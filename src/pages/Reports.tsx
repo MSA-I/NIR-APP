@@ -1,0 +1,206 @@
+import { useState } from 'react';
+import { FileSpreadsheet, Printer, Send, CheckCircle2 } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { supabase } from '../lib/supabase';
+import { useQuery, unwrap } from '../lib/useQuery';
+import { useAuth } from '../auth/AuthContext';
+import { PageLoader, StatusBadge, useToast, ErrorNote } from '../components/ui';
+import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
+import { fmtMoneyExact, fmtDate, fmtMonth, monthRange } from '../lib/format';
+import { logAction } from '../lib/audit';
+
+export default function Reports() {
+  const { profile } = useAuth();
+  const toast = useToast();
+  const now = new Date();
+  const [month, setMonth] = useState(now.toISOString().slice(0, 7)); // YYYY-MM
+  const [busy, setBusy] = useState(false);
+
+  const { data, loading, error, refetch } = useQuery(async () => {
+    const { start, end } = monthRange(month);
+    const [invRes, payRes, credRes, excRes, bankRes, exportRes] = await Promise.all([
+      supabase.from('invoices').select('*, supplier:suppliers(name)').gte('invoice_date', start).lt('invoice_date', end).is('deleted_at', null).order('invoice_date'),
+      supabase.from('payments').select('*, supplier:suppliers(name)').gte('paid_date', start).lt('paid_date', end).order('paid_date'),
+      supabase.from('credit_requests').select('*, supplier:suppliers(name)').gte('created_at', start).lt('created_at', end),
+      supabase.from('exceptions').select('*, supplier:suppliers(name)').in('status', ['open', 'in_progress']),
+      supabase.from('bank_transactions').select('status').gte('tx_date', start).lt('tx_date', end),
+      supabase.from('monthly_exports').select('*').eq('month', `${month}-01`).maybeSingle(),
+    ]);
+    return {
+      invoices: unwrap(invRes) as ({ id: string; invoice_number: string; invoice_date: string; total_amount: number; amount_before_vat: number; vat_amount: number; review_status: string; payment_status: string; export_status: string; supplier: { name: string } })[],
+      payments: unwrap(payRes) as ({ number: number; paid_date: string; amount: number; method: string | null; reference: string | null; supplier: { name: string } })[],
+      credits: unwrap(credRes) as ({ number: number; reason: string; amount: number; status: string; supplier: { name: string } })[],
+      exceptions: unwrap(excRes) as ({ id: string; type: string; title: string; supplier: { name: string } | null })[],
+      bank: unwrap(bankRes) as { status: string }[],
+      export: unwrap(exportRes) as { id: string; status: string; sent_at: string | null } | null,
+    };
+  }, [month]);
+
+  const isOffice = !!profile && ['owner', 'office'].includes(profile.role);
+
+  function exportExcel() {
+    if (!data) return;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.invoices.map((i) => ({
+      'ספק': i.supplier.name, 'מספר חשבונית': i.invoice_number, 'תאריך': i.invoice_date,
+      'לפני מע"מ': i.amount_before_vat, 'מע"מ': i.vat_amount, 'סה"כ': i.total_amount,
+      'סטטוס בדיקה': INVOICE_REVIEW_STATUS[i.review_status]?.label, 'סטטוס תשלום': INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
+    }))), 'חשבוניות');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.payments.map((p) => ({
+      'ספק': p.supplier.name, 'תאריך': p.paid_date, 'סכום': p.amount, 'אמצעי': p.method, 'אסמכתא': p.reference,
+    }))), 'תשלומים');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.credits.map((c) => ({
+      'ספק': c.supplier.name, 'סיבה': CREDIT_REASON[c.reason], 'סכום': c.amount, 'סטטוס': CREDIT_STATUS[c.status]?.label,
+    }))), 'זיכויים');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.exceptions.map((e) => ({
+      'סוג': EXCEPTION_TYPE[e.type], 'תיאור': e.title, 'ספק': e.supplier?.name ?? '',
+    }))), 'חריגים פתוחים');
+    XLSX.writeFile(wb, `gamos-report-${month}.xlsx`);
+  }
+
+  async function markSent() {
+    if (!data || !profile) return;
+    setBusy(true);
+    try {
+      if (data.export) {
+        await supabase.from('monthly_exports').update({ status: 'sent', sent_at: new Date().toISOString(), sent_by: profile.id }).eq('id', data.export.id);
+      } else {
+        await supabase.from('monthly_exports').insert({
+          org_id: profile.org_id, month: `${month}-01`, status: 'sent', sent_at: new Date().toISOString(), sent_by: profile.id,
+        });
+      }
+      const ids = data.invoices.filter((i) => i.export_status === 'not_sent').map((i) => i.id);
+      if (ids.length) await supabase.from('invoices').update({ export_status: 'sent' }).in('id', ids);
+      await logAction({ orgId: profile.org_id, action: 'month_sent_to_accountant', entityType: 'monthly_exports', reason: month });
+      toast('החודש סומן כהועבר לרו״ח');
+      void refetch();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (loading) return <PageLoader />;
+  if (error || !data) return <ErrorNote message={error ?? 'שגיאה'} />;
+
+  const totals = {
+    invoices: data.invoices.reduce((s, i) => s + i.total_amount, 0),
+    beforeVat: data.invoices.reduce((s, i) => s + i.amount_before_vat, 0),
+    vat: data.invoices.reduce((s, i) => s + i.vat_amount, 0),
+    paid: data.payments.reduce((s, p) => s + p.amount, 0),
+    unpaidCount: data.invoices.filter((i) => i.payment_status !== 'paid').length,
+    unmatchedBank: data.bank.filter((b) => b.status === 'unmatched' || b.status === 'suggested').length,
+  };
+
+  // payments grouped by supplier
+  const paymentsBySupplier = [...data.payments.reduce((m, p) => {
+    m.set(p.supplier.name, (m.get(p.supplier.name) ?? 0) + p.amount);
+    return m;
+  }, new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 no-print">
+        <h1 className="page-title">דוח חודשי לרואת חשבון</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <input type="month" className="input w-auto!" value={month} onChange={(e) => setMonth(e.target.value)} />
+          <button className="btn-secondary" onClick={exportExcel}><FileSpreadsheet size={15} /> ייצוא Excel</button>
+          <button className="btn-secondary" onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
+          {isOffice && (
+            data.export?.status === 'sent'
+              ? <span className="badge-green flex items-center gap-1"><CheckCircle2 size={13} /> הועבר לרו״ח {data.export.sent_at ? fmtDate(data.export.sent_at) : ''}</span>
+              : <button className="btn-primary" disabled={busy} onClick={() => void markSent()}><Send size={15} /> סימון כהועבר לרו״ח</button>
+          )}
+        </div>
+      </div>
+
+      <div className="print-area space-y-4">
+        <div className="hidden print:block">
+          <h2 className="text-xl font-bold">אולמי גאמוס — דוח חודשי {fmtMonth(`${month}-01`)}</h2>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
+          <div className="card card-pad"><div className="text-xs text-slate-500">חשבוניות</div><div className="text-lg font-bold">{data.invoices.length}</div></div>
+          <div className="card card-pad"><div className="text-xs text-slate-500">סה״כ חשבוניות</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.invoices)}</div></div>
+          <div className="card card-pad"><div className="text-xs text-slate-500">מע״מ</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.vat)}</div></div>
+          <div className="card card-pad"><div className="text-xs text-slate-500">שולם החודש</div><div className="text-lg font-bold num text-start text-emerald-700">{fmtMoneyExact(totals.paid)}</div></div>
+          <div className="card card-pad"><div className="text-xs text-slate-500">חשבוניות שטרם שולמו</div><div className={`text-lg font-bold ${totals.unpaidCount ? 'text-amber-600' : ''}`}>{totals.unpaidCount}</div></div>
+          <div className="card card-pad"><div className="text-xs text-slate-500">תנועות בנק ללא התאמה</div><div className={`text-lg font-bold ${totals.unmatchedBank ? 'text-rose-600' : ''}`}>{totals.unmatchedBank}</div></div>
+        </div>
+
+        {data.exceptions.length > 0 && (
+          <div className="card card-pad border-amber-200 bg-amber-50/50">
+            <h2 className="section-title text-amber-800 mb-2">חריגים פתוחים שדורשים טיפול לפני סגירת החודש ({data.exceptions.length})</h2>
+            <ul className="text-sm text-amber-900 space-y-1 list-disc list-inside">
+              {data.exceptions.map((e) => <li key={e.id}>{EXCEPTION_TYPE[e.type]} — {e.title}</li>)}
+            </ul>
+          </div>
+        )}
+
+        <div className="card overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 section-title">חשבוניות {fmtMonth(`${month}-01`)}</div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50"><tr>
+                <th className="th">ספק</th><th className="th">מס׳</th><th className="th">תאריך</th>
+                <th className="th">לפני מע״מ</th><th className="th">מע״מ</th><th className="th">סה״כ</th>
+                <th className="th">בדיקה</th><th className="th">תשלום</th>
+              </tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {data.invoices.map((i) => (
+                  <tr key={i.id}>
+                    <td className="td">{i.supplier.name}</td>
+                    <td className="td" dir="ltr">{i.invoice_number}</td>
+                    <td className="td">{fmtDate(i.invoice_date)}</td>
+                    <td className="td num">{fmtMoneyExact(i.amount_before_vat)}</td>
+                    <td className="td num">{fmtMoneyExact(i.vat_amount)}</td>
+                    <td className="td num font-medium">{fmtMoneyExact(i.total_amount)}</td>
+                    <td className="td"><StatusBadge meta={INVOICE_REVIEW_STATUS[i.review_status]} /></td>
+                    <td className="td"><StatusBadge meta={INVOICE_PAYMENT_STATUS[i.payment_status]} /></td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot><tr className="border-t-2 border-slate-200 font-bold">
+                <td className="td" colSpan={3}>סה״כ</td>
+                <td className="td num">{fmtMoneyExact(totals.beforeVat)}</td>
+                <td className="td num">{fmtMoneyExact(totals.vat)}</td>
+                <td className="td num">{fmtMoneyExact(totals.invoices)}</td>
+                <td colSpan={2} />
+              </tr></tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="card overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 section-title">תשלומים לפי ספק</div>
+            <table className="w-full">
+              <tbody className="divide-y divide-slate-100">
+                {paymentsBySupplier.map(([name, sum]) => (
+                  <tr key={name}><td className="td">{name}</td><td className="td num font-medium">{fmtMoneyExact(sum)}</td></tr>
+                ))}
+                {!paymentsBySupplier.length && <tr><td className="td text-slate-400 text-center py-6">אין תשלומים בחודש זה</td></tr>}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="card overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 section-title">זיכויים</div>
+            <table className="w-full">
+              <tbody className="divide-y divide-slate-100">
+                {data.credits.map((c) => (
+                  <tr key={c.number}>
+                    <td className="td">{c.supplier.name}</td>
+                    <td className="td text-slate-500">{CREDIT_REASON[c.reason]}</td>
+                    <td className="td num">{fmtMoneyExact(c.amount)}</td>
+                    <td className="td"><StatusBadge meta={CREDIT_STATUS[c.status]} /></td>
+                  </tr>
+                ))}
+                {!data.credits.length && <tr><td className="td text-slate-400 text-center py-6">אין זיכויים בחודש זה</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
