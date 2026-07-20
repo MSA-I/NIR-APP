@@ -21,23 +21,35 @@
 
 ---
 
-## 🔴 קרא את זה לפני כל דבר אחר
+## מצב ההחלה על הפרויקט האמיתי
 
-**אף מיגרציה משלב 2 לא הוחלה על פרויקט ה-Supabase האמיתי. אף Edge Function לא נפרסה. אף מסך חדש לא נצפה מול נתונים אמיתיים.**
+**המיגרציות `0006`–`0009` הוחלו ואומתו על בסיס הנתונים החי (20.07.2026).**
 
-הסיבה: `SUPABASE_ACCESS_TOKEN` לא היה זמין בסביבת העבודה. כל האימות נעשה מול Postgres בקונטיינר עם shim ל-`auth`/`storage`. הסכימה, ה-RLS וכללי הנתיבים אמיתיים — GoTrue ו-Supabase Storage עצמם לא.
+מדדים לפני ואחרי: מדיניות 71 → 77 · אינדקסים 93 → 100 · **שורות ביקורת יתומות 16 → 0** (הבאג של `0009` היה אמיתי בייצור, לא רק בדמו).
 
-**מה שנדרש לפני שסומכים על זה:** להריץ `0006`→`0009`, לפרוס את שתי ה-Edge Functions, להריץ `scripts/seed-demo.ps1`, ולעשות ריצה אחת מלאה של האשף על דייר חדש.
+**עדיין לא נעשה:** שתי ה-Edge Functions לא נפרסו (`supabase functions deploy admin-provision send-invite` + הגדרת הסודות), חבילת הדמו לא נטענה, ואף אחד משלושת המסכים החדשים לא הופעל מול נתונים אמיתיים. אין עדיין שורה ב-`platform_admins`, כך שמסך `/admin` יהיה ריק עד שיתווסף מפעיל דרך SQL.
 
-### שתי פרצות שהקוד סוגר — ופתוחות עד להחלה
+### שתי הפרצות — נסגרו ואומתו בייצור
 
 **1. הסלמת הרשאות ב-`profiles` (קדמה ל-SaaS, חמורה).** `profiles_self_update` (`0001_init.sql:496`) הוא `for update using (id = auth.uid())` ללא `with check`. Postgres משתמש ב-USING גם כבדיקה, ו-USING מגביל רק את **זהות השורה** — לא את תוכנה. כל משתמש מאומת יכול לשנות את `role` שלו ל-`owner` או את `org_id` לארגון אחר.
 
 הוכח בשני הכיוונים על Postgres בקונטיינר: עם הטריגר — נחסם; בלי הטריגר — `UPDATE SUCCEEDED`, התפקיד הפך `owner`. הפקודה הייתה ללא `where` במכוון: RLS מחיל מדיניות SELECT על UPDATE רק כשהמשפט קורא שורות, ולכן בלי `WHERE` נשאר רק ה-USING שאינו מתייעץ עם `auth_org()`.
 
-נסגר ב-`0006` בטריגר `before update` שנועל `org_id`/`role`/`active`/`supplier_id`. **הבלוק מסומן בקובץ ויכול לעבור בנפרד אם רוצים לזרז אותו.**
+נסגר ב-`0006` בטריגר `profiles_guard_privileged_columns` (BEFORE UPDATE) שנועל `org_id`/`role`/`active`/`supplier_id`.
+
+**אומת בייצור 20.07.2026:** ניסיון `update profiles set role='owner'` ללא `where`, מהסשן של סוכן הספק האמיתי — נחסם:
+`profiles: org_id, role, active and supplier_id may only be changed by an owner of the organization`
 
 **2. דליפת יתרות לסוכני ספק.** `supplier_balances` ו-`invoice_balances` הם definer views שמגנים על עצמם בקריאה ל-`auth_org()` בלבד — בלי בדיקת תפקיד. נמדד עם JWT חי של סוכן ספק: `suppliers` החזירה 1 שורה (נכון), אבל `supplier_balances` החזירה **15** ו-`invoice_balances` **14 עם סכומים**. ספק ראה כמה העסק חייב למתחרים שלו. נסגר ב-`0008`.
+
+**אומת בייצור 20.07.2026**, אותו סוכן ספק, אותן שאילתות:
+
+| | לפני | אחרי |
+|---|---|---|
+| `suppliers` | 1 (נכון) | 1 (נכון) |
+| `supplier_balances` | 15 | **0** |
+| `invoice_balances` | 14 עם סכומים | **0** |
+| `invoices` | 0 | 0 |
 
 ---
 
