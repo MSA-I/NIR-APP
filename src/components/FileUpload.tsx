@@ -7,16 +7,49 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import type { DocumentRow } from '../lib/types';
 import { fmtDateTime } from '../lib/format';
 
+const MAX_DIM = 1600;      // enough to read an invoice; a raw phone photo is ~4x this
+const JPEG_QUALITY = 0.8;
+
+/**
+ * Shrinks a phone photo (~3.5MB) to ~350KB before upload. Invoices are read, not zoomed,
+ * so 1600px is plenty -- and documents are kept 7 years, so the storage never shrinks back.
+ * Non-images (PDFs) and anything that fails to decode pass through untouched.
+ */
+async function compressImage(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_DIM / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size < 500_000) { bitmap.close(); return file; }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { bitmap.close(); return file; }
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', JPEG_QUALITY));
+    if (!blob || blob.size >= file.size) return file;   // already smaller than we'd make it
+    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch {
+    return file;   // HEIC on an old browser, corrupt file -- upload the original
+  }
+}
+
 /** Uploads a file to the private `documents` bucket and registers it on an entity. */
 export async function uploadDocument(orgId: string, entityType: string, entityId: string, file: File) {
-  const safeName = file.name.replace(/[^\w.\-]+/g, '_');
-  const path = `${entityType}/${entityId}/${Date.now()}_${safeName}`;
-  const up = await supabase.storage.from('documents').upload(path, file, { contentType: file.type });
+  const upload = await compressImage(file);
+  const safeName = upload.name.replace(/[^\w.\-]+/g, '_');
+  // org_id must lead the path -- the bucket's RLS policy reads it to enforce tenant isolation.
+  const path = `${orgId}/${entityType}/${entityId}/${Date.now()}_${safeName}`;
+  const up = await supabase.storage.from('documents').upload(path, upload, { contentType: upload.type });
   if (up.error) throw new Error(up.error.message);
   const { data: user } = await supabase.auth.getUser();
   const ins = await supabase.from('documents').insert({
     org_id: orgId, entity_type: entityType, entity_id: entityId,
-    storage_path: path, file_name: file.name, mime_type: file.type, uploaded_by: user.user?.id,
+    storage_path: path, file_name: file.name, mime_type: upload.type, uploaded_by: user.user?.id,
   });
   if (ins.error) throw new Error(ins.error.message);
 }

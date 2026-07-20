@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>SupplyFlow — תוכנית הפיכה לשירות מנוי</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 10.5pt; line-height: 1.65; color: #1e293b;
+    margin: 0;
+  }
+
+  h1, h2, h3 { line-height: 1.3; margin: 0; }
+
+  /* ---- cover ---- */
+  .cover { padding-top: 40mm; text-align: center; page-break-after: always; }
+  .cover .eyebrow { font-size: 10pt; letter-spacing: .18em; color: #64748b; margin-bottom: 14px; }
+  .cover h1 { font-size: 30pt; font-weight: 700; color: #0f172a; letter-spacing: -.01em; }
+  .cover .sub { font-size: 13pt; color: #475569; margin-top: 12px; font-weight: 400; }
+  .cover .rule { width: 60px; height: 3px; background: #4f46e5; margin: 28px auto; }
+  .cover .meta { font-size: 9.5pt; color: #94a3b8; margin-top: 60px; line-height: 2; }
+
+  /* ---- sections ---- */
+  /* NB: no page-break-inside:avoid here -- it shoved whole sections onto fresh pages and
+     left every page ~60% empty. Breaks are controlled on the child blocks instead. */
+  section { margin-bottom: 26px; }
+  h2 {
+    font-size: 15pt; font-weight: 700; color: #0f172a;
+    padding-bottom: 7px; margin-bottom: 14px;
+    border-bottom: 2px solid #e2e8f0;
+    page-break-after: avoid;   /* heading never orphaned at the foot of a page */
+  }
+  h3 { page-break-after: avoid; }
+  table, tr { page-break-inside: avoid; }
+
+  /* Latin/number runs inside RTL text: "5–7" would otherwise reorder to "7–5". */
+  .ltr { direction: ltr; unicode-bidi: isolate; }
+  h2 .num {
+    display: inline-block; background: #4f46e5; color: #fff;
+    width: 24px; height: 24px; line-height: 24px; border-radius: 6px;
+    font-size: 11pt; text-align: center; margin-left: 9px; vertical-align: 2px;
+  }
+  h3 { font-size: 11.5pt; font-weight: 600; color: #1e293b; margin: 16px 0 6px; }
+  p { margin: 0 0 10px; }
+
+  /* ---- tables ---- */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; font-size: 9.5pt; }
+  th {
+    background: #f1f5f9; color: #0f172a; font-weight: 600;
+    text-align: right; padding: 9px 11px; border-bottom: 2px solid #cbd5e1;
+  }
+  td { padding: 9px 11px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tfoot td { font-weight: 700; background: #f8fafc; border-top: 2px solid #cbd5e1; }
+
+  /* ---- phase cards ---- */
+  .phase {
+    border: 1px solid #e2e8f0; border-radius: 9px; padding: 15px 17px;
+    margin-bottom: 13px; page-break-inside: avoid; background: #fff;
+  }
+  .phase.done { border-color: #86efac; background: #f0fdf4; }
+  .phase-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 9px; }
+  .phase-head h3 { margin: 0; flex: 1; font-size: 12pt; }
+  .tag {
+    font-size: 8.5pt; font-weight: 600; padding: 3px 9px; border-radius: 20px;
+    white-space: nowrap;
+  }
+  .tag.time { background: #e0e7ff; color: #3730a3; }
+  .tag.ok   { background: #16a34a; color: #fff; }
+  ul { margin: 7px 0; padding-right: 19px; }
+  li { margin-bottom: 4px; }
+
+  /* ---- callouts ---- */
+  .note {
+    border-right: 4px solid #4f46e5; background: #f8fafc;
+    padding: 12px 15px; border-radius: 0 7px 7px 0; margin: 14px 0;
+    page-break-inside: avoid;
+  }
+  .note.warn { border-right-color: #f59e0b; background: #fffbeb; }
+  .note strong { color: #0f172a; }
+  .note p:last-child { margin-bottom: 0; }
+
+  .lead {
+    font-size: 11pt; color: #334155; background: #f8fafc;
+    padding: 14px 17px; border-radius: 8px; margin-bottom: 20px;
+  }
+  .lead p:last-child { margin-bottom: 0; }
+
+  .pagebreak { page-break-before: always; }
+  .glossary dt { font-weight: 600; color: #0f172a; margin-top: 9px; }
+  .glossary dd { margin: 2px 0 0; padding-right: 0; color: #475569; }
+
+  footer.doc {
+    margin-top: 30px; padding-top: 12px; border-top: 1px solid #e2e8f0;
+    font-size: 8.5pt; color: #94a3b8; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="eyebrow">מסמך תכנון</div>
+  <h1>SupplyFlow</h1>
+  <div class="sub">הפיכת המערכת לשירות מנוי<br>לוחות זמנים, עלויות והיערכות רגולטורית</div>
+  <div class="rule"></div>
+  <div class="meta">
+    יולי 2026<br>
+    מסמך פנימי — מיועד להחלטת המשך
+  </div>
+</div>
+
+<!-- ========== 1 ========== -->
+<section>
+  <h2><span class="num">1</span>על מה מדובר</h2>
+
+  <div class="lead">
+    <p>היום המערכת משרתת עסק אחד — אולמי גאמוס. היא מנהלת את כל המסלול מהזמנה אצל הספק ועד התשלום בבנק: הזמנות רכש, קבלת סחורה, חשבוניות, זיכויים, דרישות תשלום, התאמות בנק ודוחות לרואה החשבון.</p>
+    <p>המטרה: להפוך אותה למוצר שאפשר למכור לעסקים נוספים במנוי חודשי, כך שכל עסק מקבל מערכת משלו ואינו רואה דבר מהנתונים של האחרים.</p>
+  </div>
+
+  <h3>נקודת הפתיחה טובה מהצפוי</h3>
+  <p>המערכת נבנתה מלכתחילה כך שכל פיסת מידע שייכת לעסק מסוים. לכל טבלה במסד הנתונים יש שיוך לעסק, ומעליה יושבות 77 חוקות הרשאה שבודקות בכל שליפה ושליפה שהמשתמש מורשה לראות רק את הנתונים של העסק שלו.</p>
+  <p>זה בדרך כלל החלק היקר והמסובך ביותר בהפיכת מערכת לשירות מנוי, והוא כבר בנוי. מה שנותר הוא בעיקר <strong>לפתוח את הדלת</strong> — לאפשר לעסק חדש להירשם בעצמו, לשלם, ולהתחיל לעבוד.</p>
+</section>
+
+<!-- ========== 2 ========== -->
+<section>
+  <h2><span class="num">2</span>שלבי הפיתוח</h2>
+
+  <div class="phase done">
+    <div class="phase-head">
+      <h3>שלב 1 — חיזוק ואבטחה</h3>
+      <span class="tag ok">בוצע</span>
+    </div>
+    <p>ארבעה תיקונים שבוצעו לפני כל השאר, כי הם חוסמים את כל היתר:</p>
+    <ul>
+      <li><strong>איטום הפרדה בין לקוחות בקבצים.</strong> נמצא פער: בעוד שרשומות המערכת היו מופרדות היטב בין עסקים, מחסן <em>הקבצים עצמם</em> (צילומי חשבוניות) לא היה. משתמש מעסק אחד יכול היה להגיע לצילומי חשבוניות של עסק אחר. עם לקוח יחיד זה חסר משמעות; עם לקוח שני זו דליפת מידע. תוקן.</li>
+      <li><strong>זירוז המערכת.</strong> נוספו 55 "אינדקסים" — משהו כמו מפתח בסוף ספר: במקום לעבור על כל הדפים כדי למצוא ערך, המערכת קופצת ישירות אליו. בלעדיהם המערכת הייתה מאטה ככל שמצטרפים לקוחות, ודורשת שרת חזק ויקר פי כמה.</li>
+      <li><strong>החלפת רכיב תוכנה פגיע.</strong> הרכיב שמייצא קבצי Excel נשא שתי חולשות אבטחה ידועות. הוחלף בגרסה מעודכנת מהיצרן.</li>
+      <li><strong>דחיסת צילומים.</strong> צילום חשבונית בטלפון שוקל כ־3.5 מגה. כעת הוא מוקטן אוטומטית לכ־350 קילו לפני השמירה — עדיין קריא לגמרי, אבל תופס פי עשרה פחות מקום. חשוב במיוחד מפני שחובה לשמור מסמכים שבע שנים, כלומר האחסון רק גדל ולעולם לא מתכווץ.</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head">
+      <h3>שלב 2 — פתיחת המערכת ללקוחות חדשים</h3>
+      <span class="tag time"><span class="ltr">5–7</span> ימי עבודה</span>
+    </div>
+    <p>כאן נבנית היכולת שעסק חדש ייכנס לבד, בלי שמישהו יקים לו ידנית חשבון מאחורי הקלעים (כפי שקורה היום).</p>
+    <ul>
+      <li>מסך הרשמה — עסק חדש נרשם, והמערכת מקימה לו סביבה נפרדת ומשתמש מנהל</li>
+      <li>הזמנת עובדים — המנהל מזמין את הצוות שלו במייל ומגדיר לכל אחד תפקיד</li>
+      <li>שליחת מיילים אוטומטית (הזמנות, איפוס סיסמה)</li>
+      <li>אשף הקמה — עסק חדש נכנס למערכת ריקה לגמרי: אפס ספקים, אפס מוצרים. בלי אשף שמייבא לו רשימת ספקים ומוצרים מקובץ Excel, הוא נוטש ביום הראשון</li>
+      <li>הסרת המיתוג הקבוע של "אולמי גאמוס" והחלפתו בשם העסק המתארח</li>
+    </ul>
+    <p><strong>מול מי:</strong> אין גורם חיצוני. נדרשים רק חשבון לשירות שליחת מיילים ודומיין.</p>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head">
+      <h3>שלב 3 — היערכות משפטית</h3>
+      <span class="tag time">שבועיים (במקביל)</span>
+    </div>
+    <p>עבודה שאינה תלויה בפיתוח ולכן רצה במקביל — אבל היא בעלת זמן ההמתנה הארוך, ולכן כדאי להתחיל אותה מוקדם.</p>
+    <ul>
+      <li>תנאי שימוש ומדיניות פרטיות</li>
+      <li>הסכם עיבוד מידע מול הלקוחות — המערכת מחזיקה נתונים פיננסיים של ספקיהם</li>
+      <li>בדיקה מול עורך דין אילו חובות חלות לפי חוק הגנת הפרטיות</li>
+    </ul>
+    <p><strong>מול מי:</strong> עורך דין המתמחה בהגנת פרטיות ודיני מחשבים. פירוט בפרק 3.</p>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head">
+      <h3>שלב 4 — גבייה מהלקוחות</h3>
+      <span class="tag time">יומיים עבודה + המתנה</span>
+    </div>
+    <p>הפיתוח עצמו קצר. מה שלוקח זמן הוא אישור העסק אצל חברת הסליקה — תהליך שאורך בין יומיים לשבועיים ואינו בשליטתנו.</p>
+    <ul>
+      <li>חיבור לחברת סליקה, הגדרת מסלולי מנוי ותקופת ניסיון</li>
+      <li>חיבור לתוכנת הפקת חשבוניות ישראלית</li>
+      <li>ניתוק אוטומטי בתום תקופת ניסיון או באי־תשלום</li>
+    </ul>
+    <div class="note warn">
+      <p><strong>המלצה:</strong> אין לבנות גבייה אוטומטית לפני שיש שלושה לקוחות משלמים. לשניים־שלושה הראשונים אפשר להוציא חשבונית ידנית — זה עובד מצוין, חוסך שבועיים, ומאפשר להתחיל למכור בזמן שהאישורים מתגלגלים.</p>
+    </div>
+    <p><strong>מול מי:</strong> חברת סליקה, ספק חשבוניות, רשות המסים. פירוט בפרק 3.</p>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head">
+      <h3>שלב 5 — פיילוט</h3>
+      <span class="tag time">שבועיים</span>
+    </div>
+    <p>שניים־שלושה עסקים אמיתיים עובדים במערכת במקביל. זהו השלב היחיד שבו אפשר באמת לוודא שההפרדה בין לקוחות עובדת — ואי אפשר לקצר אותו בכסף או בכוח אדם.</p>
+    <p>זה גם השלב שבו מתגלה מה עסק אחר צריך ולגאמוס לא היה. כמעט תמיד מתגלה משהו.</p>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head">
+      <h3>שלב 6 — עלייה לאוויר</h3>
+      <span class="tag time">ימים ספורים</span>
+    </div>
+    <ul>
+      <li>הפעלת גיבוי מלא עם יכולת שחזור לנקודת זמן</li>
+      <li>מערכת התרעות על תקלות</li>
+      <li>פתיחת ההרשמה לקהל</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========== 3 ========== -->
+<section>
+  <h2><span class="num">3</span>מול אילו גורמים ורשויות</h2>
+
+  <p>הטבלה מרוכזת לפי סדר הפעולה. הטור הימני הוא זמן ההמתנה — לא זמן העבודה.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:22%">גורם</th>
+        <th>לשם מה</th>
+        <th style="width:12%">שלב</th>
+        <th class="num" style="width:17%">זמן המתנה</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>עורך דין</strong><br><span style="color:#64748b">הגנת פרטיות / דיני מחשבים</span></td>
+        <td>ניסוח תנאי שימוש, מדיניות פרטיות והסכם עיבוד מידע. קביעה אילו חובות חלות בפועל.</td>
+        <td>3</td>
+        <td class="num">שבוע לתיאום</td>
+      </tr>
+      <tr>
+        <td><strong>הרשות להגנת הפרטיות</strong></td>
+        <td>המערכת מחזיקה מידע פיננסי על ספקים של לקוחות. תיקון 13 לחוק הגנת הפרטיות, שנכנס לתוקף באוגוסט 2025, החמיר את חובות אבטחת המידע והאכיפה. <strong>מה בדיוק חל כאן — לבירור מול עורך דין</strong>, ותלוי בהיקף הפעילות ובסוג המידע.</td>
+        <td>3</td>
+        <td class="num">לבירור</td>
+      </tr>
+      <tr>
+        <td><strong>חברת סליקה</strong><br><span style="color:#64748b">Stripe / Paddle</span></td>
+        <td>אימות העסק לפני שמותר לגבות כסף. תהליך בירוקרטי סטנדרטי.</td>
+        <td>4</td>
+        <td class="num"><span class="ltr">2–14</span> ימים</td>
+      </tr>
+      <tr>
+        <td><strong>ספק חשבוניות</strong><br><span style="color:#64748b">חשבונית ירוקה / iCount</span></td>
+        <td>חברת סליקה זרה אינה מפיקה חשבונית מס כנדרש בישראל. נדרשת תוכנה ישראלית שתעשה זאת ותטפל גם בדרישות מודל חשבוניות ישראל.</td>
+        <td>4</td>
+        <td class="num">ימים</td>
+      </tr>
+      <tr>
+        <td><strong>רשות המסים</strong></td>
+        <td>דיווח ההכנסות מהמנויים ומע"מ. מטופל דרך רואה החשבון בשגרה הרגילה.</td>
+        <td>שוטף</td>
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td><strong>בנק</strong></td>
+        <td>חשבון עסקי לקבלת התקבולים.</td>
+        <td>4</td>
+        <td class="num">ימים</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <p><strong>נקודה מרגיעה שכדאי להכיר: המערכת אינה מעבירה כסף.</strong></p>
+    <p>כשמשתמש מסמן "ההעברה בוצעה", הוא מתעד פעולה שהוא עצמו ביצע בבנק — המערכת רק שומרת את האסמכתא. גם ייבוא תנועות הבנק נעשה מקובץ שהמשתמש מוריד בעצמו, ללא חיבור ישיר לבנק.</p>
+    <p>המשמעות: מדובר במערכת <em>תיעוד</em>, לא בשירות תשלומים. היא אינה נכנסת לתחום הרישוי של נותני שירותים פיננסיים, וזה חוסך רגולציה כבדה ויקרה. חשוב לשמור על ההפרדה הזו גם בהמשך — חיבור ישיר לבנק לביצוע העברות ישנה את התמונה הרגולטורית מקצה לקצה.</p>
+  </div>
+</section>
+
+<!-- ========== 4 ========== -->
+<section>
+  <h2><span class="num">4</span>לוח זמנים כולל</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:30%">שלב</th>
+        <th class="num" style="width:18%">עבודה</th>
+        <th>הערה</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1 — חיזוק ואבטחה</td>
+        <td class="num">בוצע</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>2 — פתיחה ללקוחות</td>
+        <td class="num"><span class="ltr">5–7</span> ימים</td>
+        <td>עיקר הפיתוח</td>
+      </tr>
+      <tr>
+        <td>3 — היערכות משפטית</td>
+        <td class="num">במקביל</td>
+        <td>להתחיל מוקדם — זמן המתנה ארוך</td>
+      </tr>
+      <tr>
+        <td>4 — גבייה</td>
+        <td class="num">יומיים</td>
+        <td>+ עד שבועיים המתנה לאישור סליקה</td>
+      </tr>
+      <tr>
+        <td>5 — פיילוט</td>
+        <td class="num">שבועיים</td>
+        <td>זמן קלנדרי, לא ניתן לקיצור</td>
+      </tr>
+      <tr>
+        <td>6 — עלייה לאוויר</td>
+        <td class="num">ימים ספורים</td>
+        <td>—</td>
+      </tr>
+    </tbody>
+    <tfoot>
+      <tr>
+        <td>עד לקוח משלם ראשון</td>
+        <td class="num"><span class="ltr">3–4</span> שבועות</td>
+        <td>בהנחת עבודה רציפה</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="note warn">
+    <p><strong>מה שקובע את לוח הזמנים אינו כתיבת הקוד.</strong></p>
+    <p>הפיתוח עצמו הוא כשבוע. מה שמותח את התמונה לשלושה־ארבעה שבועות הוא זמן ההמתנה לאישורים חיצוניים, זמן בדיקה ותיקון, והפיילוט מול לקוחות אמיתיים.</p>
+    <p>המסקנה המעשית: <strong>להתחיל את אימות העסק בחברת הסליקה ואת הפנייה לעורך הדין ביום הראשון</strong>, במקביל לפיתוח. אלו הפריטים עם ההמתנה הארוכה ביותר ואפס תלות בקוד.</p>
+  </div>
+</section>
+
+<!-- ========== 5 ========== -->
+<section>
+  <h2><span class="num">5</span>עלויות תפעול</h2>
+
+  <p>המערכת אינה מצריכה שרתים בבעלות. כל הרכיבים הם שירותים בתשלום חודשי לפי שימוש.</p>
+
+  <h3>בהתחלה — עד כעשרה לקוחות</h3>
+  <table>
+    <thead>
+      <tr><th style="width:32%">שירות</th><th>תפקיד</th><th class="num" style="width:17%">לחודש</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Supabase Pro</td><td>מסד הנתונים, ניהול המשתמשים ואחסון הקבצים</td><td class="num">‎$25</td></tr>
+      <tr><td>Cloudflare Pages</td><td>אירוח האתר</td><td class="num">חינם</td></tr>
+      <tr><td>Resend</td><td>שליחת מיילים</td><td class="num"><span class="ltr">$0–20</span></td></tr>
+      <tr><td>Sentry</td><td>התרעה על תקלות</td><td class="num">חינם</td></tr>
+      <tr><td>ספק חשבוניות</td><td>הפקת חשבוניות מס ללקוחות</td><td class="num">‎₪50</td></tr>
+      <tr><td>דומיין</td><td>כתובת האתר</td><td class="num">‎$1</td></tr>
+    </tbody>
+    <tfoot>
+      <tr><td>סה"כ</td><td>—</td><td class="num"><span class="ltr">$50–70</span></td></tr>
+    </tfoot>
+  </table>
+
+  <h3>ב־100 לקוחות</h3>
+  <p>בהנחה של כ־120 חשבוניות בחודש לעסק וכשישה משתמשים בכל עסק:</p>
+
+  <table>
+    <thead>
+      <tr><th style="width:40%">רכיב</th><th class="num">ללא התיקונים משלב 1</th><th class="num">עם התיקונים</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Supabase — בסיס</td><td class="num">‎$25</td><td class="num">‎$25</td></tr>
+      <tr><td>Supabase — עוצמת שרת</td><td class="num">‎$110</td><td class="num">‎$15</td></tr>
+      <tr><td>אחסון קבצים (סוף שנה ראשונה)</td><td class="num">‎$11</td><td class="num">‎$0</td></tr>
+      <tr><td>תעבורה</td><td class="num">‎$14</td><td class="num">‎$0</td></tr>
+      <tr><td>גיבוי ושחזור לנקודת זמן</td><td class="num">‎$100</td><td class="num">‎$100</td></tr>
+      <tr><td>מיילים, ניטור, חשבוניות</td><td class="num">‎$50</td><td class="num">‎$50</td></tr>
+    </tbody>
+    <tfoot>
+      <tr><td>סה"כ לחודש</td><td class="num">‎$310</td><td class="num">‎$190</td></tr>
+    </tfoot>
+  </table>
+
+  <p style="font-size:9pt;color:#64748b">הפער של ‎$120 בחודש נובע כולו משני התיקונים שבוצעו בשלב 1 — האינדקסים ודחיסת התמונות. שעתיים עבודה, חיסכון של כ־‎$1,400 בשנה, וההפרש רק גדל עם הזמן.</p>
+
+  <div class="note">
+    <p><strong>העלות האמיתית אינה השרתים.</strong></p>
+    <p>ב־100 לקוחות במחיר ‎₪300 לחודש, ההכנסה החודשית היא כ־‎₪30,000. התשתית עולה כ־‎₪700 — כשני אחוזים. זהו רעש.</p>
+    <p>שתי ההוצאות שבאמת נספרות:</p>
+    <p><strong>עמלות סליקה — כ־‎₪900 בחודש.</strong> כשלושה אחוזים מכל תקבול. גדול מכל התשתית יחד, וגדל ביחס ישר להכנסה.</p>
+    <p><strong>תמיכה — ‎₪5,000 ומעלה בחודש.</strong> מאה עסקים שמנהלים אצלך תהליכי כסף יפנו בשאלות: חשבונית שלא נקלטה, התאמת בנק שלא תפסה, ספק שלא מבין למה המחירון שלו לא נשמר. בהיקף כזה זו לפחות חצי משרה. זו ההוצאה הגדולה ביותר בתמונה, והיא פי שבעה מהשרתים.</p>
+  </div>
+
+  <p>הרווח הגולמי בתרחיש זה הוא כ־93 אחוז — יחס בריא למוצר מסוג זה. <strong>התשתית הטכנית לא צפויה להוות מגבלה בשום שלב.</strong></p>
+</section>
+
+<!-- ========== 6 ========== -->
+<section>
+  <h2><span class="num">6</span>סיכונים שכדאי להכיר</h2>
+
+  <h3>תלות בספק תשתית יחיד</h3>
+  <p>מסד הנתונים, ניהול המשתמשים, אחסון הקבצים וכל מנגנון ההרשאות יושבים כולם אצל ספק אחד (Supabase). זו החלטה נכונה למהירות ולעלות, אבל מעבר לספק אחר בעתיד יהיה כתיבה מחדש ולא העברה פשוטה. בהיקף הנוכחי זה סיכון סביר לחלוטין — כדאי רק שיהיה מודע.</p>
+
+  <h3>שמירת מסמכים לאורך שנים</h3>
+  <p>חובה לשמור מסמכים חשבונאיים שבע שנים. האחסון גדל בהתמדה ולעולם אינו מתכווץ. דחיסת התמונות שבוצעה בשלב 1 מקטינה את הצמיחה הזו פי עשרה — בשנה השלישית ההפרש הוא בין כ־180 ג'יגה לכ־1.8 טרה.</p>
+
+  <h3>הפער בין לקוח ראשון לשני</h3>
+  <p>המערכת נבנתה מול הצרכים של עסק אחד. הפיילוט הוא שיגלה מה עסק אחר צריך ואין לו כאן. כדאי לתכנן מראש שבוע־שבועיים של התאמות אחרי הפיילוט — זה כמעט תמיד קורה, ועדיף שיהיה בתוכנית.</p>
+</section>
+
+<!-- ========== 7 ========== -->
+<section>
+  <h2><span class="num">7</span>מה לעשות עכשיו</h2>
+  <p>שלוש פעולות שכדאי לבצע השבוע, לפי סדר:</p>
+  <ol>
+    <li><strong>לפתוח תהליך אימות עסק בחברת הסליקה.</strong> זמן ההמתנה הארוך ביותר, אפס תלות בפיתוח. כל יום עיכוב כאן הוא יום עיכוב בסוף.</li>
+    <li><strong>לתאם פגישה עם עורך דין.</strong> אותו היגיון — התיאום לוקח שבוע, העבודה עצמה קצרה.</li>
+    <li><strong>להתחיל את שלב 2</strong> — פתיחת המערכת ללקוחות חדשים.</li>
+  </ol>
+
+  <h3 style="margin-top:20px">מונחים שמופיעים במסמך</h3>
+  <dl class="glossary">
+    <dt>אינדקס</dt>
+    <dd>מפתח שמאפשר למסד הנתונים לאתר מידע ישירות במקום לסרוק הכול. משפיע ישירות על מהירות המערכת ועל עלות השרת.</dd>
+    <dt>חוקת הרשאה</dt>
+    <dd>כלל שנאכף ברמת מסד הנתונים עצמו וקובע מי רשאי לראות איזו שורה. זהו המנגנון שמונע מעסק אחד לראות נתונים של עסק אחר.</dd>
+    <dt>סליקה</dt>
+    <dd>גביית תשלום בכרטיס אשראי דרך חברה חיצונית.</dd>
+    <dt>שחזור לנקודת זמן</dt>
+    <dd>גיבוי שמאפשר להחזיר את המערכת למצבה בשעה מסוימת בעבר, ולא רק לגיבוי היומי האחרון. חיוני כשמדובר בנתונים כספיים.</dd>
+  </dl>
+</section>
+
+<footer class="doc">
+  SupplyFlow — תוכנית הפיכה לשירות מנוי · יולי 2026
+</footer>
+
+</body>
+</html>
