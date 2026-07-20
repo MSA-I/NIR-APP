@@ -1,0 +1,192 @@
+<meta charset="utf-8">
+<title>SupplyFlow — מה נוסף למערכת</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 10.5pt; line-height: 1.7; color: #1e293b; margin: 0; direction: rtl;
+  }
+  h1, h2, h3 { line-height: 1.3; margin: 0; }
+
+  .cover { padding-top: 45mm; text-align: center; page-break-after: always; }
+  .cover .eyebrow { font-size: 10pt; letter-spacing: .18em; color: #64748b; margin-bottom: 14px; }
+  .cover h1 { font-size: 30pt; font-weight: 700; color: #0f172a; letter-spacing: -.01em; }
+  .cover .sub { font-size: 13pt; color: #475569; margin-top: 12px; }
+  .cover .rule { width: 60px; height: 3px; background: #4f46e5; margin: 28px auto; }
+  .cover .meta { font-size: 9.5pt; color: #94a3b8; margin-top: 70px; line-height: 2; }
+
+  section { margin-bottom: 24px; }
+  h2 {
+    font-size: 15pt; font-weight: 700; color: #0f172a;
+    padding-bottom: 7px; margin-bottom: 14px; border-bottom: 2px solid #e2e8f0;
+    page-break-after: avoid;
+  }
+  h2 .num {
+    display: inline-block; background: #4f46e5; color: #fff;
+    width: 24px; height: 24px; line-height: 24px; border-radius: 6px;
+    font-size: 11pt; text-align: center; margin-left: 9px; vertical-align: 2px;
+  }
+  h3 { font-size: 11.5pt; font-weight: 600; margin: 16px 0 5px; page-break-after: avoid; }
+  p { margin: 0 0 10px; }
+
+  .lead { font-size: 11pt; color: #334155; background: #f8fafc; padding: 14px 17px; border-radius: 8px; margin-bottom: 22px; }
+  .lead p:last-child { margin-bottom: 0; }
+
+  .item { border: 1px solid #e2e8f0; border-radius: 9px; padding: 14px 16px; margin-bottom: 12px; page-break-inside: avoid; }
+  .item.fix { border-color: #fca5a5; background: #fef2f2; }
+  .item.new { border-color: #a7f3d0; background: #f0fdf4; }
+  .item h3 { margin-top: 0; }
+  .tag { font-size: 8.5pt; font-weight: 600; padding: 3px 9px; border-radius: 20px; white-space: nowrap; margin-left: 8px; }
+  .tag.risk { background: #dc2626; color: #fff; }
+  .tag.ok   { background: #16a34a; color: #fff; }
+  .before { font-size: 9.5pt; color: #7f1d1d; background: #fee2e2; padding: 8px 11px; border-radius: 6px; margin-top: 8px; }
+  .after  { font-size: 9.5pt; color: #14532d; background: #dcfce7; padding: 8px 11px; border-radius: 6px; margin-top: 6px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; font-size: 9.5pt; page-break-inside: avoid; }
+  th { background: #f1f5f9; color: #0f172a; font-weight: 600; text-align: right; padding: 9px 11px; border-bottom: 2px solid #cbd5e1; }
+  td { padding: 9px 11px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  td.num, th.num { text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; direction: ltr; }
+
+  .note { border-right: 4px solid #4f46e5; background: #f8fafc; padding: 12px 15px; border-radius: 0 7px 7px 0; margin: 14px 0; page-break-inside: avoid; }
+  .note.warn { border-right-color: #f59e0b; background: #fffbeb; }
+  .note p:last-child { margin-bottom: 0; }
+  ul { margin: 7px 0; padding-right: 20px; }
+  li { margin-bottom: 5px; }
+  .pagebreak { page-break-before: always; }
+  footer.doc { margin-top: 30px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 8.5pt; color: #94a3b8; text-align: center; }
+</style>
+
+<div class="cover">
+  <div class="eyebrow">עדכון ללקוח</div>
+  <h1>SupplyFlow</h1>
+  <div class="rule"></div>
+  <div class="sub">מה נוסף למערכת מאז העדכון הקודם</div>
+  <div class="meta">
+    יולי 2026<br>
+    שני נושאים: אבטחת המידע, והכנת המערכת למכירה לעסקים נוספים
+  </div>
+</div>
+
+<section>
+  <h2><span class="num">1</span>בקצרה</h2>
+  <div class="lead">
+    <p>העדכון הזה כמעט ולא משנה את מה שרואים על המסך — ובכל זאת הוא החשוב ביותר עד היום.</p>
+    <p>הוא עושה שני דברים: <strong>סוגר שלוש תקלות אבטחה</strong> שהיו במערכת ואיש לא ידע עליהן,
+    <strong>ומכין את המערכת לשמש יותר מעסק אחד</strong> — כך שאפשר יהיה למכור אותה כשירות.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">2</span>תקלות אבטחה שנמצאו ותוקנו</h2>
+
+  <p>שלוש התקלות האלה היו במערכת מהיום הראשון. הן התגלו תוך כדי עבודה על נושא אחר לגמרי,
+  נבדקו על המערכת האמיתית — ותוקנו.</p>
+
+  <div class="item fix">
+    <h3>ספק היה יכול לראות כמה אתה חייב למתחרים שלו <span class="tag risk">חמור</span></h3>
+    <p>לכל ספק יש כניסה למערכת כדי לעדכן את המחירון שלו. הוא אמור לראות רק את עצמו.</p>
+    <p class="before"><strong>לפני:</strong> ספק שנכנס לעדכן מחירון ראה את <strong>יתרת החוב של כל 15 הספקים</strong> — סכומים מדויקים. כלומר: כמה אתה חייב למתחרים שלו, ומתי.</p>
+    <p class="after"><strong>אחרי:</strong> נבדק עם חשבון ספק אמיתי — הוא רואה 0 שורות. רק את המחירון שלו.</p>
+  </div>
+
+  <div class="item fix">
+    <h3>כל משתמש היה יכול להפוך את עצמו למנהל ראשי <span class="tag risk">חמור</span></h3>
+    <p>למערכת יש תפקידים: מנהל, מזכירות, מנהל מטבח, מבצע העברות, רואה חשבון, ספק. לכל אחד הרשאות שונות.</p>
+    <p class="before"><strong>לפני:</strong> כל מי שיש לו משתמש במערכת היה יכול לשנות לעצמו את התפקיד ל"מנהל" ולקבל גישה מלאה — לאשר תשלומים, לראות את כל הכספים, הכל. גם ספק. גם מי שרק מבצע העברות.</p>
+    <p class="after"><strong>אחרי:</strong> נוסה בפועל על המערכת החיה — הניסיון נחסם. רק מנהל יכול לשנות תפקידים.</p>
+  </div>
+
+  <div class="item fix">
+    <h3>צילומי חשבוניות לא היו מופרדים בין עסקים <span class="tag ok">נסגר</span></h3>
+    <p>עם לקוח אחד זה חסר משמעות. עם לקוח שני זו דליפת מידע — ולכן זה נסגר לפני כל השאר.</p>
+  </div>
+
+  <div class="note">
+    <p><strong>איך זה נמצא?</strong> לא בבדיקה שגרתית. שלוש התקלות עלו תוך כדי בדיקה של המערכת
+    מזווית חדשה — מה קורה כשיש יותר מעסק אחד. שאלות כאלה חושפות דברים שבדיקה רגילה מפספסת,
+    כי היא בודקת שהמערכת עובדת ולא שאי אפשר לנצל אותה.</p>
+  </div>
+</section>
+
+<section class="pagebreak">
+  <h2><span class="num">3</span>המערכת יכולה עכשיו לשרת יותר מעסק אחד</h2>
+
+  <p>עד היום המערכת שירתה עסק אחד. הבסיס לריבוי עסקים היה בנוי מראש — מה שהיה חסר זו
+  <strong>הדלת</strong>: דרך להכניס לקוח חדש, בלי מגע ידני במסד הנתונים.</p>
+
+  <div class="item new">
+    <h3>מסך הקמת לקוח</h3>
+    <p>מסך ניהול שבו מקימים עסק חדש בלחיצה — שם העסק, מנהל, שיעור מע"מ. המערכת יוצרת לו
+    סביבה נפרדת לגמרי ומשתמש מנהל. אפשר גם להשעות לקוח שהפסיק לשלם.</p>
+  </div>
+
+  <div class="item new">
+    <h3>הזמנת עובדים במייל</h3>
+    <p>בעל העסק מזמין את הצוות שלו בעצמו, כל אחד עם התפקיד שלו. העובד מקבל מייל, לוחץ,
+    בוחר סיסמה ונכנס. הקישור פג אחרי שבוע.</p>
+  </div>
+
+  <div class="item new">
+    <h3>אשף התחלה ללקוח חדש</h3>
+    <p>לקוח חדש נכנס למערכת ריקה לגמרי — אפס ספקים, אפס מוצרים. זה הרגע שבו רוב הלקוחות נוטשים.
+    האשף מעלה את רשימת הספקים והמוצרים <strong>מקובץ אקסל שכבר יש לו</strong>, ומראה לו בדיוק
+    מה ייקלט לפני שמאשרים. אפשר לדלג על כל שלב.</p>
+  </div>
+
+  <div class="item new">
+    <h3>המערכת כבר לא "של גאמוס"</h3>
+    <p>שם העסק היה כתוב קשיח בתוך המערכת — כולל <strong>בהזמנות שנשלחות לספקים</strong>
+    ובדוח שעובר לרואה החשבון. עכשיו כל עסק רואה את שמו שלו בכל מקום.</p>
+    <p>גם המונחים: התפקיד "מנהל מטבח" הגיוני לאולם אירועים וחסר משמעות למוסך. כל עסק
+    יכול לקרוא לתפקידים בשמות שמתאימים לו.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">4</span>הוכחה שההפרדה עובדת</h2>
+
+  <p>הוקם עסק בדיקה על המערכת האמיתית, לצד גאמוס. כך זה נראה כשכל אחד מהם מסתכל:</p>
+
+  <table>
+    <thead>
+      <tr><th>מה הוא רואה</th><th class="num">העסק החדש</th><th class="num">גאמוס</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>ספקים</td><td class="num">0</td><td class="num">15</td></tr>
+      <tr><td>חשבוניות</td><td class="num">0</td><td class="num">14</td></tr>
+      <tr><td>יתרות חוב</td><td class="num">0</td><td class="num">15</td></tr>
+      <tr><td>פרטי העסק השני</td><td class="num">0</td><td class="num">0</td></tr>
+    </tbody>
+  </table>
+
+  <p>אף אחד מהם לא רואה שום פריט של השני — גם לא בגישה ישירה ומכוונת. ההפרדה נאכפת
+  במסד הנתונים עצמו, לא במסכים, כך שגם מי שינסה לעקוף את הממשק ייחסם.</p>
+</section>
+
+<section>
+  <h2><span class="num">5</span>מה עוד נדרש לפני מכירה ללקוח ראשון</h2>
+
+  <table>
+    <thead><tr><th>מה</th><th>למה</th></tr></thead>
+    <tbody>
+      <tr><td>חשבון לשליחת מיילים</td><td>בלעדיו הזמנות לעובדים לא נשלחות. הקוד מוכן ומחכה. חינם בהיקף הזה.</td></tr>
+      <tr><td>העלאת המערכת לאוויר</td><td>כרגע היא רצה מקומית בלבד</td></tr>
+      <tr><td>תנאי שימוש ומדיניות פרטיות</td><td>המערכת מחזיקה מידע פיננסי של ספקים. עבודה מול עורך דין, ורצה במקביל לפיתוח</td></tr>
+      <tr><td>גבייה</td><td>מומלץ לא לבנות אוטומציה לפני שלושה לקוחות משלמים — לראשונים חשבונית ידנית עובדת מצוין</td></tr>
+      <tr><td>פיילוט</td><td>שניים-שלושה עסקים אמיתיים במקביל. השלב היחיד שלא ניתן לקצר</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note warn">
+    <p><strong>הערה חשובה על מה שכן ומה שלא נבדק.</strong> תיקוני האבטחה והקמת הלקוח
+    נבדקו על המערכת האמיתית והוכחו בפועל. לעומת זאת <strong>המסכים החדשים עצמם טרם נוסו
+    בדפדפן מול נתונים אמיתיים</strong>, ושליחת המיילים לא נוסתה כלל כי אין עדיין חשבון מייל.
+    זה מה שנשאר לפני שאפשר לומר שהמערכת מוכנה ללקוח משלם.</p>
+  </div>
+</section>
+
+<footer class="doc">
+  SupplyFlow · עדכון יולי 2026 · מסמך פנימי
+</footer>
