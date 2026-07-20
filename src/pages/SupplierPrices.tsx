@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { toHebrewError } from "../lib/errors";
 import { Upload, Pencil, Tags } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
@@ -94,7 +95,7 @@ function EditModal({ row, onClose, onSaved }: { row: Row; onClose: () => void; o
       price_effective_date: todayISO(),
       available,
     }).eq('id', row.id);
-    if (upd.error) { setBusy(false); toast(upd.error.message, 'error'); return; }
+    if (upd.error) { setBusy(false); toast(toHebrewError(upd.error.message), 'error'); return; }
     if (p !== row.current_price) {
       await supabase.from('price_history').insert({
         org_id: profile!.org_id, supplier_product_id: row.id, price: p, effective_date: todayISO(), created_by: profile!.id,

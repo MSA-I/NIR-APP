@@ -310,7 +310,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
 
   async function assignSupplier() {
     const res = await supabase.from('bank_transactions').update({ supplier_id: supplierId || null }).eq('id', tx.id);
-    if (res.error) { toast(res.error.message, 'error'); return; }
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     toast('הספק שויך לתנועה');
     void refetch();
   }

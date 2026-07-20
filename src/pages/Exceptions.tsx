@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toHebrewError } from "../lib/errors";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -97,7 +98,7 @@ function ExceptionDetail({ row, canWrite, onClose, onChanged, onNavigate }: {
       resolution_note: note.trim() || null,
     }).eq('id', row.id);
     setBusy(false);
-    if (res.error) { toast(res.error.message, 'error'); return; }
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     await logAction({ orgId: row.org_id, action: `exception:${status}`, entityType: 'exceptions', entityId: row.id, reason: note.trim() || undefined });
     toast('החריג עודכן');
     onChanged();

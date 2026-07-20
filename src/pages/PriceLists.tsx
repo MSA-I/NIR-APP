@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { toHebrewError } from "../lib/errors";
 import { TrendingUp, TrendingDown, Upload, History, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -137,7 +138,7 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
       price_effective_date: date,
       available,
     }).eq('id', row.id);
-    if (upd.error) { setBusy(false); toast(upd.error.message, 'error'); return; }
+    if (upd.error) { setBusy(false); toast(toHebrewError(upd.error.message), 'error'); return; }
     if (p !== row.current_price) {
       await supabase.from('price_history').insert({
         org_id: profile!.org_id, supplier_product_id: row.id, price: p, effective_date: date,

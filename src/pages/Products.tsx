@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toHebrewError } from '../lib/errors';
 import { Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -103,7 +104,7 @@ function ProductForm({ product, onClose, onSaved }: { product: Product | null; o
       ? await supabase.from('products').update(row).eq('id', product.id)
       : await supabase.from('products').insert(row);
     setBusy(false);
-    if (res.error) { toast(res.error.message, 'error'); return; }
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     toast(product ? 'המוצר עודכן' : 'המוצר נוצר');
     onSaved();
   }

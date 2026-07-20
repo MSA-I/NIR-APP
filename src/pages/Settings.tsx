@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toHebrewError } from "../lib/errors";
 import { Settings as SettingsIcon, Users, MailPlus, Send, Ban } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -48,13 +49,13 @@ export default function Settings() {
       },
     }).eq('id', profile!.org_id);
     setBusy(false);
-    if (res.error) { toast(res.error.message, 'error'); return; }
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     toast('ההגדרות נשמרו — ייכנסו לתוקף בכניסה הבאה');
   }
 
   async function toggleActive(u: Profile) {
     const res = await supabase.from('profiles').update({ active: u.active! }).eq('id', u.id);
-    if (res.error) { toast(res.error.message, 'error'); return; }
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     toast(u.active ? 'המשתמש הושבת' : 'המשתמש הופעל');
     void refetch();
   }

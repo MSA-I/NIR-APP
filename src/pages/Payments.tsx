@@ -1,3 +1,4 @@
+import { CreditCard } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { DataTable, ErrorNote, SkeletonTable, type Column } from '../components/ui';
@@ -37,7 +38,7 @@ export default function Payments() {
 
   return (
     <div className="space-y-4">
-      <h1 className="page-title">תשלומים</h1>
+      <h1 className="page-title flex items-center gap-2"><CreditCard size={22} /> תשלומים</h1>
       <DataTable rows={data ?? []} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.reference ?? '').includes(q)}
         emptyTitle="לא נרשמו תשלומים" />

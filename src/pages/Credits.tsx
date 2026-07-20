@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { RotateCcw } from 'lucide-react';
+import { toHebrewError } from '../lib/errors';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -42,7 +44,7 @@ export default function Credits() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="page-title">זיכויים</h1>
+        <h1 className="page-title flex items-center gap-2"><RotateCcw size={22} /> זיכויים</h1>
         <div className="text-sm text-slate-500">סה״כ זיכויים פתוחים: <b className="num text-violet-700">{fmtMoneyExact(openSum)}</b></div>
       </div>
       <DataTable rows={rows} columns={columns} searchable
@@ -85,7 +87,7 @@ function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
       status, resolved_at: ['offset', 'closed', 'received'].includes(status) ? new Date().toISOString() : null,
     }).eq('id', credit.id);
     setBusy(false);
-    if (res.error) { toast(res.error.message, 'error'); return; }
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     await logAction({ orgId: credit.org_id, action: `credit_status:${status}`, entityType: 'credit_requests', entityId: credit.id });
     // offset credits change the linked invoice's effective balance
     if (credit.invoice && ['offset', 'closed'].includes(status)) await refreshInvoicePaymentStatus(credit.invoice.id);

@@ -1,5 +1,5 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, ScrollText, Settings, LogOut, Menu, X, Building2 } from 'lucide-react';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, ScrollText, Settings, LogOut, Menu, X, Building2, Bell } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { APP_NAME } from '../lib/branding';
@@ -7,6 +7,20 @@ import type { Role } from '../lib/types';
 
 interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[]; mobile?: boolean }
 
+// Section 8 regroup — Nir's three working groups (רכש / כספים / בקרה), המשך פיתוח.txt:116-138.
+//
+// Two deliberate departures from a literal reading, both flagged to the user:
+//  - Dashboard stays pinned in the headerless section at the top, not folded into בקרה where
+//    Nir listed it. It is the landing route for owner/office (AuthContext homeFor), and
+//    sections 1-3 make it THE control centre — burying it three groups down would undercut
+//    exactly the screen those sections are trying to elevate.
+//  - Nine items Nir did not place (מחירונים, הזמנה חדשה, דרישות תשלום, התאמות בנק, יומן
+//    ביקורת, הגדרות, and the single-role /pay, /my-prices, /admin) are slotted by the
+//    obvious procurement/finance/control reading. None of it invents business meaning.
+//
+// Order inside רכש keeps the three order-flow items (new/list/receiving) contiguous and
+// ahead of חשבוניות so the mobile bottom bar (mobileItems, keyed off `mobile` + declaration
+// order) stays exactly {הזמנה חדשה, הזמנות, קבלת סחורה, חשבוניות} for staff roles.
 const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: '',
@@ -15,16 +29,11 @@ const NAV: { section: string; items: NavItem[] }[] = [
     ],
   },
   {
-    section: 'תפעול',
+    section: 'רכש',
     items: [
       { to: '/orders/new', label: 'הזמנה חדשה', icon: ShoppingCart, roles: ['owner', 'office', 'kitchen'], mobile: true },
       { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office', 'kitchen'], mobile: true },
       { to: '/receiving', label: 'קבלת סחורה', icon: PackageCheck, roles: ['owner', 'office', 'kitchen'], mobile: true },
-    ],
-  },
-  {
-    section: 'קטלוג',
-    items: [
       { to: '/suppliers', label: 'ספקים', icon: Truck, roles: ['owner', 'office', 'kitchen', 'accountant'] },
       { to: '/products', label: 'מוצרים', icon: Package, roles: ['owner', 'office', 'kitchen'] },
       { to: '/prices', label: 'מחירונים', icon: Tags, roles: ['owner', 'office', 'kitchen'] },
@@ -45,6 +54,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: 'בקרה',
     items: [
+      { to: '/alerts', label: 'התראות', icon: Bell, roles: ['owner', 'office'] },
       { to: '/exceptions', label: 'חריגים', icon: AlertTriangle, roles: ['owner', 'office', 'kitchen', 'accountant'] },
       { to: '/reports', label: 'דוח לרו״ח', icon: BarChart3, roles: ['owner', 'office', 'accountant'] },
       { to: '/audit', label: 'יומן ביקורת', icon: ScrollText, roles: ['owner', 'office', 'accountant'] },
@@ -56,6 +66,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
 export default function Layout() {
   const { profile, org, roleLabels, isPlatformAdmin, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const role = profile?.role;
   // Layout also renders during the initial load, before `org` arrives. Falling back to
@@ -77,6 +88,11 @@ export default function Layout() {
   // bar is already capped at 4 — slice(0,4) would silently drop a tenant item to fit it.
   const mobileItems = roleSections.flatMap((s) => s.items).filter((i) => i.mobile).slice(0, 4);
 
+  // Group headers only earn their space once there is more than one item to organise. supplier
+  // and payer each see a single link, and a "רכש" header over a vendor's own price list reads
+  // as if they were doing the buying. Below the threshold the header is noise, so drop it.
+  const showHeaders = sections.reduce((n, s) => n + s.items.length, 0) > 1;
+
   async function handleSignOut() {
     await signOut();
     navigate('/login');
@@ -96,7 +112,7 @@ export default function Layout() {
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
         {sections.map((s, i) => (
           <div key={i}>
-            {s.section && <div className="px-3 pb-1 text-[11px] font-semibold text-slate-500 uppercase">{s.section}</div>}
+            {showHeaders && s.section && <div className="px-3 pb-1 text-[11px] font-semibold text-slate-500 uppercase">{s.section}</div>}
             <div className="space-y-0.5">
               {s.items.map((item) => (
                 <NavLink key={item.to} to={item.to} className={linkCls} onClick={() => setMobileOpen(false)} end={item.to === '/orders'}>
@@ -139,7 +155,10 @@ export default function Layout() {
 
       {/* Content */}
       <main className="lg:ms-60 px-4 sm:px-6 py-5 pb-24 lg:pb-8 max-w-[1400px]">
-        <Outlet />
+        {/* keyed by path so each screen change re-triggers the fade (section 11) */}
+        <div key={location.pathname} className="page-fade">
+          <Outlet />
+        </div>
       </main>
 
       {/* Mobile bottom nav */}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { toHebrewError } from "../lib/errors";
 import { useNavigate, useParams } from 'react-router-dom';
 import { Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -94,7 +95,7 @@ export function OrderDetail() {
     const res = await supabase.from('purchase_orders').update(patch).eq('id', order.id);
     setBusy(false);
     setConfirm(null);
-    if (res.error) { toast(res.error.message, 'error'); return; }
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     await logAction({ orgId: order.org_id, action: `order_status:${status}`, entityType: 'purchase_orders', entityId: order.id, reason });
     toast('הסטטוס עודכן');
     void refetch();

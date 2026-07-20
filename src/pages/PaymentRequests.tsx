@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { toHebrewError } from '../lib/errors';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, Loader2, Send, CheckCircle2, ShieldAlert, XCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -259,7 +260,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
     if (status === 'approved') { patch.approved_by = profile!.id; patch.approved_at = new Date().toISOString(); }
     const res = await supabase.from('payment_requests').update(patch).eq('id', pr.id);
     setBusy(false);
-    if (res.error) { toast(res.error.message, 'error'); return; }
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     await logAction({ orgId: pr.org_id, action: `payment_request:${status}`, entityType: 'payment_requests', entityId: pr.id, reason });
     toast('הסטטוס עודכן');
     onChanged();

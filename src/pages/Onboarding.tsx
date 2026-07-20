@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { toHebrewError } from "../lib/errors";
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Building2, Tags, Truck, Package, CheckCircle2, Upload, Check, X, Plus,
@@ -295,7 +296,7 @@ function BusinessStep({ onSaved }: { onSaved: () => void }) {
       },
     }).eq('id', profile!.org_id);
     setBusy(false);
-    if (res.error) { toast(res.error.message, 'error'); return; }
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     toast('פרטי העסק נשמרו');
     onSaved();
   }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toHebrewError } from '../lib/errors';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Loader2, Send, CheckCircle2, RotateCcw, SearchCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -62,7 +63,7 @@ export default function InvoiceDetail() {
     setBusy(true);
     const res = await supabase.from('invoices').update({ review_status: status }).eq('id', inv.id);
     setBusy(false);
-    if (res.error) { toast(res.error.message, 'error'); return; }
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     await logAction({ orgId: inv.org_id, action: `invoice_review:${status}`, entityType: 'invoices', entityId: inv.id });
     toast('הסטטוס עודכן');
     void refetch();
@@ -184,7 +185,7 @@ function CreditFromInvoice({ invoice, onClose, onSaved }: { invoice: FullInvoice
       reason, amount: a, status: 'open', notes: notes || null, created_by: profile!.id, created_at: new Date().toISOString(),
     });
     setBusy(false);
-    if (res.error) { toast(res.error.message, 'error'); return; }
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     onSaved();
   }
 

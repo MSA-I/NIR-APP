@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toHebrewError } from "../lib/errors";
 import { Building2, ShieldCheck, Plus, Copy } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -45,7 +46,7 @@ export default function Admin() {
     const status = action === 'suspend' ? 'suspended' : 'active';
     setBusy(true);
     const res = await supabase.from('organizations').update({ status }).eq('id', org.id);
-    if (res.error) { setBusy(false); toast(res.error.message, 'error'); return; }
+    if (res.error) { setBusy(false); toast(toHebrewError(res.error.message), 'error'); return; }
 
     await logAction({
       orgId: org.id,
@@ -77,7 +78,7 @@ export default function Admin() {
     });
     setBusy(false);
 
-    if (!res.ok) { toast(res.message, 'error'); return; }
+    if (!res.ok) { toast(toHebrewError(res.message), 'error'); return; }
     setCreating(false);
     setHandover({ email: form.ownerEmail.trim(), password: form.password, result: res.result });
     void refetch();
