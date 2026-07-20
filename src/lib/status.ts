@@ -4,6 +4,19 @@ export interface StatusMeta { label: string; tone: Tone }
 
 const m = (label: string, tone: Tone): StatusMeta => ({ label, tone });
 
+export const ORG_STATUS: Record<string, StatusMeta> = {
+  trial: m('תקופת ניסיון', 'amber'),
+  active: m('פעיל', 'green'),
+  suspended: m('מושהה', 'red'),
+};
+
+export const INVITATION_STATUS: Record<string, StatusMeta> = {
+  pending: m('ממתינה', 'amber'),
+  accepted: m('התקבלה', 'green'),
+  expired: m('פגה', 'slate'),
+  revoked: m('בוטלה', 'red'),
+};
+
 export const SUPPLIER_STATUS: Record<string, StatusMeta> = {
   active: m('פעיל', 'green'),
   inactive: m('לא פעיל', 'slate'),
@@ -115,6 +128,12 @@ export const SEVERITY: Record<string, StatusMeta> = {
   high: m('גבוהה', 'red'),
 };
 
+/**
+ * Default role labels. The `user_role` enum values themselves are frozen — they are
+ * baked into 77 RLS policies — so a tenant whose vocabulary differs (a garage has no
+ * "מנהל מטבח") overrides the *display* label only. Defaults stay events-venue-neutral
+ * where they can, and are simply the fallback where they cannot.
+ */
 export const ROLE_LABEL: Record<string, string> = {
   owner: 'הנהלה',
   kitchen: 'מנהל מטבח',
@@ -123,3 +142,25 @@ export const ROLE_LABEL: Record<string, string> = {
   accountant: 'רואה חשבון',
   supplier: 'ספק',
 };
+
+/**
+ * Per-tenant role labels, resolved from `organizations.settings.role_labels`.
+ *
+ * `settings` is a jsonb column, so its contents are untrusted at the type level — this
+ * reads it defensively and accepts a string override only for a role that actually
+ * exists in ROLE_LABEL. Unknown keys are dropped: a settings blob can rename a role,
+ * never invent one. Any role the tenant has not customized keeps its Hebrew default.
+ *
+ * Prefer `useAuth().roleLabels` in components; this is the pure function underneath.
+ */
+export function resolveRoleLabels(orgSettings: unknown): Record<string, string> {
+  const raw = (orgSettings as { role_labels?: unknown } | null | undefined)?.role_labels;
+  if (!raw || typeof raw !== 'object') return ROLE_LABEL;
+  const overrides = raw as Record<string, unknown>;
+  const resolved = { ...ROLE_LABEL };
+  for (const role of Object.keys(ROLE_LABEL)) {
+    const value = overrides[role];
+    if (typeof value === 'string' && value.trim()) resolved[role] = value.trim();
+  }
+  return resolved;
+}

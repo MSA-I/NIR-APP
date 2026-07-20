@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
 import { TrendingUp, TrendingDown, Upload, History, Pencil } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, PageLoader, Modal, useToast, ErrorNote, type Column } from '../components/ui';
+import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
 import { fmtDate, todayISO } from '../lib/format';
 import type { SupplierProduct, Supplier, PriceHistory } from '../lib/types';
 
@@ -173,17 +173,26 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   const [busy, setBusy] = useState(false);
 
   async function onFile(file: File) {
-    const buf = await file.arrayBuffer();
-    const wb = XLSX.read(buf);
-    const sheet = wb.Sheets[wb.SheetNames[0]];
-    const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
-    const rows = json.map((r) => ({
-      supplier: String(r['ספק'] ?? r['supplier'] ?? '').trim(),
-      product: String(r['מוצר'] ?? r['product'] ?? '').trim(),
-      price: Number(r['מחיר'] ?? r['price'] ?? 0),
-    })).filter((r) => r.supplier && r.product && r.price > 0);
-    if (!rows.length) { toast('לא נמצאו שורות תקינות. נדרשות עמודות: ספק, מוצר, מחיר', 'error'); return; }
-    setPreview(rows);
+    try {
+      const sheet = await readSheet(file);
+      // exact header names only, as before — this screen has no column-mapping step to correct a wrong guess
+      const cols = {
+        supplier: matchColumn(sheet.headers, ['ספק', 'supplier'], false),
+        product: matchColumn(sheet.headers, ['מוצר', 'product'], false),
+        price: matchColumn(sheet.headers, ['מחיר', 'price'], false),
+      };
+      const { valid } = mapRows(sheet.rows, (r) => {
+        const supplier = cellText(r, cols.supplier);
+        const product = cellText(r, cols.product);
+        const price = cellNumber(r, cols.price) ?? 0;
+        if (!supplier || !product || price <= 0) return skipRow('חסר ספק, מוצר או מחיר תקין');
+        return { supplier, product, price };
+      });
+      if (!valid.length) { toast('לא נמצאו שורות תקינות. נדרשות עמודות: ספק, מוצר, מחיר', 'error'); return; }
+      setPreview(valid);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'שגיאה בקריאת הקובץ', 'error');
+    }
   }
 
   async function runImport() {

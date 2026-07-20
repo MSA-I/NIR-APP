@@ -1,8 +1,8 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, ScrollText, Settings, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, ScrollText, Settings, LogOut, Menu, X, Building2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { ROLE_LABEL } from '../lib/status';
+import { APP_NAME } from '../lib/branding';
 import type { Role } from '../lib/types';
 
 interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[]; mobile?: boolean }
@@ -54,14 +54,28 @@ const NAV: { section: string; items: NavItem[] }[] = [
 ];
 
 export default function Layout() {
-  const { profile, signOut } = useAuth();
+  const { profile, org, roleLabels, isPlatformAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const role = profile?.role;
+  // Layout also renders during the initial load, before `org` arrives. Falling back to
+  // the product name keeps the header honest — it is never another tenant's name.
+  const orgName = org?.name ?? APP_NAME;
 
-  const sections = NAV.map((s) => ({ ...s, items: s.items.filter((i) => role && i.roles.includes(role)) }))
+  const roleSections = NAV.map((s) => ({ ...s, items: s.items.filter((i) => role && i.roles.includes(role)) }))
     .filter((s) => s.items.length > 0);
-  const mobileItems = sections.flatMap((s) => s.items).filter((i) => i.mobile).slice(0, 4);
+
+  // Platform operators are a separate axis from tenant roles, so the console cannot ride
+  // NAV's `roles: Role[]` filter — appending a synthetic Role would misrepresent the
+  // user_role enum the RLS policies are built on. It is appended after the tenant sections
+  // to keep the visual separation between "running this business" and "running the platform".
+  const sections = isPlatformAdmin
+    ? [...roleSections, { section: 'פלטפורמה', items: [{ to: '/admin', label: 'ניהול לקוחות', icon: Building2, roles: [] as Role[] }] }]
+    : roleSections;
+
+  // Deliberately from roleSections: the operator console is a desktop task, and the mobile
+  // bar is already capped at 4 — slice(0,4) would silently drop a tenant item to fit it.
+  const mobileItems = roleSections.flatMap((s) => s.items).filter((i) => i.mobile).slice(0, 4);
 
   async function handleSignOut() {
     await signOut();
@@ -76,8 +90,8 @@ export default function Layout() {
   const sidebar = (
     <div className="flex flex-col h-full">
       <div className="px-4 py-5 border-b border-white/10">
-        <div className="text-lg font-bold text-white">SupplyFlow</div>
-        <div className="text-xs text-slate-400">אולמי גאמוס — ניהול רכש ותשלומים</div>
+        <div className="text-lg font-bold text-white truncate" title={orgName}>{orgName}</div>
+        <div className="text-xs text-slate-400">ניהול רכש ותשלומים</div>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
         {sections.map((s, i) => (
@@ -96,7 +110,7 @@ export default function Layout() {
       </nav>
       <div className="px-4 py-3 border-t border-white/10">
         <div className="text-sm text-white font-medium">{profile?.full_name}</div>
-        <div className="text-xs text-slate-400 mb-2">{role ? ROLE_LABEL[role] : ''}</div>
+        <div className="text-xs text-slate-400 mb-2">{role ? roleLabels[role] : ''}</div>
         <button className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white" onClick={() => void handleSignOut()}>
           <LogOut size={13} /> התנתקות
         </button>
@@ -111,7 +125,7 @@ export default function Layout() {
 
       {/* Mobile top bar */}
       <header className="lg:hidden sticky top-0 z-40 bg-slate-900 text-white flex items-center justify-between px-4 py-3 no-print">
-        <div className="font-bold">SupplyFlow <span className="text-slate-400 font-normal text-sm">| גאמוס</span></div>
+        <div className="font-bold truncate me-3" title={orgName}>{orgName}</div>
         <button onClick={() => setMobileOpen(true)} aria-label="תפריט"><Menu size={22} /></button>
       </header>
       {mobileOpen && (

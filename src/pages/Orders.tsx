@@ -69,7 +69,10 @@ type FullOrder = PurchaseOrder & {
 export function OrderDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, org } = useAuth();
+  // The order sheet and the WhatsApp message both leave the building — they must carry
+  // the buying organization's own name, never the vendor's or another tenant's.
+  const orgName = org?.name ?? '';
   const toast = useToast();
   const [confirm, setConfirm] = useState<{ status: PoStatus; label: string } | null>(null);
   const [supplierConfirmOpen, setSupplierConfirmOpen] = useState(false);
@@ -106,7 +109,7 @@ export function OrderDetail() {
     if (digits.startsWith('0')) digits = '972' + digits.slice(1);
     const total = order.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
     const lines = [
-      `הזמנת רכש #${order.number} — אולמי גאמוס`,
+      `הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`,
       order.expected_date ? `אספקה מבוקשת: ${fmtDate(order.expected_date)}` : '',
       '',
       ...order.items.map((i) => `• ${i.product.name} — ${i.qty} ${i.product.unit}`),
@@ -191,7 +194,7 @@ export function OrderDetail() {
       {/* Printable order sheet */}
       <div className="card card-pad print-area">
         <div className="hidden print:block mb-4">
-          <h2 className="text-xl font-bold">הזמנת רכש #{order.number} — אולמי גאמוס</h2>
+          <h2 className="text-xl font-bold">{`הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`}</h2>
           <div className="text-sm mt-1">ספק: {order.supplier.name} · תאריך: {fmtDate(order.created_at)} {order.expected_date && `· אספקה מבוקשת: ${fmtDate(order.expected_date)}`}</div>
         </div>
         <table className="w-full">

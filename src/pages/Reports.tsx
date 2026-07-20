@@ -10,7 +10,7 @@ import { fmtMoneyExact, fmtDate, fmtMonth, monthRange } from '../lib/format';
 import { logAction } from '../lib/audit';
 
 export default function Reports() {
-  const { profile } = useAuth();
+  const { profile, org } = useAuth();
   const toast = useToast();
   const now = new Date();
   const [month, setMonth] = useState(now.toISOString().slice(0, 7)); // YYYY-MM
@@ -115,7 +115,8 @@ export default function Reports() {
 
       <div className="print-area space-y-4">
         <div className="hidden print:block">
-          <h2 className="text-xl font-bold">אולמי גאמוס — דוח חודשי {fmtMonth(`${month}-01`)}</h2>
+          {/* Printed header handed to the accountant — carries the tenant's own name. */}
+          <h2 className="text-xl font-bold">{`${org?.name ? `${org.name} — ` : ''}דוח חודשי ${fmtMonth(`${month}-01`)}`}</h2>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">

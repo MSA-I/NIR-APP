@@ -1,4 +1,4 @@
-# SupplyFlow — מערכת ניהול רכש, חשבוניות ותשלומים | אולמי גאמוס
+# SupplyFlow — מערכת ניהול רכש, חשבוניות ותשלומים
 
 פלטפורמת Procurement-to-Payment מלאה: ספקים ← מחירונים ← הזמנות רכש ← קבלת סחורה ← חשבוניות ← זיכויים ← דרישות תשלום ← תשלומים ← התאמות בנק ← דוחות הנהלה ורו״ח.
 
@@ -18,7 +18,7 @@ VITE_SUPABASE_URL=https://rkftlbctohswhbbiaqin.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon key>
 ```
 
-## משתמשי דמו (סיסמה לכולם: `Gamos2026!`)
+## משתמשי דמו — קיימים רק לאחר טעינת חבילת הדמו (סיסמה לכולם: `Gamos2026!`)
 
 | אימייל | תפקיד | מסך בית |
 |---|---|---|
@@ -36,7 +36,9 @@ VITE_SUPABASE_ANON_KEY=<anon key>
 - `supabase/migrations/0001_init.sql` — סכימה מלאה: 30 טבלאות, 15 enums, RLS לכל טבלה, טריגר ביקורת גנרי, views ליתרות, bucket אחסון `documents`.
 - `supabase/migrations/0002_payer_execution.sql` — הרשאות ביצוע העברות + RPC לעדכון סטטוס תשלום.
 - `supabase/migrations/0003_kitchen_balance_read.sql` — views של יתרות עם סינון ארגון.
-- `supabase/seed.sql` — נתוני דמו ריאליסטיים בעברית (15 ספקים, 46 מוצרים, כל תרחישי הקצה הפיננסיים).
+- `supabase/seed.sql` — seed ניטרלי לדייר חדש: שורת ארגון + קטגוריות התחלתיות בלבד.
+- `supabase/demo/` — חבילת הדמו כדייר נפרד ("אולמי גאמוס"): 15 ספקים, 46 מוצרים וכל
+  תרחישי הקצה הפיננסיים. נטענת לפי דרישה, ואינה חלק מהתקנה אצל לקוח.
 
 הרצת SQL מול הפרויקט (Management API):
 
@@ -45,7 +47,7 @@ $env:SUPABASE_ACCESS_TOKEN = "sbp_..."   # טוקן אישי מ-supabase.com/das
 .\scripts\db-query.ps1 -SqlFile supabase\migrations\0001_init.sql
 ```
 
-יצירת משתמשי הדמו: `scripts\create-users.ps1` (דורש `SUPABASE_SERVICE_KEY`).
+טעינת חבילת הדמו: `scripts\create-users.ps1` (פעם אחת לפרויקט), ואז `scripts\seed-demo.ps1`.
 
 ## בדיקה ידנית מומלצת (Happy Path)
 
@@ -55,7 +57,8 @@ $env:SUPABASE_ACCESS_TOKEN = "sbp_..."   # טוקן אישי מ-supabase.com/das
 4. **מזכירות:** התאמות בנק ← ייבוא CSV ← מיפוי עמודות ← אישור הצעות התאמה.
 5. **רו״ח / הנהלה:** דוח לרו״ח ← ייצוא Excel ← "סימון כהועבר לרו״ח".
 
-חשבונית `7702` של "בשר והבן" מ-03.07 היא כפילות מכוונת — פתח אותה והרץ בדיקות כדי לראות את מנוע הכפילויות בפעולה.
+לאחר טעינת חבילת הדמו: חשבונית `7702` של "בשר והבן" מ-03.07 היא כפילות מכוונת — פתח אותה
+והרץ בדיקות כדי לראות את מנוע הכפילויות בפעולה.
 
 `npm run build` מריץ בדיקת טיפוסים מלאה + בנייה.
 

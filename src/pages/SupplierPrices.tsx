@@ -15,7 +15,7 @@ type Row = SupplierProduct & { product: { id: string; name: string; unit: string
  * RLS (migration 0004) guarantees the agent reads/writes just its own price rows.
  */
 export default function SupplierPrices() {
-  const { profile } = useAuth();
+  const { profile, org } = useAuth();
   const toast = useToast();
   const [editFor, setEditFor] = useState<Row | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -51,7 +51,8 @@ export default function SupplierPrices() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="page-title flex items-center gap-2"><Tags size={22} /> המחירון שלי</h1>
-          <div className="text-sm text-slate-500 mt-1">{data.supplier.name} — עדכון מחירים וזמינות עבור אולמי גאמוס</div>
+          {/* Read by a supplier agent — names the buying organization, not the vendor. */}
+          <div className="text-sm text-slate-500 mt-1">{`${data.supplier.name} — עדכון מחירים וזמינות${org?.name ? ` עבור ${org.name}` : ''}`}</div>
         </div>
         <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> העלאת מחירון (Excel/CSV)</button>
       </div>

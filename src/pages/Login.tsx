@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Loader2, Lock } from 'lucide-react';
 import { useAuth, homeFor } from '../auth/AuthContext';
+import { APP_NAME } from '../lib/branding';
 
 export default function Login() {
   const { signIn, session, profile, loading } = useAuth();
@@ -29,9 +30,11 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
       <div className="w-full max-w-sm">
+        {/* Nothing is authenticated here, so there is no tenant to name — the login
+            screen wears the product's identity, and the tenant's appears after sign-in. */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white">SupplyFlow</h1>
-          <p className="text-slate-400 mt-1 text-sm">מערכת ניהול רכש, חשבוניות ותשלומים — אולמי גאמוס</p>
+          <h1 className="text-3xl font-bold text-white">{APP_NAME}</h1>
+          <p className="text-slate-400 mt-1 text-sm">מערכת ניהול רכש, חשבוניות ותשלומים</p>
         </div>
         <form onSubmit={(e) => void onSubmit(e)} className="card card-pad space-y-4">
           <div>

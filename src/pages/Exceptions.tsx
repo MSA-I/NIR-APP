@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, PageLoader, useToast, Modal, ErrorNote, type Column } from '../components/ui';
-import { EXCEPTION_TYPE, EXCEPTION_STATUS, SEVERITY, ROLE_LABEL } from '../lib/status';
+import { EXCEPTION_TYPE, EXCEPTION_STATUS, SEVERITY } from '../lib/status';
 import { fmtDate } from '../lib/format';
 import { logAction } from '../lib/audit';
 import type { ExceptionRow, ExceptionStatus } from '../lib/types';
@@ -15,7 +15,7 @@ type Row = ExceptionRow & { supplier: { name: string } | null };
 export default function Exceptions() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { profile } = useAuth();
+  const { profile, roleLabels } = useAuth();
   const [statusFilter, setStatusFilter] = useState(params.get('status') ?? 'open');
   const [typeFilter, setTypeFilter] = useState(params.get('type') ?? '');
   const [selected, setSelected] = useState<Row | null>(null);
@@ -36,7 +36,7 @@ export default function Exceptions() {
     { key: 'type', header: 'סוג', render: (r) => <span className="text-slate-600">{EXCEPTION_TYPE[r.type]}</span> },
     { key: 'title', header: 'תיאור', render: (r) => <span className="font-medium text-slate-900 max-w-96 truncate inline-block">{r.title}</span> },
     { key: 'supplier', header: 'ספק', render: (r) => r.supplier?.name ?? '—' },
-    { key: 'assigned', header: 'באחריות', render: (r) => (r.assigned_role ? ROLE_LABEL[r.assigned_role] : '—') },
+    { key: 'assigned', header: 'באחריות', render: (r) => (r.assigned_role ? roleLabels[r.assigned_role] : '—') },
     { key: 'created', header: 'נפתח', sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
     { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={EXCEPTION_STATUS[r.status]} /> },
   ];

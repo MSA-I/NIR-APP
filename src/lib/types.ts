@@ -12,11 +12,52 @@ export interface Profile {
   supplier_id: string | null; // set only for supplier agent logins
 }
 
+export type OrgStatus = 'trial' | 'active' | 'suspended';
+
 export interface Organization {
   id: string;
   name: string;
   vat_rate: number;
-  settings: { bank_match_days: number; bank_match_amount_tolerance: number };
+  status: OrgStatus;
+  trial_ends_at: string | null;
+  settings: {
+    bank_match_days: number;
+    bank_match_amount_tolerance: number;
+    // Per-tenant display names for roles. The user_role enum is fixed (it is baked into the
+    // RLS policies); only the label moves. resolveRoleLabels() in status.ts honors a key
+    // only if it already exists in ROLE_LABEL, so a settings blob can rename a role but
+    // never invent one.
+    role_labels?: Partial<Record<Role, string>>;
+  };
+}
+
+/** Keys match INVITATION_STATUS in status.ts. Derived, not a stored column. */
+export type InvitationStatus = 'pending' | 'expired' | 'accepted' | 'revoked';
+
+/** Migration 0007. `token_hash` is deliberately absent — it is never read client-side. */
+export interface Invitation {
+  id: string;
+  org_id: string;
+  email: string;
+  role: Role;
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  invited_by: string | null;
+  last_sent_at: string;
+  send_count: number;
+  created_at: string;
+}
+
+/** One row of the platform_orgs() RPC (migration 0006). Cross-tenant, operators only. */
+export interface PlatformOrg {
+  id: string;
+  name: string;
+  status: OrgStatus;
+  vat_rate: number;
+  trial_ends_at: string | null;
+  created_at: string;
+  user_count: number;
 }
 
 export interface Category { id: string; org_id: string; name: string; sort: number }

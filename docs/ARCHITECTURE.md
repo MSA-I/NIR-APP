@@ -4,6 +4,13 @@
 
 SPA ב-React 19 + TypeScript (Vite) מול Supabase כ-backend יחיד: PostgreSQL עם Row-Level Security לכל טבלה, Supabase Auth (אימייל+סיסמה), ו-Storage פרטי למסמכים. אין שרת ביניים — כללי האבטחה נאכפים ב-DB (RLS + פונקציות SECURITY DEFINER), והלוגיקה העסקית (בדיקות כפילות, פיצול הזמנות, הצעות התאמת בנק) ממומשת בשכבת `src/lib` בצד הלקוח מעל שאילתות מוגנות-RLS.
 
+**חריגה מכוונת מ"אין שרת ביניים" (שלב 2, 20.07.2026).** הקמת דייר חדש והזמנת עובדים דורשות
+את מפתח ה-`service_role`, שעוקף את כל ה-RLS ולכן אסור שיגיע לדפדפן. שתי Edge Functions של
+Supabase הן המקום היחיד שבו הוא קיים: `admin-provision` (יצירת ארגון+בעלים) ו-`send-invite`
+(שליחת הזמנה ב-Resend). שתיהן מאמתות את זהות הקורא **לפני** כל פעולה — `getUser()` מול לקוח
+anon, ואז בדיקת הרשאה. פונקציה שמחזיקה `service_role` ובוטחת בקורא שלה היא פשרה מלאה.
+זו הרחבה של אותו עיקרון, לא נטישה שלו: עדיין אין תשתית משלנו לתחזק.
+
 ```
 src/
   auth/AuthContext.tsx     סשן + פרופיל + ניתוב לפי תפקיד
@@ -22,8 +29,12 @@ src/
   pages/                   מסך לכל מודול (ראה מפת מסכים)
 supabase/
   migrations/              0001 סכימה+RLS · 0002 ביצוע העברות · 0003 views יתרות
-  seed.sql                 נתוני דמו מלאים
-scripts/                   db-query.ps1 (SQL דרך Management API), create-users.ps1
+                           0004 סוכני ספק · 0005 בידוד אחסון+אינדקסים · 0006 מפעילי פלטפורמה
+                           0007 הזמנות עובדים · 0008 הגנת תפקיד על views היתרות
+  functions/               admin-provision (הקמת דייר) · send-invite (מייל הזמנה) — service_role
+  seed.sql                 seed ניטרלי לדייר חדש (ארגון + קטגוריות)
+  demo/                    חבילת הדמו כדייר נפרד + reset + audit בידוד
+scripts/                   db-query.ps1 (SQL דרך Management API), create-users.ps1, seed-demo.ps1
 ```
 
 ## מפת מסכים ונתיבים

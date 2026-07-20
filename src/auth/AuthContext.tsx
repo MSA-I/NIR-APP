@@ -1,14 +1,28 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { Organization, Profile } from '../lib/types';
 import { unwrap } from '../lib/useQuery';
+import { APP_NAME } from '../lib/branding';
+import { resolveRoleLabels } from '../lib/status';
 
 interface AuthState {
   session: Session | null;
   profile: Profile | null;
   org: Organization | null;
   loading: boolean;
+  /**
+   * Platform operator, a separate axis from `profile.role` — an operator administers
+   * tenants, a role administers within one. Checked against `platform_admins`, whose
+   * policy runs through is_platform_admin() and never through auth_org(), so it still
+   * answers for an operator whose own org is suspended.
+   *
+   * This is UX only. The security boundary is the RLS policies on `platform_admins` /
+   * `organizations` and the caller check inside the admin-provision function.
+   */
+  isPlatformAdmin: boolean;
+  /** Role → display label for the signed-in tenant. Drop-in replacement for ROLE_LABEL. */
+  roleLabels: Record<string, string>;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
 }
@@ -19,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,19 +46,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!session) { setProfile(null); setOrg(null); return; }
+    if (!session) { setProfile(null); setOrg(null); setIsPlatformAdmin(false); return; }
     let cancelled = false;
     (async () => {
       try {
-        const p = unwrap(await supabase.from('profiles').select('*').eq('id', session.user.id).single()) as Profile;
-        const o = unwrap(await supabase.from('organizations').select('*').eq('id', p.org_id).single()) as Organization;
-        if (!cancelled) { setProfile(p); setOrg(o); }
+        // maybeSingle, not single: zero rows is an expected outcome, not an error.
+        // profiles_select and organizations both filter through auth_org(), which 0006
+        // makes return null for a suspended org -- so a suspended tenant reads nothing,
+        // including their own rows. .single() threw there, and the rejection escaped this
+        // IIFE and dumped the user at /login with no explanation. Now profile stays null
+        // with a live session, which App renders as "account unavailable".
+        const p = unwrap(
+          await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
+        ) as Profile | null;
+        const o = p
+          ? (unwrap(
+              await supabase.from('organizations').select('*').eq('id', p.org_id).maybeSingle(),
+            ) as Organization | null)
+          : null;
+        // Deliberately not gated on `p`: an operator with no tenant profile is valid.
+        const admin = unwrap(
+          await supabase.from('platform_admins').select('user_id').eq('user_id', session.user.id).maybeSingle(),
+        ) as { user_id: string } | null;
+        if (!cancelled) { setProfile(p); setOrg(o); setIsPlatformAdmin(!!admin); }
+      } catch {
+        // Never leave the app spinning on a failed bootstrap.
+        if (!cancelled) { setProfile(null); setOrg(null); setIsPlatformAdmin(false); }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
   }, [session]);
+
+  // index.html ships a tenant-neutral <title> (the product name) because the database
+  // is unreachable at parse time. We prefix the tenant only once it is actually known,
+  // so the tab never shows one customer's name to another, and it reverts on sign-out.
+  useEffect(() => {
+    document.title = org ? `${org.name} — ${APP_NAME}` : APP_NAME;
+  }, [org]);
+
+  const roleLabels = useMemo(() => resolveRoleLabels(org?.settings), [org?.settings]);
 
   async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -55,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, profile, org, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ session, profile, org, loading, isPlatformAdmin, roleLabels, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
