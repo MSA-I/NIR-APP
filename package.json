@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "check:alerts": "node scripts/check-alert-rules.ts",
+    "build": "tsc --noEmit && npm run check:alerts && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

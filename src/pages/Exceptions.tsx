@@ -4,7 +4,7 @@ import { AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, PageLoader, useToast, Modal, ErrorNote, type Column } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { EXCEPTION_TYPE, EXCEPTION_STATUS, SEVERITY } from '../lib/status';
 import { fmtDate } from '../lib/format';
 import { logAction } from '../lib/audit';
@@ -41,7 +41,7 @@ export default function Exceptions() {
     { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={EXCEPTION_STATUS[r.status]} /> },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable cols={5} />;
   if (error) return <ErrorNote message={error} />;
 
   return (

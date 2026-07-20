@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { DataTable, PageLoader, ErrorNote, type Column } from '../components/ui';
+import { DataTable, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import type { Payment } from '../lib/types';
 
@@ -32,7 +32,7 @@ export default function Payments() {
     { key: 'notes', header: 'הערות', render: (r) => <span className="text-slate-500 max-w-56 truncate inline-block">{r.notes ?? ''}</span> },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable cols={5} />;
   if (error) return <ErrorNote message={error} />;
 
   return (

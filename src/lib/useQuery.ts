@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toHebrewError } from './errors';
 
 // ponytail: tiny fetch hook instead of react-query — add react-query only if caching/invalidation outgrows this
 export function useQuery<T>(fn: () => Promise<T>, deps: unknown[] = []) {
@@ -14,16 +15,25 @@ export function useQuery<T>(fn: () => Promise<T>, deps: unknown[] = []) {
     try {
       setData(await fnRef.current());
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      // Every page renders this through ErrorNote, so a raw Postgres string here reaches
+      // a Hebrew-speaking user on any screen that fails to load.
+      setError(toHebrewError(e));
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // Dropping data on a deps change is what separates the two states below: a new key
+  // (different :id, different month) invalidates what we hold, a manual refetch after a
+  // mutation does not. Without this, switching records would show the previous record's
+  // data as if it were the new one.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void refetch(); }, deps);
+  useEffect(() => { setData(null); void refetch(); }, deps);
 
-  return { data, loading, error, refetch };
+  // `loading` means "nothing to show yet" — it drives the skeletons. `fetching` means
+  // "a request is in flight" and stays false-negative-free for refetch-after-mutation,
+  // where blanking the page the user is reading is worse than showing nothing new.
+  return { data, loading: loading && data === null, fetching: loading, error, refetch };
 }
 
 // returns `any` on purpose: without generated DB types, supabase-js infers awkward

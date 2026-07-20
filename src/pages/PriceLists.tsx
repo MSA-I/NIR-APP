@@ -3,7 +3,7 @@ import { TrendingUp, TrendingDown, Upload, History, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, PageLoader, Modal, useToast, ErrorNote, type Column } from '../components/ui';
+import { DataTable, Modal, useToast, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
 import { fmtDate, todayISO } from '../lib/format';
 import type { SupplierProduct, Supplier, PriceHistory } from '../lib/types';
@@ -66,7 +66,7 @@ export default function PriceLists() {
     },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable cols={5} />;
   if (error) return <ErrorNote message={error} />;
 
   return (

@@ -4,7 +4,7 @@ import { Plus, AlertTriangle, AlertOctagon, Info } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, PageLoader, ErrorNote, type Column } from '../components/ui';
+import { DataTable, StatusBadge, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import type { Invoice } from '../lib/types';
@@ -71,7 +71,7 @@ export function InvoicesList() {
     { key: 'export', header: 'רו״ח', render: (r) => <StatusBadge meta={INVOICE_EXPORT_STATUS[r.export_status]} /> },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable cols={6} />;
   if (error) return <ErrorNote message={error} />;
 
   return (

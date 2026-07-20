@@ -3,7 +3,7 @@ import { Landmark, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageLoader, useToast, StatusBadge, Modal, EmptyState, ErrorNote } from '../components/ui';
+import { useToast, StatusBadge, Modal, EmptyState, ErrorNote, SkeletonList } from '../components/ui';
 import { DocumentList } from '../components/FileUpload';
 import { refreshInvoicePaymentStatus } from '../lib/checks';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
@@ -28,7 +28,7 @@ export default function PayerQueue() {
       .in('status', ['approved', 'sent_for_execution', 'executed', 'matched'])
       .order('due_date', { ascending: true, nullsFirst: false })) as Promise<Row[]>);
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonList />;
   if (error) return <ErrorNote message={error} />;
 
   const pending = (data ?? []).filter((r) => ['approved', 'sent_for_execution'].includes(r.status));

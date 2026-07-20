@@ -4,7 +4,7 @@ import { Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle } fro
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, PageLoader, useToast, ConfirmDialog, Modal, ErrorNote, type Column } from '../components/ui';
+import { DataTable, StatusBadge, PageLoader, useToast, ConfirmDialog, Modal, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { PO_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime } from '../lib/format';
 import { logAction } from '../lib/audit';
@@ -40,7 +40,7 @@ export function OrdersList() {
     { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={PO_STATUS[r.status]} /> },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable cols={6} />;
   if (error) return <ErrorNote message={error} />;
 
   return (

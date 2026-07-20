@@ -6,10 +6,11 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, PageLoader, useToast, Modal, ErrorNote, type Column } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { BANK_TX_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime } from '../lib/format';
 import { refreshInvoicePaymentStatus } from '../lib/checks';
+import { toHebrewError } from '../lib/errors';
 import { logAction } from '../lib/audit';
 import type { BankTransaction, BankImport, Supplier } from '../lib/types';
 
@@ -64,7 +65,7 @@ export default function Bank() {
     { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={BANK_TX_STATUS[r.status]} /> },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable cols={6} />;
   if (error) return <ErrorNote message={error} />;
 
   return (
@@ -386,7 +387,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   async function openException() {
     setBusy(true);
     const type = supplierId ? 'payment_without_invoice' : 'unknown_supplier';
-    await supabase.from('exceptions').insert({
+    const res = await supabase.from('exceptions').insert({
       org_id: tx.org_id, type, severity: 'medium', status: 'open',
       title: supplierId
         ? `תשלום ללא חשבונית — ${data?.suppliers.find((s) => s.id === supplierId)?.name ?? ''} (${fmtMoneyExact(tx.amount)})`
@@ -395,12 +396,14 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
       supplier_id: supplierId || null, bank_transaction_id: tx.id, assigned_role: 'office',
     });
     setBusy(false);
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     toast('נפתח חריג לבירור');
     onChanged();
   }
 
   async function ignore() {
-    await supabase.from('bank_transactions').update({ status: 'ignored' }).eq('id', tx.id);
+    const res = await supabase.from('bank_transactions').update({ status: 'ignored' }).eq('id', tx.id);
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     toast('התנועה סומנה כלא רלוונטית');
     onChanged();
   }

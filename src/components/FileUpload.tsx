@@ -2,7 +2,8 @@ import { useRef, useState } from 'react';
 import { Camera, FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
-import { useToast } from './ui';
+import { useToast, Skeleton, ConfirmDialog } from './ui';
+import { ok, toHebrewError } from '../lib/errors';
 import { useQuery, unwrap } from '../lib/useQuery';
 import type { DocumentRow } from '../lib/types';
 import { fmtDateTime } from '../lib/format';
@@ -61,9 +62,12 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<DocumentRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const { data: docs, refetch } = useQuery<DocumentRow[]>(async () =>
-    unwrap(await supabase.from('documents').select('*').eq('entity_type', entityType).eq('entity_id', entityId).order('created_at', { ascending: false })),
+  const { data: docs, loading, refetch } = useQuery<DocumentRow[]>(async () =>
+    unwrap(await supabase.from('documents').select('*').eq('entity_type', entityType).eq('entity_id', entityId)
+      .is('deleted_at', null).order('created_at', { ascending: false })),
     [entityType, entityId]);
 
   async function onPick(files: FileList | null) {
@@ -87,10 +91,27 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
     window.open(data.signedUrl, '_blank');
   }
 
+  // Soft delete (migration 0010). Was a one-click hard delete of both the row and the stored
+  // file, with no confirmation and no error check — the only destructive action in the app
+  // without a ConfirmDialog, and the deleted file is the scan of the original document.
+  //
+  // The stored object is deliberately left in place. Clearing the row while destroying the
+  // bytes would keep the record and lose the document, which defeats the purpose of a soft
+  // delete on a financial record.
   async function remove(doc: DocumentRow) {
-    await supabase.storage.from('documents').remove([doc.storage_path]);
-    await supabase.from('documents').delete().eq('id', doc.id);
-    await refetch();
+    setDeleting(true);
+    try {
+      ok(await supabase.from('documents')
+        .update({ deleted_at: new Date().toISOString(), deleted_by: profile?.id ?? null })
+        .eq('id', doc.id));
+      toast('המסמך הוסר');
+      setPending(null);
+      await refetch();
+    } catch (e) {
+      toast(toHebrewError(e), 'error');
+    } finally {
+      setDeleting(false);
+    }
   }
 
   const canDelete = profile?.role === 'owner' || profile?.role === 'office';
@@ -109,7 +130,20 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
           {...(capture ? { capture: 'environment' as const } : {})}
           onChange={(e) => void onPick(e.target.files)} />
       </div>
-      {docs?.length ? (
+      {loading ? (
+        // Not cosmetic: `docs` is null while fetching, and the empty branch below claims
+        // "no documents". On an invoice that reads as "no scan attached" when there is one.
+        <div className="border border-slate-100 rounded-lg divide-y divide-slate-100" role="status" aria-busy="true">
+          <span className="sr-only">טוען מסמכים</span>
+          {[0, 1].map((i) => (
+            <div key={i} className="flex items-center gap-2 px-3 py-2.5">
+              <Skeleton className="h-3.5 w-3.5 shrink-0" />
+              <Skeleton className="h-3 w-40" />
+              <Skeleton className="h-3 w-24 ms-auto shrink-0" />
+            </div>
+          ))}
+        </div>
+      ) : docs?.length ? (
         <ul className="divide-y divide-slate-100 border border-slate-100 rounded-lg">
           {docs.map((d) => (
             <li key={d.id} className="flex items-center gap-2 px-3 py-2 text-sm">
@@ -117,7 +151,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
               <button className="text-indigo-700 hover:underline truncate" onClick={() => void open(d)}>{d.file_name}</button>
               <span className="text-xs text-slate-400 ms-auto shrink-0">{fmtDateTime(d.created_at)}</span>
               {canDelete && (
-                <button className="btn-ghost p-1! text-slate-400 hover:text-rose-600" onClick={() => void remove(d)} aria-label="מחיקה">
+                <button className="btn-ghost p-1! text-slate-400 hover:text-rose-600" onClick={() => setPending(d)} aria-label="מחיקה">
                   <Trash2 size={14} />
                 </button>
               )}
@@ -127,6 +161,17 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
       ) : (
         <div className="text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg px-3 py-4 text-center">אין מסמכים</div>
       )}
+
+      <ConfirmDialog
+        open={pending !== null}
+        onClose={() => setPending(null)}
+        onConfirm={() => { if (pending) void remove(pending); }}
+        title="הסרת מסמך"
+        message={`המסמך "${pending?.file_name ?? ''}" יוסר מהרשימה. הקובץ עצמו נשמר, וההסרה ניתנת לביטול על ידי מנהל המערכת.`}
+        confirmLabel="הסרה"
+        danger
+        busy={deleting}
+      />
     </div>
   );
 }

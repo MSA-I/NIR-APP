@@ -4,7 +4,7 @@ import { Plus, Loader2, Send, CheckCircle2, ShieldAlert, XCircle } from 'lucide-
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, PageLoader, useToast, Modal, ConfirmDialog, ErrorNote, type Column } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ConfirmDialog, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { CheckList } from './Invoices';
 import { runPaymentRequestChecks, type CheckResult } from '../lib/checks';
 import { logAction } from '../lib/audit';
@@ -40,7 +40,7 @@ export default function PaymentRequests() {
     { key: 'created', header: 'נוצרה', sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable cols={6} />;
   if (error) return <ErrorNote message={error} />;
 
   return (

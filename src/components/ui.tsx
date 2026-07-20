@@ -9,11 +9,109 @@ export function StatusBadge({ meta }: { meta: StatusMeta | undefined }) {
 }
 
 /* ---------- Spinner / loaders ---------- */
+// Kept for the auth gates and for regions with no content shape worth mirroring.
+// Anything that resolves into a known layout should use a Skeleton* below instead —
+// a centred spinner discards the page title and collapses the height, so the whole
+// screen jumps when data lands.
 export function PageLoader() {
   return (
     <div className="flex items-center justify-center py-24 text-slate-400">
       <Loader2 className="animate-spin" size={28} />
     </div>
+  );
+}
+
+/* ---------- Skeletons ---------- */
+export function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`skeleton ${className}`} aria-hidden />;
+}
+
+// One wrapper for every skeleton: screen readers get a single "טוען" instead of
+// narrating a wall of empty boxes.
+function SkeletonRegion({ children }: { children: ReactNode }) {
+  return (
+    <div role="status" aria-busy="true" className="space-y-4">
+      <span className="sr-only">טוען</span>
+      {children}
+    </div>
+  );
+}
+
+function SkeletonTitle() {
+  return <Skeleton className="h-7 w-48" />;
+}
+
+/** Mirrors the DataTable shell: card → optional toolbar → header row → body rows. */
+export function SkeletonTable({ rows = 8, cols = 5, title = true, toolbar = true }: {
+  rows?: number; cols?: number; title?: boolean; toolbar?: boolean;
+}) {
+  // Varied widths so the placeholder reads as text, not as a barcode.
+  const widths = ['w-32', 'w-20', 'w-28', 'w-16', 'w-24', 'w-20'];
+  return (
+    <SkeletonRegion>
+      {title && <SkeletonTitle />}
+      <div className="card overflow-hidden">
+        {toolbar && (
+          <div className="flex items-center gap-2 p-3 border-b border-slate-100">
+            <Skeleton className="h-9 w-full max-w-xs" />
+          </div>
+        )}
+        <div className="bg-slate-50 border-b border-slate-100 flex gap-3 px-3 py-2.5">
+          {Array.from({ length: cols }, (_, i) => <Skeleton key={i} className={`h-3 ${widths[i % widths.length]}`} />)}
+        </div>
+        <div className="divide-y divide-slate-100">
+          {Array.from({ length: rows }, (_, r) => (
+            <div key={r} className="flex gap-3 px-3 py-3.5">
+              {Array.from({ length: cols }, (_, c) => <Skeleton key={c} className={`h-3.5 ${widths[(r + c) % widths.length]}`} />)}
+            </div>
+          ))}
+        </div>
+      </div>
+    </SkeletonRegion>
+  );
+}
+
+/** Mirrors a row of KpiCard / stat cards. `cols` matches the grid the page uses. */
+export function SkeletonCards({ count = 4, cols = 4, title = false }: {
+  count?: number; cols?: 3 | 4 | 5 | 6; title?: boolean;
+}) {
+  const grid = { 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-4', 5: 'md:grid-cols-3 xl:grid-cols-5', 6: 'md:grid-cols-4 xl:grid-cols-6' }[cols];
+  return (
+    <SkeletonRegion>
+      {title && <SkeletonTitle />}
+      <div className={`grid grid-cols-2 ${grid} gap-3`}>
+        {Array.from({ length: count }, (_, i) => (
+          <div key={i} className="card card-pad">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-6 w-24 mt-2" />
+          </div>
+        ))}
+      </div>
+    </SkeletonRegion>
+  );
+}
+
+/** Mirrors the stacked card-button lists (Receiving, PayerQueue) — not a table. */
+export function SkeletonList({ rows = 5, title = true }: { rows?: number; title?: boolean }) {
+  return (
+    <SkeletonRegion>
+      {title && <SkeletonTitle />}
+      <div className="max-w-2xl space-y-3">
+        {Array.from({ length: rows }, (_, i) => (
+          <div key={i} className="card card-pad">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+            <div className="flex gap-3 mt-3">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </SkeletonRegion>
   );
 }
 

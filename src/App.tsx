@@ -7,6 +7,7 @@ import type { Role } from './lib/types';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Alerts from './pages/Alerts';
 import { SuppliersList, SupplierCard } from './pages/Suppliers';
 import Products from './pages/Products';
 import PriceLists from './pages/PriceLists';
@@ -127,6 +128,9 @@ export default function App() {
 
         <Route path="/bank" element={<Guard roles={['owner', 'office', 'accountant']}><Bank /></Guard>} />
         <Route path="/exceptions" element={<Guard roles={READERS}><Exceptions /></Guard>} />
+        {/* Not in the sidebar yet — the nav regroup (סעיף 8) owns Layout.tsx and is queued
+            behind the sections 1-6 work. Reachable by URL until then. */}
+        <Route path="/alerts" element={<Guard roles={FINANCE}><Alerts /></Guard>} />
         <Route path="/reports" element={<Guard roles={['owner', 'office', 'accountant']}><Reports /></Guard>} />
         <Route path="/audit" element={<Guard roles={['owner', 'office', 'accountant']}><AuditLogPage /></Guard>} />
         <Route path="/settings" element={<Guard roles={['owner']}><Settings /></Guard>} />

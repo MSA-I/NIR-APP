@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Building2, ShieldCheck, Plus, Copy } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { DataTable, StatusBadge, ConfirmDialog, Modal, PageLoader, useToast, ErrorNote, type Column } from '../components/ui';
+import { DataTable, StatusBadge, ConfirmDialog, Modal, useToast, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { fmtDate, fmtNum, todayISO } from '../lib/format';
 import { logAction } from '../lib/audit';
 import { ORG_STATUS } from '../lib/status';
@@ -103,7 +103,7 @@ export default function Admin() {
     },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable cols={5} />;
   if (error) return <ErrorNote message={error} />;
   if (!data?.isPlatformAdmin) return <ErrorNote message="המסך הזה פתוח למנהלי פלטפורמה בלבד." />;
 

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, PageLoader, useToast, Modal, ErrorNote, type Column } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { CREDIT_REASON, CREDIT_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import { refreshInvoicePaymentStatus } from '../lib/checks';
@@ -36,7 +36,7 @@ export default function Credits() {
     { key: 'created', header: 'נפתח', sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable cols={6} />;
   if (error) return <ErrorNote message={error} />;
 
   return (

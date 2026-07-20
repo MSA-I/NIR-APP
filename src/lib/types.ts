@@ -193,6 +193,7 @@ export interface DocumentRow {
   id: string; org_id: string; entity_type: string; entity_id: string;
   storage_path: string; file_name: string; mime_type: string | null;
   uploaded_by: string | null; created_at: string;
+  deleted_at: string | null; deleted_by: string | null; // 0010 — soft delete; the stored file is kept
 }
 
 export interface AuditLog {

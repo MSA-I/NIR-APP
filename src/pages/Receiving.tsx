@@ -4,7 +4,7 @@ import { Plus, Minus, PackageCheck, Save, CheckCircle2, FileText, Camera } from 
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageLoader, useToast, StatusBadge, EmptyState, ErrorNote } from '../components/ui';
+import { PageLoader, useToast, StatusBadge, EmptyState, ErrorNote, SkeletonList } from '../components/ui';
 import { DocumentList } from '../components/FileUpload';
 import { PO_STATUS, RECEIPT_LINE_STATUS } from '../lib/status';
 import { fmtDate } from '../lib/format';
@@ -24,7 +24,7 @@ export function ReceivingList() {
       .in('status', ['sent', 'confirmed', 'partial'])
       .order('expected_date', { ascending: true })) as Promise<OrderForReceiving[]>);
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonList />;
   if (error) return <ErrorNote message={error} />;
 
   return (

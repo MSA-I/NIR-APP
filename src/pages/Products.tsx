@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, PageLoader, Modal, useToast, ErrorNote, type Column } from '../components/ui';
+import { DataTable, Modal, useToast, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { useCategories } from './Suppliers';
 import type { Product } from '../lib/types';
 
@@ -43,14 +43,17 @@ export default function Products() {
     { key: 'cat', header: 'קטגוריה', sortValue: (r) => r.category?.name ?? '', render: (r) => r.category?.name ?? '—' },
     { key: 'unit', header: 'יחידת מידה', render: (r) => r.unit },
     { key: 'sku', header: 'מק״ט', render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
-    { key: 'suppliers', header: 'ספקים', sortValue: (r) => r.supplierCount ?? 0, render: (r) => r.supplierCount || '—' },
+    // Shows 0, not `—`. The dash means "no data"; a product with no supplier is a measured
+    // fact and an actionable one — it cannot be ordered. Hiding it behind the same glyph as
+    // "unknown" buried the very rows worth looking at.
+    { key: 'suppliers', header: 'ספקים', className: 'num', sortValue: (r) => r.supplierCount ?? 0, render: (r) => r.supplierCount ?? 0 },
     {
       key: 'best', header: 'מחיר מיטבי', className: 'num', sortValue: (r) => r.bestPrice ?? 0,
       render: (r) => (r.bestPrice != null ? `₪${r.bestPrice.toFixed(2)}` : '—'),
     },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable cols={5} />;
   if (error) return <ErrorNote message={error} />;
 
   return (

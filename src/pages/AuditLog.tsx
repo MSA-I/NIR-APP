@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ScrollText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { DataTable, PageLoader, Modal, ErrorNote, type Column } from '../components/ui';
+import { DataTable, Modal, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { fmtDateTime } from '../lib/format';
 import type { AuditLog as AuditRow } from '../lib/types';
 
@@ -49,7 +49,7 @@ export default function AuditLogPage() {
     { key: 'reason', header: 'סיבה', render: (r) => <span className="text-slate-500 max-w-72 truncate inline-block">{r.reason ?? ''}</span> },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable rows={12} cols={5} />;
   if (error) return <ErrorNote message={error} />;
 
   return (

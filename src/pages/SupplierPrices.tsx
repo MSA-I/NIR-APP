@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, PageLoader, Modal, useToast, ErrorNote, type Column } from '../components/ui';
+import { DataTable, Modal, useToast, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { fmtDate, todayISO } from '../lib/format';
 import type { Supplier, SupplierProduct } from '../lib/types';
 
@@ -43,7 +43,7 @@ export default function SupplierPrices() {
     },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable cols={5} />;
   if (error || !data) return <ErrorNote message={error ?? 'שגיאה'} />;
 
   return (

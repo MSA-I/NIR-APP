@@ -4,10 +4,11 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageLoader, StatusBadge, useToast, ErrorNote } from '../components/ui';
+import { StatusBadge, useToast, ErrorNote, SkeletonCards } from '../components/ui';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtMonth, monthRange } from '../lib/format';
 import { logAction } from '../lib/audit';
+import { ok, toHebrewError } from '../lib/errors';
 
 export default function Reports() {
   const { profile, org } = useAuth();
@@ -66,24 +67,28 @@ export default function Reports() {
     if (!data || !profile) return;
     setBusy(true);
     try {
+      // ok() on every write: supabase-js resolves successfully on a rejected statement, so
+      // without it a failed update still fell through to the success toast below.
       if (data.export) {
-        await supabase.from('monthly_exports').update({ status: 'sent', sent_at: new Date().toISOString(), sent_by: profile.id }).eq('id', data.export.id);
+        ok(await supabase.from('monthly_exports').update({ status: 'sent', sent_at: new Date().toISOString(), sent_by: profile.id }).eq('id', data.export.id));
       } else {
-        await supabase.from('monthly_exports').insert({
+        ok(await supabase.from('monthly_exports').insert({
           org_id: profile.org_id, month: `${month}-01`, status: 'sent', sent_at: new Date().toISOString(), sent_by: profile.id,
-        });
+        }));
       }
       const ids = data.invoices.filter((i) => i.export_status === 'not_sent').map((i) => i.id);
-      if (ids.length) await supabase.from('invoices').update({ export_status: 'sent' }).in('id', ids);
-      await logAction({ orgId: profile.org_id, action: 'month_sent_to_accountant', entityType: 'monthly_exports', reason: month });
-      toast('החודש סומן כהועבר לרו״ח');
+      if (ids.length) ok(await supabase.from('invoices').update({ export_status: 'sent' }).in('id', ids));
+      const audit = await logAction({ orgId: profile.org_id, action: 'month_sent_to_accountant', entityType: 'monthly_exports', reason: month });
+      toast(audit.logged ? 'החודש סומן כהועבר לרו״ח' : 'החודש סומן כהועבר לרו״ח — אך הפעולה לא נרשמה ביומן הביקורת');
       void refetch();
+    } catch (e) {
+      toast(toHebrewError(e), 'error');
     } finally {
       setBusy(false);
     }
   }
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonCards count={6} cols={6} title />;
   if (error || !data) return <ErrorNote message={error ?? 'שגיאה'} />;
 
   const totals = {
