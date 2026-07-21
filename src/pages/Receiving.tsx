@@ -36,12 +36,12 @@ export function ReceivingList() {
         <div className="space-y-3">
           {data.map((o) => (
             <button key={o.id} onClick={() => navigate(`/receiving/${o.id}`)}
-              className="card w-full text-start p-4 hover:border-indigo-300 active:scale-[.99] transition-all">
+              className="card w-full text-start p-4 hover:border-action-line active:scale-[.99] transition-all">
               <div className="flex items-center justify-between">
-                <div className="font-semibold text-slate-900 text-base">{o.supplier.name}</div>
+                <div className="font-semibold text-ink text-base">{o.supplier.name}</div>
                 <StatusBadge meta={PO_STATUS[o.status]} />
               </div>
-              <div className="flex items-center gap-4 mt-2 text-sm text-slate-500">
+              <div className="flex items-center gap-4 mt-2 text-sm text-ink-muted">
                 <span>הזמנה #{o.number}</span>
                 <span>{o.items.length} פריטים</span>
                 {o.expected_date && <span>אספקה: {fmtDate(o.expected_date)}</span>}
@@ -188,8 +188,8 @@ export function ReceiveOrder() {
     return (
       <div className="max-w-xl mx-auto space-y-4 text-center pt-6">
         <CheckCircle2 size={48} className="text-emerald-500 mx-auto" />
-        <h1 className="text-xl font-bold text-slate-900">הקבלה נשמרה!</h1>
-        <p className="text-sm text-slate-500">עכשיו אפשר לצלם את החשבונית או תעודת המשלוח ולצרף אותה לקבלה.</p>
+        <h1 className="text-xl font-bold text-ink">הקבלה נשמרה!</h1>
+        <p className="text-sm text-ink-muted">עכשיו אפשר לצלם את החשבונית או תעודת המשלוח ולצרף אותה לקבלה.</p>
         <div className="card card-pad text-start">
           <DocumentList entityType="goods_receipt" entityId={doneReceiptId} capture />
         </div>
@@ -226,7 +226,7 @@ export function ReceiveOrder() {
     <div className="max-w-xl mx-auto space-y-3 pb-28">
       <div>
         <h1 className="page-title flex items-center gap-2"><PackageCheck size={22} /> קבלת סחורה</h1>
-        <div className="text-sm text-slate-500 mt-1">{order.supplier.name} · הזמנה #{order.number}</div>
+        <div className="text-sm text-ink-muted mt-1">{order.supplier.name} · הזמנה #{order.number}</div>
         {data?.draft && <div className="mt-1 text-xs text-await-fg">נטענה טיוטת קבלה שנשמרה קודם</div>}
       </div>
 
@@ -238,8 +238,8 @@ export function ReceiveOrder() {
           <div key={item.id} className={`card p-4 border-2 ${CARD[RECEIPT_LINE_STATUS[line.status].tone]}`}>
             <div className="flex items-start justify-between gap-2">
               <div>
-                <div className="font-semibold text-slate-900">{item.product.name}</div>
-                <div className="text-xs text-slate-500 mt-0.5">
+                <div className="font-semibold text-ink">{item.product.name}</div>
+                <div className="text-xs text-ink-muted mt-0.5">
                   הוזמן: {item.qty} {item.product.unit}
                   {item.received_qty > 0 && ` · התקבל בעבר: ${item.received_qty}`}
                 </div>
@@ -248,7 +248,7 @@ export function ReceiveOrder() {
             </div>
 
             <div className="flex items-center gap-2 mt-3">
-              <span className="text-sm text-slate-600 w-16">התקבל:</span>
+              <span className="text-sm text-ink-soft w-16">התקבל:</span>
               <button className="btn-secondary p-3!" onClick={() => setLine(item.id, { qty: Math.max(0, line.qty - 1) }, item)} aria-label="הפחתה"><Minus size={18} /></button>
               <input type="number" min={0} step="any" inputMode="decimal"
                 className="input w-24! num text-center text-lg! py-2.5! font-semibold"
@@ -262,7 +262,7 @@ export function ReceiveOrder() {
             <div className="grid grid-cols-5 gap-1.5 mt-3">
               {statusButtons.map((b) => (
                 <button key={b.key}
-                  className={`rounded-lg border min-h-11 flex items-center justify-center text-xs font-medium transition-colors ${line.status === b.key ? SOLID[RECEIPT_LINE_STATUS[b.key].tone] : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                  className={`rounded-lg border min-h-11 flex items-center justify-center text-xs font-medium transition-colors ${line.status === b.key ? SOLID[RECEIPT_LINE_STATUS[b.key].tone] : 'border-line text-ink-soft hover:bg-surface-sunken'}`}
                   onClick={() => setLine(item.id, { status: b.key, ...(b.key === 'missing' ? { qty: 0 } : {}) })}>
                   {b.label}
                 </button>
@@ -277,15 +277,15 @@ export function ReceiveOrder() {
         );
       })}
 
-      <label className="flex items-center gap-2 text-sm text-slate-700 px-1">
+      <label className="flex items-center gap-2 text-sm text-ink-mid px-1">
         <input type="checkbox" className="rounded" checked={openCredits} onChange={(e) => setOpenCredits(e.target.checked)} />
         פתיחת דרישות זיכוי אוטומטית לפריטים חסרים / פגומים / שהוחזרו
       </label>
 
       {/* sticky action bar */}
-      <div className="fixed bottom-14 lg:bottom-0 inset-x-0 lg:ms-60 bg-white border-t border-slate-200 p-3 flex gap-2 z-30"
+      <div className="fixed bottom-14 lg:bottom-0 inset-x-0 lg:ms-60 bg-surface border-t border-line p-3 flex gap-2 z-30"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
-        <div className="hidden sm:flex items-center text-xs text-slate-500 me-auto ps-2">
+        <div className="hidden sm:flex items-center text-xs text-ink-muted me-auto ps-2">
           <Camera size={14} className="me-1" /> צילום החשבונית יתאפשר מיד לאחר סיום הקבלה
         </div>
         <button className="btn-secondary flex-1 sm:flex-none" disabled={busy} onClick={() => void save(false)}>

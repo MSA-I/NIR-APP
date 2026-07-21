@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
 import { BANK_TX_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime } from '../lib/format';
 import { refreshInvoicePaymentStatus } from '../lib/checks';
@@ -188,7 +188,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
     <Modal open onClose={onClose} title="ייבוא תדפיס בנק" wide>
       {result ? (
         <div className="space-y-4">
-          <div className="rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm px-4 py-3">{result}</div>
+          <Note tone="done">{result}</Note>
           <div className="flex justify-end"><button className="btn-primary" onClick={onDone}>סיום</button></div>
         </div>
       ) : !headers.length ? (
@@ -482,7 +482,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
               ) : <div className="text-sm text-slate-500">אין חשבוניות פתוחות לספק</div>}
               {chosenSum > 0 && (
                 <div className="flex items-center justify-between mt-2 text-sm">
-                  <span className={Math.abs(chosenSum - tx.amount) > 1 ? 'text-amber-600' : 'text-emerald-600'}>
+                  <span className={Math.abs(chosenSum - tx.amount) > 1 ? 'text-await-fg' : 'text-done-fg'}>
                     הוקצה {fmtMoneyExact(chosenSum)} מתוך {fmtMoneyExact(tx.amount)}
                   </span>
                   <button className="btn-primary" disabled={busy} onClick={() => void confirmManual()}>אישור התאמה ידנית</button>

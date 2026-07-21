@@ -80,7 +80,7 @@ function AccountUnavailable() {
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="card card-pad max-w-md text-center">
         <h1 className="page-title">החשבון אינו זמין</h1>
-        <p className="text-slate-600 mt-2">
+        <p className="text-ink-soft mt-2">
           לא ניתן לטעון את פרטי החשבון. ייתכן שהגישה הושעתה או שהמשתמש הושבת.
           לפרטים יש לפנות למנהל המערכת.
         </p>

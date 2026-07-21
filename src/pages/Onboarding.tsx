@@ -8,7 +8,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, PageLoader, useToast, ErrorNote, ConfirmDialog, EmptyState, type Column } from '../components/ui';
+import { DataTable, PageLoader, useToast, ErrorNote, ConfirmDialog, EmptyState, Note, type Column } from '../components/ui';
 import {
   readSheet, autoMapColumns, mapRows, cellText, cellNumber, skipRow, nameKey, groupSkipped,
   type FieldSpec, type MapResult, type SheetData, type SheetRow,
@@ -233,7 +233,7 @@ function Stepper({ current, doneByData, skipped, onSelect }: {
             <button
               onClick={() => onSelect(i)}
               className={`w-full flex items-center gap-2.5 px-4 py-3 text-start transition-colors cursor-pointer
-                ${active ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}>
+                ${active ? 'bg-action-wash/60' : 'hover:bg-slate-50'}`}>
               <span className={`flex size-8 shrink-0 items-center justify-center rounded-full
                 ${done ? 'bg-emerald-100 text-emerald-700' : active ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-400'}`}>
                 {done ? <Check size={16} /> : <Icon size={16} />}
@@ -564,10 +564,12 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
   if (report) {
     return (
       <div className="space-y-4">
-        <div className="rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm px-4 py-3">
-          <div className="font-medium mb-1">הייבוא הסתיים</div>
-          <ul className="space-y-0.5">{report.map((line, i) => <li key={i}>{line}</li>)}</ul>
-        </div>
+        <Note tone="done">
+          <div className="w-full">
+            <div className="font-medium mb-1">הייבוא הסתיים</div>
+            <ul className="space-y-0.5">{report.map((line, i) => <li key={i}>{line}</li>)}</ul>
+          </div>
+        </Note>
         {parsed && parsed.skipped.length > 0 && <SkippedPanel skipped={parsed.skipped} />}
         <div className="flex justify-between">
           <button className="btn-secondary" onClick={reset}>ייבוא קובץ נוסף</button>
@@ -676,20 +678,22 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
 function SkippedPanel({ skipped }: { skipped: { row: number; reason: string }[] }) {
   const groups = groupSkipped(skipped);
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-      <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
-        <AlertTriangle size={15} /> {skipped.length === 1 ? 'שורה אחת דולגה' : `${skipped.length} שורות דולגו`}
+    <Note tone="await">
+      <div className="w-full">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <AlertTriangle size={15} /> {skipped.length === 1 ? 'שורה אחת דולגה' : `${skipped.length} שורות דולגו`}
+        </div>
+        <ul className="mt-2 space-y-1 text-xs">
+          {groups.map((g) => (
+            <li key={g.reason}>
+              <b>{g.reason}</b> — {g.rows.length === 1
+                ? `שורה ${g.rows[0]}`
+                : `${g.rows.length} שורות (${g.rows.slice(0, 8).join(', ')}${g.rows.length > 8 ? ` ועוד ${g.rows.length - 8}` : ''})`}
+            </li>
+          ))}
+        </ul>
       </div>
-      <ul className="mt-2 space-y-1 text-xs text-amber-800">
-        {groups.map((g) => (
-          <li key={g.reason}>
-            <b>{g.reason}</b> — {g.rows.length === 1
-              ? `שורה ${g.rows[0]}`
-              : `${g.rows.length} שורות (${g.rows.slice(0, 8).join(', ')}${g.rows.length > 8 ? ` ועוד ${g.rows.length - 8}` : ''})`}
-          </li>
-        ))}
-      </ul>
-    </div>
+    </Note>
   );
 }
 
@@ -1022,10 +1026,10 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
         subtitle="אותו קובץ יכול להכיל גם את המוצרים וגם מחיר לכל ספק. קטגוריה שאינה קיימת עדיין תיווצר אוטומטית."
       />
       {counts?.suppliers === 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <Note tone="await">
           עדיין אין ספקים במערכת, ולכן עמודת מחיר לא תיובא — המוצרים ייווצרו בלי מחירון.
           אפשר לחזור לשלב הספקים, או לייבא מחירון בהמשך ממסך <b>מחירונים</b>.
-        </div>
+        </Note>
       )}
       <SheetImport
         fields={PRODUCT_FIELDS}

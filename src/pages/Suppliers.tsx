@@ -409,7 +409,7 @@ function SupplierPricesTab({ rows, history }: { rows: PricedProduct[]; history: 
         // Same treatment as PriceLists.tsx:50-56 (LRM keeps the sign on the correct side in RTL).
         return pct > 0
           ? <span className="inline-flex items-center gap-1 text-rose-600 font-medium"><TrendingUp size={14} />{'‎'}+{pct.toFixed(1)}%</span>
-          : <span className="inline-flex items-center gap-1 text-emerald-600 font-medium"><TrendingDown size={14} />{'‎'}{pct.toFixed(1)}%</span>;
+          : <span className="inline-flex items-center gap-1 text-done-fg font-medium"><TrendingDown size={14} />{'‎'}{pct.toFixed(1)}%</span>;
       },
     },
     {
@@ -426,7 +426,7 @@ function SupplierPricesTab({ rows, history }: { rows: PricedProduct[]; history: 
     <div className="space-y-3">
       <div className="flex flex-wrap gap-4 text-sm">
         <span className="text-slate-600">התייקרו: <b className="text-rose-600">{summary.up}</b></span>
-        <span className="text-slate-600">הוזלו: <b className="text-emerald-600">{summary.down}</b></span>
+        <span className="text-slate-600">הוזלו: <b className="text-done-fg">{summary.down}</b></span>
         <span className="text-slate-600">שינוי חציוני: <b className="num">{summary.median == null ? '—' : `${summary.median > 0 ? '+' : ''}${summary.median.toFixed(1)}%`}</b></span>
       </div>
       <DataTable rows={rows} columns={columns} searchable

@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { StatusBadge, useToast, ErrorNote, SkeletonCards } from '../components/ui';
+import { StatusBadge, useToast, ErrorNote, SkeletonCards, Note } from '../components/ui';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtMonth, monthRange } from '../lib/format';
 import { logAction } from '../lib/audit';
@@ -129,33 +129,35 @@ export default function Reports() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
-          <div className="card card-pad"><div className="text-xs text-slate-500">חשבוניות</div><div className="text-lg font-bold">{data.invoices.length}</div></div>
-          <div className="card card-pad"><div className="text-xs text-slate-500">סה״כ חשבוניות</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.invoices)}</div></div>
-          <div className="card card-pad"><div className="text-xs text-slate-500">מע״מ</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.vat)}</div></div>
-          <div className="card card-pad"><div className="text-xs text-slate-500">שולם החודש</div><div className="text-lg font-bold num text-start text-emerald-700">{fmtMoneyExact(totals.paid)}</div></div>
-          <div className="card card-pad"><div className="text-xs text-slate-500">חשבוניות שטרם שולמו</div><div className={`text-lg font-bold ${totals.unpaidCount ? 'text-amber-600' : ''}`}>{totals.unpaidCount}</div></div>
-          <div className="card card-pad"><div className="text-xs text-slate-500">תנועות בנק ללא התאמה</div><div className={`text-lg font-bold ${totals.unmatchedBank ? 'text-rose-600' : ''}`}>{totals.unmatchedBank}</div></div>
+          <div className="card card-pad"><div className="text-xs text-ink-muted">חשבוניות</div><div className="text-lg font-bold">{data.invoices.length}</div></div>
+          <div className="card card-pad"><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.invoices)}</div></div>
+          <div className="card card-pad"><div className="text-xs text-ink-muted">מע״מ</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.vat)}</div></div>
+          <div className="card card-pad"><div className="text-xs text-ink-muted">שולם החודש</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(totals.paid)}</div></div>
+          <div className="card card-pad"><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`text-lg font-bold ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></div>
+          <div className="card card-pad"><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`text-lg font-bold ${totals.unmatchedBank ? 'text-alert-solid' : ''}`}>{totals.unmatchedBank}</div></div>
         </div>
 
         {data.exceptions.length > 0 && (
-          <div className="card card-pad border-amber-200 bg-amber-50/50">
-            <h2 className="section-title text-amber-800 mb-2">חריגים פתוחים שדורשים טיפול לפני סגירת החודש ({data.exceptions.length})</h2>
-            <ul className="text-sm text-amber-900 space-y-1 list-disc list-inside">
-              {data.exceptions.map((e) => <li key={e.id}>{EXCEPTION_TYPE[e.type]} — {e.title}</li>)}
-            </ul>
-          </div>
+          <Note tone="await">
+            <div className="w-full">
+              <h2 className="text-base font-semibold mb-2">חריגים פתוחים שדורשים טיפול לפני סגירת החודש ({data.exceptions.length})</h2>
+              <ul className="space-y-1 list-disc list-inside">
+                {data.exceptions.map((e) => <li key={e.id}>{EXCEPTION_TYPE[e.type]} — {e.title}</li>)}
+              </ul>
+            </div>
+          </Note>
         )}
 
         <div className="card overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 section-title">חשבוניות {fmtMonth(`${month}-01`)}</div>
+          <div className="px-4 py-3 border-b border-line-soft section-title">חשבוניות {fmtMonth(`${month}-01`)}</div>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-50"><tr>
+              <thead className="bg-surface-sunken"><tr>
                 <th className="th">ספק</th><th className="th">מס׳</th><th className="th">תאריך</th>
                 <th className="th">לפני מע״מ</th><th className="th">מע״מ</th><th className="th">סה״כ</th>
                 <th className="th">בדיקה</th><th className="th">תשלום</th>
               </tr></thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-line-soft">
                 {data.invoices.map((i) => (
                   <tr key={i.id}>
                     <td className="td">{i.supplier.name}</td>
@@ -169,7 +171,7 @@ export default function Reports() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot><tr className="border-t-2 border-slate-200 font-bold">
+              <tfoot><tr className="border-t-2 border-line font-bold">
                 <td className="td" colSpan={3}>סה״כ</td>
                 <td className="td num">{fmtMoneyExact(totals.beforeVat)}</td>
                 <td className="td num">{fmtMoneyExact(totals.vat)}</td>
@@ -182,30 +184,30 @@ export default function Reports() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="card overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 section-title">תשלומים לפי ספק</div>
+            <div className="px-4 py-3 border-b border-line-soft section-title">תשלומים לפי ספק</div>
             <table className="w-full">
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-line-soft">
                 {paymentsBySupplier.map(([name, sum]) => (
                   <tr key={name}><td className="td">{name}</td><td className="td num font-medium">{fmtMoneyExact(sum)}</td></tr>
                 ))}
-                {!paymentsBySupplier.length && <tr><td className="td text-slate-500 text-center py-6">אין תשלומים בחודש זה</td></tr>}
+                {!paymentsBySupplier.length && <tr><td className="td text-ink-muted text-center py-6">אין תשלומים בחודש זה</td></tr>}
               </tbody>
             </table>
           </div>
 
           <div className="card overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 section-title">זיכויים</div>
+            <div className="px-4 py-3 border-b border-line-soft section-title">זיכויים</div>
             <table className="w-full">
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-line-soft">
                 {data.credits.map((c) => (
                   <tr key={c.number}>
                     <td className="td">{c.supplier.name}</td>
-                    <td className="td text-slate-500">{CREDIT_REASON[c.reason]}</td>
+                    <td className="td text-ink-muted">{CREDIT_REASON[c.reason]}</td>
                     <td className="td num">{fmtMoneyExact(c.amount)}</td>
                     <td className="td"><StatusBadge meta={CREDIT_STATUS[c.status]} /></td>
                   </tr>
                 ))}
-                {!data.credits.length && <tr><td className="td text-slate-500 text-center py-6">אין זיכויים בחודש זה</td></tr>}
+                {!data.credits.length && <tr><td className="td text-ink-muted text-center py-6">אין זיכויים בחודש זה</td></tr>}
               </tbody>
             </table>
           </div>

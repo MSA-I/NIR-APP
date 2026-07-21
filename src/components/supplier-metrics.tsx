@@ -18,6 +18,7 @@
 import { LineChart, Line } from 'recharts';
 import { Star } from 'lucide-react';
 import type { SupplierMetrics } from '../lib/types';
+import { chartTheme } from '../lib/theme';
 
 export type { SupplierMetrics };  // re-exported so Suppliers.tsx's existing import keeps resolving
 
@@ -38,7 +39,7 @@ export const fmtLeadDays = (v: number | null | undefined) => (v == null ? '—' 
 // mapping (ui.tsx). amber→await-fg lifts the 16px tile value off the failing 3.19:1 contrast that
 // amber-600 gave; green→done-fg, red→alert-fg, blue→info-fg.
 const TONE_TEXT: Record<ScoreTone, string> = {
-  slate: 'text-slate-900',
+  slate: 'text-ink',
   green: 'text-done-fg',
   amber: 'text-await-fg',
   red: 'text-alert-fg',
@@ -65,11 +66,11 @@ export function Scorecard({ items }: { items: ScoreItem[] }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-x-6 gap-y-4">
         {items.map((it, i) => (
           <div key={i}>
-            <div className="text-xs font-medium text-slate-500">{it.label}</div>
+            <div className="text-xs font-medium text-ink-muted">{it.label}</div>
             <div className={`text-base font-semibold mt-0.5 ${it.numeric === false ? 'text-start' : 'num'} ${TONE_TEXT[it.tone ?? 'slate']}`}>
               {it.value}
             </div>
-            {it.sub && <div className="text-xs text-slate-400 mt-0.5">{it.sub}</div>}
+            {it.sub && <div className="text-xs text-ink-faint mt-0.5">{it.sub}</div>}
           </div>
         ))}
       </div>
@@ -92,7 +93,7 @@ export function RatingStars({ value, onChange }: { value: number | null; onChang
         title={value != null ? `דירוג ${value} מתוך 5` : 'לא דורג'}>
         {stars.map((n) => (
           <Star key={n} size={15}
-            className={value != null && n <= value ? 'fill-amber-400 text-amber-400' : 'text-slate-300'} />
+            className={value != null && n <= value ? 'fill-star text-star' : 'text-ink-ghost'} />
         ))}
       </span>
     );
@@ -104,11 +105,11 @@ export function RatingStars({ value, onChange }: { value: number | null; onChang
         <button key={n} type="button" role="radio" aria-checked={value === n} aria-label={`${n} כוכבים`}
           onClick={() => onChange(n)} className="p-0.5 cursor-pointer leading-none">
           <Star size={20}
-            className={value != null && n <= value ? 'fill-amber-400 text-amber-400' : 'text-slate-300 hover:text-amber-300'} />
+            className={value != null && n <= value ? 'fill-star text-star' : 'text-ink-ghost hover:text-star-hover'} />
         </button>
       ))}
       {value != null && (
-        <button type="button" className="text-xs text-slate-400 hover:text-slate-600 ms-1" onClick={() => onChange(0)}>
+        <button type="button" className="text-xs text-ink-faint hover:text-ink-soft ms-1" onClick={() => onChange(0)}>
           נקה
         </button>
       )}
@@ -126,9 +127,8 @@ export function PriceSparkline({ points }: { points: number[] }) {
   if (!points || points.length < 2) return null;
   const first = points[0];
   const last = points[points.length - 1];
-  const stroke = last > first ? '#f43f5e' /* rose-500 */
-    : last < first ? '#10b981' /* emerald-500 */
-    : '#94a3b8'; /* slate-400 */
+  const t = chartTheme();
+  const stroke = last > first ? t.trendUp : last < first ? t.trendDown : t.flat;
   const data = points.map((price, i) => ({ i, price }));
   return (
     <span dir="ltr" className="inline-block align-middle">

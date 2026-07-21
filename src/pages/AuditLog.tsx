@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ScrollText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { DataTable, Modal, ErrorNote, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, Modal, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
 import { fmtDateTime } from '../lib/format';
 import type { AuditLog as AuditRow } from '../lib/types';
 
@@ -42,11 +42,11 @@ export default function AuditLogPage() {
   const entities = [...new Set((data ?? []).map((r) => r.entity_type))];
 
   const columns: Column<Row>[] = [
-    { key: 'time', header: 'מועד', sortValue: (r) => r.created_at, render: (r) => <span className="text-slate-500">{fmtDateTime(r.created_at)}</span> },
-    { key: 'user', header: 'משתמש', render: (r) => r.profile?.full_name ?? <span className="text-slate-500">מערכת</span> },
+    { key: 'time', header: 'מועד', sortValue: (r) => r.created_at, render: (r) => <span className="text-ink-muted">{fmtDateTime(r.created_at)}</span> },
+    { key: 'user', header: 'משתמש', render: (r) => r.profile?.full_name ?? <span className="text-ink-muted">מערכת</span> },
     { key: 'action', header: 'פעולה', render: (r) => <span className="font-medium">{actionLabel(r.action)}</span> },
     { key: 'entity', header: 'ישות', render: (r) => ENTITY_LABEL[r.entity_type] ?? r.entity_type },
-    { key: 'reason', header: 'סיבה', render: (r) => <span className="text-slate-500 max-w-72 truncate inline-block">{r.reason ?? ''}</span> },
+    { key: 'reason', header: 'סיבה', render: (r) => <span className="text-ink-muted max-w-72 truncate inline-block">{r.reason ?? ''}</span> },
   ];
 
   if (loading) return <SkeletonTable rows={12} cols={5} />;
@@ -68,23 +68,23 @@ export default function AuditLogPage() {
       {selected && (
         <Modal open onClose={() => setSelected(null)} title={`${actionLabel(selected.action)} — ${ENTITY_LABEL[selected.entity_type] ?? selected.entity_type}`} wide>
           <div className="space-y-3 text-sm">
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-slate-500">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-ink-muted">
               <span>{fmtDateTime(selected.created_at)}</span>
               <span>{selected.profile?.full_name ?? 'מערכת'}</span>
               {selected.entity_id && <span dir="ltr" className="text-xs">{selected.entity_id}</span>}
             </div>
-            {selected.reason && <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-amber-800">סיבה: {selected.reason}</div>}
+            {selected.reason && <Note tone="await">סיבה: {selected.reason}</Note>}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {selected.old_values && (
                 <div>
-                  <div className="font-medium text-slate-600 mb-1">ערכים קודמים</div>
-                  <pre className="bg-slate-50 rounded-lg p-3 text-xs overflow-auto max-h-64" dir="ltr">{JSON.stringify(selected.old_values, null, 2)}</pre>
+                  <div className="font-medium text-ink-soft mb-1">ערכים קודמים</div>
+                  <pre className="bg-surface-sunken rounded-lg p-3 text-xs overflow-auto max-h-64" dir="ltr">{JSON.stringify(selected.old_values, null, 2)}</pre>
                 </div>
               )}
               {selected.new_values && (
                 <div>
-                  <div className="font-medium text-slate-600 mb-1">ערכים חדשים</div>
-                  <pre className="bg-slate-50 rounded-lg p-3 text-xs overflow-auto max-h-64" dir="ltr">{JSON.stringify(selected.new_values, null, 2)}</pre>
+                  <div className="font-medium text-ink-soft mb-1">ערכים חדשים</div>
+                  <pre className="bg-surface-sunken rounded-lg p-3 text-xs overflow-auto max-h-64" dir="ltr">{JSON.stringify(selected.new_values, null, 2)}</pre>
                 </div>
               )}
             </div>

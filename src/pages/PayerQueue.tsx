@@ -3,7 +3,7 @@ import { Landmark, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { useToast, StatusBadge, Modal, EmptyState, ErrorNote, SkeletonList } from '../components/ui';
+import { useToast, StatusBadge, Modal, EmptyState, ErrorNote, SkeletonList, Note } from '../components/ui';
 import { DocumentList } from '../components/FileUpload';
 import { refreshInvoicePaymentStatus } from '../lib/checks';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
@@ -43,12 +43,12 @@ export default function PayerQueue() {
       ) : (
         <div className="space-y-3">
           {pending.map((r) => (
-            <button key={r.id} className="card w-full text-start p-4 hover:border-indigo-300 transition-all" onClick={() => setSelected(r)}>
+            <button key={r.id} className="card w-full text-start p-4 hover:border-action-line transition-all" onClick={() => setSelected(r)}>
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-900">{r.supplier.name}</span>
+                <span className="font-semibold text-ink">{r.supplier.name}</span>
                 <span className="text-lg font-bold num">{fmtMoneyExact(r.amount)}</span>
               </div>
-              <div className="flex items-center gap-3 mt-1.5 text-sm text-slate-500">
+              <div className="flex items-center gap-3 mt-1.5 text-sm text-ink-muted">
                 <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} />
                 {r.due_date && <span>לתשלום עד {fmtDate(r.due_date)}</span>}
                 <span>{r.invoices.length} חשבוניות</span>
@@ -60,8 +60,8 @@ export default function PayerQueue() {
 
       {done.length > 0 && (
         <div>
-          <h2 className="section-title mb-2 text-slate-500">בוצעו לאחרונה</h2>
-          <div className="card divide-y divide-slate-100">
+          <h2 className="section-title mb-2 text-ink-muted">בוצעו לאחרונה</h2>
+          <div className="card divide-y divide-line-soft">
             {done.slice(0, 8).map((r) => (
               <div key={r.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
                 <span>{r.supplier.name}</span>
@@ -131,7 +131,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
       <Modal open onClose={onDone} title="ההעברה נרשמה">
         <div className="text-center mb-4">
           <CheckCircle2 size={40} className="text-emerald-500 mx-auto mb-2" />
-          <p className="text-sm text-slate-600">אפשר לצרף עכשיו אישור העברה (צילום מסך / PDF).</p>
+          <p className="text-sm text-ink-soft">אפשר לצרף עכשיו אישור העברה (צילום מסך / PDF).</p>
         </div>
         <DocumentList entityType="payment" entityId={paymentId} capture />
         <div className="flex justify-end mt-4"><button className="btn-primary" onClick={onDone}>סיום</button></div>
@@ -142,20 +142,20 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
   return (
     <Modal open onClose={onClose} title={`ביצוע העברה — ${pr.supplier.name}`}>
       <div className="space-y-4">
-        <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1"><Landmark size={15} /> פרטי חשבון להעברה</div>
-          <div className="text-sm text-slate-800" dir="ltr" style={{ textAlign: 'right' }}>{pr.supplier.bank_details ?? 'לא הוזנו פרטי בנק — יש לברר מול המשרד'}</div>
+        <div className="rounded-lg bg-surface-sunken border border-line px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-ink-mid mb-1"><Landmark size={15} /> פרטי חשבון להעברה</div>
+          <div className="text-sm text-ink-body" dir="ltr" style={{ textAlign: 'right' }}>{pr.supplier.bank_details ?? 'לא הוזנו פרטי בנק — יש לברר מול המשרד'}</div>
         </div>
 
         <dl className="text-sm space-y-1.5">
-          <div className="flex justify-between"><dt className="text-slate-500">סכום מאושר</dt><dd className="font-bold num">{fmtMoneyExact(pr.amount)}</dd></div>
-          {pr.due_date && <div className="flex justify-between"><dt className="text-slate-500">תאריך יעד</dt><dd>{fmtDate(pr.due_date)}</dd></div>}
-          <div className="flex justify-between"><dt className="text-slate-500">חשבוניות</dt>
+          <div className="flex justify-between"><dt className="text-ink-muted">סכום מאושר</dt><dd className="font-bold num">{fmtMoneyExact(pr.amount)}</dd></div>
+          {pr.due_date && <div className="flex justify-between"><dt className="text-ink-muted">תאריך יעד</dt><dd>{fmtDate(pr.due_date)}</dd></div>}
+          <div className="flex justify-between"><dt className="text-ink-muted">חשבוניות</dt>
             <dd dir="ltr">{pr.invoices.map((i) => i.invoice.invoice_number).join(', ') || '—'}</dd></div>
-          {pr.notes && <div className="bg-amber-50 border border-amber-100 rounded px-3 py-2 text-amber-800">{pr.notes}</div>}
+          {pr.notes && <Note tone="await">{pr.notes}</Note>}
         </dl>
 
-        <hr className="border-slate-100" />
+        <hr className="border-line-soft" />
 
         <div className="grid grid-cols-2 gap-3">
           <div><label className="label">תאריך ביצוע</label><input type="date" className="input" value={f.paid_date} onChange={(e) => setF((s) => ({ ...s, paid_date: e.target.value }))} /></div>

@@ -5,7 +5,7 @@ import { Plus, AlertTriangle, AlertOctagon, Info } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, ErrorNote, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, StatusBadge, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import type { Invoice } from '../lib/types';
@@ -16,23 +16,21 @@ export type InvoiceRow = Invoice & { supplier: { name: string }; balance?: numbe
 /** Shared renderer for automatic-check results. */
 export function CheckList({ checks }: { checks: CheckResult[] }) {
   if (!checks.length) {
-    return <div className="rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-2.5">כל הבדיקות האוטומטיות עברו ללא ממצאים.</div>;
+    return <Note tone="done">כל הבדיקות האוטומטיות עברו ללא ממצאים.</Note>;
   }
   const icon = { critical: AlertOctagon, warning: AlertTriangle, info: Info };
-  const cls = {
-    critical: 'bg-rose-50 border-rose-200 text-rose-800',
-    warning: 'bg-amber-50 border-amber-200 text-amber-800',
-    info: 'bg-sky-50 border-sky-200 text-sky-800',
-  };
+  // Severity → semantic tone: critical is a loss-risk (alert), warning needs our action (await),
+  // info is context (info). The shared Note recolours all three from index.css.
+  const tone = { critical: 'alert', warning: 'await', info: 'info' } as const;
   return (
     <div className="space-y-2">
       {checks.map((c, i) => {
         const Icon = icon[c.severity];
         return (
-          <div key={i} className={`flex items-start gap-2 rounded-lg border px-3.5 py-2.5 text-sm ${cls[c.severity]}`}>
+          <Note key={i} tone={tone[c.severity]}>
             <Icon size={16} className="mt-0.5 shrink-0" />
             <span>{c.message}</span>
-          </div>
+          </Note>
         );
       })}
     </div>

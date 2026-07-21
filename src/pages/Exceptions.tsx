@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toHebrewError } from "../lib/errors";
 import { useNavigate } from 'react-router-dom';
 import { useParamState } from '../lib/useParamState';
@@ -6,7 +6,7 @@ import { AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
 import { EXCEPTION_TYPE, EXCEPTION_STATUS, SEVERITY } from '../lib/status';
 import { fmtDate } from '../lib/format';
 import { logAction } from '../lib/audit';
@@ -30,6 +30,18 @@ export default function Exceptions() {
     unwrap(await supabase.from('exceptions')
       .select('*, supplier:suppliers(name)')
       .order('created_at', { ascending: false })) as Promise<Row[]>);
+
+  // Deep-link auto-open (audit round 2): arriving via /exceptions?id=X previously pinned the list
+  // to that one row but still made the user click it. Open its detail modal once on load so the
+  // user lands directly on the resolution flow. The ref caps it to a single open per id, so closing
+  // the modal — or a refetch after resolving — does not reopen it; clearing the filter still works.
+  const autoOpenedId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!idFilter || !data) return;
+    if (autoOpenedId.current === idFilter) return;
+    const match = data.find((r) => r.id === idFilter);
+    if (match) { autoOpenedId.current = idFilter; setSelected(match); }
+  }, [idFilter, data]);
 
   const rows = (data ?? []).filter((r) => idFilter
     ? r.id === idFilter
@@ -147,7 +159,7 @@ function ExceptionDetail({ row, canWrite, onClose, onChanged, onNavigate }: {
           </ul>
         )}
         {row.resolution_note && (
-          <div className="text-sm bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 text-emerald-800">סיכום: {row.resolution_note}</div>
+          <Note tone="done">סיכום: {row.resolution_note}</Note>
         )}
         {links.length > 0 && (
           <div className="flex flex-wrap gap-2">

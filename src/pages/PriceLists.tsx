@@ -50,7 +50,7 @@ export default function PriceLists() {
   const changePct = (r: Row) => r.previous_price ? ((r.current_price - r.previous_price) / r.previous_price) * 100 : 0;
 
   const columns: Column<Row>[] = [
-    { key: 'product', header: 'מוצר', sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-slate-900">{r.product.name}</span> },
+    { key: 'product', header: 'מוצר', sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-ink">{r.product.name}</span> },
     { key: 'supplier', header: 'ספק', sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
     { key: 'unit', header: 'יח׳', render: (r) => r.product.unit },
     { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">₪{r.current_price.toFixed(2)}</span> },
@@ -59,7 +59,7 @@ export default function PriceLists() {
       key: 'change', header: 'שינוי', sortValue: changePct,
       render: (r) => {
         const pct = changePct(r);
-        if (!r.previous_price || pct === 0) return <span className="text-slate-400">—</span>;
+        if (!r.previous_price || pct === 0) return <span className="text-ink-faint">—</span>;
         return pct > 0
           ? <span className="inline-flex items-center gap-1 text-trend-up-fg font-medium"><TrendingUp size={14} />‎+{pct.toFixed(1)}%</span>
           : <span className="inline-flex items-center gap-1 text-trend-down-fg font-medium"><TrendingDown size={14} />‎{pct.toFixed(1)}%</span>;
@@ -91,7 +91,7 @@ export default function PriceLists() {
         toolbar={
           <>
             {productFilter && (
-              <button className="btn-ghost text-sm text-indigo-700 flex items-center gap-1" onClick={() => setProductFilter('')} title="הסרת סינון מוצר">
+              <button className="btn-ghost text-sm text-action flex items-center gap-1" onClick={() => setProductFilter('')} title="הסרת סינון מוצר">
                 <X size={14} /> {activeProductName ?? 'מוצר'}
               </button>
             )}
@@ -99,7 +99,7 @@ export default function PriceLists() {
               <option value="">כל הספקים</option>
               {suppliers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
             </select>
-            <label className="flex items-center gap-1.5 text-sm text-slate-600">
+            <label className="flex items-center gap-1.5 text-sm text-ink-soft">
               <input type="checkbox" className="rounded" checked={onlyIncreases} onChange={(e) => setIncreasesStr(e.target.checked ? '1' : '')} />
               רק התייקרויות
             </label>
@@ -124,13 +124,13 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
       {data?.length ? (
         <table className="w-full">
           <thead><tr><th className="th">תאריך</th><th className="th">מחיר</th></tr></thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line-soft">
             {data.map((h) => (
               <tr key={h.id}><td className="td">{fmtDate(h.effective_date)}</td><td className="td num">₪{h.price.toFixed(2)}</td></tr>
             ))}
           </tbody>
         </table>
-      ) : <div className="text-sm text-slate-500 py-4 text-center">אין רשומות היסטוריה</div>}
+      ) : <div className="text-sm text-ink-muted py-4 text-center">אין רשומות היסטוריה</div>}
     </Modal>
   );
 }
@@ -258,11 +258,11 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         </div>
       ) : preview.length ? (
         <div className="space-y-4">
-          <div className="text-sm text-slate-600">{preview.length} שורות זוהו. ההתאמה מתבצעת לפי שם ספק ושם מוצר מדויקים.</div>
-          <div className="max-h-64 overflow-y-auto border border-slate-100 rounded-lg">
+          <div className="text-sm text-ink-soft">{preview.length} שורות זוהו. ההתאמה מתבצעת לפי שם ספק ושם מוצר מדויקים.</div>
+          <div className="max-h-64 overflow-y-auto border border-line-soft rounded-lg">
             <table className="w-full">
-              <thead className="bg-slate-50 sticky top-0"><tr><th className="th">ספק</th><th className="th">מוצר</th><th className="th">מחיר</th></tr></thead>
-              <tbody className="divide-y divide-slate-100">
+              <thead className="bg-surface-sunken sticky top-0"><tr><th className="th">ספק</th><th className="th">מוצר</th><th className="th">מחיר</th></tr></thead>
+              <tbody className="divide-y divide-line-soft">
                 {preview.slice(0, 100).map((r, i) => (
                   <tr key={i}><td className="td">{r.supplier}</td><td className="td">{r.product}</td><td className="td num">₪{r.price.toFixed(2)}</td></tr>
                 ))}
@@ -276,7 +276,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         </div>
       ) : (
         <div className="text-center py-8">
-          <p className="text-sm text-slate-600 mb-4">בחר קובץ Excel או CSV עם העמודות: <b>ספק</b>, <b>מוצר</b>, <b>מחיר</b></p>
+          <p className="text-sm text-ink-soft mb-4">בחר קובץ Excel או CSV עם העמודות: <b>ספק</b>, <b>מוצר</b>, <b>מחיר</b></p>
           <button className="btn-primary" onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
           <input ref={fileRef} type="file" hidden accept=".xlsx,.xls,.csv" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
         </div>

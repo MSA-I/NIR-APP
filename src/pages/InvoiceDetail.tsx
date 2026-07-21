@@ -92,7 +92,7 @@ export default function InvoiceDetail() {
         </div>
         <div className="flex flex-wrap gap-2">
           {isOffice && transitions.filter((t) => t.from.includes(inv.review_status)).map((t) => (
-            <button key={t.to} className={t.to === 'investigation' ? 'btn-secondary text-rose-600' : 'btn-primary'} disabled={busy}
+            <button key={t.to} className={t.to === 'investigation' ? 'btn-secondary text-alert-solid' : 'btn-primary'} disabled={busy}
               onClick={() => void setReviewStatus(t.to)}>
               {t.to === 'approved' ? <CheckCircle2 size={15} /> : t.to === 'investigation' ? <SearchCheck size={15} /> : <Send size={15} />}
               {t.label}
@@ -108,40 +108,40 @@ export default function InvoiceDetail() {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="card card-pad"><div className="text-xs text-slate-500">סה״כ חשבונית</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(inv.total_amount)}</div>
-          <div className="text-xs text-slate-500 mt-0.5">לפני מע״מ {fmtMoneyExact(inv.amount_before_vat)} + מע״מ {fmtMoneyExact(inv.vat_amount)}</div></div>
-        <div className="card card-pad"><div className="text-xs text-slate-500">שולם</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.paid_amount ?? 0)}</div></div>
+        <div className="card card-pad"><div className="text-xs text-ink-muted">סה״כ חשבונית</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(inv.total_amount)}</div>
+          <div className="text-xs text-ink-muted mt-0.5">לפני מע״מ {fmtMoneyExact(inv.amount_before_vat)} + מע״מ {fmtMoneyExact(inv.vat_amount)}</div></div>
+        <div className="card card-pad"><div className="text-xs text-ink-muted">שולם</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.paid_amount ?? 0)}</div></div>
         {/* credited = already offset, a settled claim like "paid" — done, not the retired violet (audit 2026-07-21) */}
-        <div className="card card-pad"><div className="text-xs text-slate-500">זוכה</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.credited_amount ?? 0)}</div></div>
-        <div className="card card-pad"><div className="text-xs text-slate-500">יתרה לתשלום</div><div className={`text-lg font-bold num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
+        <div className="card card-pad"><div className="text-xs text-ink-muted">זוכה</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.credited_amount ?? 0)}</div></div>
+        <div className="card card-pad"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`text-lg font-bold num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card card-pad space-y-3">
           <div className="section-title">פרטים</div>
           <dl className="text-sm space-y-2">
-            <div className="flex justify-between"><dt className="text-slate-500">תאריך חשבונית</dt><dd>{fmtDate(inv.invoice_date)}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">נקלטה במערכת</dt><dd>{fmtDate(inv.received_date)}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">ספק</dt><dd><Link className="text-indigo-700 hover:underline" to={`/suppliers/${inv.supplier.id}`}>{inv.supplier.name}</Link></dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">הזמנות מקושרות</dt>
+            <div className="flex justify-between"><dt className="text-ink-muted">תאריך חשבונית</dt><dd>{fmtDate(inv.invoice_date)}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">נקלטה במערכת</dt><dd>{fmtDate(inv.received_date)}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">ספק</dt><dd><Link className="link" to={`/suppliers/${inv.supplier.id}`}>{inv.supplier.name}</Link></dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">הזמנות מקושרות</dt>
               <dd className="flex gap-2">{inv.orders.length ? inv.orders.map((o) => (
-                <Link key={o.order_id} className="text-indigo-700 hover:underline" to={`/orders/${o.order_id}`}>#{o.purchase_orders.number}</Link>
+                <Link key={o.order_id} className="link" to={`/orders/${o.order_id}`}>#{o.purchase_orders.number}</Link>
               )) : '—'}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">קבלות סחורה</dt>
+            <div className="flex justify-between"><dt className="text-ink-muted">קבלות סחורה</dt>
               <dd>{inv.receipts.length ? inv.receipts.map((r) => `#${r.goods_receipts.number}`).join(', ') : '—'}</dd></div>
           </dl>
-          {inv.notes && <div className="text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2">{inv.notes}</div>}
+          {inv.notes && <div className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-3 py-2">{inv.notes}</div>}
         </div>
 
         <div className="card card-pad">
           <DocumentList entityType="invoice" entityId={inv.id} capture />
           {data.allocations.length > 0 && (
             <div className="mt-4">
-              <div className="text-sm font-medium text-slate-600 mb-2">תשלומים שהוקצו לחשבונית</div>
-              <ul className="divide-y divide-slate-100 border border-slate-100 rounded-lg text-sm">
+              <div className="text-sm font-medium text-ink-soft mb-2">תשלומים שהוקצו לחשבונית</div>
+              <ul className="divide-y divide-line-soft border border-line-soft rounded-lg text-sm">
                 {data.allocations.map((a, i) => (
                   <li key={i} className="flex justify-between px-3 py-2">
-                    <span>תשלום #{a.payment.number} · {fmtDate(a.payment.paid_date)} {a.payment.reference && <span className="text-slate-500" dir="ltr">({a.payment.reference})</span>}</span>
+                    <span>תשלום #{a.payment.number} · {fmtDate(a.payment.paid_date)} {a.payment.reference && <span className="text-ink-muted" dir="ltr">({a.payment.reference})</span>}</span>
                     <span className="num font-medium">{fmtMoneyExact(a.amount)}</span>
                   </li>
                 ))}
@@ -158,7 +158,7 @@ export default function InvoiceDetail() {
             {checking ? <Loader2 size={14} className="animate-spin" /> : <SearchCheck size={15} />} הרצת בדיקות
           </button>
         </div>
-        {checks ? <CheckList checks={checks} /> : <div className="text-sm text-slate-500">לחץ ״הרצת בדיקות״ להשוואת החשבונית מול הזמנות, קבלות, תשלומים ותנועות בנק.</div>}
+        {checks ? <CheckList checks={checks} /> : <div className="text-sm text-ink-muted">לחץ ״הרצת בדיקות״ להשוואת החשבונית מול הזמנות, קבלות, תשלומים ותנועות בנק.</div>}
       </div>
 
       {creditOpen && (
@@ -201,7 +201,7 @@ function CreditFromInvoice({ invoice, onClose, onSaved }: { invoice: FullInvoice
         </div>
         <div><label className="label">סכום (₪)</label><input type="number" step="0.01" className="input num" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
         <div><label className="label">פירוט</label><textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-        <div className="text-xs text-slate-500">נפתח בתאריך {fmtDate(todayISO())} · הזיכוי ישפיע על יתרת הספק לאחר אישור/קיזוז</div>
+        <div className="text-xs text-ink-muted">נפתח בתאריך {fmtDate(todayISO())} · הזיכוי ישפיע על יתרת הספק לאחר אישור/קיזוז</div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
         <button className="btn-secondary" onClick={onClose}>ביטול</button>

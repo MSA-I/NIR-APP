@@ -6,7 +6,7 @@ import { Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle } fro
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, PageLoader, useToast, ConfirmDialog, Modal, ErrorNote, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, StatusBadge, PageLoader, useToast, ConfirmDialog, Modal, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
 import { PO_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, todayISO } from '../lib/format';
 import { logAction } from '../lib/audit';
@@ -149,7 +149,7 @@ export function OrderDetail() {
       <div className="flex flex-wrap items-start justify-between gap-3 no-print">
         <div>
           <h1 className="page-title flex items-center gap-3">הזמנה #{order.number} <StatusBadge meta={PO_STATUS[order.status]} /></h1>
-          <div className="text-sm text-slate-500 mt-1">
+          <div className="text-sm text-ink-muted mt-1">
             {order.supplier.name} · נוצרה {fmtDateTime(order.created_at)}
             {order.sent_at && <> · נשלחה {fmtDateTime(order.sent_at)}</>}
           </div>
@@ -161,7 +161,7 @@ export function OrderDetail() {
             </button>
           ))}
           {canWrite && waLink && ['draft', 'ready', 'sent'].includes(order.status) && (
-            <button className="btn text-white bg-emerald-600 hover:bg-emerald-700" onClick={sendWhatsApp}>
+            <button className="btn text-white bg-done-solid hover:bg-done-fg" onClick={sendWhatsApp}>
               <MessageCircle size={15} /> שליחה ב-WhatsApp
             </button>
           )}
@@ -175,23 +175,25 @@ export function OrderDetail() {
           )}
           <button className="btn-secondary" onClick={() => window.print()}><Printer size={15} /> הדפסה</button>
           {canWrite && !['received', 'cancelled'].includes(order.status) && (
-            <button className="btn-ghost text-rose-600" onClick={() => setConfirm({ status: 'cancelled', label: 'ביטול הזמנה' })}><XCircle size={15} /> ביטול</button>
+            <button className="btn-ghost text-alert-solid" onClick={() => setConfirm({ status: 'cancelled', label: 'ביטול הזמנה' })}><XCircle size={15} /> ביטול</button>
           )}
         </div>
       </div>
 
       {order.confirmed_at && (
-        <div className="no-print rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm px-4 py-2.5 flex items-center gap-2">
-          <CheckCircle2 size={15} />
-          הספק אישר את קבלת ההזמנה ב-{fmtDateTime(order.confirmed_at)}
-          {order.confirmation_note && <span className="text-emerald-700">· {order.confirmation_note}</span>}
-        </div>
+        <Note tone="done" className="no-print">
+          <CheckCircle2 size={15} className="mt-0.5 shrink-0" />
+          <span>
+            הספק אישר את קבלת ההזמנה ב-{fmtDateTime(order.confirmed_at)}
+            {order.confirmation_note && <span className="text-done-fg"> · {order.confirmation_note}</span>}
+          </span>
+        </Note>
       )}
 
       {underMin && (
-        <div className="no-print rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-2.5">
+        <Note tone="await" className="no-print">
           שים לב: סכום ההזמנה ({fmtMoneyExact(total)}) נמוך ממינימום ההזמנה של הספק ({fmtMoneyExact(order.supplier.min_order_amount!)}).
-        </div>
+        </Note>
       )}
 
       {/* Printable order sheet */}
@@ -201,38 +203,38 @@ export function OrderDetail() {
           <div className="text-sm mt-1">ספק: {order.supplier.name} · תאריך: {fmtDate(order.created_at)} {order.expected_date && `· אספקה מבוקשת: ${fmtDate(order.expected_date)}`}</div>
         </div>
         <table className="w-full">
-          <thead className="bg-slate-50 border-b border-slate-100">
+          <thead className="bg-surface-sunken border-b border-line-soft">
             <tr>
               <th className="th">מוצר</th><th className="th">יח׳</th><th className="th">כמות</th>
               <th className="th">מחיר יח׳ (בעת ההזמנה)</th><th className="th">סה״כ</th>
               {order.status !== 'draft' && <th className="th no-print">התקבל</th>}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line-soft">
             {order.items.map((i) => (
               <tr key={i.id}>
-                <td className="td font-medium text-slate-800">{i.product.name}</td>
+                <td className="td font-medium text-ink-body">{i.product.name}</td>
                 <td className="td">{i.product.unit}</td>
                 <td className="td num">{i.qty}</td>
                 <td className="td num">₪{i.unit_price.toFixed(2)}</td>
                 <td className="td num">{fmtMoneyExact(i.qty * i.unit_price)}</td>
                 {order.status !== 'draft' && (
                   <td className="td no-print num">
-                    {i.received_qty > 0 ? <span className={i.received_qty >= i.qty ? 'text-emerald-600' : 'text-amber-600'}>{i.received_qty}</span> : '—'}
+                    {i.received_qty > 0 ? <span className={i.received_qty >= i.qty ? 'text-done-fg' : 'text-await-fg'}>{i.received_qty}</span> : '—'}
                   </td>
                 )}
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t-2 border-slate-200">
+            <tr className="border-t-2 border-line">
               <td className="td font-bold" colSpan={4}>סה״כ להזמנה</td>
               <td className="td num font-bold">{fmtMoneyExact(total)}</td>
               {order.status !== 'draft' && <td className="no-print" />}
             </tr>
           </tfoot>
         </table>
-        {order.notes && <div className="mt-3 text-sm text-slate-600">הערות: {order.notes}</div>}
+        {order.notes && <div className="mt-3 text-sm text-ink-soft">הערות: {order.notes}</div>}
       </div>
 
       <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)}
@@ -240,7 +242,7 @@ export function OrderDetail() {
         title={confirm?.label ?? ''} message="האם לבטל את ההזמנה? הפעולה תתועד ביומן הביקורת." danger requireReason busy={busy} />
 
       <Modal open={supplierConfirmOpen} onClose={() => setSupplierConfirmOpen(false)} title="אישור קבלת הזמנה ע״י הספק">
-        <p className="text-sm text-slate-600 mb-3">מועד האישור והמשתמש המסמן יתועדו במערכת וביומן הביקורת.</p>
+        <p className="text-sm text-ink-soft mb-3">מועד האישור והמשתמש המסמן יתועדו במערכת וביומן הביקורת.</p>
         <label className="label">איך התקבל האישור? (לא חובה)</label>
         <input className="input" placeholder='למשל: "אושר ב-WhatsApp ע״י דוד"' value={confirmNote} onChange={(e) => setConfirmNote(e.target.value)} />
         <label className="label mt-3">אספקה מבוקשת (לא חובה — לעדכון תאריך היעד)</label>

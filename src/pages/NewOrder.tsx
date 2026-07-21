@@ -4,7 +4,7 @@ import { Search, Trash2, AlertTriangle, Split, Plus, Minus } from 'lucide-react'
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageLoader, useToast, ErrorNote } from '../components/ui';
+import { PageLoader, useToast, ErrorNote, Note } from '../components/ui';
 import { useCategories } from './Suppliers';
 import { fmtMoneyExact, todayISO } from '../lib/format';
 import type { Product, Supplier, SupplierProduct } from '../lib/types';
@@ -226,26 +226,28 @@ export default function NewOrder() {
             <div className="card card-pad space-y-3">
               <div className="section-title flex items-center gap-2"><Split size={17} /> פיצול לפי ספקים</div>
               {split.noSupplier.length > 0 && (
-                <div className="rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm px-3 py-2">
+                <Note tone="alert">
                   ללא ספק זמין: {split.noSupplier.map((i) => i.product.name).join(', ')}
-                </div>
+                </Note>
               )}
               <div className="space-y-2">
                 {split.groups.map((g) => {
                   const underMin = g.supplier.min_order_amount != null && g.subtotal < g.supplier.min_order_amount;
                   return (
-                    <div key={g.supplier.id} className={`rounded-lg border px-3 py-2.5 ${underMin ? 'border-amber-300 bg-amber-50' : 'border-slate-200'}`}>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium text-slate-800">{g.supplier.name} <span className="text-slate-500 font-normal">({g.items.length} פריטים)</span></span>
-                        <span className="font-semibold num">{fmtMoneyExact(g.subtotal)}</span>
-                      </div>
-                      {underMin && (
-                        <div className="flex items-center gap-1.5 text-xs text-amber-700 mt-1">
-                          <AlertTriangle size={13} />
-                          מתחת למינימום הזמנה ({fmtMoneyExact(g.supplier.min_order_amount!)})
+                    <Note key={g.supplier.id} tone={underMin ? 'await' : 'idle'}>
+                      <div className="w-full">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium text-slate-800">{g.supplier.name} <span className="text-slate-500 font-normal">({g.items.length} פריטים)</span></span>
+                          <span className="font-semibold num">{fmtMoneyExact(g.subtotal)}</span>
                         </div>
-                      )}
-                    </div>
+                        {underMin && (
+                          <div className="flex items-center gap-1.5 text-xs text-await-fg mt-1">
+                            <AlertTriangle size={13} />
+                            מתחת למינימום הזמנה ({fmtMoneyExact(g.supplier.min_order_amount!)})
+                          </div>
+                        )}
+                      </div>
+                    </Note>
                   );
                 })}
               </div>

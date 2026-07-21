@@ -104,19 +104,19 @@ export default function Layout() {
 
   const linkCls = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
-      isActive ? 'bg-indigo-600/20 text-white font-medium' : 'text-slate-300 hover:bg-white/5 hover:text-white'
+      isActive ? 'bg-action text-white font-medium' : 'text-shell-ink-soft hover:bg-shell-ink/5 hover:text-shell-ink'
     }`;
 
   const sidebar = (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-5 border-b border-white/10">
-        <div className="text-lg font-bold text-white truncate" title={orgName}>{orgName}</div>
-        <div className="text-xs text-slate-400">ניהול רכש ותשלומים</div>
+      <div className="px-4 py-5 border-b border-shell-ink/10">
+        <div className="text-lg font-bold text-shell-ink truncate" title={orgName}>{orgName}</div>
+        <div className="text-xs text-shell-ink-dim">ניהול רכש ותשלומים</div>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
         {sections.map((s, i) => (
           <div key={i}>
-            {showHeaders && s.section && <div className="px-3 pb-1 text-[11px] font-semibold text-slate-500 uppercase">{s.section}</div>}
+            {showHeaders && s.section && <div className="px-3 pb-1 text-[11px] font-semibold text-shell-heading uppercase">{s.section}</div>}
             <div className="space-y-0.5">
               {s.items.map((item) => (
                 <NavLink key={item.to} to={item.to} className={linkCls} onClick={() => setMobileOpen(false)} end={item.to === '/orders'}>
@@ -128,10 +128,10 @@ export default function Layout() {
           </div>
         ))}
       </nav>
-      <div className="px-4 py-3 border-t border-white/10">
-        <div className="text-sm text-white font-medium">{profile?.full_name}</div>
-        <div className="text-xs text-slate-400 mb-2">{role ? roleLabels[role] : ''}</div>
-        <button className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white" onClick={() => void handleSignOut()}>
+      <div className="px-4 py-3 border-t border-shell-ink/10">
+        <div className="text-sm text-shell-ink font-medium">{profile?.full_name}</div>
+        <div className="text-xs text-shell-ink-dim mb-2">{role ? roleLabels[role] : ''}</div>
+        <button className="flex items-center gap-1.5 text-xs text-shell-ink-dim hover:text-shell-ink" onClick={() => void handleSignOut()}>
           <LogOut size={13} /> התנתקות
         </button>
       </div>
@@ -140,11 +140,18 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen">
+      {/* Skip-to-content (audit round 2): the first focusable element, so a keyboard user can
+          jump past the ~19 sidebar links straight to the page. Hidden until focused, then styled
+          like a primary button at the logical start, z-above the sidebar (z-40). */}
+      <a href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:start-3 focus:z-50 focus:rounded-lg focus:bg-action focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-action-line">
+        דלג לתוכן
+      </a>
       {/* Desktop sidebar */}
-      <aside className="hidden lg:block fixed inset-y-0 start-0 w-60 bg-slate-900 z-40 no-print">{sidebar}</aside>
+      <aside className="hidden lg:block fixed inset-y-0 start-0 w-60 bg-shell border-e border-line z-40 no-print">{sidebar}</aside>
 
       {/* Mobile top bar */}
-      <header className="lg:hidden sticky top-0 z-40 bg-slate-900 text-white flex items-center justify-between px-4 py-3 no-print">
+      <header className="lg:hidden sticky top-0 z-40 bg-shell text-shell-ink border-b border-line flex items-center justify-between px-4 py-3 no-print">
         <div className="font-bold truncate me-3" title={orgName}>{orgName}</div>
         <div className="flex items-center gap-1">
           {canSearch && (
@@ -155,9 +162,9 @@ export default function Layout() {
       </header>
       {searchOpen && <GlobalSearch variant="mobile" onClose={() => setSearchOpen(false)} />}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-slate-900/60 no-print" onClick={() => setMobileOpen(false)}>
-          <aside className="absolute inset-y-0 start-0 w-72 bg-slate-900" onClick={(e) => e.stopPropagation()}>
-            <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 text-slate-400" onClick={() => setMobileOpen(false)} aria-label="סגירה"><X size={20} /></button>
+        <div className="lg:hidden fixed inset-0 z-50 bg-shell/60 no-print" onClick={() => setMobileOpen(false)}>
+          <aside className="absolute inset-y-0 start-0 w-72 bg-shell border-e border-line" onClick={(e) => e.stopPropagation()}>
+            <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 text-shell-ink-dim" onClick={() => setMobileOpen(false)} aria-label="סגירה"><X size={20} /></button>
             {sidebar}
           </aside>
         </div>
@@ -167,13 +174,13 @@ export default function Layout() {
           today (plan §2), and lg:ms-60 lines it up beside the fixed w-60 sidebar. z-30 keeps it
           below the sidebar (z-40); sticky works because the min-h-screen wrapper has no overflow. */}
       {canSearch && (
-        <header className="hidden lg:flex sticky top-0 z-30 lg:ms-60 h-14 items-center border-b border-slate-200 bg-white px-6 no-print">
+        <header className="hidden lg:flex sticky top-0 z-30 lg:ms-60 h-14 items-center border-b border-line bg-surface px-6 no-print">
           <GlobalSearch />
         </header>
       )}
 
-      {/* Content */}
-      <main className="lg:ms-60 px-4 sm:px-6 py-5 pb-24 lg:pb-8">
+      {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring. */}
+      <main id="main" tabIndex={-1} className="lg:ms-60 px-4 sm:px-6 py-5 pb-24 lg:pb-8 focus:outline-none">
         {/* max-w column centred (mx-auto) in the space beside the sidebar — otherwise a wide
             viewport strands all content on the start side in RTL, leaving a dead zone on the
             end side. keyed by path so each screen change re-triggers the fade (section 11). */}
@@ -184,10 +191,10 @@ export default function Layout() {
 
       {/* Mobile bottom nav */}
       {mobileItems.length > 0 && (
-        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200 flex no-print" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-surface border-t border-line flex no-print" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
           {mobileItems.map((item) => (
             <NavLink key={item.to} to={item.to} end={item.to === '/orders'}
-              className={({ isActive }) => `flex-1 flex flex-col items-center gap-0.5 py-2 text-[11px] ${isActive ? 'text-indigo-700 font-medium' : 'text-slate-500'}`}>
+              className={({ isActive }) => `flex-1 flex flex-col items-center gap-0.5 py-2 text-[11px] ${isActive ? 'text-action font-medium' : 'text-ink-muted'}`}>
               <item.icon size={20} />
               {item.label}
             </NavLink>

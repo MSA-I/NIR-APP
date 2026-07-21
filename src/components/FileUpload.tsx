@@ -119,7 +119,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-slate-600 flex items-center gap-1.5"><Paperclip size={15} /> מסמכים מצורפים</span>
+        <span className="text-sm font-medium text-ink-soft flex items-center gap-1.5"><Paperclip size={15} /> מסמכים מצורפים</span>
         {canUpload && (
           <button className="btn-secondary py-1.5!" disabled={busy} onClick={() => inputRef.current?.click()}>
             {busy ? <Loader2 size={15} className="animate-spin" /> : capture ? <Camera size={15} /> : <Paperclip size={15} />}
@@ -133,7 +133,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
       {loading ? (
         // Not cosmetic: `docs` is null while fetching, and the empty branch below claims
         // "no documents". On an invoice that reads as "no scan attached" when there is one.
-        <div className="border border-slate-100 rounded-lg divide-y divide-slate-100" role="status" aria-busy="true">
+        <div className="border border-line-soft rounded-lg divide-y divide-line-soft" role="status" aria-busy="true">
           <span className="sr-only">טוען מסמכים</span>
           {[0, 1].map((i) => (
             <div key={i} className="flex items-center gap-2 px-3 py-2.5">
@@ -144,14 +144,14 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
           ))}
         </div>
       ) : docs?.length ? (
-        <ul className="divide-y divide-slate-100 border border-slate-100 rounded-lg">
+        <ul className="divide-y divide-line-soft border border-line-soft rounded-lg">
           {docs.map((d) => (
             <li key={d.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-              <FileText size={15} className="text-slate-400 shrink-0" />
-              <button className="text-indigo-700 hover:underline truncate" onClick={() => void open(d)}>{d.file_name}</button>
-              <span className="text-xs text-slate-500 ms-auto shrink-0">{fmtDateTime(d.created_at)}</span>
+              <FileText size={15} className="text-ink-faint shrink-0" />
+              <button className="link truncate" onClick={() => void open(d)}>{d.file_name}</button>
+              <span className="text-xs text-ink-muted ms-auto shrink-0">{fmtDateTime(d.created_at)}</span>
               {canDelete && (
-                <button className="btn-ghost p-1! text-slate-400 hover:text-rose-600" onClick={() => setPending(d)} aria-label="מחיקה">
+                <button className="btn-ghost p-1.5! min-w-11 min-h-11 text-ink-faint hover:text-alert-solid" onClick={() => setPending(d)} aria-label="מחיקה">
                   <Trash2 size={14} />
                 </button>
               )}
@@ -159,7 +159,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
           ))}
         </ul>
       ) : (
-        <div className="text-sm text-slate-500 border border-dashed border-slate-200 rounded-lg px-3 py-4 text-center">אין מסמכים</div>
+        <div className="text-sm text-ink-muted border border-dashed border-line rounded-lg px-3 py-4 text-center">אין מסמכים</div>
       )}
 
       <ConfirmDialog

@@ -3,13 +3,16 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { TrendingUp, ChevronLeft, RotateCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { PageLoader, StatusBadge, Note, AttentionZone, StatTile, TaskLine, type AttentionItem } from '../components/ui';
+import { Skeleton, StatusBadge, Note, AttentionZone, StatTile, TaskLine, type AttentionItem } from '../components/ui';
 import { EXCEPTION_TYPE, SEVERITY } from '../lib/status';
 import { fmtMoney, fmtMoneyExact, fmtMonth, toLocalISO } from '../lib/format';
+import { chartTheme } from '../lib/theme';
 
-// single-hue magnitude palette (dataviz rule: identity sits on the axis, color encodes nothing else)
-const BAR_COLOR = '#4f46e5';
 const money = (v: number) => `₪${Math.round(v).toLocaleString('he-IL')}`;
+// audit round 2: glance values are whole-shekel by convention — the three money-strip tiles round to
+// whole ₪ so they read consistently at a glance (₪8,131 not ₪14,842.6). Tables elsewhere keep exact
+// amounts; format.ts is untouched. null stays null → "—", never a fake rounded 0 (CLAUDE.md:37).
+const glanceMoney = (v: number | null) => fmtMoney(v == null ? null : Math.round(v));
 // compact ₪ for dense axes (the 8-bar weekly series): full labels overlap at that count.
 const moneyShort = (v: number) => (Math.abs(v) >= 1000 ? `₪${(v / 1000).toLocaleString('he-IL', { maximumFractionDigits: 1 })}k` : `₪${Math.round(v)}`);
 // "עודכן ב-HH:MM" freshness stamp — the screen promises real-time, so it says when it last read.
@@ -18,6 +21,73 @@ const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-d
 // Week bucketing for the weekly-purchasing chart. Local-day helper is shared (toLocalISO).
 const pad = (n: number) => String(n).padStart(2, '0');
 const startOfWeek = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - x.getDay()); return x; };
+
+// audit round 2: the loading state was <PageLoader/> — a centred spinner that collapses the page
+// height and jumps when data lands, exactly what ui.tsx warns against on a known layout (and this is
+// the flagship screen). This mirrors the above-the-fold shape instead: header, the "דורש טיפול" card,
+// the money strip, and the first pair of detail cards. One role="status" region with a single "טוען"
+// for screen readers — SkeletonRegion is not exported, so we compose the house pattern from Skeleton.
+function DashboardSkeleton() {
+  return (
+    <div role="status" aria-busy="true" className="space-y-5">
+      <span className="sr-only">טוען</span>
+
+      {/* header: page title + freshness stamp */}
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-7 w-48" />
+        <Skeleton className="h-4 w-24" />
+      </div>
+
+      {/* AttentionZone card: header + dense rows (badge · label · amount) */}
+      <div className="card card-pad">
+        <div className="flex items-center justify-between mb-2">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-3 w-28" />
+        </div>
+        <div className="divide-y divide-line-soft">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="flex items-center gap-3 py-2.5">
+              <Skeleton className="h-6 w-8 rounded-full" />
+              <Skeleton className={`h-4 ${['w-56', 'w-44', 'w-64', 'w-48'][i]}`} />
+              <Skeleton className="h-4 w-16 ms-auto" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* money strip: three navigable stat tiles (title · value · sub) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {Array.from({ length: 3 }, (_, i) => (
+          <div key={i} className="card card-pad">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-6 w-28 mt-2" />
+            <Skeleton className="h-3 w-40 mt-2" />
+          </div>
+        ))}
+      </div>
+
+      {/* first pair of detail cards (חריגים · התייקרויות) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {Array.from({ length: 2 }, (_, i) => (
+          <div key={i} className="card card-pad">
+            <div className="flex items-center justify-between mb-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+            <div className="divide-y divide-line-soft">
+              {Array.from({ length: 4 }, (_, r) => (
+                <div key={r} className="flex items-center justify-between py-2.5">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const { data, loading, error, refetch, fetching } = useQuery(async () => {
@@ -198,13 +268,15 @@ export default function Dashboard() {
     };
   });
 
-  if (loading) return <PageLoader />;
+  if (loading) return <DashboardSkeleton />;
+
+  const t = chartTheme();
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title">דשבורד ניהולי</h1>
-        <div className="flex items-center gap-2 text-xs text-slate-500">
+        <div className="flex items-center gap-2 text-xs text-ink-muted">
           {data?.fetchedAt && <span>עודכן ב-<span className="num">{timeFmt.format(data.fetchedAt)}</span></span>}
           <button className="btn-ghost py-1! px-2!" onClick={() => void refetch()} disabled={fetching}
             aria-label="רענון נתוני הדשבורד" title="רענון">
@@ -229,11 +301,11 @@ export default function Dashboard() {
       {/* thin money strip — context, all navigable. `sub` carries a short plain-Hebrew gloss of
           each term (StatTile has no title-tooltip prop; `sub` is the visible, readable equivalent). */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <StatTile title="יתרת חשבוניות פתוחות" value={fmtMoney(data.money.openBalance)} tone="await" to="/invoices?pay=unpaid"
+        <StatTile title="יתרת חשבוניות פתוחות" value={glanceMoney(data.money.openBalance)} tone="await" to="/invoices?pay=unpaid"
           sub="סך החוב לספקים על חשבוניות שטרם שולמו במלואן" />
-        <StatTile title="שולם לספקים החודש" value={fmtMoney(data.money.paidMonth)} tone="done" to={`/payments?month=${data.money.monthKey}`}
+        <StatTile title="שולם לספקים החודש" value={glanceMoney(data.money.paidMonth)} tone="done" to={`/payments?month=${data.money.monthKey}`}
           sub="סך התשלומים שיצאו לספקים החודש" />
-        <StatTile title="נרכש החודש" value={fmtMoney(data.money.purchasedMonth)} to="/orders?status=all"
+        <StatTile title="נרכש החודש" value={glanceMoney(data.money.purchasedMonth)} to="/orders?status=all"
           sub={data.savings != null
             ? `חיסכון משוער החודש: ההפרש מול המחיר היקר ביותר שהוצע — ${fmtMoney(data.savings)}`
             : 'שווי ההזמנות שנוצרו החודש (במחירי ההזמנה)'} />
@@ -247,15 +319,15 @@ export default function Dashboard() {
             <Link to="/exceptions?status=open" className="btn-ghost py-1! text-xs">לכל החריגים <ChevronLeft size={13} /></Link>
           </div>
           {data.exceptions.length ? (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-line-soft">
               {data.exceptions.map((e) => (
                 <li key={e.id}>
-                  <Link to={`/exceptions?id=${e.id}`} className="block py-2 text-sm -mx-2 px-2 rounded-lg hover:bg-slate-50">
+                  <Link to={`/exceptions?id=${e.id}`} className="block py-2 text-sm -mx-2 px-2 rounded-lg hover:bg-surface-sunken">
                     <div className="flex items-center gap-2">
                       <StatusBadge meta={SEVERITY[e.severity]} />
-                      <span className="text-xs text-slate-500">{EXCEPTION_TYPE[e.type]}</span>
+                      <span className="text-xs text-ink-muted">{EXCEPTION_TYPE[e.type]}</span>
                     </div>
-                    <div className="text-slate-700 truncate mt-0.5">{e.title}</div>
+                    <div className="text-ink-mid truncate mt-0.5">{e.title}</div>
                   </Link>
                 </li>
               ))}
@@ -265,12 +337,12 @@ export default function Dashboard() {
               Shown only when > 0 — a risk indicator printing "0" is the fake-zero the plan forbids;
               the count-0 "all clear" is already carried by AttentionZone tier B. */}
           {(data.meta.suspectedDup > 0 || data.meta.unmatchedBank > 0) && (
-            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            <div className="mt-3 pt-3 border-t border-line-soft flex flex-wrap gap-x-4 gap-y-1 text-xs">
               {data.meta.suspectedDup > 0 && (
-                <Link to="/exceptions?type=duplicate_invoice,duplicate_payment" className="text-slate-500 hover:text-slate-700">חשד לכפילות: <span className="num font-medium">{data.meta.suspectedDup}</span></Link>
+                <Link to="/exceptions?type=duplicate_invoice,duplicate_payment" className="text-ink-muted hover:text-ink-mid">חשד לכפילות: <span className="num font-medium">{data.meta.suspectedDup}</span></Link>
               )}
               {data.meta.unmatchedBank > 0 && (
-                <Link to="/bank?status=unmatched" className="text-slate-500 hover:text-slate-700">תנועות בנק לא מותאמות: <span className="num font-medium">{data.meta.unmatchedBank}</span></Link>
+                <Link to="/bank?status=unmatched" className="text-ink-muted hover:text-ink-mid">תנועות בנק לא מותאמות: <span className="num font-medium">{data.meta.unmatchedBank}</span></Link>
               )}
             </div>
           )}
@@ -282,17 +354,17 @@ export default function Dashboard() {
             <Link to="/prices?increases=1" className="btn-ghost py-1! text-xs">לכל המחירונים <ChevronLeft size={13} /></Link>
           </div>
           {data.priceIncreases.length ? (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-line-soft">
               {data.priceIncreases.map((p, i) => (
                 <li key={i}>
-                  <Link to={`/prices?product=${p.product.id}`} className="flex items-center justify-between py-2 text-sm -mx-2 px-2 rounded-lg hover:bg-slate-50">
+                  <Link to={`/prices?product=${p.product.id}`} className="flex items-center justify-between py-2 text-sm -mx-2 px-2 rounded-lg hover:bg-surface-sunken">
                     <span className="min-w-0 truncate">
-                      <span className="font-medium text-slate-800">{p.product.name}</span>
-                      <span className="text-slate-500 text-xs ms-2">{p.supplier.name}</span>
+                      <span className="font-medium text-ink-body">{p.product.name}</span>
+                      <span className="text-ink-muted text-xs ms-2">{p.supplier.name}</span>
                     </span>
                     <span className="flex items-center gap-3 shrink-0">
                       {/* explicit direction (מ־… ל־…): "₪X ← ₪Y" is ambiguous in RTL */}
-                      <span className="text-xs text-slate-500">מ־<span className="num">₪{p.previous_price!.toFixed(2)}</span> ל־<span className="num">₪{p.current_price.toFixed(2)}</span></span>
+                      <span className="text-xs text-ink-muted">מ־<span className="num">₪{p.previous_price!.toFixed(2)}</span> ל־<span className="num">₪{p.current_price.toFixed(2)}</span></span>
                       {/* fix: text in the darker alert-fg (contrast); arrow keeps the lighter trend hue */}
                       <span className="inline-flex items-center gap-1 text-alert-fg font-medium num" dir="ltr"><TrendingUp size={13} className="text-trend-up-fg" />+{p.pct.toFixed(1)}%</span>
                     </span>
@@ -300,7 +372,7 @@ export default function Dashboard() {
                 </li>
               ))}
             </ul>
-          ) : <div className="text-sm text-slate-500 py-6 text-center">אין התייקרויות אחרונות</div>}
+          ) : <div className="text-sm text-ink-muted py-6 text-center">אין התייקרויות אחרונות</div>}
         </div>
       </div>
 
@@ -312,17 +384,17 @@ export default function Dashboard() {
             <Link to="/suppliers?balance=open" className="btn-ghost py-1! text-xs">לכל הספקים <ChevronLeft size={13} /></Link>
           </div>
           {data.topBalances.length ? (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-line-soft">
               {data.topBalances.map((b) => (
                 <li key={b.id}>
-                  <Link to={`/suppliers/${b.id}`} className="flex items-center justify-between py-2 text-sm -mx-2 px-2 rounded-lg hover:bg-slate-50">
-                    <span className="text-slate-700">{b.name}</span>
+                  <Link to={`/suppliers/${b.id}`} className="flex items-center justify-between py-2 text-sm -mx-2 px-2 rounded-lg hover:bg-surface-sunken">
+                    <span className="text-ink-mid">{b.name}</span>
                     <span className="font-semibold num text-await-fg">{fmtMoneyExact(b.balance)}</span>
                   </Link>
                 </li>
               ))}
             </ul>
-          ) : <div className="text-sm text-slate-500 py-6 text-center">אין יתרות פתוחות</div>}
+          ) : <div className="text-sm text-ink-muted py-6 text-center">אין יתרות פתוחות</div>}
         </div>
 
         <div className="card card-pad">
@@ -350,14 +422,17 @@ export default function Dashboard() {
               </span>
             )}
           </div>
-          <div dir="ltr" className="h-56">
+          {/* audit round 2: non-visual alternative — the SVG carries no accessible name, so the
+              wrapper is role="img" with an aria-label spelling out each bar's ₪ (whole-shekel). */}
+          <div dir="ltr" className="h-56" role="img"
+            aria-label={`הוצאות רכש לפי חודש: ${data.monthly.map((m) => `${m.month} ${money(m.total)}`).join(', ')}`}>
             <ResponsiveContainer>
               <BarChart data={data.monthly} margin={{ top: 20, left: 8, right: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
                 <YAxis hide />
                 <Tooltip formatter={(v) => money(Number(v))} labelStyle={{ fontFamily: 'Heebo' }} />
-                <Bar dataKey="total" name="סה״כ" fill={BAR_COLOR} radius={[4, 4, 0, 0]} maxBarSize={56} isAnimationActive={false}>
+                <Bar dataKey="total" name="סה״כ" fill={t.bar} radius={[4, 4, 0, 0]} maxBarSize={56} isAnimationActive={false}>
                   <LabelList dataKey="total" position="top" formatter={(v: number) => money(v)} style={{ fontSize: 11, fill: '#475569' }} />
                 </Bar>
               </BarChart>
@@ -367,7 +442,8 @@ export default function Dashboard() {
 
         <div className="card card-pad">
           <h2 className="section-title mb-1" title="שווי ההזמנות שנוצרו בכל שבוע (במחירי ההזמנה)">רכש לפי שבוע (8 שבועות אחרונים)</h2>
-          <div dir="ltr" className="h-56">
+          <div dir="ltr" className="h-56" role="img"
+            aria-label={`רכש לפי שבוע: ${data.weekly.map((w) => `${w.week} ${money(w.total)}`).join(', ')}`}>
             <ResponsiveContainer>
               <BarChart data={data.weekly} margin={{ top: 20, left: 8, right: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -376,7 +452,7 @@ export default function Dashboard() {
                 <Tooltip formatter={(v) => money(Number(v))} labelStyle={{ fontFamily: 'Heebo' }} />
                 {/* value labels so the week series reads at a glance like the monthly chart; compact
                     ₪ format because 8 full labels overlap (moneyShort) */}
-                <Bar dataKey="total" name="סה״כ" fill={BAR_COLOR} radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={false}>
+                <Bar dataKey="total" name="סה״כ" fill={t.bar} radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={false}>
                   <LabelList dataKey="total" position="top" formatter={(v: number) => moneyShort(v)} style={{ fontSize: 10, fill: '#475569' }} />
                 </Bar>
               </BarChart>
@@ -388,20 +464,21 @@ export default function Dashboard() {
           <h2 className="section-title mb-1" title="פילוח הרכש של החודש לפי קטגוריית מוצר">הוצאות לפי קטגוריה (החודש)</h2>
           {data.categories.length ? (
             // height tracks row count so a short list does not trail off into empty space
-            <div dir="ltr" style={{ height: Math.min(240, Math.max(96, data.categories.length * 34 + 16)) }}>
+            <div dir="ltr" style={{ height: Math.min(240, Math.max(96, data.categories.length * 34 + 16)) }} role="img"
+              aria-label={`הוצאות לפי קטגוריה: ${data.categories.slice(0, 12).map((c) => `${c.name} ${money(c.total)}`).join(', ')}`}>
               <ResponsiveContainer>
                 <BarChart data={data.categories} layout="vertical" margin={{ left: 8, right: 56 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
                   <XAxis type="number" hide />
                   <YAxis type="category" dataKey="name" orientation="right" width={90} tick={{ fontSize: 12, fill: '#334155' }} axisLine={false} tickLine={false} />
                   <Tooltip formatter={(v) => money(Number(v))} />
-                  <Bar dataKey="total" name="סה״כ" fill={BAR_COLOR} radius={[4, 0, 0, 4]} maxBarSize={22} isAnimationActive={false}>
+                  <Bar dataKey="total" name="סה״כ" fill={t.bar} radius={[4, 0, 0, 4]} maxBarSize={22} isAnimationActive={false}>
                     <LabelList dataKey="total" position="left" formatter={(v: number) => money(v)} style={{ fontSize: 11, fill: '#475569' }} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          ) : <div className="text-sm text-slate-500 py-6 text-center">אין רכש החודש</div>}
+          ) : <div className="text-sm text-ink-muted py-6 text-center">אין רכש החודש</div>}
         </div>
       </div>
       </>)}

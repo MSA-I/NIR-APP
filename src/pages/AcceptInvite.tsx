@@ -89,7 +89,7 @@ export default function AcceptInvite() {
   if (loading) {
     return (
       <Shell>
-        <div className="card card-pad flex justify-center py-10 text-slate-400">
+        <div className="card card-pad flex justify-center py-10 text-ink-faint">
           <Loader2 className="animate-spin" size={26} />
         </div>
       </Shell>
@@ -119,10 +119,10 @@ export default function AcceptInvite() {
   return (
     <Shell>
       <form onSubmit={(e) => void onSubmit(e)} className="card card-pad space-y-4">
-        <div className="pb-1 border-b border-slate-100">
+        <div className="pb-1 border-b border-line-soft">
           <h2 className="section-title">הצטרפות ל{lookup.org_name}</h2>
-          <p className="text-sm text-slate-500 mt-1">
-            התפקיד שהוגדר עבורך: <strong className="text-slate-700">
+          <p className="text-sm text-ink-muted mt-1">
+            התפקיד שהוגדר עבורך: <strong className="text-ink-mid">
               {resolveRoleLabels({ role_labels: lookup.role_labels })[lookup.role ?? ''] ?? lookup.role}
             </strong>
           </p>
@@ -153,7 +153,7 @@ export default function AcceptInvite() {
             value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </div>
 
-        {formError && <div className="text-sm text-rose-600">{formError}</div>}
+        {formError && <div className="text-sm text-alert-solid">{formError}</div>}
 
         <button type="submit" className="btn-primary w-full" disabled={busy}>
           {busy ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={15} />}
@@ -173,11 +173,11 @@ const INVALID_MESSAGE: Record<string, string> = {
 
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-shell p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-white">{APP_NAME}</h1>
-          <p className="text-slate-400 mt-1 text-sm">מערכת ניהול רכש, חשבוניות ותשלומים</p>
+          <p className="text-ink-faint mt-1 text-sm">מערכת ניהול רכש, חשבוניות ותשלומים</p>
         </div>
         {children}
       </div>
@@ -190,10 +190,10 @@ function Notice({ title, message, tone = 'warn' }: { title: string; message: str
   return (
     <div className="card card-pad space-y-3">
       <div className="flex items-start gap-2.5">
-        <Icon size={19} className={tone === 'info' ? 'text-emerald-600 shrink-0 mt-0.5' : 'text-amber-600 shrink-0 mt-0.5'} />
+        <Icon size={19} className={tone === 'info' ? 'text-done-solid shrink-0 mt-0.5' : 'text-await-solid shrink-0 mt-0.5'} />
         <div>
-          <div className="font-semibold text-slate-900">{title}</div>
-          <p className="text-sm text-slate-600 mt-1 leading-relaxed">{message}</p>
+          <div className="font-semibold text-ink">{title}</div>
+          <p className="text-sm text-ink-soft mt-1 leading-relaxed">{message}</p>
         </div>
       </div>
       <Link to="/login" className="btn-secondary w-full">מעבר למסך ההתחברות</Link>

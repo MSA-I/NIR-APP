@@ -308,7 +308,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
               ))}
             </ul>
           </div>
-        ) : <div className="text-sm text-amber-600">דרישה ללא חשבוניות מקושרות</div>}
+        ) : <div className="text-sm text-await-fg">דרישה ללא חשבוניות מקושרות</div>}
 
         <div>
           <div className="text-sm font-medium text-slate-600 mb-1.5">בדיקות לפני אישור</div>

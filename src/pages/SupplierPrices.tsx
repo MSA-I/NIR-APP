@@ -32,7 +32,7 @@ export default function SupplierPrices() {
   });
 
   const columns: Column<Row>[] = [
-    { key: 'product', header: 'מוצר', sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-slate-900">{r.product.name}</span> },
+    { key: 'product', header: 'מוצר', sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-ink">{r.product.name}</span> },
     { key: 'unit', header: 'יח׳', render: (r) => r.product.unit },
     { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">₪{r.current_price.toFixed(2)}</span> },
     { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => (r.previous_price != null ? `₪${r.previous_price.toFixed(2)}` : '—') },
@@ -54,7 +54,7 @@ export default function SupplierPrices() {
         <div>
           <h1 className="page-title flex items-center gap-2"><Tags size={22} /> המחירון שלי</h1>
           {/* Read by a supplier agent — names the buying organization, not the vendor. */}
-          <div className="text-sm text-slate-500 mt-1">{`${data.supplier.name} — עדכון מחירים וזמינות${org?.name ? ` עבור ${org.name}` : ''}`}</div>
+          <div className="text-sm text-ink-muted mt-1">{`${data.supplier.name} — עדכון מחירים וזמינות${org?.name ? ` עבור ${org.name}` : ''}`}</div>
         </div>
         <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> העלאת מחירון (Excel/CSV)</button>
       </div>
@@ -180,16 +180,16 @@ function ImportModal({ supplierId, orgId, existing, onClose, onDone }: {
     <Modal open onClose={onClose} title="העלאת מחירון" wide>
       {report ? (
         <div className="space-y-4">
-          <div className="rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm px-4 py-3">{report}</div>
+          <Note tone="done">{report}</Note>
           <div className="flex justify-end"><button className="btn-primary" onClick={onDone}>סיום</button></div>
         </div>
       ) : preview.length ? (
         <div className="space-y-4">
-          <div className="text-sm text-slate-600">{preview.length} שורות זוהו בקובץ:</div>
-          <div className="max-h-64 overflow-y-auto border border-slate-100 rounded-lg">
+          <div className="text-sm text-ink-soft">{preview.length} שורות זוהו בקובץ:</div>
+          <div className="max-h-64 overflow-y-auto border border-line-soft rounded-lg">
             <table className="w-full">
-              <thead className="bg-slate-50 sticky top-0"><tr><th className="th">מוצר</th><th className="th">מחיר</th></tr></thead>
-              <tbody className="divide-y divide-slate-100">
+              <thead className="bg-surface-sunken sticky top-0"><tr><th className="th">מוצר</th><th className="th">מחיר</th></tr></thead>
+              <tbody className="divide-y divide-line-soft">
                 {preview.slice(0, 100).map((r, i) => (
                   <tr key={i}><td className="td">{r.product}</td><td className="td num">₪{r.price.toFixed(2)}</td></tr>
                 ))}
@@ -203,7 +203,7 @@ function ImportModal({ supplierId, orgId, existing, onClose, onDone }: {
         </div>
       ) : (
         <div className="text-center py-8">
-          <p className="text-sm text-slate-600 mb-4">בחר קובץ Excel או CSV עם העמודות: <b>מוצר</b>, <b>מחיר</b></p>
+          <p className="text-sm text-ink-soft mb-4">בחר קובץ Excel או CSV עם העמודות: <b>מוצר</b>, <b>מחיר</b></p>
           <button className="btn-primary" onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
           <input ref={fileRef} type="file" hidden accept=".xlsx,.xls,.csv" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
         </div>

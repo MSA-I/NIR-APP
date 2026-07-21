@@ -182,7 +182,7 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
 
   const field = (
     <div className="relative w-full">
-      <Search size={16} className="absolute top-1/2 -translate-y-1/2 start-3 text-slate-400 pointer-events-none" />
+      <Search size={16} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint pointer-events-none" />
       <input
         ref={inputRef}
         type="text"
@@ -202,21 +202,21 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
       />
-      {loading && <Loader2 size={15} className="animate-spin absolute top-1/2 -translate-y-1/2 end-3 text-slate-400" />}
+      {loading && <Loader2 size={15} className="animate-spin absolute top-1/2 -translate-y-1/2 end-3 text-ink-faint" />}
     </div>
   );
 
   const panelBody = !hasTerm ? (
-    <div className="px-3 py-3 text-xs text-slate-400">חיפוש {hintLabels}</div>
+    <div className="px-3 py-3 text-xs text-ink-faint">חיפוש {hintLabels}</div>
   ) : loading && !hits ? null : hits && hits.length === 0 ? (
-    <div className="px-3 py-6 text-center text-sm text-slate-500">לא נמצאו תוצאות עבור «{q}»</div>
+    <div className="px-3 py-6 text-center text-sm text-ink-muted">לא נמצאו תוצאות עבור «{q}»</div>
   ) : (
     <ul id="gs-listbox" role="listbox" aria-label="תוצאות חיפוש" className="py-1">
       {renderGroups.map((g) => {
         const Icon = g.meta.icon;
         return (
           <li key={g.entity} role="group" aria-label={g.meta.label}>
-            <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
               <Icon size={13} /> {g.meta.label}
             </div>
             <ul role="presentation">
@@ -228,15 +228,15 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
                   aria-selected={index === activeIndex}
                   onMouseDown={(e) => { e.preventDefault(); open(hit); }}
                   onMouseEnter={() => setActiveIndex(index)}
-                  className={`flex items-center gap-3 px-3 py-2 cursor-pointer ${index === activeIndex ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}
+                  className={`flex items-center gap-3 px-3 py-2 cursor-pointer ${index === activeIndex ? 'bg-action-wash' : 'hover:bg-surface-sunken'}`}
                 >
-                  <Icon size={15} className="shrink-0 text-slate-400" />
+                  <Icon size={15} className="shrink-0 text-ink-faint" />
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-slate-800 truncate" dir={LTR_TITLE[hit.entity] ? 'ltr' : undefined}>{hit.title}</div>
-                    {hit.subtitle && <div className="text-xs text-slate-500 truncate">{hit.subtitle}</div>}
+                    <div className="text-sm font-medium text-ink-body truncate" dir={LTR_TITLE[hit.entity] ? 'ltr' : undefined}>{hit.title}</div>
+                    {hit.subtitle && <div className="text-xs text-ink-muted truncate">{hit.subtitle}</div>}
                   </div>
                   <StatusBadge meta={metaFor(hit)} />
-                  {hit.amount != null && <span className="num text-sm text-slate-700 shrink-0">{fmtMoneyExact(hit.amount)}</span>}
+                  {hit.amount != null && <span className="num text-sm text-ink-mid shrink-0">{fmtMoneyExact(hit.amount)}</span>}
                 </li>
               ))}
             </ul>
@@ -248,8 +248,8 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
 
   if (variant === 'mobile') {
     return (
-      <div role="dialog" aria-modal="true" aria-label="חיפוש כללי" className="lg:hidden fixed inset-0 z-50 bg-white flex flex-col">
-        <div className="flex items-center gap-2 border-b border-slate-200 p-3">
+      <div role="dialog" aria-modal="true" aria-label="חיפוש כללי" className="lg:hidden fixed inset-0 z-50 bg-surface flex flex-col">
+        <div className="flex items-center gap-2 border-b border-line p-3">
           {field}
           <button className="btn-ghost p-2!" onClick={() => onClose?.()} aria-label="סגירה"><X size={20} /></button>
         </div>
