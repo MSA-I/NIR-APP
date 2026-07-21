@@ -1,49 +1,49 @@
 ---
 name: SupplyFlow
-description: מערכת procurement-to-payment עברית RTL — B2B פרימיום, "פנקס הדיו": מונוכרום שקט + צבע סמנטי בלבד
+description: מערכת procurement-to-payment עברית RTL — B2B פרימיום, מסגרת פטרול עמוקה + נייר חם + צבע סמנטי
 colors:
-  # ---- שלד (structural) — "פנקס הדיו" (T5, 21.07.2026) ----
-  canvas: "oklch(97.8% 0.003 255)"             # רקע הגוף — נייר שקט
-  surface: "#ffffff"                            # כרטיסים, טבלאות, מודאלים, שדות
-  surface-sunken: "oklch(98.6% 0.002 255)"      # thead, שדות disabled, רצועות שקטות
-  line: "oklch(90% 0.006 255)"                  # גבול כרטיס, מפריד מול canvas
-  line-soft: "oklch(94.5% 0.004 255)"           # מפרידי שורות פנימיים
-  line-strong: "oklch(84% 0.008 255)"           # גבול שדות וכפתור משני
-  ink: "oklch(16% 0.015 260)"                   # כותרות דף, הטקסט החזק ביותר
-  ink-body: "oklch(24% 0.015 260)"              # טקסט גוף
-  ink-mid: "oklch(32% 0.02 258)"                # תאי טבלה
-  ink-soft: "oklch(42% 0.02 258)"               # תוויות, כפתורי ghost
-  ink-muted: "oklch(50% 0.02 257)"              # כותרות עמודה, טקסט משני — AA על לבן
-  ink-faint: "oklch(56% 0.02 257)"              # placeholder ורמזים בלבד — 4.65:1 על לבן
-  ink-ghost: "oklch(78% 0.012 256)"             # אייקונים כבויים, סימנים דקורטיביים
-  # פעולה = דיו, לא גוון מותג. הצבע הרווי הפונקציונלי היחיד הוא טבעת הפוקוס.
-  action: "oklch(21% 0.02 260)"                 # כפתור ראשי, גלולת ניווט פעילה
-  action-hover: "oklch(31% 0.025 260)"          # משטח כהה מבהיר ב-hover
-  action-solid: "oklch(28% 0.02 260)"           # צ'יפים מלאים, מילויי בחירה
-  action-soft: "oklch(94% 0.008 257)"           # badge ספירה
-  action-on-soft: "oklch(24% 0.015 260)"
-  action-wash: "oklch(96.5% 0.006 256)"         # hover שורה (בשימוש עם /40)
-  action-line: "oklch(60% 0.02 257)"            # גבול hover על כרטיס לחיץ
-  focus: "oklch(55% 0.19 255)"                  # טבעת פוקוס — כחול פונקציונלי, 4.9:1
-  # ה-shell בהיר: סרגל לבן + hairline, טקסט דיו. פס ה-slate-900 הכהה איננו.
-  shell: "#ffffff"
-  shell-ink: "oklch(16% 0.015 260)"
-  shell-ink-soft: "oklch(35% 0.02 258)"
-  shell-ink-dim: "oklch(50% 0.02 257)"
-  shell-heading: "oklch(55% 0.02 257)"
-  # גרפים — דיו, לא קישוט
-  chart-1: "oklch(35% 0.02 258)"
-  chart-grid: "oklch(92% 0.005 255)"
-  chart-tick: "oklch(50% 0.02 257)"
-  chart-label: "oklch(42% 0.02 258)"
-  chart-tick-strong: "oklch(32% 0.02 258)"
+  # ---- שלד (structural) — "חדר בקרה פטרול" (T6, 21.07.2026) ----
+  canvas: "oklch(96.8% 0.01 85)"                # רקע הגוף — נייר חם
+  surface: "oklch(99.2% 0.004 85)"              # כרטיסים, טבלאות, מודאלים, שדות
+  surface-sunken: "oklch(95.2% 0.012 85)"       # thead, שדות disabled, רצועות שקטות
+  line: "oklch(88.5% 0.014 80)"                 # גבול כרטיס, מפריד מול canvas
+  line-soft: "oklch(93.2% 0.011 82)"            # מפרידי שורות פנימיים
+  line-strong: "oklch(65% 0.016 78)"            # גבול שדות/כפתור משני — 3.16:1
+  ink: "oklch(22% 0.025 205)"                   # כותרות דף, הטקסט החזק ביותר
+  ink-body: "oklch(29% 0.022 205)"              # טקסט גוף
+  ink-mid: "oklch(37% 0.022 205)"               # תאי טבלה
+  ink-soft: "oklch(44% 0.022 205)"              # תוויות, כפתורי ghost
+  ink-muted: "oklch(50% 0.021 205)"             # כותרות עמודה, טקסט משני
+  ink-faint: "oklch(54% 0.019 205)"             # placeholder ורמזים — 4.57:1 על canvas
+  ink-ghost: "oklch(75.5% 0.012 85)"            # אייקונים כבויים, סימנים דקורטיביים
+  # פעולה = מותג פטרול; היא מבנית בלבד ולעולם אינה מחליפה סטטוס.
+  action: "oklch(43.08% 0.0701 211.43)"          # #0f5a66 — כפתור ראשי, לינק, גרף
+  action-hover: "oklch(38.06% 0.0625 212.45)"
+  action-solid: "oklch(47.64% 0.0772 210.72)"    # צ'יפים מלאים, מילויי בחירה
+  action-soft: "oklch(93.41% 0.0182 205.32)"     # badge ספירה
+  action-on-soft: "oklch(38.19% 0.0588 211.94)"
+  action-wash: "oklch(96.69% 0.0086 188.11)"    # hover שורה
+  action-line: "oklch(64.32% 0.0541 205.4)"      # גבול hover על כרטיס לחיץ
+  focus: "oklch(52.98% 0.0911 212.98)"           # טבעת פוקוס — 4.98:1
+  # shell כהה: המסגרת הממותגת של המוצר; אזור העבודה נשאר נייר חם.
+  shell: "oklch(31.81% 0.0517 213.09)"           # #073942
+  shell-ink: "oklch(97% 0.009 85)"
+  shell-ink-soft: "oklch(88% 0.012 85)"
+  shell-ink-dim: "oklch(73% 0.015 85)"
+  shell-heading: "oklch(72% 0.016 85)"
+  # גרפים — רמפת פטרול מבנית, צבע סמנטי רק כשיש משמעות עסקית.
+  chart-1: "{colors.action}"
+  chart-grid: "oklch(89% 0.014 80)"
+  chart-tick: "oklch(50% 0.021 205)"
+  chart-label: "oklch(44% 0.022 205)"
+  chart-tick-strong: "oklch(37% 0.022 205)"
   star: "amber-400"                             # כוכבי דירוג: קישוט, לא סטטוס
   star-hover: "amber-300"
   # ---- שפת הצבעים הסמנטית — העוגנים ללא שינוי ----
   # done=הושלם (emerald) · await=ממתין (amber) · alert=חריגה (rose) · info=מידע (sky) · idle=ניטרלי (slate)
   # כל משמעות חושפת שישה משטחים: wash/line/soft/on-soft/fg/solid — הערכים ב-@theme ב-src/index.css.
-  trend-up: "rose-500"                          # התייקרות — תמיד עם חץ
-  trend-down: "emerald-500"                     # הוזלה — תמיד עם חץ
+  trend-up: "rose-700"                          # התייקרות — תמיד עם חץ
+  trend-down: "emerald-700"                     # הוזלה — תמיד עם חץ
 typography:
   # IBM Plex Sans Hebrew נושאת את ה-UI; IBM Plex Mono נושאת כל מספר (.num).
   # שתיהן מ-Google Fonts (index.html) — Sans ב-400/500/600/700, Mono ב-400/500/600.
@@ -72,13 +72,18 @@ typography:
     fontSize: "0.75rem"
     fontWeight: 600
     note: "ללא uppercase וללא tracking — לעברית אין רישיות; היררכיה מגודל/משקל/צבע בלבד"
+  micro:
+    fontFamily: "IBM Plex Sans Hebrew, ..."
+    fontSize: "0.6875rem"
+    fontWeight: 600
+    note: "11px שמור לכותרות קבוצות בסרגל ולתוויות ניווט תחתון בלבד; אינו משמש תוכן או מידע עסקי"
   num:
     fontFamily: "IBM Plex Mono, ui-monospace, Consolas, monospace"
     fontFeature: "tabular-nums"
     note: "כל .num — סכומים, כמויות, מספרי מסמכים, ערכי KPI — במונו. חתימת הלדג'ר של המערכת"
 rounded:
   control: "0.5rem"    # rounded-lg — כפתורים, שדות
-  card: "0.5rem"       # rounded-lg — כרטיסים (הוקטן מ-0.75rem; שטוח וחד יותר)
+  card: "0.75rem"      # rounded-xl — כרטיסים ומשטחי עבודה
   modal: "1rem"        # rounded-2xl — מודאלים (מרחפים — נשארים רכים)
   pill: "9999px"       # badges
 spacing:
@@ -94,50 +99,47 @@ components:
   button-danger: { backgroundColor: "alert-solid", textColor: "#ffffff" }
   button-ghost: { textColor: "{colors.ink-soft}", hoverBackground: "{colors.canvas}" }
   input: { backgroundColor: "{colors.surface}", border: "{colors.line-strong}", focusRing: "{colors.focus}", rounded: "{rounded.control}" }
-  card: { backgroundColor: "{colors.surface}", border: "{colors.line}", rounded: "{rounded.card}", shadow: "none" }
+  card: { backgroundColor: "{colors.surface}", border: "{colors.line}", rounded: "{rounded.card}", shadow: "petrol-tinted soft" }
   badge-*: { pattern: "bg-{tone}-soft + text-{tone}-on-soft", rounded: "{rounded.pill}" }
   note-*: { pattern: "bg-{tone}-wash + border-{tone}-line + text-{tone}-on-soft" }
 ---
 
-# Design System: SupplyFlow — "פנקס הדיו" (Ink Ledger)
+# Design System: SupplyFlow — "חדר בקרה פטרול"
 
 ## 1. Overview
 
-**Creative North Star: "חדר בקרה שקט" שנכתב בדיו.**
+**Creative North Star: "חדר בקרה שקט" עטוף במסגרת פטרול עמוקה.**
 
-SupplyFlow הוא ספר החשבונות של מנהל שסומך על הכלים שלו: דיו כהה על נייר לבן, ספרות מיושרות
-במונו, וחותמת צבע רק היכן שיש טענה עסקית. השלד כולו מונוכרום קריר — canvas כמעט-לבן, משטחים
-לבנים עם hairline, כפתור ראשי בדיו כמעט-שחור. **צבע במסך = אך ורק שפת הסטטוס הסמנטית** (או
-מגמת מחיר עם חץ). מסך שכולו תקין הוא מסך כמעט מונוכרומטי — וזו התכונה: כשמשהו צבוע, מסתכלים עליו.
-
-מה שנזנח במעבר (21.07.2026): סרגל slate-900 כהה עם גלולות אינדיגו, אקצנט אינדיגו מפוזר,
-כותרות טבלה uppercase, אריחי KPI זהים עם צל — כל סממני "תבנית האדמין הגנרית".
+SupplyFlow מטפל בכסף, ולכן סביבת העבודה שלו נשארת רגועה: נייר חם, טקסט כהה וספרות מיושרות
+במונו. מסגרת הפטרול — סרגל הצד, פעולות, לינקים וגרפים מבניים — נותנת למוצר זהות ברורה בלי לצבוע
+כל משטח. **צבע סטטוס עדיין שמור לטענה עסקית בלבד**; הפטרול מזהה את המוצר ואת הפעולה, לא "הצלחה"
+או "חריגה". התוצאה צריכה להרגיש כמו כלי מקצועי שנעים לעבוד בו שעות, לא תבנית אדמין ולא מסך סטרילי.
 
 **Key Characteristics:**
-- שקט כברירת מחדל; צבע = טענה סמנטית, לעולם לא קישוט. האקצנט הראשי הוא *דיו*, לא גוון מותג.
+- שקט כברירת מחדל; פטרול = מסגרת/פעולה, וצבעי done/await/alert/info = משמעות עסקית בלבד.
 - כל מספר במונו (`.num` → IBM Plex Mono): טורי סכומים מתיישרים כמו בפנקס.
 - עברית RTL מלאה: properties לוגיים בלבד; אין uppercase.
-- שטוח: hairline הוא כל סיפור הגובה של כרטיס במנוחה; צל שמור למרחפים ולהזמנת hover.
+- עומק רך: צל פטרול עדין בכרטיס במנוחה, והרמה של פיקסל אחד רק בכרטיס לחיץ.
 - אין נתון מזויף: מדד בלי נתונים מציג `—`, לא `0`.
 
 ## 2. Colors
 
-### The Ink Principle
-**`action` הוא דיו, לא מותג.** כפתור ראשי, לינק (`.link`), גלולת ניווט פעילה וצ'יפ נבחר — כולם
-דיו כמעט-שחור. משטח כהה מבהיר ב-hover (`action-hover`). הצבע הרווי הפונקציונלי היחיד בשלד הוא
-טבעת הפוקוס (`focus`, כחול 4.9:1) — נגישות, לא מיתוג.
+### עקרון מסגרת הפטרול
+**`action` הוא צבע המותג המבני.** כפתור ראשי, לינק (`.link`), צ'יפ נבחר ועמודות גרף משתמשים באותה
+רמפת פטרול. ה-shell כהה יותר ומשמש מסגרת; פריט הניווט הפעיל הופך לגלולת נייר בהירה כדי להישאר
+מובחן ונגיש. אסור להשתמש בפטרול כתחליף לסטטוס סמנטי.
 
 ### שפת הסטטוס — ללא שינוי
 ארבע משמעויות + ניטרלי, כל אחת עם שישה משטחים (wash/line/soft/on-soft/fg/solid):
 **done** (emerald) הושלם/תקין/שולם · **await** (amber) ממתין לטיפול מצדנו · **alert** (rose)
 חריגה/דחוף/הפסד אפשרי + פעולה הרסנית · **info** (sky) הכדור אצל גורם חיצוני · **idle** (slate)
-היעדר טענה. **חוק ארבע המשמעויות** ו**חוק האות הכתום** בתוקף מלא: אסור emerald/amber/rose/sky
-מחוץ למשמעותם; await חייב להישאר נדיר כדי להישמע; משמעות לעולם לא בגוון בלבד — תמיד טקסט/אייקון.
+היעדר טענה. דרגות `solid` ו־trend הוכהו ל־700 כדי להבטיח AA עם טקסט לבן/טקסט קטן; המשמעות והגוון
+לא השתנו. **חוק ארבע המשמעויות** ו**חוק האות הכתום** בתוקף: משמעות תמיד מלווה טקסט או אייקון.
 
 ### Named Rules
-**חוק הדיו:** אסור להכניס גוון מותג חדש לשלד. משהו "רוצה לבלוט"? או שהוא טענת סטטוס (badge/note)
-או שהוא דיו. **חוק הטוקנים:** אפס מחלקות פלטה גולמיות (`slate-*`, `indigo-*`...) ב-tsx — נאכף
-בגרפ (§7). צבע חדש = טוקן חדש ב-@theme + עדכון המסמך הזה יחד.
+**חוק המסגרת הממותגת:** פטרול מותר רק בשלד, בפעולה ובגרפים מבניים; הוא לעולם אינו מקודד מצב עסקי.
+**חוק הטוקנים:** אפס מחלקות פלטה גולמיות (`slate-*`, `indigo-*`...) ב-tsx — נאכף בגרפ שב־Runbook להלן.
+צבע או צל חדש = טוקן חדש ב־@theme + עדכון המסמך הזה יחד.
 
 ## 3. Typography
 
@@ -148,28 +150,30 @@ SupplyFlow הוא ספר החשבונות של מנהל שסומך על הכלי
 ### Hierarchy
 Headline ‏700 / ‏1.25rem מובייל / ‏1.5rem רחב (`page-title`) · Title ‏600/1rem (`section-title`) ·
 Body ‏400/0.875rem · Label ‏500/0.875rem ‏ink-soft · Table header ‏600/0.75rem ‏ink-muted —
-**בלי uppercase, בלי tracking** (שריד לטיני שהוסר) · ערכי KPI ‏600–700/1.25rem במונו.
+**בלי uppercase, בלי tracking** (שריד לטיני שהוסר) · Micro ‏600/0.6875rem שמור רק לכותרות קבוצות
+בסרגל ולניווט התחתון · ערכי KPI ‏600–700/1.25rem במונו.
 
 **חוק הספרות המיושרות:** כל תא מספרי עטוף `class="num"` ‏(LTR + ‏tabular-nums + מונו + יישור לסוף).
 
 ## 4. Elevation
 
-שטוח באמת. כרטיס במנוחה = `bg-surface` + ‏hairline ‏(`line`) — **בלי צל**. ההיררכיה:
-- **מונח:** hairline בלבד.
-- **מוזמן:** ‏`.card-link-hover` — גבול מתכהה (`action-line`) + צל קל. ההזמנה לפעולה היא היחידה שמרימה משטח.
+העומק רך, צבוע ועקבי; אין צל שחור גנרי:
+- **מונח:** `shadow-card` + ‏hairline חם — מורגש מול canvas בלי להפוך כל אזור לאריח.
+- **מוזמן:** ‏`.card-link-hover` — גבול `action-line`, ‏`shadow-card-hover` והרמה של 1px בלבד.
 - **מרחף:** ‏shadow-xl למודאל (rounded-2xl), ‏shadow-lg לטוסט — תמיד עם backdrop ‏`shell/50` במודאל.
 
 ## 5. Components
 
-### Navigation — הסרגל הבהיר
-סרגל צדי `bg-shell` (לבן) + ‏`border-e border-line`; טקסט דיו. **פריט פעיל = גלולת דיו מלאה
-(`bg-action text-white`)** — היפוך מלא, סימן הזיהוי של המערכת. פריט רגיל `shell-ink-soft` עם
-hover עדין `shell-ink/5`. טופ-בר מובייל ובר תחתון לבנים עם hairline; פעיל בבר התחתון = `text-action`.
-‏theme-color ב-index.html = ‏`#ffffff` (מתואם ל-shell — פריט צ'קליסט ברה-תמה).
+### Navigation — מסגרת פטרול
+סרגל צדי, טופ־בר ומגירת מובייל משתמשים ב־`bg-shell` (`#073942`) עם קווים `shell-ink/10`.
+**פריט פעיל = גלולת נייר (`bg-shell-ink text-shell`)**; פריט רגיל `shell-ink-soft` עם hover של
+`shell-ink/10`. בר הניווט התחתון נשאר משטח נייר והפריט הפעיל בו `text-action`.
+‏theme-color ב־index.html = ‏`#073942`.
 
 ### Buttons
-Primary דיו · Secondary לבן + ‏`line-strong` · Danger ‏`alert-solid` (תמיד מאחורי ConfirmDialog
-עם סיבה כשנרשם ביומן) · Ghost ‏`ink-soft`. ‏disabled:opacity-50; ‏busy עם ספינר בתוך הכפתור.
+Primary פטרול · Secondary נייר + ‏`line-strong` ביחס 3:1 · Danger ‏`alert-solid` (תמיד מאחורי
+ConfirmDialog עם סיבה כשנרשם ביומן) · Ghost ‏`ink-soft`. לכל btn טבעת focus, מעבר 150ms ומשוב
+לחיצה של 1px; ‏disabled אינו זז ו־busy נשאר עם ספינר בתוך הכפתור.
 
 ### DataTable — כולל מובייל
 שולחן העבודה של המערכת. דסקטופ: thead ‏`surface-sunken`, שורות `divide-line-soft`, ‏hover
@@ -193,29 +197,29 @@ badge = ‏soft/on-soft · ‏note = ‏wash/line/on-soft ‏(+idle לניטרל
 ### Charts
 recharts לא קורא CSS vars מ-attributes — ‏`src/lib/theme.ts` ‏(`chartTheme()`) קורא את הטוקנים
 פעם אחת ב-getComputedStyle ומזרים מחרוזות צבע אמיתיות (bar/grid/tick/label/tickStrong/trendUp/
-trendDown/flat). עמודות בדיו; צבע סמנטי בגרף רק כשהוא נושא משמעות. אפס הקסים ב-tsx.
+trendDown/flat). עמודות בפטרול; צבע סמנטי בגרף רק כשהוא נושא משמעות. אפס הקסים ב-tsx.
 
 ## 6. Do's and Don'ts
 
 ### Do:
 - **Do** כל צבע דרך טוקן; מחלקות המשמעות (`badge-*`, `note-*`, `text-*-fg`) הן ה-API.
 - **Do** ‏`class="num"` על כל תא מספרי — המונו הוא חלק מהשפה, לא קישוט.
-- **Do** ‏properties לוגיים בלבד; ‏`—` למדד ללא נתונים; ניגודיות ≥4.5:1 (ledger ב-§7).
+- **Do** ‏properties לוגיים בלבד; ‏`—` למדד ללא נתונים; ניגודיות ≥4.5:1 (ledger ב־Runbook להלן).
 - **Do** מעברים 150–250ms ‏ease-out מכבדי reduced-motion; ‏`active:` לצד `hover:` ברכיבים משותפים.
 
 ### Don't:
-- **Don't** גוון מותג בשלד — הדיו הוא המותג. אין להחזיר אינדיגו/כחול דקורטיבי.
+- **Don't** להשתמש בפטרול כסטטוס או לפזר גוון מותג נוסף; מעטפת המותג נשענת על גוון אחד.
 - **Don't** ‏uppercase/tracking על טקסט עברי.
-- **Don't** צל על כרטיס במנוחה; ‏glassmorphism; אנימציה שאינה מצב — אסור בחוקה.
-- **Don't** מחלקת פלטה גולמית או הקס ב-tsx — הגרפ ב-§7 חייב להישאר ריק.
+- **Don't** צל שחור/כבד; ‏glassmorphism; אנימציה שאינה מצב — אסור בחוקה.
+- **Don't** מחלקת פלטה גולמית או הקס ב-tsx — גרפ האכיפה שלהלן חייב להישאר ריק.
 - **Don't** ‏emerald/amber/rose/sky מחוץ למשמעותם; אין להמציא משמעות שישית.
 - **Don't** ‏`border-left/right` צבעוני כפס-סימון — ‏`note-*` בלבד.
 
-## 7. Retheme Runbook + אכיפה
+### Retheme Runbook + אכיפה
 
-**רה-תמה מלאה = שלושה קבצים בלבד:** ‏(1) בלוק ה-@theme ב-`src/index.css` · ‏(2) ‏`index.html` —
-קישור הפונטים + ‏meta ‏theme-color · ‏(3) המסמך הזה. שום דף לא נערך. זו התוצאה של סבב הטוקניזציה
-(21.07.2026, ‏490 מופעים קשיחים → 0).
+**רה-תמה סטטית עתידית = שלושה קבצים:** ‏(1) בלוק ה־@theme ב־`src/index.css` · ‏(2) ‏`index.html`
+ל־theme-color/פונטים · ‏(3) המסמך הזה. מעבר שמשנה את *קוטביות* ה־shell (בהיר↔כהה) מחייב בנוסף audit
+לצרכני `bg-shell` כדי לוודא שהם משתמשים ב־`shell-ink-*`, כפי שנעשה ב־Login/AcceptInvite בסבב T6.
 
 **גרפ האכיפה** (חייב להחזיר אפס שורות על `src --include='*.tsx'`):
 ```
@@ -224,11 +228,13 @@ trendDown/flat). עמודות בדיו; צבע סמנטי בגרף רק כשהו
 וכן `#[0-9a-fA-F]{6}` — אפס הקסים ב-tsx (הגרפים דרך chartTheme).
 
 **Contrast ledger (נמדד 21.07.2026, סקריפט OKLCH→sRGB):**
-ink/canvas ‏18.2 · ‏ink-body/surface ‏16.5 · ‏ink-mid ‏12.7 · ‏ink-soft ‏8.5 · ‏ink-muted ‏6.0 ·
-‏ink-faint ‏4.65 (placeholder, AA) · לבן על action ‏17.7 · על action-hover ‏13.2 · על action-solid
-‏14.6 · ‏focus ‏4.9 ‏(≥3 non-text) · ‏chart-tick ‏6.0 · ‏shell-ink-soft ‏11.3 · ‏shell-heading ‏4.85.
-הסטטוסים (soft/on-soft, wash/on-soft) — צירופי 100↔800 המקוריים, AA מוכח.
+ink/canvas ‏15.68 · ‏ink-body/surface ‏13.68 · ‏ink-mid ‏10.10 · ‏ink-soft ‏7.51 · ‏ink-muted ‏5.81 ·
+‏ink-faint/surface ‏4.90 · ‏ink-faint/canvas ‏4.57 · לבן על action ‏7.85 · על action-hover ‏9.75 ·
+על action-solid ‏6.43 · ‏focus/surface ‏4.98 · ‏line-strong/surface ‏3.16 · ‏action-line/surface ‏3.17 ·
+‏shell-ink/shell ‏11.51 · ‏shell-soft ‏8.74 · ‏shell-dim ‏5.25 · ‏shell-heading ‏5.06.
+מילויי הסטטוס בדרגת 700 עם לבן: המינימום הוא await ‏5.05; trend-up/down בדרגת 700 עוברים 5.2.
 
 **סיכוני תחזוקה:** ‏`badge-${tone}`/`note-${tone}` נבנות דינמית — כל ערך Tone חייב מחלקה ב-index.css
 (אין שגיאת build אם חסרה). ‏Tailwind v4: מחלקה מותאמת = ‏@apply על utilities אמיתיים בלבד; קומפוזיציה
-דרך ‏@utility (כמו btn/badge/note). ‏chartTheme() ממוטמן ברמת מודול — theme switch עתידי חייב invalidation.
+דרך ‏@utility (כמו btn/badge/note). טוקני `shadow-card*` חייבים להישאר צבועי פטרול ועדינים.
+‏chartTheme() ממוטמן ברמת מודול — theme switch עתידי חייב invalidation.

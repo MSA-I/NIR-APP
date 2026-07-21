@@ -164,7 +164,7 @@ export function OrderDetail() {
             </button>
           ))}
           {canWrite && waLink && ['draft', 'ready', 'sent'].includes(order.status) && (
-            <button className="btn text-white bg-done-solid hover:bg-done-fg" onClick={sendWhatsApp}>
+            <button className="btn text-white bg-done-solid hover:bg-done-on-soft" onClick={sendWhatsApp}>
               <MessageCircle size={15} /> שליחה ב-WhatsApp
             </button>
           )}

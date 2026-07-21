@@ -177,7 +177,7 @@ function Shell({ children }: { children: ReactNode }) {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-white">{APP_NAME}</h1>
-          <p className="text-ink-faint mt-1 text-sm">מערכת ניהול רכש, חשבוניות ותשלומים</p>
+          <p className="text-shell-ink-dim mt-1 text-sm">מערכת ניהול רכש, חשבוניות ותשלומים</p>
         </div>
         {children}
       </div>

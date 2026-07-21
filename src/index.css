@@ -6,51 +6,52 @@
   --font-sans: "IBM Plex Sans Hebrew", "Heebo", ui-sans-serif, system-ui, sans-serif;
   --font-num: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
 
-  /* ---- Structural tokens — "פנקס הדיו" (Ink Ledger, T5 2026-07-21) ----
-     The chrome of the app: near-monochrome cool neutrals, a near-black ink action color,
-     and a light shell. Color on screen is reserved for the semantic status language below;
-     the chrome itself makes no claims. A retheme is an edit to THIS block (+ index.html
-     theme-color meta + the font link) only. */
-  --color-canvas: oklch(97.8% 0.003 255);          /* body background — quiet paper */
-  --color-surface: #ffffff;                        /* cards, tables, modals, inputs */
-  --color-surface-sunken: oklch(98.6% 0.002 255);  /* thead, disabled inputs, quiet strips */
+  /* ---- Structural tokens — deep-petrol control room (T6 2026-07-21) ----
+     Warm paper keeps long operational sessions inviting; petrol frames the product and
+     identifies action without borrowing a status hue. Semantic colors below still carry
+     business meaning exclusively. */
+  --color-canvas: oklch(96.8% 0.01 85);            /* body background — warm paper */
+  --color-surface: oklch(99.2% 0.004 85);          /* cards, tables, modals, inputs */
+  --color-surface-sunken: oklch(95.2% 0.012 85);   /* thead, disabled inputs, quiet strips */
 
-  --color-line: oklch(90% 0.006 255);              /* card borders, dividers vs canvas */
-  --color-line-soft: oklch(94.5% 0.004 255);       /* row separators, inner dividers */
-  --color-line-strong: oklch(84% 0.008 255);       /* input + secondary-button borders */
+  --color-line: oklch(88.5% 0.014 80);             /* card borders, dividers vs canvas */
+  --color-line-soft: oklch(93.2% 0.011 82);        /* row separators, inner dividers */
+  --color-line-strong: oklch(65% 0.016 78);        /* input + secondary-button borders — 3:1 */
 
-  --color-ink: oklch(16% 0.015 260);               /* page titles, strongest text */
-  --color-ink-body: oklch(24% 0.015 260);          /* body text */
-  --color-ink-mid: oklch(32% 0.02 258);            /* table cells */
-  --color-ink-soft: oklch(42% 0.02 258);           /* labels, ghost buttons */
-  --color-ink-muted: oklch(50% 0.02 257);          /* column headers, secondary text — AA on white */
-  --color-ink-faint: oklch(56% 0.02 257);          /* placeholders and hints only — AA 4.5:1 on white */
-  --color-ink-ghost: oklch(78% 0.012 256);         /* disabled icons, decorative marks */
+  --color-ink: oklch(22% 0.025 205);               /* page titles, strongest text */
+  --color-ink-body: oklch(29% 0.022 205);          /* body text */
+  --color-ink-mid: oklch(37% 0.022 205);           /* table cells */
+  --color-ink-soft: oklch(44% 0.022 205);          /* labels, ghost buttons */
+  --color-ink-muted: oklch(50% 0.021 205);         /* column headers, secondary text */
+  --color-ink-faint: oklch(54% 0.019 205);         /* placeholders and hints — AA on canvas */
+  --color-ink-ghost: oklch(75.5% 0.012 85);        /* disabled icons, decorative marks */
 
-  /* Action is INK, not a brand hue: the primary button is near-black, hover lightens
-     (dark surfaces hover lighter). The only saturated functional color is the focus ring. */
-  --color-action: oklch(21% 0.02 260);             /* primary buttons, active nav pill */
-  --color-action-hover: oklch(31% 0.025 260);
-  --color-action-solid: oklch(28% 0.02 260);       /* filled chips, selection fills */
-  --color-action-soft: oklch(94% 0.008 257);       /* count badges */
-  --color-action-on-soft: oklch(24% 0.015 260);
-  --color-action-wash: oklch(96.5% 0.006 256);     /* row hover (used with /40) */
-  --color-action-line: oklch(60% 0.02 257);        /* hover border on clickable cards */
-  --color-focus: oklch(55% 0.19 255);              /* focus ring — functional blue, stays visible */
+  /* Brand petrol is structural, never a status. White text remains AA on every solid. */
+  --color-action: oklch(43.08% 0.0701 211.43);     /* #0f5a66 — primary action + links */
+  --color-action-hover: oklch(38.06% 0.0625 212.45);
+  --color-action-solid: oklch(47.64% 0.0772 210.72);
+  --color-action-soft: oklch(93.41% 0.0182 205.32);
+  --color-action-on-soft: oklch(38.19% 0.0588 211.94);
+  --color-action-wash: oklch(96.69% 0.0086 188.11);
+  --color-action-line: oklch(64.32% 0.0541 205.4);
+  --color-focus: oklch(52.98% 0.0911 212.98);
 
-  /* The shell went light: white sidebar + hairline, dark ink text. The dark-admin
-     slate-900 rail is gone — separation comes from the border, not from a color slab. */
-  --color-shell: #ffffff;
-  --color-shell-ink: oklch(16% 0.015 260);
-  --color-shell-ink-soft: oklch(35% 0.02 258);
-  --color-shell-ink-dim: oklch(50% 0.02 257);
-  --color-shell-heading: oklch(55% 0.02 257);
+  /* The dark shell is the brand frame; the working canvas stays quiet and warm. */
+  --color-shell: oklch(31.81% 0.0517 213.09);      /* #073942 */
+  --color-shell-ink: oklch(97% 0.009 85);
+  --color-shell-ink-soft: oklch(88% 0.012 85);
+  --color-shell-ink-dim: oklch(73% 0.015 85);
+  --color-shell-heading: oklch(72% 0.016 85);
 
-  --color-chart-1: oklch(35% 0.02 258);            /* ink bars — data, not decoration */
-  --color-chart-grid: oklch(92% 0.005 255);
-  --color-chart-tick: oklch(50% 0.02 257);
-  --color-chart-label: oklch(42% 0.02 258);
-  --color-chart-tick-strong: oklch(32% 0.02 258);
+  --color-chart-1: var(--color-action);
+  --color-chart-grid: oklch(89% 0.014 80);
+  --color-chart-tick: oklch(50% 0.021 205);
+  --color-chart-label: oklch(44% 0.022 205);
+  --color-chart-tick-strong: oklch(37% 0.022 205);
+
+  /* Tinted elevation: physical depth without generic black drop shadows. */
+  --shadow-card: 0 1px 2px rgb(28 37 38 / 0.04), 0 8px 24px rgb(15 90 102 / 0.04);
+  --shadow-card-hover: 0 2px 4px rgb(28 37 38 / 0.06), 0 12px 28px rgb(15 90 102 / 0.08);
 
   --color-star: var(--color-amber-400);            /* rating stars: decoration, not status */
   --color-star-hover: var(--color-amber-300);
@@ -69,40 +70,40 @@
   --color-done-soft: var(--color-emerald-100);
   --color-done-on-soft: var(--color-emerald-800);
   --color-done-fg: var(--color-emerald-700);
-  --color-done-solid: var(--color-emerald-600);
+  --color-done-solid: var(--color-emerald-700);
 
   --color-await-wash: var(--color-amber-50);
   --color-await-line: var(--color-amber-200);
   --color-await-soft: var(--color-amber-100);
   --color-await-on-soft: var(--color-amber-800);
   --color-await-fg: var(--color-amber-700);
-  --color-await-solid: var(--color-amber-600);
+  --color-await-solid: var(--color-amber-700);
 
   --color-alert-wash: var(--color-rose-50);
   --color-alert-line: var(--color-rose-200);
   --color-alert-soft: var(--color-rose-100);
   --color-alert-on-soft: var(--color-rose-800);
   --color-alert-fg: var(--color-rose-700);
-  --color-alert-solid: var(--color-rose-600);
+  --color-alert-solid: var(--color-rose-700);
 
   --color-info-wash: var(--color-sky-50);
   --color-info-line: var(--color-sky-200);
   --color-info-soft: var(--color-sky-100);
   --color-info-on-soft: var(--color-sky-800);
   --color-info-fg: var(--color-sky-700);
-  --color-info-solid: var(--color-sky-600);
+  --color-info-solid: var(--color-sky-700);
 
   --color-idle-wash: var(--color-slate-50);
   --color-idle-line: var(--color-slate-200);
   --color-idle-soft: var(--color-slate-100);
   --color-idle-on-soft: var(--color-slate-800);
   --color-idle-fg: var(--color-slate-700);
-  --color-idle-solid: var(--color-slate-600);
+  --color-idle-solid: var(--color-slate-700);
 
-  /* trend ≠ status: a direction of change, never "urgent". Kept visually distinct from
-     alert/done (lighter -500) and always paired with an arrow so meaning isn't hue-only. */
-  --color-trend-up-fg: var(--color-rose-500);
-  --color-trend-down-fg: var(--color-emerald-500);
+  /* trend ≠ status: a direction of change, never "urgent". The 700 values meet AA and
+     remain paired with an arrow so meaning is never communicated by hue alone. */
+  --color-trend-up-fg: var(--color-rose-700);
+  --color-trend-down-fg: var(--color-emerald-700);
 }
 
 html { font-family: var(--font-sans); }
@@ -114,7 +115,7 @@ body {
 /* Tailwind v4: custom classes can @apply only real utilities, so the shared
    btn/badge bases are registered with @utility and the variants apply them. */
 @utility btn {
-  @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-[color,background-color,border-color,box-shadow,translate] duration-150 ease-out cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:translate-y-px disabled:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed;
 }
 @utility badge {
   @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap;
@@ -127,14 +128,14 @@ body {
 }
 
 @layer components {
-  /* Flat at rest: a hairline is the card's whole elevation story. Shadow is reserved for
-     things that float (modal, toast) and for the hover invitation (card-link-hover). */
-  .card { @apply bg-surface rounded-lg border border-line; }
+  /* Warm paper surfaces carry a restrained, petrol-tinted elevation. Only interactive cards
+     rise further, so depth still communicates behavior rather than decoration. */
+  .card { @apply bg-surface rounded-xl border border-line shadow-card; }
   .card-pad { @apply p-4 sm:p-5; }
 
   .btn-primary { @apply btn bg-action text-white hover:bg-action-hover; }
   .btn-secondary { @apply btn bg-surface text-ink-mid border border-line-strong hover:bg-surface-sunken; }
-  .btn-danger { @apply btn bg-alert-solid text-white hover:bg-alert-fg; }
+  .btn-danger { @apply btn bg-alert-solid text-white hover:bg-alert-on-soft; }
   .btn-ghost { @apply btn text-ink-soft hover:bg-canvas; }
 
   .input { @apply w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-ink-body placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-focus focus:border-focus disabled:bg-surface-sunken; }
@@ -143,7 +144,7 @@ body {
   /* Shared interaction patterns — every page hover/link points here, never at a raw hue. */
   .link { @apply text-action font-medium hover:underline; }
   .row-hover { @apply hover:bg-action-wash/40 active:bg-action-wash/70 transition-colors; }
-  .card-link-hover { @apply hover:border-action-line hover:shadow transition-all; }
+  .card-link-hover { @apply hover:border-action-line hover:shadow-card-hover hover:-translate-y-px active:translate-y-0 transition-[border-color,box-shadow,translate] duration-200 ease-out; }
 
   /* Semantic badges. StatusBadge builds `badge-${tone}` from the Tone union in
      lib/status.ts, so every Tone value MUST have a class here or the tag renders
@@ -189,6 +190,11 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
   .animate-spin { animation-duration: 1.5s; }
+  .btn-primary, .btn-secondary, .btn-danger, .btn-ghost, .card-link-hover {
+    transition-duration: 0.01ms !important;
+  }
+  .btn-primary:active, .btn-secondary:active, .btn-danger:active, .btn-ghost:active,
+  .card-link-hover:hover { translate: none !important; }
 }
 
 @media print {

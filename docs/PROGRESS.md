@@ -7,6 +7,32 @@
 
 ---
 
+## סבב 21.07 — רידיזיין "חדר בקרה פטרול על נייר חם"
+
+**סקופ:** רה־תמה ויזואלית בלבד; ללא שינוי props, נתיבים, API, סכימה, `Tone` או `chartTheme()`.
+
+1. **מעטפת וטוקנים:** הוחלפו טוקני השלד למשטחי נייר חמים, דיו פטרול ומעטפת `#073942`; ‏`action`
+   נקבע ל־`#0F5A66`, ‏theme-color הותאם, והגרפים המבניים ממשיכים לצרוך את `chartTheme()` הקיים.
+2. **עומק ואינטראקציה:** כרטיסים עברו ל־rounded-xl עם `shadow-card`; כרטיס לחיץ מקבל
+   `shadow-card-hover` והרמה של 1px. כפתורים ושדות קיבלו focus גלוי, press של 1px ומעברים של
+   150–200ms; תחת reduced-motion התנועה מתבטלת בפועל.
+3. **נגישות סמנטית:** ניווט פעיל הוא גלולת נייר על shell פטרול; כתוביות auth הותאמו ל־shell;
+   דרגות solid ו־trend הוכהו ל־700 בלי לשנות משמעות. hover סכנה ו־WhatsApp שומרים משוב נגיש.
+4. **תיעוד:** `DESIGN.md` וה־sidecar ‏`.impeccable/design.json` עודכנו לשפת המותג, elevation,
+   contrast ledger וכללי האכיפה החדשים.
+
+**אומת בפועל:** `npm run build` ו־alert rules עברו; grep לצבעים גולמיים/hex ב־TSX = ‏0;
+Impeccable audit לקבצי הרידיזיין = ‏0 ממצאים. 18 בדיקות ניגודיות עברו (faint/canvas ‏4.57,
+line-strong/surface ‏3.16, לבן/action ‏7.85, focus/surface ‏4.98, shell-dim/shell ‏5.25,
+ניווט פעיל ‏11.51, ומילוי הסטטוס החלש ביותר ‏5.05). צולמו ונבדקו לפני/אחרי על אותם נתונים:
+דסקטופ 1440×900 — Login, Dashboard, Orders, Alerts; מובייל 390×844 — Dashboard, Orders,
+Receiving ומגירה פתוחה. כל הצילומים RTL ללא overflow אופקי; יעדי המגע הקריטיים במובייל ≥44px.
+focus/press/hover ו־reduced-motion נבדקו גם הם בדפדפן, כולל ביטול lift תחת reduced-motion.
+
+**לא נכלל:** אין deployment. `AGENTS.md` המקומי נשאר ללא שינוי ומחוץ ל־staging.
+
+---
+
 ## מצב השלבים
 
 | שלב | תיאור | סטטוס |

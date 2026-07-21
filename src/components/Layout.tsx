@@ -104,7 +104,7 @@ export default function Layout() {
 
   const linkCls = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
-      isActive ? 'bg-action text-white font-medium' : 'text-shell-ink-soft hover:bg-shell-ink/5 hover:text-shell-ink'
+      isActive ? 'bg-shell-ink text-shell font-medium' : 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
     }`;
 
   const sidebar = (
@@ -151,10 +151,10 @@ export default function Layout() {
         דלג לתוכן
       </a>
       {/* Desktop sidebar */}
-      <aside className="hidden lg:block fixed inset-y-0 start-0 w-60 bg-shell border-e border-line z-40 no-print">{sidebar}</aside>
+      <aside className="hidden lg:block fixed inset-y-0 start-0 w-60 bg-shell border-e border-shell-ink/10 z-40 no-print">{sidebar}</aside>
 
       {/* Mobile top bar */}
-      <header className="lg:hidden sticky top-0 z-40 bg-shell text-shell-ink border-b border-line flex items-center justify-between px-4 py-3 no-print">
+      <header className="lg:hidden sticky top-0 z-40 bg-shell text-shell-ink border-b border-shell-ink/10 flex items-center justify-between px-4 py-3 no-print">
         <NavLink to="/dashboard" aria-label={`${orgName} — חזרה לדשבורד`}
           className="flex min-h-11 flex-1 items-center rounded font-bold truncate me-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           title={orgName}>{orgName}</NavLink>
@@ -168,7 +168,7 @@ export default function Layout() {
       {searchOpen && <GlobalSearch variant="mobile" onClose={() => setSearchOpen(false)} />}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 bg-shell/60 no-print" onClick={() => setMobileOpen(false)}>
-          <aside className="absolute inset-y-0 start-0 w-72 bg-shell border-e border-line" onClick={(e) => e.stopPropagation()}>
+          <aside className="absolute inset-y-0 start-0 w-72 bg-shell border-e border-shell-ink/10" onClick={(e) => e.stopPropagation()}>
             <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 text-shell-ink-dim" onClick={() => setMobileOpen(false)} aria-label="סגירה"><X size={20} /></button>
             {sidebar}
           </aside>

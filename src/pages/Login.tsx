@@ -34,7 +34,7 @@ export default function Login() {
             screen wears the product's identity, and the tenant's appears after sign-in. */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-white">{APP_NAME}</h1>
-          <p className="text-ink-faint mt-1 text-sm">מערכת ניהול רכש, חשבוניות ותשלומים</p>
+          <p className="text-shell-ink-dim mt-1 text-sm">מערכת ניהול רכש, חשבוניות ותשלומים</p>
         </div>
         <form onSubmit={(e) => void onSubmit(e)} className="card card-pad space-y-4">
           <div>
