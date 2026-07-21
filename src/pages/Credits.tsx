@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { toHebrewError } from '../lib/errors';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useParamState } from '../lib/useParamState';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -18,7 +19,7 @@ export default function Credits() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { profile } = useAuth();
-  const [statusFilter, setStatusFilter] = useState<'active' | 'all'>('active');
+  const [statusFilter, setStatusFilter] = useParamState('status', 'active');
   const [selected, setSelected] = useState<Row | null>(null);
 
   const { data, loading, error, refetch } = useQuery(async () =>
@@ -64,7 +65,7 @@ export default function Credits() {
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.notes ?? '').toLowerCase().includes(q)}
         onRowClick={(r) => setSelected(r)}
         toolbar={
-          <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'active' | 'all')}>
+          <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="active">זיכויים פעילים</option>
             <option value="all">הכל</option>
           </select>

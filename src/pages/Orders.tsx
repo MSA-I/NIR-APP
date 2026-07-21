@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { toHebrewError } from "../lib/errors";
 import { useNavigate, useParams } from 'react-router-dom';
+import { useParamState } from '../lib/useParamState';
 import { Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -15,7 +16,7 @@ type OrderRow = PurchaseOrder & { supplier: { name: string }; items: { qty: numb
 
 export function OrdersList() {
   const navigate = useNavigate();
-  const [statusFilter, setStatusFilter] = useState<'open' | 'all' | PoStatus>('open');
+  const [statusFilter, setStatusFilter] = useParamState('status', 'open');
 
   const { data, loading, error } = useQuery(async () =>
     unwrap(await supabase.from('purchase_orders')
@@ -51,7 +52,7 @@ export function OrdersList() {
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || String(r.number).includes(q)}
         onRowClick={(r) => navigate(`/orders/${r.id}`)}
         toolbar={
-          <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}>
+          <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="open">הזמנות פתוחות</option>
             <option value="all">הכל</option>
             {Object.entries(PO_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}

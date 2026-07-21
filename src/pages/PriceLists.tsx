@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { useParamState } from '../lib/useParamState';
 import { toHebrewError } from "../lib/errors";
 import { TrendingUp, TrendingDown, Upload, History, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -16,7 +17,9 @@ export default function PriceLists() {
   const { profile } = useAuth();
   const toast = useToast();
   const [supplierFilter, setSupplierFilter] = useState('');
-  const [onlyIncreases, setOnlyIncreases] = useState(false);
+  // '1' via ?increases=1 (from the dashboard price-increase card); re-syncs on navigation.
+  const [increasesStr, setIncreasesStr] = useParamState('increases');
+  const onlyIncreases = increasesStr === '1';
   const [historyFor, setHistoryFor] = useState<Row | null>(null);
   const [editFor, setEditFor] = useState<Row | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -86,7 +89,7 @@ export default function PriceLists() {
               {suppliers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
             </select>
             <label className="flex items-center gap-1.5 text-sm text-slate-600">
-              <input type="checkbox" className="rounded" checked={onlyIncreases} onChange={(e) => setOnlyIncreases(e.target.checked)} />
+              <input type="checkbox" className="rounded" checked={onlyIncreases} onChange={(e) => setIncreasesStr(e.target.checked ? '1' : '')} />
               רק התייקרויות
             </label>
           </>

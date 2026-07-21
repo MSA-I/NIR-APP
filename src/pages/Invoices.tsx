@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useParamState } from '../lib/useParamState';
 import { Plus, AlertTriangle, AlertOctagon, Info } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -40,10 +41,10 @@ export function CheckList({ checks }: { checks: CheckResult[] }) {
 
 export function InvoicesList() {
   const navigate = useNavigate();
-  const [params] = useSearchParams();
   const { profile } = useAuth();
-  const [reviewFilter, setReviewFilter] = useState(params.get('review') ?? '');
-  const [payFilter, setPayFilter] = useState(params.get('pay') ?? '');
+  const [reviewFilter, setReviewFilter] = useParamState('review');
+  const [payFilter, setPayFilter] = useParamState('pay');
+  const [exportFilter, setExportFilter] = useParamState('export');
 
   const { data, loading, error } = useQuery(async () => {
     const invoices = unwrap(await supabase.from('invoices')
@@ -56,7 +57,8 @@ export function InvoicesList() {
 
   const rows = useMemo(() => (data ?? []).filter((r) =>
     (!reviewFilter || r.review_status === reviewFilter) &&
-    (!payFilter || r.payment_status === payFilter)), [data, reviewFilter, payFilter]);
+    (!payFilter || r.payment_status === payFilter) &&
+    (!exportFilter || r.export_status === exportFilter)), [data, reviewFilter, payFilter, exportFilter]);
 
   const canCreate = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
 
@@ -92,6 +94,10 @@ export function InvoicesList() {
             <select className="input w-auto!" value={payFilter} onChange={(e) => setPayFilter(e.target.value)}>
               <option value="">כל סטטוסי התשלום</option>
               {Object.entries(INVOICE_PAYMENT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+            <select className="input w-auto!" value={exportFilter} onChange={(e) => setExportFilter(e.target.value)}>
+              <option value="">כל סטטוסי הרו״ח</option>
+              {Object.entries(INVOICE_EXPORT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
           </>
         } />

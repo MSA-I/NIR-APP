@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toHebrewError } from "../lib/errors";
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { useParamState } from '../lib/useParamState';
 import { AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -15,10 +16,10 @@ type Row = ExceptionRow & { supplier: { name: string } | null };
 
 export default function Exceptions() {
   const navigate = useNavigate();
-  const [params] = useSearchParams();
   const { profile, roleLabels } = useAuth();
-  const [statusFilter, setStatusFilter] = useState(params.get('status') ?? 'open');
-  const [typeFilter, setTypeFilter] = useState(params.get('type') ?? '');
+  const [statusFilter, setStatusFilter] = useParamState('status', 'open');
+  const [typeFilter, setTypeFilter] = useParamState('type');
+  const [severityFilter, setSeverityFilter] = useParamState('severity');
   const [selected, setSelected] = useState<Row | null>(null);
 
   const { data, loading, error, refetch } = useQuery(async () =>
@@ -28,7 +29,8 @@ export default function Exceptions() {
 
   const rows = (data ?? []).filter((r) =>
     (statusFilter === 'all' || (statusFilter === 'open' ? ['open', 'in_progress'].includes(r.status) : r.status === statusFilter)) &&
-    (!typeFilter || r.type === typeFilter));
+    (!typeFilter || typeFilter.split(',').includes(r.type)) &&
+    (!severityFilter || r.severity === severityFilter));
 
   const canWrite = !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
 
@@ -62,6 +64,10 @@ export default function Exceptions() {
             <select className="input w-auto!" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
               <option value="">כל הסוגים</option>
               {Object.entries(EXCEPTION_TYPE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            <select className="input w-auto!" value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)}>
+              <option value="">כל החומרות</option>
+              {Object.entries(SEVERITY).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
           </>
         }

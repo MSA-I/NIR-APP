@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toHebrewError } from '../lib/errors';
 import { useSearchParams } from 'react-router-dom';
+import { useParamState } from '../lib/useParamState';
 import { Plus, Loader2, Send, CheckCircle2, ShieldAlert, XCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -18,7 +19,8 @@ type Row = PaymentRequest & { supplier: { name: string } };
 export default function PaymentRequests() {
   const [params, setParams] = useSearchParams();
   const { profile } = useAuth();
-  const [statusFilter, setStatusFilter] = useState<'active' | 'all'>('active');
+  const [statusFilter, setStatusFilter] = useParamState('status', 'active');
+  const [dueFilter, setDueFilter] = useParamState('due');
   const [createOpen, setCreateOpen] = useState(!!params.get('new'));
   const [selected, setSelected] = useState<Row | null>(null);
 
@@ -27,8 +29,18 @@ export default function PaymentRequests() {
       .select('*, supplier:suppliers(name)')
       .order('created_at', { ascending: false })) as Promise<Row[]>);
 
-  const rows = (data ?? []).filter((r) => statusFilter === 'all' ||
-    !['matched', 'cancelled', 'executed'].includes(r.status));
+  // Local calendar date (en-CA → YYYY-MM-DD); due_date is a plain date, so a string compare
+  // is correct. Deliberately local, not UTC — "due today" must match the user's today.
+  const today = new Date().toLocaleDateString('en-CA');
+  const rows = (data ?? []).filter((r) => {
+    const active = !['matched', 'cancelled', 'executed'].includes(r.status);
+    const statusOk = statusFilter === 'all' ? true : statusFilter === 'active' ? active : r.status === statusFilter;
+    const dueOk = !dueFilter ? true
+      : dueFilter === 'today' ? active && r.due_date === today
+      : dueFilter === 'overdue' ? active && !!r.due_date && r.due_date < today
+      : true;
+    return statusOk && dueOk;
+  });
 
   const isOffice = !!profile && ['owner', 'office'].includes(profile.role);
 
@@ -54,10 +66,18 @@ export default function PaymentRequests() {
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || String(r.number).includes(q)}
         onRowClick={(r) => setSelected(r)}
         toolbar={
-          <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'active' | 'all')}>
-            <option value="active">דרישות פעילות</option>
-            <option value="all">הכל</option>
-          </select>
+          <>
+            <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="active">דרישות פעילות</option>
+              <option value="all">הכל</option>
+              {Object.entries(PAYMENT_REQUEST_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+            <select className="input w-auto!" value={dueFilter} onChange={(e) => setDueFilter(e.target.value)}>
+              <option value="">כל מועדי היעד</option>
+              <option value="today">יעד היום</option>
+              <option value="overdue">באיחור</option>
+            </select>
+          </>
         } />
 
       {createOpen && (

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useParamState } from '../lib/useParamState';
 import { Plus, Phone, Mail, MapPin, Clock, Truck, Star, TrendingUp, TrendingDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -79,6 +80,10 @@ export function SuppliersList() {
 
   const canWrite = profile?.role === 'owner' || profile?.role === 'office';
 
+  // ?balance=open from the dashboard "ספקים עם יתרה פתוחה" card.
+  const [balanceFilter, setBalanceFilter] = useParamState('balance');
+  const rows = useMemo(() => (data ?? []).filter((r) => balanceFilter !== 'open' || (r.open_balance ?? 0) > 0), [data, balanceFilter]);
+
   const columns: Column<SupplierWithBalance>[] = [
     { key: 'name', header: 'ספק', sortValue: (r) => r.name, render: (r) => <span className="font-medium text-slate-900">{r.name}</span> },
     { key: 'rating', header: 'דירוג', className: 'num', sortValue: (r) => r.rating ?? 0, render: (r) => r.rating != null
@@ -102,9 +107,16 @@ export function SuppliersList() {
         <h1 className="page-title">ספקים</h1>
         {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> ספק חדש</button>}
       </div>
-      <DataTable rows={data ?? []} columns={columns} searchable
+      <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.contact_name ?? '').toLowerCase().includes(q) || (r.tax_id ?? '').toLowerCase().includes(q)}
-        onRowClick={(r) => navigate(`/suppliers/${r.id}`)} />
+        onRowClick={(r) => navigate(`/suppliers/${r.id}`)}
+        toolbar={
+          <select className="input w-auto!" value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)}>
+            <option value="">כל הספקים</option>
+            <option value="open">עם יתרה פתוחה</option>
+          </select>
+        } />
+      {balanceFilter === 'open' && rows.length === 0 && <p className="text-sm text-slate-400">אין ספקים עם יתרה פתוחה.</p>}
       {editing && <SupplierForm supplier={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refetch(); }} />}
     </div>
   );

@@ -44,13 +44,22 @@ export default function Payments() {
   const focused = params.get('id') ? allRows.find((r) => r.id === params.get('id')) : null;
   const clearFocus = () => { const next = new URLSearchParams(params); next.delete('id'); setParams(next, { replace: true }); };
 
+  // ?month=YYYY-MM from the dashboard "שולם לספקים החודש" tile. paid_date is a plain date,
+  // so a prefix match is the month filter. Read straight off params — useSearchParams
+  // re-reads each render, so no mount-only staleness here.
+  const monthFilter = params.get('month') ?? '';
+  const clearMonth = () => { const next = new URLSearchParams(params); next.delete('month'); setParams(next, { replace: true }); };
+  const baseRows = monthFilter ? allRows.filter((r) => r.paid_date?.startsWith(monthFilter)) : allRows;
+
   return (
     <div className="space-y-4">
       <h1 className="page-title flex items-center gap-2"><CreditCard size={22} /> תשלומים</h1>
-      <DataTable rows={focused ? [focused] : allRows} columns={columns} searchable
+      <DataTable rows={focused ? [focused] : baseRows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.reference ?? '').includes(q)}
         toolbar={focused ? (
           <button className="btn-secondary" onClick={clearFocus}><X size={14} /> מציג תשלום #{focused.number}</button>
+        ) : monthFilter ? (
+          <button className="btn-secondary" onClick={clearMonth}><X size={14} /> תשלומי חודש <span dir="ltr">{monthFilter}</span></button>
         ) : undefined}
         emptyTitle="לא נרשמו תשלומים" />
     </div>
