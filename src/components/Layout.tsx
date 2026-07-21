@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
 import { APP_NAME } from '../lib/branding';
 import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
+import Fab from './Fab';
 import type { Role } from '../lib/types';
 
 interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[]; mobile?: boolean }
@@ -218,6 +219,10 @@ export default function Layout() {
           ))}
         </nav>
       )}
+
+      {/* Global quick-actions FAB — self-gating (role + suppressed routes); Layout only
+          wraps authed routes, so it never reaches the public pages. */}
+      <Fab />
     </div>
   );
 }
