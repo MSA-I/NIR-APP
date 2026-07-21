@@ -6,6 +6,8 @@ import {
 } from 'recharts';
 import { Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RotateCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../auth/AuthContext';
+import { hasVapidKey, isIOS, isPushSupported, isStandalone } from '../lib/push';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { Skeleton, StatusBadge, Note, AttentionZone, TaskLine, type AttentionItem } from '../components/ui';
 import { EXCEPTION_TYPE, SEVERITY } from '../lib/status';
@@ -36,6 +38,33 @@ function useReducedMotion() {
   }, []);
 
   return reduced;
+}
+
+/** One-time nudge toward push notifications — the dashboard's real-time promise extends to
+ *  "when you're not looking", but only via an opt-in the user must perform in Settings.
+ *  Shown solely to the roles that receive the price-increase push (owner/office), only while
+ *  asking is still possible (permission undecided), and never again after "הבנתי". */
+function PushNudge() {
+  const { profile } = useAuth();
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem('sf-push-nudge') === '1');
+
+  if (dismissed || !profile || !['owner', 'office'].includes(profile.role) || !hasVapidKey()) return null;
+  // iOS before install has no Push API at all — the honest nudge there is "install first".
+  const iosInstall = isIOS() && !isStandalone();
+  const canAsk = isPushSupported() && Notification.permission === 'default';
+  if (!iosInstall && !canAsk) return null;
+
+  const dismiss = () => { localStorage.setItem('sf-push-nudge', '1'); setDismissed(true); };
+  return (
+    <Note tone="info" className="flex flex-wrap items-center justify-between gap-3">
+      <span>
+        {iosInstall
+          ? 'כדי לקבל התראות ב-iPhone יש להוסיף את האפליקציה למסך הבית (שיתוף ← הוספה למסך הבית)'
+          : <>אפשר לקבל התראה מיידית כשספק מעלה מחיר — <Link to="/settings" className="font-medium underline">הפעלת התראות בהגדרות</Link>.</>}
+      </span>
+      <button className="btn-ghost py-1! text-xs shrink-0" onClick={dismiss}>הבנתי</button>
+    </Note>
+  );
 }
 
 function DeltaChip({ value }: { value: number }) {
@@ -570,6 +599,8 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      <PushNudge />
 
       {/* Truth-reporting (CLAUDE.md): a failed load/refetch shows an inline note WITH retry and keeps
           whatever data we still hold on screen — it never blanks the sections that did load. */}
