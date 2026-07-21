@@ -10,6 +10,8 @@ import { useAuth } from '../auth/AuthContext';
 import { hasVapidKey, isIOS, isPushSupported, isStandalone } from '../lib/push';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { Skeleton, StatusBadge, Note, AttentionZone, TaskLine, type AttentionItem } from '../components/ui';
+import QuickActionsRow from '../components/QuickActions';
+import { useQuickCapture } from '../components/QuickCapture';
 import { EXCEPTION_TYPE, SEVERITY } from '../lib/status';
 import { fmtMoney, fmtMoneyExact, fmtMonth, toLocalISO } from '../lib/format';
 import { chartTheme } from '../lib/theme';
@@ -323,6 +325,9 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
+  // Quick capture is wired here (not inside QuickActionsRow) so the page mounts the hidden
+  // input exactly once and passes the callback down — QuickCapture.tsx's contract.
+  const capture = useQuickCapture();
   const { data, loading, error, refetch, fetching } = useQuery(async () => {
     const now = new Date();
     const todayISO = toLocalISO(now);
@@ -601,6 +606,11 @@ export default function Dashboard() {
       </div>
 
       <PushNudge />
+
+      {/* Quick actions — the global FAB's vocabulary flattened into the control room, above
+          the money band. Renders only for roles with at least one action. */}
+      <QuickActionsRow onCapture={capture.openCapture} busy={capture.busy} />
+      {capture.element}
 
       {/* Truth-reporting (CLAUDE.md): a failed load/refetch shows an inline note WITH retry and keeps
           whatever data we still hold on screen — it never blanks the sections that did load. */}

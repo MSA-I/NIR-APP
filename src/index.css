@@ -59,6 +59,8 @@
   --shadow-dashboard: 0 1px 2px rgb(28 37 38 / 0.06), 0 16px 36px -22px rgb(15 90 102 / 0.24);
   /* Floating row-action menu (ActionMenu): between card-hover and the toast/modal tier. */
   --shadow-menu: 0 2px 6px rgb(28 37 38 / 0.08), 0 16px 32px -12px rgb(15 90 102 / 0.18);
+  /* Global quick-actions FAB: one step past shadow-menu — the strongest petrol tint in the set. */
+  --shadow-fab: 0 3px 8px rgb(28 37 38 / 0.1), 0 20px 40px -12px rgb(15 90 102 / 0.28);
 
   --color-star: var(--color-amber-400);            /* rating stars: decoration, not status */
   --color-star-hover: var(--color-amber-300);
