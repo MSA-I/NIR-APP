@@ -23,10 +23,19 @@ export default function Fab() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const firstItemRef = useRef<HTMLElement | null>(null);
   const { openCapture, element, busy } = useQuickCapture();
 
   // Route change closes the dial — link selection navigates, and back/forward is covered too.
   useEffect(() => { setOpen(false); }, [pathname]);
+
+  // Keyboard access (adversarial review round): on open, focus moves to the first dial item,
+  // so Enter on the trigger lands inside the menu instead of leaving focus behind it. The
+  // dial is rendered AFTER the trigger in the DOM, so Tab continues through the remaining
+  // items in order; Escape (below) returns focus to the trigger.
+  useEffect(() => {
+    if (open) firstItemRef.current?.focus();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -57,29 +66,6 @@ export default function Fab() {
     // nav's own env() safe-area handling so both shift together on notched devices.
     <div ref={rootRef} className="fixed end-4 bottom-20 z-40 no-print lg:end-8 lg:bottom-8"
       style={{ marginBottom: 'env(safe-area-inset-bottom)' }}>
-      {open && (
-        <div role="menu" aria-label="פעולות מהירות"
-          className="absolute bottom-full end-0 mb-3 flex flex-col items-end gap-2">
-          {/* Label first, icon at the logical end — the label reads first in RTL. Items are
-              plain-tabbable (small dial, no roving focus); Escape returns focus to the FAB. */}
-          {actions.map(({ key, label, icon: Icon, kind, to }) =>
-            kind === 'capture' ? (
-              <button key={key} type="button" role="menuitem" className={itemCls} disabled={busy}
-                onClick={() => { setOpen(false); openCapture(); }}>
-                {label}
-                {busy
-                  ? <Loader2 size={16} className="animate-spin text-action" aria-hidden="true" />
-                  : <Icon size={16} className="text-action" aria-hidden="true" />}
-              </button>
-            ) : (
-              <Link key={key} role="menuitem" to={to!} className={itemCls} onClick={() => setOpen(false)}>
-                {label}
-                <Icon size={16} className="text-action" aria-hidden="true" />
-              </Link>
-            ),
-          )}
-        </div>
-      )}
       <button ref={btnRef} type="button" aria-expanded={open} aria-haspopup="menu" aria-label="פעולות מהירות"
         onClick={() => setOpen((o) => !o)}
         className="grid h-14 w-14 place-items-center rounded-full bg-action text-white shadow-fab transition-colors hover:bg-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas">
@@ -91,6 +77,33 @@ export default function Fab() {
             className={`transition-transform duration-200 ease-out motion-reduce:transition-none ${open ? 'rotate-45' : ''}`} />
         )}
       </button>
+      {/* The dial sits AFTER the trigger in the DOM (Tab flows trigger → items) but is
+          absolutely positioned above it — same visual placement as before. */}
+      {open && (
+        <div role="menu" aria-label="פעולות מהירות"
+          className="absolute bottom-full end-0 mb-3 flex flex-col items-end gap-2">
+          {/* Label first, icon at the logical end — the label reads first in RTL. Items are
+              plain-tabbable (small dial, no roving focus); on open, focus lands on the first
+              item (firstItemRef); Escape returns focus to the FAB. */}
+          {actions.map(({ key, label, icon: Icon, kind, to }, index) => {
+            const itemRef = index === 0 ? (el: HTMLElement | null) => { firstItemRef.current = el; } : undefined;
+            return kind === 'capture' ? (
+              <button key={key} ref={itemRef} type="button" role="menuitem" className={itemCls} disabled={busy}
+                onClick={() => { setOpen(false); openCapture(); }}>
+                {label}
+                {busy
+                  ? <Loader2 size={16} className="animate-spin text-action" aria-hidden="true" />
+                  : <Icon size={16} className="text-action" aria-hidden="true" />}
+              </button>
+            ) : (
+              <Link key={key} ref={itemRef} role="menuitem" to={to!} className={itemCls} onClick={() => setOpen(false)}>
+                {label}
+                <Icon size={16} className="text-action" aria-hidden="true" />
+              </Link>
+            );
+          })}
+        </div>
+      )}
       {element}
     </div>
   );

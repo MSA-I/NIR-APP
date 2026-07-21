@@ -50,7 +50,14 @@ export async function getPushStatus(): Promise<PushStatus> {
   try {
     const reg = await navigator.serviceWorker.getRegistration();
     const sub = await reg?.pushManager.getSubscription();
-    return sub ? 'subscribed' : 'not-subscribed';
+    if (!sub) return 'not-subscribed';
+    // A browser subscription alone is not "subscribed": the endpoint is per-DEVICE, so after
+    // a user switch on this device its DB row may still belong to the previous user — a row
+    // RLS hides from us. "Subscribed" is only honest when WE own the row; otherwise report
+    // not-subscribed so the toggle re-claims the endpoint (claim_push_subscription, 0015).
+    const { data, error } = await supabase.from('push_subscriptions')
+      .select('id').eq('endpoint', sub.endpoint).maybeSingle();
+    return !error && data ? 'subscribed' : 'not-subscribed';
   } catch {
     return 'not-subscribed';
   }
@@ -68,8 +75,10 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
  * Subscribes this device and records it for the send-push function.
  * MUST be called from a click handler — browsers only grant Notification.requestPermission
  * from a user gesture. Returns null on success, a Hebrew error message otherwise.
+ * The DB row's org/user come from auth_org()/auth.uid() inside claim_push_subscription,
+ * never from the caller — so there is no profile argument to lie with.
  */
-export async function subscribePush(profile: { id: string; org_id: string }): Promise<string | null> {
+export async function subscribePush(): Promise<string | null> {
   if (!isPushSupported()) return 'הדפדפן הזה אינו תומך בהתראות דחיפה';
   if (!VAPID_PUBLIC_KEY) return 'התראות דחיפה אינן מוגדרות בסביבה זו';
 
@@ -94,17 +103,17 @@ export async function subscribePush(profile: { id: string; org_id: string }): Pr
       return 'המנוי שהתקבל מהדפדפן חסר — נסה שוב';
     }
 
-    // ignoreDuplicates (ON CONFLICT DO NOTHING): re-subscribing the same endpoint is a
-    // no-op, which matches 0015's deliberate lack of an UPDATE policy — a subscription
-    // is never edited, only created and deleted.
-    const res = await supabase.from('push_subscriptions').upsert({
-      org_id: profile.org_id,
-      user_id: profile.id,
-      endpoint: json.endpoint,
-      p256dh: json.keys.p256dh,
-      auth: json.keys.auth,
-      user_agent: navigator.userAgent,
-    }, { onConflict: 'endpoint', ignoreDuplicates: true });
+    // claim_push_subscription (SECURITY DEFINER, 0015) deletes any existing row for this
+    // endpoint — regardless of owner — and inserts a fresh one for the current user. A plain
+    // upsert under RLS could not do that: after a user switch on the same browser the old
+    // owner's row is invisible to us, so ON CONFLICT DO NOTHING would silently keep routing
+    // this device's pushes to the previous user's org while we report "subscribed".
+    const res = await supabase.rpc('claim_push_subscription', {
+      p_endpoint: json.endpoint,
+      p_p256dh: json.keys.p256dh,
+      p_auth: json.keys.auth,
+      p_user_agent: navigator.userAgent,
+    });
 
     if (res.error) {
       // Do not keep a browser subscription the server never heard about.
@@ -126,8 +135,9 @@ export async function unsubscribePush(): Promise<string | null> {
 
     const endpoint = sub.endpoint;
     await sub.unsubscribe();
-    // RLS limits the delete to the caller's own row; a failure leaves a dead endpoint
-    // that send-push cleans up on its first 404/410, so it is not surfaced as an error.
+    // RLS limits the delete to the caller's own row — matching 0 rows is legitimate (the
+    // endpoint may have been claimed by another user of this device); a failure leaves a
+    // dead endpoint that send-push cleans up on its first 404/410, so it is not surfaced.
     await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
     return null;
   } catch {

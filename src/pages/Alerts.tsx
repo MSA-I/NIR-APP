@@ -5,6 +5,7 @@ import { buildSummary, type Summary, type SummaryLine } from '../lib/summary';
 import type { AlertSeverity } from '../lib/alerts';
 import { fmtMoney, fmtNum, fmtDateTime } from '../lib/format';
 import { SkeletonCards, ErrorNote, EmptyState } from '../components/ui';
+import { PushSection } from '../components/PushSettings';
 
 /**
  * סעיף 9 (התראות) + סעיף 10 (סיכום עסקי) on one screen, because they answer the same
@@ -99,6 +100,10 @@ export default function Alerts() {
       {data.alerts.length === 0 && data.lines.every((l) => l.value === 0) && (
         <EmptyState title="אין עדיין נתונים במערכת" subtitle="ההתראות יופיעו כשייקלטו חשבוניות, מחירונים והזמנות" />
       )}
+
+      {/* Device-notifications toggle lives on the notifications screen too: /settings is
+          owner-only, but the push audience is owner+office — this guard (FINANCE) covers both. */}
+      <PushSection />
     </div>
   );
 }

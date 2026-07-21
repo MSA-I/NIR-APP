@@ -67,6 +67,25 @@ export function InvoicesList() {
   const canCreate = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
   const isOffice = profile && ['owner', 'office'].includes(profile.role);
 
+  // Delete guard (adversarial review round): a soft-deleted invoice disappears from the list
+  // and from invoice_balances, but its payment_allocations / credit_requests rows survive —
+  // the money would still be allocated to a record nobody can see. Refuse the delete while
+  // anything points at the invoice; the user resolves it from the payments/credits screens.
+  async function requestDelete(inv: InvoiceRow) {
+    const [alloc, credits] = await Promise.all([
+      supabase.from('payment_allocations').select('id', { count: 'exact', head: true }).eq('invoice_id', inv.id),
+      supabase.from('credit_requests').select('id', { count: 'exact', head: true }).eq('invoice_id', inv.id),
+    ]);
+    const err = alloc.error ?? credits.error;
+    // If the check itself failed we cannot prove the invoice is safe to delete — refuse.
+    if (err) { toast(toHebrewError(err.message), 'error'); return; }
+    if ((alloc.count ?? 0) > 0 || (credits.count ?? 0) > 0) {
+      toast('לא ניתן למחוק חשבונית שיש לה תשלומים או זיכויים משויכים — יש לטפל דרך מסך התשלומים/זיכויים', 'error');
+      return;
+    }
+    setDeleteTarget(inv);
+  }
+
   // Soft delete only (CLAUDE.md): invoices carry deleted_at (no deleted_by column on this
   // table); the list query already filters .is('deleted_at', null), so refetch drops the row.
   async function deleteInvoice(reason?: string) {
@@ -112,7 +131,7 @@ export function InvoicesList() {
           { key: 'duplicate', label: 'שכפול כטיוטה', icon: Copy, hidden: !canCreate, onSelect: () => navigate(`/invoices/new?from=${r.id}`) },
           { key: 'share', label: 'שליחה', icon: Share2, hidden: !canShare(), onSelect: () => void shareInvoice(r, r.supplier.name) },
           { key: 'print', label: 'הדפסה', icon: Printer, onSelect: () => navigate(`/invoices/${r.id}?print=1`) },
-          { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', hidden: !isOffice, onSelect: () => setDeleteTarget(r) },
+          { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', hidden: !isOffice, onSelect: () => void requestDelete(r) },
         ]}
         toolbar={
           <>

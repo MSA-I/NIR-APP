@@ -13,6 +13,11 @@ import { uploadDocument } from './FileUpload';
  *
  * `element` must be rendered somewhere in the caller's tree (it is the hidden file input).
  */
+
+/** Fired on window after every successful upload batch. The FAB's capture has no line to the
+ *  inbox surfaces mounted elsewhere in the tree (nav count pill, the /inbox list) — this event
+ *  is how they learn the inbox changed and refetch (adversarial review round). */
+export const INBOX_CHANGED_EVENT = 'sf:inbox-changed';
 export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
   openCapture: () => void; element: ReactNode; busy: boolean;
 } {
@@ -36,8 +41,12 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
     } finally {
       if (inputRef.current) inputRef.current.value = '';
       setBusy(false);
-      // Even a partial batch changed the inbox — let the caller refresh its list/count.
-      if (uploaded > 0) await onUploaded?.();
+      // Even a partial batch changed the inbox — notify every inbox surface (event) AND
+      // the direct caller (prop), which may want its own follow-up.
+      if (uploaded > 0) {
+        window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+        await onUploaded?.();
+      }
     }
   }
 
