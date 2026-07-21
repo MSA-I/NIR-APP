@@ -195,7 +195,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
                         })} />
                       <span className="flex-1">
                         חשבונית <b dir="ltr">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}
-                        {inv.review_status !== 'approved' && <span className="badge-amber ms-2">טרם אושרה</span>}
+                        {inv.review_status !== 'approved' && <span className="badge-await ms-2">טרם אושרה</span>}
                       </span>
                       <span className="text-slate-400 text-xs num">יתרה {fmtMoneyExact(inv.balance)}</span>
                       {checked && (

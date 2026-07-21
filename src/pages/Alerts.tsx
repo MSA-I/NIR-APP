@@ -16,9 +16,9 @@ import { SkeletonCards, ErrorNote, EmptyState } from '../components/ui';
  */
 
 const SEVERITY_BADGE: Record<AlertSeverity, string> = {
-  critical: 'badge-red',
-  warning: 'badge-amber',
-  info: 'badge-blue',
+  critical: 'badge-alert',
+  warning: 'badge-await',
+  info: 'badge-info',
 };
 
 const SEVERITY_LABEL: Record<AlertSeverity, string> = {

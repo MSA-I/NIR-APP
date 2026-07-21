@@ -470,7 +470,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
               <input className="input border-transparent! bg-transparent! focus:bg-white! focus:border-slate-300!"
                 value={c.name}
                 onChange={(e) => setItems(list.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
-              {!c.id && <span className="badge-blue shrink-0">חדשה</span>}
+              {!c.id && <span className="badge-info shrink-0">חדשה</span>}
               <button className="btn-ghost p-1.5! shrink-0" aria-label={`הסרת ${c.name}`}
                 onClick={() => setItems(list.filter((_, j) => j !== i))}>
                 <X size={15} />

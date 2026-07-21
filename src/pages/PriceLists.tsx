@@ -4,9 +4,10 @@ import { TrendingUp, TrendingDown, Upload, History, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, Modal, useToast, ErrorNote, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, Modal, useToast, ErrorNote, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
 import { fmtDate, todayISO } from '../lib/format';
+import { PRODUCT_AVAILABILITY } from '../lib/status';
 import type { SupplierProduct, Supplier, PriceHistory } from '../lib/types';
 
 type Row = SupplierProduct & { supplier: Supplier; product: { id: string; name: string; unit: string } };
@@ -51,12 +52,12 @@ export default function PriceLists() {
         const pct = changePct(r);
         if (!r.previous_price || pct === 0) return <span className="text-slate-400">—</span>;
         return pct > 0
-          ? <span className="inline-flex items-center gap-1 text-rose-600 font-medium"><TrendingUp size={14} />‎+{pct.toFixed(1)}%</span>
-          : <span className="inline-flex items-center gap-1 text-emerald-600 font-medium"><TrendingDown size={14} />‎{pct.toFixed(1)}%</span>;
+          ? <span className="inline-flex items-center gap-1 text-trend-up-fg font-medium"><TrendingUp size={14} />‎+{pct.toFixed(1)}%</span>
+          : <span className="inline-flex items-center gap-1 text-trend-down-fg font-medium"><TrendingDown size={14} />‎{pct.toFixed(1)}%</span>;
       },
     },
     { key: 'date', header: 'בתוקף מ־', sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
-    { key: 'avail', header: 'זמינות', render: (r) => (r.available ? <span className="badge-green">זמין</span> : <span className="badge-red">לא זמין</span>) },
+    { key: 'avail', header: 'זמינות', render: (r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} /> },
     {
       key: 'actions', header: '', render: (r) => (
         <span className="flex gap-1">
@@ -238,7 +239,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
     <Modal open onClose={onClose} title="ייבוא מחירון מ־Excel / CSV" wide>
       {report ? (
         <div className="space-y-4">
-          <div className="rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm px-4 py-3">{report}</div>
+          <Note tone="done">{report}</Note>
           <div className="flex justify-end"><button className="btn-primary" onClick={onDone}>סיום</button></div>
         </div>
       ) : preview.length ? (

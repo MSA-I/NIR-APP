@@ -1,4 +1,5 @@
-import { CreditCard } from 'lucide-react';
+import { CreditCard, X } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { DataTable, ErrorNote, SkeletonTable, type Column } from '../components/ui';
@@ -11,6 +12,7 @@ type Row = Payment & {
 };
 
 export default function Payments() {
+  const [params, setParams] = useSearchParams();
   const { data, loading, error } = useQuery(async () =>
     unwrap(await supabase.from('payments')
       .select('*, supplier:suppliers(name), allocations:payment_allocations(amount, invoice:invoices(invoice_number))')
@@ -36,11 +38,20 @@ export default function Payments() {
   if (loading) return <SkeletonTable cols={5} />;
   if (error) return <ErrorNote message={error} />;
 
+  // A global-search result opens as ?id= — narrow the table to that one payment (no modal on
+  // this page) and offer a dismissible chip back to the full list.
+  const allRows = data ?? [];
+  const focused = params.get('id') ? allRows.find((r) => r.id === params.get('id')) : null;
+  const clearFocus = () => { const next = new URLSearchParams(params); next.delete('id'); setParams(next, { replace: true }); };
+
   return (
     <div className="space-y-4">
       <h1 className="page-title flex items-center gap-2"><CreditCard size={22} /> תשלומים</h1>
-      <DataTable rows={data ?? []} columns={columns} searchable
+      <DataTable rows={focused ? [focused] : allRows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.reference ?? '').includes(q)}
+        toolbar={focused ? (
+          <button className="btn-secondary" onClick={clearFocus}><X size={14} /> מציג תשלום #{focused.number}</button>
+        ) : undefined}
         emptyTitle="לא נרשמו תשלומים" />
     </div>
   );

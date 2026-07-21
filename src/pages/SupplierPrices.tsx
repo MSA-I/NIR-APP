@@ -5,8 +5,9 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, Modal, useToast, ErrorNote, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, Modal, useToast, ErrorNote, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
 import { fmtDate, todayISO } from '../lib/format';
+import { PRODUCT_AVAILABILITY } from '../lib/status';
 import type { Supplier, SupplierProduct } from '../lib/types';
 
 type Row = SupplierProduct & { product: { id: string; name: string; unit: string } };
@@ -36,7 +37,7 @@ export default function SupplierPrices() {
     { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">₪{r.current_price.toFixed(2)}</span> },
     { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => (r.previous_price != null ? `₪${r.previous_price.toFixed(2)}` : '—') },
     { key: 'date', header: 'בתוקף מ־', sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
-    { key: 'avail', header: 'זמינות', render: (r) => (r.available ? <span className="badge-green">זמין</span> : <span className="badge-red">לא זמין</span>) },
+    { key: 'avail', header: 'זמינות', render: (r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} /> },
     {
       key: 'edit', header: '', render: (r) => (
         <button className="btn-ghost p-1.5!" title="עדכון" onClick={() => setEditFor(r)}><Pencil size={15} /></button>
@@ -58,9 +59,9 @@ export default function SupplierPrices() {
         <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> העלאת מחירון (Excel/CSV)</button>
       </div>
 
-      <div className="rounded-lg bg-sky-50 border border-sky-200 text-sky-800 text-sm px-4 py-2.5">
+      <Note tone="info">
         קובץ המחירון צריך לכלול שתי עמודות: <b>מוצר</b> (שם מדויק) ו-<b>מחיר</b>. מחירים שהשתנו יתועדו בהיסטוריה.
-      </div>
+      </Note>
 
       <DataTable rows={data.rows} columns={columns} searchable
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q)}

@@ -6,7 +6,7 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { PageLoader, useToast, StatusBadge, EmptyState, ErrorNote, SkeletonList } from '../components/ui';
 import { DocumentList } from '../components/FileUpload';
-import { PO_STATUS, RECEIPT_LINE_STATUS } from '../lib/status';
+import { PO_STATUS, RECEIPT_LINE_STATUS, type Tone } from '../lib/status';
 import { fmtDate } from '../lib/format';
 import type { PurchaseOrder, PurchaseOrderItem, ReceiptLineStatus } from '../lib/types';
 
@@ -207,16 +207,20 @@ export function ReceiveOrder() {
     { key: 'full', label: 'מלא' }, { key: 'partial', label: 'חלקי' }, { key: 'missing', label: 'חסר' },
     { key: 'damaged', label: 'פגום' }, { key: 'returned', label: 'הוחזר' },
   ];
-  const statusTone: Record<ReceiptLineStatus, string> = {
-    full: 'bg-emerald-600 text-white border-emerald-600',
-    partial: 'bg-amber-500 text-white border-amber-500',
-    missing: 'bg-rose-600 text-white border-rose-600',
-    damaged: 'bg-rose-600 text-white border-rose-600',
-    returned: 'bg-violet-600 text-white border-violet-600',
+  // Single source: the tone comes from RECEIPT_LINE_STATUS (lib/status.ts), so re-colouring
+  // a status there recolours both the selected button and the card border here (§4.5).
+  // `bg-amber-500` → await-solid (amber-600) folds away the old off-by-one shade (§3.6ה).
+  const SOLID: Record<Tone, string> = {
+    done: 'bg-done-solid text-white border-done-solid',
+    await: 'bg-await-solid text-white border-await-solid',
+    alert: 'bg-alert-solid text-white border-alert-solid',
+    info: 'bg-info-solid text-white border-info-solid',
+    idle: 'bg-idle-solid text-white border-idle-solid',
+    violet: 'bg-violet-600 text-white border-violet-600',
   };
-  const cardTone: Record<ReceiptLineStatus, string> = {
-    full: 'border-emerald-200', partial: 'border-amber-300', missing: 'border-rose-300',
-    damaged: 'border-rose-300', returned: 'border-violet-300',
+  const CARD: Record<Tone, string> = {
+    done: 'border-done-line', await: 'border-await-line', alert: 'border-alert-line',
+    info: 'border-info-line', idle: 'border-idle-line', violet: 'border-violet-300',
   };
 
   return (
@@ -232,7 +236,7 @@ export function ReceiveOrder() {
         if (!line) return null;
         const remaining = Math.max(0, item.qty - item.received_qty);
         return (
-          <div key={item.id} className={`card p-4 border-2 ${cardTone[line.status]}`}>
+          <div key={item.id} className={`card p-4 border-2 ${CARD[RECEIPT_LINE_STATUS[line.status].tone]}`}>
             <div className="flex items-start justify-between gap-2">
               <div>
                 <div className="font-semibold text-slate-900">{item.product.name}</div>
@@ -259,7 +263,7 @@ export function ReceiveOrder() {
             <div className="grid grid-cols-5 gap-1.5 mt-3">
               {statusButtons.map((b) => (
                 <button key={b.key}
-                  className={`rounded-lg border py-2 text-xs font-medium transition-colors ${line.status === b.key ? statusTone[b.key] : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                  className={`rounded-lg border py-2 text-xs font-medium transition-colors ${line.status === b.key ? SOLID[RECEIPT_LINE_STATUS[b.key].tone] : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                   onClick={() => setLine(item.id, { status: b.key, ...(b.key === 'missing' ? { qty: 0 } : {}) })}>
                   {b.label}
                 </button>

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { toHebrewError } from '../lib/errors';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -16,6 +16,7 @@ type Row = CreditRequest & { supplier: { name: string }; invoice: { id: string; 
 
 export default function Credits() {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const { profile } = useAuth();
   const [statusFilter, setStatusFilter] = useState<'active' | 'all'>('active');
   const [selected, setSelected] = useState<Row | null>(null);
@@ -24,6 +25,18 @@ export default function Credits() {
     unwrap(await supabase.from('credit_requests')
       .select('*, supplier:suppliers(name), invoice:invoices(id, invoice_number)')
       .order('created_at', { ascending: false })) as Promise<Row[]>);
+
+  // Open a credit card straight from a global-search result (?id=). Clear the param once
+  // consumed so closing the modal doesn't reopen it and the URL stays clean.
+  useEffect(() => {
+    const id = params.get('id');
+    if (!id || !data) return;
+    const row = data.find((r) => r.id === id);
+    if (row) setSelected(row);
+    const next = new URLSearchParams(params);
+    next.delete('id');
+    setParams(next, { replace: true });
+  }, [params, data, setParams]);
 
   const rows = (data ?? []).filter((r) => statusFilter === 'all' || ['open', 'requested', 'received'].includes(r.status));
   const openSum = (data ?? []).filter((r) => ['open', 'requested', 'received'].includes(r.status)).reduce((s, r) => s + r.amount, 0);

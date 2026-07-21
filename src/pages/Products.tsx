@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toHebrewError } from '../lib/errors';
 import { Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -15,6 +16,7 @@ interface ProductRow extends Product {
 
 export default function Products() {
   const { profile } = useAuth();
+  const [params, setParams] = useSearchParams();
   const [editing, setEditing] = useState<Product | null | 'new'>(null);
   const [catFilter, setCatFilter] = useState('');
   const { data: categories } = useCategories();
@@ -38,6 +40,18 @@ export default function Products() {
 
   const canWrite = profile?.role !== 'accountant' && profile?.role !== 'payer';
   const rows = (data ?? []).filter((p) => !catFilter || p.category_id === catFilter);
+
+  // Open the product editor straight from a global-search result (?id=). Read-only roles never
+  // reach this route, but guard on canWrite anyway; clear the param once consumed.
+  useEffect(() => {
+    const id = params.get('id');
+    if (!id || !data || !canWrite) return;
+    const row = data.find((p) => p.id === id);
+    if (row) setEditing(row);
+    const next = new URLSearchParams(params);
+    next.delete('id');
+    setParams(next, { replace: true });
+  }, [params, data, canWrite, setParams]);
 
   const columns: Column<ProductRow>[] = [
     { key: 'name', header: 'מוצר', sortValue: (r) => r.name, render: (r) => <span className={`font-medium ${r.active ? 'text-slate-900' : 'text-slate-400 line-through'}`}>{r.name}</span> },

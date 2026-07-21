@@ -186,7 +186,7 @@ export default function Settings() {
                 <td className="td font-medium">{u.full_name}{u.id === profile?.id && <span className="text-xs text-slate-400 ms-2">(אתה)</span>}</td>
                 <td className="td">{roleLabels[u.role]}</td>
                 <td className="td" dir="ltr">{u.phone ?? '—'}</td>
-                <td className="td">{u.active ? <span className="badge-green">פעיל</span> : <span className="badge-slate">מושבת</span>}</td>
+                <td className="td">{u.active ? <span className="badge-done">פעיל</span> : <span className="badge-idle">מושבת</span>}</td>
                 <td className="td">
                   {u.id !== profile?.id && (
                     <button className="btn-ghost py-1! text-xs" onClick={() => void toggleActive(u)}>{u.active ? 'השבתה' : 'הפעלה'}</button>

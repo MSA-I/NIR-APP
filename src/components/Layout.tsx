@@ -1,8 +1,9 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, ScrollText, Settings, LogOut, Menu, X, Building2, Bell } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { APP_NAME } from '../lib/branding';
+import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
 import type { Role } from '../lib/types';
 
 interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[]; mobile?: boolean }
@@ -68,7 +69,10 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const role = profile?.role;
+  // Section 5: payer/supplier get no search box — their only routes are dead ends for it.
+  const canSearch = canGlobalSearch(role);
   // Layout also renders during the initial load, before `org` arrives. Falling back to
   // the product name keeps the header honest — it is never another tenant's name.
   const orgName = org?.name ?? APP_NAME;
@@ -142,8 +146,14 @@ export default function Layout() {
       {/* Mobile top bar */}
       <header className="lg:hidden sticky top-0 z-40 bg-slate-900 text-white flex items-center justify-between px-4 py-3 no-print">
         <div className="font-bold truncate me-3" title={orgName}>{orgName}</div>
-        <button onClick={() => setMobileOpen(true)} aria-label="תפריט"><Menu size={22} /></button>
+        <div className="flex items-center gap-1">
+          {canSearch && (
+            <button className="p-1" onClick={() => setSearchOpen(true)} aria-label="חיפוש"><Search size={21} /></button>
+          )}
+          <button className="p-1" onClick={() => setMobileOpen(true)} aria-label="תפריט"><Menu size={22} /></button>
+        </div>
       </header>
+      {searchOpen && <GlobalSearch variant="mobile" onClose={() => setSearchOpen(false)} />}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 bg-slate-900/60 no-print" onClick={() => setMobileOpen(false)}>
           <aside className="absolute inset-y-0 start-0 w-72 bg-slate-900" onClick={(e) => e.stopPropagation()}>
@@ -151,6 +161,15 @@ export default function Layout() {
             {sidebar}
           </aside>
         </div>
+      )}
+
+      {/* Global search — desktop. Injected above <main>: the headerless desktop area is empty
+          today (plan §2), and lg:ms-60 lines it up beside the fixed w-60 sidebar. z-30 keeps it
+          below the sidebar (z-40); sticky works because the min-h-screen wrapper has no overflow. */}
+      {canSearch && (
+        <header className="hidden lg:flex sticky top-0 z-30 lg:ms-60 h-14 items-center border-b border-slate-200 bg-white px-6 no-print">
+          <GlobalSearch />
+        </header>
       )}
 
       {/* Content */}

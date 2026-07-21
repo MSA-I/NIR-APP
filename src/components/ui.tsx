@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, createContext, useContext, type ReactNode } from 'react';
-import { ChevronRight, ChevronLeft, Search, X, Loader2, Inbox } from 'lucide-react';
-import type { StatusMeta } from '../lib/status';
+import { Link } from 'react-router-dom';
+import { ChevronRight, ChevronLeft, Search, X, Loader2, Inbox, Bell, Check } from 'lucide-react';
+import type { StatusMeta, Tone } from '../lib/status';
+import { fmtMoney } from '../lib/format';
 
 /* ---------- StatusBadge ---------- */
 export function StatusBadge({ meta }: { meta: StatusMeta | undefined }) {
@@ -125,8 +127,20 @@ export function EmptyState({ title, subtitle }: { title: string; subtitle?: stri
   );
 }
 
+/* ---------- Note (shared alert box, §4.3) ---------- */
+// One box for the four notice colours. `.note-*` lives in index.css so the whole
+// system's success/warning/info/error boxes recolour from a single place. Only the
+// four semantic tones make sense here; `violet`/`idle` are not notice colours.
+export function Note({ tone, children, className = '' }: {
+  tone: 'done' | 'await' | 'alert' | 'info'; children: ReactNode; className?: string;
+}) {
+  return <div className={`note-${tone} ${className}`}>{children}</div>;
+}
+
+// Kept as a named wrapper: its ~30 call sites stay untouched and all get their colour
+// from Note → .note-alert. (Text is now -on-soft/-800, was rose-700 — §3.1 fix.)
 export function ErrorNote({ message }: { message: string }) {
-  return <div className="rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3">{message}</div>;
+  return <Note tone="alert">{message}</Note>;
 }
 
 /* ---------- KpiCard ---------- */
@@ -141,6 +155,102 @@ export function KpiCard({ title, value, sub, tone = 'slate', onClick }: {
       <div className={`text-xl font-bold mt-1 num text-start ${toneCls}`} dir="ltr" style={{ textAlign: 'right' }}>{value}</div>
       {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
     </button>
+  );
+}
+
+/* ---------- AttentionZone — dashboard "requires attention today" (Nir §1–3) ---------- */
+export interface AttentionItem {
+  key: string;
+  label: string;
+  count: number | null;      // null = cannot be measured → never rendered, never shown as 0
+  amount?: number | null;    // optional ₪ figure shown at the row end
+  tone: Tone;                // shared tone vocabulary (badge-* in index.css)
+  to: string;                // full path incl. query string — a real <Link>, not onClick
+  hint?: string;             // e.g. "3 בחומרה גבוהה"
+  clearLabel?: string;       // muted "all clear" phrasing, e.g. "אין חריגים"
+}
+
+/**
+ * The control-center header (Nir sections 1–3). One card, dense one-line rows, ordered by
+ * business importance by the caller. Two tiers inside the single card:
+ *   A — count > 0: full rows, in the given order.
+ *   B — count === 0: collapsed into one muted "✓ אין …" strip, so eight all-clear items do
+ *       not shout as loudly as the things that need action ("calm", CLAUDE.md).
+ * count === null (cannot be measured — e.g. no payment has a due date) is shown in NEITHER
+ * tier: never rendered, never shown as 0 (CLAUDE.md:37). Rows are real <Link>s, so keyboard
+ * focus, middle-click and "open in new tab" all work (Nir §2: the dashboard is also a hub).
+ */
+export function AttentionZone({ items }: { items: AttentionItem[] }) {
+  const active = items.filter((i) => i.count != null && i.count > 0);
+  const clear = items.filter((i) => i.count === 0);
+  const totalAmount = active.reduce((s, i) => s + (i.amount ?? 0), 0);
+
+  return (
+    <section className="card card-pad">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <h2 className="section-title flex items-center gap-2"><Bell size={18} className="text-await-fg" /> דורש טיפול היום</h2>
+        <span className="text-xs text-slate-500">
+          {active.length
+            ? <>{active.length} פריטים{totalAmount > 0 && <> · <span className="num">{fmtMoney(totalAmount)}</span></>}</>
+            : 'הכול תחת שליטה'}
+        </span>
+      </div>
+
+      {active.length > 0 ? (
+        <ul className="divide-y divide-slate-100">
+          {active.map((i) => (
+            <li key={i.key}>
+              <Link to={i.to} className="flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg hover:bg-slate-50 transition-colors">
+                <span className={`badge-${i.tone} num justify-center min-w-8`}>{i.count}</span>
+                <span className="flex-1 min-w-0 truncate">
+                  <span className="text-slate-800 font-medium">{i.label}</span>
+                  {i.hint && <span className="text-xs text-slate-400 ms-2">{i.hint}</span>}
+                </span>
+                {i.amount != null && i.amount > 0 && <span className="num text-sm font-semibold text-slate-700">{fmtMoney(i.amount)}</span>}
+                <ChevronLeft size={16} className="text-slate-300 shrink-0" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="text-sm text-done-fg py-1">אין משימות דחופות כרגע 🎉</div>
+      )}
+
+      {clear.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-400">
+          {clear.map((i) => (
+            <span key={i.key} className="inline-flex items-center gap-1"><Check size={13} className="text-done-solid shrink-0" /> {i.clearLabel ?? i.label}</span>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ---------- StatTile — a compact, navigable stat (dashboard money strip) ---------- */
+// Uses section 6's fg surface (index.css comment: "fg → text/icon on white, KpiCard/money").
+export function StatTile({ title, value, tone = 'idle', to, sub }: {
+  title: string; value: string; tone?: Tone; to: string; sub?: string;
+}) {
+  const toneCls = { done: 'text-done-fg', await: 'text-await-fg', alert: 'text-alert-fg', info: 'text-info-fg', idle: 'text-slate-900', violet: 'text-violet-700' }[tone];
+  return (
+    <Link to={to} className="card card-pad block hover:border-indigo-300 hover:shadow transition-all">
+      <div className="text-xs font-medium text-slate-500">{title}</div>
+      <div className={`text-xl font-bold mt-1 num ${toneCls}`} dir="ltr" style={{ textAlign: 'right' }}>{value}</div>
+      {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
+    </Link>
+  );
+}
+
+/* ---------- TaskLine — role-routed queue row (promoted from Dashboard, now a <Link>) ---------- */
+export function TaskLine({ label, count, to }: { label: string; count: number; to: string }) {
+  return (
+    <li>
+      <Link to={to} className="flex items-center justify-between -mx-2 px-2 py-1.5 rounded-lg hover:bg-slate-50">
+        <span className="text-slate-600">{label}</span>
+        <span className={`badge num ${count > 0 ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-500'}`}>{count}</span>
+      </Link>
+    </li>
   );
 }
 
