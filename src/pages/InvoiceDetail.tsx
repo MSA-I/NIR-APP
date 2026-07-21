@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toHebrewError } from '../lib/errors';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Loader2, Send, CheckCircle2, RotateCcw, SearchCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -46,6 +46,19 @@ export default function InvoiceDetail() {
   const canEdit = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
   const isOffice = profile && ['owner', 'office'].includes(profile.role);
 
+  // ?print=1 (Invoices list "הדפסה" action): print once when the data is on screen, then strip
+  // the param so refresh/back does not re-open the dialog. Same one-shot pattern as OrderDetail.
+  const [params, setParams] = useSearchParams();
+  const printedRef = useRef(false);
+  useEffect(() => {
+    if (printedRef.current || params.get('print') !== '1' || !inv) return;
+    printedRef.current = true;
+    window.print();
+    const next = new URLSearchParams(params);
+    next.delete('print');
+    setParams(next, { replace: true });
+  }, [params, inv, setParams]);
+
   async function runChecks() {
     if (!inv) return;
     setChecking(true);
@@ -90,7 +103,7 @@ export default function InvoiceDetail() {
             <StatusBadge meta={INVOICE_EXPORT_STATUS[inv.export_status]} />
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 no-print">
           {isOffice && transitions.filter((t) => t.from.includes(inv.review_status)).map((t) => (
             <button key={t.to} className={t.to === 'investigation' ? 'btn-secondary text-alert-solid' : 'btn-primary'} disabled={busy}
               onClick={() => void setReviewStatus(t.to)}>
@@ -107,17 +120,19 @@ export default function InvoiceDetail() {
         </div>
       </div>
 
+      {/* print-area on the money + details cards: shadows/borders drop in print so the sheet
+          stays a clean invoice document (same convention as the Orders print sheet). */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="card card-pad"><div className="text-xs text-ink-muted">סה״כ חשבונית</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(inv.total_amount)}</div>
+        <div className="card card-pad print-area"><div className="text-xs text-ink-muted">סה״כ חשבונית</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(inv.total_amount)}</div>
           <div className="text-xs text-ink-muted mt-0.5">לפני מע״מ {fmtMoneyExact(inv.amount_before_vat)} + מע״מ {fmtMoneyExact(inv.vat_amount)}</div></div>
-        <div className="card card-pad"><div className="text-xs text-ink-muted">שולם</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.paid_amount ?? 0)}</div></div>
+        <div className="card card-pad print-area"><div className="text-xs text-ink-muted">שולם</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.paid_amount ?? 0)}</div></div>
         {/* credited = already offset, a settled claim like "paid" — done, not the retired violet (audit 2026-07-21) */}
-        <div className="card card-pad"><div className="text-xs text-ink-muted">זוכה</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.credited_amount ?? 0)}</div></div>
-        <div className="card card-pad"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`text-lg font-bold num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
+        <div className="card card-pad print-area"><div className="text-xs text-ink-muted">זוכה</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.credited_amount ?? 0)}</div></div>
+        <div className="card card-pad print-area"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`text-lg font-bold num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card card-pad space-y-3">
+        <div className="card card-pad space-y-3 print-area">
           <div className="section-title">פרטים</div>
           <dl className="text-sm space-y-2">
             <div className="flex justify-between"><dt className="text-ink-muted">תאריך חשבונית</dt><dd>{fmtDate(inv.invoice_date)}</dd></div>
@@ -133,7 +148,8 @@ export default function InvoiceDetail() {
           {inv.notes && <div className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-3 py-2">{inv.notes}</div>}
         </div>
 
-        <div className="card card-pad">
+        {/* attachments/allocations are working-screen material, not part of the printed sheet */}
+        <div className="card card-pad no-print">
           <InvoiceAttachments invoiceId={inv.id} receipts={inv.receipts.map((r) => r.goods_receipts)} />
           {data.allocations.length > 0 && (
             <div className="mt-4">
@@ -151,7 +167,7 @@ export default function InvoiceDetail() {
         </div>
       </div>
 
-      <div className="card card-pad">
+      <div className="card card-pad no-print">
         <div className="flex items-center justify-between mb-3">
           <div className="section-title">בדיקות אוטומטיות</div>
           <button className="btn-secondary py-1.5!" onClick={() => void runChecks()} disabled={checking}>

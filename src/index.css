@@ -57,6 +57,8 @@
   --shadow-card: 0 1px 2px rgb(28 37 38 / 0.04), 0 8px 24px rgb(15 90 102 / 0.04);
   --shadow-card-hover: 0 2px 4px rgb(28 37 38 / 0.06), 0 12px 28px rgb(15 90 102 / 0.08);
   --shadow-dashboard: 0 1px 2px rgb(28 37 38 / 0.06), 0 16px 36px -22px rgb(15 90 102 / 0.24);
+  /* Floating row-action menu (ActionMenu): between card-hover and the toast/modal tier. */
+  --shadow-menu: 0 2px 6px rgb(28 37 38 / 0.08), 0 16px 32px -12px rgb(15 90 102 / 0.18);
 
   --color-star: var(--color-amber-400);            /* rating stars: decoration, not status */
   --color-star-hover: var(--color-amber-300);

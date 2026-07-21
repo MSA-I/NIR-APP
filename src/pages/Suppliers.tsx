@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useParamState } from '../lib/useParamState';
-import { Plus, Phone, Mail, MapPin, Clock, Truck, Star, TrendingUp, TrendingDown } from 'lucide-react';
+import { Plus, Phone, Mail, MapPin, Clock, Truck, Star, TrendingUp, TrendingDown, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, PageLoader, useToast, Modal, ErrorNote, type Column } from '../components/ui';
+import { logAction } from '../lib/audit';
+import { DataTable, StatusBadge, PageLoader, useToast, Modal, ErrorNote, ConfirmDialog, type Column } from '../components/ui';
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
 import { SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
 import { fmtMoney, fmtMoneyExact, fmtDate, fmtDays } from '../lib/format';
@@ -55,7 +56,10 @@ function RiskCell({ m }: { m?: SupplierMetrics }) {
 export function SuppliersList() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const toast = useToast();
   const [editing, setEditing] = useState<SupplierRow | null | 'new'>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SupplierWithBalance | null>(null);
+  const [busyDelete, setBusyDelete] = useState(false);
 
   const { data, loading, error, refetch } = useQuery(async () => {
     // Same shape as the card query (Promise.all): suppliers + balances + metrics in parallel,
@@ -83,6 +87,20 @@ export function SuppliersList() {
   // ?balance=open from the dashboard "ספקים עם יתרה פתוחה" card.
   const [balanceFilter, setBalanceFilter] = useParamState('balance');
   const rows = useMemo(() => (data ?? []).filter((r) => balanceFilter !== 'open' || (r.open_balance ?? 0) > 0), [data, balanceFilter]);
+
+  // Soft delete only (CLAUDE.md): deleted_at is stamped, the financial history stays. The list
+  // query already filters .is('deleted_at', null), so refetch drops the row.
+  async function deleteSupplier(reason?: string) {
+    if (!deleteTarget) return;
+    setBusyDelete(true);
+    const res = await supabase.from('suppliers').update({ deleted_at: new Date().toISOString() }).eq('id', deleteTarget.id);
+    setBusyDelete(false);
+    if (res.error) { setDeleteTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
+    await logAction({ orgId: deleteTarget.org_id, action: 'supplier_deleted', entityType: 'suppliers', entityId: deleteTarget.id, reason });
+    setDeleteTarget(null);
+    toast('הספק נמחק');
+    void refetch();
+  }
 
   const columns: Column<SupplierWithBalance>[] = [
     { key: 'name', header: 'ספק', priority: 3, sortValue: (r) => r.name, render: (r) => <span className="font-medium text-ink">{r.name}</span> },
@@ -113,6 +131,10 @@ export function SuppliersList() {
         mobile="cards"
         mobileTitle={(r) => r.name}
         mobileTrailing={(r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} />}
+        rowActions={canWrite ? (r) => [
+          { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setEditing(r) },
+          { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', onSelect: () => setDeleteTarget(r) },
+        ] : undefined}
         toolbar={
           <select className="input w-auto!" value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)}>
             <option value="">כל הספקים</option>
@@ -121,6 +143,12 @@ export function SuppliersList() {
         } />
       {balanceFilter === 'open' && rows.length === 0 && <p className="text-sm text-ink-muted">אין ספקים עם יתרה פתוחה.</p>}
       {editing && <SupplierForm supplier={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refetch(); }} />}
+
+      <ConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}
+        onConfirm={(reason) => void deleteSupplier(reason)}
+        title="מחיקת ספק"
+        message={`הספק ״${deleteTarget?.name ?? ''}״ יוסר מהרשימות (מחיקה רכה — ההיסטוריה הכספית נשמרת). הפעולה תתועד ביומן הביקורת.`}
+        confirmLabel="מחיקה" danger requireReason busy={busyDelete} />
     </div>
   );
 }

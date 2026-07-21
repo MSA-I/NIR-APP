@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toHebrewError } from '../lib/errors';
 import { useSearchParams } from 'react-router-dom';
 import { useParamState } from '../lib/useParamState';
-import { Plus, Loader2, Send, CheckCircle2, ShieldAlert, XCircle } from 'lucide-react';
+import { Plus, Loader2, Send, CheckCircle2, ShieldAlert, XCircle, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -19,10 +19,13 @@ type Row = PaymentRequest & { supplier: { name: string } };
 export default function PaymentRequests() {
   const [params, setParams] = useSearchParams();
   const { profile } = useAuth();
+  const toast = useToast();
   const [statusFilter, setStatusFilter] = useParamState('status', 'active');
   const [dueFilter, setDueFilter] = useParamState('due');
   const [createOpen, setCreateOpen] = useState(!!params.get('new'));
   const [selected, setSelected] = useState<Row | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Row | null>(null);
+  const [busyCancel, setBusyCancel] = useState(false);
 
   const { data, loading, error, refetch } = useQuery(async () =>
     unwrap(await supabase.from('payment_requests')
@@ -41,6 +44,21 @@ export default function PaymentRequests() {
   });
 
   const isOffice = !!profile && ['owner', 'office'].includes(profile.role);
+
+  // Mirrors the detail modal's cancel flow: status → cancelled, reason recorded in audit_logs.
+  // Terminal statuses (cancelled/executed/matched — same set the detail modal treats as final)
+  // hide the action entirely.
+  async function cancelRequest(reason?: string) {
+    if (!cancelTarget) return;
+    setBusyCancel(true);
+    const res = await supabase.from('payment_requests').update({ status: 'cancelled' }).eq('id', cancelTarget.id);
+    setBusyCancel(false);
+    if (res.error) { setCancelTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
+    await logAction({ orgId: cancelTarget.org_id, action: 'payment_request:cancelled', entityType: 'payment_requests', entityId: cancelTarget.id, reason });
+    setCancelTarget(null);
+    toast('הדרישה בוטלה');
+    void refetch();
+  }
 
   const columns: Column<Row>[] = [
     { key: 'num', header: 'מס׳', priority: 3, sortValue: (r) => r.number, render: (r) => `#${r.number}` },
@@ -66,6 +84,14 @@ export default function PaymentRequests() {
         mobile="cards"
         mobileTitle={(r) => <>#{r.number} · {r.supplier.name}</>}
         mobileTrailing={(r) => <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} />}
+        rowActions={(r) => [
+          { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setSelected(r) },
+          {
+            key: 'cancel', label: 'ביטול', icon: XCircle, tone: 'danger',
+            hidden: !isOffice || ['cancelled', 'executed', 'matched'].includes(r.status),
+            onSelect: () => setCancelTarget(r),
+          },
+        ]}
         toolbar={
           <>
             <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
@@ -89,6 +115,11 @@ export default function PaymentRequests() {
         <PaymentRequestDetail pr={selected} isOffice={isOffice} onClose={() => setSelected(null)}
           onChanged={() => { setSelected(null); void refetch(); }} />
       )}
+
+      <ConfirmDialog open={!!cancelTarget} onClose={() => setCancelTarget(null)}
+        onConfirm={(reason) => void cancelRequest(reason)}
+        title="ביטול דרישת תשלום" message="הביטול יתועד ביומן הביקורת."
+        danger requireReason busy={busyCancel} />
     </div>
   );
 }
