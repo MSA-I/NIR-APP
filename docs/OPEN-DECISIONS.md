@@ -60,9 +60,11 @@
 | 32 | **`expected_date` אינו נכתב בשום מסלול** | עמידה-בזמנים וזמן-אספקה מציגים `—` ("אין תאריך אספקה מוזן"), **לעולם לא `0%`**. הוספת שדה קליטה ב-`NewOrder`/`Orders` היא הכרעה עסקית שלא בוצעה — עד אז המדד לא-null רק על נתוני seed | `NewOrder.tsx`, `Orders.tsx` |
 | 33 | **11 מיפויי צבע-לסטטוס לא הוכרעו** | הושארו בצבע הקיים, לא נוחשו: expired · PO.ready/sent/confirmed · receipt.returned · invoice.in_review · export.not_sent · credit.received · pr.approved/sent_for_execution/executed. + טון `idle` (ניטרלי) + 3 סטטוסי `violet` זמניים שדורשים משמעות עסקית | `src/lib/status.ts` |
 
+
+**נסגרו 21.07.2026 (מסמך `NIR-DEV-CLOSEOUT.md`):** #32 — `expected_date` = תאריך **מבוקש**, נכתב ב-NewOrder ובמודאל האישור. #33 — כל 11 המיפויים הוכרעו והטון `violet` הוסר לגמרי. **החלטת FK חדשה:** `payment_allocations` ו-`bank_allocations` יושרו ל-`ON DELETE RESTRICT` (מיגרציה `0013`) — מחיקה קשה של תשלום נכשלת בקול במקום קסקד שקט, בהתאם לעקרון המחיקה הרכה לרשומות כספיות.
 **שתיים מהתראות ניר לא מומשו ואינן מוצגות כאפס:** "מלאי נמוך" (אין כמות במלאי בסכימה — ראה #11) ו"חריגה בתקציב" (אין טבלת תקציב כלל; צד ההוצאה מחושב, היעד חסר והוא קלט עסקי).
 
-**אי-התאמת אוצר מילים שנשארה פתוחה:** `exceptions.severity` הוא `low/medium/high`, בעוד `checks.ts` ו-`alerts.ts` משתמשים ב-`info/warning/critical`. שני סולמות לאותו מושג. כדאי לאחד לפני שנוסף להם צרכן שלישי.
+**סולמות חומרה — נסגר 21.07 כהפרדה מכוונת:** `exceptions.severity` (`low/medium/high`) הוא enum **מאוחסן** ב-DB; `checks.ts`/`alerts.ts` (`info/warning/critical`) הם ערכים **חולפים** בזיכרון. שני מחזורי-חיים, לא לאחד. שניהם ממופים לאותם טונים לתצוגה. מתועד בהערה ב-`status.ts`.
 
 **חוב ידוע שנוצר בשלב 2:** ערכי enum שאין להם נתונים ב-seed הדמו — `receipt_line_status='returned'`, `credit_status='received'`, `supplier_status='inactive'`, `bank_tx_status='ignored'`, ושלושה סטטוסי דרישת תשלום. הוספת נתונים להם הייתה מזיזה את היתרות הפיננסיות שהדמו מסתמך עליהן. החריגים בדמו משויכים ל-`office` ו-`kitchen` בלבד, כלומר "חריג לכל תפקיד" דק ממה שהצ׳קליסט מרמז.
 
