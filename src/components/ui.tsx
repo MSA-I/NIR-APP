@@ -196,7 +196,7 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
         {item.amount != null && item.amount > 0 && (
           <span className={`num text-sm ${muted ? 'font-medium text-ink-soft' : 'font-semibold text-ink-mid'}`}>{fmtMoney(item.amount)}</span>
         )}
-        <ChevronLeft size={16} className="text-ink-ghost shrink-0" />
+        <ChevronLeft size={16} className="text-ink-ghost shrink-0" aria-hidden="true" />
       </Link>
     </li>
   );
@@ -207,11 +207,10 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
  * (count > 0) are ranked by tone severity (alert → await → info → idle), with the caller's
  * business order kept as the tiebreaker within a tone, then split into two tiers in the card:
  *   Action — alert + await rows: what needs us today, at full weight, on top.
- *   לידיעה  — info + idle rows below a thin muted divider: ambient awareness (open credits,
- *            purchase commitments) that must NOT share the orange action frame (DESIGN.md
- *            "חוק האות הכתום"), or the whole strip reads as urgent. Same row anatomy, quieter.
- *   count === 0: collapsed into one muted "✓ אין …" strip at the bottom, so eight all-clear
- *            items don't shout as loudly as one that needs action ("calm", CLAUDE.md).
+ *   לידיעה  — info + idle rows live in a closed native disclosure with unknown and clear
+ *            rows, so ambient awareness remains available without competing with today's work.
+ *   count === 0: collapsed into the same muted disclosure, so eight all-clear items don't shout
+ *            as loudly as one that needs action ("calm", CLAUDE.md).
  * count === null (cannot be measured — e.g. no payment has a due date) gets a neutral "—" tier;
  * it is never silently converted to 0 and it prevents a false all-clear (CLAUDE.md:37). Rows are
  * real <Link>s, so keyboard focus,
@@ -243,46 +242,55 @@ export function AttentionZone({ items, totalLabel }: { items: AttentionItem[]; t
   return (
     <section className="card card-pad">
       <div className="flex items-center justify-between gap-3 mb-2">
-        <h2 className="section-title flex items-center gap-2"><Bell size={18} className="text-await-fg" /> דורש טיפול היום</h2>
+        <h2 className="section-title flex items-center gap-2"><Bell size={18} className="text-await-fg" aria-hidden="true" /> דורש טיפול היום</h2>
         <span className="text-xs text-ink-muted">
-          {actionRows.length
-            ? <>{actionRows.length} פריטים{actionTotal > 0 && <> · {totalLabel ? <>{totalLabel} </> : null}<span className="num">{fmtMoney(actionTotal)}</span></>}</>
-            : unknownRows.length ? `${unknownRows.length} מדדים ללא נתונים` : 'הכול תחת שליטה'}
+          {actionRows.length} סוגי טיפול
+          {actionTotal > 0 && <> · {totalLabel ? <>{totalLabel} </> : null}<span className="num">{fmtMoney(actionTotal)}</span></>}
         </span>
       </div>
 
       {actionRows.length > 0 ? (
-        <ul className="divide-y divide-line-soft">
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
           {actionRows.map((i) => <AttentionRow key={i.key} item={i} />)}
         </ul>
       ) : noticeRows.length === 0 && unknownRows.length === 0 ? (
         <div className="text-sm text-done-fg py-1">אין משימות דחופות כרגע</div>
       ) : null}
 
-      {noticeRows.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-line-soft">
-          <div className="text-xs font-medium text-ink-muted mb-1">לידיעה</div>
-          <ul className="divide-y divide-line-soft">
-            {noticeRows.map((i) => <AttentionRow key={i.key} item={i} muted />)}
-          </ul>
-        </div>
-      )}
+      {(noticeRows.length > 0 || unknownRows.length > 0 || clear.length > 0) && (
+        <details className="group mt-2 border-t border-line-soft">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm text-ink-muted hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+            <ChevronLeft size={16} className="shrink-0 transition-transform group-open:-rotate-90" aria-hidden="true" />
+            <span className="font-medium text-ink-soft">מידע נוסף</span>
+            <span className="num ms-auto">{noticeRows.length + unknownRows.length + clear.length}</span>
+          </summary>
 
-      {unknownRows.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-line-soft">
-          <div className="text-xs font-medium text-ink-muted mb-1">לא ניתן למדידה</div>
-          <ul className="divide-y divide-line-soft">
-            {unknownRows.map((i) => <AttentionRow key={i.key} item={i} muted />)}
-          </ul>
-        </div>
-      )}
+          {noticeRows.length > 0 && (
+            <div className="pt-2">
+              <div className="text-xs font-medium text-ink-muted mb-1">לידיעה</div>
+              <ul className="divide-y divide-line-soft">
+                {noticeRows.map((i) => <AttentionRow key={i.key} item={i} muted />)}
+              </ul>
+            </div>
+          )}
 
-      {clear.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-line-soft flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-ink-muted">
-          {clear.map((i) => (
-            <span key={i.key} className="inline-flex items-center gap-1"><Check size={13} className="text-done-solid shrink-0" /> {i.clearLabel ?? i.label}</span>
-          ))}
-        </div>
+          {unknownRows.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-line-soft">
+              <div className="text-xs font-medium text-ink-muted mb-1">לא ניתן למדידה</div>
+              <ul className="divide-y divide-line-soft">
+                {unknownRows.map((i) => <AttentionRow key={i.key} item={i} muted />)}
+              </ul>
+            </div>
+          )}
+
+          {clear.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-line-soft flex flex-wrap gap-x-4 gap-y-1.5 pb-1 text-xs text-ink-muted">
+              {clear.map((i) => (
+                <span key={i.key} className="inline-flex items-center gap-1"><Check size={13} className="text-done-solid shrink-0" aria-hidden="true" /> {i.clearLabel ?? i.label}</span>
+              ))}
+            </div>
+          )}
+        </details>
       )}
     </section>
   );

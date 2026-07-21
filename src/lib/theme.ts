@@ -2,14 +2,28 @@
 // SVG presentation *attributes*, where var() resolution is not guaranteed — so we read the
 // computed values once and hand recharts real color strings. Module-level cache: the theme is
 // static per page load; a future runtime theme switch must invalidate `cache`.
-let cache: Record<string, string> | null = null;
+type ChartTheme = {
+  bar: string;
+  bars: string[];
+  grid: string;
+  tick: string;
+  label: string;
+  tickStrong: string;
+  trendUp: string;
+  trendDown: string;
+  flat: string;
+};
+
+let cache: ChartTheme | null = null;
 
 export function chartTheme() {
   if (!cache) {
     const s = getComputedStyle(document.documentElement);
     const v = (name: string) => s.getPropertyValue(name).trim();
+    const bar = v('--color-chart-1');
     cache = {
-      bar: v('--color-chart-1'),
+      bar,
+      bars: [bar, v('--color-chart-2'), v('--color-chart-3'), v('--color-chart-4'), v('--color-chart-5')],
       grid: v('--color-chart-grid'),
       tick: v('--color-chart-tick'),
       label: v('--color-chart-label'),

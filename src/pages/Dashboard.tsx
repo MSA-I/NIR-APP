@@ -1,13 +1,17 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Area, AreaChart, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
-import { Banknote, ChevronLeft, ReceiptText, RotateCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
+import {
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart,
+  Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from 'recharts';
+import { Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RotateCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { Skeleton, StatusBadge, Note, AttentionZone, TaskLine, type AttentionItem } from '../components/ui';
 import { EXCEPTION_TYPE, SEVERITY } from '../lib/status';
 import { fmtMoney, fmtMoneyExact, fmtMonth, toLocalISO } from '../lib/format';
 import { chartTheme } from '../lib/theme';
+import { mergeWeeklyComparison, topCategoriesWithOther } from '../lib/dashboardSeries';
 
 const money = (v: number) => `₪${Math.round(v).toLocaleString('he-IL')}`;
 // audit round 2: glance values are whole-shekel by convention — the three money-strip tiles round to
@@ -19,7 +23,7 @@ const moneyShort = (v: number) => (Math.abs(v) >= 1000 ? `₪${(v / 1000).toLoca
 // "עודכן ב-HH:MM" freshness stamp — the screen promises real-time, so it says when it last read.
 const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit' });
 
-type WeeklyPoint = { week: string; total: number; count: number };
+type WeeklyPoint = { week: string; total: number; count: number; label: string };
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -32,41 +36,6 @@ function useReducedMotion() {
   }, []);
 
   return reduced;
-}
-
-function TrendSparkline({ points, label }: { points: WeeklyPoint[]; label: string }) {
-  const gradientId = `dashboardSpark${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
-  const t = chartTheme();
-  const ariaLabel = `${label}: ${points.map((point) => `${point.week} ${money(point.total)}`).join(', ')}`;
-
-  return (
-    <ChartViewport className="h-8" label={ariaLabel}>
-      {(animation) => (
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={points} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
-            <defs>
-              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={t.bar} stopOpacity={0.16} />
-                <stop offset="100%" stopColor={t.bar} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <Area
-              type="linear"
-              dataKey="total"
-              stroke={t.bar}
-              strokeWidth={1.5}
-              fill={`url(#${gradientId})`}
-              dot={false}
-              isAnimationActive={animation.active}
-              animationDuration={500}
-              animationEasing="ease-out"
-              onAnimationEnd={animation.finish}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      )}
-    </ChartViewport>
-  );
 }
 
 function DeltaChip({ value }: { value: number }) {
@@ -92,6 +61,7 @@ function ChartViewport({ className, label, style, children }: {
 }) {
   const reducedMotion = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
+  const initialLabel = useRef(label);
   const [visible, setVisible] = useState(() => reducedMotion || !('IntersectionObserver' in window));
   const [finished, setFinished] = useState(() => reducedMotion || !('IntersectionObserver' in window));
 
@@ -112,6 +82,10 @@ function ChartViewport({ className, label, style, children }: {
     return () => observer.disconnect();
   }, [reducedMotion]);
 
+  useEffect(() => {
+    if (label !== initialLabel.current) setFinished(true);
+  }, [label]);
+
   return (
     <div ref={ref} dir="ltr" className={className} style={style} role="img" aria-label={label}>
       {visible
@@ -121,20 +95,48 @@ function ChartViewport({ className, label, style, children }: {
   );
 }
 
+function TrendSparkline({ points, label }: { points: WeeklyPoint[]; label: string }) {
+  const gradientId = `dashboardSpark${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  const t = chartTheme();
+  const plotted = points.map((point) => ({ ...point, total: point.count > 0 ? point.total : null }));
+  const ariaLabel = `${label}: ${points.map((point) => `${point.week} ${point.count ? fmtMoneyExact(point.total) : 'אין רשומות'}`).join(', ')}`;
+
+  return (
+    <ChartViewport className="h-7 min-w-16 flex-1" label={ariaLabel}>
+      {(animation) => (
+        <ResponsiveContainer>
+          <AreaChart data={plotted} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={t.bar} stopOpacity={0.18} />
+                <stop offset="100%" stopColor={t.bar} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <Area type="linear" dataKey="total" stroke={t.bar} strokeWidth={1.5}
+              fill={`url(#${gradientId})`} dot={{ r: 1.5, strokeWidth: 0 }} connectNulls={false}
+              isAnimationActive={animation.active} animationDuration={500} animationEasing="ease-out"
+              onAnimationEnd={animation.finish} />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
+    </ChartViewport>
+  );
+}
+
 // One segment of the money band. Segments live in a single .card and separate with logical
 // borders (border-t stacked / border-s side-by-side) — never divide-x, which is physical
 // left/right and breaks under RTL (see supplier-metrics.tsx).
-function BandStat({ title, value, tone = 'idle', to, sub, icon: Icon, spark, sparkLabel, aux, delta }: {
+function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, delta, spark, sparkLabel }: {
   title: string;
   value: number | null;
   tone?: 'done' | 'await' | 'idle';
   to: string;
-  sub: string;
+  context: string;
   icon: LucideIcon;
-  spark?: WeeklyPoint[];
-  sparkLabel?: string;
   aux?: string;
   delta?: number | null;
+  spark?: WeeklyPoint[];
+  sparkLabel?: string;
 }) {
   const toneCls = { done: 'text-done-fg', await: 'text-await-fg', idle: 'text-ink' }[tone];
   const chipCls = {
@@ -142,12 +144,18 @@ function BandStat({ title, value, tone = 'idle', to, sub, icon: Icon, spark, spa
     await: 'bg-await-wash text-await-fg',
     idle: 'bg-idle-wash text-idle-fg',
   }[tone];
-  const hasSpark = spark != null && spark.filter((point) => point.count > 0).length >= 2;
-
+  const hasSpark = value != null && spark != null && spark.filter((point) => point.count > 0).length >= 2;
+  const linkLabel = [
+    `${title}: ${glanceMoney(value)}`,
+    delta != null ? `${Math.round(delta) > 0 ? '+' : ''}${Math.round(delta)}% מול אותם ימים בחודש הקודם` : null,
+    context,
+    aux,
+  ].filter(Boolean).join('. ');
   return (
     <Link
       to={to}
-      className="block min-h-11 border-t border-line-soft px-4 py-3.5 transition-colors first:border-t-0 hover:bg-surface-sunken active:bg-action-wash/70 sm:border-s sm:border-t-0 sm:px-5 sm:first:border-s-0"
+      aria-label={linkLabel}
+      className="block min-h-20 border-t border-line-soft px-4 py-3 transition-colors first:border-t-0 hover:bg-surface-sunken active:bg-action-wash/70 sm:border-s sm:border-t-0 sm:px-5 sm:first:border-s-0"
     >
       <div className="flex items-center gap-2">
         <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${chipCls}`} aria-hidden="true">
@@ -156,23 +164,45 @@ function BandStat({ title, value, tone = 'idle', to, sub, icon: Icon, spark, spa
         <span className="text-xs font-medium text-ink-muted">{title}</span>
         {delta != null && <DeltaChip value={delta} />}
       </div>
-      <div className={`mt-2 text-2xl font-semibold num ${toneCls}`} dir="ltr">{glanceMoney(value)}</div>
-      <div className="mt-2 h-12">
-        {hasSpark && spark && sparkLabel ? (
-          <>
-            <div className="flex items-center justify-between text-xs text-ink-muted">
-              <span>מגמה</span><span>8 שבועות</span>
-            </div>
-            <TrendSparkline points={spark} label={sparkLabel} />
-          </>
-        ) : aux ? (
-          <div className="flex h-full items-center text-xs text-ink-muted">{aux}</div>
-        ) : spark ? (
-          <div className="flex h-full items-center text-xs text-ink-muted">אין מספיק נתונים למגמה</div>
-        ) : null}
+      <div className="mt-1.5 flex items-center gap-3">
+        <div className={`shrink-0 text-xl font-semibold num sm:text-2xl ${toneCls}`} dir="ltr">{glanceMoney(value)}</div>
+        {hasSpark && spark && sparkLabel && <TrendSparkline points={spark} label={sparkLabel} />}
       </div>
-      <div className="mt-1 text-xs text-ink-muted">{sub}</div>
+      <div className="mt-1 flex items-center justify-between gap-3 text-xs text-ink-muted">
+        <span>{delta != null ? 'מול אותם ימים בחודש הקודם' : context}</span>
+        <span className="truncate text-end">{aux ?? (hasSpark ? 'מגמת 8 שבועות' : context)}</span>
+      </div>
     </Link>
+  );
+}
+
+function OperationsDisclosure({ title, count, summary, empty, children }: {
+  title: string;
+  count: number;
+  summary?: string;
+  empty: string;
+  children: ReactNode;
+}) {
+  if (count === 0) {
+    return (
+      <div className="flex min-h-11 items-center gap-2 border-t border-line-soft px-4 py-2.5 text-sm text-ink-muted first:border-t-0 sm:px-5">
+        <Check size={15} className="shrink-0 text-done-solid" aria-hidden="true" />
+        <span>{empty}</span>
+        <span className="badge-idle num ms-auto">0</span>
+      </div>
+    );
+  }
+
+  return (
+    <details name="dashboard-operations" className="group border-t border-line-soft first:border-t-0">
+      <summary className="flex min-h-11 list-none items-center gap-2 px-4 py-2.5 text-sm hover:bg-surface-sunken active:bg-action-wash/70 [&::-webkit-details-marker]:hidden sm:px-5">
+        <span className="font-medium text-ink-body">{title}</span>
+        <span className="badge-idle num">{count}</span>
+        {summary && <span className="ms-auto truncate text-xs text-ink-muted">{summary}</span>}
+        <ChevronDown size={16} className="shrink-0 text-ink-ghost transition-transform group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <div className="border-t border-line-soft px-4 pb-4 pt-2 sm:px-5">{children}</div>
+    </details>
   );
 }
 
@@ -185,7 +215,7 @@ const timelineDate = (value: string) => value.includes('T') ? new Date(value) : 
 // audit round 2: the loading state was <PageLoader/> — a centred spinner that collapses the page
 // height and jumps when data lands, exactly what ui.tsx warns against on a known layout (and this is
 // the flagship screen). This mirrors the above-the-fold shape instead: header, the "דורש טיפול" card,
-// the money strip, and the first pair of detail cards. One role="status" region with a single "טוען"
+// the money strip, the trend card and the folded detail card. One role="status" region with a single "טוען"
 // for screen readers — SkeletonRegion is not exported, so we compose the house pattern from Skeleton.
 function DashboardSkeleton() {
   return (
@@ -215,37 +245,47 @@ function DashboardSkeleton() {
         </div>
       </div>
 
-      {/* money band: one card, three segments (title · value · sub) */}
+      {/* money band: one card, three compact segments */}
       <div className="card grid grid-cols-1 sm:grid-cols-3">
         {Array.from({ length: 3 }, (_, i) => (
-          <div key={i} className="px-4 py-3.5 sm:px-5 border-t sm:border-t-0 sm:border-s border-line-soft first:border-t-0 sm:first:border-s-0">
+          <div key={i} className="min-h-20 px-4 py-3 sm:px-5 border-t sm:border-t-0 sm:border-s border-line-soft first:border-t-0 sm:first:border-s-0">
             <div className="flex items-center gap-2">
               <Skeleton className="size-8 rounded-lg" />
               <Skeleton className="h-3 w-24" />
             </div>
-            <Skeleton className="h-7 w-28 mt-2" />
-            <Skeleton className="h-12 w-full mt-2" />
-            <Skeleton className="h-3 w-40 mt-2" />
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <Skeleton className="h-7 w-28" />
+              <Skeleton className="h-3 w-20" />
+            </div>
           </div>
         ))}
       </div>
 
-      {/* first pair of detail cards (חריגים · התייקרויות) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {Array.from({ length: 2 }, (_, i) => (
-          <div key={i} className="card card-pad">
-            <div className="flex items-center justify-between mb-2">
-              <Skeleton className="h-5 w-40" />
-              <Skeleton className="h-4 w-24" />
-            </div>
-            <div className="divide-y divide-line-soft">
-              {Array.from({ length: 4 }, (_, r) => (
-                <div key={r} className="flex items-center justify-between py-2.5">
-                  <Skeleton className="h-4 w-40" />
-                  <Skeleton className="h-4 w-16" />
-                </div>
-              ))}
-            </div>
+      <div className="card overflow-hidden">
+        <div className="px-4 py-4 sm:px-5"><Skeleton className="h-5 w-24" /></div>
+        <div className="grid grid-cols-1 border-t border-line-soft lg:grid-cols-12">
+          <div className="p-4 lg:col-span-7 lg:border-e lg:border-line-soft sm:p-5">
+            <Skeleton className="h-4 w-36" />
+            <Skeleton className="mt-3 h-48 w-full rounded-lg" />
+          </div>
+          <div className="border-t border-line-soft p-4 lg:col-span-5 lg:border-t-0 sm:p-5">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="mt-3 h-48 w-full rounded-lg" />
+          </div>
+          <div className="border-t border-line-soft p-4 lg:col-span-12 sm:p-5">
+            <Skeleton className="h-4 w-44" />
+            <Skeleton className="mt-3 h-48 w-full rounded-lg" />
+          </div>
+        </div>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="px-4 py-4 sm:px-5"><Skeleton className="h-5 w-44" /></div>
+        {Array.from({ length: 4 }, (_, i) => (
+          <div key={i} className="flex min-h-11 items-center gap-3 border-t border-line-soft px-4 sm:px-5">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-6 w-8 rounded-full" />
+            <Skeleton className="ms-auto h-3 w-28" />
           </div>
         ))}
       </div>
@@ -377,23 +417,30 @@ export default function Dashboard() {
 
     // ── monthly expense chart (invoices by calendar month) + MoM change. Calendar buckets stay
     // consecutive even when a month has no invoices; an entirely empty source stays empty.
-    const byMonth = new Map<string, number>();
+    const byMonth = new Map<string, { total: number; count: number }>();
     for (const inv of invoices) {
       const m = inv.invoice_date.slice(0, 7);
-      byMonth.set(m, (byMonth.get(m) ?? 0) + inv.total_amount);
+      const bucket = byMonth.get(m) ?? { total: 0, count: 0 };
+      bucket.total += inv.total_amount;
+      bucket.count += 1;
+      byMonth.set(m, bucket);
     }
     const monthBuckets = Array.from({ length: 4 }, (_, idx) => {
       const date = new Date(now.getFullYear(), now.getMonth() - (3 - idx), 1);
       const key = `${date.getFullYear()}-${pad(date.getMonth() + 1)}`;
-      return { key, month: fmtMonth(`${key}-01`), total: Math.round(byMonth.get(key) ?? 0) };
+      const bucket = byMonth.get(key) ?? { total: 0, count: 0 };
+      const total = bucket.total;
+      return { key, month: fmtMonth(`${key}-01`), total, count: bucket.count, label: bucket.count ? money(total) : '' };
     });
-    const monthly = invoices.length ? monthBuckets.map(({ month, total }) => ({ month, total })) : [];
+    const monthly = invoices.length ? monthBuckets.map(({ month, total, count, label }) => ({ month, total, count, label })) : [];
     const currentMonthKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
     const previousMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const previousMonthKey = `${previousMonthDate.getFullYear()}-${pad(previousMonthDate.getMonth() + 1)}`;
-    const curMonthTotal = byMonth.get(currentMonthKey) ?? 0;
-    const prevMonthTotal = byMonth.get(previousMonthKey) ?? 0;
-    const momChange = prevMonthTotal > 0 ? ((curMonthTotal - prevMonthTotal) / prevMonthTotal) * 100 : null;
+    const curMonthBucket = byMonth.get(currentMonthKey);
+    const prevMonthBucket = byMonth.get(previousMonthKey);
+    const momChange = curMonthBucket && prevMonthBucket && prevMonthBucket.total > 0
+      ? ((curMonthBucket.total - prevMonthBucket.total) / prevMonthBucket.total) * 100
+      : null;
 
     // ── weekly magnitude series: buckets carry a row count so an artificial zero bucket is never
     // mistaken for an observed point. The same helper powers purchases and supplier payments.
@@ -409,7 +456,7 @@ export default function Dashboard() {
         bucket.total += row.value;
         bucket.count += 1;
       }
-      return buckets.map(({ week, total, count }) => ({ week, total: Math.round(total), count }));
+      return buckets.map(({ week, total, count }) => ({ week, total, count, label: count ? moneyShort(total) : '' }));
     };
     const weekly = weeklySeries(orders.map((order) => ({ date: order.created_at, value: orderValue(order) })));
     const paidWeekly = weeklySeries(payments.map((payment) => ({ date: payment.paid_date, value: payment.amount })));
@@ -442,7 +489,8 @@ export default function Dashboard() {
       const cat = it.product?.category?.name ?? 'ללא קטגוריה';
       byCat.set(cat, (byCat.get(cat) ?? 0) + it.qty * it.unit_price);
     }
-    const categories = [...byCat.entries()].map(([name, total]) => ({ name, total: Math.round(total) })).sort((a, b) => b.total - a.total);
+    const categories = topCategoriesWithOther([...byCat.entries()].map(([name, total]) => ({ name, total })))
+      .map((category) => ({ ...category, label: moneyShort(category.total) }));
 
     // supplier open balances — id is KEPT so each row can link to /suppliers/:id (was dropped).
     const topBalances = supBal.sort((a, b) => b.open_balance - a.open_balance).slice(0, 6)
@@ -467,8 +515,11 @@ export default function Dashboard() {
       money: { openBalance, openInvoiceCount, paidMonth, paidDelta, purchasedMonth, purchasedDelta, monthKey },
       monthly, weekly, paidWeekly, momChange, categories, savings,
       priceIncreases: priceIncreases.slice(0, 6),
+      priceIncreaseCount: priceIncreases.length,
       topBalances,
+      openSupplierCount: supBal.length,
       exceptions: exceptions.slice(0, 6),
+      exceptionCount: exceptions.length,
       meta: { suspectedDup, unmatchedBank },
       queue: {
         receiving: openPos.length,
@@ -484,6 +535,22 @@ export default function Dashboard() {
   if (loading) return <DashboardSkeleton />;
 
   const t = chartTheme();
+  const taskTotal = data ? Object.values(data.queue).reduce((sum, count) => sum + count, 0) : 0;
+  const weeklyComparison = data ? mergeWeeklyComparison(data.weekly, data.paidWeekly) : [];
+  const hasWeeklyComparison = weeklyComparison.some((point) => point.purchases != null || point.payments != null);
+  const categoryTotal = data?.categories.reduce((sum, category) => sum + category.total, 0) ?? 0;
+  const monthlyAria = data ? `הוצאות רכש לפי חודש: ${data.monthly.length
+    ? data.monthly.map((point) => `${point.month} ${point.count ? fmtMoneyExact(point.total) : 'אין חשבוניות'}`).join(', ')
+    : 'אין נתוני חשבוניות לתקופה'}` : '';
+  const weeklyAria = `השוואת רכש ותשלומים לפי שבוע: ${weeklyComparison.map((point) => (
+    `${point.week}, רכש ${point.purchases == null ? 'אין רשומות' : fmtMoneyExact(point.purchases)}, תשלומים ${point.payments == null ? 'אין רשומות' : fmtMoneyExact(point.payments)}`
+  )).join('; ')}`;
+  const categoryEmptyMessage = data?.categories.length
+    ? `נמדד רכש בסכום ${fmtMoneyExact(categoryTotal)}; אין תמהיל חיובי להצגה`
+    : 'אין רכש החודש';
+  const categoriesAria = data ? `הוצאות לפי קטגוריה: ${categoryTotal > 0
+    ? data.categories.map((category) => `${category.name} ${fmtMoneyExact(category.total)}, ${Math.round((category.total / categoryTotal) * 100)} אחוז`).join(', ')
+    : categoryEmptyMessage}` : '';
 
   return (
     <div className="dashboard-depth space-y-5">
@@ -513,208 +580,240 @@ export default function Dashboard() {
         </Note>
       )}
 
-      {data && (<div className="dash-enter space-y-5">
-      {/* Nir §1–3 — the control center. totalLabel scopes the summed ₪ as workload, not net debt. */}
-      <div><AttentionZone items={data.attention} totalLabel="סה״כ בטיפול" /></div>
+      {data && (
+        <div className="dash-enter space-y-5">
+          <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול" />
 
-      {/* money band — one ledger strip with three navigable segments, not three identical
-          tiles. `sub` carries a short plain-Hebrew gloss of each term. */}
-      <div className="card grid grid-cols-1 sm:grid-cols-3">
-        <BandStat title="יתרת חשבוניות פתוחות" value={data.money.openBalance} tone="await" to="/invoices?pay=unpaid"
-          icon={ReceiptText} aux={data.money.openBalance == null ? 'אין נתונים זמינים' : `${data.money.openInvoiceCount} חשבוניות פתוחות`}
-          sub="סך החוב לספקים על חשבוניות שטרם שולמו במלואן" />
-        <BandStat title="שולם לספקים החודש" value={data.money.paidMonth} tone="done" to={`/payments?month=${data.money.monthKey}`}
-          icon={Banknote} spark={data.paidWeekly} sparkLabel="תשלומים לספקים בשמונה השבועות האחרונים" delta={data.money.paidDelta}
-          sub="סך התשלומים שיצאו לספקים החודש" />
-        <BandStat title="נרכש החודש" value={data.money.purchasedMonth} to="/orders?status=all"
-          icon={ShoppingCart} spark={data.weekly} sparkLabel="רכש בשמונה השבועות האחרונים" delta={data.money.purchasedDelta}
-          sub={data.savings != null
-            ? `חיסכון משוער החודש: ההפרש מול המחיר היקר ביותר שהוצע — ${fmtMoney(data.savings)}`
-            : 'שווי ההזמנות שנוצרו החודש (במחירי ההזמנה)'} />
-      </div>
-
-      {/* operational detail — exceptions + recent price increases */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card card-pad">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="section-title">חריגים פתוחים</h2>
-            <Link to="/exceptions?status=open" className="btn-ghost min-h-11 text-xs">לכל החריגים <ChevronLeft size={13} /></Link>
+          <div className="card grid grid-cols-1 sm:grid-cols-3">
+            <BandStat title="יתרת חשבוניות פתוחות" value={data.money.openBalance} tone="await" to="/invoices?pay=unpaid"
+              icon={ReceiptText} context="נכון לעכשיו"
+              aux={data.money.openBalance == null ? 'אין נתונים זמינים' : `${data.money.openInvoiceCount} חשבוניות פתוחות`} />
+            <BandStat title="שולם לספקים החודש" value={data.money.paidMonth} tone="done" to={`/payments?month=${data.money.monthKey}`}
+              icon={Banknote} context="מתחילת החודש" delta={data.money.paidDelta}
+              spark={data.paidWeekly} sparkLabel="מגמת תשלומים לספקים בשמונה השבועות האחרונים" />
+            <BandStat title="נרכש החודש" value={data.money.purchasedMonth} to="/orders?status=all"
+              icon={ShoppingCart} context="מתחילת החודש" delta={data.money.purchasedDelta}
+              aux={data.savings != null ? `חיסכון משוער ${fmtMoney(data.savings)}` : undefined}
+              spark={data.weekly} sparkLabel="מגמת רכש בשמונה השבועות האחרונים" />
           </div>
-          {data.exceptions.length ? (
-            <ul className="divide-y divide-line-soft">
-              {data.exceptions.map((e) => (
-                <li key={e.id}>
-                  <Link to={`/exceptions?id=${e.id}`} className="block min-h-11 py-2 text-sm -mx-2 px-2 rounded-lg hover:bg-surface-sunken active:bg-action-wash/70 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <StatusBadge meta={SEVERITY[e.severity]} />
-                      <span className="text-xs text-ink-muted">{EXCEPTION_TYPE[e.type]}</span>
-                    </div>
-                    <div className="text-ink-mid truncate mt-0.5">{e.title}</div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : <div className="text-sm text-done-fg py-6 text-center">אין חריגים פתוחים כרגע</div>}
-          {/* folded risk hints (Nir §1: duplicate suspicions, unmatched bank movements).
-              Shown only when > 0 — a risk indicator printing "0" is the fake-zero the plan forbids;
-              the count-0 "all clear" is already carried by AttentionZone tier B. */}
-          {(data.meta.suspectedDup > 0 || data.meta.unmatchedBank > 0) && (
-            <div className="mt-3 pt-3 border-t border-line-soft flex flex-wrap gap-x-4 gap-y-1 text-xs">
-              {data.meta.suspectedDup > 0 && (
-                <Link to="/exceptions?type=duplicate_invoice,duplicate_payment" className="inline-flex min-h-11 items-center text-ink-muted hover:text-ink-mid active:text-ink">חשד לכפילות: <span className="num font-medium">{data.meta.suspectedDup}</span></Link>
-              )}
-              {data.meta.unmatchedBank > 0 && (
-                <Link to="/bank?status=unmatched" className="inline-flex min-h-11 items-center text-ink-muted hover:text-ink-mid active:text-ink">תנועות בנק לא מותאמות: <span className="num font-medium">{data.meta.unmatchedBank}</span></Link>
-              )}
+
+          <section className="card overflow-hidden">
+            <div className="px-4 py-4 sm:px-5">
+              <h2 className="section-title">מגמות</h2>
+              <p className="mt-0.5 text-xs text-ink-muted">רכש, תשלומים ותמהיל הוצאות במבט אחד</p>
             </div>
-          )}
-        </div>
 
-        <div className="card card-pad">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="section-title flex items-center gap-1.5"><TrendingUp size={16} className="text-trend-up-fg" /> מוצרים שהתייקרו לאחרונה</h2>
-            <Link to="/prices?increases=1" className="btn-ghost min-h-11 text-xs">לכל המחירונים <ChevronLeft size={13} /></Link>
-          </div>
-          {data.priceIncreases.length ? (
-            <ul className="divide-y divide-line-soft">
-              {data.priceIncreases.map((p, i) => (
-                <li key={i}>
-                  <Link to={`/prices?product=${p.product.id}`} className="flex min-h-11 items-center justify-between py-2 text-sm -mx-2 px-2 rounded-lg hover:bg-surface-sunken active:bg-action-wash/70 transition-colors">
-                    <span className="min-w-0 truncate">
-                      <span className="font-medium text-ink-body">{p.product.name}</span>
-                      <span className="text-ink-muted text-xs ms-2">{p.supplier.name}</span>
+            <div className="grid grid-cols-1 border-t border-line-soft lg:grid-cols-12">
+              <section className="p-4 sm:p-5 lg:col-span-7 lg:border-e lg:border-line-soft" aria-labelledby="monthly-trend-title">
+                <div className="flex min-h-8 flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h3 id="monthly-trend-title" className="text-sm font-semibold text-ink-body">הוצאות רכש לפי חודש</h3>
+                    <p className="text-xs text-ink-muted">חשבוניות שהתקבלו בארבעת החודשים האחרונים</p>
+                  </div>
+                  {data.momChange != null && (
+                    <span className={`text-xs font-medium ${data.momChange > 0 ? 'text-alert-fg' : 'text-done-fg'}`} dir="ltr">
+                      {data.momChange > 0 ? '+' : ''}{data.momChange.toFixed(0)}% מול חודש קודם
                     </span>
-                    <span className="flex items-center gap-3 shrink-0">
-                      {/* explicit direction (מ־… ל־…): "₪X ← ₪Y" is ambiguous in RTL */}
-                      <span className="text-xs text-ink-muted">מ־<span className="num">₪{p.previous_price!.toFixed(2)}</span> ל־<span className="num">₪{p.current_price.toFixed(2)}</span></span>
-                      {/* fix: text in the darker alert-fg (contrast); arrow keeps the lighter trend hue */}
-                      <span className="inline-flex items-center gap-1 text-alert-fg font-medium num" dir="ltr"><TrendingUp size={13} className="text-trend-up-fg" />+{p.pct.toFixed(1)}%</span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : <div className="text-sm text-ink-muted py-6 text-center">אין התייקרויות אחרונות</div>}
-        </div>
-      </div>
+                  )}
+                </div>
+                <ChartViewport className="mt-2 h-44 sm:h-48" label={monthlyAria}>
+                  {(animation) => data.monthly.length ? (
+                    <ResponsiveContainer>
+                      <BarChart data={data.monthly} margin={{ top: 24, left: 8, right: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={t.grid} />
+                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: t.tick }} axisLine={false} tickLine={false} />
+                        <YAxis hide />
+                        <Tooltip cursor={false} formatter={(value) => fmtMoneyExact(Number(value))} isAnimationActive={animation.active} />
+                        <Bar dataKey="total" name="סה״כ" fill={t.bar} radius={[4, 4, 0, 0]} maxBarSize={52}
+                          isAnimationActive={animation.active} animationDuration={550} animationEasing="ease-out" onAnimationEnd={animation.finish}>
+                          {data.monthly.map((point, index) => (
+                            <Cell key={point.month} fill={t.bars[(data.monthly.length - 1 - index) % t.bars.length]} />
+                          ))}
+                          <LabelList dataKey="label" position="top" style={{ fontSize: 12, fill: t.label }} />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : <div className="flex h-full items-center justify-center text-sm text-ink-muted">אין נתוני חשבוניות לתקופה</div>}
+                </ChartViewport>
+              </section>
 
-      {/* suppliers with open balance + tasks by role */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card card-pad">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="section-title">ספקים עם יתרה פתוחה</h2>
-            <Link to="/suppliers?balance=open" className="btn-ghost min-h-11 text-xs">לכל הספקים <ChevronLeft size={13} /></Link>
-          </div>
-          {data.topBalances.length ? (
-            <ul className="divide-y divide-line-soft">
-              {data.topBalances.map((b) => (
-                <li key={b.id}>
-                  <Link to={`/suppliers/${b.id}`} className="flex min-h-11 items-center justify-between py-2 text-sm -mx-2 px-2 rounded-lg hover:bg-surface-sunken active:bg-action-wash/70 transition-colors">
-                    <span className="text-ink-mid">{b.name}</span>
-                    <span className="font-semibold num text-await-fg">{fmtMoneyExact(b.balance)}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : <div className="text-sm text-ink-muted py-6 text-center">אין יתרות פתוחות</div>}
-        </div>
+              <section className="border-t border-line-soft p-4 sm:p-5 lg:col-span-5 lg:border-t-0" aria-labelledby="category-trend-title">
+                <h3 id="category-trend-title" className="text-sm font-semibold text-ink-body">תמהיל הרכש החודש</h3>
+                <p className="text-xs text-ink-muted">ארבע הקטגוריות הגדולות וכל היתר</p>
+                {categoryTotal > 0 ? (
+                  <div className="mt-2 flex min-h-44 items-center gap-3">
+                    <ChartViewport className="relative h-40 w-40 shrink-0" label={categoriesAria}>
+                      {(animation) => (
+                        <>
+                          <ResponsiveContainer>
+                            <PieChart>
+                              <Pie data={data.categories} dataKey="total" nameKey="name" innerRadius={48} outerRadius={70}
+                                paddingAngle={2} stroke="none" isAnimationActive={animation.active} animationDuration={550}
+                                animationEasing="ease-out" onAnimationEnd={animation.finish}>
+                                {data.categories.map((category, index) => (
+                                  <Cell key={category.name} fill={category.name === 'אחר' ? t.bars[4] : t.bars[index % 4]} />
+                                ))}
+                              </Pie>
+                            </PieChart>
+                          </ResponsiveContainer>
+                          <div className="pointer-events-none absolute inset-0 grid place-content-center text-center" aria-hidden="true">
+                            <span className="text-xs text-ink-muted">סה״כ</span>
+                            <span className="num text-sm font-semibold text-ink">{moneyShort(categoryTotal)}</span>
+                          </div>
+                        </>
+                      )}
+                    </ChartViewport>
+                    <ul className="min-w-0 flex-1 space-y-1.5 text-xs">
+                      {data.categories.map((category, index) => (
+                        <li key={category.name} className="flex items-center gap-2">
+                          <span className="size-2 shrink-0 rounded-full" aria-hidden="true"
+                            style={{ backgroundColor: category.name === 'אחר' ? t.bars[4] : t.bars[index % 4] }} />
+                          <span className="min-w-0 flex-1 truncate text-ink-mid">{category.name}</span>
+                          <span className="shrink-0 text-ink-muted" title={fmtMoneyExact(category.total)}>
+                            <span className="num">{moneyShort(category.total)}</span> · <span className="num">{Math.round((category.total / categoryTotal) * 100)}%</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : <div className="flex h-44 items-center justify-center text-center text-sm text-ink-muted">{categoryEmptyMessage}</div>}
+              </section>
 
-        <div className="card card-pad">
-          <h2 className="section-title mb-2">משימות לפי תפקיד</h2>
-          <ul className="space-y-1 text-sm">
-            <TaskLine label="הזמנות ממתינות לקבלת סחורה (ניר)" count={data.queue.receiving} to="/orders?status=open" />
-            <TaskLine label="חשבוניות לבדיקה (מזכירות)" count={data.queue.invoicesToReview} to="/invoices?review=received" />
-            <TaskLine label="טיוטות דרישת תשלום (מזכירות)" count={data.queue.prDrafts} to="/payment-requests" />
-            <TaskLine label="דרישות לאישור הנהלה" count={data.queue.prPendingApproval} to="/payment-requests?status=pending_approval" />
-            <TaskLine label="חריגים בחומרה גבוהה (הנהלה)" count={data.queue.highExceptions} to="/exceptions?status=open&severity=high" />
-            <TaskLine label="חשבוניות שטרם הועברו לרו״ח" count={data.queue.notSentToAccountant} to="/invoices?export=not_sent" />
-          </ul>
-        </div>
-      </div>
+              <section className="border-t border-line-soft p-4 sm:p-5 lg:col-span-12" aria-labelledby="weekly-trend-title">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 id="weekly-trend-title" className="text-sm font-semibold text-ink-body">רכש מול תשלומים</h3>
+                    <p className="text-xs text-ink-muted">שמונה השבועות האחרונים</p>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-ink-muted" aria-hidden="true">
+                    <span className="inline-flex items-center gap-1.5"><span className="w-6 border-t-2" style={{ borderColor: t.bars[0] }} />רכש</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="w-6 border-t-2 border-dashed" style={{ borderColor: t.bars[2] }} />תשלומים</span>
+                  </div>
+                </div>
+                <ChartViewport className="mt-2 h-44 sm:h-48" label={weeklyAria}>
+                  {(animation) => hasWeeklyComparison ? (
+                    <ResponsiveContainer>
+                      <LineChart data={weeklyComparison} margin={{ top: 8, left: 8, right: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={t.grid} />
+                        <XAxis dataKey="week" tick={{ fontSize: 12, fill: t.tick }} axisLine={false} tickLine={false} />
+                        <YAxis hide />
+                        <Tooltip cursor={false} formatter={(value) => value == null ? '—' : fmtMoneyExact(Number(value))}
+                          isAnimationActive={animation.active} />
+                        <Line type="linear" dataKey="purchases" name="רכש" stroke={t.bars[0]} strokeWidth={2}
+                          dot={{ r: 2.5, strokeWidth: 0 }} connectNulls={false} isAnimationActive={animation.active} animationDuration={550}
+                          animationEasing="ease-out" onAnimationEnd={animation.finish} />
+                        <Line type="linear" dataKey="payments" name="תשלומים" stroke={t.bars[2]} strokeWidth={2}
+                          strokeDasharray="6 4" dot={{ r: 2.5, strokeWidth: 0 }} connectNulls={false} isAnimationActive={animation.active}
+                          animationDuration={550} animationEasing="ease-out" onAnimationEnd={animation.finish} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : <div className="flex h-full items-center justify-center text-sm text-ink-muted">אין רכש או תשלומים בשמונת השבועות האחרונים</div>}
+                </ChartViewport>
+              </section>
+            </div>
+          </section>
 
-      {/* trends — moved to the bottom */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card card-pad">
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="section-title" title="סכום החשבוניות שהתקבלו בכל חודש">הוצאות רכש לפי חודש</h2>
-            {data.momChange != null && (
-              // trend text in the darker -fg pair for contrast (was rose-500/emerald-500, too light)
-              <span className={`text-xs font-medium ${data.momChange > 0 ? 'text-alert-fg' : 'text-done-fg'}`} dir="ltr">
-                {data.momChange > 0 ? '+' : ''}{data.momChange.toFixed(0)}% מול חודש קודם
-              </span>
-            )}
-          </div>
-          {data.monthly.length ? (
-            <ChartViewport className="h-56"
-              label={`הוצאות רכש לפי חודש: ${data.monthly.map((m) => `${m.month} ${money(m.total)}`).join(', ')}`}>
-              {(animation) => (
-                <ResponsiveContainer>
-                  <BarChart data={data.monthly} margin={{ top: 20, left: 8, right: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={t.grid} />
-                    <XAxis dataKey="month" tick={{ fontSize: 12, fill: t.tick }} axisLine={false} tickLine={false} />
-                    <YAxis hide />
-                    <Tooltip formatter={(v) => money(Number(v))} isAnimationActive={animation.active} />
-                    <Bar dataKey="total" name="סה״כ" fill={t.bar} radius={[4, 4, 0, 0]} maxBarSize={56}
-                      isAnimationActive={animation.active} animationDuration={550} animationEasing="ease-out" onAnimationEnd={animation.finish}>
-                      <LabelList dataKey="total" position="top" formatter={(v: number) => money(v)} style={{ fontSize: 12, fill: t.label }} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </ChartViewport>
-          ) : <div className="text-sm text-ink-muted py-6 text-center">אין נתוני חשבוניות לתקופה</div>}
-        </div>
+          <section className="card overflow-hidden">
+            <div className="px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
+              <h2 className="section-title">תמונת מצב תפעולית</h2>
+              <p className="mt-0.5 text-xs text-ink-muted">הפירוט זמין לפי צורך; הפעולות הדחופות נשארות למעלה.</p>
+            </div>
+            <div className="border-t border-line-soft">
+              <OperationsDisclosure title="חריגים פתוחים" count={data.exceptionCount}
+                summary={data.queue.highExceptions ? `${data.queue.highExceptions} בחומרה גבוהה` : undefined}
+                empty="אין חריגים פתוחים כרגע">
+                <div className="flex justify-end">
+                  <Link to="/exceptions?status=open" className="btn-ghost min-h-11 text-xs">לכל החריגים <ChevronLeft size={13} /></Link>
+                </div>
+                <ul className="divide-y divide-line-soft">
+                  {data.exceptions.map((exception) => (
+                    <li key={exception.id}>
+                      <Link to={`/exceptions?id=${exception.id}`} className="block min-h-11 rounded-lg px-2 py-2 text-sm hover:bg-surface-sunken active:bg-action-wash/70">
+                        <div className="flex items-center gap-2">
+                          <StatusBadge meta={SEVERITY[exception.severity]} />
+                          <span className="text-xs text-ink-muted">{EXCEPTION_TYPE[exception.type]}</span>
+                        </div>
+                        <div className="mt-0.5 truncate text-ink-mid">{exception.title}</div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                {(data.meta.suspectedDup > 0 || data.meta.unmatchedBank > 0) && (
+                  <div className="mt-3 flex flex-wrap gap-x-4 border-t border-line-soft pt-2 text-xs">
+                    {data.meta.suspectedDup > 0 && (
+                      <Link to="/exceptions?type=duplicate_invoice,duplicate_payment" className="inline-flex min-h-11 items-center text-ink-muted hover:text-ink-mid active:text-ink">
+                        חשד לכפילות: <span className="num font-medium">{data.meta.suspectedDup}</span>
+                      </Link>
+                    )}
+                    {data.meta.unmatchedBank > 0 && (
+                      <Link to="/bank?status=unmatched" className="inline-flex min-h-11 items-center text-ink-muted hover:text-ink-mid active:text-ink">
+                        תנועות בנק לא מותאמות: <span className="num font-medium">{data.meta.unmatchedBank}</span>
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </OperationsDisclosure>
 
-        <div className="card card-pad">
-          <h2 className="section-title mb-1" title="שווי ההזמנות שנוצרו בכל שבוע (במחירי ההזמנה)">רכש לפי שבוע (8 שבועות אחרונים)</h2>
-          {data.weekly.some((point) => point.count > 0) ? (
-            <ChartViewport className="h-56"
-              label={`רכש לפי שבוע: ${data.weekly.map((w) => `${w.week} ${money(w.total)}`).join(', ')}`}>
-              {(animation) => (
-                <ResponsiveContainer>
-                  <BarChart data={data.weekly} margin={{ top: 20, left: 8, right: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={t.grid} />
-                    <XAxis dataKey="week" tick={{ fontSize: 12, fill: t.tick }} axisLine={false} tickLine={false} />
-                    <YAxis hide />
-                    <Tooltip formatter={(v) => money(Number(v))} isAnimationActive={animation.active} />
-                    <Bar dataKey="total" name="סה״כ" fill={t.bar} radius={[4, 4, 0, 0]} maxBarSize={40}
-                      isAnimationActive={animation.active} animationDuration={550} animationEasing="ease-out" onAnimationEnd={animation.finish}>
-                      <LabelList dataKey="total" position="top" formatter={(v: number) => moneyShort(v)} style={{ fontSize: 12, fill: t.label }} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </ChartViewport>
-          ) : <div className="text-sm text-ink-muted py-6 text-center">אין רכש בשמונת השבועות האחרונים</div>}
-        </div>
+              <OperationsDisclosure title="מוצרים שהתייקרו לאחרונה" count={data.priceIncreaseCount}
+                summary={data.priceIncreases[0] ? `עלייה מרבית ${data.priceIncreases[0].pct.toFixed(1)}%` : undefined}
+                empty="אין התייקרויות אחרונות">
+                <div className="flex justify-end">
+                  <Link to="/prices?increases=1" className="btn-ghost min-h-11 text-xs">לכל המחירונים <ChevronLeft size={13} /></Link>
+                </div>
+                <ul className="divide-y divide-line-soft">
+                  {data.priceIncreases.map((price, index) => (
+                    <li key={index}>
+                      <Link to={`/prices?product=${price.product.id}`} className="flex min-h-11 items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm hover:bg-surface-sunken active:bg-action-wash/70">
+                        <span className="min-w-0 truncate">
+                          <span className="font-medium text-ink-body">{price.product.name}</span>
+                          <span className="ms-2 text-xs text-ink-muted">{price.supplier.name}</span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-3">
+                          <span className="text-xs text-ink-muted">מ־<span className="num">₪{price.previous_price!.toFixed(2)}</span> ל־<span className="num">₪{price.current_price.toFixed(2)}</span></span>
+                          <span className="inline-flex items-center gap-1 font-medium text-alert-fg num" dir="ltr">
+                            <TrendingUp size={13} className="text-trend-up-fg" />+{price.pct.toFixed(1)}%
+                          </span>
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </OperationsDisclosure>
 
-        <div className="card card-pad lg:col-span-2">
-          <h2 className="section-title mb-1" title="פילוח הרכש של החודש לפי קטגוריית מוצר">הוצאות לפי קטגוריה (החודש)</h2>
-          {data.categories.length ? (
-            <ChartViewport
-              className=""
-              style={{ height: Math.min(240, Math.max(96, data.categories.length * 34 + 16)) }}
-              label={`הוצאות לפי קטגוריה: ${data.categories.slice(0, 12).map((c) => `${c.name} ${money(c.total)}`).join(', ')}`}
-            >
-              {(animation) => (
-                <ResponsiveContainer>
-                  <BarChart data={data.categories} layout="vertical" margin={{ left: 72, right: 48 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={t.grid} />
-                    <XAxis type="number" hide />
-                    <YAxis type="category" dataKey="name" orientation="right" width={90} tick={{ fontSize: 12, fill: t.tickStrong }} axisLine={false} tickLine={false} />
-                    <Tooltip formatter={(v) => money(Number(v))} isAnimationActive={animation.active} />
-                    <Bar dataKey="total" name="סה״כ" fill={t.bar} radius={[4, 0, 0, 4]} maxBarSize={22}
-                      isAnimationActive={animation.active} animationDuration={550} animationEasing="ease-out" onAnimationEnd={animation.finish}>
-                      <LabelList dataKey="total" position="left" formatter={(v: number) => money(v)} style={{ fontSize: 12, fill: t.label }} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </ChartViewport>
-          ) : <div className="text-sm text-ink-muted py-6 text-center">אין רכש החודש</div>}
+              <OperationsDisclosure title="ספקים עם יתרה פתוחה" count={data.openSupplierCount}
+                summary={data.topBalances[0] ? `${data.topBalances[0].name} · ${fmtMoneyExact(data.topBalances[0].balance)}` : undefined}
+                empty="אין יתרות פתוחות">
+                <div className="flex justify-end">
+                  <Link to="/suppliers?balance=open" className="btn-ghost min-h-11 text-xs">לכל הספקים <ChevronLeft size={13} /></Link>
+                </div>
+                <ul className="divide-y divide-line-soft">
+                  {data.topBalances.map((balance) => (
+                    <li key={balance.id}>
+                      <Link to={`/suppliers/${balance.id}`} className="flex min-h-11 items-center justify-between rounded-lg px-2 py-2 text-sm hover:bg-surface-sunken active:bg-action-wash/70">
+                        <span className="text-ink-mid">{balance.name}</span>
+                        <span className="font-semibold text-await-fg num">{fmtMoneyExact(balance.balance)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </OperationsDisclosure>
+
+              <OperationsDisclosure title="משימות לפי תפקיד" count={taskTotal}
+                summary={`${Object.values(data.queue).filter((count) => count > 0).length} תורים פעילים`}
+                empty="אין משימות פתוחות לפי תפקיד">
+                <ul className="space-y-1 text-sm">
+                  <TaskLine label="הזמנות ממתינות לקבלת סחורה (ניר)" count={data.queue.receiving} to="/orders?status=open" />
+                  <TaskLine label="חשבוניות לבדיקה (מזכירות)" count={data.queue.invoicesToReview} to="/invoices?review=received" />
+                  <TaskLine label="טיוטות דרישת תשלום (מזכירות)" count={data.queue.prDrafts} to="/payment-requests" />
+                  <TaskLine label="דרישות לאישור הנהלה" count={data.queue.prPendingApproval} to="/payment-requests?status=pending_approval" />
+                  <TaskLine label="חריגים בחומרה גבוהה (הנהלה)" count={data.queue.highExceptions} to="/exceptions?status=open&severity=high" />
+                  <TaskLine label="חשבוניות שטרם הועברו לרו״ח" count={data.queue.notSentToAccountant} to="/invoices?export=not_sent" />
+                </ul>
+              </OperationsDisclosure>
+            </div>
+          </section>
         </div>
-      </div>
-      </div>)}
+      )}
     </div>
   );
 }

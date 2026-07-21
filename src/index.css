@@ -44,6 +44,10 @@
   --color-shell-heading: oklch(72% 0.016 85);
 
   --color-chart-1: var(--color-action);
+  --color-chart-2: oklch(49% 0.09 245);
+  --color-chart-3: oklch(52% 0.095 275);
+  --color-chart-4: oklch(53% 0.09 305);
+  --color-chart-5: oklch(52% 0.085 335);
   --color-chart-grid: oklch(89% 0.014 80);
   --color-chart-tick: oklch(50% 0.021 205);
   --color-chart-label: oklch(44% 0.022 205);
@@ -175,7 +179,8 @@ body {
   /* The control centre gets one extra breath of separation; the selector is deliberately
      scoped so this dashboard round does not deepen operational cards elsewhere. */
   .dashboard-depth .card { box-shadow: var(--shadow-dashboard); }
-  .dashboard-depth :is(a, button):focus-visible { @apply outline-none ring-2 ring-focus ring-offset-2 ring-offset-canvas; }
+  .dashboard-depth summary { @apply cursor-pointer; }
+  .dashboard-depth :is(a, button, summary):focus-visible { @apply outline-none ring-2 ring-focus ring-offset-2 ring-offset-canvas; }
 }
 
 /* number cells keep latin digits aligned nicely inside RTL layout */
@@ -211,6 +216,7 @@ body {
   .btn-primary, .btn-secondary, .btn-danger, .btn-ghost, .card-link-hover {
     transition-duration: 0.01ms !important;
   }
+  .dashboard-depth summary svg { transition-duration: 0.01ms !important; }
   .btn-primary:active, .btn-secondary:active, .btn-danger:active, .btn-ghost:active,
   .card-link-hover:hover { translate: none !important; }
   .dash-enter > *, .freshness-settle { animation: none; }

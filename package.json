@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "check:alerts": "node scripts/check-alert-rules.ts",
-    "build": "tsc --noEmit && npm run check:alerts && vite build",
+    "check:dashboard": "node scripts/check-dashboard-series.ts",
+    "build": "tsc --noEmit && npm run check:alerts && npm run check:dashboard && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

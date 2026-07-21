@@ -21,7 +21,7 @@ interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; rol
 //
 // Order inside רכש keeps the three order-flow items (new/list/receiving) contiguous and
 // ahead of חשבוניות so the mobile bottom bar (mobileItems, keyed off `mobile` + declaration
-// order) stays exactly {הזמנה חדשה, הזמנות, קבלת סחורה, חשבוניות} for staff roles.
+// order) stays exactly {הזמנה חדשה, הזמנות, קבלת סחורה, חשבוניות, זיכויים} for staff roles.
 const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: '',
@@ -45,7 +45,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     section: 'כספים',
     items: [
       { to: '/invoices', label: 'חשבוניות', icon: FileText, roles: ['owner', 'office', 'kitchen', 'accountant'], mobile: true },
-      { to: '/credits', label: 'זיכויים', icon: RotateCcw, roles: ['owner', 'office', 'kitchen', 'accountant'] },
+      { to: '/credits', label: 'זיכויים', icon: RotateCcw, roles: ['owner', 'office', 'kitchen', 'accountant'], mobile: true },
       { to: '/payment-requests', label: 'דרישות תשלום', icon: Send, roles: ['owner', 'office'] },
       { to: '/payments', label: 'תשלומים', icon: CreditCard, roles: ['owner', 'office', 'accountant'] },
       { to: '/bank', label: 'התאמות בנק', icon: Landmark, roles: ['owner', 'office', 'accountant'] },
@@ -88,9 +88,9 @@ export default function Layout() {
     ? [...roleSections, { section: 'פלטפורמה', items: [{ to: '/admin', label: 'ניהול לקוחות', icon: Building2, roles: [] as Role[] }] }]
     : roleSections;
 
-  // Deliberately from roleSections: the operator console is a desktop task, and the mobile
-  // bar is already capped at 4 — slice(0,4) would silently drop a tenant item to fit it.
-  const mobileItems = roleSections.flatMap((s) => s.items).filter((i) => i.mobile).slice(0, 4);
+  // Deliberately from roleSections: the operator console is a desktop task. The five-item cap
+  // fits the complete staff bar without letting the platform route displace a tenant item.
+  const mobileItems = roleSections.flatMap((s) => s.items).filter((i) => i.mobile).slice(0, 5);
 
   // Group headers only earn their space once there is more than one item to organise. supplier
   // and payer each see a single link, and a "רכש" header over a vendor's own price list reads
