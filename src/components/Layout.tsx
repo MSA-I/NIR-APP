@@ -1,7 +1,8 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, Inbox } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { useInboxCount } from '../lib/useInboxCount';
 import { APP_NAME } from '../lib/branding';
 import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
 import type { Role } from '../lib/types';
@@ -46,6 +47,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     items: [
       { to: '/invoices', label: 'חשבוניות', icon: FileText, roles: ['owner', 'office', 'kitchen', 'accountant'], mobile: true },
       { to: '/credits', label: 'זיכויים', icon: RotateCcw, roles: ['owner', 'office', 'kitchen', 'accountant'], mobile: true },
+      { to: '/inbox', label: 'מסמכים', icon: Inbox, roles: ['owner', 'office', 'kitchen'] },
       { to: '/payment-requests', label: 'דרישות תשלום', icon: Send, roles: ['owner', 'office'] },
       { to: '/payments', label: 'תשלומים', icon: CreditCard, roles: ['owner', 'office', 'accountant'] },
       { to: '/bank', label: 'התאמות בנק', icon: Landmark, roles: ['owner', 'office', 'accountant'] },
@@ -74,6 +76,10 @@ export default function Layout() {
   const role = profile?.role;
   // Section 5: payer/supplier get no search box — their only routes are dead ends for it.
   const canSearch = canGlobalSearch(role);
+  // Documents-inbox pill (0014): counted only for the roles that see the /inbox item; the
+  // pill renders solely for a known count > 0 — null (loading) and 0 both render nothing,
+  // so it never fabricates an all-clear or a workload (CLAUDE.md).
+  const inboxCount = useInboxCount(!!role && (['owner', 'office', 'kitchen'] as Role[]).includes(role));
   // Layout also renders during the initial load, before `org` arrives. Falling back to
   // the product name keeps the header honest — it is never another tenant's name.
   const orgName = org?.name ?? APP_NAME;
@@ -124,6 +130,11 @@ export default function Layout() {
                 <NavLink key={item.to} to={item.to} className={linkCls} onClick={() => setMobileOpen(false)} end={item.to === '/orders'}>
                   <item.icon size={17} />
                   {item.label}
+                  {/* TaskLine's count-pill anatomy at the item's logical end; both the desktop
+                      sidebar and the mobile drawer render this same `sidebar` tree. */}
+                  {item.to === '/inbox' && inboxCount != null && inboxCount > 0 && (
+                    <span className="badge num bg-action-soft text-action-on-soft ms-auto">{inboxCount}</span>
+                  )}
                 </NavLink>
               ))}
             </div>

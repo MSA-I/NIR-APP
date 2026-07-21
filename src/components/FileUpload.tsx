@@ -39,12 +39,20 @@ async function compressImage(file: File): Promise<File> {
   }
 }
 
-/** Uploads a file to the private `documents` bucket and registers it on an entity. */
-export async function uploadDocument(orgId: string, entityType: string, entityId: string, file: File) {
+/**
+ * Uploads a file to the private `documents` bucket and registers it on an entity.
+ * A null entityId is an inbox capture (migration 0014): the file lands under
+ * {org_id}/inbox/ and the row carries entity_type='inbox' with no entity until it is
+ * re-filed from /inbox. The stored object never moves on re-filing — the bucket policy
+ * reads only the leading org segment.
+ */
+export async function uploadDocument(orgId: string, entityType: string, entityId: string | null, file: File) {
   const upload = await compressImage(file);
   const safeName = upload.name.replace(/[^\w.\-]+/g, '_');
   // org_id must lead the path -- the bucket's RLS policy reads it to enforce tenant isolation.
-  const path = `${orgId}/${entityType}/${entityId}/${Date.now()}_${safeName}`;
+  const path = entityId
+    ? `${orgId}/${entityType}/${entityId}/${Date.now()}_${safeName}`
+    : `${orgId}/inbox/${Date.now()}_${safeName}`;
   const up = await supabase.storage.from('documents').upload(path, upload, { contentType: upload.type });
   if (up.error) throw new Error(up.error.message);
   const { data: user } = await supabase.auth.getUser();
