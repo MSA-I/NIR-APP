@@ -109,10 +109,11 @@ export default function Layout() {
 
   const sidebar = (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-5 border-b border-shell-ink/10">
+      <NavLink to="/dashboard" aria-label={`${orgName} — חזרה לדשבורד`}
+        className="block px-4 py-5 border-b border-shell-ink/10 transition-colors hover:bg-shell-ink/5 active:bg-shell-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus">
         <div className="text-lg font-bold text-shell-ink truncate" title={orgName}>{orgName}</div>
         <div className="text-xs text-shell-ink-dim">ניהול רכש ותשלומים</div>
-      </div>
+      </NavLink>
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
         {sections.map((s, i) => (
           <div key={i}>
@@ -129,7 +130,9 @@ export default function Layout() {
         ))}
       </nav>
       <div className="px-4 py-3 border-t border-shell-ink/10">
-        <div className="text-sm text-shell-ink font-medium">{profile?.full_name}</div>
+        <NavLink to="/dashboard" className="inline-block rounded text-sm text-shell-ink font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+          {profile?.full_name}
+        </NavLink>
         <div className="text-xs text-shell-ink-dim mb-2">{role ? roleLabels[role] : ''}</div>
         <button className="flex items-center gap-1.5 text-xs text-shell-ink-dim hover:text-shell-ink" onClick={() => void handleSignOut()}>
           <LogOut size={13} /> התנתקות
@@ -152,7 +155,9 @@ export default function Layout() {
 
       {/* Mobile top bar */}
       <header className="lg:hidden sticky top-0 z-40 bg-shell text-shell-ink border-b border-line flex items-center justify-between px-4 py-3 no-print">
-        <div className="font-bold truncate me-3" title={orgName}>{orgName}</div>
+        <NavLink to="/dashboard" aria-label={`${orgName} — חזרה לדשבורד`}
+          className="flex min-h-11 flex-1 items-center rounded font-bold truncate me-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          title={orgName}>{orgName}</NavLink>
         <div className="flex items-center gap-1">
           {canSearch && (
             <button className="flex items-center justify-center min-w-11 min-h-11" onClick={() => setSearchOpen(true)} aria-label="חיפוש"><Search size={21} /></button>
