@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Trash2, AlertTriangle, Split, Plus, Minus } from 'lucide-react';
+import { Search, Trash2, AlertTriangle, Split, Plus, Minus, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -56,13 +56,27 @@ export default function NewOrder() {
     return map;
   }, [data, supplierById]);
 
+  // Carted products stay visible in the picker (in a "carted" state with an inline stepper) —
+  // hiding them gave zero feedback on tap and forced a scroll down to the cart to fix a quantity.
   const filteredProducts = (data?.products ?? []).filter((p) =>
     (!cat || p.category_id === cat) &&
-    (!q || p.name.toLowerCase().includes(q.toLowerCase())) &&
-    !cart.some((c) => c.product.id === p.id));
+    (!q || p.name.toLowerCase().includes(q.toLowerCase())));
+
+  const cartByProduct = useMemo(() => new Map(cart.map((c) => [c.product.id, c])), [cart]);
 
   function addToCart(p: Product) {
     setCart((c) => [...c, { product: p, qty: 1, chosenSupplierId: null }]);
+  }
+
+  // Shared qty logic for picker rows and cart rows — one source of truth, no duplication.
+  function incQty(productId: string) {
+    setCart((c) => c.map((x) => (x.product.id === productId ? { ...x, qty: x.qty + 1 } : x)));
+  }
+
+  // Minus at qty 1 removes the item entirely — same behavior in the picker and in the cart.
+  function decQty(productId: string) {
+    setCart((c) => c.flatMap((x) =>
+      x.product.id !== productId ? [x] : x.qty > 1 ? [{ ...x, qty: x.qty - 1 }] : []));
   }
 
   function effective(item: CartItem): { sp: SupplierProduct | null; recommended: SupplierProduct | null } {
@@ -160,16 +174,33 @@ export default function NewOrder() {
           <div className="max-h-[26rem] overflow-y-auto divide-y divide-line-soft">
             {filteredProducts.map((p) => {
               const offers = offersByProduct.get(p.id) ?? [];
+              const carted = cartByProduct.get(p.id);
+              // The stepper buttons are siblings of the row-body button (nested buttons are
+              // invalid HTML); body click adds / increments, the stepper fine-tunes in place.
               return (
-                <button key={p.id} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-action-wash/50 text-start" onClick={() => addToCart(p)}>
-                  <span>
-                    <span className="text-sm font-medium text-ink-body">{p.name}</span>
-                    <span className="text-xs text-ink-muted ms-2">{p.unit}</span>
-                  </span>
-                  <span className="text-xs text-ink-muted num">
-                    {offers.length ? `₪${offers[0].current_price.toFixed(2)}` : 'אין ספק'}
-                  </span>
-                </button>
+                <div key={p.id} className={`flex items-center ${carted ? 'bg-action-wash/60' : ''}`}>
+                  <button
+                    className={`flex-1 min-w-0 flex items-center justify-between gap-3 px-4 py-2.5 text-start ${carted ? 'hover:bg-action-wash' : 'hover:bg-action-wash/50'}`}
+                    onClick={() => (carted ? incQty(p.id) : addToCart(p))}>
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      {carted && <Check size={14} className="text-done-fg shrink-0" aria-hidden="true" />}
+                      <span className="text-sm font-medium text-ink-body truncate">{p.name}</span>
+                      <span className="text-xs text-ink-muted shrink-0">{p.unit}</span>
+                    </span>
+                    <span className="text-xs text-ink-muted num shrink-0">
+                      {offers.length ? `₪${offers[0].current_price.toFixed(2)}` : 'אין ספק'}
+                    </span>
+                  </button>
+                  {carted && (
+                    <div className="flex items-center gap-0.5 pe-2 shrink-0">
+                      <button className="btn-ghost p-1.5! min-w-10 min-h-10" aria-label="הפחת כמות"
+                        onClick={(e) => { e.stopPropagation(); decQty(p.id); }}><Minus size={14} /></button>
+                      <span className="num text-sm font-medium min-w-6">{carted.qty}</span>
+                      <button className="btn-ghost p-1.5! min-w-10 min-h-10" aria-label="הוסף כמות"
+                        onClick={(e) => { e.stopPropagation(); incQty(p.id); }}><Plus size={14} /></button>
+                    </div>
+                  )}
+                </div>
               );
             })}
             {!filteredProducts.length && <div className="px-4 py-8 text-center text-sm text-ink-muted">לא נמצאו מוצרים</div>}
@@ -197,10 +228,10 @@ export default function NewOrder() {
                         <div className="text-xs text-ink-muted">{item.product.unit}</div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button className="btn-secondary p-1.5! min-w-10 min-h-10" onClick={() => setCart((c) => c.map((x, i) => i === idx ? { ...x, qty: Math.max(1, x.qty - 1) } : x))} aria-label="הפחתה"><Minus size={14} /></button>
+                        <button className="btn-secondary p-1.5! min-w-10 min-h-10" onClick={() => decQty(item.product.id)} aria-label="הפחת כמות"><Minus size={14} /></button>
                         <input type="number" min={0.1} step="any" className="input w-20! num text-center" value={item.qty}
                           onChange={(e) => setCart((c) => c.map((x, i) => i === idx ? { ...x, qty: Number(e.target.value) || 1 } : x))} />
-                        <button className="btn-secondary p-1.5! min-w-10 min-h-10" onClick={() => setCart((c) => c.map((x, i) => i === idx ? { ...x, qty: x.qty + 1 } : x))} aria-label="הוספה"><Plus size={14} /></button>
+                        <button className="btn-secondary p-1.5! min-w-10 min-h-10" onClick={() => incQty(item.product.id)} aria-label="הוסף כמות"><Plus size={14} /></button>
                       </div>
                       <select className="input sm:w-56!" value={item.chosenSupplierId ?? ''}
                         onChange={(e) => setCart((c) => c.map((x, i) => i === idx ? { ...x, chosenSupplierId: e.target.value || null } : x))}>
@@ -251,6 +282,7 @@ export default function NewOrder() {
                   );
                 })}
               </div>
+              <SupplierComparison cart={cart} offersByProduct={offersByProduct} supplierById={supplierById} effective={effective} />
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
                   <label className="label">הערות</label>
@@ -270,6 +302,50 @@ export default function NewOrder() {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* Explicit "who is cheapest" summary (CLAUDE.md §12): before saving, the manager sees per item
+   whether the chosen supplier is the cheapest offer and what switching would save — a decision
+   surface, not decoration. Items without any offer are skipped (the "אין ספק" note covers them). */
+function SupplierComparison({ cart, offersByProduct, supplierById, effective }: {
+  cart: CartItem[];
+  offersByProduct: Map<string, SupplierProduct[]>;
+  supplierById: Map<string, Supplier>;
+  effective: (item: CartItem) => { sp: SupplierProduct | null; recommended: SupplierProduct | null };
+}) {
+  const rows: { item: CartItem; sp: SupplierProduct; cheapest: SupplierProduct; delta: number }[] = [];
+  for (const item of cart) {
+    const { sp } = effective(item);
+    const cheapest = (offersByProduct.get(item.product.id) ?? [])[0]; // offers sorted ascending by price
+    if (!sp || !cheapest) continue;
+    rows.push({ item, sp, cheapest, delta: (sp.current_price - cheapest.current_price) * item.qty });
+  }
+  if (!rows.length) return null;
+  const saving = rows.reduce((s, r) => s + r.delta, 0);
+  if (saving <= 0) return <Note tone="done">כל הפריטים הוזמנו מהספק הזול ביותר</Note>;
+  return (
+    <div className="border border-line-soft rounded-lg divide-y divide-line-soft">
+      {rows.map(({ item, sp, cheapest, delta }) => (
+        <div key={item.product.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-3 py-1.5 text-sm">
+          <span className="min-w-0">
+            <span className="font-medium text-ink-body">{item.product.name}</span>
+            <span className="text-xs text-ink-muted ms-2">
+              {supplierById.get(sp.supplier_id)?.name} · <span className="num">{fmtMoneyExact(sp.current_price)}</span>
+            </span>
+          </span>
+          {delta > 0 && (
+            <span className="text-xs text-await-fg">
+              הזול ביותר: {supplierById.get(cheapest.supplier_id)?.name} · <span className="num">{fmtMoneyExact(cheapest.current_price)}</span> · הפרש <span className="num">{fmtMoneyExact(delta)}</span>
+            </span>
+          )}
+        </div>
+      ))}
+      <div className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
+        <span className="text-ink-soft">חיסכון אפשרי אם עוברים לזול ביותר:</span>
+        <b className="num text-await-fg">{fmtMoneyExact(saving)}</b>
       </div>
     </div>
   );
