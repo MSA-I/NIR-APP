@@ -3,11 +3,10 @@
 // Section 6 — the tone is a *claim*, not a hue:
 //   done  = הושלם / תקין        await = ממתין לטיפול
 //   alert = חריגה / דחוף        info  = מידע כללי
-//   idle  = ניטרלי (היעדר טענה)  violet = ללא בית סמנטי עדיין — הכרעה פ-2
-// `violet` survives only for the 3 statuses whose colour is an open business
-// decision (PO.sent, receipt.returned, payment.sent_for_execution). It is the one
-// non-semantic tone left; when פ-2 is decided it is removed together with its class.
-export type Tone = 'done' | 'await' | 'alert' | 'info' | 'idle' | 'violet';
+//   idle  = ניטרלי (היעדר טענה)
+// The transitional `violet` is gone: the 3 statuses that held it (PO.sent, receipt.returned,
+// payment.sent_for_execution) were resolved to info/alert/await (OPEN-DECISIONS #33).
+export type Tone = 'done' | 'await' | 'alert' | 'info' | 'idle';
 export interface StatusMeta { label: string; tone: Tone }
 
 const m = (label: string, tone: Tone): StatusMeta => ({ label, tone });
@@ -34,9 +33,9 @@ export const SUPPLIER_STATUS: Record<string, StatusMeta> = {
 
 export const PO_STATUS: Record<string, StatusMeta> = {
   draft: m('טיוטה', 'idle'),
-  ready: m('מוכנה', 'info'),             // פ (await vs info) — kept at current colour
-  sent: m('נשלחה', 'violet'),            // פ-2 — violet kept until decided
-  confirmed: m('אושרה', 'info'),         // פ (done vs await) — kept at current colour
+  ready: m('מוכנה', 'await'),            // ממתינה לשליחה — יש פעולה מצדנו (OPEN-DECISIONS #33)
+  sent: m('נשלחה', 'info'),              // הכדור אצל הספק — מידע
+  confirmed: m('אושרה', 'done'),         // הספק אישר — הצעד הושלם
   partial: m('התקבלה חלקית', 'await'),
   received: m('התקבלה', 'done'),
   cancelled: m('בוטלה', 'idle'),
@@ -53,12 +52,12 @@ export const RECEIPT_LINE_STATUS: Record<string, StatusMeta> = {
   partial: m('התקבל חלקית', 'await'),
   missing: m('חסר', 'alert'),
   damaged: m('פגום', 'alert'),
-  returned: m('הוחזר', 'violet'),        // פ-2 — violet kept until decided
+  returned: m('הוחזר', 'alert'),         // חריגה שדורשת זיכוי
 };
 
 export const INVOICE_REVIEW_STATUS: Record<string, StatusMeta> = {
   received: m('התקבלה', 'await'),        // §5: an untouched received invoice IS "waiting" — Nir's dashboard item
-  in_review: m('בבדיקה', 'info'),        // פ-4 — kept at current colour
+  in_review: m('בבדיקה', 'await'),       // ממתינה להשלמת בדיקה
   pending_approval: m('ממתינה לאישור', 'await'),
   approved: m('מאושרת', 'done'),
   investigation: m('דורשת בירור', 'alert'),
@@ -95,9 +94,9 @@ export const CREDIT_STATUS: Record<string, StatusMeta> = {
 export const PAYMENT_REQUEST_STATUS: Record<string, StatusMeta> = {
   draft: m('טיוטה', 'idle'),
   pending_approval: m('ממתינה לאישור', 'await'),
-  approved: m('מאושרת', 'done'),                  // פ-7 — kept at current colour (money has not moved yet)
-  sent_for_execution: m('הועברה לביצוע', 'violet'), // פ-2 — violet kept until decided
-  executed: m('הועברה בוצעה', 'info'),            // פ (done vs await) — kept at current colour
+  approved: m('מאושרת', 'await'),                 // אושרה אך הכסף טרם הועבר — ממתין לביצוע
+  sent_for_execution: m('הועברה לביצוע', 'await'), // ממתין להעברה בפועל
+  executed: m('הועברה בוצעה', 'done'),            // ההעברה בוצעה
   matched: m('הותאמה לבנק', 'done'),
   investigation: m('דורשת בירור', 'alert'),
   suspected_duplicate: m('חשד לכפילות', 'alert'),

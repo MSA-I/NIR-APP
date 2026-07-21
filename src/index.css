@@ -94,9 +94,6 @@ body {
   .badge-alert { @apply badge bg-alert-soft text-alert-on-soft; }
   .badge-info  { @apply badge bg-info-soft  text-info-on-soft; }
   .badge-idle  { @apply badge bg-idle-soft  text-idle-on-soft; }
-  /* `violet` has no semantic home yet: PO.sent, receipt.returned and
-     payment.sent_for_execution await decision פ-2. Kept raw until then. */
-  .badge-violet { @apply badge bg-violet-100 text-violet-800; }
 
   /* Shared alert box (§4.3). ErrorNote and the ad-hoc notice boxes point here. */
   .note-done  { @apply note bg-done-wash  border-done-line  text-done-on-soft; }

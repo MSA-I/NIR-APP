@@ -216,11 +216,10 @@ export function ReceiveOrder() {
     alert: 'bg-alert-solid text-white border-alert-solid',
     info: 'bg-info-solid text-white border-info-solid',
     idle: 'bg-idle-solid text-white border-idle-solid',
-    violet: 'bg-violet-600 text-white border-violet-600',
   };
   const CARD: Record<Tone, string> = {
     done: 'border-done-line', await: 'border-await-line', alert: 'border-alert-line',
-    info: 'border-info-line', idle: 'border-idle-line', violet: 'border-violet-300',
+    info: 'border-info-line', idle: 'border-idle-line',
   };
 
   return (
