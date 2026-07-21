@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Camera, FileText, Inbox, Loader2, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { useQuickCapture } from '../components/QuickCapture';
+import { INBOX_CHANGED_EVENT, useQuickCapture } from '../components/QuickCapture';
 import { ConfirmDialog, EmptyState, ErrorNote, Modal, Skeleton, useToast } from '../components/ui';
 import { ok, toHebrewError } from '../lib/errors';
 import { logAction } from '../lib/audit';
@@ -36,7 +36,16 @@ function RefileModal({ doc, target, onClose, onDone }: {
     return () => clearTimeout(t);
   }, [q]);
 
+  // Out-of-order guard (adversarial review round): useQuery carries no request identity, so a
+  // slow response for an OLD search term could land after — and overwrite — the results of the
+  // current one. Each invocation takes a token; a resolution whose token is no longer current
+  // parks on a never-settling promise, so useQuery never sees its stale rows (the newer
+  // invocation is the one that resolves and paints). Local by design — useQuery stays untouched.
+  const reqSeq = useRef(0);
+
   const { data: options, loading } = useQuery<{ id: string; title: string; sub: string }[]>(async () => {
+    const token = ++reqSeq.current;
+    let result: { id: string; title: string; sub: string }[];
     if (target === 'invoice') {
       let query = supabase.from('invoices')
         .select('id, invoice_number, invoice_date, supplier:suppliers(name)')
@@ -45,27 +54,30 @@ function RefileModal({ doc, target, onClose, onDone }: {
         .limit(20);
       if (dq) query = query.ilike('invoice_number', `%${dq}%`);
       const rows = unwrap(await query) as InvoicePick[];
-      return rows.map((r) => ({
+      result = rows.map((r) => ({
         id: r.id,
         title: `חשבונית ${r.invoice_number}${r.supplier ? ` — ${r.supplier.name}` : ''}`,
         sub: fmtDate(r.invoice_date),
       }));
+    } else {
+      let query = supabase.from('goods_receipts')
+        .select('id, number, received_at, order:purchase_orders(supplier:suppliers(name))')
+        .order('received_at', { ascending: false })
+        .limit(20);
+      // goods_receipts.number is an integer, so a numeric query matches it exactly;
+      // free text narrows the fetched page by supplier name instead.
+      const numeric = /^\d+$/.test(dq);
+      if (dq && numeric) query = query.eq('number', Number(dq));
+      let rows = unwrap(await query) as ReceiptPick[];
+      if (dq && !numeric) rows = rows.filter((r) => r.order?.supplier?.name.includes(dq));
+      result = rows.map((r) => ({
+        id: r.id,
+        title: `קבלה #${r.number}${r.order?.supplier ? ` — ${r.order.supplier.name}` : ''}`,
+        sub: fmtDate(r.received_at),
+      }));
     }
-    let query = supabase.from('goods_receipts')
-      .select('id, number, received_at, order:purchase_orders(supplier:suppliers(name))')
-      .order('received_at', { ascending: false })
-      .limit(20);
-    // goods_receipts.number is an integer, so a numeric query matches it exactly;
-    // free text narrows the fetched page by supplier name instead.
-    const numeric = /^\d+$/.test(dq);
-    if (dq && numeric) query = query.eq('number', Number(dq));
-    let rows = unwrap(await query) as ReceiptPick[];
-    if (dq && !numeric) rows = rows.filter((r) => r.order?.supplier?.name.includes(dq));
-    return rows.map((r) => ({
-      id: r.id,
-      title: `קבלה #${r.number}${r.order?.supplier ? ` — ${r.order.supplier.name}` : ''}`,
-      sub: fmtDate(r.received_at),
-    }));
+    if (token !== reqSeq.current) return new Promise<never>(() => {});
+    return result;
   }, [target, dq]);
 
   async function assign(entityId: string) {
@@ -154,6 +166,17 @@ export default function DocumentsInbox() {
   }, []);
 
   const { openCapture, element, busy } = useQuickCapture(refetch);
+
+  // A capture from ANOTHER surface (the global FAB floats over this screen's list too) fires
+  // INBOX_CHANGED_EVENT; without listening, the list would sit stale until a manual reload.
+  // This page's own capture button keeps its direct onUploaded path above — a double refetch
+  // for local captures is harmless (useQuery keeps current data while fetching).
+  useEffect(() => {
+    const onChanged = () => { void refetch(); };
+    window.addEventListener(INBOX_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(INBOX_CHANGED_EVENT, onChanged);
+  }, [refetch]);
+
   const [refile, setRefile] = useState<{ doc: DocumentRow; target: RefileTarget } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DocumentRow | null>(null);
   const [deleting, setDeleting] = useState(false);

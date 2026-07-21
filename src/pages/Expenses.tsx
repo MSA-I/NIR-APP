@@ -30,6 +30,16 @@ const PRESETS: { key: PresetKey; label: string }[] = [
   { key: 'year', label: 'שנה' },
 ];
 
+// A PostgREST .in() inlines every id into the request URL — the yearly preset can put
+// thousands of invoice UUIDs there and blow the URL length limit. Batch the ids, fetch the
+// chunks in parallel and flatten; callers don't depend on row order. 150 ids ≈ 6KB of URL,
+// comfortably under common 8KB gateway limits.
+async function chunkedIn<T>(ids: string[], fetchFn: (chunk: string[]) => Promise<T[]>, size = 150): Promise<T[]> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size));
+  return (await Promise.all(chunks.map(fetchFn))).flat();
+}
+
 // Local calendar ranges (toLocalISO, never toISOString — format.ts:16). "3 חודשים" is a
 // three-calendar-month window ending today; "שנה" is the trailing twelve months.
 function presetRange(key: PresetKey): { from: string; to: string } {
@@ -100,14 +110,16 @@ export default function Expenses() {
     let links: { invoice_id: string; order_id: string }[] = [];
     let items: { qty: number; unit_price: number; product: { category_id: string | null } | null }[] = [];
     if (invoices.length) {
-      links = unwrap(await supabase.from('invoice_order_links')
-        .select('invoice_id, order_id')
-        .in('invoice_id', invoices.map((i) => i.id))) as { invoice_id: string; order_id: string }[];
+      links = await chunkedIn(invoices.map((i) => i.id), async (chunk) =>
+        unwrap(await supabase.from('invoice_order_links')
+          .select('invoice_id, order_id')
+          .in('invoice_id', chunk)) as { invoice_id: string; order_id: string }[]);
       const orderIds = [...new Set(links.map((l) => l.order_id))];
       if (orderIds.length) {
-        items = unwrap(await supabase.from('purchase_order_items')
-          .select('qty, unit_price, product:products(category_id)')
-          .in('order_id', orderIds)) as typeof items;
+        items = await chunkedIn(orderIds, async (chunk) =>
+          unwrap(await supabase.from('purchase_order_items')
+            .select('qty, unit_price, product:products(category_id)')
+            .in('order_id', chunk)) as typeof items);
       }
     }
 

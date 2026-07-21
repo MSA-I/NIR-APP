@@ -88,6 +88,28 @@ export function SuppliersList() {
   const [balanceFilter, setBalanceFilter] = useParamState('balance');
   const rows = useMemo(() => (data ?? []).filter((r) => balanceFilter !== 'open' || (r.open_balance ?? 0) > 0), [data, balanceFilter]);
 
+  // Delete guard (adversarial review round): a soft-deleted supplier vanishes from the lists
+  // while money is still owed to them or goods are still on their way — the open balance and
+  // the in-flight orders would go dark. Both checks run FRESH (not off the possibly-stale list
+  // merge): the supplier_balances view for open money, purchase_orders outside the terminal
+  // statuses (received/cancelled) for in-flight activity.
+  async function requestDelete(s: SupplierWithBalance) {
+    const [balRes, poRes] = await Promise.all([
+      supabase.from('supplier_balances').select('open_balance').eq('supplier_id', s.id).maybeSingle(),
+      supabase.from('purchase_orders').select('id', { count: 'exact', head: true })
+        .eq('supplier_id', s.id).not('status', 'in', '(received,cancelled)'),
+    ]);
+    const err = balRes.error ?? poRes.error;
+    // If the check itself failed we cannot prove the supplier is safe to delete — refuse.
+    if (err) { toast(toHebrewError(err.message), 'error'); return; }
+    const openBalance = (balRes.data as { open_balance: number } | null)?.open_balance ?? 0;
+    if (openBalance > 0 || (poRes.count ?? 0) > 0) {
+      toast('לא ניתן למחוק ספק עם יתרה פתוחה או הזמנות פעילות', 'error');
+      return;
+    }
+    setDeleteTarget(s);
+  }
+
   // Soft delete only (CLAUDE.md): deleted_at is stamped, the financial history stays. The list
   // query already filters .is('deleted_at', null), so refetch drops the row.
   async function deleteSupplier(reason?: string) {
@@ -133,7 +155,7 @@ export function SuppliersList() {
         mobileTrailing={(r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} />}
         rowActions={canWrite ? (r) => [
           { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setEditing(r) },
-          { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', onSelect: () => setDeleteTarget(r) },
+          { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', onSelect: () => void requestDelete(r) },
         ] : undefined}
         toolbar={
           <select className="input w-auto!" value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)}>

@@ -580,32 +580,42 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
                 </tr>
               </thead>
               <tbody className="divide-y divide-line-soft">
-                {pageRows.map((row) => (
+                {pageRows.map((row) => {
                   // A clickable row is keyboard operable (audit round 2): in ~10 screens the row is
                   // the ONLY way to open the record, but a bare onClick <tr> is mouse-only. When
                   // onRowClick exists we make the row a button — focusable, role="button", Enter/Space
                   // to activate (preventDefault on Space so the page doesn't scroll) — with the house
                   // focus-visible indigo outline (inset offset so overflow-hidden can't clip it, unlike
                   // a box-shadow ring). WCAG 2.1.1 (A).
-                  <tr key={row.id}
-                    className={onRowClick ? 'row-hover cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2' : ''}
-                    role={onRowClick ? 'button' : undefined}
-                    tabIndex={onRowClick ? 0 : undefined}
-                    onClick={onRowClick ? () => onRowClick(row) : undefined}
-                    onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(row); } } : undefined}>
-                    {columns.map((c) => <td key={c.key} className={`td ${c.className ?? ''}`}>{c.render(row)}</td>)}
-                    {rowActions && (
-                      <td className="td w-12 py-0.5!">
-                        {/* stopPropagation on click AND keydown: the row itself is a button
-                            (Enter/Space activate it), and opening the menu must not also
-                            navigate the row. */}
-                        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-                          <ActionMenu items={rowActions(row)} />
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
+                  //
+                  // EXCEPT when rowActions is also present (adversarial review round): a
+                  // role="button" <tr> would then hold the menu's real <button> — a nested
+                  // interactive control, invalid ARIA. Tradeoff: with a menu the row keeps only
+                  // the mouse onClick + cursor affordance, and keyboard users reach the record
+                  // through the menu itself (its first item opens/edits the row). Tables without
+                  // rowActions keep the full row-button behavior exactly.
+                  const rowIsButton = !!onRowClick && !rowActions;
+                  return (
+                    <tr key={row.id}
+                      className={onRowClick ? 'row-hover cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2' : ''}
+                      role={rowIsButton ? 'button' : undefined}
+                      tabIndex={rowIsButton ? 0 : undefined}
+                      onClick={onRowClick ? () => onRowClick(row) : undefined}
+                      onKeyDown={rowIsButton ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick!(row); } } : undefined}>
+                      {columns.map((c) => <td key={c.key} className={`td ${c.className ?? ''}`}>{c.render(row)}</td>)}
+                      {rowActions && (
+                        <td className="td w-12 py-0.5!">
+                          {/* stopPropagation on click: the row still navigates on mouse click, and
+                              opening the menu must not also navigate. keydown is stopped too so
+                              menu keys stay self-contained even if a row handler returns later. */}
+                          <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                            <ActionMenu items={rowActions(row)} />
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

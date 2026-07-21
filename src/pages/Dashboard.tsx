@@ -43,9 +43,11 @@ function useReducedMotion() {
 }
 
 /** One-time nudge toward push notifications — the dashboard's real-time promise extends to
- *  "when you're not looking", but only via an opt-in the user must perform in Settings.
+ *  "when you're not looking", but only via an opt-in the user must perform themselves.
  *  Shown solely to the roles that receive the price-increase push (owner/office), only while
- *  asking is still possible (permission undecided), and never again after "הבנתי". */
+ *  asking is still possible (permission undecided), and never again after "הבנתי".
+ *  Links to /alerts, NOT /settings: the toggle renders on both, but /settings is owner-only —
+ *  an office user following a /settings link would be silently bounced back here. */
 function PushNudge() {
   const { profile } = useAuth();
   const [dismissed, setDismissed] = useState(() => localStorage.getItem('sf-push-nudge') === '1');
@@ -62,7 +64,7 @@ function PushNudge() {
       <span>
         {iosInstall
           ? 'כדי לקבל התראות ב-iPhone יש להוסיף את האפליקציה למסך הבית (שיתוף ← הוספה למסך הבית)'
-          : <>אפשר לקבל התראה מיידית כשספק מעלה מחיר — <Link to="/settings" className="font-medium underline">הפעלת התראות בהגדרות</Link>.</>}
+          : <>אפשר לקבל התראה מיידית כשספק מעלה מחיר — <Link to="/alerts" className="font-medium underline">הפעלת התראות במסך ההתראות</Link>.</>}
       </span>
       <button className="btn-ghost py-1! text-xs shrink-0" onClick={dismiss}>הבנתי</button>
     </Note>
