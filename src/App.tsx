@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth, homeFor } from './auth/AuthContext';
 import { PageLoader } from './components/ui';
@@ -83,10 +83,17 @@ function AccountUnavailable() {
 
 export default function App() {
   const { session, profile, loading, isPlatformAdmin } = useAuth();
+  const { pathname } = useLocation();
+
+  // The public routes must render regardless of a broken session. Someone accepting an
+  // invitation is joining fresh — the accept flow creates a NEW user — and may arrive with a
+  // leftover session, a deleted account, or a suspended org. Short-circuiting them to
+  // AccountUnavailable would trap an invitee on a screen that has nothing to do with them.
+  const isPublic = pathname === '/accept-invite' || pathname === '/login';
 
   // An operator with no tenant profile is legitimate — send them to the console, not to
   // the unavailable screen.
-  if (session && !loading && !profile && isPlatformAdmin) {
+  if (!isPublic && session && !loading && !profile && isPlatformAdmin) {
     return (
       <Routes>
         <Route path="/admin" element={<PlatformGuard><Admin /></PlatformGuard>} />
@@ -94,7 +101,7 @@ export default function App() {
       </Routes>
     );
   }
-  if (session && !loading && !profile) return <AccountUnavailable />;
+  if (!isPublic && session && !loading && !profile) return <AccountUnavailable />;
 
   return (
     <Routes>
