@@ -42,7 +42,7 @@ Vite 6 · React 19 · React Router 7 · TypeScript strict · Supabase · **Tailw
 
 - `npm run dev` — פורט **5199**
 - `npm run build` = `tsc --noEmit && vite build` — **השער האוטומטי היחיד.** אין linter, אין טסטים.
-- מיגרציות: `scripts/db-query.ps1`
+- מיגרציות: `scripts/db-query.ps1` (Windows) / `scripts/db-query.sh` (Linux/Mac)
 
 **Tailwind v4: אין `tailwind.config.js`.** טוקנים ב-`@theme` בתוך `src/index.css`. מחלקות מותאמות יכולות `@apply` רק utilities אמיתיים — לכן `btn`/`badge` רשומים כ-`@utility`.
 
