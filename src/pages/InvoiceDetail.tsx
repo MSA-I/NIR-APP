@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { PageLoader, useToast, StatusBadge, Modal, ErrorNote } from '../components/ui';
-import { DocumentList } from '../components/FileUpload';
+import { InvoiceAttachments } from '../components/AttachmentsPanel';
 import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
 import { logAction } from '../lib/audit';
@@ -134,7 +134,7 @@ export default function InvoiceDetail() {
         </div>
 
         <div className="card card-pad">
-          <DocumentList entityType="invoice" entityId={inv.id} capture />
+          <InvoiceAttachments invoiceId={inv.id} receipts={inv.receipts.map((r) => r.goods_receipts)} />
           {data.allocations.length > 0 && (
             <div className="mt-4">
               <div className="text-sm font-medium text-ink-soft mb-2">תשלומים שהוקצו לחשבונית</div>
