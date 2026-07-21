@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toHebrewError } from "../lib/errors";
-import { Settings as SettingsIcon, Users, MailPlus, Send, Ban } from 'lucide-react';
+import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, BellRing } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageLoader, useToast, ErrorNote, DataTable, StatusBadge, ConfirmDialog, type Column } from '../components/ui';
+import { PageLoader, useToast, ErrorNote, Note, DataTable, StatusBadge, ConfirmDialog, type Column } from '../components/ui';
+import { getPushStatus, subscribePush, unsubscribePush, isIOS, isStandalone, type PushStatus } from '../lib/push';
 import { INVITATION_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime } from '../lib/format';
 import { logAction } from '../lib/audit';
@@ -13,6 +14,76 @@ import {
   sendInvite, resendInvite, revokeInvite, type Invitation,
 } from '../lib/invitations';
 import type { Profile, Role } from '../lib/types';
+
+/* ---------- push notifications (per-device, not per-org) ---------- */
+
+// Status → the one line shown under the toggle. 'no-key' is a legitimate environment
+// (dev without VAPID keys) and must read as configuration, not as a failure.
+const PUSH_STATUS_LINE: Record<PushStatus, string> = {
+  unsupported: 'הדפדפן הזה אינו תומך בהתראות דחיפה',
+  'no-key': 'לא מוגדר בסביבה זו',
+  denied: 'ההתראות נחסמו בהגדרות הדפדפן — כדי להפעיל יש לאפשר אותן שם',
+  subscribed: 'התראות פעילות במכשיר זה',
+  'not-subscribed': 'התראות כבויות במכשיר זה',
+};
+
+function PushSection() {
+  const { profile } = useAuth();
+  const toast = useToast();
+  const [status, setStatus] = useState<PushStatus | null>(null); // null = still checking
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { void getPushStatus().then(setStatus); }, []);
+
+  // iOS Safari exposes the Push API only to an installed app — before that the honest
+  // instruction is "install first", not a dead toggle that fails silently.
+  const iosNeedsInstall = isIOS() && !isStandalone();
+  const canToggle = status === 'subscribed' || status === 'not-subscribed';
+
+  async function toggle() {
+    if (!profile || !canToggle) return;
+    setBusy(true);
+    const err = status === 'subscribed'
+      ? await unsubscribePush()
+      : await subscribePush({ id: profile.id, org_id: profile.org_id });
+    setBusy(false);
+    if (err) toast(err, 'error');
+    else toast(status === 'subscribed' ? 'ההתראות כובו במכשיר זה' : 'ההתראות הופעלו במכשיר זה');
+    setStatus(await getPushStatus());
+  }
+
+  return (
+    <div className="card card-pad space-y-4">
+      <div>
+        <h2 className="section-title flex items-center gap-2"><BellRing size={17} /> התראות דחיפה</h2>
+        <p className="text-sm text-ink-muted mt-1">
+          התראה מיידית למכשיר זה כשספק מעלה מחיר במחירון וכשתשלומים מתקרבים לפירעון.
+        </p>
+      </div>
+
+      {iosNeedsInstall && (
+        <Note tone="info">
+          ב-iPhone יש להוסיף את האפליקציה למסך הבית (שיתוף ← הוספה למסך הבית) לפני הפעלת התראות
+        </Note>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-sm text-ink-muted">
+          {status === null ? 'בודק…' : iosNeedsInstall ? 'התראות יהיו זמינות לאחר ההוספה למסך הבית' : PUSH_STATUS_LINE[status]}
+        </span>
+        {(canToggle || iosNeedsInstall) && (
+          <button
+            className={status === 'subscribed' ? 'btn-ghost' : 'btn-primary'}
+            disabled={busy || iosNeedsInstall || !canToggle}
+            onClick={() => void toggle()}
+          >
+            {status === 'subscribed' ? 'כבה התראות במכשיר זה' : 'הפעל התראות למכשיר זה'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function Settings() {
   const { profile, org, roleLabels } = useAuth();
@@ -175,6 +246,8 @@ export default function Settings() {
         </div>
         <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>שמירה</button></div>
       </div>
+
+      <PushSection />
 
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-line-soft section-title flex items-center gap-2"><Users size={17} /> משתמשים והרשאות</div>
