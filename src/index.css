@@ -52,6 +52,7 @@
   /* Tinted elevation: physical depth without generic black drop shadows. */
   --shadow-card: 0 1px 2px rgb(28 37 38 / 0.04), 0 8px 24px rgb(15 90 102 / 0.04);
   --shadow-card-hover: 0 2px 4px rgb(28 37 38 / 0.06), 0 12px 28px rgb(15 90 102 / 0.08);
+  --shadow-dashboard: 0 1px 2px rgb(28 37 38 / 0.06), 0 16px 36px -22px rgb(15 90 102 / 0.24);
 
   --color-star: var(--color-amber-400);            /* rating stars: decoration, not status */
   --color-star-hover: var(--color-amber-300);
@@ -170,6 +171,11 @@ body {
 
   .page-title { @apply text-xl sm:text-2xl font-bold text-ink; }
   .section-title { @apply text-base font-semibold text-ink-body; }
+
+  /* The control centre gets one extra breath of separation; the selector is deliberately
+     scoped so this dashboard round does not deepen operational cards elsewhere. */
+  .dashboard-depth .card { box-shadow: var(--shadow-dashboard); }
+  .dashboard-depth :is(a, button):focus-visible { @apply outline-none ring-2 ring-focus ring-offset-2 ring-offset-canvas; }
 }
 
 /* number cells keep latin digits aligned nicely inside RTL layout */
@@ -181,6 +187,18 @@ body {
 @keyframes page-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .page-fade { animation: page-fade 0.15s ease-out; }
 @media (prefers-reduced-motion: reduce) { .page-fade { animation: none; } }
+
+/* Five decision regions settle once when real data replaces the skeleton. Manual refetch keeps
+   this subtree mounted, so the sequence cannot replay or distract during operational use. */
+@keyframes dash-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+.dash-enter > * { animation: dash-enter 0.35s ease-out both; }
+.dash-enter > :nth-child(2) { animation-delay: 60ms; }
+.dash-enter > :nth-child(3) { animation-delay: 120ms; }
+.dash-enter > :nth-child(4) { animation-delay: 180ms; }
+.dash-enter > :nth-child(5) { animation-delay: 240ms; }
+
+@keyframes freshness-settle { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.freshness-settle { animation: freshness-settle 0.18s ease-out both; }
 
 /* Reduced-motion coverage beyond the page fade (audit 2026-07-21). The skeleton pulse is pure
    decoration — its static slate-200 fill still reads as a placeholder — so it stops entirely.
@@ -195,10 +213,12 @@ body {
   }
   .btn-primary:active, .btn-secondary:active, .btn-danger:active, .btn-ghost:active,
   .card-link-hover:hover { translate: none !important; }
+  .dash-enter > *, .freshness-settle { animation: none; }
 }
 
 @media print {
   .no-print { display: none !important; }
   body { background: white; }
   .print-area { box-shadow: none !important; border: none !important; }
+  .dashboard-depth .card { box-shadow: none !important; }
 }

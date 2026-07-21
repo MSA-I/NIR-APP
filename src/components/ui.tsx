@@ -184,10 +184,11 @@ const ATTENTION_TONE_ORDER: Record<Tone, number> = { alert: 0, await: 1, info: 2
 // anatomy: tone badge · label (+hint) · optional ₪ · chevron. `muted` only quiets the label/amount
 // weight; the badge already carries the tone's own soft colour (audit round 2).
 function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean }) {
+  const measured = item.count != null;
   return (
     <li>
-      <Link to={item.to} className="flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg hover:bg-surface-sunken transition-colors">
-        <span className={`badge-${item.tone} num justify-center min-w-8`}>{item.count}</span>
+      <Link to={item.to} className="flex min-h-11 items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg hover:bg-surface-sunken active:bg-action-wash/70 transition-colors">
+        <span className={`${measured ? `badge-${item.tone}` : 'badge-idle'} num justify-center min-w-8`}>{item.count ?? '—'}</span>
         <span className="flex-1 min-w-0 truncate">
           <span className={muted ? 'text-ink-soft' : 'text-ink-body font-medium'}>{item.label}</span>
           {item.hint && <span className="text-xs text-ink-muted ms-2">{item.hint}</span>}
@@ -211,8 +212,9 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
  *            "חוק האות הכתום"), or the whole strip reads as urgent. Same row anatomy, quieter.
  *   count === 0: collapsed into one muted "✓ אין …" strip at the bottom, so eight all-clear
  *            items don't shout as loudly as one that needs action ("calm", CLAUDE.md).
- * count === null (cannot be measured — e.g. no payment has a due date) is in NO tier: never
- * rendered, never shown as 0 (CLAUDE.md:37). Rows are real <Link>s, so keyboard focus,
+ * count === null (cannot be measured — e.g. no payment has a due date) gets a neutral "—" tier;
+ * it is never silently converted to 0 and it prevents a false all-clear (CLAUDE.md:37). Rows are
+ * real <Link>s, so keyboard focus,
  * middle-click and "open in new tab" all work (Nir §2: the dashboard is also a hub).
  *
  * The header count + ₪ sum reflect the ACTION tier only (audit round 2) — the honest "needs
@@ -225,6 +227,7 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
  */
 export function AttentionZone({ items, totalLabel }: { items: AttentionItem[]; totalLabel?: string }) {
   const clear = items.filter((i) => i.count === 0);
+  const unknownRows = items.filter((i) => i.count == null);
   // Rank the active rows by tone severity; the original index is the tiebreaker, so same-tone
   // rows keep the caller's business order.
   const active = items
@@ -244,7 +247,7 @@ export function AttentionZone({ items, totalLabel }: { items: AttentionItem[]; t
         <span className="text-xs text-ink-muted">
           {actionRows.length
             ? <>{actionRows.length} פריטים{actionTotal > 0 && <> · {totalLabel ? <>{totalLabel} </> : null}<span className="num">{fmtMoney(actionTotal)}</span></>}</>
-            : 'הכול תחת שליטה'}
+            : unknownRows.length ? `${unknownRows.length} מדדים ללא נתונים` : 'הכול תחת שליטה'}
         </span>
       </div>
 
@@ -252,7 +255,7 @@ export function AttentionZone({ items, totalLabel }: { items: AttentionItem[]; t
         <ul className="divide-y divide-line-soft">
           {actionRows.map((i) => <AttentionRow key={i.key} item={i} />)}
         </ul>
-      ) : noticeRows.length === 0 ? (
+      ) : noticeRows.length === 0 && unknownRows.length === 0 ? (
         <div className="text-sm text-done-fg py-1">אין משימות דחופות כרגע</div>
       ) : null}
 
@@ -261,6 +264,15 @@ export function AttentionZone({ items, totalLabel }: { items: AttentionItem[]; t
           <div className="text-xs font-medium text-ink-muted mb-1">לידיעה</div>
           <ul className="divide-y divide-line-soft">
             {noticeRows.map((i) => <AttentionRow key={i.key} item={i} muted />)}
+          </ul>
+        </div>
+      )}
+
+      {unknownRows.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-line-soft">
+          <div className="text-xs font-medium text-ink-muted mb-1">לא ניתן למדידה</div>
+          <ul className="divide-y divide-line-soft">
+            {unknownRows.map((i) => <AttentionRow key={i.key} item={i} muted />)}
           </ul>
         </div>
       )}
@@ -280,7 +292,7 @@ export function AttentionZone({ items, totalLabel }: { items: AttentionItem[]; t
 export function TaskLine({ label, count, to }: { label: string; count: number; to: string }) {
   return (
     <li>
-      <Link to={to} className="flex items-center justify-between -mx-2 px-2 py-1.5 rounded-lg hover:bg-surface-sunken">
+      <Link to={to} className="flex min-h-11 items-center justify-between -mx-2 px-2 py-1.5 rounded-lg hover:bg-surface-sunken active:bg-action-wash/70 transition-colors">
         <span className="text-ink-soft">{label}</span>
         <span className={`badge num ${count > 0 ? 'bg-action-soft text-action-on-soft' : 'bg-idle-soft text-ink-soft'}`}>{count}</span>
       </Link>

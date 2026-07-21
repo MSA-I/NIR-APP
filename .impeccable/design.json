@@ -144,6 +144,11 @@
         "purpose": "הזמנה ללחיצה יחד עם הרמה של פיקסל אחד."
       },
       {
+        "name": "dashboard",
+        "value": "0 1px 2px rgb(28 37 38 / 0.06), 0 16px 36px -22px rgb(15 90 102 / 0.24)",
+        "purpose": "עומק מקומי לאזורי ההחלטה במרכז הבקרה בלבד."
+      },
+      {
         "name": "floating",
         "value": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
         "purpose": "מודאל וטוסט שנמצאים באמת מעל הדף."
@@ -159,21 +164,17 @@
         "name": "page-fade",
         "value": "opacity 0→1 + translateY(4px)→0, 150ms ease-out",
         "purpose": "מעבר מסך עדין שמבוטל תחת prefers-reduced-motion."
+      },
+      {
+        "name": "dashboard-entry",
+        "value": "350ms, 7px, stagger 60ms",
+        "purpose": "כניסה חד־פעמית של אזורי ההחלטה; מבוטלת תחת reduced motion."
       }
     ],
     "breakpoints": [
-      {
-        "name": "sm",
-        "value": "640px"
-      },
-      {
-        "name": "md",
-        "value": "768px"
-      },
-      {
-        "name": "lg",
-        "value": "1024px — סרגל צד מופיע ובר תחתון נעלם"
-      }
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px — סרגל צד מופיע ובר תחתון נעלם" }
     ]
   },
   "components": [
