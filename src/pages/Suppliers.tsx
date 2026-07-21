@@ -94,7 +94,7 @@ export function SuppliersList() {
     { key: 'phone', header: 'טלפון', render: (r) => <span dir="ltr">{r.phone || '—'}</span> },
     { key: 'min', header: 'מינ׳ הזמנה', className: 'num', sortValue: (r) => r.min_order_amount ?? 0, render: (r) => fmtMoney(r.min_order_amount) },
     { key: 'risk', header: 'התראות', render: (r) => <RiskCell m={r.metrics} /> },
-    { key: 'balance', header: 'יתרה פתוחה', className: 'num', sortValue: (r) => r.open_balance ?? 0, render: (r) => <span className={r.open_balance ? 'text-amber-700 font-medium' : ''}>{fmtMoney(r.open_balance)}</span> },
+    { key: 'balance', header: 'יתרה פתוחה', className: 'num', sortValue: (r) => r.open_balance ?? 0, render: (r) => <span className={r.open_balance ? 'text-await-fg font-medium' : ''}>{fmtMoney(r.open_balance)}</span> },
     { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} /> },
   ];
 
@@ -116,7 +116,7 @@ export function SuppliersList() {
             <option value="open">עם יתרה פתוחה</option>
           </select>
         } />
-      {balanceFilter === 'open' && rows.length === 0 && <p className="text-sm text-slate-400">אין ספקים עם יתרה פתוחה.</p>}
+      {balanceFilter === 'open' && rows.length === 0 && <p className="text-sm text-slate-500">אין ספקים עם יתרה פתוחה.</p>}
       {editing && <SupplierForm supplier={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refetch(); }} />}
     </div>
   );
@@ -293,7 +293,7 @@ export function SupplierCard() {
             <span className="inline-flex items-center gap-2">
               <RatingStars value={s.rating} />
               {s.rating != null && s.rating_updated_at && (
-                <span className="text-xs font-normal text-slate-400" title={s.rating_note ?? undefined}>עודכן {fmtDate(s.rating_updated_at)}</span>
+                <span className="text-xs font-normal text-slate-500" title={s.rating_note ?? undefined}>עודכן {fmtDate(s.rating_updated_at)}</span>
               )}
             </span>
           </h1>

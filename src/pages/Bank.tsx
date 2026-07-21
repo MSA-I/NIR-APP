@@ -61,7 +61,7 @@ export default function Bank() {
     { key: 'desc', header: 'תיאור', render: (r) => <span className="max-w-72 truncate inline-block">{r.description}</span> },
     { key: 'amount', header: 'סכום', className: 'num', sortValue: (r) => r.amount, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
     { key: 'ref', header: 'אסמכתא', render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
-    { key: 'supplier', header: 'ספק מזוהה', render: (r) => r.supplier?.name ?? <span className="text-slate-400">לא זוהה</span> },
+    { key: 'supplier', header: 'ספק מזוהה', render: (r) => r.supplier?.name ?? <span className="text-slate-500">לא זוהה</span> },
     { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={BANK_TX_STATUS[r.status]} /> },
   ];
 
@@ -76,7 +76,7 @@ export default function Bank() {
       </div>
 
       {data?.imports.length ? (
-        <div className="text-xs text-slate-400">
+        <div className="text-xs text-slate-500">
           ייבוא אחרון: {data.imports[0].filename} ({data.imports[0].row_count} שורות, {fmtDateTime(data.imports[0].imported_at)})
         </div>
       ) : null}
@@ -418,7 +418,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
             <span>{fmtDate(tx.tx_date)} · {tx.description}</span>
             <span className="font-bold num">{fmtMoneyExact(tx.amount)}</span>
           </div>
-          {tx.reference && <div className="text-xs text-slate-400 mt-1">אסמכתא: <span dir="ltr">{tx.reference}</span></div>}
+          {tx.reference && <div className="text-xs text-slate-500 mt-1">אסמכתא: <span dir="ltr">{tx.reference}</span></div>}
         </div>
 
         <div className="flex items-end gap-2">
@@ -442,7 +442,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                     <div key={`${c.kind}-${c.id}`} className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-sm">
                       <Link2 size={15} className="text-indigo-500 shrink-0" />
                       <span className="flex-1">{c.label}</span>
-                      <span className={`badge ${c.confidence >= 0.85 ? 'bg-emerald-100 text-emerald-800' : c.confidence >= 0.7 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
+                      <span className={c.confidence >= 0.85 ? 'badge-done' : c.confidence >= 0.7 ? 'badge-await' : 'badge-idle'}>
                         ביטחון {(c.confidence * 100).toFixed(0)}%
                       </span>
                       <button className="btn-primary py-1.5!" disabled={busy} onClick={() => void confirmCandidate(c)}>
@@ -451,7 +451,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                     </div>
                   ))}
                 </div>
-              ) : <div className="text-sm text-slate-400">אין הצעות אוטומטיות — ניתן להתאים ידנית מטה</div>}
+              ) : <div className="text-sm text-slate-500">אין הצעות אוטומטיות — ניתן להתאים ידנית מטה</div>}
             </div>
 
             <div>
@@ -470,7 +470,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                             return next;
                           })} />
                         <span className="flex-1">חשבונית <b dir="ltr">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}</span>
-                        <span className="text-xs text-slate-400 num">יתרה {fmtMoneyExact(inv.balance)}</span>
+                        <span className="text-xs text-slate-500 num">יתרה {fmtMoneyExact(inv.balance)}</span>
                         {checked && (
                           <input type="number" step="0.01" className="input w-28! num" value={chosenInvoices[inv.id]}
                             onChange={(e) => setChosenInvoices((c) => ({ ...c, [inv.id]: Number(e.target.value) || 0 }))} />
@@ -479,7 +479,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                     );
                   })}
                 </div>
-              ) : <div className="text-sm text-slate-400">אין חשבוניות פתוחות לספק</div>}
+              ) : <div className="text-sm text-slate-500">אין חשבוניות פתוחות לספק</div>}
               {chosenSum > 0 && (
                 <div className="flex items-center justify-between mt-2 text-sm">
                   <span className={Math.abs(chosenSum - tx.amount) > 1 ? 'text-amber-600' : 'text-emerald-600'}>

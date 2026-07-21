@@ -148,16 +148,16 @@ export default function Layout() {
         <div className="font-bold truncate me-3" title={orgName}>{orgName}</div>
         <div className="flex items-center gap-1">
           {canSearch && (
-            <button className="p-1" onClick={() => setSearchOpen(true)} aria-label="חיפוש"><Search size={21} /></button>
+            <button className="flex items-center justify-center min-w-11 min-h-11" onClick={() => setSearchOpen(true)} aria-label="חיפוש"><Search size={21} /></button>
           )}
-          <button className="p-1" onClick={() => setMobileOpen(true)} aria-label="תפריט"><Menu size={22} /></button>
+          <button className="flex items-center justify-center min-w-11 min-h-11" onClick={() => setMobileOpen(true)} aria-label="תפריט"><Menu size={22} /></button>
         </div>
       </header>
       {searchOpen && <GlobalSearch variant="mobile" onClose={() => setSearchOpen(false)} />}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 bg-slate-900/60 no-print" onClick={() => setMobileOpen(false)}>
           <aside className="absolute inset-y-0 start-0 w-72 bg-slate-900" onClick={(e) => e.stopPropagation()}>
-            <button className="absolute top-4 end-4 text-slate-400" onClick={() => setMobileOpen(false)} aria-label="סגירה"><X size={20} /></button>
+            <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 text-slate-400" onClick={() => setMobileOpen(false)} aria-label="סגירה"><X size={20} /></button>
             {sidebar}
           </aside>
         </div>
@@ -173,9 +173,11 @@ export default function Layout() {
       )}
 
       {/* Content */}
-      <main className="lg:ms-60 px-4 sm:px-6 py-5 pb-24 lg:pb-8 max-w-[1400px]">
-        {/* keyed by path so each screen change re-triggers the fade (section 11) */}
-        <div key={location.pathname} className="page-fade">
+      <main className="lg:ms-60 px-4 sm:px-6 py-5 pb-24 lg:pb-8">
+        {/* max-w column centred (mx-auto) in the space beside the sidebar — otherwise a wide
+            viewport strands all content on the start side in RTL, leaving a dead zone on the
+            end side. keyed by path so each screen change re-triggers the fade (section 11). */}
+        <div key={location.pathname} className="page-fade mx-auto max-w-[1400px]">
           <Outlet />
         </div>
       </main>

@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-21T00:00:00.000Z",
+  "title": "Design System: SupplyFlow",
+  "extensions": {
+    "colorMeta": {
+      "action": { "role": "primary", "displayName": "אינדיגו פעולה", "canonical": "oklch(45.7% 0.24 277.023)", "tonalRamp": ["oklch(35.9% 0.144 278.697)", "oklch(39.8% 0.195 277.366)", "oklch(45.7% 0.24 277.023)", "oklch(51.1% 0.262 276.966)", "oklch(58.5% 0.233 277.117)", "oklch(67.3% 0.182 276.935)", "oklch(78.5% 0.115 274.713)", "oklch(93% 0.034 272.788)"] },
+      "done-solid": { "role": "secondary", "displayName": "הושלם", "canonical": "oklch(59.6% 0.145 163.225)", "tonalRamp": ["oklch(37.8% 0.077 168.94)", "oklch(43.2% 0.095 166.913)", "oklch(50.8% 0.118 165.612)", "oklch(59.6% 0.145 163.225)", "oklch(69.6% 0.17 162.48)", "oklch(84.5% 0.143 164.978)", "oklch(95% 0.052 163.051)", "oklch(97.9% 0.021 166.113)"] },
+      "await-solid": { "role": "secondary", "displayName": "ממתין", "canonical": "oklch(66.6% 0.179 58.318)", "tonalRamp": ["oklch(41.4% 0.112 45.904)", "oklch(47.3% 0.137 46.201)", "oklch(55.5% 0.163 48.998)", "oklch(66.6% 0.179 58.318)", "oklch(76.9% 0.188 70.08)", "oklch(87.9% 0.169 91.605)", "oklch(96.2% 0.059 95.617)", "oklch(98.7% 0.022 95.277)"] },
+      "alert-solid": { "role": "secondary", "displayName": "חריגה", "canonical": "oklch(58.6% 0.253 17.585)", "tonalRamp": ["oklch(41% 0.159 10.272)", "oklch(45.5% 0.188 13.697)", "oklch(51.4% 0.222 16.935)", "oklch(58.6% 0.253 17.585)", "oklch(64.5% 0.246 16.439)", "oklch(81% 0.117 11.638)", "oklch(94.1% 0.03 12.58)", "oklch(96.9% 0.015 12.422)"] },
+      "info-solid": { "role": "secondary", "displayName": "מידע", "canonical": "oklch(58.8% 0.158 241.966)", "tonalRamp": ["oklch(39.1% 0.09 240.876)", "oklch(44.3% 0.11 240.79)", "oklch(50% 0.134 242.749)", "oklch(58.8% 0.158 241.966)", "oklch(68.5% 0.169 237.323)", "oklch(82.8% 0.111 230.318)", "oklch(95.1% 0.026 236.824)", "oklch(97.7% 0.013 236.62)"] },
+      "ink-strong": { "role": "neutral", "displayName": "דיו כהה / סרגל צדי", "canonical": "oklch(20.8% 0.042 265.755)", "tonalRamp": ["oklch(20.8% 0.042 265.755)", "oklch(27.9% 0.041 260.031)", "oklch(37.2% 0.044 257.287)", "oklch(44.6% 0.043 257.281)", "oklch(55.4% 0.046 257.417)", "oklch(70.4% 0.04 256.788)", "oklch(92.9% 0.013 255.508)", "oklch(96.8% 0.007 247.896)"] },
+      "canvas": { "role": "neutral", "displayName": "קנבס", "canonical": "oklch(96.8% 0.007 247.896)", "tonalRamp": ["oklch(20.8% 0.042 265.755)", "oklch(27.9% 0.041 260.031)", "oklch(37.2% 0.044 257.287)", "oklch(44.6% 0.043 257.281)", "oklch(55.4% 0.046 257.417)", "oklch(70.4% 0.04 256.788)", "oklch(92.9% 0.013 255.508)", "oklch(98.4% 0.003 247.858)"] }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "כותרת דף", "purpose": "אחת לדף (page-title). 1.25rem במובייל, 1.5rem במסך רחב." },
+      "kpi-value": { "displayName": "ערך KPI", "purpose": "המספר הגדול בכרטיסי הדשבורד. תמיד tabular-nums בתוך .num." }
+    },
+    "shadows": [
+      { "name": "resting", "value": "0 1px 2px 0 rgb(0 0 0 / 0.05)", "purpose": "כרטיס במנוחה (shadow-sm) — רמז לחומריות, לא גובה." },
+      { "name": "invited", "value": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)", "purpose": "כרטיס לחיץ ב-hover, יחד עם border-indigo-300." },
+      { "name": "floating", "value": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)", "purpose": "מודאל וטוסט — רק מה שמרחף מעל הדף." }
+    ],
+    "motion": [
+      { "name": "page-fade", "value": "opacity 0→1 + translateY(4px)→0, 150ms ease-out", "purpose": "מעבר מסך עדין; מבוטל תחת prefers-reduced-motion." },
+      { "name": "transition-colors", "value": "150ms ease", "purpose": "ברירת המחדל לכל שינוי מצב של כפתור/שורה." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "lg", "value": "1024px (סרגל צדי מופיע; בר תחתון נעלם)" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "פעולה ראשית אחת לאזור. אינדיגו מלא, מעמיק ב-hover.",
+      "html": "<button class=\"ds-btn-primary\">שמירת חשבונית</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: oklch(45.7% 0.24 277.023); color: #fff; padding: 8px 14px; border: none; border-radius: 8px; font-family: Heebo, system-ui, sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 150ms; } .ds-btn-primary:hover { background: oklch(39.8% 0.195 277.366); } .ds-btn-primary:focus-visible { outline: 2px solid oklch(58.5% 0.233 277.117); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "פעולת משנה — לבן עם גבול.",
+      "html": "<button class=\"ds-btn-secondary\">ביטול</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; gap: 6px; background: #fff; color: oklch(37.2% 0.044 257.287); padding: 8px 14px; border: 1px solid oklch(86.9% 0.022 252.894); border-radius: 8px; font-family: Heebo, system-ui, sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 150ms; } .ds-btn-secondary:hover { background: oklch(98.4% 0.003 247.858); } .ds-btn-secondary:focus-visible { outline: 2px solid oklch(58.5% 0.233 277.117); outline-offset: 2px; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "פעולה הרסנית — תמיד מאחורי ConfirmDialog.",
+      "html": "<button class=\"ds-btn-danger\">מחיקת מסמך</button>",
+      "css": ".ds-btn-danger { display: inline-flex; align-items: center; gap: 6px; background: oklch(58.6% 0.253 17.585); color: #fff; padding: 8px 14px; border: none; border-radius: 8px; font-family: Heebo, system-ui, sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 150ms; } .ds-btn-danger:hover { background: oklch(51.4% 0.222 16.935); } .ds-btn-danger:focus-visible { outline: 2px solid oklch(58.5% 0.233 277.117); outline-offset: 2px; }"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "שדה טופס — פוקוס בטבעת אינדיגו, עקבי עם צבע הפעולה.",
+      "html": "<div style=\"direction: rtl; font-family: Heebo, system-ui, sans-serif;\"><label class=\"ds-label\">שם ספק</label><input class=\"ds-input\" placeholder=\"לדוגמה: משק ירוק\" /></div>",
+      "css": ".ds-label { display: block; font-size: 14px; font-weight: 500; color: oklch(44.6% 0.043 257.281); margin-bottom: 4px; } .ds-input { width: 100%; background: #fff; color: oklch(27.9% 0.041 260.031); border: 1px solid oklch(86.9% 0.022 252.894); border-radius: 8px; padding: 8px 12px; font-size: 14px; font-family: inherit; } .ds-input::placeholder { color: oklch(70.4% 0.04 256.788); } .ds-input:focus { outline: none; border-color: oklch(58.5% 0.233 277.117); box-shadow: 0 0 0 2px oklch(58.5% 0.233 277.117 / 0.35); }"
+    },
+    {
+      "name": "Status Badges",
+      "kind": "chip",
+      "refersTo": "badge-done",
+      "description": "שפת ארבע המשמעויות + ניטרלי. soft/on-soft, גלולה.",
+      "html": "<div style=\"display: flex; gap: 8px; direction: rtl; font-family: Heebo, system-ui, sans-serif;\"><span class=\"ds-badge ds-badge-done\">שולמה</span><span class=\"ds-badge ds-badge-await\">ממתינה לאישור</span><span class=\"ds-badge ds-badge-alert\">דורשת בירור</span><span class=\"ds-badge ds-badge-info\">נשלחה</span><span class=\"ds-badge ds-badge-idle\">טיוטה</span></div>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 12px; font-weight: 500; white-space: nowrap; } .ds-badge-done { background: oklch(95% 0.052 163.051); color: oklch(43.2% 0.095 166.913); } .ds-badge-await { background: oklch(96.2% 0.059 95.617); color: oklch(47.3% 0.137 46.201); } .ds-badge-alert { background: oklch(94.1% 0.03 12.58); color: oklch(45.5% 0.188 13.697); } .ds-badge-info { background: oklch(95.1% 0.026 236.824); color: oklch(44.3% 0.11 240.79); } .ds-badge-idle { background: oklch(96.8% 0.007 247.896); color: oklch(27.9% 0.041 260.031); }"
+    },
+    {
+      "name": "KPI Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "כרטיס מדד לחיץ — hover מזמין בגבול אינדיגו, מספר ב-tabular-nums.",
+      "html": "<button class=\"ds-kpi\" style=\"direction: rtl;\"><span class=\"ds-kpi-title\">חשבוניות ממתינות</span><span class=\"ds-kpi-value\">₪ 12,480</span><span class=\"ds-kpi-sub\">4 חשבוניות</span></button>",
+      "css": ".ds-kpi { display: flex; flex-direction: column; align-items: flex-start; text-align: start; width: 220px; background: #fff; border: 1px solid oklch(92.9% 0.013 255.508); border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); cursor: pointer; font-family: Heebo, system-ui, sans-serif; transition: border-color 150ms, box-shadow 150ms; } .ds-kpi:hover { border-color: oklch(78.5% 0.115 274.713); box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); } .ds-kpi-title { font-size: 12px; font-weight: 500; color: oklch(55.4% 0.046 257.417); } .ds-kpi-value { font-size: 20px; font-weight: 700; color: oklch(20.8% 0.042 265.755); margin-top: 4px; direction: ltr; font-variant-numeric: tabular-nums; } .ds-kpi-sub { font-size: 12px; color: oklch(70.4% 0.04 256.788); margin-top: 4px; }"
+    },
+    {
+      "name": "Note",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "קופסת הודעה משותפת (note-*) — wash + גבול line מלא, לעולם לא פס צד.",
+      "html": "<div class=\"ds-note ds-note-alert\" style=\"direction: rtl;\">חשבונית 7702 זוהתה כחשד לכפילות — נדרש בירור לפני אישור.</div>",
+      "css": ".ds-note { display: flex; align-items: flex-start; gap: 8px; border-radius: 8px; padding: 12px 16px; font-size: 14px; font-family: Heebo, system-ui, sans-serif; border: 1px solid; } .ds-note-alert { background: oklch(96.9% 0.015 12.422); border-color: oklch(89.2% 0.058 10.001); color: oklch(45.5% 0.188 13.697); }"
+    },
+    {
+      "name": "Sidebar Nav Item",
+      "kind": "nav",
+      "refersTo": "button-ghost",
+      "description": "פריט ניווט בסרגל הכהה — פעיל ב-indigo-600/20 על slate-900.",
+      "html": "<div style=\"background: oklch(20.8% 0.042 265.755); padding: 12px; border-radius: 12px; width: 220px; direction: rtl; font-family: Heebo, system-ui, sans-serif;\"><a class=\"ds-nav-item ds-nav-active\" href=\"#\">חשבוניות</a><a class=\"ds-nav-item\" href=\"#\">תשלומים</a></div>",
+      "css": ".ds-nav-item { display: block; padding: 8px 12px; border-radius: 8px; font-size: 14px; color: oklch(86.9% 0.022 252.894); text-decoration: none; transition: background-color 150ms, color 150ms; margin-bottom: 2px; } .ds-nav-item:hover { background: rgb(255 255 255 / 0.05); color: #fff; } .ds-nav-active { background: oklch(51.1% 0.262 276.966 / 0.2); color: #fff; font-weight: 500; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "חדר בקרה שקט",
+    "overview": "SupplyFlow היא חדר הבקרה של מנהל עסק שמטפל בכסף של עצמו ושל אחרים. הכול נראה במבט אחד; אזעקה נשמעת רק כשהיא אמיתית. המערכת שקטה כברירת מחדל — רקע slate מאופק, משטחים לבנים, דיו כהה — וצבע מופיע אך ורק כשהוא נושא טענה: הושלם, ממתין, חריגה, מידע. מסך שכולו תקין הוא מסך כמעט מונוכרומטי, וזו התכונה, לא באג. הצפיפות גבוהה במקומות העבודה ונדיבה במקומות ההחלטה.",
+    "keyCharacteristics": [
+      "שקט כברירת מחדל; צבע = טענה סמנטית, לעולם לא קישוט",
+      "עברית RTL מלאה: properties לוגיים בלבד, ספרות לטיניות מיושרות ב-num",
+      "צפוף היכן שעובדים, מרווח היכן שמחליטים",
+      "שטוח-בעיקרו: גבול דק וצל עדין; צל אמיתי רק למרחפים",
+      "אין נתון מזויף: מדד בלי נתונים מציג —, לא 0"
+    ],
+    "rules": [
+      { "name": "חוק ארבע המשמעויות", "body": "לכל צבע סטטוס יש משמעות אחת קבועה בכל המערכת. אסור להשתמש ב-emerald/amber/rose/sky מחוץ למשמעות שלהם, ואסור להמציא משמעות שישית. משמעות לעולם אינה מועברת בגוון בלבד — תמיד טקסט או אייקון לצידה.", "section": "colors" },
+      { "name": "חוק האות הכתום", "body": "await הוא אות עבודה — הוא חייב להישאר נדיר כדי להישמע. סטטוס שגרתי שאינו דורש פעולה מיידית נשאר idle, אחרת רוב המסך כתום והאות מתדלדל.", "section": "colors" },
+      { "name": "חוק הספרות המיושרות", "body": "כל תא מספרי — סכום, כמות, מספר מסמך — עטוף ב-class=\"num\" (LTR + tabular-nums + יישור לסוף). ספרות שלא מתיישרות בטור הן שגיאה, לא סגנון.", "section": "typography" },
+      { "name": "חוק המרחפים", "body": "צל בולט מופיע רק על אלמנט שנמצא מעל הדף (מודאל, טוסט, תפריט). כרטיס שצועק בצל כבד במנוחה — שגיאה.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do להצמיד לכל סטטוס טקסט או אייקון — צבע לעולם אינו הערוץ היחיד (WCAG 2.1 AA)",
+      "Do — למדד שאין לו נתונים; אפס הוא טענה נמדדת על המציאות",
+      "Do properties לוגיים בלבד (start/end, ms/me, ps/pe) — לעולם לא left/right",
+      "Do class=\"num\" על כל תא מספרי",
+      "Do ניגודיות טקסט ≥4.5:1; slate-400 מותר רק ל-placeholder ורמזים",
+      "Do מעברים 150–250ms עם ease-out, מכבדים prefers-reduced-motion",
+      "Do ConfirmDialog עם סיבה על כל פעולה הרסנית או כזו שנרשמת ביומן ביקורת"
+    ],
+    "donts": [
+      "Don't אנימציות מוגזמות או תנועה שאינה משדרת מצב — אסור בחוקה",
+      "Don't glassmorphism, blur דקורטיבי, שטחים דקורטיביים ריקים — אסור בחוקה",
+      "Don't טקסט זעיר בניגודיות נמוכה — אסור בחוקה",
+      "Don't גרפים מיותרים: גרף שאינו עוזר להחלטה הוא רעש — אסור בחוקה",
+      "Don't הסתרת פעולות קריטיות מאחורי hover — אסור בחוקה",
+      "Don't מראה תבנית-אדמין גנרית או הפיכת כל דף לרשת כרטיסים מנופחת — אסור בחוקה",
+      "Don't ערכים סטטיים מזויפים בדשבורד; כל מספר נגזר מנתוני האפליקציה",
+      "Don't border-left/right צבעוני עבה כפס-סימון — משתמשים ב-note-* עם גבול מלא",
+      "Don't emerald/amber/rose/sky מחוץ למשמעות הסמנטית שלהם"
+    ]
+  }
+}

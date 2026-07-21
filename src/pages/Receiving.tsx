@@ -227,7 +227,7 @@ export function ReceiveOrder() {
       <div>
         <h1 className="page-title flex items-center gap-2"><PackageCheck size={22} /> קבלת סחורה</h1>
         <div className="text-sm text-slate-500 mt-1">{order.supplier.name} · הזמנה #{order.number}</div>
-        {data?.draft && <div className="mt-1 text-xs text-amber-600">נטענה טיוטת קבלה שנשמרה קודם</div>}
+        {data?.draft && <div className="mt-1 text-xs text-await-fg">נטענה טיוטת קבלה שנשמרה קודם</div>}
       </div>
 
       {order.items.map((item) => {
@@ -262,7 +262,7 @@ export function ReceiveOrder() {
             <div className="grid grid-cols-5 gap-1.5 mt-3">
               {statusButtons.map((b) => (
                 <button key={b.key}
-                  className={`rounded-lg border py-2 text-xs font-medium transition-colors ${line.status === b.key ? SOLID[RECEIPT_LINE_STATUS[b.key].tone] : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                  className={`rounded-lg border min-h-11 flex items-center justify-center text-xs font-medium transition-colors ${line.status === b.key ? SOLID[RECEIPT_LINE_STATUS[b.key].tone] : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                   onClick={() => setLine(item.id, { status: b.key, ...(b.key === 'missing' ? { qty: 0 } : {}) })}>
                   {b.label}
                 </button>
@@ -283,7 +283,7 @@ export function ReceiveOrder() {
       </label>
 
       {/* sticky action bar */}
-      <div className="fixed bottom-14 lg:bottom-0 inset-x-0 lg:ms-60 bg-white/95 backdrop-blur border-t border-slate-200 p-3 flex gap-2 z-30"
+      <div className="fixed bottom-14 lg:bottom-0 inset-x-0 lg:ms-60 bg-white border-t border-slate-200 p-3 flex gap-2 z-30"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
         <div className="hidden sm:flex items-center text-xs text-slate-500 me-auto ps-2">
           <Camera size={14} className="me-1" /> צילום החשבונית יתאפשר מיד לאחר סיום הקבלה

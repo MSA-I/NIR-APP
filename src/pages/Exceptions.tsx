@@ -20,6 +20,10 @@ export default function Exceptions() {
   const [statusFilter, setStatusFilter] = useParamState('status', 'open');
   const [typeFilter, setTypeFilter] = useParamState('type');
   const [severityFilter, setSeverityFilter] = useParamState('severity');
+  // ?id=<exception_id> from the dashboard/alerts deep-links to a single exception. When set it
+  // pins the list to that one row regardless of the other filters (so a resolved exception the
+  // dashboard points at still shows); the first dropdown change clears it back to normal filtering.
+  const [idFilter, setIdFilter] = useParamState('id');
   const [selected, setSelected] = useState<Row | null>(null);
 
   const { data, loading, error, refetch } = useQuery(async () =>
@@ -27,10 +31,11 @@ export default function Exceptions() {
       .select('*, supplier:suppliers(name)')
       .order('created_at', { ascending: false })) as Promise<Row[]>);
 
-  const rows = (data ?? []).filter((r) =>
-    (statusFilter === 'all' || (statusFilter === 'open' ? ['open', 'in_progress'].includes(r.status) : r.status === statusFilter)) &&
-    (!typeFilter || typeFilter.split(',').includes(r.type)) &&
-    (!severityFilter || r.severity === severityFilter));
+  const rows = (data ?? []).filter((r) => idFilter
+    ? r.id === idFilter
+    : (statusFilter === 'all' || (statusFilter === 'open' ? ['open', 'in_progress'].includes(r.status) : r.status === statusFilter)) &&
+      (!typeFilter || typeFilter.split(',').includes(r.type)) &&
+      (!severityFilter || r.severity === severityFilter));
 
   const canWrite = !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
 
@@ -55,17 +60,20 @@ export default function Exceptions() {
         onRowClick={(r) => setSelected(r)}
         toolbar={
           <>
-            <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            {idFilter && (
+              <button className="btn-ghost text-sm text-indigo-700" onClick={() => setIdFilter('')}>הצג את כל החריגים</button>
+            )}
+            <select className="input w-auto!" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setIdFilter(''); }}>
               <option value="open">פתוחים ובטיפול</option>
               <option value="resolved">טופלו</option>
               <option value="dismissed">נדחו</option>
               <option value="all">הכל</option>
             </select>
-            <select className="input w-auto!" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+            <select className="input w-auto!" value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setIdFilter(''); }}>
               <option value="">כל הסוגים</option>
               {Object.entries(EXCEPTION_TYPE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
-            <select className="input w-auto!" value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)}>
+            <select className="input w-auto!" value={severityFilter} onChange={(e) => { setSeverityFilter(e.target.value); setIdFilter(''); }}>
               <option value="">כל החומרות</option>
               {Object.entries(SEVERITY).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
@@ -130,7 +138,7 @@ function ExceptionDetail({ row, canWrite, onClose, onChanged, onNavigate }: {
         <div className="flex items-center gap-2">
           <StatusBadge meta={SEVERITY[row.severity]} />
           <StatusBadge meta={EXCEPTION_STATUS[row.status]} />
-          <span className="text-xs text-slate-400">נפתח {fmtDate(row.created_at)}</span>
+          <span className="text-xs text-slate-500">נפתח {fmtDate(row.created_at)}</span>
         </div>
         <div className="font-medium text-slate-900">{row.title}</div>
         {detailLines.length > 0 && (

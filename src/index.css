@@ -118,6 +118,16 @@ body {
 .page-fade { animation: page-fade 0.15s ease-out; }
 @media (prefers-reduced-motion: reduce) { .page-fade { animation: none; } }
 
+/* Reduced-motion coverage beyond the page fade (audit 2026-07-21). The skeleton pulse is pure
+   decoration — its static slate-200 fill still reads as a placeholder — so it stops entirely.
+   A spinner, by contrast, encodes live "loading" state, so it must keep turning; it is only
+   slowed to a calm 1.5s so it no longer reads as urgent motion. Rules are unlayered, so they win
+   over the Tailwind utilities they override. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+  .animate-spin { animation-duration: 1.5s; }
+}
+
 @media print {
   .no-print { display: none !important; }
   body { background: white; }

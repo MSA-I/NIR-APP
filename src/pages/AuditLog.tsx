@@ -43,7 +43,7 @@ export default function AuditLogPage() {
 
   const columns: Column<Row>[] = [
     { key: 'time', header: 'מועד', sortValue: (r) => r.created_at, render: (r) => <span className="text-slate-500">{fmtDateTime(r.created_at)}</span> },
-    { key: 'user', header: 'משתמש', render: (r) => r.profile?.full_name ?? <span className="text-slate-400">מערכת</span> },
+    { key: 'user', header: 'משתמש', render: (r) => r.profile?.full_name ?? <span className="text-slate-500">מערכת</span> },
     { key: 'action', header: 'פעולה', render: (r) => <span className="font-medium">{actionLabel(r.action)}</span> },
     { key: 'entity', header: 'ישות', render: (r) => ENTITY_LABEL[r.entity_type] ?? r.entity_type },
     { key: 'reason', header: 'סיבה', render: (r) => <span className="text-slate-500 max-w-72 truncate inline-block">{r.reason ?? ''}</span> },

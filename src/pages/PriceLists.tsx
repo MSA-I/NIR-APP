@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useParamState } from '../lib/useParamState';
 import { toHebrewError } from "../lib/errors";
-import { TrendingUp, TrendingDown, Upload, History, Pencil } from 'lucide-react';
+import { TrendingUp, TrendingDown, Upload, History, Pencil, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -20,6 +20,9 @@ export default function PriceLists() {
   // '1' via ?increases=1 (from the dashboard price-increase card); re-syncs on navigation.
   const [increasesStr, setIncreasesStr] = useParamState('increases');
   const onlyIncreases = increasesStr === '1';
+  // ?product=<product_id> deep-links from a product/supplier card to that one product's prices;
+  // coexists with the supplier + increases filters and is cleared from the chip below.
+  const [productFilter, setProductFilter] = useParamState('product');
   const [historyFor, setHistoryFor] = useState<Row | null>(null);
   const [editFor, setEditFor] = useState<Row | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -39,7 +42,10 @@ export default function PriceLists() {
 
   const rows = (data ?? []).filter((r) =>
     (!supplierFilter || r.supplier_id === supplierFilter) &&
+    (!productFilter || r.product_id === productFilter) &&
     (!onlyIncreases || (r.previous_price != null && r.current_price > r.previous_price)));
+
+  const activeProductName = productFilter ? data?.find((r) => r.product_id === productFilter)?.product.name : null;
 
   const changePct = (r: Row) => r.previous_price ? ((r.current_price - r.previous_price) / r.previous_price) * 100 : 0;
 
@@ -84,6 +90,11 @@ export default function PriceLists() {
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q) || r.supplier.name.toLowerCase().includes(q)}
         toolbar={
           <>
+            {productFilter && (
+              <button className="btn-ghost text-sm text-indigo-700 flex items-center gap-1" onClick={() => setProductFilter('')} title="הסרת סינון מוצר">
+                <X size={14} /> {activeProductName ?? 'מוצר'}
+              </button>
+            )}
             <select className="input w-auto!" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
               <option value="">כל הספקים</option>
               {suppliers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
@@ -119,7 +130,7 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
             ))}
           </tbody>
         </table>
-      ) : <div className="text-sm text-slate-400 py-4 text-center">אין רשומות היסטוריה</div>}
+      ) : <div className="text-sm text-slate-500 py-4 text-center">אין רשומות היסטוריה</div>}
     </Modal>
   );
 }

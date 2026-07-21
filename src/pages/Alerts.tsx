@@ -51,7 +51,7 @@ export default function Alerts() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="page-title">התראות וסיכום עסקי</h1>
-          <p className="text-xs text-slate-400 mt-0.5">נבדק {fmtDateTime(data.generatedAt)}</p>
+          <p className="text-xs text-slate-500 mt-0.5">נבדק {fmtDateTime(data.generatedAt)}</p>
         </div>
         <button className="btn-secondary" onClick={() => void refetch()} disabled={fetching}>
           <RefreshCw size={15} className={fetching ? 'animate-spin' : ''} />
@@ -91,7 +91,7 @@ export default function Alerts() {
 
       {/* Naming what is not covered belongs on the screen, not only in the docs: a manager
           who reads this page as complete would stop looking elsewhere. */}
-      <p className="text-xs text-slate-400 leading-relaxed">
+      <p className="text-xs text-slate-500 leading-relaxed">
         אינו נבדק: מלאי נמוך (אין מעקב כמויות במערכת) · חריגה בתקציב (לא הוגדר תקציב).
         מועדי פירעון נבדקים רק על דרישות תשלום שהוזן להן תאריך.
       </p>

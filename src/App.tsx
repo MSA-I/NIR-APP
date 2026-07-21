@@ -1,35 +1,44 @@
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import type { ReactNode } from 'react';
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { useAuth, homeFor } from './auth/AuthContext';
 import { PageLoader } from './components/ui';
 import type { Role } from './lib/types';
 
+// Eager: the auth shell that must paint before (or regardless of) a resolved session.
+// Layout is the persistent chrome around every tenant screen; Login/AcceptInvite are the
+// public routes an unauthenticated or fresh-invite visitor lands on first.
 import Layout from './components/Layout';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Alerts from './pages/Alerts';
-import { SuppliersList, SupplierCard } from './pages/Suppliers';
-import Products from './pages/Products';
-import PriceLists from './pages/PriceLists';
-import NewOrder from './pages/NewOrder';
-import { OrdersList, OrderDetail } from './pages/Orders';
-import { ReceivingList, ReceiveOrder } from './pages/Receiving';
-import { InvoicesList } from './pages/Invoices';
-import InvoiceNew from './pages/InvoiceNew';
-import InvoiceDetail from './pages/InvoiceDetail';
-import Credits from './pages/Credits';
-import PaymentRequests from './pages/PaymentRequests';
-import PayerQueue from './pages/PayerQueue';
-import Payments from './pages/Payments';
-import Bank from './pages/Bank';
-import Exceptions from './pages/Exceptions';
-import Reports from './pages/Reports';
-import AuditLogPage from './pages/AuditLog';
-import Settings from './pages/Settings';
-import SupplierPrices from './pages/SupplierPrices';
-import Admin from './pages/Admin';
 import AcceptInvite from './pages/AcceptInvite';
-import Onboarding from './pages/Onboarding';
+
+// Lazy: every screen behind the Layout loads its own chunk on demand, so a supplier hitting
+// /my-prices or a payer hitting /pay never downloads Dashboard/Reports (and recharts) up front.
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Alerts = lazy(() => import('./pages/Alerts'));
+const SuppliersList = lazy(() => import('./pages/Suppliers').then((m) => ({ default: m.SuppliersList })));
+const SupplierCard = lazy(() => import('./pages/Suppliers').then((m) => ({ default: m.SupplierCard })));
+const Products = lazy(() => import('./pages/Products'));
+const PriceLists = lazy(() => import('./pages/PriceLists'));
+const NewOrder = lazy(() => import('./pages/NewOrder'));
+const OrdersList = lazy(() => import('./pages/Orders').then((m) => ({ default: m.OrdersList })));
+const OrderDetail = lazy(() => import('./pages/Orders').then((m) => ({ default: m.OrderDetail })));
+const ReceivingList = lazy(() => import('./pages/Receiving').then((m) => ({ default: m.ReceivingList })));
+const ReceiveOrder = lazy(() => import('./pages/Receiving').then((m) => ({ default: m.ReceiveOrder })));
+const InvoicesList = lazy(() => import('./pages/Invoices').then((m) => ({ default: m.InvoicesList })));
+const InvoiceNew = lazy(() => import('./pages/InvoiceNew'));
+const InvoiceDetail = lazy(() => import('./pages/InvoiceDetail'));
+const Credits = lazy(() => import('./pages/Credits'));
+const PaymentRequests = lazy(() => import('./pages/PaymentRequests'));
+const PayerQueue = lazy(() => import('./pages/PayerQueue'));
+const Payments = lazy(() => import('./pages/Payments'));
+const Bank = lazy(() => import('./pages/Bank'));
+const Exceptions = lazy(() => import('./pages/Exceptions'));
+const Reports = lazy(() => import('./pages/Reports'));
+const AuditLogPage = lazy(() => import('./pages/AuditLog'));
+const Settings = lazy(() => import('./pages/Settings'));
+const SupplierPrices = lazy(() => import('./pages/SupplierPrices'));
+const Admin = lazy(() => import('./pages/Admin'));
+const Onboarding = lazy(() => import('./pages/Onboarding'));
 
 function Guard({ roles, children }: { roles: Role[]; children: ReactNode }) {
   const { session, profile, loading } = useAuth();
@@ -95,10 +104,12 @@ export default function App() {
   // the unavailable screen.
   if (!isPublic && session && !loading && !profile && isPlatformAdmin) {
     return (
-      <Routes>
-        <Route path="/admin" element={<PlatformGuard><Admin /></PlatformGuard>} />
-        <Route path="*" element={<Navigate to="/admin" replace />} />
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/admin" element={<PlatformGuard><Admin /></PlatformGuard>} />
+          <Route path="*" element={<Navigate to="/admin" replace />} />
+        </Routes>
+      </Suspense>
     );
   }
   if (!isPublic && session && !loading && !profile) return <AccountUnavailable />;
@@ -108,6 +119,10 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/accept-invite" element={<AcceptInvite />} />
       <Route element={session || loading ? <Layout /> : <Navigate to="/login" replace />}>
+        {/* One Suspense boundary for every lazy page, nested under the Layout so the shell
+            (nav, requires-attention strip) stays mounted and only the content area shows
+            PageLoader while a page chunk loads. */}
+        <Route element={<Suspense fallback={<PageLoader />}><Outlet /></Suspense>}>
         <Route path="/" element={loading ? <PageLoader /> : <Navigate to={homeFor(profile?.role)} replace />} />
 
         <Route path="/dashboard" element={<Guard roles={FINANCE}><Dashboard /></Guard>} />
@@ -145,6 +160,7 @@ export default function App() {
         <Route path="/admin" element={<PlatformGuard><Admin /></PlatformGuard>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
       </Route>
     </Routes>
   );

@@ -149,7 +149,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
             <li key={d.id} className="flex items-center gap-2 px-3 py-2 text-sm">
               <FileText size={15} className="text-slate-400 shrink-0" />
               <button className="text-indigo-700 hover:underline truncate" onClick={() => void open(d)}>{d.file_name}</button>
-              <span className="text-xs text-slate-400 ms-auto shrink-0">{fmtDateTime(d.created_at)}</span>
+              <span className="text-xs text-slate-500 ms-auto shrink-0">{fmtDateTime(d.created_at)}</span>
               {canDelete && (
                 <button className="btn-ghost p-1! text-slate-400 hover:text-rose-600" onClick={() => setPending(d)} aria-label="מחיקה">
                   <Trash2 size={14} />
@@ -159,7 +159,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
           ))}
         </ul>
       ) : (
-        <div className="text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg px-3 py-4 text-center">אין מסמכים</div>
+        <div className="text-sm text-slate-500 border border-dashed border-slate-200 rounded-lg px-3 py-4 text-center">אין מסמכים</div>
       )}
 
       <ConfirmDialog

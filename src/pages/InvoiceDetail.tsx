@@ -109,10 +109,11 @@ export default function InvoiceDetail() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="card card-pad"><div className="text-xs text-slate-500">סה״כ חשבונית</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(inv.total_amount)}</div>
-          <div className="text-xs text-slate-400 mt-0.5">לפני מע״מ {fmtMoneyExact(inv.amount_before_vat)} + מע״מ {fmtMoneyExact(inv.vat_amount)}</div></div>
-        <div className="card card-pad"><div className="text-xs text-slate-500">שולם</div><div className="text-lg font-bold num text-start text-emerald-700">{fmtMoneyExact(data.balance?.paid_amount ?? 0)}</div></div>
-        <div className="card card-pad"><div className="text-xs text-slate-500">זוכה</div><div className="text-lg font-bold num text-start text-violet-700">{fmtMoneyExact(data.balance?.credited_amount ?? 0)}</div></div>
-        <div className="card card-pad"><div className="text-xs text-slate-500">יתרה לתשלום</div><div className={`text-lg font-bold num text-start ${data.balance && data.balance.balance > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
+          <div className="text-xs text-slate-500 mt-0.5">לפני מע״מ {fmtMoneyExact(inv.amount_before_vat)} + מע״מ {fmtMoneyExact(inv.vat_amount)}</div></div>
+        <div className="card card-pad"><div className="text-xs text-slate-500">שולם</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.paid_amount ?? 0)}</div></div>
+        {/* credited = already offset, a settled claim like "paid" — done, not the retired violet (audit 2026-07-21) */}
+        <div className="card card-pad"><div className="text-xs text-slate-500">זוכה</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.credited_amount ?? 0)}</div></div>
+        <div className="card card-pad"><div className="text-xs text-slate-500">יתרה לתשלום</div><div className={`text-lg font-bold num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -140,7 +141,7 @@ export default function InvoiceDetail() {
               <ul className="divide-y divide-slate-100 border border-slate-100 rounded-lg text-sm">
                 {data.allocations.map((a, i) => (
                   <li key={i} className="flex justify-between px-3 py-2">
-                    <span>תשלום #{a.payment.number} · {fmtDate(a.payment.paid_date)} {a.payment.reference && <span className="text-slate-400" dir="ltr">({a.payment.reference})</span>}</span>
+                    <span>תשלום #{a.payment.number} · {fmtDate(a.payment.paid_date)} {a.payment.reference && <span className="text-slate-500" dir="ltr">({a.payment.reference})</span>}</span>
                     <span className="num font-medium">{fmtMoneyExact(a.amount)}</span>
                   </li>
                 ))}
@@ -157,7 +158,7 @@ export default function InvoiceDetail() {
             {checking ? <Loader2 size={14} className="animate-spin" /> : <SearchCheck size={15} />} הרצת בדיקות
           </button>
         </div>
-        {checks ? <CheckList checks={checks} /> : <div className="text-sm text-slate-400">לחץ ״הרצת בדיקות״ להשוואת החשבונית מול הזמנות, קבלות, תשלומים ותנועות בנק.</div>}
+        {checks ? <CheckList checks={checks} /> : <div className="text-sm text-slate-500">לחץ ״הרצת בדיקות״ להשוואת החשבונית מול הזמנות, קבלות, תשלומים ותנועות בנק.</div>}
       </div>
 
       {creditOpen && (
@@ -200,7 +201,7 @@ function CreditFromInvoice({ invoice, onClose, onSaved }: { invoice: FullInvoice
         </div>
         <div><label className="label">סכום (₪)</label><input type="number" step="0.01" className="input num" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
         <div><label className="label">פירוט</label><textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-        <div className="text-xs text-slate-400">נפתח בתאריך {fmtDate(todayISO())} · הזיכוי ישפיע על יתרת הספק לאחר אישור/קיזוז</div>
+        <div className="text-xs text-slate-500">נפתח בתאריך {fmtDate(todayISO())} · הזיכוי ישפיע על יתרת הספק לאחר אישור/קיזוז</div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
         <button className="btn-secondary" onClick={onClose}>ביטול</button>

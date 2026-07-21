@@ -136,7 +136,7 @@ export default function Admin() {
             </p>
             <CredentialRow label="אימייל" value={handover.email} onCopy={() => toast('הועתק')} />
             <CredentialRow label="סיסמה ראשונית" value={handover.password} onCopy={() => toast('הועתק')} />
-            <div className="text-xs text-slate-400">
+            <div className="text-xs text-slate-500">
               נוצרו {fmtNum(handover.result.categories_created)} קטגוריות בסיס. הארגון נפתח בסטטוס «תקופת ניסיון».
             </div>
             <div className="flex justify-end">

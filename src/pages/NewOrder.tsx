@@ -164,7 +164,7 @@ export default function NewOrder() {
                 <button key={p.id} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-indigo-50/50 text-start" onClick={() => addToCart(p)}>
                   <span>
                     <span className="text-sm font-medium text-slate-800">{p.name}</span>
-                    <span className="text-xs text-slate-400 ms-2">{p.unit}</span>
+                    <span className="text-xs text-slate-500 ms-2">{p.unit}</span>
                   </span>
                   <span className="text-xs text-slate-500 num">
                     {offers.length ? `₪${offers[0].current_price.toFixed(2)}` : 'אין ספק'}
@@ -172,7 +172,7 @@ export default function NewOrder() {
                 </button>
               );
             })}
-            {!filteredProducts.length && <div className="px-4 py-8 text-center text-sm text-slate-400">לא נמצאו מוצרים</div>}
+            {!filteredProducts.length && <div className="px-4 py-8 text-center text-sm text-slate-500">לא נמצאו מוצרים</div>}
           </div>
         </div>
 
@@ -184,7 +184,7 @@ export default function NewOrder() {
               <span className="text-sm text-slate-500">סה״כ משוער: <b className="num">{fmtMoneyExact(total)}</b></span>
             </div>
             {cart.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-slate-400">בחר מוצרים מהרשימה משמאל כדי להתחיל</div>
+              <div className="px-4 py-10 text-center text-sm text-slate-500">בחר מוצרים מהרשימה משמאל כדי להתחיל</div>
             ) : (
               <div className="divide-y divide-slate-50">
                 {cart.map((item, idx) => {
@@ -194,7 +194,7 @@ export default function NewOrder() {
                     <div key={item.product.id} className="px-4 py-3 flex flex-wrap items-center gap-3">
                       <div className="flex-1 min-w-40">
                         <div className="text-sm font-medium text-slate-800">{item.product.name}</div>
-                        <div className="text-xs text-slate-400">{item.product.unit}</div>
+                        <div className="text-xs text-slate-500">{item.product.unit}</div>
                       </div>
                       <div className="flex items-center gap-1">
                         <button className="btn-secondary p-1.5!" onClick={() => setCart((c) => c.map((x, i) => i === idx ? { ...x, qty: Math.max(1, x.qty - 1) } : x))} aria-label="הפחתה"><Minus size={14} /></button>
@@ -236,7 +236,7 @@ export default function NewOrder() {
                   return (
                     <div key={g.supplier.id} className={`rounded-lg border px-3 py-2.5 ${underMin ? 'border-amber-300 bg-amber-50' : 'border-slate-200'}`}>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium text-slate-800">{g.supplier.name} <span className="text-slate-400 font-normal">({g.items.length} פריטים)</span></span>
+                        <span className="font-medium text-slate-800">{g.supplier.name} <span className="text-slate-500 font-normal">({g.items.length} פריטים)</span></span>
                         <span className="font-semibold num">{fmtMoneyExact(g.subtotal)}</span>
                       </div>
                       {underMin && (

@@ -1,22 +1,26 @@
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
-import { TrendingUp, ChevronLeft } from 'lucide-react';
+import { TrendingUp, ChevronLeft, RotateCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { PageLoader, StatusBadge, ErrorNote, AttentionZone, StatTile, TaskLine, type AttentionItem } from '../components/ui';
+import { PageLoader, StatusBadge, Note, AttentionZone, StatTile, TaskLine, type AttentionItem } from '../components/ui';
 import { EXCEPTION_TYPE, SEVERITY } from '../lib/status';
 import { fmtMoney, fmtMoneyExact, fmtMonth, toLocalISO } from '../lib/format';
 
 // single-hue magnitude palette (dataviz rule: identity sits on the axis, color encodes nothing else)
 const BAR_COLOR = '#4f46e5';
 const money = (v: number) => `₪${Math.round(v).toLocaleString('he-IL')}`;
+// compact ₪ for dense axes (the 8-bar weekly series): full labels overlap at that count.
+const moneyShort = (v: number) => (Math.abs(v) >= 1000 ? `₪${(v / 1000).toLocaleString('he-IL', { maximumFractionDigits: 1 })}k` : `₪${Math.round(v)}`);
+// "עודכן ב-HH:MM" freshness stamp — the screen promises real-time, so it says when it last read.
+const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit' });
 
 // Week bucketing for the weekly-purchasing chart. Local-day helper is shared (toLocalISO).
 const pad = (n: number) => String(n).padStart(2, '0');
 const startOfWeek = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - x.getDay()); return x; };
 
 export default function Dashboard() {
-  const { data, loading, error } = useQuery(async () => {
+  const { data, loading, error, refetch, fetching } = useQuery(async () => {
     const now = new Date();
     const todayISO = toLocalISO(now);
     const monthStart = `${todayISO.slice(0, 7)}-01`;
@@ -46,7 +50,7 @@ export default function Dashboard() {
       supabase.from('purchase_order_items').select('qty, unit_price, product:products(category:categories(name)), order:purchase_orders!inner(created_at, status)').gte('order.created_at', chartsFrom),
       // price increases — now bounded to the last 30 days (was a full unbounded scan): matches the
       // "מוצרים שהתייקרו לאחרונה" label and the alerts window (OPEN-DECISIONS #26).
-      supabase.from('supplier_products').select('current_price, previous_price, price_effective_date, product:products(name), supplier:suppliers(name)').gte('price_effective_date', last30dISO).not('previous_price', 'is', null).order('price_effective_date', { ascending: false }),
+      supabase.from('supplier_products').select('current_price, previous_price, price_effective_date, product:products(id, name), supplier:suppliers(name)').gte('price_effective_date', last30dISO).not('previous_price', 'is', null).order('price_effective_date', { ascending: false }),
       supabase.from('purchase_request_items').select('qty, unit_price, product_id, request:purchase_requests!inner(created_at, status)').gte('request.created_at', monthStart).eq('request.status', 'split'),
       // available offers for the savings estimate — kept minimal (2 cols) but cannot be date-bounded:
       // savings needs the max CURRENT available offer per product regardless of when it was set.
@@ -67,7 +71,7 @@ export default function Dashboard() {
     const supBal = unwrap(supBalRes) as { supplier_id: string; open_balance: number }[];
     const suppliers = new Map((unwrap(suppliersRes) as { id: string; name: string }[]).map((s) => [s.id, s.name]));
     const poItems = unwrap(poItemsRes) as { qty: number; unit_price: number; product: { category: { name: string } | null } | null; order: { created_at: string } }[];
-    const priceRows = unwrap(priceUpRes) as { current_price: number; previous_price: number | null; price_effective_date: string; product: { name: string }; supplier: { name: string } }[];
+    const priceRows = unwrap(priceUpRes) as { current_price: number; previous_price: number | null; price_effective_date: string; product: { id: string; name: string }; supplier: { name: string } }[];
     const reqItems = unwrap(reqItemsRes) as { qty: number; unit_price: number | null; product_id: string }[];
     const offers = unwrap(offersRes) as { product_id: string; current_price: number }[];
     const openPos = unwrap(openPoRes) as { items: { qty: number; unit_price: number; received_qty: number }[] }[];
@@ -175,6 +179,7 @@ export default function Dashboard() {
     ];
 
     return {
+      fetchedAt: new Date(),   // query-completion time → drives the "עודכן ב-" stamp
       attention,
       money: { openBalance, paidMonth, purchasedMonth, monthKey },
       monthly, weekly, momChange, categories, savings,
@@ -194,21 +199,44 @@ export default function Dashboard() {
   });
 
   if (loading) return <PageLoader />;
-  if (error || !data) return <ErrorNote message={error ?? 'שגיאה'} />;
 
   return (
     <div className="space-y-5">
-      <h1 className="page-title">דשבורד ניהולי</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="page-title">דשבורד ניהולי</h1>
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          {data?.fetchedAt && <span>עודכן ב-<span className="num">{timeFmt.format(data.fetchedAt)}</span></span>}
+          <button className="btn-ghost py-1! px-2!" onClick={() => void refetch()} disabled={fetching}
+            aria-label="רענון נתוני הדשבורד" title="רענון">
+            <RotateCw size={15} className={fetching ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      </div>
 
-      {/* Nir §1–3 — the control center */}
-      <AttentionZone items={data.attention} />
+      {/* Truth-reporting (CLAUDE.md): a failed load/refetch shows an inline note WITH retry and keeps
+          whatever data we still hold on screen — it never blanks the sections that did load. */}
+      {error && (
+        <Note tone="alert" className="flex items-center justify-between gap-3">
+          <span>{error}</span>
+          <button className="btn-ghost py-1! shrink-0 whitespace-nowrap" onClick={() => void refetch()}>נסה שוב</button>
+        </Note>
+      )}
 
-      {/* thin money strip — context, all navigable */}
+      {data && (<>
+      {/* Nir §1–3 — the control center. totalLabel scopes the summed ₪ as workload, not net debt. */}
+      <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול" />
+
+      {/* thin money strip — context, all navigable. `sub` carries a short plain-Hebrew gloss of
+          each term (StatTile has no title-tooltip prop; `sub` is the visible, readable equivalent). */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <StatTile title="יתרת חשבוניות פתוחות" value={fmtMoney(data.money.openBalance)} tone="await" to="/invoices?pay=unpaid" />
-        <StatTile title="שולם לספקים החודש" value={fmtMoney(data.money.paidMonth)} tone="done" to={`/payments?month=${data.money.monthKey}`} />
+        <StatTile title="יתרת חשבוניות פתוחות" value={fmtMoney(data.money.openBalance)} tone="await" to="/invoices?pay=unpaid"
+          sub="סך החוב לספקים על חשבוניות שטרם שולמו במלואן" />
+        <StatTile title="שולם לספקים החודש" value={fmtMoney(data.money.paidMonth)} tone="done" to={`/payments?month=${data.money.monthKey}`}
+          sub="סך התשלומים שיצאו לספקים החודש" />
         <StatTile title="נרכש החודש" value={fmtMoney(data.money.purchasedMonth)} to="/orders?status=all"
-          sub={data.savings != null ? `חיסכון משוער מהשוואת מחירים: ${fmtMoney(data.savings)}` : undefined} />
+          sub={data.savings != null
+            ? `חיסכון משוער החודש: ההפרש מול המחיר היקר ביותר שהוצע — ${fmtMoney(data.savings)}`
+            : 'שווי ההזמנות שנוצרו החודש (במחירי ההזמנה)'} />
       </div>
 
       {/* operational detail — exceptions + recent price increases */}
@@ -222,17 +250,17 @@ export default function Dashboard() {
             <ul className="divide-y divide-slate-100">
               {data.exceptions.map((e) => (
                 <li key={e.id}>
-                  <Link to="/exceptions?status=open" className="block py-2 text-sm -mx-2 px-2 rounded-lg hover:bg-slate-50">
+                  <Link to={`/exceptions?id=${e.id}`} className="block py-2 text-sm -mx-2 px-2 rounded-lg hover:bg-slate-50">
                     <div className="flex items-center gap-2">
                       <StatusBadge meta={SEVERITY[e.severity]} />
-                      <span className="text-xs text-slate-400">{EXCEPTION_TYPE[e.type]}</span>
+                      <span className="text-xs text-slate-500">{EXCEPTION_TYPE[e.type]}</span>
                     </div>
                     <div className="text-slate-700 truncate mt-0.5">{e.title}</div>
                   </Link>
                 </li>
               ))}
             </ul>
-          ) : <div className="text-sm text-done-fg py-6 text-center">אין חריגים פתוחים 🎉</div>}
+          ) : <div className="text-sm text-done-fg py-6 text-center">אין חריגים פתוחים כרגע</div>}
           {/* folded risk hints (Nir §1: duplicate suspicions, unmatched bank movements).
               Shown only when > 0 — a risk indicator printing "0" is the fake-zero the plan forbids;
               the count-0 "all clear" is already carried by AttentionZone tier B. */}
@@ -257,20 +285,22 @@ export default function Dashboard() {
             <ul className="divide-y divide-slate-100">
               {data.priceIncreases.map((p, i) => (
                 <li key={i}>
-                  <Link to="/prices?increases=1" className="flex items-center justify-between py-2 text-sm -mx-2 px-2 rounded-lg hover:bg-slate-50">
+                  <Link to={`/prices?product=${p.product.id}`} className="flex items-center justify-between py-2 text-sm -mx-2 px-2 rounded-lg hover:bg-slate-50">
                     <span className="min-w-0 truncate">
                       <span className="font-medium text-slate-800">{p.product.name}</span>
-                      <span className="text-slate-400 text-xs ms-2">{p.supplier.name}</span>
+                      <span className="text-slate-500 text-xs ms-2">{p.supplier.name}</span>
                     </span>
                     <span className="flex items-center gap-3 shrink-0">
-                      <span className="text-xs text-slate-400 num">₪{p.previous_price!.toFixed(2)} ← ₪{p.current_price.toFixed(2)}</span>
-                      <span className="inline-flex items-center gap-1 text-trend-up-fg font-medium num" dir="ltr"><TrendingUp size={13} />+{p.pct.toFixed(1)}%</span>
+                      {/* explicit direction (מ־… ל־…): "₪X ← ₪Y" is ambiguous in RTL */}
+                      <span className="text-xs text-slate-500">מ־<span className="num">₪{p.previous_price!.toFixed(2)}</span> ל־<span className="num">₪{p.current_price.toFixed(2)}</span></span>
+                      {/* fix: text in the darker alert-fg (contrast); arrow keeps the lighter trend hue */}
+                      <span className="inline-flex items-center gap-1 text-alert-fg font-medium num" dir="ltr"><TrendingUp size={13} className="text-trend-up-fg" />+{p.pct.toFixed(1)}%</span>
                     </span>
                   </Link>
                 </li>
               ))}
             </ul>
-          ) : <div className="text-sm text-slate-400 py-6 text-center">אין התייקרויות אחרונות</div>}
+          ) : <div className="text-sm text-slate-500 py-6 text-center">אין התייקרויות אחרונות</div>}
         </div>
       </div>
 
@@ -292,7 +322,7 @@ export default function Dashboard() {
                 </li>
               ))}
             </ul>
-          ) : <div className="text-sm text-slate-400 py-6 text-center">אין יתרות פתוחות</div>}
+          ) : <div className="text-sm text-slate-500 py-6 text-center">אין יתרות פתוחות</div>}
         </div>
 
         <div className="card card-pad">
@@ -312,9 +342,10 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card card-pad">
           <div className="flex items-center justify-between mb-1">
-            <h2 className="section-title">הוצאות רכש לפי חודש</h2>
+            <h2 className="section-title" title="סכום החשבוניות שהתקבלו בכל חודש">הוצאות רכש לפי חודש</h2>
             {data.momChange != null && (
-              <span className={`text-xs font-medium ${data.momChange > 0 ? 'text-trend-up-fg' : 'text-trend-down-fg'}`} dir="ltr">
+              // trend text in the darker -fg pair for contrast (was rose-500/emerald-500, too light)
+              <span className={`text-xs font-medium ${data.momChange > 0 ? 'text-alert-fg' : 'text-done-fg'}`} dir="ltr">
                 {data.momChange > 0 ? '+' : ''}{data.momChange.toFixed(0)}% מול חודש קודם
               </span>
             )}
@@ -326,7 +357,7 @@ export default function Dashboard() {
                 <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
                 <YAxis hide />
                 <Tooltip formatter={(v) => money(Number(v))} labelStyle={{ fontFamily: 'Heebo' }} />
-                <Bar dataKey="total" name="סה״כ" fill={BAR_COLOR} radius={[4, 4, 0, 0]} maxBarSize={56}>
+                <Bar dataKey="total" name="סה״כ" fill={BAR_COLOR} radius={[4, 4, 0, 0]} maxBarSize={56} isAnimationActive={false}>
                   <LabelList dataKey="total" position="top" formatter={(v: number) => money(v)} style={{ fontSize: 11, fill: '#475569' }} />
                 </Bar>
               </BarChart>
@@ -335,7 +366,7 @@ export default function Dashboard() {
         </div>
 
         <div className="card card-pad">
-          <h2 className="section-title mb-1">רכש לפי שבוע (8 שבועות אחרונים)</h2>
+          <h2 className="section-title mb-1" title="שווי ההזמנות שנוצרו בכל שבוע (במחירי ההזמנה)">רכש לפי שבוע (8 שבועות אחרונים)</h2>
           <div dir="ltr" className="h-56">
             <ResponsiveContainer>
               <BarChart data={data.weekly} margin={{ top: 20, left: 8, right: 8 }}>
@@ -343,29 +374,37 @@ export default function Dashboard() {
                 <XAxis dataKey="week" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
                 <YAxis hide />
                 <Tooltip formatter={(v) => money(Number(v))} labelStyle={{ fontFamily: 'Heebo' }} />
-                <Bar dataKey="total" name="סה״כ" fill={BAR_COLOR} radius={[4, 4, 0, 0]} maxBarSize={40} />
+                {/* value labels so the week series reads at a glance like the monthly chart; compact
+                    ₪ format because 8 full labels overlap (moneyShort) */}
+                <Bar dataKey="total" name="סה״כ" fill={BAR_COLOR} radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={false}>
+                  <LabelList dataKey="total" position="top" formatter={(v: number) => moneyShort(v)} style={{ fontSize: 10, fill: '#475569' }} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         <div className="card card-pad lg:col-span-2">
-          <h2 className="section-title mb-1">הוצאות לפי קטגוריה (החודש)</h2>
-          <div dir="ltr" className="h-56">
-            <ResponsiveContainer>
-              <BarChart data={data.categories} layout="vertical" margin={{ left: 8, right: 56 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                <XAxis type="number" hide />
-                <YAxis type="category" dataKey="name" orientation="right" width={90} tick={{ fontSize: 12, fill: '#334155' }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(v) => money(Number(v))} />
-                <Bar dataKey="total" name="סה״כ" fill={BAR_COLOR} radius={[4, 0, 0, 4]} maxBarSize={22}>
-                  <LabelList dataKey="total" position="left" formatter={(v: number) => money(v)} style={{ fontSize: 11, fill: '#475569' }} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <h2 className="section-title mb-1" title="פילוח הרכש של החודש לפי קטגוריית מוצר">הוצאות לפי קטגוריה (החודש)</h2>
+          {data.categories.length ? (
+            // height tracks row count so a short list does not trail off into empty space
+            <div dir="ltr" style={{ height: Math.min(240, Math.max(96, data.categories.length * 34 + 16)) }}>
+              <ResponsiveContainer>
+                <BarChart data={data.categories} layout="vertical" margin={{ left: 8, right: 56 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="name" orientation="right" width={90} tick={{ fontSize: 12, fill: '#334155' }} axisLine={false} tickLine={false} />
+                  <Tooltip formatter={(v) => money(Number(v))} />
+                  <Bar dataKey="total" name="סה״כ" fill={BAR_COLOR} radius={[4, 0, 0, 4]} maxBarSize={22} isAnimationActive={false}>
+                    <LabelList dataKey="total" position="left" formatter={(v: number) => money(v)} style={{ fontSize: 11, fill: '#475569' }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : <div className="text-sm text-slate-500 py-6 text-center">אין רכש החודש</div>}
         </div>
       </div>
+      </>)}
     </div>
   );
 }

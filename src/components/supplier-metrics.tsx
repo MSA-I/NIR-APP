@@ -9,10 +9,11 @@
 //   RatingStars      — read-only when onChange is omitted; interactive radiogroup otherwise.
 //   PriceSparkline   — a static, axis-less step line for the prices tab.
 //
-// Colors use raw Tailwind utilities on purpose. status.ts/index.css are being rewritten to a
-// semantic color language by another agent this wave; the raw text-*/bg-* utilities used below
-// are stable regardless of how the badge-* classes settle, so these components can't be broken
-// by that churn.
+// Colors: the metric-tile value colors map to the settled semantic tokens (done/await/alert/info
+// — audit 2026-07-21, once status.ts/index.css finished this wave's rewrite). The star glyphs
+// (RatingStars) and the price trend line (PriceSparkline) stay on raw utilities/hex on purpose:
+// they are a rating affordance and a direction-of-change, not status claims, so the semantic
+// tokens would misrepresent them.
 
 import { LineChart, Line } from 'recharts';
 import { Star } from 'lucide-react';
@@ -20,11 +21,12 @@ import type { SupplierMetrics } from '../lib/types';
 
 export type { SupplierMetrics };  // re-exported so Suppliers.tsx's existing import keeps resolving
 
-// Local tone union, deliberately NOT status.ts's Tone. status.ts is being migrated to a
-// semantic color language (done/await/alert/…) by another agent this wave; these are visual
-// value-colors for metric tiles, mapped straight to raw Tailwind text utilities, so keeping
-// them local means this file cannot be broken by that migration.
-export type ScoreTone = 'slate' | 'green' | 'amber' | 'red' | 'blue' | 'violet';
+// Local tone union, deliberately NOT status.ts's Tone: these are value-colors for metric tiles
+// keyed by plain color names (green/amber/red/…) chosen at the call site from thresholds — a
+// different vocabulary than status.ts's semantic claims. The values below map each onto the
+// settled semantic token so the palette stays single-sourced (audit 2026-07-21). `violet` is
+// gone: it had no caller and no place in the four-meaning language.
+export type ScoreTone = 'slate' | 'green' | 'amber' | 'red' | 'blue';
 
 
 // Metric formatters — kept local rather than added to format.ts, which is not owned this wave.
@@ -32,14 +34,15 @@ export type ScoreTone = 'slate' | 'green' | 'amber' | 'red' | 'blue' | 'violet';
 export const fmtPct = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v)}%`);
 export const fmtLeadDays = (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(1)} ימים`);
 
-// Value text color per tone. Mirrors KpiCard's mapping (ui.tsx) and adds violet.
+// Value text color per tone → the semantic token utilities (audit 2026-07-21). Mirrors KpiCard's
+// mapping (ui.tsx). amber→await-fg lifts the 16px tile value off the failing 3.19:1 contrast that
+// amber-600 gave; green→done-fg, red→alert-fg, blue→info-fg.
 const TONE_TEXT: Record<ScoreTone, string> = {
   slate: 'text-slate-900',
-  green: 'text-emerald-700',
-  amber: 'text-amber-600',
-  red: 'text-rose-600',
-  blue: 'text-sky-700',
-  violet: 'text-violet-700',
+  green: 'text-done-fg',
+  amber: 'text-await-fg',
+  red: 'text-alert-fg',
+  blue: 'text-info-fg',
 };
 
 export interface ScoreItem {

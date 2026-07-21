@@ -59,7 +59,8 @@ export default function Credits() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title flex items-center gap-2"><RotateCcw size={22} /> זיכויים</h1>
-        <div className="text-sm text-slate-500">סה״כ זיכויים פתוחים: <b className="num text-violet-700">{fmtMoneyExact(openSum)}</b></div>
+        {/* open credits are open work (house idiom: "an open balance is open work") — await, not the retired violet (audit 2026-07-21) */}
+        <div className="text-sm text-slate-500">סה״כ זיכויים פתוחים: <b className="num text-await-fg">{fmtMoneyExact(openSum)}</b></div>
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.notes ?? '').toLowerCase().includes(q)}

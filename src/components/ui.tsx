@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, createContext, useContext, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, createContext, useContext, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, Search, X, Loader2, Inbox, Bell, Check } from 'lucide-react';
 import type { StatusMeta, Tone } from '../lib/status';
@@ -122,7 +122,7 @@ export function EmptyState({ title, subtitle }: { title: string; subtitle?: stri
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <Inbox size={36} className="text-slate-300 mb-3" />
       <div className="text-slate-600 font-medium">{title}</div>
-      {subtitle && <div className="text-sm text-slate-400 mt-1">{subtitle}</div>}
+      {subtitle && <div className="text-sm text-slate-500 mt-1">{subtitle}</div>}
     </div>
   );
 }
@@ -147,13 +147,16 @@ export function ErrorNote({ message }: { message: string }) {
 export function KpiCard({ title, value, sub, tone = 'slate', onClick }: {
   title: string; value: string; sub?: string; tone?: 'slate' | 'green' | 'amber' | 'red' | 'blue'; onClick?: () => void;
 }) {
-  const toneCls = { slate: 'text-slate-900', green: 'text-emerald-700', amber: 'text-amber-600', red: 'text-rose-600', blue: 'text-sky-700' }[tone];
+  // Public prop API (tone: slate|green|amber|red|blue) is unchanged for callers; internally each
+  // maps to a semantic token utility (audit 2026-07-21). amber→await-fg (=amber-700) also lifts
+  // the small-size value off the failing contrast the raw amber-600 gave.
+  const toneCls = { slate: 'text-slate-900', green: 'text-done-fg', amber: 'text-await-fg', red: 'text-alert-fg', blue: 'text-info-fg' }[tone];
   return (
     <button onClick={onClick} disabled={!onClick}
       className="card card-pad text-start w-full hover:border-indigo-300 hover:shadow transition-all disabled:hover:border-slate-200 disabled:hover:shadow-sm cursor-pointer disabled:cursor-default">
       <div className="text-xs font-medium text-slate-500">{title}</div>
       <div className={`text-xl font-bold mt-1 num text-start ${toneCls}`} dir="ltr" style={{ textAlign: 'right' }}>{value}</div>
-      {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
+      {sub && <div className="text-xs text-slate-500 mt-1">{sub}</div>}
     </button>
   );
 }
@@ -179,8 +182,12 @@ export interface AttentionItem {
  * count === null (cannot be measured — e.g. no payment has a due date) is shown in NEITHER
  * tier: never rendered, never shown as 0 (CLAUDE.md:37). Rows are real <Link>s, so keyboard
  * focus, middle-click and "open in new tab" all work (Nir §2: the dashboard is also a hub).
+ *
+ * `totalLabel` (audit 2026-07-21): the header ₪ sum mixes credits (money owed to us) with
+ * obligations (money we owe), so a bare figure is apples+oranges. The caller — which knows what
+ * the mix means — may pass a short qualifier (e.g. "חשיפה"); we render it, we never invent it.
  */
-export function AttentionZone({ items }: { items: AttentionItem[] }) {
+export function AttentionZone({ items, totalLabel }: { items: AttentionItem[]; totalLabel?: string }) {
   const active = items.filter((i) => i.count != null && i.count > 0);
   const clear = items.filter((i) => i.count === 0);
   const totalAmount = active.reduce((s, i) => s + (i.amount ?? 0), 0);
@@ -191,7 +198,7 @@ export function AttentionZone({ items }: { items: AttentionItem[] }) {
         <h2 className="section-title flex items-center gap-2"><Bell size={18} className="text-await-fg" /> דורש טיפול היום</h2>
         <span className="text-xs text-slate-500">
           {active.length
-            ? <>{active.length} פריטים{totalAmount > 0 && <> · <span className="num">{fmtMoney(totalAmount)}</span></>}</>
+            ? <>{active.length} פריטים{totalAmount > 0 && <> · {totalLabel ? <>{totalLabel} </> : null}<span className="num">{fmtMoney(totalAmount)}</span></>}</>
             : 'הכול תחת שליטה'}
         </span>
       </div>
@@ -204,7 +211,7 @@ export function AttentionZone({ items }: { items: AttentionItem[] }) {
                 <span className={`badge-${i.tone} num justify-center min-w-8`}>{i.count}</span>
                 <span className="flex-1 min-w-0 truncate">
                   <span className="text-slate-800 font-medium">{i.label}</span>
-                  {i.hint && <span className="text-xs text-slate-400 ms-2">{i.hint}</span>}
+                  {i.hint && <span className="text-xs text-slate-500 ms-2">{i.hint}</span>}
                 </span>
                 {i.amount != null && i.amount > 0 && <span className="num text-sm font-semibold text-slate-700">{fmtMoney(i.amount)}</span>}
                 <ChevronLeft size={16} className="text-slate-300 shrink-0" />
@@ -213,11 +220,11 @@ export function AttentionZone({ items }: { items: AttentionItem[] }) {
           ))}
         </ul>
       ) : (
-        <div className="text-sm text-done-fg py-1">אין משימות דחופות כרגע 🎉</div>
+        <div className="text-sm text-done-fg py-1">אין משימות דחופות כרגע</div>
       )}
 
       {clear.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-400">
+        <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-500">
           {clear.map((i) => (
             <span key={i.key} className="inline-flex items-center gap-1"><Check size={13} className="text-done-solid shrink-0" /> {i.clearLabel ?? i.label}</span>
           ))}
@@ -232,12 +239,14 @@ export function AttentionZone({ items }: { items: AttentionItem[] }) {
 export function StatTile({ title, value, tone = 'idle', to, sub }: {
   title: string; value: string; tone?: Tone; to: string; sub?: string;
 }) {
-  const toneCls = { done: 'text-done-fg', await: 'text-await-fg', alert: 'text-alert-fg', info: 'text-info-fg', idle: 'text-slate-900', violet: 'text-violet-700' }[tone];
+  // Keys are exactly the Tone union (audit 2026-07-21 removed the orphan `violet`, which Tone no
+  // longer includes and no caller passed).
+  const toneCls = { done: 'text-done-fg', await: 'text-await-fg', alert: 'text-alert-fg', info: 'text-info-fg', idle: 'text-slate-900' }[tone];
   return (
     <Link to={to} className="card card-pad block hover:border-indigo-300 hover:shadow transition-all">
       <div className="text-xs font-medium text-slate-500">{title}</div>
       <div className={`text-xl font-bold mt-1 num ${toneCls}`} dir="ltr" style={{ textAlign: 'right' }}>{value}</div>
-      {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
+      {sub && <div className="text-xs text-slate-500 mt-1">{sub}</div>}
     </Link>
   );
 }
@@ -248,29 +257,64 @@ export function TaskLine({ label, count, to }: { label: string; count: number; t
     <li>
       <Link to={to} className="flex items-center justify-between -mx-2 px-2 py-1.5 rounded-lg hover:bg-slate-50">
         <span className="text-slate-600">{label}</span>
-        <span className={`badge num ${count > 0 ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-500'}`}>{count}</span>
+        <span className={`badge num ${count > 0 ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600'}`}>{count}</span>
       </Link>
     </li>
   );
 }
 
 /* ---------- Modal ---------- */
+// Selector for the elements a Tab trap and initial focus should consider (audit 2026-07-21).
+const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function Modal({ open, onClose, title, children, wide }: {
   open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+
+  // Esc to close + a Tab focus trap (audit 2026-07-21): a keyboard user must not be able to Tab
+  // out of the dialog into the page behind the backdrop. Mirrors the dialog contract GlobalSearch
+  // already meets (role="dialog" + aria-modal + managed focus).
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    if (open) window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key !== 'Tab') return;
+      const nodes = panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE);
+      if (!nodes || nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  // Move focus into the dialog on open (the panel itself, so no destructive control is pre-armed
+  // and the screen reader announces the dialog by its title), and restore it to the opener on
+  // close (audit 2026-07-21).
+  useEffect(() => {
+    if (!open) return;
+    openerRef.current = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+    return () => openerRef.current?.focus();
+  }, [open]);
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-4" onClick={onClose}>
-      <div className={`bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'} max-h-[92vh] flex flex-col`}
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
+        className={`bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'} max-h-[92vh] flex flex-col focus:outline-none`}
         onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h3 className="font-semibold text-slate-900">{title}</h3>
-          <button className="btn-ghost p-1.5!" onClick={onClose} aria-label="סגירה"><X size={18} /></button>
+          <h3 id={titleId} className="font-semibold text-slate-900">{title}</h3>
+          <button className="btn-ghost p-1.5! min-w-11 min-h-11" onClick={onClose} aria-label="סגירה"><X size={18} /></button>
         </div>
         <div className="p-5 overflow-y-auto">{children}</div>
       </div>
@@ -321,7 +365,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="fixed bottom-20 sm:bottom-6 start-1/2 -translate-x-1/2 rtl:translate-x-1/2 z-[60] flex flex-col gap-2 items-center">
         {toasts.map((t) => (
-          <div key={t.id} className={`rounded-lg px-4 py-2.5 text-sm text-white shadow-lg ${t.tone === 'success' ? 'bg-slate-800' : 'bg-rose-600'}`}>
+          // Each toast is its own live region (audit 2026-07-21): success is polite, an error is
+          // assertive so a screen reader interrupts to surface it. role follows suit (status/alert).
+          <div key={t.id}
+            role={t.tone === 'error' ? 'alert' : 'status'}
+            aria-live={t.tone === 'error' ? 'assertive' : 'polite'}
+            className={`rounded-lg px-4 py-2.5 text-sm text-white shadow-lg ${t.tone === 'success' ? 'bg-slate-800' : 'bg-rose-600'}`}>
             {t.message}
           </div>
         ))}
@@ -388,12 +437,24 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
             <table className="w-full">
               <thead className="bg-slate-50 border-b border-slate-100">
                 <tr>
-                  {columns.map((c) => (
-                    <th key={c.key} className={`th ${c.sortValue ? 'cursor-pointer hover:text-slate-700' : ''}`}
-                      onClick={() => c.sortValue && setSort((s) => s?.key === c.key ? { key: c.key, dir: s.dir === 1 ? -1 : 1 } : { key: c.key, dir: 1 })}>
-                      {c.header}{sort?.key === c.key && (sort.dir === 1 ? ' ↑' : ' ↓')}
-                    </th>
-                  ))}
+                  {columns.map((c) => {
+                    // Sortable headers are real <button>s (audit 2026-07-21): keyboard focus,
+                    // Enter/Space activation and the hover affordance come for free, and aria-sort
+                    // exposes the active direction to a screen reader. Visual layout is unchanged —
+                    // the button inherits .th's type via Tailwind's button reset.
+                    const active = sort?.key === c.key;
+                    const ariaSort = !c.sortValue ? undefined : active ? (sort?.dir === 1 ? 'ascending' : 'descending') : 'none';
+                    return (
+                      <th key={c.key} className="th" aria-sort={ariaSort}>
+                        {c.sortValue ? (
+                          <button type="button" className="inline-flex items-center gap-1 hover:text-slate-700 cursor-pointer"
+                            onClick={() => setSort((s) => s?.key === c.key ? { key: c.key, dir: s.dir === 1 ? -1 : 1 } : { key: c.key, dir: 1 })}>
+                            {c.header}{active && (sort?.dir === 1 ? ' ↑' : ' ↓')}
+                          </button>
+                        ) : c.header}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -409,9 +470,9 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
             <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-100 text-sm text-slate-500">
               <span>{filtered.length} רשומות</span>
               <div className="flex items-center gap-1">
-                <button className="btn-ghost p-1.5!" disabled={page === 0} onClick={() => setPage((p) => p - 1)} aria-label="הקודם"><ChevronRight size={16} /></button>
+                <button className="btn-ghost p-1.5! min-w-11 min-h-11" disabled={page === 0} onClick={() => setPage((p) => p - 1)} aria-label="הקודם"><ChevronRight size={16} /></button>
                 <span className="px-2">{page + 1} / {pages}</span>
-                <button className="btn-ghost p-1.5!" disabled={page >= pages - 1} onClick={() => setPage((p) => p + 1)} aria-label="הבא"><ChevronLeft size={16} /></button>
+                <button className="btn-ghost p-1.5! min-w-11 min-h-11" disabled={page >= pages - 1} onClick={() => setPage((p) => p + 1)} aria-label="הבא"><ChevronLeft size={16} /></button>
               </div>
             </div>
           )}

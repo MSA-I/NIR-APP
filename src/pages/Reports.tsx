@@ -188,7 +188,7 @@ export default function Reports() {
                 {paymentsBySupplier.map(([name, sum]) => (
                   <tr key={name}><td className="td">{name}</td><td className="td num font-medium">{fmtMoneyExact(sum)}</td></tr>
                 ))}
-                {!paymentsBySupplier.length && <tr><td className="td text-slate-400 text-center py-6">אין תשלומים בחודש זה</td></tr>}
+                {!paymentsBySupplier.length && <tr><td className="td text-slate-500 text-center py-6">אין תשלומים בחודש זה</td></tr>}
               </tbody>
             </table>
           </div>
@@ -205,7 +205,7 @@ export default function Reports() {
                     <td className="td"><StatusBadge meta={CREDIT_STATUS[c.status]} /></td>
                   </tr>
                 ))}
-                {!data.credits.length && <tr><td className="td text-slate-400 text-center py-6">אין זיכויים בחודש זה</td></tr>}
+                {!data.credits.length && <tr><td className="td text-slate-500 text-center py-6">אין זיכויים בחודש זה</td></tr>}
               </tbody>
             </table>
           </div>

@@ -215,7 +215,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
                         חשבונית <b dir="ltr">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}
                         {inv.review_status !== 'approved' && <span className="badge-await ms-2">טרם אושרה</span>}
                       </span>
-                      <span className="text-slate-400 text-xs num">יתרה {fmtMoneyExact(inv.balance)}</span>
+                      <span className="text-slate-500 text-xs num">יתרה {fmtMoneyExact(inv.balance)}</span>
                       {checked && (
                         <input type="number" step="0.01" className="input w-28! num" value={chosen[inv.id]}
                           onChange={(e) => setChosen((c) => ({ ...c, [inv.id]: Number(e.target.value) || 0 }))} />
@@ -224,7 +224,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
                   );
                 })}
               </div>
-            ) : <div className="text-sm text-slate-400 border border-dashed rounded-lg px-3 py-4 text-center">אין חשבוניות פתוחות לספק זה — ניתן לשמור דרישה ללא חשבונית (תסומן כחריג בהתאמות)</div>}
+            ) : <div className="text-sm text-slate-500 border border-dashed rounded-lg px-3 py-4 text-center">אין חשבוניות פתוחות לספק זה — ניתן לשמור דרישה ללא חשבונית (תסומן כחריג בהתאמות)</div>}
           </div>
         )}
 

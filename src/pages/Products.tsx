@@ -54,7 +54,7 @@ export default function Products() {
   }, [params, data, canWrite, setParams]);
 
   const columns: Column<ProductRow>[] = [
-    { key: 'name', header: 'מוצר', sortValue: (r) => r.name, render: (r) => <span className={`font-medium ${r.active ? 'text-slate-900' : 'text-slate-400 line-through'}`}>{r.name}</span> },
+    { key: 'name', header: 'מוצר', sortValue: (r) => r.name, render: (r) => <span className={`font-medium ${r.active ? 'text-slate-900' : 'text-slate-500 line-through'}`}>{r.name}</span> },
     { key: 'cat', header: 'קטגוריה', sortValue: (r) => r.category?.name ?? '', render: (r) => r.category?.name ?? '—' },
     { key: 'unit', header: 'יחידת מידה', render: (r) => r.unit },
     { key: 'sku', header: 'מק״ט', render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },

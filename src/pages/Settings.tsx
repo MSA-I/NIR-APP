@@ -183,7 +183,7 @@ export default function Settings() {
           <tbody className="divide-y divide-slate-100">
             {users?.map((u) => (
               <tr key={u.id}>
-                <td className="td font-medium">{u.full_name}{u.id === profile?.id && <span className="text-xs text-slate-400 ms-2">(אתה)</span>}</td>
+                <td className="td font-medium">{u.full_name}{u.id === profile?.id && <span className="text-xs text-slate-500 ms-2">(אתה)</span>}</td>
                 <td className="td">{roleLabels[u.role]}</td>
                 <td className="td" dir="ltr">{u.phone ?? '—'}</td>
                 <td className="td">{u.active ? <span className="badge-done">פעיל</span> : <span className="badge-idle">מושבת</span>}</td>

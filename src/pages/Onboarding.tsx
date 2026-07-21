@@ -242,7 +242,7 @@ function Stepper({ current, doneByData, skipped, onSelect }: {
                 <span className={`block text-sm truncate ${active ? 'font-semibold text-indigo-900' : 'text-slate-700'}`}>
                   {s.label}
                 </span>
-                <span className="block text-xs text-slate-400">
+                <span className="block text-xs text-slate-500">
                   {done ? 'הושלם' : wasSkipped ? 'דולג' : `שלב ${i + 1}`}
                 </span>
               </span>
