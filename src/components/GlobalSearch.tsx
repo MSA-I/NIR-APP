@@ -5,24 +5,10 @@ import { supabase } from '../lib/supabase';
 import { StatusBadge } from './ui';
 import { SUPPLIER_STATUS, PO_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, type StatusMeta } from '../lib/status';
 import { fmtMoneyExact } from '../lib/format';
-import type { Role } from '../lib/types';
+import type { Role, SearchHit, SearchEntity as EntityType } from '../lib/types';
 import { useAuth } from '../auth/AuthContext';
 
-// --- Types to consolidate later --------------------------------------------------------
-// SearchHit mirrors the columns of global_search() (0011_global_search.sql). types.ts is
-// hand-maintained against the migrations, so this belongs there — kept local for this wave
-// (types.ts is owned by another agent right now) and reported for consolidation.
-type EntityType = 'supplier' | 'product' | 'invoice' | 'order' | 'payment' | 'credit';
-export interface SearchHit {
-  entity: EntityType;
-  id: string;
-  title: string;
-  subtitle: string | null;
-  status: string | null;
-  amount: number | null;
-  occurred_at: string | null;
-  rank: number;
-}
+// SearchHit / SearchEntity now live in lib/types (imported above as EntityType).
 
 // Two-row map to fold into status.ts alongside SUPPLIER_STATUS. Products carry no status
 // column of their own — active/inactive is the boolean `active`, so this needs a home. The

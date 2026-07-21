@@ -5,31 +5,27 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { PageLoader, StatusBadge, ErrorNote, AttentionZone, StatTile, TaskLine, type AttentionItem } from '../components/ui';
 import { EXCEPTION_TYPE, SEVERITY } from '../lib/status';
-import { fmtMoney, fmtMoneyExact, fmtMonth } from '../lib/format';
+import { fmtMoney, fmtMoneyExact, fmtMonth, toLocalISO } from '../lib/format';
 
 // single-hue magnitude palette (dataviz rule: identity sits on the axis, color encodes nothing else)
 const BAR_COLOR = '#4f46e5';
 const money = (v: number) => `₪${Math.round(v).toLocaleString('he-IL')}`;
 
-// Local calendar day, NOT UTC. The app runs in a single timezone (Israel); "today" / "this
-// week" must mean the local day. `Date.toISOString()` is UTC and rolls the date back for the
-// hours after local midnight — the moment the dashboard says "received today" / "due today",
-// that becomes a user-visible correctness bug (docs/nir/01-03 §2.7).
+// Week bucketing for the weekly-purchasing chart. Local-day helper is shared (toLocalISO).
 const pad = (n: number) => String(n).padStart(2, '0');
-const localISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const startOfWeek = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - x.getDay()); return x; };
 
 export default function Dashboard() {
   const { data, loading, error } = useQuery(async () => {
     const now = new Date();
-    const todayISO = localISO(now);
+    const todayISO = toLocalISO(now);
     const monthStart = `${todayISO.slice(0, 7)}-01`;
     const monthKey = todayISO.slice(0, 7); // YYYY-MM, for /payments?month=
     const eightWeeksAgo = new Date(startOfWeek(now)); eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 7 * 7);
-    const eightWeeksISO = localISO(eightWeeksAgo);
+    const eightWeeksISO = toLocalISO(eightWeeksAgo);
     const last30d = new Date(now); last30d.setDate(now.getDate() - 30);
-    const last30dISO = localISO(last30d);
-    const chartsFrom = localISO(new Date(now.getFullYear(), now.getMonth() - 3, 1));
+    const last30dISO = toLocalISO(last30d);
+    const chartsFrom = toLocalISO(new Date(now.getFullYear(), now.getMonth() - 3, 1));
 
     const [
       ordersRes, invoicesRes, paymentsRes, balancesRes, prRes, exceptionsRes, creditsRes,
@@ -143,11 +139,11 @@ export default function Dashboard() {
     // ── weekly purchasing series (Nir §8, new): 8 local-week buckets of order value.
     const weekBuckets = Array.from({ length: 8 }, (_, idx) => {
       const ws = new Date(startOfWeek(now)); ws.setDate(ws.getDate() - (7 - idx) * 7);
-      return { key: localISO(ws), week: `${pad(ws.getDate())}/${pad(ws.getMonth() + 1)}`, total: 0 };
+      return { key: toLocalISO(ws), week: `${pad(ws.getDate())}/${pad(ws.getMonth() + 1)}`, total: 0 };
     });
     const weekByKey = new Map(weekBuckets.map((b) => [b.key, b]));
     for (const o of orders) {
-      const b = weekByKey.get(localISO(startOfWeek(new Date(o.created_at))));
+      const b = weekByKey.get(toLocalISO(startOfWeek(new Date(o.created_at))));
       if (b) b.total += Math.round(orderValue(o));
     }
     const weekly = weekBuckets.map(({ week, total }) => ({ week, total }));

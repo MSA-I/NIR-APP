@@ -11,7 +11,7 @@ import { CheckList } from './Invoices';
 import { runPaymentRequestChecks, type CheckResult } from '../lib/checks';
 import { logAction } from '../lib/audit';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
-import { fmtMoneyExact, fmtDate } from '../lib/format';
+import { fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
 import type { PaymentRequest, PaymentRequestStatus, Supplier } from '../lib/types';
 
 type Row = PaymentRequest & { supplier: { name: string } };
@@ -29,9 +29,7 @@ export default function PaymentRequests() {
       .select('*, supplier:suppliers(name)')
       .order('created_at', { ascending: false })) as Promise<Row[]>);
 
-  // Local calendar date (en-CA → YYYY-MM-DD); due_date is a plain date, so a string compare
-  // is correct. Deliberately local, not UTC — "due today" must match the user's today.
-  const today = new Date().toLocaleDateString('en-CA');
+  const today = todayISO();  // local calendar day; due_date is a plain date, string compare is correct
   const rows = (data ?? []).filter((r) => {
     const active = !['matched', 'cancelled', 'executed'].includes(r.status);
     const statusOk = statusFilter === 'all' ? true : statusFilter === 'active' ? active : r.status === statusFilter;

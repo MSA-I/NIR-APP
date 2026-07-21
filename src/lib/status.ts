@@ -130,6 +130,10 @@ export const EXCEPTION_STATUS: Record<string, StatusMeta> = {
   dismissed: m('נדחה', 'idle'),
 };
 
+// Deliberately a DIFFERENT scale from checks.ts/alerts.ts (info/warning/critical): this one
+// is the STORED exceptions.severity enum (low/medium/high, a DB column); those are TRANSIENT
+// in-memory results. Two vocabularies, two lifetimes — do not "unify" the strings. They already
+// converge where it matters: both map to the same Tone (alert/await/idle|info) for display.
 export const SEVERITY: Record<string, StatusMeta> = {
   low: m('נמוכה', 'idle'),
   medium: m('בינונית', 'await'),

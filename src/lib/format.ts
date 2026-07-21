@@ -12,7 +12,12 @@ export const fmtDate = (v: string | Date | null | undefined) => (v ? dateFmt.for
 export const fmtDateTime = (v: string | Date | null | undefined) => (v ? dateTimeFmt.format(new Date(v)) : '—');
 export const fmtMonth = (v: string | Date) => monthFmt.format(new Date(v));
 
-export const todayISO = () => new Date().toISOString().slice(0, 10);
+// Local calendar day, NOT UTC. The app runs in one timezone (Israel), so "today" — whether
+// stamped on a new record or compared against a due_date — must be the local day. toISOString()
+// is UTC and rolls the date back in the hours after local midnight (docs/nir/01-03 §2.7).
+export const toLocalISO = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export const todayISO = () => toLocalISO(new Date());
 
 export function monthRange(month: string /* YYYY-MM */) {
   const start = `${month}-01`;

@@ -97,10 +97,6 @@ body {
   /* `violet` has no semantic home yet: PO.sent, receipt.returned and
      payment.sent_for_execution await decision פ-2. Kept raw until then. */
   .badge-violet { @apply badge bg-violet-100 text-violet-800; }
-  /* transitional alias: Dashboard.tsx:229 still writes a raw `badge-red` on a
-     trend metric (section 1's file). Aliased to alert tokens so it isn't
-     unstyled; remove once :229 becomes a trend chip (§4.6). */
-  .badge-red { @apply badge bg-alert-soft text-alert-on-soft; }
 
   /* Shared alert box (§4.3). ErrorNote and the ad-hoc notice boxes point here. */
   .note-done  { @apply note bg-done-wash  border-done-line  text-done-on-soft; }

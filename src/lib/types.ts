@@ -60,6 +60,41 @@ export interface PlatformOrg {
   user_count: number;
 }
 
+/** One row of the supplier_metrics view (migration 0012). on_time_pct/avg_lead_days are
+ *  null (never 0) when there are no promised-date samples. */
+export interface SupplierMetrics {
+  supplier_id: string;
+  otd_samples: number;
+  otd_on_time: number;
+  on_time_pct: number | null;
+  lead_samples: number;
+  avg_lead_days: number | null;
+  open_exceptions: number;
+  exceptions_window: number;
+  exceptions_lifetime: number;
+  open_credits: number;
+  open_credits_amount: number;
+  credits_window: number;
+  credits_lifetime: number;
+  priced_items: number;
+  price_changes_window: number;
+  last_price_change: string | null;
+}
+
+export type SearchEntity = 'supplier' | 'product' | 'invoice' | 'order' | 'payment' | 'credit';
+
+/** One row of the global_search() RPC (migration 0011). */
+export interface SearchHit {
+  entity: SearchEntity;
+  id: string;
+  title: string;
+  subtitle: string | null;
+  status: string | null;
+  amount: number | null;
+  occurred_at: string | null;
+  rank: number;
+}
+
 export interface Category { id: string; org_id: string; name: string; sort: number }
 
 export type SupplierStatus = 'active' | 'inactive' | 'problematic' | 'pending';

@@ -16,6 +16,9 @@
 
 import { LineChart, Line } from 'recharts';
 import { Star } from 'lucide-react';
+import type { SupplierMetrics } from '../lib/types';
+
+export type { SupplierMetrics };  // re-exported so Suppliers.tsx's existing import keeps resolving
 
 // Local tone union, deliberately NOT status.ts's Tone. status.ts is being migrated to a
 // semantic color language (done/await/alert/…) by another agent this wave; these are visual
@@ -23,25 +26,6 @@ import { Star } from 'lucide-react';
 // them local means this file cannot be broken by that migration.
 export type ScoreTone = 'slate' | 'green' | 'amber' | 'red' | 'blue' | 'violet';
 
-/** Mirrors the 16 output columns of the supplier_metrics view (migration 0011). */
-export interface SupplierMetrics {
-  supplier_id: string;
-  otd_samples: number;
-  otd_on_time: number;
-  on_time_pct: number | null;   // null (never 0) when there are no promised-date samples
-  lead_samples: number;
-  avg_lead_days: number | null;
-  open_exceptions: number;
-  exceptions_window: number;
-  exceptions_lifetime: number;
-  open_credits: number;
-  open_credits_amount: number;
-  credits_window: number;
-  credits_lifetime: number;
-  priced_items: number;
-  price_changes_window: number;
-  last_price_change: string | null;
-}
 
 // Metric formatters — kept local rather than added to format.ts, which is not owned this wave.
 // Both return an em dash for null, matching fmtMoney's convention (format.ts:8).
