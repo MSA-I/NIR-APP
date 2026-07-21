@@ -43,11 +43,11 @@ function otdTone(m: SupplierMetrics | null | undefined): ScoreTone {
 function RiskCell({ m }: { m?: SupplierMetrics }) {
   const ex = m?.open_exceptions ?? 0;
   const cr = m?.open_credits ?? 0;
-  if (!ex && !cr) return <span className="text-slate-300">—</span>;
+  if (!ex && !cr) return <span className="text-ink-ghost">—</span>;
   return (
     <span className="flex items-center gap-1">
-      {ex > 0 && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-rose-100 text-rose-800 whitespace-nowrap">{ex} חריגים</span>}
-      {cr > 0 && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 whitespace-nowrap">{cr} זיכויים</span>}
+      {ex > 0 && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-alert-soft text-alert-on-soft whitespace-nowrap">{ex} חריגים</span>}
+      {cr > 0 && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-await-soft text-await-on-soft whitespace-nowrap">{cr} זיכויים</span>}
     </span>
   );
 }
@@ -85,17 +85,17 @@ export function SuppliersList() {
   const rows = useMemo(() => (data ?? []).filter((r) => balanceFilter !== 'open' || (r.open_balance ?? 0) > 0), [data, balanceFilter]);
 
   const columns: Column<SupplierWithBalance>[] = [
-    { key: 'name', header: 'ספק', sortValue: (r) => r.name, render: (r) => <span className="font-medium text-slate-900">{r.name}</span> },
-    { key: 'rating', header: 'דירוג', className: 'num', sortValue: (r) => r.rating ?? 0, render: (r) => r.rating != null
-        ? <span className="inline-flex items-center gap-1"><Star size={13} className="fill-amber-400 text-amber-400" />{r.rating}</span>
-        : <span className="text-slate-300">—</span> },
-    { key: 'cats', header: 'קטגוריות', render: (r) => <span className="text-slate-500">{r.categories?.join(', ') || '—'}</span> },
-    { key: 'contact', header: 'איש קשר', render: (r) => r.contact_name || '—' },
+    { key: 'name', header: 'ספק', priority: 3, sortValue: (r) => r.name, render: (r) => <span className="font-medium text-ink">{r.name}</span> },
+    { key: 'rating', header: 'דירוג', priority: 3, className: 'num', sortValue: (r) => r.rating ?? 0, render: (r) => r.rating != null
+        ? <span className="inline-flex items-center gap-1"><Star size={13} className="fill-star text-star" />{r.rating}</span>
+        : <span className="text-ink-ghost">—</span> },
+    { key: 'cats', header: 'קטגוריות', priority: 3, render: (r) => <span className="text-ink-muted">{r.categories?.join(', ') || '—'}</span> },
+    { key: 'contact', header: 'איש קשר', priority: 3, render: (r) => r.contact_name || '—' },
     { key: 'phone', header: 'טלפון', render: (r) => <span dir="ltr">{r.phone || '—'}</span> },
-    { key: 'min', header: 'מינ׳ הזמנה', className: 'num', sortValue: (r) => r.min_order_amount ?? 0, render: (r) => fmtMoney(r.min_order_amount) },
-    { key: 'risk', header: 'התראות', render: (r) => <RiskCell m={r.metrics} /> },
-    { key: 'balance', header: 'יתרה פתוחה', className: 'num', sortValue: (r) => r.open_balance ?? 0, render: (r) => <span className={r.open_balance ? 'text-await-fg font-medium' : ''}>{fmtMoney(r.open_balance)}</span> },
-    { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} /> },
+    { key: 'min', header: 'מינ׳ הזמנה', priority: 3, className: 'num', sortValue: (r) => r.min_order_amount ?? 0, render: (r) => fmtMoney(r.min_order_amount) },
+    { key: 'risk', header: 'התראות', mobileLabel: null, render: (r) => <RiskCell m={r.metrics} /> },
+    { key: 'balance', header: 'יתרה פתוחה', sortValue: (r) => r.open_balance ?? 0, render: (r) => <span className={`num ${r.open_balance ? 'text-await-fg font-medium' : ''}`}>{fmtMoney(r.open_balance)}</span>, className: 'num' },
+    { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} /> },
   ];
 
   if (loading) return <PageLoader />;
@@ -110,13 +110,16 @@ export function SuppliersList() {
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.contact_name ?? '').toLowerCase().includes(q) || (r.tax_id ?? '').toLowerCase().includes(q)}
         onRowClick={(r) => navigate(`/suppliers/${r.id}`)}
+        mobile="cards"
+        mobileTitle={(r) => r.name}
+        mobileTrailing={(r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} />}
         toolbar={
           <select className="input w-auto!" value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)}>
             <option value="">כל הספקים</option>
             <option value="open">עם יתרה פתוחה</option>
           </select>
         } />
-      {balanceFilter === 'open' && rows.length === 0 && <p className="text-sm text-slate-500">אין ספקים עם יתרה פתוחה.</p>}
+      {balanceFilter === 'open' && rows.length === 0 && <p className="text-sm text-ink-muted">אין ספקים עם יתרה פתוחה.</p>}
       {editing && <SupplierForm supplier={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refetch(); }} />}
     </div>
   );
@@ -181,7 +184,7 @@ function SupplierForm({ supplier, onClose, onSaved }: { supplier: SupplierRow | 
           <div className="flex flex-wrap gap-1.5">
             {days.map((d, i) => (
               <button type="button" key={i}
-                className={`rounded-lg border px-2.5 py-1.5 text-xs ${f.delivery_days.includes(i) ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}
+                className={`rounded-lg border px-2.5 py-1.5 text-xs ${f.delivery_days.includes(i) ? 'bg-action-solid text-white border-action-solid' : 'border-line-strong text-ink-soft hover:bg-surface-sunken'}`}
                 onClick={() => set('delivery_days', f.delivery_days.includes(i) ? f.delivery_days.filter((x) => x !== i) : [...f.delivery_days, i].sort())}>
                 {d}
               </button>
@@ -293,11 +296,11 @@ export function SupplierCard() {
             <span className="inline-flex items-center gap-2">
               <RatingStars value={s.rating} />
               {s.rating != null && s.rating_updated_at && (
-                <span className="text-xs font-normal text-slate-500" title={s.rating_note ?? undefined}>עודכן {fmtDate(s.rating_updated_at)}</span>
+                <span className="text-xs font-normal text-ink-muted" title={s.rating_note ?? undefined}>עודכן {fmtDate(s.rating_updated_at)}</span>
               )}
             </span>
           </h1>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-slate-500">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-ink-muted">
             {s.contact_name && <span>{s.contact_name}</span>}
             {s.phone && <span className="flex items-center gap-1"><Phone size={13} /><span dir="ltr">{s.phone}</span></span>}
             {s.email && <span className="flex items-center gap-1"><Mail size={13} /><span dir="ltr">{s.email}</span></span>}
@@ -311,12 +314,12 @@ export function SupplierCard() {
 
       <Scorecard items={scoreItems} />
 
-      {s.notes && <div className="card card-pad text-sm text-slate-600">{s.notes}</div>}
+      {s.notes && <div className="card card-pad text-sm text-ink-soft">{s.notes}</div>}
 
-      <div className="flex gap-1 border-b border-slate-200 no-print overflow-x-auto">
+      <div className="flex gap-1 border-b border-line no-print overflow-x-auto">
         {tabs.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm whitespace-nowrap border-b-2 -mb-px ${tab === t.key ? 'border-indigo-600 text-indigo-700 font-medium' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+            className={`px-4 py-2 text-sm whitespace-nowrap border-b-2 -mb-px ${tab === t.key ? 'border-action-solid text-action font-medium' : 'border-transparent text-ink-muted hover:text-ink-mid'}`}>
             {t.label}
           </button>
         ))}
@@ -398,17 +401,17 @@ function SupplierPricesTab({ rows, history }: { rows: PricedProduct[]; history: 
   }, [rows]);
 
   const columns: Column<PricedProduct>[] = [
-    { key: 'product', header: 'מוצר', sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-slate-900">{r.product.name}</span> },
+    { key: 'product', header: 'מוצר', sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-ink">{r.product.name}</span> },
     { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">₪{r.current_price.toFixed(2)}</span> },
     { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => (r.previous_price != null ? `₪${r.previous_price.toFixed(2)}` : '—') },
     {
       key: 'change', header: 'שינוי', sortValue: changePct,
       render: (r) => {
         const pct = changePct(r);
-        if (!r.previous_price || pct === 0) return <span className="text-slate-400">—</span>;
+        if (!r.previous_price || pct === 0) return <span className="text-ink-faint">—</span>;
         // Same treatment as PriceLists.tsx:50-56 (LRM keeps the sign on the correct side in RTL).
         return pct > 0
-          ? <span className="inline-flex items-center gap-1 text-rose-600 font-medium"><TrendingUp size={14} />{'‎'}+{pct.toFixed(1)}%</span>
+          ? <span className="inline-flex items-center gap-1 text-alert-solid font-medium"><TrendingUp size={14} />{'‎'}+{pct.toFixed(1)}%</span>
           : <span className="inline-flex items-center gap-1 text-done-fg font-medium"><TrendingDown size={14} />{'‎'}{pct.toFixed(1)}%</span>;
       },
     },
@@ -416,7 +419,7 @@ function SupplierPricesTab({ rows, history }: { rows: PricedProduct[]; history: 
       key: 'trend', header: 'מגמה',
       render: (r) => {
         const pts = histBySp.get(r.id) ?? [];
-        return pts.length >= 2 ? <PriceSparkline points={pts} /> : <span className="text-slate-300">—</span>;
+        return pts.length >= 2 ? <PriceSparkline points={pts} /> : <span className="text-ink-ghost">—</span>;
       },
     },
     { key: 'date', header: 'בתוקף מ־', sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
@@ -425,9 +428,9 @@ function SupplierPricesTab({ rows, history }: { rows: PricedProduct[]; history: 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-4 text-sm">
-        <span className="text-slate-600">התייקרו: <b className="text-rose-600">{summary.up}</b></span>
-        <span className="text-slate-600">הוזלו: <b className="text-done-fg">{summary.down}</b></span>
-        <span className="text-slate-600">שינוי חציוני: <b className="num">{summary.median == null ? '—' : `${summary.median > 0 ? '+' : ''}${summary.median.toFixed(1)}%`}</b></span>
+        <span className="text-ink-soft">התייקרו: <b className="text-alert-solid">{summary.up}</b></span>
+        <span className="text-ink-soft">הוזלו: <b className="text-done-fg">{summary.down}</b></span>
+        <span className="text-ink-soft">שינוי חציוני: <b className="num">{summary.median == null ? '—' : `${summary.median > 0 ? '+' : ''}${summary.median.toFixed(1)}%`}</b></span>
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q)}

@@ -54,7 +54,7 @@ export default function Products() {
   }, [params, data, canWrite, setParams]);
 
   const columns: Column<ProductRow>[] = [
-    { key: 'name', header: 'מוצר', sortValue: (r) => r.name, render: (r) => <span className={`font-medium ${r.active ? 'text-slate-900' : 'text-slate-500 line-through'}`}>{r.name}</span> },
+    { key: 'name', header: 'מוצר', sortValue: (r) => r.name, render: (r) => <span className={`font-medium ${r.active ? 'text-ink' : 'text-ink-muted line-through'}`}>{r.name}</span> },
     { key: 'cat', header: 'קטגוריה', sortValue: (r) => r.category?.name ?? '', render: (r) => r.category?.name ?? '—' },
     { key: 'unit', header: 'יחידת מידה', render: (r) => r.unit },
     { key: 'sku', header: 'מק״ט', render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
@@ -139,7 +139,7 @@ function ProductForm({ product, onClose, onSaved }: { product: Product | null; o
         <div><label className="label">ברקוד</label><input className="input" dir="ltr" value={f.barcode} onChange={(e) => set('barcode', e.target.value)} /></div>
         <div><label className="label">מלאי מינימום (לשימוש עתידי)</label><input type="number" className="input num" value={f.min_stock} onChange={(e) => set('min_stock', e.target.value)} /></div>
         <div className="flex items-end pb-2">
-          <label className="flex items-center gap-2 text-sm text-slate-700">
+          <label className="flex items-center gap-2 text-sm text-ink-mid">
             <input type="checkbox" checked={f.active} onChange={(e) => set('active', e.target.checked)} className="rounded" />
             מוצר פעיל
           </label>

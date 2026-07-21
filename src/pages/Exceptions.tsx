@@ -53,8 +53,8 @@ export default function Exceptions() {
 
   const columns: Column<Row>[] = [
     { key: 'severity', header: 'חומרה', sortValue: (r) => r.severity, render: (r) => <StatusBadge meta={SEVERITY[r.severity]} /> },
-    { key: 'type', header: 'סוג', render: (r) => <span className="text-slate-600">{EXCEPTION_TYPE[r.type]}</span> },
-    { key: 'title', header: 'תיאור', render: (r) => <span className="font-medium text-slate-900 max-w-96 truncate inline-block">{r.title}</span> },
+    { key: 'type', header: 'סוג', render: (r) => <span className="text-ink-soft">{EXCEPTION_TYPE[r.type]}</span> },
+    { key: 'title', header: 'תיאור', render: (r) => <span className="font-medium text-ink max-w-96 truncate inline-block">{r.title}</span> },
     { key: 'supplier', header: 'ספק', render: (r) => r.supplier?.name ?? '—' },
     { key: 'assigned', header: 'באחריות', render: (r) => (r.assigned_role ? roleLabels[r.assigned_role] : '—') },
     { key: 'created', header: 'נפתח', sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
@@ -66,14 +66,14 @@ export default function Exceptions() {
 
   return (
     <div className="space-y-4">
-      <h1 className="page-title flex items-center gap-2"><AlertTriangle size={22} className="text-amber-500" /> חריגים</h1>
+      <h1 className="page-title flex items-center gap-2"><AlertTriangle size={22} className="text-await-solid" /> חריגים</h1>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.title.toLowerCase().includes(q) || (r.supplier?.name ?? '').toLowerCase().includes(q)}
         onRowClick={(r) => setSelected(r)}
         toolbar={
           <>
             {idFilter && (
-              <button className="btn-ghost text-sm text-indigo-700" onClick={() => setIdFilter('')}>הצג את כל החריגים</button>
+              <button className="btn-ghost text-sm text-action" onClick={() => setIdFilter('')}>הצג את כל החריגים</button>
             )}
             <select className="input w-auto!" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setIdFilter(''); }}>
               <option value="open">פתוחים ובטיפול</option>
@@ -150,11 +150,11 @@ function ExceptionDetail({ row, canWrite, onClose, onChanged, onNavigate }: {
         <div className="flex items-center gap-2">
           <StatusBadge meta={SEVERITY[row.severity]} />
           <StatusBadge meta={EXCEPTION_STATUS[row.status]} />
-          <span className="text-xs text-slate-500">נפתח {fmtDate(row.created_at)}</span>
+          <span className="text-xs text-ink-muted">נפתח {fmtDate(row.created_at)}</span>
         </div>
-        <div className="font-medium text-slate-900">{row.title}</div>
+        <div className="font-medium text-ink">{row.title}</div>
         {detailLines.length > 0 && (
-          <ul className="text-sm text-slate-600 bg-slate-50 rounded-lg px-4 py-3 space-y-1 list-disc list-inside">
+          <ul className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-4 py-3 space-y-1 list-disc list-inside">
             {detailLines.map((l, i) => <li key={i}>{l}</li>)}
           </ul>
         )}
@@ -174,7 +174,7 @@ function ExceptionDetail({ row, canWrite, onClose, onChanged, onNavigate }: {
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               {row.status === 'open' && <button className="btn-secondary" disabled={busy} onClick={() => void setStatus('in_progress')}>סימון בטיפול</button>}
-              <button className="btn-ghost text-slate-500" disabled={busy} onClick={() => void setStatus('dismissed')}>דחייה (לא רלוונטי)</button>
+              <button className="btn-ghost text-ink-muted" disabled={busy} onClick={() => void setStatus('dismissed')}>דחייה (לא רלוונטי)</button>
               <button className="btn-primary" disabled={busy} onClick={() => void setStatus('resolved')}>סימון כטופל</button>
             </div>
           </>

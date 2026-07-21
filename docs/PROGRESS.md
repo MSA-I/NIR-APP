@@ -24,6 +24,21 @@
 
 ---
 
+## סבב 21.07 (ערב) — רדיזיין "פנקס הדיו" + התאמת מובייל (impeccable adapt)
+
+**מה השתנה:** רדיזיין ויזואלי מלא נגד מראה "תבנית האדמין" — מתועד במלואו ב-`DESIGN.md` (שוכתב).
+1. **טוקניזציה מלאה:** ‏490 מחלקות פלטה קשיחות ב-32 קבצי tsx → ‏0. כל השלד ב-@theme ‏(`src/index.css`): ‏canvas/surface/line/ink-סולם/action/shell/chart. רה-תמה עתידית = עריכת קובץ אחד + index.html. גרפ אכיפה ב-DESIGN.md §7.
+2. **"פנקס הדיו":** ‏IBM Plex Sans Hebrew ‏(UI) + ‏IBM Plex Mono לכל `.num` · אקצנט = דיו כמעט-שחור (האינדיגו בוטל) · סרגל צדי **בהיר** עם גלולת דיו לפריט פעיל · כרטיסים שטוחים rounded-lg בלי צל · כותרות טבלה בלי uppercase · גרפים בדיו דרך `src/lib/theme.ts` ‏(chartTheme — recharts לא קורא var() ב-attributes).
+3. **דשבורד:** רצועת הכסף = פס אחד (BandStat מקומי, ‏StatTile נמחק מ-ui.tsx כקוד מת).
+4. **מובייל:** ‏DataTable קיבל `mobile="cards"` ‏(priority/mobileLabel לעמודות, ‏mobileTitle/mobileTrailing) — הופעל ב-Invoices/Orders/Suppliers/Payments/PaymentRequests; טבלאות גולמיות נעטפו (Settings משתמשים, Orders הדפסה עם `print:overflow-visible`, ‏Reports ×2); עגלת NewOrder תוקנה ל-375px ‏(select ‏sm:w-56!, ‏steppers ‏44px, ‏ms-auto לסה"כ).
+5. **נגישות:** ‏15 צימודי ניגודיות נמדדו חישובית — כולם AA (‏ink-faint הוכהה ל-4.65:1); ‏focus ring כחול 4.9:1; ‏`active:` נוסף לצד hover ברכיבים משותפים.
+
+**אומת:** ‏build ירוק אחרי כל שלב · גרפ literals/הקסים = ‏0 · צילומי דפדפן חיים (דשבורד, חשבוניות, ספקים, הזמנות, דוחות, התראות, קבלת סחורה) מול baseline לפני · תצוגת הכרטיסים אומתה ב-DOM ‏(14 כרטיסים ב-/invoices, טבלה `hidden md:block`). **מגבלת כלי ידועה נשארת:** צילום מסך ברוחב מובייל אמיתי חסום (רוחב capture קבוע) — אימות ויזואלי במובייל פיזי טרם בוצע.
+
+**לא נגענו:** שפת 4 המשמעויות (עוגני emerald/amber/rose/sky), ‏RLS/נתונים/לוגיקה, ‏breakpoint הסרגל (נשאר lg — נבחן ונדחה: ‏528px תוכן ב-768 גרוע מהבר התחתון).
+
+---
+
 ## סבב 21.07 — סעיפים 1–6, חוזה סינון, וסגירת חוב-פיתוח
 
 **סעיפים 1–6 (4 סוכנים מקבילים):** דשבורד כמרכז בקרה (רצועת "דורש טיפול", פריט ב-0 → "✓ אין…" ולא 0), מסך ספקים מועשר (`supplier_metrics` view `0012`, scorecard, דירוג ידני, ספַּרקליינים), חיפוש גלובלי (`global_search` RPC `0011`, `SECURITY INVOKER`), ושפת צבעים סמנטית. אומת חי: דשבורד, `/admin`, `/alerts`, כרטיס ספק, חיפוש.

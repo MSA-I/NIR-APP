@@ -173,11 +173,11 @@ export default function Onboarding() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="page-title">הקמת המערכת</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-ink-muted mt-1">
             ארבעה שלבים קצרים שממלאים את המערכת בנתוני העסק. אפשר לדלג על כל שלב ולהשלים אותו מאוחר יותר.
           </p>
         </div>
-        <Link className="btn-ghost text-slate-500 whitespace-nowrap" to="/dashboard">
+        <Link className="btn-ghost text-ink-muted whitespace-nowrap" to="/dashboard">
           כניסה למערכת <ChevronLeft size={15} />
         </Link>
       </div>
@@ -204,7 +204,7 @@ export default function Onboarding() {
           <ChevronRight size={15} /> חזרה
         </button>
         {step.key !== 'done' && (
-          <button className="btn-ghost text-slate-500" onClick={skipCurrent}>
+          <button className="btn-ghost text-ink-muted" onClick={skipCurrent}>
             דילוג על השלב <ChevronLeft size={15} />
           </button>
         )}
@@ -229,20 +229,20 @@ function Stepper({ current, doneByData, skipped, onSelect }: {
         const done = doneByData[s.key];
         const wasSkipped = skipped.includes(s.key) && !done;
         return (
-          <li key={s.key} className="flex-1 min-w-40 border-b sm:border-b-0 sm:border-s border-slate-100 first:border-s-0">
+          <li key={s.key} className="flex-1 min-w-40 border-b sm:border-b-0 sm:border-s border-line-soft first:border-s-0">
             <button
               onClick={() => onSelect(i)}
               className={`w-full flex items-center gap-2.5 px-4 py-3 text-start transition-colors cursor-pointer
-                ${active ? 'bg-action-wash/60' : 'hover:bg-slate-50'}`}>
+                ${active ? 'bg-action-wash/60' : 'hover:bg-surface-sunken'}`}>
               <span className={`flex size-8 shrink-0 items-center justify-center rounded-full
-                ${done ? 'bg-emerald-100 text-emerald-700' : active ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                ${done ? 'bg-done-soft text-done-fg' : active ? 'bg-action text-white' : 'bg-idle-soft text-ink-faint'}`}>
                 {done ? <Check size={16} /> : <Icon size={16} />}
               </span>
               <span className="min-w-0">
-                <span className={`block text-sm truncate ${active ? 'font-semibold text-indigo-900' : 'text-slate-700'}`}>
+                <span className={`block text-sm truncate ${active ? 'font-semibold text-ink' : 'text-ink-mid'}`}>
                   {s.label}
                 </span>
-                <span className="block text-xs text-slate-500">
+                <span className="block text-xs text-ink-muted">
                   {done ? 'הושלם' : wasSkipped ? 'דולג' : `שלב ${i + 1}`}
                 </span>
               </span>
@@ -449,11 +449,11 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
 
       {suggestions.length > 0 && (
         <div>
-          <div className="text-xs font-medium text-slate-500 mb-2">הצעות — לחיצה מוסיפה לרשימה</div>
+          <div className="text-xs font-medium text-ink-muted mb-2">הצעות — לחיצה מוסיפה לרשימה</div>
           <div className="flex flex-wrap gap-1.5">
             {suggestions.map((s) => (
               <button key={s} onClick={() => add(s)}
-                className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50 cursor-pointer">
+                className="rounded-lg border border-line-strong px-2.5 py-1.5 text-xs text-ink-soft hover:bg-surface-sunken cursor-pointer">
                 <Plus size={12} className="inline -mt-px me-1" />{s}
               </button>
             ))}
@@ -464,10 +464,10 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
       {list.length === 0 ? (
         <EmptyState title="אין עדיין קטגוריות" subtitle="הוסף קטגוריה, בחר מההצעות, או דלג על השלב" />
       ) : (
-        <ul className="border border-slate-200 rounded-lg divide-y divide-slate-100">
+        <ul className="border border-line rounded-lg divide-y divide-line-soft">
           {list.map((c, i) => (
             <li key={c.id ?? `new-${i}`} className="flex items-center gap-2 px-3 py-2">
-              <input className="input border-transparent! bg-transparent! focus:bg-white! focus:border-slate-300!"
+              <input className="input border-transparent! bg-transparent! focus:bg-surface! focus:border-line-strong!"
                 value={c.name}
                 onChange={(e) => setItems(list.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
               {!c.id && <span className="badge-info shrink-0">חדשה</span>}
@@ -584,7 +584,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
     return (
       <div className="space-y-4">
         {failure && <ErrorNote message={failure} />}
-        <div className="text-sm text-slate-600">
+        <div className="text-sm text-ink-soft">
           <b>{sheet.fileName}</b> — {parsed.valid.length} שורות מוכנות לייבוא
           {parsed.skipped.length > 0 && <>, {parsed.skipped.length} ידולגו</>}. שום דבר לא נשמר עד לאישור.
         </div>
@@ -623,7 +623,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
   if (sheet) {
     return (
       <div className="space-y-4">
-        <div className="text-sm text-slate-600">
+        <div className="text-sm text-ink-soft">
           <b>{sheet.fileName}</b> — {sheet.rows.length} שורות. התאם כל שדה לעמודה בקובץ:
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -639,12 +639,12 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
           ))}
         </div>
 
-        <div className="overflow-x-auto border border-slate-200 rounded-lg">
+        <div className="overflow-x-auto border border-line rounded-lg">
           <table className="w-full">
-            <thead className="bg-slate-50"><tr>{sheet.headers.map((h) => <th key={h} className="th">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-slate-100">
+            <thead className="bg-surface-sunken"><tr>{sheet.headers.map((h) => <th key={h} className="th">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-line-soft">
               {sheet.rows.slice(0, 5).map((r, i) => (
-                <tr key={i}>{sheet.headers.map((h) => <td key={h} className="td text-slate-500">{cellText(r, h, 60) || '—'}</td>)}</tr>
+                <tr key={i}>{sheet.headers.map((h) => <td key={h} className="td text-ink-muted">{cellText(r, h, 60) || '—'}</td>)}</tr>
               ))}
             </tbody>
           </table>
@@ -664,9 +664,9 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
   return (
     <div className="space-y-4">
       {children}
-      <div className="rounded-lg border border-dashed border-slate-300 py-10 text-center">
-        <FileSpreadsheet size={30} className="text-slate-300 mx-auto mb-3" />
-        <p className="text-sm text-slate-600 mb-4">בחר קובץ Excel (xlsx/xls) או CSV. תוכל להתאים עמודות ולראות תצוגה מקדימה לפני שמירה.</p>
+      <div className="rounded-lg border border-dashed border-line-strong py-10 text-center">
+        <FileSpreadsheet size={30} className="text-ink-ghost mx-auto mb-3" />
+        <p className="text-sm text-ink-soft mb-4">בחר קובץ Excel (xlsx/xls) או CSV. תוכל להתאים עמודות ולראות תצוגה מקדימה לפני שמירה.</p>
         <button className="btn-primary" onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
         <input ref={fileRef} type="file" hidden accept=".xlsx,.xls,.csv"
           onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
@@ -699,11 +699,11 @@ function SkippedPanel({ skipped }: { skipped: { row: number; reason: string }[] 
 
 function StepHeading({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
   return (
-    <div className="flex items-start gap-3 pb-4 border-b border-slate-100">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">{icon}</span>
+    <div className="flex items-start gap-3 pb-4 border-b border-line-soft">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-idle-soft text-ink-soft">{icon}</span>
       <div>
         <h2 className="section-title">{title}</h2>
-        <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>
+        <p className="text-sm text-ink-muted mt-0.5">{subtitle}</p>
       </div>
     </div>
   );
@@ -797,7 +797,7 @@ function SuppliersStep({ onDone }: { onDone: () => void }) {
   }
 
   const columns: Column<SupplierDraft>[] = [
-    { key: 'name', header: 'שם הספק', render: (r) => <span className="font-medium text-slate-900">{r.name}</span> },
+    { key: 'name', header: 'שם הספק', render: (r) => <span className="font-medium text-ink">{r.name}</span> },
     { key: 'contact', header: 'איש קשר', render: (r) => r.contact_name ?? '—' },
     { key: 'phone', header: 'טלפון', render: (r) => <span dir="ltr">{r.phone ?? '—'}</span> },
     { key: 'email', header: 'אימייל', render: (r) => <span dir="ltr">{r.email ?? '—'}</span> },
@@ -822,7 +822,7 @@ function SuppliersStep({ onDone }: { onDone: () => void }) {
         commit={commit}
         confirmMessage={(n) => `ייווצרו ${n} ספקים חדשים. אפשר לערוך או להשבית אותם אחר כך במסך הספקים.`}
         onDone={onDone}>
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-ink-soft">
           העמודה היחידה שחייבת להיות מופיעה היא <b>שם הספק</b>. כל היתר — ח.פ, איש קשר, טלפון, אימייל, כתובת,
           תנאי תשלום ומינימום הזמנה — אופציונליים וניתן להשלים אותם ידנית בהמשך.
         </p>
@@ -999,7 +999,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
   }
 
   const columns: Column<ProductDraft>[] = [
-    { key: 'name', header: 'מוצר', render: (r) => <span className="font-medium text-slate-900">{r.name}</span> },
+    { key: 'name', header: 'מוצר', render: (r) => <span className="font-medium text-ink">{r.name}</span> },
     { key: 'cat', header: 'קטגוריה', render: (r) => r.category || '—' },
     { key: 'unit', header: 'יח׳', render: (r) => r.unit },
     { key: 'sku', header: 'מק״ט', render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
@@ -1008,9 +1008,9 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
     {
       key: 'note', header: 'הערה',
       render: (r) => {
-        if (r.priceNote) return <span className="text-amber-700 text-xs">{r.priceNote}</span>;
-        if (r.existingProductId) return <span className="text-slate-500 text-xs">מוצר קיים — יתווסף רק המחיר</span>;
-        return <span className="text-slate-300">—</span>;
+        if (r.priceNote) return <span className="text-await-fg text-xs">{r.priceNote}</span>;
+        if (r.existingProductId) return <span className="text-ink-muted text-xs">מוצר קיים — יתווסף רק המחיר</span>;
+        return <span className="text-ink-ghost">—</span>;
       },
     },
   ];
@@ -1038,7 +1038,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
         commit={commit}
         confirmMessage={(n) => `${n} שורות ייכתבו למערכת: מוצרים חדשים, קטגוריות חסרות ומחירי ספק.`}
         onDone={onDone}>
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-ink-soft">
           חובה למפות <b>שם המוצר</b> בלבד. אם הקובץ מכיל גם <b>ספק</b> וגם <b>מחיר</b>, ייבנה מהם מחירון —
           שם הספק חייב להיות זהה לשם שכבר קיים במערכת.
         </p>
@@ -1075,16 +1075,16 @@ function DoneStep({ counts, skipped, onGoToStep, onFinish }: {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {tiles.map((t) => (
-          <Link key={t.label} to={t.to} className="card card-pad hover:border-indigo-300 hover:shadow transition-all">
-            <div className="text-xs font-medium text-slate-500">{t.label}</div>
-            <div className="text-xl font-bold num text-start text-slate-900 mt-1">{t.value}</div>
+          <Link key={t.label} to={t.to} className="card card-pad card-link-hover">
+            <div className="text-xs font-medium text-ink-muted">{t.label}</div>
+            <div className="text-xl font-bold num text-start text-ink mt-1">{t.value}</div>
           </Link>
         ))}
       </div>
 
       {pending.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-          <div className="text-sm font-medium text-slate-700">שלבים שדילגת עליהם</div>
+        <div className="rounded-lg border border-line bg-surface-sunken px-4 py-3">
+          <div className="text-sm font-medium text-ink-mid">שלבים שדילגת עליהם</div>
           <div className="flex flex-wrap gap-2 mt-2">
             {pending.map((s) => (
               <button key={s.key} className="btn-secondary py-1.5! text-xs"
@@ -1096,12 +1096,12 @@ function DoneStep({ counts, skipped, onGoToStep, onFinish }: {
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-600">
-        <div className="font-medium text-slate-700 mb-1">מה הלאה</div>
+      <div className="rounded-lg border border-line px-4 py-3 text-sm text-ink-soft">
+        <div className="font-medium text-ink-mid mb-1">מה הלאה</div>
         <ul className="space-y-1">
-          <li>· הוספת משתמשי צוות והרשאות — מסך <Link className="text-indigo-700 hover:underline" to="/settings">הגדרות</Link>.</li>
-          <li>· עדכון מחירון או ייבוא נוסף — מסך <Link className="text-indigo-700 hover:underline" to="/prices">מחירונים</Link>.</li>
-          <li>· יצירת ההזמנה הראשונה — מסך <Link className="text-indigo-700 hover:underline" to="/orders/new">הזמנה חדשה</Link>.</li>
+          <li>· הוספת משתמשי צוות והרשאות — מסך <Link className="link" to="/settings">הגדרות</Link>.</li>
+          <li>· עדכון מחירון או ייבוא נוסף — מסך <Link className="link" to="/prices">מחירונים</Link>.</li>
+          <li>· יצירת ההזמנה הראשונה — מסך <Link className="link" to="/orders/new">הזמנה חדשה</Link>.</li>
         </ul>
       </div>
 

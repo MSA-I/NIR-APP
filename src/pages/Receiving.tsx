@@ -187,7 +187,7 @@ export function ReceiveOrder() {
   if (doneReceiptId) {
     return (
       <div className="max-w-xl mx-auto space-y-4 text-center pt-6">
-        <CheckCircle2 size={48} className="text-emerald-500 mx-auto" />
+        <CheckCircle2 size={48} className="text-done-solid mx-auto" />
         <h1 className="text-xl font-bold text-ink">הקבלה נשמרה!</h1>
         <p className="text-sm text-ink-muted">עכשיו אפשר לצלם את החשבונית או תעודת המשלוח ולצרף אותה לקבלה.</p>
         <div className="card card-pad text-start">
@@ -209,7 +209,7 @@ export function ReceiveOrder() {
   ];
   // Single source: the tone comes from RECEIPT_LINE_STATUS (lib/status.ts), so re-colouring
   // a status there recolours both the selected button and the card border here (§4.5).
-  // `bg-amber-500` → await-solid (amber-600) folds away the old off-by-one shade (§3.6ה).
+  // The old amber-500 shade folds into await-solid, away from the off-by-one shade (§3.6ה).
   const SOLID: Record<Tone, string> = {
     done: 'bg-done-solid text-white border-done-solid',
     await: 'bg-await-solid text-white border-await-solid',

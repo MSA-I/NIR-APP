@@ -145,64 +145,64 @@ export default function NewOrder() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
         {/* Product picker */}
         <div className="card lg:col-span-2 overflow-hidden">
-          <div className="p-3 border-b border-slate-100 space-y-2">
+          <div className="p-3 border-b border-line-soft space-y-2">
             <div className="relative">
-              <Search size={15} className="absolute top-1/2 -translate-y-1/2 start-3 text-slate-400" />
+              <Search size={15} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint" />
               <input className="input ps-9!" placeholder="חיפוש מוצר..." value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
             <div className="flex gap-1.5 flex-wrap">
-              <button className={`badge ${!cat ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`} onClick={() => setCat('')}>הכל</button>
+              <button className={`badge ${!cat ? 'bg-action-solid text-white' : 'bg-idle-soft text-ink-soft'}`} onClick={() => setCat('')}>הכל</button>
               {categories?.map((c) => (
-                <button key={c.id} className={`badge ${cat === c.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`} onClick={() => setCat(c.id)}>{c.name}</button>
+                <button key={c.id} className={`badge ${cat === c.id ? 'bg-action-solid text-white' : 'bg-idle-soft text-ink-soft'}`} onClick={() => setCat(c.id)}>{c.name}</button>
               ))}
             </div>
           </div>
-          <div className="max-h-[26rem] overflow-y-auto divide-y divide-slate-50">
+          <div className="max-h-[26rem] overflow-y-auto divide-y divide-line-soft">
             {filteredProducts.map((p) => {
               const offers = offersByProduct.get(p.id) ?? [];
               return (
-                <button key={p.id} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-indigo-50/50 text-start" onClick={() => addToCart(p)}>
+                <button key={p.id} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-action-wash/50 text-start" onClick={() => addToCart(p)}>
                   <span>
-                    <span className="text-sm font-medium text-slate-800">{p.name}</span>
-                    <span className="text-xs text-slate-500 ms-2">{p.unit}</span>
+                    <span className="text-sm font-medium text-ink-body">{p.name}</span>
+                    <span className="text-xs text-ink-muted ms-2">{p.unit}</span>
                   </span>
-                  <span className="text-xs text-slate-500 num">
+                  <span className="text-xs text-ink-muted num">
                     {offers.length ? `₪${offers[0].current_price.toFixed(2)}` : 'אין ספק'}
                   </span>
                 </button>
               );
             })}
-            {!filteredProducts.length && <div className="px-4 py-8 text-center text-sm text-slate-500">לא נמצאו מוצרים</div>}
+            {!filteredProducts.length && <div className="px-4 py-8 text-center text-sm text-ink-muted">לא נמצאו מוצרים</div>}
           </div>
         </div>
 
         {/* Cart + split preview */}
         <div className="lg:col-span-3 space-y-4">
           <div className="card overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-4 py-3 border-b border-line-soft flex items-center justify-between">
               <span className="section-title">פריטים ברשימה ({cart.length})</span>
-              <span className="text-sm text-slate-500">סה״כ משוער: <b className="num">{fmtMoneyExact(total)}</b></span>
+              <span className="text-sm text-ink-muted">סה״כ משוער: <b className="num">{fmtMoneyExact(total)}</b></span>
             </div>
             {cart.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-slate-500">בחר מוצרים מהרשימה משמאל כדי להתחיל</div>
+              <div className="px-4 py-10 text-center text-sm text-ink-muted">בחר מוצרים מהרשימה משמאל כדי להתחיל</div>
             ) : (
-              <div className="divide-y divide-slate-50">
+              <div className="divide-y divide-line-soft">
                 {cart.map((item, idx) => {
                   const offers = offersByProduct.get(item.product.id) ?? [];
                   const { sp, recommended } = effective(item);
                   return (
                     <div key={item.product.id} className="px-4 py-3 flex flex-wrap items-center gap-3">
                       <div className="flex-1 min-w-40">
-                        <div className="text-sm font-medium text-slate-800">{item.product.name}</div>
-                        <div className="text-xs text-slate-500">{item.product.unit}</div>
+                        <div className="text-sm font-medium text-ink-body">{item.product.name}</div>
+                        <div className="text-xs text-ink-muted">{item.product.unit}</div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button className="btn-secondary p-1.5!" onClick={() => setCart((c) => c.map((x, i) => i === idx ? { ...x, qty: Math.max(1, x.qty - 1) } : x))} aria-label="הפחתה"><Minus size={14} /></button>
+                        <button className="btn-secondary p-1.5! min-w-10 min-h-10" onClick={() => setCart((c) => c.map((x, i) => i === idx ? { ...x, qty: Math.max(1, x.qty - 1) } : x))} aria-label="הפחתה"><Minus size={14} /></button>
                         <input type="number" min={0.1} step="any" className="input w-20! num text-center" value={item.qty}
                           onChange={(e) => setCart((c) => c.map((x, i) => i === idx ? { ...x, qty: Number(e.target.value) || 1 } : x))} />
-                        <button className="btn-secondary p-1.5!" onClick={() => setCart((c) => c.map((x, i) => i === idx ? { ...x, qty: x.qty + 1 } : x))} aria-label="הוספה"><Plus size={14} /></button>
+                        <button className="btn-secondary p-1.5! min-w-10 min-h-10" onClick={() => setCart((c) => c.map((x, i) => i === idx ? { ...x, qty: x.qty + 1 } : x))} aria-label="הוספה"><Plus size={14} /></button>
                       </div>
-                      <select className="input w-56!" value={item.chosenSupplierId ?? ''}
+                      <select className="input sm:w-56!" value={item.chosenSupplierId ?? ''}
                         onChange={(e) => setCart((c) => c.map((x, i) => i === idx ? { ...x, chosenSupplierId: e.target.value || null } : x))}>
                         <option value="">
                           {recommended ? `מומלץ: ${supplierById.get(recommended.supplier_id)?.name} — ₪${recommended.current_price.toFixed(2)}` : 'אין ספק זמין'}
@@ -213,8 +213,8 @@ export default function NewOrder() {
                           </option>
                         ))}
                       </select>
-                      <div className="w-24 text-sm font-medium num">{sp ? fmtMoneyExact(sp.current_price * item.qty) : '—'}</div>
-                      <button className="btn-ghost p-1.5! text-slate-400 hover:text-rose-600" onClick={() => setCart((c) => c.filter((_, i) => i !== idx))} aria-label="הסרה"><Trash2 size={15} /></button>
+                      <div className="w-24 text-sm font-medium num ms-auto">{sp ? fmtMoneyExact(sp.current_price * item.qty) : '—'}</div>
+                      <button className="btn-ghost p-1.5! min-w-10 min-h-10 text-ink-faint hover:text-alert-solid" onClick={() => setCart((c) => c.filter((_, i) => i !== idx))} aria-label="הסרה"><Trash2 size={15} /></button>
                     </div>
                   );
                 })}
@@ -237,7 +237,7 @@ export default function NewOrder() {
                     <Note key={g.supplier.id} tone={underMin ? 'await' : 'idle'}>
                       <div className="w-full">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="font-medium text-slate-800">{g.supplier.name} <span className="text-slate-500 font-normal">({g.items.length} פריטים)</span></span>
+                          <span className="font-medium text-ink-body">{g.supplier.name} <span className="text-ink-muted font-normal">({g.items.length} פריטים)</span></span>
                           <span className="font-semibold num">{fmtMoneyExact(g.subtotal)}</span>
                         </div>
                         {underMin && (

@@ -29,9 +29,9 @@ const SEVERITY_LABEL: Record<AlertSeverity, string> = {
 
 function Figure({ line, onClick }: { line: SummaryLine; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="card card-pad text-start w-full hover:border-indigo-300 hover:shadow transition-all cursor-pointer">
-      <div className="text-xs font-medium text-slate-500">{line.label}</div>
-      <div className="text-xl font-bold text-slate-900 mt-1 num">
+    <button onClick={onClick} className="card card-pad text-start w-full card-link-hover cursor-pointer">
+      <div className="text-xs font-medium text-ink-muted">{line.label}</div>
+      <div className="text-xl font-bold text-ink mt-1 num">
         {line.unit === 'currency' ? fmtMoney(line.value) : fmtNum(line.value)}
       </div>
     </button>
@@ -51,7 +51,7 @@ export default function Alerts() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="page-title">התראות וסיכום עסקי</h1>
-          <p className="text-xs text-slate-500 mt-0.5">נבדק {fmtDateTime(data.generatedAt)}</p>
+          <p className="text-xs text-ink-muted mt-0.5">נבדק {fmtDateTime(data.generatedAt)}</p>
         </div>
         <button className="btn-secondary" onClick={() => void refetch()} disabled={fetching}>
           <RefreshCw size={15} className={fetching ? 'animate-spin' : ''} />
@@ -68,21 +68,21 @@ export default function Alerts() {
         {data.alerts.length === 0 ? (
           // Deliberately not a row of zeros: "nothing found" is a different statement from
           // "we measured seven things and they were all zero", and only the first is true.
-          <div className="card card-pad flex items-center gap-3 text-sm text-slate-600">
-            <ShieldCheck size={18} className="text-emerald-600 shrink-0" />
+          <div className="card card-pad flex items-center gap-3 text-sm text-ink-soft">
+            <ShieldCheck size={18} className="text-done-solid shrink-0" />
             לא נמצאו התראות פתוחות בבדיקות שהמערכת יודעת להריץ.
           </div>
         ) : (
-          <div className="card divide-y divide-slate-100 overflow-hidden">
+          <div className="card divide-y divide-line-soft overflow-hidden">
             {data.alerts.map((a) => (
               <button key={a.code} onClick={() => navigate(a.to)}
-                className="w-full text-start flex items-center gap-3 px-4 py-3 hover:bg-indigo-50/40 cursor-pointer">
+                className="w-full text-start flex items-center gap-3 px-4 py-3 row-hover cursor-pointer">
                 <span className={`${SEVERITY_BADGE[a.severity]} shrink-0`}>{SEVERITY_LABEL[a.severity]}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium text-slate-800">{a.title}</span>
-                  <span className="block text-xs text-slate-500 mt-0.5">{a.detail}</span>
+                  <span className="block text-sm font-medium text-ink-body">{a.title}</span>
+                  <span className="block text-xs text-ink-muted mt-0.5">{a.detail}</span>
                 </span>
-                <ChevronLeft size={16} className="text-slate-300 shrink-0" />
+                <ChevronLeft size={16} className="text-ink-ghost shrink-0" />
               </button>
             ))}
           </div>
@@ -91,7 +91,7 @@ export default function Alerts() {
 
       {/* Naming what is not covered belongs on the screen, not only in the docs: a manager
           who reads this page as complete would stop looking elsewhere. */}
-      <p className="text-xs text-slate-500 leading-relaxed">
+      <p className="text-xs text-ink-muted leading-relaxed">
         אינו נבדק: מלאי נמוך (אין מעקב כמויות במערכת) · חריגה בתקציב (לא הוגדר תקציב).
         מועדי פירעון נבדקים רק על דרישות תשלום שהוזן להן תאריך.
       </p>

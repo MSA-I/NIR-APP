@@ -61,14 +61,14 @@ export function InvoicesList() {
   const canCreate = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
 
   const columns: Column<InvoiceRow>[] = [
-    { key: 'number', header: 'מס׳ חשבונית', sortValue: (r) => r.invoice_number, render: (r) => <span className="font-medium text-slate-900" dir="ltr">{r.invoice_number}</span> },
-    { key: 'supplier', header: 'ספק', sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
+    { key: 'number', header: 'מס׳ חשבונית', priority: 3, sortValue: (r) => r.invoice_number, render: (r) => <span className="font-medium text-ink" dir="ltr">{r.invoice_number}</span> },
+    { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
     { key: 'date', header: 'תאריך', sortValue: (r) => r.invoice_date, render: (r) => fmtDate(r.invoice_date) },
     { key: 'total', header: 'סה״כ', className: 'num', sortValue: (r) => r.total_amount, render: (r) => fmtMoneyExact(r.total_amount) },
-    { key: 'balance', header: 'יתרה', className: 'num', sortValue: (r) => r.balance ?? 0, render: (r) => (r.balance != null && r.balance > 0 ? <span className="text-amber-700">{fmtMoneyExact(r.balance)}</span> : <span className="text-emerald-600">—</span>) },
-    { key: 'review', header: 'בדיקה', render: (r) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
-    { key: 'payment', header: 'תשלום', render: (r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
-    { key: 'export', header: 'רו״ח', render: (r) => <StatusBadge meta={INVOICE_EXPORT_STATUS[r.export_status]} /> },
+    { key: 'balance', header: 'יתרה', className: 'num', sortValue: (r) => r.balance ?? 0, render: (r) => (r.balance != null && r.balance > 0 ? <span className="text-await-fg">{fmtMoneyExact(r.balance)}</span> : <span className="text-done-solid">—</span>) },
+    { key: 'review', header: 'בדיקה', mobileLabel: null, render: (r) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
+    { key: 'payment', header: 'תשלום', priority: 3, render: (r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
+    { key: 'export', header: 'רו״ח', priority: 3, render: (r) => <StatusBadge meta={INVOICE_EXPORT_STATUS[r.export_status]} /> },
   ];
 
   if (loading) return <SkeletonTable cols={6} />;
@@ -83,6 +83,9 @@ export function InvoicesList() {
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.invoice_number.toLowerCase().includes(q) || r.supplier.name.toLowerCase().includes(q)}
         onRowClick={(r) => navigate(`/invoices/${r.id}`)}
+        mobile="cards"
+        mobileTitle={(r) => <><span dir="ltr">{r.invoice_number}</span> · {r.supplier.name}</>}
+        mobileTrailing={(r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} />}
         toolbar={
           <>
             <select className="input w-auto!" value={reviewFilter} onChange={(e) => setReviewFilter(e.target.value)}>

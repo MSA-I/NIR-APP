@@ -28,13 +28,13 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-shell p-4">
       <div className="w-full max-w-sm">
         {/* Nothing is authenticated here, so there is no tenant to name — the login
             screen wears the product's identity, and the tenant's appears after sign-in. */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-white">{APP_NAME}</h1>
-          <p className="text-slate-400 mt-1 text-sm">מערכת ניהול רכש, חשבוניות ותשלומים</p>
+          <p className="text-ink-faint mt-1 text-sm">מערכת ניהול רכש, חשבוניות ותשלומים</p>
         </div>
         <form onSubmit={(e) => void onSubmit(e)} className="card card-pad space-y-4">
           <div>
@@ -47,7 +47,7 @@ export default function Login() {
             <input id="password" type="password" className="input" dir="ltr" autoComplete="current-password"
               value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
-          {error && <div className="text-sm text-rose-600">{error}</div>}
+          {error && <div className="text-sm text-alert-solid">{error}</div>}
           <button type="submit" className="btn-primary w-full" disabled={busy}>
             {busy ? <Loader2 size={16} className="animate-spin" /> : <Lock size={15} />}
             התחברות

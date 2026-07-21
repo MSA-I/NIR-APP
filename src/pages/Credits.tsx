@@ -60,7 +60,7 @@ export default function Credits() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title flex items-center gap-2"><RotateCcw size={22} /> זיכויים</h1>
         {/* open credits are open work (house idiom: "an open balance is open work") — await, not the retired violet (audit 2026-07-21) */}
-        <div className="text-sm text-slate-500">סה״כ זיכויים פתוחים: <b className="num text-await-fg">{fmtMoneyExact(openSum)}</b></div>
+        <div className="text-sm text-ink-muted">סה״כ זיכויים פתוחים: <b className="num text-await-fg">{fmtMoneyExact(openSum)}</b></div>
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.notes ?? '').toLowerCase().includes(q)}
@@ -113,14 +113,14 @@ function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
   return (
     <Modal open onClose={onClose} title={`זיכוי #${credit.number} — ${credit.supplier.name}`}>
       <dl className="text-sm space-y-2 mb-4">
-        <div className="flex justify-between"><dt className="text-slate-500">סיבה</dt><dd>{CREDIT_REASON[credit.reason]}</dd></div>
-        <div className="flex justify-between"><dt className="text-slate-500">סכום</dt><dd className="num font-semibold">{fmtMoneyExact(credit.amount)}</dd></div>
-        <div className="flex justify-between"><dt className="text-slate-500">סטטוס</dt><dd><StatusBadge meta={CREDIT_STATUS[credit.status]} /></dd></div>
+        <div className="flex justify-between"><dt className="text-ink-muted">סיבה</dt><dd>{CREDIT_REASON[credit.reason]}</dd></div>
+        <div className="flex justify-between"><dt className="text-ink-muted">סכום</dt><dd className="num font-semibold">{fmtMoneyExact(credit.amount)}</dd></div>
+        <div className="flex justify-between"><dt className="text-ink-muted">סטטוס</dt><dd><StatusBadge meta={CREDIT_STATUS[credit.status]} /></dd></div>
         {credit.invoice && (
-          <div className="flex justify-between"><dt className="text-slate-500">חשבונית</dt>
-            <dd><button className="text-indigo-700 hover:underline" onClick={() => onOpenInvoice(credit.invoice!.id)}>{credit.invoice.invoice_number}</button></dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">חשבונית</dt>
+            <dd><button className="link" onClick={() => onOpenInvoice(credit.invoice!.id)}>{credit.invoice.invoice_number}</button></dd></div>
         )}
-        {credit.notes && <div className="bg-slate-50 rounded-lg px-3 py-2 text-slate-600">{credit.notes}</div>}
+        {credit.notes && <div className="bg-surface-sunken rounded-lg px-3 py-2 text-ink-soft">{credit.notes}</div>}
       </dl>
       {canWrite && (
         <div className="flex flex-wrap gap-2 justify-end">

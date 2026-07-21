@@ -110,7 +110,7 @@ export default function InvoiceNew() {
   return (
     <div className="max-w-2xl space-y-4">
       <h1 className="page-title">חשבונית חדשה</h1>
-      {presetOrder && <div className="text-sm text-slate-500">החשבונית תקושר אוטומטית להזמנה ולקבלת הסחורה שממנה הגעת.</div>}
+      {presetOrder && <div className="text-sm text-ink-muted">החשבונית תקושר אוטומטית להזמנה ולקבלת הסחורה שממנה הגעת.</div>}
 
       <div className="card card-pad grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
@@ -132,7 +132,7 @@ export default function InvoiceNew() {
         <div className="card card-pad">
           <div className="section-title mb-3 flex items-center gap-2">
             בדיקות אוטומטיות
-            {checking && <Loader2 size={14} className="animate-spin text-slate-400" />}
+            {checking && <Loader2 size={14} className="animate-spin text-ink-faint" />}
           </div>
           {checks && <CheckList checks={checks} />}
         </div>

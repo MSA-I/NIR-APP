@@ -144,7 +144,6 @@ body {
   .link { @apply text-action font-medium hover:underline; }
   .row-hover { @apply hover:bg-action-wash/40 active:bg-action-wash/70 transition-colors; }
   .card-link-hover { @apply hover:border-action-line hover:shadow transition-all; }
-  .count-badge { @apply badge bg-action-soft text-action-on-soft; }
 
   /* Semantic badges. StatusBadge builds `badge-${tone}` from the Tone union in
      lib/status.ts, so every Tone value MUST have a class here or the tag renders

@@ -43,12 +43,12 @@ export default function PaymentRequests() {
   const isOffice = !!profile && ['owner', 'office'].includes(profile.role);
 
   const columns: Column<Row>[] = [
-    { key: 'num', header: 'מס׳', sortValue: (r) => r.number, render: (r) => `#${r.number}` },
-    { key: 'supplier', header: 'ספק', sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
-    { key: 'amount', header: 'סכום', className: 'num', sortValue: (r) => r.amount, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
-    { key: 'due', header: 'תאריך יעד', sortValue: (r) => r.due_date ?? '', render: (r) => fmtDate(r.due_date) },
-    { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} /> },
-    { key: 'created', header: 'נוצרה', sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
+    { key: 'num', header: 'מס׳', priority: 3, sortValue: (r) => r.number, render: (r) => `#${r.number}` },
+    { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
+    { key: 'amount', header: 'סכום', mobileLabel: null, className: 'num', sortValue: (r) => r.amount, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
+    { key: 'due', header: 'יעד', sortValue: (r) => r.due_date ?? '', render: (r) => fmtDate(r.due_date) },
+    { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} /> },
+    { key: 'created', header: 'נוצרה', priority: 3, sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
   ];
 
   if (loading) return <SkeletonTable cols={6} />;
@@ -63,6 +63,9 @@ export default function PaymentRequests() {
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || String(r.number).includes(q)}
         onRowClick={(r) => setSelected(r)}
+        mobile="cards"
+        mobileTitle={(r) => <>#{r.number} · {r.supplier.name}</>}
+        mobileTrailing={(r) => <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} />}
         toolbar={
           <>
             <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
@@ -200,7 +203,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
           <div>
             <label className="label">חשבוניות פתוחות לתשלום</label>
             {invoices?.length ? (
-              <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-56 overflow-y-auto">
+              <div className="border border-line rounded-lg divide-y divide-line-soft max-h-56 overflow-y-auto">
                 {invoices.map((inv) => {
                   const checked = inv.id in chosen;
                   return (
@@ -215,7 +218,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
                         חשבונית <b dir="ltr">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}
                         {inv.review_status !== 'approved' && <span className="badge-await ms-2">טרם אושרה</span>}
                       </span>
-                      <span className="text-slate-500 text-xs num">יתרה {fmtMoneyExact(inv.balance)}</span>
+                      <span className="text-ink-muted text-xs num">יתרה {fmtMoneyExact(inv.balance)}</span>
                       {checked && (
                         <input type="number" step="0.01" className="input w-28! num" value={chosen[inv.id]}
                           onChange={(e) => setChosen((c) => ({ ...c, [inv.id]: Number(e.target.value) || 0 }))} />
@@ -224,12 +227,12 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
                   );
                 })}
               </div>
-            ) : <div className="text-sm text-slate-500 border border-dashed rounded-lg px-3 py-4 text-center">אין חשבוניות פתוחות לספק זה — ניתן לשמור דרישה ללא חשבונית (תסומן כחריג בהתאמות)</div>}
+            ) : <div className="text-sm text-ink-muted border border-dashed rounded-lg px-3 py-4 text-center">אין חשבוניות פתוחות לספק זה — ניתן לשמור דרישה ללא חשבונית (תסומן כחריג בהתאמות)</div>}
           </div>
         )}
 
-        <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
-          <span className="text-sm text-slate-600">סכום הדרישה</span>
+        <div className="flex items-center justify-between rounded-lg bg-surface-sunken px-4 py-3">
+          <span className="text-sm text-ink-soft">סכום הדרישה</span>
           <span className="text-lg font-bold num">{fmtMoneyExact(amount)}</span>
         </div>
 
@@ -292,14 +295,14 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge meta={PAYMENT_REQUEST_STATUS[pr.status]} />
           <span className="text-lg font-bold num">{fmtMoneyExact(pr.amount)}</span>
-          {pr.due_date && <span className="text-sm text-slate-500">יעד: {fmtDate(pr.due_date)}</span>}
+          {pr.due_date && <span className="text-sm text-ink-muted">יעד: {fmtDate(pr.due_date)}</span>}
         </div>
-        {pr.notes && <div className="text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2">{pr.notes}</div>}
+        {pr.notes && <div className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-3 py-2">{pr.notes}</div>}
 
         {links?.length ? (
           <div>
-            <div className="text-sm font-medium text-slate-600 mb-1.5">חשבוניות מקושרות</div>
-            <ul className="divide-y divide-slate-100 border border-slate-100 rounded-lg text-sm">
+            <div className="text-sm font-medium text-ink-soft mb-1.5">חשבוניות מקושרות</div>
+            <ul className="divide-y divide-line-soft border border-line-soft rounded-lg text-sm">
               {links.map((l) => (
                 <li key={l.invoice_id} className="flex justify-between px-3 py-2">
                   <span>חשבונית <b dir="ltr">{l.invoice.invoice_number}</b> · {fmtDate(l.invoice.invoice_date)}</span>
@@ -311,8 +314,8 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         ) : <div className="text-sm text-await-fg">דרישה ללא חשבוניות מקושרות</div>}
 
         <div>
-          <div className="text-sm font-medium text-slate-600 mb-1.5">בדיקות לפני אישור</div>
-          {checks ? <CheckList checks={checks} /> : <Loader2 size={16} className="animate-spin text-slate-400" />}
+          <div className="text-sm font-medium text-ink-soft mb-1.5">בדיקות לפני אישור</div>
+          {checks ? <CheckList checks={checks} /> : <Loader2 size={16} className="animate-spin text-ink-faint" />}
         </div>
 
         {isOffice && (
@@ -329,7 +332,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
               <button className="btn-primary" disabled={busy} onClick={() => void setStatus('sent_for_execution')}><Send size={15} /> העברה לגורם המבצע</button>
             )}
             {!['cancelled', 'executed', 'matched'].includes(pr.status) && (
-              <button className="btn-ghost text-rose-600" disabled={busy} onClick={() => setCancelOpen(true)}><XCircle size={15} /> ביטול</button>
+              <button className="btn-ghost text-alert-solid" disabled={busy} onClick={() => setCancelOpen(true)}><XCircle size={15} /> ביטול</button>
             )}
           </div>
         )}

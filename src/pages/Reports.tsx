@@ -185,6 +185,7 @@ export default function Reports() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-line-soft section-title">תשלומים לפי ספק</div>
+            <div className="overflow-x-auto">
             <table className="w-full">
               <tbody className="divide-y divide-line-soft">
                 {paymentsBySupplier.map(([name, sum]) => (
@@ -193,10 +194,12 @@ export default function Reports() {
                 {!paymentsBySupplier.length && <tr><td className="td text-ink-muted text-center py-6">אין תשלומים בחודש זה</td></tr>}
               </tbody>
             </table>
+            </div>
           </div>
 
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-line-soft section-title">זיכויים</div>
+            <div className="overflow-x-auto">
             <table className="w-full">
               <tbody className="divide-y divide-line-soft">
                 {data.credits.map((c) => (
@@ -210,6 +213,7 @@ export default function Reports() {
                 {!data.credits.length && <tr><td className="td text-ink-muted text-center py-6">אין זיכויים בחודש זה</td></tr>}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       </div>

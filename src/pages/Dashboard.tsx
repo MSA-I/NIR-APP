@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { TrendingUp, ChevronLeft, RotateCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { Skeleton, StatusBadge, Note, AttentionZone, StatTile, TaskLine, type AttentionItem } from '../components/ui';
+import { Skeleton, StatusBadge, Note, AttentionZone, TaskLine, type AttentionItem } from '../components/ui';
 import { EXCEPTION_TYPE, SEVERITY } from '../lib/status';
 import { fmtMoney, fmtMoneyExact, fmtMonth, toLocalISO } from '../lib/format';
 import { chartTheme } from '../lib/theme';
@@ -17,6 +17,22 @@ const glanceMoney = (v: number | null) => fmtMoney(v == null ? null : Math.round
 const moneyShort = (v: number) => (Math.abs(v) >= 1000 ? `₪${(v / 1000).toLocaleString('he-IL', { maximumFractionDigits: 1 })}k` : `₪${Math.round(v)}`);
 // "עודכן ב-HH:MM" freshness stamp — the screen promises real-time, so it says when it last read.
 const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit' });
+
+// One segment of the money band. Segments live in a single .card and separate with logical
+// borders (border-t stacked / border-s side-by-side) — never divide-x, which is physical
+// left/right and breaks under RTL (see supplier-metrics.tsx).
+function BandStat({ title, value, tone = 'idle', to, sub }: {
+  title: string; value: string; tone?: 'done' | 'await' | 'idle'; to: string; sub: string;
+}) {
+  const toneCls = { done: 'text-done-fg', await: 'text-await-fg', idle: 'text-ink' }[tone];
+  return (
+    <Link to={to} className="block px-4 py-3.5 sm:px-5 hover:bg-surface-sunken transition-colors border-t sm:border-t-0 sm:border-s border-line-soft first:border-t-0 sm:first:border-s-0">
+      <div className="text-xs font-medium text-ink-muted">{title}</div>
+      <div className={`text-xl font-semibold mt-0.5 num ${toneCls}`} dir="ltr">{value}</div>
+      <div className="text-xs text-ink-muted mt-0.5">{sub}</div>
+    </Link>
+  );
+}
 
 // Week bucketing for the weekly-purchasing chart. Local-day helper is shared (toLocalISO).
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -55,10 +71,10 @@ function DashboardSkeleton() {
         </div>
       </div>
 
-      {/* money strip: three navigable stat tiles (title · value · sub) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {/* money band: one card, three segments (title · value · sub) */}
+      <div className="card grid grid-cols-1 sm:grid-cols-3">
         {Array.from({ length: 3 }, (_, i) => (
-          <div key={i} className="card card-pad">
+          <div key={i} className="px-4 py-3.5 sm:px-5 border-t sm:border-t-0 sm:border-s border-line-soft first:border-t-0 sm:first:border-s-0">
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-6 w-28 mt-2" />
             <Skeleton className="h-3 w-40 mt-2" />
@@ -298,14 +314,14 @@ export default function Dashboard() {
       {/* Nir §1–3 — the control center. totalLabel scopes the summed ₪ as workload, not net debt. */}
       <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול" />
 
-      {/* thin money strip — context, all navigable. `sub` carries a short plain-Hebrew gloss of
-          each term (StatTile has no title-tooltip prop; `sub` is the visible, readable equivalent). */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <StatTile title="יתרת חשבוניות פתוחות" value={glanceMoney(data.money.openBalance)} tone="await" to="/invoices?pay=unpaid"
+      {/* money band — one ledger strip with three navigable segments, not three identical
+          tiles. `sub` carries a short plain-Hebrew gloss of each term. */}
+      <div className="card grid grid-cols-1 sm:grid-cols-3">
+        <BandStat title="יתרת חשבוניות פתוחות" value={glanceMoney(data.money.openBalance)} tone="await" to="/invoices?pay=unpaid"
           sub="סך החוב לספקים על חשבוניות שטרם שולמו במלואן" />
-        <StatTile title="שולם לספקים החודש" value={glanceMoney(data.money.paidMonth)} tone="done" to={`/payments?month=${data.money.monthKey}`}
+        <BandStat title="שולם לספקים החודש" value={glanceMoney(data.money.paidMonth)} tone="done" to={`/payments?month=${data.money.monthKey}`}
           sub="סך התשלומים שיצאו לספקים החודש" />
-        <StatTile title="נרכש החודש" value={glanceMoney(data.money.purchasedMonth)} to="/orders?status=all"
+        <BandStat title="נרכש החודש" value={glanceMoney(data.money.purchasedMonth)} to="/orders?status=all"
           sub={data.savings != null
             ? `חיסכון משוער החודש: ההפרש מול המחיר היקר ביותר שהוצע — ${fmtMoney(data.savings)}`
             : 'שווי ההזמנות שנוצרו החודש (במחירי ההזמנה)'} />
@@ -428,12 +444,12 @@ export default function Dashboard() {
             aria-label={`הוצאות רכש לפי חודש: ${data.monthly.map((m) => `${m.month} ${money(m.total)}`).join(', ')}`}>
             <ResponsiveContainer>
               <BarChart data={data.monthly} margin={{ top: 20, left: 8, right: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={t.grid} />
+                <XAxis dataKey="month" tick={{ fontSize: 12, fill: t.tick }} axisLine={false} tickLine={false} />
                 <YAxis hide />
-                <Tooltip formatter={(v) => money(Number(v))} labelStyle={{ fontFamily: 'Heebo' }} />
+                <Tooltip formatter={(v) => money(Number(v))} />
                 <Bar dataKey="total" name="סה״כ" fill={t.bar} radius={[4, 4, 0, 0]} maxBarSize={56} isAnimationActive={false}>
-                  <LabelList dataKey="total" position="top" formatter={(v: number) => money(v)} style={{ fontSize: 11, fill: '#475569' }} />
+                  <LabelList dataKey="total" position="top" formatter={(v: number) => money(v)} style={{ fontSize: 11, fill: t.label }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -446,14 +462,14 @@ export default function Dashboard() {
             aria-label={`רכש לפי שבוע: ${data.weekly.map((w) => `${w.week} ${money(w.total)}`).join(', ')}`}>
             <ResponsiveContainer>
               <BarChart data={data.weekly} margin={{ top: 20, left: 8, right: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="week" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={t.grid} />
+                <XAxis dataKey="week" tick={{ fontSize: 11, fill: t.tick }} axisLine={false} tickLine={false} />
                 <YAxis hide />
-                <Tooltip formatter={(v) => money(Number(v))} labelStyle={{ fontFamily: 'Heebo' }} />
+                <Tooltip formatter={(v) => money(Number(v))} />
                 {/* value labels so the week series reads at a glance like the monthly chart; compact
                     ₪ format because 8 full labels overlap (moneyShort) */}
                 <Bar dataKey="total" name="סה״כ" fill={t.bar} radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={false}>
-                  <LabelList dataKey="total" position="top" formatter={(v: number) => moneyShort(v)} style={{ fontSize: 10, fill: '#475569' }} />
+                  <LabelList dataKey="total" position="top" formatter={(v: number) => moneyShort(v)} style={{ fontSize: 10, fill: t.label }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -468,12 +484,12 @@ export default function Dashboard() {
               aria-label={`הוצאות לפי קטגוריה: ${data.categories.slice(0, 12).map((c) => `${c.name} ${money(c.total)}`).join(', ')}`}>
               <ResponsiveContainer>
                 <BarChart data={data.categories} layout="vertical" margin={{ left: 8, right: 56 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={t.grid} />
                   <XAxis type="number" hide />
-                  <YAxis type="category" dataKey="name" orientation="right" width={90} tick={{ fontSize: 12, fill: '#334155' }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" orientation="right" width={90} tick={{ fontSize: 12, fill: t.tickStrong }} axisLine={false} tickLine={false} />
                   <Tooltip formatter={(v) => money(Number(v))} />
                   <Bar dataKey="total" name="סה״כ" fill={t.bar} radius={[4, 0, 0, 4]} maxBarSize={22} isAnimationActive={false}>
-                    <LabelList dataKey="total" position="left" formatter={(v: number) => money(v)} style={{ fontSize: 11, fill: '#475569' }} />
+                    <LabelList dataKey="total" position="left" formatter={(v: number) => money(v)} style={{ fontSize: 11, fill: t.label }} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>

@@ -134,7 +134,7 @@ export default function Settings() {
     {
       key: 'sent', header: 'נשלחה',
       render: (r) => (
-        <span className="text-slate-500">
+        <span className="text-ink-muted">
           {fmtDateTime(r.last_sent_at)}{r.send_count > 1 && ` (×${r.send_count})`}
         </span>
       ),
@@ -150,7 +150,7 @@ export default function Settings() {
             <button className="btn-ghost py-1! text-xs" onClick={() => setResendTarget(r)}>
               <Send size={13} /> שליחה מחדש
             </button>
-            <button className="btn-ghost py-1! text-xs text-rose-600 hover:bg-rose-50" onClick={() => setRevokeTarget(r)}>
+            <button className="btn-ghost py-1! text-xs text-alert-solid hover:bg-alert-wash" onClick={() => setRevokeTarget(r)}>
               <Ban size={13} /> ביטול
             </button>
           </div>
@@ -177,13 +177,14 @@ export default function Settings() {
       </div>
 
       <div className="card overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100 section-title flex items-center gap-2"><Users size={17} /> משתמשים והרשאות</div>
+        <div className="px-4 py-3 border-b border-line-soft section-title flex items-center gap-2"><Users size={17} /> משתמשים והרשאות</div>
+        <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-slate-50"><tr><th className="th">שם</th><th className="th">תפקיד</th><th className="th">טלפון</th><th className="th">סטטוס</th><th className="th"></th></tr></thead>
-          <tbody className="divide-y divide-slate-100">
+          <thead className="bg-surface-sunken"><tr><th className="th">שם</th><th className="th">תפקיד</th><th className="th">טלפון</th><th className="th">סטטוס</th><th className="th"></th></tr></thead>
+          <tbody className="divide-y divide-line-soft">
             {users?.map((u) => (
               <tr key={u.id}>
-                <td className="td font-medium">{u.full_name}{u.id === profile?.id && <span className="text-xs text-slate-500 ms-2">(אתה)</span>}</td>
+                <td className="td font-medium">{u.full_name}{u.id === profile?.id && <span className="text-xs text-ink-muted ms-2">(אתה)</span>}</td>
                 <td className="td">{roleLabels[u.role]}</td>
                 <td className="td" dir="ltr">{u.phone ?? '—'}</td>
                 <td className="td">{u.active ? <span className="badge-done">פעיל</span> : <span className="badge-idle">מושבת</span>}</td>
@@ -196,12 +197,13 @@ export default function Settings() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div className="card card-pad space-y-4">
         <div>
           <h2 className="section-title flex items-center gap-2"><MailPlus size={17} /> הזמנת עובד</h2>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-ink-muted mt-1">
             נשלח מייל עם קישור אישי להגדרת שם וסיסמה. הקישור תקף 7 ימים.
           </p>
         </div>

@@ -26,13 +26,13 @@ export default function Payments() {
     { key: 'method', header: 'אמצעי', render: (r) => r.method ?? '—' },
     { key: 'ref', header: 'אסמכתא', render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
     {
-      key: 'invoices', header: 'חשבוניות', render: (r) => (
-        <span className="text-slate-500" dir="ltr">
+      key: 'invoices', header: 'חשבוניות', priority: 3, render: (r) => (
+        <span className="text-ink-muted" dir="ltr">
           {r.allocations.filter((a) => a.invoice).map((a) => a.invoice!.invoice_number).join(', ') || '—'}
         </span>
       ),
     },
-    { key: 'notes', header: 'הערות', render: (r) => <span className="text-slate-500 max-w-56 truncate inline-block">{r.notes ?? ''}</span> },
+    { key: 'notes', header: 'הערות', priority: 3, render: (r) => <span className="text-ink-muted max-w-56 truncate inline-block">{r.notes ?? ''}</span> },
   ];
 
   if (loading) return <SkeletonTable cols={5} />;
@@ -56,6 +56,8 @@ export default function Payments() {
       <h1 className="page-title flex items-center gap-2"><CreditCard size={22} /> תשלומים</h1>
       <DataTable rows={focused ? [focused] : baseRows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.reference ?? '').includes(q)}
+        mobile="cards"
+        mobileTitle={(r) => <>#{r.number} · {r.supplier.name}</>}
         toolbar={focused ? (
           <button className="btn-secondary" onClick={clearFocus}><X size={14} /> מציג תשלום #{focused.number}</button>
         ) : monthFilter ? (

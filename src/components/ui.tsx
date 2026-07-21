@@ -276,24 +276,6 @@ export function AttentionZone({ items, totalLabel }: { items: AttentionItem[]; t
   );
 }
 
-/* ---------- StatTile — a compact, navigable stat (dashboard money strip) ---------- */
-// Uses section 6's fg surface (index.css comment: "fg → text/icon on white, KpiCard/money").
-export function StatTile({ title, value, tone = 'idle', to, sub }: {
-  title: string; value: string; tone?: Tone; to: string; sub?: string;
-}) {
-  // Keys are exactly the Tone union (audit 2026-07-21 removed the orphan `violet`, which Tone no
-  // longer includes and no caller passed).
-  const toneCls = { done: 'text-done-fg', await: 'text-await-fg', alert: 'text-alert-fg', info: 'text-info-fg', idle: 'text-ink' }[tone];
-  return (
-    <Link to={to} className="card card-pad block card-link-hover">
-      <div className="text-xs font-medium text-ink-muted">{title}</div>
-      {/* .num aligns to the logical end; no physical textAlign override (audit round 2). */}
-      <div className={`text-xl font-bold mt-1 num ${toneCls}`} dir="ltr">{value}</div>
-      {sub && <div className="text-xs text-ink-muted mt-1">{sub}</div>}
-    </Link>
-  );
-}
-
 /* ---------- TaskLine — role-routed queue row (promoted from Dashboard, now a <Link>) ---------- */
 export function TaskLine({ label, count, to }: { label: string; count: number; to: string }) {
   return (

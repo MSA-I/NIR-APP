@@ -33,13 +33,13 @@ export function OrdersList() {
   const orderTotal = (o: OrderRow) => o.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
 
   const columns: Column<OrderRow>[] = [
-    { key: 'num', header: 'מס׳', sortValue: (r) => r.number, render: (r) => <span className="font-medium">#{r.number}</span> },
-    { key: 'supplier', header: 'ספק', sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
+    { key: 'num', header: 'מס׳', priority: 3, sortValue: (r) => r.number, render: (r) => <span className="font-medium">#{r.number}</span> },
+    { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
     { key: 'created', header: 'נוצרה', sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
-    { key: 'expected', header: 'אספקה צפויה', sortValue: (r) => r.expected_date ?? '', render: (r) => fmtDate(r.expected_date) },
-    { key: 'items', header: 'פריטים', render: (r) => r.items.length },
-    { key: 'total', header: 'סה״כ', className: 'num', sortValue: orderTotal, render: (r) => fmtMoneyExact(orderTotal(r)) },
-    { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={PO_STATUS[r.status]} /> },
+    { key: 'expected', header: 'אספקה', sortValue: (r) => r.expected_date ?? '', render: (r) => fmtDate(r.expected_date) },
+    { key: 'items', header: 'פריטים', priority: 3, render: (r) => r.items.length },
+    { key: 'total', header: 'סה״כ', className: 'num', mobileLabel: null, sortValue: orderTotal, render: (r) => fmtMoneyExact(orderTotal(r)) },
+    { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={PO_STATUS[r.status]} /> },
   ];
 
   if (loading) return <SkeletonTable cols={6} />;
@@ -51,6 +51,9 @@ export function OrdersList() {
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || String(r.number).includes(q)}
         onRowClick={(r) => navigate(`/orders/${r.id}`)}
+        mobile="cards"
+        mobileTitle={(r) => <>#{r.number} · {r.supplier.name}</>}
+        mobileTrailing={(r) => <StatusBadge meta={PO_STATUS[r.status]} />}
         toolbar={
           <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="open">הזמנות פתוחות</option>
@@ -202,6 +205,7 @@ export function OrderDetail() {
           <h2 className="text-xl font-bold">{`הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`}</h2>
           <div className="text-sm mt-1">ספק: {order.supplier.name} · תאריך: {fmtDate(order.created_at)} {order.expected_date && `· אספקה מבוקשת: ${fmtDate(order.expected_date)}`}</div>
         </div>
+        <div className="overflow-x-auto print:overflow-visible">
         <table className="w-full">
           <thead className="bg-surface-sunken border-b border-line-soft">
             <tr>
@@ -234,6 +238,7 @@ export function OrderDetail() {
             </tr>
           </tfoot>
         </table>
+        </div>
         {order.notes && <div className="mt-3 text-sm text-ink-soft">הערות: {order.notes}</div>}
       </div>
 

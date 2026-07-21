@@ -61,7 +61,7 @@ export default function Bank() {
     { key: 'desc', header: 'תיאור', render: (r) => <span className="max-w-72 truncate inline-block">{r.description}</span> },
     { key: 'amount', header: 'סכום', className: 'num', sortValue: (r) => r.amount, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
     { key: 'ref', header: 'אסמכתא', render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
-    { key: 'supplier', header: 'ספק מזוהה', render: (r) => r.supplier?.name ?? <span className="text-slate-500">לא זוהה</span> },
+    { key: 'supplier', header: 'ספק מזוהה', render: (r) => r.supplier?.name ?? <span className="text-ink-muted">לא זוהה</span> },
     { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={BANK_TX_STATUS[r.status]} /> },
   ];
 
@@ -76,7 +76,7 @@ export default function Bank() {
       </div>
 
       {data?.imports.length ? (
-        <div className="text-xs text-slate-500">
+        <div className="text-xs text-ink-muted">
           ייבוא אחרון: {data.imports[0].filename} ({data.imports[0].row_count} שורות, {fmtDateTime(data.imports[0].imported_at)})
         </div>
       ) : null}
@@ -193,13 +193,13 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         </div>
       ) : !headers.length ? (
         <div className="text-center py-8">
-          <p className="text-sm text-slate-600 mb-4">בחר קובץ CSV או Excel מתדפיס הבנק. השורה המקורית נשמרת במלואה.</p>
+          <p className="text-sm text-ink-soft mb-4">בחר קובץ CSV או Excel מתדפיס הבנק. השורה המקורית נשמרת במלואה.</p>
           <button className="btn-primary" onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
           <input ref={fileRef} type="file" hidden accept=".csv,.xlsx,.xls" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="text-sm text-slate-600">{fileName} · {rawRows.length} שורות. מיפוי עמודות:</div>
+          <div className="text-sm text-ink-soft">{fileName} · {rawRows.length} שורות. מיפוי עמודות:</div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {([['date', 'תאריך *'], ['description', 'תיאור *'], ['amount', 'סכום (חובה) *'], ['reference', 'אסמכתא']] as const).map(([k, label]) => (
               <div key={k}>
@@ -211,10 +211,10 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
               </div>
             ))}
           </div>
-          <div className="max-h-48 overflow-auto border border-slate-100 rounded-lg">
+          <div className="max-h-48 overflow-auto border border-line-soft rounded-lg">
             <table className="w-full text-xs">
-              <thead className="bg-slate-50 sticky top-0"><tr>{headers.map((h) => <th key={h} className="th text-[11px]!">{h}</th>)}</tr></thead>
-              <tbody className="divide-y divide-slate-100">
+              <thead className="bg-surface-sunken sticky top-0"><tr>{headers.map((h) => <th key={h} className="th text-[11px]!">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-line-soft">
                 {rawRows.slice(0, 6).map((r, i) => (
                   <tr key={i}>{headers.map((h) => <td key={h} className="td text-xs!">{String(r[h] ?? '')}</td>)}</tr>
                 ))}
@@ -413,12 +413,12 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   return (
     <Modal open onClose={onClose} title="התאמת תנועת בנק" wide>
       <div className="space-y-4">
-        <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-sm">
+        <div className="rounded-lg bg-surface-sunken border border-line px-4 py-3 text-sm">
           <div className="flex flex-wrap justify-between gap-2">
             <span>{fmtDate(tx.tx_date)} · {tx.description}</span>
             <span className="font-bold num">{fmtMoneyExact(tx.amount)}</span>
           </div>
-          {tx.reference && <div className="text-xs text-slate-500 mt-1">אסמכתא: <span dir="ltr">{tx.reference}</span></div>}
+          {tx.reference && <div className="text-xs text-ink-muted mt-1">אסמכתא: <span dir="ltr">{tx.reference}</span></div>}
         </div>
 
         <div className="flex items-end gap-2">
@@ -435,12 +435,12 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
         {supplierId && (
           <>
             <div>
-              <div className="text-sm font-medium text-slate-600 mb-1.5">הצעות התאמה</div>
+              <div className="text-sm font-medium text-ink-soft mb-1.5">הצעות התאמה</div>
               {data?.candidates.length ? (
                 <div className="space-y-2">
                   {data.candidates.map((c) => (
-                    <div key={`${c.kind}-${c.id}`} className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-sm">
-                      <Link2 size={15} className="text-indigo-500 shrink-0" />
+                    <div key={`${c.kind}-${c.id}`} className="flex items-center gap-3 rounded-lg border border-line px-3 py-2.5 text-sm">
+                      <Link2 size={15} className="text-info-fg shrink-0" />
                       <span className="flex-1">{c.label}</span>
                       <span className={c.confidence >= 0.85 ? 'badge-done' : c.confidence >= 0.7 ? 'badge-await' : 'badge-idle'}>
                         ביטחון {(c.confidence * 100).toFixed(0)}%
@@ -451,13 +451,13 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                     </div>
                   ))}
                 </div>
-              ) : <div className="text-sm text-slate-500">אין הצעות אוטומטיות — ניתן להתאים ידנית מטה</div>}
+              ) : <div className="text-sm text-ink-muted">אין הצעות אוטומטיות — ניתן להתאים ידנית מטה</div>}
             </div>
 
             <div>
-              <div className="text-sm font-medium text-slate-600 mb-1.5">התאמה ידנית — פיצול בין חשבוניות פתוחות</div>
+              <div className="text-sm font-medium text-ink-soft mb-1.5">התאמה ידנית — פיצול בין חשבוניות פתוחות</div>
               {data?.openInvoices.length ? (
-                <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                <div className="border border-line rounded-lg divide-y divide-line-soft max-h-48 overflow-y-auto">
                   {data.openInvoices.map((inv) => {
                     const checked = inv.id in chosenInvoices;
                     return (
@@ -470,7 +470,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                             return next;
                           })} />
                         <span className="flex-1">חשבונית <b dir="ltr">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}</span>
-                        <span className="text-xs text-slate-500 num">יתרה {fmtMoneyExact(inv.balance)}</span>
+                        <span className="text-xs text-ink-muted num">יתרה {fmtMoneyExact(inv.balance)}</span>
                         {checked && (
                           <input type="number" step="0.01" className="input w-28! num" value={chosenInvoices[inv.id]}
                             onChange={(e) => setChosenInvoices((c) => ({ ...c, [inv.id]: Number(e.target.value) || 0 }))} />
@@ -479,7 +479,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                     );
                   })}
                 </div>
-              ) : <div className="text-sm text-slate-500">אין חשבוניות פתוחות לספק</div>}
+              ) : <div className="text-sm text-ink-muted">אין חשבוניות פתוחות לספק</div>}
               {chosenSum > 0 && (
                 <div className="flex items-center justify-between mt-2 text-sm">
                   <span className={Math.abs(chosenSum - tx.amount) > 1 ? 'text-await-fg' : 'text-done-fg'}>
@@ -492,9 +492,9 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
           </>
         )}
 
-        <div className="flex flex-wrap justify-between gap-2 pt-2 border-t border-slate-100">
-          <button className="btn-ghost text-slate-500" disabled={busy} onClick={() => void ignore()}><EyeOff size={15} /> לא רלוונטית (לא ספק)</button>
-          <button className="btn-secondary text-amber-700" disabled={busy} onClick={() => void openException()}>
+        <div className="flex flex-wrap justify-between gap-2 pt-2 border-t border-line-soft">
+          <button className="btn-ghost text-ink-muted" disabled={busy} onClick={() => void ignore()}><EyeOff size={15} /> לא רלוונטית (לא ספק)</button>
+          <button className="btn-secondary text-await-fg" disabled={busy} onClick={() => void openException()}>
             <AlertTriangle size={15} /> פתיחת חריג לבירור
           </button>
         </div>

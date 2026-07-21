@@ -85,7 +85,7 @@ export default function Admin() {
   }
 
   const columns: Column<PlatformOrg>[] = [
-    { key: 'name', header: 'ארגון', sortValue: (o) => o.name, render: (o) => <span className="font-medium text-slate-900">{o.name}</span> },
+    { key: 'name', header: 'ארגון', sortValue: (o) => o.name, render: (o) => <span className="font-medium text-ink">{o.name}</span> },
     { key: 'status', header: 'סטטוס', sortValue: (o) => o.status, render: (o) => <StatusBadge meta={ORG_STATUS[o.status]} /> },
     { key: 'users', header: 'משתמשים', className: 'num', sortValue: (o) => o.user_count, render: (o) => fmtNum(o.user_count) },
     { key: 'vat', header: 'מע״מ', className: 'num', render: (o) => `${fmtNum(o.vat_rate)}%` },
@@ -96,7 +96,7 @@ export default function Admin() {
       header: '',
       render: (o) => (
         <button
-          className={o.status === 'suspended' ? 'btn-secondary py-1! text-xs' : 'btn-ghost py-1! text-xs text-rose-600'}
+          className={o.status === 'suspended' ? 'btn-secondary py-1! text-xs' : 'btn-ghost py-1! text-xs text-alert-solid'}
           onClick={() => setPending({ org: o, action: o.status === 'suspended' ? 'reactivate' : 'suspend' })}>
           {o.status === 'suspended' ? 'הפעלה מחדש' : 'השהיה'}
         </button>
@@ -131,12 +131,12 @@ export default function Admin() {
       {handover && (
         <Modal open onClose={() => setHandover(null)} title="הארגון הוקם — פרטי כניסה למסירה">
           <div className="space-y-4">
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-ink-soft">
               הפרטים מוצגים פעם אחת בלבד. מסור אותם לבעל העסק בערוץ מאובטח ובקש ממנו להחליף סיסמה בכניסה הראשונה.
             </p>
             <CredentialRow label="אימייל" value={handover.email} onCopy={() => toast('הועתק')} />
             <CredentialRow label="סיסמה ראשונית" value={handover.password} onCopy={() => toast('הועתק')} />
-            <div className="text-xs text-slate-500">
+            <div className="text-xs text-ink-muted">
               נוצרו {fmtNum(handover.result.categories_created)} קטגוריות בסיס. הארגון נפתח בסטטוס «תקופת ניסיון».
             </div>
             <div className="flex justify-end">
@@ -196,8 +196,8 @@ function NewOrgModal({ open, busy, onClose, onSubmit }: {
   return (
     <Modal open={open} onClose={close} title="הקמת ארגון חדש" wide>
       <div className="space-y-4">
-        <div className="flex items-start gap-2 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2.5 text-sm text-slate-600">
-          <Building2 size={16} className="mt-0.5 shrink-0 text-slate-400" />
+        <div className="flex items-start gap-2 rounded-lg bg-surface-sunken border border-line px-3 py-2.5 text-sm text-ink-soft">
+          <Building2 size={16} className="mt-0.5 shrink-0 text-ink-faint" />
           <span>נוצרים ארגון, משתמש בעלים וקטגוריות בסיס. הפעולה מבוטלת במלואה אם שלב כלשהו נכשל.</span>
         </div>
 
