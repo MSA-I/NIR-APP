@@ -20,11 +20,35 @@ export default function InvoiceNew() {
   const presetSupplier = params.get('supplier') ?? '';
   const presetOrder = params.get('order');
   const presetReceipt = params.get('receipt');
+  const presetFrom = params.get('from'); // duplicate-as-draft from the Invoices list
 
   const [f, setF] = useState({
     supplier_id: presetSupplier, invoice_number: '', invoice_date: todayISO(),
     before_vat: '', vat: '', total: '', notes: '',
   });
+
+  // ?from=<invoiceId> ("שכפול כטיוטה"): prefill supplier, amounts and notes from the source.
+  // invoice_number stays EMPTY and the date stays today — a duplicated number would trip the
+  // duplicate checks below, and rightly so.
+  useEffect(() => {
+    if (!presetFrom) return;
+    void (async () => {
+      const res = await supabase.from('invoices')
+        .select('supplier_id, amount_before_vat, vat_amount, total_amount, notes')
+        .eq('id', presetFrom).maybeSingle();
+      if (res.error || !res.data) { toast('טעינת חשבונית המקור נכשלה', 'error'); return; }
+      const src = res.data as { supplier_id: string; amount_before_vat: number; vat_amount: number; total_amount: number; notes: string | null };
+      setF((s) => ({
+        ...s,
+        supplier_id: src.supplier_id,
+        before_vat: src.amount_before_vat ? String(src.amount_before_vat) : '',
+        vat: src.vat_amount ? String(src.vat_amount) : '',
+        total: src.total_amount ? String(src.total_amount) : '',
+        notes: src.notes ?? '',
+      }));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetFrom]);
   const [checks, setChecks] = useState<CheckResult[] | null>(null);
   const [checking, setChecking] = useState(false);
   const [busy, setBusy] = useState(false);

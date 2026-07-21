@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, Search, X, Loader2, Inbox, Bell, Check } from 'lucide-react';
 import type { StatusMeta, Tone } from '../lib/status';
 import { fmtMoney } from '../lib/format';
+import { ActionMenu, type ActionMenuItem } from './ActionMenu';
 
 /* ---------- StatusBadge ---------- */
 export function StatusBadge({ meta }: { meta: StatusMeta | undefined }) {
@@ -439,7 +440,7 @@ export interface Column<T> {
   mobileLabel?: string | null;
 }
 
-export function DataTable<T extends { id: string }>({ rows, columns, onRowClick, searchable, searchFn, pageSize = 15, emptyTitle = 'אין נתונים להצגה', emptySubtitle, toolbar, mobile = 'scroll', mobileTitle, mobileTrailing }: {
+export function DataTable<T extends { id: string }>({ rows, columns, onRowClick, searchable, searchFn, pageSize = 15, emptyTitle = 'אין נתונים להצגה', emptySubtitle, toolbar, mobile = 'scroll', mobileTitle, mobileTrailing, rowActions }: {
   rows: T[]; columns: Column<T>[]; onRowClick?: (row: T) => void;
   searchable?: boolean; searchFn?: (row: T, q: string) => boolean;
   pageSize?: number; emptyTitle?: string; emptySubtitle?: string; toolbar?: ReactNode;
@@ -450,6 +451,9 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
   mobileTitle?: (row: T) => ReactNode;
   /** End-aligned slot on the headline (typically the status badge). */
   mobileTrailing?: (row: T) => ReactNode;
+  /** Per-row ActionMenu items: a trailing non-sortable column on desktop, an end-aligned
+      trigger next to the card body on mobile. Items handle their own role gating via hidden. */
+  rowActions?: (row: T) => ActionMenuItem[];
 }) {
   const [q, setQ] = useState('');
   const [page, setPage] = useState(0);
@@ -517,9 +521,27 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
                     </div>
                   </>
                 );
+                // With rowActions the card body cannot stay one big <button> holding the menu —
+                // button-in-button is invalid HTML — so the <li> becomes a flex row: the same
+                // clickable body shrunk to flex-1 plus the menu as a sibling at the logical end.
+                // Without rowActions the original markup is untouched (zero regression).
                 return (
-                  <li key={row.id}>
-                    {onRowClick ? (
+                  <li key={row.id} className={rowActions ? 'flex items-start' : undefined}>
+                    {rowActions ? (
+                      <>
+                        {onRowClick ? (
+                          <button type="button" onClick={() => onRowClick(row)}
+                            className="flex-1 min-w-0 text-start p-4 row-hover cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2">
+                            {body}
+                          </button>
+                        ) : (
+                          <div className="flex-1 min-w-0 p-4">{body}</div>
+                        )}
+                        <div className="shrink-0 pe-2 pt-3">
+                          <ActionMenu items={rowActions(row)} />
+                        </div>
+                      </>
+                    ) : onRowClick ? (
                       <button type="button" onClick={() => onRowClick(row)}
                         className="w-full text-start p-4 row-hover cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2">
                         {body}
@@ -554,6 +576,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
                       </th>
                     );
                   })}
+                  {rowActions && <th className="th w-12"><span className="sr-only">פעולות</span></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-line-soft">
@@ -571,6 +594,16 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
                     onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(row); } } : undefined}>
                     {columns.map((c) => <td key={c.key} className={`td ${c.className ?? ''}`}>{c.render(row)}</td>)}
+                    {rowActions && (
+                      <td className="td w-12 py-0.5!">
+                        {/* stopPropagation on click AND keydown: the row itself is a button
+                            (Enter/Space activate it), and opening the menu must not also
+                            navigate the row. */}
+                        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                          <ActionMenu items={rowActions(row)} />
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

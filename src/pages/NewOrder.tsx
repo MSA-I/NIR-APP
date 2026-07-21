@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Trash2, AlertTriangle, Split, Plus, Minus, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -17,6 +17,9 @@ interface CartItem {
 
 export default function NewOrder() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const fromOrderId = params.get('from'); // ?from=<orderId> — duplicate an existing order into the cart
+  const seededRef = useRef(false);
   const { profile } = useAuth();
   const toast = useToast();
   const { data: categories } = useCategories();
@@ -55,6 +58,35 @@ export default function NewOrder() {
     for (const arr of map.values()) arr.sort((a, b) => a.current_price - b.current_price);
     return map;
   }, [data, supplierById]);
+
+  // ?from=<orderId> ("שכפול" on the Orders list): seed the cart with the source order's items,
+  // pinned to the source supplier. Only products that are still active AND still have an offer
+  // enter the cart; when the source supplier no longer offers a product the item falls back to
+  // the recommendation (null) instead of landing in the "אין ספק" bucket. Skipped items are
+  // reported in one short toast — never silently different from the source order without a word.
+  useEffect(() => {
+    if (!fromOrderId || !data || seededRef.current) return;
+    seededRef.current = true;
+    void (async () => {
+      const res = await supabase.from('purchase_orders')
+        .select('supplier_id, items:purchase_order_items(product_id, qty)')
+        .eq('id', fromOrderId).maybeSingle();
+      if (res.error || !res.data) { toast('טעינת הזמנת המקור נכשלה', 'error'); return; }
+      const src = res.data as unknown as { supplier_id: string; items: { product_id: string; qty: number }[] };
+      const productById = new Map(data.products.map((p) => [p.id, p]));
+      const items: CartItem[] = [];
+      let skipped = 0;
+      for (const it of src.items) {
+        const product = productById.get(it.product_id);
+        const offers = offersByProduct.get(it.product_id) ?? [];
+        if (!product || offers.length === 0) { skipped++; continue; }
+        const srcSupplierOffers = offers.some((o) => o.supplier_id === src.supplier_id);
+        items.push({ product, qty: it.qty, chosenSupplierId: srcSupplierOffers ? src.supplier_id : null });
+      }
+      setCart(items);
+      if (skipped > 0) toast(`${skipped} פריטים מההזמנה המקורית דולגו — המוצר אינו פעיל או שאין לו ספק זמין`);
+    })();
+  }, [fromOrderId, data, offersByProduct, toast]);
 
   // Carted products stay visible in the picker (in a "carted" state with an inline stepper) —
   // hiding them gave zero feedback on tap and forced a scroll down to the cart to fix a quantity.

@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toHebrewError } from "../lib/errors";
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useParamState } from '../lib/useParamState';
-import { Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle } from 'lucide-react';
+import { Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle, Pencil, Copy } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -10,17 +10,25 @@ import { DataTable, StatusBadge, PageLoader, useToast, ConfirmDialog, Modal, Err
 import { PO_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, todayISO } from '../lib/format';
 import { logAction } from '../lib/audit';
+import { sendOrderWhatsApp, orderWhatsAppLink } from '../lib/share';
 import type { PurchaseOrder, PurchaseOrderItem, PoStatus } from '../lib/types';
 
-type OrderRow = PurchaseOrder & { supplier: { name: string }; items: { qty: number; unit_price: number }[] };
+type OrderRow = PurchaseOrder & {
+  supplier: { name: string; phone: string | null; whatsapp: string | null };
+  items: { qty: number; unit_price: number; product: { name: string; unit: string } }[];
+};
 
 export function OrdersList() {
   const navigate = useNavigate();
+  const { profile, org } = useAuth();
+  const toast = useToast();
   const [statusFilter, setStatusFilter] = useParamState('status', 'open');
+  const [cancelTarget, setCancelTarget] = useState<OrderRow | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const { data, loading, error } = useQuery(async () =>
+  const { data, loading, error, refetch } = useQuery(async () =>
     unwrap(await supabase.from('purchase_orders')
-      .select('*, supplier:suppliers(name), items:purchase_order_items(qty, unit_price)')
+      .select('*, supplier:suppliers(name, phone, whatsapp), items:purchase_order_items(qty, unit_price, product:products(name, unit))')
       .order('created_at', { ascending: false })) as Promise<OrderRow[]>);
 
   const rows = useMemo(() => {
@@ -31,6 +39,27 @@ export function OrdersList() {
   }, [data, statusFilter]);
 
   const orderTotal = (o: OrderRow) => o.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
+
+  const canWrite = !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+
+  // Mirrors OrderDetail's cancel flow: status → cancelled, reason recorded in audit_logs.
+  async function cancelOrder(reason?: string) {
+    if (!cancelTarget) return;
+    setBusy(true);
+    const res = await supabase.from('purchase_orders').update({ status: 'cancelled' }).eq('id', cancelTarget.id);
+    setBusy(false);
+    if (res.error) { setCancelTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
+    await logAction({ orgId: cancelTarget.org_id, action: 'order_status:cancelled', entityType: 'purchase_orders', entityId: cancelTarget.id, reason });
+    setCancelTarget(null);
+    toast('ההזמנה בוטלה');
+    void refetch();
+  }
+
+  async function sendWhatsApp(r: OrderRow) {
+    const res = await sendOrderWhatsApp(r, org?.name ?? '');
+    if (res.error) { toast(res.error, 'error'); return; }
+    if (res.statusChanged) { toast('הסטטוס עודכן'); void refetch(); }
+  }
 
   const columns: Column<OrderRow>[] = [
     { key: 'num', header: 'מס׳', priority: 3, sortValue: (r) => r.number, render: (r) => <span className="font-medium">#{r.number}</span> },
@@ -54,6 +83,21 @@ export function OrdersList() {
         mobile="cards"
         mobileTitle={(r) => <>#{r.number} · {r.supplier.name}</>}
         mobileTrailing={(r) => <StatusBadge meta={PO_STATUS[r.status]} />}
+        rowActions={(r) => [
+          { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => navigate(`/orders/${r.id}`) },
+          { key: 'duplicate', label: 'שכפול', icon: Copy, hidden: !canWrite, onSelect: () => navigate(`/orders/new?from=${r.id}`) },
+          {
+            key: 'whatsapp', label: 'שליחה בוואטסאפ', icon: MessageCircle,
+            hidden: !canWrite || !(r.supplier.whatsapp || r.supplier.phone) || !['draft', 'ready', 'sent'].includes(r.status),
+            onSelect: () => void sendWhatsApp(r),
+          },
+          { key: 'print', label: 'הדפסה', icon: Printer, onSelect: () => navigate(`/orders/${r.id}?print=1`) },
+          {
+            key: 'cancel', label: 'ביטול', icon: XCircle, tone: 'danger',
+            hidden: !canWrite || ['received', 'cancelled'].includes(r.status),
+            onSelect: () => setCancelTarget(r),
+          },
+        ]}
         toolbar={
           <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="open">הזמנות פתוחות</option>
@@ -62,6 +106,11 @@ export function OrdersList() {
           </select>
         }
         emptyTitle="אין הזמנות" emptySubtitle="צור הזמנה חדשה ממסך ״הזמנה חדשה״" />
+
+      <ConfirmDialog open={!!cancelTarget} onClose={() => setCancelTarget(null)}
+        onConfirm={(reason) => void cancelOrder(reason)}
+        title="ביטול הזמנה" message="האם לבטל את ההזמנה? הפעולה תתועד ביומן הביקורת."
+        danger requireReason busy={busy} />
     </div>
   );
 }
@@ -84,11 +133,24 @@ export function OrderDetail() {
   const [confirmNote, setConfirmNote] = useState('');
   const [confirmExpected, setConfirmExpected] = useState('');  // optional: set/correct אספקה מבוקשת at confirmation
   const [busy, setBusy] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const printedRef = useRef(false);
 
   const { data: order, loading, error, refetch } = useQuery(async () =>
     unwrap(await supabase.from('purchase_orders')
       .select('*, supplier:suppliers(id, name, phone, whatsapp, email, min_order_amount), items:purchase_order_items(*, product:products(name, unit))')
       .eq('id', id!).single()) as Promise<FullOrder>, [id]);
+
+  // ?print=1 (Orders list "הדפסה" action): print once when the data is on screen, then strip
+  // the param so refresh/back does not re-open the dialog.
+  useEffect(() => {
+    if (printedRef.current || params.get('print') !== '1' || !order) return;
+    printedRef.current = true;
+    window.print();
+    const next = new URLSearchParams(params);
+    next.delete('print');
+    setParams(next, { replace: true });
+  }, [params, order, setParams]);
 
   const canWrite = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
 
@@ -106,33 +168,13 @@ export function OrderDetail() {
     void refetch();
   }
 
-  /** wa.me deep link with the full order text prefilled (no WhatsApp Business API needed) */
-  function whatsAppLink(): string | null {
-    if (!order) return null;
-    const raw = order.supplier.whatsapp || order.supplier.phone;
-    if (!raw) return null;
-    let digits = raw.replace(/\D/g, '');
-    if (digits.startsWith('0')) digits = '972' + digits.slice(1);
-    const total = order.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
-    const lines = [
-      `הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`,
-      order.expected_date ? `אספקה מבוקשת: ${fmtDate(order.expected_date)}` : '',
-      '',
-      ...order.items.map((i) => `• ${i.product.name} — ${i.qty} ${i.product.unit}`),
-      '',
-      `סה"כ משוער: ${fmtMoneyExact(total)}`,
-      order.notes ? `הערות: ${order.notes}` : '',
-      'נא לאשר קבלת ההזמנה 🙏',
-    ];
-    return `https://wa.me/${digits}?text=${encodeURIComponent(lines.join('\n'))}`;
-  }
-
-  function sendWhatsApp() {
-    const link = whatsAppLink();
-    if (!link || !order) return;
-    window.open(link, '_blank');
-    if (order.status === 'ready' || order.status === 'draft') void setStatus('sent');
-    void logAction({ orgId: order.org_id, action: 'order_sent_whatsapp', entityType: 'purchase_orders', entityId: order.id });
+  // The WhatsApp order-send flow (link building, wa.me open, mark-as-sent, audit log) lives in
+  // lib/share.ts and is shared with the Orders list row actions.
+  async function sendWhatsApp() {
+    if (!order) return;
+    const res = await sendOrderWhatsApp(order, orgName);
+    if (res.error) { toast(res.error, 'error'); return; }
+    if (res.statusChanged) { toast('הסטטוס עודכן'); void refetch(); }
   }
 
   if (loading) return <PageLoader />;
@@ -145,7 +187,7 @@ export function OrderDetail() {
     { from: ['draft'], to: 'ready', label: 'סימון כמוכנה', icon: CheckCircle2 },
     { from: ['ready'], to: 'sent', label: 'סימון כנשלחה לספק', icon: Send },
   ];
-  const waLink = whatsAppLink();
+  const waLink = orderWhatsAppLink(order, orgName);
 
   return (
     <div className="space-y-4">
@@ -164,7 +206,7 @@ export function OrderDetail() {
             </button>
           ))}
           {canWrite && waLink && ['draft', 'ready', 'sent'].includes(order.status) && (
-            <button className="btn text-white bg-done-solid hover:bg-done-on-soft" onClick={sendWhatsApp}>
+            <button className="btn text-white bg-done-solid hover:bg-done-on-soft" onClick={() => void sendWhatsApp()}>
               <MessageCircle size={15} /> שליחה ב-WhatsApp
             </button>
           )}

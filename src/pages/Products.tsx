@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toHebrewError } from '../lib/errors';
-import { Plus } from 'lucide-react';
+import { Plus, Pencil, Copy, Power } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, Modal, useToast, ErrorNote, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, Modal, useToast, ErrorNote, SkeletonTable, ConfirmDialog, type Column } from '../components/ui';
+import { logAction } from '../lib/audit';
 import { useCategories } from './Suppliers';
 import type { Product } from '../lib/types';
 
@@ -16,8 +17,12 @@ interface ProductRow extends Product {
 
 export default function Products() {
   const { profile } = useAuth();
+  const toast = useToast();
   const [params, setParams] = useSearchParams();
   const [editing, setEditing] = useState<Product | null | 'new'>(null);
+  const [clone, setClone] = useState<Product | null>(null); // "שכפול": prefill without an id
+  const [toggleTarget, setToggleTarget] = useState<ProductRow | null>(null);
+  const [busyToggle, setBusyToggle] = useState(false);
   const [catFilter, setCatFilter] = useState('');
   const { data: categories } = useCategories();
 
@@ -53,6 +58,25 @@ export default function Products() {
     setParams(next, { replace: true });
   }, [params, data, canWrite, setParams]);
 
+  // Deactivation hides the product from new orders — not a financial delete, but it is a
+  // reversible business claim, so deactivating requires a reason for the audit log;
+  // reactivating takes an optional-free confirm. Both log to audit_logs.
+  async function toggleActive(reason?: string) {
+    if (!toggleTarget) return;
+    const next = !toggleTarget.active;
+    setBusyToggle(true);
+    const res = await supabase.from('products').update({ active: next }).eq('id', toggleTarget.id);
+    setBusyToggle(false);
+    if (res.error) { setToggleTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
+    await logAction({
+      orgId: toggleTarget.org_id, action: next ? 'product_activated' : 'product_deactivated',
+      entityType: 'products', entityId: toggleTarget.id, reason,
+    });
+    setToggleTarget(null);
+    toast(next ? 'המוצר הופעל' : 'המוצר הושבת');
+    void refetch();
+  }
+
   const columns: Column<ProductRow>[] = [
     { key: 'name', header: 'מוצר', sortValue: (r) => r.name, render: (r) => <span className={`font-medium ${r.active ? 'text-ink' : 'text-ink-muted line-through'}`}>{r.name}</span> },
     { key: 'cat', header: 'קטגוריה', sortValue: (r) => r.category?.name ?? '', render: (r) => r.category?.name ?? '—' },
@@ -80,29 +104,51 @@ export default function Products() {
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.sku ?? '').toLowerCase().includes(q)}
         onRowClick={canWrite ? (r) => setEditing(r) : undefined}
+        rowActions={canWrite ? (r) => [
+          { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setEditing(r) },
+          { key: 'duplicate', label: 'שכפול', icon: Copy, onSelect: () => setClone({ ...r, name: `${r.name} (עותק)` }) },
+          { key: 'toggle', label: r.active ? 'השבתה' : 'הפעלה', icon: Power, onSelect: () => setToggleTarget(r) },
+        ] : undefined}
         toolbar={
           <select className="input w-auto!" value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>
             <option value="">כל הקטגוריות</option>
             {categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         } />
-      {editing && (
-        <ProductForm product={editing === 'new' ? null : editing}
-          onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refetch(); }} />
+      {(editing || clone) && (
+        <ProductForm product={editing && editing !== 'new' ? editing : null} initial={clone ?? undefined}
+          onClose={() => { setEditing(null); setClone(null); }}
+          onSaved={() => { setEditing(null); setClone(null); void refetch(); }} />
       )}
+
+      <ConfirmDialog open={!!toggleTarget} onClose={() => setToggleTarget(null)}
+        onConfirm={(reason) => void toggleActive(reason)}
+        title={toggleTarget?.active ? 'השבתת מוצר' : 'הפעלת מוצר'}
+        message={toggleTarget?.active
+          ? `המוצר ״${toggleTarget?.name}״ לא יופיע יותר בהזמנות חדשות. הפעולה תתועד ביומן הביקורת.`
+          : `המוצר ״${toggleTarget?.name}״ יחזור להיות זמין להזמנות. הפעולה תתועד ביומן הביקורת.`}
+        confirmLabel={toggleTarget?.active ? 'השבתה' : 'הפעלה'}
+        requireReason={!!toggleTarget?.active} busy={busyToggle} />
     </div>
   );
 }
 
-function ProductForm({ product, onClose, onSaved }: { product: Product | null; onClose: () => void; onSaved: () => void }) {
+function ProductForm({ product, initial, onClose, onSaved }: {
+  /** existing row → update; null → insert */
+  product: Product | null;
+  /** prefill for a NEW product (duplicate flow) — fields only, never an update target */
+  initial?: Product;
+  onClose: () => void; onSaved: () => void;
+}) {
   const { profile } = useAuth();
   const toast = useToast();
   const { data: categories } = useCategories();
   const [busy, setBusy] = useState(false);
+  const seed = product ?? initial ?? null;
   const [f, setF] = useState({
-    name: product?.name ?? '', category_id: product?.category_id ?? '', unit: product?.unit ?? 'ק"ג',
-    sku: product?.sku ?? '', barcode: product?.barcode ?? '', notes: product?.notes ?? '',
-    active: product?.active ?? true, min_stock: product?.min_stock?.toString() ?? '',
+    name: seed?.name ?? '', category_id: seed?.category_id ?? '', unit: seed?.unit ?? 'ק"ג',
+    sku: seed?.sku ?? '', barcode: seed?.barcode ?? '', notes: seed?.notes ?? '',
+    active: seed?.active ?? true, min_stock: seed?.min_stock?.toString() ?? '',
   });
   const set = (k: string, v: unknown) => setF((s) => ({ ...s, [k]: v }));
 

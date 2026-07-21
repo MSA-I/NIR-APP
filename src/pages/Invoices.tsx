@@ -1,13 +1,16 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useParamState } from '../lib/useParamState';
-import { Plus, AlertTriangle, AlertOctagon, Info } from 'lucide-react';
+import { Plus, AlertTriangle, AlertOctagon, Info, Pencil, Copy, Share2, Printer, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { toHebrewError } from '../lib/errors';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
+import { DataTable, StatusBadge, ErrorNote, SkeletonTable, Note, ConfirmDialog, useToast, type Column } from '../components/ui';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
+import { logAction } from '../lib/audit';
+import { canShare, shareInvoice } from '../lib/share';
 import type { Invoice } from '../lib/types';
 import type { CheckResult } from '../lib/checks';
 
@@ -40,11 +43,14 @@ export function CheckList({ checks }: { checks: CheckResult[] }) {
 export function InvoicesList() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const toast = useToast();
   const [reviewFilter, setReviewFilter] = useParamState('review');
   const [payFilter, setPayFilter] = useParamState('pay');
   const [exportFilter, setExportFilter] = useParamState('export');
+  const [deleteTarget, setDeleteTarget] = useState<InvoiceRow | null>(null);
+  const [busyDelete, setBusyDelete] = useState(false);
 
-  const { data, loading, error } = useQuery(async () => {
+  const { data, loading, error, refetch } = useQuery(async () => {
     const invoices = unwrap(await supabase.from('invoices')
       .select('*, supplier:suppliers(name)').is('deleted_at', null)
       .order('invoice_date', { ascending: false })) as InvoiceRow[];
@@ -59,6 +65,21 @@ export function InvoicesList() {
     (!exportFilter || r.export_status === exportFilter)), [data, reviewFilter, payFilter, exportFilter]);
 
   const canCreate = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const isOffice = profile && ['owner', 'office'].includes(profile.role);
+
+  // Soft delete only (CLAUDE.md): invoices carry deleted_at (no deleted_by column on this
+  // table); the list query already filters .is('deleted_at', null), so refetch drops the row.
+  async function deleteInvoice(reason?: string) {
+    if (!deleteTarget) return;
+    setBusyDelete(true);
+    const res = await supabase.from('invoices').update({ deleted_at: new Date().toISOString() }).eq('id', deleteTarget.id);
+    setBusyDelete(false);
+    if (res.error) { setDeleteTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
+    await logAction({ orgId: deleteTarget.org_id, action: 'invoice_deleted', entityType: 'invoices', entityId: deleteTarget.id, reason });
+    setDeleteTarget(null);
+    toast('החשבונית נמחקה');
+    void refetch();
+  }
 
   const columns: Column<InvoiceRow>[] = [
     { key: 'number', header: 'מס׳ חשבונית', priority: 3, sortValue: (r) => r.invoice_number, render: (r) => <span className="font-medium text-ink" dir="ltr">{r.invoice_number}</span> },
@@ -86,6 +107,13 @@ export function InvoicesList() {
         mobile="cards"
         mobileTitle={(r) => <><span dir="ltr">{r.invoice_number}</span> · {r.supplier.name}</>}
         mobileTrailing={(r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} />}
+        rowActions={(r) => [
+          { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => navigate(`/invoices/${r.id}`) },
+          { key: 'duplicate', label: 'שכפול כטיוטה', icon: Copy, hidden: !canCreate, onSelect: () => navigate(`/invoices/new?from=${r.id}`) },
+          { key: 'share', label: 'שליחה', icon: Share2, hidden: !canShare(), onSelect: () => void shareInvoice(r, r.supplier.name) },
+          { key: 'print', label: 'הדפסה', icon: Printer, onSelect: () => navigate(`/invoices/${r.id}?print=1`) },
+          { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', hidden: !isOffice, onSelect: () => setDeleteTarget(r) },
+        ]}
         toolbar={
           <>
             <select className="input w-auto!" value={reviewFilter} onChange={(e) => setReviewFilter(e.target.value)}>
@@ -102,6 +130,12 @@ export function InvoicesList() {
             </select>
           </>
         } />
+
+      <ConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}
+        onConfirm={(reason) => void deleteInvoice(reason)}
+        title="מחיקת חשבונית"
+        message={`חשבונית ${deleteTarget?.invoice_number ?? ''} תימחק (מחיקה רכה — הרשומה נשמרת ביומן). הפעולה תתועד ביומן הביקורת.`}
+        confirmLabel="מחיקה" danger requireReason busy={busyDelete} />
     </div>
   );
 }
