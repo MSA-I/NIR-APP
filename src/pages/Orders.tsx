@@ -8,7 +8,7 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, PageLoader, useToast, ConfirmDialog, Modal, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { PO_STATUS } from '../lib/status';
-import { fmtMoneyExact, fmtDate, fmtDateTime } from '../lib/format';
+import { fmtMoneyExact, fmtDate, fmtDateTime, todayISO } from '../lib/format';
 import { logAction } from '../lib/audit';
 import type { PurchaseOrder, PurchaseOrderItem, PoStatus } from '../lib/types';
 
@@ -79,6 +79,7 @@ export function OrderDetail() {
   const [confirm, setConfirm] = useState<{ status: PoStatus; label: string } | null>(null);
   const [supplierConfirmOpen, setSupplierConfirmOpen] = useState(false);
   const [confirmNote, setConfirmNote] = useState('');
+  const [confirmExpected, setConfirmExpected] = useState('');  // optional: set/correct אספקה מבוקשת at confirmation
   const [busy, setBusy] = useState(false);
 
   const { data: order, loading, error, refetch } = useQuery(async () =>
@@ -242,6 +243,8 @@ export function OrderDetail() {
         <p className="text-sm text-slate-600 mb-3">מועד האישור והמשתמש המסמן יתועדו במערכת וביומן הביקורת.</p>
         <label className="label">איך התקבל האישור? (לא חובה)</label>
         <input className="input" placeholder='למשל: "אושר ב-WhatsApp ע״י דוד"' value={confirmNote} onChange={(e) => setConfirmNote(e.target.value)} />
+        <label className="label mt-3">אספקה מבוקשת (לא חובה — לעדכון תאריך היעד)</label>
+        <input type="date" className="input" min={todayISO()} value={confirmExpected} onChange={(e) => setConfirmExpected(e.target.value)} />
         <div className="flex justify-end gap-2 mt-5">
           <button className="btn-secondary" onClick={() => setSupplierConfirmOpen(false)}>ביטול</button>
           <button className="btn-primary" disabled={busy} onClick={() => {
@@ -249,6 +252,7 @@ export function OrderDetail() {
             void setStatus('confirmed', confirmNote || undefined, {
               confirmed_at: new Date().toISOString(),
               confirmation_note: confirmNote.trim() || null,
+              ...(confirmExpected ? { expected_date: confirmExpected } : {}),
             });
           }}>
             <CheckCircle2 size={15} /> אישור

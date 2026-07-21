@@ -6,7 +6,7 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { PageLoader, useToast, ErrorNote } from '../components/ui';
 import { useCategories } from './Suppliers';
-import { fmtMoneyExact } from '../lib/format';
+import { fmtMoneyExact, todayISO } from '../lib/format';
 import type { Product, Supplier, SupplierProduct } from '../lib/types';
 
 interface CartItem {
@@ -24,6 +24,10 @@ export default function NewOrder() {
   const [cat, setCat] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [notes, setNotes] = useState('');
+  // Requested delivery date (OPEN-DECISIONS #32): the date WE ask for. Written to every split
+  // order's expected_date, which the supplier on-time metric measures against. Optional — blank
+  // leaves the metric as "—" for that order rather than a false 0%.
+  const [expectedDate, setExpectedDate] = useState('');
   const [busy, setBusy] = useState(false);
 
   const { data, loading, error } = useQuery(async () => {
@@ -111,7 +115,7 @@ export default function NewOrder() {
         for (const g of split.groups) {
           const po = unwrap(await supabase.from('purchase_orders').insert({
             org_id: profile!.org_id, supplier_id: g.supplier.id, request_id: req.id,
-            status: 'ready', notes: notes || null, created_by: profile!.id,
+            status: 'ready', expected_date: expectedDate || null, notes: notes || null, created_by: profile!.id,
           }).select('id').single()) as { id: string };
           const poItems = g.items.map(({ item, sp }) => ({
             order_id: po.id, product_id: item.product.id, qty: item.qty, unit_price: sp.current_price,
@@ -245,9 +249,15 @@ export default function NewOrder() {
                   );
                 })}
               </div>
-              <div>
-                <label className="label">הערות</label>
-                <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="למשל: אירוע יום חמישי — 300 אורחים" />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="label">הערות</label>
+                  <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="למשל: אירוע יום חמישי — 300 אורחים" />
+                </div>
+                <div>
+                  <label className="label">אספקה מבוקשת</label>
+                  <input type="date" className="input" value={expectedDate} min={todayISO()} onChange={(e) => setExpectedDate(e.target.value)} />
+                </div>
               </div>
               <div className="flex flex-wrap justify-end gap-2 pt-1">
                 <button className="btn-secondary" disabled={busy} onClick={() => void saveRequest(false)}>שמירה כטיוטה</button>
