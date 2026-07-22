@@ -72,9 +72,19 @@ insert into purchase_orders (
   '20000000-0000-0000-0000-000000000001'
 );
 
-insert into purchase_order_items (id, order_id, product_id, qty, unit_price) values
-  ('71000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', 10, 10),
-  ('71000000-0000-0000-0000-000000000002', '70000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000002', 5, 20);
+insert into purchase_order_items (id, org_id, order_id, product_id, qty, unit_price) values
+  ('71000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', 10, 10),
+  ('71000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000002', 5, 20);
+
+insert into invoices (
+  id, org_id, supplier_id, invoice_number, invoice_date,
+  amount_before_vat, vat_amount, total_amount
+) values (
+  '60000000-0000-0000-0000-000000000010',
+  '10000000-0000-0000-0000-000000000002',
+  '30000000-0000-0000-0000-000000000003',
+  'TENANT-B-CREDIT', '2026-07-10', 10, 1.8, 11.8
+);
 
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
@@ -153,6 +163,96 @@ select create_invoice(
   '30000000-0000-0000-0000-000000000001',
   'INV-002', '2026-07-11', 42.37, 7.63, 50, null, null, null, null,
   'קליטת חשבונית נוספת'
+);
+
+-- Invoice-linked credit requests use one retry-safe command boundary for creation and status.
+select create_invoice(
+  '60000000-0000-0000-0000-000000000003',
+  '30000000-0000-0000-0000-000000000001',
+  'INV-CREDIT', '2026-07-12', 100, 18, 118, null, null, null, null,
+  'credit command fixture'
+);
+select pg_temp.p1_assert(
+  (create_invoice_credit_request(
+    '65000000-0000-0000-0000-000000000001',
+    '60000000-0000-0000-0000-000000000003',
+    'wrong_price', 118, 'full credit', 'open invoice credit'
+  )->>'idempotent')::boolean = false,
+  'credit request first call must commit'
+);
+select pg_temp.p1_assert(
+  (create_invoice_credit_request(
+    '65000000-0000-0000-0000-000000000001',
+    '60000000-0000-0000-0000-000000000003',
+    'wrong_price', 118, 'full credit', 'credit retry'
+  )->>'idempotent')::boolean,
+  'credit request retry must be idempotent'
+);
+do $$
+begin
+  perform create_invoice_credit_request(
+    '65000000-0000-0000-0000-000000000001',
+    '60000000-0000-0000-0000-000000000003',
+    'wrong_price', 117, 'full credit', 'conflicting credit retry'
+  );
+  raise exception 'expected credit idempotency conflict';
+exception when sqlstate 'P0001' then
+  if sqlerrm not like '%credit_request_idempotency_conflict%' then raise; end if;
+end
+$$;
+do $$
+begin
+  perform create_invoice_credit_request(
+    '65000000-0000-0000-0000-000000000002',
+    '60000000-0000-0000-0000-000000000010',
+    'wrong_price', 11.8, null, 'cross-tenant credit attempt'
+  );
+  raise exception 'expected cross-tenant credit rejection';
+exception when sqlstate 'P0002' then
+  if sqlerrm not like '%credit_request_invoice_unknown%' then raise; end if;
+end
+$$;
+do $$
+begin
+  perform transition_credit_request(
+    '65000000-0000-0000-0000-000000000001', 'offset', 'invalid direct offset'
+  );
+  raise exception 'expected invalid credit transition';
+exception when sqlstate 'P0001' then
+  if sqlerrm not like '%credit_request_transition_invalid%' then raise; end if;
+end
+$$;
+select transition_credit_request(
+  '65000000-0000-0000-0000-000000000001', 'requested', 'requested from supplier'
+);
+select pg_temp.p1_assert(
+  (transition_credit_request(
+    '65000000-0000-0000-0000-000000000001', 'requested', 'credit transition retry'
+  )->>'idempotent')::boolean,
+  'credit transition retry must be idempotent'
+);
+select transition_credit_request(
+  '65000000-0000-0000-0000-000000000001', 'received', 'credit received'
+);
+select transition_credit_request(
+  '65000000-0000-0000-0000-000000000001', 'offset', 'credit offset against invoice'
+);
+select pg_temp.p1_assert(
+  (select payment_status = 'paid' from invoices where id = '60000000-0000-0000-0000-000000000003'),
+  'credit offset did not refresh invoice payment status'
+);
+select transition_credit_request(
+  '65000000-0000-0000-0000-000000000001', 'closed', 'credit closed'
+);
+select pg_temp.p1_assert(
+  exists (
+    select 1 from audit_logs
+    where entity_type = 'credit_requests'
+      and entity_id = '65000000-0000-0000-0000-000000000001'
+      and action = 'credit_request_transitioned'
+      and reason = 'credit closed'
+  ),
+  'credit transition audit is missing its reason'
 );
 
 -- Payment request: create, retry, transition and payer execution all remain atomic.
@@ -537,6 +637,16 @@ select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000005
 set local role authenticated;
 do $$
 begin
+  perform transition_credit_request(
+    '65000000-0000-0000-0000-000000000001', 'closed', 'accountant attempt'
+  );
+  raise exception 'expected accountant credit rejection';
+exception when sqlstate '42501' then
+  if sqlerrm not like '%credit_request_transition_not_authorized%' then raise; end if;
+end
+$$;
+do $$
+begin
   perform mark_month_export_sent('2026-08-01', '{}'::uuid[], 'accountant attempt');
   raise exception 'expected accountant rejection';
 exception when sqlstate '42501' then
@@ -559,6 +669,32 @@ exception when insufficient_privilege then
   null;
 end
 $$;
+do $$
+begin
+  insert into credit_requests (
+    id, org_id, supplier_id, invoice_id, reason, amount, status, created_by
+  ) values (
+    '65000000-0000-0000-0000-000000000099',
+    '10000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000001',
+    '60000000-0000-0000-0000-000000000003',
+    'other', 1, 'open', '20000000-0000-0000-0000-000000000001'
+  );
+  raise exception 'expected direct credit insert rejection';
+exception when insufficient_privilege then
+  null;
+end
+$$;
+do $$
+begin
+  update credit_requests
+  set status = 'open'
+  where id = '65000000-0000-0000-0000-000000000001';
+  raise exception 'expected direct credit update rejection';
+exception when insufficient_privilege then
+  null;
+end
+$$;
 
 -- Finalize revalidates the locked current price and is idempotent after a lost response.
 reset role;
@@ -571,8 +707,9 @@ insert into purchase_requests (
   '20000000-0000-0000-0000-000000000001', 2
 );
 insert into purchase_request_items (
-  request_id, product_id, qty, recommended_supplier_id, chosen_supplier_id, unit_price
+  org_id, request_id, product_id, qty, recommended_supplier_id, chosen_supplier_id, unit_price
 ) values (
+  '10000000-0000-0000-0000-000000000001',
   '81000000-0000-0000-0000-000000000001',
   '40000000-0000-0000-0000-000000000001', 2,
   '30000000-0000-0000-0000-000000000001',
@@ -603,8 +740,9 @@ insert into purchase_requests (
   '20000000-0000-0000-0000-000000000001', 2
 );
 insert into purchase_request_items (
-  request_id, product_id, qty, recommended_supplier_id, chosen_supplier_id, unit_price
+  org_id, request_id, product_id, qty, recommended_supplier_id, chosen_supplier_id, unit_price
 ) values (
+  '10000000-0000-0000-0000-000000000001',
   '81000000-0000-0000-0000-000000000002',
   '40000000-0000-0000-0000-000000000001', 1,
   '30000000-0000-0000-0000-000000000001',

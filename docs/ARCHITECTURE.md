@@ -132,7 +132,8 @@ scripts/                   כלי admin עם יעד מפורש + check-p0-securi
 ## גבול פקודות פיננסי P1 — חוזה הענף המבודד
 
 > החוזה הבא ממומש בענף `codex/p1-financial-commands`, אך עדיין אינו חלק מ־main או מהמסד החי.
-> טיוטת המיגרציה חייבת לעבור rebase על P0, לקבל מספר פנוי ולהיבדק שוב בשני דיירים לפני מיזוג.
+> ‏P0 בקומיט `2c56812` כבר שולב; מיגרציות P0 הן `0020`–`0022` ומיגרציית P1 היא `0023`.
+> מסלול שדרוג מ־`0019`, התקנה נקייה ומטריצת שני דיירים נבדקו מחדש לאחר השילוב.
 
 כל שינוי כספי בתחום P1 עובר דרך RPC אחד. הלקוח רשאי לחשב preview, אך אינו קובע `org_id`,
 משתמש מבצע, מאשר, יתרה, סטטוס נגזר או audit. ‏`p1_financial_command_guard` משתמש בסמן
@@ -145,6 +146,7 @@ transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מ
 | תדפיס בנק | `import_bank_transactions`, ‏`match_bank_transaction` ופקודות assign/ignore/exception | hash קובץ ושורה, נעילת תנועה, תשלום/הקצאה יחידים |
 | קבלת סחורה | `save_goods_receipt` | UUID קבלה יציב, נעילת הזמנה ופריטים; כמות תקינה נצברת פעם אחת |
 | חשבונית | `create_invoice`, ‏`set_invoice_review_status` | UUID לקוח יציב, בדיקות DB חוזרות, חריג/override/audit באותה עסקה |
+| זיכוי מחשבונית | `create_invoice_credit_request`, ‏`transition_credit_request` | UUID לקוח יציב, נעילת חשבונית לפני זיכוי, מעברי סטטוס שרתיים ורענון יתרה באותה עסקה |
 | מחיר | `set_supplier_product_price`, ‏`import_supplier_prices` | נעילת `supplier_products`; מחיר נוכחי ו־`price_history` נכתבים יחד |
 | חודש לרו״ח | `mark_month_export_sent` | נעילת ארגון/export/חשבוניות ו־snapshot ממוין של `invoice_ids` |
 | אישור טיוטת הזמנה | `finalize_purchase_request_draft` | נעילת טיוטה, פריטים ומחירים בסדר קבוע; שינוי מחיר מחזיר `draft_price_changed` |

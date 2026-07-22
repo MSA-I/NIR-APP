@@ -236,6 +236,7 @@ try {
     accountantB = New-TestUser "accountant-b" $suffix $serviceKey
     supplierB = New-TestUser "supplier-b" $suffix $serviceKey
     ownerSuspended = New-TestUser "owner-suspended" $suffix $serviceKey
+    payerSuspended = New-TestUser "payer-suspended" $suffix $serviceKey
     platform = New-TestUser "platform" $suffix $serviceKey
   }
 
@@ -261,7 +262,8 @@ try {
     @{ id = $accounts.payerB.Id; org_id = $orgB; full_name = "Payer B"; role = "payer" },
     @{ id = $accounts.accountantB.Id; org_id = $orgB; full_name = "Accountant B"; role = "accountant" },
     @{ id = $accounts.supplierB.Id; org_id = $orgB; full_name = "Supplier Agent B"; role = "supplier"; supplier_id = $supplierB },
-    @{ id = $accounts.ownerSuspended.Id; org_id = $orgSuspended; full_name = "Suspended Owner"; role = "owner" }
+    @{ id = $accounts.ownerSuspended.Id; org_id = $orgSuspended; full_name = "Suspended Owner"; role = "owner" },
+    @{ id = $accounts.payerSuspended.Id; org_id = $orgSuspended; full_name = "Suspended Payer"; role = "payer" }
   )
   foreach ($profile in $profileRows) { Add-ServiceRow "profiles" $profile $serviceKey | Out-Null }
   Add-ServiceRow "platform_admins" @{ user_id = $accounts.platform.Id; note = "P0 local acceptance" } $serviceKey | Out-Null
@@ -385,6 +387,16 @@ try {
   $response = Invoke-Rest -Method Post -Resource "rpc/set_organization_lifecycle" -ApiKey $anonKey -Token $accounts.platform.Token -Body @{ p_org_id = $orgSuspended; p_status = "suspended"; p_trial_ends_at = $null; p_reason = "P0 suspended-tenant test" }
   Assert-Status $response @(204) "platform lifecycle command"
   Assert-Count (Get-Rows "profiles?select=id" $accounts.ownerSuspended $anonKey "suspended tenant negative read") 0 "suspended tenant loses profile and organization plane"
+  $response = Invoke-Rest -Method Post -Resource "rpc/execute_payment_request" -ApiKey $anonKey -Token $accounts.payerSuspended.Token -Body @{
+    p_payment_request_id = $paymentRequestA
+    p_paid_date = "2026-07-22"
+    p_method = "bank transfer"
+    p_reference = "P0-P1-SUSPENDED"
+    p_notes = $null
+    p_allocations = @(@{ invoice_id = $invoiceA; credit_id = $null; amount = 100 })
+    p_reason = "suspended tenant must not execute payments"
+  }
+  Assert-Blocked $response "suspended tenant cannot execute P1 payment command"
   $response = Invoke-Rest -Method Get -Resource "audit_logs?action=eq.organization_lifecycle_changed&entity_id=eq.$orgSuspended&select=user_id,reason&limit=1" -ApiKey $serviceKey -Token $serviceKey
   Assert-Status $response @(200) "trusted lifecycle audit verification"
   $lifecycleAudit = @($response.Json)
@@ -405,6 +417,17 @@ try {
   Assert-Blocked $response "payment hard delete grant removed"
   $response = Invoke-Rest -Method Delete -Resource "payment_allocations?payment_id=eq.$paymentA" -ApiKey $anonKey -Token $accounts.ownerA.Token -Prefer "return=representation"
   Assert-Blocked $response "allocation hard delete grant removed"
+  $response = Invoke-Rest -Method Post -Resource "payments" -ApiKey $anonKey -Token $accounts.payerA.Token -Body @{ id = (New-Id); org_id = $orgA; supplier_id = $supplierA; amount = 1; executed_by = $accounts.payerA.Id } -Prefer "return=representation"
+  Assert-Blocked $response "payer direct payment insert blocked after P1 cutover"
+  $response = Invoke-Rest -Method Post -Resource "payment_allocations" -ApiKey $anonKey -Token $accounts.payerA.Token -Body @{ id = (New-Id); org_id = $orgA; payment_id = $paymentA; invoice_id = $invoiceA; amount = 1 } -Prefer "return=representation"
+  Assert-Blocked $response "payer direct allocation insert blocked after P1 cutover"
+  $response = Invoke-Rest -Method Patch -Resource "payment_requests?id=eq.$paymentRequestA" -ApiKey $anonKey -Token $accounts.payerA.Token -Body @{ status = "sent_for_execution" } -Prefer "return=representation"
+  Assert-Blocked $response "payer direct payment-request update blocked after P1 cutover"
+  $blockedCreditId = New-Id
+  $response = Invoke-Rest -Method Post -Resource "credit_requests" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{ id = $blockedCreditId; org_id = $orgA; supplier_id = $supplierA; invoice_id = $invoiceA; reason = "other"; amount = 1; status = "open"; created_by = $accounts.ownerA.Id } -Prefer "return=representation"
+  Assert-Blocked $response "owner direct credit insert blocked after P1 cutover"
+  $response = Invoke-Rest -Method Patch -Resource "credit_requests?id=eq.$blockedCreditId" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{ status = "requested" } -Prefer "return=representation"
+  Assert-Blocked $response "owner direct credit update blocked after P1 cutover"
 
   # Personal drafts are creator-only and item replacement stays behind its RPC.
   $draftBody = @{ p_request_id = $null; p_notes = "Kitchen private draft"; p_expected_date = $null; p_editor_step = 1; p_items = @(@{ product_id = $productA; qty = 2; chosen_supplier_id = $supplierA }) }

@@ -131,6 +131,9 @@ create trigger p1_invoice_order_links_guard
 create trigger p1_invoice_receipt_links_guard
   before insert or update or delete on invoice_receipt_links
   for each row execute function p1_financial_command_guard();
+create trigger p1_credit_requests_guard
+  before insert or update or delete on credit_requests
+  for each row execute function p1_financial_command_guard();
 create trigger p1_payment_requests_guard
   before insert or update or delete on payment_requests
   for each row execute function p1_financial_command_guard();
@@ -167,6 +170,7 @@ revoke update on purchase_order_items from authenticated;
 revoke insert on invoices from authenticated;
 revoke insert, update, delete on invoice_order_links from authenticated;
 revoke insert, update, delete on invoice_receipt_links from authenticated;
+revoke insert, update, delete on credit_requests from authenticated;
 revoke insert, update, delete on payment_requests from authenticated;
 revoke insert, update, delete on payment_request_invoices from authenticated;
 revoke insert, update, delete on supplier_products from authenticated;
@@ -1954,6 +1958,215 @@ $$;
 
 revoke all on function public.set_invoice_review_status(uuid, invoice_review_status, text) from public;
 grant execute on function public.set_invoice_review_status(uuid, invoice_review_status, text) to authenticated;
+
+-- ===== 4a. Invoice-linked credit commands =====
+
+create or replace function create_invoice_credit_request(
+  p_credit_request_id uuid,
+  p_invoice_id uuid,
+  p_reason credit_reason,
+  p_amount numeric,
+  p_notes text,
+  p_audit_reason text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_org uuid := auth_org();
+  v_user uuid := auth.uid();
+  v_role user_role := auth_role();
+  v_invoice invoices;
+  v_credit credit_requests;
+  v_amount numeric := round(p_amount, 2);
+  v_notes text := nullif(trim(p_notes), '');
+  v_audit_reason text := nullif(trim(p_audit_reason), '');
+begin
+  if v_org is null or v_user is null or v_role not in ('owner', 'office', 'kitchen') then
+    raise exception 'credit_request_create_not_authorized' using errcode = '42501';
+  end if;
+  if p_credit_request_id is null or p_invoice_id is null or p_reason is null
+     or p_amount is null or v_audit_reason is null then
+    raise exception 'credit_request_fields_required' using errcode = '22023';
+  end if;
+  if v_amount <= 0 then
+    raise exception 'credit_request_amount_invalid' using errcode = '22023';
+  end if;
+
+  -- Invoice-first locking matches payment execution and credit transitions.
+  select * into v_invoice
+  from invoices i
+  where i.id = p_invoice_id and i.org_id = v_org and i.deleted_at is null
+  for update;
+  if not found then
+    raise exception 'credit_request_invoice_unknown' using errcode = 'P0002';
+  end if;
+
+  select * into v_credit
+  from credit_requests c
+  where c.id = p_credit_request_id
+  for update;
+
+  if found then
+    if v_credit.org_id <> v_org
+       or v_credit.invoice_id is distinct from v_invoice.id
+       or v_credit.receipt_item_id is not null
+       or v_credit.supplier_id <> v_invoice.supplier_id
+       or v_credit.reason <> p_reason
+       or round(v_credit.amount, 2) <> v_amount
+       or v_credit.notes is distinct from v_notes
+       or v_credit.created_by is distinct from v_user then
+      raise exception 'credit_request_idempotency_conflict' using errcode = 'P0001';
+    end if;
+
+    return jsonb_build_object(
+      'credit_request_id', v_credit.id,
+      'status', v_credit.status,
+      'idempotent', true
+    );
+  end if;
+
+  perform set_config('app.p1_financial_writer', v_user::text, true);
+
+  insert into credit_requests (
+    id, org_id, supplier_id, invoice_id, reason, amount,
+    status, notes, created_by
+  ) values (
+    p_credit_request_id, v_org, v_invoice.supplier_id, v_invoice.id, p_reason, v_amount,
+    'open', v_notes, v_user
+  ) returning * into v_credit;
+
+  insert into audit_logs (
+    org_id, user_id, action, entity_type, entity_id, new_values, reason
+  ) values (
+    v_org, v_user, 'invoice_credit_requested', 'credit_requests', v_credit.id,
+    jsonb_build_object(
+      'invoice_id', v_invoice.id,
+      'supplier_id', v_invoice.supplier_id,
+      'credit_reason', p_reason,
+      'amount', v_amount,
+      'status', v_credit.status
+    ),
+    v_audit_reason
+  );
+
+  return jsonb_build_object(
+    'credit_request_id', v_credit.id,
+    'status', v_credit.status,
+    'idempotent', false
+  );
+end
+$$;
+
+create or replace function transition_credit_request(
+  p_credit_request_id uuid,
+  p_status credit_status,
+  p_reason text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_org uuid := auth_org();
+  v_user uuid := auth.uid();
+  v_role user_role := auth_role();
+  v_credit credit_requests;
+  v_invoice_id uuid;
+  v_reason text := nullif(trim(p_reason), '');
+  v_allowed boolean := false;
+begin
+  if v_org is null or v_user is null or v_role not in ('owner', 'office', 'kitchen') then
+    raise exception 'credit_request_transition_not_authorized' using errcode = '42501';
+  end if;
+  if p_credit_request_id is null or p_status is null or v_reason is null then
+    raise exception 'credit_request_transition_fields_required' using errcode = '22023';
+  end if;
+
+  select c.invoice_id into v_invoice_id
+  from credit_requests c
+  where c.id = p_credit_request_id and c.org_id = v_org;
+  if not found then
+    raise exception 'credit_request_unknown' using errcode = 'P0002';
+  end if;
+
+  -- Payment execution locks invoices before credits. Use the same order to avoid a cycle.
+  if v_invoice_id is not null then
+    perform 1
+    from invoices i
+    where i.id = v_invoice_id and i.org_id = v_org
+    for update;
+    if not found then
+      raise exception 'credit_request_invoice_unknown' using errcode = 'P0002';
+    end if;
+  end if;
+
+  select * into v_credit
+  from credit_requests c
+  where c.id = p_credit_request_id and c.org_id = v_org
+  for update;
+  if not found or v_credit.invoice_id is distinct from v_invoice_id then
+    raise exception 'credit_request_concurrent_change' using errcode = '40001';
+  end if;
+
+  if v_credit.status = p_status then
+    return jsonb_build_object(
+      'credit_request_id', v_credit.id,
+      'status', v_credit.status,
+      'idempotent', true
+    );
+  end if;
+
+  v_allowed :=
+    (v_credit.status = 'open' and p_status in ('requested', 'received'))
+    or (v_credit.status = 'requested' and p_status = 'received')
+    or (v_credit.status = 'received' and p_status in ('offset', 'closed'))
+    or (v_credit.status = 'offset' and p_status = 'closed');
+
+  if not v_allowed then
+    raise exception 'credit_request_transition_invalid' using errcode = 'P0001';
+  end if;
+
+  perform set_config('app.p1_financial_writer', v_user::text, true);
+
+  update credit_requests
+  set status = p_status,
+      resolved_at = case when p_status in ('received', 'offset', 'closed') then now() else null end
+  where id = v_credit.id;
+
+  if v_invoice_id is not null
+     and (v_credit.status in ('offset', 'closed') or p_status in ('offset', 'closed')) then
+    perform p1_refresh_invoice_payment_statuses(v_org, array[v_invoice_id]);
+  end if;
+
+  insert into audit_logs (
+    org_id, user_id, action, entity_type, entity_id, old_values, new_values, reason
+  ) values (
+    v_org, v_user, 'credit_request_transitioned', 'credit_requests', v_credit.id,
+    jsonb_build_object('status', v_credit.status),
+    jsonb_build_object('status', p_status),
+    v_reason
+  );
+
+  return jsonb_build_object(
+    'credit_request_id', v_credit.id,
+    'status', p_status,
+    'idempotent', false
+  );
+end
+$$;
+
+revoke all on function public.create_invoice_credit_request(
+  uuid, uuid, credit_reason, numeric, text, text
+) from public;
+grant execute on function public.create_invoice_credit_request(
+  uuid, uuid, credit_reason, numeric, text, text
+) to authenticated;
+revoke all on function public.transition_credit_request(uuid, credit_status, text) from public;
+grant execute on function public.transition_credit_request(uuid, credit_status, text) to authenticated;
 
 -- ===== 6. Supplier price commands =====
 

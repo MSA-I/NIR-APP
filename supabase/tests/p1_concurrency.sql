@@ -1,17 +1,9 @@
 -- P1 concurrency harness. Run only against a disposable database that already has all
 -- project migrations through 0023_p1_financial_command_boundaries.sql applied. The harness uses
 -- dblink to create two real PostgreSQL sessions and intentionally commits its fixtures.
--- Clone/reset the database before every run.
---
--- Example (the value is the password of the disposable local database, never production):
---   psql -X -v ON_ERROR_STOP=1 -v dblink_password=... -f p1_concurrency.sql
+-- Clone/reset the database before every run. Run psql as the disposable database superuser;
+-- each worker immediately switches to the authenticated role before invoking application RPCs.
 \set ON_ERROR_STOP on
-
-\if :{?dblink_password}
-\else
-  \echo 'dblink_password is required for the disposable test database'
-  \quit 3
-\endif
 
 create extension if not exists dblink;
 drop schema if exists p1_concurrency_test cascade;
@@ -81,7 +73,18 @@ insert into invoices (
   ('61000000-0000-0000-0000-000000000002', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-REVERSE-A', '2026-07-11', 84.75, 15.25, 100),
   ('61000000-0000-0000-0000-000000000003', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-REVERSE-B', '2026-07-12', 84.75, 15.25, 100),
   ('61000000-0000-0000-0000-000000000004', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-BANK', '2026-07-13', 42.37, 7.63, 50),
-  ('61000000-0000-0000-0000-000000000005', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-MONTH', '2026-07-14', 21.19, 3.81, 25);
+  ('61000000-0000-0000-0000-000000000005', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-MONTH', '2026-07-14', 21.19, 3.81, 25),
+  ('61000000-0000-0000-0000-000000000006', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-CREDIT', '2026-07-15', 21.19, 3.81, 25);
+
+insert into credit_requests (
+  id, org_id, supplier_id, invoice_id, reason, amount, status, created_by
+) values (
+  '65000000-0000-0000-0000-000000000001',
+  '11000000-0000-0000-0000-000000000001',
+  '31000000-0000-0000-0000-000000000001',
+  '61000000-0000-0000-0000-000000000006',
+  'wrong_price', 25, 'received', '21000000-0000-0000-0000-000000000001'
+);
 
 insert into payment_requests (
   id, org_id, supplier_id, amount, due_date, status, created_by, approved_by, approved_at
@@ -90,18 +93,18 @@ insert into payment_requests (
   ('81000000-0000-0000-0000-000000000002', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 20, '2026-07-25', 'approved', '21000000-0000-0000-0000-000000000001', '21000000-0000-0000-0000-000000000001', now()),
   ('81000000-0000-0000-0000-000000000003', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 20, '2026-07-25', 'approved', '21000000-0000-0000-0000-000000000001', '21000000-0000-0000-0000-000000000001', now());
 
-insert into payment_request_invoices (payment_request_id, invoice_id, amount_allocated) values
-  ('81000000-0000-0000-0000-000000000001', '61000000-0000-0000-0000-000000000001', 100),
-  ('81000000-0000-0000-0000-000000000002', '61000000-0000-0000-0000-000000000002', 10),
-  ('81000000-0000-0000-0000-000000000002', '61000000-0000-0000-0000-000000000003', 10),
-  ('81000000-0000-0000-0000-000000000003', '61000000-0000-0000-0000-000000000002', 10),
-  ('81000000-0000-0000-0000-000000000003', '61000000-0000-0000-0000-000000000003', 10);
+insert into payment_request_invoices (org_id, payment_request_id, invoice_id, amount_allocated) values
+  ('11000000-0000-0000-0000-000000000001', '81000000-0000-0000-0000-000000000001', '61000000-0000-0000-0000-000000000001', 100),
+  ('11000000-0000-0000-0000-000000000001', '81000000-0000-0000-0000-000000000002', '61000000-0000-0000-0000-000000000002', 10),
+  ('11000000-0000-0000-0000-000000000001', '81000000-0000-0000-0000-000000000002', '61000000-0000-0000-0000-000000000003', 10),
+  ('11000000-0000-0000-0000-000000000001', '81000000-0000-0000-0000-000000000003', '61000000-0000-0000-0000-000000000002', 10),
+  ('11000000-0000-0000-0000-000000000001', '81000000-0000-0000-0000-000000000003', '61000000-0000-0000-0000-000000000003', 10);
 
 insert into purchase_orders (id, org_id, supplier_id, status, created_by) values
   ('71000000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'confirmed', '21000000-0000-0000-0000-000000000001');
 
-insert into purchase_order_items (id, order_id, product_id, qty, unit_price) values
-  ('71100000-0000-0000-0000-000000000001', '71000000-0000-0000-0000-000000000001', '41000000-0000-0000-0000-000000000001', 10, 10);
+insert into purchase_order_items (id, org_id, order_id, product_id, qty, unit_price) values
+  ('71100000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', '71000000-0000-0000-0000-000000000001', '41000000-0000-0000-0000-000000000001', 10, 10);
 
 insert into bank_imports (
   id, org_id, filename, file_hash, column_mapping, row_count, imported_by
@@ -131,9 +134,9 @@ insert into purchase_requests (
 );
 
 insert into purchase_request_items (
-  id, request_id, product_id, qty, recommended_supplier_id, chosen_supplier_id, unit_price
+  id, org_id, request_id, product_id, qty, recommended_supplier_id, chosen_supplier_id, unit_price
 ) values (
-  '73100000-0000-0000-0000-000000000001', '73000000-0000-0000-0000-000000000001',
+  '73100000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', '73000000-0000-0000-0000-000000000001',
   '41000000-0000-0000-0000-000000000002', 1,
   '31000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 20
 );
@@ -210,6 +213,23 @@ begin
     true, null, true,
     '[{"order_item_id":"71100000-0000-0000-0000-000000000001","qty_received":10,"status":"full","notes":null}]'::jsonb,
     'concurrent receipt completion'
+  );
+  perform pg_sleep(p_hold_seconds);
+  return v_result;
+end
+$$;
+
+create function p1_concurrency_test.run_same_credit(p_hold_seconds double precision)
+returns jsonb
+language plpgsql
+security invoker
+as $$
+declare v_result jsonb;
+begin
+  perform p1_concurrency_test.activate('21000000-0000-0000-0000-000000000001');
+  v_result := transition_credit_request(
+    '65000000-0000-0000-0000-000000000001', 'offset',
+    'concurrent credit offset'
   );
   perform pg_sleep(p_hold_seconds);
   return v_result;
@@ -322,13 +342,13 @@ begin
 end
 $$;
 
-select dblink_connect(
+select dblink_connect_u(
   'p1_a',
-  format('host=%L port=5432 dbname=%L user=%L password=%L', '127.0.0.1', current_database(), current_user, :'dblink_password')
+  format('dbname=%L user=%L', current_database(), 'postgres')
 );
-select dblink_connect(
+select dblink_connect_u(
   'p1_b',
-  format('host=%L port=5432 dbname=%L user=%L password=%L', '127.0.0.1', current_database(), current_user, :'dblink_password')
+  format('dbname=%L user=%L', current_database(), 'postgres')
 );
 
 -- The browser and save RPC both break equal-price ties by supplier UUID.
@@ -410,6 +430,27 @@ select p1_concurrency_test.assert(
 select p1_concurrency_test.assert(
   (select count(*) = 1 from goods_receipts where id = '72000000-0000-0000-0000-000000000001'),
   'concurrent receipt completion created duplicate receipts'
+);
+
+select dblink_send_query('p1_a', 'select p1_concurrency_test.run_same_credit(1.2)');
+select pg_sleep(0.15);
+select dblink_send_query('p1_b', 'select p1_concurrency_test.run_same_credit(0)');
+insert into p1_concurrency_test.results
+select 'same_credit', 'a', result from dblink_get_result('p1_a') as t(result jsonb);
+insert into p1_concurrency_test.results
+select 'same_credit', 'b', result from dblink_get_result('p1_b') as t(result jsonb);
+select count(*) from dblink_get_result('p1_a') as t(result jsonb);
+select count(*) from dblink_get_result('p1_b') as t(result jsonb);
+select p1_concurrency_test.assert(
+  (select count(*) filter (where (result->>'idempotent')::boolean) = 1
+          and count(*) filter (where not (result->>'idempotent')::boolean) = 1
+   from p1_concurrency_test.results where case_name = 'same_credit'),
+  'concurrent credit transition was not exactly-once'
+);
+select p1_concurrency_test.assert(
+  (select status = 'offset' from credit_requests where id = '65000000-0000-0000-0000-000000000001')
+  and (select payment_status = 'paid' from invoices where id = '61000000-0000-0000-0000-000000000006'),
+  'concurrent credit transition did not refresh the invoice exactly once'
 );
 
 select dblink_send_query('p1_a', 'select p1_concurrency_test.run_bank_match(1.2)');

@@ -196,8 +196,8 @@ export default function InvoiceDetail() {
 }
 
 function CreditFromInvoice({ invoice, onClose, onSaved }: { invoice: FullInvoice; onClose: () => void; onSaved: () => void }) {
-  const { profile } = useAuth();
   const toast = useToast();
+  const [creditRequestId] = useState(() => crypto.randomUUID());
   const [reason, setReason] = useState<CreditReason>('wrong_price');
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
@@ -207,9 +207,13 @@ function CreditFromInvoice({ invoice, onClose, onSaved }: { invoice: FullInvoice
     const a = Number(amount);
     if (!a || a <= 0) { toast('סכום זיכוי לא תקין', 'error'); return; }
     setBusy(true);
-    const res = await supabase.from('credit_requests').insert({
-      org_id: profile!.org_id, supplier_id: invoice.supplier.id, invoice_id: invoice.id,
-      reason, amount: a, status: 'open', notes: notes || null, created_by: profile!.id, created_at: new Date().toISOString(),
+    const res = await supabase.rpc('create_invoice_credit_request', {
+      p_credit_request_id: creditRequestId,
+      p_invoice_id: invoice.id,
+      p_reason: reason,
+      p_amount: a,
+      p_notes: notes.trim() || null,
+      p_audit_reason: 'פתיחת דרישת זיכוי מחשבונית',
     });
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
