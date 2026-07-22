@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { Organization, Profile } from '../lib/types';
@@ -35,13 +35,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [org, setOrg] = useState<Organization | null>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const sessionUserId = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
+    function applySession(next: Session | null) {
+      const nextUserId = next?.user.id ?? null;
+      if (nextUserId !== sessionUserId.current) {
+        sessionUserId.current = nextUserId;
+        setProfile(null);
+        setOrg(null);
+        setIsPlatformAdmin(false);
+        setLoading(!!next);
+      }
+      setSession(next);
+    }
+
     void supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      if (!data.session) setLoading(false);
+      applySession(data.session);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => applySession(s));
     return () => sub.subscription.unsubscribe();
   }, []);
 
