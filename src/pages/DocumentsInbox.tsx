@@ -162,7 +162,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
       <div className="space-y-3">
         <label className="block">
           <span className="label">קובץ</span>
-          <input type="file" className="input" multiple accept="image/*,application/pdf"
+          <input type="file" className="input" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,image/avif,application/pdf"
             onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
         </label>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

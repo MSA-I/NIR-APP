@@ -52,7 +52,7 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
   }
 
   const element = (
-    <input ref={inputRef} type="file" multiple accept="image/*,application/pdf"
+    <input ref={inputRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,image/avif,application/pdf"
       capture="environment" className="hidden"
       onChange={(e) => void onPick(e.target.files)} />
   );
