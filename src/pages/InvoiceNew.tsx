@@ -7,8 +7,8 @@ import { useAuth } from '../auth/AuthContext';
 import { PageLoader, useToast, ConfirmDialog, ErrorNote, Note } from '../components/ui';
 import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
-import { logAction } from '../lib/audit';
 import { todayISO } from '../lib/format';
+import { toHebrewError } from '../lib/errors';
 import type { Supplier } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
 import { invoiceCheckFingerprint } from '../lib/checkFingerprint';
@@ -16,7 +16,7 @@ import { invoiceCheckFingerprint } from '../lib/checkFingerprint';
 export default function InvoiceNew() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { profile, org } = useAuth();
+  const { org } = useAuth();
   const toast = useToast();
 
   const presetSupplier = params.get('supplier') ?? '';
@@ -26,8 +26,9 @@ export default function InvoiceNew() {
 
   const [f, setF] = useState({
     supplier_id: presetSupplier, invoice_number: '', invoice_date: todayISO(),
-    before_vat: '', vat: '', total: '', notes: '',
+    before_vat: '', vat: '', total: '', notes: '', reason: '',
   });
+  const [invoiceId] = useState(() => crypto.randomUUID());
 
   // ?from=<invoiceId> ("שכפול כטיוטה"): prefill supplier, amounts and notes from the source.
   // invoice_number stays EMPTY and the date stays today — a duplicated number would trip the
@@ -121,6 +122,7 @@ export default function InvoiceNew() {
       toast('ספק, מספר חשבונית וסכום הם שדות חובה', 'error');
       return;
     }
+    if (!f.reason.trim()) { toast('נדרשת סיבה לקליטת החשבונית', 'error'); return; }
     if (!checkFingerprint || !checksReady) {
       toast(checkError ?? 'יש להמתין לסיום בדיקות הכפילות', 'error');
       return;
@@ -141,37 +143,27 @@ export default function InvoiceNew() {
       if (latestFingerprint.current !== checkFingerprint) throw new Error('פרטי החשבונית השתנו במהלך הבדיקה. יש להמתין לבדיקה העדכנית.');
       setChecked({ fingerprint: checkFingerprint, results: freshChecks });
       setCheckError(null);
-      const freshHasCritical = freshChecks.some((check) => check.severity === 'critical');
-      const inv = unwrap(await supabase.from('invoices').insert({
-        org_id: profile!.org_id, supplier_id: f.supplier_id, invoice_number: f.invoice_number.trim(),
-        invoice_date: f.invoice_date, received_date: todayISO(), received_by: profile!.id,
-        amount_before_vat: Number(f.before_vat) || 0, vat_amount: Number(f.vat) || 0, total_amount: Number(f.total),
-        review_status: freshHasCritical && !overrideReason ? 'investigation' : 'received',
-        notes: f.notes || null,
-      }).select('id').single()) as { id: string };
+      const inv = unwrap(await supabase.rpc('create_invoice', {
+        p_invoice_id: invoiceId,
+        p_supplier_id: f.supplier_id,
+        p_invoice_number: f.invoice_number.trim(),
+        p_invoice_date: f.invoice_date,
+        p_amount_before_vat: Number(f.before_vat) || 0,
+        p_vat_amount: Number(f.vat) || 0,
+        p_total_amount: Number(f.total),
+        p_notes: f.notes.trim() || null,
+        p_order_id: presetOrder,
+        p_receipt_id: presetReceipt,
+        p_override_reason: overrideReason?.trim() || null,
+        p_reason: f.reason.trim(),
+      })) as { invoice_id: string; review_status: string; duplicate_detected: boolean };
 
-      if (presetOrder) await supabase.from('invoice_order_links').insert({ invoice_id: inv.id, order_id: presetOrder });
-      if (presetReceipt) await supabase.from('invoice_receipt_links').insert({ invoice_id: inv.id, receipt_id: presetReceipt });
-
-      if (freshHasCritical && overrideReason) {
-        await logAction({
-          orgId: profile!.org_id, action: 'override_duplicate_warning', entityType: 'invoices', entityId: inv.id,
-          reason: overrideReason, newValues: { checks: freshChecks.map((c) => c.message) },
-        });
-      }
-      if (freshHasCritical && !overrideReason) {
-        // saved for investigation — also open an exception so it lands on the exceptions board
-        await supabase.from('exceptions').insert({
-          org_id: profile!.org_id, type: 'duplicate_invoice', severity: 'high', status: 'open',
-          title: `חשד לחשבונית כפולה — מס׳ ${f.invoice_number.trim()}`,
-          details: { checks: freshChecks.filter((c) => c.severity === 'critical').map((c) => c.message) },
-          supplier_id: f.supplier_id, invoice_id: inv.id, assigned_role: 'office',
-        });
-      }
-      toast('החשבונית נשמרה');
-      navigate(`/invoices/${inv.id}`);
+      toast(inv.review_status === 'investigation'
+        ? 'החשבונית נשמרה כדורשת בירור ונפתח חריג לבדיקה'
+        : 'החשבונית נשמרה');
+      navigate(`/invoices/${inv.invoice_id}`);
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'שגיאה בשמירה', 'error');
+      toast(toHebrewError(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -199,6 +191,7 @@ export default function InvoiceNew() {
         <div><label className="label">מע״מ ({org?.vat_rate ?? 18}%)</label><input type="number" step="0.01" className="input num" value={f.vat} onChange={(e) => set('vat', e.target.value)} /></div>
         <div><label className="label">סה״כ לתשלום *</label><input type="number" step="0.01" className="input num font-semibold" value={f.total} onChange={(e) => onTotal(e.target.value)} /></div>
         <div className="sm:col-span-2"><label className="label">הערות</label><textarea className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label">סיבת קליטת החשבונית *</label><input className="input" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>
       </div>
 
       {(checks || checking || checkError) && (

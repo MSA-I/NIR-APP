@@ -175,7 +175,9 @@ function UploadModal({ suppliers, onClose, onDone }: {
       <div className="space-y-3">
         <label className="block">
           <span className="label">קובץ</span>
-          <input type="file" className="input" multiple accept="image/*,application/pdf" disabled={busy || !!uploadSummary?.failed.length}
+          <input type="file" className="input" multiple
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,image/avif,application/pdf"
+            disabled={busy || !!uploadSummary?.failed.length}
             onChange={(event) => { setUploadSummary(null); setFiles(Array.from(event.target.files ?? [])); }} />
           {files.length > 0 && <div className="mt-1 text-xs text-ink-muted">{files.map((file) => file.name).join(', ')}</div>}
         </label>

@@ -15,5 +15,13 @@ assert.equal(calculateOrderSavings([{ ...basket[0], offers: basket[0].offers.sli
 assert.equal(calculateOrderSavings([
   { productId: 'decimal', qty: 2.5, chosenSupplierId: 's1', offers: [{ supplierId: 's1', unitPrice: 4.03 }] },
 ]).splitTotal, 10.08);
+const tie = calculateOrderSavings([
+  { productId: 'tie', qty: 1, chosenSupplierId: null, offers: [
+    { supplierId: '00000000-0000-0000-0000-000000000002', unitPrice: 10 },
+    { supplierId: '00000000-0000-0000-0000-000000000001', unitPrice: 10 },
+  ] },
+]);
+assert.equal(tie.singleSupplierId, '00000000-0000-0000-0000-000000000001');
+assert.equal(tie.allCheapest, true);
 
 console.log('order savings checks passed');

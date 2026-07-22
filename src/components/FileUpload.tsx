@@ -236,7 +236,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
               {capture ? 'צילום / העלאה' : 'העלאת קובץ'}
           </button>
         </div>}
-        <input ref={inputRef} type="file" hidden multiple accept="image/*,application/pdf"
+        <input ref={inputRef} type="file" hidden multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,image/avif,application/pdf"
           {...(capture ? { capture: 'environment' as const } : {})}
           onChange={(e) => void onPick(e.target.files)} />
       </div>

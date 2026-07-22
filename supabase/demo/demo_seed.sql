@@ -105,7 +105,9 @@ insert into suppliers (id, org_id, name, tax_id, contact_name, phone, whatsapp, 
 ('aa000000-0000-4000-8000-000000000014', '11111111-1111-4111-8111-111111111111', 'שף ציוד מקצועי', '515889900', 'רון אשכנזי', '03-5667788', '053-5667788', 'ron@chef-tziud.demo', 'פתח תקווה', '{}', null, null, 'מזומן / אשראי', null, 'ספק חדש — ממתין לאישור הנהלה', 'pending'),
 ('aa000000-0000-4000-8000-000000000015', '11111111-1111-4111-8111-111111111111', 'תבליני הגליל', '511556677', 'סמיר חורי', '04-6990011', '050-6990011', 'samir@tavliney-hagalil.demo', 'שפרעם', '{0,3}', '14:00', 200, 'שוטף + 30', 'בנק ערבי ישראלי 34 | סניף 785 | חשבון 667788', 'תבלינים, קטניות ומוצרים יבשים', 'active');
 
-insert into supplier_categories (supplier_id, category_id) values
+insert into supplier_categories (supplier_id, category_id, org_id)
+select v.supplier_id::uuid, v.category_id::uuid,
+       '11111111-1111-4111-8111-111111111111'::uuid from (values
 ('aa000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000001'),
 ('aa000000-0000-4000-8000-000000000002', 'cc000000-0000-4000-8000-000000000001'),
 ('aa000000-0000-4000-8000-000000000003', 'cc000000-0000-4000-8000-000000000001'),
@@ -120,7 +122,8 @@ insert into supplier_categories (supplier_id, category_id) values
 ('aa000000-0000-4000-8000-000000000012', 'cc000000-0000-4000-8000-000000000004'),
 ('aa000000-0000-4000-8000-000000000013', 'cc000000-0000-4000-8000-000000000004'),
 ('aa000000-0000-4000-8000-000000000014', 'cc000000-0000-4000-8000-000000000005'),
-('aa000000-0000-4000-8000-000000000015', 'cc000000-0000-4000-8000-000000000001');
+('aa000000-0000-4000-8000-000000000015', 'cc000000-0000-4000-8000-000000000001')
+) as v(supplier_id, category_id);
 
 -- ===== Products =====
 insert into products (id, org_id, name, category_id, unit, sku, active) values
@@ -286,14 +289,18 @@ insert into purchase_requests (id, org_id, status, notes, created_by, created_at
 ('ee000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'split', 'הזמנה שבועית — אירועי סוף השבוע', pg_temp.demo_user('kitchen'), '2026-07-14 09:30+03'),
 ('ee000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'draft', 'טיוטה — חתונה 28.7', pg_temp.demo_user('kitchen'), '2026-07-16 08:15+03');
 
-insert into purchase_request_items (request_id, product_id, qty, recommended_supplier_id, chosen_supplier_id, unit_price) values
+insert into purchase_request_items (request_id, product_id, qty, recommended_supplier_id, chosen_supplier_id, unit_price, org_id)
+select v.request_id::uuid, v.product_id::uuid, v.qty::numeric,
+       v.recommended_supplier_id::uuid, v.chosen_supplier_id::uuid, v.unit_price::numeric,
+       '11111111-1111-4111-8111-111111111111'::uuid from (values
 ('ee000000-0000-4000-8000-000000000001', 'bb000000-0000-4000-8000-000000000001', 50, 'aa000000-0000-4000-8000-000000000002', 'aa000000-0000-4000-8000-000000000001', 8.50),
 ('ee000000-0000-4000-8000-000000000001', 'bb000000-0000-4000-8000-000000000004', 80, 'aa000000-0000-4000-8000-000000000002', 'aa000000-0000-4000-8000-000000000002', 3.50),
 ('ee000000-0000-4000-8000-000000000001', 'bb000000-0000-4000-8000-000000000012', 45, 'aa000000-0000-4000-8000-000000000005', 'aa000000-0000-4000-8000-000000000005', 36.90),
 ('ee000000-0000-4000-8000-000000000001', 'bb000000-0000-4000-8000-000000000031', 20, 'aa000000-0000-4000-8000-000000000008', 'aa000000-0000-4000-8000-000000000008', 45.00),
 ('ee000000-0000-4000-8000-000000000002', 'bb000000-0000-4000-8000-000000000016', 25, 'aa000000-0000-4000-8000-000000000007', null, null),
 ('ee000000-0000-4000-8000-000000000002', 'bb000000-0000-4000-8000-000000000041', 40, 'aa000000-0000-4000-8000-000000000012', null, null),
-('ee000000-0000-4000-8000-000000000002', 'bb000000-0000-4000-8000-000000000035', 60, 'aa000000-0000-4000-8000-000000000009', null, null);
+('ee000000-0000-4000-8000-000000000002', 'bb000000-0000-4000-8000-000000000035', 60, 'aa000000-0000-4000-8000-000000000009', null, null)
+) as v(request_id, product_id, qty, recommended_supplier_id, chosen_supplier_id, unit_price);
 
 -- ===== Purchase orders =====
 insert into purchase_orders (id, org_id, supplier_id, request_id, status, expected_date, notes, created_by, sent_at, created_at) values
@@ -319,7 +326,10 @@ insert into purchase_orders (id, org_id, supplier_id, request_id, status, expect
 ('f0000000-0000-4000-8000-000000000016', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000015', null, 'received', '2026-05-19', null, pg_temp.demo_user('kitchen'), '2026-05-18 09:00+03', '2026-05-18 08:30+03'),
 ('f0000000-0000-4000-8000-000000000017', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000013', null, 'received', '2026-06-18', null, pg_temp.demo_user('office'), '2026-06-16 12:00+03', '2026-06-16 11:00+03');
 
-insert into purchase_order_items (id, order_id, product_id, qty, unit_price, received_qty) values
+insert into purchase_order_items (id, order_id, product_id, qty, unit_price, received_qty, org_id)
+select v.id::uuid, v.order_id::uuid, v.product_id::uuid, v.qty::numeric,
+       v.unit_price::numeric, v.received_qty::numeric,
+       '11111111-1111-4111-8111-111111111111'::uuid from (values
 -- f001 משק ירוק — total 1,180.00, fully received
 ('f1000000-0000-4000-8000-000000000001', 'f0000000-0000-4000-8000-000000000001', 'bb000000-0000-4000-8000-000000000001', 40, 8.50, 40),
 ('f1000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000001', 'bb000000-0000-4000-8000-000000000002', 30, 5.90, 30),
@@ -386,7 +396,8 @@ insert into purchase_order_items (id, order_id, product_id, qty, unit_price, rec
 -- f017 אריזות הדרום — total 900.00
 ('f1000000-0000-4000-8000-000000000048', 'f0000000-0000-4000-8000-000000000017', 'bb000000-0000-4000-8000-000000000041', 20, 26.50, 20),
 ('f1000000-0000-4000-8000-000000000049', 'f0000000-0000-4000-8000-000000000017', 'bb000000-0000-4000-8000-000000000042', 15, 17.80, 15),
-('f1000000-0000-4000-8000-000000000050', 'f0000000-0000-4000-8000-000000000017', 'bb000000-0000-4000-8000-000000000044', 7.25, 14.20, 7.25);
+('f1000000-0000-4000-8000-000000000050', 'f0000000-0000-4000-8000-000000000017', 'bb000000-0000-4000-8000-000000000044', 7.25, 14.20, 7.25)
+) as v(id, order_id, product_id, qty, unit_price, received_qty);
 
 -- ===== Goods receipts =====
 insert into goods_receipts (id, org_id, order_id, status, received_by, received_at, notes) values
@@ -402,7 +413,10 @@ insert into goods_receipts (id, org_id, order_id, status, received_by, received_
 ('f2000000-0000-4000-8000-000000000010', '11111111-1111-4111-8111-111111111111', 'f0000000-0000-4000-8000-000000000016', 'completed', pg_temp.demo_user('kitchen'), '2026-05-19 10:00+03', null),
 ('f2000000-0000-4000-8000-000000000011', '11111111-1111-4111-8111-111111111111', 'f0000000-0000-4000-8000-000000000017', 'completed', pg_temp.demo_user('kitchen'), '2026-06-18 12:30+03', null);
 
-insert into goods_receipt_items (receipt_id, order_item_id, product_id, qty_received, status, notes) values
+insert into goods_receipt_items (receipt_id, order_item_id, product_id, qty_received, status, notes, org_id)
+select v.receipt_id::uuid, v.order_item_id::uuid, v.product_id::uuid,
+       v.qty_received::numeric, v.status::receipt_line_status, v.notes,
+       '11111111-1111-4111-8111-111111111111'::uuid from (values
 -- f201: all full
 ('f2000000-0000-4000-8000-000000000001', 'f1000000-0000-4000-8000-000000000001', 'bb000000-0000-4000-8000-000000000001', 40, 'full', null),
 ('f2000000-0000-4000-8000-000000000001', 'f1000000-0000-4000-8000-000000000002', 'bb000000-0000-4000-8000-000000000002', 30, 'full', null),
@@ -452,7 +466,8 @@ insert into goods_receipt_items (receipt_id, order_item_id, product_id, qty_rece
 -- f211
 ('f2000000-0000-4000-8000-000000000011', 'f1000000-0000-4000-8000-000000000048', 'bb000000-0000-4000-8000-000000000041', 20, 'full', null),
 ('f2000000-0000-4000-8000-000000000011', 'f1000000-0000-4000-8000-000000000049', 'bb000000-0000-4000-8000-000000000042', 15, 'full', null),
-('f2000000-0000-4000-8000-000000000011', 'f1000000-0000-4000-8000-000000000050', 'bb000000-0000-4000-8000-000000000044', 7.25, 'full', null);
+('f2000000-0000-4000-8000-000000000011', 'f1000000-0000-4000-8000-000000000050', 'bb000000-0000-4000-8000-000000000044', 7.25, 'full', null)
+) as v(receipt_id, order_item_id, product_id, qty_received, status, notes);
 
 -- ===== Invoices =====
 insert into invoices (id, org_id, supplier_id, invoice_number, invoice_date, received_date, received_by, amount_before_vat, vat_amount, total_amount, review_status, payment_status, export_status, notes) values
@@ -471,7 +486,9 @@ insert into invoices (id, org_id, supplier_id, invoice_number, invoice_date, rec
 ('f4000000-0000-4000-8000-000000000013', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000015', '509', '2026-05-20', '2026-05-20', pg_temp.demo_user('kitchen'), 542.37, 97.63, 640.00, 'approved', 'unpaid', 'sent', 'חשבונית ישנה ללא תשלום — דורש בירור'),
 ('f4000000-0000-4000-8000-000000000014', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000013', '3377', '2026-06-18', '2026-06-18', pg_temp.demo_user('office'), 762.71, 137.29, 900.00, 'approved', 'paid', 'sent', 'קוזז זיכוי 150 ₪ מהיתרה');
 
-insert into invoice_order_links (invoice_id, order_id) values
+insert into invoice_order_links (invoice_id, order_id, org_id)
+select v.invoice_id::uuid, v.order_id::uuid,
+       '11111111-1111-4111-8111-111111111111'::uuid from (values
 ('f4000000-0000-4000-8000-000000000001', 'f0000000-0000-4000-8000-000000000001'),
 ('f4000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000002'),
 ('f4000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000003'),
@@ -483,9 +500,12 @@ insert into invoice_order_links (invoice_id, order_id) values
 ('f4000000-0000-4000-8000-000000000011', 'f0000000-0000-4000-8000-000000000008'),
 ('f4000000-0000-4000-8000-000000000012', 'f0000000-0000-4000-8000-000000000009'),
 ('f4000000-0000-4000-8000-000000000013', 'f0000000-0000-4000-8000-000000000016'),
-('f4000000-0000-4000-8000-000000000014', 'f0000000-0000-4000-8000-000000000017');
+('f4000000-0000-4000-8000-000000000014', 'f0000000-0000-4000-8000-000000000017')
+) as v(invoice_id, order_id);
 
-insert into invoice_receipt_links (invoice_id, receipt_id) values
+insert into invoice_receipt_links (invoice_id, receipt_id, org_id)
+select v.invoice_id::uuid, v.receipt_id::uuid,
+       '11111111-1111-4111-8111-111111111111'::uuid from (values
 ('f4000000-0000-4000-8000-000000000001', 'f2000000-0000-4000-8000-000000000001'),
 ('f4000000-0000-4000-8000-000000000002', 'f2000000-0000-4000-8000-000000000002'),
 ('f4000000-0000-4000-8000-000000000003', 'f2000000-0000-4000-8000-000000000003'),
@@ -496,7 +516,8 @@ insert into invoice_receipt_links (invoice_id, receipt_id) values
 ('f4000000-0000-4000-8000-000000000011', 'f2000000-0000-4000-8000-000000000008'),
 ('f4000000-0000-4000-8000-000000000012', 'f2000000-0000-4000-8000-000000000009'),
 ('f4000000-0000-4000-8000-000000000013', 'f2000000-0000-4000-8000-000000000010'),
-('f4000000-0000-4000-8000-000000000014', 'f2000000-0000-4000-8000-000000000011');
+('f4000000-0000-4000-8000-000000000014', 'f2000000-0000-4000-8000-000000000011')
+) as v(invoice_id, receipt_id);
 
 -- ===== Credit requests =====
 insert into credit_requests (id, org_id, supplier_id, invoice_id, receipt_item_id, reason, amount, status, notes, created_by, created_at, resolved_at) values
@@ -516,7 +537,9 @@ insert into payment_requests (id, org_id, supplier_id, amount, due_date, status,
 ('f6000000-0000-4000-8000-000000000006', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000010', 500.00, '2026-07-08', 'executed', 'תשלום חלקי ע"ח חשבונית 2088', pg_temp.demo_user('office'), pg_temp.demo_user('owner'), '2026-07-06 10:00+03', '2026-07-05 09:00+03'),
 ('f6000000-0000-4000-8000-000000000007', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000012', 1404.00, '2026-08-01', 'pending_approval', 'ממתין לבירור פער מול חשבונית 888214', pg_temp.demo_user('office'), null, null, '2026-07-15 12:00+03');
 
-insert into payment_request_invoices (payment_request_id, invoice_id, amount_allocated) values
+insert into payment_request_invoices (payment_request_id, invoice_id, amount_allocated, org_id)
+select v.payment_request_id::uuid, v.invoice_id::uuid, v.amount_allocated::numeric,
+       '11111111-1111-4111-8111-111111111111'::uuid from (values
 ('f6000000-0000-4000-8000-000000000001', 'f4000000-0000-4000-8000-000000000007', 2832.00),
 ('f6000000-0000-4000-8000-000000000002', 'f4000000-0000-4000-8000-000000000007', 2832.00),
 ('f6000000-0000-4000-8000-000000000003', 'f4000000-0000-4000-8000-000000000010', 3040.00),
@@ -525,7 +548,8 @@ insert into payment_request_invoices (payment_request_id, invoice_id, amount_all
 ('f6000000-0000-4000-8000-000000000005', 'f4000000-0000-4000-8000-000000000004', 413.00),
 ('f6000000-0000-4000-8000-000000000005', 'f4000000-0000-4000-8000-000000000005', 826.00),
 ('f6000000-0000-4000-8000-000000000006', 'f4000000-0000-4000-8000-000000000006', 500.00),
-('f6000000-0000-4000-8000-000000000007', 'f4000000-0000-4000-8000-000000000008', 1404.00);
+('f6000000-0000-4000-8000-000000000007', 'f4000000-0000-4000-8000-000000000008', 1404.00)
+) as v(payment_request_id, invoice_id, amount_allocated);
 
 -- ===== Payments =====
 insert into payments (id, org_id, supplier_id, payment_request_id, amount, paid_date, method, reference, executed_by, notes) values

@@ -146,7 +146,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
           {busy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
           הוספת קבצים
         </button>
-        <input ref={inputRef} type="file" hidden multiple accept="image/*,application/pdf"
+        <input ref={inputRef} type="file" hidden multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,image/avif,application/pdf"
           onChange={(event) => void onPick(event.target.files)} />
       </div>
 

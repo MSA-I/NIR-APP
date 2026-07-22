@@ -19,7 +19,7 @@ src/
     status.ts              תוויות עברית + צבעים לכל enum
     format.ts              ₪ / תאריכים he-IL
     checks.ts              מנוע בדיקות: חשבוניות, דרישות תשלום, רענון סטטוס תשלום (RPC)
-    audit.ts               רישום פעולות עם סיבה ליומן הביקורת
+    audit.ts               sentinel תאימות: אינו כותב audit מהדפדפן ומסמן callers ישנים
     useQuery.ts            hook איחזור מינימלי
     alerts.ts              סריקת ממצאים חיה למסך ההתראות
     notifications.ts       מונה unread, סימון נקרא ו-Realtime לפעמון
@@ -37,10 +37,11 @@ supabase/
                            0009–0014 הקשחות, חיפוש, מדדי ספקים ותיבת מסמכים
                            0015 מנויי Push · 0016 טריגרים/cron · 0017 התראות ומחזורי מסירה
                            0018 טיוטות הזמנה אטומיות · 0019 מטא־דאטה לגלריית מסמכים
+                           0020 זהות/lifecycle/audit · 0021 שלמות דייר · 0022 חוזה P0/Storage
   functions/               admin-provision · send-invite · send-push — service_role נשאר בשרת
   seed.sql                 seed ניטרלי לדייר חדש (ארגון + קטגוריות)
   demo/                    חבילת הדמו כדייר נפרד + reset + audit בידוד
-scripts/                   db-query.ps1 (SQL דרך Management API), create-users.ps1, seed-demo.ps1
+scripts/                   כלי admin עם יעד מפורש + check-p0-security.ps1 + check-p0-upgrade.ps1
 ```
 
 ## מפת מסכים ונתיבים
@@ -69,6 +70,7 @@ scripts/                   db-query.ps1 (SQL דרך Management API), create-user
 | `/reports` | דוח חודשי לרו״ח + ייצוא | בעלים, מזכירות, רו״ח |
 | `/audit` | יומן ביקורת | בעלים, מזכירות, רו״ח |
 | `/settings` | משתמשים + הגדרות עסק | בעלים |
+| `/admin` | lifecycle של ארגונים | מפעיל פלטפורמה בלבד |
 
 ## מטריצת הרשאות (RLS — נאכף בשרת)
 
@@ -89,6 +91,28 @@ scripts/                   db-query.ps1 (SQL דרך Management API), create-user
 
 עמודת "ספק" קיימת במודל (enum + organization_id בכל טבלה) — פורטל ספקים עתידי יתווסף ב-policies בלבד, ללא שינוי סכימה.
 
+### חוזה אבטחת P0
+
+- `profiles.id`, ‏`profiles.org_id` ועמודות הזהות הדיירית אינן ניתנות לשינוי דרך JWT. משתמש
+  משנה בעצמו רק שם/טלפון; owner משנה `role`/`active`/`supplier_id` של חבר בארגונו דרך
+  `manage_profile_access`, עם סיבה ו־audit באותה טרנזקציה.
+- owner משנה רק `organizations.name`/`vat_rate`/`settings`. ‏`status` ו־`trial_ends_at`
+  משתנים רק דרך `set_organization_lifecycle` בידי platform admin, עם נעילה וסיבה. השעיית
+  ארגון מאפסת בפועל את `auth_org()` לכל חבריו, וגם `send-push` מסנן ארגון מושעה במפורש.
+- כל קשר עסקי דיירי נאכף באמצעות `org_id` ו־FK מורכב אל `(org_id,id)` או guard פולימורפי
+  מפורש. שבע טבלאות ילד/קישור שלא נשאו דייר קיבלו `org_id`; ‏`audit_logs.user_id` הוא החריג
+  המתועד, מפני שפעולת platform יכולה להירשם בדייר שהמפעיל אינו חבר בו.
+- טיוטת `purchase_requests` ופריטיה פרטיות ל־`created_by` גם לקריאה בתוך אותו דייר. יתרות
+  ומדדי ספק נשארים views מחושבים, `security_invoker`, וכל join/aggregate שלהם כולל `org_id`.
+- `audit_logs` הוא server-authored: אין INSERT/UPDATE/DELETE ל־JWT, ה־triggers גוזרים actor,
+  tenant ו־old/new מן המוטציה האמיתית, וסיבת פעולת P0 רגישה נכתבת בתוך פקודת ה־RPC שלה.
+- אין DELETE קשיח דרך JWT לרשומות פיננסיות. ב־Storage קריאה ניתנת רק כאשר קיימת שורת
+  `documents` מורשית לאותו path; payer קורא רק מסמך שהוא העלה. מחיקה מותרת רק ל־orphan חדש
+  של אותו uploader שאין אליו שורת מסמך. bucket המסמכים פרטי וחוסם HTML/SVG.
+- חריג זמני ומוצהר: שלוש מדיניות הכתיבה הישירה של payer נשארות עד ה־cutover האטומי של P1:
+  `payment_requests_payer_update`, ‏`payments_payer_insert`, ‏`pa_payer_insert`. אין להרחיבן;
+  החוזה להסרתן נמצא ב־`P0-P1-SECURITY-HANDOFF.md`.
+
 ## מודל נתונים — עקרונות
 
 - **אין payment_id על חשבונית.** `payment_allocations` (תשלום↔חשבונית/זיכוי, N:M) ו-`bank_allocations` (תנועת בנק↔חשבונית/תשלום, N:M) — תומך בחשבונית המשולמת בכמה תשלומים, תשלום המכסה כמה חשבוניות, תשלומים חלקיים, קיזוזי זיכוי, והעברה בסכום שונה מהחשבונית.
@@ -99,10 +123,42 @@ scripts/                   db-query.ps1 (SQL דרך Management API), create-user
 - **מסמך ותוכן עסקי הם שני צירים:** `documents.entity_type/entity_id` קובעים תיוק, ואילו
   `document_kind/supplier_id/document_date` מאפשרים גלריה וסינון בלי לנחש את סוגו של מסמך היסטורי.
 - **מחיקה רכה בלבד** לרשומות כספיות (`deleted_at` / סטטוס בוטל).
-- **ביקורת כפולה:** טריגר DB גנרי על כל הטבלאות הפיננסיות (old/new JSONB + משתמש) + רישום אפליקטיבי עם *סיבה* לפעולות רגישות (עקיפת כפילות, ביטולים, אישורי התאמה).
+- **ביקורת server-authored:** טריגרי DB על כל היישויות הרגישות גוזרים old/new, משתמש ודייר
+  מן המוטציה. פעולות פקודה אטומיות כותבות סיבה באותו RPC; הדפדפן אינו רשאי להוסיף שורת audit.
 - **התראות נשמרות פר־נמען:** `notifications` מסוננת ב־RLS לפי `org_id` ו־`auth.uid()`; לקוח רשאי
   לעדכן רק `read_at`. ‏`notification_event_states` היא server-only ומגדירה מחזור מסירה אחד,
   הסלמת warning→critical ומחזור חדש לאחר פתרון.
+
+## גבול פקודות פיננסי P1 — חוזה הענף המבודד
+
+> החוזה הבא ממומש בענף `codex/p1-financial-commands`, אך עדיין אינו חלק מ־main או מהמסד החי.
+> ‏P0 בקומיט `2c56812` כבר שולב; מיגרציות P0 הן `0020`–`0022` ומיגרציית P1 היא `0023`.
+> מסלול שדרוג מ־`0019`, התקנה נקייה ומטריצת שני דיירים נבדקו מחדש לאחר השילוב.
+
+כל שינוי כספי בתחום P1 עובר דרך RPC אחד. הלקוח רשאי לחשב preview, אך אינו קובע `org_id`,
+משתמש מבצע, מאשר, יתרה, סטטוס נגזר או audit. ‏`p1_financial_command_guard` משתמש בסמן
+transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מוסרים מהטבלאות שבבעלות מלאה.
+
+| משפחה | פקודת שרת | נקודת הסריאליזציה והאידמפוטנטיות |
+|---|---|---|
+| ביצוע תשלום | `execute_payment_request` | נעילת הדרישה והיעדים בסדר UUID; unique על דרישה; retry משווה payload קנוני |
+| דרישת תשלום | `create_payment_request`, ‏`transition_payment_request` | UUID לקוח יציב, נעילת חשבוניות/דרישה ומעברי סטטוס שרתיים |
+| תדפיס בנק | `import_bank_transactions`, ‏`match_bank_transaction` ופקודות assign/ignore/exception | hash קובץ ושורה, נעילת תנועה, תשלום/הקצאה יחידים |
+| קבלת סחורה | `save_goods_receipt` | UUID קבלה יציב, נעילת הזמנה ופריטים; כמות תקינה נצברת פעם אחת |
+| חשבונית | `create_invoice`, ‏`set_invoice_review_status` | UUID לקוח יציב, בדיקות DB חוזרות, חריג/override/audit באותה עסקה |
+| זיכוי מחשבונית | `create_invoice_credit_request`, ‏`transition_credit_request` | UUID לקוח יציב, נעילת חשבונית לפני זיכוי, מעברי סטטוס שרתיים ורענון יתרה באותה עסקה |
+| מחיר | `set_supplier_product_price`, ‏`import_supplier_prices` | נעילת `supplier_products`; מחיר נוכחי ו־`price_history` נכתבים יחד |
+| חודש לרו״ח | `mark_month_export_sent` | נעילת ארגון/export/חשבוניות ו־snapshot ממוין של `invoice_ids` |
+| אישור טיוטת הזמנה | `finalize_purchase_request_draft` | נעילת טיוטה, פריטים ומחירים בסדר קבוע; שינוי מחיר מחזיר `draft_price_changed` |
+
+שובר השוויון בהמלצת מחיר הוא `(current_price, supplier_id)` הן ב־`save_purchase_request_draft`
+והן בדפדפן. בחירה ידנית של משתמש נשמרת, אבל המחיר והזמינות שלה נבדקים שוב תחת נעילה.
+`purchase_order_items.unit_price` נשאר snapshot ואינו משתנה לאחר יצירת ההזמנה.
+
+ל־`bank_allocations` אין עדיין constraint היסטורי של יעד יחיד: preflight מצא שבע שורות ישנות
+עם שני יעדים. כתיבה חדשה דרך ה־RPC מחייבת יעד אחד וה־guard חוסם כתיבה ישירה; תיקון הרשומות
+הישנות מחייב החלטת נתונים מפורשת. באופן דומה, export ישן ב־`sent` ללא `invoice_ids` אינו מקבל
+snapshot מומצא ב־retry אלא נכשל ב־`month_export_legacy_snapshot_missing`.
 
 ## ה-Workflow המלא (ממומש)
 

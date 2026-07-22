@@ -84,6 +84,7 @@ export default function NewOrder() {
   const [saveError, setSaveError] = useState('');
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [finalizeReason, setFinalizeReason] = useState('');
   const [cancelOpen, setCancelOpen] = useState(false);
   const [sendQueue, setSendQueue] = useState<QueueOrder[] | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
@@ -157,7 +158,9 @@ export default function NewOrder() {
       offers.push(offer);
       map.set(offer.product_id, offers);
     }
-    for (const offers of map.values()) offers.sort((a, b) => a.current_price - b.current_price);
+    for (const offers of map.values()) offers.sort((a, b) =>
+      a.current_price - b.current_price
+      || (a.supplier_id < b.supplier_id ? -1 : a.supplier_id > b.supplier_id ? 1 : 0));
     return map;
   }, [data, supplierById]);
 
@@ -393,12 +396,13 @@ export default function NewOrder() {
 
   async function finalizeDraft() {
     if (savings.splitTotal === null) return;
+    if (!finalizeReason.trim()) { toast('נדרשת סיבה לאישור ההזמנה', 'error'); return; }
     setBusy(true);
     try {
       if (!await runSaveQueue()) throw new Error('שמירת הטיוטה נכשלה');
       const requestId = latestDraftRef.current?.requestId;
       if (!requestId) throw new Error('הטיוטה טרם נשמרה');
-      const finalized = await finalizeOrderDraft(requestId, savings.splitTotal);
+      const finalized = await finalizeOrderDraft(requestId, savings.splitTotal, finalizeReason);
       finalizedRef.current = true;
       const orders = unwrap(await supabase.from('purchase_orders')
         .select('*, supplier:suppliers(name, phone, whatsapp), items:purchase_order_items(qty, unit_price, product:products(name, unit))')
@@ -596,6 +600,7 @@ export default function NewOrder() {
           <SummaryRow label="כל המוצרים הוקצו לספק הזול ביותר" value={savings.allCheapest ? '✓ כן' : 'לא'} tone={savings.allCheapest ? 'done' : 'await'} />
         </div>
         {savings.singleSupplierTotal === null && <p className="mt-3 text-sm text-ink-muted">אין ספק יחיד שמציע את כל מוצרי הסל, ולכן לא מוצגת טענת חיסכון.</p>}
+        <div className="mt-4"><label className="label">סיבת אישור ההזמנה *</label><input className="input" value={finalizeReason} onChange={(e) => setFinalizeReason(e.target.value)} /></div>
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" className="btn-secondary" disabled={busy} onClick={() => setReviewOpen(false)}>חזרה לעריכה</button>
           <button type="button" className="btn-primary" disabled={busy || savings.splitTotal === null} onClick={() => void finalizeDraft()}>

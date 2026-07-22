@@ -9,8 +9,6 @@ import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { CREDIT_REASON, CREDIT_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
-import { refreshInvoicePaymentStatus } from '../lib/checks';
-import { logAction } from '../lib/audit';
 import type { CreditRequest, CreditStatus } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
 
@@ -104,14 +102,14 @@ function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
 
   async function setStatus(status: CreditStatus) {
     setBusy(true);
-    const res = await supabase.from('credit_requests').update({
-      status, resolved_at: ['offset', 'closed'].includes(status) ? new Date().toISOString() : null,
-    }).eq('id', credit.id);
+    const transition = flow.find((item) => item.to === status && item.from.includes(credit.status));
+    const res = await supabase.rpc('transition_credit_request', {
+      p_credit_request_id: credit.id,
+      p_status: status,
+      p_reason: transition?.label ?? 'עדכון סטטוס זיכוי',
+    });
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-    await logAction({ orgId: credit.org_id, action: `credit_status:${status}`, entityType: 'credit_requests', entityId: credit.id });
-    // offset credits change the linked invoice's effective balance
-    if (credit.invoice && ['offset', 'closed'].includes(status)) await refreshInvoicePaymentStatus(credit.invoice.id);
     toast('סטטוס הזיכוי עודכן');
     onChanged();
   }

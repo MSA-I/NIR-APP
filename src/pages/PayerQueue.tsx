@@ -2,12 +2,11 @@ import { useState } from 'react';
 import { Landmark, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { useAuth } from '../auth/AuthContext';
 import { useToast, StatusBadge, Modal, EmptyState, ErrorNote, SkeletonList, Note } from '../components/ui';
 import { DocumentList } from '../components/FileUpload';
-import { refreshInvoicePaymentStatus } from '../lib/checks';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
+import { toHebrewError } from '../lib/errors';
 import type { PaymentRequest } from '../lib/types';
 
 /**
@@ -81,46 +80,34 @@ export default function PayerQueue() {
 }
 
 function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; onDone: () => void }) {
-  const { profile } = useAuth();
   const toast = useToast();
-  const [f, setF] = useState({ paid_date: todayISO(), amount: pr.amount.toString(), reference: '', notes: '' });
+  const [f, setF] = useState({ paid_date: todayISO(), reference: '', notes: '', reason: '' });
   const [busy, setBusy] = useState(false);
   const [paymentId, setPaymentId] = useState<string | null>(null);
 
   async function execute() {
-    const amount = Number(f.amount);
-    if (!amount || amount <= 0) { toast('סכום לא תקין', 'error'); return; }
     if (!f.reference.trim()) { toast('נדרשת אסמכתת העברה', 'error'); return; }
+    if (!f.reason.trim()) { toast('נדרשת סיבה לביצוע ההעברה', 'error'); return; }
     setBusy(true);
     try {
-      const payment = unwrap(await supabase.from('payments').insert({
-        org_id: profile!.org_id, supplier_id: pr.supplier.id, payment_request_id: pr.id,
-        amount, paid_date: f.paid_date, method: 'העברה בנקאית', reference: f.reference.trim(),
-        executed_by: profile!.id, notes: f.notes || null,
-      }).select('id').single()) as { id: string };
+      const payment = unwrap(await supabase.rpc('execute_payment_request', {
+        p_payment_request_id: pr.id,
+        p_paid_date: f.paid_date,
+        p_method: 'העברה בנקאית',
+        p_reference: f.reference.trim(),
+        p_notes: f.notes.trim() || null,
+        p_allocations: pr.invoices.map((link) => ({
+          invoice_id: link.invoice_id,
+          credit_id: null,
+          amount: link.amount_allocated,
+        })),
+        p_reason: f.reason.trim(),
+      })) as { payment_id: string };
 
-      // allocate against the linked invoices, proportional to the request allocations, capped by the actual amount
-      let remaining = amount;
-      for (const link of pr.invoices) {
-        if (remaining <= 0) break;
-        const alloc = Math.min(link.amount_allocated, remaining);
-        const ins = await supabase.from('payment_allocations').insert({
-          payment_id: payment.id, invoice_id: link.invoice_id, amount: alloc,
-        });
-        if (ins.error) throw new Error(ins.error.message);
-        remaining -= alloc;
-        await refreshInvoicePaymentStatus(link.invoice_id);
-      }
-
-      const upd = await supabase.from('payment_requests').update({
-        status: 'executed', executor_notes: f.notes || null,
-      }).eq('id', pr.id);
-      if (upd.error) throw new Error(upd.error.message);
-
-      setPaymentId(payment.id);
+      setPaymentId(payment.payment_id);
       toast('ההעברה נרשמה בהצלחה');
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'שגיאה ברישום ההעברה', 'error');
+      toast(toHebrewError(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -159,10 +146,11 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
 
         <div className="grid grid-cols-2 gap-3">
           <div><label className="label">תאריך ביצוע</label><input type="date" className="input" value={f.paid_date} onChange={(e) => setF((s) => ({ ...s, paid_date: e.target.value }))} /></div>
-          <div><label className="label">סכום שהועבר בפועל</label><input type="number" step="0.01" className="input num" value={f.amount} onChange={(e) => setF((s) => ({ ...s, amount: e.target.value }))} /></div>
+          <div><label className="label">סכום מאושר להעברה</label><input type="number" className="input num" value={pr.amount} readOnly /></div>
         </div>
         <div><label className="label">אסמכתת העברה *</label><input className="input" dir="ltr" value={f.reference} onChange={(e) => setF((s) => ({ ...s, reference: e.target.value }))} /></div>
         <div><label className="label">הערות</label><input className="input" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></div>
+        <div><label className="label">סיבת ביצוע / אישור הפעולה *</label><input className="input" value={f.reason} onChange={(e) => setF((s) => ({ ...s, reason: e.target.value }))} /></div>
 
         <div className="flex justify-end gap-2">
           <button className="btn-secondary" onClick={onClose}>ביטול</button>
