@@ -1,4 +1,4 @@
--- Nir's feedback round 1:
+-- Product feedback round 1:
 -- (1) Supplier agent users: can upload/maintain ONLY their own price list, see nothing else.
 -- (4) Order confirmation tracking: when + note, on top of the audit log's who.
 

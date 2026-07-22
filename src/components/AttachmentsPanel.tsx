@@ -71,7 +71,11 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
     if (!files?.length || !profile) return;
     setBusy(true);
     try {
-      for (const file of Array.from(files)) await uploadDocument(profile.org_id, 'invoice', invoiceId, file);
+      const invoice = unwrap(await supabase.from('invoices').select('supplier_id, invoice_date')
+        .eq('id', invoiceId).single()) as { supplier_id: string; invoice_date: string };
+      for (const file of Array.from(files)) await uploadDocument(profile.org_id, 'invoice', invoiceId, file, {
+        documentKind: 'invoice', supplierId: invoice.supplier_id, documentDate: invoice.invoice_date,
+      });
       toast(files.length === 1 ? 'המסמך הועלה' : `${files.length} מסמכים הועלו`);
       await refetch();
     } catch (e) {

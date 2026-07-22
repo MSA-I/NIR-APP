@@ -1,4 +1,4 @@
--- SupplyFlow — DEMO tenant package: "אולמי גאמוס", an events venue.
+-- SupplyFlow — neutral demo tenant package.
 --
 -- This is NOT what a real new tenant gets. It exists to *show the product working* —
 -- sales demos, and developing against realistic data. The neutral baseline a real
@@ -39,7 +39,7 @@ begin
   end if;
 
   if (select count(*) from auth.users where email in
-      ('owner@gamos.demo','nir@gamos.demo','office@gamos.demo','payer@gamos.demo','accountant@gamos.demo')) < 5 then
+      ('owner@demo.supplyflow.local','kitchen@demo.supplyflow.local','office@demo.supplyflow.local','payer@demo.supplyflow.local','accountant@demo.supplyflow.local')) < 5 then
     raise exception 'Demo auth users are missing. Run scripts/create-users.ps1 first.';
   end if;
 end $$;
@@ -55,7 +55,7 @@ end $$;
 -- tenant sitting in 'trial' would misrepresent the product on a sales call.
 -- Requires migration 0006 to be applied first.
 insert into organizations (id, name, vat_rate, status) values
-('11111111-1111-4111-8111-111111111111', 'אולמי גאמוס', 18.00, 'active');
+('11111111-1111-4111-8111-111111111111', 'עסק לדוגמה', 18.00, 'active');
 
 -- profiles.id IS the auth.users id, so it cannot be hardcoded — create-users.ps1 lets
 -- Supabase mint it. Resolve by email instead. (The previous hardcoded UUIDs could only
@@ -63,11 +63,11 @@ insert into organizations (id, name, vat_rate, status) values
 insert into profiles (id, org_id, full_name, role, phone)
 select u.id, '11111111-1111-4111-8111-111111111111', x.full_name, x.role::user_role, x.phone
 from (values
-  ('owner@gamos.demo',      'משה נהוראי',       'owner',      '050-5551111'),
-  ('nir@gamos.demo',        'ניר ברקוביץ',      'kitchen',    '052-5552222'),
-  ('office@gamos.demo',     'רותי אלמוג',       'office',     '053-5553333'),
-  ('payer@gamos.demo',      'אבי פרידמן',       'payer',      '054-5554444'),
-  ('accountant@gamos.demo', 'דינה שרון (רו"ח)', 'accountant', '050-5555555')
+  ('owner@demo.supplyflow.local',      'בעלים לדוגמה',       'owner',      '050-5551111'),
+  ('kitchen@demo.supplyflow.local',    'צוות תפעול לדוגמה',  'kitchen',    '052-5552222'),
+  ('office@demo.supplyflow.local',     'משרד לדוגמה',        'office',     '053-5553333'),
+  ('payer@demo.supplyflow.local',      'מבצע תשלום לדוגמה',  'payer',      '054-5554444'),
+  ('accountant@demo.supplyflow.local', 'רו״ח לדוגמה',        'accountant', '050-5555555')
 ) as x(email, full_name, role, phone)
 join auth.users u on u.email = x.email;
 

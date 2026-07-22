@@ -164,7 +164,7 @@ export function KpiCard({ title, value, sub, tone = 'slate', onClick }: {
   );
 }
 
-/* ---------- AttentionZone — dashboard "requires attention today" (Nir §1–3) ---------- */
+/* ---------- AttentionZone — dashboard "requires attention today" ---------- */
 export interface AttentionItem {
   key: string;
   label: string;
@@ -204,7 +204,7 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
 }
 
 /**
- * The control-center header (Nir sections 1–3). One card, dense one-line rows. Active rows
+ * The control-center header. One card, dense one-line rows. Active rows
  * (count > 0) are ranked by tone severity (alert → await → info → idle), with the caller's
  * business order kept as the tiebreaker within a tone, then split into two tiers in the card:
  *   Action — alert + await rows: what needs us today, at full weight, on top.
@@ -215,7 +215,7 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
  * count === null (cannot be measured — e.g. no payment has a due date) gets a neutral "—" tier;
  * it is never silently converted to 0 and it prevents a false all-clear (CLAUDE.md:37). Rows are
  * real <Link>s, so keyboard focus,
- * middle-click and "open in new tab" all work (Nir §2: the dashboard is also a hub).
+ * middle-click and "open in new tab" all work because the dashboard is also a hub.
  *
  * The header count + ₪ sum reflect the ACTION tier only (audit round 2) — the honest "needs
  * action today" figure; the לידיעה rows keep their own per-row amounts and are not summed in.

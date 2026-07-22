@@ -57,7 +57,7 @@ export default function Reports() {
       'סוג': EXCEPTION_TYPE[e.type], 'תיאור': e.title, 'ספק': e.supplier?.name ?? '',
     }))), 'חריגים פתוחים');
     // This file lands in an accountant's inbox, and an accountant serves several businesses.
-    // The name has to say whose report it is — it read `gamos-report-…` for every tenant.
+    // The name has to say whose report it is; a fixed tenant name would break multi-tenancy.
     // Strip only what filesystems object to; Hebrew names are fine and are the whole point.
     const slug = (org?.name ?? '').replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
     XLSX.writeFile(wb, `${slug || 'supplyflow'}-report-${month}.xlsx`);

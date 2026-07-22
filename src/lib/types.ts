@@ -128,7 +128,8 @@ export interface PriceHistory { id: string; supplier_product_id: string; price: 
 export type RequestStatus = 'draft' | 'split' | 'cancelled';
 export interface PurchaseRequest {
   id: string; org_id: string; number: number; status: RequestStatus;
-  notes: string | null; created_by: string | null; created_at: string;
+  notes: string | null; expected_date: string | null; editor_step: 1 | 2;
+  created_by: string | null; created_at: string; updated_at: string;
 }
 export interface PurchaseRequestItem {
   id: string; request_id: string; product_id: string; qty: number;
@@ -224,10 +225,12 @@ export interface ExceptionRow {
   supplier?: Supplier;
 }
 
+export type DocumentKind = 'invoice' | 'delivery_note' | 'credit' | 'quote' | 'payment_confirmation' | 'other';
 export interface DocumentRow {
   id: string; org_id: string; entity_type: string;
   entity_id: string | null; // null only while entity_type='inbox' — captured, not yet filed (0014)
   storage_path: string; file_name: string; mime_type: string | null;
+  document_kind: DocumentKind; supplier_id: string | null; document_date: string | null;
   uploaded_by: string | null; created_at: string;
   deleted_at: string | null; deleted_by: string | null; // 0010 — soft delete; the stored file is kept
 }

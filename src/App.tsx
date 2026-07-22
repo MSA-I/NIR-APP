@@ -35,7 +35,7 @@ const Bank = lazy(() => import('./pages/Bank'));
 const Exceptions = lazy(() => import('./pages/Exceptions'));
 const Reports = lazy(() => import('./pages/Reports'));
 const Expenses = lazy(() => import('./pages/Expenses'));
-const DocumentsInbox = lazy(() => import('./pages/DocumentsInbox'));
+const DocumentsGallery = lazy(() => import('./pages/DocumentsInbox'));
 const AuditLogPage = lazy(() => import('./pages/AuditLog'));
 const Settings = lazy(() => import('./pages/Settings'));
 const SupplierPrices = lazy(() => import('./pages/SupplierPrices'));
@@ -144,7 +144,8 @@ export default function App() {
         <Route path="/invoices" element={<Guard roles={READERS}><InvoicesList /></Guard>} />
         <Route path="/invoices/new" element={<Guard roles={STAFF}><InvoiceNew /></Guard>} />
         <Route path="/invoices/:id" element={<Guard roles={READERS}><InvoiceDetail /></Guard>} />
-        <Route path="/inbox" element={<Guard roles={STAFF}><DocumentsInbox /></Guard>} />
+        <Route path="/documents" element={<Guard roles={READERS}><DocumentsGallery /></Guard>} />
+        <Route path="/inbox" element={<Navigate to="/documents?filing=unfiled" replace />} />
 
         <Route path="/credits" element={<Guard roles={READERS}><Credits /></Guard>} />
         <Route path="/payment-requests" element={<Guard roles={FINANCE}><PaymentRequests /></Guard>} />

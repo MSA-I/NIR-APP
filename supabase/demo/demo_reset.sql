@@ -18,7 +18,7 @@ begin
   select name into v_name from organizations where id = v_org;
 
   -- Safety: never let this file delete something that is not the demo tenant.
-  if v_name is not null and v_name <> 'אולמי גאמוס' then
+  if v_name is not null and v_name <> 'עסק לדוגמה' then
     raise exception 'Organization % is named "%" — that is not the demo tenant. Refusing to delete.', v_org, v_name;
   end if;
 

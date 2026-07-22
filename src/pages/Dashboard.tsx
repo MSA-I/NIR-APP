@@ -496,7 +496,7 @@ export default function Dashboard() {
     const topBalances = supBal.sort((a, b) => b.open_balance - a.open_balance).slice(0, 6)
       .map((b) => ({ id: b.supplier_id, name: suppliers.get(b.supplier_id) ?? '—', balance: b.open_balance }));
 
-    // ── "דורש טיפול היום", ordered by business importance (Nir §3).
+    // ── "דורש טיפול היום", ordered by business importance.
     // Tones use section 6's semantic vocabulary: await=ממתין · alert=דחוף · info=מידע · idle=ניטרלי.
     const attention: AttentionItem[] = [
       { key: 'inv-approval', label: 'חשבוניות הממתינות לאישור', count: invoicesPendingApproval, tone: 'await', to: '/invoices?review=pending_approval', clearLabel: 'אין חשבוניות לאישור' },
@@ -555,7 +555,7 @@ export default function Dashboard() {
   return (
     <div className="dashboard-depth space-y-5">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <h1 className="page-title min-w-0">דשבורד ניהולי</h1>
+        <h1 className="page-title min-w-0">מרכז הבקרה</h1>
         <div className="flex items-center gap-2 text-xs text-ink-muted">
           <span aria-live="polite" aria-atomic="true">
             {data?.fetchedAt && (
@@ -565,7 +565,7 @@ export default function Dashboard() {
             )}
           </span>
           <button className="btn-ghost min-h-11 min-w-11 p-2!" onClick={() => void refetch()} disabled={fetching}
-            aria-label="רענון נתוני הדשבורד" title="רענון">
+            aria-label="רענון נתוני מרכז הבקרה" title="רענון">
             <RotateCw size={15} className={fetching ? 'animate-spin' : ''} />
           </button>
         </div>

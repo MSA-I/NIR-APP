@@ -18,15 +18,15 @@ VITE_SUPABASE_URL=https://rkftlbctohswhbbiaqin.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon key>
 ```
 
-## משתמשי דמו — קיימים רק לאחר טעינת חבילת הדמו (סיסמה לכולם: `Gamos2026!`)
+## משתמשי דמו — קיימים רק לאחר טעינת חבילת הדמו (סיסמה לכולם: `SupplyFlowDemo2026!`)
 
 | אימייל | תפקיד | מסך בית |
 |---|---|---|
-| `owner@gamos.demo` | בעלים / הנהלה | דשבורד |
-| `nir@gamos.demo` | ניר — מנהל מטבח (מובייל) | קבלת סחורה |
-| `office@gamos.demo` | מזכירות | דשבורד |
-| `payer@gamos.demo` | מבצע העברות | תשלומים לביצוע |
-| `accountant@gamos.demo` | רו״ח (קריאה בלבד) | דוח חודשי |
+| `owner@demo.supplyflow.local` | בעלים / הנהלה | מרכז הבקרה |
+| `kitchen@demo.supplyflow.local` | צוות תפעול (מובייל) | קבלת סחורה |
+| `office@demo.supplyflow.local` | מזכירות | מרכז הבקרה |
+| `payer@demo.supplyflow.local` | מבצע העברות | תשלומים לביצוע |
+| `accountant@demo.supplyflow.local` | רו״ח (קריאה בלבד) | דוח חודשי |
 | `meshek@supplier.demo` | סוכן ספק — משק ירוק (מחירון בלבד) | המחירון שלי |
 
 יצירת סוכן ספק נוסף: `scripts\create-supplier-user.ps1` (ראה הערות בסקריפט).
@@ -37,7 +37,7 @@ VITE_SUPABASE_ANON_KEY=<anon key>
 - `supabase/migrations/0002_payer_execution.sql` — הרשאות ביצוע העברות + RPC לעדכון סטטוס תשלום.
 - `supabase/migrations/0003_kitchen_balance_read.sql` — views של יתרות עם סינון ארגון.
 - `supabase/seed.sql` — seed ניטרלי לדייר חדש: שורת ארגון + קטגוריות התחלתיות בלבד.
-- `supabase/demo/` — חבילת הדמו כדייר נפרד ("אולמי גאמוס"): 15 ספקים, 46 מוצרים וכל
+- `supabase/demo/` — חבילת הדמו כדייר נפרד ("עסק לדוגמה"): 15 ספקים, 46 מוצרים וכל
   תרחישי הקצה הפיננסיים. נטענת לפי דרישה, ואינה חלק מהתקנה אצל לקוח.
 
 הרצת SQL מול הפרויקט (Management API):

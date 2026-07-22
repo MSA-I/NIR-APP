@@ -5,7 +5,7 @@
 -- a new customer opening the app should see their own empty system, not someone else's.
 --
 -- The demo data that used to live in this file (15 suppliers, 46 products and the seeded
--- financial edge cases for "אולמי גאמוס") moved to supabase/demo/demo_seed.sql. It is a
+-- financial edge cases for the former single-tenant demo) moved to supabase/demo/demo_seed.sql. It is a
 -- separate tenant, loaded on demand, and never part of a customer install.
 --
 -- ===== When you actually need this file =====

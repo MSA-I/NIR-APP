@@ -56,7 +56,7 @@ export const RECEIPT_LINE_STATUS: Record<string, StatusMeta> = {
 };
 
 export const INVOICE_REVIEW_STATUS: Record<string, StatusMeta> = {
-  received: m('התקבלה', 'await'),        // §5: an untouched received invoice IS "waiting" — Nir's dashboard item
+  received: m('התקבלה', 'await'),        // an untouched received invoice is waiting for review
   in_review: m('בבדיקה', 'await'),       // ממתינה להשלמת בדיקה
   pending_approval: m('ממתינה לאישור', 'await'),
   approved: m('מאושרת', 'done'),
@@ -123,7 +123,7 @@ export const EXCEPTION_TYPE: Record<string, string> = {
 };
 
 export const EXCEPTION_STATUS: Record<string, StatusMeta> = {
-  open: m('פתוח', 'alert'),              // Nir's "אדום = חריגה", literally
+  open: m('פתוח', 'alert'),              // an open exception is an active deviation
   in_progress: m('בטיפול', 'await'),
   resolved: m('טופל', 'done'),
   dismissed: m('נדחה', 'idle'),

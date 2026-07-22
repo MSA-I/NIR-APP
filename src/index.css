@@ -66,7 +66,7 @@
   --color-star-hover: var(--color-amber-300);
 
   /* ---- Section 6: one color language ----
-     Four meanings (Nir): done=הושלם/תקין · await=ממתין לטיפול · alert=חריגה/דחוף · info=מידע.
+     Four meanings: done=הושלם/תקין · await=ממתין לטיפול · alert=חריגה/דחוף · info=מידע.
      idle is the *absence* of a claim (neutral), not a fifth meaning — see plan פ-1.
      Each meaning exposes the surfaces the code actually uses:
        wash + line     → alert-box background + border  (.note-*)
@@ -243,7 +243,7 @@ body {
 /* number cells keep latin digits aligned nicely inside RTL layout */
 .num { direction: ltr; unicode-bidi: embed; text-align: end; font-variant-numeric: tabular-nums; font-family: var(--font-num); }
 
-/* section 11 — a calm 150ms fade+rise on screen change. Nir asked for gentle transitions;
+/* A calm 150ms fade+rise on screen change; product transitions stay restrained,
    CLAUDE.md forbids excessive ones, so this is deliberately small and honours reduced-motion.
    Not a color concern — kept clear of section 6's @theme/badge work. */
 @keyframes page-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }

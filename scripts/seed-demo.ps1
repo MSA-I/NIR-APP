@@ -5,7 +5,7 @@
 # holds real customers.
 #
 # Prerequisites, once per project:
-#   .\scripts\create-users.ps1          # creates the demo auth users (owner@gamos.demo etc.)
+#   .\scripts\create-users.ps1          # creates the neutral demo auth users
 #
 # Usage:
 #   $env:SUPABASE_ACCESS_TOKEN = "sbp_..."

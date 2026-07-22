@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toHebrewError } from "../lib/errors";
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useParamState } from '../lib/useParamState';
-import { Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle, Pencil, Copy } from 'lucide-react';
+import { Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle, Pencil, Copy, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -11,11 +11,21 @@ import { PO_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, todayISO } from '../lib/format';
 import { logAction } from '../lib/audit';
 import { sendOrderWhatsApp, orderWhatsAppLink } from '../lib/share';
+import { cancelOrderDraft } from '../lib/orderDrafts';
 import type { PurchaseOrder, PurchaseOrderItem, PoStatus } from '../lib/types';
 
 type OrderRow = PurchaseOrder & {
   supplier: { name: string; phone: string | null; whatsapp: string | null };
   items: { qty: number; unit_price: number; product: { name: string; unit: string } }[];
+};
+
+type DraftListRow = {
+  id: string;
+  number: number;
+  updated_at: string;
+  notes: string | null;
+  editor_step: number;
+  items: { qty: number; unit_price: number | null; product: { name: string } }[];
 };
 
 export function OrdersList() {
@@ -24,23 +34,32 @@ export function OrdersList() {
   const toast = useToast();
   const [statusFilter, setStatusFilter] = useParamState('status', 'open');
   const [cancelTarget, setCancelTarget] = useState<OrderRow | null>(null);
+  const [draftCancelTarget, setDraftCancelTarget] = useState<DraftListRow | null>(null);
   const [busy, setBusy] = useState(false);
+  const canWrite = !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
 
-  const { data, loading, error, refetch } = useQuery(async () =>
-    unwrap(await supabase.from('purchase_orders')
-      .select('*, supplier:suppliers(name, phone, whatsapp), items:purchase_order_items(qty, unit_price, product:products(name, unit))')
-      .order('created_at', { ascending: false })) as Promise<OrderRow[]>);
+  const { data, loading, error, refetch } = useQuery(async () => {
+    const [orders, drafts] = await Promise.all([
+      supabase.from('purchase_orders')
+        .select('*, supplier:suppliers(name, phone, whatsapp), items:purchase_order_items(qty, unit_price, product:products(name, unit))')
+        .order('created_at', { ascending: false }),
+      canWrite
+        ? supabase.from('purchase_requests')
+          .select('id, number, updated_at, notes, editor_step, items:purchase_request_items(qty, unit_price, product:products(name))')
+          .eq('status', 'draft').eq('created_by', profile!.id).order('updated_at', { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    return { orders: unwrap(orders) as OrderRow[], drafts: unwrap(drafts) as DraftListRow[] };
+  }, [profile?.id]);
 
   const rows = useMemo(() => {
-    const all = data ?? [];
+    const all = data?.orders ?? [];
     if (statusFilter === 'all') return all;
     if (statusFilter === 'open') return all.filter((o) => !['received', 'cancelled'].includes(o.status));
     return all.filter((o) => o.status === statusFilter);
   }, [data, statusFilter]);
 
   const orderTotal = (o: OrderRow) => o.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
-
-  const canWrite = !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
 
   // Mirrors OrderDetail's cancel flow: status → cancelled, reason recorded in audit_logs.
   async function cancelOrder(reason?: string) {
@@ -61,6 +80,25 @@ export function OrdersList() {
     if (res.statusChanged) { toast('הסטטוס עודכן'); void refetch(); }
   }
 
+  async function cancelDraft(reason?: string) {
+    if (!draftCancelTarget) return;
+    setBusy(true);
+    try {
+      await cancelOrderDraft(draftCancelTarget.id, reason ?? 'ביטול טיוטה');
+      toast('הטיוטה בוטלה');
+      setDraftCancelTarget(null);
+      void refetch();
+    } catch (failure) {
+      toast(toHebrewError(failure), 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const draftTotal = (draft: DraftListRow) => draft.items.length && draft.items.every((item) => item.unit_price != null)
+    ? draft.items.reduce((sum, item) => sum + item.qty * item.unit_price!, 0)
+    : null;
+
   const columns: Column<OrderRow>[] = [
     { key: 'num', header: 'מס׳', priority: 3, sortValue: (r) => r.number, render: (r) => <span className="font-medium">#{r.number}</span> },
     { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
@@ -76,7 +114,36 @@ export function OrdersList() {
 
   return (
     <div className="space-y-4">
-      <h1 className="page-title">הזמנות רכש</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="page-title">הזמנות רכש</h1>
+        {canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={15} /> טיוטה חדשה</button>}
+      </div>
+
+      {canWrite && (
+        <section aria-labelledby="my-drafts-title" className="border-y border-line-strong bg-surface">
+          <div className="flex items-center justify-between gap-2 border-b border-line-soft px-3 py-3 sm:px-4">
+            <div><h2 id="my-drafts-title" className="section-title">הטיוטות שלי</h2><p className="mt-0.5 text-xs text-ink-muted">המשך בדיוק מהמקום שבו הפסקת</p></div>
+            <span className="badge badge-idle num">{data?.drafts.length ?? 0}</span>
+          </div>
+          {data?.drafts.length ? (
+            <div className="divide-y divide-line-soft">
+              {data.drafts.map((draft) => (
+                <div key={draft.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-3 sm:px-4">
+                  <div className="min-w-0">
+                    <div className="font-medium text-ink-body">טיוטה #{draft.number}</div>
+                    <div className="text-xs text-ink-muted">עודכנה {fmtDateTime(draft.updated_at)} · <span className="num">{draft.items.length}</span> מוצרים · {fmtMoneyExact(draftTotal(draft))}</div>
+                  </div>
+                  <div className="ms-auto flex gap-2">
+                    <button type="button" className="btn-secondary" onClick={() => navigate(`/orders/new?draft=${draft.id}`)}>המשך עריכה</button>
+                    <button type="button" className="btn-ghost text-alert-solid" onClick={() => setDraftCancelTarget(draft)}>ביטול</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <div className="px-4 py-6 text-sm text-ink-muted">אין טיוטות פעילות.</div>}
+        </section>
+      )}
+
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || String(r.number).includes(q)}
         onRowClick={(r) => navigate(`/orders/${r.id}`)}
@@ -111,6 +178,10 @@ export function OrdersList() {
         onConfirm={(reason) => void cancelOrder(reason)}
         title="ביטול הזמנה" message="האם לבטל את ההזמנה? הפעולה תתועד ביומן הביקורת."
         danger requireReason busy={busy} />
+      <ConfirmDialog open={!!draftCancelTarget} onClose={() => setDraftCancelTarget(null)}
+        onConfirm={(reason) => void cancelDraft(reason)}
+        title="ביטול טיוטה" message="הטיוטה תבוטל ולא תופיע עוד להמשך. הפעולה תתועד ביומן הביקורת."
+        confirmLabel="ביטול הטיוטה" danger requireReason busy={busy} />
     </div>
   );
 }

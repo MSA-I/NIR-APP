@@ -1,4 +1,4 @@
--- SupplyFlow initial schema — procurement-to-payment platform for GAMOS
+-- SupplyFlow initial schema — procurement-to-payment platform
 -- Applied via Supabase Management API. All monetary values in ILS (₪), numeric(12,2).
 
 -- ===== Enums =====

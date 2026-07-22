@@ -12,7 +12,7 @@ import { INBOX_CHANGED_EVENT } from '../components/QuickCapture';
  * Returns null until a count has loaded (the pill renders only for a known count > 0 —
  * never a fabricated 0, per CLAUDE.md); once known, the previous value is kept during a
  * refetch so the sidebar doesn't flicker. `enabled=false` skips the query entirely for
- * roles that never see the nav item (payer/supplier/accountant).
+ * roles that cannot act on unfiled documents (payer/supplier/accountant).
  */
 export function useInboxCount(enabled = true): number | null {
   const { pathname } = useLocation();

@@ -12,6 +12,18 @@
  */
 
 const PATTERNS: [RegExp, string][] = [
+  [/draft_unknown/i,
+    'הטיוטה אינה זמינה עוד. ייתכן שבוטלה או אושרה בחלון אחר.'],
+  [/draft_invalid_supplier_selection|draft_supplier_unavailable/i,
+    'אחד הספקים שנבחרו אינו זמין עוד. יש לבחור ספק מחדש.'],
+  [/draft_price_changed/i,
+    'המחירים השתנו. הסיכום רוענן ויש לעבור עליו ולאשר שוב.'],
+  [/document_already_filed/i,
+    'המסמך כבר שויך ליעד עסקי.'],
+  [/document_target_unknown/i,
+    'יעד התיוק אינו זמין עוד. יש לבחור יעד אחר.'],
+  [/reason_required/i,
+    'יש להזין סיבה לביצוע הפעולה.'],
   [/row-level security|permission denied|insufficient privilege/i,
     'אין לך הרשאה לבצע את הפעולה הזו.'],
   [/duplicate key value|already exists/i,

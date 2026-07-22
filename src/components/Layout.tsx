@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, Inbox } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, Inbox } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -7,26 +7,25 @@ import { APP_NAME } from '../lib/branding';
 import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
 import Fab from './Fab';
 import NotificationBell from './NotificationBell';
+import { useToast } from './ui';
+import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
 import type { Role } from '../lib/types';
 
 interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[] }
 
-// Section 8 regroup — Nir's three working groups (רכש / כספים / בקרה), המשך פיתוח.txt:116-138.
+// Navigation follows the three product work groups: רכש / כספים / בקרה.
 //
-// Two deliberate departures from a literal reading, both flagged to the user:
-//  - Dashboard stays pinned in the headerless section at the top, not folded into בקרה where
-//    Nir listed it. It is the landing route for owner/office (AuthContext homeFor), and
-//    sections 1-3 make it THE control centre — burying it three groups down would undercut
-//    exactly the screen those sections are trying to elevate.
-//  - Items Nir did not place (מחירונים, דרישות תשלום, התאמות בנק, יומן
-//    ביקורת, הגדרות, and the single-role /pay, /my-prices, /admin) are slotted by the
+// New order is pinned first because it is the most frequent workflow. The control centre
+// remains the owner/office landing route, but lives in its natural control group.
+// Remaining items (מחירונים, דרישות תשלום, התאמות בנק, יומן ביקורת,
+//    הגדרות, and the single-role /pay, /my-prices, /admin) are slotted by the
 //    obvious procurement/finance/control reading. None of it invents business meaning.
 //
 const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: '',
     items: [
-      { to: '/dashboard', label: 'דשבורד', icon: LayoutDashboard, roles: ['owner', 'office'] },
+      { to: '/orders/new', label: 'הזמנה חדשה', icon: ShoppingCart, roles: ['owner', 'office', 'kitchen'] },
     ],
   },
   {
@@ -45,7 +44,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     items: [
       { to: '/invoices', label: 'חשבוניות', icon: FileText, roles: ['owner', 'office', 'kitchen', 'accountant'] },
       { to: '/credits', label: 'זיכויים', icon: RotateCcw, roles: ['owner', 'office', 'kitchen', 'accountant'] },
-      { to: '/inbox', label: 'מסמכים', icon: Inbox, roles: ['owner', 'office', 'kitchen'] },
+      { to: '/documents', label: 'גלריית מסמכים', icon: Inbox, roles: ['owner', 'office', 'kitchen', 'accountant'] },
       { to: '/payment-requests', label: 'דרישות תשלום', icon: Send, roles: ['owner', 'office'] },
       { to: '/payments', label: 'תשלומים', icon: CreditCard, roles: ['owner', 'office', 'accountant'] },
       { to: '/bank', label: 'התאמות בנק', icon: Landmark, roles: ['owner', 'office', 'accountant'] },
@@ -55,6 +54,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: 'בקרה',
     items: [
+      { to: '/dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, roles: ['owner', 'office'] },
       { to: '/alerts', label: 'התראות', icon: Bell, roles: ['owner', 'office'] },
       { to: '/exceptions', label: 'חריגים', icon: AlertTriangle, roles: ['owner', 'office', 'kitchen', 'accountant'] },
       { to: '/expenses', label: 'ריכוז הוצאות', icon: PieChart, roles: ['owner', 'office', 'accountant'] },
@@ -68,6 +68,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
 export default function Layout() {
   const { profile, org, roleLabels, isPlatformAdmin, signOut } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -76,9 +77,9 @@ export default function Layout() {
   const role = profile?.role;
   // Section 5: payer/supplier get no search box — their only routes are dead ends for it.
   const canSearch = canGlobalSearch(role);
-  // Documents-inbox pill (0014): counted only for the roles that see the /inbox item; the
-  // pill renders solely for a known count > 0 — null (loading) and 0 both render nothing,
-  // so it never fabricates an all-clear or a workload (CLAUDE.md).
+  // Unfiled-documents pill (0014): counted only for staff who can act on that queue. The
+  // accountant can read the gallery but does not receive an action badge. A known count > 0
+  // is required, so null (loading) and 0 never fabricate an all-clear or workload.
   const inboxCount = useInboxCount(!!role && (['owner', 'office', 'kitchen'] as Role[]).includes(role));
   // Layout also renders during the initial load, before `org` arrives. Falling back to
   // the product name keeps the header honest — it is never another tenant's name.
@@ -144,6 +145,15 @@ export default function Layout() {
   }
 
   async function handleSignOut() {
+    const detail: OrderDraftFlushDetail = { pending: [] };
+    window.dispatchEvent(new CustomEvent<OrderDraftFlushDetail>(ORDER_DRAFT_FLUSH_EVENT, { detail }));
+    if (detail.pending.length) {
+      const saved = await Promise.all(detail.pending);
+      if (saved.some((result) => !result)) {
+        toast('לא ניתן להתנתק לפני שמירת טיוטת ההזמנה. יש לנסות שוב.', 'error');
+        return;
+      }
+    }
     await signOut();
     navigate('/login');
   }
@@ -170,7 +180,7 @@ export default function Layout() {
                   {item.label}
                   {/* TaskLine's count-pill anatomy at the item's logical end; both the desktop
                       sidebar and the mobile drawer render this same `sidebar` tree. */}
-                  {item.to === '/inbox' && inboxCount != null && inboxCount > 0 && (
+                  {item.to === '/documents' && inboxCount != null && inboxCount > 0 && (
                     <span className="badge num bg-action-soft text-action-on-soft ms-auto">{inboxCount}</span>
                   )}
                 </NavLink>

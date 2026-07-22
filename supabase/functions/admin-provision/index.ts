@@ -52,7 +52,7 @@ interface ProvisionResult {
 
 /**
  * A single neutral bucket, NOT the food/beverage/cleaning set from supabase/seed.sql — those
- * describe GAMOS's event-hall business and would be an invented assumption about what a new
+ * describe a legacy tenant's business and would be an invented assumption about what a new
  * customer buys (docs/OPEN-DECISIONS.md:3). `products.category_id` is nullable, so a tenant
  * can also run with none. The operator can pass a real list in `categories`.
  */

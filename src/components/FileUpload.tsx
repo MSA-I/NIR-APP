@@ -1,15 +1,41 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Camera, FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useToast, Skeleton, ConfirmDialog } from './ui';
 import { ok, toHebrewError } from '../lib/errors';
 import { useQuery, unwrap } from '../lib/useQuery';
-import type { DocumentRow } from '../lib/types';
+import type { DocumentKind, DocumentRow } from '../lib/types';
 import { fmtDateTime } from '../lib/format';
 
 const MAX_DIM = 1600;      // enough to read an invoice; a raw phone photo is ~4x this
 const JPEG_QUALITY = 0.8;
+
+export const DOCUMENT_KIND_OPTIONS: { value: DocumentKind; label: string }[] = [
+  { value: 'invoice', label: 'חשבונית' },
+  { value: 'delivery_note', label: 'תעודת משלוח' },
+  { value: 'credit', label: 'זיכוי' },
+  { value: 'quote', label: 'הצעת מחיר' },
+  { value: 'payment_confirmation', label: 'אישור תשלום' },
+  { value: 'other', label: 'מסמך נוסף' },
+];
+
+export function documentKindLabel(kind: DocumentKind) {
+  return DOCUMENT_KIND_OPTIONS.find((option) => option.value === kind)?.label ?? 'מסמך נוסף';
+}
+
+export interface DocumentMetadata {
+  documentKind?: DocumentKind;
+  supplierId?: string | null;
+  documentDate?: string | null;
+}
+
+function defaultDocumentKind(entityType: string): DocumentKind {
+  if (entityType === 'invoice') return 'invoice';
+  if (entityType === 'goods_receipt') return 'delivery_note';
+  if (entityType === 'payment') return 'payment_confirmation';
+  return 'other';
+}
 
 /**
  * Shrinks a phone photo (~3.5MB) to ~350KB before upload. Invoices are read, not zoomed,
@@ -46,7 +72,7 @@ async function compressImage(file: File): Promise<File> {
  * re-filed from /inbox. The stored object never moves on re-filing — the bucket policy
  * reads only the leading org segment.
  */
-export async function uploadDocument(orgId: string, entityType: string, entityId: string | null, file: File) {
+export async function uploadDocument(orgId: string, entityType: string, entityId: string | null, file: File, metadata: DocumentMetadata = {}) {
   const upload = await compressImage(file);
   const safeName = upload.name.replace(/[^\w.\-]+/g, '_');
   // org_id must lead the path -- the bucket's RLS policy reads it to enforce tenant isolation.
@@ -59,8 +85,44 @@ export async function uploadDocument(orgId: string, entityType: string, entityId
   const ins = await supabase.from('documents').insert({
     org_id: orgId, entity_type: entityType, entity_id: entityId,
     storage_path: path, file_name: file.name, mime_type: upload.type, uploaded_by: user.user?.id,
+    document_kind: metadata.documentKind ?? defaultDocumentKind(entityType),
+    supplier_id: metadata.supplierId ?? null,
+    document_date: metadata.documentDate ?? null,
   });
-  if (ins.error) throw new Error(ins.error.message);
+  if (ins.error) {
+    // The row never existed, so this cleanup can only target the object created above.
+    // Preserve the insert error: a cleanup failure is secondary and must not hide the cause.
+    try {
+      const cleanup = await supabase.storage.from('documents').remove([up.data.path]);
+      if (cleanup.error) console.error('[supplyflow] failed to clean up unregistered document', cleanup.error.message);
+    } catch (cleanupError) {
+      console.error('[supplyflow] failed to clean up unregistered document', cleanupError);
+    }
+    throw new Error(ins.error.message);
+  }
+}
+
+async function entityMetadata(entityType: string, entityId: string, documentKind: DocumentKind): Promise<DocumentMetadata> {
+  if (entityType === 'invoice') {
+    const row = unwrap(await supabase.from('invoices').select('supplier_id, invoice_date').eq('id', entityId).single()) as {
+      supplier_id: string; invoice_date: string;
+    };
+    return { documentKind, supplierId: row.supplier_id, documentDate: row.invoice_date };
+  }
+  if (entityType === 'goods_receipt') {
+    const row = unwrap(await supabase.from('goods_receipts')
+      .select('received_at, order:purchase_orders(supplier_id)').eq('id', entityId).single()) as {
+      received_at: string | null; order: { supplier_id: string } | null;
+    };
+    return { documentKind, supplierId: row.order?.supplier_id ?? null, documentDate: row.received_at?.slice(0, 10) ?? null };
+  }
+  if (entityType === 'payment') {
+    const row = unwrap(await supabase.from('payments').select('supplier_id, paid_date').eq('id', entityId).single()) as {
+      supplier_id: string; paid_date: string;
+    };
+    return { documentKind, supplierId: row.supplier_id, documentDate: row.paid_date };
+  }
+  return { documentKind };
 }
 
 export function DocumentList({ entityType, entityId, canUpload = true, capture }: {
@@ -72,6 +134,9 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<DocumentRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [documentKind, setDocumentKind] = useState<DocumentKind>(() => defaultDocumentKind(entityType));
+
+  useEffect(() => setDocumentKind(defaultDocumentKind(entityType)), [entityType]);
 
   const { data: docs, loading, refetch } = useQuery<DocumentRow[]>(async () =>
     unwrap(await supabase.from('documents').select('*').eq('entity_type', entityType).eq('entity_id', entityId)
@@ -82,11 +147,12 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
     if (!files?.length || !profile) return;
     setBusy(true);
     try {
-      for (const f of Array.from(files)) await uploadDocument(profile.org_id, entityType, entityId, f);
+      const metadata = await entityMetadata(entityType, entityId, documentKind);
+      for (const f of Array.from(files)) await uploadDocument(profile.org_id, entityType, entityId, f, metadata);
       toast('הקובץ הועלה בהצלחה');
       await refetch();
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'שגיאה בהעלאה', 'error');
+      toast(toHebrewError(e), 'error');
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -96,7 +162,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   async function open(doc: DocumentRow) {
     const { data, error } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300);
     if (error || !data) { toast('שגיאה בפתיחת הקובץ', 'error'); return; }
-    window.open(data.signedUrl, '_blank');
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
   }
 
   // Soft delete (migration 0010). Was a one-click hard delete of both the row and the stored
@@ -126,14 +192,25 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <span className="text-sm font-medium text-ink-soft flex items-center gap-1.5"><Paperclip size={15} /> מסמכים מצורפים</span>
-        {canUpload && (
+        {canUpload && <div className="flex flex-wrap items-center gap-2">
+          {entityType === 'goods_receipt' && (
+            <label className="flex items-center gap-1.5 text-xs text-ink-soft">
+              סוג
+              <select className="input w-auto! py-1.5!" value={documentKind}
+                onChange={(event) => setDocumentKind(event.target.value as DocumentKind)}>
+                <option value="delivery_note">תעודת משלוח</option>
+                <option value="invoice">חשבונית</option>
+                <option value="other">מסמך נוסף</option>
+              </select>
+            </label>
+          )}
           <button className="btn-secondary py-1.5!" disabled={busy} onClick={() => inputRef.current?.click()}>
-            {busy ? <Loader2 size={15} className="animate-spin" /> : capture ? <Camera size={15} /> : <Paperclip size={15} />}
-            {capture ? 'צילום / העלאה' : 'העלאת קובץ'}
+              {busy ? <Loader2 size={15} className="animate-spin" /> : capture ? <Camera size={15} /> : <Paperclip size={15} />}
+              {capture ? 'צילום / העלאה' : 'העלאת קובץ'}
           </button>
-        )}
+        </div>}
         <input ref={inputRef} type="file" hidden multiple accept="image/*,application/pdf"
           {...(capture ? { capture: 'environment' as const } : {})}
           onChange={(e) => void onPick(e.target.files)} />
@@ -157,6 +234,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
             <li key={d.id} className="flex items-center gap-2 px-3 py-2 text-sm">
               <FileText size={15} className="text-ink-faint shrink-0" />
               <button className="link truncate" onClick={() => void open(d)}>{d.file_name}</button>
+              <span className="hidden text-xs text-ink-muted sm:inline">{documentKindLabel(d.document_kind)}</span>
               <span className="text-xs text-ink-muted ms-auto shrink-0">{fmtDateTime(d.created_at)}</span>
               {canDelete && (
                 <button className="btn-ghost p-1.5! min-w-11 min-h-11 text-ink-faint hover:text-alert-solid" onClick={() => setPending(d)} aria-label="מחיקה">
