@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, createContext, useContext, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, createContext, useContext, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, Search, X, Loader2, Inbox, Bell, Check } from 'lucide-react';
 import type { StatusMeta, Tone } from '../lib/status';
@@ -18,8 +18,9 @@ export function StatusBadge({ meta }: { meta: StatusMeta | undefined }) {
 // screen jumps when data lands.
 export function PageLoader() {
   return (
-    <div className="flex items-center justify-center py-24 text-ink-faint">
-      <Loader2 className="animate-spin" size={28} />
+    <div role="status" aria-live="polite" className="flex items-center justify-center py-24 text-ink-faint">
+      <Loader2 className="animate-spin" size={28} aria-hidden="true" />
+      <span className="sr-only">טוען</span>
     </div>
   );
 }
@@ -132,16 +133,16 @@ export function EmptyState({ title, subtitle }: { title: string; subtitle?: stri
 // One box for the notice colours. `.note-*` lives in index.css so the whole system's
 // success/warning/info/error boxes recolour from a single place. The four semantic tones plus
 // `idle` for a neutral notice — a statement with no claim (audit round 2); `violet` is gone.
-export function Note({ tone, children, className = '' }: {
-  tone: 'done' | 'await' | 'alert' | 'info' | 'idle'; children: ReactNode; className?: string;
+export function Note({ tone, children, className = '', role }: {
+  tone: 'done' | 'await' | 'alert' | 'info' | 'idle'; children: ReactNode; className?: string; role?: 'alert' | 'status';
 }) {
-  return <div className={`note-${tone} ${className}`}>{children}</div>;
+  return <div className={`note-${tone} ${className}`} role={role}>{children}</div>;
 }
 
 // Kept as a named wrapper: its ~30 call sites stay untouched and all get their colour
 // from Note → .note-alert. (Text is now -on-soft/-800, was rose-700 — §3.1 fix.)
 export function ErrorNote({ message }: { message: string }) {
-  return <Note tone="alert">{message}</Note>;
+  return <Note tone="alert" role="alert">{message}</Note>;
 }
 
 /* ---------- KpiCard ---------- */
@@ -310,59 +311,179 @@ export function TaskLine({ label, count, to }: { label: string; count: number; t
 }
 
 /* ---------- Modal ---------- */
-// Selector for the elements a Tab trap and initial focus should consider (audit 2026-07-21).
-const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+// One dialog stack for Modal, the mobile drawer and mobile search. A nested layer owns Escape
+// and Tab until it closes; background layers stay inert. The selector excludes hidden controls,
+// while the runtime filter also catches CSS-hidden ancestors.
+const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])';
+const dialogStack: symbol[] = [];
+let bodyLockDepth = 0;
+let previousBodyOverflow = '';
 
-export function Modal({ open, onClose, title, children, wide }: {
-  open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean;
+function focusableWithin(panel: HTMLElement): HTMLElement[] {
+  return Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((node) =>
+    !node.hidden
+    && !node.closest('[hidden], [aria-hidden="true"]')
+    && node.getClientRects().length > 0
+    && getComputedStyle(node).visibility !== 'hidden');
+}
+
+function lockBody() {
+  if (bodyLockDepth++ === 0) {
+    previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function unlockBody() {
+  bodyLockDepth = Math.max(0, bodyLockDepth - 1);
+  if (bodyLockDepth === 0) document.body.style.overflow = previousBodyOverflow;
+}
+
+export function useDialogLayer<T extends HTMLElement>({ open, onClose, busy = false, allowCloseWhileBusy = false, initialFocus }: {
+  open: boolean;
+  onClose: () => void;
+  busy?: boolean;
+  allowCloseWhileBusy?: boolean;
+  initialFocus?: (panel: T) => HTMLElement | null;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<T>(null);
   const openerRef = useRef<HTMLElement | null>(null);
-  const titleId = useId();
+  const tokenRef = useRef(Symbol('dialog'));
+  const onCloseRef = useRef(onClose);
+  const busyRef = useRef(busy);
+  const allowCloseRef = useRef(allowCloseWhileBusy);
+  const initialFocusRef = useRef(initialFocus);
+  onCloseRef.current = onClose;
+  busyRef.current = busy;
+  allowCloseRef.current = allowCloseWhileBusy;
+  initialFocusRef.current = initialFocus;
 
-  // Esc to close + a Tab focus trap (audit 2026-07-21): a keyboard user must not be able to Tab
-  // out of the dialog into the page behind the backdrop. Mirrors the dialog contract GlobalSearch
-  // already meets (role="dialog" + aria-modal + managed focus).
+  const isTop = useCallback(() => dialogStack.at(-1) === tokenRef.current, []);
+  const requestClose = useCallback(() => {
+    if (!isTop() || (busyRef.current && !allowCloseRef.current)) return false;
+    onCloseRef.current();
+    return true;
+  }, [isTop]);
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onClose(); return; }
-      if (e.key !== 'Tab') return;
-      const nodes = panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE);
-      if (!nodes || nodes.length === 0) return;
+    const token = tokenRef.current;
+    openerRef.current = document.activeElement as HTMLElement | null;
+    dialogStack.push(token);
+    lockBody();
+
+    const focusFrame = requestAnimationFrame(() => {
+      const panel = panelRef.current;
+      if (panel) (initialFocusRef.current?.(panel) ?? panel).focus();
+    });
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isTop()) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        requestClose();
+        return;
+      }
+      if (event.key !== 'Tab' || !panelRef.current) return;
+      const nodes = focusableWithin(panelRef.current);
+      if (!nodes.length) {
+        event.preventDefault();
+        panelRef.current.focus();
+        return;
+      }
       const first = nodes[0];
       const last = nodes[nodes.length - 1];
-      if (e.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) {
-        e.preventDefault(); last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault(); first.focus();
+      if (!panelRef.current.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
 
-  // Move focus into the dialog on open (the panel itself, so no destructive control is pre-armed
-  // and the screen reader announces the dialog by its title), and restore it to the opener on
-  // close (audit 2026-07-21).
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', onKeyDown);
+      const index = dialogStack.lastIndexOf(token);
+      if (index >= 0) dialogStack.splice(index, 1);
+      unlockBody();
+      const opener = openerRef.current;
+      requestAnimationFrame(() => {
+        if (opener?.isConnected && !opener.hidden && opener.getClientRects().length > 0) opener.focus();
+      });
+    };
+  }, [open, isTop, requestClose]);
+
+  return { panelRef, requestClose, isTop };
+}
+
+export function Modal({ open, onClose, title, children, wide, busy = false, allowCloseWhileBusy = false, description, statusMessage }: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+  wide?: boolean;
+  busy?: boolean;
+  allowCloseWhileBusy?: boolean;
+  description?: string;
+  statusMessage?: string;
+}) {
+  const { panelRef, requestClose, isTop } = useDialogLayer<HTMLDivElement>({ open, onClose, busy, allowCloseWhileBusy });
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+  const previousStatusRef = useRef<string | undefined | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+
   useEffect(() => {
-    if (!open) return;
-    openerRef.current = document.activeElement as HTMLElement | null;
-    panelRef.current?.focus();
-    return () => openerRef.current?.focus();
-  }, [open]);
+    if (!open) { previousStatusRef.current = null; return; }
+    const previous = previousStatusRef.current;
+    previousStatusRef.current = statusMessage;
+    if (previous !== null && statusMessage && statusMessage !== previous && isTop()) {
+      setAnnouncement(statusMessage);
+      requestAnimationFrame(() => titleRef.current?.focus());
+    }
+  }, [open, statusMessage, isTop]);
+
+  // A wizard step may remove the focused control. Recover to the dialog heading instead of
+  // leaving focus on document.body, and announce the new step when the caller supplied one.
+  useEffect(() => {
+    if (!open || !panelRef.current) return;
+    const observer = new MutationObserver(() => queueMicrotask(() => {
+      const active = document.activeElement as HTMLElement | null;
+      if (isTop() && (!active || active === document.body || !active.isConnected)) {
+        titleRef.current?.focus();
+        setAnnouncement(statusMessage ?? title);
+      }
+    }));
+    observer.observe(panelRef.current, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [open, panelRef, isTop, statusMessage, title]);
 
   if (!open) return null;
+  const closeDisabled = busy && !allowCloseWhileBusy;
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-shell/50 p-0 sm:p-4" onClick={onClose}>
-      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
-        className={`bg-surface rounded-t-2xl sm:rounded-2xl shadow-xl w-full ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'} max-h-[92vh] flex flex-col focus:outline-none`}
-        onClick={(e) => e.stopPropagation()}>
+    <div className="dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-shell/50 p-0 sm:p-4" onClick={() => requestClose()}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined} aria-busy={busy || undefined} tabIndex={-1}
+        className={`dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-xl w-full ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'} flex flex-col focus:outline-none`}
+        onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-line-soft">
-          <h3 id={titleId} className="font-semibold text-ink">{title}</h3>
-          <button className="btn-ghost p-1.5! min-w-11 min-h-11" onClick={onClose} aria-label="סגירה"><X size={18} /></button>
+          <h3 ref={titleRef} id={titleId} tabIndex={-1} className="font-semibold text-ink focus:outline-none">{title}</h3>
+          <button type="button" className="btn-ghost p-1.5! min-w-11 min-h-11" disabled={closeDisabled}
+            onClick={() => requestClose()} aria-label="סגירה"><X size={18} /></button>
         </div>
-        <div className="p-5 overflow-y-auto">{children}</div>
+        <div className="dialog-safe-body p-5 overflow-y-auto">
+          {description && <p id={descriptionId} className="text-sm text-ink-soft mb-4">{description}</p>}
+          {children}
+        </div>
+        <div aria-live="polite" className="sr-only">{announcement}</div>
       </div>
     </div>
   );
@@ -373,18 +494,18 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
   title: string; message: string; confirmLabel?: string; danger?: boolean; requireReason?: boolean; busy?: boolean;
 }) {
   const [reason, setReason] = useState('');
+  const reasonId = useId();
   useEffect(() => { if (open) setReason(''); }, [open]);
   return (
-    <Modal open={open} onClose={onClose} title={title}>
-      <p className="text-sm text-ink-soft mb-4">{message}</p>
+    <Modal open={open} onClose={onClose} title={title} description={message} busy={busy}>
       {requireReason && (
         <div className="mb-4">
-          <label className="label">סיבה (חובה — נרשם ביומן הביקורת)</label>
-          <textarea className="input" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
+          <label className="label" htmlFor={reasonId}>סיבה (חובה — נרשם ביומן הביקורת)</label>
+          <textarea id={reasonId} className="input" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
       )}
       <div className="flex gap-2 justify-end">
-        <button className="btn-secondary" onClick={onClose}>ביטול</button>
+        <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
         <button className={danger ? 'btn-danger' : 'btn-primary'} disabled={busy || (requireReason && !reason.trim())}
           onClick={() => onConfirm(requireReason ? reason.trim() : undefined)}>
           {busy ? <Loader2 size={16} className="animate-spin" /> : confirmLabel}
@@ -440,9 +561,9 @@ export interface Column<T> {
   mobileLabel?: string | null;
 }
 
-export function DataTable<T extends { id: string }>({ rows, columns, onRowClick, searchable, searchFn, pageSize = 15, emptyTitle = 'אין נתונים להצגה', emptySubtitle, toolbar, mobile = 'cards', mobileTitle, mobileTrailing, rowActions }: {
+export function DataTable<T extends { id: string }>({ rows, columns, onRowClick, searchable, searchFn, searchLabel = 'חיפוש בטבלה', pageSize = 15, emptyTitle = 'אין נתונים להצגה', emptySubtitle, toolbar, mobile = 'cards', mobileTitle, mobileTrailing, rowActions, rowLabel }: {
   rows: T[]; columns: Column<T>[]; onRowClick?: (row: T) => void;
-  searchable?: boolean; searchFn?: (row: T, q: string) => boolean;
+  searchable?: boolean; searchFn?: (row: T, q: string) => boolean; searchLabel?: string;
   pageSize?: number; emptyTitle?: string; emptySubtitle?: string; toolbar?: ReactNode;
   /** 'cards' (default) stacks rows below md; reserve 'scroll' for true matrix previews.
       Search/filter/sort/pagination are shared. */
@@ -454,6 +575,8 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
   /** Per-row ActionMenu items: a trailing non-sortable column on desktop, an end-aligned
       trigger next to the card body on mobile. Items handle their own role gating via hidden. */
   rowActions?: (row: T) => ActionMenuItem[];
+  /** Human-readable identity used in row action names, e.g. "חשבונית 123 — ספק א". */
+  rowLabel?: (row: T) => string;
 }) {
   const [q, setQ] = useState('');
   const [page, setPage] = useState(0);
@@ -485,7 +608,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
           {searchable && (
             <div className="relative flex-1 min-w-44 max-w-xs">
               <Search size={15} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint" />
-              <input className="input ps-9!" placeholder="חיפוש..." value={q} onChange={(e) => setQ(e.target.value)} />
+              <input className="input ps-9!" aria-label={searchLabel} placeholder="חיפוש..." value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
           )}
           {toolbar}
@@ -538,7 +661,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
                           <div className="flex-1 min-w-0 p-4">{body}</div>
                         )}
                         <div className="shrink-0 pe-2 pt-3">
-                          <ActionMenu items={rowActions(row)} />
+                          <ActionMenu items={rowActions(row)} label={`פעולות עבור ${rowLabel?.(row) ?? row.id}`} />
                         </div>
                       </>
                     ) : onRowClick ? (
@@ -566,7 +689,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
                     const active = sort?.key === c.key;
                     const ariaSort = !c.sortValue ? undefined : active ? (sort?.dir === 1 ? 'ascending' : 'descending') : 'none';
                     return (
-                      <th key={c.key} className="th" aria-sort={ariaSort}>
+                      <th key={c.key} scope="col" className="th" aria-sort={ariaSort}>
                         {c.sortValue ? (
                           <button type="button" className="inline-flex items-center gap-1 hover:text-ink-mid cursor-pointer"
                             onClick={() => setSort((s) => s?.key === c.key ? { key: c.key, dir: s.dir === 1 ? -1 : 1 } : { key: c.key, dir: 1 })}>
@@ -576,40 +699,33 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
                       </th>
                     );
                   })}
-                  {rowActions && <th className="th w-12"><span className="sr-only">פעולות</span></th>}
+                  {rowActions && <th scope="col" className="th w-12"><span className="sr-only">פעולות</span></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-line-soft">
                 {pageRows.map((row) => {
-                  // A clickable row is keyboard operable (audit round 2): in ~10 screens the row is
-                  // the ONLY way to open the record, but a bare onClick <tr> is mouse-only. When
-                  // onRowClick exists we make the row a button — focusable, role="button", Enter/Space
-                  // to activate (preventDefault on Space so the page doesn't scroll) — with the house
-                  // focus-visible indigo outline (inset offset so overflow-hidden can't clip it, unlike
-                  // a box-shadow ring). WCAG 2.1.1 (A).
-                  //
-                  // EXCEPT when rowActions is also present (adversarial review round): a
-                  // role="button" <tr> would then hold the menu's real <button> — a nested
-                  // interactive control, invalid ARIA. Tradeoff: with a menu the row keeps only
-                  // the mouse onClick + cursor affordance, and keyboard users reach the record
-                  // through the menu itself (its first item opens/edits the row). Tables without
-                  // rowActions keep the full row-button behavior exactly.
-                  const rowIsButton = !!onRowClick && !rowActions;
                   return (
                     <tr key={row.id}
-                      className={onRowClick ? 'row-hover cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2' : ''}
-                      role={rowIsButton ? 'button' : undefined}
-                      tabIndex={rowIsButton ? 0 : undefined}
-                      onClick={onRowClick ? () => onRowClick(row) : undefined}
-                      onKeyDown={rowIsButton ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick!(row); } } : undefined}>
-                      {columns.map((c) => <td key={c.key} className={`td ${c.className ?? ''}`}>{c.render(row)}</td>)}
+                      className={onRowClick ? 'row-hover cursor-pointer' : ''}
+                      onClick={onRowClick ? () => onRowClick(row) : undefined}>
+                      {columns.map((c, index) => (
+                        <td key={c.key} className={`td ${c.className ?? ''}`}>
+                          {index === 0 && onRowClick ? (
+                            <button type="button" className="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+                              aria-label={rowLabel ? `פתיחת ${rowLabel(row)}` : undefined}
+                              onClick={(event) => { event.stopPropagation(); onRowClick(row); }}>
+                              {c.render(row)}
+                            </button>
+                          ) : c.render(row)}
+                        </td>
+                      ))}
                       {rowActions && (
                         <td className="td w-12 py-0.5!">
                           {/* stopPropagation on click: the row still navigates on mouse click, and
                               opening the menu must not also navigate. keydown is stopped too so
                               menu keys stay self-contained even if a row handler returns later. */}
                           <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-                            <ActionMenu items={rowActions(row)} />
+                            <ActionMenu items={rowActions(row)} label={`פעולות עבור ${rowLabel?.(row) ?? row.id}`} />
                           </div>
                         </td>
                       )}

@@ -64,6 +64,9 @@ export function ActionMenu({ items, label = 'פעולות' }: { items: ActionMen
     if (top + mh > window.innerHeight - VIEWPORT_PAD && rect.top - mh - GAP >= VIEWPORT_PAD) {
       top = rect.top - mh - GAP;
     }
+    // At high zoom neither side may fit. The menu is height-clamped by CSS; this final clamp
+    // keeps the scrollable surface inside the viewport instead of losing its first/last action.
+    top = Math.min(Math.max(top, VIEWPORT_PAD), window.innerHeight - mh - VIEWPORT_PAD);
     setPos({ top, left });
   }, [open]);
 
@@ -127,7 +130,7 @@ export function ActionMenu({ items, label = 'פעולות' }: { items: ActionMen
         <div ref={menuRef} role="menu" aria-orientation="vertical" aria-label={label}
           onKeyDown={onMenuKeyDown}
           style={{ position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, visibility: pos ? 'visible' : 'hidden' }}
-          className="z-50 min-w-40 max-w-64 border border-line bg-surface py-1 shadow-menu">
+          className="z-50 min-w-40 max-w-64 max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain border border-line bg-surface py-1 shadow-menu">
           {visible.map((it) => (
             <button key={it.key} type="button" role="menuitem" tabIndex={-1}
               aria-disabled={it.disabled || undefined}

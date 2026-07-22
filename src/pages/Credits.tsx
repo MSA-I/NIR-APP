@@ -64,12 +64,14 @@ export default function Credits() {
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.notes ?? '').toLowerCase().includes(q)}
+        searchLabel="חיפוש בדרישות זיכוי"
+        rowLabel={(r) => `דרישת זיכוי מספר ${r.number} עבור ${r.supplier.name}`}
         onRowClick={(r) => setSelected(r)}
         rowActions={(r) => [
           { key: 'open', label: 'פתיחת פרטים', icon: Eye, onSelect: () => setSelected(r) },
         ]}
         toolbar={
-          <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <select className="input w-auto!" aria-label="סינון דרישות זיכוי לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="active">זיכויים פעילים</option>
             <option value="all">הכל</option>
           </select>
@@ -114,14 +116,14 @@ function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
   }
 
   return (
-    <Modal open onClose={onClose} title={`זיכוי #${credit.number} — ${credit.supplier.name}`}>
+    <Modal open onClose={onClose} title={`זיכוי #${credit.number} — ${credit.supplier.name}`} busy={busy} statusMessage={busy ? 'מעדכן את הזיכוי' : undefined}>
       <dl className="text-sm space-y-2 mb-4">
         <div className="flex justify-between"><dt className="text-ink-muted">סיבה</dt><dd>{CREDIT_REASON[credit.reason]}</dd></div>
         <div className="flex justify-between"><dt className="text-ink-muted">סכום</dt><dd className="num font-semibold">{fmtMoneyExact(credit.amount)}</dd></div>
         <div className="flex justify-between"><dt className="text-ink-muted">סטטוס</dt><dd><StatusBadge meta={CREDIT_STATUS[credit.status]} /></dd></div>
         {credit.invoice && (
           <div className="flex justify-between"><dt className="text-ink-muted">חשבונית</dt>
-            <dd><button className="link" onClick={() => onOpenInvoice(credit.invoice!.id)}>{credit.invoice.invoice_number}</button></dd></div>
+            <dd><button className="link num" onClick={() => onOpenInvoice(credit.invoice!.id)}>{credit.invoice.invoice_number}</button></dd></div>
         )}
         {credit.notes && <div className="bg-surface-sunken rounded-lg px-3 py-2 text-ink-soft">{credit.notes}</div>}
       </dl>

@@ -61,7 +61,7 @@ export default function PaymentRequests() {
   }
 
   const columns: Column<Row>[] = [
-    { key: 'num', header: 'מס׳', priority: 3, sortValue: (r) => r.number, render: (r) => `#${r.number}` },
+    { key: 'num', header: 'מס׳', priority: 3, className: 'num', sortValue: (r) => r.number, render: (r) => `#${r.number}` },
     { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
     { key: 'amount', header: 'סכום', mobileLabel: null, className: 'num', sortValue: (r) => r.amount, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
     { key: 'due', header: 'יעד', sortValue: (r) => r.due_date ?? '', render: (r) => fmtDate(r.due_date) },
@@ -80,6 +80,8 @@ export default function PaymentRequests() {
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || String(r.number).includes(q)}
+        searchLabel="חיפוש בדרישות תשלום"
+        rowLabel={(r) => `דרישת תשלום מספר ${r.number} עבור ${r.supplier.name}`}
         onRowClick={(r) => setSelected(r)}
         mobile="cards"
         mobileTitle={(r) => <>#{r.number} · {r.supplier.name}</>}
@@ -94,12 +96,12 @@ export default function PaymentRequests() {
         ]}
         toolbar={
           <>
-            <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <select className="input w-auto!" aria-label="סינון דרישות תשלום לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="active">דרישות פעילות</option>
               <option value="all">הכל</option>
               {Object.entries(PAYMENT_REQUEST_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
-            <select className="input w-auto!" value={dueFilter} onChange={(e) => setDueFilter(e.target.value)}>
+            <select className="input w-auto!" aria-label="סינון דרישות תשלום לפי מועד יעד" value={dueFilter} onChange={(e) => setDueFilter(e.target.value)}>
               <option value="">כל מועדי היעד</option>
               <option value="today">יעד היום</option>
               <option value="overdue">באיחור</option>
@@ -179,6 +181,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
   }, [supplierId, amount, chosen]);
 
   const hasCritical = checks?.some((c) => c.severity === 'critical') ?? false;
+  const supplierName = suppliers?.find((supplier) => supplier.id === supplierId)?.name ?? 'הספק הנבחר';
 
   async function save(toApproval: boolean) {
     if (!supplierId || amount <= 0) { toast('בחר ספק וחשבוניות לתשלום', 'error'); return; }
@@ -217,22 +220,22 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
   }
 
   return (
-    <Modal open onClose={onClose} title="דרישת תשלום חדשה" wide>
+    <Modal open onClose={onClose} title="דרישת תשלום חדשה" wide busy={busy} statusMessage={busy ? 'שומר את דרישת התשלום' : undefined}>
       <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="sm:col-span-2">
-            <label className="label">ספק *</label>
-            <select className="input" value={supplierId} onChange={(e) => { setSupplierId(e.target.value); setChosen({}); }}>
+            <label className="label" htmlFor="payment-request-supplier">ספק *</label>
+            <select id="payment-request-supplier" className="input" value={supplierId} onChange={(e) => { setSupplierId(e.target.value); setChosen({}); }}>
               <option value="">בחר ספק...</option>
               {suppliers?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
-          <div><label className="label">תאריך יעד</label><input type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
+          <div><label className="label" htmlFor="payment-request-due-date">תאריך יעד</label><input id="payment-request-due-date" type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
         </div>
 
         {supplierId && (
-          <div>
-            <label className="label">חשבוניות פתוחות לתשלום</label>
+          <fieldset>
+            <legend className="label">חשבוניות פתוחות לתשלום</legend>
             {invoices?.length ? (
               <div className="border border-line rounded-lg divide-y divide-line-soft max-h-56 overflow-y-auto">
                 {invoices.map((inv) => {
@@ -240,18 +243,20 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
                   return (
                     <div key={inv.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                       <input type="checkbox" className="rounded" checked={checked}
+                        aria-label={`בחירת חשבונית ${inv.invoice_number} של ${supplierName} להקצאה בדרישת התשלום`}
                         onChange={(e) => setChosen((c) => {
                           const next = { ...c };
                           if (e.target.checked) next[inv.id] = inv.balance; else delete next[inv.id];
                           return next;
                         })} />
                       <span className="flex-1">
-                        חשבונית <b dir="ltr">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}
+                        חשבונית <b dir="ltr" className="num">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}
                         {inv.review_status !== 'approved' && <span className="badge-await ms-2">טרם אושרה</span>}
                       </span>
                       <span className="text-ink-muted text-xs num">יתרה {fmtMoneyExact(inv.balance)}</span>
                       {checked && (
                         <input type="number" step="0.01" className="input w-28! num" value={chosen[inv.id]}
+                          aria-label={`סכום ההקצאה לחשבונית ${inv.invoice_number} של ${supplierName}`}
                           onChange={(e) => setChosen((c) => ({ ...c, [inv.id]: Number(e.target.value) || 0 }))} />
                       )}
                     </div>
@@ -259,7 +264,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
                 })}
               </div>
             ) : <div className="text-sm text-ink-muted border border-dashed rounded-lg px-3 py-4 text-center">אין חשבוניות פתוחות לספק זה — ניתן לשמור דרישה ללא חשבונית (תסומן כחריג בהתאמות)</div>}
-          </div>
+          </fieldset>
         )}
 
         <div className="flex items-center justify-between rounded-lg bg-surface-sunken px-4 py-3">
@@ -267,12 +272,13 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
           <span className="text-lg font-bold num">{fmtMoneyExact(amount)}</span>
         </div>
 
-        <div><label className="label">הערות</label><input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+        <div><label className="label" htmlFor="payment-request-notes">הערות</label><input id="payment-request-notes" className="input" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
 
+        {supplierId && amount > 0 && !checks && <div role="status" className="text-sm text-ink-muted">בודק את דרישת התשלום…</div>}
         {checks && <CheckList checks={checks} />}
 
         <div className="flex justify-end gap-2">
-          <button className="btn-secondary" onClick={onClose}>ביטול</button>
+          <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
           <button className="btn-secondary" disabled={busy || amount <= 0} onClick={() => void save(false)}>שמירה כטיוטה</button>
           <button className={hasCritical ? 'btn-danger' : 'btn-primary'} disabled={busy || amount <= 0} onClick={() => void save(true)}>
             {busy ? <Loader2 size={15} className="animate-spin" /> : hasCritical ? <ShieldAlert size={15} /> : <Send size={15} />}
@@ -294,7 +300,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
   const [busy, setBusy] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
 
-  const { data: links } = useQuery(async () =>
+  const { data: links, loading: linksLoading, error: linksError } = useQuery(async () =>
     unwrap(await supabase.from('payment_request_invoices')
       .select('invoice_id, amount_allocated, invoice:invoices(invoice_number, invoice_date, total_amount)')
       .eq('payment_request_id', pr.id)) as Promise<{ invoice_id: string; amount_allocated: number; invoice: { invoice_number: string; invoice_date: string } }[]>, [pr.id]);
@@ -311,9 +317,9 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
     const patch: Record<string, unknown> = { status };
     if (status === 'approved') { patch.approved_by = profile!.id; patch.approved_at = new Date().toISOString(); }
     const res = await supabase.from('payment_requests').update(patch).eq('id', pr.id);
-    setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { setBusy(false); toast(toHebrewError(res.error.message), 'error'); return; }
     await logAction({ orgId: pr.org_id, action: `payment_request:${status}`, entityType: 'payment_requests', entityId: pr.id, reason });
+    setBusy(false);
     toast('הסטטוס עודכן');
     onChanged();
   }
@@ -321,7 +327,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
   const hasCritical = checks?.some((c) => c.severity === 'critical') ?? false;
 
   return (
-    <Modal open onClose={onClose} title={`דרישת תשלום #${pr.number} — ${pr.supplier.name}`} wide>
+    <Modal open onClose={onClose} title={`דרישת תשלום #${pr.number} — ${pr.supplier.name}`} wide busy={busy} statusMessage={busy ? 'מעדכן את דרישת התשלום' : undefined}>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge meta={PAYMENT_REQUEST_STATUS[pr.status]} />
@@ -330,13 +336,13 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         </div>
         {pr.notes && <div className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-3 py-2">{pr.notes}</div>}
 
-        {links?.length ? (
+        {linksLoading ? <div role="status" className="text-sm text-ink-muted">טוען חשבוניות מקושרות…</div> : linksError ? <ErrorNote message={linksError} /> : links?.length ? (
           <div>
             <div className="text-sm font-medium text-ink-soft mb-1.5">חשבוניות מקושרות</div>
             <ul className="divide-y divide-line-soft border border-line-soft rounded-lg text-sm">
               {links.map((l) => (
                 <li key={l.invoice_id} className="flex justify-between px-3 py-2">
-                  <span>חשבונית <b dir="ltr">{l.invoice.invoice_number}</b> · {fmtDate(l.invoice.invoice_date)}</span>
+                  <span>חשבונית <b dir="ltr" className="num">{l.invoice.invoice_number}</b> · {fmtDate(l.invoice.invoice_date)}</span>
                   <span className="num font-medium">{fmtMoneyExact(l.amount_allocated)}</span>
                 </li>
               ))}
@@ -346,7 +352,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
 
         <div>
           <div className="text-sm font-medium text-ink-soft mb-1.5">בדיקות לפני אישור</div>
-          {checks ? <CheckList checks={checks} /> : <Loader2 size={16} className="animate-spin text-ink-faint" />}
+          {checks ? <CheckList checks={checks} /> : <div role="status" className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 size={16} className="animate-spin text-ink-faint" aria-hidden="true" /> בודק את הדרישה…</div>}
         </div>
 
         {isOffice && (
@@ -370,7 +376,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
       </div>
 
       <ConfirmDialog open={cancelOpen} onClose={() => setCancelOpen(false)}
-        onConfirm={(reason) => { setCancelOpen(false); void setStatus('cancelled', reason); }}
+        onConfirm={(reason) => void setStatus('cancelled', reason)}
         title="ביטול דרישת תשלום" message="הביטול יתועד ביומן הביקורת." danger requireReason busy={busy} />
     </Modal>
   );

@@ -140,11 +140,11 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
   }
 
   return (
-    <Modal open onClose={onClose} title={`ביצוע העברה — ${pr.supplier.name}`}>
+    <Modal open onClose={onClose} title={`ביצוע העברה — ${pr.supplier.name}`} busy={busy} statusMessage={busy ? 'רושם את ההעברה' : undefined}>
       <div className="space-y-4">
         <div className="rounded-lg bg-surface-sunken border border-line px-4 py-3">
           <div className="flex items-center gap-2 text-sm font-medium text-ink-mid mb-1"><Landmark size={15} /> פרטי חשבון להעברה</div>
-          <div className="text-sm text-ink-body" dir="ltr" style={{ textAlign: 'right' }}>{pr.supplier.bank_details ?? 'לא הוזנו פרטי בנק — יש לברר מול המשרד'}</div>
+          <div className="text-sm text-ink-body text-start" dir="ltr">{pr.supplier.bank_details ?? 'לא הוזנו פרטי בנק — יש לברר מול המשרד'}</div>
         </div>
 
         <dl className="text-sm space-y-1.5">
@@ -158,14 +158,14 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
         <hr className="border-line-soft" />
 
         <div className="grid grid-cols-2 gap-3">
-          <div><label className="label">תאריך ביצוע</label><input type="date" className="input" value={f.paid_date} onChange={(e) => setF((s) => ({ ...s, paid_date: e.target.value }))} /></div>
-          <div><label className="label">סכום שהועבר בפועל</label><input type="number" step="0.01" className="input num" value={f.amount} onChange={(e) => setF((s) => ({ ...s, amount: e.target.value }))} /></div>
+          <div><label className="label" htmlFor="payment-execution-date">תאריך ביצוע</label><input id="payment-execution-date" type="date" className="input" value={f.paid_date} onChange={(e) => setF((s) => ({ ...s, paid_date: e.target.value }))} /></div>
+          <div><label className="label" htmlFor="payment-execution-amount">סכום שהועבר בפועל</label><input id="payment-execution-amount" type="number" step="0.01" className="input num" value={f.amount} onChange={(e) => setF((s) => ({ ...s, amount: e.target.value }))} /></div>
         </div>
-        <div><label className="label">אסמכתת העברה *</label><input className="input" dir="ltr" value={f.reference} onChange={(e) => setF((s) => ({ ...s, reference: e.target.value }))} /></div>
-        <div><label className="label">הערות</label><input className="input" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></div>
+        <div><label className="label" htmlFor="payment-execution-reference">אסמכתת העברה *</label><input id="payment-execution-reference" className="input num" dir="ltr" value={f.reference} onChange={(e) => setF((s) => ({ ...s, reference: e.target.value }))} /></div>
+        <div><label className="label" htmlFor="payment-execution-notes">הערות</label><input id="payment-execution-notes" className="input" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></div>
 
         <div className="flex justify-end gap-2">
-          <button className="btn-secondary" onClick={onClose}>ביטול</button>
+          <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
           <button className="btn-primary" disabled={busy} onClick={() => void execute()}>
             {busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} ההעברה בוצעה
           </button>

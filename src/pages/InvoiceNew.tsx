@@ -138,25 +138,25 @@ export default function InvoiceNew() {
 
       <div className="card card-pad grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <label className="label">ספק *</label>
-          <select className="input" value={f.supplier_id} onChange={(e) => set('supplier_id', e.target.value)}>
+          <label className="label" htmlFor="invoice-new-supplier">ספק *</label>
+          <select id="invoice-new-supplier" className="input" value={f.supplier_id} onChange={(e) => set('supplier_id', e.target.value)}>
             <option value="">בחר ספק...</option>
             {suppliers?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
-        <div><label className="label">מספר חשבונית *</label><input className="input" dir="ltr" value={f.invoice_number} onChange={(e) => set('invoice_number', e.target.value)} /></div>
-        <div><label className="label">תאריך חשבונית *</label><input type="date" className="input" value={f.invoice_date} onChange={(e) => set('invoice_date', e.target.value)} /></div>
-        <div><label className="label">סכום לפני מע״מ</label><input type="number" step="0.01" className="input num" value={f.before_vat} onChange={(e) => onBeforeVat(e.target.value)} /></div>
-        <div><label className="label">מע״מ ({org?.vat_rate ?? 18}%)</label><input type="number" step="0.01" className="input num" value={f.vat} onChange={(e) => set('vat', e.target.value)} /></div>
-        <div><label className="label">סה״כ לתשלום *</label><input type="number" step="0.01" className="input num font-semibold" value={f.total} onChange={(e) => onTotal(e.target.value)} /></div>
-        <div className="sm:col-span-2"><label className="label">הערות</label><textarea className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-new-number">מספר חשבונית *</label><input id="invoice-new-number" className="input num" dir="ltr" value={f.invoice_number} onChange={(e) => set('invoice_number', e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-new-date">תאריך חשבונית *</label><input id="invoice-new-date" type="date" className="input" value={f.invoice_date} onChange={(e) => set('invoice_date', e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-new-before-vat">סכום לפני מע״מ</label><input id="invoice-new-before-vat" type="number" step="0.01" className="input num" value={f.before_vat} onChange={(e) => onBeforeVat(e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-new-vat">מע״מ ({org?.vat_rate ?? 18}%)</label><input id="invoice-new-vat" type="number" step="0.01" className="input num" value={f.vat} onChange={(e) => set('vat', e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-new-total">סה״כ לתשלום *</label><input id="invoice-new-total" type="number" step="0.01" className="input num font-semibold" value={f.total} onChange={(e) => onTotal(e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="invoice-new-notes">הערות</label><textarea id="invoice-new-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
       </div>
 
       {(checks || checking) && (
         <div className="card card-pad">
           <div className="section-title mb-3 flex items-center gap-2">
             בדיקות אוטומטיות
-            {checking && <Loader2 size={14} className="animate-spin text-ink-faint" />}
+            {checking && <span role="status" className="flex items-center gap-1 text-sm text-ink-muted"><Loader2 size={14} className="animate-spin text-ink-faint" aria-hidden="true" /> בודק…</span>}
           </div>
           {checks && <CheckList checks={checks} />}
         </div>

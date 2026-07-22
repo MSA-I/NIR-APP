@@ -21,6 +21,7 @@ export default function Settings() {
   const [matchDays, setMatchDays] = useState(org?.settings?.bank_match_days?.toString() ?? '7');
   const [tolerance, setTolerance] = useState(org?.settings?.bank_match_amount_tolerance?.toString() ?? '1');
   const [busy, setBusy] = useState(false);
+  const [toggleBusyId, setToggleBusyId] = useState<string | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<Role>('office');
@@ -54,9 +55,15 @@ export default function Settings() {
   }
 
   async function toggleActive(u: Profile) {
-    const res = await supabase.from('profiles').update({ active: u.active! }).eq('id', u.id);
+    setToggleBusyId(u.id);
+    const res = await supabase.from('profiles')
+      .update({ active: !u.active })
+      .eq('id', u.id)
+      .select('active')
+      .single();
+    setToggleBusyId(null);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-    toast(u.active ? 'המשתמש הושבת' : 'המשתמש הופעל');
+    toast(res.data.active ? 'המשתמש הופעל' : 'המשתמש הושבת');
     void refetch();
   }
 
@@ -169,9 +176,9 @@ export default function Settings() {
       <div className="card card-pad space-y-4">
         <h2 className="section-title">הגדרות עסק</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div><label className="label">שיעור מע״מ (%)</label><input type="number" step="0.5" className="input num" value={vatRate} onChange={(e) => setVatRate(e.target.value)} /></div>
-          <div><label className="label">טווח ימים להתאמת בנק</label><input type="number" className="input num" value={matchDays} onChange={(e) => setMatchDays(e.target.value)} /></div>
-          <div><label className="label">סטיית סכום מותרת (₪)</label><input type="number" step="0.5" className="input num" value={tolerance} onChange={(e) => setTolerance(e.target.value)} /></div>
+          <div><label className="label" htmlFor="settings-vat-rate">שיעור מע״מ (%)</label><input id="settings-vat-rate" type="number" step="0.5" className="input num" value={vatRate} onChange={(e) => setVatRate(e.target.value)} /></div>
+          <div><label className="label" htmlFor="settings-match-days">טווח ימים להתאמת בנק</label><input id="settings-match-days" type="number" className="input num" value={matchDays} onChange={(e) => setMatchDays(e.target.value)} /></div>
+          <div><label className="label" htmlFor="settings-tolerance">סטיית סכום מותרת (₪)</label><input id="settings-tolerance" type="number" step="0.5" className="input num" value={tolerance} onChange={(e) => setTolerance(e.target.value)} /></div>
         </div>
         <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>שמירה</button></div>
       </div>
@@ -180,7 +187,7 @@ export default function Settings() {
         <div className="px-4 py-3 border-b border-line-soft section-title flex items-center gap-2"><Users size={17} /> משתמשים והרשאות</div>
         <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-surface-sunken"><tr><th className="th">שם</th><th className="th">תפקיד</th><th className="th">טלפון</th><th className="th">סטטוס</th><th className="th"></th></tr></thead>
+          <thead className="bg-surface-sunken"><tr><th scope="col" className="th">שם</th><th scope="col" className="th">תפקיד</th><th scope="col" className="th">טלפון</th><th scope="col" className="th">סטטוס</th><th scope="col" className="th"><span className="sr-only">פעולות</span></th></tr></thead>
           <tbody className="divide-y divide-line-soft">
             {users?.map((u) => (
               <tr key={u.id}>
@@ -190,7 +197,9 @@ export default function Settings() {
                 <td className="td">{u.active ? <span className="badge-done">פעיל</span> : <span className="badge-idle">מושבת</span>}</td>
                 <td className="td">
                   {u.id !== profile?.id && (
-                    <button className="btn-ghost py-1! text-xs" onClick={() => void toggleActive(u)}>{u.active ? 'השבתה' : 'הפעלה'}</button>
+                    <button className="btn-ghost py-1! text-xs" disabled={toggleBusyId === u.id} onClick={() => void toggleActive(u)}>
+                      {toggleBusyId === u.id ? 'מעדכן…' : u.active ? 'השבתה' : 'הפעלה'}
+                    </button>
                   )}
                 </td>
               </tr>
@@ -233,6 +242,8 @@ export default function Settings() {
           columns={inviteColumns}
           searchable
           searchFn={(r, q) => r.email.toLowerCase().includes(q)}
+          searchLabel="חיפוש בהזמנות עובדים"
+          rowLabel={(r) => `הזמנה עבור ${r.email}`}
           emptyTitle="לא נשלחו הזמנות"
           emptySubtitle="הזמנה שנשלחה תופיע כאן עם הסטטוס והתוקף שלה"
         />

@@ -207,20 +207,20 @@ function CreditFromInvoice({ invoice, onClose, onSaved }: { invoice: FullInvoice
   }
 
   return (
-    <Modal open onClose={onClose} title={`דרישת זיכוי — חשבונית ${invoice.invoice_number}`}>
+    <Modal open onClose={onClose} title={`דרישת זיכוי — חשבונית ${invoice.invoice_number}`} busy={busy} statusMessage={busy ? 'פותח את דרישת הזיכוי' : undefined}>
       <div className="space-y-4">
         <div>
-          <label className="label">סיבת הזיכוי</label>
-          <select className="input" value={reason} onChange={(e) => setReason(e.target.value as CreditReason)}>
+          <label className="label" htmlFor="invoice-credit-reason">סיבת הזיכוי</label>
+          <select id="invoice-credit-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value as CreditReason)}>
             {Object.entries(CREDIT_REASON).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </div>
-        <div><label className="label">סכום (₪)</label><input type="number" step="0.01" className="input num" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
-        <div><label className="label">פירוט</label><textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-credit-amount">סכום (₪)</label><input id="invoice-credit-amount" type="number" step="0.01" className="input num" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-credit-notes">פירוט</label><textarea id="invoice-credit-notes" className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
         <div className="text-xs text-ink-muted">נפתח בתאריך {fmtDate(todayISO())} · הזיכוי ישפיע על יתרת הספק לאחר אישור/קיזוז</div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
-        <button className="btn-secondary" onClick={onClose}>ביטול</button>
+        <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
         <button className="btn-primary" disabled={busy} onClick={() => void save()}>פתיחת דרישת זיכוי</button>
       </div>
     </Modal>

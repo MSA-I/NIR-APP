@@ -210,6 +210,26 @@ body {
   padding-inline-end: max(1rem, env(safe-area-inset-left));
 }
 
+.phone-safe-drawer,
+.phone-safe-dialog {
+  padding-block-start: env(safe-area-inset-top);
+  padding-block-end: env(safe-area-inset-bottom);
+}
+
+.dialog-backdrop-safe {
+  padding-inline-start: env(safe-area-inset-right);
+  padding-inline-end: env(safe-area-inset-left);
+  padding-block-start: env(safe-area-inset-top);
+}
+
+.dialog-panel-safe {
+  max-block-size: min(92dvh, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+}
+
+.dialog-safe-body {
+  padding-block-end: max(1.25rem, env(safe-area-inset-bottom));
+}
+
 .phone-fab {
   inset-inline-end: max(1rem, env(safe-area-inset-left));
   inset-block-end: max(1rem, env(safe-area-inset-bottom));
@@ -220,15 +240,27 @@ body {
   padding-block-end: calc(0.75rem + env(safe-area-inset-bottom));
 }
 
+.phone-update-notice {
+  inset-block-end: max(5rem, calc(1rem + env(safe-area-inset-bottom)));
+}
+
 @media (min-width: 40rem) {
   .phone-safe-main {
     padding-inline-start: max(1.5rem, env(safe-area-inset-right));
     padding-inline-end: max(1.5rem, env(safe-area-inset-left));
   }
+
+  .dialog-backdrop-safe {
+    padding-block-start: max(1rem, env(safe-area-inset-top));
+    padding-block-end: max(1rem, env(safe-area-inset-bottom));
+    padding-inline-start: max(1rem, env(safe-area-inset-right));
+    padding-inline-end: max(1rem, env(safe-area-inset-left));
+  }
 }
 
 @media (min-width: 48rem) {
   .phone-fab { inset-inline-end: 2rem; inset-block-end: 2rem; }
+  .phone-update-notice { inset-block-end: 1.5rem; }
 }
 
 @media (max-width: 47.999rem) {
@@ -284,4 +316,15 @@ body {
   body { background: white; }
   .print-area { box-shadow: none !important; border: none !important; }
   .dashboard-depth .card { box-shadow: none !important; }
+  .monthly-report { page: monthly-report; width: 100%; font-size: 9pt; }
+  .monthly-report .report-table-wrap { overflow: visible !important; }
+  .monthly-report table { width: 100% !important; table-layout: auto; }
+  .monthly-report th, .monthly-report td { white-space: normal !important; padding: 1.5mm 1.8mm !important; }
+  .monthly-report .report-invoices { font-size: 8pt; }
+  .monthly-report .card, .monthly-report table, .monthly-report tr { break-inside: avoid; }
+}
+
+@page monthly-report {
+  size: A4 landscape;
+  margin: 9mm;
 }

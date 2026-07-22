@@ -5,6 +5,12 @@ import type { Organization, Profile } from '../lib/types';
 import { unwrap } from '../lib/useQuery';
 import { APP_NAME } from '../lib/branding';
 import { resolveRoleLabels } from '../lib/status';
+import { cleanupPushBeforeSignOut } from '../lib/push';
+
+export interface SignOutResult {
+  error: string | null;
+  pushWarning: string | null;
+}
 
 interface AuthState {
   session: Session | null;
@@ -24,7 +30,7 @@ interface AuthState {
   /** Role → display label for the signed-in tenant. Drop-in replacement for ROLE_LABEL. */
   roleLabels: Record<string, string>;
   signIn: (email: string, password: string) => Promise<string | null>;
-  signOut: () => Promise<void>;
+  signOut: () => Promise<SignOutResult>;
 }
 
 const AuthContext = createContext<AuthState>(null as unknown as AuthState);
@@ -106,7 +112,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
+    const push = await cleanupPushBeforeSignOut();
+    const { error } = await supabase.auth.signOut();
+    return { error: error?.message ?? null, pushWarning: push.warning };
   }
 
   return (

@@ -19,6 +19,7 @@ import { LineChart, Line } from 'recharts';
 import { Star } from 'lucide-react';
 import type { SupplierMetrics } from '../lib/types';
 import { chartTheme } from '../lib/theme';
+import { useId } from 'react';
 
 export type { SupplierMetrics };  // re-exported so Suppliers.tsx's existing import keeps resolving
 
@@ -83,8 +84,9 @@ export function Scorecard({ items }: { items: ScoreItem[] }) {
  * star). Interactive variant is a keyboard-accessible radiogroup; the "נקה" button and star 0
  * both mean "clear" — the caller maps 0 to null.
  */
-export function RatingStars({ value, onChange }: { value: number | null; onChange?: (n: number) => void }) {
+export function RatingStars({ value, onChange, label = 'דירוג ספק' }: { value: number | null; onChange?: (n: number) => void; label?: string }) {
   const stars = [1, 2, 3, 4, 5];
+  const groupName = useId();
 
   if (!onChange) {
     return (
@@ -92,7 +94,7 @@ export function RatingStars({ value, onChange }: { value: number | null; onChang
         aria-label={value != null ? `דירוג ${value} מתוך 5` : 'ספק לא דורג'}
         title={value != null ? `דירוג ${value} מתוך 5` : 'לא דורג'}>
         {stars.map((n) => (
-          <Star key={n} size={15}
+          <Star key={n} size={15} aria-hidden="true"
             className={value != null && n <= value ? 'fill-star text-star' : 'text-ink-ghost'} />
         ))}
       </span>
@@ -100,13 +102,14 @@ export function RatingStars({ value, onChange }: { value: number | null; onChang
   }
 
   return (
-    <span role="radiogroup" aria-label="דירוג ספק" className="inline-flex items-center gap-0.5">
+    <span role="radiogroup" aria-label={label} className="inline-flex items-center gap-0.5">
       {stars.map((n) => (
-        <button key={n} type="button" role="radio" aria-checked={value === n} aria-label={`${n} כוכבים`}
-          onClick={() => onChange(n)} className="p-0.5 cursor-pointer leading-none">
-          <Star size={20}
+        <label key={n} className="cursor-pointer rounded-sm p-0.5 leading-none focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-action">
+          <input className="sr-only" type="radio" name={groupName} value={n} checked={value === n}
+            aria-label={`${n} כוכבים`} onChange={() => onChange(n)} />
+          <Star size={20} aria-hidden="true"
             className={value != null && n <= value ? 'fill-star text-star' : 'text-ink-ghost hover:text-star-hover'} />
-        </button>
+        </label>
       ))}
       {value != null && (
         <button type="button" className="text-xs text-ink-faint hover:text-ink-soft ms-1" onClick={() => onChange(0)}>

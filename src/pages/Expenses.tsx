@@ -258,6 +258,7 @@ export default function Expenses() {
               </div>
               <div className="hidden md:block">
                 <DataTable rows={data.bySupplier} columns={columns} mobile="scroll"
+                  rowLabel={(r) => `הוצאות עבור ${r.name}`}
                   onRowClick={(r) => setDrill(r)} emptyTitle="אין חשבוניות בטווח" />
               </div>
             </section>

@@ -39,7 +39,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
     return () => clearTimeout(timeout);
   }, [q]);
 
-  const { data: options, loading } = useQuery<RefileOption[]>(async () => {
+  const { data: options, loading, error } = useQuery<RefileOption[]>(async () => {
     const token = ++reqSeq.current;
     let result: RefileOption[];
     if (target === 'invoice') {
@@ -92,7 +92,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
   }
 
   return (
-    <Modal open onClose={onClose} title={target === 'invoice' ? 'שיוך לחשבונית' : 'שיוך לקבלת סחורה'}>
+    <Modal open onClose={onClose} title={target === 'invoice' ? 'שיוך לחשבונית' : 'שיוך לקבלת סחורה'} busy={busy} statusMessage={busy ? 'משייך את המסמך' : undefined}>
       <p className="mb-3 truncate text-sm text-ink-soft">המסמך: {doc.file_name}</p>
       <label className="mb-3 block">
         <span className="sr-only">חיפוש יעד לשיוך</span>
@@ -102,7 +102,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
             placeholder={target === 'invoice' ? 'חיפוש לפי מספר חשבונית...' : 'חיפוש לפי מספר קבלה או ספק...'} />
         </span>
       </label>
-      {loading ? (
+      {error ? <ErrorNote message={error} /> : loading ? (
         <div className="space-y-2 text-sm text-ink-muted" role="status">טוען יעדים…</div>
       ) : options?.length ? (
         <ul className="max-h-72 overflow-y-auto rounded-lg border border-line-soft divide-y divide-line-soft">
@@ -157,7 +157,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
   }
 
   return (
-    <Modal open onClose={() => { if (!busy) onClose(); }} title="העלאת מסמך">
+    <Modal open onClose={onClose} title="העלאת מסמך" busy={busy} statusMessage={busy ? 'מעלה את המסמכים' : undefined}>
       <p className="mb-4 text-sm text-ink-muted">המסמך ייקלט כלא משויך. אפשר לשייך אותו לחשבונית או לקבלת סחורה לאחר ההעלאה.</p>
       <div className="space-y-3">
         <label className="block">
@@ -380,6 +380,7 @@ export default function DocumentsGallery() {
 
       {error ? <ErrorNote message={error} /> : loading ? <SkeletonTable cols={5} /> : (
         <DataTable rows={filtered} columns={columns} pageSize={20}
+          rowLabel={(doc) => `מסמך ${doc.file_name}`}
           onRowClick={(doc) => void open(doc)}
           mobileTitle={(doc) => doc.file_name}
           mobileTrailing={(doc) => <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>}

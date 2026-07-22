@@ -111,30 +111,31 @@ export default function Reports() {
       <div className="flex flex-wrap items-center justify-between gap-3 no-print">
         <h1 className="page-title">דוח חודשי לרואת חשבון</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <input type="month" className="input w-auto!" value={month} onChange={(e) => setMonth(e.target.value)} />
+          <label className="sr-only" htmlFor="monthly-report-month">חודש הדוח</label>
+          <input id="monthly-report-month" type="month" className="input w-auto!" value={month} onChange={(e) => setMonth(e.target.value)} />
           <button className="btn-secondary" onClick={exportExcel}><FileSpreadsheet size={15} /> ייצוא Excel</button>
           <button className="btn-secondary" onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
           {isOffice && (
             data.export?.status === 'sent'
               ? <span className="badge-done flex items-center gap-1"><CheckCircle2 size={13} /> הועבר לרו״ח {data.export.sent_at ? fmtDate(data.export.sent_at) : ''}</span>
-              : <button className="btn-primary" disabled={busy} onClick={() => void markSent()}><Send size={15} /> סימון כהועבר לרו״ח</button>
+              : <button className="btn-primary" disabled={busy} onClick={() => void markSent()}><Send size={15} /> {busy ? 'מסמן כהועבר…' : 'סימון כהועבר לרו״ח'}</button>
           )}
         </div>
       </div>
 
-      <div className="print-area space-y-4">
+      <div className="print-area monthly-report space-y-4">
         <div className="hidden print:block">
           {/* Printed header handed to the accountant — carries the tenant's own name. */}
           <h2 className="text-xl font-bold">{`${org?.name ? `${org.name} — ` : ''}דוח חודשי ${fmtMonth(`${month}-01`)}`}</h2>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
-          <div className="card card-pad"><div className="text-xs text-ink-muted">חשבוניות</div><div className="text-lg font-bold">{data.invoices.length}</div></div>
+          <div className="card card-pad"><div className="text-xs text-ink-muted">חשבוניות</div><div className="text-lg font-bold num">{data.invoices.length}</div></div>
           <div className="card card-pad"><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.invoices)}</div></div>
           <div className="card card-pad"><div className="text-xs text-ink-muted">מע״מ</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.vat)}</div></div>
           <div className="card card-pad"><div className="text-xs text-ink-muted">שולם החודש</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(totals.paid)}</div></div>
-          <div className="card card-pad"><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`text-lg font-bold ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></div>
-          <div className="card card-pad"><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`text-lg font-bold ${totals.unmatchedBank ? 'text-alert-solid' : ''}`}>{totals.unmatchedBank}</div></div>
+          <div className="card card-pad"><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`text-lg font-bold num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></div>
+          <div className="card card-pad"><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`text-lg font-bold num ${totals.unmatchedBank ? 'text-alert-solid' : ''}`}>{totals.unmatchedBank}</div></div>
         </div>
 
         {data.exceptions.length > 0 && (
@@ -150,18 +151,18 @@ export default function Reports() {
 
         <div className="card overflow-hidden">
           <div className="px-4 py-3 border-b border-line-soft section-title">חשבוניות {fmtMonth(`${month}-01`)}</div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="report-table-wrap overflow-x-auto">
+            <table className="report-invoices w-full">
               <thead className="bg-surface-sunken"><tr>
-                <th className="th">ספק</th><th className="th">מס׳</th><th className="th">תאריך</th>
-                <th className="th">לפני מע״מ</th><th className="th">מע״מ</th><th className="th">סה״כ</th>
-                <th className="th">בדיקה</th><th className="th">תשלום</th>
+                <th scope="col" className="th">ספק</th><th scope="col" className="th">מס׳</th><th scope="col" className="th">תאריך</th>
+                <th scope="col" className="th">לפני מע״מ</th><th scope="col" className="th">מע״מ</th><th scope="col" className="th">סה״כ</th>
+                <th scope="col" className="th">בדיקה</th><th scope="col" className="th">תשלום</th>
               </tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {data.invoices.map((i) => (
                   <tr key={i.id}>
                     <td className="td">{i.supplier.name}</td>
-                    <td className="td" dir="ltr">{i.invoice_number}</td>
+                    <td className="td num" dir="ltr">{i.invoice_number}</td>
                     <td className="td">{fmtDate(i.invoice_date)}</td>
                     <td className="td num">{fmtMoneyExact(i.amount_before_vat)}</td>
                     <td className="td num">{fmtMoneyExact(i.vat_amount)}</td>
@@ -172,7 +173,7 @@ export default function Reports() {
                 ))}
               </tbody>
               <tfoot><tr className="border-t-2 border-line font-bold">
-                <td className="td" colSpan={3}>סה״כ</td>
+                <th scope="row" className="td text-start" colSpan={3}>סה״כ</th>
                 <td className="td num">{fmtMoneyExact(totals.beforeVat)}</td>
                 <td className="td num">{fmtMoneyExact(totals.vat)}</td>
                 <td className="td num">{fmtMoneyExact(totals.invoices)}</td>
@@ -185,13 +186,14 @@ export default function Reports() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-line-soft section-title">תשלומים לפי ספק</div>
-            <div className="overflow-x-auto">
+            <div className="report-table-wrap overflow-x-auto">
             <table className="w-full">
+              <thead className="bg-surface-sunken"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סכום ששולם</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {paymentsBySupplier.map(([name, sum]) => (
                   <tr key={name}><td className="td">{name}</td><td className="td num font-medium">{fmtMoneyExact(sum)}</td></tr>
                 ))}
-                {!paymentsBySupplier.length && <tr><td className="td text-ink-muted text-center py-6">אין תשלומים בחודש זה</td></tr>}
+                {!paymentsBySupplier.length && <tr><td colSpan={2} className="td text-ink-muted text-center py-6">אין תשלומים בחודש זה</td></tr>}
               </tbody>
             </table>
             </div>
@@ -199,8 +201,9 @@ export default function Reports() {
 
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-line-soft section-title">זיכויים</div>
-            <div className="overflow-x-auto">
+            <div className="report-table-wrap overflow-x-auto">
             <table className="w-full">
+              <thead className="bg-surface-sunken"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סיבה</th><th scope="col" className="th">סכום</th><th scope="col" className="th">סטטוס</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {data.credits.map((c) => (
                   <tr key={c.number}>
@@ -210,7 +213,7 @@ export default function Reports() {
                     <td className="td"><StatusBadge meta={CREDIT_STATUS[c.status]} /></td>
                   </tr>
                 ))}
-                {!data.credits.length && <tr><td className="td text-ink-muted text-center py-6">אין זיכויים בחודש זה</td></tr>}
+                {!data.credits.length && <tr><td colSpan={4} className="td text-ink-muted text-center py-6">אין זיכויים בחודש זה</td></tr>}
               </tbody>
             </table>
             </div>

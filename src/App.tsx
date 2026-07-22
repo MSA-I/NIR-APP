@@ -1,7 +1,8 @@
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import { lazy, Suspense, type ReactNode } from 'react';
+import { Component, lazy, Suspense, useState, type ReactNode } from 'react';
 import { useAuth, homeFor } from './auth/AuthContext';
-import { PageLoader } from './components/ui';
+import { PageLoader, useToast } from './components/ui';
+import { toHebrewError } from './lib/errors';
 import type { Role } from './lib/types';
 
 // Eager: the auth shell that must paint before (or regardless of) a resolved session.
@@ -42,6 +43,30 @@ const SupplierPrices = lazy(() => import('./pages/SupplierPrices'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 
+class LazyRouteErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div role="alert" className="card card-pad mx-auto my-8 max-w-lg text-center">
+        <h1 className="page-title">לא ניתן לטעון את המסך</h1>
+        <p className="mt-2 text-sm text-ink-soft">ייתכן שהאפליקציה עודכנה בזמן שהכרטיסייה הייתה פתוחה.</p>
+        <button type="button" className="btn-primary mt-5" onClick={() => window.location.reload()}>רענון וטעינה מחדש</button>
+      </div>
+    );
+  }
+}
+
+function LazyPageBoundary({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  return <LazyRouteErrorBoundary key={pathname}>{children}</LazyRouteErrorBoundary>;
+}
+
 function Guard({ roles, children }: { roles: Role[]; children: ReactNode }) {
   const { session, profile, loading } = useAuth();
   if (loading) return <PageLoader />;
@@ -78,6 +103,20 @@ const READERS: Role[] = ['owner', 'office', 'kitchen', 'accountant'];
  */
 function AccountUnavailable() {
   const { signOut } = useAuth();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+
+  async function handleSignOut() {
+    setBusy(true);
+    const result = await signOut();
+    setBusy(false);
+    if (result.error) {
+      toast(toHebrewError(result.error), 'error');
+      return;
+    }
+    if (result.pushWarning) toast(result.pushWarning, 'error');
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="card card-pad max-w-md text-center">
@@ -86,7 +125,9 @@ function AccountUnavailable() {
           לא ניתן לטעון את פרטי החשבון. ייתכן שהגישה הושעתה או שהמשתמש הושבת.
           לפרטים יש לפנות למנהל המערכת.
         </p>
-        <button className="btn-secondary mt-5" onClick={() => void signOut()}>התנתקות</button>
+        <button className="btn-secondary mt-5" disabled={busy} onClick={() => void handleSignOut()}>
+          {busy ? 'מתנתק…' : 'התנתקות'}
+        </button>
       </div>
     </div>
   );
@@ -106,12 +147,14 @@ export default function App() {
   // the unavailable screen.
   if (!isPublic && session && !loading && !profile && isPlatformAdmin) {
     return (
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
-          <Route path="/admin" element={<PlatformGuard><Admin /></PlatformGuard>} />
-          <Route path="*" element={<Navigate to="/admin" replace />} />
-        </Routes>
-      </Suspense>
+      <LazyPageBoundary>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/admin" element={<PlatformGuard><Admin /></PlatformGuard>} />
+            <Route path="*" element={<Navigate to="/admin" replace />} />
+          </Routes>
+        </Suspense>
+      </LazyPageBoundary>
     );
   }
   if (!isPublic && session && !loading && !profile) return <AccountUnavailable />;
@@ -124,7 +167,7 @@ export default function App() {
         {/* One Suspense boundary for every lazy page, nested under the Layout so the shell
             (nav, requires-attention strip) stays mounted and only the content area shows
             PageLoader while a page chunk loads. */}
-        <Route element={<Suspense fallback={<PageLoader />}><Outlet /></Suspense>}>
+        <Route element={<LazyPageBoundary><Suspense fallback={<PageLoader />}><Outlet /></Suspense></LazyPageBoundary>}>
         <Route path="/" element={loading ? <PageLoader /> : <Navigate to={homeFor(profile?.role)} replace />} />
 
         <Route path="/dashboard" element={<Guard roles={FINANCE}><Dashboard /></Guard>} />

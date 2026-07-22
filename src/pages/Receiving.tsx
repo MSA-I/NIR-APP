@@ -42,8 +42,8 @@ export function ReceivingList() {
                 <StatusBadge meta={PO_STATUS[o.status]} />
               </div>
               <div className="flex items-center gap-4 mt-2 text-sm text-ink-muted">
-                <span>הזמנה #{o.number}</span>
-                <span>{o.items.length} פריטים</span>
+                <span className="num">הזמנה #{o.number}</span>
+                <span className="num">{o.items.length} פריטים</span>
                 {o.expected_date && <span>אספקה: {fmtDate(o.expected_date)}</span>}
               </div>
             </button>
@@ -226,7 +226,7 @@ export function ReceiveOrder() {
     <div className="max-w-xl mx-auto space-y-3 pb-28">
       <div>
         <h1 className="page-title flex items-center gap-2"><PackageCheck size={22} /> קבלת סחורה</h1>
-        <div className="text-sm text-ink-muted mt-1">{order.supplier.name} · הזמנה #{order.number}</div>
+        <div className="text-sm text-ink-muted mt-1">{order.supplier.name} · <span className="num">הזמנה #{order.number}</span></div>
         {data?.draft && <div className="mt-1 text-xs text-await-fg">נטענה טיוטת קבלה שנשמרה קודם</div>}
       </div>
 
@@ -249,13 +249,14 @@ export function ReceiveOrder() {
 
             <div className="flex items-center gap-2 mt-3">
               <span className="text-sm text-ink-soft w-16">התקבל:</span>
-              <button className="btn-secondary p-3!" onClick={() => setLine(item.id, { qty: Math.max(0, line.qty - 1) }, item)} aria-label="הפחתה"><Minus size={18} /></button>
+              <button className="btn-secondary p-3!" onClick={() => setLine(item.id, { qty: Math.max(0, line.qty - 1) }, item)} aria-label={`הפחתת הכמות שהתקבלה עבור ${item.product.name}`}><Minus size={18} /></button>
               <input type="number" min={0} step="any" inputMode="decimal"
                 className="input w-24! num text-center text-lg! py-2.5! font-semibold"
+                aria-label={`כמות שהתקבלה עבור ${item.product.name}`}
                 value={line.qty} onChange={(e) => setLine(item.id, { qty: Math.max(0, Number(e.target.value) || 0) }, item)} />
-              <button className="btn-secondary p-3!" onClick={() => setLine(item.id, { qty: line.qty + 1 }, item)} aria-label="הוספה"><Plus size={18} /></button>
+              <button className="btn-secondary p-3!" onClick={() => setLine(item.id, { qty: line.qty + 1 }, item)} aria-label={`הגדלת הכמות שהתקבלה עבור ${item.product.name}`}><Plus size={18} /></button>
               {line.qty !== remaining && (
-                <button className="btn-ghost text-xs" onClick={() => setLine(item.id, { qty: remaining }, item)}>מלא ({remaining})</button>
+                <button className="btn-ghost text-xs" aria-label={`סימון מלוא הכמות שנותרה עבור ${item.product.name}: ${remaining}`} onClick={() => setLine(item.id, { qty: remaining }, item)}>מלא ({remaining})</button>
               )}
             </div>
 
@@ -263,6 +264,8 @@ export function ReceiveOrder() {
               {statusButtons.map((b) => (
                 <button key={b.key}
                   className={`rounded-lg border min-h-11 flex items-center justify-center text-xs font-medium transition-colors ${line.status === b.key ? SOLID[RECEIPT_LINE_STATUS[b.key].tone] : 'border-line text-ink-soft hover:bg-surface-sunken'}`}
+                  aria-label={`${b.label} עבור ${item.product.name}`}
+                  aria-pressed={line.status === b.key}
                   onClick={() => setLine(item.id, { status: b.key, ...(b.key === 'missing' ? { qty: 0 } : {}) })}>
                   {b.label}
                 </button>
@@ -271,6 +274,7 @@ export function ReceiveOrder() {
 
             {line.status !== 'full' && (
               <input className="input mt-2.5" placeholder="הערה (למשל: הגיע מופשר, אריזה קרועה...)"
+                aria-label={`הערה לקבלת ${item.product.name}`}
                 value={line.notes} onChange={(e) => setLine(item.id, { notes: e.target.value })} />
             )}
           </div>
@@ -284,6 +288,7 @@ export function ReceiveOrder() {
 
       {/* sticky action bar */}
       <div className="phone-taskbar fixed inset-x-0 lg:ms-60 bg-surface border-t border-line p-3 flex gap-2 z-30">
+        {busy && <span className="sr-only" role="status" aria-live="polite">שומר את הקבלה</span>}
         <div className="hidden sm:flex items-center text-xs text-ink-muted me-auto ps-2">
           <Camera size={14} className="me-1" /> צילום החשבונית יתאפשר מיד לאחר סיום הקבלה
         </div>

@@ -453,12 +453,12 @@ export default function NewOrder() {
         <div>
           <h1 className="page-title">הזמנה חדשה</h1>
           <p className="mt-1 text-sm text-ink-muted">בחירת מוצרים תחילה, אישור ספקים ומחירים לאחר מכן</p>
-          <div className={`mt-2 flex min-h-6 items-center gap-1.5 text-xs ${saveStatus === 'error' ? 'text-alert-fg' : 'text-ink-muted'}`} aria-live="polite">
+          <div className={`mt-2 flex min-h-6 items-center gap-1.5 text-xs ${saveStatus === 'error' ? 'text-alert-fg' : 'text-ink-muted'}`} role="status" aria-live="polite">
             {saveStatus === 'saving' ? <Loader2 size={13} className="animate-spin" /> : saveStatus === 'saved' ? <Check size={13} /> : <Clock3 size={13} />}
             <span>{draftNumber ? `טיוטה #${draftNumber} · ` : ''}{saveLabel}</span>
             {saveStatus === 'error' && <button type="button" className="font-semibold underline" onClick={() => void runSaveQueue()}>ניסיון חוזר</button>}
           </div>
-          {saveError && saveStatus === 'error' && <p className="text-xs text-alert-fg">{saveError}</p>}
+          {saveError && saveStatus === 'error' && <p role="alert" className="text-xs text-alert-fg">{saveError}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
           {(draftId || cart.length > 0) && <button type="button" className="btn-ghost text-alert-solid" disabled={busy} onClick={() => setCancelOpen(true)}><XCircle size={15} /> ביטול טיוטה</button>}
@@ -491,9 +491,9 @@ export default function NewOrder() {
               <input className="input ps-9!" aria-label="חיפוש מוצר" placeholder="חיפוש מוצר..." value={q} onChange={(event) => setQ(event.target.value)} />
             </div>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="סינון לפי קטגוריה">
-              <button type="button" className={`min-h-11 border px-3 text-xs font-medium ${!cat ? 'border-action bg-action text-white' : 'border-line text-ink-soft hover:bg-surface-sunken'}`} onClick={() => setCat('')}>הכול</button>
+              <button type="button" aria-pressed={!cat} className={`min-h-11 border px-3 text-xs font-medium ${!cat ? 'border-action bg-action text-white' : 'border-line text-ink-soft hover:bg-surface-sunken'}`} onClick={() => setCat('')}>הכול</button>
               {categories?.map((category) => (
-                <button type="button" key={category.id} className={`min-h-11 border px-3 text-xs font-medium ${cat === category.id ? 'border-action bg-action text-white' : 'border-line text-ink-soft hover:bg-surface-sunken'}`} onClick={() => setCat(category.id)}>{category.name}</button>
+                <button type="button" key={category.id} aria-pressed={cat === category.id} className={`min-h-11 border px-3 text-xs font-medium ${cat === category.id ? 'border-action bg-action text-white' : 'border-line text-ink-soft hover:bg-surface-sunken'}`} onClick={() => setCat(category.id)}>{category.name}</button>
               ))}
             </div>
           </div>
@@ -505,6 +505,8 @@ export default function NewOrder() {
               return (
                 <div key={product.id} className={`flex min-h-14 items-center ${carted ? 'bg-action-wash/45' : ''}`}>
                   <button type="button" className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-start hover:bg-surface-sunken sm:px-4"
+                    aria-pressed={!!carted}
+                    aria-label={`${carted ? 'נבחר' : 'בחירת'} ${product.name}`}
                     onClick={() => { if (!carted) setCart((current) => [...current, { product, qty: 1, chosenSupplierId: null }]); }}>
                     <span className={`grid size-6 shrink-0 place-items-center border ${carted ? 'border-done-line bg-done-soft text-done-fg' : 'border-line text-transparent'}`} aria-hidden="true"><Check size={14} /></span>
                     <span className="min-w-0 flex-1"><span className="block break-words text-sm font-medium text-ink-body sm:truncate">{product.name}</span><span className="text-xs text-ink-muted">{product.unit}</span></span>
@@ -575,8 +577,8 @@ export default function NewOrder() {
           </section>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="sm:col-span-2"><label className="label">הערות</label><input className="input" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="למשל: אספקה לכניסה הראשית" /></div>
-            <div><label className="label">אספקה מבוקשת</label><input type="date" className="input" value={expectedDate} min={todayISO()} onChange={(event) => setExpectedDate(event.target.value)} /></div>
+            <div className="sm:col-span-2"><label className="label" htmlFor="new-order-notes">הערות</label><input id="new-order-notes" className="input" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="למשל: אספקה לכניסה הראשית" /></div>
+            <div><label className="label" htmlFor="new-order-expected-date">אספקה מבוקשת</label><input id="new-order-expected-date" type="date" className="input" value={expectedDate} min={todayISO()} onChange={(event) => setExpectedDate(event.target.value)} /></div>
           </div>
           <div className="flex items-center border-t border-line-strong bg-surface px-3 py-3 sm:px-4">
             <button type="button" className="btn-secondary" disabled={busy} onClick={() => setStep(1)}>חזרה למוצרים וכמויות</button>
@@ -585,7 +587,7 @@ export default function NewOrder() {
         </div>
       )}
 
-      <Modal open={reviewOpen} onClose={() => { if (!busy) setReviewOpen(false); }} title="סיכום ההזמנה">
+      <Modal open={reviewOpen} onClose={() => setReviewOpen(false)} title="סיכום ההזמנה" busy={busy} statusMessage={busy ? 'יוצר את ההזמנות לספקים' : undefined}>
         <div className="divide-y divide-line-soft border-y border-line-strong text-sm">
           <SummaryRow label="מספר ספקים" value={String(savings.supplierCount)} />
           <SummaryRow label="מספר מוצרים" value={String(cart.length)} />
@@ -604,14 +606,14 @@ export default function NewOrder() {
         </div>
       </Modal>
 
-      <Modal open={sendQueue !== null} onClose={() => navigate('/orders')} title="שליחת הזמנות לספקים">
+      <Modal open={sendQueue !== null} onClose={() => navigate('/orders')} title="שליחת הזמנות לספקים" busy={sendingId !== null} statusMessage={sendingId ? 'פותח את הודעת הספק ומעדכן את ההזמנה' : undefined}>
         <p className="mb-3 text-sm text-ink-soft">כל הזמנה תסומן כנשלחה רק לאחר פתיחת הודעת WhatsApp שלה.</p>
         <div className="divide-y divide-line-soft border-y border-line-strong">
           {sendQueue?.map((order) => {
             const hasWhatsApp = !!(order.supplier.whatsapp || order.supplier.phone);
             return (
               <div key={order.id} className="flex flex-wrap items-center gap-2 py-3">
-                <div><div className="font-medium text-ink-body">{order.supplier.name}</div><div className="text-xs text-ink-muted">הזמנה #{order.number}</div></div>
+                <div><div className="font-medium text-ink-body">{order.supplier.name}</div><div className="text-xs text-ink-muted num">הזמנה #{order.number}</div></div>
                 <div className="ms-auto">
                   {order.status === 'sent' ? <span className="badge badge-done">נשלחה</span>
                     : hasWhatsApp ? <button type="button" className="btn-primary" disabled={sendingId !== null} onClick={() => void sendQueuedOrder(order)}>{sendingId === order.id ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={15} />} שליחה ב-WhatsApp</button>

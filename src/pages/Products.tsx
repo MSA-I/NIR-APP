@@ -103,6 +103,8 @@ export default function Products() {
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.sku ?? '').toLowerCase().includes(q)}
+        searchLabel="חיפוש במוצרים"
+        rowLabel={(r) => `מוצר ${r.name}`}
         onRowClick={canWrite ? (r) => setEditing(r) : undefined}
         rowActions={canWrite ? (r) => [
           { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setEditing(r) },
@@ -110,7 +112,7 @@ export default function Products() {
           { key: 'toggle', label: r.active ? 'השבתה' : 'הפעלה', icon: Power, onSelect: () => setToggleTarget(r) },
         ] : undefined}
         toolbar={
-          <select className="input w-auto!" value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>
+          <select className="input w-auto!" aria-label="סינון מוצרים לפי קטגוריה" value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>
             <option value="">כל הקטגוריות</option>
             {categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -170,30 +172,30 @@ function ProductForm({ product, initial, onClose, onSaved }: {
   }
 
   return (
-    <Modal open onClose={onClose} title={product ? `עריכת מוצר — ${product.name}` : 'מוצר חדש'}>
+    <Modal open onClose={onClose} title={product ? `עריכת מוצר — ${product.name}` : 'מוצר חדש'} busy={busy} statusMessage={busy ? 'שומר את המוצר' : undefined}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="sm:col-span-2"><label className="label">שם המוצר *</label><input className="input" value={f.name} onChange={(e) => set('name', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="product-name">שם המוצר *</label><input id="product-name" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} /></div>
         <div>
-          <label className="label">קטגוריה</label>
-          <select className="input" value={f.category_id} onChange={(e) => set('category_id', e.target.value)}>
+          <label className="label" htmlFor="product-category">קטגוריה</label>
+          <select id="product-category" className="input" value={f.category_id} onChange={(e) => set('category_id', e.target.value)}>
             <option value="">ללא</option>
             {categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        <div><label className="label">יחידת מידה</label><input className="input" value={f.unit} onChange={(e) => set('unit', e.target.value)} /></div>
-        <div><label className="label">מק״ט</label><input className="input" dir="ltr" value={f.sku} onChange={(e) => set('sku', e.target.value)} /></div>
-        <div><label className="label">ברקוד</label><input className="input" dir="ltr" value={f.barcode} onChange={(e) => set('barcode', e.target.value)} /></div>
-        <div><label className="label">מלאי מינימום (לשימוש עתידי)</label><input type="number" className="input num" value={f.min_stock} onChange={(e) => set('min_stock', e.target.value)} /></div>
+        <div><label className="label" htmlFor="product-unit">יחידת מידה</label><input id="product-unit" className="input" value={f.unit} onChange={(e) => set('unit', e.target.value)} /></div>
+        <div><label className="label" htmlFor="product-sku">מק״ט</label><input id="product-sku" className="input num" dir="ltr" value={f.sku} onChange={(e) => set('sku', e.target.value)} /></div>
+        <div><label className="label" htmlFor="product-barcode">ברקוד</label><input id="product-barcode" className="input num" dir="ltr" value={f.barcode} onChange={(e) => set('barcode', e.target.value)} /></div>
+        <div><label className="label" htmlFor="product-min-stock">מלאי מינימום (לשימוש עתידי)</label><input id="product-min-stock" type="number" className="input num" value={f.min_stock} onChange={(e) => set('min_stock', e.target.value)} /></div>
         <div className="flex items-end pb-2">
           <label className="flex items-center gap-2 text-sm text-ink-mid">
             <input type="checkbox" checked={f.active} onChange={(e) => set('active', e.target.checked)} className="rounded" />
             מוצר פעיל
           </label>
         </div>
-        <div className="sm:col-span-2"><label className="label">הערות</label><textarea className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="product-notes">הערות</label><textarea id="product-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
-        <button className="btn-secondary" onClick={onClose}>ביטול</button>
+        <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
         <button className="btn-primary" disabled={busy} onClick={() => void save()}>שמירה</button>
       </div>
     </Modal>

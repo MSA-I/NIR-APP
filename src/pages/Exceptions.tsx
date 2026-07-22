@@ -69,23 +69,25 @@ export default function Exceptions() {
       <h1 className="page-title flex items-center gap-2"><AlertTriangle size={22} className="text-await-solid" /> חריגים</h1>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.title.toLowerCase().includes(q) || (r.supplier?.name ?? '').toLowerCase().includes(q)}
+        searchLabel="חיפוש בחריגים"
+        rowLabel={(r) => `חריג: ${r.title}`}
         onRowClick={(r) => setSelected(r)}
         toolbar={
           <>
             {idFilter && (
               <button className="btn-ghost text-sm text-action" onClick={() => setIdFilter('')}>הצג את כל החריגים</button>
             )}
-            <select className="input w-auto!" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setIdFilter(''); }}>
+            <select className="input w-auto!" aria-label="סינון חריגים לפי סטטוס" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setIdFilter(''); }}>
               <option value="open">פתוחים ובטיפול</option>
               <option value="resolved">טופלו</option>
               <option value="dismissed">נדחו</option>
               <option value="all">הכל</option>
             </select>
-            <select className="input w-auto!" value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setIdFilter(''); }}>
+            <select className="input w-auto!" aria-label="סינון חריגים לפי סוג" value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setIdFilter(''); }}>
               <option value="">כל הסוגים</option>
               {Object.entries(EXCEPTION_TYPE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
-            <select className="input w-auto!" value={severityFilter} onChange={(e) => { setSeverityFilter(e.target.value); setIdFilter(''); }}>
+            <select className="input w-auto!" aria-label="סינון חריגים לפי חומרה" value={severityFilter} onChange={(e) => { setSeverityFilter(e.target.value); setIdFilter(''); }}>
               <option value="">כל החומרות</option>
               {Object.entries(SEVERITY).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
@@ -145,7 +147,7 @@ function ExceptionDetail({ row, canWrite, onClose, onChanged, onNavigate }: {
   }
 
   return (
-    <Modal open onClose={onClose} title={EXCEPTION_TYPE[row.type]}>
+    <Modal open onClose={onClose} title={EXCEPTION_TYPE[row.type]} busy={busy} statusMessage={busy ? 'מעדכן את החריג' : undefined}>
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <StatusBadge meta={SEVERITY[row.severity]} />
@@ -169,8 +171,8 @@ function ExceptionDetail({ row, canWrite, onClose, onChanged, onNavigate }: {
         {canWrite && ['open', 'in_progress'].includes(row.status) && (
           <>
             <div>
-              <label className="label">הערת טיפול / סיכום</label>
-              <textarea className="input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+              <label className="label" htmlFor="exception-resolution-note">הערת טיפול / סיכום</label>
+              <textarea id="exception-resolution-note" className="input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               {row.status === 'open' && <button className="btn-secondary" disabled={busy} onClick={() => void setStatus('in_progress')}>סימון בטיפול</button>}

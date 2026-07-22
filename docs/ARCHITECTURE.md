@@ -28,7 +28,6 @@ src/
     ui.tsx                 DataTable, StatusBadge, Modal, ConfirmDialog(+סיבה), Toast, KPI
     FileUpload.tsx         העלאה ל-Storage + טבלת documents (כולל צילום מצלמה)
     NotificationBell.tsx   פעמון התראות חדשות בלבד
-    QuickActions.tsx       פס הפעולות התפעולי בדשבורד
   pages/                   מסך לכל מודול (ראה מפת מסכים)
 supabase/
   migrations/              0001 סכימה+RLS · 0002 ביצוע העברות · 0003 views יתרות

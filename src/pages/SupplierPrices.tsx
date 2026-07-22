@@ -60,6 +60,8 @@ export default function SupplierPrices() {
 
       <DataTable rows={data.rows} columns={columns} searchable
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q)}
+        searchLabel="חיפוש במחירון שלי"
+        rowLabel={(r) => `מוצר ${r.product.name}`}
         rowActions={(r) => [
           { key: 'edit', label: 'עדכון מחיר וזמינות', icon: Pencil, onSelect: () => setEditFor(r) },
         ]}
@@ -105,13 +107,13 @@ function EditModal({ row, onClose, onSaved }: { row: Row; onClose: () => void; o
   }
 
   return (
-    <Modal open onClose={onClose} title={`עדכון — ${row.product.name}`}>
+    <Modal open onClose={onClose} title={`עדכון — ${row.product.name}`} busy={busy} statusMessage={busy ? 'שומר את המחיר והזמינות' : undefined}>
       <div className="space-y-4">
-        <div><label className="label">מחיר (₪)</label><input type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-price">מחיר (₪)</label><input id="supplier-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="rounded" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> המוצר זמין</label>
       </div>
       <div className="flex justify-end gap-2 mt-5">
-        <button className="btn-secondary" onClick={onClose}>ביטול</button>
+        <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
         <button className="btn-primary" disabled={busy} onClick={() => void save()}>שמירה</button>
       </div>
     </Modal>
@@ -175,7 +177,7 @@ function ImportModal({ supplierId, orgId, existing, onClose, onDone }: {
   }
 
   return (
-    <Modal open onClose={onClose} title="העלאת מחירון" wide>
+    <Modal open onClose={onClose} title="העלאת מחירון" wide busy={busy} statusMessage={report ?? (busy ? 'מעדכן את המחירון' : undefined)}>
       {report ? (
         <div className="space-y-4">
           <Note tone="done">{report}</Note>
@@ -186,7 +188,7 @@ function ImportModal({ supplierId, orgId, existing, onClose, onDone }: {
           <div className="text-sm text-ink-soft">{preview.length} שורות זוהו בקובץ:</div>
           <div className="max-h-64 overflow-y-auto border border-line-soft rounded-lg">
             <table className="w-full">
-              <thead className="bg-surface-sunken sticky top-0"><tr><th className="th">מוצר</th><th className="th">מחיר</th></tr></thead>
+              <thead className="bg-surface-sunken sticky top-0"><tr><th scope="col" className="th">מוצר</th><th scope="col" className="th">מחיר</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {preview.slice(0, 100).map((r, i) => (
                   <tr key={i}><td className="td">{r.product}</td><td className="td num">₪{r.price.toFixed(2)}</td></tr>
@@ -195,14 +197,14 @@ function ImportModal({ supplierId, orgId, existing, onClose, onDone }: {
             </table>
           </div>
           <div className="flex justify-end gap-2">
-            <button className="btn-secondary" onClick={() => setPreview([])}>חזרה</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => setPreview([])}>חזרה</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>{busy ? 'מעדכן...' : 'אישור ועדכון המחירון'}</button>
           </div>
         </div>
       ) : (
         <div className="text-center py-8">
           <p className="text-sm text-ink-soft mb-4">בחר קובץ Excel או CSV עם העמודות: <b>מוצר</b>, <b>מחיר</b></p>
-          <button className="btn-primary" onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
+          <button className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
           <input ref={fileRef} type="file" hidden accept=".xlsx,.xls,.csv" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
         </div>
       )}

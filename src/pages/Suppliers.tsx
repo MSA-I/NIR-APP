@@ -149,6 +149,8 @@ export function SuppliersList() {
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.contact_name ?? '').toLowerCase().includes(q) || (r.tax_id ?? '').toLowerCase().includes(q)}
+        searchLabel="חיפוש בספקים"
+        rowLabel={(r) => `ספק ${r.name}`}
         onRowClick={(r) => navigate(`/suppliers/${r.id}`)}
         mobile="cards"
         mobileTitle={(r) => r.name}
@@ -158,7 +160,7 @@ export function SuppliersList() {
           { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', onSelect: () => void requestDelete(r) },
         ] : undefined}
         toolbar={
-          <select className="input w-auto!" value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)}>
+          <select className="input w-auto!" aria-label="סינון ספקים לפי יתרה פתוחה" value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)}>
             <option value="">כל הספקים</option>
             <option value="open">עם יתרה פתוחה</option>
           </select>
@@ -220,47 +222,48 @@ function SupplierForm({ supplier, onClose, onSaved }: { supplier: SupplierRow | 
   const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
   return (
-    <Modal open onClose={onClose} title={supplier ? `עריכת ספק — ${supplier.name}` : 'ספק חדש'} wide>
+    <Modal open onClose={onClose} title={supplier ? `עריכת ספק — ${supplier.name}` : 'ספק חדש'} wide busy={busy} statusMessage={busy ? 'שומר את פרטי הספק' : undefined}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div><label className="label">שם הספק *</label><input className="input" value={f.name} onChange={(e) => set('name', e.target.value)} /></div>
-        <div><label className="label">ח.פ / עוסק</label><input className="input" dir="ltr" value={f.tax_id} onChange={(e) => set('tax_id', e.target.value)} /></div>
-        <div><label className="label">איש קשר</label><input className="input" value={f.contact_name} onChange={(e) => set('contact_name', e.target.value)} /></div>
-        <div><label className="label">טלפון</label><input className="input" dir="ltr" value={f.phone} onChange={(e) => set('phone', e.target.value)} /></div>
-        <div><label className="label">WhatsApp</label><input className="input" dir="ltr" value={f.whatsapp} onChange={(e) => set('whatsapp', e.target.value)} /></div>
-        <div><label className="label">אימייל</label><input className="input" dir="ltr" value={f.email} onChange={(e) => set('email', e.target.value)} /></div>
-        <div className="sm:col-span-2"><label className="label">כתובת</label><input className="input" value={f.address} onChange={(e) => set('address', e.target.value)} /></div>
-        <div>
-          <label className="label">ימי אספקה</label>
+        <div><label className="label" htmlFor="supplier-name">שם הספק *</label><input id="supplier-name" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-tax-id">ח.פ / עוסק</label><input id="supplier-tax-id" className="input" dir="ltr" value={f.tax_id} onChange={(e) => set('tax_id', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-contact">איש קשר</label><input id="supplier-contact" className="input" value={f.contact_name} onChange={(e) => set('contact_name', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-phone">טלפון</label><input id="supplier-phone" className="input" dir="ltr" value={f.phone} onChange={(e) => set('phone', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-whatsapp">WhatsApp</label><input id="supplier-whatsapp" className="input" dir="ltr" value={f.whatsapp} onChange={(e) => set('whatsapp', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-email">אימייל</label><input id="supplier-email" className="input" dir="ltr" value={f.email} onChange={(e) => set('email', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-address">כתובת</label><input id="supplier-address" className="input" value={f.address} onChange={(e) => set('address', e.target.value)} /></div>
+        <fieldset>
+          <legend className="label">ימי אספקה</legend>
           <div className="flex flex-wrap gap-1.5">
             {days.map((d, i) => (
               <button type="button" key={i}
+                aria-pressed={f.delivery_days.includes(i)}
                 className={`rounded-lg border px-2.5 py-1.5 text-xs ${f.delivery_days.includes(i) ? 'bg-action-solid text-white border-action-solid' : 'border-line-strong text-ink-soft hover:bg-surface-sunken'}`}
                 onClick={() => set('delivery_days', f.delivery_days.includes(i) ? f.delivery_days.filter((x) => x !== i) : [...f.delivery_days, i].sort())}>
                 {d}
               </button>
             ))}
           </div>
-        </div>
-        <div><label className="label">שעת סגירת הזמנות</label><input type="time" className="input" value={f.cutoff_time} onChange={(e) => set('cutoff_time', e.target.value)} /></div>
-        <div><label className="label">מינימום הזמנה (₪)</label><input type="number" className="input num" value={f.min_order_amount} onChange={(e) => set('min_order_amount', e.target.value)} /></div>
-        <div><label className="label">תנאי תשלום</label><input className="input" placeholder="שוטף + 30" value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} /></div>
-        <div className="sm:col-span-2"><label className="label">פרטי בנק (מוצג למבצע ההעברות)</label><input className="input" value={f.bank_details} onChange={(e) => set('bank_details', e.target.value)} /></div>
+        </fieldset>
+        <div><label className="label" htmlFor="supplier-cutoff">שעת סגירת הזמנות</label><input id="supplier-cutoff" type="time" className="input" value={f.cutoff_time} onChange={(e) => set('cutoff_time', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-minimum">מינימום הזמנה (₪)</label><input id="supplier-minimum" type="number" className="input num" value={f.min_order_amount} onChange={(e) => set('min_order_amount', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-payment-terms">תנאי תשלום</label><input id="supplier-payment-terms" className="input" placeholder="שוטף + 30" value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-details">פרטי בנק (מוצג למבצע ההעברות)</label><input id="supplier-bank-details" className="input" value={f.bank_details} onChange={(e) => set('bank_details', e.target.value)} /></div>
         <div>
-          <label className="label">סטטוס</label>
-          <select className="input" value={f.status} onChange={(e) => set('status', e.target.value)}>
+          <label className="label" htmlFor="supplier-status">סטטוס</label>
+          <select id="supplier-status" className="input" value={f.status} onChange={(e) => set('status', e.target.value)}>
             {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
         </div>
-        <div>
-          <label className="label">דירוג ספק</label>
+        <fieldset>
+          <legend className="label">דירוג ספק</legend>
           <div className="pt-1"><RatingStars value={f.rating} onChange={(n) => set('rating', n || null)} /></div>
-        </div>
-        <div className="sm:col-span-2"><label className="label">הערת דירוג</label><input className="input" placeholder="למה הדירוג הזה?" value={f.rating_note} onChange={(e) => set('rating_note', e.target.value)} /></div>
-        <div className="sm:col-span-2"><label className="label">הערות</label><textarea className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
+        </fieldset>
+        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-rating-note">הערת דירוג</label><input id="supplier-rating-note" className="input" placeholder="למה הדירוג הזה?" value={f.rating_note} onChange={(e) => set('rating_note', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-notes">הערות</label><textarea id="supplier-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
-        <button className="btn-secondary" onClick={onClose}>ביטול</button>
-        <button className="btn-primary" disabled={busy} onClick={() => void save()}>שמירה</button>
+        <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
+        <button className="btn-primary" disabled={busy} onClick={() => void save()}>{busy ? 'שומר…' : 'שמירה'}</button>
       </div>
     </Modal>
   );
@@ -366,9 +369,9 @@ export function SupplierCard() {
 
       {s.notes && <div className="card card-pad text-sm text-ink-soft">{s.notes}</div>}
 
-      <div className="flex gap-1 border-b border-line no-print overflow-x-auto">
+      <div role="tablist" aria-label={`מידע עבור ${s.name}`} className="flex gap-1 border-b border-line no-print overflow-x-auto">
         {tabs.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)}
+          <button key={t.key} id={`supplier-tab-${t.key}`} role="tab" aria-selected={tab === t.key} aria-controls={`supplier-panel-${t.key}`} onClick={() => setTab(t.key)}
             className={`px-4 py-2 text-sm whitespace-nowrap border-b-2 -mb-px ${tab === t.key ? 'border-action-solid text-action font-medium' : 'border-transparent text-ink-muted hover:text-ink-mid'}`}>
             {t.label}
           </button>
@@ -376,40 +379,48 @@ export function SupplierCard() {
       </div>
 
       {tab === 'orders' && (
+        <div role="tabpanel" id="supplier-panel-orders" aria-labelledby="supplier-tab-orders">
         <DataTable rows={data.orders} columns={[
-          { key: 'num', header: 'מס׳', render: (r: PurchaseOrder) => `#${r.number}` },
+          { key: 'num', header: 'מס׳', className: 'num', render: (r: PurchaseOrder) => `#${r.number}` },
           { key: 'date', header: 'תאריך', sortValue: (r: PurchaseOrder) => r.created_at, render: (r: PurchaseOrder) => fmtDate(r.created_at) },
           { key: 'expected', header: 'אספקה צפויה', render: (r: PurchaseOrder) => fmtDate(r.expected_date) },
           { key: 'status', header: 'סטטוס', render: (r: PurchaseOrder) => <StatusBadge meta={PO_STATUS[r.status]} /> },
-        ]} onRowClick={(r) => navigate(`/orders/${r.id}`)} emptyTitle="אין הזמנות לספק זה" />
+        ]} rowLabel={(r) => `הזמנת רכש מספר ${r.number} עבור ${s.name}`} onRowClick={(r) => navigate(`/orders/${r.id}`)} emptyTitle="אין הזמנות לספק זה" />
+        </div>
       )}
       {tab === 'invoices' && (
+        <div role="tabpanel" id="supplier-panel-invoices" aria-labelledby="supplier-tab-invoices">
         <DataTable rows={data.invoices} columns={[
-          { key: 'num', header: 'מס׳ חשבונית', render: (r: Invoice) => r.invoice_number },
+          { key: 'num', header: 'מס׳ חשבונית', className: 'num', render: (r: Invoice) => r.invoice_number },
           { key: 'date', header: 'תאריך', sortValue: (r: Invoice) => r.invoice_date, render: (r: Invoice) => fmtDate(r.invoice_date) },
           { key: 'total', header: 'סה״כ', className: 'num', sortValue: (r: Invoice) => r.total_amount, render: (r: Invoice) => fmtMoneyExact(r.total_amount) },
           { key: 'review', header: 'בדיקה', render: (r: Invoice) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
           { key: 'payment', header: 'תשלום', render: (r: Invoice) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
-        ]} onRowClick={(r) => navigate(`/invoices/${r.id}`)} emptyTitle="אין חשבוניות לספק זה" />
+        ]} rowLabel={(r) => `חשבונית ${r.invoice_number} של ${s.name}`} onRowClick={(r) => navigate(`/invoices/${r.id}`)} emptyTitle="אין חשבוניות לספק זה" />
+        </div>
       )}
       {tab === 'payments' && (
+        <div role="tabpanel" id="supplier-panel-payments" aria-labelledby="supplier-tab-payments">
         <DataTable rows={data.payments} columns={[
           { key: 'date', header: 'תאריך', sortValue: (r: Payment) => r.paid_date, render: (r: Payment) => fmtDate(r.paid_date) },
           { key: 'amount', header: 'סכום', className: 'num', sortValue: (r: Payment) => r.amount, render: (r: Payment) => fmtMoneyExact(r.amount) },
           { key: 'method', header: 'אמצעי', render: (r: Payment) => r.method ?? '—' },
-          { key: 'ref', header: 'אסמכתא', render: (r: Payment) => <span dir="ltr">{r.reference ?? '—'}</span> },
+          { key: 'ref', header: 'אסמכתא', className: 'num', render: (r: Payment) => <span dir="ltr">{r.reference ?? '—'}</span> },
         ]} emptyTitle="אין תשלומים לספק זה" />
+        </div>
       )}
       {tab === 'credits' && (
+        <div role="tabpanel" id="supplier-panel-credits" aria-labelledby="supplier-tab-credits">
         <DataTable rows={data.credits} columns={[
-          { key: 'num', header: 'מס׳', render: (r: CreditRequest) => `#${r.number}` },
+          { key: 'num', header: 'מס׳', className: 'num', render: (r: CreditRequest) => `#${r.number}` },
           { key: 'reason', header: 'סיבה', render: (r: CreditRequest) => CREDIT_REASON[r.reason] },
           { key: 'amount', header: 'סכום', className: 'num', sortValue: (r: CreditRequest) => r.amount, render: (r: CreditRequest) => fmtMoneyExact(r.amount) },
           { key: 'status', header: 'סטטוס', render: (r: CreditRequest) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
           { key: 'date', header: 'נפתח', sortValue: (r: CreditRequest) => r.created_at, render: (r: CreditRequest) => fmtDate(r.created_at) },
-        ]} onRowClick={() => navigate('/credits')} emptyTitle="אין זיכויים לספק זה" />
+        ]} rowLabel={(r) => `דרישת זיכוי מספר ${r.number} עבור ${s.name}`} onRowClick={() => navigate('/credits')} emptyTitle="אין זיכויים לספק זה" />
+        </div>
       )}
-      {tab === 'prices' && <SupplierPricesTab rows={data.prices} history={data.history} />}
+      {tab === 'prices' && <div role="tabpanel" id="supplier-panel-prices" aria-labelledby="supplier-tab-prices"><SupplierPricesTab rows={data.prices} history={data.history} /></div>}
 
       {editing && <SupplierForm supplier={s} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); void refetch(); }} />}
     </div>
@@ -484,6 +495,7 @@ function SupplierPricesTab({ rows, history }: { rows: PricedProduct[]; history: 
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q)}
+        searchLabel="חיפוש במחירון הספק"
         emptyTitle="אין מחירון לספק זה" />
     </div>
   );

@@ -60,7 +60,7 @@ export default function Bank() {
     { key: 'date', header: 'תאריך', sortValue: (r) => r.tx_date, render: (r) => fmtDate(r.tx_date) },
     { key: 'desc', header: 'תיאור', render: (r) => <span className="max-w-72 truncate inline-block">{r.description}</span> },
     { key: 'amount', header: 'סכום', className: 'num', sortValue: (r) => r.amount, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
-    { key: 'ref', header: 'אסמכתא', render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
+    { key: 'ref', header: 'אסמכתא', className: 'num', render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
     { key: 'supplier', header: 'ספק מזוהה', render: (r) => r.supplier?.name ?? <span className="text-ink-muted">לא זוהה</span> },
     { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={BANK_TX_STATUS[r.status]} /> },
   ];
@@ -83,9 +83,11 @@ export default function Bank() {
 
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.description.toLowerCase().includes(q) || (r.reference ?? '').includes(q) || (r.supplier?.name ?? '').toLowerCase().includes(q)}
+        searchLabel="חיפוש בתנועות בנק"
+        rowLabel={(r) => `תנועת בנק מיום ${fmtDate(r.tx_date)} בסכום ${fmtMoneyExact(r.amount)} עבור ${r.description}`}
         onRowClick={isOffice ? (r) => setSelected(r) : undefined}
         toolbar={
-          <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <select className="input w-auto!" aria-label="סינון תנועות בנק לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">כל הסטטוסים</option>
             {Object.entries(BANK_TX_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
@@ -115,30 +117,37 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   const [result, setResult] = useState<string | null>(null);
 
   async function onFile(file: File) {
-    const buf = await file.arrayBuffer();
-    setFileHash(await sha256(buf));
-    setFileName(file.name);
-    let rows: Record<string, unknown>[] = [];
-    if (file.name.toLowerCase().endsWith('.csv')) {
-      const text = new TextDecoder('utf-8').decode(buf);
-      const parsed = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true });
-      rows = parsed.data;
-    } else {
-      const wb = XLSX.read(buf);
-      rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]]);
+    setBusy(true);
+    try {
+      const buf = await file.arrayBuffer();
+      setFileHash(await sha256(buf));
+      setFileName(file.name);
+      let rows: Record<string, unknown>[] = [];
+      if (file.name.toLowerCase().endsWith('.csv')) {
+        const text = new TextDecoder('utf-8').decode(buf);
+        const parsed = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true });
+        rows = parsed.data;
+      } else {
+        const wb = XLSX.read(buf);
+        rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]]);
+      }
+      if (!rows.length) { toast('הקובץ ריק או לא נקרא', 'error'); return; }
+      const hs = Object.keys(rows[0]);
+      setHeaders(hs);
+      setRawRows(rows);
+      // best-effort auto-mapping by common Hebrew headers
+      const find = (...names: string[]) => hs.find((h) => names.some((n) => h.includes(n))) ?? '';
+      setMap({
+        date: find('תאריך', 'date'),
+        description: find('תיאור', 'פרטים', 'description'),
+        amount: find('חובה', 'סכום', 'amount', 'debit'),
+        reference: find('אסמכתא', 'reference', 'סימוכין'),
+      });
+    } catch {
+      toast('קריאת הקובץ נכשלה', 'error');
+    } finally {
+      setBusy(false);
     }
-    if (!rows.length) { toast('הקובץ ריק או לא נקרא', 'error'); return; }
-    const hs = Object.keys(rows[0]);
-    setHeaders(hs);
-    setRawRows(rows);
-    // best-effort auto-mapping by common Hebrew headers
-    const find = (...names: string[]) => hs.find((h) => names.some((n) => h.includes(n))) ?? '';
-    setMap({
-      date: find('תאריך', 'date'),
-      description: find('תיאור', 'פרטים', 'description'),
-      amount: find('חובה', 'סכום', 'amount', 'debit'),
-      reference: find('אסמכתא', 'reference', 'סימוכין'),
-    });
   }
 
   async function runImport() {
@@ -185,7 +194,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   }
 
   return (
-    <Modal open onClose={onClose} title="ייבוא תדפיס בנק" wide>
+    <Modal open onClose={onClose} title="ייבוא תדפיס בנק" wide busy={busy} statusMessage={result ?? (busy ? 'מעבד את תדפיס הבנק' : undefined)}>
       {result ? (
         <div className="space-y-4">
           <Note tone="done">{result}</Note>
@@ -194,7 +203,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
       ) : !headers.length ? (
         <div className="text-center py-8">
           <p className="text-sm text-ink-soft mb-4">בחר קובץ CSV או Excel מתדפיס הבנק. השורה המקורית נשמרת במלואה.</p>
-          <button className="btn-primary" onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
+          <button className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
           <input ref={fileRef} type="file" hidden accept=".csv,.xlsx,.xls" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
         </div>
       ) : (
@@ -203,8 +212,8 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {([['date', 'תאריך *'], ['description', 'תיאור *'], ['amount', 'סכום (חובה) *'], ['reference', 'אסמכתא']] as const).map(([k, label]) => (
               <div key={k}>
-                <label className="label">{label}</label>
-                <select className="input" value={map[k]} onChange={(e) => setMap((m) => ({ ...m, [k]: e.target.value }))}>
+                <label className="label" htmlFor={`bank-import-${k}`}>{label}</label>
+                <select id={`bank-import-${k}`} className="input" value={map[k]} onChange={(e) => setMap((m) => ({ ...m, [k]: e.target.value }))}>
                   <option value="">—</option>
                   {headers.map((h) => <option key={h} value={h}>{h}</option>)}
                 </select>
@@ -213,7 +222,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
           </div>
           <div className="max-h-48 overflow-auto border border-line-soft rounded-lg">
             <table className="w-full text-xs">
-              <thead className="bg-surface-sunken sticky top-0"><tr>{headers.map((h) => <th key={h} className="th text-[11px]!">{h}</th>)}</tr></thead>
+              <thead className="bg-surface-sunken sticky top-0"><tr>{headers.map((h) => <th key={h} scope="col" className="th text-[11px]!">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {rawRows.slice(0, 6).map((r, i) => (
                   <tr key={i}>{headers.map((h) => <td key={h} className="td text-xs!">{String(r[h] ?? '')}</td>)}</tr>
@@ -222,7 +231,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             </table>
           </div>
           <div className="flex justify-end gap-2">
-            <button className="btn-secondary" onClick={() => { setHeaders([]); setRawRows([]); }}>קובץ אחר</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => { setHeaders([]); setRawRows([]); }}>קובץ אחר</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>
               {busy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />} ייבוא
             </button>
@@ -252,7 +261,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   const [supplierId, setSupplierId] = useState(tx.supplier_id ?? '');
   const [chosenInvoices, setChosenInvoices] = useState<Record<string, number>>({});
 
-  const { data, refetch } = useQuery(async () => {
+  const { data, loading, error, refetch } = useQuery(async () => {
     const suppliers = unwrap(await supabase.from('suppliers').select('id, name').is('deleted_at', null).order('name')) as Supplier[];
     if (!supplierId) return { suppliers, candidates: [] as Candidate[], openInvoices: [] };
 
@@ -309,10 +318,15 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   }, [supplierId]);
 
   async function assignSupplier() {
-    const res = await supabase.from('bank_transactions').update({ supplier_id: supplierId || null }).eq('id', tx.id);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-    toast('הספק שויך לתנועה');
-    void refetch();
+    setBusy(true);
+    try {
+      const res = await supabase.from('bank_transactions').update({ supplier_id: supplierId || null }).eq('id', tx.id);
+      if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+      toast('הספק שויך לתנועה');
+      void refetch();
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function confirmCandidate(c: Candidate) {
@@ -402,16 +416,23 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   }
 
   async function ignore() {
-    const res = await supabase.from('bank_transactions').update({ status: 'ignored' }).eq('id', tx.id);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-    toast('התנועה סומנה כלא רלוונטית');
-    onChanged();
+    setBusy(true);
+    try {
+      const res = await supabase.from('bank_transactions').update({ status: 'ignored' }).eq('id', tx.id);
+      if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+      toast('התנועה סומנה כלא רלוונטית');
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
   }
 
   const chosenSum = Object.values(chosenInvoices).reduce((s, v) => s + v, 0);
+  const supplierName = data?.suppliers.find((supplier) => supplier.id === supplierId)?.name ?? 'הספק הנבחר';
+  const transactionLabel = `תנועת הבנק מיום ${fmtDate(tx.tx_date)} בסכום ${fmtMoneyExact(tx.amount)}`;
 
   return (
-    <Modal open onClose={onClose} title="התאמת תנועת בנק" wide>
+    <Modal open onClose={onClose} title="התאמת תנועת בנק" wide busy={busy} statusMessage={busy ? 'שומר את התאמת הבנק' : undefined}>
       <div className="space-y-4">
         <div className="rounded-lg bg-surface-sunken border border-line px-4 py-3 text-sm">
           <div className="flex flex-wrap justify-between gap-2">
@@ -423,16 +444,19 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
 
         <div className="flex items-end gap-2">
           <div className="flex-1">
-            <label className="label">ספק</label>
-            <select className="input" value={supplierId} onChange={(e) => { setSupplierId(e.target.value); setChosenInvoices({}); }}>
+            <label className="label" htmlFor="bank-match-supplier">ספק</label>
+            <select id="bank-match-supplier" className="input" disabled={loading} value={supplierId} onChange={(e) => { setSupplierId(e.target.value); setChosenInvoices({}); }}>
               <option value="">לא מזוהה</option>
               {data?.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
-          {supplierId !== (tx.supplier_id ?? '') && <button className="btn-secondary" onClick={() => void assignSupplier()}>שיוך ספק</button>}
+          {supplierId !== (tx.supplier_id ?? '') && <button className="btn-secondary" disabled={busy || loading} onClick={() => void assignSupplier()}>שיוך ספק</button>}
         </div>
 
-        {supplierId && (
+        {loading && <div role="status" className="text-sm text-ink-muted">טוען ספקים והצעות התאמה…</div>}
+        {error && <ErrorNote message={error} />}
+
+        {supplierId && !loading && !error && (
           <>
             <div>
               <div className="text-sm font-medium text-ink-soft mb-1.5">הצעות התאמה</div>
@@ -445,7 +469,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                       <span className={c.confidence >= 0.85 ? 'badge-done' : c.confidence >= 0.7 ? 'badge-await' : 'badge-idle'}>
                         ביטחון {(c.confidence * 100).toFixed(0)}%
                       </span>
-                      <button className="btn-primary py-1.5!" disabled={busy} onClick={() => void confirmCandidate(c)}>
+                      <button className="btn-primary py-1.5!" aria-label={`אישור ${c.label} עבור ${transactionLabel}`} disabled={busy} onClick={() => void confirmCandidate(c)}>
                         <CheckCircle2 size={14} /> אישור
                       </button>
                     </div>
@@ -454,8 +478,8 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
               ) : <div className="text-sm text-ink-muted">אין הצעות אוטומטיות — ניתן להתאים ידנית מטה</div>}
             </div>
 
-            <div>
-              <div className="text-sm font-medium text-ink-soft mb-1.5">התאמה ידנית — פיצול בין חשבוניות פתוחות</div>
+            <fieldset>
+              <legend className="text-sm font-medium text-ink-soft mb-1.5">התאמה ידנית — פיצול בין חשבוניות פתוחות</legend>
               {data?.openInvoices.length ? (
                 <div className="border border-line rounded-lg divide-y divide-line-soft max-h-48 overflow-y-auto">
                   {data.openInvoices.map((inv) => {
@@ -463,16 +487,18 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                     return (
                       <div key={inv.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                         <input type="checkbox" className="rounded" checked={checked}
+                          aria-label={`בחירת חשבונית ${inv.invoice_number} של ${supplierName} להקצאה עבור ${transactionLabel}`}
                           onChange={(e) => setChosenInvoices((c) => {
                             const next = { ...c };
                             if (e.target.checked) next[inv.id] = Math.min(inv.balance, tx.amount - chosenSum > 0 ? tx.amount - chosenSum : inv.balance);
                             else delete next[inv.id];
                             return next;
                           })} />
-                        <span className="flex-1">חשבונית <b dir="ltr">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}</span>
+                        <span className="flex-1">חשבונית <b dir="ltr" className="num">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}</span>
                         <span className="text-xs text-ink-muted num">יתרה {fmtMoneyExact(inv.balance)}</span>
                         {checked && (
                           <input type="number" step="0.01" className="input w-28! num" value={chosenInvoices[inv.id]}
+                            aria-label={`סכום ההקצאה לחשבונית ${inv.invoice_number} של ${supplierName} עבור ${transactionLabel}`}
                             onChange={(e) => setChosenInvoices((c) => ({ ...c, [inv.id]: Number(e.target.value) || 0 }))} />
                         )}
                       </div>
@@ -488,7 +514,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                   <button className="btn-primary" disabled={busy} onClick={() => void confirmManual()}>אישור התאמה ידנית</button>
                 </div>
               )}
-            </div>
+            </fieldset>
           </>
         )}
 

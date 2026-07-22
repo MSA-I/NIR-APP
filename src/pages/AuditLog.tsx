@@ -57,9 +57,11 @@ export default function AuditLogPage() {
       <h1 className="page-title flex items-center gap-2"><ScrollText size={22} /> יומן ביקורת</h1>
       <DataTable rows={rows} columns={columns} pageSize={25} searchable
         searchFn={(r, q) => r.action.includes(q) || (r.reason ?? '').toLowerCase().includes(q) || (r.profile?.full_name ?? '').includes(q)}
+        searchLabel="חיפוש ביומן הביקורת"
+        rowLabel={(r) => `${actionLabel(r.action)} ב${ENTITY_LABEL[r.entity_type] ?? r.entity_type} מיום ${fmtDateTime(r.created_at)}`}
         onRowClick={(r) => setSelected(r)}
         toolbar={
-          <select className="input w-auto!" value={entityFilter} onChange={(e) => setEntityFilter(e.target.value)}>
+          <select className="input w-auto!" aria-label="סינון יומן הביקורת לפי ישות" value={entityFilter} onChange={(e) => setEntityFilter(e.target.value)}>
             <option value="">כל הישויות</option>
             {entities.map((e) => <option key={e} value={e}>{ENTITY_LABEL[e] ?? e}</option>)}
           </select>

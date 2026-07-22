@@ -101,7 +101,7 @@ export function InvoicesList() {
   }
 
   const columns: Column<InvoiceRow>[] = [
-    { key: 'number', header: 'מס׳ חשבונית', priority: 3, sortValue: (r) => r.invoice_number, render: (r) => <span className="font-medium text-ink" dir="ltr">{r.invoice_number}</span> },
+    { key: 'number', header: 'מס׳ חשבונית', priority: 3, className: 'num', sortValue: (r) => r.invoice_number, render: (r) => <span className="font-medium text-ink" dir="ltr">{r.invoice_number}</span> },
     { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
     { key: 'date', header: 'תאריך', sortValue: (r) => r.invoice_date, render: (r) => fmtDate(r.invoice_date) },
     { key: 'total', header: 'סה״כ', className: 'num', sortValue: (r) => r.total_amount, render: (r) => fmtMoneyExact(r.total_amount) },
@@ -122,9 +122,11 @@ export function InvoicesList() {
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.invoice_number.toLowerCase().includes(q) || r.supplier.name.toLowerCase().includes(q)}
+        searchLabel="חיפוש בחשבוניות"
+        rowLabel={(r) => `חשבונית ${r.invoice_number} של ${r.supplier.name}`}
         onRowClick={(r) => navigate(`/invoices/${r.id}`)}
         mobile="cards"
-        mobileTitle={(r) => <><span dir="ltr">{r.invoice_number}</span> · {r.supplier.name}</>}
+        mobileTitle={(r) => <><span dir="ltr" className="num">{r.invoice_number}</span> · {r.supplier.name}</>}
         mobileTrailing={(r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} />}
         rowActions={(r) => [
           { key: 'edit', label: 'עריכה', icon: Pencil, hidden: !canCreate, onSelect: () => navigate(`/invoices/${r.id}`) },
@@ -135,15 +137,15 @@ export function InvoicesList() {
         ]}
         toolbar={
           <>
-            <select className="input w-auto!" value={reviewFilter} onChange={(e) => setReviewFilter(e.target.value)}>
+            <select className="input w-auto!" aria-label="סינון חשבוניות לפי סטטוס בדיקה" value={reviewFilter} onChange={(e) => setReviewFilter(e.target.value)}>
               <option value="">כל סטטוסי הבדיקה</option>
               {Object.entries(INVOICE_REVIEW_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
-            <select className="input w-auto!" value={payFilter} onChange={(e) => setPayFilter(e.target.value)}>
+            <select className="input w-auto!" aria-label="סינון חשבוניות לפי סטטוס תשלום" value={payFilter} onChange={(e) => setPayFilter(e.target.value)}>
               <option value="">כל סטטוסי התשלום</option>
               {Object.entries(INVOICE_PAYMENT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
-            <select className="input w-auto!" value={exportFilter} onChange={(e) => setExportFilter(e.target.value)}>
+            <select className="input w-auto!" aria-label="סינון חשבוניות לפי סטטוס העברה לרואה חשבון" value={exportFilter} onChange={(e) => setExportFilter(e.target.value)}>
               <option value="">כל סטטוסי הרו״ח</option>
               {Object.entries(INVOICE_EXPORT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>

@@ -7,9 +7,10 @@ import { APP_NAME } from '../lib/branding';
 import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
 import Fab from './Fab';
 import NotificationBell from './NotificationBell';
-import { useToast } from './ui';
+import { useDialogLayer, useToast } from './ui';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
 import type { Role } from '../lib/types';
+import { toHebrewError } from '../lib/errors';
 
 interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[] }
 
@@ -65,6 +66,21 @@ const NAV: { section: string; items: NavItem[] }[] = [
   },
 ];
 
+const PAGE_TITLE_PATTERNS: [RegExp, string][] = [
+  [/^\/suppliers\/[^/]+$/, 'כרטיס ספק'],
+  [/^\/orders\/[^/]+$/, 'פרטי הזמנה'],
+  [/^\/receiving\/[^/]+$/, 'קבלת סחורה'],
+  [/^\/invoices\/new$/, 'חשבונית חדשה'],
+  [/^\/invoices\/[^/]+$/, 'פרטי חשבונית'],
+  [/^\/onboarding$/, 'הקמת המערכת'],
+  [/^\/admin$/, 'ניהול פלטפורמה'],
+];
+
+function pageTitleFor(pathname: string): string {
+  const navTitle = NAV.flatMap((section) => section.items).find((item) => item.to === pathname)?.label;
+  return navTitle ?? PAGE_TITLE_PATTERNS.find(([pattern]) => pattern.test(pathname))?.[1] ?? APP_NAME;
+}
+
 export default function Layout() {
   const { profile, org, roleLabels, isPlatformAdmin, signOut } = useAuth();
   const navigate = useNavigate();
@@ -73,7 +89,6 @@ export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const drawerRef = useRef<HTMLElement>(null);
   const role = profile?.role;
   // Section 5: payer/supplier get no search box — their only routes are dead ends for it.
   const canSearch = canGlobalSearch(role);
@@ -101,48 +116,31 @@ export default function Layout() {
   // as if they were doing the buying. Below the threshold the header is noise, so drop it.
   const showHeaders = sections.reduce((n, s) => n + s.items.length, 0) > 1;
 
+  const { panelRef: drawerRef, requestClose: closeMobileMenu } = useDialogLayer<HTMLElement>({
+    open: mobileOpen,
+    onClose: () => setMobileOpen(false),
+    initialFocus: (panel) => panel.querySelector<HTMLElement>('[aria-current="page"]')
+      ?? panel.querySelector<HTMLElement>('button, a'),
+  });
+
+  // Crossing into desktop closes the mobile layer so its scroll lock cannot survive a resize.
   useEffect(() => {
-    if (!mobileOpen) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    requestAnimationFrame(() => {
-      const active = drawerRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
-      (active ?? drawerRef.current?.querySelector<HTMLElement>('button, a'))?.focus();
-    });
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        setMobileOpen(false);
-        requestAnimationFrame(() => menuButtonRef.current?.focus());
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const focusable = Array.from(drawerRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? []);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', onKeyDown);
+    const desktop = window.matchMedia('(min-width: 64rem)');
+    const sync = () => { if (desktop.matches) setMobileOpen(false); };
+    desktop.addEventListener('change', sync);
+    sync();
     return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', onKeyDown);
+      desktop.removeEventListener('change', sync);
     };
-  }, [mobileOpen]);
+  }, []);
 
-  function closeMobileMenu() {
-    setMobileOpen(false);
-    requestAnimationFrame(() => menuButtonRef.current?.focus());
-  }
+  // Route changes announce themselves through the tab title and move keyboard focus past the
+  // persistent navigation shell. Query-only filter changes keep focus where the user left it.
+  useEffect(() => {
+    document.title = `${pageTitleFor(location.pathname)} — ${orgName}`;
+    const frame = requestAnimationFrame(() => document.getElementById('main')?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(frame);
+  }, [location.pathname, orgName]);
 
   async function handleSignOut() {
     const detail: OrderDraftFlushDetail = { pending: [] };
@@ -154,8 +152,13 @@ export default function Layout() {
         return;
       }
     }
-    await signOut();
+    const result = await signOut();
+    if (result.error) {
+      toast(toHebrewError(result.error), 'error');
+      return;
+    }
     navigate('/login');
+    if (result.pushWarning) toast(result.pushWarning, 'error');
   }
 
   const linkCls = ({ isActive }: { isActive: boolean }) =>
@@ -172,10 +175,10 @@ export default function Layout() {
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
         {sections.map((s, i) => (
           <div key={i}>
-            {showHeaders && s.section && <div className="px-3 pb-1 text-[11px] font-semibold text-shell-heading uppercase">{s.section}</div>}
+            {showHeaders && s.section && <div className="px-3 pb-1 text-[11px] font-semibold text-shell-heading">{s.section}</div>}
             <div className="space-y-0.5">
               {s.items.map((item) => (
-                <NavLink key={item.to} to={item.to} className={linkCls} onClick={() => setMobileOpen(false)} end={item.to === '/orders'}>
+                <NavLink key={item.to} to={item.to} className={linkCls} onClick={() => { if (mobileOpen) closeMobileMenu(); }} end={item.to === '/orders'}>
                   <item.icon size={17} />
                   {item.label}
                   {/* TaskLine's count-pill anatomy at the item's logical end; both the desktop
@@ -222,16 +225,17 @@ export default function Layout() {
         <div className="flex items-center gap-1">
           <NotificationBell onShell />
           {canSearch && (
-            <button className="flex items-center justify-center min-w-11 min-h-11" onClick={() => setSearchOpen(true)} aria-label="חיפוש"><Search size={21} /></button>
+            <button className="flex items-center justify-center min-w-11 min-h-11" onClick={() => setSearchOpen(true)}
+              aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={21} /></button>
           )}
         </div>
       </header>
       {searchOpen && <GlobalSearch variant="mobile" onClose={() => setSearchOpen(false)} />}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-shell/60 no-print" onClick={closeMobileMenu}>
+        <div className="lg:hidden fixed inset-0 z-50 bg-shell/60 no-print" onClick={() => closeMobileMenu()}>
           <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label="תפריט ראשי"
-            className="absolute inset-y-0 start-0 w-72 bg-shell border-e border-shell-ink/10" onClick={(e) => e.stopPropagation()}>
-            <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 text-shell-ink-dim" onClick={closeMobileMenu} aria-label="סגירת תפריט"><X size={20} /></button>
+            tabIndex={-1} className="phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-shell border-e border-shell-ink/10 focus:outline-none" onClick={(e) => e.stopPropagation()}>
+            <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 text-shell-ink-dim" onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={20} /></button>
             {sidebar}
           </aside>
         </div>

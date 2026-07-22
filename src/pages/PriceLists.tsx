@@ -80,6 +80,8 @@ export default function PriceLists() {
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q) || r.supplier.name.toLowerCase().includes(q)}
+        searchLabel="חיפוש במחירונים"
+        rowLabel={(r) => `${r.product.name} אצל ${r.supplier.name}`}
         rowActions={(r) => [
           { key: 'history', label: 'היסטוריית מחירים', icon: History, onSelect: () => setHistoryFor(r) },
           { key: 'edit', label: 'עדכון מחיר', icon: Pencil, hidden: !canWrite, onSelect: () => setEditFor(r) },
@@ -91,7 +93,7 @@ export default function PriceLists() {
                 <X size={14} /> {activeProductName ?? 'מוצר'}
               </button>
             )}
-            <select className="input w-auto!" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
+            <select className="input w-auto!" aria-label="סינון מחירונים לפי ספק" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
               <option value="">כל הספקים</option>
               {suppliers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
             </select>
@@ -161,14 +163,14 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
   }
 
   return (
-    <Modal open onClose={onClose} title={`עדכון מחיר — ${row.product.name} (${row.supplier.name})`}>
+    <Modal open onClose={onClose} title={`עדכון מחיר — ${row.product.name} (${row.supplier.name})`} busy={busy} statusMessage={busy ? 'שומר את המחיר' : undefined}>
       <div className="space-y-4">
-        <div><label className="label">מחיר חדש (₪)</label><input type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
-        <div><label className="label">בתוקף מתאריך</label><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        <div><label className="label" htmlFor="price-list-price">מחיר חדש (₪)</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
+        <div><label className="label" htmlFor="price-list-date">בתוקף מתאריך</label><input id="price-list-date" type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="rounded" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> זמין אצל הספק</label>
       </div>
       <div className="flex justify-end gap-2 mt-5">
-        <button className="btn-secondary" onClick={onClose}>ביטול</button>
+        <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
         <button className="btn-primary" disabled={busy} onClick={() => void save()}>שמירה</button>
       </div>
     </Modal>
@@ -246,7 +248,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   }
 
   return (
-    <Modal open onClose={onClose} title="ייבוא מחירון מ־Excel / CSV" wide>
+    <Modal open onClose={onClose} title="ייבוא מחירון מ־Excel / CSV" wide busy={busy} statusMessage={report ?? (busy ? 'מייבא את המחירון' : undefined)}>
       {report ? (
         <div className="space-y-4">
           <Note tone="done">{report}</Note>
@@ -257,7 +259,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           <div className="text-sm text-ink-soft">{preview.length} שורות זוהו. ההתאמה מתבצעת לפי שם ספק ושם מוצר מדויקים.</div>
           <div className="max-h-64 overflow-y-auto border border-line-soft rounded-lg">
             <table className="w-full">
-              <thead className="bg-surface-sunken sticky top-0"><tr><th className="th">ספק</th><th className="th">מוצר</th><th className="th">מחיר</th></tr></thead>
+              <thead className="bg-surface-sunken sticky top-0"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">מוצר</th><th scope="col" className="th">מחיר</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {preview.slice(0, 100).map((r, i) => (
                   <tr key={i}><td className="td">{r.supplier}</td><td className="td">{r.product}</td><td className="td num">₪{r.price.toFixed(2)}</td></tr>
@@ -266,14 +268,14 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
             </table>
           </div>
           <div className="flex justify-end gap-2">
-            <button className="btn-secondary" onClick={() => setPreview([])}>חזרה</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => setPreview([])}>חזרה</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>{busy ? 'מייבא...' : 'אישור וייבוא'}</button>
           </div>
         </div>
       ) : (
         <div className="text-center py-8">
           <p className="text-sm text-ink-soft mb-4">בחר קובץ Excel או CSV עם העמודות: <b>ספק</b>, <b>מוצר</b>, <b>מחיר</b></p>
-          <button className="btn-primary" onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
+          <button className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
           <input ref={fileRef} type="file" hidden accept=".xlsx,.xls,.csv" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
         </div>
       )}
