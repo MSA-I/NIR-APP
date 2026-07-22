@@ -75,6 +75,24 @@ $env:SUPABASE_ACCESS_TOKEN = "sbp_..."   # טוקן אישי מ-supabase.com/das
 .\scripts\check-p0-upgrade.ps1 -ResetUpgradeDatabase
 ```
 
+## שער איכות P4 — מקומי בלבד
+
+לאחר התקנת התלויות, הפקודה היחידה שמריצה את כל שערי הקוד, המסד והדפדפן היא:
+
+```powershell
+npm.cmd run quality
+```
+
+השער משתמש בתשתיות ובבדיקות הקיימות: build ובדיקות Node, ‏P0/P1/P2 SQL, ‏Supabase CLI,
+Docker ו־Chrome/Edge. הוא הרסני **רק** לפרויקט Supabase המקומי `supplyflow-p0`
+(`http://127.0.0.1:55431`), מסרב לכתובת אחרת ומאפס את המסד המקומי בסיום. בדיקות הדפדפן
+משתמשות ב־`PLAYWRIGHT_CORE_PATH` אם הוגדר, או ב־runtime המקומי הקיים של Codex, ושומרות
+ראיות מחוץ לריפו תחת `.codex/visualizations` בפרופיל המשתמש. אפשר לשנות רק את יעד הראיות
+באמצעות `QUALITY_ARTIFACT_ROOT`.
+
+חוסר ב־Docker/Supabase/דפדפן/runtime, בדיקה מדולגת או ממצא בדפדפן מחזירים קוד יציאה שאינו
+אפס; אין מסלול fallback שמדווח הצלחה.
+
 ## תיעוד נוסף
 
 - `docs/ARCHITECTURE.md` — ארכיטקטורה, מפת מסכים, מטריצת הרשאות, דיאגרמות סטטוסים, ה-workflow המלא.

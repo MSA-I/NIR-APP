@@ -10,6 +10,7 @@
     "check:orders": "node scripts/check-order-savings.ts",
     "check:p2": "node scripts/check-p2-reliability.ts",
     "build": "tsc --noEmit && npm run check:alerts && npm run check:dashboard && npm run check:orders && npm run check:p2 && vite build",
+    "quality": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-quality-gates.ps1",
     "preview": "vite preview"
   },
   "dependencies": {

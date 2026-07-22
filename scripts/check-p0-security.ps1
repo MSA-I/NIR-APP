@@ -6,10 +6,12 @@
 #
 # Usage:
 #   .\scripts\check-p0-security.ps1 -ResetLocalDatabase
+#   .\scripts\check-p0-security.ps1 -ResetLocalDatabase -ServePushFunction
 #   .\scripts\check-p0-security.ps1 -ResetLocalDatabase -KeepFixture # local debugging only
 param(
   [switch]$ResetLocalDatabase,
   [switch]$KeepFixture,
+  [switch]$ServePushFunction,
   [string]$PushSecret
 )
 
@@ -59,6 +61,79 @@ function New-Id { return [guid]::NewGuid().Guid }
 
 function New-Password {
   return "P0!$([guid]::NewGuid().ToString('N'))aA7"
+}
+
+function ConvertTo-Base64Url([byte[]]$Bytes) {
+  return [Convert]::ToBase64String($Bytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+}
+
+function New-LocalVapidKeys {
+  $ecdsa = New-Object System.Security.Cryptography.ECDsaCng 256
+  try {
+    $parameters = $ecdsa.ExportParameters($true)
+    $publicBytes = New-Object byte[] 65
+    $publicBytes[0] = 4
+    [Array]::Copy($parameters.Q.X, 0, $publicBytes, 1, 32)
+    [Array]::Copy($parameters.Q.Y, 0, $publicBytes, 33, 32)
+    return [pscustomobject]@{
+      PublicKey = ConvertTo-Base64Url $publicBytes
+      PrivateKey = ConvertTo-Base64Url $parameters.D
+    }
+  }
+  finally {
+    $ecdsa.Dispose()
+  }
+}
+
+function Start-LocalPushFunction([hashtable]$Environment, [string]$Secret) {
+  $repoRoot = Split-Path -Parent $PSScriptRoot
+  $keys = New-LocalVapidKeys
+  $stdoutPath = [IO.Path]::GetTempFileName()
+  $stderrPath = [IO.Path]::GetTempFileName()
+  $envPath = [IO.Path]::GetTempFileName()
+  $envLines = @(
+    "PUSH_FN_SECRET=$Secret",
+    "VAPID_PUBLIC_KEY=$($keys.PublicKey)",
+    "VAPID_PRIVATE_KEY=$($keys.PrivateKey)",
+    "VAPID_SUBJECT=mailto:p0-local@example.test",
+    "SUPABASE_URL=$($Environment.API_URL)",
+    "SUPABASE_SERVICE_ROLE_KEY=$($Environment.SERVICE_ROLE_KEY)"
+  )
+  [IO.File]::WriteAllLines($envPath, $envLines, (New-Object Text.UTF8Encoding($false)))
+  $process = Start-Process -FilePath (Get-Command supabase).Source `
+    -ArgumentList @("functions", "serve", "send-push", "--no-verify-jwt", "--env-file", $envPath) `
+    -WorkingDirectory $repoRoot -WindowStyle Hidden -PassThru `
+    -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+
+  $ready = $false
+  for ($attempt = 0; $attempt -lt 60; $attempt++) {
+    if ($process.HasExited) { break }
+    try {
+      $probe = Invoke-JsonRequest -Method Post -Uri "$apiUrl/functions/v1/send-push" `
+        -Headers @{ "x-push-secret" = "p0-readiness-probe" } -Body @{ event = "payment_due_scan" }
+      if ($probe.Status -eq 403) {
+        $ready = $true
+        break
+      }
+    } catch {
+      # The local Deno worker is still starting.
+    }
+    Start-Sleep -Milliseconds 500
+  }
+
+  if (-not $ready) {
+    if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+    $detail = (Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue).Trim()
+    Remove-Item -LiteralPath $stdoutPath, $stderrPath, $envPath -Force -ErrorAction SilentlyContinue
+    throw "Local send-push function did not become ready. $detail"
+  }
+
+  return [pscustomobject]@{
+    Process = $process
+    StdoutPath = $stdoutPath
+    StderrPath = $stderrPath
+    EnvPath = $envPath
+  }
 }
 
 function New-Headers([string]$ApiKey, [string]$Token, [string]$Prefer = $null) {
@@ -215,6 +290,7 @@ Reset-TestDatabase
 $environment = Get-LocalSupabaseEnvironment
 $anonKey = [string]$environment.ANON_KEY
 $serviceKey = [string]$environment.SERVICE_ROLE_KEY
+$pushServer = $null
 
 try {
   $suffix = [guid]::NewGuid().ToString("N").Substring(0, 10)
@@ -570,6 +646,11 @@ try {
     Assert-Count (Get-Rows "profiles?select=id" $roleAccount $anonKey "suspended all-role negative read") 0 "every tenant role loses access after suspension"
   }
 
+  if ($ServePushFunction) {
+    if (-not $PushSecret) { $PushSecret = "P0-$([guid]::NewGuid().ToString('N'))" }
+    $pushServer = Start-LocalPushFunction $environment $PushSecret
+  }
+
   if ($PushSecret) {
     $activeEventKey = "p0-edge-active-$suffix"
     $suspendedEventKey = "p0-edge-suspended-$suffix"
@@ -592,6 +673,10 @@ try {
   Write-Output "P0 security acceptance passed: $script:Passed assertions."
 }
 finally {
+  if ($pushServer) {
+    if (-not $pushServer.Process.HasExited) { Stop-Process -Id $pushServer.Process.Id -Force }
+    Remove-Item -LiteralPath $pushServer.StdoutPath, $pushServer.StderrPath, $pushServer.EnvPath -Force -ErrorAction SilentlyContinue
+  }
   if (-not $KeepFixture) {
     Reset-TestDatabase
   } else {
