@@ -39,6 +39,7 @@ import webpush from 'npm:web-push@3.6.7';
  * no shared module). If one side changes, change the other in the same commit. */
 const DUE_SOON_DAYS = 7;
 const PR_ACTIVE = ['draft', 'pending_approval', 'approved', 'sent_for_execution'];
+const NOTIFIABLE_ORG_STATUSES = ['trial', 'active'];
 
 /** The in-app alerts screen is an owner/office decision surface (App.tsx FINANCE guard).
  *  The bell and Push use the same audience so a notification never links to a forbidden page. */
@@ -103,9 +104,18 @@ function businessDate(n = 0): string {
   return date.toISOString().slice(0, 10);
 }
 
+async function organizationCanNotify(admin: SupabaseClient, orgId: string): Promise<boolean> {
+  const { data, error } = await admin.from('organizations').select('id')
+    .eq('id', orgId).in('status', NOTIFIABLE_ORG_STATUSES).maybeSingle();
+  if (error) throw new Error(error.message);
+  return !!data;
+}
+
 async function recipientIds(admin: SupabaseClient, orgId: string): Promise<string[]> {
-  const { data, error } = await admin.from('profiles').select('id')
-    .eq('org_id', orgId).eq('active', true).in('role', ALERT_ROLES);
+  const { data, error } = await admin.from('profiles')
+    .select('id, organization:organizations!profiles_org_id_fkey!inner(status)')
+    .eq('org_id', orgId).eq('active', true).in('role', ALERT_ROLES)
+    .in('organization.status', NOTIFIABLE_ORG_STATUSES);
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => row.id as string);
 }
@@ -250,6 +260,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       ? 'מחיר אחד עודכן כלפי מעלה במחירון'
       : `${count} מחירים עודכנו כלפי מעלה במחירון`;
     try {
+      if (!await organizationCanNotify(admin, body.org_id)) {
+        return json({ ok: true, notifications: 0, results: { sent: 0, failed: 0, removed: 0 } }, 200);
+      }
       const recipients = await recipientIds(admin, body.org_id);
       const insertedUsers = await insertNotifications(admin, recipients.map((userId) => ({
         org_id: body.org_id!, user_id: userId, event_code: 'price_increase',
@@ -271,6 +284,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return fail('invalid_request', 'duplicate_invoice_check payload is incomplete', 400);
     }
     try {
+      if (!await organizationCanNotify(admin, body.org_id)) {
+        return json({ ok: true, notifications: 0 }, 200);
+      }
       if (!body.payload.active) {
         await closeStandingEvent(admin, body.org_id, 'duplicate_invoice', [body.payload.entity_key]);
         return json({ ok: true, notifications: 0 }, 200);
@@ -301,7 +317,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (body.event === 'payment_due_scan') {
     const { data: orgRows, error: orgErr } = await admin
       .from('profiles')
-      .select('org_id').eq('active', true).in('role', ALERT_ROLES);
+      .select('org_id, organization:organizations!profiles_org_id_fkey!inner(status)')
+      .eq('active', true).in('role', ALERT_ROLES)
+      .in('organization.status', NOTIFIABLE_ORG_STATUSES);
     if (orgErr) return fail('query_failed', orgErr.message, 500);
 
     const orgIds = [...new Set((orgRows ?? []).map((r) => r.org_id as string))];
