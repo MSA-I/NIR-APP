@@ -1,5 +1,5 @@
 -- P1 regression harness. Run only against an isolated local database after applying all
--- project migrations plus p1_financial_command_boundaries.sql.
+-- project migrations through 0023_p1_financial_command_boundaries.sql.
 \set ON_ERROR_STOP on
 
 begin;

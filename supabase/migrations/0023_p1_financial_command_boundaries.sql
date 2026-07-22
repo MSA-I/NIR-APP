@@ -1,5 +1,5 @@
--- P1 draft — atomic financial command boundaries.
--- Move into migrations/ with the next free number only after rebasing onto P0/integration.
+-- P1 — atomic financial command boundaries.
+-- Depends on P0 migrations 0020-0022; integrate P0 before applying this migration.
 -- Forward-only: command functions/guards can be replaced, but financial rows are never
 -- deleted as rollback. Run supabase/tests/p1_preflight.sql before this file.
 

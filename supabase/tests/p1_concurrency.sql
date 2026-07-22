@@ -1,5 +1,5 @@
 -- P1 concurrency harness. Run only against a disposable database that already has all
--- project migrations and p1_financial_command_boundaries.sql applied. The harness uses
+-- project migrations through 0023_p1_financial_command_boundaries.sql applied. The harness uses
 -- dblink to create two real PostgreSQL sessions and intentionally commits its fixtures.
 -- Clone/reset the database before every run.
 --
