@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, FileText, Inbox, Loader2, Search } from 'lucide-react';
+import { Camera, Eye, FileInput, FileText, Inbox, Loader2, ReceiptText, Search, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -9,6 +9,7 @@ import { ok, toHebrewError } from '../lib/errors';
 import { logAction } from '../lib/audit';
 import { fmtDate, fmtDateTime } from '../lib/format';
 import type { DocumentRow } from '../lib/types';
+import { ActionMenu } from '../components/ActionMenu';
 
 type RefileTarget = 'invoice' | 'goods_receipt';
 
@@ -224,12 +225,12 @@ export default function DocumentsInbox() {
       {error && <ErrorNote message={error} />}
 
       {loading ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" role="status" aria-busy="true">
+        <div className="divide-y divide-line-soft border-y border-line-strong bg-surface" role="status" aria-busy="true">
           <span className="sr-only">טוען מסמכים</span>
           {[0, 1, 2].map((i) => (
-            <div key={i} className="card overflow-hidden">
-              <Skeleton className="h-24 w-full rounded-none" />
-              <div className="p-3 space-y-2">
+            <div key={i} className="flex min-h-20 items-center gap-3 px-3 py-2.5 sm:px-4">
+              <Skeleton className="size-14 shrink-0 rounded-none" />
+              <div className="min-w-0 flex-1 space-y-2">
                 <Skeleton className="h-4 w-32" />
                 <Skeleton className="h-3 w-24" />
               </div>
@@ -237,43 +238,39 @@ export default function DocumentsInbox() {
           ))}
         </div>
       ) : data?.docs.length ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="divide-y divide-line-soft border-y border-line-strong bg-surface">
           {data.docs.map((d) => {
             const thumb = data.thumbs[d.storage_path];
             const isImage = !!thumb && !!d.mime_type?.startsWith('image/');
             return (
-              <div key={d.id} className="card overflow-hidden flex flex-col">
+              <li key={d.id} className="flex min-h-20 items-center gap-3 px-3 py-2.5 sm:px-4">
                 <button type="button" onClick={() => void open(d)} title={d.file_name}
                   aria-label={`פתיחת המסמך ${d.file_name} בלשונית חדשה`}
-                  className="block w-full cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2">
+                  className="grid size-14 shrink-0 place-items-center border border-line bg-surface-sunken focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2">
                   {isImage ? (
-                    <img src={thumb} alt={d.file_name} className="h-24 w-full object-cover rounded-t-lg" />
+                    <img src={thumb} alt={d.file_name} className="size-full object-cover" />
                   ) : (
-                    <span className="flex h-24 w-full items-center justify-center rounded-t-lg bg-surface-sunken">
-                      <FileText size={28} className="text-ink-faint" aria-hidden="true" />
-                    </span>
+                    <FileText size={22} className="text-ink-faint" aria-hidden="true" />
                   )}
                 </button>
-                <div className="p-3 flex-1 min-w-0">
-                  <div className="text-sm font-medium text-ink-body truncate" title={d.file_name}>{d.file_name}</div>
+                <div className="min-w-0 flex-1">
+                  <button type="button" onClick={() => void open(d)}
+                    className="max-w-full truncate text-start text-sm font-medium text-ink-body hover:text-action focus-visible:outline-none focus-visible:underline"
+                    title={d.file_name}>{d.file_name}</button>
                   <div className="text-xs text-ink-muted mt-0.5">{fmtDateTime(d.created_at)}</div>
                 </div>
-                <div className="flex flex-wrap items-center gap-1 border-t border-line-soft px-2 py-1.5">
-                  <button className="btn-ghost px-2! py-1.5! text-xs!" onClick={() => void open(d)}>צפייה</button>
-                  {canFile && (
-                    <>
-                      <button className="btn-ghost px-2! py-1.5! text-xs!" onClick={() => setRefile({ doc: d, target: 'invoice' })}>שיוך לחשבונית</button>
-                      <button className="btn-ghost px-2! py-1.5! text-xs!" onClick={() => setRefile({ doc: d, target: 'goods_receipt' })}>שיוך לקבלה</button>
-                      <button className="btn-ghost px-2! py-1.5! text-xs! ms-auto text-ink-faint hover:text-alert-solid" onClick={() => setPendingDelete(d)}>הסרה</button>
-                    </>
-                  )}
-                </div>
-              </div>
+                <ActionMenu label={`פעולות עבור ${d.file_name}`} items={[
+                  { key: 'view', label: 'צפייה', icon: Eye, onSelect: () => void open(d) },
+                  { key: 'invoice', label: 'שיוך לחשבונית', icon: FileInput, hidden: !canFile, onSelect: () => setRefile({ doc: d, target: 'invoice' }) },
+                  { key: 'receipt', label: 'שיוך לקבלת סחורה', icon: ReceiptText, hidden: !canFile, onSelect: () => setRefile({ doc: d, target: 'goods_receipt' }) },
+                  { key: 'delete', label: 'הסרה', icon: Trash2, tone: 'danger', hidden: !canFile, onSelect: () => setPendingDelete(d) },
+                ]} />
+              </li>
             );
           })}
-        </div>
+        </ul>
       ) : (
-        <div className="card">
+        <div className="border-y border-line-strong bg-surface">
           <EmptyState title="אין מסמכים לא משויכים" subtitle="כל מה שצולם כבר שויך. מסמך חדש נקלט בכפתור צילום / העלאה." />
         </div>
       )}

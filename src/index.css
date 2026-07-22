@@ -115,16 +115,24 @@
   --color-trend-down-fg: var(--color-emerald-700);
 }
 
-html { font-family: var(--font-sans); }
+html {
+  font-family: var(--font-sans);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
 
 body {
   @apply bg-canvas text-ink-body antialiased;
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
+
+#root { min-inline-size: 0; }
 
 /* Tailwind v4: custom classes can @apply only real utilities, so the shared
    btn/badge bases are registered with @utility and the variants apply them. */
 @utility btn {
-  @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-[color,background-color,border-color,box-shadow,translate] duration-150 ease-out cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:translate-y-px disabled:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply inline-flex min-h-11 sm:min-h-0 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-[color,background-color,border-color,box-shadow,translate] duration-150 ease-out cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:translate-y-px disabled:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed;
 }
 @utility badge {
   @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap;
@@ -147,7 +155,8 @@ body {
   .btn-danger { @apply btn bg-alert-solid text-white hover:bg-alert-on-soft; }
   .btn-ghost { @apply btn text-ink-soft hover:bg-canvas; }
 
-  .input { @apply w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-ink-body placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-focus focus:border-focus disabled:bg-surface-sunken; }
+  /* 16px on phones prevents Safari from zooming the whole page when an input receives focus. */
+  .input { @apply w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-base sm:text-sm text-ink-body placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-focus focus:border-focus disabled:bg-surface-sunken; }
   .label { @apply block text-sm font-medium text-ink-soft mb-1; }
 
   /* Shared interaction patterns — every page hover/link points here, never at a raw hue. */
@@ -185,6 +194,50 @@ body {
   .dashboard-depth .card { box-shadow: var(--shadow-dashboard); }
   .dashboard-depth summary { @apply cursor-pointer; }
   .dashboard-depth :is(a, button, summary):focus-visible { @apply outline-none ring-2 ring-focus ring-offset-2 ring-offset-canvas; }
+}
+
+/* Phone shell: safe-area values are physical browser measurements, mapped here to the
+   logical RTL edges. The content remains width-constrained; no overflow is hidden. */
+.phone-safe-header {
+  padding-block-start: max(0.75rem, env(safe-area-inset-top));
+  padding-block-end: 0.75rem;
+  padding-inline-start: max(1rem, env(safe-area-inset-right));
+  padding-inline-end: max(1rem, env(safe-area-inset-left));
+}
+
+.phone-safe-main {
+  padding-inline-start: max(1rem, env(safe-area-inset-right));
+  padding-inline-end: max(1rem, env(safe-area-inset-left));
+}
+
+.phone-fab {
+  inset-inline-end: max(1rem, env(safe-area-inset-left));
+  inset-block-end: max(1rem, env(safe-area-inset-bottom));
+}
+
+.phone-taskbar {
+  inset-block-end: 0;
+  padding-block-end: calc(0.75rem + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 40rem) {
+  .phone-safe-main {
+    padding-inline-start: max(1.5rem, env(safe-area-inset-right));
+    padding-inline-end: max(1.5rem, env(safe-area-inset-left));
+  }
+}
+
+@media (min-width: 48rem) {
+  .phone-fab { inset-inline-end: 2rem; inset-block-end: 2rem; }
+}
+
+@media (max-width: 47.999rem) {
+  .mobile-data-card .truncate {
+    max-inline-size: 100%;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+  }
 }
 
 /* number cells keep latin digits aligned nicely inside RTL layout */

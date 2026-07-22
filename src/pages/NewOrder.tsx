@@ -4,7 +4,7 @@ import { Search, Trash2, AlertTriangle, Split, Plus, Minus, Check } from 'lucide
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageLoader, useToast, ErrorNote, Note } from '../components/ui';
+import { PageLoader, useToast, ErrorNote } from '../components/ui';
 import { useCategories } from './Suppliers';
 import { fmtMoneyExact, todayISO } from '../lib/format';
 import type { Product, Supplier, SupplierProduct } from '../lib/types';
@@ -32,6 +32,11 @@ export default function NewOrder() {
   // leaves the metric as "—" for that order rather than a false 0%.
   const [expectedDate, setExpectedDate] = useState('');
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
+
+  useEffect(() => {
+    if (step === 2 && cart.length === 0) setStep(1);
+  }, [cart.length, step]);
 
   const { data, loading, error } = useQuery(async () => {
     const [products, sps, suppliers] = await Promise.all([
@@ -186,155 +191,139 @@ export default function NewOrder() {
   if (error) return <ErrorNote message={error} />;
 
   return (
-    <div className="space-y-4">
-      <h1 className="page-title">הזמנה חדשה</h1>
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
-        {/* Product picker */}
-        <div className="card lg:col-span-2 overflow-hidden">
-          <div className="p-3 border-b border-line-soft space-y-2">
-            <div className="relative">
-              <Search size={15} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint" />
-              <input className="input ps-9!" placeholder="חיפוש מוצר..." value={q} onChange={(e) => setQ(e.target.value)} />
+    <div className="mx-auto max-w-5xl space-y-4">
+      <div>
+        <h1 className="page-title">הזמנה חדשה</h1>
+        <p className="mt-1 text-sm text-ink-muted">בחירת מוצרים תחילה, אישור ספקים ומחירים לאחר מכן</p>
+      </div>
+
+      <nav aria-label="שלבי הזמנה" className="grid grid-cols-2 border-y border-line-strong bg-surface">
+        <button type="button" onClick={() => setStep(1)} aria-current={step === 1 ? 'step' : undefined}
+          className={`flex min-h-14 items-center gap-2 border-b-2 px-4 text-start transition-colors ${step === 1 ? 'border-action bg-action-wash/50 text-ink' : 'border-transparent text-ink-muted hover:bg-surface-sunken'}`}>
+          <span className="num text-xs">01</span><span className="text-sm font-semibold">מוצרים וכמויות</span>
+        </button>
+        <button type="button" disabled={!cart.length} onClick={() => setStep(2)} aria-current={step === 2 ? 'step' : undefined}
+          className={`flex min-h-14 items-center gap-2 border-b-2 border-s border-line-soft px-4 text-start transition-colors disabled:opacity-50 ${step === 2 ? 'border-b-action bg-action-wash/50 text-ink' : 'border-b-transparent text-ink-muted hover:bg-surface-sunken'}`}>
+          <span className="num text-xs">02</span><span className="text-sm font-semibold">ספקים וסיכום</span>
+        </button>
+      </nav>
+
+      {step === 1 ? (
+        <section aria-labelledby="product-picker-title" className="border-y border-line-strong bg-surface">
+          <div className="space-y-3 border-b border-line-soft p-3 sm:p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 id="product-picker-title" className="section-title">בחירת מוצרים</h2>
+              <span className="text-sm text-ink-muted"><span className="num font-semibold text-ink">{cart.length}</span> מוצרים נבחרו</span>
             </div>
-            <div className="flex gap-1.5 flex-wrap">
-              <button className={`badge ${!cat ? 'bg-action-solid text-white' : 'bg-idle-soft text-ink-soft'}`} onClick={() => setCat('')}>הכל</button>
-              {categories?.map((c) => (
-                <button key={c.id} className={`badge ${cat === c.id ? 'bg-action-solid text-white' : 'bg-idle-soft text-ink-soft'}`} onClick={() => setCat(c.id)}>{c.name}</button>
+            <div className="relative">
+              <Search size={15} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint" aria-hidden="true" />
+              <input className="input ps-9!" aria-label="חיפוש מוצר" placeholder="חיפוש מוצר..." value={q} onChange={(event) => setQ(event.target.value)} />
+            </div>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="סינון לפי קטגוריה">
+              <button type="button" className={`min-h-11 border px-3 text-xs font-medium ${!cat ? 'border-action bg-action text-white' : 'border-line text-ink-soft hover:bg-surface-sunken'}`} onClick={() => setCat('')}>הכול</button>
+              {categories?.map((category) => (
+                <button type="button" key={category.id} className={`min-h-11 border px-3 text-xs font-medium ${cat === category.id ? 'border-action bg-action text-white' : 'border-line text-ink-soft hover:bg-surface-sunken'}`} onClick={() => setCat(category.id)}>{category.name}</button>
               ))}
             </div>
           </div>
-          <div className="max-h-[26rem] overflow-y-auto divide-y divide-line-soft">
-            {filteredProducts.map((p) => {
-              const offers = offersByProduct.get(p.id) ?? [];
-              const carted = cartByProduct.get(p.id);
-              // The stepper buttons are siblings of the row-body button (nested buttons are
-              // invalid HTML); body click adds / increments, the stepper fine-tunes in place.
+
+          <div className="max-h-[32rem] divide-y divide-line-soft overflow-y-auto">
+            {filteredProducts.map((product) => {
+              const offers = offersByProduct.get(product.id) ?? [];
+              const carted = cartByProduct.get(product.id);
               return (
-                <div key={p.id} className={`flex items-center ${carted ? 'bg-action-wash/60' : ''}`}>
-                  <button
-                    className={`flex-1 min-w-0 flex items-center justify-between gap-3 px-4 py-2.5 text-start ${carted ? 'hover:bg-action-wash' : 'hover:bg-action-wash/50'}`}
-                    onClick={() => (carted ? incQty(p.id) : addToCart(p))}>
-                    <span className="flex items-center gap-1.5 min-w-0">
-                      {carted && <Check size={14} className="text-done-fg shrink-0" aria-hidden="true" />}
-                      <span className="text-sm font-medium text-ink-body truncate">{p.name}</span>
-                      <span className="text-xs text-ink-muted shrink-0">{p.unit}</span>
+                <div key={product.id} className={`flex min-h-14 items-center ${carted ? 'bg-action-wash/45' : ''}`}>
+                  <button type="button" className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-start hover:bg-surface-sunken sm:px-4"
+                    onClick={() => { if (!carted) addToCart(product); }}>
+                    <span className={`grid size-6 shrink-0 place-items-center border ${carted ? 'border-done-line bg-done-soft text-done-fg' : 'border-line text-transparent'}`} aria-hidden="true">
+                      <Check size={14} />
                     </span>
-                    <span className="text-xs text-ink-muted num shrink-0">
-                      {offers.length ? `₪${offers[0].current_price.toFixed(2)}` : 'אין ספק'}
+                    <span className="min-w-0 flex-1">
+                      <span className="block break-words text-sm font-medium text-ink-body sm:truncate">{product.name}</span>
+                      <span className="text-xs text-ink-muted">{product.unit}</span>
                     </span>
+                    <span className="shrink-0 text-xs text-ink-muted num">{offers.length ? `₪${offers[0].current_price.toFixed(2)}` : 'אין ספק'}</span>
                   </button>
                   {carted && (
-                    <div className="flex items-center gap-0.5 pe-2 shrink-0">
-                      <button className="btn-ghost p-1.5! min-w-10 min-h-10" aria-label="הפחת כמות"
-                        onClick={(e) => { e.stopPropagation(); decQty(p.id); }}><Minus size={14} /></button>
-                      <span className="num text-sm font-medium min-w-6">{carted.qty}</span>
-                      <button className="btn-ghost p-1.5! min-w-10 min-h-10" aria-label="הוסף כמות"
-                        onClick={(e) => { e.stopPropagation(); incQty(p.id); }}><Plus size={14} /></button>
+                    <div className="me-3 flex shrink-0 items-center border border-line-strong bg-surface sm:me-4" aria-label={`כמות ${product.name}`}>
+                      <button type="button" className="grid size-11 place-items-center hover:bg-surface-sunken" aria-label={`הפחתת כמות ${product.name}`} onClick={() => decQty(product.id)}><Minus size={14} /></button>
+                      <span className="min-w-10 border-x border-line py-2 text-center text-sm font-semibold num">{carted.qty}</span>
+                      <button type="button" className="grid size-11 place-items-center hover:bg-surface-sunken" aria-label={`הוספת כמות ${product.name}`} onClick={() => incQty(product.id)}><Plus size={14} /></button>
                     </div>
                   )}
                 </div>
               );
             })}
-            {!filteredProducts.length && <div className="px-4 py-8 text-center text-sm text-ink-muted">לא נמצאו מוצרים</div>}
-          </div>
-        </div>
-
-        {/* Cart + split preview */}
-        <div className="lg:col-span-3 space-y-4">
-          <div className="card overflow-hidden">
-            <div className="px-4 py-3 border-b border-line-soft flex items-center justify-between">
-              <span className="section-title">פריטים ברשימה ({cart.length})</span>
-              <span className="text-sm text-ink-muted">סה״כ משוער: <b className="num">{fmtMoneyExact(total)}</b></span>
-            </div>
-            {cart.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-ink-muted">בחר מוצרים מהרשימה משמאל כדי להתחיל</div>
-            ) : (
-              <div className="divide-y divide-line-soft">
-                {cart.map((item, idx) => {
-                  const offers = offersByProduct.get(item.product.id) ?? [];
-                  const { sp, recommended } = effective(item);
-                  return (
-                    <div key={item.product.id} className="px-4 py-3 flex flex-wrap items-center gap-3">
-                      <div className="flex-1 min-w-40">
-                        <div className="text-sm font-medium text-ink-body">{item.product.name}</div>
-                        <div className="text-xs text-ink-muted">{item.product.unit}</div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button className="btn-secondary p-1.5! min-w-10 min-h-10" onClick={() => decQty(item.product.id)} aria-label="הפחת כמות"><Minus size={14} /></button>
-                        <input type="number" min={0.1} step="any" className="input w-20! num text-center" value={item.qty}
-                          onChange={(e) => setCart((c) => c.map((x, i) => i === idx ? { ...x, qty: Number(e.target.value) || 1 } : x))} />
-                        <button className="btn-secondary p-1.5! min-w-10 min-h-10" onClick={() => incQty(item.product.id)} aria-label="הוסף כמות"><Plus size={14} /></button>
-                      </div>
-                      <select className="input sm:w-56!" value={item.chosenSupplierId ?? ''}
-                        onChange={(e) => setCart((c) => c.map((x, i) => i === idx ? { ...x, chosenSupplierId: e.target.value || null } : x))}>
-                        <option value="">
-                          {recommended ? `מומלץ: ${supplierById.get(recommended.supplier_id)?.name} — ₪${recommended.current_price.toFixed(2)}` : 'אין ספק זמין'}
-                        </option>
-                        {offers.map((o) => (
-                          <option key={o.id} value={o.supplier_id}>
-                            {supplierById.get(o.supplier_id)?.name} — ₪{o.current_price.toFixed(2)}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="w-24 text-sm font-medium num ms-auto">{sp ? fmtMoneyExact(sp.current_price * item.qty) : '—'}</div>
-                      <button className="btn-ghost p-1.5! min-w-10 min-h-10 text-ink-faint hover:text-alert-solid" onClick={() => setCart((c) => c.filter((_, i) => i !== idx))} aria-label="הסרה"><Trash2 size={15} /></button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            {!filteredProducts.length && <div className="px-4 py-10 text-center text-sm text-ink-muted">לא נמצאו מוצרים</div>}
           </div>
 
-          {cart.length > 0 && (
-            <div className="card card-pad space-y-3">
-              <div className="section-title flex items-center gap-2"><Split size={17} /> פיצול לפי ספקים</div>
-              {split.noSupplier.length > 0 && (
-                <Note tone="alert">
-                  ללא ספק זמין: {split.noSupplier.map((i) => i.product.name).join(', ')}
-                </Note>
-              )}
-              <div className="space-y-2">
-                {split.groups.map((g) => {
-                  const underMin = g.supplier.min_order_amount != null && g.subtotal < g.supplier.min_order_amount;
-                  return (
-                    <Note key={g.supplier.id} tone={underMin ? 'await' : 'idle'}>
-                      <div className="w-full">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="font-medium text-ink-body">{g.supplier.name} <span className="text-ink-muted font-normal">({g.items.length} פריטים)</span></span>
-                          <span className="font-semibold num">{fmtMoneyExact(g.subtotal)}</span>
-                        </div>
-                        {underMin && (
-                          <div className="flex items-center gap-1.5 text-xs text-await-fg mt-1">
-                            <AlertTriangle size={13} />
-                            מתחת למינימום הזמנה ({fmtMoneyExact(g.supplier.min_order_amount!)})
-                          </div>
-                        )}
-                      </div>
-                    </Note>
-                  );
-                })}
-              </div>
-              <SupplierComparison cart={cart} offersByProduct={offersByProduct} supplierById={supplierById} effective={effective} />
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2">
-                  <label className="label">הערות</label>
-                  <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="למשל: אירוע יום חמישי — 300 אורחים" />
-                </div>
-                <div>
-                  <label className="label">אספקה מבוקשת</label>
-                  <input type="date" className="input" value={expectedDate} min={todayISO()} onChange={(e) => setExpectedDate(e.target.value)} />
-                </div>
-              </div>
-              <div className="flex flex-wrap justify-end gap-2 pt-1">
-                <button className="btn-secondary" disabled={busy} onClick={() => void saveRequest(false)}>שמירה כטיוטה</button>
-                <button className="btn-primary" disabled={busy || split.groups.length === 0} onClick={() => void saveRequest(true)}>
-                  <Split size={15} /> פיצול ל־{split.groups.length} הזמנות ספק
-                </button>
-              </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-strong px-3 py-3 sm:px-4">
+            <div className="text-sm text-ink-muted">{cart.length ? `${cart.length} מוצרים מוכנים לשלב הספקים` : 'בחר לפחות מוצר אחד'}</div>
+            <button type="button" className="btn-primary" disabled={!cart.length} onClick={() => setStep(2)}>המשך לספקים</button>
+          </div>
+        </section>
+      ) : (
+        <div className="space-y-4">
+          <section aria-labelledby="selected-products-title" className="border-y border-line-strong bg-surface">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft px-3 py-3 sm:px-4">
+              <h2 id="selected-products-title" className="section-title">פריטים וספקים</h2>
+              <span className="text-sm text-ink-muted">סה״כ משוער <b className="num text-ink">{fmtMoneyExact(total)}</b></span>
             </div>
-          )}
+            <div className="divide-y divide-line-soft">
+              {cart.map((item, index) => {
+                const offers = offersByProduct.get(item.product.id) ?? [];
+                const { sp, recommended } = effective(item);
+                return (
+                  <div key={item.product.id} className="grid items-center gap-3 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_5rem_minmax(13rem,1fr)_7rem_2.75rem] sm:px-4">
+                    <div className="min-w-0"><div className="break-words text-sm font-medium text-ink-body sm:truncate">{item.product.name}</div><div className="text-xs text-ink-muted">{item.product.unit}</div></div>
+                    <div className="text-sm"><span className="text-ink-muted">כמות </span><b className="num">{item.qty}</b></div>
+                    <select className="input" aria-label={`ספק עבור ${item.product.name}`} value={item.chosenSupplierId ?? ''}
+                      onChange={(event) => setCart((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, chosenSupplierId: event.target.value || null } : row))}>
+                      <option value="">{recommended ? `הזול ביותר: ${supplierById.get(recommended.supplier_id)?.name} — ₪${recommended.current_price.toFixed(2)}` : 'אין ספק זמין'}</option>
+                      {offers.map((offer) => <option key={offer.id} value={offer.supplier_id}>{supplierById.get(offer.supplier_id)?.name} — ₪{offer.current_price.toFixed(2)}</option>)}
+                    </select>
+                    <div className="text-sm font-semibold num">{sp ? fmtMoneyExact(sp.current_price * item.qty) : '—'}</div>
+                    <button type="button" className="grid size-11 place-items-center text-ink-faint hover:bg-surface-sunken hover:text-alert-solid" onClick={() => setCart((current) => current.filter((_, rowIndex) => rowIndex !== index))} aria-label={`הסרת ${item.product.name}`}><Trash2 size={15} /></button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <SupplierComparison cart={cart} offersByProduct={offersByProduct} supplierById={supplierById} effective={effective} />
+
+          <section aria-labelledby="supplier-split-title" className="border-y border-line-strong bg-surface">
+            <div className="flex items-center gap-2 border-b border-line-soft px-3 py-3 sm:px-4"><Split size={17} aria-hidden="true" /><h2 id="supplier-split-title" className="section-title">פיצול הזמנות לספקים</h2></div>
+            {split.noSupplier.length > 0 && <div className="flex items-start gap-2 border-b border-alert-line bg-alert-wash px-3 py-2.5 text-sm text-alert-fg sm:px-4"><AlertTriangle size={16} className="mt-0.5 shrink-0" />ללא ספק זמין: {split.noSupplier.map((item) => item.product.name).join(', ')}</div>}
+            <div className="divide-y divide-line-soft">
+              {split.groups.map((group) => {
+                const underMin = group.supplier.min_order_amount != null && group.subtotal < group.supplier.min_order_amount;
+                return (
+                  <div key={group.supplier.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 sm:px-4 ${underMin ? 'bg-await-wash' : ''}`}>
+                    <span className="font-medium text-ink-body">{group.supplier.name}</span>
+                    <span className="text-xs text-ink-muted">{group.items.length} פריטים</span>
+                    <span className="ms-auto font-semibold num">{fmtMoneyExact(group.subtotal)}</span>
+                    {underMin && <span className="w-full text-xs text-await-fg">מתחת למינימום הזמנה של {fmtMoneyExact(group.supplier.min_order_amount!)}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="sm:col-span-2"><label className="label">הערות</label><input className="input" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="למשל: אירוע יום חמישי — 300 אורחים" /></div>
+            <div><label className="label">אספקה מבוקשת</label><input type="date" className="input" value={expectedDate} min={todayISO()} onChange={(event) => setExpectedDate(event.target.value)} /></div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line-strong bg-surface px-3 py-3 sm:px-4">
+            <button type="button" className="btn-secondary" disabled={busy} onClick={() => setStep(1)}>חזרה למוצרים וכמויות</button>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn-secondary" disabled={busy} onClick={() => void saveRequest(false)}>שמירה כטיוטה</button>
+              <button type="button" className="btn-primary" disabled={busy || split.groups.length === 0} onClick={() => void saveRequest(true)}><Split size={15} /> יצירת {split.groups.length} הזמנות ספק</button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -348,37 +337,61 @@ function SupplierComparison({ cart, offersByProduct, supplierById, effective }: 
   supplierById: Map<string, Supplier>;
   effective: (item: CartItem) => { sp: SupplierProduct | null; recommended: SupplierProduct | null };
 }) {
-  const rows: { item: CartItem; sp: SupplierProduct; cheapest: SupplierProduct; delta: number }[] = [];
-  for (const item of cart) {
+  const rows = cart.map((item) => {
     const { sp } = effective(item);
-    const cheapest = (offersByProduct.get(item.product.id) ?? [])[0]; // offers sorted ascending by price
-    if (!sp || !cheapest) continue;
-    rows.push({ item, sp, cheapest, delta: (sp.current_price - cheapest.current_price) * item.qty });
-  }
+    const cheapest = (offersByProduct.get(item.product.id) ?? [])[0] ?? null;
+    const delta = sp && cheapest ? Math.max(0, (sp.current_price - cheapest.current_price) * item.qty) : 0;
+    return { item, sp, cheapest, delta };
+  });
   if (!rows.length) return null;
-  const saving = rows.reduce((s, r) => s + r.delta, 0);
-  if (saving <= 0) return <Note tone="done">כל הפריטים הוזמנו מהספק הזול ביותר</Note>;
+  const saving = rows.reduce((sum, row) => sum + row.delta, 0);
   return (
-    <div className="border border-line-soft rounded-lg divide-y divide-line-soft">
-      {rows.map(({ item, sp, cheapest, delta }) => (
-        <div key={item.product.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-3 py-1.5 text-sm">
-          <span className="min-w-0">
-            <span className="font-medium text-ink-body">{item.product.name}</span>
-            <span className="text-xs text-ink-muted ms-2">
-              {supplierById.get(sp.supplier_id)?.name} · <span className="num">{fmtMoneyExact(sp.current_price)}</span>
-            </span>
-          </span>
-          {delta > 0 && (
-            <span className="text-xs text-await-fg">
-              הזול ביותר: {supplierById.get(cheapest.supplier_id)?.name} · <span className="num">{fmtMoneyExact(cheapest.current_price)}</span> · הפרש <span className="num">{fmtMoneyExact(delta)}</span>
-            </span>
-          )}
+    <section aria-labelledby="supplier-comparison-title" className="border-y border-line-strong bg-surface">
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line-soft px-3 py-3 sm:px-4">
+        <div>
+          <h2 id="supplier-comparison-title" className="section-title">השוואת מחיר לכל מוצר</h2>
+          <p className="mt-0.5 text-xs text-ink-muted">המחיר נשמר בהזמנה לפי הספק שנבחר ברגע השליחה.</p>
         </div>
-      ))}
-      <div className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
-        <span className="text-ink-soft">חיסכון אפשרי אם עוברים לזול ביותר:</span>
-        <b className="num text-await-fg">{fmtMoneyExact(saving)}</b>
+        <div className="text-start sm:text-end">
+          <span className="block text-xs text-ink-muted">חיסכון אפשרי</span>
+          <strong className={`num text-base ${saving > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(saving)}</strong>
+        </div>
       </div>
-    </div>
+      <div className="divide-y divide-line-soft">
+        {rows.map(({ item, sp, cheapest, delta }) => {
+          const selectedName = sp ? supplierById.get(sp.supplier_id)?.name ?? 'ספק לא זמין' : 'לא נבחר ספק';
+          const cheapestName = cheapest ? supplierById.get(cheapest.supplier_id)?.name ?? 'ספק לא זמין' : null;
+          const selectedIsCheapest = !!sp && !!cheapest && sp.supplier_id === cheapest.supplier_id;
+          return (
+            <div key={item.product.id} className="grid gap-2 px-3 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center sm:px-4">
+              <div className="min-w-0">
+                <div className="font-medium text-ink-body">{item.product.name}</div>
+                <div className="mt-0.5 text-xs text-ink-muted">כמות <span className="num">{item.qty}</span></div>
+              </div>
+              {cheapest ? (
+                <div className="min-w-0">
+                  <div className="text-xs text-ink-muted">המחיר הזול ביותר</div>
+                  <div className="mt-0.5 text-ink-body">{cheapestName} · <span className="num font-medium">{fmtMoneyExact(cheapest.current_price)}</span></div>
+                </div>
+              ) : (
+                <div className="text-alert-fg">אין הצעת מחיר פעילה למוצר</div>
+              )}
+              <div className="sm:min-w-40 sm:text-end">
+                {sp ? (
+                  <>
+                    <div className="text-xs text-ink-muted">נבחר: {selectedName} · <span className="num">{fmtMoneyExact(sp.current_price)}</span></div>
+                    <div className={`mt-0.5 font-medium ${selectedIsCheapest ? 'text-done-fg' : 'text-await-fg'}`}>
+                      {selectedIsCheapest ? 'הבחירה הזולה ביותר' : `אפשר לחסוך ${fmtMoneyExact(delta)}`}
+                    </div>
+                  </>
+                ) : (
+                  <div className="font-medium text-alert-fg">לא ניתן להזמין כרגע</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

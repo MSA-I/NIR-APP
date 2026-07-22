@@ -67,14 +67,6 @@ export default function PriceLists() {
     },
     { key: 'date', header: 'בתוקף מ־', sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
     { key: 'avail', header: 'זמינות', render: (r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} /> },
-    {
-      key: 'actions', header: '', render: (r) => (
-        <span className="flex gap-1">
-          <button className="btn-ghost p-1.5!" title="היסטוריית מחירים" onClick={(e) => { e.stopPropagation(); setHistoryFor(r); }}><History size={15} /></button>
-          {canWrite && <button className="btn-ghost p-1.5!" title="עדכון מחיר" onClick={(e) => { e.stopPropagation(); setEditFor(r); }}><Pencil size={15} /></button>}
-        </span>
-      ),
-    },
   ];
 
   if (loading) return <SkeletonTable cols={5} />;
@@ -88,6 +80,10 @@ export default function PriceLists() {
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q) || r.supplier.name.toLowerCase().includes(q)}
+        rowActions={(r) => [
+          { key: 'history', label: 'היסטוריית מחירים', icon: History, onSelect: () => setHistoryFor(r) },
+          { key: 'edit', label: 'עדכון מחיר', icon: Pencil, hidden: !canWrite, onSelect: () => setEditFor(r) },
+        ]}
         toolbar={
           <>
             {productFilter && (

@@ -190,9 +190,9 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
     <li>
       <Link to={item.to} className="flex min-h-11 items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg hover:bg-surface-sunken active:bg-action-wash/70 transition-colors">
         <span className={`${measured ? `badge-${item.tone}` : 'badge-idle'} num justify-center min-w-8`}>{item.count ?? '—'}</span>
-        <span className="flex-1 min-w-0 truncate">
+        <span className="min-w-0 flex-1 leading-snug">
           <span className={muted ? 'text-ink-soft' : 'text-ink-body font-medium'}>{item.label}</span>
-          {item.hint && <span className="text-xs text-ink-muted ms-2">{item.hint}</span>}
+          {item.hint && <span className="ms-2 text-xs text-ink-muted max-sm:block max-sm:ms-0 max-sm:mt-0.5">{item.hint}</span>}
         </span>
         {item.amount != null && item.amount > 0 && (
           <span className={`num text-sm ${muted ? 'font-medium text-ink-soft' : 'font-semibold text-ink-mid'}`}>{fmtMoney(item.amount)}</span>
@@ -242,7 +242,7 @@ export function AttentionZone({ items, totalLabel }: { items: AttentionItem[]; t
 
   return (
     <section className="card card-pad">
-      <div className="flex items-center justify-between gap-3 mb-2">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="section-title flex items-center gap-2"><Bell size={18} className="text-await-fg" aria-hidden="true" /> דורש טיפול היום</h2>
         <span className="text-xs text-ink-muted">
           {actionRows.length} סוגי טיפול
@@ -440,12 +440,12 @@ export interface Column<T> {
   mobileLabel?: string | null;
 }
 
-export function DataTable<T extends { id: string }>({ rows, columns, onRowClick, searchable, searchFn, pageSize = 15, emptyTitle = 'אין נתונים להצגה', emptySubtitle, toolbar, mobile = 'scroll', mobileTitle, mobileTrailing, rowActions }: {
+export function DataTable<T extends { id: string }>({ rows, columns, onRowClick, searchable, searchFn, pageSize = 15, emptyTitle = 'אין נתונים להצגה', emptySubtitle, toolbar, mobile = 'cards', mobileTitle, mobileTrailing, rowActions }: {
   rows: T[]; columns: Column<T>[]; onRowClick?: (row: T) => void;
   searchable?: boolean; searchFn?: (row: T, q: string) => boolean;
   pageSize?: number; emptyTitle?: string; emptySubtitle?: string; toolbar?: ReactNode;
-  /** 'cards' stacks rows as tappable cards below md; 'scroll' (default) keeps today's
-      horizontal-scroll table everywhere. Search/filter/sort/pagination are shared. */
+  /** 'cards' (default) stacks rows below md; reserve 'scroll' for true matrix previews.
+      Search/filter/sort/pagination are shared. */
   mobile?: 'cards' | 'scroll';
   /** Card headline; default: the first visible column's render. */
   mobileTitle?: (row: T) => ReactNode;
@@ -503,7 +503,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
                 const body = (
                   <>
                     <div className="flex items-center justify-between gap-3">
-                      <div className="font-medium text-ink-body min-w-0 truncate">{title}</div>
+                      <div className="min-w-0 break-words font-medium text-ink-body">{title}</div>
                       {mobileTrailing && <div className="shrink-0">{mobileTrailing(row)}</div>}
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-sm text-ink-mid">
@@ -512,7 +512,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
                         if (v == null || v === '' ) return null;
                         const label = c.mobileLabel === undefined ? c.header : c.mobileLabel;
                         return (
-                          <span key={c.key} className="inline-flex items-baseline gap-1 min-w-0">
+                          <span key={c.key} className="inline-flex min-w-0 flex-wrap items-baseline gap-1">
                             {label && <span className="text-xs text-ink-muted">{label}:</span>}
                             {v}
                           </span>
@@ -526,7 +526,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
                 // clickable body shrunk to flex-1 plus the menu as a sibling at the logical end.
                 // Without rowActions the original markup is untouched (zero regression).
                 return (
-                  <li key={row.id} className={rowActions ? 'flex items-start' : undefined}>
+                  <li key={row.id} className={`mobile-data-card ${rowActions ? 'flex items-start' : ''}`}>
                     {rowActions ? (
                       <>
                         {onRowClick ? (

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RotateCcw } from 'lucide-react';
+import { Eye, RotateCcw } from 'lucide-react';
 import { toHebrewError } from '../lib/errors';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useParamState } from '../lib/useParamState';
@@ -65,6 +65,9 @@ export default function Credits() {
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.notes ?? '').toLowerCase().includes(q)}
         onRowClick={(r) => setSelected(r)}
+        rowActions={(r) => [
+          { key: 'open', label: 'פתיחת פרטים', icon: Eye, onSelect: () => setSelected(r) },
+        ]}
         toolbar={
           <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="active">זיכויים פעילים</option>

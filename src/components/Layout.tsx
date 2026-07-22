@@ -1,14 +1,15 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, Inbox } from 'lucide-react';
-import { useState } from 'react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, Inbox } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
 import { APP_NAME } from '../lib/branding';
 import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
 import Fab from './Fab';
+import NotificationBell from './NotificationBell';
 import type { Role } from '../lib/types';
 
-interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[]; mobile?: boolean }
+interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[] }
 
 // Section 8 regroup — Nir's three working groups (רכש / כספים / בקרה), המשך פיתוח.txt:116-138.
 //
@@ -17,13 +18,10 @@ interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; rol
 //    Nir listed it. It is the landing route for owner/office (AuthContext homeFor), and
 //    sections 1-3 make it THE control centre — burying it three groups down would undercut
 //    exactly the screen those sections are trying to elevate.
-//  - Nine items Nir did not place (מחירונים, הזמנה חדשה, דרישות תשלום, התאמות בנק, יומן
+//  - Items Nir did not place (מחירונים, דרישות תשלום, התאמות בנק, יומן
 //    ביקורת, הגדרות, and the single-role /pay, /my-prices, /admin) are slotted by the
 //    obvious procurement/finance/control reading. None of it invents business meaning.
 //
-// Order inside רכש keeps the three order-flow items (new/list/receiving) contiguous and
-// ahead of חשבוניות so the mobile bottom bar (mobileItems, keyed off `mobile` + declaration
-// order) stays exactly {הזמנה חדשה, הזמנות, קבלת סחורה, חשבוניות, זיכויים} for staff roles.
 const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: '',
@@ -34,25 +32,24 @@ const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: 'רכש',
     items: [
-      { to: '/orders/new', label: 'הזמנה חדשה', icon: ShoppingCart, roles: ['owner', 'office', 'kitchen'], mobile: true },
-      { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office', 'kitchen'], mobile: true },
-      { to: '/receiving', label: 'קבלת סחורה', icon: PackageCheck, roles: ['owner', 'office', 'kitchen'], mobile: true },
+      { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office', 'kitchen'] },
+      { to: '/receiving', label: 'קבלת סחורה', icon: PackageCheck, roles: ['owner', 'office', 'kitchen'] },
       { to: '/suppliers', label: 'ספקים', icon: Truck, roles: ['owner', 'office', 'kitchen', 'accountant'] },
       { to: '/products', label: 'מוצרים', icon: Package, roles: ['owner', 'office', 'kitchen'] },
       { to: '/prices', label: 'מחירונים', icon: Tags, roles: ['owner', 'office', 'kitchen'] },
-      { to: '/my-prices', label: 'המחירון שלי', icon: Tags, roles: ['supplier'], mobile: true },
+      { to: '/my-prices', label: 'המחירון שלי', icon: Tags, roles: ['supplier'] },
     ],
   },
   {
     section: 'כספים',
     items: [
-      { to: '/invoices', label: 'חשבוניות', icon: FileText, roles: ['owner', 'office', 'kitchen', 'accountant'], mobile: true },
-      { to: '/credits', label: 'זיכויים', icon: RotateCcw, roles: ['owner', 'office', 'kitchen', 'accountant'], mobile: true },
+      { to: '/invoices', label: 'חשבוניות', icon: FileText, roles: ['owner', 'office', 'kitchen', 'accountant'] },
+      { to: '/credits', label: 'זיכויים', icon: RotateCcw, roles: ['owner', 'office', 'kitchen', 'accountant'] },
       { to: '/inbox', label: 'מסמכים', icon: Inbox, roles: ['owner', 'office', 'kitchen'] },
       { to: '/payment-requests', label: 'דרישות תשלום', icon: Send, roles: ['owner', 'office'] },
       { to: '/payments', label: 'תשלומים', icon: CreditCard, roles: ['owner', 'office', 'accountant'] },
       { to: '/bank', label: 'התאמות בנק', icon: Landmark, roles: ['owner', 'office', 'accountant'] },
-      { to: '/pay', label: 'תשלומים לביצוע', icon: CreditCard, roles: ['payer'], mobile: true },
+      { to: '/pay', label: 'תשלומים לביצוע', icon: CreditCard, roles: ['payer'] },
     ],
   },
   {
@@ -74,6 +71,8 @@ export default function Layout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
   const role = profile?.role;
   // Section 5: payer/supplier get no search box — their only routes are dead ends for it.
   const canSearch = canGlobalSearch(role);
@@ -96,14 +95,53 @@ export default function Layout() {
     ? [...roleSections, { section: 'פלטפורמה', items: [{ to: '/admin', label: 'ניהול לקוחות', icon: Building2, roles: [] as Role[] }] }]
     : roleSections;
 
-  // Deliberately from roleSections: the operator console is a desktop task. The five-item cap
-  // fits the complete staff bar without letting the platform route displace a tenant item.
-  const mobileItems = roleSections.flatMap((s) => s.items).filter((i) => i.mobile).slice(0, 5);
-
   // Group headers only earn their space once there is more than one item to organise. supplier
   // and payer each see a single link, and a "רכש" header over a vendor's own price list reads
   // as if they were doing the buying. Below the threshold the header is noise, so drop it.
   const showHeaders = sections.reduce((n, s) => n + s.items.length, 0) > 1;
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    requestAnimationFrame(() => {
+      const active = drawerRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+      (active ?? drawerRef.current?.querySelector<HTMLElement>('button, a'))?.focus();
+    });
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMobileOpen(false);
+        requestAnimationFrame(() => menuButtonRef.current?.focus());
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(drawerRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? []);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [mobileOpen]);
+
+  function closeMobileMenu() {
+    setMobileOpen(false);
+    requestAnimationFrame(() => menuButtonRef.current?.focus());
+  }
 
   async function handleSignOut() {
     await signOut();
@@ -117,11 +155,10 @@ export default function Layout() {
 
   const sidebar = (
     <div className="flex flex-col h-full">
-      <NavLink to="/dashboard" aria-label={`${orgName} — חזרה לדשבורד`}
-        className="block px-4 py-5 border-b border-shell-ink/10 transition-colors hover:bg-shell-ink/5 active:bg-shell-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus">
+      <div className="px-4 py-5 border-b border-shell-ink/10">
         <div className="text-lg font-bold text-shell-ink truncate" title={orgName}>{orgName}</div>
         <div className="text-xs text-shell-ink-dim">ניהול רכש ותשלומים</div>
-      </NavLink>
+      </div>
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
         {sections.map((s, i) => (
           <div key={i}>
@@ -143,11 +180,9 @@ export default function Layout() {
         ))}
       </nav>
       <div className="px-4 py-3 border-t border-shell-ink/10">
-        <NavLink to="/dashboard" className="inline-block rounded text-sm text-shell-ink font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-          {profile?.full_name}
-        </NavLink>
+        <div className="text-sm text-shell-ink font-medium">{profile?.full_name}</div>
         <div className="text-xs text-shell-ink-dim mb-2">{role ? roleLabels[role] : ''}</div>
-        <button className="flex items-center gap-1.5 text-xs text-shell-ink-dim hover:text-shell-ink" onClick={() => void handleSignOut()}>
+        <button className="flex min-h-11 items-center gap-1.5 text-xs text-shell-ink-dim hover:text-shell-ink" onClick={() => void handleSignOut()}>
           <LogOut size={13} /> התנתקות
         </button>
       </div>
@@ -155,7 +190,7 @@ export default function Layout() {
   );
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-dvh min-w-0">
       {/* Skip-to-content (audit round 2): the first focusable element, so a keyboard user can
           jump past the ~19 sidebar links straight to the page. Hidden until focused, then styled
           like a primary button at the logical start, z-above the sidebar (z-40). */}
@@ -167,22 +202,26 @@ export default function Layout() {
       <aside className="hidden lg:block fixed inset-y-0 start-0 w-60 bg-shell border-e border-shell-ink/10 z-40 no-print">{sidebar}</aside>
 
       {/* Mobile top bar */}
-      <header className="lg:hidden sticky top-0 z-40 bg-shell text-shell-ink border-b border-shell-ink/10 flex items-center justify-between px-4 py-3 no-print">
-        <NavLink to="/dashboard" aria-label={`${orgName} — חזרה לדשבורד`}
-          className="flex min-h-11 flex-1 items-center rounded font-bold truncate me-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-          title={orgName}>{orgName}</NavLink>
+      <header className="phone-safe-header lg:hidden sticky top-0 z-40 bg-shell text-shell-ink border-b border-shell-ink/10 flex min-w-0 items-center no-print">
+        <button ref={menuButtonRef} type="button"
+          className="flex items-center justify-center min-w-11 min-h-11"
+          onClick={() => setMobileOpen(true)} aria-label="פתיחת תפריט" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
+          <Menu size={22} />
+        </button>
+        <div className="flex min-h-11 min-w-0 flex-1 items-center px-2 font-bold" title={orgName}>{orgName}</div>
         <div className="flex items-center gap-1">
+          <NotificationBell onShell />
           {canSearch && (
             <button className="flex items-center justify-center min-w-11 min-h-11" onClick={() => setSearchOpen(true)} aria-label="חיפוש"><Search size={21} /></button>
           )}
-          <button className="flex items-center justify-center min-w-11 min-h-11" onClick={() => setMobileOpen(true)} aria-label="תפריט"><Menu size={22} /></button>
         </div>
       </header>
       {searchOpen && <GlobalSearch variant="mobile" onClose={() => setSearchOpen(false)} />}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-shell/60 no-print" onClick={() => setMobileOpen(false)}>
-          <aside className="absolute inset-y-0 start-0 w-72 bg-shell border-e border-shell-ink/10" onClick={(e) => e.stopPropagation()}>
-            <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 text-shell-ink-dim" onClick={() => setMobileOpen(false)} aria-label="סגירה"><X size={20} /></button>
+        <div className="lg:hidden fixed inset-0 z-50 bg-shell/60 no-print" onClick={closeMobileMenu}>
+          <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label="תפריט ראשי"
+            className="absolute inset-y-0 start-0 w-72 bg-shell border-e border-shell-ink/10" onClick={(e) => e.stopPropagation()}>
+            <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 text-shell-ink-dim" onClick={closeMobileMenu} aria-label="סגירת תפריט"><X size={20} /></button>
             {sidebar}
           </aside>
         </div>
@@ -192,35 +231,23 @@ export default function Layout() {
           today (plan §2), and lg:ms-60 lines it up beside the fixed w-60 sidebar. z-30 keeps it
           below the sidebar (z-40); sticky works because the min-h-screen wrapper has no overflow. */}
       {canSearch && (
-        <header className="hidden lg:flex sticky top-0 z-30 lg:ms-60 h-14 items-center border-b border-line bg-surface px-6 no-print">
+        <header className="hidden lg:flex sticky top-0 z-30 lg:ms-60 h-14 items-center gap-3 border-b border-line bg-surface px-6 no-print">
           <GlobalSearch />
+          <NotificationBell />
         </header>
       )}
-
       {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring. */}
-      <main id="main" tabIndex={-1} className="lg:ms-60 px-4 sm:px-6 py-5 pb-24 lg:pb-8 focus:outline-none">
+      <main id="main" tabIndex={-1}
+        className="phone-safe-main min-w-0 lg:ms-60 py-5 pb-20 md:pb-8 focus:outline-none">
         {/* max-w column centred (mx-auto) in the space beside the sidebar — otherwise a wide
             viewport strands all content on the start side in RTL, leaving a dead zone on the
             end side. keyed by path so each screen change re-triggers the fade (section 11). */}
-        <div key={location.pathname} className="page-fade mx-auto max-w-[1400px]">
+        <div key={location.pathname} className="page-fade mx-auto min-w-0 max-w-[1400px]">
           <Outlet />
         </div>
       </main>
 
-      {/* Mobile bottom nav */}
-      {mobileItems.length > 0 && (
-        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-surface border-t border-line flex no-print" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          {mobileItems.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.to === '/orders'}
-              className={({ isActive }) => `flex-1 flex flex-col items-center gap-0.5 py-2 text-[11px] ${isActive ? 'text-action font-medium' : 'text-ink-muted'}`}>
-              <item.icon size={20} />
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-      )}
-
-      {/* Global quick-actions FAB — self-gating (role + suppressed routes); Layout only
+      {/* Global document-capture FAB — self-gating (role + focused routes); Layout only
           wraps authed routes, so it never reaches the public pages. */}
       <Fab />
     </div>

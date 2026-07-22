@@ -118,7 +118,7 @@ export function ActionMenu({ items, label = 'פעולות' }: { items: ActionMen
 
   return (
     <>
-      <button ref={triggerRef} type="button" className="btn-ghost p-1.5! min-w-10 min-h-10"
+      <button ref={triggerRef} type="button" className="btn-ghost min-h-11 min-w-11 rounded-none! p-1.5!"
         aria-haspopup="menu" aria-expanded={open} aria-label={label}
         onClick={() => (open ? close() : setOpen(true))}>
         <MoreVertical size={16} aria-hidden="true" />
@@ -127,7 +127,7 @@ export function ActionMenu({ items, label = 'פעולות' }: { items: ActionMen
         <div ref={menuRef} role="menu" aria-orientation="vertical" aria-label={label}
           onKeyDown={onMenuKeyDown}
           style={{ position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, visibility: pos ? 'visible' : 'hidden' }}
-          className="z-50 min-w-40 max-w-64 rounded-lg border border-line bg-surface py-1 shadow-menu">
+          className="z-50 min-w-40 max-w-64 border border-line bg-surface py-1 shadow-menu">
           {visible.map((it) => (
             <button key={it.key} type="button" role="menuitem" tabIndex={-1}
               aria-disabled={it.disabled || undefined}

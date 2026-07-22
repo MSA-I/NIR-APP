@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { unwrap } from './useQuery';
 import { countDuplicateKeys, countAboveAverage } from './alertRules';
+import { toLocalISO, todayISO } from './format';
 
 /**
  * Standing-condition scanner (סעיף 9 — מערכת התראות).
@@ -10,9 +11,9 @@ import { countDuplicateKeys, countAboveAverage } from './alertRules';
  * while a form is open. Neither ever looks at data that is already sitting in the database.
  * Every alert below is a *standing* condition on existing rows, so it needs its own pass.
  *
- * ponytail: pulled on demand, not stored and not pushed. No notifications table, no realtime
- * channel, no cron. Add persistence when alerts must fire while nobody is looking at the
- * screen — until then a table would only duplicate what a query already answers.
+ * The screen remains a live scan of current truth. Warning/critical transitions are also
+ * persisted by 0017 for the unread bell and selected Web Push events; informational findings
+ * stay here only, and resolved conditions disappear from this scan without erasing history.
  *
  * Every query here is filtered to the caller's tenant by RLS (`org_id = auth_org()`), so no
  * org filter is written by hand.
@@ -47,13 +48,13 @@ const PR_ACTIVE = ['draft', 'pending_approval', 'approved', 'sent_for_execution'
 function daysAgo(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  return toLocalISO(d);
 }
 
 function daysAhead(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  return toLocalISO(d);
 }
 
 /* ---------- scans ---------- */
@@ -156,7 +157,7 @@ async function scanPaymentsDueSoon(): Promise<Alert | null> {
 
   if (!rows.length) return null;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayISO();
   const late = rows.filter((r) => r.due_date < today).length;
 
   return {

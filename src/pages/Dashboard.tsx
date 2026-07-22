@@ -6,12 +6,8 @@ import {
 } from 'recharts';
 import { Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RotateCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../auth/AuthContext';
-import { hasVapidKey, isIOS, isPushSupported, isStandalone } from '../lib/push';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { Skeleton, StatusBadge, Note, AttentionZone, TaskLine, type AttentionItem } from '../components/ui';
-import QuickActionsRow from '../components/QuickActions';
-import { useQuickCapture } from '../components/QuickCapture';
 import { EXCEPTION_TYPE, SEVERITY } from '../lib/status';
 import { fmtMoney, fmtMoneyExact, fmtMonth, toLocalISO } from '../lib/format';
 import { chartTheme } from '../lib/theme';
@@ -40,35 +36,6 @@ function useReducedMotion() {
   }, []);
 
   return reduced;
-}
-
-/** One-time nudge toward push notifications — the dashboard's real-time promise extends to
- *  "when you're not looking", but only via an opt-in the user must perform themselves.
- *  Shown solely to the roles that receive the price-increase push (owner/office), only while
- *  asking is still possible (permission undecided), and never again after "הבנתי".
- *  Links to /alerts, NOT /settings: the toggle renders on both, but /settings is owner-only —
- *  an office user following a /settings link would be silently bounced back here. */
-function PushNudge() {
-  const { profile } = useAuth();
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem('sf-push-nudge') === '1');
-
-  if (dismissed || !profile || !['owner', 'office'].includes(profile.role) || !hasVapidKey()) return null;
-  // iOS before install has no Push API at all — the honest nudge there is "install first".
-  const iosInstall = isIOS() && !isStandalone();
-  const canAsk = isPushSupported() && Notification.permission === 'default';
-  if (!iosInstall && !canAsk) return null;
-
-  const dismiss = () => { localStorage.setItem('sf-push-nudge', '1'); setDismissed(true); };
-  return (
-    <Note tone="info" className="flex flex-wrap items-center justify-between gap-3">
-      <span>
-        {iosInstall
-          ? 'כדי לקבל התראות ב-iPhone יש להוסיף את האפליקציה למסך הבית (שיתוף ← הוספה למסך הבית)'
-          : <>אפשר לקבל התראה מיידית כשספק מעלה מחיר — <Link to="/alerts" className="font-medium underline">הפעלת התראות במסך ההתראות</Link>.</>}
-      </span>
-      <button className="btn-ghost py-1! text-xs shrink-0" onClick={dismiss}>הבנתי</button>
-    </Note>
-  );
 }
 
 function DeltaChip({ value }: { value: number }) {
@@ -203,7 +170,7 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
       </div>
       <div className="mt-1 flex items-center justify-between gap-3 text-xs text-ink-muted">
         <span>{delta != null ? 'מול אותם ימים בחודש הקודם' : context}</span>
-        <span className="truncate text-end">{aux ?? (hasSpark ? 'מגמת 8 שבועות' : context)}</span>
+        <span className="min-w-0 text-end leading-snug">{aux ?? (hasSpark ? 'מגמת 8 שבועות' : context)}</span>
       </div>
     </Link>
   );
@@ -228,10 +195,10 @@ function OperationsDisclosure({ title, count, summary, empty, children }: {
 
   return (
     <details name="dashboard-operations" className="group border-t border-line-soft first:border-t-0">
-      <summary className="flex min-h-11 list-none items-center gap-2 px-4 py-2.5 text-sm hover:bg-surface-sunken active:bg-action-wash/70 [&::-webkit-details-marker]:hidden sm:px-5">
+      <summary className="flex min-h-11 flex-wrap items-center gap-2 px-4 py-2.5 text-sm hover:bg-surface-sunken active:bg-action-wash/70 [&::-webkit-details-marker]:hidden sm:px-5">
         <span className="font-medium text-ink-body">{title}</span>
         <span className="badge-idle num">{count}</span>
-        {summary && <span className="ms-auto truncate text-xs text-ink-muted">{summary}</span>}
+        {summary && <span className="ms-auto min-w-0 text-end text-xs text-ink-muted">{summary}</span>}
         <ChevronDown size={16} className="shrink-0 text-ink-ghost transition-transform group-open:rotate-180" aria-hidden="true" />
       </summary>
       <div className="border-t border-line-soft px-4 pb-4 pt-2 sm:px-5">{children}</div>
@@ -327,9 +294,6 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
-  // Quick capture is wired here (not inside QuickActionsRow) so the page mounts the hidden
-  // input exactly once and passes the callback down — QuickCapture.tsx's contract.
-  const capture = useQuickCapture();
   const { data, loading, error, refetch, fetching } = useQuery(async () => {
     const now = new Date();
     const todayISO = toLocalISO(now);
@@ -590,8 +554,8 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard-depth space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="page-title">דשבורד ניהולי</h1>
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <h1 className="page-title min-w-0">דשבורד ניהולי</h1>
         <div className="flex items-center gap-2 text-xs text-ink-muted">
           <span aria-live="polite" aria-atomic="true">
             {data?.fetchedAt && (
@@ -606,13 +570,6 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
-
-      <PushNudge />
-
-      {/* Quick actions — the global FAB's vocabulary flattened into the control room, above
-          the money band. Renders only for roles with at least one action. */}
-      <QuickActionsRow onCapture={capture.openCapture} busy={capture.busy} />
-      {capture.element}
 
       {/* Truth-reporting (CLAUDE.md): a failed load/refetch shows an inline note WITH retry and keeps
           whatever data we still hold on screen — it never blanks the sections that did load. */}
@@ -684,8 +641,8 @@ export default function Dashboard() {
                 <h3 id="category-trend-title" className="text-sm font-semibold text-ink-body">תמהיל הרכש החודש</h3>
                 <p className="text-xs text-ink-muted">ארבע הקטגוריות הגדולות וכל היתר</p>
                 {categoryTotal > 0 ? (
-                  <div className="mt-2 flex min-h-44 items-center gap-3">
-                    <ChartViewport className="relative h-40 w-40 shrink-0" label={categoriesAria}>
+                  <div className="mt-2 flex min-h-44 flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+                    <ChartViewport className="relative mx-auto h-36 w-36 shrink-0 sm:h-40 sm:w-40" label={categoriesAria}>
                       {(animation) => (
                         <>
                           <ResponsiveContainer>
@@ -711,7 +668,7 @@ export default function Dashboard() {
                         <li key={category.name} className="flex items-center gap-2">
                           <span className="size-2 shrink-0 rounded-full" aria-hidden="true"
                             style={{ backgroundColor: category.name === 'אחר' ? t.bars[4] : t.bars[index % 4] }} />
-                          <span className="min-w-0 flex-1 truncate text-ink-mid">{category.name}</span>
+                          <span className="min-w-0 flex-1 break-words text-ink-mid sm:truncate">{category.name}</span>
                           <span className="shrink-0 text-ink-muted" title={fmtMoneyExact(category.total)}>
                             <span className="num">{moneyShort(category.total)}</span> · <span className="num">{Math.round((category.total / categoryTotal) * 100)}%</span>
                           </span>
@@ -776,7 +733,7 @@ export default function Dashboard() {
                           <StatusBadge meta={SEVERITY[exception.severity]} />
                           <span className="text-xs text-ink-muted">{EXCEPTION_TYPE[exception.type]}</span>
                         </div>
-                        <div className="mt-0.5 truncate text-ink-mid">{exception.title}</div>
+                        <div className="mt-0.5 break-words text-ink-mid sm:truncate">{exception.title}</div>
                       </Link>
                     </li>
                   ))}
@@ -806,12 +763,12 @@ export default function Dashboard() {
                 <ul className="divide-y divide-line-soft">
                   {data.priceIncreases.map((price, index) => (
                     <li key={index}>
-                      <Link to={`/prices?product=${price.product.id}`} className="flex min-h-11 items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm hover:bg-surface-sunken active:bg-action-wash/70">
-                        <span className="min-w-0 truncate">
+                      <Link to={`/prices?product=${price.product.id}`} className="flex min-h-11 flex-col items-stretch gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface-sunken active:bg-action-wash/70 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                        <span className="min-w-0 break-words sm:truncate">
                           <span className="font-medium text-ink-body">{price.product.name}</span>
                           <span className="ms-2 text-xs text-ink-muted">{price.supplier.name}</span>
                         </span>
-                        <span className="flex shrink-0 items-center gap-3">
+                        <span className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 sm:justify-start">
                           <span className="text-xs text-ink-muted">מ־<span className="num">₪{price.previous_price!.toFixed(2)}</span> ל־<span className="num">₪{price.current_price.toFixed(2)}</span></span>
                           <span className="inline-flex items-center gap-1 font-medium text-alert-fg num" dir="ltr">
                             <TrendingUp size={13} className="text-trend-up-fg" />+{price.pct.toFixed(1)}%

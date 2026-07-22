@@ -283,8 +283,7 @@ export function ReceiveOrder() {
       </label>
 
       {/* sticky action bar */}
-      <div className="fixed bottom-14 lg:bottom-0 inset-x-0 lg:ms-60 bg-surface border-t border-line p-3 flex gap-2 z-30"
-        style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+      <div className="phone-taskbar fixed inset-x-0 lg:ms-60 bg-surface border-t border-line p-3 flex gap-2 z-30">
         <div className="hidden sm:flex items-center text-xs text-ink-muted me-auto ps-2">
           <Camera size={14} className="me-1" /> צילום החשבונית יתאפשר מיד לאחר סיום הקבלה
         </div>

@@ -74,7 +74,7 @@ export default function PaymentRequests() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title">דרישות תשלום</h1>
         {isOffice && <button className="btn-primary" onClick={() => setCreateOpen(true)}><Plus size={16} /> דרישה חדשה</button>}
       </div>

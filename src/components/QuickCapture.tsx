@@ -8,8 +8,9 @@ import { uploadDocument } from './FileUpload';
  * Capture-first upload into the documents inbox (migration 0014): openCapture() opens the
  * camera/file picker, every picked file is pushed to {org_id}/inbox/... with no entity, and
  * the user re-files it from /inbox when the invoice/receipt exists. Deliberately
- * dependency-light — a later phase mounts this in the global Layout so capture is one tap
- * from anywhere; busy feedback is the button spinner + a toast, no extra UI.
+ * dependency-light — Dashboard mounts it in the first-screen command strip and Layout mounts
+ * the same capture contract as the single global camera FAB elsewhere; busy feedback is the
+ * button spinner + a toast, no extra UI.
  *
  * `element` must be rendered somewhere in the caller's tree (it is the hidden file input).
  */

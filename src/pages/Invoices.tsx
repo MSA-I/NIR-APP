@@ -116,7 +116,7 @@ export function InvoicesList() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title">חשבוניות</h1>
         {canCreate && <button className="btn-primary" onClick={() => navigate('/invoices/new')}><Plus size={16} /> חשבונית חדשה</button>}
       </div>
@@ -127,7 +127,7 @@ export function InvoicesList() {
         mobileTitle={(r) => <><span dir="ltr">{r.invoice_number}</span> · {r.supplier.name}</>}
         mobileTrailing={(r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} />}
         rowActions={(r) => [
-          { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => navigate(`/invoices/${r.id}`) },
+          { key: 'edit', label: 'עריכה', icon: Pencil, hidden: !canCreate, onSelect: () => navigate(`/invoices/${r.id}`) },
           { key: 'duplicate', label: 'שכפול כטיוטה', icon: Copy, hidden: !canCreate, onSelect: () => navigate(`/invoices/new?from=${r.id}`) },
           { key: 'share', label: 'שליחה', icon: Share2, hidden: !canShare(), onSelect: () => void shareInvoice(r, r.supplier.name) },
           { key: 'print', label: 'הדפסה', icon: Printer, onSelect: () => navigate(`/invoices/${r.id}?print=1`) },

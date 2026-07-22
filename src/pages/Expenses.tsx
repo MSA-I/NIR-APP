@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
-import { Banknote, Calculator, FileSpreadsheet, Printer, ReceiptText, type LucideIcon } from 'lucide-react';
+import { Banknote, Calculator, ChevronLeft, FileSpreadsheet, Printer, ReceiptText, type LucideIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -9,12 +8,6 @@ import { useParamState } from '../lib/useParamState';
 import { DataTable, EmptyState, ErrorNote, Modal, SkeletonCards, StatusBadge, type Column } from '../components/ui';
 import { INVOICE_PAYMENT_STATUS } from '../lib/status';
 import { fmtDate, fmtMoney, fmtMoneyExact, fmtNum, toLocalISO, todayISO } from '../lib/format';
-import { chartTheme } from '../lib/theme';
-import { topCategoriesWithOther } from '../lib/dashboardSeries';
-
-// The uncovered remainder of the donut — invoices with no linked purchase order. Named once:
-// the slice, the legend and the Excel sheet must all use the exact same honest label.
-const NO_ORDER = 'ללא הזמנה מקושרת';
 
 type InvoiceRow = {
   id: string; invoice_number: string; invoice_date: string; total_amount: number;
@@ -56,16 +49,15 @@ function presetRange(key: PresetKey): { from: string; to: string } {
   }
 }
 
-// One segment of the money strip — BandStat's anatomy (icon chip · label · mono value ·
-// context) in its quiet, non-linked form. Segments live in ONE .card and separate with
-// logical borders (border-t stacked / border-s side-by-side) — never divide-x (DESIGN.md).
+// One segment in a compact control-room strip. The square marker and shared ruled surface keep
+// the summary dense and operational instead of turning each number into a floating card.
 function StripStat({ title, value, context, icon: Icon }: {
   title: string; value: string; context?: string; icon: LucideIcon;
 }) {
   return (
     <div className="min-h-20 border-t border-line-soft px-4 py-3 first:border-t-0 sm:border-s sm:border-t-0 sm:px-5 sm:first:border-s-0">
       <div className="flex items-center gap-2">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-idle-wash text-idle-fg" aria-hidden="true">
+        <span className="grid size-8 shrink-0 place-items-center border border-line-soft bg-surface-sunken text-idle-fg" aria-hidden="true">
           <Icon size={16} />
         </span>
         <span className="text-xs font-medium text-ink-muted">{title}</span>
@@ -123,14 +115,11 @@ export default function Expenses() {
       }
     }
 
-    // Coverage math: an invoice is "covered" when it has at least one linked order. X (covered)
-    // and Y (all) are INVOICE totals; the category slices are PO-item sums (qty × snapshot
-    // unit_price) and are therefore an approximation of the covered money — the coverage line
-    // states this out loud instead of pretending the donut equals the ledger.
+    // Coverage is expressed separately from the category rows. Category values come from order
+    // snapshots, not invoice lines, so the UI never presents them as an exact invoice breakdown.
     const linkedIds = new Set(links.map((l) => l.invoice_id));
     const totalAll = invoices.reduce((s, i) => s + i.total_amount, 0);
     const coveredTotal = invoices.filter((i) => linkedIds.has(i.id)).reduce((s, i) => s + i.total_amount, 0);
-    const uncoveredTotal = totalAll - coveredTotal;
 
     const byCat = new Map<string, number>();
     for (const it of items) {
@@ -148,7 +137,7 @@ export default function Expenses() {
     }
     const bySupplier = [...bySupMap.values()].sort((a, b) => b.total - a.total);
 
-    return { invoices, bySupplier, catTotals, totalAll, coveredTotal, uncoveredTotal };
+    return { invoices, bySupplier, catTotals, totalAll, coveredTotal };
   }, [from, to]);
 
   function exportExcel() {
@@ -158,11 +147,10 @@ export default function Expenses() {
       'ספק': r.name, 'חשבוניות': r.count, 'סה"כ': r.total,
       '% מהסך': data.totalAll > 0 ? Number(((r.total / data.totalAll) * 100).toFixed(1)) : null,
     }))), 'לפי ספק');
-    const catRows: { 'קטגוריה': string; 'סכום': number }[] = [...data.catTotals]
+    const catRows: { 'קטגוריה': string; 'ערך בהזמנות מקושרות': number }[] = [...data.catTotals]
       .sort((a, b) => b.total - a.total)
-      .map((c) => ({ 'קטגוריה': c.name, 'סכום': c.total }));
-    if (data.uncoveredTotal > 0) catRows.push({ 'קטגוריה': NO_ORDER, 'סכום': data.uncoveredTotal });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'לפי קטגוריה');
+      .map((c) => ({ 'קטגוריה': c.name, 'ערך בהזמנות מקושרות': c.total }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'קטגוריות בהזמנות');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.invoices.map((i) => ({
       'ספק': i.supplier?.name ?? '', 'מספר חשבונית': i.invoice_number, 'תאריך': i.invoice_date,
       'סה"כ': i.total_amount, 'סטטוס תשלום': INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
@@ -173,26 +161,13 @@ export default function Expenses() {
   if (loading) return <SkeletonCards count={3} cols={3} title />;
   if (error || !data) return <ErrorNote message={error ?? 'שגיאה'} />;
 
-  const t = chartTheme();
   const hasInvoices = data.invoices.length > 0;
   // A computed sum over a selected range IS data — ₪0 total with 0 invoices is an honest
   // statement. Only the average is genuinely unmeasurable at 0/0 → "—" (CLAUDE.md).
   const avg = hasInvoices ? data.totalAll / data.invoices.length : null;
 
-  const donutCats = topCategoriesWithOther(data.catTotals);
-  const donutData = [
-    ...donutCats,
-    ...(data.uncoveredTotal > 0 ? [{ name: NO_ORDER, total: data.uncoveredTotal }] : []),
-  ];
-  const donutTotal = donutData.reduce((s, c) => s + c.total, 0);
-  const hasCoverage = donutCats.length > 0;
-  // "אחר" keeps chart-5 exactly like the dashboard donut; the honest no-order remainder is
-  // NOT a category, so it takes the neutral/idle chart tone (t.flat) — all via chartTheme().
-  const sliceColor = (name: string, index: number) =>
-    name === NO_ORDER ? t.flat : name === 'אחר' ? t.bars[4] : t.bars[index % 4];
-  const donutAria = `פילוח הוצאות לפי קטגוריה: ${donutData
-    .map((c) => `${c.name} ${fmtMoneyExact(c.total)}, ${donutTotal > 0 ? Math.round((c.total / donutTotal) * 100) : 0} אחוז`)
-    .join(', ')}`;
+  const categoryRows = [...data.catTotals].sort((a, b) => b.total - a.total);
+  const categoryTotal = categoryRows.reduce((sum, row) => sum + row.total, 0);
 
   const columns: Column<SupplierRow>[] = [
     { key: 'name', header: 'ספק', sortValue: (r) => r.name, render: (r) => <span className="font-medium">{r.name}</span> },
@@ -216,14 +191,13 @@ export default function Expenses() {
         </div>
       </div>
 
-      {/* Range filter: preset chips (NewOrder chip pattern) + explicit from/to date inputs. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 no-print">
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="טווחי תאריכים מהירים">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-line-soft bg-surface px-3 py-3 no-print sm:px-4">
+        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="טווחי תאריכים מהירים">
           {PRESETS.map((p) => {
             const r = presetRange(p.key);
             const active = from === r.from && to === r.to;
             return (
-              <button key={p.key} className={`badge ${active ? 'bg-action-solid text-white' : 'bg-idle-soft text-ink-soft'}`}
+              <button key={p.key} className={`min-h-11 border px-3 text-sm font-medium transition-colors sm:min-h-9 ${active ? 'border-action bg-action-solid text-white' : 'border-line-soft bg-surface text-ink-soft hover:bg-surface-sunken'}`}
                 aria-pressed={active} onClick={() => setRange(r.from, r.to)}>
                 {p.label}
               </button>
@@ -247,8 +221,7 @@ export default function Expenses() {
           <h2 className="text-xl font-bold">ריכוז הוצאות {fmtDate(from)} – {fmtDate(to)}</h2>
         </div>
 
-        {/* Money strip — one card, three segments, logical separators (BandStat anatomy). */}
-        <div className="card grid grid-cols-1 sm:grid-cols-3">
+        <div className="grid grid-cols-1 border-y border-line-strong bg-surface sm:grid-cols-3">
           <StripStat title="סה״כ הוצאות בטווח" icon={Banknote}
             value={fmtMoney(Math.round(data.totalAll))} context={`${fmtDate(from)} – ${fmtDate(to)}`} />
           <StripStat title="מספר חשבוניות" icon={ReceiptText}
@@ -259,7 +232,7 @@ export default function Expenses() {
         </div>
 
         {!hasInvoices ? (
-          <div className="card">
+          <div className="border-y border-line-soft bg-surface">
             <EmptyState title="אין חשבוניות בטווח שנבחר"
               subtitle="שנו את טווח התאריכים או בחרו אחד מהטווחים המהירים" />
           </div>
@@ -267,56 +240,58 @@ export default function Expenses() {
           <>
             <section className="space-y-2">
               <h2 className="section-title">הוצאות לפי ספק</h2>
-              <DataTable rows={data.bySupplier} columns={columns} mobile="cards"
-                mobileTitle={(r) => r.name}
-                onRowClick={(r) => setDrill(r)}
-                emptyTitle="אין חשבוניות בטווח" />
+              <div className="divide-y divide-line-soft border-y border-line-strong bg-surface md:hidden">
+                {data.bySupplier.map((supplier) => (
+                  <button key={supplier.id} type="button" onClick={() => setDrill(supplier)}
+                    className="flex min-h-16 w-full items-center gap-3 px-3 py-2.5 text-start hover:bg-surface-sunken active:bg-action-wash/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus">
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium text-ink-body">{supplier.name}</span>
+                      <span className="mt-0.5 block text-xs text-ink-muted">
+                        <span className="num">{fmtNum(supplier.count)}</span> חשבוניות
+                        {data.totalAll > 0 && <> · <span className="num">{((supplier.total / data.totalAll) * 100).toFixed(1)}%</span> מהסך</>}
+                      </span>
+                    </span>
+                    <strong className="num shrink-0 text-sm text-ink-body">{fmtMoneyExact(supplier.total)}</strong>
+                    <ChevronLeft size={16} className="shrink-0 text-ink-ghost" aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+              <div className="hidden md:block">
+                <DataTable rows={data.bySupplier} columns={columns} mobile="scroll"
+                  onRowClick={(r) => setDrill(r)} emptyTitle="אין חשבוניות בטווח" />
+              </div>
             </section>
 
-            <section className="card overflow-hidden">
-              <div className="border-b border-line-soft px-4 py-3 sm:px-5">
-                <h2 className="section-title">פילוח לפי קטגוריה</h2>
-                {/* Explicit coverage: the donut can only see invoices with a linked order. */}
-                <p className="mt-0.5 text-xs text-ink-muted">
-                  הפילוח מכסה <span className="num">{fmtMoney(Math.round(data.coveredTotal))}</span> מתוך{' '}
-                  <span className="num">{fmtMoney(Math.round(data.totalAll))}</span> — חשבוניות עם הזמנה מקושרת בלבד
-                </p>
-              </div>
-              <div className="p-4 sm:p-5">
-                {hasCoverage ? (
-                  <div className="flex flex-col items-center gap-4 sm:flex-row">
-                    <div dir="ltr" role="img" aria-label={donutAria} className="h-44 w-44 shrink-0">
-                      <ResponsiveContainer>
-                        <PieChart>
-                          <Pie data={donutData} dataKey="total" nameKey="name" innerRadius={52} outerRadius={76}
-                            paddingAngle={2} stroke="none" isAnimationActive={false}>
-                            {donutData.map((c, i) => <Cell key={c.name} fill={sliceColor(c.name, i)} />)}
-                          </Pie>
-                          <Tooltip cursor={false} formatter={(value) => fmtMoneyExact(Number(value))} isAnimationActive={false} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <ul className="w-full min-w-0 flex-1 space-y-1.5 text-sm">
-                      {donutData.map((c, i) => (
-                        <li key={c.name} className="flex items-center gap-2">
-                          <span className="size-2 shrink-0 rounded-full" aria-hidden="true"
-                            style={{ backgroundColor: sliceColor(c.name, i) }} />
-                          <span className={`min-w-0 flex-1 truncate ${c.name === NO_ORDER ? 'text-ink-muted' : 'text-ink-mid'}`}>{c.name}</span>
-                          <span className="shrink-0 text-ink-muted">
-                            <span className="num">{fmtMoney(Math.round(c.total))}</span>
-                            {donutTotal > 0 && <> · <span className="num">{Math.round((c.total / donutTotal) * 100)}%</span></>}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+            <details className="border-y border-line-strong bg-surface">
+              <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 sm:px-4">
+                <span>
+                  <span className="block font-semibold text-ink-body">פירוט מוצרים לפי קטגוריה</span>
+                  <span className="mt-0.5 block text-xs text-ink-muted">מידע משלים מהזמנות מקושרות; אינו מחליף את סכומי החשבוניות בטבלת הספקים.</span>
+                </span>
+                <span className="shrink-0 text-xs text-ink-muted">הצג פירוט</span>
+              </summary>
+              <div className="border-t border-line-soft">
+                <div className="px-3 py-2 text-xs text-ink-muted sm:px-4">
+                  חשבוניות מקושרות בסך <span className="num">{fmtMoney(Math.round(data.coveredTotal))}</span> מתוך{' '}
+                  <span className="num">{fmtMoney(Math.round(data.totalAll))}</span>. הסכומים למטה הם ערכי פריטי ההזמנה במחירי snapshot.
+                </div>
+                {categoryRows.length > 0 ? (
+                  <ul className="divide-y divide-line-soft border-t border-line-soft text-sm">
+                    {categoryRows.map((row) => (
+                      <li key={row.name} className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-2 sm:px-4">
+                        <span className="min-w-0 break-words text-ink-body">{row.name}</span>
+                        <span className="num text-ink-muted">{categoryTotal > 0 ? `${((row.total / categoryTotal) * 100).toFixed(1)}%` : '—'}</span>
+                        <span className="num min-w-24 font-medium text-ink-body">{fmtMoneyExact(row.total)}</span>
+                      </li>
+                    ))}
+                  </ul>
                 ) : (
-                  <div className="py-8 text-center text-sm text-ink-muted">
-                    אין חשבוניות עם הזמנה מקושרת בטווח שנבחר — אין פילוח קטגוריות להצגה
+                  <div className="border-t border-line-soft px-3 py-6 text-center text-sm text-ink-muted sm:px-4">
+                    אין בטווח חשבוניות עם הזמנה מקושרת ופריטי קטגוריה.
                   </div>
                 )}
               </div>
-            </section>
+            </details>
           </>
         )}
       </div>

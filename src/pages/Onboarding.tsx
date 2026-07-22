@@ -590,7 +590,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
         </div>
 
         {parsed.valid.length > 0 ? (
-          <DataTable rows={parsed.valid} columns={columns} pageSize={10} />
+          <DataTable rows={parsed.valid} columns={columns} pageSize={10} mobile="scroll" />
         ) : (
           <EmptyState title="אין שורות תקינות לייבוא" subtitle="בדוק את מיפוי העמודות או את תוכן הקובץ" />
         )}

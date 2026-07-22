@@ -84,7 +84,7 @@ export function OrdersList() {
         mobileTitle={(r) => <>#{r.number} · {r.supplier.name}</>}
         mobileTrailing={(r) => <StatusBadge meta={PO_STATUS[r.status]} />}
         rowActions={(r) => [
-          { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => navigate(`/orders/${r.id}`) },
+          { key: 'edit', label: 'עריכה', icon: Pencil, hidden: !canWrite, onSelect: () => navigate(`/orders/${r.id}`) },
           { key: 'duplicate', label: 'שכפול', icon: Copy, hidden: !canWrite, onSelect: () => navigate(`/orders/new?from=${r.id}`) },
           {
             key: 'whatsapp', label: 'שליחה בוואטסאפ', icon: MessageCircle,

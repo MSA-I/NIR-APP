@@ -6,7 +6,7 @@ import { getPushStatus, subscribePush, unsubscribePush, isIOS, isStandalone, typ
 /* ---------- push notifications (per-device, not per-org) ---------- */
 
 // Extracted from Settings.tsx (audit round: adversarial review): /settings is owner-only, but
-// the price-increase push targets owner+office — office users need this toggle reachable, so
+// operational pushes target owner+office — office users need this toggle reachable, so
 // the same card now also renders on /alerts (FINANCE guard covers both roles).
 
 // Status → the one line shown under the toggle. 'no-key' is a legitimate environment
@@ -46,7 +46,7 @@ export function PushSection() {
       <div>
         <h2 className="section-title flex items-center gap-2"><BellRing size={17} /> התראות דחיפה</h2>
         <p className="text-sm text-ink-muted mt-1">
-          התראה מיידית למכשיר זה כשספק מעלה מחיר במחירון וכשתשלומים מתקרבים לפירעון.
+          התראה מיידית למכשיר זה על עליית מחיר, חשד לחשבונית כפולה ותשלום שמתקרב לפירעון או עבר אותו.
         </p>
       </div>
 

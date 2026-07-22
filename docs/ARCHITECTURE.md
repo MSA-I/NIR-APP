@@ -4,12 +4,11 @@
 
 SPA ב-React 19 + TypeScript (Vite) מול Supabase כ-backend יחיד: PostgreSQL עם Row-Level Security לכל טבלה, Supabase Auth (אימייל+סיסמה), ו-Storage פרטי למסמכים. אין שרת ביניים — כללי האבטחה נאכפים ב-DB (RLS + פונקציות SECURITY DEFINER), והלוגיקה העסקית (בדיקות כפילות, פיצול הזמנות, הצעות התאמת בנק) ממומשת בשכבת `src/lib` בצד הלקוח מעל שאילתות מוגנות-RLS.
 
-**חריגה מכוונת מ"אין שרת ביניים" (שלב 2, 20.07.2026).** הקמת דייר חדש והזמנת עובדים דורשות
-את מפתח ה-`service_role`, שעוקף את כל ה-RLS ולכן אסור שיגיע לדפדפן. שתי Edge Functions של
-Supabase הן המקום היחיד שבו הוא קיים: `admin-provision` (יצירת ארגון+בעלים) ו-`send-invite`
-(שליחת הזמנה ב-Resend). שתיהן מאמתות את זהות הקורא **לפני** כל פעולה — `getUser()` מול לקוח
-anon, ואז בדיקת הרשאה. פונקציה שמחזיקה `service_role` ובוטחת בקורא שלה היא פשרה מלאה.
-זו הרחבה של אותו עיקרון, לא נטישה שלו: עדיין אין תשתית משלנו לתחזק.
+**חריגה מכוונת מ"אין שרת ביניים" (שלב 2 ואירועי Push).** פעולות מערכת שחוצות RLS מחזיקות את
+מפתח ה־`service_role` רק ב־Supabase Edge Functions — לעולם לא בדפדפן. `admin-provision` ו־
+`send-invite` מאמתות JWT והרשאה לפני פעולה; `send-push` נקראת רק מטריגרי DB/cron ומאמתת
+`x-push-secret` מול secret סביבתי לפני יצירת התראות, קריאת מנויים או ניקוי endpoint מת.
+זו הרחבה תחומה של אותו עיקרון, לא שרת יישום עצמאי.
 
 ```
 src/
@@ -22,16 +21,22 @@ src/
     checks.ts              מנוע בדיקות: חשבוניות, דרישות תשלום, רענון סטטוס תשלום (RPC)
     audit.ts               רישום פעולות עם סיבה ליומן הביקורת
     useQuery.ts            hook איחזור מינימלי
+    alerts.ts              סריקת ממצאים חיה למסך ההתראות
+    notifications.ts       מונה unread, סימון נקרא ו-Realtime לפעמון
   components/
     Layout.tsx             סרגל צד RTL + ניווט תחתון במובייל (מסונן לפי תפקיד)
     ui.tsx                 DataTable, StatusBadge, Modal, ConfirmDialog(+סיבה), Toast, KPI
     FileUpload.tsx         העלאה ל-Storage + טבלת documents (כולל צילום מצלמה)
+    NotificationBell.tsx   פעמון התראות חדשות בלבד
+    QuickActions.tsx       פס הפעולות התפעולי בדשבורד
   pages/                   מסך לכל מודול (ראה מפת מסכים)
 supabase/
   migrations/              0001 סכימה+RLS · 0002 ביצוע העברות · 0003 views יתרות
                            0004 סוכני ספק · 0005 בידוד אחסון+אינדקסים · 0006 מפעילי פלטפורמה
                            0007 הזמנות עובדים · 0008 הגנת תפקיד על views היתרות
-  functions/               admin-provision (הקמת דייר) · send-invite (מייל הזמנה) — service_role
+                           0009–0014 הקשחות, חיפוש, מדדי ספקים ותיבת מסמכים
+                           0015 מנויי Push · 0016 טריגרים/cron · 0017 התראות ומחזורי מסירה
+  functions/               admin-provision · send-invite · send-push — service_role נשאר בשרת
   seed.sql                 seed ניטרלי לדייר חדש (ארגון + קטגוריות)
   demo/                    חבילת הדמו כדייר נפרד + reset + audit בידוד
 scripts/                   db-query.ps1 (SQL דרך Management API), create-users.ps1, seed-demo.ps1
@@ -50,12 +55,15 @@ scripts/                   db-query.ps1 (SQL דרך Management API), create-user
 | `/orders`, `/orders/:id` | הזמנות + תצוגת הדפסה | קוראים |
 | `/receiving`, `/receiving/:orderId` | קבלת סחורה (מובייל) | בעלים, מזכירות, מטבח |
 | `/invoices`, `/invoices/new`, `/invoices/:id` | חשבוניות + בדיקות אוטומטיות | קוראים / כותבים |
+| `/inbox` | מסמכים לא־מתויקים + שיוך לחשבונית/קבלת סחורה | בעלים, מזכירות, מטבח |
 | `/credits` | זיכויים | קוראים |
 | `/payment-requests` | דרישות תשלום + אישורים | בעלים, מזכירות |
 | `/pay` | תור ביצוע העברות | מבצע העברות בלבד |
 | `/payments` | תשלומים | בעלים, מזכירות, רו״ח |
 | `/bank` | ייבוא תדפיס + התאמות | בעלים, מזכירות, רו״ח |
 | `/exceptions` | חריגים | בעלים, מזכירות, מטבח, רו״ח |
+| `/alerts` | מרכז התראות חי + סימון התראות פעמון כנקראו | בעלים, מזכירות |
+| `/expenses` | ריכוז הוצאות לפי ספק + פירוט קטגוריות משני | בעלים, מזכירות, רו״ח |
 | `/reports` | דוח חודשי לרו״ח + ייצוא | בעלים, מזכירות, רו״ח |
 | `/audit` | יומן ביקורת | בעלים, מזכירות, רו״ח |
 | `/settings` | משתמשים + הגדרות עסק | בעלים |
@@ -86,6 +94,9 @@ scripts/                   db-query.ps1 (SQL דרך Management API), create-user
 - **snapshot מחירים:** `purchase_order_items.unit_price` נקבע ברגע ההזמנה; `price_history` שומר כל שינוי.
 - **מחיקה רכה בלבד** לרשומות כספיות (`deleted_at` / סטטוס בוטל).
 - **ביקורת כפולה:** טריגר DB גנרי על כל הטבלאות הפיננסיות (old/new JSONB + משתמש) + רישום אפליקטיבי עם *סיבה* לפעולות רגישות (עקיפת כפילות, ביטולים, אישורי התאמה).
+- **התראות נשמרות פר־נמען:** `notifications` מסוננת ב־RLS לפי `org_id` ו־`auth.uid()`; לקוח רשאי
+  לעדכן רק `read_at`. ‏`notification_event_states` היא server-only ומגדירה מחזור מסירה אחד,
+  הסלמת warning→critical ומחזור חדש לאחר פתרון.
 
 ## ה-Workflow המלא (ממומש)
 

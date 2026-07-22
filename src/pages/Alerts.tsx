@@ -1,20 +1,16 @@
 import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { RefreshCw, ChevronLeft, ShieldCheck } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';
-import { buildSummary, type Summary, type SummaryLine } from '../lib/summary';
+import { buildSummary, type Summary } from '../lib/summary';
 import type { AlertSeverity } from '../lib/alerts';
-import { fmtMoney, fmtNum, fmtDateTime } from '../lib/format';
-import { SkeletonCards, ErrorNote, EmptyState } from '../components/ui';
+import { fmtDateTime } from '../lib/format';
+import { SkeletonCards, ErrorNote } from '../components/ui';
 import { PushSection } from '../components/PushSettings';
+import { useAuth } from '../auth/AuthContext';
+import { markAllNotificationsRead } from '../lib/notifications';
 
-/**
- * סעיף 9 (התראות) + סעיף 10 (סיכום עסקי) on one screen, because they answer the same
- * question from two directions: what is true right now, and what about it needs a decision.
- *
- * Severity maps onto the existing badge- classes rather than raw colours. The colour
- * language (סעיף 6) is still being settled; when those class definitions change in
- * index.css this screen follows without being touched.
- */
+/** Full actionable queue. The dashboard owns the business summary and links here for detail. */
 
 const SEVERITY_BADGE: Record<AlertSeverity, string> = {
   critical: 'badge-alert',
@@ -28,20 +24,16 @@ const SEVERITY_LABEL: Record<AlertSeverity, string> = {
   info: 'מידע',
 };
 
-function Figure({ line, onClick }: { line: SummaryLine; onClick: () => void }) {
-  return (
-    <button onClick={onClick} className="card card-pad text-start w-full card-link-hover cursor-pointer">
-      <div className="text-xs font-medium text-ink-muted">{line.label}</div>
-      <div className="text-xl font-bold text-ink mt-1 num">
-        {line.unit === 'currency' ? fmtMoney(line.value) : fmtNum(line.value)}
-      </div>
-    </button>
-  );
-}
-
 export default function Alerts() {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const { data, loading, fetching, error, refetch } = useQuery<Summary>(() => buildSummary(), []);
+
+  // Opening the canonical alerts screen acknowledges everything delivered to the bell.
+  // Wait for a successful load so a network failure never clears unseen work.
+  useEffect(() => {
+    if (data && !error && profile) void markAllNotificationsRead(profile.id);
+  }, [data, error, profile]);
 
   if (loading) return <SkeletonCards count={5} cols={5} title />;
   if (error) return <ErrorNote message={error} />;
@@ -51,17 +43,13 @@ export default function Alerts() {
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="page-title">התראות וסיכום עסקי</h1>
+          <h1 className="page-title">התראות</h1>
           <p className="text-xs text-ink-muted mt-0.5">נבדק {fmtDateTime(data.generatedAt)}</p>
         </div>
         <button className="btn-secondary" onClick={() => void refetch()} disabled={fetching}>
           <RefreshCw size={15} className={fetching ? 'animate-spin' : ''} />
           רענון
         </button>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-        {data.lines.map((l) => <Figure key={l.key} line={l} onClick={() => navigate(l.to)} />)}
       </div>
 
       <div>
@@ -97,12 +85,7 @@ export default function Alerts() {
         מועדי פירעון נבדקים רק על דרישות תשלום שהוזן להן תאריך.
       </p>
 
-      {data.alerts.length === 0 && data.lines.every((l) => l.value === 0) && (
-        <EmptyState title="אין עדיין נתונים במערכת" subtitle="ההתראות יופיעו כשייקלטו חשבוניות, מחירונים והזמנות" />
-      )}
-
-      {/* Device-notifications toggle lives on the notifications screen too: /settings is
-          owner-only, but the push audience is owner+office — this guard (FINANCE) covers both. */}
+      {/* Canonical per-device notification setting: /alerts is available to owner and office. */}
       <PushSection />
     </div>
   );

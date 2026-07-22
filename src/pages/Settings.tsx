@@ -5,7 +5,6 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { PageLoader, useToast, ErrorNote, DataTable, StatusBadge, ConfirmDialog, type Column } from '../components/ui';
-import { PushSection } from '../components/PushSettings';
 import { INVITATION_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime } from '../lib/format';
 import { logAction } from '../lib/audit';
@@ -176,8 +175,6 @@ export default function Settings() {
         </div>
         <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>שמירה</button></div>
       </div>
-
-      <PushSection />
 
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-line-soft section-title flex items-center gap-2"><Users size={17} /> משתמשים והרשאות</div>

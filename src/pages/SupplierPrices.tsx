@@ -38,11 +38,6 @@ export default function SupplierPrices() {
     { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => (r.previous_price != null ? `₪${r.previous_price.toFixed(2)}` : '—') },
     { key: 'date', header: 'בתוקף מ־', sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
     { key: 'avail', header: 'זמינות', render: (r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} /> },
-    {
-      key: 'edit', header: '', render: (r) => (
-        <button className="btn-ghost p-1.5!" title="עדכון" onClick={() => setEditFor(r)}><Pencil size={15} /></button>
-      ),
-    },
   ];
 
   if (loading) return <SkeletonTable cols={5} />;
@@ -65,6 +60,9 @@ export default function SupplierPrices() {
 
       <DataTable rows={data.rows} columns={columns} searchable
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q)}
+        rowActions={(r) => [
+          { key: 'edit', label: 'עדכון מחיר וזמינות', icon: Pencil, onSelect: () => setEditFor(r) },
+        ]}
         emptyTitle="אין מוצרים במחירון" emptySubtitle="העלה קובץ מחירון כדי להתחיל" />
 
       {editFor && (
