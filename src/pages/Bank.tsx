@@ -46,7 +46,8 @@ export default function Bank() {
 
   const { data, loading, fetching, error, refetch } = useQuery(async () => {
     const txs = await fetchAll<TxRow>((from, to) => supabase.from('bank_transactions')
-      .select('*, supplier:suppliers(name)').order('tx_date', { ascending: false }).order('id').range(from, to));
+      .select('*, supplier:suppliers!p0_bt_supplier_tenant_fk(name)')
+      .order('tx_date', { ascending: false }).order('id').range(from, to));
     const imports = unwrap(await supabase.from('bank_imports').select('*').order('imported_at', { ascending: false }).limit(10)) as BankImport[];
     return { txs, imports };
   });

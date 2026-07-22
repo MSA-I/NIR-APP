@@ -1,8 +1,9 @@
 # P0 → P1 — חוזה cutover לביצוע תשלום
 
-מסמך זה מתאר את הגבול שנשאר בכוונה לאחר מיגרציות P0 ‏`0020`–`0022`. הוא אינו אישור
-לפרודקשן: P0 נבדק מקומית בלבד, ושלוש כתיבות payer הישירות נשארות blocker עד ש־P1 ינחית
-את ה־RPC והלקוח התואם באותה מסירה.
+**סטטוס 22.07.2026: החוזה הושלם.** מסמך זה נשמר כהיסטוריית ה־cutover. מיגרציה `0023`
+והלקוח התואם בקומיט P0/P1 ‏`e04dd5d` הסירו את שלוש כתיבות ה־payer הישירות והעבירו את
+הביצוע ל־RPC יחיד. העבודה נבדקה מקומית בלבד ואינה אישור לפרודקשן; לא בוצעו push, deploy
+או מיגרציה חיה.
 
 ## מה P0 כבר מבטיח
 
@@ -13,16 +14,16 @@
 - audit של המוטציות עצמן הוא server-authored. P0 לא הוסיף unique/idempotency, בדיקת סכומי
   allocation או graph של מעברי סטטוס — אלה בבעלות P1.
 
-## מסלול הכתיבה הישיר שנשאר
+## מסלול הכתיבה הישיר שנסגר
 
-`src/pages/PayerQueue.tsx` מבצע כיום שלושה שלבים בלתי־אטומיים:
+לפני `0023`, ‏`src/pages/PayerQueue.tsx` ביצע שלושה שלבים בלתי־אטומיים:
 
 1. INSERT ל־`payments`.
 2. INSERT אחד או יותר ל־`payment_allocations`, וביניהם קריאות
    `refresh_invoice_payment_status`.
 3. UPDATE של `payment_requests.status` ל־`executed`.
 
-מטריצת ה־RLS לאחר P0 משאירה בכוונה את שלוש המדיניות הבאות ללא שינוי:
+מטריצת ה־RLS של P0 השאירה זמנית את שלוש המדיניות הבאות:
 
 | טבלה | policy | פעולה שמותרת ל־payer |
 |---|---|---|
@@ -30,14 +31,12 @@
 | `payments` | `payments_payer_insert` | INSERT בדייר הנוכחי כאשר `executed_by = auth.uid()` |
 | `payment_allocations` | `pa_payer_insert` | INSERT כאשר התשלום בדייר הנוכחי ונוצר בידי אותו payer |
 
-ל־DB role ‏`authenticated` קיימים ACL משותפים של INSERT/UPDATE על שלוש הטבלאות; אין GRANT
-נפרד ל־payer, וההפרדה נעשית ב־RLS. לכן אין לבטל את ה־ACL המשותף בלי להעביר גם את כתיבות
-owner/office. ה־cutover המינימלי של P1 חייב להסיר את שלוש המדיניות לעיל לאחר שה־RPC קיים,
-ולוודא שלא נוצרה policy חלופית שמאפשרת payer direct-write.
+`0023` הסירה את שלוש המדיניות ואת הרשאות הכתיבה הישירה לטבלאות שבבעלות הפקודה. לא נוצרה
+policy חלופית ל־payer; owner/office פועלים גם הם דרך פקודות השרת הרלוונטיות.
 
-## העסקה האטומית ש־P1 חייב לספק
+## העסקה האטומית ש־P1 מספק
 
-`execute_payment_request` הוא מקור הכתיבה היחיד של payer. באותה טרנזקציה עליו:
+`execute_payment_request` הוא מקור הכתיבה היחיד של payer. באותה טרנזקציה הוא:
 
 - לגזור actor ו־`org_id` מן ה־JWT, לא מן הקלט, ולאפשר `payer` בלבד אלא אם החלטה מתועדת
   מאשרת במפורש תפקיד נוסף.
@@ -52,8 +51,8 @@ owner/office. ה־cutover המינימלי של P1 חייב להסיר את של
 - להחזיר JSON מינימלי ויציב הכולל `payment_id`, סטטוס ורשימת החשבוניות שרועננו, עם קודי
   שגיאה קבועים המתורגמים ב־`src/lib/errors.ts`.
 
-רק לאחר שהמיגרציה והבדיקות עוברות, `PayerQueue.tsx` מוחלף לקריאת RPC אחת. אין fallback לרצף
-הישן, אין קריאת `logAction` נוספת ואין עריכה של אותו מסך מתוך P0.
+`PayerQueue.tsx` הוחלף לקריאת RPC אחת. אין fallback לרצף הישן ואין קריאת `logAction`
+נוספת לפעולה הזאת.
 
 ## בדיקות cutover חובה
 
@@ -72,9 +71,9 @@ owner/office. ה־cutover המינימלי של P1 חייב להסיר את של
 
 ## תלות audit נוספת שנחשפה
 
-`src/lib/audit.ts` אינו כותב עוד `audit_logs` מן הדפדפן ומחזיר `logged:false` בכוונה. ה־trigger
-עדיין מתעד את השינוי האמיתי, אך action עסקי וסיבה אינם אטומיים עד שהפקודה עוברת לשרת.
-נותרו callers ב־`Bank.tsx`, ‏`Credits.tsx`, ‏`Exceptions.tsx`, ‏`InvoiceDetail.tsx`,
-`InvoiceNew.tsx`, ‏`Invoices.tsx`, ‏`Orders.tsx`, ‏`PaymentRequests.tsx`, ‏`Products.tsx`,
-`Reports.tsx`, ‏`Suppliers.tsx` ו־`src/lib/share.ts`. כל סוכן P1/P2 מחליף רק את ה־callers
-שבבעלותו בתוך ה־RPC העסקי; אסור להחזיר INSERT גנרי ל־audit או לאפשר ללקוח לבחור payload.
+`src/lib/audit.ts` אינו כותב `audit_logs` מן הדפדפן ומחזיר `logged:false` בכוונה. כל פעולות
+P1 ב־Bank, Credits, InvoiceNew/Detail, PaymentRequests, Reports, PayerQueue, Receiving ומחירים
+כבר כותבות action וסיבה בתוך ה־RPC. נותרו פעולות legacy שמחוץ לגבול P1 ב־Exceptions,
+Invoices soft-delete, Orders, Products, Suppliers ו־`src/lib/share.ts`; ה־trigger מתעד בהן את
+המוטציה האמיתית, אך שדרוגן לפקודת שרת הוא עבודה עתידית נפרדת. אסור להחזיר INSERT גנרי
+ל־audit או לאפשר ללקוח לבחור payload.

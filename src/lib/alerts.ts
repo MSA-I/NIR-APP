@@ -1,7 +1,6 @@
 import { supabase } from './supabase';
-import { countDuplicateKeys, countAboveAverage, settleAlertScans } from './alertRules';
+import { settleAlertScans } from './alertRules';
 import { addCalendarDays, todayISO } from './format';
-import { fetchAll } from './supabasePaging';
 
 /**
  * Standing-condition scanner (סעיף 9 — מערכת התראות).
@@ -42,9 +41,6 @@ const PRICE_INCREASE_WINDOW_DAYS = 30;
 /** How close a dated payment request must be before it counts as approaching. */
 const DUE_SOON_DAYS = 7;
 
-/** Payment requests that still represent money owed. Excludes cancelled and already-matched. */
-const PR_ACTIVE = ['draft', 'pending_approval', 'approved', 'sent_for_execution'];
-
 function daysAgo(n: number): string {
   return addCalendarDays(todayISO(), -n);
 }
@@ -55,16 +51,20 @@ function daysAhead(n: number): string {
 
 /* ---------- scans ---------- */
 
+async function rpcCount(
+  request: PromiseLike<{ data: unknown; error: { message: string } | null }>,
+): Promise<number> {
+  const { data, error } = await request;
+  if (error) throw new Error(error.message);
+  const count = Number(data);
+  if (!Number.isSafeInteger(count) || count < 0) throw new Error('count_unavailable');
+  return count;
+}
+
 /** Invoices sharing a supplier + invoice number. checks.ts catches these at entry; this
  *  catches the ones already stored, including any entered before that check existed. */
 async function scanDuplicateInvoices(): Promise<Alert | null> {
-  // ponytail: grouped client-side. Fine at a few thousand invoices; move to an RPC with
-  // `group by` if a tenant's invoice table outgrows a single page fetch.
-  const rows = await fetchAll<{ id: string; supplier_id: string; invoice_number: string }>((from, to) => supabase.from('invoices')
-    .select('id, supplier_id, invoice_number').is('deleted_at', null)
-    .order('supplier_id').order('invoice_number').order('id').range(from, to));
-
-  const dupes = countDuplicateKeys(rows);
+  const dupes = await rpcCount(supabase.rpc('p2_duplicate_invoice_group_count'));
   if (!dupes) return null;
 
   return {
@@ -79,19 +79,15 @@ async function scanDuplicateInvoices(): Promise<Alert | null> {
 /** Catalogue price rises. Note the scope limit in `detail`: there is no invoice_items table,
  *  so this sees the price list, never what a supplier actually billed. */
 async function scanPriceIncreases(): Promise<Alert | null> {
-  const rows = await fetchAll<{ id: string; current_price: number; previous_price: number }>((from, to) => supabase.from('supplier_products')
-    .select('id, current_price, previous_price')
-    .not('previous_price', 'is', null)
-    .gte('price_effective_date', daysAgo(PRICE_INCREASE_WINDOW_DAYS))
-    .order('price_effective_date').order('id').range(from, to));
-
-  const raised = rows.filter((r) => r.current_price > r.previous_price);
-  if (!raised.length) return null;
+  const raised = await rpcCount(supabase.rpc('p2_recent_price_increase_count', {
+    p_since: daysAgo(PRICE_INCREASE_WINDOW_DAYS),
+  }));
+  if (!raised) return null;
 
   return {
     code: 'price_increase',
     severity: 'warning',
-    title: `${raised.length} מחירים עלו ב-${PRICE_INCREASE_WINDOW_DAYS} הימים האחרונים`,
+    title: `${raised} מחירים עלו ב-${PRICE_INCREASE_WINDOW_DAYS} הימים האחרונים`,
     detail: 'לפי המחירון. מה שנגבה בפועל בחשבונית אינו נמדד — לחשבונית אין שורות פריטים',
     to: '/prices',
   };
@@ -101,11 +97,9 @@ async function scanPriceIncreases(): Promise<Alert | null> {
  *  Products with a single supplier are skipped — their own price *is* the average, and a
  *  deviation of zero is not a finding. */
 async function scanPricedAboveAverage(): Promise<Alert | null> {
-  const rows = await fetchAll<{ id: string; product_id: string; current_price: number }>((from, to) => supabase.from('supplier_products')
-    .select('id, product_id, current_price').eq('available', true)
-    .order('product_id').order('id').range(from, to));
-
-  const over = countAboveAverage(rows, ABOVE_AVG_MARGIN);
+  const over = await rpcCount(supabase.rpc('p2_above_average_offer_count', {
+    p_margin: ABOVE_AVG_MARGIN,
+  }));
   if (!over) return null;
 
   return {
@@ -120,14 +114,7 @@ async function scanPricedAboveAverage(): Promise<Alert | null> {
 /** Invoices with no linked purchase order. A direct purchase legitimately has none, so this
  *  is information, not a fault. */
 async function scanInvoicesWithoutOrder(): Promise<Alert | null> {
-  const [invoices, links] = await Promise.all([
-    fetchAll<{ id: string }>((from, to) => supabase.from('invoices').select('id').is('deleted_at', null).order('id').range(from, to)),
-    fetchAll<{ invoice_id: string; order_id: string }>((from, to) => supabase.from('invoice_order_links')
-      .select('invoice_id, order_id').order('invoice_id').order('order_id').range(from, to)),
-  ]);
-
-  const linked = new Set(links.map((l) => l.invoice_id));
-  const orphans = invoices.filter((i) => !linked.has(i.id)).length;
+  const orphans = await rpcCount(supabase.rpc('p2_invoice_without_order_count'));
   if (!orphans) return null;
 
   return {
@@ -146,23 +133,26 @@ async function scanInvoicesWithoutOrder(): Promise<Alert | null> {
  *  the one a user typed into a payment request — an optional field that is usually empty.
  *  A manager who reads this as "everything due soon" would be wrong, so the alert says so. */
 async function scanPaymentsDueSoon(): Promise<Alert | null> {
-  const rows = await fetchAll<{ id: string; due_date: string }>((from, to) => supabase.from('payment_requests')
-    .select('id, due_date')
-    .not('due_date', 'is', null)
-    .lte('due_date', daysAhead(DUE_SOON_DAYS))
-    .in('status', PR_ACTIVE).order('due_date').order('id').range(from, to));
-
-  if (!rows.length) return null;
-
   const today = todayISO();
-  const late = rows.filter((r) => r.due_date < today).length;
+  const { data, error } = await supabase.rpc('p2_payment_due_counts', {
+    p_today: today,
+    p_until: daysAhead(DUE_SOON_DAYS),
+  });
+  if (error) throw new Error(error.message);
+  const counts = data as { total?: unknown; late?: unknown } | null;
+  const total = Number(counts?.total);
+  const late = Number(counts?.late);
+  if (!Number.isSafeInteger(total) || total < 0 || !Number.isSafeInteger(late) || late < 0 || late > total) {
+    throw new Error('due_counts_unavailable');
+  }
+  if (!total) return null;
 
   return {
     code: 'payment_due_soon',
     severity: late ? 'critical' : 'warning',
     title: late
       ? `${late} דרישות תשלום עברו את מועד הפירעון`
-      : `${rows.length} דרישות תשלום לפירעון תוך ${DUE_SOON_DAYS} ימים`,
+      : `${total} דרישות תשלום לפירעון תוך ${DUE_SOON_DAYS} ימים`,
     detail: 'מכסה רק דרישות תשלום שהוזן להן תאריך. לחשבוניות אין מועד פירעון במערכת',
     to: '/payment-requests',
   };

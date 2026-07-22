@@ -1,7 +1,6 @@
 import { supabase } from './supabase';
 import { scanAlerts, type Alert } from './alerts';
 import { addCalendarDays, todayISO } from './format';
-import { fetchAll } from './supabasePaging';
 import { readExactCount } from './queryResult';
 
 /**
@@ -32,10 +31,19 @@ export interface SummaryLine {
 
 const WEEK_DAYS = 7;
 const PRICE_INCREASE_WINDOW_DAYS = 30;
-const PR_ACTIVE = ['draft', 'pending_approval', 'approved', 'sent_for_execution'];
 
 function daysAgo(n: number): string {
   return addCalendarDays(todayISO(), -n);
+}
+
+async function rpcNumber(
+  request: PromiseLike<{ data: unknown; error: { message: string } | null }>,
+): Promise<number> {
+  const { data, error } = await request;
+  if (error) throw new Error(error.message);
+  const value = Number(data);
+  if (!Number.isFinite(value) || value < 0) throw new Error('metric_unavailable');
+  return value;
 }
 
 export interface Summary {
@@ -66,19 +74,16 @@ export async function buildSummary(): Promise<Summary> {
     ) },
 
     // 3. money committed on active payment requests
-    { key: 'expected_payments', label: 'סכום פתוח בדרישות תשלום', unit: 'currency', to: '/payment-requests', run: async () => {
-      const rows = await fetchAll<{ id: string; amount: number }>((from, to) => supabase.from('payment_requests')
-        .select('id, amount').in('status', PR_ACTIVE).order('id').range(from, to));
-      return rows.reduce((sum, row) => sum + row.amount, 0);
-    } },
+    { key: 'expected_payments', label: 'סכום פתוח בדרישות תשלום', unit: 'currency', to: '/payment-requests', run: () => rpcNumber(
+      supabase.rpc('p2_active_payment_request_total'),
+    ) },
 
     // 4. distinct suppliers who raised a catalogue price in the window
-    { key: 'suppliers_raised', label: `ספקים שהעלו מחיר ב-${PRICE_INCREASE_WINDOW_DAYS} הימים האחרונים`, unit: 'count', to: '/prices', run: async () => {
-      const rows = await fetchAll<{ id: string; supplier_id: string; current_price: number; previous_price: number }>((from, to) => supabase.from('supplier_products')
-        .select('id, supplier_id, current_price, previous_price').not('previous_price', 'is', null)
-        .gte('price_effective_date', daysAgo(PRICE_INCREASE_WINDOW_DAYS)).order('id').range(from, to));
-      return new Set(rows.filter((row) => row.current_price > row.previous_price).map((row) => row.supplier_id)).size;
-    } },
+    { key: 'suppliers_raised', label: `ספקים שהעלו מחיר ב-${PRICE_INCREASE_WINDOW_DAYS} הימים האחרונים`, unit: 'count', to: '/prices', run: () => rpcNumber(
+      supabase.rpc('p2_suppliers_with_price_increase_since', {
+        p_since: daysAgo(PRICE_INCREASE_WINDOW_DAYS),
+      }),
+    ) },
 
     // 5. exceptions still needing a decision
     { key: 'open_exceptions', label: 'חריגים פתוחים', unit: 'count', to: '/exceptions', run: () => readExactCount(
