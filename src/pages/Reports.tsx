@@ -4,11 +4,10 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { StatusBadge, useToast, ErrorNote, SkeletonCards, Note } from '../components/ui';
+import { StatusBadge, useToast, ConfirmDialog, ErrorNote, SkeletonCards, Note } from '../components/ui';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtMonth, monthRange } from '../lib/format';
-import { logAction } from '../lib/audit';
-import { ok, toHebrewError } from '../lib/errors';
+import { toHebrewError } from '../lib/errors';
 
 export default function Reports() {
   const { profile, org } = useAuth();
@@ -16,6 +15,7 @@ export default function Reports() {
   const now = new Date();
   const [month, setMonth] = useState(now.toISOString().slice(0, 7)); // YYYY-MM
   const [busy, setBusy] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
 
   const { data, loading, error, refetch } = useQuery(async () => {
     const { start, end } = monthRange(month);
@@ -63,23 +63,17 @@ export default function Reports() {
     XLSX.writeFile(wb, `${slug || 'supplyflow'}-report-${month}.xlsx`);
   }
 
-  async function markSent() {
+  async function markSent(reason?: string) {
     if (!data || !profile) return;
     setBusy(true);
     try {
-      // ok() on every write: supabase-js resolves successfully on a rejected statement, so
-      // without it a failed update still fell through to the success toast below.
-      if (data.export) {
-        ok(await supabase.from('monthly_exports').update({ status: 'sent', sent_at: new Date().toISOString(), sent_by: profile.id }).eq('id', data.export.id));
-      } else {
-        ok(await supabase.from('monthly_exports').insert({
-          org_id: profile.org_id, month: `${month}-01`, status: 'sent', sent_at: new Date().toISOString(), sent_by: profile.id,
-        }));
-      }
-      const ids = data.invoices.filter((i) => i.export_status === 'not_sent').map((i) => i.id);
-      if (ids.length) ok(await supabase.from('invoices').update({ export_status: 'sent' }).in('id', ids));
-      const audit = await logAction({ orgId: profile.org_id, action: 'month_sent_to_accountant', entityType: 'monthly_exports', reason: month });
-      toast(audit.logged ? 'החודש סומן כהועבר לרו״ח' : 'החודש סומן כהועבר לרו״ח — אך הפעולה לא נרשמה ביומן הביקורת');
+      unwrap(await supabase.rpc('mark_month_export_sent', {
+        p_month: `${month}-01`,
+        p_invoice_ids: data.invoices.map((invoice) => invoice.id),
+        p_reason: reason?.trim() || null,
+      }));
+      setSendOpen(false);
+      toast('החודש סומן כהועבר לרו״ח');
       void refetch();
     } catch (e) {
       toast(toHebrewError(e), 'error');
@@ -117,10 +111,16 @@ export default function Reports() {
           {isOffice && (
             data.export?.status === 'sent'
               ? <span className="badge-done flex items-center gap-1"><CheckCircle2 size={13} /> הועבר לרו״ח {data.export.sent_at ? fmtDate(data.export.sent_at) : ''}</span>
-              : <button className="btn-primary" disabled={busy} onClick={() => void markSent()}><Send size={15} /> סימון כהועבר לרו״ח</button>
+              : <button className="btn-primary" disabled={busy} onClick={() => setSendOpen(true)}><Send size={15} /> סימון כהועבר לרו״ח</button>
           )}
         </div>
       </div>
+
+      <ConfirmDialog open={sendOpen} onClose={() => setSendOpen(false)}
+        onConfirm={(reason) => void markSent(reason)}
+        title="סימון הדוח כהועבר לרו״ח"
+        message="רשימת החשבוניות הנוכחית תישמר כצילום מצב, וכל הסימון יתבצע בעסקה אחת."
+        confirmLabel="סימון כהועבר" requireReason busy={busy} />
 
       <div className="print-area space-y-4">
         <div className="hidden print:block">

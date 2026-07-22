@@ -9,7 +9,6 @@ import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, useToast, Modal, ConfirmDialog, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { CheckList } from './Invoices';
 import { runPaymentRequestChecks, type CheckResult } from '../lib/checks';
-import { logAction } from '../lib/audit';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
 import type { PaymentRequest, PaymentRequestStatus, Supplier } from '../lib/types';
@@ -51,10 +50,13 @@ export default function PaymentRequests() {
   async function cancelRequest(reason?: string) {
     if (!cancelTarget) return;
     setBusyCancel(true);
-    const res = await supabase.from('payment_requests').update({ status: 'cancelled' }).eq('id', cancelTarget.id);
+    const res = await supabase.rpc('transition_payment_request', {
+      p_payment_request_id: cancelTarget.id,
+      p_target_status: 'cancelled',
+      p_reason: reason?.trim() || null,
+    });
     setBusyCancel(false);
     if (res.error) { setCancelTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
-    await logAction({ orgId: cancelTarget.org_id, action: 'payment_request:cancelled', entityType: 'payment_requests', entityId: cancelTarget.id, reason });
     setCancelTarget(null);
     toast('הדרישה בוטלה');
     void refetch();
@@ -128,12 +130,13 @@ export default function PaymentRequests() {
 function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
   presetInvoiceId: string | null; onClose: () => void; onSaved: () => void;
 }) {
-  const { profile } = useAuth();
   const toast = useToast();
   const [supplierId, setSupplierId] = useState('');
   const [chosen, setChosen] = useState<Record<string, number>>({}); // invoice_id -> allocation
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [reason, setReason] = useState('');
+  const [requestId] = useState(() => crypto.randomUUID());
   const [checks, setChecks] = useState<CheckResult[] | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -182,35 +185,28 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
 
   async function save(toApproval: boolean) {
     if (!supplierId || amount <= 0) { toast('בחר ספק וחשבוניות לתשלום', 'error'); return; }
+    if (!reason.trim()) { toast('נדרשת סיבה ליצירת דרישת התשלום', 'error'); return; }
     setBusy(true);
     try {
-      const status: PaymentRequestStatus = hasCritical ? 'suspected_duplicate' : toApproval ? 'pending_approval' : 'draft';
-      const pr = unwrap(await supabase.from('payment_requests').insert({
-        org_id: profile!.org_id, supplier_id: supplierId, amount, due_date: dueDate || null,
-        status, notes: notes || null, created_by: profile!.id,
-      }).select('id, number').single()) as { id: string; number: number };
+      const pr = unwrap(await supabase.rpc('create_payment_request', {
+        p_request_id: requestId,
+        p_supplier_id: supplierId,
+        p_due_date: dueDate || null,
+        p_notes: notes.trim() || null,
+        p_requested_status: toApproval ? 'pending_approval' : 'draft',
+        p_allocations: Object.entries(chosen).filter(([, value]) => value > 0)
+          .map(([invoice_id, value]) => ({ invoice_id, amount: value })),
+        p_reason: reason.trim(),
+      })) as { payment_request_id: string; number: number; status: PaymentRequestStatus };
 
-      const links = Object.entries(chosen).filter(([, v]) => v > 0)
-        .map(([invoice_id, amount_allocated]) => ({ payment_request_id: pr.id, invoice_id, amount_allocated }));
-      if (links.length) {
-        const ins = await supabase.from('payment_request_invoices').insert(links);
-        if (ins.error) throw new Error(ins.error.message);
-      }
-
-      if (hasCritical) {
-        await supabase.from('exceptions').insert({
-          org_id: profile!.org_id, type: 'duplicate_payment', severity: 'high', status: 'open',
-          title: `חשד לדרישת תשלום כפולה — #${pr.number}`,
-          details: { checks: checks?.filter((c) => c.severity === 'critical').map((c) => c.message) },
-          supplier_id: supplierId, payment_request_id: pr.id, assigned_role: 'office',
-        });
+      if (pr.status === 'suspected_duplicate') {
         toast('הדרישה נשמרה עם חשד לכפילות ונפתח חריג לבדיקה', 'error');
       } else {
         toast(toApproval ? 'הדרישה נשלחה לאישור' : 'הדרישה נשמרה כטיוטה');
       }
       onSaved();
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'שגיאה בשמירה', 'error');
+      toast(toHebrewError(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -268,6 +264,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
         </div>
 
         <div><label className="label">הערות</label><input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+        <div><label className="label">סיבת יצירת הדרישה *</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
 
         {checks && <CheckList checks={checks} />}
 
@@ -288,11 +285,10 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
 export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
   pr: Row; isOffice: boolean; onClose: () => void; onChanged: () => void;
 }) {
-  const { profile } = useAuth();
   const toast = useToast();
   const [checks, setChecks] = useState<CheckResult[] | null>(null);
   const [busy, setBusy] = useState(false);
-  const [cancelOpen, setCancelOpen] = useState(false);
+  const [transitionTarget, setTransitionTarget] = useState<PaymentRequestStatus | null>(null);
 
   const { data: links } = useQuery(async () =>
     unwrap(await supabase.from('payment_request_invoices')
@@ -308,12 +304,14 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
 
   async function setStatus(status: PaymentRequestStatus, reason?: string) {
     setBusy(true);
-    const patch: Record<string, unknown> = { status };
-    if (status === 'approved') { patch.approved_by = profile!.id; patch.approved_at = new Date().toISOString(); }
-    const res = await supabase.from('payment_requests').update(patch).eq('id', pr.id);
+    const res = await supabase.rpc('transition_payment_request', {
+      p_payment_request_id: pr.id,
+      p_target_status: status,
+      p_reason: reason?.trim() || null,
+    });
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-    await logAction({ orgId: pr.org_id, action: `payment_request:${status}`, entityType: 'payment_requests', entityId: pr.id, reason });
+    setTransitionTarget(null);
     toast('הסטטוס עודכן');
     onChanged();
   }
@@ -352,26 +350,29 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         {isOffice && (
           <div className="flex flex-wrap justify-end gap-2 pt-1">
             {['draft'].includes(pr.status) && (
-              <button className="btn-primary" disabled={busy} onClick={() => void setStatus('pending_approval')}><Send size={15} /> שליחה לאישור</button>
+              <button className="btn-primary" disabled={busy} onClick={() => setTransitionTarget('pending_approval')}><Send size={15} /> שליחה לאישור</button>
             )}
             {['pending_approval', 'suspected_duplicate', 'investigation'].includes(pr.status) && (
-              <button className={hasCritical ? 'btn-danger' : 'btn-primary'} disabled={busy} onClick={() => void setStatus('approved')}>
+              <button className={hasCritical ? 'btn-danger' : 'btn-primary'} disabled={busy} onClick={() => setTransitionTarget('approved')}>
                 <CheckCircle2 size={15} /> {hasCritical ? 'אישור למרות האזהרות' : 'אישור הדרישה'}
               </button>
             )}
             {['approved'].includes(pr.status) && (
-              <button className="btn-primary" disabled={busy} onClick={() => void setStatus('sent_for_execution')}><Send size={15} /> העברה לגורם המבצע</button>
+              <button className="btn-primary" disabled={busy} onClick={() => setTransitionTarget('sent_for_execution')}><Send size={15} /> העברה לגורם המבצע</button>
             )}
             {!['cancelled', 'executed', 'matched'].includes(pr.status) && (
-              <button className="btn-ghost text-alert-solid" disabled={busy} onClick={() => setCancelOpen(true)}><XCircle size={15} /> ביטול</button>
+              <button className="btn-ghost text-alert-solid" disabled={busy} onClick={() => setTransitionTarget('cancelled')}><XCircle size={15} /> ביטול</button>
             )}
           </div>
         )}
       </div>
 
-      <ConfirmDialog open={cancelOpen} onClose={() => setCancelOpen(false)}
-        onConfirm={(reason) => { setCancelOpen(false); void setStatus('cancelled', reason); }}
-        title="ביטול דרישת תשלום" message="הביטול יתועד ביומן הביקורת." danger requireReason busy={busy} />
+      <ConfirmDialog open={transitionTarget !== null} onClose={() => setTransitionTarget(null)}
+        onConfirm={(reason) => transitionTarget && void setStatus(transitionTarget, reason)}
+        title={transitionTarget === 'cancelled' ? 'ביטול דרישת תשלום' : 'עדכון דרישת תשלום'}
+        message="המעבר והסיבה יישמרו יחד ביומן הביקורת."
+        danger={transitionTarget === 'cancelled' || (transitionTarget === 'approved' && hasCritical)}
+        requireReason busy={busy} />
     </Modal>
   );
 }
