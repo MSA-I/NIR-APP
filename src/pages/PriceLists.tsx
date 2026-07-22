@@ -134,30 +134,26 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
 }
 
 function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => void; onSaved: () => void }) {
-  const { profile } = useAuth();
   const toast = useToast();
   const [price, setPrice] = useState(row.current_price.toString());
   const [date, setDate] = useState(todayISO());
   const [available, setAvailable] = useState(row.available);
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function save() {
     const p = Number(price);
     if (!p || p <= 0) { toast('מחיר לא תקין', 'error'); return; }
+    if (!reason.trim()) { toast('נדרשת סיבה לעדכון המחיר', 'error'); return; }
     setBusy(true);
-    const upd = await supabase.from('supplier_products').update({
-      current_price: p,
-      previous_price: p !== row.current_price ? row.current_price : row.previous_price,
-      price_effective_date: date,
-      available,
-    }).eq('id', row.id);
+    const upd = await supabase.rpc('set_supplier_product_price', {
+      p_supplier_product_id: row.id,
+      p_price: p,
+      p_effective_date: date,
+      p_available: available,
+      p_reason: reason.trim(),
+    });
     if (upd.error) { setBusy(false); toast(toHebrewError(upd.error.message), 'error'); return; }
-    if (p !== row.current_price) {
-      await supabase.from('price_history').insert({
-        org_id: profile!.org_id, supplier_product_id: row.id, price: p, effective_date: date,
-        created_by: profile!.id,
-      });
-    }
     setBusy(false);
     onSaved();
   }
@@ -168,6 +164,7 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
         <div><label className="label" htmlFor="price-list-price">מחיר חדש (₪)</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
         <div><label className="label" htmlFor="price-list-date">בתוקף מתאריך</label><input id="price-list-date" type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="rounded" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> זמין אצל הספק</label>
+        <div><label className="label">סיבת העדכון *</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
         <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
@@ -179,12 +176,12 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
 
 /** Import price list: expects columns ספק / מוצר / מחיר (or supplier/product/price). */
 function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const { profile } = useAuth();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<{ supplier: string; product: string; price: number }[]>([]);
   const [report, setReport] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reason, setReason] = useState('');
 
   async function onFile(file: File) {
     try {
@@ -210,41 +207,32 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   }
 
   async function runImport() {
+    if (!reason.trim()) { toast('נדרשת סיבה לייבוא המחירון', 'error'); return; }
     setBusy(true);
-    const suppliers = unwrap(await supabase.from('suppliers').select('id, name')) as { id: string; name: string }[];
-    const products = unwrap(await supabase.from('products').select('id, name')) as { id: string; name: string }[];
-    const sps = unwrap(await supabase.from('supplier_products').select('id, supplier_id, product_id, current_price, previous_price')) as SupplierProduct[];
-    let updated = 0, created = 0, skipped = 0;
-    for (const row of preview) {
-      const sup = suppliers.find((s) => s.name.trim() === row.supplier);
-      const prod = products.find((p) => p.name.trim() === row.product);
-      if (!sup || !prod) { skipped++; continue; }
-      const existing = sps.find((sp) => sp.supplier_id === sup.id && sp.product_id === prod.id);
-      if (existing) {
-        if (existing.current_price !== row.price) {
-          await supabase.from('supplier_products').update({
-            current_price: row.price, previous_price: existing.current_price, price_effective_date: todayISO(),
-          }).eq('id', existing.id);
-          await supabase.from('price_history').insert({
-            org_id: profile!.org_id, supplier_product_id: existing.id, price: row.price, effective_date: todayISO(), created_by: profile!.id,
-          });
-          updated++;
-        }
-      } else {
-        const ins = await supabase.from('supplier_products').insert({
-          org_id: profile!.org_id, supplier_id: sup.id, product_id: prod.id,
-          current_price: row.price, price_effective_date: todayISO(),
-        }).select('id').single();
-        if (!ins.error && ins.data) {
-          await supabase.from('price_history').insert({
-            org_id: profile!.org_id, supplier_product_id: ins.data.id, price: row.price, effective_date: todayISO(), created_by: profile!.id,
-          });
-          created++;
-        }
+    try {
+      const suppliers = unwrap(await supabase.from('suppliers').select('id, name')) as { id: string; name: string }[];
+      const products = unwrap(await supabase.from('products').select('id, name')) as { id: string; name: string }[];
+      const unresolved: number[] = [];
+      const rows = preview.flatMap((row, index) => {
+        const supplier = suppliers.find((candidate) => candidate.name.trim() === row.supplier);
+        const product = products.find((candidate) => candidate.name.trim() === row.product);
+        if (!supplier || !product) { unresolved.push(index + 2); return []; }
+        return [{ supplier_id: supplier.id, product_id: product.id, price: row.price, available: true }];
+      });
+      if (unresolved.length) {
+        throw new Error(`הייבוא בוטל: ספק או מוצר לא נמצאו בשם מדויק בשורות ${unresolved.slice(0, 12).join(', ')}.`);
       }
+      const imported = unwrap(await supabase.rpc('import_supplier_prices', {
+        p_rows: rows,
+        p_effective_date: todayISO(),
+        p_reason: reason.trim(),
+      })) as { updated: number; created: number; unchanged: number };
+      setReport(`עודכנו ${imported.updated} מחירים, נוצרו ${imported.created} רשומות חדשות, ${imported.unchanged} ללא שינוי.`);
+    } catch (e) {
+      toast(toHebrewError(e), 'error');
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
-    setReport(`עודכנו ${updated} מחירים, נוצרו ${created} רשומות חדשות, דולגו ${skipped} שורות (ספק/מוצר לא נמצא בשם מדויק).`);
   }
 
   return (
@@ -267,6 +255,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
               </tbody>
             </table>
           </div>
+          <div><label className="label">סיבת הייבוא *</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
           <div className="flex justify-end gap-2">
             <button className="btn-secondary" disabled={busy} onClick={() => setPreview([])}>חזרה</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>{busy ? 'מייבא...' : 'אישור וייבוא'}</button>

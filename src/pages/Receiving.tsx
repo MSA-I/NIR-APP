@@ -3,11 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Minus, PackageCheck, Save, CheckCircle2, FileText, Camera } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { useAuth } from '../auth/AuthContext';
 import { PageLoader, useToast, StatusBadge, EmptyState, ErrorNote, SkeletonList } from '../components/ui';
 import { DocumentList } from '../components/FileUpload';
 import { PO_STATUS, RECEIPT_LINE_STATUS, type Tone } from '../lib/status';
 import { fmtDate } from '../lib/format';
+import { toHebrewError } from '../lib/errors';
 import type { PurchaseOrder, PurchaseOrderItem, ReceiptLineStatus } from '../lib/types';
 
 type OrderForReceiving = PurchaseOrder & {
@@ -60,10 +60,11 @@ interface LineState { qty: number; status: ReceiptLineStatus; notes: string }
 export function ReceiveOrder() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
-  const { profile } = useAuth();
   const toast = useToast();
   const [lines, setLines] = useState<Record<string, LineState>>({});
   const [openCredits, setOpenCredits] = useState(true);
+  const [reason, setReason] = useState('');
+  const [newReceiptId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [doneReceiptId, setDoneReceiptId] = useState<string | null>(null);
   const [invoiceSupplier, setInvoiceSupplier] = useState<string | null>(null);
@@ -113,59 +114,27 @@ export function ReceiveOrder() {
   }
 
   async function save(complete: boolean) {
-    if (!order || !profile) return;
+    if (!order) return;
+    if (!reason.trim()) { toast('נדרשת סיבה לשמירת הקבלה', 'error'); return; }
     setBusy(true);
     try {
-      let receiptId = data?.draft?.id ?? null;
-      if (receiptId) {
-        await supabase.from('goods_receipt_items').delete().eq('receipt_id', receiptId);
-        const upd = await supabase.from('goods_receipts').update({
-          status: complete ? 'completed' : 'draft', received_by: profile.id, received_at: new Date().toISOString(),
-        }).eq('id', receiptId);
-        if (upd.error) throw new Error(upd.error.message);
-      } else {
-        const ins = unwrap(await supabase.from('goods_receipts').insert({
-          org_id: profile.org_id, order_id: order.id, status: complete ? 'completed' : 'draft', received_by: profile.id,
-        }).select('id').single()) as { id: string };
-        receiptId = ins.id;
-      }
+      const result = unwrap(await supabase.rpc('save_goods_receipt', {
+        p_order_id: order.id,
+        p_receipt_id: data?.draft?.id ?? newReceiptId,
+        p_complete: complete,
+        p_notes: null,
+        p_open_credits: openCredits,
+        p_lines: order.items.map((item) => ({
+          order_item_id: item.id,
+          qty_received: lines[item.id]?.qty ?? 0,
+          status: lines[item.id]?.status ?? 'full',
+          notes: lines[item.id]?.notes.trim() || null,
+        })),
+        p_reason: reason.trim(),
+      })) as { receipt_id: string };
 
-      const itemRows = order.items.map((item) => ({
-        receipt_id: receiptId, order_item_id: item.id, product_id: item.product_id,
-        qty_received: lines[item.id]?.qty ?? 0, status: lines[item.id]?.status ?? 'full',
-        notes: lines[item.id]?.notes || null,
-      }));
-      const insItems = await supabase.from('goods_receipt_items').insert(itemRows);
-      if (insItems.error) throw new Error(insItems.error.message);
-
+      const receiptId = result.receipt_id;
       if (complete) {
-        // update received quantities on the order items
-        for (const item of order.items) {
-          const add = lines[item.id]?.qty ?? 0;
-          if (add > 0) {
-            await supabase.from('purchase_order_items').update({ received_qty: item.received_qty + add }).eq('id', item.id);
-          }
-        }
-        const allFull = order.items.every((item) => (item.received_qty + (lines[item.id]?.qty ?? 0)) >= item.qty);
-        await supabase.from('purchase_orders').update({ status: allFull ? 'received' : 'partial' }).eq('id', order.id);
-
-        // auto credit requests for problematic lines
-        if (openCredits) {
-          const problems = order.items.filter((item) => ['missing', 'damaged', 'returned', 'partial'].includes(lines[item.id]?.status));
-          for (const item of problems) {
-            const line = lines[item.id];
-            const remaining = Math.max(0, item.qty - item.received_qty);
-            const shortQty = line.status === 'damaged' || line.status === 'returned' ? remaining - line.qty : remaining - line.qty;
-            const amount = Math.round(shortQty * item.unit_price * 100) / 100;
-            if (amount <= 0) continue;
-            const reason = line.status === 'damaged' ? 'damaged' : line.status === 'returned' ? 'returned' : 'missing';
-            await supabase.from('credit_requests').insert({
-              org_id: profile.org_id, supplier_id: order.supplier.id, reason, amount,
-              status: 'open', notes: `${item.product.name} — ${RECEIPT_LINE_STATUS[line.status].label}${line.notes ? ` (${line.notes})` : ''} — הזמנה #${order.number}`,
-              created_by: profile.id,
-            });
-          }
-        }
         setDoneReceiptId(receiptId);
         setInvoiceSupplier(order.supplier.id);
         toast('הקבלה הושלמה');
@@ -174,7 +143,7 @@ export function ReceiveOrder() {
         navigate('/receiving');
       }
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'שגיאה בשמירה', 'error');
+      toast(toHebrewError(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -283,8 +252,10 @@ export function ReceiveOrder() {
 
       <label className="flex items-center gap-2 text-sm text-ink-mid px-1">
         <input type="checkbox" className="rounded" checked={openCredits} onChange={(e) => setOpenCredits(e.target.checked)} />
-        פתיחת דרישות זיכוי אוטומטית לפריטים חסרים / פגומים / שהוחזרו
+        פתיחת דרישות זיכוי אוטומטית לחוסרי כמות בלבד
       </label>
+      <p className="px-1 text-xs text-ink-muted">פריטים פגומים או שהוחזרו אינם נספרים כאספקה תקינה, והטיפול הכספי בהם נשאר ידני עד להכרעה עסקית.</p>
+      <div><label className="label">סיבת השמירה / ההשלמה *</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
 
       {/* sticky action bar */}
       <div className="phone-taskbar fixed inset-x-0 lg:ms-60 bg-surface border-t border-line p-3 flex gap-2 z-30">

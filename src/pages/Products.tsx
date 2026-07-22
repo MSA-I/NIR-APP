@@ -3,12 +3,13 @@ import { useSearchParams } from 'react-router-dom';
 import { toHebrewError } from '../lib/errors';
 import { Plus, Pencil, Copy, Power } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useQuery, unwrap } from '../lib/useQuery';
+import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, SkeletonTable, ConfirmDialog, type Column } from '../components/ui';
 import { logAction } from '../lib/audit';
 import { useCategories } from './Suppliers';
 import type { Product } from '../lib/types';
+import { fetchAll } from '../lib/supabasePaging';
 
 interface ProductRow extends Product {
   supplierCount?: number;
@@ -26,9 +27,11 @@ export default function Products() {
   const [catFilter, setCatFilter] = useState('');
   const { data: categories } = useCategories();
 
-  const { data, loading, error, refetch } = useQuery(async () => {
-    const products = unwrap(await supabase.from('products').select('*, category:categories(id, name)').order('name')) as ProductRow[];
-    const sps = unwrap(await supabase.from('supplier_products').select('product_id, current_price, available')) as { product_id: string; current_price: number; available: boolean }[];
+  const { data, loading, fetching, error, refetch } = useQuery(async () => {
+    const products = await fetchAll<ProductRow>((from, to) => supabase.from('products')
+      .select('*, category:categories(id, name)').order('name').order('id').range(from, to));
+    const sps = await fetchAll<{ id: string; product_id: string; current_price: number; available: boolean }>((from, to) => supabase.from('supplier_products')
+      .select('id, product_id, current_price, available').order('product_id').order('id').range(from, to));
     const byProduct = new Map<string, number[]>();
     for (const sp of sps) {
       if (!sp.available) continue;
@@ -93,10 +96,12 @@ export default function Products() {
   ];
 
   if (loading) return <SkeletonTable cols={5} />;
-  if (error) return <ErrorNote message={error} />;
+  if (error && !data) return <ErrorNote message={error} />;
 
   return (
     <div className="space-y-4">
+      {error && <ErrorNote message={error} />}
+      {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title">מוצרים</h1>
         {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> מוצר חדש</button>}

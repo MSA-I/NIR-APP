@@ -7,8 +7,11 @@ import { supabase } from '../lib/supabase';
 import type { DocumentRow } from '../lib/types';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { ActionMenu } from './ActionMenu';
-import { ConfirmDialog, ErrorNote, Skeleton, useToast } from './ui';
+import { ConfirmDialog, ErrorNote, Note, Skeleton, useToast } from './ui';
 import { uploadDocument } from './FileUpload';
+import { openReservedPopup } from '../lib/popup';
+import { mergeUploadBatchSummary, runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
+import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 
 export interface LinkedReceipt {
   id: string;
@@ -30,6 +33,8 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [retryFiles, setRetryFiles] = useState<File[]>([]);
+  const [uploadSummary, setUploadSummary] = useState<UploadBatchSummary | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DocumentRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const receiptsKey = receipts.map((receipt) => receipt.id).join(',');
@@ -37,15 +42,15 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
   const canDelete = profile?.role === 'owner' || profile?.role === 'office';
 
   const { data, loading, error, refetch } = useQuery<{ items: AttachmentItem[]; thumbs: Record<string, string> }>(async () => {
-    const invoicePromise = supabase.from('documents').select('*')
-      .eq('entity_type', 'invoice').eq('entity_id', invoiceId).is('deleted_at', null);
+    const invoicePromise = fetchAll<DocumentRow>((from, to) => supabase.from('documents').select('*')
+      .eq('entity_type', 'invoice').eq('entity_id', invoiceId).is('deleted_at', null)
+      .order('created_at', { ascending: false }).order('id').range(from, to));
     const receiptPromise = receiptsKey
-      ? supabase.from('documents').select('*').eq('entity_type', 'goods_receipt')
-        .in('entity_id', receiptsKey.split(',')).is('deleted_at', null)
-      : Promise.resolve({ data: [], error: null });
-    const [invoiceResult, receiptResult] = await Promise.all([invoicePromise, receiptPromise]);
-    const invoiceDocs = unwrap(invoiceResult) as DocumentRow[];
-    const receiptDocs = unwrap(receiptResult) as DocumentRow[];
+      ? fetchInChunks(receiptsKey.split(','), (ids) => fetchAll<DocumentRow>((from, to) => supabase.from('documents').select('*')
+        .eq('entity_type', 'goods_receipt').in('entity_id', ids).is('deleted_at', null)
+        .order('created_at', { ascending: false }).order('id').range(from, to)))
+      : Promise.resolve([] as DocumentRow[]);
+    const [invoiceDocs, receiptDocs] = await Promise.all([invoicePromise, receiptPromise]);
     const items: AttachmentItem[] = [
       ...invoiceDocs.map((doc) => ({ doc, source: 'חשבונית', sourceDate: null, direct: true })),
       ...receiptDocs.map((doc) => {
@@ -60,25 +65,37 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
     ].sort((a, b) => b.doc.created_at.localeCompare(a.doc.created_at));
     const thumbs: Record<string, string> = {};
     if (items.length) {
-      const { data: signed } = await supabase.storage.from('documents')
-        .createSignedUrls(items.map((item) => item.doc.storage_path), 300);
+      const signed = await fetchInChunks(items.map((item) => item.doc.storage_path), async (paths) => {
+        const result = await supabase.storage.from('documents').createSignedUrls(paths, 300);
+        if (result.error) throw new Error(result.error.message);
+        return result.data ?? [];
+      }, 100);
       for (const row of signed ?? []) if (row.path && row.signedUrl && !row.error) thumbs[row.path] = row.signedUrl;
     }
     return { items, thumbs };
   }, [invoiceId, receiptsKey]);
 
-  async function onPick(files: FileList | null) {
-    if (!files?.length || !profile) return;
+  async function uploadFiles(files: File[], previousSummary: UploadBatchSummary | null = null) {
+    if (!files.length || !profile) return;
     setBusy(true);
     try {
       const invoice = unwrap(await supabase.from('invoices').select('supplier_id, invoice_date')
         .eq('id', invoiceId).single()) as { supplier_id: string; invoice_date: string };
-      for (const file of Array.from(files)) await uploadDocument(profile.org_id, 'invoice', invoiceId, file, {
+      const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, 'invoice', invoiceId, file, {
         documentKind: 'invoice', supplierId: invoice.supplier_id, documentDate: invoice.invoice_date,
-      });
-      toast(files.length === 1 ? 'המסמך הועלה' : `${files.length} מסמכים הועלו`);
-      await refetch();
+      }));
+      const failed = result.failed.map(({ item }) => item);
+      setRetryFiles(failed);
+      setUploadSummary(mergeUploadBatchSummary(previousSummary, result, (file) => file.name));
+      if (result.succeeded.length) await refetch();
+      if (failed.length) {
+        toast(`${result.succeeded.length} מסמכים הועלו, ${failed.length} נכשלו: ${failed.map((file) => file.name).join(', ')}`, 'error');
+      } else {
+        toast(result.succeeded.length === 1 ? 'המסמך הועלה' : `${result.succeeded.length} מסמכים הועלו`);
+      }
     } catch (e) {
+      setRetryFiles(files);
+      setUploadSummary({ succeeded: previousSummary?.succeeded ?? [], failed: files.map((file) => file.name) });
       toast(toHebrewError(e), 'error');
     } finally {
       setBusy(false);
@@ -86,10 +103,20 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
     }
   }
 
+  function onPick(files: FileList | null) {
+    if (!files?.length) return;
+    setUploadSummary(null);
+    void uploadFiles(Array.from(files));
+  }
+
   async function open(doc: DocumentRow) {
-    const { data: url, error } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300);
-    if (error || !url) { toast('שגיאה בפתיחת הקובץ', 'error'); return; }
-    window.open(url.signedUrl, '_blank', 'noopener,noreferrer');
+    const result = await openReservedPopup(async () => {
+      const { data: url, error } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300);
+      if (error || !url) throw error ?? new Error('missing signed URL');
+      return url.signedUrl;
+    });
+    if (result === 'blocked') toast('הדפדפן חסם את חלון הצפייה. יש לאפשר חלונות קופצים ולנסות שוב.', 'error');
+    if (result === 'error') toast('שגיאה בפתיחת הקובץ', 'error');
   }
 
   async function remove(doc: DocumentRow) {
@@ -115,15 +142,32 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
           <h2 id="invoice-attachments-title" className="section-title">מסמכים מצורפים</h2>
           <p className="text-xs text-ink-muted">חשבונית ותעודות משלוח מקבלות מקושרות</p>
         </div>
-        <button type="button" className="btn-secondary" disabled={busy} onClick={() => inputRef.current?.click()}>
+        <button type="button" className="btn-secondary" disabled={busy || retryFiles.length > 0} onClick={() => inputRef.current?.click()}>
           {busy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
           הוספת קבצים
         </button>
-        <input ref={inputRef} type="file" hidden multiple accept="image/*,application/pdf"
+        <input ref={inputRef} type="file" hidden multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,image/avif,application/pdf"
           onChange={(event) => void onPick(event.target.files)} />
       </div>
 
-      {error ? (
+      {uploadSummary && (
+        <Note tone={uploadSummary.failed.length ? 'alert' : 'done'} className="mb-2">
+          <div role="status">
+            <div><span className="num">{uploadSummary.succeeded.length}</span> הועלו · <span className="num">{uploadSummary.failed.length}</span> נכשלו</div>
+            {uploadSummary.failed.length > 0 && (
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs">נכשלו: {uploadSummary.failed.join(', ')}</span>
+                <button type="button" className="btn-ghost min-h-11" disabled={busy} onClick={() => void uploadFiles(retryFiles, uploadSummary)}>
+                  ניסיון חוזר לנכשלים בלבד
+                </button>
+              </div>
+            )}
+          </div>
+        </Note>
+      )}
+
+      {error && data && <ErrorNote message={error} />}
+      {error && !data ? (
         <ErrorNote message={error} />
       ) : loading ? (
         <div className="divide-y divide-line-soft border-y border-line-strong" role="status" aria-busy="true">

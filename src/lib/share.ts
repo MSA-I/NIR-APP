@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { logAction } from './audit';
 import { toHebrewError } from './errors';
 import { fmtDate, fmtMoneyExact } from './format';
+import { openExternalPopup } from './popup';
 
 /**
  * The slice of a purchase order the WhatsApp share needs. Both the Orders list rows and the
@@ -47,8 +48,10 @@ export function orderWhatsAppLink(order: WhatsAppOrder, orgName: string): string
  */
 export async function sendOrderWhatsApp(order: WhatsAppOrder, orgName: string): Promise<{ opened: boolean; statusChanged: boolean; error?: string }> {
   const link = orderWhatsAppLink(order, orgName);
-  if (!link) return { opened: false, statusChanged: false };
-  window.open(link, '_blank');
+  if (!link) return { opened: false, statusChanged: false, error: 'לספק אין מספר WhatsApp זמין' };
+  if (openExternalPopup(link) !== 'opened') {
+    return { opened: false, statusChanged: false, error: 'הדפדפן חסם את חלון WhatsApp. יש לאפשר חלונות קופצים ולנסות שוב.' };
+  }
   void logAction({ orgId: order.org_id, action: 'order_sent_whatsapp', entityType: 'purchase_orders', entityId: order.id });
   if (order.status !== 'draft' && order.status !== 'ready') return { opened: true, statusChanged: false };
   const res = await supabase.from('purchase_orders')

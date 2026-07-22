@@ -6,6 +6,7 @@ import { unwrap } from '../lib/useQuery';
 import { APP_NAME } from '../lib/branding';
 import { resolveRoleLabels } from '../lib/status';
 import { cleanupPushBeforeSignOut } from '../lib/push';
+import { toHebrewError } from '../lib/errors';
 
 export interface SignOutResult {
   error: string | null;
@@ -17,6 +18,7 @@ interface AuthState {
   profile: Profile | null;
   org: Organization | null;
   loading: boolean;
+  bootstrapError: string | null;
   /**
    * Platform operator, a separate axis from `profile.role` — an operator administers
    * tenants, a role administers within one. Checked against `platform_admins`, whose
@@ -31,6 +33,7 @@ interface AuthState {
   roleLabels: Record<string, string>;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<SignOutResult>;
+  retryBootstrap: () => void;
 }
 
 const AuthContext = createContext<AuthState>(null as unknown as AuthState);
@@ -41,6 +44,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [org, setOrg] = useState<Organization | null>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const sessionUserId = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
@@ -51,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null);
         setOrg(null);
         setIsPlatformAdmin(false);
+        setBootstrapError(null);
         setLoading(!!next);
       }
       setSession(next);
@@ -86,16 +92,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const admin = unwrap(
           await supabase.from('platform_admins').select('user_id').eq('user_id', session.user.id).maybeSingle(),
         ) as { user_id: string } | null;
-        if (!cancelled) { setProfile(p); setOrg(o); setIsPlatformAdmin(!!admin); }
-      } catch {
+        if (!cancelled) {
+          setProfile(p);
+          setOrg(o);
+          setIsPlatformAdmin(!!admin);
+          setBootstrapError(null);
+        }
+      } catch (error) {
         // Never leave the app spinning on a failed bootstrap.
-        if (!cancelled) { setProfile(null); setOrg(null); setIsPlatformAdmin(false); }
+        if (!cancelled) {
+          setProfile(null);
+          setOrg(null);
+          setIsPlatformAdmin(false);
+          setBootstrapError(toHebrewError(error));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [session]);
+  }, [session, bootstrapAttempt]);
 
   // index.html ships a tenant-neutral <title> (the product name) because the database
   // is unreachable at parse time. We prefix the tenant only once it is actually known,
@@ -117,8 +133,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null, pushWarning: push.warning };
   }
 
+  function retryBootstrap() {
+    if (!session) return;
+    setBootstrapError(null);
+    setLoading(true);
+    setBootstrapAttempt((attempt) => attempt + 1);
+  }
+
   return (
-    <AuthContext.Provider value={{ session, profile, org, loading, isPlatformAdmin, roleLabels, signIn, signOut }}>
+    <AuthContext.Provider value={{ session, profile, org, loading, bootstrapError, isPlatformAdmin, roleLabels, signIn, signOut, retryBootstrap }}>
       {children}
     </AuthContext.Provider>
   );

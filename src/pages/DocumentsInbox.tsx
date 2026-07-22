@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Eye, FileInput, Files, FileText, Loader2, ReceiptText, Search, Upload, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { INBOX_CHANGED_EVENT } from '../components/QuickCapture';
-import { DataTable, ErrorNote, Modal, SkeletonTable, useToast, type Column } from '../components/ui';
+import { DataTable, ErrorNote, Modal, Note, SkeletonTable, useToast, type Column } from '../components/ui';
 import { ok, toHebrewError } from '../lib/errors';
 import { fmtDate, fmtDateTime, todayISO } from '../lib/format';
 import type { DocumentKind, DocumentRow } from '../lib/types';
 import { DOCUMENT_KIND_OPTIONS, documentKindLabel, uploadDocument } from '../components/FileUpload';
+import { openReservedPopup } from '../lib/popup';
+import { mergeUploadBatchSummary, runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
+import { fetchAll } from '../lib/supabasePaging';
 
 type RefileTarget = 'invoice' | 'goods_receipt';
 type SupplierOption = { id: string; name: string };
@@ -32,7 +35,6 @@ function RefileModal({ doc, target, onClose, onDone }: {
   const [q, setQ] = useState('');
   const [dq, setDq] = useState('');
   const [busy, setBusy] = useState(false);
-  const reqSeq = useRef(0);
 
   useEffect(() => {
     const timeout = setTimeout(() => setDq(q.trim()), 300);
@@ -40,7 +42,6 @@ function RefileModal({ doc, target, onClose, onDone }: {
   }, [q]);
 
   const { data: options, loading, error } = useQuery<RefileOption[]>(async () => {
-    const token = ++reqSeq.current;
     let result: RefileOption[];
     if (target === 'invoice') {
       let query = supabase.from('invoices')
@@ -67,7 +68,6 @@ function RefileModal({ doc, target, onClose, onDone }: {
         sub: fmtDate(row.received_at),
       }));
     }
-    if (token !== reqSeq.current) return new Promise<never>(() => {});
     return result;
   }, [target, dq]);
 
@@ -102,7 +102,9 @@ function RefileModal({ doc, target, onClose, onDone }: {
             placeholder={target === 'invoice' ? 'חיפוש לפי מספר חשבונית...' : 'חיפוש לפי מספר קבלה או ספק...'} />
         </span>
       </label>
-      {error ? <ErrorNote message={error} /> : loading ? (
+      {error ? (
+        <ErrorNote message={error} />
+      ) : loading ? (
         <div className="space-y-2 text-sm text-ink-muted" role="status">טוען יעדים…</div>
       ) : options?.length ? (
         <ul className="max-h-72 overflow-y-auto rounded-lg border border-line-soft divide-y divide-line-soft">
@@ -135,20 +137,31 @@ function UploadModal({ suppliers, onClose, onDone }: {
   const [supplierId, setSupplierId] = useState('');
   const [documentDate, setDocumentDate] = useState(todayISO());
   const [busy, setBusy] = useState(false);
+  const [uploadSummary, setUploadSummary] = useState<UploadBatchSummary | null>(null);
 
   async function submit() {
     if (!profile || files.length === 0) return;
     setBusy(true);
     try {
-      for (const file of files) await uploadDocument(profile.org_id, 'inbox', null, file, {
+      const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, 'inbox', null, file, {
         documentKind: kind,
         supplierId: supplierId || null,
         documentDate: documentDate || null,
-      });
-      toast(files.length === 1 ? 'המסמך הועלה' : `${files.length} מסמכים הועלו`);
-      window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
-      await onDone();
-      onClose();
+      }));
+      const failed = result.failed.map(({ item }) => item);
+      setFiles(failed);
+      const summary = mergeUploadBatchSummary(uploadSummary, result, (file) => file.name);
+      setUploadSummary(summary);
+      if (result.succeeded.length) {
+        window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+        await onDone();
+      }
+      if (failed.length) {
+        toast(`${summary.succeeded.length} מסמכים הועלו, ${failed.length} נכשלו: ${failed.map((file) => file.name).join(', ')}`, 'error');
+      } else {
+        toast(summary.succeeded.length === 1 ? 'המסמך הועלה' : `${summary.succeeded.length} מסמכים הועלו`);
+        onClose();
+      }
     } catch (error) {
       toast(toHebrewError(error), 'error');
     } finally {
@@ -162,8 +175,11 @@ function UploadModal({ suppliers, onClose, onDone }: {
       <div className="space-y-3">
         <label className="block">
           <span className="label">קובץ</span>
-          <input type="file" className="input" multiple accept="image/*,application/pdf"
-            onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
+          <input type="file" className="input" multiple
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,image/avif,application/pdf"
+            disabled={busy || !!uploadSummary?.failed.length}
+            onChange={(event) => { setUploadSummary(null); setFiles(Array.from(event.target.files ?? [])); }} />
+          {files.length > 0 && <div className="mt-1 text-xs text-ink-muted">{files.map((file) => file.name).join(', ')}</div>}
         </label>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label>
@@ -184,12 +200,20 @@ function UploadModal({ suppliers, onClose, onDone }: {
             {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
           </select>
         </label>
+        {uploadSummary && (
+          <Note tone={uploadSummary.failed.length ? 'alert' : 'done'}>
+            <div role="status">
+              <div><span className="num">{uploadSummary.succeeded.length}</span> הועלו · <span className="num">{uploadSummary.failed.length}</span> נכשלו</div>
+              {uploadSummary.failed.length > 0 && <div className="mt-1 text-xs">נכשלו: {uploadSummary.failed.join(', ')}. ניסיון חוזר ישלח רק אותם.</div>}
+            </div>
+          </Note>
+        )}
       </div>
       <div className="mt-5 flex justify-end gap-2">
         <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
         <button type="button" className="btn-primary" disabled={busy || files.length === 0} onClick={() => void submit()}>
           {busy ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-          העלאה
+          {uploadSummary?.failed.length ? 'ניסיון חוזר לנכשלים בלבד' : 'העלאה'}
         </button>
       </div>
     </Modal>
@@ -215,21 +239,13 @@ export default function DocumentsGallery() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [refile, setRefile] = useState<{ doc: DocumentRow; target: RefileTarget } | null>(null);
 
-  const { data, loading, error, refetch } = useQuery<{
+  const { data, loading, fetching, error, refetch } = useQuery<{
     docs: GalleryDocument[]; suppliers: SupplierOption[];
   }>(async () => {
-    const suppliersResult = await supabase.from('suppliers').select('id, name').is('deleted_at', null).order('name');
-    const suppliers = unwrap(suppliersResult) as SupplierOption[];
-    const docs: GalleryDocument[] = [];
-    const pageSize = 500;
-    for (let fromRow = 0; ; fromRow += pageSize) {
-      const documentsResult = await supabase.from('documents').select('*, supplier:suppliers(id, name)')
-        .is('deleted_at', null).order('created_at', { ascending: false })
-        .range(fromRow, fromRow + pageSize - 1);
-      const batch = unwrap(documentsResult) as GalleryDocument[];
-      docs.push(...batch);
-      if (batch.length < pageSize) break;
-    }
+    const suppliers = await fetchAll<SupplierOption>((from, to) => supabase.from('suppliers').select('id, name')
+      .is('deleted_at', null).order('name').order('id').range(from, to));
+    const docs = await fetchAll((from, to) => supabase.from('documents').select('*, supplier:suppliers(id, name)')
+      .is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to)) as unknown as GalleryDocument[];
     return { docs, suppliers };
   }, []);
 
@@ -271,14 +287,13 @@ export default function DocumentsGallery() {
   }
 
   async function open(doc: DocumentRow) {
-    // Reserve the tab while the click is still a trusted user gesture; opening only after the
-    // signed-URL request resolves is commonly blocked as an asynchronous popup.
-    const viewer = window.open('about:blank', '_blank');
-    if (viewer) viewer.opener = null;
-    const { data: url, error: openError } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300);
-    if (openError || !url) { viewer?.close(); toast('שגיאה בפתיחת הקובץ', 'error'); return; }
-    if (!viewer) { toast('הדפדפן חסם את חלון הצפייה. יש לאפשר חלונות קופצים ולנסות שוב.', 'error'); return; }
-    viewer.location.replace(url.signedUrl);
+    const result = await openReservedPopup(async () => {
+      const { data: url, error: openError } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300);
+      if (openError || !url) throw openError ?? new Error('missing signed URL');
+      return url.signedUrl;
+    });
+    if (result === 'blocked') toast('הדפדפן חסם את חלון הצפייה. יש לאפשר חלונות קופצים ולנסות שוב.', 'error');
+    if (result === 'error') toast('שגיאה בפתיחת הקובץ', 'error');
   }
 
   const columns: Column<GalleryDocument>[] = [
@@ -378,7 +393,9 @@ export default function DocumentsGallery() {
         )}
       </section>
 
-      {error ? <ErrorNote message={error} /> : loading ? <SkeletonTable cols={5} /> : (
+      {error && data && <ErrorNote message={error} />}
+      {fetching && data && <div className="text-xs text-ink-muted" role="status">רשימת המסמכים מתעדכנת…</div>}
+      {error && !data ? <ErrorNote message={error} /> : loading ? <SkeletonTable cols={5} /> : (
         <DataTable rows={filtered} columns={columns} pageSize={20}
           rowLabel={(doc) => `מסמך ${doc.file_name}`}
           onRowClick={(doc) => void open(doc)}

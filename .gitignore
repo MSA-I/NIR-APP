@@ -5,6 +5,7 @@ dist/
 *.log
 .wrangler/
 supabase/.temp/
+supabase/.branches/
 # impeccable live-mode runtime state (journal/annotations/server) — config and design context ARE committed
 .impeccable/live/sessions/
 .impeccable/live/annotations/

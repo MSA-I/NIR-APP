@@ -133,8 +133,42 @@ function AccountUnavailable() {
   );
 }
 
+function BootstrapUnavailable() {
+  const { bootstrapError, retryBootstrap, signOut } = useAuth();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+
+  async function handleSignOut() {
+    setBusy(true);
+    const result = await signOut();
+    setBusy(false);
+    if (result.error) {
+      toast(toHebrewError(result.error), 'error');
+      return;
+    }
+    if (result.pushWarning) toast(result.pushWarning, 'error');
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="card card-pad max-w-md text-center">
+        <h1 className="page-title">לא ניתן לטעון את החשבון</h1>
+        <p className="text-ink-soft mt-2">
+          {bootstrapError ?? 'אירעה תקלה זמנית בטעינת פרטי החשבון.'} החיבור נשאר פעיל ואפשר לנסות שוב.
+        </p>
+        <div className="mt-5 flex justify-center gap-2">
+          <button className="btn-primary" disabled={busy} onClick={retryBootstrap}>ניסיון חוזר</button>
+          <button className="btn-secondary" disabled={busy} onClick={() => void handleSignOut()}>
+            {busy ? 'מתנתק…' : 'התנתקות'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  const { session, profile, loading, isPlatformAdmin } = useAuth();
+  const { session, profile, loading, bootstrapError, isPlatformAdmin } = useAuth();
   const { pathname } = useLocation();
 
   // The public routes must render regardless of a broken session. Someone accepting an
@@ -157,6 +191,7 @@ export default function App() {
       </LazyPageBoundary>
     );
   }
+  if (!isPublic && session && !loading && !profile && bootstrapError) return <BootstrapUnavailable />;
   if (!isPublic && session && !loading && !profile) return <AccountUnavailable />;
 
   return (

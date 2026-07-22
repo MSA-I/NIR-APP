@@ -1,10 +1,12 @@
 import { CreditCard, X } from 'lucide-react';
+import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { useQuery, unwrap } from '../lib/useQuery';
+import { useQuery } from '../lib/useQuery';
 import { DataTable, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import type { Payment } from '../lib/types';
+import { fetchAll } from '../lib/supabasePaging';
 
 type Row = Payment & {
   supplier: { name: string };
@@ -14,9 +16,19 @@ type Row = Payment & {
 export default function Payments() {
   const [params, setParams] = useSearchParams();
   const { data, loading, error } = useQuery(async () =>
-    unwrap(await supabase.from('payments')
+    fetchAll<Row>((from, to) => supabase.from('payments')
       .select('*, supplier:suppliers(name), allocations:payment_allocations(amount, invoice:invoices(invoice_number))')
-      .order('paid_date', { ascending: false })) as Promise<Row[]>);
+      .order('paid_date', { ascending: false }).order('id').range(from, to)));
+
+  useEffect(() => {
+    const id = params.get('id');
+    if (!id || !data || data.some((row) => row.id === id)) return;
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('id');
+      return next;
+    }, { replace: true });
+  }, [data, params, setParams]);
 
   const columns: Column<Row>[] = [
     { key: 'num', header: 'מס׳', sortValue: (r) => r.number, render: (r) => `#${r.number}` },

@@ -5,7 +5,6 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { DataTable, StatusBadge, ConfirmDialog, Modal, useToast, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { fmtDate, fmtNum, todayISO } from '../lib/format';
-import { logAction } from '../lib/audit';
 import { ORG_STATUS } from '../lib/status';
 import { provisionOrg, generatePassword, type PlatformOrg, type ProvisionResult } from '../lib/platform';
 
@@ -45,18 +44,13 @@ export default function Admin() {
   async function applyStatus(org: PlatformOrg, action: 'suspend' | 'reactivate', reason?: string) {
     const status = action === 'suspend' ? 'suspended' : 'active';
     setBusy(true);
-    const res = await supabase.from('organizations').update({ status }).eq('id', org.id);
-    if (res.error) { setBusy(false); toast(toHebrewError(res.error.message), 'error'); return; }
-
-    await logAction({
-      orgId: org.id,
-      action: action === 'suspend' ? 'org:suspend' : 'org:reactivate',
-      entityType: 'organizations',
-      entityId: org.id,
-      reason,
-      oldValues: { status: org.status },
-      newValues: { status },
+    const res = await supabase.rpc('set_organization_lifecycle', {
+      p_org_id: org.id,
+      p_status: status,
+      p_trial_ends_at: org.trial_ends_at,
+      p_reason: reason?.trim() ?? '',
     });
+    if (res.error) { setBusy(false); toast(toHebrewError(res.error.message), 'error'); return; }
 
     setBusy(false);
     setPending(null);
@@ -152,7 +146,7 @@ export default function Admin() {
         open={!!pending}
         busy={busy}
         danger={pending?.action === 'suspend'}
-        requireReason={pending?.action === 'suspend'}
+        requireReason
         title={pending?.action === 'suspend' ? `השהיית ${pending.org.name}` : `הפעלת ${pending?.org.name ?? ''} מחדש`}
         message={
           pending?.action === 'suspend'

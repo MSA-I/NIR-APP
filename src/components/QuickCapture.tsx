@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useToast } from './ui';
 import { toHebrewError } from '../lib/errors';
 import { uploadDocument } from './FileUpload';
+import { mergeUploadBatchSummary, runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
 
 /**
  * Capture-first upload into the documents inbox (migration 0014): openCapture() opens the
@@ -20,42 +21,59 @@ import { uploadDocument } from './FileUpload';
  *  is how they learn the inbox changed and refetch (adversarial review round). */
 export const INBOX_CHANGED_EVENT = 'sf:inbox-changed';
 export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
-  openCapture: () => void; element: ReactNode; busy: boolean;
+  openCapture: () => void; element: ReactNode; busy: boolean; retryCount: number;
 } {
   const { profile } = useAuth();
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [retryFiles, setRetryFiles] = useState<File[]>([]);
+  const [uploadSummary, setUploadSummary] = useState<UploadBatchSummary | null>(null);
 
-  async function onPick(files: FileList | null) {
-    if (!files?.length || !profile) return;
+  async function uploadFiles(files: File[], previousSummary: UploadBatchSummary | null = null) {
+    if (!files.length || !profile) return;
     setBusy(true);
-    let uploaded = 0;
     try {
-      for (const f of Array.from(files)) {
-        await uploadDocument(profile.org_id, 'inbox', null, f);
-        uploaded++;
+      const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, 'inbox', null, file));
+      const failed = result.failed.map(({ item }) => item);
+      setRetryFiles(failed);
+      const summary = mergeUploadBatchSummary(previousSummary, result, (file) => file.name);
+      setUploadSummary(failed.length ? summary : null);
+      if (failed.length) {
+        const cause = result.failed[0]?.error ? ` — ${toHebrewError(result.failed[0].error)}` : '';
+        toast(`${summary.succeeded.length} נשמרו, ${failed.length} נכשלו (${failed.map((file) => file.name).join(', ')}). לחיצה נוספת תנסה רק אותם${cause}`, 'error');
+      } else {
+        toast(summary.succeeded.length > 1 ? `${summary.succeeded.length} מסמכים נשמרו במסמכים לא משויכים` : 'המסמך נשמר במסמכים לא משויכים');
       }
-      toast(uploaded > 1 ? `${uploaded} מסמכים נשמרו במסמכים לא משויכים` : 'המסמך נשמר במסמכים לא משויכים');
+      if (result.succeeded.length > 0) {
+        window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+        await onUploaded?.();
+      }
     } catch (e) {
       toast(toHebrewError(e), 'error');
     } finally {
       if (inputRef.current) inputRef.current.value = '';
       setBusy(false);
-      // Even a partial batch changed the inbox — notify every inbox surface (event) AND
-      // the direct caller (prop), which may want its own follow-up.
-      if (uploaded > 0) {
-        window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
-        await onUploaded?.();
-      }
+    }
+  }
+
+  function onPick(files: FileList | null) {
+    if (files?.length) {
+      setUploadSummary(null);
+      void uploadFiles(Array.from(files));
     }
   }
 
   const element = (
-    <input ref={inputRef} type="file" multiple accept="image/*,application/pdf"
+    <input ref={inputRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,image/avif,application/pdf"
       capture="environment" className="hidden"
       onChange={(e) => void onPick(e.target.files)} />
   );
 
-  return { openCapture: () => inputRef.current?.click(), element, busy };
+  return {
+    openCapture: () => { if (retryFiles.length) void uploadFiles(retryFiles, uploadSummary); else inputRef.current?.click(); },
+    element,
+    busy,
+    retryCount: retryFiles.length,
+  };
 }

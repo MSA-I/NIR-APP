@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { Upload, Landmark, Link2, AlertTriangle, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
@@ -8,11 +7,11 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
 import { BANK_TX_STATUS } from '../lib/status';
-import { fmtMoneyExact, fmtDate, fmtDateTime } from '../lib/format';
-import { refreshInvoicePaymentStatus } from '../lib/checks';
+import { fmtMoneyExact, fmtDate, fmtDateTime, addCalendarDays } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
-import { logAction } from '../lib/audit';
-import type { BankTransaction, BankImport, Supplier } from '../lib/types';
+import type { BankTransaction, BankImport } from '../lib/types';
+import { useParamState } from '../lib/useParamState';
+import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 
 type TxRow = BankTransaction & { supplier: { name: string } | null };
 
@@ -41,14 +40,14 @@ const parseAmount = (v: unknown) => Math.abs(Number(String(v ?? '').replace(/[�
 
 export default function Bank() {
   const { profile, org } = useAuth();
-  const [params] = useSearchParams();
-  const [statusFilter, setStatusFilter] = useState(params.get('status') ?? '');
+  const [statusFilter, setStatusFilter] = useParamState('status');
   const [importOpen, setImportOpen] = useState(false);
   const [selected, setSelected] = useState<TxRow | null>(null);
 
-  const { data, loading, error, refetch } = useQuery(async () => {
-    const txs = unwrap(await supabase.from('bank_transactions')
-      .select('*, supplier:suppliers(name)').order('tx_date', { ascending: false })) as TxRow[];
+  const { data, loading, fetching, error, refetch } = useQuery(async () => {
+    const txs = await fetchAll<TxRow>((from, to) => supabase.from('bank_transactions')
+      .select('*, supplier:suppliers!p0_bt_supplier_tenant_fk(name)')
+      .order('tx_date', { ascending: false }).order('id').range(from, to));
     const imports = unwrap(await supabase.from('bank_imports').select('*').order('imported_at', { ascending: false }).limit(10)) as BankImport[];
     return { txs, imports };
   });
@@ -66,10 +65,12 @@ export default function Bank() {
   ];
 
   if (loading) return <SkeletonTable cols={6} />;
-  if (error) return <ErrorNote message={error} />;
+  if (error && !data) return <ErrorNote message={error} />;
 
   return (
     <div className="space-y-4">
+      {error && <ErrorNote message={error} />}
+      {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title flex items-center gap-2"><Landmark size={22} /> התאמות בנק</h1>
         {isOffice && <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> ייבוא תדפיס בנק</button>}
@@ -105,7 +106,6 @@ export default function Bank() {
 
 /* ================= Import wizard: file -> column mapping -> insert ================= */
 function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const { profile } = useAuth();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState('');
@@ -115,6 +115,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   const [map, setMap] = useState({ date: '', description: '', amount: '', reference: '' });
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
 
   async function onFile(file: File) {
     setBusy(true);
@@ -152,42 +153,46 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
 
   async function runImport() {
     if (!map.date || !map.description || !map.amount) { toast('יש למפות לפחות תאריך, תיאור וסכום', 'error'); return; }
+    if (!reason.trim()) { toast('נדרשת סיבה לייבוא תדפיס הבנק', 'error'); return; }
     setBusy(true);
     try {
-      // duplicate file guard
-      const existing = unwrap(await supabase.from('bank_imports').select('id').eq('file_hash', fileHash).maybeSingle()) as { id: string } | null;
-      if (existing) { toast('קובץ זה כבר יובא בעבר — הייבוא בוטל', 'error'); setBusy(false); return; }
-
       const suppliers = unwrap(await supabase.from('suppliers').select('id, name').is('deleted_at', null)) as { id: string; name: string }[];
-      const existingHashes = new Set((unwrap(await supabase.from('bank_transactions').select('row_hash')) as { row_hash: string }[]).map((r) => r.row_hash));
-
-      const imp = unwrap(await supabase.from('bank_imports').insert({
-        org_id: profile!.org_id, filename: fileName, file_hash: fileHash,
-        column_mapping: map, row_count: 0, imported_by: profile!.id,
-      }).select('id').single()) as { id: string };
-
-      let inserted = 0, skippedDup = 0, skippedBad = 0;
-      for (const raw of rawRows) {
+      const invalidRows: number[] = [];
+      const normalized = await Promise.all(rawRows.map(async (raw, index) => {
         const date = parseDate(String(raw[map.date] ?? ''));
         const amount = parseAmount(raw[map.amount]);
         const description = String(raw[map.description] ?? '').trim();
-        if (!date || !amount || !description) { skippedBad++; continue; }
+        if (!date || !amount || !description) { invalidRows.push(index + 2); return null; }
         const reference = map.reference ? String(raw[map.reference] ?? '').trim() || null : null;
         const rowHash = await sha256(`${date}|${amount}|${reference ?? ''}|${description}`);
-        if (existingHashes.has(rowHash)) { skippedDup++; continue; }
-        existingHashes.add(rowHash);
         const supplier = suppliers.find((s) => norm(description).includes(norm(s.name)) || norm(s.name).includes(norm(description)));
-        const ins = await supabase.from('bank_transactions').insert({
-          org_id: profile!.org_id, import_id: imp.id, tx_date: date, description, amount,
-          is_debit: true, reference, raw, supplier_id: supplier?.id ?? null,
-          status: 'unmatched', row_hash: rowHash,
-        });
-        if (!ins.error) inserted++;
+        return {
+          tx_date: date,
+          description,
+          amount,
+          is_debit: true,
+          reference,
+          raw,
+          supplier_id: supplier?.id ?? null,
+          row_hash: rowHash,
+        };
+      }));
+      if (invalidRows.length) {
+        throw new Error(`הייבוא בוטל: שורות ${invalidRows.slice(0, 12).join(', ')} אינן כוללות תאריך, תיאור וסכום תקינים.`);
       }
-      await supabase.from('bank_imports').update({ row_count: inserted }).eq('id', imp.id);
-      setResult(`יובאו ${inserted} תנועות. דולגו ${skippedDup} כפולות ו־${skippedBad} שורות לא תקינות.`);
+
+      const imported = unwrap(await supabase.rpc('import_bank_transactions', {
+        p_filename: fileName,
+        p_file_hash: fileHash,
+        p_column_mapping: map,
+        p_rows: normalized,
+        p_reason: reason.trim(),
+      })) as { row_count: number; idempotent: boolean };
+      setResult(imported.idempotent
+        ? `הקובץ כבר יובא קודם. נמצאו ${imported.row_count} תנועות בייבוא הקיים.`
+        : `יובאו ${imported.row_count} תנועות בעסקה אחת.`);
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'שגיאה בייבוא', 'error');
+      toast(toHebrewError(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -230,6 +235,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
               </tbody>
             </table>
           </div>
+          <div><label className="label">סיבת הייבוא *</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
           <div className="flex justify-end gap-2">
             <button className="btn-secondary" disabled={busy} onClick={() => { setHeaders([]); setRawRows([]); }}>קובץ אחר</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>
@@ -255,31 +261,35 @@ interface Candidate {
 function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   tx: TxRow; tolerance: number; days: number; onClose: () => void; onChanged: () => void;
 }) {
-  const { profile } = useAuth();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [supplierId, setSupplierId] = useState(tx.supplier_id ?? '');
   const [chosenInvoices, setChosenInvoices] = useState<Record<string, number>>({});
+  const [reason, setReason] = useState('');
+  const [directPaymentId] = useState(() => crypto.randomUUID());
 
   const { data, loading, error, refetch } = useQuery(async () => {
-    const suppliers = unwrap(await supabase.from('suppliers').select('id, name').is('deleted_at', null).order('name')) as Supplier[];
+    const suppliers = await fetchAll<{ id: string; name: string }>((from, to) => supabase.from('suppliers').select('id, name')
+      .is('deleted_at', null).order('name').order('id').range(from, to));
     if (!supplierId) return { suppliers, candidates: [] as Candidate[], openInvoices: [] };
 
-    const from = new Date(tx.tx_date); from.setDate(from.getDate() - days);
-    const to = new Date(tx.tx_date); to.setDate(to.getDate() + days);
+    const fromDate = addCalendarDays(tx.tx_date, -days);
+    const toDate = addCalendarDays(tx.tx_date, days);
 
     // candidate payments: recorded transfers awaiting bank match
-    const payments = unwrap(await supabase.from('payments')
+    const payments = await fetchAll<{ id: string; number: number; amount: number; paid_date: string; reference: string | null; payment_request_id: string | null; allocations: { invoice_id: string | null }[] }>((from, to) => supabase.from('payments')
       .select('id, number, amount, paid_date, reference, payment_request_id, allocations:payment_allocations(invoice_id)')
-      .eq('supplier_id', supplierId)) as { id: string; number: number; amount: number; paid_date: string; reference: string | null; payment_request_id: string | null; allocations: { invoice_id: string | null }[] }[];
-    const matchedPaymentIds = new Set((unwrap(await supabase.from('bank_allocations').select('payment_id').eq('confirmed', true)) as { payment_id: string | null }[])
+      .eq('supplier_id', supplierId).order('paid_date').order('id').range(from, to));
+    const matchedAllocations = await fetchAll<{ id: string; payment_id: string | null }>((from, to) => supabase.from('bank_allocations')
+      .select('id, payment_id').eq('confirmed', true).order('id').range(from, to));
+    const matchedPaymentIds = new Set(matchedAllocations
       .map((b) => b.payment_id).filter(Boolean));
 
     const candidates: Candidate[] = [];
     for (const p of payments) {
       if (matchedPaymentIds.has(p.id)) continue;
       const amountOk = Math.abs(p.amount - tx.amount) <= tolerance;
-      const dateOk = p.paid_date >= from.toISOString().slice(0, 10) && p.paid_date <= to.toISOString().slice(0, 10);
+      const dateOk = p.paid_date >= fromDate && p.paid_date <= toDate;
       const refOk = !!p.reference && !!tx.reference && p.reference === tx.reference;
       if (!amountOk && !refOk) continue;
       let confidence = 0.5;
@@ -295,12 +305,13 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
     }
 
     // candidate open invoices (direct match when no payment was recorded)
-    const invoices = unwrap(await supabase.from('invoices')
+    const invoices = await fetchAll<{ id: string; invoice_number: string; invoice_date: string; total_amount: number }>((from, to) => supabase.from('invoices')
       .select('id, invoice_number, invoice_date, total_amount')
-      .eq('supplier_id', supplierId).neq('payment_status', 'paid').is('deleted_at', null)) as
-      { id: string; invoice_number: string; invoice_date: string; total_amount: number }[];
+      .eq('supplier_id', supplierId).neq('payment_status', 'paid').is('deleted_at', null)
+      .order('invoice_date').order('id').range(from, to));
     const ids = invoices.map((i) => i.id);
-    const bals = ids.length ? unwrap(await supabase.from('invoice_balances').select('*').in('invoice_id', ids)) as { invoice_id: string; balance: number }[] : [];
+    const bals = ids.length ? await fetchInChunks(ids, (chunk) => fetchAll<{ invoice_id: string; balance: number }>((from, to) => supabase.from('invoice_balances')
+      .select('invoice_id, balance').in('invoice_id', chunk).order('invoice_id').range(from, to))) : [];
     const balMap = new Map(bals.map((b) => [b.invoice_id, b.balance]));
     const openInvoices = invoices.map((i) => ({ ...i, balance: balMap.get(i.id) ?? i.total_amount })).filter((i) => i.balance > 0);
 
@@ -318,52 +329,43 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   }, [supplierId]);
 
   async function assignSupplier() {
+    if (!reason.trim()) { toast('נדרשת סיבה לפעולה', 'error'); return; }
     setBusy(true);
     try {
-      const res = await supabase.from('bank_transactions').update({ supplier_id: supplierId || null }).eq('id', tx.id);
+      const res = await supabase.rpc('assign_bank_transaction_supplier', {
+        p_bank_transaction_id: tx.id,
+        p_supplier_id: supplierId || null,
+        p_reason: reason.trim(),
+      });
       if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-      toast('הספק שויך לתנועה');
+      toast(supplierId ? 'הספק שויך לתנועה' : 'שיוך הספק הוסר מהתנועה');
       void refetch();
+    } catch (error) {
+      toast(toHebrewError(error), 'error');
     } finally {
       setBusy(false);
     }
   }
 
   async function confirmCandidate(c: Candidate) {
+    if (!reason.trim()) { toast('נדרשת סיבה לאישור ההתאמה', 'error'); return; }
     setBusy(true);
     try {
-      let paymentId = c.kind === 'payment' ? c.id : null;
-      // direct invoice match without a recorded payment -> create the payment record now
-      if (c.kind === 'invoice') {
-        const pay = unwrap(await supabase.from('payments').insert({
-          org_id: profile!.org_id, supplier_id: supplierId, amount: tx.amount, paid_date: tx.tx_date,
-          method: 'העברה בנקאית', reference: tx.reference, executed_by: profile!.id,
-          notes: `נוצר אוטומטית מהתאמת בנק (${tx.description})`,
-        }).select('id').single()) as { id: string };
-        paymentId = pay.id;
-        const insAlloc = await supabase.from('payment_allocations').insert({ payment_id: paymentId, invoice_id: c.id, amount: Math.min(tx.amount, c.amount) });
-        if (insAlloc.error) throw new Error(insAlloc.error.message);
-      }
-      const ins = await supabase.from('bank_allocations').insert({
-        bank_transaction_id: tx.id,
-        invoice_id: c.kind === 'invoice' ? c.id : c.invoiceIds[0] ?? null,
-        payment_id: paymentId,
-        amount: tx.amount, confidence: c.confidence, confirmed: true, created_by: profile!.id,
-      });
-      if (ins.error) throw new Error(ins.error.message);
-      await supabase.from('bank_transactions').update({ status: 'matched', supplier_id: supplierId || tx.supplier_id }).eq('id', tx.id);
-
-      // downstream statuses
-      for (const invId of c.invoiceIds) await refreshInvoicePaymentStatus(invId);
-      if (c.kind === 'payment') {
-        const p = unwrap(await supabase.from('payments').select('payment_request_id').eq('id', c.id).single()) as { payment_request_id: string | null };
-        if (p.payment_request_id) await supabase.from('payment_requests').update({ status: 'matched' }).eq('id', p.payment_request_id);
-      }
-      await logAction({ orgId: tx.org_id, action: 'bank_match_confirmed', entityType: 'bank_transactions', entityId: tx.id, newValues: { candidate: c.label, confidence: c.confidence } });
+      unwrap(await supabase.rpc('match_bank_transaction', {
+        p_bank_transaction_id: tx.id,
+        p_supplier_id: supplierId || null,
+        p_existing_payment_id: c.kind === 'payment' ? c.id : null,
+        p_payment_id: c.kind === 'invoice' ? directPaymentId : null,
+        p_allocations: c.kind === 'invoice'
+          ? [{ invoice_id: c.id, amount: Math.min(tx.amount, c.amount) }]
+          : [],
+        p_confidence: c.confidence,
+        p_reason: reason.trim(),
+      }));
       toast('ההתאמה אושרה');
       onChanged();
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'שגיאה באישור ההתאמה', 'error');
+      toast(toHebrewError(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -372,42 +374,34 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   async function confirmManual() {
     const entries = Object.entries(chosenInvoices).filter(([, v]) => v > 0);
     if (!entries.length) return;
+    if (!reason.trim()) { toast('נדרשת סיבה לאישור ההתאמה', 'error'); return; }
     setBusy(true);
     try {
-      const pay = unwrap(await supabase.from('payments').insert({
-        org_id: profile!.org_id, supplier_id: supplierId, amount: tx.amount, paid_date: tx.tx_date,
-        method: 'העברה בנקאית', reference: tx.reference, executed_by: profile!.id,
-        notes: `התאמה ידנית מתדפיס בנק (${tx.description})`,
-      }).select('id').single()) as { id: string };
-      for (const [invId, amount] of entries) {
-        await supabase.from('payment_allocations').insert({ payment_id: pay.id, invoice_id: invId, amount });
-        await supabase.from('bank_allocations').insert({
-          bank_transaction_id: tx.id, invoice_id: invId, payment_id: pay.id, amount,
-          confidence: null, confirmed: true, created_by: profile!.id,
-        });
-        await refreshInvoicePaymentStatus(invId);
-      }
-      await supabase.from('bank_transactions').update({ status: 'matched', supplier_id: supplierId }).eq('id', tx.id);
-      await logAction({ orgId: tx.org_id, action: 'bank_match_manual', entityType: 'bank_transactions', entityId: tx.id, newValues: { invoices: entries } });
+      unwrap(await supabase.rpc('match_bank_transaction', {
+        p_bank_transaction_id: tx.id,
+        p_supplier_id: supplierId || null,
+        p_existing_payment_id: null,
+        p_payment_id: directPaymentId,
+        p_allocations: entries.map(([invoice_id, amount]) => ({ invoice_id, amount })),
+        p_confidence: null,
+        p_reason: reason.trim(),
+      }));
       toast('ההתאמה הידנית נשמרה');
       onChanged();
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'שגיאה', 'error');
+      toast(toHebrewError(e), 'error');
     } finally {
       setBusy(false);
     }
   }
 
   async function openException() {
+    if (!reason.trim()) { toast('נדרשת סיבה לפתיחת החריג', 'error'); return; }
     setBusy(true);
-    const type = supplierId ? 'payment_without_invoice' : 'unknown_supplier';
-    const res = await supabase.from('exceptions').insert({
-      org_id: tx.org_id, type, severity: 'medium', status: 'open',
-      title: supplierId
-        ? `תשלום ללא חשבונית — ${data?.suppliers.find((s) => s.id === supplierId)?.name ?? ''} (${fmtMoneyExact(tx.amount)})`
-        : `העברה לגורם לא מזוהה — ${fmtMoneyExact(tx.amount)}`,
-      details: { description: tx.description, date: tx.tx_date, amount: tx.amount },
-      supplier_id: supplierId || null, bank_transaction_id: tx.id, assigned_role: 'office',
+    const res = await supabase.rpc('open_bank_transaction_exception', {
+      p_bank_transaction_id: tx.id,
+      p_supplier_id: supplierId || null,
+      p_reason: reason.trim(),
     });
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
@@ -416,12 +410,18 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   }
 
   async function ignore() {
+    if (!reason.trim()) { toast('נדרשת סיבה לסימון התנועה', 'error'); return; }
     setBusy(true);
     try {
-      const res = await supabase.from('bank_transactions').update({ status: 'ignored' }).eq('id', tx.id);
+      const res = await supabase.rpc('ignore_bank_transaction', {
+        p_bank_transaction_id: tx.id,
+        p_reason: reason.trim(),
+      });
       if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
       toast('התנועה סומנה כלא רלוונטית');
       onChanged();
+    } catch (error) {
+      toast(toHebrewError(error), 'error');
     } finally {
       setBusy(false);
     }
@@ -452,6 +452,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
           </div>
           {supplierId !== (tx.supplier_id ?? '') && <button className="btn-secondary" disabled={busy || loading} onClick={() => void assignSupplier()}>שיוך ספק</button>}
         </div>
+        <div><label className="label">סיבת הפעולה *</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
 
         {loading && <div role="status" className="text-sm text-ink-muted">טוען ספקים והצעות התאמה…</div>}
         {error && <ErrorNote message={error} />}

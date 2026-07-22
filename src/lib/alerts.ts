@@ -1,7 +1,6 @@
 import { supabase } from './supabase';
-import { unwrap } from './useQuery';
-import { countDuplicateKeys, countAboveAverage } from './alertRules';
-import { toLocalISO, todayISO } from './format';
+import { settleAlertScans } from './alertRules';
+import { addCalendarDays, todayISO } from './format';
 
 /**
  * Standing-condition scanner (סעיף 9 — מערכת התראות).
@@ -42,33 +41,30 @@ const PRICE_INCREASE_WINDOW_DAYS = 30;
 /** How close a dated payment request must be before it counts as approaching. */
 const DUE_SOON_DAYS = 7;
 
-/** Payment requests that still represent money owed. Excludes cancelled and already-matched. */
-const PR_ACTIVE = ['draft', 'pending_approval', 'approved', 'sent_for_execution'];
-
 function daysAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return toLocalISO(d);
+  return addCalendarDays(todayISO(), -n);
 }
 
 function daysAhead(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  return toLocalISO(d);
+  return addCalendarDays(todayISO(), n);
 }
 
 /* ---------- scans ---------- */
 
+async function rpcCount(
+  request: PromiseLike<{ data: unknown; error: { message: string } | null }>,
+): Promise<number> {
+  const { data, error } = await request;
+  if (error) throw new Error(error.message);
+  const count = Number(data);
+  if (!Number.isSafeInteger(count) || count < 0) throw new Error('count_unavailable');
+  return count;
+}
+
 /** Invoices sharing a supplier + invoice number. checks.ts catches these at entry; this
  *  catches the ones already stored, including any entered before that check existed. */
 async function scanDuplicateInvoices(): Promise<Alert | null> {
-  // ponytail: grouped client-side. Fine at a few thousand invoices; move to an RPC with
-  // `group by` if a tenant's invoice table outgrows a single page fetch.
-  const rows = unwrap(await supabase.from('invoices')
-    .select('supplier_id, invoice_number').is('deleted_at', null)) as
-    { supplier_id: string; invoice_number: string }[];
-
-  const dupes = countDuplicateKeys(rows);
+  const dupes = await rpcCount(supabase.rpc('p2_duplicate_invoice_group_count'));
   if (!dupes) return null;
 
   return {
@@ -83,19 +79,15 @@ async function scanDuplicateInvoices(): Promise<Alert | null> {
 /** Catalogue price rises. Note the scope limit in `detail`: there is no invoice_items table,
  *  so this sees the price list, never what a supplier actually billed. */
 async function scanPriceIncreases(): Promise<Alert | null> {
-  const rows = unwrap(await supabase.from('supplier_products')
-    .select('current_price, previous_price')
-    .not('previous_price', 'is', null)
-    .gte('price_effective_date', daysAgo(PRICE_INCREASE_WINDOW_DAYS))) as
-    { current_price: number; previous_price: number }[];
-
-  const raised = rows.filter((r) => r.current_price > r.previous_price);
-  if (!raised.length) return null;
+  const raised = await rpcCount(supabase.rpc('p2_recent_price_increase_count', {
+    p_since: daysAgo(PRICE_INCREASE_WINDOW_DAYS),
+  }));
+  if (!raised) return null;
 
   return {
     code: 'price_increase',
     severity: 'warning',
-    title: `${raised.length} מחירים עלו ב-${PRICE_INCREASE_WINDOW_DAYS} הימים האחרונים`,
+    title: `${raised} מחירים עלו ב-${PRICE_INCREASE_WINDOW_DAYS} הימים האחרונים`,
     detail: 'לפי המחירון. מה שנגבה בפועל בחשבונית אינו נמדד — לחשבונית אין שורות פריטים',
     to: '/prices',
   };
@@ -105,11 +97,9 @@ async function scanPriceIncreases(): Promise<Alert | null> {
  *  Products with a single supplier are skipped — their own price *is* the average, and a
  *  deviation of zero is not a finding. */
 async function scanPricedAboveAverage(): Promise<Alert | null> {
-  const rows = unwrap(await supabase.from('supplier_products')
-    .select('product_id, current_price').eq('available', true)) as
-    { product_id: string; current_price: number }[];
-
-  const over = countAboveAverage(rows, ABOVE_AVG_MARGIN);
+  const over = await rpcCount(supabase.rpc('p2_above_average_offer_count', {
+    p_margin: ABOVE_AVG_MARGIN,
+  }));
   if (!over) return null;
 
   return {
@@ -124,13 +114,7 @@ async function scanPricedAboveAverage(): Promise<Alert | null> {
 /** Invoices with no linked purchase order. A direct purchase legitimately has none, so this
  *  is information, not a fault. */
 async function scanInvoicesWithoutOrder(): Promise<Alert | null> {
-  const [invoices, links] = await Promise.all([
-    supabase.from('invoices').select('id').is('deleted_at', null).then(unwrap) as Promise<{ id: string }[]>,
-    supabase.from('invoice_order_links').select('invoice_id').then(unwrap) as Promise<{ invoice_id: string }[]>,
-  ]);
-
-  const linked = new Set(links.map((l) => l.invoice_id));
-  const orphans = invoices.filter((i) => !linked.has(i.id)).length;
+  const orphans = await rpcCount(supabase.rpc('p2_invoice_without_order_count'));
   if (!orphans) return null;
 
   return {
@@ -149,23 +133,26 @@ async function scanInvoicesWithoutOrder(): Promise<Alert | null> {
  *  the one a user typed into a payment request — an optional field that is usually empty.
  *  A manager who reads this as "everything due soon" would be wrong, so the alert says so. */
 async function scanPaymentsDueSoon(): Promise<Alert | null> {
-  const rows = unwrap(await supabase.from('payment_requests')
-    .select('id, due_date')
-    .not('due_date', 'is', null)
-    .lte('due_date', daysAhead(DUE_SOON_DAYS))
-    .in('status', PR_ACTIVE)) as { id: string; due_date: string }[];
-
-  if (!rows.length) return null;
-
   const today = todayISO();
-  const late = rows.filter((r) => r.due_date < today).length;
+  const { data, error } = await supabase.rpc('p2_payment_due_counts', {
+    p_today: today,
+    p_until: daysAhead(DUE_SOON_DAYS),
+  });
+  if (error) throw new Error(error.message);
+  const counts = data as { total?: unknown; late?: unknown } | null;
+  const total = Number(counts?.total);
+  const late = Number(counts?.late);
+  if (!Number.isSafeInteger(total) || total < 0 || !Number.isSafeInteger(late) || late < 0 || late > total) {
+    throw new Error('due_counts_unavailable');
+  }
+  if (!total) return null;
 
   return {
     code: 'payment_due_soon',
     severity: late ? 'critical' : 'warning',
     title: late
       ? `${late} דרישות תשלום עברו את מועד הפירעון`
-      : `${rows.length} דרישות תשלום לפירעון תוך ${DUE_SOON_DAYS} ימים`,
+      : `${total} דרישות תשלום לפירעון תוך ${DUE_SOON_DAYS} ימים`,
     detail: 'מכסה רק דרישות תשלום שהוזן להן תאריך. לחשבוניות אין מועד פירעון במערכת',
     to: '/payment-requests',
   };
@@ -187,11 +174,11 @@ async function scanPaymentsDueSoon(): Promise<Alert | null> {
  */
 
 const SCANS = [
-  scanDuplicateInvoices,
-  scanPriceIncreases,
-  scanPricedAboveAverage,
-  scanInvoicesWithoutOrder,
-  scanPaymentsDueSoon,
+  { code: 'duplicate_invoice', label: 'חשבוניות כפולות', run: scanDuplicateInvoices },
+  { code: 'price_increase', label: 'עליות מחיר', run: scanPriceIncreases },
+  { code: 'above_average_price', label: 'מחירים מעל הממוצע', run: scanPricedAboveAverage },
+  { code: 'invoice_without_order', label: 'חשבוניות ללא הזמנה', run: scanInvoicesWithoutOrder },
+  { code: 'payment_due_soon', label: 'מועדי תשלום', run: scanPaymentsDueSoon },
 ];
 
 const SEVERITY_ORDER: Record<AlertSeverity, number> = { critical: 0, warning: 1, info: 2 };
@@ -204,9 +191,14 @@ const SEVERITY_ORDER: Record<AlertSeverity, number> = { critical: 0, warning: 1,
  * One failing scan does not blank the rest: a tenant whose price list is empty should still
  * see its duplicate invoices.
  */
-export async function scanAlerts(): Promise<Alert[]> {
-  const settled = await Promise.allSettled(SCANS.map((s) => s()));
-  return settled
-    .flatMap((r) => (r.status === 'fulfilled' && r.value ? [r.value] : []))
-    .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
+export interface AlertScanResult {
+  alerts: Alert[];
+  complete: boolean;
+  failures: { code: string; label: string }[];
+}
+
+export async function scanAlerts(): Promise<AlertScanResult> {
+  const result = await settleAlertScans(SCANS);
+  result.alerts.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
+  return result;
 }

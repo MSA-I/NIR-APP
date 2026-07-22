@@ -498,12 +498,13 @@ interface ImportRow { id: string; row: number }
 
 type Parser<T> = (rows: SheetRow[], cols: Record<string, string>) => MapResult<T>;
 
-function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, confirmMessage, onDone, children }: {
+function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, confirmMessage, requireReason = false, onDone, children }: {
   fields: readonly FieldSpec[];
   parse: Parser<T>;
   columns: Column<T>[];
-  commit: (rows: T[]) => Promise<string[]>;
+  commit: (rows: T[], reason?: string) => Promise<string[]>;
   confirmMessage: (count: number) => string;
+  requireReason?: boolean;
   onDone: () => void;
   children?: ReactNode;
 }) {
@@ -549,12 +550,12 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
     setParsed(parse(sheet.rows, cols));
   }
 
-  async function run() {
+  async function run(reason?: string) {
     if (!parsed) return;
     setBusy(true);
     setFailure(null);
     try {
-      const nextReport = await commit(parsed.valid);
+      const nextReport = await commit(parsed.valid, reason);
       setReport(nextReport);
       setConfirming(false);
     } catch (e) {
@@ -613,11 +614,12 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
         <ConfirmDialog
           open={confirming}
           onClose={() => setConfirming(false)}
-          onConfirm={() => void run()}
+          onConfirm={(reason) => void run(reason)}
           busy={busy}
           title="אישור ייבוא"
           message={confirmMessage(parsed.valid.length)}
           confirmLabel="ייבוא"
+          requireReason={requireReason}
         />
       </div>
     );
@@ -932,7 +934,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
     });
   };
 
-  async function commit(rows: ProductDraft[]): Promise<string[]> {
+  async function commit(rows: ProductDraft[], reason?: string): Promise<string[]> {
     const { products, suppliers, categories } = index.current;
     const orgId = profile!.org_id;
 
@@ -967,37 +969,40 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
 
     // 3. price rows — only where a supplier resolved and the price survived validation
     let pricesSet = 0;
+    let pricesUnchanged = 0;
+    let priceBatchError: string | null = null;
     const priceFailures: number[] = [];
+    const priceRows: { supplier_id: string; product_id: string; price: number; available: boolean; sourceRow: number }[] = [];
     for (const r of rows) {
       if (r.price == null) continue;
       const supplierId = suppliers.get(nameKey(r.supplier));
       const productId = r.existingProductId ?? products.get(nameKey(r.name));
       if (!supplierId || !productId) { priceFailures.push(r.row); continue; }
+      priceRows.push({ supplier_id: supplierId, product_id: productId, price: r.price, available: true, sourceRow: r.row });
+    }
 
-      const ins = await supabase.from('supplier_products').insert({
-        org_id: orgId,
-        supplier_id: supplierId,
-        product_id: productId,
-        current_price: r.price,
-        price_effective_date: todayISO(),
-      }).select('id').single();
-
-      if (ins.error || !ins.data) { priceFailures.push(r.row); continue; }
-      await supabase.from('price_history').insert({
-        org_id: orgId,
-        supplier_product_id: (ins.data as { id: string }).id,
-        price: r.price,
-        effective_date: todayISO(),
-        created_by: profile!.id,
+    if (priceRows.length) {
+      const imported = await supabase.rpc('import_supplier_prices', {
+        p_rows: priceRows.map(({ sourceRow: _sourceRow, ...row }) => row),
+        p_effective_date: todayISO(),
+        p_reason: reason?.trim() || null,
       });
-      pricesSet++;
+      if (imported.error) {
+        priceFailures.push(...priceRows.map((row) => row.sourceRow));
+        priceBatchError = errMsg(imported.error);
+      } else {
+        const result = imported.data as { created: number; updated: number; unchanged: number };
+        pricesSet = result.created + result.updated;
+        pricesUnchanged = result.unchanged;
+      }
     }
 
     const lines = [`נוצרו ${createdProducts} מוצרים.`];
     if (newCategoryNames.length) lines.push(`נוצרו ${newCategoryNames.length} קטגוריות חדשות מתוך הקובץ.`);
     lines.push(pricesSet ? `נקבעו ${pricesSet} מחירי ספק.` : 'לא נקבעו מחירי ספק בייבוא הזה.');
+    if (pricesUnchanged) lines.push(`${pricesUnchanged} מחירים כבר היו זהים ולא יצרו היסטוריה נוספת.`);
     if (priceFailures.length) {
-      lines.push(`${priceFailures.length} מחירים לא נשמרו (שורות ${priceFailures.slice(0, 10).join(', ')}${priceFailures.length > 10 ? ' ועוד' : ''}) — ייתכן שכבר קיים מחיר לאותו ספק ומוצר.`);
+      lines.push(`${priceFailures.length} מחירים לא נשמרו (שורות ${priceFailures.slice(0, 10).join(', ')}${priceFailures.length > 10 ? ' ועוד' : ''}).${priceBatchError ? ` הסיבה: ${priceBatchError}` : ''}`);
     }
     return lines;
   }
@@ -1040,6 +1045,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
         parse={parse}
         columns={columns}
         commit={commit}
+        requireReason
         confirmMessage={(n) => `${n} שורות ייכתבו למערכת: מוצרים חדשים, קטגוריות חסרות ומחירי ספק.`}
         onDone={onDone}>
         <p className="text-sm text-ink-soft">
