@@ -1,11 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
-import { RefreshCw, ChevronLeft, ShieldCheck } from 'lucide-react';
+import { RefreshCw, ChevronLeft, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';
 import { buildSummary, type Summary } from '../lib/summary';
 import type { AlertSeverity } from '../lib/alerts';
 import { fmtDateTime } from '../lib/format';
-import { SkeletonCards, ErrorNote } from '../components/ui';
+import { SkeletonCards, ErrorNote, Note } from '../components/ui';
 import { PushSection } from '../components/PushSettings';
 import { useAuth } from '../auth/AuthContext';
 import { markAllNotificationsRead } from '../lib/notifications';
@@ -32,11 +32,11 @@ export default function Alerts() {
   // Opening the canonical alerts screen acknowledges everything delivered to the bell.
   // Wait for a successful load so a network failure never clears unseen work.
   useEffect(() => {
-    if (data && !error && profile) void markAllNotificationsRead(profile.id);
-  }, [data, error, profile]);
+    if (data?.complete && !fetching && !error && profile) void markAllNotificationsRead(profile.id);
+  }, [data, fetching, error, profile]);
 
   if (loading) return <SkeletonCards count={5} cols={5} title />;
-  if (error) return <ErrorNote message={error} />;
+  if (error && !data) return <ErrorNote message={error} />;
   if (!data) return null;
 
   return (
@@ -44,7 +44,9 @@ export default function Alerts() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="page-title">התראות</h1>
-          <p className="text-xs text-ink-muted mt-0.5">נבדק {fmtDateTime(data.generatedAt)}</p>
+          <p className="text-xs text-ink-muted mt-0.5">
+            נבדק {fmtDateTime(data.generatedAt)}{fetching ? ' · מתעדכן כעת' : ''}
+          </p>
         </div>
         <button className="btn-secondary" onClick={() => void refetch()} disabled={fetching}>
           <RefreshCw size={15} className={fetching ? 'animate-spin' : ''} />
@@ -52,16 +54,25 @@ export default function Alerts() {
         </button>
       </div>
 
+      {(error || !data.complete) && (
+        <Note tone="alert">
+          <TriangleAlert size={16} className="mt-0.5 shrink-0" />
+          <span>
+            {error ?? `הסריקה חלקית: ${data.failures.map((failure) => failure.label).join(', ')}. הממצאים שכן נטענו מוצגים, אך אי אפשר לקבוע שהכול תקין.`}
+          </span>
+        </Note>
+      )}
+
       <div>
         <h2 className="section-title mb-2">דורש טיפול</h2>
-        {data.alerts.length === 0 ? (
+        {data.complete && data.alerts.length === 0 ? (
           // Deliberately not a row of zeros: "nothing found" is a different statement from
           // "we measured seven things and they were all zero", and only the first is true.
           <div className="card card-pad flex items-center gap-3 text-sm text-ink-soft">
             <ShieldCheck size={18} className="text-done-solid shrink-0" />
             לא נמצאו התראות פתוחות בבדיקות שהמערכת יודעת להריץ.
           </div>
-        ) : (
+        ) : data.alerts.length > 0 ? (
           <div className="card divide-y divide-line-soft overflow-hidden">
             {data.alerts.map((a) => (
               <button key={a.code} onClick={() => navigate(a.to)}
@@ -74,6 +85,10 @@ export default function Alerts() {
                 <ChevronLeft size={16} className="text-ink-ghost shrink-0" />
               </button>
             ))}
+          </div>
+        ) : (
+          <div className="card card-pad text-sm text-ink-soft">
+            הסריקה לא הושלמה, ולכן אין אפשרות לקבוע שאין התראות פתוחות.
           </div>
         )}
       </div>

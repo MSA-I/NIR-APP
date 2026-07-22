@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { Camera, FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
-import { useToast, Skeleton, ConfirmDialog } from './ui';
+import { useToast, Skeleton, ConfirmDialog, ErrorNote, Note } from './ui';
 import { ok, toHebrewError } from '../lib/errors';
 import { useQuery, unwrap } from '../lib/useQuery';
 import type { DocumentKind, DocumentRow } from '../lib/types';
 import { fmtDateTime } from '../lib/format';
+import { openReservedPopup } from '../lib/popup';
+import { mergeUploadBatchSummary, runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
+import { fetchAll } from '../lib/supabasePaging';
 
 const MAX_DIM = 1600;      // enough to read an invoice; a raw phone photo is ~4x this
 const JPEG_QUALITY = 0.8;
@@ -132,26 +135,38 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [retryFiles, setRetryFiles] = useState<File[]>([]);
+  const [uploadSummary, setUploadSummary] = useState<UploadBatchSummary | null>(null);
   const [pending, setPending] = useState<DocumentRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [documentKind, setDocumentKind] = useState<DocumentKind>(() => defaultDocumentKind(entityType));
 
   useEffect(() => setDocumentKind(defaultDocumentKind(entityType)), [entityType]);
 
-  const { data: docs, loading, refetch } = useQuery<DocumentRow[]>(async () =>
-    unwrap(await supabase.from('documents').select('*').eq('entity_type', entityType).eq('entity_id', entityId)
-      .is('deleted_at', null).order('created_at', { ascending: false })),
+  const { data: docs, loading, fetching, error, refetch } = useQuery<DocumentRow[]>(async () =>
+    fetchAll<DocumentRow>((from, to) => supabase.from('documents').select('*').eq('entity_type', entityType).eq('entity_id', entityId)
+      .is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to)),
     [entityType, entityId]);
 
-  async function onPick(files: FileList | null) {
-    if (!files?.length || !profile) return;
+  async function uploadFiles(files: File[], previousSummary: UploadBatchSummary | null = null) {
+    if (!files.length || !profile) return;
     setBusy(true);
     try {
       const metadata = await entityMetadata(entityType, entityId, documentKind);
-      for (const f of Array.from(files)) await uploadDocument(profile.org_id, entityType, entityId, f, metadata);
-      toast('הקובץ הועלה בהצלחה');
-      await refetch();
+      const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, entityType, entityId, file, metadata));
+      const failed = result.failed.map(({ item }) => item);
+      setRetryFiles(failed);
+      const summary = mergeUploadBatchSummary(previousSummary, result, (file) => file.name);
+      setUploadSummary(summary);
+      if (result.succeeded.length) await refetch();
+      if (failed.length) {
+        toast(`${result.succeeded.length} קבצים הועלו, ${failed.length} נכשלו: ${failed.map((file) => file.name).join(', ')}`, 'error');
+      } else {
+        toast(result.succeeded.length === 1 ? 'הקובץ הועלה בהצלחה' : `${result.succeeded.length} קבצים הועלו בהצלחה`);
+      }
     } catch (e) {
+      setRetryFiles(files);
+      setUploadSummary({ succeeded: previousSummary?.succeeded ?? [], failed: files.map((file) => file.name) });
       toast(toHebrewError(e), 'error');
     } finally {
       setBusy(false);
@@ -159,10 +174,20 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
     }
   }
 
+  function onPick(files: FileList | null) {
+    if (!files?.length) return;
+    setUploadSummary(null);
+    void uploadFiles(Array.from(files));
+  }
+
   async function open(doc: DocumentRow) {
-    const { data, error } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300);
-    if (error || !data) { toast('שגיאה בפתיחת הקובץ', 'error'); return; }
-    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+    const result = await openReservedPopup(async () => {
+      const { data, error } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300);
+      if (error || !data) throw error ?? new Error('missing signed URL');
+      return data.signedUrl;
+    });
+    if (result === 'blocked') toast('הדפדפן חסם את חלון הצפייה. יש לאפשר חלונות קופצים ולנסות שוב.', 'error');
+    if (result === 'error') toast('שגיאה בפתיחת הקובץ', 'error');
   }
 
   // Soft delete (migration 0010). Was a one-click hard delete of both the row and the stored
@@ -206,7 +231,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
               </select>
             </label>
           )}
-          <button className="btn-secondary py-1.5!" disabled={busy} onClick={() => inputRef.current?.click()}>
+          <button className="btn-secondary py-1.5!" disabled={busy || retryFiles.length > 0} onClick={() => inputRef.current?.click()}>
               {busy ? <Loader2 size={15} className="animate-spin" /> : capture ? <Camera size={15} /> : <Paperclip size={15} />}
               {capture ? 'צילום / העלאה' : 'העלאת קובץ'}
           </button>
@@ -215,7 +240,26 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
           {...(capture ? { capture: 'environment' as const } : {})}
           onChange={(e) => void onPick(e.target.files)} />
       </div>
-      {loading ? (
+      {uploadSummary && (
+        <Note tone={uploadSummary.failed.length ? 'alert' : 'done'} className="mb-2">
+          <div role="status">
+            <div><span className="num">{uploadSummary.succeeded.length}</span> הועלו · <span className="num">{uploadSummary.failed.length}</span> נכשלו</div>
+            {uploadSummary.failed.length > 0 && (
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs">נכשלו: {uploadSummary.failed.join(', ')}</span>
+                <button type="button" className="btn-ghost min-h-11" disabled={busy} onClick={() => void uploadFiles(retryFiles, uploadSummary)}>
+                  ניסיון חוזר לנכשלים בלבד
+                </button>
+              </div>
+            )}
+          </div>
+        </Note>
+      )}
+      {error && docs && <ErrorNote message={error} />}
+      {fetching && docs && <div className="mb-2 text-xs text-ink-muted" role="status">רשימת המסמכים מתעדכנת…</div>}
+      {error && !docs ? (
+        <ErrorNote message={error} />
+      ) : loading ? (
         // Not cosmetic: `docs` is null while fetching, and the empty branch below claims
         // "no documents". On an invoice that reads as "no scan attached" when there is one.
         <div className="border border-line-soft rounded-lg divide-y divide-line-soft" role="status" aria-busy="true">

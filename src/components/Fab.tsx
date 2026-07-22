@@ -10,7 +10,7 @@ const CAPTURE_SUPPRESSED_PATHS = ['/orders/new', '/invoices/new', '/receiving/:o
 export default function Fab() {
   const { profile } = useAuth();
   const { pathname } = useLocation();
-  const { openCapture, element, busy } = useQuickCapture();
+  const { openCapture, element, busy, retryCount } = useQuickCapture();
 
   if (!profile || !CAPTURE_ROLES.includes(profile.role)
     || CAPTURE_SUPPRESSED_PATHS.some((path) => matchPath(path, pathname) != null)) return null;
@@ -18,7 +18,8 @@ export default function Fab() {
   return (
     <div className="phone-fab fixed z-40 no-print">
       <button type="button" onClick={openCapture} disabled={busy}
-        aria-label={busy ? 'מעלה מסמך' : 'צילום מסמך'} title="צילום מסמך"
+        aria-label={busy ? 'מעלה מסמך' : retryCount ? `ניסיון חוזר להעלאת ${retryCount} מסמכים` : 'צילום מסמך'}
+        title={retryCount ? `ניסיון חוזר לנכשלים בלבד (${retryCount})` : 'צילום מסמך'}
         className="grid size-12 place-items-center border border-action-line bg-action text-white shadow-fab transition-colors hover:bg-action-hover active:bg-action-solid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:opacity-60">
         {busy
           ? <Loader2 size={21} className="animate-spin" aria-hidden="true" />

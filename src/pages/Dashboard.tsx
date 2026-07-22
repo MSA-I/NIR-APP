@@ -6,12 +6,17 @@ import {
 } from 'recharts';
 import { Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RotateCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useQuery, unwrap } from '../lib/useQuery';
+import { useQuery } from '../lib/useQuery';
 import { Skeleton, StatusBadge, Note, AttentionZone, TaskLine, type AttentionItem } from '../components/ui';
 import { EXCEPTION_TYPE, SEVERITY } from '../lib/status';
-import { fmtMoney, fmtMoneyExact, fmtMonth, toLocalISO } from '../lib/format';
+import {
+  addCalendarDays, BUSINESS_TIME_ZONE, dateStartInstant, daysInCalendarMonth,
+  fmtMoney, fmtMoneyExact, fmtMonth, shiftCalendarMonth, startOfCalendarWeek,
+  todayISO as businessTodayISO, toTimeZoneISO,
+} from '../lib/format';
 import { chartTheme } from '../lib/theme';
 import { mergeWeeklyComparison, topCategoriesWithOther } from '../lib/dashboardSeries';
+import { fetchAll } from '../lib/supabasePaging';
 
 const money = (v: number) => `₪${Math.round(v).toLocaleString('he-IL')}`;
 // audit round 2: glance values are whole-shekel by convention — the three money-strip tiles round to
@@ -21,7 +26,7 @@ const glanceMoney = (v: number | null) => fmtMoney(v == null ? null : Math.round
 // compact ₪ for dense axes (the 8-bar weekly series): full labels overlap at that count.
 const moneyShort = (v: number) => (Math.abs(v) >= 1000 ? `₪${(v / 1000).toLocaleString('he-IL', { maximumFractionDigits: 1 })}k` : `₪${Math.round(v)}`);
 // "עודכן ב-HH:MM" freshness stamp — the screen promises real-time, so it says when it last read.
-const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit' });
+const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TIME_ZONE });
 
 type WeeklyPoint = { week: string; total: number; count: number; label: string };
 
@@ -206,11 +211,9 @@ function OperationsDisclosure({ title, count, summary, empty, children }: {
   );
 }
 
-// Week bucketing for the weekly-purchasing chart. Local-day helper is shared (toLocalISO).
+// Calendar buckets are anchored to the business timezone, not the browser/server timezone.
 const pad = (n: number) => String(n).padStart(2, '0');
-const startOfWeek = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - x.getDay()); return x; };
-const localDateKey = (value: string) => value.includes('T') ? toLocalISO(new Date(value)) : value.slice(0, 10);
-const timelineDate = (value: string) => value.includes('T') ? new Date(value) : new Date(`${value.slice(0, 10)}T00:00:00`);
+const localDateKey = (value: string) => value.includes('T') ? toTimeZoneISO(new Date(value)) : value.slice(0, 10);
 
 // audit round 2: the loading state was <PageLoader/> — a centred spinner that collapses the page
 // height and jumps when data lands, exactly what ui.tsx warns against on a known layout (and this is
@@ -296,21 +299,18 @@ function DashboardSkeleton() {
 export default function Dashboard() {
   const { data, loading, error, refetch, fetching } = useQuery(async () => {
     const now = new Date();
-    const todayISO = toLocalISO(now);
+    const todayISO = businessTodayISO();
     const monthStart = `${todayISO.slice(0, 7)}-01`;
-    const monthStartTimestamp = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const monthKey = todayISO.slice(0, 7); // YYYY-MM, for /payments?month=
-    const eightWeeksAgo = new Date(startOfWeek(now)); eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 7 * 7);
-    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const prevMonthStartISO = toLocalISO(prevMonthStart);
-    const trendStart = prevMonthStart < eightWeeksAgo ? prevMonthStart : eightWeeksAgo;
-    const trendFromISO = toLocalISO(trendStart);
-    const trendFromTimestamp = trendStart.toISOString();
-    const last30d = new Date(now); last30d.setDate(now.getDate() - 30);
-    const last30dISO = toLocalISO(last30d);
-    const chartsStart = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-    const chartsFrom = toLocalISO(chartsStart);
-    const chartsFromTimestamp = chartsStart.toISOString();
+    const monthStartTimestamp = dateStartInstant(monthStart);
+    const eightWeeksAgoISO = addCalendarDays(startOfCalendarWeek(todayISO), -7 * 7);
+    const prevMonthKey = shiftCalendarMonth(monthKey, -1);
+    const prevMonthStartISO = `${prevMonthKey}-01`;
+    const trendFromISO = prevMonthStartISO < eightWeeksAgoISO ? prevMonthStartISO : eightWeeksAgoISO;
+    const trendFromTimestamp = dateStartInstant(trendFromISO);
+    const last30dISO = addCalendarDays(todayISO, -30);
+    const chartsFrom = `${shiftCalendarMonth(monthKey, -3)}-01`;
+    const chartsFromTimestamp = dateStartInstant(chartsFrom);
 
     const [
       ordersRes, invoicesRes, paymentsRes, balancesRes, prRes, exceptionsRes, creditsRes,
@@ -318,44 +318,44 @@ export default function Dashboard() {
     ] = await Promise.all([
       // recent orders (8 weeks) — purchased today/week/month + the weekly series. created_at is the
       // time axis, non-draft/cancelled the filter, at snapshot prices (OPEN-DECISIONS #4, locked).
-      supabase.from('purchase_orders').select('id, created_at, status, items:purchase_order_items(qty, unit_price)').gte('created_at', trendFromTimestamp).lte('created_at', now.toISOString()).not('status', 'in', '(draft,cancelled)'),
-      supabase.from('invoices').select('id, supplier_id, invoice_date, received_date, total_amount, review_status, payment_status, export_status').is('deleted_at', null).gte('invoice_date', chartsFrom),
-      supabase.from('payments').select('amount, paid_date').gte('paid_date', trendFromISO).lte('paid_date', todayISO),
-      supabase.from('invoice_balances').select('balance'),
-      supabase.from('payment_requests').select('id, status, due_date, amount'),
-      supabase.from('exceptions').select('*, supplier:suppliers(name)').in('status', ['open', 'in_progress']).order('created_at', { ascending: false }),
-      supabase.from('credit_requests').select('amount, status').in('status', ['open', 'requested', 'received']),
-      supabase.from('bank_transactions').select('id, status'),
-      supabase.from('supplier_balances').select('*').gt('open_balance', 0),
-      supabase.from('suppliers').select('id, name'),
-      supabase.from('purchase_order_items').select('qty, unit_price, product:products(category:categories(name)), order:purchase_orders!inner(created_at, status)').gte('order.created_at', chartsFromTimestamp).lte('order.created_at', now.toISOString()).not('order.status', 'in', '(draft,cancelled)'),
+      fetchAll((from, to) => supabase.from('purchase_orders').select('id, created_at, status, items:purchase_order_items(qty, unit_price)').gte('created_at', trendFromTimestamp).lte('created_at', now.toISOString()).not('status', 'in', '(draft,cancelled)').order('created_at').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('invoices').select('id, supplier_id, invoice_date, received_date, total_amount, review_status, payment_status, export_status').is('deleted_at', null).gte('invoice_date', chartsFrom).order('invoice_date').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('payments').select('id, amount, paid_date').gte('paid_date', trendFromISO).lte('paid_date', todayISO).order('paid_date').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('invoice_balances').select('invoice_id, balance').order('invoice_id').range(from, to)),
+      fetchAll((from, to) => supabase.from('payment_requests').select('id, status, due_date, amount').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('exceptions').select('*, supplier:suppliers(name)').in('status', ['open', 'in_progress']).order('created_at', { ascending: false }).order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('credit_requests').select('id, amount, status').in('status', ['open', 'requested', 'received']).order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('bank_transactions').select('id, status').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('supplier_balances').select('supplier_id, open_balance').gt('open_balance', 0).order('supplier_id').range(from, to)),
+      fetchAll((from, to) => supabase.from('suppliers').select('id, name').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('purchase_order_items').select('id, qty, unit_price, product:products(category:categories(name)), order:purchase_orders!inner(created_at, status)').gte('order.created_at', chartsFromTimestamp).lte('order.created_at', now.toISOString()).not('order.status', 'in', '(draft,cancelled)').order('id').range(from, to)),
       // price increases — now bounded to the last 30 days (was a full unbounded scan): matches the
       // "מוצרים שהתייקרו לאחרונה" label and the alerts window (OPEN-DECISIONS #26).
-      supabase.from('supplier_products').select('current_price, previous_price, price_effective_date, product:products(id, name), supplier:suppliers(name)').gte('price_effective_date', last30dISO).not('previous_price', 'is', null).order('price_effective_date', { ascending: false }),
-      supabase.from('purchase_request_items').select('qty, unit_price, product_id, request:purchase_requests!inner(created_at, status)').gte('request.created_at', monthStartTimestamp).lte('request.created_at', now.toISOString()).eq('request.status', 'split'),
+      fetchAll((from, to) => supabase.from('supplier_products').select('id, current_price, previous_price, price_effective_date, product:products(id, name), supplier:suppliers(name)').gte('price_effective_date', last30dISO).not('previous_price', 'is', null).order('price_effective_date', { ascending: false }).order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('purchase_request_items').select('id, qty, unit_price, product_id, request:purchase_requests!inner(created_at, status)').gte('request.created_at', monthStartTimestamp).lte('request.created_at', now.toISOString()).eq('request.status', 'split').order('id').range(from, to)),
       // available offers for the savings estimate — kept minimal (2 cols) but cannot be date-bounded:
       // savings needs the max CURRENT available offer per product regardless of when it was set.
-      supabase.from('supplier_products').select('product_id, current_price').eq('available', true),
+      fetchAll((from, to) => supabase.from('supplier_products').select('id, product_id, current_price').eq('available', true).order('id').range(from, to)),
       // open commitments — any date, so a PO sent months ago that is still open still counts. Also
       // serves the "awaiting goods receipt" queue, replacing the old serial round-trip.
-      supabase.from('purchase_orders').select('id, status, items:purchase_order_items(qty, unit_price, received_qty)').in('status', ['sent', 'confirmed', 'partial']),
+      fetchAll((from, to) => supabase.from('purchase_orders').select('id, status, items:purchase_order_items(qty, unit_price, received_qty)').in('status', ['sent', 'confirmed', 'partial']).order('id').range(from, to)),
     ]);
 
-    const orders = unwrap(ordersRes) as { created_at: string; items: { qty: number; unit_price: number }[] }[];
-    const invoices = unwrap(invoicesRes) as { supplier_id: string; invoice_date: string; received_date: string; total_amount: number; review_status: string; payment_status: string; export_status: string }[];
-    const payments = unwrap(paymentsRes) as { amount: number; paid_date: string }[];
-    const balances = unwrap(balancesRes) as { balance: number }[];
-    const prs = unwrap(prRes) as { status: string; due_date: string | null; amount: number }[];
-    const exceptions = unwrap(exceptionsRes) as ({ id: string; type: string; severity: 'low' | 'medium' | 'high'; title: string; created_at: string; supplier: { name: string } | null })[];
-    const credits = unwrap(creditsRes) as { amount: number }[];
-    const bank = unwrap(bankRes) as { status: string }[];
-    const supBal = unwrap(supBalRes) as { supplier_id: string; open_balance: number }[];
-    const suppliers = new Map((unwrap(suppliersRes) as { id: string; name: string }[]).map((s) => [s.id, s.name]));
-    const poItems = unwrap(poItemsRes) as { qty: number; unit_price: number; product: { category: { name: string } | null } | null; order: { created_at: string } }[];
-    const priceRows = unwrap(priceUpRes) as { current_price: number; previous_price: number | null; price_effective_date: string; product: { id: string; name: string }; supplier: { name: string } }[];
-    const reqItems = unwrap(reqItemsRes) as { qty: number; unit_price: number | null; product_id: string }[];
-    const offers = unwrap(offersRes) as { product_id: string; current_price: number }[];
-    const openPos = unwrap(openPoRes) as { items: { qty: number; unit_price: number; received_qty: number }[] }[];
+    const orders = ordersRes as unknown as { created_at: string; items: { qty: number; unit_price: number }[] }[];
+    const invoices = invoicesRes as unknown as { supplier_id: string; invoice_date: string; received_date: string; total_amount: number; review_status: string; payment_status: string; export_status: string }[];
+    const payments = paymentsRes as unknown as { amount: number; paid_date: string }[];
+    const balances = balancesRes as unknown as { balance: number }[];
+    const prs = prRes as unknown as { status: string; due_date: string | null; amount: number }[];
+    const exceptions = exceptionsRes as unknown as ({ id: string; type: string; severity: 'low' | 'medium' | 'high'; title: string; created_at: string; supplier: { name: string } | null })[];
+    const credits = creditsRes as unknown as { amount: number }[];
+    const bank = bankRes as unknown as { status: string }[];
+    const supBal = supBalRes as unknown as { supplier_id: string; open_balance: number }[];
+    const suppliers = new Map((suppliersRes as unknown as { id: string; name: string }[]).map((s) => [s.id, s.name]));
+    const poItems = poItemsRes as unknown as { qty: number; unit_price: number; product: { category: { name: string } | null } | null; order: { created_at: string } }[];
+    const priceRows = priceUpRes as unknown as { current_price: number; previous_price: number | null; price_effective_date: string; product: { id: string; name: string }; supplier: { name: string } }[];
+    const reqItems = reqItemsRes as unknown as { qty: number; unit_price: number | null; product_id: string }[];
+    const offers = offersRes as unknown as { product_id: string; current_price: number }[];
+    const openPos = openPoRes as unknown as { items: { qty: number; unit_price: number; received_qty: number }[] }[];
 
     const orderValue = (o: { items: { qty: number; unit_price: number }[] }) => o.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
 
@@ -426,18 +426,14 @@ export default function Dashboard() {
       byMonth.set(m, bucket);
     }
     const monthBuckets = Array.from({ length: 4 }, (_, idx) => {
-      const date = new Date(now.getFullYear(), now.getMonth() - (3 - idx), 1);
-      const key = `${date.getFullYear()}-${pad(date.getMonth() + 1)}`;
+      const key = shiftCalendarMonth(monthKey, -(3 - idx));
       const bucket = byMonth.get(key) ?? { total: 0, count: 0 };
       const total = bucket.total;
       return { key, month: fmtMonth(`${key}-01`), total, count: bucket.count, label: bucket.count ? money(total) : '' };
     });
     const monthly = invoices.length ? monthBuckets.map(({ month, total, count, label }) => ({ month, total, count, label })) : [];
-    const currentMonthKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
-    const previousMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const previousMonthKey = `${previousMonthDate.getFullYear()}-${pad(previousMonthDate.getMonth() + 1)}`;
-    const curMonthBucket = byMonth.get(currentMonthKey);
-    const prevMonthBucket = byMonth.get(previousMonthKey);
+    const curMonthBucket = byMonth.get(monthKey);
+    const prevMonthBucket = byMonth.get(prevMonthKey);
     const momChange = curMonthBucket && prevMonthBucket && prevMonthBucket.total > 0
       ? ((curMonthBucket.total - prevMonthBucket.total) / prevMonthBucket.total) * 100
       : null;
@@ -445,13 +441,14 @@ export default function Dashboard() {
     // ── weekly magnitude series: buckets carry a row count so an artificial zero bucket is never
     // mistaken for an observed point. The same helper powers purchases and supplier payments.
     const weeklySeries = (rows: { date: string; value: number }[]): WeeklyPoint[] => {
+      const currentWeekStart = startOfCalendarWeek(todayISO);
       const buckets = Array.from({ length: 8 }, (_, idx) => {
-        const ws = new Date(startOfWeek(now)); ws.setDate(ws.getDate() - (7 - idx) * 7);
-        return { key: toLocalISO(ws), week: `${pad(ws.getDate())}/${pad(ws.getMonth() + 1)}`, total: 0, count: 0 };
+        const key = addCalendarDays(currentWeekStart, -(7 - idx) * 7);
+        return { key, week: `${key.slice(8, 10)}/${key.slice(5, 7)}`, total: 0, count: 0 };
       });
       const byWeek = new Map(buckets.map((bucket) => [bucket.key, bucket]));
       for (const row of rows) {
-        const bucket = byWeek.get(toLocalISO(startOfWeek(timelineDate(row.date))));
+        const bucket = byWeek.get(startOfCalendarWeek(localDateKey(row.date)));
         if (!bucket) continue;
         bucket.total += row.value;
         bucket.count += 1;
@@ -463,10 +460,8 @@ export default function Dashboard() {
 
     // MTD is compared with the same number of calendar days in the previous month. Missing/zero
     // baseline means "not measurable", so the delta is omitted rather than rendered as 0%.
-    const previousMonthLength = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
-    const previousCutoffISO = toLocalISO(new Date(
-      now.getFullYear(), now.getMonth() - 1, Math.min(now.getDate(), previousMonthLength),
-    ));
+    const previousMonthLength = daysInCalendarMonth(prevMonthKey);
+    const previousCutoffISO = `${prevMonthKey}-${pad(Math.min(Number(todayISO.slice(8, 10)), previousMonthLength))}`;
     const inPreviousMTD = (date: string) => {
       const key = localDateKey(date);
       return key >= prevMonthStartISO && key <= previousCutoffISO;

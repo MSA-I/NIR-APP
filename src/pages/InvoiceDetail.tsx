@@ -5,7 +5,7 @@ import { Loader2, Send, CheckCircle2, RotateCcw, SearchCheck } from 'lucide-reac
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageLoader, useToast, StatusBadge, Modal, ErrorNote } from '../components/ui';
+import { PageLoader, useToast, StatusBadge, Modal, ErrorNote, Note } from '../components/ui';
 import { InvoiceAttachments } from '../components/AttachmentsPanel';
 import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
@@ -26,6 +26,8 @@ export default function InvoiceDetail() {
   const { profile } = useAuth();
   const toast = useToast();
   const [checks, setChecks] = useState<CheckResult[] | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const checkSequence = useRef(0);
   const [checking, setChecking] = useState(false);
   const [creditOpen, setCreditOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -49,26 +51,41 @@ export default function InvoiceDetail() {
   // ?print=1 (Invoices list "הדפסה" action): print once when the data is on screen, then strip
   // the param so refresh/back does not re-open the dialog. Same one-shot pattern as OrderDetail.
   const [params, setParams] = useSearchParams();
-  const printedRef = useRef(false);
+  const printedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (printedRef.current || params.get('print') !== '1' || !inv) return;
-    printedRef.current = true;
+    if (printedRef.current === inv?.id || params.get('print') !== '1' || !inv) return;
+    printedRef.current = inv.id;
     window.print();
     const next = new URLSearchParams(params);
     next.delete('print');
     setParams(next, { replace: true });
   }, [params, inv, setParams]);
 
+  useEffect(() => {
+    checkSequence.current += 1;
+    setChecks(null);
+    setCheckError(null);
+    setChecking(false);
+  }, [id]);
+
   async function runChecks() {
     if (!inv) return;
+    const sequence = ++checkSequence.current;
     setChecking(true);
-    const res = await runInvoiceChecks({
-      id: inv.id, supplier_id: inv.supplier.id, invoice_number: inv.invoice_number,
-      invoice_date: inv.invoice_date, total_amount: inv.total_amount,
-      linkedOrderIds: inv.orders.map((o) => o.order_id),
-    });
-    setChecks(res);
-    setChecking(false);
+    setChecks(null);
+    setCheckError(null);
+    try {
+      const res = await runInvoiceChecks({
+        id: inv.id, supplier_id: inv.supplier.id, invoice_number: inv.invoice_number,
+        invoice_date: inv.invoice_date, total_amount: inv.total_amount,
+        linkedOrderIds: inv.orders.map((o) => o.order_id),
+      });
+      if (checkSequence.current === sequence && id === inv.id) setChecks(res);
+    } catch {
+      if (checkSequence.current === sequence) setCheckError('הרצת הבדיקות נכשלה. לא ניתן להסיק שאין כפילות או תשלום קודם.');
+    } finally {
+      if (checkSequence.current === sequence) setChecking(false);
+    }
   }
 
   async function setReviewStatus(status: InvoiceReviewStatus) {
@@ -83,7 +100,8 @@ export default function InvoiceDetail() {
   }
 
   if (loading) return <PageLoader />;
-  if (error || !inv || !data) return <ErrorNote message={error ?? 'חשבונית לא נמצאה'} />;
+  if (error && !data) return <ErrorNote message={error} />;
+  if (!inv || !data) return <ErrorNote message="חשבונית לא נמצאה" />;
 
   const transitions: { from: InvoiceReviewStatus[]; to: InvoiceReviewStatus; label: string }[] = [
     { from: ['received'], to: 'in_review', label: 'העברה לבדיקה' },
@@ -94,6 +112,7 @@ export default function InvoiceDetail() {
 
   return (
     <div className="space-y-4 max-w-4xl">
+      {error && <ErrorNote message={error} />}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="page-title">חשבונית {inv.invoice_number} — {inv.supplier.name}</h1>
@@ -174,7 +193,8 @@ export default function InvoiceDetail() {
             {checking ? <Loader2 size={14} className="animate-spin" /> : <SearchCheck size={15} />} הרצת בדיקות
           </button>
         </div>
-        {checks ? <CheckList checks={checks} /> : <div className="text-sm text-ink-muted">לחץ ״הרצת בדיקות״ להשוואת החשבונית מול הזמנות, קבלות, תשלומים ותנועות בנק.</div>}
+        {checkError && <Note tone="alert">{checkError}</Note>}
+        {checks ? <CheckList checks={checks} /> : !checking && !checkError && <div className="text-sm text-ink-muted">לחץ ״הרצת בדיקות״ להשוואת החשבונית מול הזמנות, קבלות, תשלומים ותנועות בנק.</div>}
       </div>
 
       {creditOpen && (

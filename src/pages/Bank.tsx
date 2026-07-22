@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { Upload, Landmark, Link2, AlertTriangle, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
@@ -12,7 +11,10 @@ import { fmtMoneyExact, fmtDate, fmtDateTime } from '../lib/format';
 import { refreshInvoicePaymentStatus } from '../lib/checks';
 import { toHebrewError } from '../lib/errors';
 import { logAction } from '../lib/audit';
-import type { BankTransaction, BankImport, Supplier } from '../lib/types';
+import type { BankTransaction, BankImport } from '../lib/types';
+import { useParamState } from '../lib/useParamState';
+import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
+import { addCalendarDays } from '../lib/format';
 
 type TxRow = BankTransaction & { supplier: { name: string } | null };
 
@@ -41,14 +43,13 @@ const parseAmount = (v: unknown) => Math.abs(Number(String(v ?? '').replace(/[�
 
 export default function Bank() {
   const { profile, org } = useAuth();
-  const [params] = useSearchParams();
-  const [statusFilter, setStatusFilter] = useState(params.get('status') ?? '');
+  const [statusFilter, setStatusFilter] = useParamState('status');
   const [importOpen, setImportOpen] = useState(false);
   const [selected, setSelected] = useState<TxRow | null>(null);
 
-  const { data, loading, error, refetch } = useQuery(async () => {
-    const txs = unwrap(await supabase.from('bank_transactions')
-      .select('*, supplier:suppliers(name)').order('tx_date', { ascending: false })) as TxRow[];
+  const { data, loading, fetching, error, refetch } = useQuery(async () => {
+    const txs = await fetchAll<TxRow>((from, to) => supabase.from('bank_transactions')
+      .select('*, supplier:suppliers(name)').order('tx_date', { ascending: false }).order('id').range(from, to));
     const imports = unwrap(await supabase.from('bank_imports').select('*').order('imported_at', { ascending: false }).limit(10)) as BankImport[];
     return { txs, imports };
   });
@@ -66,10 +67,12 @@ export default function Bank() {
   ];
 
   if (loading) return <SkeletonTable cols={6} />;
-  if (error) return <ErrorNote message={error} />;
+  if (error && !data) return <ErrorNote message={error} />;
 
   return (
     <div className="space-y-4">
+      {error && <ErrorNote message={error} />}
+      {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title flex items-center gap-2"><Landmark size={22} /> התאמות בנק</h1>
         {isOffice && <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> ייבוא תדפיס בנק</button>}
@@ -253,24 +256,27 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   const [chosenInvoices, setChosenInvoices] = useState<Record<string, number>>({});
 
   const { data, refetch } = useQuery(async () => {
-    const suppliers = unwrap(await supabase.from('suppliers').select('id, name').is('deleted_at', null).order('name')) as Supplier[];
+    const suppliers = await fetchAll<{ id: string; name: string }>((from, to) => supabase.from('suppliers').select('id, name')
+      .is('deleted_at', null).order('name').order('id').range(from, to));
     if (!supplierId) return { suppliers, candidates: [] as Candidate[], openInvoices: [] };
 
-    const from = new Date(tx.tx_date); from.setDate(from.getDate() - days);
-    const to = new Date(tx.tx_date); to.setDate(to.getDate() + days);
+    const fromDate = addCalendarDays(tx.tx_date, -days);
+    const toDate = addCalendarDays(tx.tx_date, days);
 
     // candidate payments: recorded transfers awaiting bank match
-    const payments = unwrap(await supabase.from('payments')
+    const payments = await fetchAll<{ id: string; number: number; amount: number; paid_date: string; reference: string | null; payment_request_id: string | null; allocations: { invoice_id: string | null }[] }>((from, to) => supabase.from('payments')
       .select('id, number, amount, paid_date, reference, payment_request_id, allocations:payment_allocations(invoice_id)')
-      .eq('supplier_id', supplierId)) as { id: string; number: number; amount: number; paid_date: string; reference: string | null; payment_request_id: string | null; allocations: { invoice_id: string | null }[] }[];
-    const matchedPaymentIds = new Set((unwrap(await supabase.from('bank_allocations').select('payment_id').eq('confirmed', true)) as { payment_id: string | null }[])
+      .eq('supplier_id', supplierId).order('paid_date').order('id').range(from, to));
+    const matchedAllocations = await fetchAll<{ id: string; payment_id: string | null }>((from, to) => supabase.from('bank_allocations')
+      .select('id, payment_id').eq('confirmed', true).order('id').range(from, to));
+    const matchedPaymentIds = new Set(matchedAllocations
       .map((b) => b.payment_id).filter(Boolean));
 
     const candidates: Candidate[] = [];
     for (const p of payments) {
       if (matchedPaymentIds.has(p.id)) continue;
       const amountOk = Math.abs(p.amount - tx.amount) <= tolerance;
-      const dateOk = p.paid_date >= from.toISOString().slice(0, 10) && p.paid_date <= to.toISOString().slice(0, 10);
+      const dateOk = p.paid_date >= fromDate && p.paid_date <= toDate;
       const refOk = !!p.reference && !!tx.reference && p.reference === tx.reference;
       if (!amountOk && !refOk) continue;
       let confidence = 0.5;
@@ -286,12 +292,13 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
     }
 
     // candidate open invoices (direct match when no payment was recorded)
-    const invoices = unwrap(await supabase.from('invoices')
+    const invoices = await fetchAll<{ id: string; invoice_number: string; invoice_date: string; total_amount: number }>((from, to) => supabase.from('invoices')
       .select('id, invoice_number, invoice_date, total_amount')
-      .eq('supplier_id', supplierId).neq('payment_status', 'paid').is('deleted_at', null)) as
-      { id: string; invoice_number: string; invoice_date: string; total_amount: number }[];
+      .eq('supplier_id', supplierId).neq('payment_status', 'paid').is('deleted_at', null)
+      .order('invoice_date').order('id').range(from, to));
     const ids = invoices.map((i) => i.id);
-    const bals = ids.length ? unwrap(await supabase.from('invoice_balances').select('*').in('invoice_id', ids)) as { invoice_id: string; balance: number }[] : [];
+    const bals = ids.length ? await fetchInChunks(ids, (chunk) => fetchAll<{ invoice_id: string; balance: number }>((from, to) => supabase.from('invoice_balances')
+      .select('invoice_id, balance').in('invoice_id', chunk).order('invoice_id').range(from, to))) : [];
     const balMap = new Map(bals.map((b) => [b.invoice_id, b.balance]));
     const openInvoices = invoices.map((i) => ({ ...i, balance: balMap.get(i.id) ?? i.total_amount })).filter((i) => i.balance > 0);
 

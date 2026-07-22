@@ -205,7 +205,7 @@ export function OrderDetail() {
   const [confirmExpected, setConfirmExpected] = useState('');  // optional: set/correct אספקה מבוקשת at confirmation
   const [busy, setBusy] = useState(false);
   const [params, setParams] = useSearchParams();
-  const printedRef = useRef(false);
+  const printedRef = useRef<string | null>(null);
 
   const { data: order, loading, error, refetch } = useQuery(async () =>
     unwrap(await supabase.from('purchase_orders')
@@ -215,8 +215,8 @@ export function OrderDetail() {
   // ?print=1 (Orders list "הדפסה" action): print once when the data is on screen, then strip
   // the param so refresh/back does not re-open the dialog.
   useEffect(() => {
-    if (printedRef.current || params.get('print') !== '1' || !order) return;
-    printedRef.current = true;
+    if (printedRef.current === order?.id || params.get('print') !== '1' || !order) return;
+    printedRef.current = order.id;
     window.print();
     const next = new URLSearchParams(params);
     next.delete('print');

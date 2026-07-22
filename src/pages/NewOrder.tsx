@@ -427,8 +427,8 @@ export default function NewOrder() {
     setSendingId(order.id);
     const result = await sendOrderWhatsApp(order, org?.name ?? '');
     setSendingId(null);
-    if (!result.opened) { toast('לספק אין מספר WhatsApp זמין', 'error'); return; }
     if (result.error) { toast(result.error, 'error'); return; }
+    if (!result.opened) return;
     if (result.statusChanged) {
       setSendQueue((queue) => queue?.map((row) => row.id === order.id
         ? { ...row, status: 'sent', sent_at: new Date().toISOString() }

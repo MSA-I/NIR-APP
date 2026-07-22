@@ -1,61 +1,65 @@
 import { useState } from 'react';
 import { FileSpreadsheet, Printer, Send, CheckCircle2 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { StatusBadge, useToast, ErrorNote, SkeletonCards, Note } from '../components/ui';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
-import { fmtMoneyExact, fmtDate, fmtMonth, monthRange } from '../lib/format';
+import { currentMonthISO, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange } from '../lib/format';
 import { logAction } from '../lib/audit';
 import { ok, toHebrewError } from '../lib/errors';
+import { fetchAll } from '../lib/supabasePaging';
+import { buildMonthlyWorkbook } from '../lib/monthlyReport';
+import * as XLSX from 'xlsx';
 
 export default function Reports() {
   const { profile, org } = useAuth();
   const toast = useToast();
-  const now = new Date();
-  const [month, setMonth] = useState(now.toISOString().slice(0, 7)); // YYYY-MM
+  const [month, setMonth] = useState(currentMonthISO());
   const [busy, setBusy] = useState(false);
 
-  const { data, loading, error, refetch } = useQuery(async () => {
+  const { data, loading, fetching, error, refetch } = useQuery(async () => {
     const { start, end } = monthRange(month);
-    const [invRes, payRes, credRes, excRes, bankRes, exportRes] = await Promise.all([
-      supabase.from('invoices').select('*, supplier:suppliers(name)').gte('invoice_date', start).lt('invoice_date', end).is('deleted_at', null).order('invoice_date'),
-      supabase.from('payments').select('*, supplier:suppliers(name)').gte('paid_date', start).lt('paid_date', end).order('paid_date'),
-      supabase.from('credit_requests').select('*, supplier:suppliers(name)').gte('created_at', start).lt('created_at', end),
-      supabase.from('exceptions').select('*, supplier:suppliers(name)').in('status', ['open', 'in_progress']),
-      supabase.from('bank_transactions').select('status').gte('tx_date', start).lt('tx_date', end),
+    const instants = monthInstantRange(month);
+    const [invoices, payments, credits, exceptions, bank, exportRes] = await Promise.all([
+      fetchAll((from, to) => supabase.from('invoices').select('*, supplier:suppliers(name)')
+        .gte('invoice_date', start).lt('invoice_date', end).is('deleted_at', null)
+        .order('invoice_date').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('payments').select('*, supplier:suppliers(name)')
+        .gte('paid_date', start).lt('paid_date', end).order('paid_date').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('credit_requests').select('*, supplier:suppliers(name)')
+        .gte('created_at', instants.start).lt('created_at', instants.end).order('created_at').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('exceptions').select('*, supplier:suppliers(name)')
+        .in('status', ['open', 'in_progress']).order('created_at').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('bank_transactions').select('id, status')
+        .gte('tx_date', start).lt('tx_date', end).order('tx_date').order('id').range(from, to)),
       supabase.from('monthly_exports').select('*').eq('month', `${month}-01`).maybeSingle(),
     ]);
     return {
-      invoices: unwrap(invRes) as ({ id: string; invoice_number: string; invoice_date: string; total_amount: number; amount_before_vat: number; vat_amount: number; review_status: string; payment_status: string; export_status: string; supplier: { name: string } })[],
-      payments: unwrap(payRes) as ({ number: number; paid_date: string; amount: number; method: string | null; reference: string | null; supplier: { name: string } })[],
-      credits: unwrap(credRes) as ({ number: number; reason: string; amount: number; status: string; supplier: { name: string } })[],
-      exceptions: unwrap(excRes) as ({ id: string; type: string; title: string; supplier: { name: string } | null })[],
-      bank: unwrap(bankRes) as { status: string }[],
+      invoices: invoices as ({ id: string; invoice_number: string; invoice_date: string; total_amount: number; amount_before_vat: number; vat_amount: number; review_status: string; payment_status: string; export_status: string; supplier: { name: string } })[],
+      payments: payments as ({ id: string; number: number; paid_date: string; amount: number; method: string | null; reference: string | null; supplier: { name: string } })[],
+      credits: credits as ({ id: string; number: number; reason: string; amount: number; status: string; supplier: { name: string } })[],
+      exceptions: exceptions as ({ id: string; type: string; title: string; supplier: { name: string } | null })[],
+      bank: bank as { id: string; status: string }[],
       export: unwrap(exportRes) as { id: string; status: string; sent_at: string | null } | null,
+      generatedAt: new Date(),
     };
   }, [month]);
 
   const isOffice = !!profile && ['owner', 'office'].includes(profile.role);
 
   function exportExcel() {
-    if (!data) return;
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.invoices.map((i) => ({
-      'ספק': i.supplier.name, 'מספר חשבונית': i.invoice_number, 'תאריך': i.invoice_date,
-      'לפני מע"מ': i.amount_before_vat, 'מע"מ': i.vat_amount, 'סה"כ': i.total_amount,
-      'סטטוס בדיקה': INVOICE_REVIEW_STATUS[i.review_status]?.label, 'סטטוס תשלום': INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
-    }))), 'חשבוניות');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.payments.map((p) => ({
-      'ספק': p.supplier.name, 'תאריך': p.paid_date, 'סכום': p.amount, 'אמצעי': p.method, 'אסמכתא': p.reference,
-    }))), 'תשלומים');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.credits.map((c) => ({
-      'ספק': c.supplier.name, 'סיבה': CREDIT_REASON[c.reason], 'סכום': c.amount, 'סטטוס': CREDIT_STATUS[c.status]?.label,
-    }))), 'זיכויים');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.exceptions.map((e) => ({
-      'סוג': EXCEPTION_TYPE[e.type], 'תיאור': e.title, 'ספק': e.supplier?.name ?? '',
-    }))), 'חריגים פתוחים');
+    if (!data || fetching || error) return;
+    const wb = buildMonthlyWorkbook({
+      orgName: org?.name, month, generatedAt: data.generatedAt, data,
+      labels: {
+        invoiceReview: INVOICE_REVIEW_STATUS,
+        invoicePayment: INVOICE_PAYMENT_STATUS,
+        creditReason: CREDIT_REASON,
+        creditStatus: CREDIT_STATUS,
+        exceptionType: EXCEPTION_TYPE,
+      },
+    });
     // This file lands in an accountant's inbox, and an accountant serves several businesses.
     // The name has to say whose report it is; a fixed tenant name would break multi-tenancy.
     // Strip only what filesystems object to; Hebrew names are fine and are the whole point.
@@ -64,7 +68,7 @@ export default function Reports() {
   }
 
   async function markSent() {
-    if (!data || !profile) return;
+    if (!data || !profile || fetching || error) return;
     setBusy(true);
     try {
       // ok() on every write: supabase-js resolves successfully on a rejected statement, so
@@ -89,7 +93,8 @@ export default function Reports() {
   }
 
   if (loading) return <SkeletonCards count={6} cols={6} title />;
-  if (error || !data) return <ErrorNote message={error ?? 'שגיאה'} />;
+  if (error && !data) return <ErrorNote message={error} />;
+  if (!data) return <ErrorNote message="שגיאה" />;
 
   const totals = {
     invoices: data.invoices.reduce((s, i) => s + i.total_amount, 0),
@@ -108,16 +113,21 @@ export default function Reports() {
 
   return (
     <div className="space-y-4">
+      {error && <ErrorNote message={error} />}
+      {fetching && data && <Note tone="idle">הדוח מתעדכן. הייצוא והסימון מושבתים עד להשלמת הרענון.</Note>}
       <div className="flex flex-wrap items-center justify-between gap-3 no-print">
-        <h1 className="page-title">דוח חודשי לרואת חשבון</h1>
+        <div>
+          <h1 className="page-title">דוח חודשי לרואת חשבון</h1>
+          <p className="mt-1 text-xs text-ink-muted">הנתונים הושלמו {fmtDateTime(data.generatedAt)} ואינם snapshot טרנזקציוני.</p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <input type="month" className="input w-auto!" value={month} onChange={(e) => setMonth(e.target.value)} />
-          <button className="btn-secondary" onClick={exportExcel}><FileSpreadsheet size={15} /> ייצוא Excel</button>
-          <button className="btn-secondary" onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
+          <button className="btn-secondary" disabled={fetching || !!error} onClick={exportExcel}><FileSpreadsheet size={15} /> ייצוא Excel</button>
+          <button className="btn-secondary" disabled={fetching || !!error} onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
           {isOffice && (
             data.export?.status === 'sent'
               ? <span className="badge-done flex items-center gap-1"><CheckCircle2 size={13} /> הועבר לרו״ח {data.export.sent_at ? fmtDate(data.export.sent_at) : ''}</span>
-              : <button className="btn-primary" disabled={busy} onClick={() => void markSent()}><Send size={15} /> סימון כהועבר לרו״ח</button>
+              : <button className="btn-primary" disabled={busy || fetching || !!error} onClick={() => void markSent()}><Send size={15} /> סימון כהועבר לרו״ח</button>
           )}
         </div>
       </div>
@@ -126,6 +136,7 @@ export default function Reports() {
         <div className="hidden print:block">
           {/* Printed header handed to the accountant — carries the tenant's own name. */}
           <h2 className="text-xl font-bold">{`${org?.name ? `${org.name} — ` : ''}דוח חודשי ${fmtMonth(`${month}-01`)}`}</h2>
+          <p className="text-xs">נוצר {fmtDateTime(data.generatedAt)}</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
@@ -140,7 +151,7 @@ export default function Reports() {
         {data.exceptions.length > 0 && (
           <Note tone="await">
             <div className="w-full">
-              <h2 className="text-base font-semibold mb-2">חריגים פתוחים שדורשים טיפול לפני סגירת החודש ({data.exceptions.length})</h2>
+              <h2 className="text-base font-semibold mb-2">חריגים פתוחים כרגע שדורשים טיפול לפני סגירת החודש ({data.exceptions.length})</h2>
               <ul className="space-y-1 list-disc list-inside">
                 {data.exceptions.map((e) => <li key={e.id}>{EXCEPTION_TYPE[e.type]} — {e.title}</li>)}
               </ul>

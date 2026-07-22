@@ -4,7 +4,7 @@ import { toHebrewError } from '../lib/errors';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useParamState } from '../lib/useParamState';
 import { supabase } from '../lib/supabase';
-import { useQuery, unwrap } from '../lib/useQuery';
+import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { CREDIT_REASON, CREDIT_STATUS } from '../lib/status';
@@ -12,6 +12,7 @@ import { fmtMoneyExact, fmtDate } from '../lib/format';
 import { refreshInvoicePaymentStatus } from '../lib/checks';
 import { logAction } from '../lib/audit';
 import type { CreditRequest, CreditStatus } from '../lib/types';
+import { fetchAll } from '../lib/supabasePaging';
 
 type Row = CreditRequest & { supplier: { name: string }; invoice: { id: string; invoice_number: string } | null };
 
@@ -22,10 +23,10 @@ export default function Credits() {
   const [statusFilter, setStatusFilter] = useParamState('status', 'active');
   const [selected, setSelected] = useState<Row | null>(null);
 
-  const { data, loading, error, refetch } = useQuery(async () =>
-    unwrap(await supabase.from('credit_requests')
+  const { data, loading, fetching, error, refetch } = useQuery(async () =>
+    fetchAll<Row>((from, to) => supabase.from('credit_requests')
       .select('*, supplier:suppliers(name), invoice:invoices(id, invoice_number)')
-      .order('created_at', { ascending: false })) as Promise<Row[]>);
+      .order('created_at', { ascending: false }).order('id').range(from, to)));
 
   // Open a credit card straight from a global-search result (?id=). Clear the param once
   // consumed so closing the modal doesn't reopen it and the URL stays clean.
@@ -53,10 +54,12 @@ export default function Credits() {
   ];
 
   if (loading) return <SkeletonTable cols={6} />;
-  if (error) return <ErrorNote message={error} />;
+  if (error && !data) return <ErrorNote message={error} />;
 
   return (
     <div className="space-y-4">
+      {error && <ErrorNote message={error} />}
+      {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title flex items-center gap-2"><RotateCcw size={22} /> זיכויים</h1>
         {/* open credits are open work (house idiom: "an open balance is open work") — await, not the retired violet (audit 2026-07-21) */}
@@ -94,15 +97,15 @@ function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
 
   const flow: { from: CreditStatus[]; to: CreditStatus; label: string }[] = [
     { from: ['open'], to: 'requested', label: 'נדרש מהספק' },
-    { from: ['requested', 'open'], to: 'received', label: 'הזיכוי התקבל' },
+    { from: ['requested'], to: 'received', label: 'הזיכוי התקבל' },
     { from: ['received'], to: 'offset', label: 'קוזז בתשלום' },
-    { from: ['received', 'offset'], to: 'closed', label: 'סגירה' },
+    { from: ['offset'], to: 'closed', label: 'סגירה' },
   ];
 
   async function setStatus(status: CreditStatus) {
     setBusy(true);
     const res = await supabase.from('credit_requests').update({
-      status, resolved_at: ['offset', 'closed', 'received'].includes(status) ? new Date().toISOString() : null,
+      status, resolved_at: ['offset', 'closed'].includes(status) ? new Date().toISOString() : null,
     }).eq('id', credit.id);
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }

@@ -92,8 +92,26 @@ function AccountUnavailable() {
   );
 }
 
+function BootstrapUnavailable() {
+  const { bootstrapError, retryBootstrap, signOut } = useAuth();
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="card card-pad max-w-md text-center">
+        <h1 className="page-title">לא ניתן לטעון את החשבון</h1>
+        <p className="text-ink-soft mt-2">
+          {bootstrapError ?? 'אירעה תקלה זמנית בטעינת פרטי החשבון.'} החיבור נשאר פעיל ואפשר לנסות שוב.
+        </p>
+        <div className="mt-5 flex justify-center gap-2">
+          <button className="btn-primary" onClick={retryBootstrap}>ניסיון חוזר</button>
+          <button className="btn-secondary" onClick={() => void signOut()}>התנתקות</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  const { session, profile, loading, isPlatformAdmin } = useAuth();
+  const { session, profile, loading, bootstrapError, isPlatformAdmin } = useAuth();
   const { pathname } = useLocation();
 
   // The public routes must render regardless of a broken session. Someone accepting an
@@ -114,6 +132,7 @@ export default function App() {
       </Suspense>
     );
   }
+  if (!isPublic && session && !loading && !profile && bootstrapError) return <BootstrapUnavailable />;
   if (!isPublic && session && !loading && !profile) return <AccountUnavailable />;
 
   return (

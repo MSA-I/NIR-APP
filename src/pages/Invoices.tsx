@@ -4,7 +4,7 @@ import { useParamState } from '../lib/useParamState';
 import { Plus, AlertTriangle, AlertOctagon, Info, Pencil, Copy, Share2, Printer, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toHebrewError } from '../lib/errors';
-import { useQuery, unwrap } from '../lib/useQuery';
+import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, ErrorNote, SkeletonTable, Note, ConfirmDialog, useToast, type Column } from '../components/ui';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS } from '../lib/status';
@@ -13,6 +13,7 @@ import { logAction } from '../lib/audit';
 import { canShare, shareInvoice } from '../lib/share';
 import type { Invoice } from '../lib/types';
 import type { CheckResult } from '../lib/checks';
+import { fetchAll } from '../lib/supabasePaging';
 
 export type InvoiceRow = Invoice & { supplier: { name: string }; balance?: number };
 
@@ -50,11 +51,12 @@ export function InvoicesList() {
   const [deleteTarget, setDeleteTarget] = useState<InvoiceRow | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
 
-  const { data, loading, error, refetch } = useQuery(async () => {
-    const invoices = unwrap(await supabase.from('invoices')
+  const { data, loading, fetching, error, refetch } = useQuery(async () => {
+    const invoices = await fetchAll<InvoiceRow>((from, to) => supabase.from('invoices')
       .select('*, supplier:suppliers(name)').is('deleted_at', null)
-      .order('invoice_date', { ascending: false })) as InvoiceRow[];
-    const balances = unwrap(await supabase.from('invoice_balances').select('*')) as { invoice_id: string; balance: number }[];
+      .order('invoice_date', { ascending: false }).order('id').range(from, to));
+    const balances = await fetchAll<{ invoice_id: string; balance: number }>((from, to) => supabase.from('invoice_balances')
+      .select('invoice_id, balance').order('invoice_id').range(from, to));
     const balMap = new Map(balances.map((b) => [b.invoice_id, b.balance]));
     return invoices.map((i) => ({ ...i, balance: balMap.get(i.id) }));
   });
@@ -112,10 +114,12 @@ export function InvoicesList() {
   ];
 
   if (loading) return <SkeletonTable cols={6} />;
-  if (error) return <ErrorNote message={error} />;
+  if (error && !data) return <ErrorNote message={error} />;
 
   return (
     <div className="space-y-4">
+      {error && <ErrorNote message={error} />}
+      {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title">חשבוניות</h1>
         {canCreate && <button className="btn-primary" onClick={() => navigate('/invoices/new')}><Plus size={16} /> חשבונית חדשה</button>}
