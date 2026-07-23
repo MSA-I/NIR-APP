@@ -7,6 +7,32 @@
 
 ---
 
+## הטמעת פרסונות מאוחדת — מצב נוכחי (23.07.2026, מקומי בלבד)
+
+**בסיס ו־provenance:** העבודה נפתחה מ־`7f9e2f0` ב־worktrees מבודדים ואוחדה בענף
+`persona/integration`. מצב P2 המשולב הוא `caab711`; לא נעשה שימוש ב־`git add .`, לא נלקחו
+שינויי ה־checkout המקורי, ולא בוצעו push, deploy או מיגרציה למסד חי.
+
+**P0/P1 הושלמו מקומית:** `owner` הוא מנהל/בעלים, `office` הוא מנהל רכש ו־`accountant`
+הוא הנהלת חשבונות תפעולית; `payer` ו־`kitchen` נשארו ללא שינוי חוזה. מיגרציות `0025`–`0033`
+מיישרות RLS, ‏RPC, ‏Storage ו־ACL עם מטריצת התפקידים ומוסיפות ledger קליטת מחירון חודשי.
+על בסיס האינטגרציה המדויק עברו reset נקי `0001`–`0033`, בדיקות preflight, ‏P0 client DML,
+פקודות פיננסיות, קליטת מחירון, אמינות נתונים ושתי בדיקות המקביליות. ‏Edge runtime אמיתי עבר
+קליטה חלקית עם דחיות, checksum, ‏retry idempotent, חסימת ספק מתחרה וחסימת XLSX פגום.
+
+**P2 הושלם בקוד ועבר שער build:** שלושת הזרמים — dashboard/supplier, הקשר טיפול, ומעטפת/
+דוח — אוחדו. נוספו deep links ומסננים, תור קבלה ממוקד, משוב עסקי במקום metadata גולמי,
+כרטיסי דוח ללא גלילה פנימית עד 1024px, יעדי מגע/focus ופעולות מהירות לפי תפקיד שאינן
+מסתירות תוכן. `npm.cmd run build` עבר על `caab711`, כולל TypeScript וכל בדיקות
+alerts/dashboard/orders/P2; ‏`node --check scripts/check-browser-smoke.cjs` ו־diff check עברו.
+צילומי runtime, ‏viewports וראיות נגישות אינם מסומנים PASS עדיין — הם שייכים לשער P3/P4.
+
+**שלב פעיל:** P3 — הרחבת quality gate ל־Edge אמיתי, scale/concurrency, מדידת מסעות,
+הצלבת dashboard/report/Excel/PDF מול DB וראיות browser. הצלחה מקומית אינה אישור staging
+או production.
+
+---
+
 ## P0 — חוזה תפקידי פרסונות (23.07.2026, מקומי בלבד)
 
 ### allowlist כתיבה ופקודות מנומקות `0030` (ענף מבודד; DB עדיין BLOCKED)
