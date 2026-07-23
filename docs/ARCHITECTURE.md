@@ -45,6 +45,7 @@ supabase/
                            0029 intake מהימן להגשות מחירון · 0030 allowlist כתיבה ופקודות מנומקות
                            0031 ניקוי orphan של uploader · 0032 qualification למדיניות Storage
                            0033 שחזור CRUD ל-service_role בלבד לאחר cutover ה-ACL
+                           0034 מצב מסירת התראות server-only · 0035 מעברי סטטוס הזמנה מנומקים
   functions/               admin-provision · send-invite · send-push · submit-price-list — service_role נשאר בשרת
   seed.sql                 seed ניטרלי לדייר חדש (ארגון + קטגוריות)
   demo/                    חבילת הדמו כדייר נפרד + reset + audit בידוד
@@ -137,6 +138,11 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
   orphan שלו, מדיניות Storage מפנה במפורש ל־`storage.objects.name`, ו־`service_role` מקבל
   מחדש CRUD על טבלאות `public` לצורכי Edge Functions. ה־grants של משתמשי הדפדפן נשארים
   allowlist מצומצם ונבדקים בנפרד.
+- `0034` נועלת את `notification_event_states` ל־`service_role`. ‏`0035` מסירה מן הדפדפן
+  UPDATE ישיר של `purchase_orders.status/sent_at/confirmed_at/confirmation_note/expected_date`.
+  המעברים `draft→ready/sent`, ‏`ready→sent` ו־`sent→confirmed` עוברים דרך
+  `transition_purchase_order_status`, שנועלת את ההזמנה, גוזרת דייר ושחקן מן ה־JWT, דורשת
+  סיבה, בודקת retry מול אותו payload וכותבת `purchase_order_status_changed` באותה עסקה.
 
 ## מודל נתונים — עקרונות
 
@@ -180,6 +186,7 @@ transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מ
 | הגשת מחירון ספק | `submit-price-list` → `submit_supplier_price_list` | Edge נועל ומאמת את גרסת אובייקט ה־Storage, גוזר hash ושורות מהבייטים; נעילת ספק מסדרת revision; ‏checksum חודשי מחזיר אותה קבלה; intake, מחיר, היסטוריה, קבלה ו־audit נסגרים באותה עסקת DB |
 | חודש לרו״ח | `mark_month_export_sent` | נעילת ארגון/export/חשבוניות ו־snapshot ממוין של `invoice_ids` |
 | אישור טיוטת הזמנה | `finalize_purchase_request_draft` | נעילת טיוטה, פריטים ומחירים בסדר קבוע; שינוי מחיר מחזיר `draft_price_changed` |
+| מעבר סטטוס הזמנה | `transition_purchase_order_status` | נעילת הזמנה דיירית; allowlist מעברים; חותמות זמן ו־audit מנומק נכתבים אטומית; retry זהה אידמפוטנטי |
 
 שובר השוויון בהמלצת מחיר הוא `(current_price, supplier_id)` הן ב־`save_purchase_request_draft`
 והן בדפדפן. בחירה ידנית של משתמש נשמרת, אבל המחיר והזמינות שלה נבדקים שוב תחת נעילה.
@@ -209,6 +216,21 @@ transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מ
 עסקת DB, כך שכשל משאיר את ה־intake מוכן לניקוי שרתי ואינו משאיר כתיבת DB חלקית. לאחר שחרור
 claim הלקוח קורא ומנקה את ה־orphan הלא־רשום שלו; מדיניות הקריאה אינה חושפת אותו למשתמש אחר,
 לספק מתחרה או לדייר אחר גם אם הניקוי נכשל.
+
+### חוזה ראיות P3/P4 המקומי
+
+`scripts/check-quality-gates.ps1` נכשל סגור: הוא מבצע reset/upgrade דרך כל המיגרציות,
+מריץ מטריצות RLS/RPC ו־concurrency, מפעיל Edge אמיתי, מתקין fixture חדש ורק אז מריץ את
+הדפדפן. לאחר ה־fixture, `check-p4-integrated-journey.cjs` מבצע מסע אחד על אותן ישויות עם
+JWT נפרד ל־supplier/office/owner/accountant. ‏`service_role` משמש בו לקריאת projection של
+ראיות בלבד; כל מוטציה עסקית נעשית דרך JWT משתמש או Edge מהימן.
+
+המסע שומר `p4-integrated-before.json`, ‏`p4-integrated-after.json`,
+`p4-integrated-audit.json` ו־`p4-integrated-journey.json` בתיקיית ה־artifact. כל כתיבה
+עוברת סריקה שחוסמת token, סיסמה, Authorization, מפתח, אימייל ו־raw payload. ה־after מאמת
+את snapshot המחיר בהזמנה, N:M allocations, יתרה מחושבת, התאמה/הסרה/התאמה מחדש וזיכוי
+שאינו מקוזז פעמיים. דוח הדפדפן שומר PASS/FAIL/BLOCKED, זמן, צעדים, backtracks, viewports,
+נגישות, console, screenshots ו־exports מוצלבים. gate מקומי אינו אישור deploy.
 
 ל־`bank_allocations` אין עדיין constraint היסטורי של יעד יחיד: preflight מצא שבע שורות ישנות
 עם שני יעדים. כתיבה חדשה דרך ה־RPC מחייבת יעד אחד וה־guard חוסם כתיבה ישירה; תיקון הרשומות
