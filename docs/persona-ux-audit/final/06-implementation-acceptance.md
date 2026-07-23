@@ -62,6 +62,8 @@
 דוח הדפדפן כולל PASS/FAIL/BLOCKED, זמן, צעדים, backtracks, console/network וראיות לכל
 מסע. Excel ו־PDF הוצלבו מול REST/DB ולא רק נבדקו כקובץ תקין. קבצי ה־artifact נסרקים לפני
 כתיבה כדי לחסום token, סיסמה, Authorization, מפתח, אימייל ו־raw payload.
+לאחר reset מקומי PostgREST ממוחזר ונבדק מחדש, כדי שחיבור ישן למסד שהוחלף לא יסווג כשגיאת
+מוצר; כשל readiness נשאר `BLOCKED`, ואילו 5xx לאחר readiness עדיין מכשיל את הקבלה.
 
 ## תוצאת המסע המשולב
 

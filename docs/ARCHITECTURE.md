@@ -221,7 +221,9 @@ claim הלקוח קורא ומנקה את ה־orphan הלא־רשום שלו; מ
 
 `scripts/check-quality-gates.ps1` נכשל סגור: הוא מבצע reset/upgrade דרך כל המיגרציות,
 מריץ מטריצות RLS/RPC ו־concurrency, מפעיל Edge אמיתי, מתקין fixture חדש ורק אז מריץ את
-הדפדפן. לאחר ה־fixture, `check-p4-integrated-journey.cjs` מבצע מסע אחד על אותן ישויות עם
+הדפדפן. reset מקומי ממחזר במפורש את PostgREST וממתין מחדש ל־Auth/REST, כדי שלא להשתמש
+בחיבור pool שנשאר ממופע PostgreSQL שהוחלף; כשל בשלב הזה הוא `BLOCKED` תשתיתי ולא PASS.
+לאחר ה־fixture, `check-p4-integrated-journey.cjs` מבצע מסע אחד על אותן ישויות עם
 JWT נפרד ל־supplier/office/owner/accountant. ‏`service_role` משמש בו לקריאת projection של
 ראיות בלבד; כל מוטציה עסקית נעשית דרך JWT משתמש או Edge מהימן.
 

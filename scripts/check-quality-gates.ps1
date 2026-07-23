@@ -11,6 +11,7 @@ $userProfilePath = [Environment]::GetFolderPath("UserProfile")
 $expectedProjectId = "supplyflow-p0"
 $expectedApiUrl = "http://127.0.0.1:55431"
 $dbContainer = "supabase_db_supplyflow-p0"
+$restContainer = "supabase_rest_supplyflow-p0"
 $previewPort = 5204
 $previewProcess = $null
 $previewStdout = $null
@@ -117,9 +118,28 @@ function Wait-LocalStackReady {
   return $environment
 }
 
+function Restart-LocalPostgrest {
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    & docker restart $restContainer | Out-Null
+    $restartExit = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  if ($restartExit -ne 0) {
+    Stop-WithInfrastructureBlock "local_postgrest_restart_failed" "Unable to restart the isolated PostgREST service after database reset."
+  }
+}
+
 function Reset-LocalDatabase {
   & supabase db reset
   Assert-ExitCode "Local Supabase reset"
+  # `supabase db reset` replaces PostgreSQL while keeping PostgREST alive. Recycle the
+  # isolated REST process so its ten-connection pool cannot retain sessions from the old
+  # database; a single sequential readiness request is not enough to exercise that pool.
+  Restart-LocalPostgrest
   $script:localEnvironment = Wait-LocalStackReady
 }
 
