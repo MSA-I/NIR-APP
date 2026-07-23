@@ -232,12 +232,14 @@ body {
 
 .phone-fab {
   inset-inline-end: max(1rem, env(safe-area-inset-left));
-  inset-block-end: max(1rem, env(safe-area-inset-bottom));
+  inset-block-start: max(0.75rem, env(safe-area-inset-top));
+  inset-block-end: auto;
 }
 
 .speed-dial-menu {
   inset-inline-end: 0;
-  inset-block-end: calc(100% + 0.75rem);
+  inset-block-start: calc(100% + 0.75rem);
+  inset-block-end: auto;
   inline-size: max-content;
   max-inline-size: min(18rem, calc(100vw - 2rem));
   max-block-size: calc(100dvh - 5.75rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
@@ -284,8 +286,14 @@ body {
 }
 
 @media (min-width: 48rem) {
-  .phone-fab { inset-inline-end: 2rem; inset-block-end: 2rem; }
   .phone-update-notice { inset-block-end: 1.5rem; }
+}
+
+@media (min-width: 64rem) {
+  .phone-fab {
+    inset-inline-end: max(2rem, env(safe-area-inset-left));
+    inset-block-start: max(0.25rem, env(safe-area-inset-top));
+  }
 }
 
 @media (max-width: 47.999rem) {

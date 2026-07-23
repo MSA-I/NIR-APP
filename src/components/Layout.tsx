@@ -5,7 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
 import { APP_NAME } from '../lib/branding';
 import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
-import Fab from './Fab';
+import Fab, { quickActionsForPath } from './Fab';
 import NotificationBell from './NotificationBell';
 import { useDialogLayer, useToast } from './ui';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
@@ -93,6 +93,7 @@ export default function Layout() {
   const role = profile?.role;
   // Section 5: payer/supplier get no search box — their routes are dead ends for it.
   const canSearch = canGlobalSearch(role);
+  const hasQuickActions = quickActionsForPath(role, location.pathname).length > 0;
   // Unfiled-documents pill (0014): counted only for staff who can act on that queue. The
   // Only procurement staff can act on the gallery queue. A known count > 0 is required,
   // so null (loading) and 0 never fabricate an all-clear or workload.
@@ -227,7 +228,7 @@ export default function Layout() {
           <Menu size={22} />
         </button>
         <div className="flex min-h-11 min-w-0 flex-1 items-center px-2 font-bold" title={orgName}>{orgName}</div>
-        <div className="flex items-center gap-1">
+        <div className={`flex items-center gap-1 ${hasQuickActions ? 'pe-14' : ''}`}>
           <NotificationBell onShell />
           {canSearch && (
             <button className="flex items-center justify-center min-w-11 min-h-11 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
@@ -255,9 +256,12 @@ export default function Layout() {
           <NotificationBell />
         </header>
       )}
+      {/* One quick-actions instance follows the visible header controls in DOM order. Its
+          reserved header slot keeps the trigger out of decision data and operational rows. */}
+      <Fab />
       {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring. */}
       <main id="main" tabIndex={-1}
-        className="phone-safe-main min-w-0 lg:ms-60 py-5 pb-24 focus:outline-none">
+        className="phone-safe-main min-w-0 lg:ms-60 py-5 focus:outline-none">
         {/* max-w column centred (mx-auto) in the space beside the sidebar — otherwise a wide
             viewport strands all content on the start side in RTL, leaving a dead zone on the
             end side. keyed by path so each screen change re-triggers the fade (section 11). */}
@@ -265,10 +269,6 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
-
-      {/* Global document-capture FAB — self-gating (role + focused routes); Layout only
-          wraps authed routes, so it never reaches the public pages. */}
-      <Fab />
     </div>
   );
 }

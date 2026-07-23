@@ -180,22 +180,19 @@ async function assertVisibleFocus(locator, scope) {
 }
 
 async function assertFabDoesNotCoverMain(page, scope) {
-  await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
-  await page.waitForTimeout(50);
-  const overlaps = await page.evaluate(() => {
+  const placement = await page.evaluate(() => {
     const fab = document.querySelector('.speed-dial-trigger')?.getBoundingClientRect();
-    if (!fab) return ['missing FAB'];
-    return [...document.querySelectorAll('#main a[href], #main button, #main input, #main select, #main textarea')]
-      .filter((node) => {
-        if (!node.checkVisibility()) return false;
-        const rect = node.getBoundingClientRect();
-        const style = getComputedStyle(node);
-        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
-          && rect.left < fab.right && rect.right > fab.left && rect.top < fab.bottom && rect.bottom > fab.top;
-      })
-      .map((node) => node.getAttribute('aria-label') || node.textContent?.replace(/\s+/g, ' ').trim() || node.tagName);
+    const header = [...document.querySelectorAll('header')]
+      .find((node) => node.checkVisibility())?.getBoundingClientRect();
+    if (!fab || !header) return { inHeader: false, fab: fab ?? null, header: header ?? null };
+    return {
+      inHeader: fab.left >= header.left && fab.right <= header.right
+        && fab.top >= header.top && fab.bottom <= header.bottom,
+      fab,
+      header,
+    };
   });
-  assert.deepEqual(overlaps, [], `${scope}: FAB covers main action or information target ${JSON.stringify(overlaps)}`);
+  assert(placement.inHeader, `${scope}: quick-actions trigger escaped its reserved header slot ${JSON.stringify(placement)}`);
 }
 
 async function assertKeyContrast(page) {

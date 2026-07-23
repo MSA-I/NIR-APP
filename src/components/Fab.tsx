@@ -3,10 +3,17 @@ import { Link, matchPath, useLocation } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { quickActionsFor } from '../lib/quickActions';
+import type { Role } from '../lib/types';
 import { useQuickCapture } from './QuickCapture';
 
 const FAB_SUPPRESSED_PATHS = ['/orders/new', '/invoices/new', '/receiving/:orderId'] as const;
 const QUICK_ACTIONS_MENU_ID = 'global-quick-actions';
+
+export function quickActionsForPath(role: Role | undefined, pathname: string) {
+  return FAB_SUPPRESSED_PATHS.some((path) => matchPath(path, pathname) != null)
+    ? []
+    : quickActionsFor(role);
+}
 
 export default function Fab() {
   const { profile } = useAuth();
@@ -50,8 +57,8 @@ export default function Fab() {
     };
   }, [open]);
 
-  const actions = quickActionsFor(profile?.role);
-  if (!actions.length || FAB_SUPPRESSED_PATHS.some((path) => matchPath(path, pathname) != null)) return null;
+  const actions = quickActionsForPath(profile?.role, pathname);
+  if (!actions.length) return null;
 
   const itemClass =
     'speed-dial-item flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface ps-4 pe-3 py-2.5 ' +
