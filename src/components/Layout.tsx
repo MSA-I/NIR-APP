@@ -256,12 +256,9 @@ export default function Layout() {
           <NotificationBell />
         </header>
       )}
-      {/* One quick-actions instance follows the visible header controls in DOM order. Its
-          reserved header slot keeps the trigger out of decision data and operational rows. */}
-      <Fab />
       {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring. */}
       <main id="main" tabIndex={-1}
-        className="phone-safe-main min-w-0 lg:ms-60 py-5 focus:outline-none">
+        className="phone-safe-main min-w-0 lg:ms-60 pt-5 focus:outline-none">
         {/* max-w column centred (mx-auto) in the space beside the sidebar — otherwise a wide
             viewport strands all content on the start side in RTL, leaving a dead zone on the
             end side. keyed by path so each screen change re-triggers the fade (section 11). */}
@@ -269,6 +266,10 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
+
+      {/* Role-aware quick actions — direct mobile bar and desktop speed dial. The component
+          self-gates by role and focused route; Layout never wraps public pages. */}
+      <Fab />
     </div>
   );
 }

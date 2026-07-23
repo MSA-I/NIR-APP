@@ -520,7 +520,7 @@ interface Toast { id: number; message: string; tone: 'success' | 'error' }
 const ToastContext = createContext<(message: string, tone?: 'success' | 'error') => void>(() => {});
 export const useToast = () => useContext(ToastContext);
 
-export function ToastProvider({ children }: { children: ReactNode }) {
+export function ToastProvider({ children, bottomNotice }: { children: ReactNode; bottomNotice?: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const push = (message: string, tone: 'success' | 'error' = 'success') => {
     const id = Date.now() + Math.random();
@@ -530,17 +530,22 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={push}>
       {children}
-      <div className="fixed bottom-20 sm:bottom-6 start-1/2 -translate-x-1/2 rtl:translate-x-1/2 z-[60] flex flex-col gap-2 items-center">
-        {toasts.map((t) => (
-          // Each toast is its own live region (audit 2026-07-21): success is polite, an error is
-          // assertive so a screen reader interrupts to surface it. role follows suit (status/alert).
-          <div key={t.id}
-            role={t.tone === 'error' ? 'alert' : 'status'}
-            aria-live={t.tone === 'error' ? 'assertive' : 'polite'}
-            className={`rounded-lg px-4 py-2.5 text-sm text-white shadow-lg ${t.tone === 'success' ? 'bg-ink-body' : 'bg-alert-solid'}`}>
-            {t.message}
+      <div className="mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 pointer-events-none no-print sm:start-6 sm:end-6">
+        {toasts.length > 0 && (
+          <div className="mobile-toast-offset flex flex-col gap-2 items-center pointer-events-auto">
+            {toasts.map((t) => (
+              // Each toast is its own live region (audit 2026-07-21): success is polite, an error is
+              // assertive so a screen reader interrupts to surface it. role follows suit (status/alert).
+              <div key={t.id}
+                role={t.tone === 'error' ? 'alert' : 'status'}
+                aria-live={t.tone === 'error' ? 'assertive' : 'polite'}
+                className={`rounded-lg px-4 py-2.5 text-sm text-white shadow-lg ${t.tone === 'success' ? 'bg-ink-body' : 'bg-alert-solid'}`}>
+                {t.message}
+              </div>
+            ))}
           </div>
-        ))}
+        )}
+        {bottomNotice}
       </div>
     </ToastContext.Provider>
   );

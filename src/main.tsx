@@ -34,7 +34,7 @@ function ServiceWorkerUpdateNotice() {
   }, []);
   if (!ready) return null;
   return (
-    <div role="status" className="phone-update-notice note-info fixed z-[60] start-4 end-4 sm:start-auto sm:end-6 sm:max-w-md no-print">
+    <div role="status" className="phone-update-notice note-info pointer-events-auto">
       <div className="min-w-0 flex-1">
         <div className="font-medium">גרסה חדשה מוכנה</div>
         <div className="mt-0.5 text-xs">שמור עבודה פתוחה ורענן בזמן שנוח לך.</div>
@@ -48,9 +48,8 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <ToastProvider>
+        <ToastProvider bottomNotice={<ServiceWorkerUpdateNotice />}>
           <App />
-          <ServiceWorkerUpdateNotice />
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>

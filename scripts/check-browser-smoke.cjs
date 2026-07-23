@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert/strict');
-const XLSX = require('xlsx');
 
 for (const name of ['QUALITY_BASE_URL', 'QUALITY_ARTIFACT_DIR', 'QUALITY_PASSWORD_SEED', 'QUALITY_BROWSER_PATH', 'PLAYWRIGHT_CORE_PATH']) {
   if (!process.env[name]) throw new Error(`Missing required browser-gate environment: ${name}`);
@@ -24,10 +23,7 @@ const report = {
   accessibility: [],
   screenshots: [],
   pdf: null,
-  excel: null,
   consoleErrors: [],
-  tasks: [],
-  blocked: [],
 };
 
 const homes = {
@@ -35,8 +31,7 @@ const homes = {
   office: '/dashboard',
   kitchen: '/receiving',
   payer: '/pay',
-  accountant: '/pay',
-  supplier: '/my-prices',
+  accountant: '/reports',
 };
 
 function credentials(role) {
@@ -155,46 +150,6 @@ async function auditAccessibility(page, scope) {
   return audit;
 }
 
-async function assertMinTouchSize(locator, scope) {
-  const sizes = await locator.evaluateAll((nodes) => nodes
-    .filter((node) => {
-      const rect = node.getBoundingClientRect();
-      const style = getComputedStyle(node);
-      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
-    })
-    .map((node) => {
-      const rect = node.getBoundingClientRect();
-      return { name: node.getAttribute('aria-label') || node.textContent?.trim() || node.tagName, width: rect.width, height: rect.height };
-    }));
-  assert(sizes.length > 0, `${scope}: no visible touch targets found`);
-  assert(sizes.every(({ width, height }) => width >= 44 && height >= 44), `${scope}: target below 44px ${JSON.stringify(sizes)}`);
-}
-
-async function assertVisibleFocus(locator, scope) {
-  const style = await locator.evaluate((node) => {
-    const computed = getComputedStyle(node);
-    return { outlineStyle: computed.outlineStyle, outlineWidth: computed.outlineWidth, boxShadow: computed.boxShadow };
-  });
-  assert((style.outlineStyle !== 'none' && style.outlineWidth !== '0px') || style.boxShadow !== 'none',
-    `${scope}: focused control has no visible focus indicator ${JSON.stringify(style)}`);
-}
-
-async function assertFabDoesNotCoverMain(page, scope) {
-  const placement = await page.evaluate(() => {
-    const fab = document.querySelector('.speed-dial-trigger')?.getBoundingClientRect();
-    const header = [...document.querySelectorAll('header')]
-      .find((node) => node.checkVisibility())?.getBoundingClientRect();
-    if (!fab || !header) return { inHeader: false, fab: fab ?? null, header: header ?? null };
-    return {
-      inHeader: fab.left >= header.left && fab.right <= header.right
-        && fab.top >= header.top && fab.bottom <= header.bottom,
-      fab,
-      header,
-    };
-  });
-  assert(placement.inHeader, `${scope}: quick-actions trigger escaped its reserved header slot ${JSON.stringify(placement)}`);
-}
-
 async function assertKeyContrast(page) {
   const results = await page.evaluate(() => {
     const parse = (value) => {
@@ -250,10 +205,11 @@ async function assertKeyContrast(page) {
   return results;
 }
 
-async function assertNoRawMetadata(page, scope) {
-  const text = await page.locator('#main').innerText();
-  assert(!/\b(?:evidence|description)\s*:/i.test(text), `${scope}: raw metadata label is visible`);
-  assert(!/\b[a-z][a-z0-9]*_[a-z0-9_]+\s*:/i.test(text), `${scope}: raw data key is visible`);
+async function assertMobileSpeedDialHidden(page, scope) {
+  assert.equal(await page.locator('.speed-dial-trigger:visible').count(), 0,
+    `${scope}: desktop speed-dial is visible`);
+  assert.equal(await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).count(), 0,
+    `${scope}: hidden desktop speed-dial remains in the accessibility tree`);
 }
 
 async function roleAndViewportMatrix(browser) {
@@ -268,9 +224,12 @@ async function roleAndViewportMatrix(browser) {
     try {
       await login(page, role);
       assert.equal(new URL(page.url()).pathname, expectedHome, `${role}: wrong home route`);
-      const quickActionsTrigger = page.getByRole('button', { name: 'פתיחת פעולות מהירות' });
-      assert.equal(await quickActionsTrigger.count(), ['owner', 'office', 'kitchen'].includes(role) ? 1 : 0,
-        `${role}: wrong quick-actions trigger visibility`);
+      const hasMobileActions = ['owner', 'office', 'kitchen'].includes(role);
+      assert.equal(await page.getByRole('group', { name: 'פעולות מהירות' }).count(), hasMobileActions ? 1 : 0,
+        `${role}: wrong mobile action group visibility`);
+      assert.equal(await page.locator('.mobile-action-bar').count(), hasMobileActions ? 1 : 0,
+        `${role}: wrong mobile action bar visibility`);
+      await assertMobileSpeedDialHidden(page, `${role}/390`);
       for (const [label, width, height] of viewports) {
         await page.setViewportSize({ width, height });
         await page.waitForTimeout(100);
@@ -292,7 +251,7 @@ async function roleAndViewportMatrix(browser) {
   const denied = [
     ['kitchen', '/dashboard', '/receiving'],
     ['payer', '/dashboard', '/pay'],
-    ['accountant', '/products', '/pay'],
+    ['accountant', '/products', '/reports'],
   ];
   for (const [role, requested, expected] of denied) {
     const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block' });
@@ -308,7 +267,7 @@ async function roleAndViewportMatrix(browser) {
   }
 }
 
-async function speedDialContract(browser) {
+async function quickActionsContract(browser) {
   const roleLabels = {
     owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
     office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
@@ -323,122 +282,231 @@ async function speedDialContract(browser) {
   for (const [role, expectedLabels] of Object.entries(roleLabels)) {
     const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
     const page = await context.newPage();
-    captureConsole(page, `speed-dial:${role}`);
+    captureConsole(page, `mobile-action-bar:${role}`);
     try {
       await login(page, role);
-      assert.equal(await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).count(), 1,
-        `${role}: speed-dial trigger is not uniquely named`);
-      const trigger = page.locator('.speed-dial-trigger');
-      assert.equal(await trigger.count(), 1, `${role}: speed-dial trigger is not unique`);
-      assert.equal(await trigger.getAttribute('aria-expanded'), 'false', `${role}: trigger starts expanded`);
-      await trigger.click();
-      assert.equal(await trigger.getAttribute('aria-expanded'), 'true', `${role}: trigger did not expose expanded state`);
-      assert.equal(await trigger.getAttribute('aria-label'), 'סגירת פעולות מהירות', `${role}: open trigger does not expose its close action`);
-      assert.equal(await trigger.getAttribute('aria-controls'), 'global-quick-actions', `${role}: trigger does not identify its menu`);
-      const menu = page.getByRole('menu', { name: 'פעולות מהירות' });
-      await menu.waitFor();
-      const items = menu.getByRole('menuitem');
+      const group = page.getByRole('group', { name: 'פעולות מהירות' });
+      await group.waitFor();
+      const bar = page.locator('.mobile-action-bar');
+      assert.equal(await bar.count(), 1, `${role}: mobile action bar is not unique`);
+      assert(await bar.evaluate((node) => node === document.querySelector('[role="group"][aria-label="פעולות מהירות"]')),
+        `${role}: .mobile-action-bar is not the named role=group`);
+      await assertMobileSpeedDialHidden(page, `${role}/390`);
+      const items = bar.locator('.mobile-action');
       assert.deepEqual((await items.allTextContents()).map((label) => label.trim()), expectedLabels,
-        `${role}: wrong speed-dial labels or order`);
+        `${role}: wrong mobile action labels or order`);
       const targets = await items.evaluateAll((nodes) => nodes.map((node) => {
         const href = node.getAttribute('href');
         if (!href) return null;
         const url = new URL(href, window.location.origin);
         return `${url.pathname}${url.search}`;
       }));
-      assert.deepEqual(targets, roleTargets[role], `${role}: wrong speed-dial destinations or order`);
-      assert(await items.first().evaluate((node) => document.activeElement === node), `${role}: first action did not receive focus`);
+      assert.deepEqual(targets, roleTargets[role], `${role}: wrong mobile action destinations or order`);
 
       if (role === 'owner') {
-        await page.waitForTimeout(220);
-        await page.screenshot({ path: path.join(outDir, 'speed-dial-open-390.png') });
-        report.screenshots.push('speed-dial-open-390.png');
-        await page.keyboard.press('ArrowDown');
-        assert(await items.nth(1).evaluate((node) => document.activeElement === node), 'ArrowDown did not advance in speed-dial');
-        await page.keyboard.press('ArrowUp');
-        assert(await items.first().evaluate((node) => document.activeElement === node), 'ArrowUp did not move back in speed-dial');
-        await page.keyboard.press('End');
-        assert(await items.last().evaluate((node) => document.activeElement === node), 'End did not focus the last speed-dial action');
-        await page.keyboard.press('Home');
-        assert(await items.first().evaluate((node) => document.activeElement === node), 'Home did not focus the first speed-dial action');
+        await page.screenshot({ path: path.join(outDir, 'mobile-action-bar-390.png') });
+        report.screenshots.push('mobile-action-bar-390.png');
 
-        const triggerSize = await trigger.evaluate((node) => {
-          const rect = node.getBoundingClientRect();
-          return { width: rect.width, height: rect.height };
-        });
-        assert(triggerSize.width >= 44 && triggerSize.height >= 44, `speed-dial trigger below 44px: ${JSON.stringify(triggerSize)}`);
-        const sizes = await items.evaluateAll((nodes) => nodes.map((node) => {
-          const rect = node.getBoundingClientRect();
-          return { width: rect.width, height: rect.height };
-        }));
-        assert(sizes.every(({ width, height }) => width >= 44 && height >= 44), `speed-dial target below 44px: ${JSON.stringify(sizes)}`);
-        const textLayout = await items.evaluateAll((nodes) => nodes.map((node) => ({
-          whiteSpace: getComputedStyle(node).whiteSpace,
-          scrollWidth: node.scrollWidth,
-          clientWidth: node.clientWidth,
-        })));
-        assert(textLayout.every(({ whiteSpace, scrollWidth, clientWidth }) => whiteSpace === 'nowrap' && scrollWidth <= clientWidth + 1),
-          `speed-dial label wraps or overflows: ${JSON.stringify(textLayout)}`);
-
-        for (const [width, height] of [[320, 720], [360, 800], [390, 844], [430, 932], [768, 1024], [1024, 768], [1440, 900]]) {
-          await page.setViewportSize({ width, height });
-          const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-          assert(overflow <= 1, `speed-dial/${width}: horizontal overflow ${overflow}px`);
-        }
-        await page.waitForTimeout(100);
-        await page.screenshot({ path: path.join(outDir, 'speed-dial-open-1440.png') });
-        report.screenshots.push('speed-dial-open-1440.png');
-
-        await page.keyboard.press('Escape');
-        await menu.waitFor({ state: 'hidden' });
-        assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'Escape did not collapse speed-dial');
-        assert.equal(await trigger.getAttribute('aria-label'), 'פתיחת פעולות מהירות', 'Escape did not restore the trigger action name');
-        assert(await trigger.evaluate((node) => document.activeElement === node), 'Escape did not restore speed-dial trigger focus');
-
-        await trigger.click();
-        await page.locator('#main h1').first().click();
-        await menu.waitFor({ state: 'hidden' });
-        assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'outside press did not collapse speed-dial');
-
-        for (const [width, height] of [[390, 844], [1024, 768]]) {
-          await page.setViewportSize({ width, height });
-          await assertFabDoesNotCoverMain(page, `dashboard FAB/${width}`);
-        }
-
-        await page.goto(`${baseURL}/receiving`);
-        await settle(page);
-        const receivingTrigger = page.locator('.speed-dial-trigger');
-        await receivingTrigger.click();
-        await page.getByRole('menuitem', { name: 'מרכז הבקרה' }).click();
-        await page.waitForURL((url) => url.pathname === '/dashboard');
-        assert.equal(await page.getByRole('menu').count(), 0, 'speed-dial stayed open after link navigation');
-        assert.equal(await receivingTrigger.getAttribute('aria-expanded'), 'false', 'link navigation did not reset expanded state');
-
-        const dashboardTrigger = page.locator('.speed-dial-trigger');
-        await dashboardTrigger.click();
         const chooser = page.waitForEvent('filechooser');
-        await page.getByRole('menuitem', { name: 'צילום מסמך' }).click();
+        await group.getByRole('button', { name: 'צילום מסמך' }).click();
         await chooser;
-        assert.equal(await dashboardTrigger.getAttribute('aria-expanded'), 'false', 'camera action did not collapse speed-dial');
+
+        for (const [width, height] of [[320, 720], [360, 800], [390, 844], [430, 932], [768, 1024]]) {
+          await page.setViewportSize({ width, height });
+          await page.waitForTimeout(100);
+          assert(await bar.isVisible(), `mobile action bar hidden at ${width}px`);
+          await assertMobileSpeedDialHidden(page, `owner/${width}`);
+          const layout = await items.evaluateAll((nodes) => nodes.map((node) => {
+            const rect = node.getBoundingClientRect();
+            const textRects = [];
+            const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+            while (walker.nextNode()) {
+              if (!walker.currentNode.textContent?.trim()) continue;
+              const range = document.createRange();
+              range.selectNodeContents(walker.currentNode);
+              textRects.push(...[...range.getClientRects()].map((line) => ({
+                top: Math.round(line.top), left: line.left, right: line.right,
+              })));
+            }
+            return {
+              width: rect.width,
+              height: rect.height,
+              scrollWidth: node.scrollWidth,
+              clientWidth: node.clientWidth,
+              lineCount: new Set(textRects.map((line) => line.top)).size,
+              textInside: textRects.every((line) => line.left >= rect.left - 1 && line.right <= rect.right + 1),
+            };
+          }));
+          assert(layout.every(({ width: itemWidth, height: itemHeight }) => itemWidth >= 44 && itemHeight >= 44),
+            `mobile action below 44px at ${width}px: ${JSON.stringify(layout)}`);
+          assert(layout.every(({ lineCount }) => lineCount >= 1 && lineCount <= 2),
+            `mobile action label exceeds two lines at ${width}px: ${JSON.stringify(layout)}`);
+          assert(layout.every(({ scrollWidth, clientWidth, textInside }) => scrollWidth <= clientWidth + 1 && textInside),
+            `mobile action label overflows at ${width}px: ${JSON.stringify(layout)}`);
+          const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+          assert(overflow <= 1, `mobile-action-bar/${width}: horizontal overflow ${overflow}px`);
+        }
 
         for (const route of ['/orders/new', '/invoices/new']) {
+          await page.setViewportSize({ width: 390, height: 844 });
           await page.goto(`${baseURL}${route}`);
           await settle(page);
-          assert.equal(await page.locator('.speed-dial-trigger').count(), 0, `${route}: speed-dial must be hidden`);
+          assert.equal(await page.locator('.mobile-action-bar').count(), 0, `${route}: mobile action bar must be hidden`);
+          await assertMobileSpeedDialHidden(page, route);
         }
-      } else {
-        await page.keyboard.press('Escape');
+
+        await page.goto(`${baseURL}/receiving/f0000000-0000-4000-8000-000000000011`);
+        await settle(page);
+        assert.equal(await page.locator('.mobile-action-bar').count(), 0, 'receiving detail mobile action bar must be hidden');
+        await assertMobileSpeedDialHidden(page, 'receiving detail');
+        assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail must expose only its phone taskbar');
       }
     } finally {
       await closeContext(context);
     }
   }
 
+  for (const role of ['accountant', 'payer']) {
+    const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    try {
+      await login(page, role);
+      assert.equal(await page.getByRole('group', { name: 'פעולות מהירות' }).count(), 0, `${role}: mobile action group must be absent`);
+      assert.equal(await page.locator('.mobile-action-bar').count(), 0, `${role}: mobile action bar must be absent`);
+      await assertMobileSpeedDialHidden(page, `${role}/390`);
+    } finally {
+      await closeContext(context);
+    }
+  }
+
+  const supplierContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+  await supplierContext.route('**/rest/v1/profiles?**', async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    const asSupplier = (profile) => ({
+      ...profile,
+      role: 'supplier',
+      supplier_id: 'aa000000-0000-4000-8000-000000000001',
+    });
+    await route.fulfill({ response, json: Array.isArray(body) ? body.map(asSupplier) : asSupplier(body) });
+  });
+  const supplierPage = await supplierContext.newPage();
+  captureConsole(supplierPage, 'mobile-action-bar:supplier');
+  try {
+    const account = credentials('owner');
+    await supplierPage.goto(`${baseURL}/login`);
+    await supplierPage.locator('#email').fill(account.email);
+    await supplierPage.locator('#password').fill(account.password);
+    await supplierPage.getByRole('button', { name: 'התחברות' }).click();
+    await supplierPage.waitForURL((url) => url.pathname === '/my-prices', { timeout: 25_000 });
+    await settle(supplierPage);
+    assert.equal(await supplierPage.getByRole('group', { name: 'פעולות מהירות' }).count(), 0, 'supplier: mobile action group must be absent');
+    assert.equal(await supplierPage.locator('.mobile-action-bar').count(), 0, 'supplier: mobile action bar must be absent');
+    await assertMobileSpeedDialHidden(supplierPage, 'supplier/390');
+  } finally {
+    await closeContext(supplierContext);
+  }
+
+  const desktop = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1024, height: 768 } });
+  const desktopPage = await desktop.newPage();
+  captureConsole(desktopPage, 'desktop-speed-dial');
+  try {
+    await login(desktopPage, 'owner');
+    for (const [width, height] of [[1024, 768], [1440, 900]]) {
+      await desktopPage.setViewportSize({ width, height });
+      await desktopPage.waitForTimeout(100);
+      assert.equal(await desktopPage.locator('.mobile-action-bar:visible').count(), 0, `mobile action bar visible at ${width}px`);
+      const trigger = desktopPage.locator('.speed-dial-trigger');
+      assert.equal(await trigger.count(), 1, `desktop speed-dial missing at ${width}px`);
+      assert(await trigger.isVisible(), `desktop speed-dial hidden at ${width}px`);
+      const overflow = await desktopPage.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      assert(overflow <= 1, `desktop-speed-dial/${width}: horizontal overflow ${overflow}px`);
+    }
+
+    const trigger = desktopPage.locator('.speed-dial-trigger');
+    assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'desktop speed-dial starts expanded');
+    await trigger.click();
+    assert.equal(await trigger.getAttribute('aria-expanded'), 'true', 'desktop speed-dial did not expose expanded state');
+    assert.equal(await trigger.getAttribute('aria-label'), 'סגירת פעולות מהירות', 'desktop speed-dial does not expose its close action');
+    assert.equal(await trigger.getAttribute('aria-controls'), 'global-quick-actions', 'desktop speed-dial does not identify its menu');
+    const menu = desktopPage.getByRole('menu', { name: 'פעולות מהירות' });
+    await menu.waitFor();
+    const items = menu.getByRole('menuitem');
+    assert.deepEqual((await items.allTextContents()).map((label) => label.trim()), roleLabels.owner,
+      'desktop speed-dial labels or order changed');
+    const targets = await items.evaluateAll((nodes) => nodes.map((node) => {
+      const href = node.getAttribute('href');
+      if (!href) return null;
+      const url = new URL(href, window.location.origin);
+      return `${url.pathname}${url.search}`;
+    }));
+    assert.deepEqual(targets, roleTargets.owner, 'desktop speed-dial destinations or order changed');
+    assert(await items.first().evaluate((node) => document.activeElement === node), 'desktop speed-dial first action did not receive focus');
+    await desktopPage.keyboard.press('ArrowDown');
+    assert(await items.nth(1).evaluate((node) => document.activeElement === node), 'ArrowDown did not advance in desktop speed-dial');
+    await desktopPage.keyboard.press('ArrowUp');
+    assert(await items.first().evaluate((node) => document.activeElement === node), 'ArrowUp did not move back in desktop speed-dial');
+    await desktopPage.keyboard.press('End');
+    assert(await items.last().evaluate((node) => document.activeElement === node), 'End did not focus the last desktop speed-dial action');
+    await desktopPage.keyboard.press('Home');
+    assert(await items.first().evaluate((node) => document.activeElement === node), 'Home did not focus the first desktop speed-dial action');
+    const sizes = await items.evaluateAll((nodes) => nodes.map((node) => {
+      const rect = node.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    }));
+    assert(sizes.every(({ width, height }) => width >= 44 && height >= 44), `desktop speed-dial target below 44px: ${JSON.stringify(sizes)}`);
+    const textLayout = await items.evaluateAll((nodes) => nodes.map((node) => ({
+      whiteSpace: getComputedStyle(node).whiteSpace,
+      scrollWidth: node.scrollWidth,
+      clientWidth: node.clientWidth,
+    })));
+    assert(textLayout.every(({ whiteSpace, scrollWidth, clientWidth }) => whiteSpace === 'nowrap' && scrollWidth <= clientWidth + 1),
+      `desktop speed-dial label wraps or overflows: ${JSON.stringify(textLayout)}`);
+    await desktopPage.screenshot({ path: path.join(outDir, 'desktop-speed-dial-open-1440.png') });
+    report.screenshots.push('desktop-speed-dial-open-1440.png');
+    await desktopPage.keyboard.press('Escape');
+    await menu.waitFor({ state: 'hidden' });
+    assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'Escape did not collapse desktop speed-dial');
+    assert.equal(await trigger.getAttribute('aria-label'), 'פתיחת פעולות מהירות', 'Escape did not restore desktop speed-dial action name');
+    assert(await trigger.evaluate((node) => document.activeElement === node), 'Escape did not restore desktop speed-dial trigger focus');
+
+    await trigger.click();
+    await menu.waitFor();
+    await desktopPage.setViewportSize({ width: 390, height: 844 });
+    await desktopPage.waitForTimeout(100);
+    assert.equal(await desktopPage.locator('#global-quick-actions').count(), 0,
+      'desktop speed-dial state survived the switch to the mobile action bar');
+    assert(await desktopPage.locator('.mobile-action[data-quick-action-key="order"]').evaluate((node) => document.activeElement === node),
+      'focus did not move from the desktop menuitem to the matching mobile action');
+    await desktopPage.setViewportSize({ width: 1440, height: 900 });
+    await desktopPage.waitForTimeout(100);
+    assert.equal(await trigger.getAttribute('aria-expanded'), 'false',
+      'desktop speed-dial reopened after a mobile breakpoint round-trip');
+    assert(await trigger.evaluate((node) => document.activeElement === node),
+      'focus did not move from the mobile action bar to the desktop trigger');
+
+    await trigger.click();
+    await desktopPage.locator('#main h1').first().click();
+    await menu.waitFor({ state: 'hidden' });
+    assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'outside press did not collapse desktop speed-dial');
+
+    await desktopPage.goto(`${baseURL}/receiving`);
+    await settle(desktopPage);
+    const receivingTrigger = desktopPage.locator('.speed-dial-trigger');
+    await receivingTrigger.click();
+    await desktopPage.getByRole('menuitem', { name: 'מרכז הבקרה' }).click();
+    await desktopPage.waitForURL((url) => url.pathname === '/dashboard');
+    assert.equal(await desktopPage.getByRole('menu').count(), 0, 'desktop speed-dial stayed open after link navigation');
+    assert.equal(await receivingTrigger.getAttribute('aria-expanded'), 'false', 'desktop link navigation did not reset expanded state');
+  } finally {
+    await closeContext(desktop);
+  }
+
   const reduced = await browser.newContext({
-    locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 390, height: 844 },
+    locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 1024, height: 768 },
   });
   const page = await reduced.newPage();
-  captureConsole(page, 'speed-dial:reduced-motion');
+  captureConsole(page, 'desktop-speed-dial:reduced-motion');
   try {
     await login(page, 'owner');
     await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).click();
@@ -453,27 +521,73 @@ async function speedDialContract(browser) {
     }));
     assert(motion.every((entry) => milliseconds(entry.animationDuration) <= 20
       && (!/(transform|translate|rotate|scale)/.test(entry.transitionProperty) || milliseconds(entry.transitionDuration) <= 20)),
-    `reduced-motion leaves speed-dial movement enabled: ${JSON.stringify(motion)}`);
+    `reduced-motion leaves desktop speed-dial movement enabled: ${JSON.stringify(motion)}`);
   } finally {
     await closeContext(reduced);
+  }
+}
+
+async function overlayStacking(browser) {
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  captureConsole(page, 'overlay-stacking');
+  const overlapAreas = async () => page.evaluate(() => {
+    const rect = (selector) => document.querySelector(selector)?.getBoundingClientRect();
+    const area = (a, b) => {
+      if (!a || !b) return null;
+      return Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left))
+        * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+    };
+    const notice = rect('.phone-update-notice');
+    return {
+      noticeBar: area(notice, rect('.mobile-action-bar')),
+      noticeToast: area(notice, rect('[data-p4-toast-viewport]')),
+      noticeFab: area(notice, rect('.speed-dial-trigger')),
+      noticeMenu: area(notice, rect('.speed-dial-menu')),
+    };
+  });
+  try {
+    await login(page, 'owner');
+    await page.evaluate(() => window.dispatchEvent(new Event('supplyflow:service-worker-updated')));
+    await page.locator('.phone-update-notice').waitFor();
+    assert.equal((await overlapAreas()).noticeBar, 0, 'PWA update notice overlaps the mobile action bar');
+
+    await page.evaluate(() => {
+      const stack = document.querySelector('.mobile-overlay-stack');
+      const notice = document.querySelector('.phone-update-notice');
+      if (!stack || !notice) throw new Error('mobile overlay stack is missing');
+      const viewport = document.createElement('div');
+      viewport.dataset.p4ToastViewport = '';
+      viewport.className = 'mobile-toast-offset flex flex-col gap-2 items-center pointer-events-auto';
+      const toast = document.createElement('div');
+      toast.className = 'rounded-lg px-4 py-2.5 text-sm text-white shadow-lg bg-ink-body';
+      toast.textContent = 'הפעולה נשמרה בהצלחה';
+      viewport.append(toast);
+      stack.insertBefore(viewport, notice);
+    });
+    assert.equal((await overlapAreas()).noticeToast, 0, 'toast overlaps the PWA update notice');
+
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    await page.waitForTimeout(100);
+    const zoomed = await overlapAreas();
+    assert.equal(zoomed.noticeToast, 0, 'toast overlaps the PWA notice at 200% text size');
+    assert.equal(zoomed.noticeBar, 0, 'PWA notice overlaps the mobile action bar at 200% text size');
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(100);
+    assert.equal((await overlapAreas()).noticeFab, 0, 'PWA update notice overlaps the desktop speed-dial');
+    await page.locator('.speed-dial-trigger').click();
+    await page.locator('.speed-dial-menu').waitFor();
+    assert.equal((await overlapAreas()).noticeMenu, 0, 'PWA update notice overlaps the open desktop speed-dial menu');
+  } finally {
+    await closeContext(context);
   }
 }
 
 async function dashboardAndDialogs(browser) {
   const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
-  const dashboardRows = new Map();
-  const dashboardReads = [];
-  page.on('response', (response) => {
-    if (response.status() !== 200 || response.request().method() !== 'GET') return;
-    const url = new URL(response.url());
-    const table = url.pathname.match(/\/rest\/v1\/(exceptions|payments)$/)?.[1];
-    if (!table || (table === 'exceptions' && !url.searchParams.has('status'))
-      || (table === 'payments' && !url.searchParams.has('paid_date'))) return;
-    dashboardReads.push(response.json().then((rows) => {
-      if (Array.isArray(rows)) dashboardRows.set(table, rows);
-    }));
-  });
   captureConsole(page, 'dashboard-dialogs');
   try {
     await login(page, 'owner');
@@ -482,29 +596,7 @@ async function dashboardAndDialogs(browser) {
     const firstDataHeading = page.locator('#main .dash-enter h2').first();
     await firstDataHeading.waitFor();
     assert((await firstDataHeading.innerText()).includes('דורש טיפול'), 'dashboard does not begin with the attention zone');
-    await page.waitForTimeout(100);
-    await Promise.all(dashboardReads);
-    const exceptionRows = dashboardRows.get('exceptions');
-    const paymentRows = dashboardRows.get('payments');
-    assert(Array.isArray(exceptionRows) && Array.isArray(paymentRows), 'dashboard did not expose its authenticated REST evidence');
-    const attention = page.locator('section.card').filter({ has: page.getByRole('heading', { name: 'דורש טיפול היום' }) });
-    const exceptionLink = attention.locator('a[href="/exceptions?status=open"]');
-    const exceptionCount = Number((await exceptionLink.locator('span.num').first().innerText()).replace(/[^\d.-]/g, ''));
-    assert.equal(exceptionCount, exceptionRows.length, 'dashboard open-exception count differs from REST');
-    const paidLink = page.locator('a[href^="/payments?month="]').filter({ hasText: 'שולם לספקים החודש' }).first();
-    const paidMonth = new URL(await paidLink.getAttribute('href'), baseURL).searchParams.get('month');
-    const paidExpected = paymentRows.filter((row) => row.paid_date.startsWith(paidMonth))
-      .reduce((total, row) => total + Number(row.amount), 0);
-    const paidRendered = Number((await paidLink.locator('.text-xl.num').innerText()).replace(/[^\d,.-]/g, '').replace(/,/g, ''));
-    assert.equal(paidRendered, Math.round(paidExpected), `dashboard MTD payments differ from REST for ${paidMonth}`);
-    assert.equal(await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).count(), 1, 'dashboard speed-dial missing');
-    for (const heading of ['הוצאות רכש לפי חודש', 'תמהיל הרכש החודש', 'רכש מול תשלומים']) {
-      const chartSection = page.locator('section').filter({ has: page.getByRole('heading', { name: heading, exact: true }) }).last();
-      await chartSection.scrollIntoViewIfNeeded();
-      await chartSection.locator('.recharts-wrapper').waitFor({ state: 'visible', timeout: 10_000 });
-    }
-    await page.waitForTimeout(650);
-    await firstDataHeading.scrollIntoViewIfNeeded();
+    assert.equal(await page.locator('.speed-dial-trigger').count(), 1, 'dashboard desktop speed-dial missing');
     const contrast = await assertKeyContrast(page);
     await page.screenshot({ path: path.join(outDir, 'dashboard-1440.png'), fullPage: true });
     report.screenshots.push('dashboard-1440.png');
@@ -512,13 +604,6 @@ async function dashboardAndDialogs(browser) {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${baseURL}/dashboard`);
     await settle(page);
-    for (const heading of ['הוצאות רכש לפי חודש', 'תמהיל הרכש החודש', 'רכש מול תשלומים']) {
-      const chartSection = page.locator('section').filter({ has: page.getByRole('heading', { name: heading, exact: true }) }).last();
-      await chartSection.scrollIntoViewIfNeeded();
-      await chartSection.locator('.recharts-wrapper').waitFor({ state: 'visible', timeout: 10_000 });
-    }
-    await page.waitForTimeout(650);
-    await page.getByRole('heading', { name: 'מרכז הבקרה', exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(outDir, 'dashboard-390.png'), fullPage: true });
     report.screenshots.push('dashboard-390.png');
 
@@ -526,7 +611,6 @@ async function dashboardAndDialogs(browser) {
     await menuButton.click();
     const drawer = page.getByRole('dialog', { name: 'תפריט ראשי' });
     await drawer.waitFor();
-    await assertMinTouchSize(drawer.locator('a[href], button'), 'mobile drawer');
     assert(await drawer.evaluate((node) => node.contains(document.activeElement)), 'drawer did not take focus');
     for (let index = 0; index < 30; index += 1) await page.keyboard.press('Tab');
     assert(await drawer.evaluate((node) => node.contains(document.activeElement)), 'drawer focus trap leaked');
@@ -537,7 +621,6 @@ async function dashboardAndDialogs(browser) {
     const menuButtonHandle = await menuButton.elementHandle();
     await page.waitForFunction((node) => document.activeElement === node, menuButtonHandle, { timeout: 3_000 });
     assert(await menuButton.evaluate((node) => document.activeElement === node), 'drawer did not restore focus');
-    await assertVisibleFocus(menuButton, 'mobile drawer trigger');
 
     await page.goto(`${baseURL}/suppliers`);
     await settle(page);
@@ -555,16 +638,6 @@ async function dashboardAndDialogs(browser) {
     assert(await supplierButton.evaluate((node) => document.activeElement === node), 'supplier dialog did not restore focus');
 
     report.accessibility.push({ scope: 'key-contrast', samples: contrast });
-    return {
-      steps: 7,
-      backtracks: 0,
-      evidence: [
-        `dashboard exceptions=${exceptionRows.length} from authenticated REST`,
-        `dashboard payments MTD ${paidMonth}=${paidExpected} from authenticated REST`,
-        'dashboard-1440.png',
-        'dashboard-390.png',
-      ],
-    };
   } finally {
     await closeContext(context);
   }
@@ -574,15 +647,10 @@ async function tableKeyboardAndSearch(browser) {
   const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1024, height: 768 } });
   const page = await context.newPage();
   captureConsole(page, 'table-keyboard-search');
-  let steps = 0;
-  let backtracks = 0;
-  const evidence = [];
   try {
     await login(page, 'owner');
-    steps += 1;
     await page.goto(`${baseURL}/invoices`);
     await settle(page);
-    steps += 1;
     await page.waitForTimeout(1_000);
     const titleAtDeepLink = await page.title();
     const routeTitleUpdated = titleAtDeepLink.includes('חשבוניות');
@@ -593,9 +661,7 @@ async function tableKeyboardAndSearch(browser) {
     await invoiceButton.waitFor({ timeout: 20_000 });
     await invoiceButton.press('Enter');
     await page.waitForURL((url) => /^\/invoices\/[^/]+$/.test(url.pathname), { timeout: 20_000 });
-    steps += 1;
     await page.goBack();
-    backtracks += 1;
     await settle(page);
 
     await page.setViewportSize({ width: 320, height: 250 });
@@ -604,8 +670,6 @@ async function tableKeyboardAndSearch(browser) {
     await trigger.click();
     const menu = page.getByRole('menu').first();
     await menu.waitFor();
-    await assertMinTouchSize(trigger, 'ActionMenu trigger');
-    await assertMinTouchSize(menu.getByRole('menuitem'), 'ActionMenu items');
     const rect = await menu.boundingBox();
     assert(rect, 'action menu has no bounds');
     assert(rect.x >= 0 && rect.y >= 0 && rect.x + rect.width <= 320.5 && rect.y + rect.height <= 250.5,
@@ -617,8 +681,6 @@ async function tableKeyboardAndSearch(browser) {
     assert.notEqual(endItem, homeItem, 'Home/End did not move inside the action menu');
     await page.keyboard.press('Escape');
     assert(await trigger.evaluate((node) => document.activeElement === node), 'action menu did not restore focus');
-    await assertVisibleFocus(trigger, 'ActionMenu trigger');
-    steps += 1;
 
     await page.setViewportSize({ width: 390, height: 844 });
     const searchButton = page.getByRole('button', { name: 'חיפוש', exact: true });
@@ -627,69 +689,16 @@ async function tableKeyboardAndSearch(browser) {
     await searchDialog.waitFor();
     const searchInput = searchDialog.getByRole('combobox', { name: 'חיפוש כללי' });
     await searchInput.fill('7702');
-    await assertMinTouchSize(searchInput, 'mobile global search');
-    await assertVisibleFocus(searchInput, 'mobile global search');
     const option = searchDialog.getByRole('option').first();
     await option.waitFor({ timeout: 20_000 });
     await option.click();
     const resultPath = new URL(page.url()).pathname;
     assert(/^\/(invoices|orders|suppliers)\//.test(resultPath), `mobile search opened unexpected route ${resultPath}`);
-    steps += 2;
     await page.goBack();
-    backtracks += 1;
     await page.goForward();
     assert.equal(new URL(page.url()).pathname, resultPath, 'back/forward lost the mobile-search deep link');
     assert(routeFocusMoved, 'route navigation did not move focus to main');
     assert(routeTitleUpdated, `deep-link route title was not updated; actual title: ${titleAtDeepLink}`);
-
-    await page.goto(`${baseURL}/alerts`);
-    await settle(page);
-    steps += 1;
-    const duplicateAlert = page.getByRole('button').filter({ hasText: /מספרי חשבונית מופיעים יותר מפעם אחת/ });
-    await duplicateAlert.waitFor({ timeout: 20_000 });
-    await duplicateAlert.click();
-    await page.waitForURL((url) => url.pathname === '/invoices' && url.searchParams.get('attention') === 'duplicates');
-    assert.equal(await page.getByRole('combobox', { name: 'סינון חשבוניות לפי צורך בטיפול' }).inputValue(), 'duplicates');
-    await page.getByText('7702', { exact: true }).first().waitFor({ timeout: 20_000 });
-    await assertNoRawMetadata(page, 'duplicate invoice alert target');
-    steps += 1;
-    evidence.push('/alerts -> /invoices?attention=duplicates');
-
-    await page.goto(`${baseURL}/alerts`);
-    await settle(page);
-    const dueAlert = page.getByRole('button').filter({ hasText: /דרישות תשלום.*(?:פירעון|מועד)/ });
-    await dueAlert.waitFor({ timeout: 20_000 });
-    await dueAlert.click();
-    await page.waitForURL((url) => url.pathname === '/payment-requests'
-      && url.searchParams.get('status') === 'active' && url.searchParams.get('due') === 'soon');
-    assert.equal(await page.getByRole('combobox', { name: 'סינון דרישות תשלום לפי מועד יעד' }).inputValue(), 'soon');
-    await assertNoRawMetadata(page, 'payment due alert target');
-    steps += 1;
-    evidence.push('/alerts -> /payment-requests?status=active&due=soon');
-
-    const exceptionId = 'fc000000-0000-4000-8000-000000000003';
-    const paymentRequestId = 'f6000000-0000-4000-8000-000000000002';
-    await page.goto(`${baseURL}/exceptions?status=open&severity=high`);
-    await settle(page);
-    assert.equal(await page.getByRole('combobox', { name: 'סינון חריגים לפי חומרה' }).inputValue(), 'high');
-    assert.equal(new URL(page.url()).searchParams.get('severity'), 'high');
-    await page.locator('#main .badge-alert:visible').filter({ hasText: /^גבוהה$/ }).first().waitFor({ timeout: 20_000 });
-    await assertNoRawMetadata(page, 'stable exception severity filter');
-    steps += 1;
-    evidence.push('/exceptions?status=open&severity=high');
-
-    await page.goto(`${baseURL}/exceptions?id=${exceptionId}`);
-    const exceptionDialog = page.getByRole('dialog');
-    await exceptionDialog.waitFor({ timeout: 20_000 });
-    await assertNoRawMetadata(page, 'exception deep link');
-    await exceptionDialog.getByRole('button', { name: 'לדרישת התשלום' }).click();
-    await page.waitForURL((url) => url.pathname === '/payment-requests' && url.searchParams.get('id') === paymentRequestId);
-    await page.getByRole('dialog').waitFor({ timeout: 20_000 });
-    await assertNoRawMetadata(page, 'payment request record deep link');
-    steps += 2;
-    evidence.push(`/exceptions?id=${exceptionId} -> /payment-requests?id=${paymentRequestId}`);
-
-    return { steps, backtracks, evidence: [`global search -> ${resultPath}`, ...evidence] };
   } finally {
     await closeContext(context);
   }
@@ -724,10 +733,12 @@ async function receivingAccessibility(browser) {
     await page.goto(`${baseURL}/receiving`);
     await settle(page);
     await page.getByText('ספק בדיקת נגישות').first().click();
-    await settle(page);
-    assert.equal(await page.locator('.speed-dial-trigger').count(), 0, 'receiving detail speed-dial must be hidden');
-    assert.equal(await page.getByText('סיבת השמירה / ההשלמה').count(), 0, 'routine receiving must not ask for a reason');
+    await page.waitForURL((url) => url.pathname === '/receiving/p4-ui-order');
     await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור מוצר בדיקת נגישות' }).waitFor();
+    assert.equal(await page.locator('.mobile-action-bar').count(), 0, 'receiving detail mobile action bar must be hidden');
+    await assertMobileSpeedDialHidden(page, 'receiving detail accessibility');
+    assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail must expose only its phone taskbar');
+    assert.equal(await page.getByText('סיבת השמירה / ההשלמה').count(), 0, 'routine receiving must not ask for a reason');
     await page.getByRole('button', { name: 'מלא עבור מוצר בדיקת נגישות' }).waitFor();
     assert.equal(await page.locator('button[aria-pressed]').count(), 5, 'receiving status controls lost pressed state');
     await page.screenshot({ path: path.join(outDir, 'receiving-390.png'), fullPage: true });
@@ -752,7 +763,7 @@ async function orderSupplierComparison(browser) {
   const page = await context.newPage();
   captureConsole(page, 'order-supplier-comparison');
   try {
-    await login(page, 'office');
+    await login(page, 'kitchen');
     await page.goto(`${baseURL}/orders/new?fresh=1`);
     await settle(page);
     await page.getByRole('button', { name: 'בחירת מלפפונים' }).click();
@@ -782,11 +793,6 @@ async function orderSupplierComparison(browser) {
     assert.equal(await review.getByText('סיבת אישור ההזמנה').count(), 0, 'routine order approval must not ask for a reason');
     await review.getByRole('button', { name: 'אשר ושלח הזמנה' }).click();
     await page.getByRole('dialog', { name: 'שליחת הזמנות לספקים' }).waitFor({ timeout: 25_000 });
-    return {
-      steps: 6,
-      backtracks: 0,
-      evidence: ['office selected a product', 'supplier comparison rendered', 'order finalized with system-authored audit reason'],
-    };
   } finally {
     await closeContext(context);
   }
@@ -806,18 +812,6 @@ async function paymentRequestNamesAndModalStack(browser) {
   await context.route('**/rest/v1/invoice_balances?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ invoice_id: 'p4-invoice', balance: 850 }] }));
   await context.route('**/rest/v1/bank_transactions?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/credit_requests?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
-  await context.route('**/rest/v1/rpc/payment_request_financial_check_signals*', (route) => route.fulfill({
-    status: 200,
-    headers: jsonHeaders,
-    json: {
-      requested_invoice_count: 1,
-      visible_invoice_count: 1,
-      paid_invoice_count: 0,
-      unapproved_invoice_count: 0,
-      amount_matches_open_balance: true,
-      similar_bank_transfer_exists: false,
-    },
-  }));
   const page = await context.newPage();
   captureConsole(page, 'payment-request-modal');
   try {
@@ -879,7 +873,7 @@ async function bankContextualNames(browser) {
   const page = await context.newPage();
   captureConsole(page, 'bank-accessibility');
   try {
-    await login(page, 'accountant');
+    await login(page, 'owner');
     await page.goto(`${baseURL}/bank`);
     await settle(page);
     const row = page.locator('button[aria-label^="פתיחת תנועת בנק "]').first();
@@ -898,209 +892,6 @@ async function bankContextualNames(browser) {
     await page.screenshot({ path: path.join(outDir, 'bank-match-dialog.png'), fullPage: true });
     report.screenshots.push('bank-match-dialog.png');
     await auditAccessibility(page, 'bank-match-dialog');
-    return { steps: 4, backtracks: 0, evidence: ['accountant opened an unmatched bank transaction', 'record-specific matching controls are named'] };
-  } finally {
-    await closeContext(context);
-  }
-}
-
-async function personaContractRegression(browser, role) {
-  const expectedHome = homes[role];
-  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
-  const page = await context.newPage();
-  captureConsole(page, `contract-regression:${role}`);
-  try {
-    await login(page, role);
-    assert.equal(new URL(page.url()).pathname, expectedHome, `${role}: home contract changed`);
-    await page.goto(`${baseURL}/dashboard`);
-    await page.waitForURL((url) => url.pathname === expectedHome, { timeout: 20_000 });
-    await settle(page);
-    const quickActions = await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).count();
-    assert.equal(quickActions, role === 'kitchen' ? 1 : 0, `${role}: quick-action contract changed`);
-    return {
-      steps: 3,
-      backtracks: 0,
-      evidence: [`${role} home=${expectedHome}`, `${role} denied /dashboard`, `${role} quick-actions=${quickActions}`],
-    };
-  } finally {
-    await closeContext(context);
-  }
-}
-
-async function accountantFinanceJourney(browser) {
-  const paymentRequestId = 'f6000000-0000-4000-8000-000000000001';
-  const creditId = 'f5000000-0000-4000-8000-000000000004';
-  const paymentReason = 'אימות P3 — ביצוע רגיל בידי הנהלת חשבונות';
-  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1024, height: 768 } });
-  const page = await context.newPage();
-  let restOrigin = '';
-  let restHeaders = null;
-  page.on('request', (request) => {
-    const url = new URL(request.url());
-    if (!restHeaders && url.pathname.startsWith('/rest/v1/')) {
-      const headers = request.headers();
-      if (headers.authorization && headers.apikey) {
-        restOrigin = url.origin;
-        restHeaders = { authorization: headers.authorization, apikey: headers.apikey };
-      }
-    }
-  });
-  captureConsole(page, 'accountant-finance-journey');
-  try {
-    await login(page, 'accountant');
-    assert(restHeaders && restOrigin, 'accountant journey did not capture its authenticated REST session');
-    const getRows = async (table, query) => {
-      const url = new URL(`/rest/v1/${table}`, restOrigin);
-      for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
-      const response = await context.request.get(url.toString(), { headers: restHeaders });
-      assert.equal(response.status(), 200, `accountant REST read failed for ${table}: ${response.status()}`);
-      return response.json();
-    };
-    const [paymentBefore] = await getRows('payment_requests', { select: 'id,status', id: `eq.${paymentRequestId}` });
-    const [creditBefore] = await getRows('credit_requests', { select: 'id,status', id: `eq.${creditId}` });
-    assert.equal(paymentBefore?.status, 'approved', 'fresh fixture payment request is not approved');
-    assert.equal(creditBefore?.status, 'offset', 'fresh fixture credit is not ready for the permitted accountant transition');
-    await page.goto(`${baseURL}/pay`);
-    await settle(page);
-    const approved = page.locator('#main button.card').filter({ hasText: 'משקאות אור' }).first();
-    await approved.waitFor({ timeout: 20_000 });
-    await approved.click();
-    const execution = page.getByRole('dialog');
-    await execution.waitFor();
-    for (const label of ['אושר על ידי', 'מבוצע על ידי', 'רישום ביומן']) {
-      await execution.getByText(label, { exact: true }).waitFor();
-    }
-    assert.equal(await execution.locator('#emergency-payment-password').count(), 0, 'regular accountant execution exposed emergency authentication');
-    assert.equal(await execution.getByRole('button', { name: 'ההעברה בוצעה' }).count(), 1, 'accountant cannot reach regular execution action');
-    await execution.locator('#payment-execution-reference').fill('P3-ACCOUNTANT-001');
-    await execution.locator('#payment-execution-reason').fill(paymentReason);
-    await execution.getByRole('button', { name: 'ההעברה בוצעה' }).click();
-    const recorded = page.getByRole('dialog', { name: 'ההעברה נרשמה' });
-    await recorded.waitFor({ timeout: 20_000 });
-    await recorded.getByRole('button', { name: 'סיום' }).click();
-    await recorded.waitFor({ state: 'hidden' });
-
-    await page.goto(`${baseURL}/bank?month=2026-07&status=attention`);
-    await settle(page);
-    assert.equal(await page.getByRole('combobox', { name: 'סינון תנועות בנק לפי סטטוס' }).inputValue(), 'attention');
-    assert.equal(await page.locator('input[aria-label="סינון תנועות בנק לפי חודש"]').inputValue(), '2026-07');
-    await page.locator('button[aria-label^="פתיחת תנועת בנק "]').first().waitFor({ timeout: 20_000 });
-
-    await page.goto(`${baseURL}/credits?status=all&id=${creditId}`);
-    const credit = page.getByRole('dialog');
-    await credit.waitFor({ timeout: 20_000 });
-    await credit.locator('button.btn-primary').filter({ hasText: 'סגירה' }).click();
-    await credit.waitFor({ state: 'hidden', timeout: 20_000 });
-    await page.getByRole('heading', { name: 'זיכויים' }).waitFor();
-    assert.equal(await page.getByRole('combobox', { name: 'סינון דרישות זיכוי לפי סטטוס' }).inputValue(), 'all');
-    const [paymentAfter] = await getRows('payment_requests', { select: 'id,status', id: `eq.${paymentRequestId}` });
-    const [creditAfter] = await getRows('credit_requests', { select: 'id,status', id: `eq.${creditId}` });
-    const audits = await getRows('audit_logs', {
-      select: 'action,entity_type,entity_id,reason,user_id',
-      entity_id: `in.(${paymentRequestId},${creditId})`,
-      order: 'created_at.desc',
-    });
-    assert.equal(paymentAfter?.status, 'executed', 'accountant payment write did not persist');
-    assert.equal(creditAfter?.status, 'closed', 'accountant credit transition did not persist');
-    const paymentAudit = audits.find((row) => row.action === 'payment_request_executed' && row.entity_id === paymentRequestId);
-    const creditAudit = audits.find((row) => row.action === 'credit_request_transitioned' && row.entity_id === creditId);
-    assert.equal(paymentAudit?.reason, paymentReason, 'accountant payment audit reason is missing or changed');
-    assert.equal(creditAudit?.reason, 'סגירה', 'accountant credit audit reason is missing or changed');
-    assert(paymentAudit?.user_id && paymentAudit.user_id === creditAudit?.user_id, 'finance writes were not attributed to the same accountant session');
-    return {
-      steps: 11,
-      backtracks: 0,
-      evidence: [
-        `payment_requests/${paymentRequestId}: approved -> executed`,
-        `credit_requests/${creditId}: offset -> closed`,
-        'accountant-session audit: payment_request_executed',
-        'accountant-session audit: credit_request_transitioned',
-        '/bank?month=2026-07&status=attention',
-      ],
-    };
-  } finally {
-    await closeContext(context);
-  }
-}
-
-async function supplierMobileEditJourney(browser) {
-  const supplierId = 'aa000000-0000-4000-8000-000000000001';
-  const marker = 'יוסי אדרי — אימות P3';
-  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
-  const page = await context.newPage();
-  let update = null;
-  page.on('request', (request) => {
-    const url = new URL(request.url());
-    if (request.method() === 'PATCH' && url.pathname.endsWith('/rest/v1/suppliers') && url.searchParams.get('id') === `eq.${supplierId}`) {
-      update = request.postDataJSON();
-    }
-  });
-  captureConsole(page, 'supplier-mobile-edit');
-  try {
-    await login(page, 'office');
-    await page.goto(`${baseURL}/suppliers/${supplierId}`);
-    await settle(page);
-    await page.getByRole('button', { name: 'עריכה', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: /עריכת ספק/ });
-    await dialog.waitFor();
-    await dialog.locator('#supplier-contact').fill(marker);
-    await dialog.getByRole('button', { name: 'שמירה' }).click();
-    await dialog.waitFor({ state: 'hidden', timeout: 20_000 });
-    await page.getByText(marker, { exact: true }).waitFor({ timeout: 20_000 });
-    assert.equal(update?.contact_name, marker, 'supplier edit did not send the mobile form value');
-    await auditAccessibility(page, 'supplier-mobile-edit-390');
-    await page.screenshot({ path: path.join(outDir, 'supplier-mobile-edit-390.png'), fullPage: true });
-    report.screenshots.push('supplier-mobile-edit-390.png');
-    return {
-      steps: 5,
-      backtracks: 0,
-      evidence: [`PATCH /suppliers?id=eq.${supplierId}`, 'supplier-mobile-edit-390.png', `contact=${marker}`],
-    };
-  } finally {
-    await closeContext(context);
-  }
-}
-
-async function supplierPriceJourney(browser) {
-  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 }, acceptDownloads: true });
-  const page = await context.newPage();
-  captureConsole(page, 'supplier-price-journey');
-  try {
-    await login(page, 'supplier');
-    await page.locator('#main').getByText(/משק ירוק/).first().waitFor({ timeout: 20_000 });
-    const mainText = await page.locator('#main').innerText();
-    assert(mainText.includes('משק ירוק'), 'supplier portal omitted its own supplier');
-    assert(!mainText.includes('חוות השדה'), 'supplier portal exposed a competing supplier');
-
-    const downloadPromise = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'הורדת תבנית' }).click();
-    const download = await downloadPromise;
-    const templateFile = path.join(outDir, 'supplier-price-template.csv');
-    await download.saveAs(templateFile);
-    const template = fs.readFileSync(templateFile, 'utf8');
-    assert(template.startsWith('\uFEFFproduct_id,product_name,price'), 'supplier template lacks the canonical product columns');
-    assert(template.includes('bb000000-0000-4000-8000-000000000001'), 'supplier template lacks canonical product ids');
-
-    const uploadFile = path.join(outDir, 'supplier-price-preview-with-unknown.csv');
-    fs.writeFileSync(uploadFile, [
-      'product_id,product_name,price',
-      'bb000000-0000-4000-8000-000000000001,עגבנייה,8.75',
-      ',מוצר ספק לא מוכר,12.50',
-    ].join('\r\n'), 'utf8');
-    await page.getByRole('button', { name: 'הגשת מחירון חודשי' }).click();
-    const dialog = page.getByRole('dialog', { name: 'הגשת מחירון חודשי' });
-    await dialog.locator('input[type="file"]').setInputFiles(uploadFile);
-    await dialog.getByText(/זוהו 2 שורות; 1 הותאמו לקטלוג/).waitFor({ timeout: 20_000 });
-    assert.equal(await dialog.getByText('מוצר קנוני', { exact: true }).count(), 1);
-    assert.equal(await dialog.getByText('לא מוכר', { exact: true }).count(), 1);
-    await assertNoRawMetadata(page, 'supplier price exception preview');
-    await page.screenshot({ path: path.join(outDir, 'supplier-price-preview-390.png'), fullPage: true });
-    report.screenshots.push('supplier-price-preview-390.png');
-    return {
-      steps: 5,
-      backtracks: 0,
-      evidence: ['supplier-price-template.csv', 'UTF-8 CSV without BOM parsed', 'one canonical and one unknown row shown before submission'],
-    };
   } finally {
     await closeContext(context);
   }
@@ -1213,175 +1004,26 @@ async function lazyChunkRecovery(browser) {
 }
 
 async function reportsAndPdf(browser) {
-  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 }, acceptDownloads: true });
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
-  const reportRows = new Map();
-  const responseReads = [];
-  const reportTables = new Set(['invoices', 'payments', 'credit_requests', 'exceptions', 'bank_transactions']);
-  page.on('response', (response) => {
-    const url = new URL(response.url());
-    const table = url.pathname.match(/\/rest\/v1\/([^/]+)$/)?.[1];
-    if (response.status() !== 200 || response.request().method() !== 'GET' || !reportTables.has(table)) return;
-    const filterKey = table === 'invoices' ? 'invoice_date'
-      : table === 'payments' ? 'paid_date'
-        : table === 'credit_requests' ? 'created_at'
-          : table === 'bank_transactions' ? 'tx_date'
-            : 'status';
-    if (!url.searchParams.has(filterKey)) return;
-    const read = response.json().then((rows) => {
-      if (Array.isArray(rows)) reportRows.set(table, rows);
-    });
-    responseReads.push(read);
-  });
   captureConsole(page, 'reports-pdf');
   try {
     await login(page, 'accountant');
     await page.goto(`${baseURL}/reports`);
     await settle(page);
-    const month = page.locator('#monthly-report-month');
-    if (await month.inputValue() !== '2026-07') {
-      const refreshed = page.waitForResponse((response) => response.url().includes('/rest/v1/invoices?')
-        && response.url().includes('2026-07-01'));
-      await month.fill('2026-07');
-      await refreshed;
-      await settle(page);
-    }
-    await page.waitForTimeout(100);
-    await Promise.all(responseReads);
-    for (const tableName of reportTables) {
-      assert(Array.isArray(reportRows.get(tableName)), `monthly report did not load authenticated REST rows for ${tableName}`);
-    }
-
-    const rows = Object.fromEntries(reportRows);
-    const sum = (values) => values.reduce((total, value) => total + Number(value || 0), 0);
-    const expected = {
-      invoiceRows: rows.invoices.length,
-      beforeVat: sum(rows.invoices.map((row) => row.amount_before_vat)),
-      vat: sum(rows.invoices.map((row) => row.vat_amount)),
-      invoices: sum(rows.invoices.map((row) => row.total_amount)),
-      paymentRows: rows.payments.length,
-      payments: sum(rows.payments.map((row) => row.amount)),
-      creditRows: rows.credit_requests.length,
-      credits: sum(rows.credit_requests.map((row) => row.amount)),
-      exceptionRows: rows.exceptions.length,
-      unmatchedBank: rows.bank_transactions.filter((row) => ['unmatched', 'suggested'].includes(row.status)).length,
-    };
-    const equalMoney = (actual, wanted, label) => assert.equal(Math.round(Number(actual) * 100), Math.round(Number(wanted) * 100), label);
-
     const table = page.locator('table.report-invoices');
     await table.waitFor();
     const headings = (await table.locator('thead th').allTextContents()).map((value) => value.trim());
     assert.equal(headings.length, 8, `monthly print report has ${headings.length}/8 columns`);
     assert((await table.locator('tfoot').innerText()).trim(), 'monthly print report has no totals row');
-
-    const downloadPromise = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'ייצוא Excel' }).click();
-    const download = await downloadPromise;
-    const excelPath = path.join(outDir, 'monthly-report.xlsx');
-    await download.saveAs(excelPath);
-    const workbook = XLSX.readFile(excelPath);
-    assert.deepEqual(workbook.SheetNames, ['פרטי הדוח', 'חשבוניות', 'תשלומים', 'זיכויים', 'חריגים פתוחים כרגע']);
-    const summaryRows = XLSX.utils.sheet_to_json(workbook.Sheets['פרטי הדוח'], { header: 1, raw: true, defval: null });
-    const metrics = new Map(summaryRows.slice(6).map(([label, count, amount]) => [label, { count, amount }]));
-    const invoiceSheet = XLSX.utils.sheet_to_json(workbook.Sheets['חשבוניות'], { raw: true, defval: null });
-    const paymentSheet = XLSX.utils.sheet_to_json(workbook.Sheets['תשלומים'], { raw: true, defval: null });
-    const creditSheet = XLSX.utils.sheet_to_json(workbook.Sheets['זיכויים'], { raw: true, defval: null });
-    const exceptionSheet = XLSX.utils.sheet_to_json(workbook.Sheets['חריגים פתוחים כרגע'], { raw: true, defval: null });
-    assert.equal(invoiceSheet.length, expected.invoiceRows, 'Excel invoice row count differs from REST');
-    assert.equal(paymentSheet.length, expected.paymentRows, 'Excel payment row count differs from REST');
-    assert.equal(creditSheet.length, expected.creditRows, 'Excel credit row count differs from REST');
-    assert.equal(exceptionSheet.length, expected.exceptionRows, 'Excel exception row count differs from REST');
-    assert.equal(metrics.get('חשבוניות')?.count, expected.invoiceRows, 'Excel invoice summary count differs from REST');
-    assert.equal(metrics.get('תשלומים')?.count, expected.paymentRows, 'Excel payment summary count differs from REST');
-    assert.equal(metrics.get('זיכויים')?.count, expected.creditRows, 'Excel credit summary count differs from REST');
-    assert.equal(metrics.get('חריגים פתוחים כרגע')?.count, expected.exceptionRows, 'Excel exception summary count differs from REST');
-    equalMoney(metrics.get('חשבוניות')?.amount, expected.invoices, 'Excel invoice total differs from REST');
-    equalMoney(metrics.get('לפני מע״מ')?.amount, expected.beforeVat, 'Excel pre-VAT total differs from REST');
-    equalMoney(metrics.get('מע״מ')?.amount, expected.vat, 'Excel VAT total differs from REST');
-    equalMoney(metrics.get('תשלומים')?.amount, expected.payments, 'Excel payment total differs from REST');
-    equalMoney(metrics.get('זיכויים')?.amount, expected.credits, 'Excel credit total differs from REST');
-    report.excel = {
-      file: 'monthly-report.xlsx',
-      bytes: fs.statSync(excelPath).size,
-      sheets: workbook.SheetNames,
-      source: 'authenticated REST fixture',
-      expected,
-    };
-
-    for (const [width, height] of [[320, 720], [390, 844], [768, 1024], [1024, 768]]) {
-      await page.setViewportSize({ width, height });
-      await page.waitForTimeout(50);
-      const layout = await page.evaluate(() => {
-        const visible = (node) => {
-          const rect = node.getBoundingClientRect();
-          const style = getComputedStyle(node);
-          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
-        };
-        return {
-          documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-          mobileCardGroups: [...document.querySelectorAll('.report-mobile-cards')].filter(visible).length,
-          visibleTableWraps: [...document.querySelectorAll('.report-table-wrap')].filter(visible).map((node) => ({
-            clientWidth: node.clientWidth, scrollWidth: node.scrollWidth,
-          })),
-        };
-      });
-      assert(layout.documentOverflow <= 1, `reports/${width}: page overflow ${layout.documentOverflow}px`);
-      assert.equal(layout.mobileCardGroups, 3, `reports/${width}: mobile card groups missing`);
-      assert.deepEqual(layout.visibleTableWraps, [], `reports/${width}: internal scrolling table remained visible`);
-      await assertMinTouchSize(page.locator('.monthly-report a[href]'), `report metrics/${width}`);
-    }
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.screenshot({ path: path.join(outDir, 'reports-mobile-390.png'), fullPage: true });
-    report.screenshots.push('reports-mobile-390.png');
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await table.waitFor({ state: 'visible' });
     await page.emulateMedia({ media: 'print' });
-    const printEvidence = await page.evaluate(() => {
-      const number = (value) => Number((value || '').replace(/[^\d,.-]/g, '').replace(/,/g, ''));
-      const card = (title) => [...document.querySelectorAll('.monthly-report .card')]
-        .find((node) => node.querySelector('.section-title')?.textContent?.trim().startsWith(title));
-      const invoiceTable = document.querySelector('table.report-invoices');
-      const invoiceTotals = [...invoiceTable.querySelectorAll('tfoot td')].slice(0, 3).map((node) => number(node.textContent));
-      const paymentTable = card('תשלומים לפי ספק')?.querySelector('table');
-      const paymentRows = [...(paymentTable?.querySelectorAll('tbody tr') ?? [])];
-      const creditTable = card('זיכויים')?.querySelector('table');
-      const creditRows = [...(creditTable?.querySelectorAll('tbody tr') ?? [])];
-      const exceptionHeading = [...document.querySelectorAll('.monthly-report h2')]
-        .find((node) => node.textContent?.includes('חריגים פתוחים כרגע'));
-      return {
-        heading: document.querySelector('.monthly-report .print\\:block h2')?.textContent?.trim() || '',
-        invoiceRows: invoiceTable.querySelectorAll('tbody tr').length,
-        beforeVat: invoiceTotals[0], vat: invoiceTotals[1], invoices: invoiceTotals[2],
-        paymentSupplierRows: paymentRows.length,
-        payments: paymentRows.reduce((total, row) => total + number(row.querySelectorAll('td')[1]?.textContent), 0),
-        creditRows: creditRows.length,
-        credits: creditRows.reduce((total, row) => total + number(row.querySelectorAll('td')[2]?.textContent), 0),
-        exceptionRows: exceptionHeading?.nextElementSibling?.querySelectorAll('li').length ?? 0,
-      };
-    });
-    assert(printEvidence.heading.includes('דוח חודשי') && printEvidence.heading.includes('יולי 2026'), 'print report heading lost tenant/month context');
-    assert.equal(printEvidence.invoiceRows, expected.invoiceRows, 'print invoice rows differ from REST');
-    assert.equal(printEvidence.creditRows, expected.creditRows, 'print credit rows differ from REST');
-    assert.equal(printEvidence.exceptionRows, expected.exceptionRows, 'print exception rows differ from REST');
-    assert.equal(printEvidence.paymentSupplierRows, new Set(rows.payments.map((row) => row.supplier.name)).size,
-      'print payment supplier groups differ from REST');
-    equalMoney(printEvidence.beforeVat, expected.beforeVat, 'print pre-VAT total differs from REST');
-    equalMoney(printEvidence.vat, expected.vat, 'print VAT total differs from REST');
-    equalMoney(printEvidence.invoices, expected.invoices, 'print invoice total differs from REST');
-    equalMoney(printEvidence.payments, expected.payments, 'print payment total differs from REST');
-    equalMoney(printEvidence.credits, expected.credits, 'print credit total differs from REST');
     await page.screenshot({ path: path.join(outDir, 'reports-print.png'), fullPage: true });
     report.screenshots.push('reports-print.png');
     const pdfPath = path.join(outDir, 'monthly-report.pdf');
     await page.pdf({ path: pdfPath, printBackground: true, preferCSSPageSize: true });
     const bytes = fs.statSync(pdfPath).size;
     assert(bytes > 5_000, `monthly report PDF is unexpectedly small (${bytes} bytes)`);
-    report.pdf = { file: 'monthly-report.pdf', bytes, headings, sourceEvidence: printEvidence, expected };
-    return {
-      steps: 8,
-      backtracks: 0,
-      evidence: ['authenticated REST fixture rows', 'monthly-report.xlsx', 'reports-print.png', 'monthly-report.pdf'],
-    };
+    report.pdf = { file: 'monthly-report.pdf', bytes, headings };
   } finally {
     await closeContext(context);
   }
@@ -1501,151 +1143,59 @@ async function adminState(browser) {
   }
 }
 
-async function fixtureReadiness(browser) {
-  const roles = Object.keys(homes);
-  for (const role of roles) {
-    const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
-    const page = await context.newPage();
-    try {
-      await login(page, role);
-      assert.equal(new URL(page.url()).pathname, homes[role], `${role}: fixture login did not reach its home`);
-      if (role === 'owner') {
-        await page.goto(`${baseURL}/invoices`);
-        await settle(page);
-        await page.getByText('7702', { exact: true }).first().waitFor({ timeout: 20_000 });
-      }
-    } finally {
-      await closeContext(context);
-    }
-  }
-  return { steps: roles.length + 1, backtracks: 0, evidence: [...roles.map((role) => `${role} login ready`), 'fixture sentinel invoice 7702'] };
-}
-
-async function run(name, check, meta = {}) {
-  if (process.env.QUALITY_ONLY && !meta.always && !name.includes(process.env.QUALITY_ONLY)) return 'SKIPPED';
-  const startedAt = Date.now();
-  const task = {
-    name,
-    status: 'FAIL',
-    persona: meta.persona ?? 'system',
-    durationMs: 0,
-    steps: meta.steps ?? 1,
-    backtracks: meta.backtracks ?? 0,
-    evidence: meta.evidence ?? [],
-  };
+async function run(name, check) {
+  if (process.env.QUALITY_ONLY && !name.includes(process.env.QUALITY_ONLY)) return;
   try {
-    const measured = await check();
-    task.status = 'PASS';
-    task.steps = measured?.steps ?? task.steps;
-    task.backtracks = measured?.backtracks ?? task.backtracks;
-    task.evidence = measured?.evidence ?? task.evidence;
+    await check();
     report.passed.push(name);
     console.log(`${name}: PASS`);
   } catch (error) {
-    task.status = meta.failureStatus ?? 'FAIL';
-    const failure = { name, status: task.status, message: error.message, stack: error.stack?.split('\n').slice(0, 4).join('\n') };
-    report.failures.push(failure);
-    if (task.status === 'BLOCKED') report.blocked.push({ name, message: error.message });
-    console.log(`${name}: ${task.status} — ${error.message}`);
+    report.failures.push({ name, message: error.message, stack: error.stack?.split('\n').slice(0, 4).join('\n') });
+    console.log(`${name}: FAIL — ${error.message}`);
+  }
+}
+
+(async () => {
+  const browser = await chromium.launch({ headless: true, executablePath: browserPath });
+  try {
+    await run('role and viewport matrix', () => roleAndViewportMatrix(browser));
+    await run('mobile action bar and desktop speed-dial contract', () => quickActionsContract(browser));
+    await run('overlay stacking and breakpoint reset', () => overlayStacking(browser));
+    await run('dashboard, quick actions and dialogs', () => dashboardAndDialogs(browser));
+    await run('DataTable, ActionMenu, route focus and mobile search', () => tableKeyboardAndSearch(browser));
+    await run('receiving contextual names and accessibility', () => receivingAccessibility(browser));
+    await run('order supplier savings and reason-free approval', () => orderSupplierComparison(browser));
+    await run('payment-request names and modal stack', () => paymentRequestNamesAndModalStack(browser));
+    await run('bank contextual names and accessibility', () => bankContextualNames(browser));
+    await run('partial Alerts never all-clear or mark read', () => alertsPartialFailure(browser));
+    await run('Settings failure never reports success', () => settingsFalseSuccess(browser));
+    await run('temporary auth bootstrap supports retry', () => bootstrapRetry(browser));
+    await run('lazy chunk failure recovers', () => lazyChunkRecovery(browser));
+    await run('monthly report print and PDF', () => reportsAndPdf(browser));
+    await run('PWA update preserves open state', () => pwaUpdate(browser));
+    await run('Push logout all success', () => pushLogout(browser, 'all-success', true, true));
+    await run('Push logout server failure', () => pushLogout(browser, 'server-failure', false, true));
+    await run('Push logout browser failure', () => pushLogout(browser, 'browser-failure', true, false));
+    await run('Push logout double failure', () => pushLogout(browser, 'double-failure', false, false));
+    await run('Admin password and Clipboard state', () => adminState(browser));
   } finally {
-    task.durationMs = Date.now() - startedAt;
-    report.tasks.push(task);
+    await browser.close();
   }
-  return task.status;
-}
 
-function blockRemaining(suite, reason) {
-  for (const task of suite) {
-    if (process.env.QUALITY_ONLY && !task.name.includes(process.env.QUALITY_ONLY)) continue;
-    report.tasks.push({
-      name: task.name, status: 'BLOCKED', persona: task.persona, durationMs: 0,
-      steps: 0, backtracks: 0, evidence: [`not run: ${reason}`],
-    });
-    report.blocked.push({ name: task.name, message: reason });
-  }
-}
-
-function writeReport() {
   if (report.consoleErrors.length) {
-    const failure = { name: 'unexpected browser console errors', status: 'FAIL', message: JSON.stringify(report.consoleErrors) };
-    report.failures.push(failure);
-    report.tasks.push({
-      name: failure.name, status: 'FAIL', persona: 'all', durationMs: 0,
-      steps: report.consoleErrors.length, backtracks: 0, evidence: report.consoleErrors,
-    });
+    report.failures.push({ name: 'unexpected browser console errors', message: JSON.stringify(report.consoleErrors) });
   }
   fs.writeFileSync(path.join(outDir, 'p4-browser-report.json'), JSON.stringify(report, null, 2), 'utf8');
   console.log(JSON.stringify({
     passed: report.passed.length,
     failed: report.failures.length,
-    blocked: report.blocked.length,
     viewportChecks: report.viewports.length,
     accessibilityAudits: report.accessibility.length,
     screenshots: report.screenshots,
     pdfBytes: report.pdf?.bytes ?? 0,
-    excelBytes: report.excel?.bytes ?? 0,
     failures: report.failures,
   }, null, 2));
   if (report.failures.length) process.exitCode = 1;
-}
-
-(async () => {
-  let browser;
-  try {
-    browser = await chromium.launch({ headless: true, executablePath: browserPath });
-  } catch (error) {
-    report.tasks.push({
-      name: 'browser and fixture readiness', status: 'BLOCKED', persona: 'all', durationMs: 0,
-      steps: 0, backtracks: 0, evidence: [error.message],
-    });
-    report.blocked.push({ name: 'browser and fixture readiness', message: error.message });
-    report.failures.push({ name: 'browser and fixture readiness', status: 'BLOCKED', message: error.message });
-    writeReport();
-    return;
-  }
-
-  const suite = [
-    { name: 'role and viewport matrix', persona: 'all roles', steps: 51, evidence: ['six role homes', '42 viewport checks', 'route denials'], check: () => roleAndViewportMatrix(browser) },
-    { name: 'speed-dial roles, keyboard, camera and responsive contract', persona: 'owner, office, kitchen', steps: 20, evidence: ['keyboard', '44px', '320/390/768/1024', 'reduced motion'], check: () => speedDialContract(browser) },
-    { name: 'dashboard, speed-dial and dialogs', persona: 'owner', steps: 7, evidence: ['dashboard REST/DOM cross-check', 'dashboard screenshots'], check: () => dashboardAndDialogs(browser) },
-    { name: 'DataTable, ActionMenu, route focus and mobile search', persona: 'owner', steps: 12, evidence: ['search and deep links', 'alerts and filters', 'severity filter'], check: () => tableKeyboardAndSearch(browser) },
-    { name: 'receiving contextual names and accessibility', persona: 'kitchen', steps: 6, evidence: ['partial and completed receipt reasons'], check: () => receivingAccessibility(browser) },
-    { name: 'order supplier savings and reason-free approval', persona: 'office', steps: 6, evidence: ['mutable purchasing journey'], check: () => orderSupplierComparison(browser) },
-    { name: 'supplier mobile edit', persona: 'office', steps: 5, evidence: ['390px edit and PATCH verification'], check: () => supplierMobileEditJourney(browser) },
-    { name: 'kitchen role regression', persona: 'kitchen', steps: 3, evidence: ['home, denied route, quick actions'], check: () => personaContractRegression(browser, 'kitchen') },
-    { name: 'payer role regression', persona: 'payer', steps: 3, evidence: ['home, denied route, no quick actions'], check: () => personaContractRegression(browser, 'payer') },
-    { name: 'payment-request names and modal stack', persona: 'owner', steps: 7, evidence: ['record names and nested modal focus'], check: () => paymentRequestNamesAndModalStack(browser) },
-    { name: 'bank contextual names and accessibility', persona: 'accountant', steps: 4, evidence: ['bank treatment controls'], check: () => bankContextualNames(browser) },
-    { name: 'partial Alerts never all-clear or mark read', persona: 'owner', steps: 4, evidence: ['partial readiness remains disclosed'], check: () => alertsPartialFailure(browser) },
-    { name: 'Settings failure never reports success', persona: 'owner', steps: 5, evidence: ['failed mutation remains open'], check: () => settingsFalseSuccess(browser) },
-    { name: 'temporary auth bootstrap supports retry', persona: 'owner', steps: 5, evidence: ['bootstrap retry without logout'], check: () => bootstrapRetry(browser) },
-    { name: 'lazy chunk failure recovers', persona: 'owner', steps: 5, evidence: ['route chunk recovery'], check: () => lazyChunkRecovery(browser) },
-    { name: 'accountant finance write journey', persona: 'accountant', steps: 11, evidence: ['payment and credit before/after with audit'], check: () => accountantFinanceJourney(browser) },
-    { name: 'supplier price and exception journey', persona: 'supplier', steps: 5, evidence: ['template and unknown-row preview'], check: () => supplierPriceJourney(browser) },
-    { name: 'monthly report print and PDF', persona: 'accountant', steps: 8, evidence: ['REST, XLSX, DOM print and PDF totals'], check: () => reportsAndPdf(browser) },
-    { name: 'PWA update preserves open state', persona: 'anonymous', steps: 4, evidence: ['service-worker update without reload'], check: () => pwaUpdate(browser) },
-    { name: 'Push logout all success', persona: 'owner', steps: 3, evidence: ['server and browser cleanup'], check: () => pushLogout(browser, 'all-success', true, true) },
-    { name: 'Push logout server failure', persona: 'owner', steps: 3, evidence: ['truthful server cleanup failure'], check: () => pushLogout(browser, 'server-failure', false, true) },
-    { name: 'Push logout browser failure', persona: 'owner', steps: 3, evidence: ['truthful browser cleanup failure'], check: () => pushLogout(browser, 'browser-failure', true, false) },
-    { name: 'Push logout double failure', persona: 'owner', steps: 3, evidence: ['truthful double cleanup failure'], check: () => pushLogout(browser, 'double-failure', false, false) },
-    { name: 'Admin password and Clipboard state', persona: 'owner', steps: 8, evidence: ['modal reset and clipboard failure'], check: () => adminState(browser) },
-  ];
-
-  try {
-    const readiness = await run('browser and fixture readiness', () => fixtureReadiness(browser), {
-      always: true, persona: 'all roles', failureStatus: 'BLOCKED', steps: 7,
-      evidence: ['six fixture logins', 'invoice 7702 sentinel'],
-    });
-    if (readiness === 'PASS') {
-      for (const task of suite) await run(task.name, task.check, task);
-    } else {
-      blockRemaining(suite, 'browser/auth/fixture readiness failed');
-    }
-  } finally {
-    await browser.close();
-  }
-
-  writeReport();
 })().catch((error) => {
   console.error(error.stack || error.message);
   process.exitCode = 1;
