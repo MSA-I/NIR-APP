@@ -637,9 +637,14 @@ try {
   $ownerHeaders["x-upsert"] = "false"
   $response = Invoke-BinaryRequest -Method Post -Uri "$apiUrl/storage/v1/object/documents/$ownerPath" -Headers $ownerHeaders -ContentType "application/pdf" -Bytes $pdfBytes
   Assert-Status $response @(200) "owner uploads allowlisted object to own tenant prefix"
-  $documentA = New-Id
-  $response = Invoke-Rest -Method Post -Resource "documents" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{ id = $documentA; org_id = $orgA; entity_type = "invoice"; entity_id = $invoiceA; storage_path = $ownerPath; file_name = "owner-proof.pdf"; mime_type = "application/pdf"; uploaded_by = $accounts.ownerA.Id } -Prefer "return=representation"
+  $documentBody = @{ org_id = $orgA; entity_type = "invoice"; entity_id = $invoiceA; storage_path = $ownerPath; file_name = "owner-proof.pdf"; mime_type = "application/pdf"; uploaded_by = $accounts.ownerA.Id }
+  $response = Invoke-Rest -Method Post -Resource "documents" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body ($documentBody + @{ id = (New-Id) }) -Prefer "return=representation"
+  Assert-Blocked $response "browser cannot choose a document id"
+  $response = Invoke-Rest -Method Post -Resource "documents" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body ($documentBody + @{ created_at = "2026-07-22T12:00:00Z" }) -Prefer "return=representation"
+  Assert-Blocked $response "browser cannot choose a document creation timestamp"
+  $response = Invoke-Rest -Method Post -Resource "documents" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body $documentBody -Prefer "return=representation"
   Assert-Status $response @(201) "owner registers uploaded object"
+  $documentA = [string](@($response.Json)[0].id)
   $response = Invoke-JsonRequest -Method Post -Uri "$apiUrl/storage/v1/object/sign/documents/$ownerPath" -Headers (New-Headers $anonKey $accounts.ownerA.Token) -Body @{ expiresIn = 60 }
   Assert-Status $response @(200) "owner obtains signed URL for registered document"
   $response = Invoke-JsonRequest -Method Post -Uri "$apiUrl/storage/v1/object/sign/documents/$ownerPath" -Headers (New-Headers $anonKey $accounts.accountantA.Token) -Body @{ expiresIn = 60 }
@@ -658,7 +663,7 @@ try {
   $payerHeaders["x-upsert"] = "false"
   $response = Invoke-BinaryRequest -Method Post -Uri "$apiUrl/storage/v1/object/documents/$payerPath" -Headers $payerHeaders -ContentType "application/pdf" -Bytes $pdfBytes
   Assert-Status $response @(200) "payer uploads object to own tenant prefix"
-  $response = Invoke-Rest -Method Post -Resource "documents" -ApiKey $anonKey -Token $accounts.payerA.Token -Body @{ id = (New-Id); org_id = $orgA; entity_type = "payment"; entity_id = $paymentA; storage_path = $payerPath; file_name = "payer-proof.pdf"; mime_type = "application/pdf"; uploaded_by = $accounts.payerA.Id } -Prefer "return=representation"
+  $response = Invoke-Rest -Method Post -Resource "documents" -ApiKey $anonKey -Token $accounts.payerA.Token -Body @{ org_id = $orgA; entity_type = "payment"; entity_id = $paymentA; storage_path = $payerPath; file_name = "payer-proof.pdf"; mime_type = "application/pdf"; uploaded_by = $accounts.payerA.Id } -Prefer "return=representation"
   Assert-Status $response @(201) "payer registers only its executed payment document"
   $response = Invoke-JsonRequest -Method Post -Uri "$apiUrl/storage/v1/object/sign/documents/$payerPath" -Headers (New-Headers $anonKey $accounts.payerA.Token) -Body @{ expiresIn = 60 }
   Assert-Status $response @(200) "payer signs its own document URL"
@@ -668,7 +673,7 @@ try {
   $tenantBHeaders["x-upsert"] = "false"
   $response = Invoke-BinaryRequest -Method Post -Uri "$apiUrl/storage/v1/object/documents/$tenantBPath" -Headers $tenantBHeaders -ContentType "application/pdf" -Bytes $pdfBytes
   Assert-Status $response @(200) "tenant B owner uploads own object"
-  $response = Invoke-Rest -Method Post -Resource "documents" -ApiKey $anonKey -Token $accounts.ownerB.Token -Body @{ id = (New-Id); org_id = $orgB; entity_type = "invoice"; entity_id = $invoiceB; storage_path = $tenantBPath; file_name = "tenant-b-proof.pdf"; mime_type = "application/pdf"; uploaded_by = $accounts.ownerB.Id } -Prefer "return=representation"
+  $response = Invoke-Rest -Method Post -Resource "documents" -ApiKey $anonKey -Token $accounts.ownerB.Token -Body @{ org_id = $orgB; entity_type = "invoice"; entity_id = $invoiceB; storage_path = $tenantBPath; file_name = "tenant-b-proof.pdf"; mime_type = "application/pdf"; uploaded_by = $accounts.ownerB.Id } -Prefer "return=representation"
   Assert-Status $response @(201) "tenant B registers its document"
   $response = Invoke-JsonRequest -Method Post -Uri "$apiUrl/storage/v1/object/sign/documents/$tenantBPath" -Headers (New-Headers $anonKey $accounts.ownerB.Token) -Body @{ expiresIn = 60 }
   Assert-Status $response @(200) "tenant B owner signs own document URL"
