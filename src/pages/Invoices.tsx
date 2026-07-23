@@ -48,18 +48,20 @@ export function InvoicesList() {
   const [reviewFilter, setReviewFilter] = useParamState('review');
   const [payFilter, setPayFilter] = useParamState('pay');
   const [exportFilter, setExportFilter] = useParamState('export');
+  const [monthFilter, setMonthFilter] = useParamState('month');
   const [deleteTarget, setDeleteTarget] = useState<InvoiceRow | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
+  const isProcurementManager = profile?.role === 'office';
 
   const { data, loading, fetching, error, refetch } = useQuery(async () => {
     const invoices = await fetchAll<InvoiceRow>((from, to) => supabase.from('invoices')
       .select('*, supplier:suppliers(name)').is('deleted_at', null)
       .order('invoice_date', { ascending: false }).order('id').range(from, to));
-    const balances = await fetchAll<{ invoice_id: string; balance: number }>((from, to) => supabase.from('invoice_balances')
+    const balances = isProcurementManager ? [] : await fetchAll<{ invoice_id: string; balance: number }>((from, to) => supabase.from('invoice_balances')
       .select('invoice_id, balance').order('invoice_id').range(from, to));
     const balMap = new Map(balances.map((b) => [b.invoice_id, b.balance]));
     return invoices.map((i) => ({ ...i, balance: balMap.get(i.id) }));
-  });
+  }, [isProcurementManager]);
 
   const canCreate = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
   const isOffice = profile && ['owner', 'office'].includes(profile.role);
@@ -67,9 +69,10 @@ export function InvoicesList() {
 
   const rows = useMemo(() => (data ?? []).filter((r) =>
     (!reviewFilter || r.review_status === reviewFilter) &&
-    (!payFilter || r.payment_status === payFilter) &&
-    (!canViewExport || !exportFilter || r.export_status === exportFilter)),
-  [data, reviewFilter, payFilter, exportFilter, canViewExport]);
+    (!payFilter || (payFilter === 'open' ? r.payment_status !== 'paid' : r.payment_status === payFilter)) &&
+    (!canViewExport || !exportFilter || r.export_status === exportFilter) &&
+    (!monthFilter || r.invoice_date.startsWith(monthFilter))),
+  [data, reviewFilter, payFilter, exportFilter, monthFilter, canViewExport]);
 
   // Delete guard (adversarial review round): a soft-deleted invoice disappears from the list
   // and from invoice_balances, but its payment_allocations / credit_requests rows survive —
@@ -109,10 +112,12 @@ export function InvoicesList() {
     { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
     { key: 'date', header: 'תאריך', sortValue: (r) => r.invoice_date, render: (r) => fmtDate(r.invoice_date) },
     { key: 'total', header: 'סה״כ', className: 'num', sortValue: (r) => r.total_amount, render: (r) => fmtMoneyExact(r.total_amount) },
-    { key: 'balance', header: 'יתרה', className: 'num', sortValue: (r) => r.balance ?? 0, render: (r) => (r.balance != null && r.balance > 0 ? <span className="text-await-fg">{fmtMoneyExact(r.balance)}</span> : <span className="text-done-solid">—</span>) },
     { key: 'review', header: 'בדיקה', mobileLabel: null, render: (r) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
     { key: 'payment', header: 'תשלום', priority: 3, render: (r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
   ];
+  if (!isProcurementManager) {
+    columns.splice(4, 0, { key: 'balance', header: 'יתרה', className: 'num', sortValue: (r) => r.balance ?? 0, render: (r) => (r.balance != null && r.balance > 0 ? <span className="text-await-fg">{fmtMoneyExact(r.balance)}</span> : <span className="text-done-solid">—</span>) });
+  }
   if (canViewExport) {
     columns.push({ key: 'export', header: 'רו״ח', priority: 3, render: (r) => <StatusBadge meta={INVOICE_EXPORT_STATUS[r.export_status]} /> });
   }
@@ -151,8 +156,10 @@ export function InvoicesList() {
             </select>
             <select className="input w-auto!" aria-label="סינון חשבוניות לפי סטטוס תשלום" value={payFilter} onChange={(e) => setPayFilter(e.target.value)}>
               <option value="">כל סטטוסי התשלום</option>
+              <option value="open">פתוחות לתשלום</option>
               {Object.entries(INVOICE_PAYMENT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
+            <input type="month" className="input w-auto!" aria-label="סינון חשבוניות לפי חודש" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} />
             {canViewExport && (
               <select className="input w-auto!" aria-label="סינון חשבוניות לפי סטטוס העברה לרואה חשבון" value={exportFilter} onChange={(e) => setExportFilter(e.target.value)}>
                 <option value="">כל סטטוסי הרו״ח</option>

@@ -19,6 +19,7 @@ export default function Credits() {
   const [params, setParams] = useSearchParams();
   const { profile } = useAuth();
   const [statusFilter, setStatusFilter] = useParamState('status', 'active');
+  const [monthFilter, setMonthFilter] = useParamState('month');
   const [selected, setSelected] = useState<Row | null>(null);
 
   const { data, loading, fetching, error, refetch } = useQuery(async () =>
@@ -38,8 +39,12 @@ export default function Credits() {
     setParams(next, { replace: true });
   }, [params, data, setParams]);
 
-  const rows = (data ?? []).filter((r) => statusFilter === 'all' || ['open', 'requested', 'received'].includes(r.status));
-  const openSum = (data ?? []).filter((r) => ['open', 'requested', 'received'].includes(r.status)).reduce((s, r) => s + r.amount, 0);
+  const rows = (data ?? []).filter((r) =>
+    (statusFilter === 'all' || ['open', 'requested', 'received'].includes(r.status)) &&
+    (!monthFilter || r.created_at.startsWith(monthFilter)));
+  const openSum = (data ?? []).filter((r) =>
+    ['open', 'requested', 'received'].includes(r.status) && (!monthFilter || r.created_at.startsWith(monthFilter)))
+    .reduce((s, r) => s + r.amount, 0);
 
   const columns: Column<Row>[] = [
     { key: 'num', header: 'מס׳', sortValue: (r) => r.number, render: (r) => `#${r.number}` },
@@ -72,10 +77,13 @@ export default function Credits() {
           { key: 'open', label: 'פתיחת פרטים', icon: Eye, onSelect: () => setSelected(r) },
         ]}
         toolbar={
-          <select className="input w-auto!" aria-label="סינון דרישות זיכוי לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="active">זיכויים פעילים</option>
-            <option value="all">הכל</option>
-          </select>
+          <>
+            <select className="input w-auto!" aria-label="סינון דרישות זיכוי לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="active">זיכויים פעילים</option>
+              <option value="all">הכל</option>
+            </select>
+            <input type="month" className="input w-auto!" aria-label="סינון דרישות זיכוי לפי חודש" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} />
+          </>
         }
         emptyTitle="אין זיכויים" emptySubtitle="דרישות זיכוי נפתחות ממסך קבלת סחורה או מחשבונית" />
 
@@ -83,7 +91,7 @@ export default function Credits() {
         <CreditDetail credit={selected} onClose={() => setSelected(null)}
           onChanged={() => { setSelected(null); void refetch(); }}
           onOpenInvoice={(id) => navigate(`/invoices/${id}`)}
-          canWrite={!!profile && ['owner', 'office', 'kitchen', 'accountant'].includes(profile.role)} />
+          canWrite={!!profile && ['owner', 'kitchen', 'accountant'].includes(profile.role)} />
       )}
     </div>
   );

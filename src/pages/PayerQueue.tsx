@@ -8,6 +8,7 @@ import { PAYMENT_REQUEST_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import type { PaymentRequest } from '../lib/types';
+import { useAuth } from '../auth/AuthContext';
 
 /**
  * Focused execution view for payment executors (payer and accountant roles).
@@ -16,14 +17,17 @@ import type { PaymentRequest } from '../lib/types';
 type Row = PaymentRequest & {
   supplier: { id: string; name: string; bank_details: string | null };
   invoices: { invoice_id: string; amount_allocated: number; invoice: { invoice_number: string } }[];
+  approver: { full_name: string } | null;
 };
 
-export default function PayerQueue() {
+type PayerQueueMode = 'regular' | 'emergency';
+
+export default function PayerQueue({ mode = 'regular' }: { mode?: PayerQueueMode }) {
   const [selected, setSelected] = useState<Row | null>(null);
 
   const { data, loading, error, refetch } = useQuery(async () =>
     unwrap(await supabase.from('payment_requests')
-      .select('*, supplier:suppliers(id, name, bank_details), invoices:payment_request_invoices(invoice_id, amount_allocated, invoice:invoices(invoice_number))')
+      .select('*, supplier:suppliers(id, name, bank_details), invoices:payment_request_invoices(invoice_id, amount_allocated, invoice:invoices(invoice_number)), approver:profiles!payment_requests_approved_by_fkey(full_name)')
       .in('status', ['approved', 'sent_for_execution', 'executed', 'matched'])
       .order('due_date', { ascending: true, nullsFirst: false })) as Promise<Row[]>);
 
@@ -35,10 +39,14 @@ export default function PayerQueue() {
 
   return (
     <div className="space-y-5 max-w-2xl">
-      <h1 className="page-title">תשלומים לביצוע</h1>
+      <h1 className="page-title">{mode === 'emergency' ? 'מסלול חירום לביצוע תשלום' : 'תשלומים לביצוע'}</h1>
+
+      {mode === 'emergency' && (
+        <Note tone="alert">מסלול זה מיועד לבעלים בלבד. כל ביצוע דורש אימות סיסמה טרי, סיבה מפורשת ונרשם ביומן הביקורת כפעולת חירום נפרדת.</Note>
+      )}
 
       {!pending.length ? (
-        <div className="card"><EmptyState title="אין העברות שממתינות לביצוע" subtitle="דרישות תשלום מאושרות יופיעו כאן" /></div>
+        <div className="card"><EmptyState title="אין העברות שממתינות לביצוע" subtitle={mode === 'emergency' ? 'רק דרישות תשלום מאושרות זמינות במסלול החירום' : 'דרישות תשלום מאושרות יופיעו כאן'} /></div>
       ) : (
         <div className="space-y-3">
           {pending.map((r) => (
@@ -74,23 +82,38 @@ export default function PayerQueue() {
         </div>
       )}
 
-      {selected && <ExecuteModal pr={selected} onClose={() => setSelected(null)} onDone={() => { setSelected(null); void refetch(); }} />}
+      {selected && <ExecuteModal pr={selected} mode={mode} onClose={() => setSelected(null)} onDone={() => { setSelected(null); void refetch(); }} />}
     </div>
   );
 }
 
-function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; onDone: () => void }) {
+function ExecuteModal({ pr, mode, onClose, onDone }: { pr: Row; mode: PayerQueueMode; onClose: () => void; onDone: () => void }) {
+  const { session, profile } = useAuth();
   const toast = useToast();
   const [f, setF] = useState({ paid_date: todayISO(), reference: '', notes: '', reason: '' });
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [paymentId, setPaymentId] = useState<string | null>(null);
 
   async function execute() {
     if (!f.reference.trim()) { toast('נדרשת אסמכתת העברה', 'error'); return; }
     if (!f.reason.trim()) { toast('נדרשת סיבה לביצוע ההעברה', 'error'); return; }
+    if (mode === 'emergency' && !password) { toast('נדרשת סיסמה לאימות זהות טרי', 'error'); return; }
     setBusy(true);
     try {
-      const payment = unwrap(await supabase.rpc('execute_payment_request', {
+      if (mode === 'emergency') {
+        const expectedUserId = session?.user.id;
+        const email = session?.user.email;
+        if (!expectedUserId || !email) throw new Error('לא ניתן לאמת את זהות המשתמש המחובר. יש להתחבר מחדש.');
+        const authResult = await supabase.auth.signInWithPassword({ email, password }).finally(() => setPassword(''));
+        if (authResult.error) throw authResult.error;
+        if (authResult.data.user?.id !== expectedUserId) {
+          await supabase.auth.signOut();
+          throw new Error('זהות המשתמש השתנתה בזמן האימות. יש להתחבר מחדש.');
+        }
+      }
+
+      const payment = unwrap(await supabase.rpc(mode === 'emergency' ? 'execute_emergency_payment_request' : 'execute_payment_request', {
         p_payment_request_id: pr.id,
         p_paid_date: f.paid_date,
         p_method: 'העברה בנקאית',
@@ -105,7 +128,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
       })) as { payment_id: string };
 
       setPaymentId(payment.payment_id);
-      toast('ההעברה נרשמה בהצלחה');
+      toast(mode === 'emergency' ? 'העברת החירום נרשמה בהצלחה' : 'ההעברה נרשמה בהצלחה');
     } catch (e) {
       toast(toHebrewError(e), 'error');
     } finally {
@@ -127,7 +150,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
   }
 
   return (
-    <Modal open onClose={onClose} title={`ביצוע העברה — ${pr.supplier.name}`} busy={busy} statusMessage={busy ? 'רושם את ההעברה' : undefined}>
+    <Modal open onClose={onClose} title={`${mode === 'emergency' ? 'ביצוע חירום' : 'ביצוע העברה'} — ${pr.supplier.name}`} busy={busy} statusMessage={busy ? 'רושם את ההעברה' : undefined}>
       <div className="space-y-4">
         <div className="rounded-lg bg-surface-sunken border border-line px-4 py-3">
           <div className="flex items-center gap-2 text-sm font-medium text-ink-mid mb-1"><Landmark size={15} /> פרטי חשבון להעברה</div>
@@ -139,6 +162,9 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           {pr.due_date && <div className="flex justify-between"><dt className="text-ink-muted">תאריך יעד</dt><dd>{fmtDate(pr.due_date)}</dd></div>}
           <div className="flex justify-between"><dt className="text-ink-muted">חשבוניות</dt>
             <dd dir="ltr">{pr.invoices.map((i) => i.invoice.invoice_number).join(', ') || '—'}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">אושר על ידי</dt><dd>{pr.approver?.full_name ?? 'לא זמין'}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">מבוצע על ידי</dt><dd>{profile?.full_name ?? 'המשתמש המחובר'}</dd></div>
+          <div className="flex justify-between gap-4"><dt className="text-ink-muted">רישום ביומן</dt><dd className="text-start">{mode === 'emergency' ? 'ביצוע תשלום במסלול חירום והסיבה' : 'ביצוע תשלום והסיבה'}</dd></div>
           {pr.notes && <Note tone="await">{pr.notes}</Note>}
         </dl>
 
@@ -151,11 +177,17 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
         <div><label className="label" htmlFor="payment-execution-reference">אסמכתת העברה *</label><input id="payment-execution-reference" className="input num" dir="ltr" value={f.reference} onChange={(e) => setF((s) => ({ ...s, reference: e.target.value }))} /></div>
         <div><label className="label" htmlFor="payment-execution-notes">הערות</label><input id="payment-execution-notes" className="input" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></div>
         <div><label className="label" htmlFor="payment-execution-reason">סיבת ביצוע / אישור הפעולה *</label><input id="payment-execution-reason" className="input" value={f.reason} onChange={(e) => setF((s) => ({ ...s, reason: e.target.value }))} /></div>
+        {mode === 'emergency' && (
+          <div>
+            <label className="label" htmlFor="emergency-payment-password">סיסמת הבעלים לאימות טרי *</label>
+            <input id="emergency-payment-password" type="password" autoComplete="current-password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+        )}
 
         <div className="flex justify-end gap-2">
           <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
           <button className="btn-primary" disabled={busy} onClick={() => void execute()}>
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} ההעברה בוצעה
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {mode === 'emergency' ? 'ביצוע חירום ורישום ההעברה' : 'ההעברה בוצעה'}
           </button>
         </div>
       </div>

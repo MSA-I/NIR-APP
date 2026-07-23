@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Upload, Landmark, Link2, AlertTriangle, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
+import { Upload, Landmark, Link2, AlertTriangle, EyeOff, Loader2, CheckCircle2, Unlink } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
@@ -41,6 +41,7 @@ const parseAmount = (v: unknown) => Math.abs(Number(String(v ?? '').replace(/[�
 export default function Bank() {
   const { profile, org } = useAuth();
   const [statusFilter, setStatusFilter] = useParamState('status');
+  const [monthFilter, setMonthFilter] = useParamState('month');
   const [importOpen, setImportOpen] = useState(false);
   const [selected, setSelected] = useState<TxRow | null>(null);
 
@@ -52,7 +53,9 @@ export default function Bank() {
     return { txs, imports };
   });
 
-  const rows = (data?.txs ?? []).filter((t) => !statusFilter || t.status === statusFilter);
+  const rows = (data?.txs ?? []).filter((t) =>
+    (!monthFilter || t.tx_date.startsWith(monthFilter)) &&
+    (!statusFilter || (statusFilter === 'attention' ? ['unmatched', 'suggested'].includes(t.status) : t.status === statusFilter)));
   const canOperateBank = !!profile && ['owner', 'accountant'].includes(profile.role);
 
   const columns: Column<TxRow>[] = [
@@ -88,19 +91,72 @@ export default function Bank() {
         rowLabel={(r) => `תנועת בנק מיום ${fmtDate(r.tx_date)} בסכום ${fmtMoneyExact(r.amount)} עבור ${r.description}`}
         onRowClick={canOperateBank ? (r) => setSelected(r) : undefined}
         toolbar={
-          <select className="input w-auto!" aria-label="סינון תנועות בנק לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">כל הסטטוסים</option>
-            {Object.entries(BANK_TX_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          </select>
+          <>
+            <select className="input w-auto!" aria-label="סינון תנועות בנק לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">כל הסטטוסים</option>
+              <option value="attention">דורשות התאמה</option>
+              {Object.entries(BANK_TX_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+            <input type="month" className="input w-auto!" aria-label="סינון תנועות בנק לפי חודש" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} />
+          </>
         }
         emptyTitle="אין תנועות בנק" emptySubtitle="ייבא תדפיס בנק (CSV / Excel) כדי להתחיל בהתאמות" />
 
       {importOpen && <BankImportModal onClose={() => setImportOpen(false)} onDone={() => { setImportOpen(false); void refetch(); }} />}
       {selected && (
-        <MatchModal tx={selected} tolerance={org?.settings?.bank_match_amount_tolerance ?? 1} days={org?.settings?.bank_match_days ?? 7}
-          onClose={() => setSelected(null)} onChanged={() => { setSelected(null); void refetch(); }} />
+        selected.status === 'matched'
+          ? <UnmatchModal tx={selected} onClose={() => setSelected(null)} onChanged={() => { setSelected(null); void refetch(); }} />
+          : <MatchModal tx={selected} tolerance={org?.settings?.bank_match_amount_tolerance ?? 1} days={org?.settings?.bank_match_days ?? 7}
+              onClose={() => setSelected(null)} onChanged={() => { setSelected(null); void refetch(); }} />
       )}
     </div>
+  );
+}
+
+function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => void; onChanged: () => void }) {
+  const toast = useToast();
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function unmatch() {
+    if (!reason.trim()) { toast('נדרשת סיבה להסרת ההתאמה', 'error'); return; }
+    setBusy(true);
+    try {
+      unwrap(await supabase.rpc('unmatch_bank_transaction', {
+        p_bank_transaction_id: tx.id,
+        p_reason: reason.trim(),
+      }));
+      toast('ההתאמה הוסרה. התשלום נשאר רשום במערכת.');
+      onChanged();
+    } catch (error) {
+      toast(toHebrewError(error), 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="הסרת התאמת בנק" busy={busy} statusMessage={busy ? 'מסיר את התאמת הבנק' : undefined}>
+      <div className="space-y-4">
+        <div className="rounded-lg bg-surface-sunken border border-line px-4 py-3 text-sm">
+          <div className="flex flex-wrap justify-between gap-2">
+            <span>{fmtDate(tx.tx_date)} · {tx.description}</span>
+            <span className="font-bold num">{fmtMoneyExact(tx.amount)}</span>
+          </div>
+        </div>
+        <Note tone="await">הסרת ההתאמה מחזירה את תנועת הבנק לטיפול ואת דרישת התשלום לסטטוס ״בוצעה״. התשלום והקצאותיו אינם מתבטלים. התאמה ישירה לחשבונית דורשת תיקון כספי נפרד.</Note>
+        <div>
+          <label className="label" htmlFor="bank-unmatch-reason">סיבה להסרת ההתאמה *</label>
+          <input id="bank-unmatch-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+        </div>
+        <div className="flex justify-end gap-2">
+          <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
+          <button className="btn-danger" disabled={busy} onClick={() => void unmatch()}>
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <Unlink size={15} />} הסרת התאמה
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

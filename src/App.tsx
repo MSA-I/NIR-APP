@@ -228,6 +228,7 @@ export default function App() {
         <Route path="/credits" element={<Guard roles={READERS}><Credits /></Guard>} />
         <Route path="/payment-requests" element={<Guard roles={FINANCE}><PaymentRequests /></Guard>} />
         <Route path="/payments" element={<Guard roles={['owner', 'accountant']}><Payments /></Guard>} />
+        <Route path="/pay/emergency" element={<Guard roles={['owner']}><PayerQueue mode="emergency" /></Guard>} />
         <Route path="/pay" element={<Guard roles={['payer', 'accountant']}><PayerQueue /></Guard>} />
 
         <Route path="/bank" element={<Guard roles={['owner', 'accountant']}><Bank /></Guard>} />

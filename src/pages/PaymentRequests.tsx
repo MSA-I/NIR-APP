@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toHebrewError } from '../lib/errors';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useParamState } from '../lib/useParamState';
 import { Plus, Loader2, Send, CheckCircle2, ShieldAlert, XCircle, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -15,7 +15,7 @@ import type { PaymentRequest, PaymentRequestStatus, Supplier } from '../lib/type
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { paymentRequestCheckFingerprint } from '../lib/checkFingerprint';
 
-type Row = PaymentRequest & { supplier: { name: string } };
+type Row = PaymentRequest & { supplier: { name: string }; approver: { full_name: string } | null };
 
 export default function PaymentRequests() {
   const [params, setParams] = useSearchParams();
@@ -41,7 +41,7 @@ export default function PaymentRequests() {
 
   const { data, loading, fetching, error, refetch } = useQuery(async () =>
     fetchAll<Row>((from, to) => supabase.from('payment_requests')
-      .select('*, supplier:suppliers(name)')
+      .select('*, supplier:suppliers(name), approver:profiles!payment_requests_approved_by_fkey(full_name)')
       .order('created_at', { ascending: false }).order('id').range(from, to)));
 
   const today = todayISO();  // local calendar day; due_date is a plain date, string compare is correct
@@ -56,6 +56,7 @@ export default function PaymentRequests() {
   });
 
   const isOffice = !!profile && ['owner', 'office'].includes(profile.role);
+  const isOwner = profile?.role === 'owner';
 
   // Mirrors the detail modal's cancel flow: status → cancelled, reason recorded in audit_logs.
   // Terminal statuses (cancelled/executed/matched — same set the detail modal treats as final)
@@ -93,7 +94,10 @@ export default function PaymentRequests() {
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title">דרישות תשלום</h1>
-        {isOffice && <button className="btn-primary" onClick={() => setManualCreateOpen(true)}><Plus size={16} /> דרישה חדשה</button>}
+        <div className="flex flex-wrap items-center gap-2">
+          {isOwner && <Link className="btn-secondary" to="/pay/emergency"><ShieldAlert size={16} /> מסלול חירום לביצוע</Link>}
+          {isOffice && <button className="btn-primary" onClick={() => setManualCreateOpen(true)}><Plus size={16} /> דרישה חדשה</button>}
+        </div>
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || String(r.number).includes(q)}
@@ -472,6 +476,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
           <StatusBadge meta={PAYMENT_REQUEST_STATUS[pr.status]} />
           <span className="text-lg font-bold num">{fmtMoneyExact(pr.amount)}</span>
           {pr.due_date && <span className="text-sm text-ink-muted">יעד: {fmtDate(pr.due_date)}</span>}
+          {pr.approved_at && <span className="text-sm text-ink-muted">אושר על ידי {pr.approver?.full_name ?? 'משתמש לא זמין'} · {fmtDate(pr.approved_at)}</span>}
         </div>
         {pr.notes && <div className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-3 py-2">{pr.notes}</div>}
 

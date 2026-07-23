@@ -17,6 +17,8 @@ const ACTION_LABEL: Record<string, string> = {
   insert: 'יצירה', update: 'עדכון', delete: 'מחיקה',
   override_duplicate_warning: 'אישור חריגה — כפילות',
   bank_match_confirmed: 'אישור התאמת בנק', bank_match_manual: 'התאמת בנק ידנית',
+  bank_match_removed: 'הסרת התאמת בנק',
+  payment_request_emergency_executed: 'ביצוע תשלום במסלול חירום',
   month_sent_to_accountant: 'העברת חודש לרו״ח',
 };
 
