@@ -63,7 +63,6 @@ export function ReceiveOrder() {
   const toast = useToast();
   const [lines, setLines] = useState<Record<string, LineState>>({});
   const [openCredits, setOpenCredits] = useState(true);
-  const [reason, setReason] = useState('');
   const [newReceiptId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [doneReceiptId, setDoneReceiptId] = useState<string | null>(null);
@@ -115,7 +114,6 @@ export function ReceiveOrder() {
 
   async function save(complete: boolean) {
     if (!order) return;
-    if (!reason.trim()) { toast('נדרשת סיבה לשמירת הקבלה', 'error'); return; }
     setBusy(true);
     try {
       const result = unwrap(await supabase.rpc('save_goods_receipt', {
@@ -130,7 +128,7 @@ export function ReceiveOrder() {
           status: lines[item.id]?.status ?? 'full',
           notes: lines[item.id]?.notes.trim() || null,
         })),
-        p_reason: reason.trim(),
+        p_reason: complete ? 'השלמת קבלת סחורה' : 'שמירת ביניים של קבלת סחורה',
       })) as { receipt_id: string };
 
       const receiptId = result.receipt_id;
@@ -255,8 +253,6 @@ export function ReceiveOrder() {
         פתיחת דרישות זיכוי אוטומטית לחוסרי כמות בלבד
       </label>
       <p className="px-1 text-xs text-ink-muted">פריטים פגומים או שהוחזרו אינם נספרים כאספקה תקינה, והטיפול הכספי בהם נשאר ידני עד להכרעה עסקית.</p>
-      <div><label className="label" htmlFor="receiving-reason">סיבת השמירה / ההשלמה *</label><input id="receiving-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
-
       {/* sticky action bar */}
       <div className="phone-taskbar fixed inset-x-0 lg:ms-60 bg-surface border-t border-line p-3 flex gap-2 z-30">
         {busy && <span className="sr-only" role="status" aria-live="polite">שומר את הקבלה</span>}

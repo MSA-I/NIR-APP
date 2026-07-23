@@ -539,6 +539,11 @@ async function receivingAccessibility(browser) {
     return route.fulfill({ status: 200, headers: jsonHeaders, json: detail ? order : [order] });
   });
   await context.route('**/rest/v1/goods_receipts?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: null }));
+  const receiptReasons = [];
+  await context.route('**/rest/v1/rpc/save_goods_receipt', (route) => {
+    receiptReasons.push(route.request().postDataJSON().p_reason);
+    return route.fulfill({ status: 200, headers: jsonHeaders, json: { receipt_id: 'a0000000-0000-4000-8000-000000000001' } });
+  });
   const page = await context.newPage();
   captureConsole(page, 'receiving-accessibility');
   try {
@@ -548,6 +553,7 @@ async function receivingAccessibility(browser) {
     await page.getByText('ספק בדיקת נגישות').first().click();
     await settle(page);
     assert.equal(await page.locator('.speed-dial-trigger').count(), 0, 'receiving detail speed-dial must be hidden');
+    assert.equal(await page.getByText('סיבת השמירה / ההשלמה').count(), 0, 'routine receiving must not ask for a reason');
     await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור מוצר בדיקת נגישות' }).waitFor();
     await page.getByRole('button', { name: 'מלא עבור מוצר בדיקת נגישות' }).waitFor();
     assert.equal(await page.locator('button[aria-pressed]').count(), 5, 'receiving status controls lost pressed state');
@@ -555,6 +561,54 @@ async function receivingAccessibility(browser) {
     report.screenshots.push('receiving-390.png');
     const audit = await auditAccessibility(page, 'receiving-detail');
     assert.deepEqual(audit.controls, [], 'receiving detail contains an unlabeled control');
+    await page.getByRole('button', { name: 'שמירת ביניים' }).click();
+    await page.waitForURL((url) => url.pathname === '/receiving');
+    assert.equal(receiptReasons[0], 'שמירת ביניים של קבלת סחורה', 'draft receipt audit reason was not system-authored');
+    await page.goto(`${baseURL}/receiving/p4-ui-order`);
+    await settle(page);
+    await page.getByRole('button', { name: /סיום קבלה/ }).click();
+    await page.getByRole('heading', { name: 'הקבלה נשמרה!' }).waitFor();
+    assert.equal(receiptReasons[1], 'השלמת קבלת סחורה', 'completed receipt audit reason was not system-authored');
+  } finally {
+    await closeContext(context);
+  }
+}
+
+async function orderSupplierComparison(browser) {
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  captureConsole(page, 'order-supplier-comparison');
+  try {
+    await login(page, 'kitchen');
+    await page.goto(`${baseURL}/orders/new?fresh=1`);
+    await settle(page);
+    await page.getByRole('button', { name: 'בחירת מלפפונים' }).click();
+    await page.getByRole('button', { name: 'המשך לספקים' }).click();
+    const supplierSelect = page.getByRole('combobox', { name: 'ספק עבור מלפפונים' });
+    await supplierSelect.selectOption('aa000000-0000-4000-8000-000000000002');
+
+    const comparison = page.locator('section[aria-labelledby="supplier-comparison-title"]');
+    await comparison.getByText('משק ירוק').waitFor();
+    await comparison.getByText('חוות השדה').waitFor();
+    await comparison.getByText(/בחירה בזול תחסוך/).waitFor();
+    await auditAccessibility(page, 'order-supplier-comparison-1440');
+    await page.screenshot({ path: path.join(outDir, 'order-supplier-comparison-1440.png'), fullPage: true });
+    report.screenshots.push('order-supplier-comparison-1440.png');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await comparison.scrollIntoViewIfNeeded();
+    const width = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+    assert.ok(width.scroll <= width.client, `order comparison overflowed at 390px: ${width.scroll} > ${width.client}`);
+    await auditAccessibility(page, 'order-supplier-comparison-390');
+    await page.screenshot({ path: path.join(outDir, 'order-supplier-comparison-390.png'), fullPage: true });
+    report.screenshots.push('order-supplier-comparison-390.png');
+
+    await page.getByRole('button', { name: 'סקירה ואישור' }).click();
+    const review = page.getByRole('dialog', { name: 'סיכום ההזמנה' });
+    await review.waitFor();
+    assert.equal(await review.getByText('סיבת אישור ההזמנה').count(), 0, 'routine order approval must not ask for a reason');
+    await review.getByRole('button', { name: 'אשר ושלח הזמנה' }).click();
+    await page.getByRole('dialog', { name: 'שליחת הזמנות לספקים' }).waitFor({ timeout: 25_000 });
   } finally {
     await closeContext(context);
   }
@@ -906,6 +960,7 @@ async function adminState(browser) {
 }
 
 async function run(name, check) {
+  if (process.env.QUALITY_ONLY && !name.includes(process.env.QUALITY_ONLY)) return;
   try {
     await check();
     report.passed.push(name);
@@ -924,6 +979,7 @@ async function run(name, check) {
     await run('dashboard, speed-dial and dialogs', () => dashboardAndDialogs(browser));
     await run('DataTable, ActionMenu, route focus and mobile search', () => tableKeyboardAndSearch(browser));
     await run('receiving contextual names and accessibility', () => receivingAccessibility(browser));
+    await run('order supplier savings and reason-free approval', () => orderSupplierComparison(browser));
     await run('payment-request names and modal stack', () => paymentRequestNamesAndModalStack(browser));
     await run('bank contextual names and accessibility', () => bankContextualNames(browser));
     await run('partial Alerts never all-clear or mark read', () => alertsPartialFailure(browser));

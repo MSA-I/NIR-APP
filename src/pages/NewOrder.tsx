@@ -84,7 +84,6 @@ export default function NewOrder() {
   const [saveError, setSaveError] = useState('');
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [finalizeReason, setFinalizeReason] = useState('');
   const [cancelOpen, setCancelOpen] = useState(false);
   const [sendQueue, setSendQueue] = useState<QueueOrder[] | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
@@ -396,13 +395,12 @@ export default function NewOrder() {
 
   async function finalizeDraft() {
     if (savings.splitTotal === null) return;
-    if (!finalizeReason.trim()) { toast('נדרשת סיבה לאישור ההזמנה', 'error'); return; }
     setBusy(true);
     try {
       if (!await runSaveQueue()) throw new Error('שמירת הטיוטה נכשלה');
       const requestId = latestDraftRef.current?.requestId;
       if (!requestId) throw new Error('הטיוטה טרם נשמרה');
-      const finalized = await finalizeOrderDraft(requestId, savings.splitTotal, finalizeReason);
+      const finalized = await finalizeOrderDraft(requestId, savings.splitTotal);
       finalizedRef.current = true;
       const orders = unwrap(await supabase.from('purchase_orders')
         .select('*, supplier:suppliers(name, phone, whatsapp), items:purchase_order_items(qty, unit_price, product:products(name, unit))')
@@ -602,7 +600,6 @@ export default function NewOrder() {
           <SummaryRow label="כל המוצרים הוקצו לספק הזול ביותר" value={savings.allCheapest ? '✓ כן' : 'לא'} tone={savings.allCheapest ? 'done' : 'await'} />
         </div>
         {savings.singleSupplierTotal === null && <p className="mt-3 text-sm text-ink-muted">אין ספק יחיד שמציע את כל מוצרי הסל, ולכן לא מוצגת טענת חיסכון.</p>}
-        <div className="mt-4"><label className="label">סיבת אישור ההזמנה *</label><input className="input" value={finalizeReason} onChange={(e) => setFinalizeReason(e.target.value)} /></div>
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" className="btn-secondary" disabled={busy} onClick={() => setReviewOpen(false)}>חזרה לעריכה</button>
           <button type="button" className="btn-primary" disabled={busy || savings.splitTotal === null} onClick={() => void finalizeDraft()}>
@@ -663,19 +660,27 @@ function SupplierComparison({ cart, offersByProduct, supplierById, effective }: 
         <div className="text-start sm:text-end"><span className="block text-xs text-ink-muted">חיסכון אפשרי בבחירה הזולה</span><strong className={`num text-base ${saving > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(saving)}</strong></div>
       </div>
       <div className="divide-y divide-line-soft">
-        {rows.map(({ item, sp, cheapest, delta }) => {
-          const selectedName = sp ? supplierById.get(sp.supplier_id)?.name ?? 'ספק לא זמין' : 'לא נבחר ספק';
-          const cheapestName = cheapest ? supplierById.get(cheapest.supplier_id)?.name ?? 'ספק לא זמין' : null;
-          const selectedIsCheapest = !!sp && !!cheapest && sp.current_price === cheapest.current_price;
+        {rows.map(({ item, sp, cheapest }) => {
+          const offers = offersByProduct.get(item.product.id) ?? [];
+          const cheapestTotal = cheapest ? cheapest.current_price * item.qty : 0;
           return (
-            <div key={item.product.id} className="grid gap-2 px-3 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center sm:px-4">
-              <div className="min-w-0"><div className="font-medium text-ink-body">{item.product.name}</div><div className="mt-0.5 text-xs text-ink-muted">כמות <span className="num">{item.qty}</span></div></div>
-              {cheapest ? <div className="min-w-0"><div className="text-xs text-ink-muted">המחיר הזול ביותר</div><div className="mt-0.5 text-ink-body">{cheapestName} · <span className="num font-medium">{fmtMoneyExact(cheapest.current_price)}</span></div></div>
-                : <div className="text-alert-fg">אין הצעת מחיר פעילה למוצר</div>}
-              <div className="sm:min-w-40 sm:text-end">
-                {sp ? <><div className="text-xs text-ink-muted">נבחר: {selectedName} · <span className="num">{fmtMoneyExact(sp.current_price)}</span></div><div className={`mt-0.5 font-medium ${selectedIsCheapest ? 'text-done-fg' : 'text-await-fg'}`}>{selectedIsCheapest ? 'הבחירה הזולה ביותר' : `אפשר לחסוך ${fmtMoneyExact(delta)}`}</div></>
-                  : <div className="font-medium text-alert-fg">לא ניתן להזמין כרגע</div>}
+            <div key={item.product.id} className="px-3 py-3 text-sm sm:px-4">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="font-medium text-ink-body">{item.product.name}</div>
+                <div className="text-xs text-ink-muted">כמות <span className="num">{item.qty}</span></div>
               </div>
+              {offers.length ? <div className="divide-y divide-line-soft border-y border-line-soft">
+                {offers.map((offer) => {
+                  const total = offer.current_price * item.qty;
+                  const difference = Math.max(0, total - cheapestTotal);
+                  const selected = sp?.supplier_id === offer.supplier_id;
+                  return <div key={offer.id} className={`grid gap-1 px-2 py-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-4 ${selected ? 'bg-action-wash/45' : ''}`}>
+                    <div className="font-medium text-ink-body">{supplierById.get(offer.supplier_id)?.name ?? 'ספק לא זמין'}{selected && <span className="ms-2 text-xs text-action">נבחר</span>}</div>
+                    <div className="text-xs text-ink-muted"><span className="num">{fmtMoneyExact(offer.current_price)}</span> × <span className="num">{item.qty}</span> = <strong className="num text-ink">{fmtMoneyExact(total)}</strong></div>
+                    <div className={`text-xs font-medium sm:min-w-36 sm:text-end ${difference === 0 ? 'text-done-fg' : 'text-await-fg'}`}>{difference === 0 ? 'המחיר הנמוך ביותר' : `בחירה בזול תחסוך ${fmtMoneyExact(difference)}`}</div>
+                  </div>;
+                })}
+              </div> : <div className="text-alert-fg">אין הצעת מחיר פעילה למוצר</div>}
             </div>
           );
         })}
