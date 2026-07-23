@@ -381,32 +381,25 @@ exception when sqlstate 'P0002' then
 end
 $$;
 
-do $$
-begin
-  perform p1b_submit_supplier_price_list_internal(
-    '69900000-0000-0000-0000-000000000001',
-    '31000000-0000-0000-0000-000000000001', '2026-07-01', 'bypass.csv',
-    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/69900000-0000-0000-0000-000000000001/bypass.csv',
-    repeat('9', 64), '[]'::jsonb, 'direct bypass attempt'
-  );
-  raise exception 'expected internal command privilege rejection';
-exception when insufficient_privilege then null;
-end
-$$;
-
-do $$
-begin
-  perform claim_supplier_price_intake(
-    '79900000-0000-0000-0000-000000000002', auth.uid(),
-    '31000000-0000-0000-0000-000000000001',
-    '69900000-0000-0000-0000-000000000002', '2026-07-01', 'bypass.csv',
-    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/69900000-0000-0000-0000-000000000002/bypass.csv',
-    'direct service command attempt'
-  );
-  raise exception 'expected service staging privilege rejection';
-exception when insufficient_privilege then null;
-end
-$$;
+-- Calling any revoked function under SET ROLE crashes the local Supabase PostgreSQL 17.6
+-- backend (also reproduced with a trivial function). Assert the effective ACL directly;
+-- successful service_role execution of claim_supplier_price_intake is exercised above.
+select pg_temp.p1b_assert(
+  not has_function_privilege(
+    'authenticated',
+    'public.p1b_submit_supplier_price_list_internal(uuid,uuid,date,text,text,text,jsonb,text)',
+    'EXECUTE'
+  ),
+  'authenticated can execute the internal price-list command'
+);
+select pg_temp.p1b_assert(
+  not has_function_privilege(
+    'authenticated',
+    'public.claim_supplier_price_intake(uuid,uuid,uuid,uuid,date,text,text,text)',
+    'EXECUTE'
+  ),
+  'authenticated can execute the service intake command'
+);
 
 do $$
 begin
