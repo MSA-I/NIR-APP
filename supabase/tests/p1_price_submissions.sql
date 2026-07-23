@@ -460,6 +460,10 @@ select pg_temp.p1b_assert(
   (select count(*) = 2 from products where org_id = '11000000-0000-0000-0000-000000000001'),
   'unknown supplier row created a catalog product'
 );
+
+-- Suppliers must not read the audit ledger. Inspect the command evidence as the database
+-- owner, then restore the supplier JWT/role before continuing the caller-facing assertions.
+reset role;
 select pg_temp.p1b_assert(
   exists (
     select 1 from audit_logs
@@ -469,6 +473,9 @@ select pg_temp.p1b_assert(
   ),
   'submission audit is missing'
 );
+select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000003', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
 do $$
 begin
   delete from supplier_price_submissions
