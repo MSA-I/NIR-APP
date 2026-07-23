@@ -52,7 +52,7 @@ using (
   )
 );
 
-comment on policy price_submissions_storage_select on storage.objects is
-  'Registered price files follow ledger roles; unregistered staging is visible only to its tenant-scoped uploader.';
+-- Policy contract: registered files follow ledger roles; unregistered staging is visible only
+-- to its tenant-scoped uploader.
 
 -- Deliberately no UPDATE policy: neither registered files nor uploader staging can be replaced.

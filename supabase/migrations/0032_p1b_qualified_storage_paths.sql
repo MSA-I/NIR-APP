@@ -87,9 +87,7 @@ using (
   )
 );
 
-comment on policy price_submissions_storage_insert on storage.objects is
-  'Tenant-scoped uploader insert with an explicitly qualified supplier path lookup.';
-comment on policy price_submissions_storage_select on storage.objects is
-  'Registered price files follow ledger roles; unregistered staging is visible only to its tenant-scoped uploader.';
+-- Policy contract: inserts use the explicitly qualified tenant/supplier path; registered files
+-- follow ledger roles, while unregistered staging is visible only to its tenant-scoped uploader.
 
 -- Deliberately no UPDATE policy: neither registered files nor uploader staging can be replaced.
