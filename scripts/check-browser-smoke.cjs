@@ -662,7 +662,7 @@ async function tableKeyboardAndSearch(browser) {
     await settle(page);
     assert.equal(await page.getByRole('combobox', { name: 'סינון חריגים לפי חומרה' }).inputValue(), 'high');
     assert.equal(new URL(page.url()).searchParams.get('severity'), 'high');
-    await page.locator('#main tbody').getByText('גבוהה', { exact: true }).first().waitFor({ timeout: 20_000 });
+    await page.locator('#main .badge-alert:visible').filter({ hasText: /^גבוהה$/ }).first().waitFor({ timeout: 20_000 });
     await assertNoRawMetadata(page, 'stable exception severity filter');
     steps += 1;
     evidence.push('/exceptions?status=open&severity=high');
