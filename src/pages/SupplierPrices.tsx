@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
-import { cellText, matchColumn, nameKey, readSheet, sha256File } from '../lib/importSheet';
+import { cellText, matchColumn, nameKey, readSheet } from '../lib/importSheet';
 import { fmtDate, todayISO } from '../lib/format';
 import { PRODUCT_AVAILABILITY } from '../lib/status';
 import type {
@@ -29,9 +29,10 @@ interface SubmissionRow {
 
 interface PreparedSubmission {
   file: File;
-  checksum: string;
   rows: SubmissionRow[];
 }
+
+class SubmissionError extends Error {}
 
 interface SubmissionReceipt {
   submission_id: string;
@@ -267,7 +268,7 @@ function ImportModal({ orgId, supplierId, products, onClose, onDone }: {
     setPhase('קורא ובודק את הקובץ');
     setReceipt(null);
     try {
-      const [sheet, checksum] = await Promise.all([readSheet(file), sha256File(file)]);
+      const sheet = await readSheet(file);
       const columns = {
         productId: matchColumn(sheet.headers, ['מזהה מוצר', 'מזהה_מוצר', 'product_id', 'product id'], false),
         product: matchColumn(sheet.headers, ['מוצר', 'שם מוצר', 'product', 'product_name'], false),
@@ -297,7 +298,7 @@ function ImportModal({ orgId, supplierId, products, onClose, onDone }: {
           available: !['0', 'false', 'לא', 'לא זמין', 'unavailable'].includes(availability),
         };
       });
-      setPrepared({ file, checksum, rows });
+      setPrepared({ file, rows });
     } catch (error) {
       setPrepared(null);
       toast(error instanceof Error ? error.message : 'לא ניתן לקרוא את הקובץ', 'error');
@@ -327,31 +328,32 @@ function ImportModal({ orgId, supplierId, products, onClose, onDone }: {
       uploaded = true;
 
       setPhase('קולט את המחירים ושומר קבלה');
-      const response = await supabase.rpc('submit_supplier_price_list', {
-        p_submission_id: submissionId,
-        p_supplier_id: supplierId,
-        p_target_month: `${targetMonth}-01`,
-        p_file_name: prepared.file.name,
-        p_storage_path: storagePath,
-        p_file_checksum: prepared.checksum,
-        p_rows: prepared.rows,
-        p_reason: reason.trim(),
+      const response = await supabase.functions.invoke<SubmissionReceipt>('submit-price-list', {
+        body: {
+          submissionId,
+          supplierId,
+          targetMonth: `${targetMonth}-01`,
+          fileName: prepared.file.name,
+          storagePath,
+          reason: reason.trim(),
+        },
       });
       let result: SubmissionReceipt;
       if (response.error) {
-        // A lost HTTP response is not proof of rollback. Reconcile by the server's idempotency
-        // key before deleting the staging object or telling the supplier to retry.
+        // A lost outer HTTP response is not proof of rollback. The Edge Function performs its
+        // own checksum reconciliation; this final lookup covers a response lost after it replied.
         const recovered = await supabase.from('supplier_price_submissions').select('*')
-          .eq('supplier_id', supplierId)
-          .eq('target_month', `${targetMonth}-01`)
-          .eq('file_checksum', prepared.checksum)
+          .eq('id', submissionId)
           .maybeSingle();
-        if (recovered.error || !recovered.data) throw response.error;
-        result = receiptFromSubmission(recovered.data as SupplierPriceSubmission);
+        if (!recovered.error && recovered.data) {
+          result = receiptFromSubmission(recovered.data as SupplierPriceSubmission);
+        } else {
+          throw new SubmissionError(await edgeErrorMessage(response.error));
+        }
       } else if (response.data) {
         result = response.data as SubmissionReceipt;
       } else {
-        throw new Error('השרת לא החזיר קבלת הגשה');
+        throw new SubmissionError('השרת לא החזיר קבלת הגשה. נסה שוב עם אותו קובץ כדי לבדוק אם כבר נקלט.');
       }
 
       if (result.idempotent && result.storage_path !== storagePath) {
@@ -367,7 +369,7 @@ function ImportModal({ orgId, supplierId, products, onClose, onDone }: {
         const cleanup = await supabase.storage.from('price-submissions').remove([storagePath]);
         cleanupFailed = Boolean(cleanup.error);
       }
-      toast(toHebrewError(error), 'error');
+      toast(error instanceof SubmissionError ? error.message : toHebrewError(error), 'error');
       if (cleanupFailed) {
         toast('לא ניתן לאשר אם ההגשה נקלטה או לנקות את הקובץ. נסה שוב עם אותו קובץ כדי לקבל את הקבלה בלי ליצור כפילות.', 'error');
       }
@@ -424,11 +426,33 @@ function ImportModal({ orgId, supplierId, products, onClose, onDone }: {
         <div className="text-center py-8">
           <p className="text-sm text-ink-soft mb-4">בחר Excel או CSV UTF-8 עם product_id (או שם מוצר קנוני) ועמודת מחיר.</p>
           <button className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
-          <input ref={fileRef} type="file" hidden accept=".xlsx,.xls,.csv" onChange={(event) => event.target.files?.[0] && void onFile(event.target.files[0])} />
+          <input ref={fileRef} type="file" hidden accept=".xlsx,.xls,.csv"
+            onClick={(event) => { event.currentTarget.value = ''; }}
+            onChange={(event) => event.target.files?.[0] && void onFile(event.target.files[0])} />
         </div>
       )}
     </Modal>
   );
+}
+
+async function edgeErrorMessage(error: unknown) {
+  const context = (error as { context?: Response } | null)?.context;
+  if (context && typeof context.json === 'function') {
+    try {
+      const body = await context.json() as { error?: { message?: string; detail?: string } };
+      if (body.error?.message) {
+        return body.error.detail ? `${body.error.message} (${body.error.detail})` : body.error.message;
+      }
+    } catch { /* use the transport mapping below */ }
+    if (context.status === 401) return 'פג תוקף החיבור. יש להתחבר מחדש לפני הגשת המחירון.';
+    if (context.status === 403) return 'אין לך הרשאה להגיש מחירון עבור הספק שנבחר.';
+    if (context.status === 409) return 'מצב ההגשה השתנה. רענן את המסך ונסה שוב.';
+    if (context.status === 413) return 'הקובץ גדול מ־10MB. יש לפצל אותו ולנסות שוב.';
+    if (context.status === 404 || context.status >= 500) {
+      return 'שירות קליטת המחירונים אינו זמין כרגע. נסה שוב בעוד מספר דקות.';
+    }
+  }
+  return toHebrewError(error);
 }
 
 function receiptFromSubmission(submission: SupplierPriceSubmission): SubmissionReceipt {

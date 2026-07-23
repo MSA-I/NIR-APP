@@ -54,21 +54,34 @@ push, ‏deploy או מיגרציה לסביבה חיה; הצלחה מקומית
 מיגרציה `0026_supplier_price_submissions.sql` מוסיפה ledger קבלות immutable לפי ארגון,
 ספק, חודש ו־revision, ודלי פרטי ייעודי בנתיב
 `{org_id}/price-submissions/{supplier_id}/{submission_id}/{file}`. אותו checksum באותו חודש
-מחזיר את הקבלה המקורית; קובץ מתקן יוצר revision חדש. `submit_supplier_price_list` מאמת קובץ
-שבבעלות המגיש, מסווג כל שורה, וקולט באותה עסקת DB את המחירים התקינים, `price_history`, הקבלה
-וה־audit. מוצר לא מוכר נדחה ואינו יוצר מוצר קטלוג. כשל DB מבטל את כל כתיבות ה־DB; כשל לאחר
-העלאת קובץ מפעיל ניקוי של orphan לא רשום, שאינו ניתן לקריאה.
+מחזיר את הקבלה המקורית; קובץ מתקן יוצר revision חדש. מיגרציה חדשה
+`0029_p1b_trusted_file_intake.sql` סוגרת את גבול האמון של `0026`: טבלת intake קצר־חיים היא
+`service_role` בלבד, מקבעת את `object_id`/`updated_at` של קובץ פרטי בבעלות המעלה וחוסמת את
+מחיקתו בזמן הקליטה. הפקודה הציבורית מקבלת רק `intake_id`; חתימת שמונת הארגומנטים הישנה נשארת
+מימוש פנימי ללא grant ל־API. צריכת ה־intake, מחירים, `price_history`, קבלה ו־audit מתבצעים
+באותה עסקת DB. מוצר לא מוכר נדחה ואינו יוצר מוצר קטלוג; כשל משאיר אפס כתיבות DB חלקיות.
 
-מסך הספק משתמש ב־`importSheet.ts` המשותף ל־XLSX/CSV, מחשב SHA-256 ב־Web Crypto, מציג חודש,
-קבלה, דחיות והיסטוריית הגשות ומספק תבנית עם מזהי מוצר ושמות קנוניים. `/prices` מציג למנהל/ת
-הרכש היסטוריית קבלות, בעוד `import_supplier_prices` הוותיק נשאר ל־`owner`/`office` בלבד;
-ספק אינו יכול לעקוף את מסלול ההגשה החדש דרך ה־RPC הישן.
+Edge Function חדשה `submit-price-list` מאמתת את JWT הקורא, התפקיד, הדייר והספק, מורידה את
+האובייקט הפרטי, בודקת עד 10MB ועד 5,000 שורות, מאמתת CSV UTF-8 או חתימת XLS/XLSX, ומחשבת
+SHA-256 ומפיקה שורות קנוניות מן הבייטים בפועל בצד השרת. היא מכינה intake דרך service role,
+אך מפעילה את פקודת המחירים הסופית עם JWT המשתמש. מפתח השירות אינו בדפדפן, CORS מוגבל
+ל־`APP_BASE_URL`/`ALLOWED_ORIGINS`, והלוגים מכילים קוד שגיאה בלבד.
 
-**אימות נוכחי:** `supabase/tests/p1_price_submissions.sql` מכסה קליטה חלקית, מוצר לא מוכר,
-retry, ‏revision, rollback, ספק מתחרה ודייר שני. `npm.cmd ci` ו־`npm.cmd run build` עברו,
-כולל TypeScript וכל בדיקות הלוגיקה המשורשרות; `git diff --check` ובדיקת scope סטטית עברו.
-בדיקת DB/reset טרם הורצה משום ש־P1C מחזיק בלעדית את Supabase המקומי; אין להפוך מצב זה
-ל־PASS. לא בוצעו push, ‏deploy או מיגרציה חיה.
+מסך הספק ממשיך להשתמש ב־`importSheet.ts` לתצוגה מקדימה בלבד ואינו שולח checksum או שורות.
+שגיאת `FieldMismatch` או כל שגיאת CSV אחרת חוסמת את ההגשה עם שורה והנחיית תיקון; CSV עברי
+ללא BOM נתמך. המסך מציג חודש, קבלה, דחיות והיסטוריה ומספק תבנית עם מזהים ושמות קנוניים,
+ומשמר reconciliation וניקוי orphan. ‏`/prices` מציג למנהל/ת הרכש היסטוריית קבלות, בעוד
+`import_supplier_prices` הוותיק נשאר ל־`owner`/`office`; ספק אינו יכול לעקוף דרך ה־RPC הישן.
+
+**אימות נוכחי:** `npm.cmd ci`, ‏`npm.cmd run build`, ‏Deno frozen-lock type-check לפונקציית הקצה,
+SheetJS runtime roundtrip, בדיקת CSV UTF-8 ללא BOM/‏FieldMismatch, ‏PowerShell parse
+ו־`git diff --check` עברו.
+`supabase/tests/p1_price_submissions.sql` הורחב ל־owner/office/supplier ולכל תפקידי השלילה,
+RLS/Storage, עקיפת RPC, שינוי object/version, rollback וספק/דייר מתחרה; harness מקביליות אמיתי
+בודק checksum זהה ושתי revisions שונות בשני חיבורים, ושניהם חוברו ל־quality gate.
+בדיקות DB/reset וקריאת Edge HTTP טרם הורצו בענף המבודד: הן מחייבות תחילה שילוב של `0028`
+עם `0029` בתוך stack אינטגרציה ייחודי. מצב זה הוא BLOCKED עד להרצה המשולבת ולא PASS. לא בוצעו
+push, ‏deploy או מיגרציה חיה.
 
 ---
 

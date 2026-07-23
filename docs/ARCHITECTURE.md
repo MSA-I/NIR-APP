@@ -4,10 +4,12 @@
 
 SPA ב-React 19 + TypeScript (Vite) מול Supabase כ-backend יחיד: PostgreSQL עם Row-Level Security לכל טבלה, Supabase Auth (אימייל+סיסמה), ו-Storage פרטי למסמכים. אין שרת ביניים — כללי האבטחה נאכפים ב-DB (RLS + פונקציות SECURITY DEFINER), והלוגיקה העסקית (בדיקות כפילות, פיצול הזמנות, הצעות התאמת בנק) ממומשת בשכבת `src/lib` בצד הלקוח מעל שאילתות מוגנות-RLS.
 
-**חריגה מכוונת מ"אין שרת ביניים" (שלב 2 ואירועי Push).** פעולות מערכת שחוצות RLS מחזיקות את
+**חריגה מכוונת מ"אין שרת ביניים" (שלב 2, אירועי Push וקליטת קבצים לא־מהימנים).** פעולות מערכת שחוצות RLS מחזיקות את
 מפתח ה־`service_role` רק ב־Supabase Edge Functions — לעולם לא בדפדפן. `admin-provision` ו־
 `send-invite` מאמתות JWT והרשאה לפני פעולה; `send-push` נקראת רק מטריגרי DB/cron ומאמתת
 `x-push-secret` מול secret סביבתי לפני יצירת התראות, קריאת מנויים או ניקוי endpoint מת.
+`submit-price-list` מאמתת את JWT הקורא, נועלת אובייקט פרטי, מורידה את הבייטים בפועל ומפיקה
+מהם hash ושורות קנוניות בצד השרת; רק אז היא מפעילה את פקודת ה־DB הסופית עם ה־JWT המקורי.
 זו הרחבה תחומה של אותו עיקרון, לא שרת יישום עצמאי.
 
 ```
@@ -40,7 +42,8 @@ supabase/
                            0023 פקודות פיננסיות P1 · 0024 אמינות נתונים והתראות P2
                            0025 חוזה תפקידים: owner/office/accountant · 0026 הגשות מחירון חודשיות
                            0027 בטיחות trigger פיננסי משותף · 0028 תיקוני גבול פיננסי P0
-  functions/               admin-provision · send-invite · send-push — service_role נשאר בשרת
+                           0029 intake מהימן להגשות מחירון
+  functions/               admin-provision · send-invite · send-push · submit-price-list — service_role נשאר בשרת
   seed.sql                 seed ניטרלי לדייר חדש (ארגון + קטגוריות)
   demo/                    חבילת הדמו כדייר נפרד + reset + audit בידוד
 scripts/                   כלי admin + בדיקות P0/P1/P2 למסד מקומי ולוגיקה בדפדפן
@@ -161,7 +164,7 @@ transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מ
 | חשבונית | `create_invoice`, ‏`set_invoice_review_status`, ‏`soft_delete_invoice` | UUID לקוח יציב, בדיקות DB חוזרות, ומחיקה רכה עם נעילה, בדיקת קשרים וסיבת audit באותה עסקה |
 | זיכוי מחשבונית | `create_invoice_credit_request`, ‏`transition_credit_request` | UUID לקוח יציב, נעילת חשבונית לפני זיכוי, מעברי סטטוס שרתיים ורענון יתרה באותה עסקה |
 | מחיר מנהל/ידני | `set_supplier_product_price`, ‏`import_supplier_prices` | נעילת `supplier_products`; מחיר נוכחי ו־`price_history` נכתבים יחד; batch legacy הוא `owner`/`office` בלבד |
-| הגשת מחירון ספק | `submit_supplier_price_list` | נעילת ספק מסדרת revision; ‏checksum חודשי מחזיר אותה קבלה; מחיר, היסטוריה, קבלה ו־audit באותה עסקת DB |
+| הגשת מחירון ספק | `submit-price-list` → `submit_supplier_price_list` | Edge נועל ומאמת את גרסת אובייקט ה־Storage, גוזר hash ושורות מהבייטים; נעילת ספק מסדרת revision; ‏checksum חודשי מחזיר אותה קבלה; intake, מחיר, היסטוריה, קבלה ו־audit נסגרים באותה עסקת DB |
 | חודש לרו״ח | `mark_month_export_sent` | נעילת ארגון/export/חשבוניות ו־snapshot ממוין של `invoice_ids` |
 | אישור טיוטת הזמנה | `finalize_purchase_request_draft` | נעילת טיוטה, פריטים ומחירים בסדר קבוע; שינוי מחיר מחזיר `draft_price_changed` |
 
@@ -174,11 +177,23 @@ transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מ
 הדלי `price-submissions` פרטי ומקבל רק CSV/XLS/XLSX עד 10MB. נתיב חדש הוא בדיוק
 `{org_id}/price-submissions/{supplier_id}/{submission_id}/{file}` וללא overwrite: ניתן למחוק
 רק orphan של אותו uploader שלא נרשם ב־ledger; לאחר רישום הקובץ immutable ונקרא רק בידי
-`owner`/`office` או הספק שלו. ה־RPC מאמת את קיום אובייקט ה־Storage ואת הבעלות עליו לפני כתיבת
-מחירים. קלט השורות מוגבל ל־5,000; כל שורה מקבלת תוצאת קבלה או דחייה, ולכן הגשה עם שילוב
-שורות תקינות ושגויות מקבלת `accepted_with_rejections`. אם כתיבת DB כלשהי נכשלת, גם מחיר,
-`price_history`, קבלה ו־audit מתבטלים יחד. העלאת Storage מקדימה את עסקת DB ולכן הלקוח מנקה
-כשל כ־orphan לא רשום; גם אם הניקוי נכשל, מדיניות הקריאה אינה חושפת אותו.
+`owner`/`office` או הספק שלו.
+
+הדפדפן רשאי לבצע preview מקומי, אך אינו שולח hash או שורות לפקודת המחירים. הוא מעלה אובייקט
+פרטי ושולח ל־`submit-price-list` רק מזהי הגשה/ספק/חודש, שם ונתיב קובץ וסיבה. פונקציית הקצה
+מאמתת מחדש את המשתמש, התפקיד, הדייר והספק, יוצרת claim קצר־חיים בטבלת
+`supplier_price_submission_intakes` שהיא `service_role` בלבד, ומקבעת `object_id` ו־
+`updated_at` של אובייקט בבעלות המעלה. כל עוד ה־claim פעיל מדיניות Storage חוסמת מחיקה;
+אין מדיניות UPDATE/overwrite לאובייקט. הפונקציה מורידה את הקובץ הפרטי, מאמתת עד 10MB,
+חותמת CSV UTF-8 או XLS/XLSX אמיתי, מפענחת עד 5,000 שורות בצד השרת ומחשבת SHA-256 מהבייטים
+שהורדו. לפני staging היא מאמתת שוב שזה אותו object/version.
+
+ה־RPC הציבורי מקבל רק `intake_id`, פועל עם ה־JWT המקורי וצורך intake מוכן של אותו actor/dייר.
+הפקודה הישנה בעלת שמונת הארגומנטים נשארת מימוש פנימי ללא grant ל־API. כל שורה מקבלת תוצאת
+קבלה או דחייה, ולכן שילוב שורות תקינות ושגויות מקבל `accepted_with_rejections`; מוצר לא מוכר
+אינו יוצר מוצר. צריכת ה־intake, עדכון המחירים, `price_history`, ה־ledger וה־audit מתבצעים באותה
+עסקת DB, כך שכשל משאיר את ה־intake מוכן לניקוי שרתי ואינו משאיר כתיבת DB חלקית. לאחר שחרור
+claim הלקוח מנקה orphan לא רשום; גם אם הניקוי נכשל, מדיניות הקריאה אינה חושפת אותו.
 
 ל־`bank_allocations` אין עדיין constraint היסטורי של יעד יחיד: preflight מצא שבע שורות ישנות
 עם שני יעדים. כתיבה חדשה דרך ה־RPC מחייבת יעד אחד וה־guard חוסם כתיבה ישירה; תיקון הרשומות

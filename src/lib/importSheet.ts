@@ -45,12 +45,12 @@ export async function readSheet(file: File): Promise<SheetData> {
         throw new SheetError('קידוד ה־CSV אינו UTF-8. שמור את הקובץ כ־CSV UTF-8 ונסה שוב.');
       }
       const parsed = Papa.parse<SheetRow>(text, { header: true, skipEmptyLines: true });
-      // Field-count mismatches are row-level input defects and remain available to the caller's
-      // partial-acceptance report. Broken quoting/delimiter detection makes the whole file unsafe.
-      const structuralError = parsed.errors.find((error) => error.type !== 'FieldMismatch');
-      if (structuralError) {
-        const firstRow = structuralError.row;
-        throw new SheetError(`מבנה ה־CSV אינו תקין${firstRow == null ? '' : ` ליד שורה ${firstRow + 2}`}. בדוק מפרידים ומרכאות.`);
+      // Papa keeps rows with missing/extra fields in `data`. Accepting them would silently shift
+      // or discard cells, so every parser error blocks with the exact source row.
+      const parseError = parsed.errors[0];
+      if (parseError) {
+        const firstRow = parseError.row;
+        throw new SheetError(`מבנה ה־CSV אינו תקין${firstRow == null ? '' : ` ליד שורה ${firstRow + 2}`}. בדוק את מספר העמודות, המפרידים והמרכאות.`);
       }
       rows = parsed.data;
     } else {
@@ -79,12 +79,6 @@ export async function readSheet(file: File): Promise<SheetData> {
   if (!headers.length) throw new SheetError('לא נמצאו כותרות עמודות בקובץ');
 
   return { fileName: file.name, headers, rows };
-}
-
-/** Browser-native SHA-256 used as the retry/idempotency key for an uploaded file. */
-export async function sha256File(file: File): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /* ---------- column matching ---------- */
