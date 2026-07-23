@@ -423,6 +423,7 @@ try {
     $localEnvironment = Wait-LocalStackReady
 
     Invoke-SqlTest "supabase\tests\p0_client_dml_acl.sql" "P0 browser DML ACL and trusted-server CRUD"
+    Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-Preflight
     Invoke-SqlTest "supabase\tests\p1_financial_commands.sql" "P1 financial commands, rollback and idempotency"
     Invoke-SqlTest "supabase\tests\p1_price_submissions.sql" "P1B trusted price-list intake, tenant isolation and rollback"
