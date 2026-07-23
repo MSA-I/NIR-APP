@@ -285,7 +285,7 @@ export function SupplierCard() {
       supabase.from('invoices').select('*').eq('supplier_id', id!).is('deleted_at', null).order('invoice_date', { ascending: false }).limit(50),
       supabase.from('payments').select('*').eq('supplier_id', id!).order('paid_date', { ascending: false }).limit(50),
       supabase.from('credit_requests').select('*').eq('supplier_id', id!).order('created_at', { ascending: false }).limit(50),
-      supabase.from('supplier_balances').select('*').eq('supplier_id', id!).single(),
+      supabase.from('supplier_balances').select('*').eq('supplier_id', id!).maybeSingle(),
       supabase.from('supplier_metrics').select('*').eq('supplier_id', id!).maybeSingle(), // maybeSingle: a role-guarded view may return no row
       supabase.from('supplier_products').select('*, product:products(id,name,unit)').eq('supplier_id', id!).order('updated_at', { ascending: false }),
     ]);

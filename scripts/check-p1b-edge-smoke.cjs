@@ -166,6 +166,28 @@ async function main() {
     p_reason: 'forged browser payload',
   });
   assert.ok(oldBypass.error, 'legacy eight-argument browser RPC remained callable');
+  const internalBypass = await userClient.rpc('p1b_submit_supplier_price_list_internal', {
+    p_submission_id: crypto.randomUUID(),
+    p_supplier_id: supplierId,
+    p_target_month: '2026-07-01',
+    p_file_name: 'internal-bypass.csv',
+    p_storage_path: `${orgId}/price-submissions/${supplierId}/${crypto.randomUUID()}/internal-bypass.csv`,
+    p_file_checksum: 'b'.repeat(64),
+    p_rows: [],
+    p_reason: 'browser internal command attempt',
+  });
+  assert.ok(internalBypass.error, 'browser reached the internal price-list command');
+  const intakeBypass = await userClient.rpc('claim_supplier_price_intake', {
+    p_intake_id: crypto.randomUUID(),
+    p_actor_id: userId,
+    p_supplier_id: supplierId,
+    p_submission_id: crypto.randomUUID(),
+    p_target_month: '2026-07-01',
+    p_file_name: 'intake-bypass.csv',
+    p_storage_path: `${orgId}/price-submissions/${supplierId}/${crypto.randomUUID()}/intake-bypass.csv`,
+    p_reason: 'browser intake command attempt',
+  });
+  assert.ok(intakeBypass.error, 'browser reached the service-only intake command');
   const noIntake = await userClient.rpc('submit_supplier_price_list', { p_intake_id: crypto.randomUUID() });
   assert.ok(noIntake.error, 'one-argument RPC accepted an untrusted intake id');
 
