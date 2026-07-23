@@ -7,6 +7,51 @@
 
 ---
 
+## פריסת production מאומתת — P0–P4 (23.07.2026)
+
+**קוד ו־Git:** שרשרת P0–P4 נבדקה מחדש מתוך worktree נקי ומבודד. הקומיטים של P0, ‏P1,
+P2, ‏P3 ו־P4 הם ancestors של `513dfd3`, ללא מיזוג חוזר של ענפים ישנים. `origin/main`
+לא השתנה בזמן האינטגרציה, ולכן `513dfd3` נדחף אליו ב־fast-forward וללא force-push.
+פריסת הקוד המתוארת כאן נבנתה בדיוק מ־`513dfd3`; העדכון הנוכחי הוא תיעוד בלבד.
+
+**שער איכות טרי:** אחרי `npm.cmd ci`, ‏`npm.cmd run quality` הסתיים ב־exit code ‏0,
+עם 17/17 קבוצות דפדפן, 20 בדיקות viewport, תשע ביקורות נגישות, אפס כשלים, אפס דילוגים
+ואפס שגיאות console. הראיות נמצאות תחת
+`C:\Users\art1\.codex\visualizations\2026\07\23\20260723-102147-p4-quality-gates`.
+
+**Supabase production:** לפני DDL נוצר dump לוגי של schema, ‏data ו־roles ונבדק לפי גודל
+ו־SHA-256 תחת
+`C:\Users\art1\.codex\visualizations\2026\07\23\20260723-103530-supplyflow-predeploy-backup`.
+ה־ledger המרוחק הסתיים ב־`0019`, וה־dry-run הציג רק את `0020`–`0024` בסדר. חמש המיגרציות
+הוחלו וכעת `migration list` תואם local/remote עד `0024`; dry-run נוסף מחזיר שהמסד מעודכן.
+בקריאת הקטלוג אומתו 67 ‏FKs חוצי־דיירים תקפים, אפס `org_id` חסר בשבע טבלאות הקשר,
+views עם `security_invoker`/`security_barrier`, דלי `documents` פרטי, ACLs של P1/P2
+ו־0 ממצאי ERROR ב־Supabase security advisor.
+
+**היסטוריה נשמרה ללא תיקון:** שלוש קבוצות החריגים נשארו בדיוק באותם counts ובאותם
+fingerprints לפני ואחרי המיגרציות: 7 הקצאות בנק דו־יעדיות, 58 מחירים ללא היסטוריה תואמת
+ושני exports ישנים ללא snapshot. לא תוקנה, נמחקה או הומצאה עבורן היסטוריה.
+
+**Edge Functions:** רק `send-invite` ו־`send-push` השתנו מול בסיס `main`, ורק הן נפרסו.
+`send-invite` פעילה בגרסה 8 עם JWT; ‏`send-push` פעילה בגרסה 3 עם `verify_jwt=false`
+כמתחייב מקריאות DB/cron, ודוחה בקשה ללא `x-push-secret` ב־403 מתוך הפונקציה.
+`admin-provision` לא נפרסה ולא שונו secrets.
+
+**Cloudflare Pages:** build production חדש עבר מתוך הקומיט הנקי, מול Supabase production
+וללא URL מקומי. הפריסה בוצעה לפרויקט `supplyflow` בכתובת הייחודית
+`https://0c378bd6.supplyflow-baq.pages.dev`, והדומיין הראשי הוא
+`https://supplyflow-baq.pages.dev`. בכל אחת משתי הכתובות הושוו `index.html` וכל 53 קובצי
+ה־JS/CSS ל־`dist` לפי SHA-256; כל הקבצים זהים. manifest ההשוואה נמצא ב־
+`C:\Users\art1\.codex\visualizations\2026\07\23\20260723-110455-supplyflow-live-513dfd3\asset-hashes.csv`.
+
+**אימות חי ללא כתיבה עסקית:** חשבון קיים הוביל למסלול המורשה `/receiving`. בדיקות Chrome
+ב־1440×900 וב־390×844 החזירו 200, ‏RTL, אפס overflow ואפס שגיאות console/page/HTTP;
+גם מגירת המובייל נפתחה ונבדקה. נשמרו `supplyflow-live-desktop-1440.png`,
+`supplyflow-live-mobile-390.png`, ‏`supplyflow-live-mobile-drawer-390.png` ו־
+`browser-report.json` בתיקיית הראיות החיה לעיל. לא נוצרו ולא שונו נתונים עסקיים.
+
+---
+
 ## P4 — שערי איכות סופיים (עבר לאחר תיקון ממצאי המוצר)
 
 **מצב 23.07.2026:** ענף `codex/p4-quality-gates` ו־worktree מבודד נוצרו בדיוק מעל
@@ -44,9 +89,10 @@ console או HTTP בלתי־צפויות.
 
 `npm.cmd run quality` החזיר exit code ‏0 ללא דילוגים: 17 קבוצות דפדפן, 20 בדיקות viewport,
 9 ביקורות נגישות, 0 כשלים ו־0 שגיאות console. ראיות ההרצה הסופית נמצאות תחת
-`C:\Users\art1\.codex\visualizations\2026\07\23\20260723-063559-p4-quality-gates`.
+`C:\Users\art1\.codex\visualizations\2026\07\23\20260723-102147-p4-quality-gates`.
 
-**גבולות:** לא שונו RPCs, לוגיקה פיננסית, migrations או assertions/תרחישי בדיקה של P4;
+**גבולות של שלב P4 המקומי, לפני rollout הייצור המתועד למעלה:** לא שונו RPCs, לוגיקה
+פיננסית, migrations או assertions/תרחישי בדיקה של P4;
 תוקן רק אתחול ה־runner המקומי. לא בוצעו push/deploy/migration חיה, לא נכתב למסד החי ולא
 שונו החריגים ההיסטוריים. המסד המקומי אופס ל־seed הניטרלי ונעצר לאחר ההרצה.
 
@@ -318,9 +364,8 @@ parse לכל סקריפטי PowerShell ו־`git diff --check` עברו. בסיו
 הזמנה, ריכוז הוצאות, תפריט חשבונית פתוח ומסמכים מאוחדים בדסקטופ וב־390px, ללא גלישה אופקית
 וללא שגיאות דפדפן. מיקום התפריט הפתוח נמדד בתוך ה־viewport וכל חמש פעולות החשבונית אומתו.
 
-**טרם הופעל בסביבה החיה:** מיגרציות `0014`–`0017`, פריסת `send-push`, מפתחות/סודות VAPID והגדרת
-`VITE_VAPID_PUBLIC_KEY`. סביבת העבודה מקושרת לפרויקט Supabase אך אין בה `SUPABASE_ACCESS_TOKEN`;
-לכן אין להציג את ה־Push או את פעמון הרשומות כמופעלים בפרודקשן עד לביצוע צעדי המפעיל ואימות קצה־לקצה.
+**מצב היסטורי בסיום הסבב הזה:** באותו זמן מיגרציות `0014`–`0017`, ‏`send-push`, ‏VAPID
+ו־`VITE_VAPID_PUBLIC_KEY` טרם הופעלו בסביבה החיה. מצב production הנוכחי מתועד בראש הקובץ.
 
 ---
 
@@ -375,11 +420,9 @@ RLS, הרשאות, נתוני dashboard או התנהגות offline.
 
 **אומת בפועל:** `npm run build` (כולל `tsc --noEmit`) עבר ירוק אחרי כל שלב. **זה הכול — ותו לא:**
 
-- מיגרציות `0014`–`0016` **נכתבו ולא הוחלו** על בסיס הנתונים החי.
-- ‏`send-push` **לא נפרסה** ל-Supabase; הגרלת זוג מפתחות VAPID, הגדרת ה-secrets ו-seed של
-  `private.push_config` — צעדי מפעיל שטרם בוצעו.
-- ‏`VITE_VAPID_PUBLIC_KEY` לא הוגדר בסביבת Cloudflare Pages — עד אז מתג ה-push בהגדרות מציג
-  "אינן מוגדרות בסביבה זו" (מצב `no-key` נתמך, לא שבור).
+- **מצב היסטורי בעת כתיבת הסעיף:** מיגרציות `0014`–`0016`, ‏`send-push`, זוג מפתחות VAPID,
+  ה־secrets, ‏`private.push_config` ו־`VITE_VAPID_PUBLIC_KEY` טרם הופעלו. מצב production
+  הנוכחי לאחר rollout ‏P0–P4 מתועד בראש הקובץ.
 - **אף מסך לא נצפה בדפדפן** — בסביבת העבודה הזו אין פרטי כניסה לאפליקציה. לפי `CLAUDE.md`, אין
   להכריז על המסכים כגמורים לפני צפייה חיה.
 
