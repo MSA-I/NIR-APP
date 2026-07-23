@@ -15,7 +15,14 @@ $previewPort = 5204
 $previewProcess = $null
 $previewStdout = $null
 $previewStderr = $null
+$priceFunctionProcess = $null
+$priceFunctionStdout = $null
+$priceFunctionStderr = $null
+$priceFunctionEnvFile = $null
 $manifestPath = $null
+$artifactDirectory = $null
+$gateSummaryPath = $null
+$gateSummaryWritten = $false
 $startedSupabase = $false
 $localEnvironment = $null
 $databaseWasUsed = $false
@@ -23,6 +30,22 @@ $databaseWasUsed = $false
 function Write-Gate([string]$Label) {
   Write-Output ""
   Write-Output "== $Label"
+}
+
+function Write-GateSummary([string]$Status, [string]$Scope, [string]$Reason) {
+  if (-not $gateSummaryPath -or $script:gateSummaryWritten) { return }
+  [ordered]@{
+    status = $Status
+    scope = $Scope
+    reason = $Reason
+    generated_at = (Get-Date).ToUniversalTime().ToString("o")
+  } | ConvertTo-Json | Set-Content -LiteralPath $gateSummaryPath -Encoding UTF8
+  $script:gateSummaryWritten = $true
+}
+
+function Stop-WithInfrastructureBlock([string]$Reason, [string]$Message) {
+  Write-GateSummary "BLOCKED" "infrastructure" $Reason
+  throw $Message
 }
 
 function Assert-ExitCode([string]$Label) {
@@ -82,12 +105,14 @@ function Wait-LocalApiReady([hashtable]$Environment) {
     if ($authStatus -eq 200 -and $restStatus -eq 200) { return }
     Start-Sleep -Milliseconds 250
   }
-  throw "Local API readiness failed after reset (Auth=$authStatus, PostgREST=$restStatus)."
+  Stop-WithInfrastructureBlock "local_api_not_ready" "Local API readiness failed after reset (Auth=$authStatus, PostgREST=$restStatus)."
 }
 
 function Wait-LocalStackReady {
   $environment = Get-LocalSupabaseEnvironment -Attempts 80
-  if (-not $environment) { throw "Local Supabase environment did not become ready." }
+  if (-not $environment) {
+    Stop-WithInfrastructureBlock "local_supabase_environment_not_ready" "Local Supabase environment did not become ready."
+  }
   Wait-LocalApiReady $environment
   return $environment
 }
@@ -227,7 +252,81 @@ function Start-PreviewServer {
   }
   if (-not $ready) {
     $detail = (Get-Content -LiteralPath $script:previewStderr -Raw -ErrorAction SilentlyContinue).Trim()
-    throw "Vite preview did not become ready on the isolated port $previewPort. $detail"
+    Stop-WithInfrastructureBlock "preview_not_ready" "Vite preview did not become ready on the isolated port $previewPort. $detail"
+  }
+}
+
+function Stop-PriceListFunction {
+  if ($script:priceFunctionProcess -and -not $script:priceFunctionProcess.HasExited) {
+    Stop-Process -Id $script:priceFunctionProcess.Id -Force -ErrorAction SilentlyContinue
+  }
+  $script:priceFunctionProcess = $null
+  foreach ($path in @($script:priceFunctionStdout, $script:priceFunctionStderr, $script:priceFunctionEnvFile)) {
+    if ($path -and (Test-Path -LiteralPath $path)) {
+      Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+    }
+  }
+  $script:priceFunctionStdout = $null
+  $script:priceFunctionStderr = $null
+  $script:priceFunctionEnvFile = $null
+}
+
+function Start-PriceListFunction([hashtable]$Environment) {
+  $script:priceFunctionStdout = [IO.Path]::GetTempFileName()
+  $script:priceFunctionStderr = [IO.Path]::GetTempFileName()
+  $script:priceFunctionEnvFile = [IO.Path]::GetTempFileName()
+  $envLines = @(
+    "SUPABASE_URL=$($Environment.API_URL)",
+    "SUPABASE_ANON_KEY=$($Environment.ANON_KEY)",
+    "SUPABASE_SERVICE_ROLE_KEY=$($Environment.SERVICE_ROLE_KEY)",
+    "APP_BASE_URL=http://127.0.0.1:5199"
+  )
+  [IO.File]::WriteAllLines($script:priceFunctionEnvFile, $envLines, (New-Object Text.UTF8Encoding($false)))
+  $script:priceFunctionProcess = Start-Process -FilePath (Get-Command supabase).Source `
+    -ArgumentList @("functions", "serve", "submit-price-list", "--no-verify-jwt", "--env-file", $script:priceFunctionEnvFile) `
+    -WorkingDirectory $repoRoot -WindowStyle Hidden -PassThru `
+    -RedirectStandardOutput $script:priceFunctionStdout -RedirectStandardError $script:priceFunctionStderr
+
+  $readyStatus = 0
+  for ($attempt = 0; $attempt -lt 160; $attempt++) {
+    if ($script:priceFunctionProcess.HasExited) { break }
+    try {
+      $readyStatus = (Invoke-WebRequest -UseBasicParsing `
+        -Uri "$expectedApiUrl/functions/v1/submit-price-list" -Method Post `
+        -ContentType "application/json" -Body "{}" -TimeoutSec 2).StatusCode
+    }
+    catch {
+      $readyStatus = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { -1 }
+    }
+    if ($readyStatus -eq 401) { return }
+    Start-Sleep -Milliseconds 250
+  }
+  Stop-WithInfrastructureBlock "submit_price_list_not_ready" "Local submit-price-list readiness failed (status=$readyStatus)."
+}
+
+function Invoke-PriceListEdgeSmoke {
+  $edgeEnvironment = @{
+    P1B_API_URL = [string]$localEnvironment.API_URL
+    P1B_ANON_KEY = [string]$localEnvironment.ANON_KEY
+    P1B_SERVICE_ROLE_KEY = [string]$localEnvironment.SERVICE_ROLE_KEY
+  }
+  $previousEdgeEnvironment = @{}
+  foreach ($name in $edgeEnvironment.Keys) {
+    $previousEdgeEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+  }
+  try {
+    foreach ($name in $edgeEnvironment.Keys) {
+      [Environment]::SetEnvironmentVariable($name, [string]$edgeEnvironment[$name], "Process")
+    }
+    Start-PriceListFunction $localEnvironment
+    & node (Join-Path $PSScriptRoot "check-p1b-edge-smoke.cjs")
+    Assert-ExitCode "P1B local Edge runtime smoke"
+  }
+  finally {
+    foreach ($name in $edgeEnvironment.Keys) {
+      [Environment]::SetEnvironmentVariable($name, $previousEdgeEnvironment[$name], "Process")
+    }
+    Stop-PriceListFunction
   }
 }
 
@@ -240,6 +339,18 @@ if ($config -notmatch "(?m)^project_id\s*=\s*`"$([regex]::Escape($expectedProjec
 foreach ($command in @("node", "npm.cmd", "supabase", "docker", "powershell")) {
   if (-not (Get-Command $command -ErrorAction SilentlyContinue)) { throw "Required command not found: $command" }
 }
+
+$artifactDate = Get-Date -Format "yyyy\\MM\\dd"
+$artifactStamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$visualizationsRoot = if ($env:QUALITY_ARTIFACT_ROOT) {
+  $env:QUALITY_ARTIFACT_ROOT
+} else {
+  Join-Path $userProfilePath ".codex\visualizations"
+}
+$artifactRoot = Join-Path $visualizationsRoot $artifactDate
+$artifactDirectory = Join-Path $artifactRoot "$artifactStamp-p4-quality-gates"
+New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
+$gateSummaryPath = Join-Path $artifactDirectory "gate-summary.json"
 
 try {
   $localEnvironment = Get-LocalSupabaseEnvironment
@@ -254,7 +365,9 @@ try {
     finally {
       $ErrorActionPreference = $previousPreference
     }
-    if ($startExit -ne 0) { throw "Unable to start the isolated local Supabase stack." }
+    if ($startExit -ne 0) {
+      Stop-WithInfrastructureBlock "local_supabase_start_failed" "Unable to start the isolated local Supabase stack."
+    }
     $startedSupabase = $true
   }
   $localEnvironment = Wait-LocalStackReady
@@ -309,12 +422,16 @@ try {
     if ($upgradeExit -ne 0) { throw "P0 upgrade path failed with exit code $upgradeExit." }
     $localEnvironment = Wait-LocalStackReady
 
+    Invoke-SqlTest "supabase\tests\p0_client_dml_acl.sql" "P0 browser DML ACL and trusted-server CRUD"
     Invoke-Preflight
     Invoke-SqlTest "supabase\tests\p1_financial_commands.sql" "P1 financial commands, rollback and idempotency"
     Invoke-SqlTest "supabase\tests\p1_price_submissions.sql" "P1B trusted price-list intake, tenant isolation and rollback"
     Invoke-SqlTest "supabase\tests\p2_data_reliability.sql" "P2 retry, alerts, pagination and reliability"
     Invoke-SqlTest "supabase\tests\p1_price_submissions_concurrency.sql" "P1B real concurrent revisions and checksum retries" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p1_concurrency.sql" "P1 real concurrent sessions" "supabase_admin"
+
+    Write-Gate "P1B local Edge runtime, 10/100/1,000 rows and failure recovery"
+    Invoke-PriceListEdgeSmoke
 
     Write-Gate "Reset after committed concurrency fixtures"
     Reset-LocalDatabase
@@ -323,16 +440,6 @@ try {
     Install-DemoFixture $credentialSeed
 
     Write-Gate "Browser, keyboard, print/PDF and accessibility smoke"
-    $artifactDate = Get-Date -Format "yyyy\\MM\\dd"
-    $artifactStamp = Get-Date -Format "yyyyMMdd-HHmmss"
-    $visualizationsRoot = if ($env:QUALITY_ARTIFACT_ROOT) {
-      $env:QUALITY_ARTIFACT_ROOT
-    } else {
-      Join-Path $userProfilePath ".codex\visualizations"
-    }
-    $artifactRoot = Join-Path $visualizationsRoot $artifactDate
-    $artifactDirectory = Join-Path $artifactRoot "$artifactStamp-p4-quality-gates"
-    New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
     Start-PreviewServer
 
     $browserEnvironment = @{
@@ -358,6 +465,7 @@ try {
     }
 
     Write-Output ""
+    Write-GateSummary "PASS" "quality" "all_gates_passed"
     Write-Output "P4 quality gates passed with no skipped tests."
     Write-Output "Browser evidence: $artifactDirectory"
   }
@@ -366,11 +474,18 @@ try {
     [Environment]::SetEnvironmentVariable("VITE_SUPABASE_ANON_KEY", $previousAnon, "Process")
   }
 }
+catch {
+  if (-not $gateSummaryWritten) {
+    Write-GateSummary "FAIL" "product" "quality_gate_failed"
+  }
+  throw
+}
 finally {
+  Stop-PriceListFunction
   if ($previewProcess -and -not $previewProcess.HasExited) {
     Stop-Process -Id $previewProcess.Id -Force -ErrorAction SilentlyContinue
   }
-  foreach ($path in @($previewStdout, $previewStderr, $manifestPath)) {
+  foreach ($path in @($previewStdout, $previewStderr, $priceFunctionStdout, $priceFunctionStderr, $priceFunctionEnvFile, $manifestPath)) {
     if ($path -and (Test-Path -LiteralPath $path)) {
       Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
     }
