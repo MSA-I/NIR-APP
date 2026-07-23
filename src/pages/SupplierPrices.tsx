@@ -88,10 +88,10 @@ export default function SupplierPrices() {
 
   const columns: Column<Row>[] = [
     { key: 'product', header: 'מוצר', sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-ink">{r.product.name}</span> },
-    { key: 'unit', header: 'יח׳', render: (r) => r.product.unit },
+    { key: 'unit', header: 'יח׳', priority: 3, render: (r) => r.product.unit },
     { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">₪{r.current_price.toFixed(2)}</span> },
-    { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => (r.previous_price != null ? `₪${r.previous_price.toFixed(2)}` : '—') },
-    { key: 'date', header: 'בתוקף מ־', sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
+    { key: 'prev', header: 'מחיר קודם', className: 'num', priority: 3, render: (r) => (r.previous_price != null ? `₪${r.previous_price.toFixed(2)}` : '—') },
+    { key: 'date', header: 'בתוקף מ־', priority: 3, sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
     { key: 'avail', header: 'זמינות', render: (r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} /> },
   ];
 
@@ -177,8 +177,13 @@ function SubmissionHistory({ submissions }: { submissions: SupplierPriceSubmissi
                 <div className="font-medium text-ink">{monthLabel(submission.target_month)} · גרסה <span className="num">{submission.revision}</span></div>
                 <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
               </div>
-              <div className="mt-1 text-sm text-ink-muted break-words">
-                {submission.file_name} · נקלטו <span className="num">{submission.accepted_count}</span> · ללא שינוי <span className="num">{submission.unchanged_count}</span> · נדחו <span className="num">{submission.rejected_count}</span>
+              <div className="mt-1 min-w-0 text-xs text-ink-muted sm:text-sm">
+                <div className="truncate" title={submission.file_name}>{submission.file_name}</div>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                  <span>נקלטו <span className="num">{submission.accepted_count}</span></span>
+                  <span>ללא שינוי <span className="num">{submission.unchanged_count}</span></span>
+                  <span>נדחו <span className="num">{submission.rejected_count}</span></span>
+                </div>
               </div>
               {submission.rejections.length > 0 && (
                 <RejectionDetails rejections={submission.rejections} />

@@ -45,10 +45,10 @@ export async function cancelOrderDraft(requestId: string, reason: string): Promi
   }));
 }
 
-export async function finalizeOrderDraft(requestId: string, expectedTotal: number, reason: string): Promise<FinalizedDraft> {
+export async function finalizeOrderDraft(requestId: string, expectedTotal: number): Promise<FinalizedDraft> {
   return unwrap(await supabase.rpc('finalize_purchase_request_draft', {
     p_request_id: requestId,
     p_expected_total: expectedTotal,
-    p_reason: reason.trim(),
+    p_reason: 'אישור הזמנה',
   })) as FinalizedDraft;
 }

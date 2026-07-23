@@ -611,7 +611,7 @@ export default function Dashboard() {
                     </span>
                   )}
                 </div>
-                <ChartViewport className="mt-2 h-44 sm:h-48" label={monthlyAria}>
+                <ChartViewport className="mt-2 h-32 sm:h-48" label={monthlyAria}>
                   {(animation) => data.monthly.length ? (
                     <ResponsiveContainer>
                       <BarChart data={data.monthly} margin={{ top: 24, left: 8, right: 8 }}>
@@ -636,14 +636,14 @@ export default function Dashboard() {
                 <h3 id="category-trend-title" className="text-sm font-semibold text-ink-body">תמהיל הרכש החודש</h3>
                 <p className="text-xs text-ink-muted">ארבע הקטגוריות הגדולות וכל היתר</p>
                 {categoryTotal > 0 ? (
-                  <div className="mt-2 flex min-h-44 flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-                    <ChartViewport className="relative mx-auto h-36 w-36 shrink-0 sm:h-40 sm:w-40" label={categoriesAria}>
+                  <div className="mt-2 flex min-h-36 flex-col items-stretch gap-3 sm:min-h-44 sm:flex-row sm:items-center">
+                    <ChartViewport className="relative mx-auto h-28 w-28 shrink-0 sm:h-40 sm:w-40" label={categoriesAria}>
                       {(animation) => (
                         <>
                           <ResponsiveContainer>
                             <PieChart>
-                              <Pie data={data.categories} dataKey="total" nameKey="name" innerRadius={48} outerRadius={70}
-                                paddingAngle={2} stroke="none" isAnimationActive={animation.active} animationDuration={550}
+                              <Pie data={data.categories} dataKey="total" nameKey="name" innerRadius="60%" outerRadius="88%"
+                                rootTabIndex={-1} paddingAngle={2} stroke="none" isAnimationActive={animation.active} animationDuration={550}
                                 animationEasing="ease-out" onAnimationEnd={animation.finish}>
                                 {data.categories.map((category, index) => (
                                   <Cell key={category.name} fill={category.name === 'אחר' ? t.bars[4] : t.bars[index % 4]} />
@@ -671,7 +671,7 @@ export default function Dashboard() {
                       ))}
                     </ul>
                   </div>
-                ) : <div className="flex h-44 items-center justify-center text-center text-sm text-ink-muted">{categoryEmptyMessage}</div>}
+                ) : <div className="flex h-24 items-center justify-center text-center text-sm text-ink-muted sm:h-44">{categoryEmptyMessage}</div>}
               </section>
 
               <section className="border-t border-line-soft p-4 sm:p-5 lg:col-span-12" aria-labelledby="weekly-trend-title">
@@ -685,7 +685,7 @@ export default function Dashboard() {
                     <span className="inline-flex items-center gap-1.5"><span className="w-6 border-t-2 border-dashed" style={{ borderColor: t.bars[2] }} />תשלומים</span>
                   </div>
                 </div>
-                <ChartViewport className="mt-2 h-44 sm:h-48" label={weeklyAria}>
+                <ChartViewport className="mt-2 h-32 sm:h-48" label={weeklyAria}>
                   {(animation) => hasWeeklyComparison ? (
                     <ResponsiveContainer>
                       <LineChart data={weeklyComparison} margin={{ top: 8, left: 8, right: 8 }}>
