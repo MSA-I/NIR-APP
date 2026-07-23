@@ -212,8 +212,16 @@ try {
   $localEnvironment = Get-LocalSupabaseEnvironment
   if (-not $localEnvironment) {
     Write-Gate "Start isolated local Supabase"
-    $startOutput = @(& supabase start 2>&1)
-    if ($LASTEXITCODE -ne 0) { throw "Unable to start the isolated local Supabase stack." }
+    $previousPreference = $ErrorActionPreference
+    try {
+      $ErrorActionPreference = "Continue"
+      $startOutput = @(& supabase start 2>&1)
+      $startExit = $LASTEXITCODE
+    }
+    finally {
+      $ErrorActionPreference = $previousPreference
+    }
+    if ($startExit -ne 0) { throw "Unable to start the isolated local Supabase stack." }
     $startedSupabase = $true
     $localEnvironment = Get-LocalSupabaseEnvironment
   }

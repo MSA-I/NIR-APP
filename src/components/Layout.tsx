@@ -142,6 +142,10 @@ export default function Layout() {
     return () => cancelAnimationFrame(frame);
   }, [location.pathname, orgName]);
 
+  // Layout is the single owner of authenticated route titles. Restore the neutral title
+  // only when leaving the authenticated shell, never when tenant data finishes loading.
+  useEffect(() => () => { document.title = APP_NAME; }, []);
+
   async function handleSignOut() {
     const detail: OrderDraftFlushDetail = { pending: [] };
     window.dispatchEvent(new CustomEvent<OrderDraftFlushDetail>(ORDER_DRAFT_FLUSH_EVENT, { detail }));

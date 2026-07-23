@@ -255,7 +255,7 @@ export function ReceiveOrder() {
         פתיחת דרישות זיכוי אוטומטית לחוסרי כמות בלבד
       </label>
       <p className="px-1 text-xs text-ink-muted">פריטים פגומים או שהוחזרו אינם נספרים כאספקה תקינה, והטיפול הכספי בהם נשאר ידני עד להכרעה עסקית.</p>
-      <div><label className="label">סיבת השמירה / ההשלמה *</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+      <div><label className="label" htmlFor="receiving-reason">סיבת השמירה / ההשלמה *</label><input id="receiving-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
 
       {/* sticky action bar */}
       <div className="phone-taskbar fixed inset-x-0 lg:ms-60 bg-surface border-t border-line p-3 flex gap-2 z-30">

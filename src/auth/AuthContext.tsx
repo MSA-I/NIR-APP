@@ -3,7 +3,6 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { Organization, Profile } from '../lib/types';
 import { unwrap } from '../lib/useQuery';
-import { APP_NAME } from '../lib/branding';
 import { resolveRoleLabels } from '../lib/status';
 import { cleanupPushBeforeSignOut } from '../lib/push';
 import { toHebrewError } from '../lib/errors';
@@ -112,13 +111,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
     return () => { cancelled = true; };
   }, [session, bootstrapAttempt]);
-
-  // index.html ships a tenant-neutral <title> (the product name) because the database
-  // is unreachable at parse time. We prefix the tenant only once it is actually known,
-  // so the tab never shows one customer's name to another, and it reverts on sign-out.
-  useEffect(() => {
-    document.title = org ? `${org.name} — ${APP_NAME}` : APP_NAME;
-  }, [org]);
 
   const roleLabels = useMemo(() => resolveRoleLabels(org?.settings), [org?.settings]);
 
