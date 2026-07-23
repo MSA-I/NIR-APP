@@ -1,5 +1,5 @@
--- P0 browser-DML and reasoned-command regression harness. Run only against an isolated local
--- database after applying migrations through 0030_client_dml_acl_and_reasoned_commands.sql.
+-- P0 browser-write, trusted-server CRUD and reasoned-command regression harness. Run only against an isolated local
+-- database after applying migrations through 0033_service_role_dml_restore.sql.
 \set ON_ERROR_STOP on
 
 begin;
@@ -15,7 +15,62 @@ begin
 end
 $$;
 
--- ===== Static ACL contract =====
+-- ===== Static browser-write and trusted-server CRUD contract =====
+
+select pg_temp.p0_acl_assert(
+  not exists (
+    select 1
+    from pg_catalog.pg_tables table_info
+    where table_info.schemaname = 'public'
+      and (
+        not has_table_privilege(
+          'service_role', format('%I.%I', table_info.schemaname, table_info.tablename), 'SELECT'
+        )
+        or not has_table_privilege(
+          'service_role', format('%I.%I', table_info.schemaname, table_info.tablename), 'INSERT'
+        )
+        or not has_table_privilege(
+          'service_role', format('%I.%I', table_info.schemaname, table_info.tablename), 'UPDATE'
+        )
+        or not has_table_privilege(
+          'service_role', format('%I.%I', table_info.schemaname, table_info.tablename), 'DELETE'
+        )
+      )
+  ),
+  'service_role is missing full CRUD on a public server table'
+);
+
+select pg_temp.p0_acl_assert(
+  not exists (
+    select 1
+    from (values
+      ('public.organizations'::regclass, false),
+      ('public.categories'::regclass, true),
+      ('public.suppliers'::regclass, false),
+      ('public.products'::regclass, false),
+      ('public.purchase_requests'::regclass, false),
+      ('public.purchase_request_items'::regclass, false),
+      ('public.purchase_orders'::regclass, false),
+      ('public.exceptions'::regclass, false),
+      ('public.documents'::regclass, false),
+      ('public.push_subscriptions'::regclass, true)
+    ) as protected_tables(relation, browser_delete_allowed)
+    where has_table_privilege('anon', relation, 'INSERT')
+       or has_table_privilege('anon', relation, 'UPDATE')
+       or has_table_privilege('anon', relation, 'DELETE')
+       or has_table_privilege('authenticated', relation, 'INSERT')
+       or has_table_privilege('authenticated', relation, 'UPDATE')
+       or (
+         has_table_privilege('authenticated', relation, 'DELETE')
+         and not browser_delete_allowed
+       )
+       or (
+         not has_table_privilege('authenticated', relation, 'DELETE')
+         and browser_delete_allowed
+       )
+  ),
+  'browser role received broad DML outside the 0030 allowlist'
+);
 
 select pg_temp.p0_acl_assert(
   has_column_privilege('authenticated', 'public.organizations', 'name', 'UPDATE')
@@ -62,6 +117,29 @@ select pg_temp.p0_acl_assert(
     'EXECUTE'
   ),
   'legacy two-argument finalize overload is executable without an audit reason'
+);
+
+-- Exercise the exact provisioning regression: service_role can create, read, modify and remove an
+-- organization even though PUBLIC/anon/authenticated do not receive a table-wide write grant.
+set local role service_role;
+insert into public.organizations (id, name, status)
+values ('13000000-0000-0000-0000-000000000009', 'P0 ACL service probe', 'active');
+update public.organizations
+set name = 'P0 ACL service probe updated'
+where id = '13000000-0000-0000-0000-000000000009';
+select id, name, status
+from public.organizations
+where id = '13000000-0000-0000-0000-000000000009';
+delete from public.organizations
+where id = '13000000-0000-0000-0000-000000000009';
+reset role;
+
+select pg_temp.p0_acl_assert(
+  not exists (
+    select 1 from public.organizations
+    where id = '13000000-0000-0000-0000-000000000009'
+  ),
+  'service_role organization DML probe did not complete'
 );
 
 -- ===== Trusted fixtures =====
