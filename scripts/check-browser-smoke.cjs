@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert/strict');
+const XLSX = require('xlsx');
 
 for (const name of ['QUALITY_BASE_URL', 'QUALITY_ARTIFACT_DIR', 'QUALITY_PASSWORD_SEED', 'QUALITY_BROWSER_PATH', 'PLAYWRIGHT_CORE_PATH']) {
   if (!process.env[name]) throw new Error(`Missing required browser-gate environment: ${name}`);
@@ -23,7 +24,10 @@ const report = {
   accessibility: [],
   screenshots: [],
   pdf: null,
+  excel: null,
   consoleErrors: [],
+  tasks: [],
+  blocked: [],
 };
 
 const homes = {
@@ -248,6 +252,12 @@ async function assertKeyContrast(page) {
   return results;
 }
 
+async function assertNoRawMetadata(page, scope) {
+  const text = await page.locator('#main').innerText();
+  assert(!/\b(?:evidence|description)\s*:/i.test(text), `${scope}: raw metadata label is visible`);
+  assert(!/\b[a-z][a-z0-9]*_[a-z0-9_]+\s*:/i.test(text), `${scope}: raw data key is visible`);
+}
+
 async function roleAndViewportMatrix(browser) {
   const viewports = [
     ['320', 320, 720], ['360', 360, 800], ['390', 390, 844], ['430', 430, 932],
@@ -454,6 +464,18 @@ async function speedDialContract(browser) {
 async function dashboardAndDialogs(browser) {
   const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
+  const dashboardRows = new Map();
+  const dashboardReads = [];
+  page.on('response', (response) => {
+    if (response.status() !== 200 || response.request().method() !== 'GET') return;
+    const url = new URL(response.url());
+    const table = url.pathname.match(/\/rest\/v1\/(exceptions|payments)$/)?.[1];
+    if (!table || (table === 'exceptions' && !url.searchParams.has('status'))
+      || (table === 'payments' && !url.searchParams.has('paid_date'))) return;
+    dashboardReads.push(response.json().then((rows) => {
+      if (Array.isArray(rows)) dashboardRows.set(table, rows);
+    }));
+  });
   captureConsole(page, 'dashboard-dialogs');
   try {
     await login(page, 'owner');
@@ -462,6 +484,21 @@ async function dashboardAndDialogs(browser) {
     const firstDataHeading = page.locator('#main .dash-enter h2').first();
     await firstDataHeading.waitFor();
     assert((await firstDataHeading.innerText()).includes('דורש טיפול'), 'dashboard does not begin with the attention zone');
+    await page.waitForTimeout(100);
+    await Promise.all(dashboardReads);
+    const exceptionRows = dashboardRows.get('exceptions');
+    const paymentRows = dashboardRows.get('payments');
+    assert(Array.isArray(exceptionRows) && Array.isArray(paymentRows), 'dashboard did not expose its authenticated REST evidence');
+    const attention = page.locator('section.card').filter({ has: page.getByRole('heading', { name: 'דורש טיפול היום' }) });
+    const exceptionLink = attention.locator('a[href="/exceptions?status=open"]');
+    const exceptionCount = Number((await exceptionLink.locator('span.num').first().innerText()).replace(/[^\d.-]/g, ''));
+    assert.equal(exceptionCount, exceptionRows.length, 'dashboard open-exception count differs from REST');
+    const paidLink = page.locator('a[href^="/payments?month="]').filter({ hasText: 'שולם לספקים החודש' }).first();
+    const paidMonth = new URL(await paidLink.getAttribute('href'), baseURL).searchParams.get('month');
+    const paidExpected = paymentRows.filter((row) => row.paid_date.startsWith(paidMonth))
+      .reduce((total, row) => total + Number(row.amount), 0);
+    const paidRendered = Number((await paidLink.locator('.text-xl.num').innerText()).replace(/[^\d,.-]/g, '').replace(/,/g, ''));
+    assert.equal(paidRendered, Math.round(paidExpected), `dashboard MTD payments differ from REST for ${paidMonth}`);
     assert.equal(await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).count(), 1, 'dashboard speed-dial missing');
     const contrast = await assertKeyContrast(page);
     await page.screenshot({ path: path.join(outDir, 'dashboard-1440.png'), fullPage: true });
@@ -506,6 +543,16 @@ async function dashboardAndDialogs(browser) {
     assert(await supplierButton.evaluate((node) => document.activeElement === node), 'supplier dialog did not restore focus');
 
     report.accessibility.push({ scope: 'key-contrast', samples: contrast });
+    return {
+      steps: 7,
+      backtracks: 0,
+      evidence: [
+        `dashboard exceptions=${exceptionRows.length} from authenticated REST`,
+        `dashboard payments MTD ${paidMonth}=${paidExpected} from authenticated REST`,
+        'dashboard-1440.png',
+        'dashboard-390.png',
+      ],
+    };
   } finally {
     await closeContext(context);
   }
@@ -515,10 +562,15 @@ async function tableKeyboardAndSearch(browser) {
   const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1024, height: 768 } });
   const page = await context.newPage();
   captureConsole(page, 'table-keyboard-search');
+  let steps = 0;
+  let backtracks = 0;
+  const evidence = [];
   try {
     await login(page, 'owner');
+    steps += 1;
     await page.goto(`${baseURL}/invoices`);
     await settle(page);
+    steps += 1;
     await page.waitForTimeout(1_000);
     const titleAtDeepLink = await page.title();
     const routeTitleUpdated = titleAtDeepLink.includes('חשבוניות');
@@ -529,7 +581,9 @@ async function tableKeyboardAndSearch(browser) {
     await invoiceButton.waitFor({ timeout: 20_000 });
     await invoiceButton.press('Enter');
     await page.waitForURL((url) => /^\/invoices\/[^/]+$/.test(url.pathname), { timeout: 20_000 });
+    steps += 1;
     await page.goBack();
+    backtracks += 1;
     await settle(page);
 
     await page.setViewportSize({ width: 320, height: 250 });
@@ -552,6 +606,7 @@ async function tableKeyboardAndSearch(browser) {
     await page.keyboard.press('Escape');
     assert(await trigger.evaluate((node) => document.activeElement === node), 'action menu did not restore focus');
     await assertVisibleFocus(trigger, 'ActionMenu trigger');
+    steps += 1;
 
     await page.setViewportSize({ width: 390, height: 844 });
     const searchButton = page.getByRole('button', { name: 'חיפוש', exact: true });
@@ -567,11 +622,62 @@ async function tableKeyboardAndSearch(browser) {
     await option.click();
     const resultPath = new URL(page.url()).pathname;
     assert(/^\/(invoices|orders|suppliers)\//.test(resultPath), `mobile search opened unexpected route ${resultPath}`);
+    steps += 2;
     await page.goBack();
+    backtracks += 1;
     await page.goForward();
     assert.equal(new URL(page.url()).pathname, resultPath, 'back/forward lost the mobile-search deep link');
     assert(routeFocusMoved, 'route navigation did not move focus to main');
     assert(routeTitleUpdated, `deep-link route title was not updated; actual title: ${titleAtDeepLink}`);
+
+    await page.goto(`${baseURL}/alerts`);
+    await settle(page);
+    steps += 1;
+    const duplicateAlert = page.getByRole('button').filter({ hasText: /מספרי חשבונית מופיעים יותר מפעם אחת/ });
+    await duplicateAlert.waitFor({ timeout: 20_000 });
+    await duplicateAlert.click();
+    await page.waitForURL((url) => url.pathname === '/invoices' && url.searchParams.get('attention') === 'duplicates');
+    assert.equal(await page.getByRole('combobox', { name: 'סינון חשבוניות לפי צורך בטיפול' }).inputValue(), 'duplicates');
+    await page.getByText('7702', { exact: true }).first().waitFor({ timeout: 20_000 });
+    await assertNoRawMetadata(page, 'duplicate invoice alert target');
+    steps += 1;
+    evidence.push('/alerts -> /invoices?attention=duplicates');
+
+    await page.goto(`${baseURL}/alerts`);
+    await settle(page);
+    const dueAlert = page.getByRole('button').filter({ hasText: /דרישות תשלום.*(?:פירעון|מועד)/ });
+    await dueAlert.waitFor({ timeout: 20_000 });
+    await dueAlert.click();
+    await page.waitForURL((url) => url.pathname === '/payment-requests'
+      && url.searchParams.get('status') === 'active' && url.searchParams.get('due') === 'soon');
+    assert.equal(await page.getByRole('combobox', { name: 'סינון דרישות תשלום לפי מועד יעד' }).inputValue(), 'soon');
+    await assertNoRawMetadata(page, 'payment due alert target');
+    steps += 1;
+    evidence.push('/alerts -> /payment-requests?status=active&due=soon');
+
+    const exceptionId = 'fc000000-0000-4000-8000-000000000003';
+    const paymentRequestId = 'f6000000-0000-4000-8000-000000000002';
+    await page.goto(`${baseURL}/exceptions?status=open&severity=high`);
+    await settle(page);
+    assert.equal(await page.getByRole('combobox', { name: 'סינון חריגים לפי חומרה' }).inputValue(), 'high');
+    assert.equal(new URL(page.url()).searchParams.get('severity'), 'high');
+    await page.getByText('גבוהה', { exact: true }).first().waitFor({ timeout: 20_000 });
+    await assertNoRawMetadata(page, 'stable exception severity filter');
+    steps += 1;
+    evidence.push('/exceptions?status=open&severity=high');
+
+    await page.goto(`${baseURL}/exceptions?id=${exceptionId}`);
+    const exceptionDialog = page.getByRole('dialog');
+    await exceptionDialog.waitFor({ timeout: 20_000 });
+    await assertNoRawMetadata(page, 'exception deep link');
+    await exceptionDialog.getByRole('button', { name: 'לדרישת התשלום' }).click();
+    await page.waitForURL((url) => url.pathname === '/payment-requests' && url.searchParams.get('id') === paymentRequestId);
+    await page.getByRole('dialog').waitFor({ timeout: 20_000 });
+    await assertNoRawMetadata(page, 'payment request record deep link');
+    steps += 2;
+    evidence.push(`/exceptions?id=${exceptionId} -> /payment-requests?id=${paymentRequestId}`);
+
+    return { steps, backtracks, evidence: [`global search -> ${resultPath}`, ...evidence] };
   } finally {
     await closeContext(context);
   }
@@ -634,7 +740,7 @@ async function orderSupplierComparison(browser) {
   const page = await context.newPage();
   captureConsole(page, 'order-supplier-comparison');
   try {
-    await login(page, 'kitchen');
+    await login(page, 'office');
     await page.goto(`${baseURL}/orders/new?fresh=1`);
     await settle(page);
     await page.getByRole('button', { name: 'בחירת מלפפונים' }).click();
@@ -664,6 +770,11 @@ async function orderSupplierComparison(browser) {
     assert.equal(await review.getByText('סיבת אישור ההזמנה').count(), 0, 'routine order approval must not ask for a reason');
     await review.getByRole('button', { name: 'אשר ושלח הזמנה' }).click();
     await page.getByRole('dialog', { name: 'שליחת הזמנות לספקים' }).waitFor({ timeout: 25_000 });
+    return {
+      steps: 6,
+      backtracks: 0,
+      evidence: ['office selected a product', 'supplier comparison rendered', 'order finalized with system-authored audit reason'],
+    };
   } finally {
     await closeContext(context);
   }
@@ -744,7 +855,7 @@ async function bankContextualNames(browser) {
   const page = await context.newPage();
   captureConsole(page, 'bank-accessibility');
   try {
-    await login(page, 'owner');
+    await login(page, 'accountant');
     await page.goto(`${baseURL}/bank`);
     await settle(page);
     const row = page.locator('button[aria-label^="פתיחת תנועת בנק "]').first();
@@ -763,6 +874,208 @@ async function bankContextualNames(browser) {
     await page.screenshot({ path: path.join(outDir, 'bank-match-dialog.png'), fullPage: true });
     report.screenshots.push('bank-match-dialog.png');
     await auditAccessibility(page, 'bank-match-dialog');
+    return { steps: 4, backtracks: 0, evidence: ['accountant opened an unmatched bank transaction', 'record-specific matching controls are named'] };
+  } finally {
+    await closeContext(context);
+  }
+}
+
+async function personaContractRegression(browser, role) {
+  const expectedHome = homes[role];
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  captureConsole(page, `contract-regression:${role}`);
+  try {
+    await login(page, role);
+    assert.equal(new URL(page.url()).pathname, expectedHome, `${role}: home contract changed`);
+    await page.goto(`${baseURL}/dashboard`);
+    await page.waitForURL((url) => url.pathname === expectedHome, { timeout: 20_000 });
+    await settle(page);
+    const quickActions = await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).count();
+    assert.equal(quickActions, role === 'kitchen' ? 1 : 0, `${role}: quick-action contract changed`);
+    return {
+      steps: 3,
+      backtracks: 0,
+      evidence: [`${role} home=${expectedHome}`, `${role} denied /dashboard`, `${role} quick-actions=${quickActions}`],
+    };
+  } finally {
+    await closeContext(context);
+  }
+}
+
+async function accountantFinanceJourney(browser) {
+  const paymentRequestId = 'f6000000-0000-4000-8000-000000000001';
+  const creditId = 'f5000000-0000-4000-8000-000000000004';
+  const paymentReason = 'אימות P3 — ביצוע רגיל בידי הנהלת חשבונות';
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1024, height: 768 } });
+  const page = await context.newPage();
+  let restOrigin = '';
+  let restHeaders = null;
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (!restHeaders && url.pathname.startsWith('/rest/v1/')) {
+      const headers = request.headers();
+      if (headers.authorization && headers.apikey) {
+        restOrigin = url.origin;
+        restHeaders = { authorization: headers.authorization, apikey: headers.apikey };
+      }
+    }
+  });
+  captureConsole(page, 'accountant-finance-journey');
+  try {
+    await login(page, 'accountant');
+    assert(restHeaders && restOrigin, 'accountant journey did not capture its authenticated REST session');
+    const getRows = async (table, query) => {
+      const url = new URL(`/rest/v1/${table}`, restOrigin);
+      for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+      const response = await context.request.get(url.toString(), { headers: restHeaders });
+      assert.equal(response.status(), 200, `accountant REST read failed for ${table}: ${response.status()}`);
+      return response.json();
+    };
+    const [paymentBefore] = await getRows('payment_requests', { select: 'id,status', id: `eq.${paymentRequestId}` });
+    const [creditBefore] = await getRows('credit_requests', { select: 'id,status', id: `eq.${creditId}` });
+    assert.equal(paymentBefore?.status, 'approved', 'fresh fixture payment request is not approved');
+    assert.equal(creditBefore?.status, 'offset', 'fresh fixture credit is not ready for the permitted accountant transition');
+    await page.goto(`${baseURL}/pay`);
+    await settle(page);
+    const approved = page.locator('#main button.card').filter({ hasText: 'משקאות אור' }).first();
+    await approved.waitFor({ timeout: 20_000 });
+    await approved.click();
+    const execution = page.getByRole('dialog');
+    await execution.waitFor();
+    for (const label of ['אושר על ידי', 'מבוצע על ידי', 'רישום ביומן']) {
+      await execution.getByText(label, { exact: true }).waitFor();
+    }
+    assert.equal(await execution.locator('#emergency-payment-password').count(), 0, 'regular accountant execution exposed emergency authentication');
+    assert.equal(await execution.getByRole('button', { name: 'ההעברה בוצעה' }).count(), 1, 'accountant cannot reach regular execution action');
+    await execution.locator('#payment-execution-reference').fill('P3-ACCOUNTANT-001');
+    await execution.locator('#payment-execution-reason').fill(paymentReason);
+    await execution.getByRole('button', { name: 'ההעברה בוצעה' }).click();
+    const recorded = page.getByRole('dialog', { name: 'ההעברה נרשמה' });
+    await recorded.waitFor({ timeout: 20_000 });
+    await recorded.getByRole('button', { name: 'סיום' }).click();
+    await recorded.waitFor({ state: 'hidden' });
+
+    await page.goto(`${baseURL}/bank?month=2026-07&status=attention`);
+    await settle(page);
+    assert.equal(await page.getByRole('combobox', { name: 'סינון תנועות בנק לפי סטטוס' }).inputValue(), 'attention');
+    assert.equal(await page.locator('input[aria-label="סינון תנועות בנק לפי חודש"]').inputValue(), '2026-07');
+    await page.locator('button[aria-label^="פתיחת תנועת בנק "]').first().waitFor({ timeout: 20_000 });
+
+    await page.goto(`${baseURL}/credits?status=all&id=${creditId}`);
+    const credit = page.getByRole('dialog');
+    await credit.waitFor({ timeout: 20_000 });
+    await credit.getByRole('button', { name: 'סגירה' }).click();
+    await credit.waitFor({ state: 'hidden', timeout: 20_000 });
+    await page.getByRole('heading', { name: 'זיכויים' }).waitFor();
+    assert.equal(await page.getByRole('combobox', { name: 'סינון דרישות זיכוי לפי סטטוס' }).inputValue(), 'all');
+    const [paymentAfter] = await getRows('payment_requests', { select: 'id,status', id: `eq.${paymentRequestId}` });
+    const [creditAfter] = await getRows('credit_requests', { select: 'id,status', id: `eq.${creditId}` });
+    const audits = await getRows('audit_logs', {
+      select: 'action,entity_type,entity_id,reason,user_id',
+      entity_id: `in.(${paymentRequestId},${creditId})`,
+      order: 'created_at.desc',
+    });
+    assert.equal(paymentAfter?.status, 'executed', 'accountant payment write did not persist');
+    assert.equal(creditAfter?.status, 'closed', 'accountant credit transition did not persist');
+    const paymentAudit = audits.find((row) => row.action === 'payment_request_executed' && row.entity_id === paymentRequestId);
+    const creditAudit = audits.find((row) => row.action === 'credit_request_transitioned' && row.entity_id === creditId);
+    assert.equal(paymentAudit?.reason, paymentReason, 'accountant payment audit reason is missing or changed');
+    assert.equal(creditAudit?.reason, 'סגירה', 'accountant credit audit reason is missing or changed');
+    assert(paymentAudit?.user_id && paymentAudit.user_id === creditAudit?.user_id, 'finance writes were not attributed to the same accountant session');
+    return {
+      steps: 11,
+      backtracks: 0,
+      evidence: [
+        `payment_requests/${paymentRequestId}: approved -> executed`,
+        `credit_requests/${creditId}: offset -> closed`,
+        'accountant-session audit: payment_request_executed',
+        'accountant-session audit: credit_request_transitioned',
+        '/bank?month=2026-07&status=attention',
+      ],
+    };
+  } finally {
+    await closeContext(context);
+  }
+}
+
+async function supplierMobileEditJourney(browser) {
+  const supplierId = 'aa000000-0000-4000-8000-000000000001';
+  const marker = 'יוסי אדרי — אימות P3';
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  let update = null;
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (request.method() === 'PATCH' && url.pathname.endsWith('/rest/v1/suppliers') && url.searchParams.get('id') === `eq.${supplierId}`) {
+      update = request.postDataJSON();
+    }
+  });
+  captureConsole(page, 'supplier-mobile-edit');
+  try {
+    await login(page, 'office');
+    await page.goto(`${baseURL}/suppliers/${supplierId}`);
+    await settle(page);
+    await page.getByRole('button', { name: 'עריכה', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: /עריכת ספק/ });
+    await dialog.waitFor();
+    await dialog.locator('#supplier-contact').fill(marker);
+    await dialog.getByRole('button', { name: 'שמירה' }).click();
+    await dialog.waitFor({ state: 'hidden', timeout: 20_000 });
+    await page.getByText(marker, { exact: true }).waitFor({ timeout: 20_000 });
+    assert.equal(update?.contact_name, marker, 'supplier edit did not send the mobile form value');
+    await auditAccessibility(page, 'supplier-mobile-edit-390');
+    await page.screenshot({ path: path.join(outDir, 'supplier-mobile-edit-390.png'), fullPage: true });
+    report.screenshots.push('supplier-mobile-edit-390.png');
+    return {
+      steps: 5,
+      backtracks: 0,
+      evidence: [`PATCH /suppliers?id=eq.${supplierId}`, 'supplier-mobile-edit-390.png', `contact=${marker}`],
+    };
+  } finally {
+    await closeContext(context);
+  }
+}
+
+async function supplierPriceJourney(browser) {
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 }, acceptDownloads: true });
+  const page = await context.newPage();
+  captureConsole(page, 'supplier-price-journey');
+  try {
+    await login(page, 'supplier');
+    const mainText = await page.locator('#main').innerText();
+    assert(mainText.includes('משק ירוק'), 'supplier portal omitted its own supplier');
+    assert(!mainText.includes('חוות השדה'), 'supplier portal exposed a competing supplier');
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'הורדת תבנית' }).click();
+    const download = await downloadPromise;
+    const templateFile = path.join(outDir, 'supplier-price-template.csv');
+    await download.saveAs(templateFile);
+    const template = fs.readFileSync(templateFile, 'utf8');
+    assert(template.startsWith('\uFEFFproduct_id,product_name,price'), 'supplier template lacks the canonical product columns');
+    assert(template.includes('bb000000-0000-4000-8000-000000000001'), 'supplier template lacks canonical product ids');
+
+    const uploadFile = path.join(outDir, 'supplier-price-preview-with-unknown.csv');
+    fs.writeFileSync(uploadFile, [
+      'product_id,product_name,price',
+      'bb000000-0000-4000-8000-000000000001,עגבנייה,8.75',
+      ',מוצר ספק לא מוכר,12.50',
+    ].join('\r\n'), 'utf8');
+    await page.getByRole('button', { name: 'הגשת מחירון חודשי' }).click();
+    const dialog = page.getByRole('dialog', { name: 'הגשת מחירון חודשי' });
+    await dialog.locator('input[type="file"]').setInputFiles(uploadFile);
+    await dialog.getByText(/זוהו 2 שורות; 1 הותאמו לקטלוג/).waitFor({ timeout: 20_000 });
+    assert.equal(await dialog.getByText('מוצר קנוני', { exact: true }).count(), 1);
+    assert.equal(await dialog.getByText('לא מוכר', { exact: true }).count(), 1);
+    await assertNoRawMetadata(page, 'supplier price exception preview');
+    await page.screenshot({ path: path.join(outDir, 'supplier-price-preview-390.png'), fullPage: true });
+    report.screenshots.push('supplier-price-preview-390.png');
+    return {
+      steps: 5,
+      backtracks: 0,
+      evidence: ['supplier-price-template.csv', 'UTF-8 CSV without BOM parsed', 'one canonical and one unknown row shown before submission'],
+    };
   } finally {
     await closeContext(context);
   }
@@ -875,18 +1188,101 @@ async function lazyChunkRecovery(browser) {
 }
 
 async function reportsAndPdf(browser) {
-  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 }, acceptDownloads: true });
   const page = await context.newPage();
+  const reportRows = new Map();
+  const responseReads = [];
+  const reportTables = new Set(['invoices', 'payments', 'credit_requests', 'exceptions', 'bank_transactions']);
+  page.on('response', (response) => {
+    const url = new URL(response.url());
+    const table = url.pathname.match(/\/rest\/v1\/([^/]+)$/)?.[1];
+    if (response.status() !== 200 || response.request().method() !== 'GET' || !reportTables.has(table)) return;
+    const filterKey = table === 'invoices' ? 'invoice_date'
+      : table === 'payments' ? 'paid_date'
+        : table === 'credit_requests' ? 'created_at'
+          : table === 'bank_transactions' ? 'tx_date'
+            : 'status';
+    if (!url.searchParams.has(filterKey)) return;
+    const read = response.json().then((rows) => {
+      if (Array.isArray(rows)) reportRows.set(table, rows);
+    });
+    responseReads.push(read);
+  });
   captureConsole(page, 'reports-pdf');
   try {
     await login(page, 'accountant');
     await page.goto(`${baseURL}/reports`);
     await settle(page);
+    const month = page.locator('#monthly-report-month');
+    if (await month.inputValue() !== '2026-07') {
+      const refreshed = page.waitForResponse((response) => response.url().includes('/rest/v1/invoices?')
+        && response.url().includes('2026-07-01'));
+      await month.fill('2026-07');
+      await refreshed;
+      await settle(page);
+    }
+    await page.waitForTimeout(100);
+    await Promise.all(responseReads);
+    for (const tableName of reportTables) {
+      assert(Array.isArray(reportRows.get(tableName)), `monthly report did not load authenticated REST rows for ${tableName}`);
+    }
+
+    const rows = Object.fromEntries(reportRows);
+    const sum = (values) => values.reduce((total, value) => total + Number(value || 0), 0);
+    const expected = {
+      invoiceRows: rows.invoices.length,
+      beforeVat: sum(rows.invoices.map((row) => row.amount_before_vat)),
+      vat: sum(rows.invoices.map((row) => row.vat_amount)),
+      invoices: sum(rows.invoices.map((row) => row.total_amount)),
+      paymentRows: rows.payments.length,
+      payments: sum(rows.payments.map((row) => row.amount)),
+      creditRows: rows.credit_requests.length,
+      credits: sum(rows.credit_requests.map((row) => row.amount)),
+      exceptionRows: rows.exceptions.length,
+      unmatchedBank: rows.bank_transactions.filter((row) => ['unmatched', 'suggested'].includes(row.status)).length,
+    };
+    const equalMoney = (actual, wanted, label) => assert.equal(Math.round(Number(actual) * 100), Math.round(Number(wanted) * 100), label);
+
     const table = page.locator('table.report-invoices');
     await table.waitFor();
     const headings = (await table.locator('thead th').allTextContents()).map((value) => value.trim());
     assert.equal(headings.length, 8, `monthly print report has ${headings.length}/8 columns`);
     assert((await table.locator('tfoot').innerText()).trim(), 'monthly print report has no totals row');
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'ייצוא Excel' }).click();
+    const download = await downloadPromise;
+    const excelPath = path.join(outDir, 'monthly-report.xlsx');
+    await download.saveAs(excelPath);
+    const workbook = XLSX.readFile(excelPath);
+    assert.deepEqual(workbook.SheetNames, ['פרטי הדוח', 'חשבוניות', 'תשלומים', 'זיכויים', 'חריגים פתוחים כרגע']);
+    const summaryRows = XLSX.utils.sheet_to_json(workbook.Sheets['פרטי הדוח'], { header: 1, raw: true, defval: null });
+    const metrics = new Map(summaryRows.slice(6).map(([label, count, amount]) => [label, { count, amount }]));
+    const invoiceSheet = XLSX.utils.sheet_to_json(workbook.Sheets['חשבוניות'], { raw: true, defval: null });
+    const paymentSheet = XLSX.utils.sheet_to_json(workbook.Sheets['תשלומים'], { raw: true, defval: null });
+    const creditSheet = XLSX.utils.sheet_to_json(workbook.Sheets['זיכויים'], { raw: true, defval: null });
+    const exceptionSheet = XLSX.utils.sheet_to_json(workbook.Sheets['חריגים פתוחים כרגע'], { raw: true, defval: null });
+    assert.equal(invoiceSheet.length, expected.invoiceRows, 'Excel invoice row count differs from REST');
+    assert.equal(paymentSheet.length, expected.paymentRows, 'Excel payment row count differs from REST');
+    assert.equal(creditSheet.length, expected.creditRows, 'Excel credit row count differs from REST');
+    assert.equal(exceptionSheet.length, expected.exceptionRows, 'Excel exception row count differs from REST');
+    assert.equal(metrics.get('חשבוניות')?.count, expected.invoiceRows, 'Excel invoice summary count differs from REST');
+    assert.equal(metrics.get('תשלומים')?.count, expected.paymentRows, 'Excel payment summary count differs from REST');
+    assert.equal(metrics.get('זיכויים')?.count, expected.creditRows, 'Excel credit summary count differs from REST');
+    assert.equal(metrics.get('חריגים פתוחים כרגע')?.count, expected.exceptionRows, 'Excel exception summary count differs from REST');
+    equalMoney(metrics.get('חשבוניות')?.amount, expected.invoices, 'Excel invoice total differs from REST');
+    equalMoney(metrics.get('לפני מע״מ')?.amount, expected.beforeVat, 'Excel pre-VAT total differs from REST');
+    equalMoney(metrics.get('מע״מ')?.amount, expected.vat, 'Excel VAT total differs from REST');
+    equalMoney(metrics.get('תשלומים')?.amount, expected.payments, 'Excel payment total differs from REST');
+    equalMoney(metrics.get('זיכויים')?.amount, expected.credits, 'Excel credit total differs from REST');
+    report.excel = {
+      file: 'monthly-report.xlsx',
+      bytes: fs.statSync(excelPath).size,
+      sheets: workbook.SheetNames,
+      source: 'authenticated REST fixture',
+      expected,
+    };
+
     for (const [width, height] of [[320, 720], [390, 844], [768, 1024], [1024, 768]]) {
       await page.setViewportSize({ width, height });
       await page.waitForTimeout(50);
@@ -915,13 +1311,52 @@ async function reportsAndPdf(browser) {
     await page.setViewportSize({ width: 1440, height: 900 });
     await table.waitFor({ state: 'visible' });
     await page.emulateMedia({ media: 'print' });
+    const printEvidence = await page.evaluate(() => {
+      const number = (value) => Number((value || '').replace(/[^\d,.-]/g, '').replace(/,/g, ''));
+      const card = (title) => [...document.querySelectorAll('.monthly-report .card')]
+        .find((node) => node.querySelector('.section-title')?.textContent?.trim().startsWith(title));
+      const invoiceTable = document.querySelector('table.report-invoices');
+      const invoiceTotals = [...invoiceTable.querySelectorAll('tfoot td')].slice(0, 3).map((node) => number(node.textContent));
+      const paymentTable = card('תשלומים לפי ספק')?.querySelector('table');
+      const paymentRows = [...(paymentTable?.querySelectorAll('tbody tr') ?? [])];
+      const creditTable = card('זיכויים')?.querySelector('table');
+      const creditRows = [...(creditTable?.querySelectorAll('tbody tr') ?? [])];
+      const exceptionHeading = [...document.querySelectorAll('.monthly-report h2')]
+        .find((node) => node.textContent?.includes('חריגים פתוחים כרגע'));
+      return {
+        heading: document.querySelector('.monthly-report .print\\:block h2')?.textContent?.trim() || '',
+        invoiceRows: invoiceTable.querySelectorAll('tbody tr').length,
+        beforeVat: invoiceTotals[0], vat: invoiceTotals[1], invoices: invoiceTotals[2],
+        paymentSupplierRows: paymentRows.length,
+        payments: paymentRows.reduce((total, row) => total + number(row.querySelectorAll('td')[1]?.textContent), 0),
+        creditRows: creditRows.length,
+        credits: creditRows.reduce((total, row) => total + number(row.querySelectorAll('td')[2]?.textContent), 0),
+        exceptionRows: exceptionHeading?.nextElementSibling?.querySelectorAll('li').length ?? 0,
+      };
+    });
+    assert(printEvidence.heading.includes('דוח חודשי') && printEvidence.heading.includes('יולי 2026'), 'print report heading lost tenant/month context');
+    assert.equal(printEvidence.invoiceRows, expected.invoiceRows, 'print invoice rows differ from REST');
+    assert.equal(printEvidence.creditRows, expected.creditRows, 'print credit rows differ from REST');
+    assert.equal(printEvidence.exceptionRows, expected.exceptionRows, 'print exception rows differ from REST');
+    assert.equal(printEvidence.paymentSupplierRows, new Set(rows.payments.map((row) => row.supplier.name)).size,
+      'print payment supplier groups differ from REST');
+    equalMoney(printEvidence.beforeVat, expected.beforeVat, 'print pre-VAT total differs from REST');
+    equalMoney(printEvidence.vat, expected.vat, 'print VAT total differs from REST');
+    equalMoney(printEvidence.invoices, expected.invoices, 'print invoice total differs from REST');
+    equalMoney(printEvidence.payments, expected.payments, 'print payment total differs from REST');
+    equalMoney(printEvidence.credits, expected.credits, 'print credit total differs from REST');
     await page.screenshot({ path: path.join(outDir, 'reports-print.png'), fullPage: true });
     report.screenshots.push('reports-print.png');
     const pdfPath = path.join(outDir, 'monthly-report.pdf');
     await page.pdf({ path: pdfPath, printBackground: true, preferCSSPageSize: true });
     const bytes = fs.statSync(pdfPath).size;
     assert(bytes > 5_000, `monthly report PDF is unexpectedly small (${bytes} bytes)`);
-    report.pdf = { file: 'monthly-report.pdf', bytes, headings };
+    report.pdf = { file: 'monthly-report.pdf', bytes, headings, sourceEvidence: printEvidence, expected };
+    return {
+      steps: 8,
+      backtracks: 0,
+      evidence: ['authenticated REST fixture rows', 'monthly-report.xlsx', 'reports-print.png', 'monthly-report.pdf'],
+    };
   } finally {
     await closeContext(context);
   }
@@ -1041,58 +1476,151 @@ async function adminState(browser) {
   }
 }
 
-async function run(name, check) {
-  if (process.env.QUALITY_ONLY && !name.includes(process.env.QUALITY_ONLY)) return;
+async function fixtureReadiness(browser) {
+  const roles = Object.keys(homes);
+  for (const role of roles) {
+    const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    try {
+      await login(page, role);
+      assert.equal(new URL(page.url()).pathname, homes[role], `${role}: fixture login did not reach its home`);
+      if (role === 'owner') {
+        await page.goto(`${baseURL}/invoices`);
+        await settle(page);
+        await page.getByText('7702', { exact: true }).first().waitFor({ timeout: 20_000 });
+      }
+    } finally {
+      await closeContext(context);
+    }
+  }
+  return { steps: roles.length + 1, backtracks: 0, evidence: [...roles.map((role) => `${role} login ready`), 'fixture sentinel invoice 7702'] };
+}
+
+async function run(name, check, meta = {}) {
+  if (process.env.QUALITY_ONLY && !meta.always && !name.includes(process.env.QUALITY_ONLY)) return 'SKIPPED';
+  const startedAt = Date.now();
+  const task = {
+    name,
+    status: 'FAIL',
+    persona: meta.persona ?? 'system',
+    durationMs: 0,
+    steps: meta.steps ?? 1,
+    backtracks: meta.backtracks ?? 0,
+    evidence: meta.evidence ?? [],
+  };
   try {
-    await check();
+    const measured = await check();
+    task.status = 'PASS';
+    task.steps = measured?.steps ?? task.steps;
+    task.backtracks = measured?.backtracks ?? task.backtracks;
+    task.evidence = measured?.evidence ?? task.evidence;
     report.passed.push(name);
     console.log(`${name}: PASS`);
   } catch (error) {
-    report.failures.push({ name, message: error.message, stack: error.stack?.split('\n').slice(0, 4).join('\n') });
-    console.log(`${name}: FAIL — ${error.message}`);
+    task.status = meta.failureStatus ?? 'FAIL';
+    const failure = { name, status: task.status, message: error.message, stack: error.stack?.split('\n').slice(0, 4).join('\n') };
+    report.failures.push(failure);
+    if (task.status === 'BLOCKED') report.blocked.push({ name, message: error.message });
+    console.log(`${name}: ${task.status} — ${error.message}`);
+  } finally {
+    task.durationMs = Date.now() - startedAt;
+    report.tasks.push(task);
+  }
+  return task.status;
+}
+
+function blockRemaining(suite, reason) {
+  for (const task of suite) {
+    if (process.env.QUALITY_ONLY && !task.name.includes(process.env.QUALITY_ONLY)) continue;
+    report.tasks.push({
+      name: task.name, status: 'BLOCKED', persona: task.persona, durationMs: 0,
+      steps: 0, backtracks: 0, evidence: [`not run: ${reason}`],
+    });
+    report.blocked.push({ name: task.name, message: reason });
   }
 }
 
-(async () => {
-  const browser = await chromium.launch({ headless: true, executablePath: browserPath });
-  try {
-    await run('role and viewport matrix', () => roleAndViewportMatrix(browser));
-    await run('speed-dial roles, keyboard, camera and responsive contract', () => speedDialContract(browser));
-    await run('dashboard, speed-dial and dialogs', () => dashboardAndDialogs(browser));
-    await run('DataTable, ActionMenu, route focus and mobile search', () => tableKeyboardAndSearch(browser));
-    await run('receiving contextual names and accessibility', () => receivingAccessibility(browser));
-    await run('order supplier savings and reason-free approval', () => orderSupplierComparison(browser));
-    await run('payment-request names and modal stack', () => paymentRequestNamesAndModalStack(browser));
-    await run('bank contextual names and accessibility', () => bankContextualNames(browser));
-    await run('partial Alerts never all-clear or mark read', () => alertsPartialFailure(browser));
-    await run('Settings failure never reports success', () => settingsFalseSuccess(browser));
-    await run('temporary auth bootstrap supports retry', () => bootstrapRetry(browser));
-    await run('lazy chunk failure recovers', () => lazyChunkRecovery(browser));
-    await run('monthly report print and PDF', () => reportsAndPdf(browser));
-    await run('PWA update preserves open state', () => pwaUpdate(browser));
-    await run('Push logout all success', () => pushLogout(browser, 'all-success', true, true));
-    await run('Push logout server failure', () => pushLogout(browser, 'server-failure', false, true));
-    await run('Push logout browser failure', () => pushLogout(browser, 'browser-failure', true, false));
-    await run('Push logout double failure', () => pushLogout(browser, 'double-failure', false, false));
-    await run('Admin password and Clipboard state', () => adminState(browser));
-  } finally {
-    await browser.close();
-  }
-
+function writeReport() {
   if (report.consoleErrors.length) {
-    report.failures.push({ name: 'unexpected browser console errors', message: JSON.stringify(report.consoleErrors) });
+    const failure = { name: 'unexpected browser console errors', status: 'FAIL', message: JSON.stringify(report.consoleErrors) };
+    report.failures.push(failure);
+    report.tasks.push({
+      name: failure.name, status: 'FAIL', persona: 'all', durationMs: 0,
+      steps: report.consoleErrors.length, backtracks: 0, evidence: report.consoleErrors,
+    });
   }
   fs.writeFileSync(path.join(outDir, 'p4-browser-report.json'), JSON.stringify(report, null, 2), 'utf8');
   console.log(JSON.stringify({
     passed: report.passed.length,
     failed: report.failures.length,
+    blocked: report.blocked.length,
     viewportChecks: report.viewports.length,
     accessibilityAudits: report.accessibility.length,
     screenshots: report.screenshots,
     pdfBytes: report.pdf?.bytes ?? 0,
+    excelBytes: report.excel?.bytes ?? 0,
     failures: report.failures,
   }, null, 2));
   if (report.failures.length) process.exitCode = 1;
+}
+
+(async () => {
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true, executablePath: browserPath });
+  } catch (error) {
+    report.tasks.push({
+      name: 'browser and fixture readiness', status: 'BLOCKED', persona: 'all', durationMs: 0,
+      steps: 0, backtracks: 0, evidence: [error.message],
+    });
+    report.blocked.push({ name: 'browser and fixture readiness', message: error.message });
+    report.failures.push({ name: 'browser and fixture readiness', status: 'BLOCKED', message: error.message });
+    writeReport();
+    return;
+  }
+
+  const suite = [
+    { name: 'role and viewport matrix', persona: 'all roles', steps: 51, evidence: ['six role homes', '42 viewport checks', 'route denials'], check: () => roleAndViewportMatrix(browser) },
+    { name: 'speed-dial roles, keyboard, camera and responsive contract', persona: 'owner, office, kitchen', steps: 20, evidence: ['keyboard', '44px', '320/390/768/1024', 'reduced motion'], check: () => speedDialContract(browser) },
+    { name: 'dashboard, speed-dial and dialogs', persona: 'owner', steps: 7, evidence: ['dashboard REST/DOM cross-check', 'dashboard screenshots'], check: () => dashboardAndDialogs(browser) },
+    { name: 'DataTable, ActionMenu, route focus and mobile search', persona: 'owner', steps: 12, evidence: ['search and deep links', 'alerts and filters', 'severity filter'], check: () => tableKeyboardAndSearch(browser) },
+    { name: 'receiving contextual names and accessibility', persona: 'kitchen', steps: 6, evidence: ['partial and completed receipt reasons'], check: () => receivingAccessibility(browser) },
+    { name: 'order supplier savings and reason-free approval', persona: 'office', steps: 6, evidence: ['mutable purchasing journey'], check: () => orderSupplierComparison(browser) },
+    { name: 'supplier mobile edit', persona: 'office', steps: 5, evidence: ['390px edit and PATCH verification'], check: () => supplierMobileEditJourney(browser) },
+    { name: 'kitchen role regression', persona: 'kitchen', steps: 3, evidence: ['home, denied route, quick actions'], check: () => personaContractRegression(browser, 'kitchen') },
+    { name: 'payer role regression', persona: 'payer', steps: 3, evidence: ['home, denied route, no quick actions'], check: () => personaContractRegression(browser, 'payer') },
+    { name: 'payment-request names and modal stack', persona: 'owner', steps: 7, evidence: ['record names and nested modal focus'], check: () => paymentRequestNamesAndModalStack(browser) },
+    { name: 'bank contextual names and accessibility', persona: 'accountant', steps: 4, evidence: ['bank treatment controls'], check: () => bankContextualNames(browser) },
+    { name: 'partial Alerts never all-clear or mark read', persona: 'owner', steps: 4, evidence: ['partial readiness remains disclosed'], check: () => alertsPartialFailure(browser) },
+    { name: 'Settings failure never reports success', persona: 'owner', steps: 5, evidence: ['failed mutation remains open'], check: () => settingsFalseSuccess(browser) },
+    { name: 'temporary auth bootstrap supports retry', persona: 'owner', steps: 5, evidence: ['bootstrap retry without logout'], check: () => bootstrapRetry(browser) },
+    { name: 'lazy chunk failure recovers', persona: 'owner', steps: 5, evidence: ['route chunk recovery'], check: () => lazyChunkRecovery(browser) },
+    { name: 'accountant finance write journey', persona: 'accountant', steps: 11, evidence: ['payment and credit before/after with audit'], check: () => accountantFinanceJourney(browser) },
+    { name: 'supplier price and exception journey', persona: 'supplier', steps: 5, evidence: ['template and unknown-row preview'], check: () => supplierPriceJourney(browser) },
+    { name: 'monthly report print and PDF', persona: 'accountant', steps: 8, evidence: ['REST, XLSX, DOM print and PDF totals'], check: () => reportsAndPdf(browser) },
+    { name: 'PWA update preserves open state', persona: 'anonymous', steps: 4, evidence: ['service-worker update without reload'], check: () => pwaUpdate(browser) },
+    { name: 'Push logout all success', persona: 'owner', steps: 3, evidence: ['server and browser cleanup'], check: () => pushLogout(browser, 'all-success', true, true) },
+    { name: 'Push logout server failure', persona: 'owner', steps: 3, evidence: ['truthful server cleanup failure'], check: () => pushLogout(browser, 'server-failure', false, true) },
+    { name: 'Push logout browser failure', persona: 'owner', steps: 3, evidence: ['truthful browser cleanup failure'], check: () => pushLogout(browser, 'browser-failure', true, false) },
+    { name: 'Push logout double failure', persona: 'owner', steps: 3, evidence: ['truthful double cleanup failure'], check: () => pushLogout(browser, 'double-failure', false, false) },
+    { name: 'Admin password and Clipboard state', persona: 'owner', steps: 8, evidence: ['modal reset and clipboard failure'], check: () => adminState(browser) },
+  ];
+
+  try {
+    const readiness = await run('browser and fixture readiness', () => fixtureReadiness(browser), {
+      always: true, persona: 'all roles', failureStatus: 'BLOCKED', steps: 7,
+      evidence: ['six fixture logins', 'invoice 7702 sentinel'],
+    });
+    if (readiness === 'PASS') {
+      for (const task of suite) await run(task.name, task.check, task);
+    } else {
+      blockRemaining(suite, 'browser/auth/fixture readiness failed');
+    }
+  } finally {
+    await browser.close();
+  }
+
+  writeReport();
 })().catch((error) => {
   console.error(error.stack || error.message);
   process.exitCode = 1;
