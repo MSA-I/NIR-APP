@@ -1,5 +1,5 @@
 -- P1B supplier price submission regression harness. Run only against an isolated local
--- database after applying migrations through 0029_p1b_trusted_file_intake.sql.
+-- database after applying migrations through 0031_p1b_uploader_orphan_cleanup.sql.
 \set ON_ERROR_STOP on
 
 begin;
@@ -98,13 +98,25 @@ insert into storage.objects (bucket_id, name, owner, metadata) values
   ),
   (
     'price-submissions',
-    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-0000-0000-000000000008/service-stage.csv',
+    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/66000000-0000-4000-8000-000000000008/service-stage.csv',
     '21000000-0000-0000-0000-000000000003',
     '{"mimetype":"text/csv","size":100}'::jsonb
   ),
   (
     'price-submissions',
     '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/64000000-0000-4000-8000-000000000009/changed-stage.csv',
+    '21000000-0000-0000-0000-000000000003',
+    '{"mimetype":"text/csv","size":100}'::jsonb
+  ),
+  (
+    'price-submissions',
+    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/68000000-0000-4000-8000-000000000001/competitor-stage.csv',
+    '21000000-0000-0000-0000-000000000003',
+    '{"mimetype":"text/csv","size":100}'::jsonb
+  ),
+  (
+    'price-submissions',
+    '11000000-0000-0000-0000-000000000002/price-submissions/31000000-0000-0000-0000-000000000003/68000000-0000-4000-8000-000000000002/tenant-stage.csv',
     '21000000-0000-0000-0000-000000000003',
     '{"mimetype":"text/csv","size":100}'::jsonb
   ),
@@ -220,9 +232,9 @@ select claim_supplier_price_intake(
   '71000000-0000-0000-0000-000000000008',
   '21000000-0000-0000-0000-000000000003',
   '31000000-0000-0000-0000-000000000001',
-  '61000000-0000-0000-0000-000000000008',
+  '66000000-0000-4000-8000-000000000008',
   '2026-08-01', 'service-stage.csv',
-  '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-0000-0000-000000000008/service-stage.csv',
+  '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/66000000-0000-4000-8000-000000000008/service-stage.csv',
   'trusted Edge staging test'
 );
 select prepare_supplier_price_intake(
@@ -257,13 +269,48 @@ select pg_temp.p1b_assert(
   'supplier receipt RLS exposed a competitor or second tenant'
 );
 select pg_temp.p1b_assert(
-  (select count(*) = 0 from storage.objects where bucket_id = 'price-submissions'),
-  'supplier Storage RLS exposed unregistered or competitor files'
+  exists (
+    select 1 from storage.objects
+    where bucket_id = 'price-submissions'
+      and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/66000000-0000-4000-8000-000000000008/service-stage.csv'
+  )
+  and not exists (
+    select 1 from storage.objects
+    where bucket_id = 'price-submissions'
+      and name in (
+        '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/68000000-0000-4000-8000-000000000001/competitor-stage.csv',
+        '11000000-0000-0000-0000-000000000002/price-submissions/31000000-0000-0000-0000-000000000003/68000000-0000-4000-8000-000000000002/tenant-stage.csv',
+        '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/62000000-0000-0000-0000-000000000001/competitor-ledger.csv',
+        '11000000-0000-0000-0000-000000000002/price-submissions/31000000-0000-0000-0000-000000000003/62000000-0000-0000-0000-000000000002/tenant-ledger.csv'
+      )
+  ),
+  'supplier Storage RLS did not isolate uploader staging, competitor and second tenant files'
 );
 
-delete from storage.objects
-where bucket_id = 'price-submissions'
-  and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-0000-0000-000000000008/service-stage.csv';
+with deleted as (
+  delete from storage.objects
+  where bucket_id = 'price-submissions'
+    and name in (
+      '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/68000000-0000-4000-8000-000000000001/competitor-stage.csv',
+      '11000000-0000-0000-0000-000000000002/price-submissions/31000000-0000-0000-0000-000000000003/68000000-0000-4000-8000-000000000002/tenant-stage.csv'
+    )
+  returning 1
+)
+select pg_temp.p1b_assert(
+  (select count(*) = 0 from deleted),
+  'supplier could delete competitor or second-tenant staging'
+);
+
+with deleted as (
+  delete from storage.objects
+  where bucket_id = 'price-submissions'
+    and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/66000000-0000-4000-8000-000000000008/service-stage.csv'
+  returning 1
+)
+select pg_temp.p1b_assert(
+  (select count(*) = 0 from deleted),
+  'active trusted intake did not block uploader deletion'
+);
 reset role;
 select set_config('request.jwt.claim.role', 'service_role', true);
 set local role service_role;
@@ -271,7 +318,7 @@ select pg_temp.p1b_assert(
   exists (
     select 1 from storage.objects
     where bucket_id = 'price-submissions'
-      and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-0000-0000-000000000008/service-stage.csv'
+      and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/66000000-0000-4000-8000-000000000008/service-stage.csv'
   ),
   'uploader deleted an object while its trusted intake was active'
 );
@@ -404,21 +451,24 @@ begin
 exception when insufficient_privilege then null;
 end
 $$;
-reset role;
 select pg_temp.p1b_assert(
   exists (
     select 1 from storage.objects
     where bucket_id = 'price-submissions'
       and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/69000000-0000-4000-8000-000000000009/own-policy.csv'
   ),
-  'supplier could not insert its own tenant-scoped staging object'
+  'supplier could not read its own tenant-scoped staging object'
 );
-select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000003', true);
-select set_config('request.jwt.claim.role', 'authenticated', true);
-set local role authenticated;
-delete from storage.objects
-where bucket_id = 'price-submissions'
-  and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/69000000-0000-4000-8000-000000000009/own-policy.csv';
+with deleted as (
+  delete from storage.objects
+  where bucket_id = 'price-submissions'
+    and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/69000000-0000-4000-8000-000000000009/own-policy.csv'
+  returning 1
+)
+select pg_temp.p1b_assert(
+  (select count(*) = 1 from deleted),
+  'supplier could not delete its own inactive staging orphan'
+);
 
 -- The old batch RPC remains for owner/office but is no longer a supplier bypass.
 do $$

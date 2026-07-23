@@ -43,6 +43,7 @@ supabase/
                            0025 חוזה תפקידים: owner/office/accountant · 0026 הגשות מחירון חודשיות
                            0027 בטיחות trigger פיננסי משותף · 0028 תיקוני גבול פיננסי P0
                            0029 intake מהימן להגשות מחירון · 0030 allowlist כתיבה ופקודות מנומקות
+                           0031 ניקוי orphan של uploader
   functions/               admin-provision · send-invite · send-push · submit-price-list — service_role נשאר בשרת
   seed.sql                 seed ניטרלי לדייר חדש (ארגון + קטגוריות)
   demo/                    חבילת הדמו כדייר נפרד + reset + audit בידוד
@@ -183,8 +184,9 @@ transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מ
 
 הדלי `price-submissions` פרטי ומקבל רק CSV/XLS/XLSX עד 10MB. נתיב חדש הוא בדיוק
 `{org_id}/price-submissions/{supplier_id}/{submission_id}/{file}` וללא overwrite: ניתן למחוק
-רק orphan של אותו uploader שלא נרשם ב־ledger; לאחר רישום הקובץ immutable ונקרא רק בידי
-`owner`/`office` או הספק שלו.
+רק orphan של אותו uploader שלא נרשם ב־ledger; staging לא־רשום נקרא רק בידי אותו uploader
+ובתנאי שהדייר, התפקיד והספק בנתיב תואמים. לאחר רישום הקובץ הוא immutable ונקרא רק בידי
+`owner`/`office` או הספק שלו. intake פעיל חוסם מחיקה גם עבור ה־uploader, ואין מדיניות UPDATE.
 
 הדפדפן רשאי לבצע preview מקומי, אך אינו שולח hash או שורות לפקודת המחירים. הוא מעלה אובייקט
 פרטי ושולח ל־`submit-price-list` רק מזהי הגשה/ספק/חודש, שם ונתיב קובץ וסיבה. פונקציית הקצה
@@ -200,7 +202,8 @@ transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מ
 קבלה או דחייה, ולכן שילוב שורות תקינות ושגויות מקבל `accepted_with_rejections`; מוצר לא מוכר
 אינו יוצר מוצר. צריכת ה־intake, עדכון המחירים, `price_history`, ה־ledger וה־audit מתבצעים באותה
 עסקת DB, כך שכשל משאיר את ה־intake מוכן לניקוי שרתי ואינו משאיר כתיבת DB חלקית. לאחר שחרור
-claim הלקוח מנקה orphan לא רשום; גם אם הניקוי נכשל, מדיניות הקריאה אינה חושפת אותו.
+claim הלקוח קורא ומנקה את ה־orphan הלא־רשום שלו; מדיניות הקריאה אינה חושפת אותו למשתמש אחר,
+לספק מתחרה או לדייר אחר גם אם הניקוי נכשל.
 
 ל־`bank_allocations` אין עדיין constraint היסטורי של יעד יחיד: preflight מצא שבע שורות ישנות
 עם שני יעדים. כתיבה חדשה דרך ה־RPC מחייבת יעד אחד וה־guard חוסם כתיבה ישירה; תיקון הרשומות

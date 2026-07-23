@@ -79,6 +79,9 @@ push, ‏deploy או מיגרציה לסביבה חיה; הצלחה מקומית
 מחיקתו בזמן הקליטה. הפקודה הציבורית מקבלת רק `intake_id`; חתימת שמונת הארגומנטים הישנה נשארת
 מימוש פנימי ללא grant ל־API. צריכת ה־intake, מחירים, `price_history`, קבלה ו־audit מתבצעים
 באותה עסקת DB. מוצר לא מוכר נדחה ואינו יוצר מוצר קטלוג; כשל משאיר אפס כתיבות DB חלקיות.
+`0031_p1b_uploader_orphan_cleanup.sql` מאפשרת רק ל־uploader לקרוא ולמחוק staging לא־רשום
+בנתיב הדייר והספק שלו; קובץ של ספק מתחרה או דייר אחר נשאר מוסתר, intake פעיל נשאר בלתי־מחיק,
+ולא נוספה מדיניות UPDATE. קובץ שנרשם ממשיך את חוזה הקריאה של ה־ledger.
 
 Edge Function חדשה `submit-price-list` מאמתת את JWT הקורא, התפקיד, הדייר והספק, מורידה את
 האובייקט הפרטי, בודקת עד 10MB ועד 5,000 שורות, מאמתת CSV UTF-8 או חתימת XLS/XLSX, ומחשבת
@@ -96,10 +99,11 @@ SHA-256 ומפיקה שורות קנוניות מן הבייטים בפועל ב
 SheetJS runtime roundtrip, בדיקת CSV UTF-8 ללא BOM/‏FieldMismatch, ‏PowerShell parse
 ו־`git diff --check` עברו.
 `supabase/tests/p1_price_submissions.sql` הורחב ל־owner/office/supplier ולכל תפקידי השלילה,
-RLS/Storage, עקיפת RPC, שינוי object/version, rollback וספק/דייר מתחרה; harness מקביליות אמיתי
+RLS/Storage, קריאה וניקוי staging של uploader, חסימת intake פעיל, עקיפת RPC, שינוי object/version,
+rollback וספק/דייר מתחרה; harness מקביליות אמיתי
 בודק checksum זהה ושתי revisions שונות בשני חיבורים, ושניהם חוברו ל־quality gate.
-בדיקות DB/reset וקריאת Edge HTTP טרם הורצו בענף המבודד: הן מחייבות תחילה שילוב של `0028`
-עם `0029` בתוך stack אינטגרציה ייחודי. מצב זה הוא BLOCKED עד להרצה המשולבת ולא PASS. לא בוצעו
+בדיקות DB/reset וקריאת Edge HTTP טרם הורצו בענף המבודד: הן מחייבות תחילה שילוב של `0028`–`0031`
+בתוך stack אינטגרציה ייחודי. מצב זה הוא BLOCKED עד להרצה המשולבת ולא PASS. לא בוצעו
 push, ‏deploy או מיגרציה חיה.
 
 ---
