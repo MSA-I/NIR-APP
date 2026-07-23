@@ -156,6 +156,9 @@ $$;
 select set_invoice_review_status(
   '60000000-0000-0000-0000-000000000001', 'in_review', 'תחילת בדיקה'
 );
+select set_invoice_review_status(
+  '60000000-0000-0000-0000-000000000001', 'approved', 'אישור חשבונית לתשלום'
+);
 
 -- A second open invoice drives bank matching and the month snapshot tests.
 select create_invoice(
@@ -163,6 +166,12 @@ select create_invoice(
   '30000000-0000-0000-0000-000000000001',
   'INV-002', '2026-07-11', 42.37, 7.63, 50, null, null, null, null,
   'קליטת חשבונית נוספת'
+);
+select set_invoice_review_status(
+  '60000000-0000-0000-0000-000000000002', 'in_review', 'תחילת בדיקה'
+);
+select set_invoice_review_status(
+  '60000000-0000-0000-0000-000000000002', 'approved', 'אישור חשבונית להתאמה'
 );
 
 -- Invoice-linked credit requests use one retry-safe command boundary for creation and status.
@@ -507,9 +516,9 @@ exception when sqlstate '42501' then
 end
 $$;
 
--- Bank import validates the full batch; matching covers direct and existing-payment paths.
+-- Accountant owns bank operations; office is denied even when calling the RPC directly.
 reset role;
-select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000002', true);
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000005', true);
 set local role authenticated;
 select pg_temp.p1_assert(
   (import_bank_transactions(
@@ -602,6 +611,52 @@ select pg_temp.p1_assert(
   (select status = 'matched' from payment_requests where id = '80000000-0000-0000-0000-000000000001'),
   'existing-payment match did not advance its request'
 );
+do $$
+begin
+  perform unmatch_bank_transaction(
+    (select id from bank_transactions where row_hash = repeat('b', 64)),
+    'ניסיון להסיר התאמה ישירה'
+  );
+  raise exception 'expected direct-match correction requirement';
+exception when sqlstate 'P0001' then
+  if sqlerrm not like '%bank_direct_match_requires_financial_correction%' then raise; end if;
+end
+$$;
+select pg_temp.p1_assert(
+  (unmatch_bank_transaction(
+    (select id from bank_transactions where row_hash = repeat('c', 64)),
+    'הסרת התאמת תשלום קיים'
+  )->>'idempotent')::boolean = false,
+  'existing-payment unmatch did not commit'
+);
+select pg_temp.p1_assert(
+  (select status = 'executed' from payment_requests where id = '80000000-0000-0000-0000-000000000001'),
+  'unmatch did not restore the request to executed'
+);
+select pg_temp.p1_assert(
+  not exists (
+    select 1 from bank_allocations ba
+    join bank_transactions bt on bt.id = ba.bank_transaction_id
+    where bt.row_hash = repeat('c', 64)
+  ),
+  'unmatch left a bank allocation behind'
+);
+select pg_temp.p1_assert(
+  (unmatch_bank_transaction(
+    (select id from bank_transactions where row_hash = repeat('c', 64)),
+    'ניסיון חוזר להסרה'
+  )->>'idempotent')::boolean,
+  'unmatch retry must be idempotent'
+);
+select pg_temp.p1_assert(
+  exists (
+    select 1 from audit_logs
+    where action = 'bank_match_removed'
+      and entity_id = (select id from bank_transactions where row_hash = repeat('c', 64))
+      and reason = 'הסרת התאמת תשלום קיים'
+  ),
+  'unmatch audit is missing its reason'
+);
 
 -- Month export stores a canonical snapshot and rejects later expansion/shrinkage.
 select pg_temp.p1_assert(
@@ -631,8 +686,18 @@ exception when sqlstate 'P0001' then
 end
 $$;
 
--- Accountant has no financial command capability, and direct table writes cannot bypass RPCs.
+-- Accountant can operate approved accounting work but not an unapproved invoice credit.
 reset role;
+select set_config('request.jwt.claim.sub', '', true);
+insert into credit_requests (
+  id, org_id, supplier_id, invoice_id, reason, amount, status, created_by
+) values (
+  '65000000-0000-0000-0000-000000000004',
+  '10000000-0000-0000-0000-000000000001',
+  '30000000-0000-0000-0000-000000000001',
+  '60000000-0000-0000-0000-000000000002',
+  'other', 1, 'requested', '20000000-0000-0000-0000-000000000001'
+);
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000005', true);
 set local role authenticated;
 do $$
@@ -640,19 +705,176 @@ begin
   perform transition_credit_request(
     '65000000-0000-0000-0000-000000000001', 'closed', 'accountant attempt'
   );
-  raise exception 'expected accountant credit rejection';
+  raise exception 'expected unapproved invoice credit rejection';
 exception when sqlstate '42501' then
-  if sqlerrm not like '%credit_request_transition_not_authorized%' then raise; end if;
+  if sqlerrm not like '%credit_request_invoice_not_approved%' then raise; end if;
+end
+$$;
+select pg_temp.p1_assert(
+  (transition_credit_request(
+    '65000000-0000-0000-0000-000000000004', 'received', 'זיכוי התקבל בהנהלת חשבונות'
+  )->>'idempotent')::boolean = false,
+  'accountant could not transition an approved-invoice credit'
+);
+
+-- Office receives only narrow warning signals and cannot read or command bank data.
+reset role;
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000002', true);
+set local role authenticated;
+select pg_temp.p1_assert(
+  (invoice_financial_check_signals('60000000-0000-0000-0000-000000000002')->>'bank_match_exists')::boolean,
+  'office invoice signal lost the confirmed direct bank match'
+);
+select pg_temp.p1_assert(
+  (payment_request_financial_check_signals(
+    '30000000-0000-0000-0000-000000000001', 118,
+    array['60000000-0000-0000-0000-000000000001'::uuid],
+    '80000000-0000-0000-0000-000000000001'
+  )->>'similar_bank_transfer_exists')::boolean,
+  'office payment-request signal lost the similar transfer warning'
+);
+select pg_temp.p1_assert(
+  (select count(*) = 0 from bank_transactions),
+  'office can read bank transactions through RLS'
+);
+do $$
+begin
+  perform import_bank_transactions(
+    'office.csv', repeat('f', 64), '{}'::jsonb, '[]'::jsonb, 'office bank attempt'
+  );
+  raise exception 'expected office bank rejection';
+exception when sqlstate '42501' then
+  if sqlerrm not like '%not_authorized%' then raise; end if;
+end
+$$;
+
+-- Focused fixtures prove accountant execution and the isolated owner emergency path.
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
+insert into invoices (
+  id, org_id, supplier_id, invoice_number, invoice_date,
+  amount_before_vat, vat_amount, total_amount, review_status
+) values
+  ('60000000-0000-0000-0000-000000000007', '10000000-0000-0000-0000-000000000001',
+   '30000000-0000-0000-0000-000000000001', 'INV-ACCOUNTANT', '2026-07-21', 100, 18, 118, 'approved'),
+  ('60000000-0000-0000-0000-000000000008', '10000000-0000-0000-0000-000000000001',
+   '30000000-0000-0000-0000-000000000001', 'INV-EMERGENCY', '2026-07-22', 50, 9, 59, 'approved');
+insert into payment_requests (
+  id, org_id, supplier_id, amount, status, created_by, approved_by, approved_at
+) values
+  ('80000000-0000-0000-0000-000000000007', '10000000-0000-0000-0000-000000000001',
+   '30000000-0000-0000-0000-000000000001', 118, 'approved',
+   '20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', now()),
+  ('80000000-0000-0000-0000-000000000008', '10000000-0000-0000-0000-000000000001',
+   '30000000-0000-0000-0000-000000000001', 59, 'approved',
+   '20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', now());
+insert into payment_request_invoices (org_id, payment_request_id, invoice_id, amount_allocated) values
+  ('10000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000007',
+   '60000000-0000-0000-0000-000000000007', 118),
+  ('10000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000008',
+   '60000000-0000-0000-0000-000000000008', 59);
+
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000005', true);
+set local role authenticated;
+select pg_temp.p1_assert(
+  (execute_payment_request(
+    '80000000-0000-0000-0000-000000000007', '2026-07-23', 'העברה בנקאית',
+    'ACCOUNTANT-REF', null,
+    '[{"invoice_id":"60000000-0000-0000-0000-000000000007","credit_id":null,"amount":118}]'::jsonb,
+    'ביצוע הנהלת חשבונות'
+  )->>'idempotent')::boolean = false,
+  'accountant could not execute an approved payment request'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '20000000-0000-0000-0000-000000000001'
+)::text, true);
+set local role authenticated;
+do $$
+begin
+  perform execute_payment_request(
+    '80000000-0000-0000-0000-000000000008', '2026-07-23', 'העברה בנקאית',
+    'EMERGENCY-REF', null,
+    '[{"invoice_id":"60000000-0000-0000-0000-000000000008","credit_id":null,"amount":59}]'::jsonb,
+    'owner regular attempt'
+  );
+  raise exception 'expected owner regular execution rejection';
+exception when sqlstate '42501' then
+  if sqlerrm not like '%payment_request_not_executable%' then raise; end if;
 end
 $$;
 do $$
 begin
-  perform mark_month_export_sent('2026-08-01', '{}'::uuid[], 'accountant attempt');
-  raise exception 'expected accountant rejection';
+  perform execute_emergency_payment_request(
+    '80000000-0000-0000-0000-000000000008', '2026-07-23', 'העברה בנקאית',
+    'EMERGENCY-REF', null,
+    '[{"invoice_id":"60000000-0000-0000-0000-000000000008","credit_id":null,"amount":59}]'::jsonb,
+    'emergency without fresh password'
+  );
+  raise exception 'expected missing amr rejection';
 exception when sqlstate '42501' then
-  if sqlerrm not like '%month_export_not_authorized%' then raise; end if;
+  if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
 end
 $$;
+reset role;
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '20000000-0000-0000-0000-000000000001',
+  'amr', jsonb_build_array(jsonb_build_object(
+    'method', 'password', 'timestamp', extract(epoch from clock_timestamp() - interval '10 minutes')::bigint
+  ))
+)::text, true);
+set local role authenticated;
+do $$
+begin
+  perform execute_emergency_payment_request(
+    '80000000-0000-0000-0000-000000000008', '2026-07-23', 'העברה בנקאית',
+    'EMERGENCY-REF', null,
+    '[{"invoice_id":"60000000-0000-0000-0000-000000000008","credit_id":null,"amount":59}]'::jsonb,
+    'stale emergency attempt'
+  );
+  raise exception 'expected stale amr rejection';
+exception when sqlstate '42501' then
+  if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
+end
+$$;
+reset role;
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '20000000-0000-0000-0000-000000000001',
+  'amr', jsonb_build_array(jsonb_build_object(
+    'method', 'password', 'timestamp', extract(epoch from clock_timestamp())::bigint
+  ))
+)::text, true);
+set local role authenticated;
+select pg_temp.p1_assert(
+  (execute_emergency_payment_request(
+    '80000000-0000-0000-0000-000000000008', '2026-07-23', 'העברה בנקאית',
+    'EMERGENCY-REF', null,
+    '[{"invoice_id":"60000000-0000-0000-0000-000000000008","credit_id":null,"amount":59}]'::jsonb,
+    'תשלום חירום מאומת'
+  )->>'emergency')::boolean,
+  'fresh owner emergency execution did not commit'
+);
+select pg_temp.p1_assert(
+  (execute_emergency_payment_request(
+    '80000000-0000-0000-0000-000000000008', '2026-07-23', 'העברה בנקאית',
+    'EMERGENCY-REF', null,
+    '[{"invoice_id":"60000000-0000-0000-0000-000000000008","credit_id":null,"amount":59}]'::jsonb,
+    'תשלום חירום מאומת'
+  )->>'idempotent')::boolean,
+  'owner emergency retry must be idempotent'
+);
+select pg_temp.p1_assert(
+  exists (
+    select 1 from audit_logs
+    where action = 'payment_request_emergency_executed'
+      and entity_id = '80000000-0000-0000-0000-000000000008'
+      and reason = 'תשלום חירום מאומת'
+  ),
+  'owner emergency audit is missing or not distinct'
+);
 
 reset role;
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
@@ -699,6 +921,7 @@ $$;
 -- Finalize revalidates the locked current price and is idempotent after a lost response.
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
 insert into purchase_requests (
   id, org_id, status, created_by, editor_step
 ) values (
@@ -732,6 +955,7 @@ select pg_temp.p1_assert(
 
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
 insert into purchase_requests (
   id, org_id, status, created_by, editor_step
 ) values (

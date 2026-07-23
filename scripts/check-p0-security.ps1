@@ -412,9 +412,11 @@ try {
   Add-ServiceRow "goods_receipt_items" @{ id = $receiptItemB; org_id = $orgB; receipt_id = $receiptB; order_item_id = $orderItemB; product_id = $productB; qty_received = 2 } $serviceKey | Out-Null
 
   $invoiceA = New-Id
+  $invoiceAUnapproved = New-Id
   $invoiceB = New-Id
-  Add-ServiceRow "invoices" @{ id = $invoiceA; org_id = $orgA; supplier_id = $supplierA; invoice_number = "P0-A"; invoice_date = "2026-07-01"; received_by = $accounts.officeA.Id; amount_before_vat = 100; total_amount = 100 } $serviceKey | Out-Null
-  Add-ServiceRow "invoices" @{ id = $invoiceB; org_id = $orgB; supplier_id = $supplierB; invoice_number = "P0-B"; invoice_date = "2026-07-01"; received_by = $accounts.ownerB.Id; amount_before_vat = 200; total_amount = 200 } $serviceKey | Out-Null
+  Add-ServiceRow "invoices" @{ id = $invoiceA; org_id = $orgA; supplier_id = $supplierA; invoice_number = "P0-A"; invoice_date = "2026-07-01"; received_by = $accounts.officeA.Id; amount_before_vat = 100; total_amount = 100; review_status = "approved" } $serviceKey | Out-Null
+  Add-ServiceRow "invoices" @{ id = $invoiceAUnapproved; org_id = $orgA; supplier_id = $supplierA; invoice_number = "P0-A-UNAPPROVED"; invoice_date = "2026-07-02"; received_by = $accounts.officeA.Id; amount_before_vat = 40; total_amount = 40; review_status = "in_review" } $serviceKey | Out-Null
+  Add-ServiceRow "invoices" @{ id = $invoiceB; org_id = $orgB; supplier_id = $supplierB; invoice_number = "P0-B"; invoice_date = "2026-07-01"; received_by = $accounts.ownerB.Id; amount_before_vat = 200; total_amount = 200; review_status = "approved" } $serviceKey | Out-Null
   Add-ServiceRow "invoice_order_links" @{ org_id = $orgA; invoice_id = $invoiceA; order_id = $orderA } $serviceKey | Out-Null
   Add-ServiceRow "invoice_receipt_links" @{ org_id = $orgA; invoice_id = $invoiceA; receipt_id = $receiptA } $serviceKey | Out-Null
 
@@ -441,6 +443,9 @@ try {
   Add-ServiceRow "bank_transactions" @{ id = $bankTransactionB; org_id = $orgB; import_id = $bankImportB; tx_date = "2026-07-02"; description = "P0 B"; amount = 50; raw = @{ amount = 50 }; supplier_id = $supplierB; row_hash = "p0-bank-b-$suffix" } $serviceKey | Out-Null
   Add-ServiceRow "bank_allocations" @{ id = (New-Id); org_id = $orgA; bank_transaction_id = $bankTransactionA; payment_id = $paymentA; amount = 30; created_by = $accounts.officeA.Id } $serviceKey | Out-Null
   Add-ServiceRow "bank_allocations" @{ id = (New-Id); org_id = $orgB; bank_transaction_id = $bankTransactionB; payment_id = $paymentB; amount = 50; created_by = $accounts.officeB.Id } $serviceKey | Out-Null
+  Add-ServiceRow "monthly_exports" @{ id = (New-Id); org_id = $orgA; month = "2026-07-01"; status = "sent"; invoice_ids = @($invoiceA); sent_by = $accounts.accountantA.Id } $serviceKey | Out-Null
+  Add-ServiceRow "monthly_exports" @{ id = (New-Id); org_id = $orgB; month = "2026-07-01"; status = "sent"; invoice_ids = @($invoiceB); sent_by = $accounts.accountantB.Id } $serviceKey | Out-Null
+  Add-ServiceRow "audit_logs" @{ org_id = $orgA; user_id = $accounts.ownerA.Id; action = "persona_fixture"; entity_type = "suppliers"; entity_id = $supplierA; reason = "P0 persona matrix" } $serviceKey | Out-Null
 
   foreach ($account in $accounts.Values) { Sign-InTestUser $account $anonKey }
 
@@ -448,14 +453,30 @@ try {
   $rows = Get-Rows "suppliers?select=id,org_id" $accounts.ownerA $anonKey "owner tenant read"
   Assert-Count $rows 1 "owner sees one own supplier"
   Assert-True ($rows[0].id -eq $supplierA) "owner cannot see tenant B supplier"
-  Assert-Count (Get-Rows "invoices?select=id&order=id" $accounts.officeA $anonKey "office tenant read") 1 "office sees only tenant A invoice"
+  Assert-Count (Get-Rows "invoices?select=id&order=id" $accounts.officeA $anonKey "office tenant read") 2 "office sees tenant A procurement invoices"
   Assert-Count (Get-Rows "products?select=id" $accounts.kitchenA $anonKey "kitchen tenant read") 1 "kitchen sees only tenant A product"
+  $accountantInvoices = Get-Rows "invoices?select=id,review_status&order=id" $accounts.accountantA $anonKey "accountant approved invoice read"
+  Assert-Count $accountantInvoices 1 "accountant sees approved invoices only"
+  Assert-True ($accountantInvoices[0].id -eq $invoiceA -and $accountantInvoices[0].review_status -eq "approved") "accountant cannot see an unapproved invoice"
   $balances = Get-Rows "invoice_balances?select=invoice_id,balance" $accounts.accountantA $anonKey "accountant balance view"
   Assert-Count $balances 1 "accountant balance view is tenant scoped"
   Assert-True ([decimal]$balances[0].balance -eq 70) "invoice balance is computed from tenant-explicit allocations"
   $balancesB = Get-Rows "invoice_balances?select=invoice_id,balance" $accounts.accountantB $anonKey "tenant B accountant balance view"
   Assert-Count $balancesB 1 "tenant B balance view is independently scoped"
   Assert-True ($balancesB[0].invoice_id -eq $invoiceB -and [decimal]$balancesB[0].balance -eq 150) "tenant A allocation cannot affect tenant B balance"
+  Assert-Count (Get-Rows "products?select=id" $accounts.accountantA $anonKey "accountant catalog negative read") 0 "accountant cannot read the product catalog"
+  Assert-Count (Get-Rows "purchase_requests?select=id" $accounts.accountantA $anonKey "accountant purchase request negative read") 0 "accountant cannot read purchase requests"
+  Assert-Count (Get-Rows "purchase_orders?select=id" $accounts.accountantA $anonKey "accountant linked order context") 1 "accountant sees only approved-invoice order context"
+  Assert-Count (Get-Rows "goods_receipts?select=id" $accounts.accountantA $anonKey "accountant linked receipt context") 1 "accountant sees only approved-invoice receipt context"
+  Assert-Count (Get-Rows "supplier_metrics?select=supplier_id" $accounts.accountantA $anonKey "accountant supplier metrics negative read") 0 "accountant cannot read procurement supplier metrics"
+  Assert-Count (Get-Rows "payments?select=id" $accounts.officeA $anonKey "office payments negative read") 0 "office cannot read payments"
+  Assert-Count (Get-Rows "bank_transactions?select=id" $accounts.officeA $anonKey "office bank negative read") 0 "office cannot read bank transactions"
+  Assert-Count (Get-Rows "monthly_exports?select=id" $accounts.officeA $anonKey "office exports negative read") 0 "office cannot read monthly exports"
+  Assert-Count (Get-Rows "audit_logs?action=eq.persona_fixture&select=id" $accounts.officeA $anonKey "office financial audit negative read") 0 "office cannot read financial audit"
+  Assert-Count (Get-Rows "payments?select=id" $accounts.accountantA $anonKey "accountant payments read") 1 "accountant reads tenant-scoped payments"
+  Assert-Count (Get-Rows "bank_transactions?select=id" $accounts.accountantA $anonKey "accountant bank read") 1 "accountant reads tenant-scoped bank transactions"
+  Assert-Count (Get-Rows "monthly_exports?select=id" $accounts.accountantA $anonKey "accountant exports read") 1 "accountant reads tenant-scoped exports"
+  Assert-Count (Get-Rows "audit_logs?action=eq.persona_fixture&select=id" $accounts.accountantA $anonKey "accountant financial audit read") 1 "accountant reads tenant-scoped financial audit"
   Assert-Count (Get-Rows "payment_requests?select=id" $accounts.payerA $anonKey "payer approved queue read") 1 "payer sees only tenant A approved request"
   Assert-Count (Get-Rows "supplier_products?select=id" $accounts.supplierA $anonKey "supplier-agent price read") 1 "supplier agent sees only its supplier prices"
   Assert-Count (Get-Rows "suppliers?id=eq.$supplierA&select=id" $accounts.ownerB $anonKey "tenant B negative read") 0 "tenant B cannot read tenant A supplier"
