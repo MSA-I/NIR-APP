@@ -41,6 +41,22 @@ select pg_temp.p0_acl_assert(
 );
 
 select pg_temp.p0_acl_assert(
+  not has_table_privilege('anon', 'public.notification_event_states', 'SELECT')
+  and not has_table_privilege('anon', 'public.notification_event_states', 'INSERT')
+  and not has_table_privilege('anon', 'public.notification_event_states', 'UPDATE')
+  and not has_table_privilege('anon', 'public.notification_event_states', 'DELETE')
+  and not has_table_privilege('authenticated', 'public.notification_event_states', 'SELECT')
+  and not has_table_privilege('authenticated', 'public.notification_event_states', 'INSERT')
+  and not has_table_privilege('authenticated', 'public.notification_event_states', 'UPDATE')
+  and not has_table_privilege('authenticated', 'public.notification_event_states', 'DELETE')
+  and has_table_privilege('service_role', 'public.notification_event_states', 'SELECT')
+  and has_table_privilege('service_role', 'public.notification_event_states', 'INSERT')
+  and has_table_privilege('service_role', 'public.notification_event_states', 'UPDATE')
+  and has_table_privilege('service_role', 'public.notification_event_states', 'DELETE'),
+  'notification delivery state ACL is not service-only'
+);
+
+select pg_temp.p0_acl_assert(
   not exists (
     select 1
     from (values
