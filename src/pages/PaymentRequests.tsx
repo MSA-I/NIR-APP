@@ -16,6 +16,16 @@ import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { paymentRequestCheckFingerprint } from '../lib/checkFingerprint';
 
 type Row = PaymentRequest & { supplier: { name: string }; approver: { full_name: string } | null };
+type PaymentInvoiceCandidate = {
+  id: string;
+  invoice_number: string;
+  invoice_date: string;
+  total_amount: number;
+  review_status: string;
+  payment_status: string;
+  balance: number | null;
+  allocationAmount: number;
+};
 
 export default function PaymentRequests() {
   const [params, setParams] = useSearchParams();
@@ -151,6 +161,7 @@ export default function PaymentRequests() {
 function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
   presetInvoiceId: string | null; onClose: () => void; onSaved: () => void;
 }) {
+  const { profile } = useAuth();
   const toast = useToast();
   const [supplierId, setSupplierId] = useState('');
   const [chosen, setChosen] = useState<Record<string, number>>({}); // invoice_id -> allocation
@@ -163,6 +174,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
   const [checkError, setCheckError] = useState<string | null>(null);
   const checkSequence = useRef(0);
   const [busy, setBusy] = useState(false);
+  const isOwner = profile?.role === 'owner';
 
   const { data: suppliers, loading: suppliersLoading, error: suppliersError } = useQuery<Supplier[]>(async () =>
     fetchAll<Supplier>((from, to) => supabase.from('suppliers').select('*').is('deleted_at', null)
@@ -170,23 +182,34 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
 
   const { data: invoices, loading: invoicesLoading, error: invoicesError } = useQuery(async () => {
     if (!supplierId) return [];
-    const inv = await fetchAll<{ id: string; invoice_number: string; invoice_date: string; total_amount: number; review_status: string }>((from, to) => supabase.from('invoices')
-      .select('id, invoice_number, invoice_date, total_amount, review_status')
-      .eq('supplier_id', supplierId).neq('payment_status', 'paid').is('deleted_at', null)
-      .order('invoice_date').order('id').range(from, to));
+    const inv = await fetchAll<Omit<PaymentInvoiceCandidate, 'balance' | 'allocationAmount'>>((from, to) => {
+      let query = supabase.from('invoices')
+        .select('id, invoice_number, invoice_date, total_amount, review_status, payment_status')
+        .eq('supplier_id', supplierId).is('deleted_at', null);
+      // Procurement may use the invoice total only while the invoice is wholly unpaid. Once
+      // partial, its exact balance belongs to the owner/accounting boundary.
+      query = isOwner ? query.neq('payment_status', 'paid') : query.eq('payment_status', 'unpaid');
+      return query.order('invoice_date').order('id').range(from, to);
+    });
     const ids = inv.map((i) => i.id);
-    const bals = ids.length ? await fetchInChunks(ids, (chunk) => fetchAll<{ invoice_id: string; balance: number }>((from, to) => supabase.from('invoice_balances')
+    const bals = isOwner && ids.length ? await fetchInChunks(ids, (chunk) => fetchAll<{ invoice_id: string; balance: number }>((from, to) => supabase.from('invoice_balances')
       .select('invoice_id, balance').in('invoice_id', chunk).order('invoice_id').range(from, to))) : [];
     const balMap = new Map(bals.map((b) => [b.invoice_id, b.balance]));
-    return inv.map((i) => ({ ...i, balance: balMap.get(i.id) ?? i.total_amount })).filter((i) => i.balance > 0);
-  }, [supplierId]);
+    return inv.flatMap<PaymentInvoiceCandidate>((i) => {
+      const balance = isOwner ? balMap.get(i.id) ?? null : null;
+      const allocationAmount = isOwner ? balance : i.total_amount;
+      return allocationAmount != null && allocationAmount > 0
+        ? [{ ...i, balance, allocationAmount }]
+        : [];
+    });
+  }, [supplierId, isOwner]);
 
   // preset from invoice detail page
   useEffect(() => {
     if (!presetInvoiceId) return;
     let cancelled = false;
     void (async () => {
-      const invoiceResult = await supabase.from('invoices').select('id, supplier_id, total_amount')
+      const invoiceResult = await supabase.from('invoices').select('id, supplier_id, total_amount, payment_status')
         .eq('id', presetInvoiceId).is('deleted_at', null).neq('payment_status', 'paid').maybeSingle();
       if (cancelled) return;
       if (invoiceResult.error || !invoiceResult.data) {
@@ -194,22 +217,30 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
         onClose();
         return;
       }
-      const inv = invoiceResult.data as { id: string; supplier_id: string; total_amount: number };
-      const balanceResult = await supabase.from('invoice_balances').select('balance').eq('invoice_id', inv.id).maybeSingle();
-      if (cancelled) return;
-      if (balanceResult.error) {
-        toast('טעינת יתרת החשבונית שבקישור נכשלה.', 'error');
+      const inv = invoiceResult.data as { id: string; supplier_id: string; total_amount: number; payment_status: string };
+      if (!isOwner && inv.payment_status !== 'unpaid') {
+        toast('חשבונית ששולמה חלקית אינה זמינה לדרישת תשלום של מנהל הרכש.', 'error');
         onClose();
         return;
       }
-      const balance = (balanceResult.data as { balance: number } | null)?.balance ?? inv.total_amount;
-      if (balance <= 0) {
+      let allocationAmount = inv.total_amount;
+      if (isOwner) {
+        const balanceResult = await supabase.from('invoice_balances').select('balance').eq('invoice_id', inv.id).maybeSingle();
+        if (cancelled) return;
+        if (balanceResult.error || !balanceResult.data) {
+          toast('טעינת יתרת החשבונית שבקישור נכשלה.', 'error');
+          onClose();
+          return;
+        }
+        allocationAmount = (balanceResult.data as { balance: number }).balance;
+      }
+      if (allocationAmount <= 0) {
         toast('לחשבונית שבקישור אין יתרה פתוחה.', 'error');
         onClose();
         return;
       }
       setSupplierId(inv.supplier_id);
-      setChosen({ [inv.id]: balance });
+      setChosen({ [inv.id]: allocationAmount });
     })().catch(() => {
       if (!cancelled) {
         toast('טעינת החשבונית שבקישור נכשלה.', 'error');
@@ -219,7 +250,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
     return () => { cancelled = true; };
     // `onClose` and `toast` are context callbacks; the deep-link id owns this request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [presetInvoiceId]);
+  }, [presetInvoiceId, isOwner]);
 
   const amount = useMemo(() => Object.values(chosen).reduce((s, v) => s + v, 0), [chosen]);
   const invoiceIds = Object.entries(chosen).filter(([, value]) => value > 0).map(([id]) => id);
@@ -332,14 +363,16 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
                         aria-label={`בחירת חשבונית ${inv.invoice_number} של ${supplierName} להקצאה בדרישת התשלום`}
                         onChange={(e) => setChosen((c) => {
                           const next = { ...c };
-                          if (e.target.checked) next[inv.id] = inv.balance; else delete next[inv.id];
+                           if (e.target.checked) next[inv.id] = inv.allocationAmount; else delete next[inv.id];
                           return next;
                         })} />
                       <span className="flex-1">
                         חשבונית <b dir="ltr" className="num">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}
                         {inv.review_status !== 'approved' && <span className="badge-await ms-2">טרם אושרה</span>}
                       </span>
-                      <span className="text-ink-muted text-xs num">יתרה {fmtMoneyExact(inv.balance)}</span>
+                      <span className="text-ink-muted text-xs num">
+                        {isOwner ? 'יתרה' : 'סכום חשבונית'} {fmtMoneyExact(inv.allocationAmount)}
+                      </span>
                       {checked && (
                         <input type="number" step="0.01" className="input w-28! num" value={chosen[inv.id]}
                           aria-label={`סכום ההקצאה לחשבונית ${inv.invoice_number} של ${supplierName}`}

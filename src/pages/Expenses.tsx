@@ -12,6 +12,7 @@ import {
   shiftCalendarMonth, todayISO,
 } from '../lib/format';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
+import { useAuth } from '../auth/AuthContext';
 
 type InvoiceRow = {
   id: string; invoice_number: string; invoice_date: string; total_amount: number;
@@ -76,6 +77,7 @@ function StripStat({ title, value, context, icon: Icon }: {
 }
 
 export default function Expenses() {
+  const { profile } = useAuth();
   const defaults = presetRange('month');
   // useParamState seeds from the URL and re-syncs when it changes; the URL is also WRITTEN
   // (replace, no history spam) so the chosen range is genuinely shareable/bookmarkable.
@@ -84,6 +86,7 @@ export default function Expenses() {
   const [params, setParams] = useSearchParams();
   const [drill, setDrill] = useState<SupplierRow | null>(null);
   const invalidRange = !!from && !!to && from > to;
+  const categoryBreakdownAvailable = profile?.role === 'owner';
 
   function setRange(nextFrom: string, nextTo: string) {
     if (!nextFrom || !nextTo) return; // a cleared date input is not a range claim
@@ -94,7 +97,10 @@ export default function Expenses() {
   }
 
   const { data, loading, fetching, error } = useQuery(async () => {
-    if (invalidRange) return { invoices: [], bySupplier: [], catTotals: [], totalAll: 0, coveredTotal: 0, invalidRange: true };
+    if (invalidRange) return {
+      invoices: [], bySupplier: [], catTotals: [], totalAll: 0, coveredTotal: 0,
+      invalidRange: true, categoryBreakdownAvailable,
+    };
     const end = addCalendarDays(to, 1);
     const [rawInvoices, categories] = await Promise.all([
       fetchAll<RawInvoiceRow>((fromRow, toRow) => supabase.from('invoices')
@@ -102,8 +108,10 @@ export default function Expenses() {
         .gte('invoice_date', from).lt('invoice_date', end)
         .is('deleted_at', null)
         .order('invoice_date', { ascending: false }).order('id').range(fromRow, toRow)),
-      fetchAll<{ id: string; name: string }>((fromRow, toRow) => supabase.from('categories')
-        .select('id, name').order('name').order('id').range(fromRow, toRow)),
+      categoryBreakdownAvailable
+        ? fetchAll<{ id: string; name: string }>((fromRow, toRow) => supabase.from('categories')
+          .select('id, name').order('name').order('id').range(fromRow, toRow))
+        : Promise.resolve([] as { id: string; name: string }[]),
     ]);
     const invoices: InvoiceRow[] = rawInvoices.map((invoice) => ({
       ...invoice,
@@ -115,7 +123,7 @@ export default function Expenses() {
     // in-range invoices → invoice_order_links → purchase_order_items at snapshot prices.
     let links: { invoice_id: string; order_id: string }[] = [];
     let items: { qty: number; unit_price: number; product: { category_id: string | null } | null }[] = [];
-    if (invoices.length) {
+    if (categoryBreakdownAvailable && invoices.length) {
       links = await fetchInChunks(invoices.map((i) => i.id), (chunk) =>
         fetchAll<{ invoice_id: string; order_id: string }>((fromRow, toRow) => supabase.from('invoice_order_links')
           .select('invoice_id, order_id').in('invoice_id', chunk)
@@ -155,8 +163,11 @@ export default function Expenses() {
     }
     const bySupplier = [...bySupMap.values()].sort((a, b) => b.total - a.total);
 
-    return { invoices, bySupplier, catTotals, totalAll, coveredTotal, invalidRange: false };
-  }, [from, to, invalidRange]);
+    return {
+      invoices, bySupplier, catTotals, totalAll, coveredTotal,
+      invalidRange: false, categoryBreakdownAvailable,
+    };
+  }, [from, to, invalidRange, categoryBreakdownAvailable]);
 
   function exportExcel() {
     if (!data || data.invalidRange || fetching || error) return;
@@ -165,10 +176,12 @@ export default function Expenses() {
       'ספק': r.name, 'חשבוניות': r.count, 'סה"כ': r.total,
       '% מהסך': data.totalAll > 0 ? Number(((r.total / data.totalAll) * 100).toFixed(1)) : null,
     }))), 'לפי ספק');
-    const catRows: { 'קטגוריה': string; 'ערך בהזמנות מקושרות': number }[] = [...data.catTotals]
-      .sort((a, b) => b.total - a.total)
-      .map((c) => ({ 'קטגוריה': c.name, 'ערך בהזמנות מקושרות': c.total }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'קטגוריות בהזמנות');
+    if (data.categoryBreakdownAvailable) {
+      const catRows: { 'קטגוריה': string; 'ערך בהזמנות מקושרות': number }[] = [...data.catTotals]
+        .sort((a, b) => b.total - a.total)
+        .map((c) => ({ 'קטגוריה': c.name, 'ערך בהזמנות מקושרות': c.total }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'קטגוריות בהזמנות');
+    }
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.invoices.map((i) => ({
       'ספק': i.supplier?.name ?? '', 'מספר חשבונית': i.invoice_number, 'תאריך': i.invoice_date,
       'סה"כ': i.total_amount, 'סטטוס תשלום': INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
@@ -286,36 +299,42 @@ export default function Expenses() {
               </div>
             </section>
 
-            <details className="border-y border-line-strong bg-surface">
-              <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 sm:px-4">
-                <span>
-                  <span className="block font-semibold text-ink-body">פירוט מוצרים לפי קטגוריה</span>
-                  <span className="mt-0.5 block text-xs text-ink-muted">מידע משלים מהזמנות מקושרות; אינו מחליף את סכומי החשבוניות בטבלת הספקים.</span>
-                </span>
-                <span className="shrink-0 text-xs text-ink-muted">הצג פירוט</span>
-              </summary>
-              <div className="border-t border-line-soft">
-                <div className="px-3 py-2 text-xs text-ink-muted sm:px-4">
-                  חשבוניות מקושרות בסך <span className="num">{fmtMoney(Math.round(data.coveredTotal))}</span> מתוך{' '}
-                  <span className="num">{fmtMoney(Math.round(data.totalAll))}</span>. הסכומים למטה הם ערכי פריטי ההזמנה במחירי snapshot.
-                </div>
-                {categoryRows.length > 0 ? (
-                  <ul className="divide-y divide-line-soft border-t border-line-soft text-sm">
-                    {categoryRows.map((row) => (
-                      <li key={row.name} className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-2 sm:px-4">
-                        <span className="min-w-0 break-words text-ink-body">{row.name}</span>
-                        <span className="num text-ink-muted">{categoryTotal > 0 ? `${((row.total / categoryTotal) * 100).toFixed(1)}%` : '—'}</span>
-                        <span className="num min-w-24 font-medium text-ink-body">{fmtMoneyExact(row.total)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="border-t border-line-soft px-3 py-6 text-center text-sm text-ink-muted sm:px-4">
-                    אין בטווח חשבוניות עם הזמנה מקושרת ופריטי קטגוריה.
+            {data.categoryBreakdownAvailable ? (
+              <details className="border-y border-line-strong bg-surface">
+                <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 sm:px-4">
+                  <span>
+                    <span className="block font-semibold text-ink-body">פירוט מוצרים לפי קטגוריה</span>
+                    <span className="mt-0.5 block text-xs text-ink-muted">מידע משלים מהזמנות מקושרות; אינו מחליף את סכומי החשבוניות בטבלת הספקים.</span>
+                  </span>
+                  <span className="shrink-0 text-xs text-ink-muted">הצג פירוט</span>
+                </summary>
+                <div className="border-t border-line-soft">
+                  <div className="px-3 py-2 text-xs text-ink-muted sm:px-4">
+                    חשבוניות מקושרות בסך <span className="num">{fmtMoney(Math.round(data.coveredTotal))}</span> מתוך{' '}
+                    <span className="num">{fmtMoney(Math.round(data.totalAll))}</span>. הסכומים למטה הם ערכי פריטי ההזמנה במחירי snapshot.
                   </div>
-                )}
-              </div>
-            </details>
+                  {categoryRows.length > 0 ? (
+                    <ul className="divide-y divide-line-soft border-t border-line-soft text-sm">
+                      {categoryRows.map((row) => (
+                        <li key={row.name} className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-2 sm:px-4">
+                          <span className="min-w-0 break-words text-ink-body">{row.name}</span>
+                          <span className="num text-ink-muted">{categoryTotal > 0 ? `${((row.total / categoryTotal) * 100).toFixed(1)}%` : '—'}</span>
+                          <span className="num min-w-24 font-medium text-ink-body">{fmtMoneyExact(row.total)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="border-t border-line-soft px-3 py-6 text-center text-sm text-ink-muted sm:px-4">
+                      אין בטווח חשבוניות עם הזמנה מקושרת ופריטי קטגוריה.
+                    </div>
+                  )}
+                </div>
+              </details>
+            ) : (
+              <Note tone="idle">
+                פילוח מוצרים וקטגוריות אינו חלק מההקשר החשבונאי המצומצם. סכומי הספקים והחשבוניות למעלה נשארים המקור המדויק, והייצוא אינו מוסיף פילוח שאינו זמין.
+              </Note>
+            )}
           </>
         )}
       </div>}

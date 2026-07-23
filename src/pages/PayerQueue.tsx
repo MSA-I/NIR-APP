@@ -16,7 +16,7 @@ import { useAuth } from '../auth/AuthContext';
  */
 type Row = PaymentRequest & {
   supplier: { id: string; name: string; bank_details: string | null };
-  invoices: { invoice_id: string; amount_allocated: number; invoice: { invoice_number: string } }[];
+  invoices: { invoice_id: string; amount_allocated: number; invoice: { invoice_number: string } | null }[];
   approver: { full_name: string } | null;
 };
 
@@ -161,7 +161,7 @@ function ExecuteModal({ pr, mode, onClose, onDone }: { pr: Row; mode: PayerQueue
           <div className="flex justify-between"><dt className="text-ink-muted">סכום מאושר</dt><dd className="font-bold num">{fmtMoneyExact(pr.amount)}</dd></div>
           {pr.due_date && <div className="flex justify-between"><dt className="text-ink-muted">תאריך יעד</dt><dd>{fmtDate(pr.due_date)}</dd></div>}
           <div className="flex justify-between"><dt className="text-ink-muted">חשבוניות</dt>
-            <dd dir="ltr">{pr.invoices.map((i) => i.invoice.invoice_number).join(', ') || '—'}</dd></div>
+            <dd dir="ltr">{pr.invoices.map((i) => i.invoice?.invoice_number).filter(Boolean).join(', ') || 'לא זמינות'}</dd></div>
           <div className="flex justify-between"><dt className="text-ink-muted">אושר על ידי</dt><dd>{pr.approver?.full_name ?? 'לא זמין'}</dd></div>
           <div className="flex justify-between"><dt className="text-ink-muted">מבוצע על ידי</dt><dd>{profile?.full_name ?? 'המשתמש המחובר'}</dd></div>
           <div className="flex justify-between gap-4"><dt className="text-ink-muted">רישום ביומן</dt><dd className="text-start">{mode === 'emergency' ? 'ביצוע תשלום במסלול חירום והסיבה' : 'ביצוע תשלום והסיבה'}</dd></div>

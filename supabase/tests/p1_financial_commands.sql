@@ -1,5 +1,5 @@
 -- P1 regression harness. Run only against an isolated local database after applying all
--- project migrations, including the forward guard-safety replacement in 0027.
+-- project migrations through 0028, including the forward guard-safety replacement in 0027.
 \set ON_ERROR_STOP on
 
 begin;
@@ -215,6 +215,56 @@ select set_invoice_review_status(
 );
 select set_invoice_review_status(
   '60000000-0000-0000-0000-000000000002', 'approved', 'אישור חשבונית להתאמה'
+);
+
+-- Invoice soft delete is a server command: direct deleted_at writes are blocked, while an
+-- unreferenced invoice is deleted atomically with its reasoned audit.
+select create_invoice(
+  '60000000-0000-0000-0000-000000000009',
+  '30000000-0000-0000-0000-000000000001',
+  'INV-SOFT-DELETE', '2026-07-12', 10, 1.8, 11.8, null, null, null, null,
+  'חשבונית לבדיקת מחיקה רכה'
+);
+select create_invoice(
+  '60000000-0000-0000-0000-000000000012',
+  '30000000-0000-0000-0000-000000000001',
+  'INV-OFFICE-DELETE', '2026-07-12', 20, 3.6, 23.6, null, null, null, null,
+  'חשבונית לבדיקת הרשאת מנהל רכש'
+);
+do $$
+begin
+  update invoices
+  set deleted_at = now()
+  where id = '60000000-0000-0000-0000-000000000009';
+  raise exception 'expected direct invoice soft-delete rejection';
+exception when sqlstate '42501' then
+  if sqlerrm not like '%invoice_soft_delete_rpc_required%' then raise; end if;
+end
+$$;
+select pg_temp.p1_assert(
+  (soft_delete_invoice(
+    '60000000-0000-0000-0000-000000000009', 'חשבונית נקלטה בטעות'
+  )->>'idempotent')::boolean = false,
+  'invoice soft-delete command did not commit'
+);
+select pg_temp.p1_assert(
+  (select deleted_at is not null from invoices where id = '60000000-0000-0000-0000-000000000009'),
+  'invoice soft-delete did not set deleted_at'
+);
+select pg_temp.p1_assert(
+  exists (
+    select 1 from audit_logs
+    where action = 'invoice_soft_deleted'
+      and entity_id = '60000000-0000-0000-0000-000000000009'
+      and reason = 'חשבונית נקלטה בטעות'
+  ),
+  'invoice soft-delete audit is missing its reason'
+);
+select pg_temp.p1_assert(
+  (soft_delete_invoice(
+    '60000000-0000-0000-0000-000000000009', 'ניסיון חוזר'
+  )->>'idempotent')::boolean,
+  'invoice soft-delete retry must be idempotent'
 );
 
 -- Invoice-linked credit requests use one retry-safe command boundary for creation and status.
@@ -701,6 +751,84 @@ select pg_temp.p1_assert(
   'unmatch audit is missing its reason'
 );
 
+-- One bank transaction may legitimately allocate to multiple payments. Unmatch restores every
+-- linked request and keeps the legacy singular payment_id response field.
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
+insert into bank_imports (id, org_id, filename, file_hash, column_mapping, row_count, imported_by)
+values (
+  '91000000-0000-0000-0000-000000000009',
+  '10000000-0000-0000-0000-000000000001', 'multi-payment.csv', repeat('8', 64), '{}'::jsonb, 1,
+  '20000000-0000-0000-0000-000000000001'
+);
+insert into bank_transactions (
+  id, org_id, import_id, tx_date, description, amount, is_debit, raw, status, row_hash
+) values (
+  '92000000-0000-0000-0000-000000000009',
+  '10000000-0000-0000-0000-000000000001',
+  '91000000-0000-0000-0000-000000000009', '2026-07-21', 'multi payment', 30, true,
+  '{}'::jsonb, 'matched', repeat('9', 64)
+);
+insert into payment_requests (
+  id, org_id, supplier_id, amount, status, created_by, approved_by, approved_at
+) values
+  ('80000000-0000-0000-0000-000000000009', '10000000-0000-0000-0000-000000000001',
+   '30000000-0000-0000-0000-000000000001', 10, 'matched',
+   '20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', now()),
+  ('80000000-0000-0000-0000-000000000010', '10000000-0000-0000-0000-000000000001',
+   '30000000-0000-0000-0000-000000000001', 20, 'matched',
+   '20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', now());
+insert into payments (
+  id, org_id, supplier_id, payment_request_id, amount, paid_date, method, reference, executed_by
+) values
+  ('90000000-0000-0000-0000-000000000009', '10000000-0000-0000-0000-000000000001',
+   '30000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000009',
+   10, '2026-07-21', 'העברה בנקאית', 'MULTI-1', '20000000-0000-0000-0000-000000000001'),
+  ('90000000-0000-0000-0000-000000000010', '10000000-0000-0000-0000-000000000001',
+   '30000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000010',
+   20, '2026-07-21', 'העברה בנקאית', 'MULTI-2', '20000000-0000-0000-0000-000000000001');
+insert into bank_allocations (
+  id, org_id, bank_transaction_id, payment_id, amount, confirmed, created_by
+) values
+  ('93000000-0000-0000-0000-000000000009', '10000000-0000-0000-0000-000000000001',
+   '92000000-0000-0000-0000-000000000009', '90000000-0000-0000-0000-000000000009',
+   10, true, '20000000-0000-0000-0000-000000000001'),
+  ('93000000-0000-0000-0000-000000000010', '10000000-0000-0000-0000-000000000001',
+   '92000000-0000-0000-0000-000000000009', '90000000-0000-0000-0000-000000000010',
+   20, true, '20000000-0000-0000-0000-000000000001');
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select pg_temp.p1_assert(
+  jsonb_array_length((unmatch_bank_transaction(
+    '92000000-0000-0000-0000-000000000009', 'הסרת התאמה מרובת תשלומים'
+  )->'payment_ids')) = 2,
+  'multi-payment unmatch did not return every payment id'
+);
+select pg_temp.p1_assert(
+  (select count(*) = 2 and bool_and(status = 'executed')
+   from payment_requests
+   where id in ('80000000-0000-0000-0000-000000000009', '80000000-0000-0000-0000-000000000010')),
+  'multi-payment unmatch did not restore every request'
+);
+select pg_temp.p1_assert(
+  not exists (
+    select 1 from bank_allocations
+    where bank_transaction_id = '92000000-0000-0000-0000-000000000009'
+  ),
+  'multi-payment unmatch left allocations behind'
+);
+select pg_temp.p1_assert(
+  exists (
+    select 1 from audit_logs
+    where action = 'bank_match_removed'
+      and entity_id = '92000000-0000-0000-0000-000000000009'
+      and jsonb_array_length(old_values->'payment_ids') = 2
+      and reason = 'הסרת התאמה מרובת תשלומים'
+  ),
+  'multi-payment unmatch audit did not preserve every payment id'
+);
+
 -- Month export stores a canonical snapshot and rejects later expansion/shrinkage.
 select pg_temp.p1_assert(
   (mark_month_export_sent(
@@ -729,6 +857,21 @@ exception when sqlstate 'P0001' then
 end
 $$;
 
+do $$
+begin
+  perform soft_delete_invoice(
+    '60000000-0000-0000-0000-000000000001', 'ניסיון להסתיר חשבונית ששולמה'
+  );
+  raise exception 'expected referenced invoice soft-delete rejection';
+exception when sqlstate 'P0001' then
+  if sqlerrm not like '%invoice_has_financial_references%' then raise; end if;
+end
+$$;
+select pg_temp.p1_assert(
+  (select deleted_at is null from invoices where id = '60000000-0000-0000-0000-000000000001'),
+  'referenced invoice was soft-deleted'
+);
+
 -- Accountant can operate approved accounting work but not an unapproved invoice credit.
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
@@ -743,6 +886,16 @@ insert into credit_requests (
 );
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000005', true);
 set local role authenticated;
+do $$
+begin
+  perform soft_delete_invoice(
+    '60000000-0000-0000-0000-000000000012', 'accountant delete attempt'
+  );
+  raise exception 'expected accountant invoice soft-delete rejection';
+exception when sqlstate '42501' then
+  if sqlerrm not like '%invoice_soft_delete_not_authorized%' then raise; end if;
+end
+$$;
 do $$
 begin
   perform transition_credit_request(
@@ -760,10 +913,33 @@ select pg_temp.p1_assert(
   'accountant could not transition an approved-invoice credit'
 );
 
--- Office receives only narrow warning signals and cannot read or command bank data.
+-- Owner retains authorized financial signals. Procurement roles receive no bank or balance
+-- oracle, even though the underlying bank match remains present.
+reset role;
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select pg_temp.p1_assert(
+  (invoice_financial_check_signals('60000000-0000-0000-0000-000000000002')->>'bank_match_exists')::boolean,
+  'owner lost the confirmed direct bank-match signal'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000003', true);
+set local role authenticated;
+select pg_temp.p1_assert(
+  not (invoice_financial_check_signals('60000000-0000-0000-0000-000000000002')->>'bank_match_exists')::boolean,
+  'kitchen received a bank-match signal'
+);
+
 reset role;
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000002', true);
 set local role authenticated;
+select pg_temp.p1_assert(
+  (soft_delete_invoice(
+    '60000000-0000-0000-0000-000000000012', 'מחיקת מנהל רכש עם סיבה'
+  )->>'idempotent')::boolean = false,
+  'office could not use the reasoned invoice soft-delete command'
+);
 do $$
 begin
   perform transition_credit_request(
@@ -775,17 +951,40 @@ exception when sqlstate '42501' then
 end
 $$;
 select pg_temp.p1_assert(
-  (invoice_financial_check_signals('60000000-0000-0000-0000-000000000002')->>'bank_match_exists')::boolean,
-  'office invoice signal lost the confirmed direct bank match'
+  not (invoice_financial_check_signals('60000000-0000-0000-0000-000000000002')->>'bank_match_exists')::boolean,
+  'office received a bank-match signal'
 );
 select pg_temp.p1_assert(
-  (payment_request_financial_check_signals(
+  not (payment_request_financial_check_signals(
     '30000000-0000-0000-0000-000000000001', 118,
     array['60000000-0000-0000-0000-000000000001'::uuid],
     '80000000-0000-0000-0000-000000000001'
   )->>'similar_bank_transfer_exists')::boolean,
-  'office payment-request signal lost the similar transfer warning'
+  'office received a similar-bank-transfer signal'
 );
+select pg_temp.p1_assert(
+  (payment_request_financial_check_signals(
+    '30000000-0000-0000-0000-000000000001', 1,
+    array['60000000-0000-0000-0000-000000000001'::uuid], null
+  )->>'amount_matches_open_balance')::boolean
+  and (payment_request_financial_check_signals(
+    '30000000-0000-0000-0000-000000000001', 117,
+    array['60000000-0000-0000-0000-000000000001'::uuid], null
+  )->>'amount_matches_open_balance')::boolean,
+  'office can distinguish hidden balances by varying the amount'
+);
+do $$
+begin
+  perform payment_request_financial_check_signals(
+    '30000000-0000-0000-0000-000000000001', 117,
+    array['60000000-0000-0000-0000-000000000001'::uuid],
+    '80000000-0000-0000-0000-000000000001'
+  );
+  raise exception 'expected payment-request signal binding rejection';
+exception when sqlstate '22023' then
+  if sqlerrm not like '%payment_request_checks_mismatch%' then raise; end if;
+end
+$$;
 select pg_temp.p1_assert(
   (select count(*) = 0 from bank_transactions),
   'office can read bank transactions through RLS'
@@ -812,7 +1011,9 @@ insert into invoices (
   ('60000000-0000-0000-0000-000000000007', '10000000-0000-0000-0000-000000000001',
    '30000000-0000-0000-0000-000000000001', 'INV-ACCOUNTANT', '2026-07-21', 100, 18, 118, 'approved'),
   ('60000000-0000-0000-0000-000000000008', '10000000-0000-0000-0000-000000000001',
-   '30000000-0000-0000-0000-000000000001', 'INV-EMERGENCY', '2026-07-22', 50, 9, 59, 'approved');
+   '30000000-0000-0000-0000-000000000001', 'INV-EMERGENCY', '2026-07-22', 50, 9, 59, 'approved'),
+  ('60000000-0000-0000-0000-000000000011', '10000000-0000-0000-0000-000000000001',
+   '30000000-0000-0000-0000-000000000001', 'INV-REOPENED', '2026-07-22', 25, 4.5, 29.5, 'approved');
 insert into payment_requests (
   id, org_id, supplier_id, amount, status, created_by, approved_by, approved_at
 ) values
@@ -821,12 +1022,17 @@ insert into payment_requests (
    '20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', now()),
   ('80000000-0000-0000-0000-000000000008', '10000000-0000-0000-0000-000000000001',
    '30000000-0000-0000-0000-000000000001', 59, 'approved',
+   '20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', now()),
+  ('80000000-0000-0000-0000-000000000011', '10000000-0000-0000-0000-000000000001',
+   '30000000-0000-0000-0000-000000000001', 29.5, 'approved',
    '20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', now());
 insert into payment_request_invoices (org_id, payment_request_id, invoice_id, amount_allocated) values
   ('10000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000007',
    '60000000-0000-0000-0000-000000000007', 118),
   ('10000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000008',
-   '60000000-0000-0000-0000-000000000008', 59);
+   '60000000-0000-0000-0000-000000000008', 59),
+  ('10000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000011',
+   '60000000-0000-0000-0000-000000000011', 29.5);
 
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000005', true);
 set local role authenticated;
@@ -838,6 +1044,51 @@ select pg_temp.p1_assert(
     'ביצוע הנהלת חשבונות'
   )->>'idempotent')::boolean = false,
   'accountant could not execute an approved payment request'
+);
+select pg_temp.p1_assert(
+  exists (
+    select 1 from payment_requests
+    where id = '80000000-0000-0000-0000-000000000011'
+  ) and exists (
+    select 1 from payment_request_invoices
+    where payment_request_id = '80000000-0000-0000-0000-000000000011'
+  ),
+  'accountant cannot see a request whose invoices are currently approved'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select set_invoice_review_status(
+  '60000000-0000-0000-0000-000000000011', 'investigation', 'פתיחה מחדש לפני ביצוע'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000005', true);
+set local role authenticated;
+select pg_temp.p1_assert(
+  not exists (
+    select 1 from payment_requests
+    where id = '80000000-0000-0000-0000-000000000011'
+  ) and not exists (
+    select 1 from payment_request_invoices
+    where payment_request_id = '80000000-0000-0000-0000-000000000011'
+  ),
+  'accountant can see a request after its invoice returned to investigation'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000004', true);
+set local role authenticated;
+select pg_temp.p1_assert(
+  exists (
+    select 1 from payment_requests
+    where id = '80000000-0000-0000-0000-000000000011'
+  ) and exists (
+    select 1 from payment_request_invoices
+    where payment_request_id = '80000000-0000-0000-0000-000000000011'
+  ),
+  'payer visibility changed when accountant readiness was tightened'
 );
 
 reset role;

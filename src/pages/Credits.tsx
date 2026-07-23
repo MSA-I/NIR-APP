@@ -12,7 +12,10 @@ import { fmtMoneyExact, fmtDate } from '../lib/format';
 import type { CreditRequest, CreditStatus } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
 
-type Row = CreditRequest & { supplier: { name: string }; invoice: { id: string; invoice_number: string } | null };
+type Row = CreditRequest & {
+  supplier: { name: string };
+  invoice: { id: string; invoice_number: string; review_status: string } | null;
+};
 
 export default function Credits() {
   const navigate = useNavigate();
@@ -24,7 +27,7 @@ export default function Credits() {
 
   const { data, loading, fetching, error, refetch } = useQuery(async () =>
     fetchAll<Row>((from, to) => supabase.from('credit_requests')
-      .select('*, supplier:suppliers!p0_credits_supplier_tenant_fk(name), invoice:invoices!p0_credits_invoice_tenant_fk(id, invoice_number)')
+      .select('*, supplier:suppliers!p0_credits_supplier_tenant_fk(name), invoice:invoices!p0_credits_invoice_tenant_fk(id, invoice_number, review_status)')
       .order('created_at', { ascending: false }).order('id').range(from, to)));
 
   // Open a credit card straight from a global-search result (?id=). Clear the param once
@@ -91,7 +94,11 @@ export default function Credits() {
         <CreditDetail credit={selected} onClose={() => setSelected(null)}
           onChanged={() => { setSelected(null); void refetch(); }}
           onOpenInvoice={(id) => navigate(`/invoices/${id}`)}
-          canWrite={!!profile && ['owner', 'kitchen', 'accountant'].includes(profile.role)} />
+          canWrite={!!profile && (
+            ['owner', 'kitchen'].includes(profile.role)
+            || (profile.role === 'accountant'
+              && (selected.invoice_id == null || selected.invoice?.review_status === 'approved'))
+          )} />
       )}
     </div>
   );
