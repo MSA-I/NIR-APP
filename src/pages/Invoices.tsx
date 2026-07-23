@@ -61,13 +61,15 @@ export function InvoicesList() {
     return invoices.map((i) => ({ ...i, balance: balMap.get(i.id) }));
   });
 
+  const canCreate = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const isOffice = profile && ['owner', 'office'].includes(profile.role);
+  const canViewExport = profile?.role !== 'office';
+
   const rows = useMemo(() => (data ?? []).filter((r) =>
     (!reviewFilter || r.review_status === reviewFilter) &&
     (!payFilter || r.payment_status === payFilter) &&
-    (!exportFilter || r.export_status === exportFilter)), [data, reviewFilter, payFilter, exportFilter]);
-
-  const canCreate = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
-  const isOffice = profile && ['owner', 'office'].includes(profile.role);
+    (!canViewExport || !exportFilter || r.export_status === exportFilter)),
+  [data, reviewFilter, payFilter, exportFilter, canViewExport]);
 
   // Delete guard (adversarial review round): a soft-deleted invoice disappears from the list
   // and from invoice_balances, but its payment_allocations / credit_requests rows survive —
@@ -110,8 +112,10 @@ export function InvoicesList() {
     { key: 'balance', header: 'יתרה', className: 'num', sortValue: (r) => r.balance ?? 0, render: (r) => (r.balance != null && r.balance > 0 ? <span className="text-await-fg">{fmtMoneyExact(r.balance)}</span> : <span className="text-done-solid">—</span>) },
     { key: 'review', header: 'בדיקה', mobileLabel: null, render: (r) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
     { key: 'payment', header: 'תשלום', priority: 3, render: (r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
-    { key: 'export', header: 'רו״ח', priority: 3, render: (r) => <StatusBadge meta={INVOICE_EXPORT_STATUS[r.export_status]} /> },
   ];
+  if (canViewExport) {
+    columns.push({ key: 'export', header: 'רו״ח', priority: 3, render: (r) => <StatusBadge meta={INVOICE_EXPORT_STATUS[r.export_status]} /> });
+  }
 
   if (loading) return <SkeletonTable cols={6} />;
   if (error && !data) return <ErrorNote message={error} />;
@@ -149,10 +153,12 @@ export function InvoicesList() {
               <option value="">כל סטטוסי התשלום</option>
               {Object.entries(INVOICE_PAYMENT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
-            <select className="input w-auto!" aria-label="סינון חשבוניות לפי סטטוס העברה לרואה חשבון" value={exportFilter} onChange={(e) => setExportFilter(e.target.value)}>
-              <option value="">כל סטטוסי הרו״ח</option>
-              {Object.entries(INVOICE_EXPORT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-            </select>
+            {canViewExport && (
+              <select className="input w-auto!" aria-label="סינון חשבוניות לפי סטטוס העברה לרואה חשבון" value={exportFilter} onChange={(e) => setExportFilter(e.target.value)}>
+                <option value="">כל סטטוסי הרו״ח</option>
+                {Object.entries(INVOICE_EXPORT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+            )}
           </>
         } />
 

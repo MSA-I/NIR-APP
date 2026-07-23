@@ -83,7 +83,7 @@ export default function Credits() {
         <CreditDetail credit={selected} onClose={() => setSelected(null)}
           onChanged={() => { setSelected(null); void refetch(); }}
           onOpenInvoice={(id) => navigate(`/invoices/${id}`)}
-          canWrite={!!profile && ['owner', 'office', 'kitchen'].includes(profile.role)} />
+          canWrite={!!profile && ['owner', 'office', 'kitchen', 'accountant'].includes(profile.role)} />
       )}
     </div>
   );

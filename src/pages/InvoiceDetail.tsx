@@ -31,6 +31,8 @@ export default function InvoiceDetail() {
   const [creditOpen, setCreditOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reviewTarget, setReviewTarget] = useState<InvoiceReviewStatus | null>(null);
+  const isProcurementManager = profile?.role === 'office';
+  const canOpenProcurement = profile?.role !== 'accountant';
 
   const { data, loading, error, refetch } = useQuery(async () => {
     const invoice = unwrap(await supabase.from('invoices')
@@ -38,11 +40,13 @@ export default function InvoiceDetail() {
       .eq('id', id!).single()) as FullInvoice;
     const balance = unwrap(await supabase.from('invoice_balances').select('*').eq('invoice_id', id!).maybeSingle()) as
       { paid_amount: number; credited_amount: number; balance: number } | null;
-    const allocations = unwrap(await supabase.from('payment_allocations')
-      .select('amount, payment:payments(id, number, paid_date, reference, amount)')
-      .eq('invoice_id', id!)) as { amount: number; payment: { number: number; paid_date: string; reference: string | null } }[];
+    const allocations = isProcurementManager
+      ? []
+      : unwrap(await supabase.from('payment_allocations')
+        .select('amount, payment:payments(id, number, paid_date, reference, amount)')
+        .eq('invoice_id', id!)) as { amount: number; payment: { number: number; paid_date: string; reference: string | null } }[];
     return { invoice, balance, allocations };
-  }, [id]);
+  }, [id, isProcurementManager]);
 
   const inv = data?.invoice;
   const canEdit = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
@@ -123,7 +127,7 @@ export default function InvoiceDetail() {
           <div className="flex flex-wrap items-center gap-2 mt-2">
             <StatusBadge meta={INVOICE_REVIEW_STATUS[inv.review_status]} />
             <StatusBadge meta={INVOICE_PAYMENT_STATUS[inv.payment_status]} />
-            <StatusBadge meta={INVOICE_EXPORT_STATUS[inv.export_status]} />
+            {!isProcurementManager && <StatusBadge meta={INVOICE_EXPORT_STATUS[inv.export_status]} />}
           </div>
         </div>
         <div className="flex flex-wrap gap-2 no-print">
@@ -166,10 +170,12 @@ export default function InvoiceDetail() {
           <dl className="text-sm space-y-2">
             <div className="flex justify-between"><dt className="text-ink-muted">תאריך חשבונית</dt><dd>{fmtDate(inv.invoice_date)}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">נקלטה במערכת</dt><dd>{fmtDate(inv.received_date)}</dd></div>
-            <div className="flex justify-between"><dt className="text-ink-muted">ספק</dt><dd><Link className="link" to={`/suppliers/${inv.supplier.id}`}>{inv.supplier.name}</Link></dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">ספק</dt><dd>{canOpenProcurement ? <Link className="link" to={`/suppliers/${inv.supplier.id}`}>{inv.supplier.name}</Link> : inv.supplier.name}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">הזמנות מקושרות</dt>
               <dd className="flex gap-2">{inv.orders.length ? inv.orders.map((o) => (
-                <Link key={o.order_id} className="link" to={`/orders/${o.order_id}`}>#{o.purchase_orders.number}</Link>
+                canOpenProcurement
+                  ? <Link key={o.order_id} className="link" to={`/orders/${o.order_id}`}>#{o.purchase_orders.number}</Link>
+                  : <span key={o.order_id}>#{o.purchase_orders.number}</span>
               )) : '—'}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">קבלות סחורה</dt>
               <dd>{inv.receipts.length ? inv.receipts.map((r) => `#${r.goods_receipts.number}`).join(', ') : '—'}</dd></div>

@@ -157,11 +157,11 @@ export const PRODUCT_AVAILABILITY: Record<'available' | 'unavailable', StatusMet
  * where they can, and are simply the fallback where they cannot.
  */
 export const ROLE_LABEL: Record<string, string> = {
-  owner: 'הנהלה',
+  owner: 'מנהל/בעלים',
   kitchen: 'מנהל מטבח',
-  office: 'מזכירות',
+  office: 'מנהל רכש',
   payer: 'מבצע העברות',
-  accountant: 'רואה חשבון',
+  accountant: 'הנהלת חשבונות',
   supplier: 'ספק',
 };
 

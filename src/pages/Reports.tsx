@@ -46,7 +46,7 @@ export default function Reports() {
     };
   }, [month]);
 
-  const isOffice = !!profile && ['owner', 'office'].includes(profile.role);
+  const canManageExport = !!profile && ['owner', 'accountant'].includes(profile.role);
 
   function exportExcel() {
     if (!data || fetching || error) return;
@@ -119,7 +119,7 @@ export default function Reports() {
           <input id="monthly-report-month" type="month" className="input w-auto!" value={month} onChange={(e) => setMonth(e.target.value)} />
           <button className="btn-secondary" disabled={fetching || !!error} onClick={exportExcel}><FileSpreadsheet size={15} /> ייצוא Excel</button>
           <button className="btn-secondary" disabled={fetching || !!error} onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
-          {isOffice && (
+          {canManageExport && (
             data.export?.status === 'sent'
               ? <span className="badge-done flex items-center gap-1"><CheckCircle2 size={13} /> הועבר לרו״ח {data.export.sent_at ? fmtDate(data.export.sent_at) : ''}</span>
               : <button className="btn-primary" disabled={busy || fetching || !!error} onClick={() => setSendOpen(true)}><Send size={15} /> סימון כהועבר לרו״ח</button>

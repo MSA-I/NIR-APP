@@ -19,8 +19,9 @@ interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; rol
 // New order is pinned first because it is the most frequent workflow. The control centre
 // remains the owner/office landing route, but lives in its natural control group.
 // Remaining items (מחירונים, דרישות תשלום, התאמות בנק, יומן ביקורת,
-//    הגדרות, and the single-role /pay, /my-prices, /admin) are slotted by the
-//    obvious procurement/finance/control reading. None of it invents business meaning.
+//    הגדרות, and the focused /pay, /my-prices, /admin routes) are slotted by the
+//    obvious procurement/finance/control reading. /pay is shared by payer and accountant.
+//    None of it invents business meaning.
 //
 const NAV: { section: string; items: NavItem[] }[] = [
   {
@@ -34,7 +35,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     items: [
       { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office', 'kitchen'] },
       { to: '/receiving', label: 'קבלת סחורה', icon: PackageCheck, roles: ['owner', 'office', 'kitchen'] },
-      { to: '/suppliers', label: 'ספקים', icon: Truck, roles: ['owner', 'office', 'kitchen', 'accountant'] },
+      { to: '/suppliers', label: 'ספקים', icon: Truck, roles: ['owner', 'office', 'kitchen'] },
       { to: '/products', label: 'מוצרים', icon: Package, roles: ['owner', 'office', 'kitchen'] },
       { to: '/prices', label: 'מחירונים', icon: Tags, roles: ['owner', 'office', 'kitchen'] },
       { to: '/my-prices', label: 'המחירון שלי', icon: Tags, roles: ['supplier'] },
@@ -45,11 +46,11 @@ const NAV: { section: string; items: NavItem[] }[] = [
     items: [
       { to: '/invoices', label: 'חשבוניות', icon: FileText, roles: ['owner', 'office', 'kitchen', 'accountant'] },
       { to: '/credits', label: 'זיכויים', icon: RotateCcw, roles: ['owner', 'office', 'kitchen', 'accountant'] },
-      { to: '/documents', label: 'גלריית מסמכים', icon: Inbox, roles: ['owner', 'office', 'kitchen', 'accountant'] },
+      { to: '/documents', label: 'גלריית מסמכים', icon: Inbox, roles: ['owner', 'office', 'kitchen'] },
       { to: '/payment-requests', label: 'דרישות תשלום', icon: Send, roles: ['owner', 'office'] },
-      { to: '/payments', label: 'תשלומים', icon: CreditCard, roles: ['owner', 'office', 'accountant'] },
-      { to: '/bank', label: 'התאמות בנק', icon: Landmark, roles: ['owner', 'office', 'accountant'] },
-      { to: '/pay', label: 'תשלומים לביצוע', icon: CreditCard, roles: ['payer'] },
+      { to: '/payments', label: 'תשלומים', icon: CreditCard, roles: ['owner', 'accountant'] },
+      { to: '/bank', label: 'התאמות בנק', icon: Landmark, roles: ['owner', 'accountant'] },
+      { to: '/pay', label: 'תשלומים לביצוע', icon: CreditCard, roles: ['payer', 'accountant'] },
     ],
   },
   {
@@ -58,9 +59,9 @@ const NAV: { section: string; items: NavItem[] }[] = [
       { to: '/dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, roles: ['owner', 'office'] },
       { to: '/alerts', label: 'התראות', icon: Bell, roles: ['owner', 'office'] },
       { to: '/exceptions', label: 'חריגים', icon: AlertTriangle, roles: ['owner', 'office', 'kitchen', 'accountant'] },
-      { to: '/expenses', label: 'ריכוז הוצאות', icon: PieChart, roles: ['owner', 'office', 'accountant'] },
-      { to: '/reports', label: 'דוח לרו״ח', icon: BarChart3, roles: ['owner', 'office', 'accountant'] },
-      { to: '/audit', label: 'יומן ביקורת', icon: ScrollText, roles: ['owner', 'office', 'accountant'] },
+      { to: '/expenses', label: 'ריכוז הוצאות', icon: PieChart, roles: ['owner', 'accountant'] },
+      { to: '/reports', label: 'דוח לרו״ח', icon: BarChart3, roles: ['owner', 'accountant'] },
+      { to: '/audit', label: 'יומן ביקורת', icon: ScrollText, roles: ['owner', 'accountant'] },
       { to: '/settings', label: 'הגדרות', icon: Settings, roles: ['owner'] },
     ],
   },
@@ -90,11 +91,11 @@ export default function Layout() {
   const [searchOpen, setSearchOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const role = profile?.role;
-  // Section 5: payer/supplier get no search box — their only routes are dead ends for it.
+  // Section 5: payer/supplier get no search box — their routes are dead ends for it.
   const canSearch = canGlobalSearch(role);
   // Unfiled-documents pill (0014): counted only for staff who can act on that queue. The
-  // accountant can read the gallery but does not receive an action badge. A known count > 0
-  // is required, so null (loading) and 0 never fabricate an all-clear or workload.
+  // Only procurement staff can act on the gallery queue. A known count > 0 is required,
+  // so null (loading) and 0 never fabricate an all-clear or workload.
   const inboxCount = useInboxCount(!!role && (['owner', 'office', 'kitchen'] as Role[]).includes(role));
   // Layout also renders during the initial load, before `org` arrives. Falling back to
   // the product name keeps the header honest — it is never another tenant's name.

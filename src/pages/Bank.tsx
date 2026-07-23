@@ -53,7 +53,7 @@ export default function Bank() {
   });
 
   const rows = (data?.txs ?? []).filter((t) => !statusFilter || t.status === statusFilter);
-  const isOffice = !!profile && ['owner', 'office'].includes(profile.role);
+  const canOperateBank = !!profile && ['owner', 'accountant'].includes(profile.role);
 
   const columns: Column<TxRow>[] = [
     { key: 'date', header: 'תאריך', sortValue: (r) => r.tx_date, render: (r) => fmtDate(r.tx_date) },
@@ -73,7 +73,7 @@ export default function Bank() {
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title flex items-center gap-2"><Landmark size={22} /> התאמות בנק</h1>
-        {isOffice && <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> ייבוא תדפיס בנק</button>}
+        {canOperateBank && <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> ייבוא תדפיס בנק</button>}
       </div>
 
       {data?.imports.length ? (
@@ -86,7 +86,7 @@ export default function Bank() {
         searchFn={(r, q) => r.description.toLowerCase().includes(q) || (r.reference ?? '').includes(q) || (r.supplier?.name ?? '').toLowerCase().includes(q)}
         searchLabel="חיפוש בתנועות בנק"
         rowLabel={(r) => `תנועת בנק מיום ${fmtDate(r.tx_date)} בסכום ${fmtMoneyExact(r.amount)} עבור ${r.description}`}
-        onRowClick={isOffice ? (r) => setSelected(r) : undefined}
+        onRowClick={canOperateBank ? (r) => setSelected(r) : undefined}
         toolbar={
           <select className="input w-auto!" aria-label="סינון תנועות בנק לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">כל הסטטוסים</option>

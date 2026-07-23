@@ -27,9 +27,9 @@ const PRODUCT_STATUS: Record<string, StatusMeta> = {
 // payer/supplier have no reachable target at all → no search box (see canGlobalSearch).
 const ALLOWED: Record<Role, EntityType[]> = {
   owner:      ['supplier', 'product', 'invoice', 'order', 'payment', 'credit'],
-  office:     ['supplier', 'product', 'invoice', 'order', 'payment', 'credit'],
+  office:     ['supplier', 'product', 'invoice', 'order', 'credit'],
   kitchen:    ['supplier', 'product', 'invoice', 'order', 'credit'],            // no /payments
-  accountant: ['supplier', 'invoice', 'order', 'payment', 'credit'],            // no /products
+  accountant: ['invoice', 'payment', 'credit'],                                // approved invoices are enforced by RLS
   payer:      [],
   supplier:   [],
 };

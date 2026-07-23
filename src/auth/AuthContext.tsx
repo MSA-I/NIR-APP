@@ -146,7 +146,7 @@ export function homeFor(role: string | undefined): string {
   switch (role) {
     case 'kitchen': return '/receiving';
     case 'payer': return '/pay';
-    case 'accountant': return '/reports';
+    case 'accountant': return '/pay';
     case 'supplier': return '/my-prices';
     default: return '/dashboard';
   }

@@ -13,7 +13,7 @@ import Login from './pages/Login';
 import AcceptInvite from './pages/AcceptInvite';
 
 // Lazy: every screen behind the Layout loads its own chunk on demand, so a supplier hitting
-// /my-prices or a payer hitting /pay never downloads Dashboard/Reports (and recharts) up front.
+// /my-prices or a payment executor hitting /pay never downloads Dashboard/Reports (and recharts) up front.
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Alerts = lazy(() => import('./pages/Alerts'));
 const SuppliersList = lazy(() => import('./pages/Suppliers').then((m) => ({ default: m.SuppliersList })));
@@ -207,14 +207,14 @@ export default function App() {
 
         <Route path="/dashboard" element={<Guard roles={FINANCE}><Dashboard /></Guard>} />
 
-        <Route path="/suppliers" element={<Guard roles={READERS}><SuppliersList /></Guard>} />
-        <Route path="/suppliers/:id" element={<Guard roles={READERS}><SupplierCard /></Guard>} />
+        <Route path="/suppliers" element={<Guard roles={STAFF}><SuppliersList /></Guard>} />
+        <Route path="/suppliers/:id" element={<Guard roles={STAFF}><SupplierCard /></Guard>} />
         <Route path="/products" element={<Guard roles={STAFF}><Products /></Guard>} />
         <Route path="/prices" element={<Guard roles={STAFF}><PriceLists /></Guard>} />
 
         <Route path="/orders/new" element={<Guard roles={STAFF}><NewOrder /></Guard>} />
-        <Route path="/orders" element={<Guard roles={READERS}><OrdersList /></Guard>} />
-        <Route path="/orders/:id" element={<Guard roles={READERS}><OrderDetail /></Guard>} />
+        <Route path="/orders" element={<Guard roles={STAFF}><OrdersList /></Guard>} />
+        <Route path="/orders/:id" element={<Guard roles={STAFF}><OrderDetail /></Guard>} />
 
         <Route path="/receiving" element={<Guard roles={STAFF}><ReceivingList /></Guard>} />
         <Route path="/receiving/:orderId" element={<Guard roles={STAFF}><ReceiveOrder /></Guard>} />
@@ -222,20 +222,20 @@ export default function App() {
         <Route path="/invoices" element={<Guard roles={READERS}><InvoicesList /></Guard>} />
         <Route path="/invoices/new" element={<Guard roles={STAFF}><InvoiceNew /></Guard>} />
         <Route path="/invoices/:id" element={<Guard roles={READERS}><InvoiceDetail /></Guard>} />
-        <Route path="/documents" element={<Guard roles={READERS}><DocumentsGallery /></Guard>} />
+        <Route path="/documents" element={<Guard roles={STAFF}><DocumentsGallery /></Guard>} />
         <Route path="/inbox" element={<Navigate to="/documents?filing=unfiled" replace />} />
 
         <Route path="/credits" element={<Guard roles={READERS}><Credits /></Guard>} />
         <Route path="/payment-requests" element={<Guard roles={FINANCE}><PaymentRequests /></Guard>} />
-        <Route path="/payments" element={<Guard roles={['owner', 'office', 'accountant']}><Payments /></Guard>} />
-        <Route path="/pay" element={<Guard roles={['payer']}><PayerQueue /></Guard>} />
+        <Route path="/payments" element={<Guard roles={['owner', 'accountant']}><Payments /></Guard>} />
+        <Route path="/pay" element={<Guard roles={['payer', 'accountant']}><PayerQueue /></Guard>} />
 
-        <Route path="/bank" element={<Guard roles={['owner', 'office', 'accountant']}><Bank /></Guard>} />
+        <Route path="/bank" element={<Guard roles={['owner', 'accountant']}><Bank /></Guard>} />
         <Route path="/exceptions" element={<Guard roles={READERS}><Exceptions /></Guard>} />
         <Route path="/alerts" element={<Guard roles={FINANCE}><Alerts /></Guard>} />
-        <Route path="/expenses" element={<Guard roles={['owner', 'office', 'accountant']}><Expenses /></Guard>} />
-        <Route path="/reports" element={<Guard roles={['owner', 'office', 'accountant']}><Reports /></Guard>} />
-        <Route path="/audit" element={<Guard roles={['owner', 'office', 'accountant']}><AuditLogPage /></Guard>} />
+        <Route path="/expenses" element={<Guard roles={['owner', 'accountant']}><Expenses /></Guard>} />
+        <Route path="/reports" element={<Guard roles={['owner', 'accountant']}><Reports /></Guard>} />
+        <Route path="/audit" element={<Guard roles={['owner', 'accountant']}><AuditLogPage /></Guard>} />
         <Route path="/settings" element={<Guard roles={['owner']}><Settings /></Guard>} />
         <Route path="/my-prices" element={<Guard roles={['supplier']}><SupplierPrices /></Guard>} />
 

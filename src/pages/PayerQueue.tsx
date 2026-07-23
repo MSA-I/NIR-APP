@@ -10,7 +10,7 @@ import { toHebrewError } from '../lib/errors';
 import type { PaymentRequest } from '../lib/types';
 
 /**
- * Focused execution view for the payment executor (payer role).
+ * Focused execution view for payment executors (payer and accountant roles).
  * Shows ONLY approved payment requests + the details needed to perform a transfer.
  */
 type Row = PaymentRequest & {

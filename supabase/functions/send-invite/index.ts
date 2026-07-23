@@ -58,11 +58,11 @@ interface IssuedInvitation {
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  owner: 'הנהלה',
+  owner: 'מנהל/בעלים',
   kitchen: 'מנהל מטבח',
-  office: 'מזכירות',
+  office: 'מנהל רכש',
   payer: 'מבצע העברות',
-  accountant: 'רואה חשבון',
+  accountant: 'הנהלת חשבונות',
 };
 
 /** Hebrew message per error code -- the UI shows these verbatim. */

@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { unwrap } from './useQuery';
-import { addCalendarDays, fmtDate, todayISO } from './format';
+import { addCalendarDays, fmtDate } from './format';
 import { fetchAll, fetchInChunks } from './supabasePaging';
 
 export type CheckSeverity = 'info' | 'warning' | 'critical';
@@ -100,17 +100,14 @@ export async function runInvoiceChecks(inv: {
       });
     }
 
-    // 5. matching bank transaction already confirmed
-    const bank = await fetchAll<{ id: string; confirmed: boolean }>((from, to) => supabase.from('bank_allocations')
-      .select('id, confirmed').eq('invoice_id', inv.id!).order('id').range(from, to));
-    if (bank.some((b) => b.confirmed)) {
+    // 5–6. Narrow server signals preserve bank/payment privacy for procurement managers.
+    const financial = unwrap(await supabase.rpc('invoice_financial_check_signals', {
+      p_invoice_id: inv.id,
+    })) as { bank_match_exists: boolean; already_paid: boolean };
+    if (financial.bank_match_exists) {
       results.push({ code: 'bank_matched', severity: 'info', message: 'קיימת תנועת בנק מותאמת לחשבונית זו' });
     }
-
-    // 6. already paid
-    const bal = unwrap(await supabase.from('invoice_balances').select('*').eq('invoice_id', inv.id).maybeSingle()) as
-      { paid_amount: number; balance: number } | null;
-    if (bal && bal.balance <= 0) {
+    if (financial.already_paid) {
       results.push({ code: 'already_paid', severity: 'critical', message: 'החשבונית כבר מסומנת כמשולמת במלואה — תשלום נוסף יהיה כפול' });
     }
   }
@@ -140,23 +137,35 @@ export async function runPaymentRequestChecks(pr: {
 }): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
 
-  // 1. linked invoices already paid / balances
-  if (pr.invoiceIds.length) {
-    const bals = await fetchInChunks(pr.invoiceIds, (ids) =>
-      fetchAll<{ invoice_id: string; balance: number; paid_amount: number }>((from, to) => supabase.from('invoice_balances')
-        .select('invoice_id, balance, paid_amount').in('invoice_id', ids).order('invoice_id').range(from, to)));
-    const paid = bals.filter((b) => b.balance <= 0);
-    if (paid.length) {
-      results.push({ code: 'invoice_paid', severity: 'critical', message: `${paid.length} מהחשבוניות המקושרות כבר שולמו במלואן` });
-    }
-    const totalBalance = bals.reduce((s, b) => s + Math.max(0, b.balance), 0);
-    if (Math.abs(totalBalance - pr.amount) > AMOUNT_TOLERANCE) {
-      results.push({
-        code: 'amount_vs_balance',
-        severity: 'warning',
-        message: `סכום הדרישה (₪${pr.amount.toLocaleString()}) שונה מיתרת החשבוניות המקושרות (₪${totalBalance.toLocaleString()})`,
-      });
-    }
+  // 1. Server-side financial signals expose decisions, never balances or bank rows.
+  const financial = unwrap(await supabase.rpc('payment_request_financial_check_signals', {
+    p_supplier_id: pr.supplier_id,
+    p_amount: pr.amount,
+    p_invoice_ids: pr.invoiceIds,
+    p_payment_request_id: pr.id ?? null,
+  })) as {
+    requested_invoice_count: number;
+    visible_invoice_count: number;
+    paid_invoice_count: number;
+    unapproved_invoice_count: number;
+    amount_matches_open_balance: boolean;
+    similar_bank_transfer_exists: boolean;
+  };
+  if (financial.visible_invoice_count !== financial.requested_invoice_count) {
+    results.push({ code: 'invoice_visibility', severity: 'critical', message: 'לא ניתן לאמת את כל החשבוניות המקושרות לדרישה' });
+  }
+  if (financial.paid_invoice_count > 0) {
+    results.push({ code: 'invoice_paid', severity: 'critical', message: `${financial.paid_invoice_count} מהחשבוניות המקושרות כבר שולמו במלואן` });
+  }
+  if (financial.unapproved_invoice_count > 0) {
+    results.push({ code: 'invoice_unapproved', severity: 'critical', message: 'הדרישה כוללת חשבונית שטרם אושרה לתשלום' });
+  }
+  if (!financial.amount_matches_open_balance) {
+    results.push({
+      code: 'amount_vs_balance',
+      severity: 'warning',
+      message: 'סכום הדרישה שונה מהיתרה הפתוחה של החשבוניות המקושרות',
+    });
   }
 
   // 2. similar active payment request
@@ -175,16 +184,12 @@ export async function runPaymentRequestChecks(pr: {
     });
   }
 
-  // 3. similar bank transaction (same supplier, same amount, last 45 days)
-  const since = addCalendarDays(todayISO(), -45);
-  const txs = await fetchAll<{ id: string; tx_date: string }>((from, to) => supabase.from('bank_transactions').select('id, tx_date')
-    .eq('supplier_id', pr.supplier_id).eq('amount', pr.amount).eq('is_debit', true)
-    .gte('tx_date', since).order('tx_date').order('id').range(from, to));
-  if (txs.length) {
+  // 3. Similar bank transfer, without exposing its date or row.
+  if (financial.similar_bank_transfer_exists) {
     results.push({
       code: 'similar_bank_tx',
       severity: 'warning',
-      message: `קיימת העברה בנקאית באותו סכום לספק זה (${txs.map((t) => fmtDate(t.tx_date)).join(', ')}) — ודא שלא שולם כבר`,
+      message: 'קיימת העברה בנקאית דומה לספק זה — יש לוודא שלא שולם כבר',
     });
   }
 
