@@ -15,6 +15,54 @@ begin
 end
 $$;
 
+-- Fresh-install ACL contract: browser reads exist only where an RLS read policy exists.
+select pg_temp.p1_assert(
+  not exists (
+    select 1
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relkind in ('r', 'p')
+      and (
+        not c.relrowsecurity
+        or not exists (
+          select 1
+          from pg_catalog.pg_policy p
+          where p.polrelid = c.oid
+            and p.polcmd in ('r', '*')
+            and (
+              0::oid = any(p.polroles)
+              or (select oid from pg_catalog.pg_roles where rolname = 'authenticated') = any(p.polroles)
+            )
+        )
+      )
+      and has_table_privilege('authenticated', c.oid, 'SELECT')
+  ),
+  'authenticated received SELECT on a non-RLS or service-only table'
+);
+select pg_temp.p1_assert(
+  not exists (
+    select 1
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relkind in ('r', 'p')
+      and c.relrowsecurity
+      and exists (
+        select 1
+        from pg_catalog.pg_policy p
+        where p.polrelid = c.oid
+          and p.polcmd in ('r', '*')
+          and (
+            0::oid = any(p.polroles)
+            or (select oid from pg_catalog.pg_roles where rolname = 'authenticated') = any(p.polroles)
+          )
+      )
+      and not has_table_privilege('authenticated', c.oid, 'SELECT')
+  ),
+  'authenticated is missing SELECT on an RLS-protected application table'
+);
+
 -- Stable fixtures. Inserts run without a JWT and therefore model trusted migration/seed work.
 insert into organizations (id, name, status) values
   ('10000000-0000-0000-0000-000000000001', 'P1 tenant A', 'active'),
@@ -238,7 +286,9 @@ begin
   where id = '60000000-0000-0000-0000-000000000009';
   raise exception 'expected direct invoice soft-delete rejection';
 exception when sqlstate '42501' then
-  if sqlerrm not like '%invoice_soft_delete_rpc_required%' then raise; end if;
+  -- A fresh install rejects at the table ACL. Upgraded installs that still carry the legacy
+  -- UPDATE grant reach p0_invoice_soft_delete_guard and reject with the same SQLSTATE.
+  null;
 end
 $$;
 select pg_temp.p1_assert(

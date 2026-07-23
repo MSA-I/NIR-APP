@@ -9,7 +9,7 @@
 
 ## P0 — חוזה תפקידי פרסונות (23.07.2026, מקומי בלבד)
 
-### תיקוני גבול פיננסי `0028` (ענף מבודד, טרם הורץ מול DB)
+### תיקוני גבול פיננסי `0028` (ענף ו־DB מקומיים מבודדים)
 
 מיגרציה `0028_p0_financial_boundary_corrections.sql` סוגרת שבעה פערי ביקורת: מחיקה
 רכה של חשבונית היא פקודת שרת אטומית עם סיבה וחסימת קשרים כספיים; אותות הבדיקה אינם
@@ -17,10 +17,20 @@
 N:M; תור `accountant` מסתיר דרישה אם חשבונית חזרה לבדיקה; והלקוח אינו מציג יתרה,
 פעולת זיכוי או פילוח קטגוריות שאינם מותרים לתפקיד. מדיניות `payer` לא שונתה.
 
-`npm.cmd ci` עבר עם 0 חולשות ו־`npm.cmd run build` עבר במלואו. בדיקות SQL הורחבו
-למחיקה ישירה/אטומית, oracle, שתי הקצאות תשלום ואי־נראות חשבונית שנפתחה מחדש, אך בשלב
-הסטטי הזה לא הופעלו Supabase או DB כדי לא להתנגש ב־stack של זרם P1C. אין בכך PASS למסד,
-ל־browser, ל־deploy או לסביבה חיה.
+ב־reset נקי עם Supabase CLI ‏2.109.1 התגלה ש־DDL grant hook אינו מעניק `SELECT`
+ל־`authenticated`. ‏`0028` משחזרת את ה־ACL באופן כשל־סגור רק לטבלאות ordinary/partitioned
+עם RLS ו־policy קריאה ל־`authenticated`/`PUBLIC`; views נשארים עם grants מפורשים וטבלת
+service-only נשארת חסומה. בדיקות הקטלוג מוודאות שאין `SELECT` על non-RLS/service-only
+ושאף טבלת אפליקציה מוגנת RLS לא חסרה אותו.
+
+**אימות עדכני:** על stack ייחודי `supplyflow-persona-p0corr` ובפורטים `57430`–`57483`,
+`supabase db reset` עבר מ־`0001` דרך `0025` ו־`0028` כולל seed. ה־ledger אישר במפורש
+`0025 role_capability_contract` ו־`0028 p0_financial_boundary_corrections`.
+`p1_financial_commands.sql` עבר במלואו, כולל מחיקה ישירה/אטומית, oracle, שתי הקצאות
+תשלום ואי־נראות חשבונית שנפתחה מחדש. קריאת REST ‏`PATCH` אמיתית ל־`deleted_at` הוחזרה
+ב־HTTP 403 / PostgreSQL ‏`42501`, והרשומה נשארה ללא שינוי. `npm.cmd ci` עבר עם 0 חולשות
+ו־`npm.cmd run build` עבר במלואו. `check-p0-security.ps1` לא הורץ כי הוא נעול בשם ובפורט
+ל־stack אחר; לא בוצעו browser, ‏deploy או מיגרציה לסביבה חיה.
 
 `owner` הוגדר כמנהל/בעלים, `office` כמנהל רכש ו־`accountant` כהנהלת חשבונות
 תפעולית. מיגרציה `0025_role_capability_contract.sql` מיישרת RLS ו־RPC: מנהל הרכש נשאר

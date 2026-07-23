@@ -1,6 +1,74 @@
 -- P0 follow-up: close the financial boundary gaps found after the persona-contract cutover.
 -- Forward-only after 0025. Migration numbers 0026/0027 are owned by the parallel P1 streams.
 
+-- Fresh CLI installs can create application tables before Supabase's browser-role DDL grant
+-- hook is present. Restore only the table ACL needed by an existing authenticated/PUBLIC read
+-- policy. Views keep their explicit grants, and service-only or non-RLS tables stay inaccessible.
+do $$
+declare
+  v_relation record;
+begin
+  for v_relation in
+    select n.nspname as schema_name, c.relname as relation_name
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relkind in ('r', 'p')
+      and c.relrowsecurity
+      and exists (
+        select 1
+        from pg_catalog.pg_policy p
+        where p.polrelid = c.oid
+          and p.polcmd in ('r', '*')
+          and (
+            0::oid = any(p.polroles)
+            or (select oid from pg_catalog.pg_roles where rolname = 'authenticated') = any(p.polroles)
+          )
+      )
+  loop
+    execute format(
+      'grant select on table %I.%I to authenticated',
+      v_relation.schema_name,
+      v_relation.relation_name
+    );
+  end loop;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relkind in ('r', 'p')
+      and not c.relrowsecurity
+      and has_table_privilege('authenticated', c.oid, 'SELECT')
+  ) then
+    raise exception 'authenticated_select_on_non_rls_table' using errcode = '42501';
+  end if;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relkind in ('r', 'p')
+      and c.relrowsecurity
+      and exists (
+        select 1
+        from pg_catalog.pg_policy p
+        where p.polrelid = c.oid
+          and p.polcmd in ('r', '*')
+          and (
+            0::oid = any(p.polroles)
+            or (select oid from pg_catalog.pg_roles where rolname = 'authenticated') = any(p.polroles)
+          )
+      )
+      and not has_table_privilege('authenticated', c.oid, 'SELECT')
+  ) then
+    raise exception 'authenticated_select_missing_for_rls_table' using errcode = '42501';
+  end if;
+end
+$$;
+
 -- ===== Invoice soft delete is one atomic, reasoned command =====
 
 create or replace function public.p0_invoice_soft_delete_guard()
