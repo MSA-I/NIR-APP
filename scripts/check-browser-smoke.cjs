@@ -207,7 +207,8 @@ async function assertKeyContrast(page) {
 
 async function roleAndViewportMatrix(browser) {
   const viewports = [
-    ['320', 320, 720], ['390', 390, 844], ['768', 768, 1024], ['1024', 1024, 768],
+    ['320', 320, 720], ['360', 360, 800], ['390', 390, 844], ['430', 430, 932],
+    ['768', 768, 1024], ['1024', 1024, 768], ['1440', 1440, 900],
   ];
   for (const [role, expectedHome] of Object.entries(homes)) {
     const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
@@ -216,6 +217,9 @@ async function roleAndViewportMatrix(browser) {
     try {
       await login(page, role);
       assert.equal(new URL(page.url()).pathname, expectedHome, `${role}: wrong home route`);
+      const quickActionsTrigger = page.getByRole('button', { name: 'פתיחת פעולות מהירות' });
+      assert.equal(await quickActionsTrigger.count(), ['owner', 'office', 'kitchen'].includes(role) ? 1 : 0,
+        `${role}: wrong quick-actions trigger visibility`);
       for (const [label, width, height] of viewports) {
         await page.setViewportSize({ width, height });
         await page.waitForTimeout(100);
@@ -253,6 +257,152 @@ async function roleAndViewportMatrix(browser) {
   }
 }
 
+async function speedDialContract(browser) {
+  const roleLabels = {
+    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+    office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+    kitchen: ['הזמנה חדשה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+  };
+  const roleTargets = {
+    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
+    office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
+    kitchen: ['/orders/new?fresh=1', null, '/receiving', '/invoices/new'],
+  };
+
+  for (const [role, expectedLabels] of Object.entries(roleLabels)) {
+    const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    captureConsole(page, `speed-dial:${role}`);
+    try {
+      await login(page, role);
+      assert.equal(await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).count(), 1,
+        `${role}: speed-dial trigger is not uniquely named`);
+      const trigger = page.locator('.speed-dial-trigger');
+      assert.equal(await trigger.count(), 1, `${role}: speed-dial trigger is not unique`);
+      assert.equal(await trigger.getAttribute('aria-expanded'), 'false', `${role}: trigger starts expanded`);
+      await trigger.click();
+      assert.equal(await trigger.getAttribute('aria-expanded'), 'true', `${role}: trigger did not expose expanded state`);
+      assert.equal(await trigger.getAttribute('aria-label'), 'סגירת פעולות מהירות', `${role}: open trigger does not expose its close action`);
+      assert.equal(await trigger.getAttribute('aria-controls'), 'global-quick-actions', `${role}: trigger does not identify its menu`);
+      const menu = page.getByRole('menu', { name: 'פעולות מהירות' });
+      await menu.waitFor();
+      const items = menu.getByRole('menuitem');
+      assert.deepEqual((await items.allTextContents()).map((label) => label.trim()), expectedLabels,
+        `${role}: wrong speed-dial labels or order`);
+      const targets = await items.evaluateAll((nodes) => nodes.map((node) => {
+        const href = node.getAttribute('href');
+        if (!href) return null;
+        const url = new URL(href, window.location.origin);
+        return `${url.pathname}${url.search}`;
+      }));
+      assert.deepEqual(targets, roleTargets[role], `${role}: wrong speed-dial destinations or order`);
+      assert(await items.first().evaluate((node) => document.activeElement === node), `${role}: first action did not receive focus`);
+
+      if (role === 'owner') {
+        await page.waitForTimeout(220);
+        await page.screenshot({ path: path.join(outDir, 'speed-dial-open-390.png') });
+        report.screenshots.push('speed-dial-open-390.png');
+        await page.keyboard.press('ArrowDown');
+        assert(await items.nth(1).evaluate((node) => document.activeElement === node), 'ArrowDown did not advance in speed-dial');
+        await page.keyboard.press('ArrowUp');
+        assert(await items.first().evaluate((node) => document.activeElement === node), 'ArrowUp did not move back in speed-dial');
+        await page.keyboard.press('End');
+        assert(await items.last().evaluate((node) => document.activeElement === node), 'End did not focus the last speed-dial action');
+        await page.keyboard.press('Home');
+        assert(await items.first().evaluate((node) => document.activeElement === node), 'Home did not focus the first speed-dial action');
+
+        const triggerSize = await trigger.evaluate((node) => {
+          const rect = node.getBoundingClientRect();
+          return { width: rect.width, height: rect.height };
+        });
+        assert(triggerSize.width >= 44 && triggerSize.height >= 44, `speed-dial trigger below 44px: ${JSON.stringify(triggerSize)}`);
+        const sizes = await items.evaluateAll((nodes) => nodes.map((node) => {
+          const rect = node.getBoundingClientRect();
+          return { width: rect.width, height: rect.height };
+        }));
+        assert(sizes.every(({ width, height }) => width >= 44 && height >= 44), `speed-dial target below 44px: ${JSON.stringify(sizes)}`);
+        const textLayout = await items.evaluateAll((nodes) => nodes.map((node) => ({
+          whiteSpace: getComputedStyle(node).whiteSpace,
+          scrollWidth: node.scrollWidth,
+          clientWidth: node.clientWidth,
+        })));
+        assert(textLayout.every(({ whiteSpace, scrollWidth, clientWidth }) => whiteSpace === 'nowrap' && scrollWidth <= clientWidth + 1),
+          `speed-dial label wraps or overflows: ${JSON.stringify(textLayout)}`);
+
+        for (const [width, height] of [[320, 720], [360, 800], [390, 844], [430, 932], [768, 1024], [1024, 768], [1440, 900]]) {
+          await page.setViewportSize({ width, height });
+          const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+          assert(overflow <= 1, `speed-dial/${width}: horizontal overflow ${overflow}px`);
+        }
+        await page.waitForTimeout(100);
+        await page.screenshot({ path: path.join(outDir, 'speed-dial-open-1440.png') });
+        report.screenshots.push('speed-dial-open-1440.png');
+
+        await page.keyboard.press('Escape');
+        await menu.waitFor({ state: 'hidden' });
+        assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'Escape did not collapse speed-dial');
+        assert.equal(await trigger.getAttribute('aria-label'), 'פתיחת פעולות מהירות', 'Escape did not restore the trigger action name');
+        assert(await trigger.evaluate((node) => document.activeElement === node), 'Escape did not restore speed-dial trigger focus');
+
+        await trigger.click();
+        await page.locator('#main h1').first().click();
+        await menu.waitFor({ state: 'hidden' });
+        assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'outside press did not collapse speed-dial');
+
+        await page.goto(`${baseURL}/receiving`);
+        await settle(page);
+        const receivingTrigger = page.locator('.speed-dial-trigger');
+        await receivingTrigger.click();
+        await page.getByRole('menuitem', { name: 'מרכז הבקרה' }).click();
+        await page.waitForURL((url) => url.pathname === '/dashboard');
+        assert.equal(await page.getByRole('menu').count(), 0, 'speed-dial stayed open after link navigation');
+        assert.equal(await receivingTrigger.getAttribute('aria-expanded'), 'false', 'link navigation did not reset expanded state');
+
+        const dashboardTrigger = page.locator('.speed-dial-trigger');
+        await dashboardTrigger.click();
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('menuitem', { name: 'צילום מסמך' }).click();
+        await chooser;
+        assert.equal(await dashboardTrigger.getAttribute('aria-expanded'), 'false', 'camera action did not collapse speed-dial');
+
+        for (const route of ['/orders/new', '/invoices/new']) {
+          await page.goto(`${baseURL}${route}`);
+          await settle(page);
+          assert.equal(await page.locator('.speed-dial-trigger').count(), 0, `${route}: speed-dial must be hidden`);
+        }
+      } else {
+        await page.keyboard.press('Escape');
+      }
+    } finally {
+      await closeContext(context);
+    }
+  }
+
+  const reduced = await browser.newContext({
+    locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 390, height: 844 },
+  });
+  const page = await reduced.newPage();
+  captureConsole(page, 'speed-dial:reduced-motion');
+  try {
+    await login(page, 'owner');
+    await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).click();
+    const moving = page.locator('[role="menuitem"], button[aria-expanded="true"] svg');
+    const motion = await moving.evaluateAll((nodes) => nodes.map((node) => {
+      const style = getComputedStyle(node);
+      return { animationDuration: style.animationDuration, transitionDuration: style.transitionDuration, transitionProperty: style.transitionProperty };
+    }));
+    const milliseconds = (value) => Math.max(...value.split(',').map((part) => {
+      const duration = Number.parseFloat(part) || 0;
+      return part.trim().endsWith('ms') ? duration : duration * 1000;
+    }));
+    assert(motion.every((entry) => milliseconds(entry.animationDuration) <= 20
+      && (!/(transform|translate|rotate|scale)/.test(entry.transitionProperty) || milliseconds(entry.transitionDuration) <= 20)),
+    `reduced-motion leaves speed-dial movement enabled: ${JSON.stringify(motion)}`);
+  } finally {
+    await closeContext(reduced);
+  }
+}
+
 async function dashboardAndDialogs(browser) {
   const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
@@ -264,17 +414,10 @@ async function dashboardAndDialogs(browser) {
     const firstDataHeading = page.locator('#main .dash-enter h2').first();
     await firstDataHeading.waitFor();
     assert((await firstDataHeading.innerText()).includes('דורש טיפול'), 'dashboard does not begin with the attention zone');
-    assert.equal(await page.getByText('פעולות מהירות', { exact: true }).count(), 0, 'Quick Actions returned');
-    assert.equal(await page.getByRole('button', { name: 'צילום מסמך' }).count(), 1, 'dashboard FAB missing');
+    assert.equal(await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).count(), 1, 'dashboard speed-dial missing');
     const contrast = await assertKeyContrast(page);
     await page.screenshot({ path: path.join(outDir, 'dashboard-1440.png'), fullPage: true });
     report.screenshots.push('dashboard-1440.png');
-
-    for (const route of ['/orders/new', '/invoices/new']) {
-      await page.goto(`${baseURL}${route}`);
-      await settle(page);
-      assert.equal(await page.getByRole('button', { name: 'צילום מסמך' }).count(), 0, `${route}: FAB must be hidden`);
-    }
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${baseURL}/dashboard`);
@@ -404,7 +547,7 @@ async function receivingAccessibility(browser) {
     await settle(page);
     await page.getByText('ספק בדיקת נגישות').first().click();
     await settle(page);
-    assert.equal(await page.getByRole('button', { name: 'צילום מסמך' }).count(), 0, 'receiving detail FAB must be hidden');
+    assert.equal(await page.locator('.speed-dial-trigger').count(), 0, 'receiving detail speed-dial must be hidden');
     await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור מוצר בדיקת נגישות' }).waitFor();
     await page.getByRole('button', { name: 'מלא עבור מוצר בדיקת נגישות' }).waitFor();
     assert.equal(await page.locator('button[aria-pressed]').count(), 5, 'receiving status controls lost pressed state');
@@ -777,7 +920,8 @@ async function run(name, check) {
   const browser = await chromium.launch({ headless: true, executablePath: browserPath });
   try {
     await run('role and viewport matrix', () => roleAndViewportMatrix(browser));
-    await run('dashboard, FAB and dialogs', () => dashboardAndDialogs(browser));
+    await run('speed-dial roles, keyboard, camera and responsive contract', () => speedDialContract(browser));
+    await run('dashboard, speed-dial and dialogs', () => dashboardAndDialogs(browser));
     await run('DataTable, ActionMenu, route focus and mobile search', () => tableKeyboardAndSearch(browser));
     await run('receiving contextual names and accessibility', () => receivingAccessibility(browser));
     await run('payment-request names and modal stack', () => paymentRequestNamesAndModalStack(browser));
