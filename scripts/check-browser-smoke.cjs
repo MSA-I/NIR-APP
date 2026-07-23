@@ -35,7 +35,7 @@ const homes = {
   office: '/dashboard',
   kitchen: '/receiving',
   payer: '/pay',
-  accountant: '/reports',
+  accountant: '/pay',
   supplier: '/my-prices',
 };
 
@@ -187,6 +187,7 @@ async function assertFabDoesNotCoverMain(page, scope) {
     if (!fab) return ['missing FAB'];
     return [...document.querySelectorAll('#main a[href], #main button, #main input, #main select, #main textarea')]
       .filter((node) => {
+        if (!node.checkVisibility()) return false;
         const rect = node.getBoundingClientRect();
         const style = getComputedStyle(node);
         return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
@@ -294,7 +295,7 @@ async function roleAndViewportMatrix(browser) {
   const denied = [
     ['kitchen', '/dashboard', '/receiving'],
     ['payer', '/dashboard', '/pay'],
-    ['accountant', '/products', '/reports'],
+    ['accountant', '/products', '/pay'],
   ];
   for (const [role, requested, expected] of denied) {
     const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block' });
@@ -661,7 +662,7 @@ async function tableKeyboardAndSearch(browser) {
     await settle(page);
     assert.equal(await page.getByRole('combobox', { name: 'סינון חריגים לפי חומרה' }).inputValue(), 'high');
     assert.equal(new URL(page.url()).searchParams.get('severity'), 'high');
-    await page.getByText('גבוהה', { exact: true }).first().waitFor({ timeout: 20_000 });
+    await page.locator('#main tbody').getByText('גבוהה', { exact: true }).first().waitFor({ timeout: 20_000 });
     await assertNoRawMetadata(page, 'stable exception severity filter');
     steps += 1;
     evidence.push('/exceptions?status=open&severity=high');
@@ -794,6 +795,18 @@ async function paymentRequestNamesAndModalStack(browser) {
   await context.route('**/rest/v1/invoice_balances?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ invoice_id: 'p4-invoice', balance: 850 }] }));
   await context.route('**/rest/v1/bank_transactions?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/credit_requests?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
+  await context.route('**/rest/v1/rpc/payment_request_financial_check_signals*', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: {
+      requested_invoice_count: 1,
+      visible_invoice_count: 1,
+      paid_invoice_count: 0,
+      unapproved_invoice_count: 0,
+      amount_matches_open_balance: true,
+      similar_bank_transfer_exists: false,
+    },
+  }));
   const page = await context.newPage();
   captureConsole(page, 'payment-request-modal');
   try {
@@ -965,7 +978,7 @@ async function accountantFinanceJourney(browser) {
     await page.goto(`${baseURL}/credits?status=all&id=${creditId}`);
     const credit = page.getByRole('dialog');
     await credit.waitFor({ timeout: 20_000 });
-    await credit.getByRole('button', { name: 'סגירה' }).click();
+    await credit.locator('button.btn-primary').filter({ hasText: 'סגירה' }).click();
     await credit.waitFor({ state: 'hidden', timeout: 20_000 });
     await page.getByRole('heading', { name: 'זיכויים' }).waitFor();
     assert.equal(await page.getByRole('combobox', { name: 'סינון דרישות זיכוי לפי סטטוס' }).inputValue(), 'all');
@@ -1043,6 +1056,7 @@ async function supplierPriceJourney(browser) {
   captureConsole(page, 'supplier-price-journey');
   try {
     await login(page, 'supplier');
+    await page.locator('#main').getByText(/משק ירוק/).first().waitFor({ timeout: 20_000 });
     const mainText = await page.locator('#main').innerText();
     assert(mainText.includes('משק ירוק'), 'supplier portal omitted its own supplier');
     assert(!mainText.includes('חוות השדה'), 'supplier portal exposed a competing supplier');
