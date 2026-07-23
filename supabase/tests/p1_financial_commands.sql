@@ -1,5 +1,5 @@
 -- P1 regression harness. Run only against an isolated local database after applying all
--- project migrations through 0023_p1_financial_command_boundaries.sql.
+-- project migrations, including the forward guard-safety replacement in 0027.
 \set ON_ERROR_STOP on
 
 begin;
@@ -70,11 +70,18 @@ insert into purchase_orders (
   '30000000-0000-0000-0000-000000000001',
   'confirmed',
   '20000000-0000-0000-0000-000000000001'
+), (
+  '70000000-0000-0000-0000-000000000002',
+  '10000000-0000-0000-0000-000000000001',
+  '30000000-0000-0000-0000-000000000001',
+  'ready',
+  '20000000-0000-0000-0000-000000000002'
 );
 
 insert into purchase_order_items (id, org_id, order_id, product_id, qty, unit_price) values
   ('71000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', 10, 10),
-  ('71000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000002', 5, 20);
+  ('71000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000002', 5, 20),
+  ('71000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000001', 2, 10);
 
 insert into invoices (
   id, org_id, supplier_id, invoice_number, invoice_date,
@@ -88,6 +95,42 @@ insert into invoices (
 
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
+
+-- The shared guard must inspect only fields that exist on the active trigger table.
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000002', true);
+update purchase_orders
+set status = 'sent', sent_at = '2026-07-23 09:00:00+00'
+where id = '70000000-0000-0000-0000-000000000002';
+select pg_temp.p1_assert(
+  (select status = 'sent' and sent_at = '2026-07-23 09:00:00+00'
+   from purchase_orders where id = '70000000-0000-0000-0000-000000000002'),
+  'office ready-to-sent transition failed through the table-safe guard'
+);
+do $$
+begin
+  update purchase_order_items
+  set received_qty = 1
+  where id = '71000000-0000-0000-0000-000000000003';
+  raise exception 'expected direct received_qty rejection';
+exception when insufficient_privilege then
+  null;
+end
+$$;
+select pg_temp.p1_assert(
+  (select received_qty = 0 from purchase_order_items where id = '71000000-0000-0000-0000-000000000003'),
+  'direct received_qty mutation crossed the financial command guard'
+);
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
+select pg_temp.p1_assert(
+  exists (
+    select 1 from audit_logs
+    where entity_type = 'purchase_orders'
+      and entity_id = '70000000-0000-0000-0000-000000000002'
+      and action = 'update'
+      and new_values ->> 'status' = 'sent'
+  ),
+  'ready-to-sent transition did not create server-authored audit'
+);
 
 -- Invoice: full commit, invalid rollback, exact retry, transition validation and tenant guard.
 select pg_temp.p1_assert(
