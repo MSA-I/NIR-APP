@@ -41,7 +41,7 @@ export default function PaymentRequests() {
 
   const { data, loading, fetching, error, refetch } = useQuery(async () =>
     fetchAll<Row>((from, to) => supabase.from('payment_requests')
-      .select('*, supplier:suppliers(name), approver:profiles!payment_requests_approved_by_fkey(full_name)')
+      .select('*, supplier:suppliers(name), approver:profiles!p0_pr_approved_actor_tenant_fk(full_name)')
       .order('created_at', { ascending: false }).order('id').range(from, to)));
 
   const today = todayISO();  // local calendar day; due_date is a plain date, string compare is correct

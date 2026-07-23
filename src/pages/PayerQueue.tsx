@@ -27,7 +27,7 @@ export default function PayerQueue({ mode = 'regular' }: { mode?: PayerQueueMode
 
   const { data, loading, error, refetch } = useQuery(async () =>
     unwrap(await supabase.from('payment_requests')
-      .select('*, supplier:suppliers(id, name, bank_details), invoices:payment_request_invoices(invoice_id, amount_allocated, invoice:invoices(invoice_number)), approver:profiles!payment_requests_approved_by_fkey(full_name)')
+      .select('*, supplier:suppliers(id, name, bank_details), invoices:payment_request_invoices(invoice_id, amount_allocated, invoice:invoices(invoice_number)), approver:profiles!p0_pr_approved_actor_tenant_fk(full_name)')
       .in('status', ['approved', 'sent_for_execution', 'executed', 'matched'])
       .order('due_date', { ascending: true, nullsFirst: false })) as Promise<Row[]>);
 

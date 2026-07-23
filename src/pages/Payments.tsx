@@ -18,7 +18,7 @@ export default function Payments() {
   const [params, setParams] = useSearchParams();
   const { data, loading, error } = useQuery(async () =>
     fetchAll<Row>((from, to) => supabase.from('payments')
-      .select('*, supplier:suppliers(name), allocations:payment_allocations(amount, invoice:invoices(invoice_number)), executor:profiles!payments_executed_by_fkey(full_name)')
+      .select('*, supplier:suppliers(name), allocations:payment_allocations(amount, invoice:invoices(invoice_number)), executor:profiles!p0_payments_actor_tenant_fk(full_name)')
       .order('paid_date', { ascending: false }).order('id').range(from, to)));
 
   useEffect(() => {
