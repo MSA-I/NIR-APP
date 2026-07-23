@@ -1,5 +1,5 @@
 -- P0 browser-write, trusted-server CRUD and reasoned-command regression harness. Run only against an isolated local
--- database after applying migrations through 0033_service_role_dml_restore.sql.
+-- database after applying migrations through 0035_reasoned_purchase_order_status.sql.
 \set ON_ERROR_STOP on
 
 begin;
@@ -97,7 +97,6 @@ select pg_temp.p0_acl_assert(
   and has_column_privilege('authenticated', 'public.suppliers', 'name', 'UPDATE')
   and has_column_privilege('authenticated', 'public.products', 'active', 'INSERT')
   and has_column_privilege('authenticated', 'public.products', 'name', 'UPDATE')
-  and has_column_privilege('authenticated', 'public.purchase_orders', 'status', 'UPDATE')
   and has_column_privilege('authenticated', 'public.exceptions', 'status', 'UPDATE')
   and has_column_privilege('authenticated', 'public.documents', 'storage_path', 'INSERT')
   and has_column_privilege('authenticated', 'public.documents', 'deleted_at', 'UPDATE')
@@ -117,6 +116,11 @@ select pg_temp.p0_acl_assert(
   and not has_any_column_privilege('authenticated', 'public.purchase_request_items', 'INSERT')
   and not has_any_column_privilege('authenticated', 'public.purchase_request_items', 'UPDATE')
   and not has_table_privilege('authenticated', 'public.purchase_request_items', 'DELETE')
+  and not has_column_privilege('authenticated', 'public.purchase_orders', 'status', 'UPDATE')
+  and not has_column_privilege('authenticated', 'public.purchase_orders', 'sent_at', 'UPDATE')
+  and not has_column_privilege('authenticated', 'public.purchase_orders', 'confirmed_at', 'UPDATE')
+  and not has_column_privilege('authenticated', 'public.purchase_orders', 'confirmation_note', 'UPDATE')
+  and not has_column_privilege('authenticated', 'public.purchase_orders', 'expected_date', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.purchase_orders', 'org_id', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.documents', 'storage_path', 'UPDATE')
   and not has_table_privilege('authenticated', 'public.suppliers', 'DELETE')
@@ -468,16 +472,27 @@ exception when sqlstate 'P0001' then
 end
 $$;
 
--- Normal non-sensitive order transitions remain direct. Cancellation is RPC-only.
-with changed as (
+-- Every order lifecycle transition is RPC-only and carries its audit reason atomically.
+do $$
+begin
   update public.purchase_orders
   set status = 'sent', sent_at = '2026-07-23 10:00:00+00'
-  where id = '53000000-0000-0000-0000-000000000001'
-  returning 1
-)
+  where id = '53000000-0000-0000-0000-000000000001';
+  raise exception 'expected direct purchase-order status denial';
+exception when insufficient_privilege then
+  null;
+end
+$$;
+
 select pg_temp.p0_acl_assert(
-  (select count(*) = 1 from changed),
-  'office normal purchase-order transition was blocked'
+  (public.transition_purchase_order_status(
+    '53000000-0000-0000-0000-000000000001',
+    'sent',
+    'supplier message sent',
+    null,
+    null
+  )->>'idempotent')::boolean = false,
+  'office purchase-order status RPC did not commit'
 );
 
 do $$
@@ -499,6 +514,20 @@ select pg_temp.p0_acl_assert(
 );
 
 reset role;
+select pg_temp.p0_acl_assert(
+  exists (
+    select 1 from public.audit_logs
+    where org_id = '13000000-0000-0000-0000-000000000001'
+      and entity_type = 'purchase_orders'
+      and entity_id = '53000000-0000-0000-0000-000000000001'
+      and action = 'purchase_order_status_changed'
+      and reason = 'supplier message sent'
+      and old_values ->> 'status' = 'ready'
+      and new_values ->> 'status' = 'sent'
+  ),
+  'purchase-order status change has no server-authored reasoned audit'
+);
+
 select pg_temp.p0_acl_assert(
   exists (
     select 1 from public.audit_logs

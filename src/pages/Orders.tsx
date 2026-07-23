@@ -9,7 +9,6 @@ import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, PageLoader, useToast, ConfirmDialog, Modal, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
 import { PO_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, todayISO } from '../lib/format';
-import { logAction } from '../lib/audit';
 import { sendOrderWhatsApp, orderWhatsAppLink } from '../lib/share';
 import { cancelOrderDraft } from '../lib/orderDrafts';
 import type { PurchaseOrder, PurchaseOrderItem, PoStatus } from '../lib/types';
@@ -229,14 +228,22 @@ export function OrderDetail() {
 
   const canWrite = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
 
-  async function setStatus(status: PoStatus, reason?: string, extra?: Record<string, unknown>): Promise<boolean> {
+  async function setStatus(
+    status: PoStatus,
+    reason: string,
+    confirmationNote: string | null = null,
+    expectedDate: string | null = null,
+  ): Promise<boolean> {
     if (!order) return false;
     setBusy(true);
-    const patch: Record<string, unknown> = { status, ...extra };
-    if (status === 'sent') patch.sent_at = new Date().toISOString();
-    const res = await supabase.from('purchase_orders').update(patch).eq('id', order.id);
+    const res = await supabase.rpc('transition_purchase_order_status', {
+      p_purchase_order_id: order.id,
+      p_target_status: status,
+      p_reason: reason,
+      p_confirmation_note: confirmationNote,
+      p_expected_date: expectedDate,
+    });
     if (res.error) { setBusy(false); toast(toHebrewError(res.error.message), 'error'); return false; }
-    await logAction({ orgId: order.org_id, action: `order_status:${status}`, entityType: 'purchase_orders', entityId: order.id, reason });
     setBusy(false);
     setConfirm(null);
     toast('הסטטוס עודכן');
@@ -258,7 +265,7 @@ export function OrderDetail() {
     void refetch();
   }
 
-  // The WhatsApp order-send flow (link building, wa.me open, mark-as-sent, audit log) lives in
+  // The WhatsApp order-send flow (link building, wa.me open and reasoned status command) lives in
   // lib/share.ts and is shared with the Orders list row actions.
   async function sendWhatsApp() {
     if (!order) return;
@@ -273,9 +280,9 @@ export function OrderDetail() {
   const total = order.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
   const underMin = order.supplier.min_order_amount != null && total < order.supplier.min_order_amount;
 
-  const transitions: { from: PoStatus[]; to: PoStatus; label: string; icon: typeof Send }[] = [
-    { from: ['draft'], to: 'ready', label: 'סימון כמוכנה', icon: CheckCircle2 },
-    { from: ['ready'], to: 'sent', label: 'סימון כנשלחה לספק', icon: Send },
+  const transitions: { from: PoStatus[]; to: PoStatus; label: string; reason: string; icon: typeof Send }[] = [
+    { from: ['draft'], to: 'ready', label: 'סימון כמוכנה', reason: 'סימון הזמנה כמוכנה', icon: CheckCircle2 },
+    { from: ['ready'], to: 'sent', label: 'סימון כנשלחה לספק', reason: 'שליחת הזמנה לספק', icon: Send },
   ];
   const waLink = orderWhatsAppLink(order, orgName);
 
@@ -291,7 +298,7 @@ export function OrderDetail() {
         </div>
         <div className="flex flex-wrap gap-2">
           {canWrite && transitions.filter((t) => t.from.includes(order.status)).map((t) => (
-            <button key={t.to} className="btn-primary" disabled={busy} onClick={() => void setStatus(t.to)}>
+            <button key={t.to} className="btn-primary" disabled={busy} onClick={() => void setStatus(t.to, t.reason)}>
               <t.icon size={15} /> {t.label}
             </button>
           ))}
@@ -387,11 +394,12 @@ export function OrderDetail() {
         <div className="flex justify-end gap-2 mt-5">
           <button className="btn-secondary" disabled={busy} onClick={() => setSupplierConfirmOpen(false)}>ביטול</button>
           <button className="btn-primary" disabled={busy} onClick={() => void (async () => {
-            const saved = await setStatus('confirmed', confirmNote || undefined, {
-              confirmed_at: new Date().toISOString(),
-              confirmation_note: confirmNote.trim() || null,
-              ...(confirmExpected ? { expected_date: confirmExpected } : {}),
-            });
+            const saved = await setStatus(
+              'confirmed',
+              'אישור ספק להזמנה',
+              confirmNote.trim() || null,
+              confirmExpected || null,
+            );
             if (saved) {
               setSupplierConfirmOpen(false);
               setConfirmNote('');

@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { logAction } from './audit';
 import { toHebrewError } from './errors';
 import { fmtDate, fmtMoneyExact } from './format';
 import { openExternalPopup } from './popup';
@@ -40,11 +39,9 @@ export function orderWhatsAppLink(order: WhatsAppOrder, orgName: string): string
 }
 
 /**
- * Opens WhatsApp with the order text, marks a draft/ready order as sent (sent_at stamped) and
- * logs `order_sent_whatsapp` — the flow OrderDetail always had, now shared with the Orders
- * list. Returns whether the status changed (the caller toasts + refetches) and a Hebrew error
- * when the status update failed — in that case the message WAS still opened, which is the
- * truth the caller should report.
+ * Opens WhatsApp with the order text and moves a draft/ready order to sent through the
+ * server-authored, reasoned status command. Returns whether the status changed and a Hebrew
+ * error when the command fails; the message was still opened in that case.
  */
 export async function sendOrderWhatsApp(order: WhatsAppOrder, orgName: string): Promise<{ opened: boolean; statusChanged: boolean; error?: string }> {
   const link = orderWhatsAppLink(order, orgName);
@@ -52,13 +49,15 @@ export async function sendOrderWhatsApp(order: WhatsAppOrder, orgName: string): 
   if (openExternalPopup(link) !== 'opened') {
     return { opened: false, statusChanged: false, error: 'הדפדפן חסם את חלון WhatsApp. יש לאפשר חלונות קופצים ולנסות שוב.' };
   }
-  void logAction({ orgId: order.org_id, action: 'order_sent_whatsapp', entityType: 'purchase_orders', entityId: order.id });
   if (order.status !== 'draft' && order.status !== 'ready') return { opened: true, statusChanged: false };
-  const res = await supabase.from('purchase_orders')
-    .update({ status: 'sent', sent_at: new Date().toISOString() })
-    .eq('id', order.id);
+  const res = await supabase.rpc('transition_purchase_order_status', {
+    p_purchase_order_id: order.id,
+    p_target_status: 'sent',
+    p_reason: 'שליחת הזמנה לספק',
+    p_confirmation_note: null,
+    p_expected_date: null,
+  });
   if (res.error) return { opened: true, statusChanged: false, error: toHebrewError(res.error.message) };
-  await logAction({ orgId: order.org_id, action: 'order_status:sent', entityType: 'purchase_orders', entityId: order.id });
   return { opened: true, statusChanged: true };
 }
 

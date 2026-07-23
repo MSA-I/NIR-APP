@@ -1,5 +1,5 @@
 -- P1 regression harness. Run only against an isolated local database after applying all
--- project migrations through 0028, including the forward guard-safety replacement in 0027.
+-- project migrations through 0035, including the reasoned purchase-order status command.
 \set ON_ERROR_STOP on
 
 begin;
@@ -144,15 +144,23 @@ insert into invoices (
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
 
--- The shared guard must inspect only fields that exist on the active trigger table.
+-- Routine order status changes use the reasoned command; protected receipt quantities still
+-- exercise the shared table-safe guard below.
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000002', true);
-update purchase_orders
-set status = 'sent', sent_at = '2026-07-23 09:00:00+00'
-where id = '70000000-0000-0000-0000-000000000002';
 select pg_temp.p1_assert(
-  (select status = 'sent' and sent_at = '2026-07-23 09:00:00+00'
+  (public.transition_purchase_order_status(
+    '70000000-0000-0000-0000-000000000002',
+    'sent',
+    'P1 supplier message sent',
+    null,
+    null
+  )->>'idempotent')::boolean = false,
+  'office ready-to-sent command did not commit'
+);
+select pg_temp.p1_assert(
+  (select status = 'sent' and sent_at is not null
    from purchase_orders where id = '70000000-0000-0000-0000-000000000002'),
-  'office ready-to-sent transition failed through the table-safe guard'
+  'office ready-to-sent command did not stamp sent_at'
 );
 do $$
 begin
@@ -174,10 +182,12 @@ select pg_temp.p1_assert(
     select 1 from audit_logs
     where entity_type = 'purchase_orders'
       and entity_id = '70000000-0000-0000-0000-000000000002'
-      and action = 'update'
+      and action = 'purchase_order_status_changed'
+      and reason = 'P1 supplier message sent'
+      and old_values ->> 'status' = 'ready'
       and new_values ->> 'status' = 'sent'
   ),
-  'ready-to-sent transition did not create server-authored audit'
+  'ready-to-sent command did not create a reasoned server-authored audit'
 );
 
 -- Invoice: full commit, invalid rollback, exact retry, transition validation and tenant guard.
