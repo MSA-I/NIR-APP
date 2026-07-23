@@ -721,6 +721,16 @@ select pg_temp.p1_assert(
 reset role;
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000002', true);
 set local role authenticated;
+do $$
+begin
+  perform transition_credit_request(
+    '65000000-0000-0000-0000-000000000004', 'closed', 'office attempt'
+  );
+  raise exception 'expected office credit transition rejection';
+exception when sqlstate '42501' then
+  if sqlerrm not like '%credit_request_transition_not_authorized%' then raise; end if;
+end
+$$;
 select pg_temp.p1_assert(
   (invoice_financial_check_signals('60000000-0000-0000-0000-000000000002')->>'bank_match_exists')::boolean,
   'office invoice signal lost the confirmed direct bank match'

@@ -1215,7 +1215,7 @@ begin
   v_signature := 'public.transition_credit_request(uuid,credit_status,text)'::regprocedure;
   select pg_get_functiondef(v_signature::oid) into v_definition;
   v_old := 'v_role not in (''owner'', ''office'', ''kitchen'')';
-  v_new := 'v_role not in (''owner'', ''office'', ''kitchen'', ''accountant'')';
+  v_new := 'v_role not in (''owner'', ''kitchen'', ''accountant'')';
   if position(v_old in v_definition) = 0 then
     raise exception 'persona_role_rewrite_source_mismatch: %', v_signature;
   end if;
