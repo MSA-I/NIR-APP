@@ -1,5 +1,5 @@
 -- P1B supplier price submission regression harness. Run only against an isolated local
--- database after applying migrations through 0031_p1b_uploader_orphan_cleanup.sql.
+-- database after applying migrations through 0032_p1b_qualified_storage_paths.sql.
 \set ON_ERROR_STOP on
 
 begin;
@@ -803,11 +803,76 @@ reset role;
 select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
+select pg_temp.p1b_assert(
+  auth.uid() = '21000000-0000-0000-0000-000000000001',
+  'owner Storage fixture has the wrong auth.uid'
+);
+select pg_temp.p1b_assert(
+  auth_org() = '11000000-0000-0000-0000-000000000001',
+  'owner Storage fixture has the wrong auth_org'
+);
+select pg_temp.p1b_assert(
+  auth_role() = 'owner',
+  'owner Storage fixture has the wrong auth_role'
+);
+select pg_temp.p1b_assert(
+  has_table_privilege('authenticated', 'public.suppliers', 'select'),
+  'authenticated role lacks supplier visibility required by the Storage policy'
+);
+select pg_temp.p1b_assert(
+  exists (
+    select 1 from suppliers
+    where org_id = auth_org()
+      and id = '31000000-0000-0000-0000-000000000002'
+      and deleted_at is null
+  ),
+  'owner cannot see the active target supplier required by the Storage policy'
+);
+select pg_temp.p1b_assert(
+  array_length(storage.foldername(
+    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/63000000-0000-4000-8000-000000000001/owner-submit.csv'
+  ), 1) = 4,
+  'owner Storage path does not contain four folders'
+);
+select pg_temp.p1b_assert(
+  (storage.foldername(
+    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/63000000-0000-4000-8000-000000000001/owner-submit.csv'
+  ))[1] = auth_org()::text
+  and (storage.foldername(
+    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/63000000-0000-4000-8000-000000000001/owner-submit.csv'
+  ))[2] = 'price-submissions'
+  and (storage.foldername(
+    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/63000000-0000-4000-8000-000000000001/owner-submit.csv'
+  ))[3] = '31000000-0000-0000-0000-000000000002',
+  'owner Storage path tenant, bucket folder or supplier folder is invalid'
+);
+select pg_temp.p1b_assert(
+  (storage.foldername(
+    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/63000000-0000-4000-8000-000000000001/owner-submit.csv'
+  ))[4] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+  'owner Storage submission folder is not a valid UUID'
+);
+select pg_temp.p1b_assert(
+  auth.uid() is not null
+  and lower('{"mimetype":"text/csv","size":100}'::jsonb ->> 'mimetype') = 'text/csv',
+  'owner Storage owner or MIME predicate is invalid'
+);
 insert into storage.objects (bucket_id, name, owner, metadata) values (
   'price-submissions',
   '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/63000000-0000-4000-8000-000000000001/owner-submit.csv',
   auth.uid(), '{"mimetype":"text/csv","size":100}'::jsonb
 );
+do $$
+begin
+  insert into storage.objects (bucket_id, name, owner, metadata) values (
+    'price-submissions',
+    '11000000-0000-0000-0000-000000000002/price-submissions/31000000-0000-0000-0000-000000000003/63000000-0000-4000-8000-000000000003/owner-cross-tenant.csv',
+    auth.uid(), '{"mimetype":"text/csv","size":100}'::jsonb
+  );
+  raise exception 'expected owner cross-tenant Storage insert rejection';
+exception when insufficient_privilege then null;
+end
+$$;
 reset role;
 select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000002', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -817,6 +882,17 @@ insert into storage.objects (bucket_id, name, owner, metadata) values (
   '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/63000000-0000-4000-8000-000000000002/office-submit.csv',
   auth.uid(), '{"mimetype":"text/csv","size":100}'::jsonb
 );
+do $$
+begin
+  insert into storage.objects (bucket_id, name, owner, metadata) values (
+    'price-submissions',
+    '11000000-0000-0000-0000-000000000002/price-submissions/31000000-0000-0000-0000-000000000003/63000000-0000-4000-8000-000000000004/office-cross-tenant.csv',
+    auth.uid(), '{"mimetype":"text/csv","size":100}'::jsonb
+  );
+  raise exception 'expected office cross-tenant Storage insert rejection';
+exception when insufficient_privilege then null;
+end
+$$;
 reset role;
 select set_config('request.jwt.claim.role', 'service_role', true);
 set local role service_role;
