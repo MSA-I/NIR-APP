@@ -72,7 +72,7 @@ async function scanDuplicateInvoices(): Promise<Alert | null> {
     severity: 'critical',
     title: `${dupes} מספרי חשבונית מופיעים יותר מפעם אחת`,
     detail: 'אותו ספק, אותו מספר חשבונית — חשד לחיוב כפול',
-    to: '/invoices',
+    to: '/invoices?attention=duplicates',
   };
 }
 
@@ -89,7 +89,7 @@ async function scanPriceIncreases(): Promise<Alert | null> {
     severity: 'warning',
     title: `${raised} מחירים עלו ב-${PRICE_INCREASE_WINDOW_DAYS} הימים האחרונים`,
     detail: 'לפי המחירון. מה שנגבה בפועל בחשבונית אינו נמדד — לחשבונית אין שורות פריטים',
-    to: '/prices',
+    to: '/prices?increases=1',
   };
 }
 
@@ -122,7 +122,7 @@ async function scanInvoicesWithoutOrder(): Promise<Alert | null> {
     severity: 'info',
     title: `${orphans} חשבוניות ללא הזמנת רכש מקושרת`,
     detail: 'רכישה ישירה יכולה להיות כזו כדין — שווה לוודא שלא נשמט קישור',
-    to: '/invoices',
+    to: '/invoices?attention=without-order',
   };
 }
 
@@ -154,7 +154,7 @@ async function scanPaymentsDueSoon(): Promise<Alert | null> {
       ? `${late} דרישות תשלום עברו את מועד הפירעון`
       : `${total} דרישות תשלום לפירעון תוך ${DUE_SOON_DAYS} ימים`,
     detail: 'מכסה רק דרישות תשלום שהוזן להן תאריך. לחשבוניות אין מועד פירעון במערכת',
-    to: '/payment-requests',
+    to: '/payment-requests?status=active&due=soon',
   };
 }
 

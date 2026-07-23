@@ -10,7 +10,7 @@ import { DataTable, StatusBadge, useToast, Modal, ConfirmDialog, ErrorNote, Note
 import { CheckList } from './Invoices';
 import { runPaymentRequestChecks, type CheckResult } from '../lib/checks';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
-import { fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
+import { addCalendarDays, fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
 import type { PaymentRequest, PaymentRequestStatus, Supplier } from '../lib/types';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { paymentRequestCheckFingerprint } from '../lib/checkFingerprint';
@@ -35,8 +35,10 @@ export default function PaymentRequests() {
   const [dueFilter, setDueFilter] = useParamState('due');
   const [manualCreateOpen, setManualCreateOpen] = useState(false);
   const presetInvoiceId = params.get('new');
+  const idFilter = params.get('id');
   const createOpen = manualCreateOpen || !!presetInvoiceId;
   const [selected, setSelected] = useState<Row | null>(null);
+  const autoOpenedId = useRef<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Row | null>(null);
   const [busyCancel, setBusyCancel] = useState(false);
 
@@ -54,13 +56,22 @@ export default function PaymentRequests() {
       .select('*, supplier:suppliers(name), approver:profiles!p0_pr_approved_actor_tenant_fk(full_name)')
       .order('created_at', { ascending: false }).order('id').range(from, to)));
 
+  useEffect(() => {
+    if (!idFilter || !data || autoOpenedId.current === idFilter) return;
+    const match = data.find((request) => request.id === idFilter);
+    if (match) { autoOpenedId.current = idFilter; setSelected(match); }
+  }, [idFilter, data]);
+
   const today = todayISO();  // local calendar day; due_date is a plain date, string compare is correct
+  const dueSoon = addCalendarDays(today, 7);
   const rows = (data ?? []).filter((r) => {
+    if (idFilter) return r.id === idFilter;
     const active = !['matched', 'cancelled', 'executed'].includes(r.status);
     const statusOk = statusFilter === 'all' ? true : statusFilter === 'active' ? active : r.status === statusFilter;
     const dueOk = !dueFilter ? true
       : dueFilter === 'today' ? active && r.due_date === today
       : dueFilter === 'overdue' ? active && !!r.due_date && r.due_date < today
+      : dueFilter === 'soon' ? ['draft', 'pending_approval', 'approved', 'sent_for_execution'].includes(r.status) && !!r.due_date && r.due_date <= dueSoon
       : true;
     return statusOk && dueOk;
   });
@@ -127,6 +138,15 @@ export default function PaymentRequests() {
         ]}
         toolbar={
           <>
+            {idFilter && (
+              <button className="btn-ghost text-sm text-action" onClick={() => {
+                setParams((current) => {
+                  const next = new URLSearchParams(current);
+                  next.delete('id');
+                  return next;
+                }, { replace: true });
+              }}>הצג את כל הדרישות</button>
+            )}
             <select className="input w-auto!" aria-label="סינון דרישות תשלום לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="active">דרישות פעילות</option>
               <option value="all">הכל</option>
@@ -136,6 +156,7 @@ export default function PaymentRequests() {
               <option value="">כל מועדי היעד</option>
               <option value="today">יעד היום</option>
               <option value="overdue">באיחור</option>
+              <option value="soon">עד 7 ימים, כולל איחורים</option>
             </select>
           </>
         } />

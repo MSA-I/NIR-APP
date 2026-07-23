@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Upload, Landmark, Link2, AlertTriangle, EyeOff, Loader2, CheckCircle2, Unlink } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
@@ -42,8 +42,11 @@ export default function Bank() {
   const { profile, org } = useAuth();
   const [statusFilter, setStatusFilter] = useParamState('status');
   const [monthFilter, setMonthFilter] = useParamState('month');
+  const [idFilter, setIdFilter] = useParamState('id');
   const [importOpen, setImportOpen] = useState(false);
   const [selected, setSelected] = useState<TxRow | null>(null);
+  const autoOpenedId = useRef<string | null>(null);
+  const canOperateBank = !!profile && ['owner', 'accountant'].includes(profile.role);
 
   const { data, loading, fetching, error, refetch } = useQuery(async () => {
     const txs = await fetchAll<TxRow>((from, to) => supabase.from('bank_transactions')
@@ -53,10 +56,16 @@ export default function Bank() {
     return { txs, imports };
   });
 
-  const rows = (data?.txs ?? []).filter((t) =>
-    (!monthFilter || t.tx_date.startsWith(monthFilter)) &&
-    (!statusFilter || (statusFilter === 'attention' ? ['unmatched', 'suggested'].includes(t.status) : t.status === statusFilter)));
-  const canOperateBank = !!profile && ['owner', 'accountant'].includes(profile.role);
+  useEffect(() => {
+    if (!idFilter || !canOperateBank || !data || autoOpenedId.current === idFilter) return;
+    const match = data.txs.find((transaction) => transaction.id === idFilter);
+    if (match) { autoOpenedId.current = idFilter; setSelected(match); }
+  }, [idFilter, canOperateBank, data]);
+
+  const rows = (data?.txs ?? []).filter((t) => idFilter
+    ? t.id === idFilter
+    : (!monthFilter || t.tx_date.startsWith(monthFilter)) &&
+      (!statusFilter || (statusFilter === 'attention' ? ['unmatched', 'suggested'].includes(t.status) : t.status === statusFilter)));
 
   const columns: Column<TxRow>[] = [
     { key: 'date', header: 'תאריך', sortValue: (r) => r.tx_date, render: (r) => fmtDate(r.tx_date) },
@@ -92,6 +101,7 @@ export default function Bank() {
         onRowClick={canOperateBank ? (r) => setSelected(r) : undefined}
         toolbar={
           <>
+            {idFilter && <button className="btn-ghost text-sm text-action" onClick={() => setIdFilter('')}>הצג את כל התנועות</button>}
             <select className="input w-auto!" aria-label="סינון תנועות בנק לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">כל הסטטוסים</option>
               <option value="attention">דורשות התאמה</option>

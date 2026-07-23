@@ -14,7 +14,14 @@ import type { Invoice } from '../lib/types';
 import type { CheckResult } from '../lib/checks';
 import { fetchAll } from '../lib/supabasePaging';
 
-export type InvoiceRow = Invoice & { supplier: { name: string }; balance?: number };
+export type InvoiceRow = Invoice & {
+  supplier: { name: string };
+  order_links: { order_id: string }[];
+  balance?: number;
+};
+
+const invoiceDuplicateKey = (invoice: InvoiceRow) =>
+  `${invoice.supplier_id}\u0000${invoice.invoice_number.trim().toLowerCase()}`;
 
 /** Shared renderer for automatic-check results. */
 export function CheckList({ checks }: { checks: CheckResult[] }) {
@@ -48,13 +55,14 @@ export function InvoicesList() {
   const [payFilter, setPayFilter] = useParamState('pay');
   const [exportFilter, setExportFilter] = useParamState('export');
   const [monthFilter, setMonthFilter] = useParamState('month');
+  const [attentionFilter, setAttentionFilter] = useParamState('attention');
   const [deleteTarget, setDeleteTarget] = useState<InvoiceRow | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
   const isProcurementManager = profile?.role === 'office';
 
   const { data, loading, fetching, error, refetch } = useQuery(async () => {
     const invoices = await fetchAll<InvoiceRow>((from, to) => supabase.from('invoices')
-      .select('*, supplier:suppliers(name)').is('deleted_at', null)
+      .select('*, supplier:suppliers(name), order_links:invoice_order_links(order_id)').is('deleted_at', null)
       .order('invoice_date', { ascending: false }).order('id').range(from, to));
     const balances = isProcurementManager ? [] : await fetchAll<{ invoice_id: string; balance: number }>((from, to) => supabase.from('invoice_balances')
       .select('invoice_id, balance').order('invoice_id').range(from, to));
@@ -66,12 +74,24 @@ export function InvoicesList() {
   const isOffice = profile && ['owner', 'office'].includes(profile.role);
   const canViewExport = profile?.role !== 'office';
 
+  const duplicateKeys = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const invoice of data ?? []) {
+      const key = invoiceDuplicateKey(invoice);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return new Set([...counts].filter(([, count]) => count > 1).map(([key]) => key));
+  }, [data]);
+
   const rows = useMemo(() => (data ?? []).filter((r) =>
     (!reviewFilter || r.review_status === reviewFilter) &&
     (!payFilter || (payFilter === 'open' ? r.payment_status !== 'paid' : r.payment_status === payFilter)) &&
     (!canViewExport || !exportFilter || r.export_status === exportFilter) &&
-    (!monthFilter || r.invoice_date.startsWith(monthFilter))),
-  [data, reviewFilter, payFilter, exportFilter, monthFilter, canViewExport]);
+    (!monthFilter || r.invoice_date.startsWith(monthFilter)) &&
+    (!attentionFilter ||
+      (attentionFilter === 'duplicates' && duplicateKeys.has(invoiceDuplicateKey(r))) ||
+      (attentionFilter === 'without-order' && r.order_links.length === 0))),
+  [data, reviewFilter, payFilter, exportFilter, monthFilter, attentionFilter, duplicateKeys, canViewExport]);
 
   // The server owns the reference check, row lock, soft delete and reasoned audit in one
   // transaction. A client-side preflight would be incomplete under role-scoped RLS.
@@ -132,6 +152,11 @@ export function InvoicesList() {
         ]}
         toolbar={
           <>
+            <select className="input w-auto!" aria-label="סינון חשבוניות לפי צורך בטיפול" value={attentionFilter} onChange={(e) => setAttentionFilter(e.target.value)}>
+              <option value="">כל החשבוניות</option>
+              <option value="duplicates">חשד לכפילות</option>
+              <option value="without-order">ללא הזמנת רכש</option>
+            </select>
             <select className="input w-auto!" aria-label="סינון חשבוניות לפי סטטוס בדיקה" value={reviewFilter} onChange={(e) => setReviewFilter(e.target.value)}>
               <option value="">כל סטטוסי הבדיקה</option>
               {Object.entries(INVOICE_REVIEW_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}

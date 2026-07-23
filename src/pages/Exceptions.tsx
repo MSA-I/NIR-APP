@@ -8,11 +8,49 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
 import { EXCEPTION_TYPE, EXCEPTION_STATUS, SEVERITY } from '../lib/status';
-import { fmtDate } from '../lib/format';
+import { fmtDate, fmtMoneyExact } from '../lib/format';
 import { logAction } from '../lib/audit';
 import type { ExceptionRow, ExceptionStatus } from '../lib/types';
 
 type Row = ExceptionRow & { supplier: { name: string } | null };
+
+const DETAIL_LABELS: Record<string, string> = {
+  evidence: 'ראיה',
+  description: 'תיאור',
+  date: 'תאריך',
+  amount: 'סכום',
+  expected: 'צפוי',
+  actual: 'בפועל',
+  difference: 'פער',
+  reason: 'סיבה',
+  notes: 'הערה',
+  invoice_number: 'מספר חשבונית',
+  payment_number: 'מספר תשלום',
+};
+
+function businessDetailLines(details: Record<string, unknown> | null): string[] {
+  if (!details) return [];
+  return Object.entries(details).flatMap(([key, raw]) => {
+    if (raw == null || key === 'code' || key === 'checks') return [];
+    const values = Array.isArray(raw)
+      ? raw
+      : typeof raw === 'object'
+        ? Object.values(raw as Record<string, unknown>)
+        : [raw];
+    const label = DETAIL_LABELS[key] ?? 'פרט נוסף';
+    return values.flatMap((value) => {
+      if (!['string', 'number', 'boolean'].includes(typeof value)) return [];
+      const text = key === 'amount' && typeof value === 'number'
+        ? fmtMoneyExact(value)
+        : key === 'date' && typeof value === 'string'
+          ? fmtDate(value)
+          : typeof value === 'boolean'
+            ? (value ? 'כן' : 'לא')
+            : String(value);
+      return `${label}: ${text}`;
+    });
+  });
+}
 
 export default function Exceptions() {
   const navigate = useNavigate();
@@ -134,17 +172,11 @@ function ExceptionDetail({ row, canWrite, onClose, onChanged, onNavigate }: {
 
   const links: { label: string; path: string }[] = [];
   if (row.invoice_id) links.push({ label: 'לחשבונית', path: `/invoices/${row.invoice_id}` });
-  if (row.payment_request_id) links.push({ label: 'לדרישות תשלום', path: '/payment-requests' });
-  if (row.bank_transaction_id) links.push({ label: 'להתאמות בנק', path: '/bank' });
+  if (row.payment_request_id) links.push({ label: 'לדרישת התשלום', path: `/payment-requests?id=${row.payment_request_id}` });
+  if (row.bank_transaction_id) links.push({ label: 'לתנועת הבנק', path: `/bank?id=${row.bank_transaction_id}` });
   if (row.supplier_id) links.push({ label: 'לכרטיס הספק', path: `/suppliers/${row.supplier_id}` });
 
-  const detailLines: string[] = [];
-  if (row.details) {
-    for (const [k, v] of Object.entries(row.details)) {
-      if (Array.isArray(v)) detailLines.push(...v.map(String));
-      else if (k !== 'checks') detailLines.push(`${k}: ${String(v)}`);
-    }
-  }
+  const detailLines = businessDetailLines(row.details);
 
   return (
     <Modal open onClose={onClose} title={EXCEPTION_TYPE[row.type]} busy={busy} statusMessage={busy ? 'מעדכן את החריג' : undefined}>

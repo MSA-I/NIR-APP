@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Minus, PackageCheck, Save, CheckCircle2, FileText, Camera } from 'lucide-react';
+import { Plus, Minus, PackageCheck, Save, CheckCircle2, FileText, Camera, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { PageLoader, useToast, StatusBadge, EmptyState, ErrorNote, SkeletonList } from '../components/ui';
 import { DocumentList } from '../components/FileUpload';
 import { PO_STATUS, RECEIPT_LINE_STATUS, type Tone } from '../lib/status';
-import { fmtDate } from '../lib/format';
+import { fmtDate, todayISO } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import type { PurchaseOrder, PurchaseOrderItem, ReceiptLineStatus } from '../lib/types';
 
@@ -15,9 +15,45 @@ type OrderForReceiving = PurchaseOrder & {
   items: (PurchaseOrderItem & { product: { name: string; unit: string } })[];
 };
 
+function needsReceivingAttention(order: OrderForReceiving, today: string): boolean {
+  return order.status === 'partial' || (!!order.expected_date && order.expected_date <= today);
+}
+
+function ReceivingOrderCard({ order, today, onOpen }: {
+  order: OrderForReceiving;
+  today: string;
+  onOpen: () => void;
+}) {
+  const attentionReason = order.status === 'partial'
+    ? 'קבלה חלקית'
+    : order.expected_date && order.expected_date < today
+      ? 'מועד האספקה עבר'
+      : order.expected_date === today
+        ? 'אספקה היום'
+        : null;
+
+  return (
+    <button onClick={onOpen}
+      className="card w-full text-start p-4 hover:border-action-line active:scale-[.99] transition-all focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-semibold text-ink text-base">{order.supplier.name}</div>
+        <StatusBadge meta={PO_STATUS[order.status]} />
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-ink-muted">
+        <span className="num">הזמנה #{order.number}</span>
+        <span className="num">{order.items.length} פריטים</span>
+        {order.expected_date && <span>אספקה: {fmtDate(order.expected_date)}</span>}
+      </div>
+      {attentionReason && <div className="mt-2 text-xs font-medium text-await-fg">{attentionReason}</div>}
+    </button>
+  );
+}
+
 /* ============ List of orders awaiting receiving — mobile-first cards ============ */
 export function ReceivingList() {
   const navigate = useNavigate();
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const { data, loading, error } = useQuery(async () =>
     unwrap(await supabase.from('purchase_orders')
       .select('*, supplier:suppliers(id, name), items:purchase_order_items(id, qty, received_qty)')
@@ -27,28 +63,75 @@ export function ReceivingList() {
   if (loading) return <SkeletonList />;
   if (error) return <ErrorNote message={error} />;
 
+  const today = todayISO();
+  const query = search.trim().toLowerCase();
+  const filtered = (data ?? []).filter((order) =>
+    (!query || order.supplier.name.toLowerCase().includes(query) || String(order.number).includes(query)) &&
+    (statusFilter === 'all'
+      || (statusFilter === 'attention' && needsReceivingAttention(order, today))
+      || order.status === statusFilter));
+  const attention = filtered.filter((order) => needsReceivingAttention(order, today));
+  const remaining = filtered.filter((order) => !needsReceivingAttention(order, today));
+  const focusedQueue = !query && statusFilter === 'all';
+
   return (
     <div className="space-y-4 max-w-2xl">
       <h1 className="page-title">קבלת סחורה</h1>
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <div>
+          <label className="sr-only" htmlFor="receiving-search">חיפוש הזמנה לקבלה</label>
+          <input id="receiving-search" type="search" className="input min-h-11"
+            placeholder="חיפוש לפי ספק או מספר הזמנה"
+            value={search} onChange={(event) => setSearch(event.target.value)} />
+        </div>
+        <select className="input min-h-11 sm:w-auto!" aria-label="סינון הזמנות לקבלה"
+          value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          <option value="all">כל הסטטוסים</option>
+          <option value="attention">דורש פעולה</option>
+          <option value="sent">נשלחה</option>
+          <option value="confirmed">אושרה</option>
+          <option value="partial">התקבלה חלקית</option>
+        </select>
+      </div>
+
       {!data?.length ? (
         <div className="card"><EmptyState title="אין הזמנות שממתינות לקבלה" subtitle="הזמנות בסטטוס נשלחה / אושרה יופיעו כאן" /></div>
-      ) : (
-        <div className="space-y-3">
-          {data.map((o) => (
-            <button key={o.id} onClick={() => navigate(`/receiving/${o.id}`)}
-              className="card w-full text-start p-4 hover:border-action-line active:scale-[.99] transition-all">
-              <div className="flex items-center justify-between">
-                <div className="font-semibold text-ink text-base">{o.supplier.name}</div>
-                <StatusBadge meta={PO_STATUS[o.status]} />
-              </div>
-              <div className="flex items-center gap-4 mt-2 text-sm text-ink-muted">
-                <span className="num">הזמנה #{o.number}</span>
-                <span className="num">{o.items.length} פריטים</span>
-                {o.expected_date && <span>אספקה: {fmtDate(o.expected_date)}</span>}
-              </div>
-            </button>
-          ))}
+      ) : !filtered.length ? (
+        <div className="card"><EmptyState title="לא נמצאו הזמנות" subtitle="אפשר לשנות את החיפוש או הסינון" /></div>
+      ) : !focusedQueue ? (
+        <div className="space-y-3" aria-label="תוצאות קבלת סחורה">
+          {filtered.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} onOpen={() => navigate(`/receiving/${order.id}`)} />)}
         </div>
+      ) : (
+        <>
+          <section className="space-y-3" aria-labelledby="receiving-attention-title">
+            <div className="flex items-center justify-between gap-2">
+              <h2 id="receiving-attention-title" className="section-title">דורש פעולה</h2>
+              <span className="badge-await num">{attention.length}</span>
+            </div>
+            {attention.length
+              ? attention.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} onOpen={() => navigate(`/receiving/${order.id}`)} />)
+              : <div className="card card-pad text-sm text-ink-soft">אין קבלות שדורשות פעולה כרגע.</div>}
+          </section>
+
+          {remaining.length > 0 && (
+            <>
+              <details className="group sm:hidden">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-2 text-sm font-medium text-action hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+                  הצג הכל ({filtered.length})
+                  <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="space-y-3 pt-2">
+                  {remaining.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} onOpen={() => navigate(`/receiving/${order.id}`)} />)}
+                </div>
+              </details>
+              <section className="hidden space-y-3 sm:block" aria-labelledby="receiving-other-title">
+                <h2 id="receiving-other-title" className="section-title">הזמנות נוספות</h2>
+                {remaining.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} onOpen={() => navigate(`/receiving/${order.id}`)} />)}
+              </section>
+            </>
+          )}
+        </>
       )}
     </div>
   );
@@ -63,7 +146,6 @@ export function ReceiveOrder() {
   const toast = useToast();
   const [lines, setLines] = useState<Record<string, LineState>>({});
   const [openCredits, setOpenCredits] = useState(true);
-  const [reason, setReason] = useState('');
   const [newReceiptId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [doneReceiptId, setDoneReceiptId] = useState<string | null>(null);
@@ -115,7 +197,6 @@ export function ReceiveOrder() {
 
   async function save(complete: boolean) {
     if (!order) return;
-    if (!reason.trim()) { toast('נדרשת סיבה לשמירת הקבלה', 'error'); return; }
     setBusy(true);
     try {
       const result = unwrap(await supabase.rpc('save_goods_receipt', {
@@ -130,7 +211,7 @@ export function ReceiveOrder() {
           status: lines[item.id]?.status ?? 'full',
           notes: lines[item.id]?.notes.trim() || null,
         })),
-        p_reason: reason.trim(),
+        p_reason: complete ? 'השלמת קבלת סחורה' : 'שמירת ביניים של קבלת סחורה',
       })) as { receipt_id: string };
 
       const receiptId = result.receipt_id;
@@ -255,8 +336,6 @@ export function ReceiveOrder() {
         פתיחת דרישות זיכוי אוטומטית לחוסרי כמות בלבד
       </label>
       <p className="px-1 text-xs text-ink-muted">פריטים פגומים או שהוחזרו אינם נספרים כאספקה תקינה, והטיפול הכספי בהם נשאר ידני עד להכרעה עסקית.</p>
-      <div><label className="label" htmlFor="receiving-reason">סיבת השמירה / ההשלמה *</label><input id="receiving-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
-
       {/* sticky action bar */}
       <div className="phone-taskbar fixed inset-x-0 lg:ms-60 bg-surface border-t border-line p-3 flex gap-2 z-30">
         {busy && <span className="sr-only" role="status" aria-live="polite">שומר את הקבלה</span>}
