@@ -105,6 +105,7 @@ export default function Reports() {
     m.set(p.supplier.name, (m.get(p.supplier.name) ?? 0) + p.amount);
     return m;
   }, new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]);
+  const metricLinkClass = 'card card-pad block transition-colors hover:border-action-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
 
   return (
     <div className="space-y-4">
@@ -142,14 +143,14 @@ export default function Reports() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Link className="card card-pad block hover:border-action-line transition-colors" to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">חשבוניות</div><div className="text-lg font-bold num">{data.invoices.length}</div></Link>
-          <Link className="card card-pad block hover:border-action-line transition-colors" to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.invoices)}</div></Link>
-          <Link className="card card-pad block hover:border-action-line transition-colors" to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.vat)}</div></Link>
-          <Link className="card card-pad block hover:border-action-line transition-colors" to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(totals.paid)}</div></Link>
-          <Link className="card card-pad block hover:border-action-line transition-colors" to={`/invoices?month=${month}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`text-lg font-bold num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Link>
-          <Link className="card card-pad block hover:border-action-line transition-colors" to={`/bank?month=${month}&status=attention`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`text-lg font-bold num ${totals.unmatchedBank ? 'text-alert-solid' : ''}`}>{totals.unmatchedBank}</div></Link>
-          <Link className="card card-pad block hover:border-action-line transition-colors" to={`/credits?month=${month}&status=all`}><div className="text-xs text-ink-muted">זיכויים בחודש</div><div className="text-lg font-bold num">{data.credits.length}</div></Link>
-          <Link className="card card-pad block hover:border-action-line transition-colors" to="/exceptions?status=open"><div className="text-xs text-ink-muted">חריגים פתוחים</div><div className={`text-lg font-bold num ${data.exceptions.length ? 'text-await-fg' : ''}`}>{data.exceptions.length}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">חשבוניות</div><div className="text-lg font-bold num">{data.invoices.length}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.invoices)}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.vat)}</div></Link>
+          <Link className={metricLinkClass} to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(totals.paid)}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${month}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`text-lg font-bold num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Link>
+          <Link className={metricLinkClass} to={`/bank?month=${month}&status=attention`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`text-lg font-bold num ${totals.unmatchedBank ? 'text-alert-solid' : ''}`}>{totals.unmatchedBank}</div></Link>
+          <Link className={metricLinkClass} to={`/credits?month=${month}&status=all`}><div className="text-xs text-ink-muted">זיכויים בחודש</div><div className="text-lg font-bold num">{data.credits.length}</div></Link>
+          <Link className={metricLinkClass} to="/exceptions?status=open"><div className="text-xs text-ink-muted">חריגים פתוחים</div><div className={`text-lg font-bold num ${data.exceptions.length ? 'text-await-fg' : ''}`}>{data.exceptions.length}</div></Link>
         </div>
 
         {data.exceptions.length > 0 && (
@@ -165,7 +166,32 @@ export default function Reports() {
 
         <div className="card overflow-hidden">
           <div className="px-4 py-3 border-b border-line-soft section-title">חשבוניות {fmtMonth(`${month}-01`)}</div>
-          <div className="report-table-wrap overflow-x-auto">
+          <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="חשבוניות בדוח">
+            {data.invoices.map((i) => (
+              <li key={i.id} className="p-4">
+                <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="break-words font-medium text-ink-body">{i.supplier.name}</div>
+                    <div className="mt-0.5 text-xs text-ink-muted"><span className="num" dir="ltr">{i.invoice_number}</span> · {fmtDate(i.invoice_date)}</div>
+                  </div>
+                  <div className="num shrink-0 font-semibold text-ink-body">{fmtMoneyExact(i.total_amount)}</div>
+                </div>
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div><dt className="text-xs text-ink-muted">לפני מע״מ</dt><dd className="num mt-0.5">{fmtMoneyExact(i.amount_before_vat)}</dd></div>
+                  <div><dt className="text-xs text-ink-muted">מע״מ</dt><dd className="num mt-0.5">{fmtMoneyExact(i.vat_amount)}</dd></div>
+                </dl>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <StatusBadge meta={INVOICE_REVIEW_STATUS[i.review_status]} />
+                  <StatusBadge meta={INVOICE_PAYMENT_STATUS[i.payment_status]} />
+                </div>
+              </li>
+            ))}
+            {!data.invoices.length && <li className="p-4 text-center text-sm text-ink-muted">אין חשבוניות בחודש זה</li>}
+            <li className="flex min-h-11 flex-wrap items-center justify-between gap-2 bg-surface-sunken px-4 py-3 font-bold">
+              <span>סה״כ</span><span className="num">{fmtMoneyExact(totals.invoices)}</span>
+            </li>
+          </ul>
+          <div className="report-table-wrap hidden overflow-x-auto xl:block print:block">
             <table className="report-invoices w-full">
               <thead className="bg-surface-sunken"><tr>
                 <th scope="col" className="th">ספק</th><th scope="col" className="th">מס׳</th><th scope="col" className="th">תאריך</th>
@@ -200,7 +226,16 @@ export default function Reports() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-line-soft section-title">תשלומים לפי ספק</div>
-            <div className="report-table-wrap overflow-x-auto">
+            <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="תשלומים לפי ספק">
+              {paymentsBySupplier.map(([name, sum]) => (
+                <li key={name} className="flex min-h-11 min-w-0 items-center justify-between gap-3 px-4 py-3">
+                  <span className="min-w-0 break-words text-sm">{name}</span>
+                  <span className="num shrink-0 font-medium">{fmtMoneyExact(sum)}</span>
+                </li>
+              ))}
+              {!paymentsBySupplier.length && <li className="p-4 text-center text-sm text-ink-muted">אין תשלומים בחודש זה</li>}
+            </ul>
+            <div className="report-table-wrap hidden overflow-x-auto xl:block print:block">
             <table className="w-full">
               <thead className="bg-surface-sunken"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סכום ששולם</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
@@ -215,7 +250,22 @@ export default function Reports() {
 
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-line-soft section-title">זיכויים</div>
-            <div className="report-table-wrap overflow-x-auto">
+            <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="זיכויים בדוח">
+              {data.credits.map((c) => (
+                <li key={c.id} className="p-4">
+                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="break-words font-medium text-ink-body">{c.supplier.name}</div>
+                      <div className="mt-0.5 break-words text-xs text-ink-muted">{CREDIT_REASON[c.reason]}</div>
+                    </div>
+                    <span className="num shrink-0 font-medium">{fmtMoneyExact(c.amount)}</span>
+                  </div>
+                  <div className="mt-3"><StatusBadge meta={CREDIT_STATUS[c.status]} /></div>
+                </li>
+              ))}
+              {!data.credits.length && <li className="p-4 text-center text-sm text-ink-muted">אין זיכויים בחודש זה</li>}
+            </ul>
+            <div className="report-table-wrap hidden overflow-x-auto xl:block print:block">
             <table className="w-full">
               <thead className="bg-surface-sunken"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סיבה</th><th scope="col" className="th">סכום</th><th scope="col" className="th">סטטוס</th></tr></thead>
               <tbody className="divide-y divide-line-soft">

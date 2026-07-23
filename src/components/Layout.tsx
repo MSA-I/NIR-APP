@@ -167,7 +167,7 @@ export default function Layout() {
   }
 
   const linkCls = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
+    `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
       isActive ? 'bg-shell-ink text-shell font-medium' : 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
     }`;
 
@@ -200,7 +200,7 @@ export default function Layout() {
       <div className="px-4 py-3 border-t border-shell-ink/10">
         <div className="text-sm text-shell-ink font-medium">{profile?.full_name}</div>
         <div className="text-xs text-shell-ink-dim mb-2">{role ? roleLabels[role] : ''}</div>
-        <button className="flex min-h-11 items-center gap-1.5 text-xs text-shell-ink-dim hover:text-shell-ink" onClick={() => void handleSignOut()}>
+        <button className="flex min-h-11 items-center gap-1.5 rounded-lg text-xs text-shell-ink-dim hover:text-shell-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => void handleSignOut()}>
           <LogOut size={13} /> התנתקות
         </button>
       </div>
@@ -222,7 +222,7 @@ export default function Layout() {
       {/* Mobile top bar */}
       <header className="phone-safe-header lg:hidden sticky top-0 z-40 bg-shell text-shell-ink border-b border-shell-ink/10 flex min-w-0 items-center no-print">
         <button ref={menuButtonRef} type="button"
-          className="flex items-center justify-center min-w-11 min-h-11"
+          className="flex items-center justify-center min-w-11 min-h-11 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           onClick={() => setMobileOpen(true)} aria-label="פתיחת תפריט" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
           <Menu size={22} />
         </button>
@@ -230,7 +230,7 @@ export default function Layout() {
         <div className="flex items-center gap-1">
           <NotificationBell onShell />
           {canSearch && (
-            <button className="flex items-center justify-center min-w-11 min-h-11" onClick={() => setSearchOpen(true)}
+            <button className="flex items-center justify-center min-w-11 min-h-11 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
               aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={21} /></button>
           )}
         </div>
@@ -240,7 +240,7 @@ export default function Layout() {
         <div className="lg:hidden fixed inset-0 z-50 bg-shell/60 no-print" onClick={() => closeMobileMenu()}>
           <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label="תפריט ראשי"
             tabIndex={-1} className="phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-shell border-e border-shell-ink/10 focus:outline-none" onClick={(e) => e.stopPropagation()}>
-            <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 text-shell-ink-dim" onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={20} /></button>
+            <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 rounded-lg text-shell-ink-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={20} /></button>
             {sidebar}
           </aside>
         </div>
@@ -257,7 +257,7 @@ export default function Layout() {
       )}
       {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring. */}
       <main id="main" tabIndex={-1}
-        className="phone-safe-main min-w-0 lg:ms-60 py-5 pb-20 md:pb-8 focus:outline-none">
+        className="phone-safe-main min-w-0 lg:ms-60 py-5 pb-24 focus:outline-none">
         {/* max-w column centred (mx-auto) in the space beside the sidebar — otherwise a wide
             viewport strands all content on the start side in RTL, leaving a dead zone on the
             end side. keyed by path so each screen change re-triggers the fade (section 11). */}

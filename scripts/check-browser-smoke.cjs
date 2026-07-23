@@ -151,6 +151,48 @@ async function auditAccessibility(page, scope) {
   return audit;
 }
 
+async function assertMinTouchSize(locator, scope) {
+  const sizes = await locator.evaluateAll((nodes) => nodes
+    .filter((node) => {
+      const rect = node.getBoundingClientRect();
+      const style = getComputedStyle(node);
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+    })
+    .map((node) => {
+      const rect = node.getBoundingClientRect();
+      return { name: node.getAttribute('aria-label') || node.textContent?.trim() || node.tagName, width: rect.width, height: rect.height };
+    }));
+  assert(sizes.length > 0, `${scope}: no visible touch targets found`);
+  assert(sizes.every(({ width, height }) => width >= 44 && height >= 44), `${scope}: target below 44px ${JSON.stringify(sizes)}`);
+}
+
+async function assertVisibleFocus(locator, scope) {
+  const style = await locator.evaluate((node) => {
+    const computed = getComputedStyle(node);
+    return { outlineStyle: computed.outlineStyle, outlineWidth: computed.outlineWidth, boxShadow: computed.boxShadow };
+  });
+  assert((style.outlineStyle !== 'none' && style.outlineWidth !== '0px') || style.boxShadow !== 'none',
+    `${scope}: focused control has no visible focus indicator ${JSON.stringify(style)}`);
+}
+
+async function assertFabDoesNotCoverMain(page, scope) {
+  await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+  await page.waitForTimeout(50);
+  const overlaps = await page.evaluate(() => {
+    const fab = document.querySelector('.speed-dial-trigger')?.getBoundingClientRect();
+    if (!fab) return ['missing FAB'];
+    return [...document.querySelectorAll('#main a[href], #main button, #main input, #main select, #main textarea')]
+      .filter((node) => {
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+          && rect.left < fab.right && rect.right > fab.left && rect.top < fab.bottom && rect.bottom > fab.top;
+      })
+      .map((node) => node.getAttribute('aria-label') || node.textContent?.replace(/\s+/g, ' ').trim() || node.tagName);
+  });
+  assert.deepEqual(overlaps, [], `${scope}: FAB covers main action or information target ${JSON.stringify(overlaps)}`);
+}
+
 async function assertKeyContrast(page) {
   const results = await page.evaluate(() => {
     const parse = (value) => {
@@ -208,7 +250,8 @@ async function assertKeyContrast(page) {
 
 async function roleAndViewportMatrix(browser) {
   const viewports = [
-    ['320', 320, 720], ['390', 390, 844], ['768', 768, 1024], ['1024', 1024, 768],
+    ['320', 320, 720], ['360', 360, 800], ['390', 390, 844], ['430', 430, 932],
+    ['768', 768, 1024], ['1024', 1024, 768], ['1440', 1440, 900],
   ];
   for (const [role, expectedHome] of Object.entries(homes)) {
     const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
@@ -217,6 +260,9 @@ async function roleAndViewportMatrix(browser) {
     try {
       await login(page, role);
       assert.equal(new URL(page.url()).pathname, expectedHome, `${role}: wrong home route`);
+      const quickActionsTrigger = page.getByRole('button', { name: 'פתיחת פעולות מהירות' });
+      assert.equal(await quickActionsTrigger.count(), ['owner', 'office', 'kitchen'].includes(role) ? 1 : 0,
+        `${role}: wrong quick-actions trigger visibility`);
       for (const [label, width, height] of viewports) {
         await page.setViewportSize({ width, height });
         await page.waitForTimeout(100);
@@ -254,6 +300,157 @@ async function roleAndViewportMatrix(browser) {
   }
 }
 
+async function speedDialContract(browser) {
+  const roleLabels = {
+    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+    office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+    kitchen: ['הזמנה חדשה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+  };
+  const roleTargets = {
+    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
+    office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
+    kitchen: ['/orders/new?fresh=1', null, '/receiving', '/invoices/new'],
+  };
+
+  for (const [role, expectedLabels] of Object.entries(roleLabels)) {
+    const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    captureConsole(page, `speed-dial:${role}`);
+    try {
+      await login(page, role);
+      assert.equal(await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).count(), 1,
+        `${role}: speed-dial trigger is not uniquely named`);
+      const trigger = page.locator('.speed-dial-trigger');
+      assert.equal(await trigger.count(), 1, `${role}: speed-dial trigger is not unique`);
+      assert.equal(await trigger.getAttribute('aria-expanded'), 'false', `${role}: trigger starts expanded`);
+      await trigger.click();
+      assert.equal(await trigger.getAttribute('aria-expanded'), 'true', `${role}: trigger did not expose expanded state`);
+      assert.equal(await trigger.getAttribute('aria-label'), 'סגירת פעולות מהירות', `${role}: open trigger does not expose its close action`);
+      assert.equal(await trigger.getAttribute('aria-controls'), 'global-quick-actions', `${role}: trigger does not identify its menu`);
+      const menu = page.getByRole('menu', { name: 'פעולות מהירות' });
+      await menu.waitFor();
+      const items = menu.getByRole('menuitem');
+      assert.deepEqual((await items.allTextContents()).map((label) => label.trim()), expectedLabels,
+        `${role}: wrong speed-dial labels or order`);
+      const targets = await items.evaluateAll((nodes) => nodes.map((node) => {
+        const href = node.getAttribute('href');
+        if (!href) return null;
+        const url = new URL(href, window.location.origin);
+        return `${url.pathname}${url.search}`;
+      }));
+      assert.deepEqual(targets, roleTargets[role], `${role}: wrong speed-dial destinations or order`);
+      assert(await items.first().evaluate((node) => document.activeElement === node), `${role}: first action did not receive focus`);
+
+      if (role === 'owner') {
+        await page.waitForTimeout(220);
+        await page.screenshot({ path: path.join(outDir, 'speed-dial-open-390.png') });
+        report.screenshots.push('speed-dial-open-390.png');
+        await page.keyboard.press('ArrowDown');
+        assert(await items.nth(1).evaluate((node) => document.activeElement === node), 'ArrowDown did not advance in speed-dial');
+        await page.keyboard.press('ArrowUp');
+        assert(await items.first().evaluate((node) => document.activeElement === node), 'ArrowUp did not move back in speed-dial');
+        await page.keyboard.press('End');
+        assert(await items.last().evaluate((node) => document.activeElement === node), 'End did not focus the last speed-dial action');
+        await page.keyboard.press('Home');
+        assert(await items.first().evaluate((node) => document.activeElement === node), 'Home did not focus the first speed-dial action');
+
+        const triggerSize = await trigger.evaluate((node) => {
+          const rect = node.getBoundingClientRect();
+          return { width: rect.width, height: rect.height };
+        });
+        assert(triggerSize.width >= 44 && triggerSize.height >= 44, `speed-dial trigger below 44px: ${JSON.stringify(triggerSize)}`);
+        const sizes = await items.evaluateAll((nodes) => nodes.map((node) => {
+          const rect = node.getBoundingClientRect();
+          return { width: rect.width, height: rect.height };
+        }));
+        assert(sizes.every(({ width, height }) => width >= 44 && height >= 44), `speed-dial target below 44px: ${JSON.stringify(sizes)}`);
+        const textLayout = await items.evaluateAll((nodes) => nodes.map((node) => ({
+          whiteSpace: getComputedStyle(node).whiteSpace,
+          scrollWidth: node.scrollWidth,
+          clientWidth: node.clientWidth,
+        })));
+        assert(textLayout.every(({ whiteSpace, scrollWidth, clientWidth }) => whiteSpace === 'nowrap' && scrollWidth <= clientWidth + 1),
+          `speed-dial label wraps or overflows: ${JSON.stringify(textLayout)}`);
+
+        for (const [width, height] of [[320, 720], [360, 800], [390, 844], [430, 932], [768, 1024], [1024, 768], [1440, 900]]) {
+          await page.setViewportSize({ width, height });
+          const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+          assert(overflow <= 1, `speed-dial/${width}: horizontal overflow ${overflow}px`);
+        }
+        await page.waitForTimeout(100);
+        await page.screenshot({ path: path.join(outDir, 'speed-dial-open-1440.png') });
+        report.screenshots.push('speed-dial-open-1440.png');
+
+        await page.keyboard.press('Escape');
+        await menu.waitFor({ state: 'hidden' });
+        assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'Escape did not collapse speed-dial');
+        assert.equal(await trigger.getAttribute('aria-label'), 'פתיחת פעולות מהירות', 'Escape did not restore the trigger action name');
+        assert(await trigger.evaluate((node) => document.activeElement === node), 'Escape did not restore speed-dial trigger focus');
+
+        await trigger.click();
+        await page.locator('#main h1').first().click();
+        await menu.waitFor({ state: 'hidden' });
+        assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'outside press did not collapse speed-dial');
+
+        for (const [width, height] of [[390, 844], [1024, 768]]) {
+          await page.setViewportSize({ width, height });
+          await assertFabDoesNotCoverMain(page, `dashboard FAB/${width}`);
+        }
+
+        await page.goto(`${baseURL}/receiving`);
+        await settle(page);
+        const receivingTrigger = page.locator('.speed-dial-trigger');
+        await receivingTrigger.click();
+        await page.getByRole('menuitem', { name: 'מרכז הבקרה' }).click();
+        await page.waitForURL((url) => url.pathname === '/dashboard');
+        assert.equal(await page.getByRole('menu').count(), 0, 'speed-dial stayed open after link navigation');
+        assert.equal(await receivingTrigger.getAttribute('aria-expanded'), 'false', 'link navigation did not reset expanded state');
+
+        const dashboardTrigger = page.locator('.speed-dial-trigger');
+        await dashboardTrigger.click();
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('menuitem', { name: 'צילום מסמך' }).click();
+        await chooser;
+        assert.equal(await dashboardTrigger.getAttribute('aria-expanded'), 'false', 'camera action did not collapse speed-dial');
+
+        for (const route of ['/orders/new', '/invoices/new']) {
+          await page.goto(`${baseURL}${route}`);
+          await settle(page);
+          assert.equal(await page.locator('.speed-dial-trigger').count(), 0, `${route}: speed-dial must be hidden`);
+        }
+      } else {
+        await page.keyboard.press('Escape');
+      }
+    } finally {
+      await closeContext(context);
+    }
+  }
+
+  const reduced = await browser.newContext({
+    locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 390, height: 844 },
+  });
+  const page = await reduced.newPage();
+  captureConsole(page, 'speed-dial:reduced-motion');
+  try {
+    await login(page, 'owner');
+    await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).click();
+    const moving = page.locator('[role="menuitem"], button[aria-expanded="true"] svg');
+    const motion = await moving.evaluateAll((nodes) => nodes.map((node) => {
+      const style = getComputedStyle(node);
+      return { animationDuration: style.animationDuration, transitionDuration: style.transitionDuration, transitionProperty: style.transitionProperty };
+    }));
+    const milliseconds = (value) => Math.max(...value.split(',').map((part) => {
+      const duration = Number.parseFloat(part) || 0;
+      return part.trim().endsWith('ms') ? duration : duration * 1000;
+    }));
+    assert(motion.every((entry) => milliseconds(entry.animationDuration) <= 20
+      && (!/(transform|translate|rotate|scale)/.test(entry.transitionProperty) || milliseconds(entry.transitionDuration) <= 20)),
+    `reduced-motion leaves speed-dial movement enabled: ${JSON.stringify(motion)}`);
+  } finally {
+    await closeContext(reduced);
+  }
+}
+
 async function dashboardAndDialogs(browser) {
   const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
@@ -265,17 +462,10 @@ async function dashboardAndDialogs(browser) {
     const firstDataHeading = page.locator('#main .dash-enter h2').first();
     await firstDataHeading.waitFor();
     assert((await firstDataHeading.innerText()).includes('דורש טיפול'), 'dashboard does not begin with the attention zone');
-    assert.equal(await page.getByText('פעולות מהירות', { exact: true }).count(), 0, 'Quick Actions returned');
-    assert.equal(await page.getByRole('button', { name: 'צילום מסמך' }).count(), 1, 'dashboard FAB missing');
+    assert.equal(await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).count(), 1, 'dashboard speed-dial missing');
     const contrast = await assertKeyContrast(page);
     await page.screenshot({ path: path.join(outDir, 'dashboard-1440.png'), fullPage: true });
     report.screenshots.push('dashboard-1440.png');
-
-    for (const route of ['/orders/new', '/invoices/new']) {
-      await page.goto(`${baseURL}${route}`);
-      await settle(page);
-      assert.equal(await page.getByRole('button', { name: 'צילום מסמך' }).count(), 0, `${route}: FAB must be hidden`);
-    }
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${baseURL}/dashboard`);
@@ -287,6 +477,7 @@ async function dashboardAndDialogs(browser) {
     await menuButton.click();
     const drawer = page.getByRole('dialog', { name: 'תפריט ראשי' });
     await drawer.waitFor();
+    await assertMinTouchSize(drawer.locator('a[href], button'), 'mobile drawer');
     assert(await drawer.evaluate((node) => node.contains(document.activeElement)), 'drawer did not take focus');
     for (let index = 0; index < 30; index += 1) await page.keyboard.press('Tab');
     assert(await drawer.evaluate((node) => node.contains(document.activeElement)), 'drawer focus trap leaked');
@@ -297,6 +488,7 @@ async function dashboardAndDialogs(browser) {
     const menuButtonHandle = await menuButton.elementHandle();
     await page.waitForFunction((node) => document.activeElement === node, menuButtonHandle, { timeout: 3_000 });
     assert(await menuButton.evaluate((node) => document.activeElement === node), 'drawer did not restore focus');
+    await assertVisibleFocus(menuButton, 'mobile drawer trigger');
 
     await page.goto(`${baseURL}/suppliers`);
     await settle(page);
@@ -346,6 +538,8 @@ async function tableKeyboardAndSearch(browser) {
     await trigger.click();
     const menu = page.getByRole('menu').first();
     await menu.waitFor();
+    await assertMinTouchSize(trigger, 'ActionMenu trigger');
+    await assertMinTouchSize(menu.getByRole('menuitem'), 'ActionMenu items');
     const rect = await menu.boundingBox();
     assert(rect, 'action menu has no bounds');
     assert(rect.x >= 0 && rect.y >= 0 && rect.x + rect.width <= 320.5 && rect.y + rect.height <= 250.5,
@@ -357,6 +551,7 @@ async function tableKeyboardAndSearch(browser) {
     assert.notEqual(endItem, homeItem, 'Home/End did not move inside the action menu');
     await page.keyboard.press('Escape');
     assert(await trigger.evaluate((node) => document.activeElement === node), 'action menu did not restore focus');
+    await assertVisibleFocus(trigger, 'ActionMenu trigger');
 
     await page.setViewportSize({ width: 390, height: 844 });
     const searchButton = page.getByRole('button', { name: 'חיפוש', exact: true });
@@ -365,6 +560,8 @@ async function tableKeyboardAndSearch(browser) {
     await searchDialog.waitFor();
     const searchInput = searchDialog.getByRole('combobox', { name: 'חיפוש כללי' });
     await searchInput.fill('7702');
+    await assertMinTouchSize(searchInput, 'mobile global search');
+    await assertVisibleFocus(searchInput, 'mobile global search');
     const option = searchDialog.getByRole('option').first();
     await option.waitFor({ timeout: 20_000 });
     await option.click();
@@ -397,6 +594,11 @@ async function receivingAccessibility(browser) {
     return route.fulfill({ status: 200, headers: jsonHeaders, json: detail ? order : [order] });
   });
   await context.route('**/rest/v1/goods_receipts?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: null }));
+  const receiptReasons = [];
+  await context.route('**/rest/v1/rpc/save_goods_receipt', (route) => {
+    receiptReasons.push(route.request().postDataJSON().p_reason);
+    return route.fulfill({ status: 200, headers: jsonHeaders, json: { receipt_id: 'a0000000-0000-4000-8000-000000000001' } });
+  });
   const page = await context.newPage();
   captureConsole(page, 'receiving-accessibility');
   try {
@@ -405,7 +607,8 @@ async function receivingAccessibility(browser) {
     await settle(page);
     await page.getByText('ספק בדיקת נגישות').first().click();
     await settle(page);
-    assert.equal(await page.getByRole('button', { name: 'צילום מסמך' }).count(), 0, 'receiving detail FAB must be hidden');
+    assert.equal(await page.locator('.speed-dial-trigger').count(), 0, 'receiving detail speed-dial must be hidden');
+    assert.equal(await page.getByText('סיבת השמירה / ההשלמה').count(), 0, 'routine receiving must not ask for a reason');
     await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור מוצר בדיקת נגישות' }).waitFor();
     await page.getByRole('button', { name: 'מלא עבור מוצר בדיקת נגישות' }).waitFor();
     assert.equal(await page.locator('button[aria-pressed]').count(), 5, 'receiving status controls lost pressed state');
@@ -413,6 +616,54 @@ async function receivingAccessibility(browser) {
     report.screenshots.push('receiving-390.png');
     const audit = await auditAccessibility(page, 'receiving-detail');
     assert.deepEqual(audit.controls, [], 'receiving detail contains an unlabeled control');
+    await page.getByRole('button', { name: 'שמירת ביניים' }).click();
+    await page.waitForURL((url) => url.pathname === '/receiving');
+    assert.equal(receiptReasons[0], 'שמירת ביניים של קבלת סחורה', 'draft receipt audit reason was not system-authored');
+    await page.goto(`${baseURL}/receiving/p4-ui-order`);
+    await settle(page);
+    await page.getByRole('button', { name: /סיום קבלה/ }).click();
+    await page.getByRole('heading', { name: 'הקבלה נשמרה!' }).waitFor();
+    assert.equal(receiptReasons[1], 'השלמת קבלת סחורה', 'completed receipt audit reason was not system-authored');
+  } finally {
+    await closeContext(context);
+  }
+}
+
+async function orderSupplierComparison(browser) {
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  captureConsole(page, 'order-supplier-comparison');
+  try {
+    await login(page, 'kitchen');
+    await page.goto(`${baseURL}/orders/new?fresh=1`);
+    await settle(page);
+    await page.getByRole('button', { name: 'בחירת מלפפונים' }).click();
+    await page.getByRole('button', { name: 'המשך לספקים' }).click();
+    const supplierSelect = page.getByRole('combobox', { name: 'ספק עבור מלפפונים' });
+    await supplierSelect.selectOption('aa000000-0000-4000-8000-000000000002');
+
+    const comparison = page.locator('section[aria-labelledby="supplier-comparison-title"]');
+    await comparison.getByText('משק ירוק').waitFor();
+    await comparison.getByText('חוות השדה').waitFor();
+    await comparison.getByText(/בחירה בזול תחסוך/).waitFor();
+    await auditAccessibility(page, 'order-supplier-comparison-1440');
+    await page.screenshot({ path: path.join(outDir, 'order-supplier-comparison-1440.png'), fullPage: true });
+    report.screenshots.push('order-supplier-comparison-1440.png');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await comparison.scrollIntoViewIfNeeded();
+    const width = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+    assert.ok(width.scroll <= width.client, `order comparison overflowed at 390px: ${width.scroll} > ${width.client}`);
+    await auditAccessibility(page, 'order-supplier-comparison-390');
+    await page.screenshot({ path: path.join(outDir, 'order-supplier-comparison-390.png'), fullPage: true });
+    report.screenshots.push('order-supplier-comparison-390.png');
+
+    await page.getByRole('button', { name: 'סקירה ואישור' }).click();
+    const review = page.getByRole('dialog', { name: 'סיכום ההזמנה' });
+    await review.waitFor();
+    assert.equal(await review.getByText('סיבת אישור ההזמנה').count(), 0, 'routine order approval must not ask for a reason');
+    await review.getByRole('button', { name: 'אשר ושלח הזמנה' }).click();
+    await page.getByRole('dialog', { name: 'שליחת הזמנות לספקים' }).waitFor({ timeout: 25_000 });
   } finally {
     await closeContext(context);
   }
@@ -636,6 +887,33 @@ async function reportsAndPdf(browser) {
     const headings = (await table.locator('thead th').allTextContents()).map((value) => value.trim());
     assert.equal(headings.length, 8, `monthly print report has ${headings.length}/8 columns`);
     assert((await table.locator('tfoot').innerText()).trim(), 'monthly print report has no totals row');
+    for (const [width, height] of [[320, 720], [390, 844], [768, 1024], [1024, 768]]) {
+      await page.setViewportSize({ width, height });
+      await page.waitForTimeout(50);
+      const layout = await page.evaluate(() => {
+        const visible = (node) => {
+          const rect = node.getBoundingClientRect();
+          const style = getComputedStyle(node);
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        };
+        return {
+          documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          mobileCardGroups: [...document.querySelectorAll('.report-mobile-cards')].filter(visible).length,
+          visibleTableWraps: [...document.querySelectorAll('.report-table-wrap')].filter(visible).map((node) => ({
+            clientWidth: node.clientWidth, scrollWidth: node.scrollWidth,
+          })),
+        };
+      });
+      assert(layout.documentOverflow <= 1, `reports/${width}: page overflow ${layout.documentOverflow}px`);
+      assert.equal(layout.mobileCardGroups, 3, `reports/${width}: mobile card groups missing`);
+      assert.deepEqual(layout.visibleTableWraps, [], `reports/${width}: internal scrolling table remained visible`);
+      await assertMinTouchSize(page.locator('.monthly-report a[href]'), `report metrics/${width}`);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: path.join(outDir, 'reports-mobile-390.png'), fullPage: true });
+    report.screenshots.push('reports-mobile-390.png');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await table.waitFor({ state: 'visible' });
     await page.emulateMedia({ media: 'print' });
     await page.screenshot({ path: path.join(outDir, 'reports-print.png'), fullPage: true });
     report.screenshots.push('reports-print.png');
@@ -764,6 +1042,7 @@ async function adminState(browser) {
 }
 
 async function run(name, check) {
+  if (process.env.QUALITY_ONLY && !name.includes(process.env.QUALITY_ONLY)) return;
   try {
     await check();
     report.passed.push(name);
@@ -778,9 +1057,11 @@ async function run(name, check) {
   const browser = await chromium.launch({ headless: true, executablePath: browserPath });
   try {
     await run('role and viewport matrix', () => roleAndViewportMatrix(browser));
-    await run('dashboard, FAB and dialogs', () => dashboardAndDialogs(browser));
+    await run('speed-dial roles, keyboard, camera and responsive contract', () => speedDialContract(browser));
+    await run('dashboard, speed-dial and dialogs', () => dashboardAndDialogs(browser));
     await run('DataTable, ActionMenu, route focus and mobile search', () => tableKeyboardAndSearch(browser));
     await run('receiving contextual names and accessibility', () => receivingAccessibility(browser));
+    await run('order supplier savings and reason-free approval', () => orderSupplierComparison(browser));
     await run('payment-request names and modal stack', () => paymentRequestNamesAndModalStack(browser));
     await run('bank contextual names and accessibility', () => bankContextualNames(browser));
     await run('partial Alerts never all-clear or mark read', () => alertsPartialFailure(browser));

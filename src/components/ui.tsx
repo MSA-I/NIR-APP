@@ -691,7 +691,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
                     return (
                       <th key={c.key} scope="col" className="th" aria-sort={ariaSort}>
                         {c.sortValue ? (
-                          <button type="button" className="inline-flex items-center gap-1 hover:text-ink-mid cursor-pointer"
+                          <button type="button" className="inline-flex min-h-11 items-center gap-1 hover:text-ink-mid cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
                             onClick={() => setSort((s) => s?.key === c.key ? { key: c.key, dir: s.dir === 1 ? -1 : 1 } : { key: c.key, dir: 1 })}>
                             {c.header}{active && (sort?.dir === 1 ? ' ↑' : ' ↓')}
                           </button>

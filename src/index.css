@@ -132,7 +132,7 @@ body {
 /* Tailwind v4: custom classes can @apply only real utilities, so the shared
    btn/badge bases are registered with @utility and the variants apply them. */
 @utility btn {
-  @apply inline-flex min-h-11 sm:min-h-0 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-[color,background-color,border-color,box-shadow,translate] duration-150 ease-out cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:translate-y-px disabled:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-[color,background-color,border-color,box-shadow,translate] duration-150 ease-out cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:translate-y-px disabled:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed;
 }
 @utility badge {
   @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap;
@@ -156,7 +156,7 @@ body {
   .btn-ghost { @apply btn text-ink-soft hover:bg-canvas; }
 
   /* 16px on phones prevents Safari from zooming the whole page when an input receives focus. */
-  .input { @apply w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-base sm:text-sm text-ink-body placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-focus focus:border-focus disabled:bg-surface-sunken; }
+  .input { @apply min-h-11 w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-base sm:text-sm text-ink-body placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-focus focus:border-focus disabled:bg-surface-sunken; }
   .label { @apply block text-sm font-medium text-ink-soft mb-1; }
 
   /* Shared interaction patterns — every page hover/link points here, never at a raw hue. */
@@ -235,6 +235,31 @@ body {
   inset-block-end: max(1rem, env(safe-area-inset-bottom));
 }
 
+.speed-dial-menu {
+  inset-inline-end: 0;
+  inset-block-end: calc(100% + 0.75rem);
+  inline-size: max-content;
+  max-inline-size: min(18rem, calc(100vw - 2rem));
+  max-block-size: calc(100dvh - 5.75rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@keyframes speed-dial-item-enter {
+  from { opacity: 0; translate: 0 0.375rem; }
+  to { opacity: 1; translate: none; }
+}
+
+.speed-dial-item {
+  min-block-size: 2.75rem;
+  max-inline-size: 100%;
+  animation: speed-dial-item-enter 140ms ease-out both;
+  animation-delay: calc(var(--speed-dial-index, 0) * 15ms);
+}
+
+.speed-dial-trigger-icon { transition: rotate 180ms ease-out; }
+.speed-dial-trigger[aria-expanded="true"] .speed-dial-trigger-icon { rotate: 45deg; }
+
 .phone-taskbar {
   inset-block-end: 0;
   padding-block-end: calc(0.75rem + env(safe-area-inset-bottom));
@@ -302,6 +327,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
   .animate-spin { animation-duration: 1.5s; }
+  .speed-dial-item { animation: none; }
+  .speed-dial-trigger-icon { transition: none; }
   .btn-primary, .btn-secondary, .btn-danger, .btn-ghost, .card-link-hover {
     transition-duration: 0.01ms !important;
   }
