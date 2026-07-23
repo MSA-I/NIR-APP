@@ -29,40 +29,73 @@ function Assert-ExitCode([string]$Label) {
   if ($LASTEXITCODE -ne 0) { throw "$Label failed with exit code $LASTEXITCODE." }
 }
 
-function Get-LocalSupabaseEnvironment {
-  $values = @{}
-  $previousPreference = $ErrorActionPreference
-  try {
-    # Supabase reports intentionally disabled local services on stderr even when status
-    # succeeds. PowerShell 5 turns that stream into a terminating NativeCommandError under
-    # ErrorAction=Stop, so decide by the native exit code instead.
-    $ErrorActionPreference = "Continue"
-    $raw = & supabase status -o env 2>$null
-    $statusExitCode = $LASTEXITCODE
-  }
-  finally {
-    $ErrorActionPreference = $previousPreference
-  }
-  if ($statusExitCode -ne 0) { return $null }
-  foreach ($line in $raw) {
-    if ($line -match '^([A-Z0-9_]+)=(.*)$') {
-      $values[$Matches[1]] = $Matches[2].Trim('"')
+function Get-LocalSupabaseEnvironment([int]$Attempts = 1) {
+  $required = @("API_URL", "ANON_KEY", "SERVICE_ROLE_KEY")
+  for ($attempt = 0; $attempt -lt $Attempts; $attempt++) {
+    $values = @{}
+    $previousPreference = $ErrorActionPreference
+    try {
+      # Supabase reports intentionally disabled local services on stderr even when status
+      # succeeds. PowerShell 5 turns that stream into a terminating NativeCommandError under
+      # ErrorAction=Stop, so decide by the native exit code instead.
+      $ErrorActionPreference = "Continue"
+      $raw = @(& supabase status -o env 2>$null)
+      $statusExitCode = $LASTEXITCODE
     }
-  }
-  foreach ($required in @("API_URL", "ANON_KEY", "SERVICE_ROLE_KEY")) {
-    if (-not $values.ContainsKey($required) -or -not $values[$required]) {
-      throw "Local Supabase did not report $required."
+    finally {
+      $ErrorActionPreference = $previousPreference
     }
+    if ($statusExitCode -eq 0) {
+      foreach ($line in $raw) {
+        if ($line -match '^([A-Z0-9_]+)=(.*)$') {
+          $values[$Matches[1]] = $Matches[2].Trim('"')
+        }
+      }
+      if ($values.ContainsKey("API_URL") -and $values.API_URL -ne $expectedApiUrl) {
+        throw "Refusing non-test Supabase URL: $($values.API_URL)"
+      }
+      $missing = @($required | Where-Object { -not $values.ContainsKey($_) -or -not $values[$_] })
+      if (-not $missing.Count) { return $values }
+    }
+    if ($attempt + 1 -lt $Attempts) { Start-Sleep -Milliseconds 250 }
   }
-  if ($values.API_URL -ne $expectedApiUrl) {
-    throw "Refusing non-test Supabase URL: $($values.API_URL)"
+  return $null
+}
+
+function Wait-LocalApiReady([hashtable]$Environment) {
+  $headers = @{
+    apikey = [string]$Environment.SERVICE_ROLE_KEY
+    Authorization = "Bearer $($Environment.SERVICE_ROLE_KEY)"
   }
-  return $values
+  $authStatus = 0
+  $restStatus = 0
+  for ($attempt = 0; $attempt -lt 80; $attempt++) {
+    try {
+      $authStatus = (Invoke-WebRequest -UseBasicParsing -Uri "$expectedApiUrl/auth/v1/health" `
+        -Headers $headers -TimeoutSec 2).StatusCode
+    } catch { $authStatus = -1 }
+    try {
+      $restStatus = (Invoke-WebRequest -UseBasicParsing `
+        -Uri "$expectedApiUrl/rest/v1/organizations?select=id&limit=0" `
+        -Headers $headers -TimeoutSec 2).StatusCode
+    } catch { $restStatus = -1 }
+    if ($authStatus -eq 200 -and $restStatus -eq 200) { return }
+    Start-Sleep -Milliseconds 250
+  }
+  throw "Local API readiness failed after reset (Auth=$authStatus, PostgREST=$restStatus)."
+}
+
+function Wait-LocalStackReady {
+  $environment = Get-LocalSupabaseEnvironment -Attempts 80
+  if (-not $environment) { throw "Local Supabase environment did not become ready." }
+  Wait-LocalApiReady $environment
+  return $environment
 }
 
 function Reset-LocalDatabase {
   & supabase db reset
   Assert-ExitCode "Local Supabase reset"
+  $script:localEnvironment = Wait-LocalStackReady
 }
 
 function Copy-SqlToDatabase([string]$RelativePath, [string]$ContainerPath) {
@@ -107,7 +140,7 @@ function Assert-PowerShellSyntax {
 }
 
 function New-DemoManifest([string]$Seed) {
-  $roles = @("owner", "kitchen", "office", "payer", "accountant")
+  $roles = @("owner", "kitchen", "office", "payer", "accountant", "supplier")
   $accounts = foreach ($role in $roles) {
     [ordered]@{
       email = "$role@demo.supplyflow.local"
@@ -223,9 +256,8 @@ try {
     }
     if ($startExit -ne 0) { throw "Unable to start the isolated local Supabase stack." }
     $startedSupabase = $true
-    $localEnvironment = Get-LocalSupabaseEnvironment
   }
-  if (-not $localEnvironment) { throw "The isolated local Supabase stack is unavailable." }
+  $localEnvironment = Wait-LocalStackReady
   $databaseWasUsed = $true
 
   Write-Gate "PowerShell syntax"
@@ -252,7 +284,7 @@ try {
       # the child's real exit code instead of letting PS 5 turn progress into an exception.
       $ErrorActionPreference = "Continue"
       $p0Output = @(& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "check-p0-security.ps1") `
-        -ResetLocalDatabase -ServePushFunction 2>&1)
+        -ResetLocalDatabase -KeepFixture -ServePushFunction 2>&1)
       $p0Exit = $LASTEXITCODE
     }
     finally {
@@ -275,6 +307,7 @@ try {
     }
     $upgradeOutput | ForEach-Object { Write-Output $_ }
     if ($upgradeExit -ne 0) { throw "P0 upgrade path failed with exit code $upgradeExit." }
+    $localEnvironment = Wait-LocalStackReady
 
     Invoke-Preflight
     Invoke-SqlTest "supabase\tests\p1_financial_commands.sql" "P1 financial commands, rollback and idempotency"
@@ -342,8 +375,8 @@ finally {
   }
   if ($databaseWasUsed) {
     Write-Gate "Final isolated database reset"
-    & supabase db reset
-    if ($LASTEXITCODE -ne 0) { Write-Warning "Final local database reset failed." }
+    try { Reset-LocalDatabase }
+    catch { Write-Warning "Final local database reset failed: $($_.Exception.Message)" }
   }
   if ($startedSupabase) {
     & supabase stop | Out-Null

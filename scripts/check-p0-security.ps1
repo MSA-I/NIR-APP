@@ -40,21 +40,35 @@ function Reset-TestDatabase {
 }
 
 function Get-LocalSupabaseEnvironment {
-  $values = @{}
-  foreach ($line in (& supabase status -o env)) {
-    if ($line -match '^([A-Z0-9_]+)=(.*)$') {
-      $values[$Matches[1]] = $Matches[2].Trim('"')
+  $required = @("API_URL", "ANON_KEY", "SERVICE_ROLE_KEY")
+  $missing = $required
+  $statusExitCode = -1
+  for ($attempt = 0; $attempt -lt 80; $attempt++) {
+    $values = @{}
+    $previousPreference = $ErrorActionPreference
+    try {
+      $ErrorActionPreference = "Continue"
+      $raw = @(& supabase status -o env 2>$null)
+      $statusExitCode = $LASTEXITCODE
     }
-  }
-  foreach ($required in @("API_URL", "ANON_KEY", "SERVICE_ROLE_KEY")) {
-    if (-not $values.ContainsKey($required) -or -not $values[$required]) {
-      throw "Local Supabase did not report $required."
+    finally {
+      $ErrorActionPreference = $previousPreference
     }
+    if ($statusExitCode -eq 0) {
+      foreach ($line in $raw) {
+        if ($line -match '^([A-Z0-9_]+)=(.*)$') {
+          $values[$Matches[1]] = $Matches[2].Trim('"')
+        }
+      }
+      if ($values.ContainsKey("API_URL") -and $values.API_URL -ne $apiUrl) {
+        throw "Refusing non-test API URL: $($values.API_URL)"
+      }
+      $missing = @($required | Where-Object { -not $values.ContainsKey($_) -or -not $values[$_] })
+      if (-not $missing.Count) { return $values }
+    }
+    Start-Sleep -Milliseconds 250
   }
-  if ($values.API_URL -ne $apiUrl) {
-    throw "Refusing non-test API URL: $($values.API_URL)"
-  }
-  return $values
+  throw "Local Supabase environment readiness timed out (status=$statusExitCode; missing=$($missing -join ','))."
 }
 
 function New-Id { return [guid]::NewGuid().Guid }
@@ -250,6 +264,24 @@ function Invoke-Rest {
   return Invoke-JsonRequest @args
 }
 
+function Wait-LocalApiReady([string]$ServiceKey) {
+  $headers = @{ apikey = $ServiceKey; Authorization = "Bearer $ServiceKey" }
+  $authStatus = 0
+  $restStatus = 0
+  for ($attempt = 0; $attempt -lt 80; $attempt++) {
+    try {
+      $authStatus = (Invoke-JsonRequest -Method Get -Uri "$apiUrl/auth/v1/health" -Headers $headers).Status
+    } catch { $authStatus = -1 }
+    try {
+      $restStatus = (Invoke-Rest -Method Get -Resource "organizations?select=id&limit=0" `
+        -ApiKey $ServiceKey -Token $ServiceKey).Status
+    } catch { $restStatus = -1 }
+    if ($authStatus -eq 200 -and $restStatus -eq 200) { return }
+    Start-Sleep -Milliseconds 250
+  }
+  throw "Local API readiness failed after reset (Auth=$authStatus, PostgREST=$restStatus)."
+}
+
 function Add-ServiceRow([string]$Table, [hashtable]$Row, [string]$ServiceKey) {
   $response = Invoke-Rest -Method Post -Resource $Table -ApiKey $ServiceKey -Token $ServiceKey `
     -Body $Row -Prefer "return=representation"
@@ -291,6 +323,7 @@ $environment = Get-LocalSupabaseEnvironment
 $anonKey = [string]$environment.ANON_KEY
 $serviceKey = [string]$environment.SERVICE_ROLE_KEY
 $pushServer = $null
+Wait-LocalApiReady $serviceKey
 
 try {
   $suffix = [guid]::NewGuid().ToString("N").Substring(0, 10)

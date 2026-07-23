@@ -39,7 +39,7 @@ begin
   end if;
 
   if (select count(*) from auth.users where email in
-      ('owner@demo.supplyflow.local','kitchen@demo.supplyflow.local','office@demo.supplyflow.local','payer@demo.supplyflow.local','accountant@demo.supplyflow.local')) < 5 then
+      ('owner@demo.supplyflow.local','kitchen@demo.supplyflow.local','office@demo.supplyflow.local','payer@demo.supplyflow.local','accountant@demo.supplyflow.local','supplier@demo.supplyflow.local')) < 6 then
     raise exception 'Demo auth users are missing. Run scripts/create-users.ps1 first.';
   end if;
 end $$;
@@ -104,6 +104,11 @@ insert into suppliers (id, org_id, name, tax_id, contact_name, phone, whatsapp, 
 ('aa000000-0000-4000-8000-000000000013', '11111111-1111-4111-8111-111111111111', 'אריזות הדרום', '512667788', 'סיגל אברהם', '08-6778899', '052-6778899', 'sigal@arizot-hadarom.demo', 'באר שבע', '{1,4}', '13:00', 350, 'שוטף + 45', null, 'משלוח חינם מעל 800 ₪', 'active'),
 ('aa000000-0000-4000-8000-000000000014', '11111111-1111-4111-8111-111111111111', 'שף ציוד מקצועי', '515889900', 'רון אשכנזי', '03-5667788', '053-5667788', 'ron@chef-tziud.demo', 'פתח תקווה', '{}', null, null, 'מזומן / אשראי', null, 'ספק חדש — ממתין לאישור הנהלה', 'pending'),
 ('aa000000-0000-4000-8000-000000000015', '11111111-1111-4111-8111-111111111111', 'תבליני הגליל', '511556677', 'סמיר חורי', '04-6990011', '050-6990011', 'samir@tavliney-hagalil.demo', 'שפרעם', '{0,3}', '14:00', 200, 'שוטף + 30', 'בנק ערבי ישראלי 34 | סניף 785 | חשבון 667788', 'תבלינים, קטניות ומוצרים יבשים', 'active');
+
+insert into profiles (id, org_id, full_name, role, phone, supplier_id)
+select u.id, '11111111-1111-4111-8111-111111111111', 'משק ירוק — פורטל ספק',
+       'supplier'::user_role, '052-6331122', 'aa000000-0000-4000-8000-000000000001'
+from auth.users u where u.email = 'supplier@demo.supplyflow.local';
 
 insert into supplier_categories (supplier_id, category_id, org_id)
 select v.supplier_id::uuid, v.category_id::uuid,

@@ -1,4 +1,4 @@
-# Creates the five demo Auth users. Passwords come from an external per-user manifest and
+# Creates the six demo Auth users. Passwords come from an external per-user manifest and
 # are never printed. The manifest must live outside this repository.
 #
 # Manifest shape:
@@ -20,7 +20,8 @@ $requiredEmails = @(
   "kitchen@demo.supplyflow.local",
   "office@demo.supplyflow.local",
   "payer@demo.supplyflow.local",
-  "accountant@demo.supplyflow.local"
+  "accountant@demo.supplyflow.local",
+  "supplier@demo.supplyflow.local"
 )
 
 if (-not $env:SUPABASE_SERVICE_KEY) { throw "SUPABASE_SERVICE_KEY not set" }
@@ -44,7 +45,7 @@ if ($manifestFile.Equals($repoRoot, [System.StringComparison]::OrdinalIgnoreCase
 $manifest = Get-Content -LiteralPath $manifestFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $accounts = @($manifest.accounts)
 if ($accounts.Count -ne $requiredEmails.Count) {
-  throw "Credentials manifest must contain exactly the five demo accounts."
+  throw "Credentials manifest must contain exactly the six demo accounts."
 }
 
 $seenEmails = @{}

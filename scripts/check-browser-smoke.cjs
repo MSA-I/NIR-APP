@@ -32,6 +32,7 @@ const homes = {
   kitchen: '/receiving',
   payer: '/pay',
   accountant: '/reports',
+  supplier: '/my-prices',
 };
 
 function credentials(role) {
