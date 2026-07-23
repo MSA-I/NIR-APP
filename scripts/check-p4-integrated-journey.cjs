@@ -229,7 +229,7 @@ async function captureBefore(evidence, ids) {
   };
 }
 
-async function captureAfter(evidence, ids) {
+async function captureAfter(evidence, financialActor, ids) {
   const queries = [
     evidence.from('supplier_products')
       .select('id,current_price,previous_price,price_effective_date,available')
@@ -245,8 +245,6 @@ async function captureAfter(evidence, ids) {
     evidence.from('invoices')
       .select('id,supplier_id,invoice_number,amount_before_vat,vat_amount,total_amount,review_status,payment_status')
       .eq('id', ids.invoice).single(),
-    evidence.from('invoice_balances').select('invoice_id,total_amount,paid_amount,credited_amount,balance')
-      .eq('invoice_id', ids.invoice).single(),
     evidence.from('payment_requests').select('id,supplier_id,amount,status').eq('id', ids.paymentRequest).single(),
     evidence.from('payment_request_invoices').select('payment_request_id,invoice_id,amount_allocated')
       .eq('payment_request_id', ids.paymentRequest).single(),
@@ -265,11 +263,16 @@ async function captureAfter(evidence, ids) {
   ];
   const labels = [
     'after supplier product', 'after submission', 'after purchase request', 'after purchase order',
-    'after purchase order item', 'after receipt', 'after invoice', 'after invoice balance',
-    'after payment request', 'after payment request allocation', 'after payment', 'after payment allocation',
+    'after purchase order item', 'after receipt', 'after invoice', 'after payment request',
+    'after payment request allocation', 'after payment', 'after payment allocation',
     'after bank import', 'after bank transaction', 'after bank allocation', 'after credit',
   ];
-  const rows = await Promise.all(queries.map((query, index) => dataOf(query, labels[index])));
+  const [rows, balanceRows] = await Promise.all([
+    Promise.all(queries.map((query, index) => dataOf(query, labels[index]))),
+    rpc(financialActor, 'p0_invoice_balance_rows', {}, 'after computed invoice balances'),
+  ]);
+  const invoiceBalance = balanceRows.find((row) => row.invoice_id === ids.invoice);
+  assert(invoiceBalance, 'after computed invoice balance row missing');
   return {
     artifact_schema: 1,
     captured_at: new Date().toISOString(),
@@ -280,15 +283,15 @@ async function captureAfter(evidence, ids) {
     purchase_order_item: rows[4],
     goods_receipt: rows[5],
     invoice: rows[6],
-    invoice_balance: rows[7],
-    payment_request: rows[8],
-    payment_request_allocation: rows[9],
-    payment: rows[10],
-    payment_allocation: rows[11],
-    bank_import: rows[12],
-    bank_transaction: rows[13],
-    bank_allocation: rows[14],
-    credit_request: rows[15],
+    invoice_balance: invoiceBalance,
+    payment_request: rows[7],
+    payment_request_allocation: rows[8],
+    payment: rows[9],
+    payment_allocation: rows[10],
+    bank_import: rows[11],
+    bank_transaction: rows[12],
+    bank_allocation: rows[13],
+    credit_request: rows[14],
   };
 }
 
@@ -644,7 +647,7 @@ async function main() {
     );
   }
 
-  const after = await captureAfter(evidence, ids);
+  const after = await captureAfter(evidence, actors.accountant.client, ids);
   writeArtifact('p4-integrated-after.json', after);
   assertMoney(after.supplier_product.current_price, 10, 'Final current supplier price');
   assert.equal(after.price_submission.status, 'accepted');
