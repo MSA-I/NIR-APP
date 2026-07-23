@@ -498,6 +498,13 @@ async function dashboardAndDialogs(browser) {
     const paidRendered = Number((await paidLink.locator('.text-xl.num').innerText()).replace(/[^\d,.-]/g, '').replace(/,/g, ''));
     assert.equal(paidRendered, Math.round(paidExpected), `dashboard MTD payments differ from REST for ${paidMonth}`);
     assert.equal(await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).count(), 1, 'dashboard speed-dial missing');
+    for (const heading of ['הוצאות רכש לפי חודש', 'תמהיל הרכש החודש', 'רכש מול תשלומים']) {
+      const chartSection = page.locator('section').filter({ has: page.getByRole('heading', { name: heading, exact: true }) }).last();
+      await chartSection.scrollIntoViewIfNeeded();
+      await chartSection.locator('.recharts-wrapper').waitFor({ state: 'visible', timeout: 10_000 });
+    }
+    await page.waitForTimeout(650);
+    await firstDataHeading.scrollIntoViewIfNeeded();
     const contrast = await assertKeyContrast(page);
     await page.screenshot({ path: path.join(outDir, 'dashboard-1440.png'), fullPage: true });
     report.screenshots.push('dashboard-1440.png');
@@ -505,6 +512,13 @@ async function dashboardAndDialogs(browser) {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${baseURL}/dashboard`);
     await settle(page);
+    for (const heading of ['הוצאות רכש לפי חודש', 'תמהיל הרכש החודש', 'רכש מול תשלומים']) {
+      const chartSection = page.locator('section').filter({ has: page.getByRole('heading', { name: heading, exact: true }) }).last();
+      await chartSection.scrollIntoViewIfNeeded();
+      await chartSection.locator('.recharts-wrapper').waitFor({ state: 'visible', timeout: 10_000 });
+    }
+    await page.waitForTimeout(650);
+    await page.getByRole('heading', { name: 'מרכז הבקרה', exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(outDir, 'dashboard-390.png'), fullPage: true });
     report.screenshots.push('dashboard-390.png');
 
