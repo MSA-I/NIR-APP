@@ -6,7 +6,6 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
 import { useAuth } from '../auth/AuthContext';
-import { logAction } from '../lib/audit';
 import { DataTable, StatusBadge, PageLoader, useToast, Modal, ErrorNote, ConfirmDialog, type Column } from '../components/ui';
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
 import { SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
@@ -115,10 +114,12 @@ export function SuppliersList() {
   async function deleteSupplier(reason?: string) {
     if (!deleteTarget) return;
     setBusyDelete(true);
-    const res = await supabase.from('suppliers').update({ deleted_at: new Date().toISOString() }).eq('id', deleteTarget.id);
+    const res = await supabase.rpc('soft_delete_supplier', {
+      p_supplier_id: deleteTarget.id,
+      p_reason: reason ?? null,
+    });
     setBusyDelete(false);
     if (res.error) { setDeleteTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
-    await logAction({ orgId: deleteTarget.org_id, action: 'supplier_deleted', entityType: 'suppliers', entityId: deleteTarget.id, reason });
     setDeleteTarget(null);
     toast('הספק נמחק');
     void refetch();
@@ -201,7 +202,7 @@ function SupplierForm({ supplier, onClose, onSaved }: { supplier: SupplierRow | 
     const newRating = f.rating || null; // 0 (cleared) → null; DB checks 1..5
     const ratingChanged = newRating !== (supplier?.rating ?? null);
     const row = {
-      org_id: profile!.org_id, name: f.name.trim(), tax_id: f.tax_id || null, contact_name: f.contact_name || null,
+      name: f.name.trim(), tax_id: f.tax_id || null, contact_name: f.contact_name || null,
       phone: f.phone || null, whatsapp: f.whatsapp || null, email: f.email || null, address: f.address || null,
       min_order_amount: f.min_order_amount ? Number(f.min_order_amount) : null,
       payment_terms: f.payment_terms || null, bank_details: f.bank_details || null, notes: f.notes || null,
@@ -212,7 +213,7 @@ function SupplierForm({ supplier, onClose, onSaved }: { supplier: SupplierRow | 
     };
     const res = supplier
       ? await supabase.from('suppliers').update(row).eq('id', supplier.id)
-      : await supabase.from('suppliers').insert(row);
+      : await supabase.from('suppliers').insert({ ...row, org_id: profile!.org_id });
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     toast(supplier ? 'הספק עודכן' : 'הספק נוצר');

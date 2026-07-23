@@ -6,7 +6,6 @@ import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, SkeletonTable, ConfirmDialog, type Column } from '../components/ui';
-import { logAction } from '../lib/audit';
 import { useCategories } from './Suppliers';
 import type { Product } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
@@ -61,20 +60,19 @@ export default function Products() {
     setParams(next, { replace: true });
   }, [params, data, canWrite, setParams]);
 
-  // Deactivation hides the product from new orders — not a financial delete, but it is a
-  // reversible business claim, so deactivating requires a reason for the audit log;
-  // reactivating takes an optional-free confirm. Both log to audit_logs.
+  // Activation changes availability for every future order. The RPC owns the row lock, reason
+  // and audit record so neither direction can bypass the same business control.
   async function toggleActive(reason?: string) {
     if (!toggleTarget) return;
     const next = !toggleTarget.active;
     setBusyToggle(true);
-    const res = await supabase.from('products').update({ active: next }).eq('id', toggleTarget.id);
+    const res = await supabase.rpc('set_product_active', {
+      p_product_id: toggleTarget.id,
+      p_active: next,
+      p_reason: reason ?? null,
+    });
     setBusyToggle(false);
     if (res.error) { setToggleTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
-    await logAction({
-      orgId: toggleTarget.org_id, action: next ? 'product_activated' : 'product_deactivated',
-      entityType: 'products', entityId: toggleTarget.id, reason,
-    });
     setToggleTarget(null);
     toast(next ? 'המוצר הופעל' : 'המוצר הושבת');
     void refetch();
@@ -135,7 +133,7 @@ export default function Products() {
           ? `המוצר ״${toggleTarget?.name}״ לא יופיע יותר בהזמנות חדשות. הפעולה תתועד ביומן הביקורת.`
           : `המוצר ״${toggleTarget?.name}״ יחזור להיות זמין להזמנות. הפעולה תתועד ביומן הביקורת.`}
         confirmLabel={toggleTarget?.active ? 'השבתה' : 'הפעלה'}
-        requireReason={!!toggleTarget?.active} busy={busyToggle} />
+        requireReason busy={busyToggle} />
     </div>
   );
 }
@@ -163,13 +161,13 @@ function ProductForm({ product, initial, onClose, onSaved }: {
     if (!f.name.trim()) { toast('שם מוצר הוא שדה חובה', 'error'); return; }
     setBusy(true);
     const row = {
-      org_id: profile!.org_id, name: f.name.trim(), category_id: f.category_id || null, unit: f.unit,
-      sku: f.sku || null, barcode: f.barcode || null, notes: f.notes || null, active: f.active,
+      name: f.name.trim(), category_id: f.category_id || null, unit: f.unit,
+      sku: f.sku || null, barcode: f.barcode || null, notes: f.notes || null,
       min_stock: f.min_stock ? Number(f.min_stock) : null,
     };
     const res = product
       ? await supabase.from('products').update(row).eq('id', product.id)
-      : await supabase.from('products').insert(row);
+      : await supabase.from('products').insert({ ...row, org_id: profile!.org_id, active: f.active });
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     toast(product ? 'המוצר עודכן' : 'המוצר נוצר');
@@ -191,12 +189,12 @@ function ProductForm({ product, initial, onClose, onSaved }: {
         <div><label className="label" htmlFor="product-sku">מק״ט</label><input id="product-sku" className="input num" dir="ltr" value={f.sku} onChange={(e) => set('sku', e.target.value)} /></div>
         <div><label className="label" htmlFor="product-barcode">ברקוד</label><input id="product-barcode" className="input num" dir="ltr" value={f.barcode} onChange={(e) => set('barcode', e.target.value)} /></div>
         <div><label className="label" htmlFor="product-min-stock">מלאי מינימום (לשימוש עתידי)</label><input id="product-min-stock" type="number" className="input num" value={f.min_stock} onChange={(e) => set('min_stock', e.target.value)} /></div>
-        <div className="flex items-end pb-2">
+        {!product && <div className="flex items-end pb-2">
           <label className="flex items-center gap-2 text-sm text-ink-mid">
             <input type="checkbox" checked={f.active} onChange={(e) => set('active', e.target.checked)} className="rounded" />
             מוצר פעיל
           </label>
-        </div>
+        </div>}
         <div className="sm:col-span-2"><label className="label" htmlFor="product-notes">הערות</label><textarea id="product-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
       </div>
       <div className="flex justify-end gap-2 mt-5">

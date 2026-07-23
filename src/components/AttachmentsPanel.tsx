@@ -40,6 +40,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
   const receiptsKey = receipts.map((receipt) => receipt.id).join(',');
   const receiptById = new Map(receipts.map((receipt) => [receipt.id, receipt]));
   const canDelete = profile?.role === 'owner' || profile?.role === 'office';
+  const canUpload = profile != null && ['owner', 'office', 'kitchen'].includes(profile.role);
 
   const { data, loading, error, refetch } = useQuery<{ items: AttachmentItem[]; thumbs: Record<string, string> }>(async () => {
     const invoicePromise = fetchAll<DocumentRow>((from, to) => supabase.from('documents').select('*')
@@ -76,7 +77,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
   }, [invoiceId, receiptsKey]);
 
   async function uploadFiles(files: File[], previousSummary: UploadBatchSummary | null = null) {
-    if (!files.length || !profile) return;
+    if (!files.length || !profile || !canUpload) return;
     setBusy(true);
     try {
       const invoice = unwrap(await supabase.from('invoices').select('supplier_id, invoice_date')
@@ -142,12 +143,14 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
           <h2 id="invoice-attachments-title" className="section-title">מסמכים מצורפים</h2>
           <p className="text-xs text-ink-muted">חשבונית ותעודות משלוח מקבלות מקושרות</p>
         </div>
-        <button type="button" className="btn-secondary" disabled={busy || retryFiles.length > 0} onClick={() => inputRef.current?.click()}>
-          {busy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-          הוספת קבצים
-        </button>
-        <input ref={inputRef} type="file" hidden multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,image/avif,application/pdf"
-          onChange={(event) => void onPick(event.target.files)} />
+        {canUpload && <>
+          <button type="button" className="btn-secondary" disabled={busy || retryFiles.length > 0} onClick={() => inputRef.current?.click()}>
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+            הוספת קבצים
+          </button>
+          <input ref={inputRef} type="file" hidden multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,image/avif,application/pdf"
+            onChange={(event) => void onPick(event.target.files)} />
+        </>}
       </div>
 
       {uploadSummary && (

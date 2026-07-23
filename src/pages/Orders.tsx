@@ -65,10 +65,12 @@ export function OrdersList() {
   async function cancelOrder(reason?: string) {
     if (!cancelTarget) return;
     setBusy(true);
-    const res = await supabase.from('purchase_orders').update({ status: 'cancelled' }).eq('id', cancelTarget.id);
+    const res = await supabase.rpc('cancel_purchase_order', {
+      p_purchase_order_id: cancelTarget.id,
+      p_reason: reason ?? null,
+    });
     setBusy(false);
     if (res.error) { setCancelTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
-    await logAction({ orgId: cancelTarget.org_id, action: 'order_status:cancelled', entityType: 'purchase_orders', entityId: cancelTarget.id, reason });
     setCancelTarget(null);
     toast('ההזמנה בוטלה');
     void refetch();
@@ -242,6 +244,20 @@ export function OrderDetail() {
     return true;
   }
 
+  async function cancelOrder(reason?: string) {
+    if (!order) return;
+    setBusy(true);
+    const res = await supabase.rpc('cancel_purchase_order', {
+      p_purchase_order_id: order.id,
+      p_reason: reason ?? null,
+    });
+    setBusy(false);
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    setConfirm(null);
+    toast('ההזמנה בוטלה');
+    void refetch();
+  }
+
   // The WhatsApp order-send flow (link building, wa.me open, mark-as-sent, audit log) lives in
   // lib/share.ts and is shared with the Orders list row actions.
   async function sendWhatsApp() {
@@ -359,7 +375,7 @@ export function OrderDetail() {
       </div>
 
       <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)}
-        onConfirm={(reason) => confirm && void setStatus(confirm.status, reason)}
+        onConfirm={(reason) => confirm && void cancelOrder(reason)}
         title={confirm?.label ?? ''} message="האם לבטל את ההזמנה? הפעולה תתועד ביומן הביקורת." danger requireReason busy={busy} />
 
       <Modal open={supplierConfirmOpen} onClose={() => setSupplierConfirmOpen(false)} title="אישור קבלת הזמנה ע״י הספק" busy={busy} statusMessage={busy ? 'שומר את אישור הספק' : undefined}>

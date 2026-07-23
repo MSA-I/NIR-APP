@@ -9,6 +9,25 @@
 
 ## P0 — חוזה תפקידי פרסונות (23.07.2026, מקומי בלבד)
 
+### allowlist כתיבה ופקודות מנומקות `0030` (ענף מבודד; DB עדיין BLOCKED)
+
+מיגרציה `0030_client_dml_acl_and_reasoned_commands.sql` מסירה DML משתמע משטחי הלקוח
+ומחזירה רק הרשאות עמודה/פעולה שנדרשות בפועל. מחיקה רכה של ספק, שינוי active של מוצר
+וביטול הזמנה עברו ל־RPCs אטומיים עם נעילה, סיבה ו־audit; triggers חוסמים bypass ישיר.
+העלאת מסמך חשבונית מוסתרת ל־`accountant`, בעוד מדיניות מסמך אישור תשלום שביצע נשמרת.
+
+שלוש פקודות הטיוטה הוותיקות מ־`0018` הוקשחו: שמירה וביטול הם `SECURITY DEFINER` עם
+`search_path` קשיח, ללא פתיחת DML ישיר ל־`purchase_requests` או לפריטיה. overload ישן של
+finalize ללא `reason`, אם נותר בהתקנה משודרגת, נשאר ללא `EXECUTE`; רק החתימה המנומקת
+`(uuid,numeric,text)` חשופה ל־`authenticated`.
+
+נוסף `supabase/tests/p0_client_dml_acl.sql` לבדיקת ACL עמודות, allow/deny לפי תפקיד,
+חציית דייר, חסימת שלוש הכתיבות הרגישות, מסלול הטיוטה, והפרדה בין מסמך חשבונית לאישור
+תשלום של `accountant`. בענף המבודד `npm.cmd ci` ו־`npm.cmd run build` עברו, כולל ארבע
+בדיקות ה־Node וה־production build. בדיקות DB/reset וה־harness החדש **לא הורצו כאן** כדי
+לא להתנגש ב־stack האינטגרציה; מצבן BLOCKED עד ריצת root המשולבת, ואינו PASS. לא בוצעו
+push, ‏deploy או מיגרציה למסד חי.
+
 ### תיקוני גבול פיננסי `0028` (ענף ו־DB מקומיים מבודדים)
 
 מיגרציה `0028_p0_financial_boundary_corrections.sql` סוגרת שבעה פערי ביקורת: מחיקה
