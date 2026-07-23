@@ -36,17 +36,23 @@ async function upload(client, path, bytes, contentType) {
 }
 
 async function invoke(apiUrl, anonKey, accessToken, body) {
-  const response = await fetch(`${apiUrl}/functions/v1/submit-price-list`, {
-    method: 'POST',
-    headers: {
-      apikey: anonKey,
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-  const payload = await response.json();
-  return { response, payload };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(`${apiUrl}/functions/v1/submit-price-list`, {
+      method: 'POST',
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    const payload = await response.json();
+    const transientWorkerRestart = response.status === 502
+      && payload?.message === 'An invalid response was received from the upstream server';
+    if (!transientWorkerRestart || attempt === 2) return { response, payload };
+    await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+  }
+  throw new Error('unreachable Edge retry state');
 }
 
 function csvFor(productIds, price) {
