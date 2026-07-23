@@ -512,8 +512,10 @@ try {
   $response = Invoke-Rest -Method Patch -Resource "organizations?id=eq.$orgA" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{ status = "suspended" } -Prefer "return=representation"
   Assert-Blocked $response "owner direct organization lifecycle update blocked"
   $response = Invoke-Rest -Method Patch -Resource "organizations?id=eq.$orgSuspended" -ApiKey $anonKey -Token $accounts.platform.Token -Body @{ status = "suspended" } -Prefer "return=representation"
-  Assert-Status $response @(200) "platform direct lifecycle update returns no writable rows"
-  Assert-Count $response.Json 0 "platform direct lifecycle update changes nothing"
+  Assert-Blocked $response "platform direct organization lifecycle update blocked"
+  $response = Invoke-Rest -Method Get -Resource "organizations?id=eq.$orgSuspended&select=status" -ApiKey $serviceKey -Token $serviceKey
+  Assert-Status $response @(200) "platform direct lifecycle verification read"
+  Assert-True (@($response.Json)[0].status -eq "active") "platform direct lifecycle update changes nothing"
   $response = Invoke-Rest -Method Post -Resource "rpc/set_organization_lifecycle" -ApiKey $anonKey -Token $accounts.platform.Token -Body @{ p_org_id = $orgSuspended; p_status = "suspended"; p_trial_ends_at = $null; p_reason = "P0 suspended-tenant test" }
   Assert-Status $response @(204) "platform lifecycle command"
   Assert-Count (Get-Rows "profiles?select=id" $accounts.ownerSuspended $anonKey "suspended tenant negative read") 0 "suspended tenant loses profile and organization plane"
