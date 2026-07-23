@@ -439,6 +439,31 @@ try {
     $credentialSeed = [guid]::NewGuid().ToString("N")
     Install-DemoFixture $credentialSeed
 
+    Write-Gate "P4 integrated supplier-to-credit journey"
+    $journeyEnvironment = @{
+      P4_API_URL = [string]$localEnvironment.API_URL
+      P4_ANON_KEY = [string]$localEnvironment.ANON_KEY
+      P4_SERVICE_ROLE_KEY = [string]$localEnvironment.SERVICE_ROLE_KEY
+      P4_PASSWORD_SEED = $credentialSeed
+      P4_ARTIFACT_DIR = $artifactDirectory
+    }
+    $previousJourneyEnvironment = @{}
+    try {
+      foreach ($name in $journeyEnvironment.Keys) {
+        $previousJourneyEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+        [Environment]::SetEnvironmentVariable($name, [string]$journeyEnvironment[$name], "Process")
+      }
+      Start-PriceListFunction $localEnvironment
+      & node (Join-Path $PSScriptRoot "check-p4-integrated-journey.cjs")
+      Assert-ExitCode "P4 integrated journey"
+    }
+    finally {
+      Stop-PriceListFunction
+      foreach ($name in $journeyEnvironment.Keys) {
+        [Environment]::SetEnvironmentVariable($name, $previousJourneyEnvironment[$name], "Process")
+      }
+    }
+
     Write-Gate "Browser, keyboard, print/PDF and accessibility smoke"
     Start-PreviewServer
 
