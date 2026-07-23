@@ -28,14 +28,31 @@ export async function readSheet(file: File): Promise<SheetData> {
   if (file.size > MAX_FILE_BYTES) {
     throw new SheetError(`הקובץ גדול מ־${Math.round(MAX_FILE_BYTES / 1024 / 1024)}MB ולא ניתן לייבוא`);
   }
+  if (!/\.(csv|xlsx|xls)$/i.test(file.name)) {
+    throw new SheetError('סוג הקובץ אינו נתמך. ניתן להעלות Excel (xlsx/xls) או CSV בקידוד UTF-8.');
+  }
   const buf = await file.arrayBuffer();
 
   let rows: SheetRow[];
   try {
     if (/\.csv$/i.test(file.name)) {
-      // strip BOM: Hebrew CSVs exported from Excel carry one, and it would end up inside the first header
-      const text = new TextDecoder('utf-8').decode(buf).replace(/^\uFEFF/, '');
-      rows = Papa.parse<SheetRow>(text, { header: true, skipEmptyLines: true }).data;
+      // A BOM is optional. Fatal decoding distinguishes a damaged/non-UTF-8 Hebrew file from
+      // a valid CSV whose first header simply has no BOM marker.
+      let text: string;
+      try {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(buf).replace(/^\uFEFF/, '');
+      } catch {
+        throw new SheetError('קידוד ה־CSV אינו UTF-8. שמור את הקובץ כ־CSV UTF-8 ונסה שוב.');
+      }
+      const parsed = Papa.parse<SheetRow>(text, { header: true, skipEmptyLines: true });
+      // Field-count mismatches are row-level input defects and remain available to the caller's
+      // partial-acceptance report. Broken quoting/delimiter detection makes the whole file unsafe.
+      const structuralError = parsed.errors.find((error) => error.type !== 'FieldMismatch');
+      if (structuralError) {
+        const firstRow = structuralError.row;
+        throw new SheetError(`מבנה ה־CSV אינו תקין${firstRow == null ? '' : ` ליד שורה ${firstRow + 2}`}. בדוק מפרידים ומרכאות.`);
+      }
+      rows = parsed.data;
     } else {
       const wb = XLSX.read(buf);
       const first = wb.SheetNames[0];
@@ -62,6 +79,12 @@ export async function readSheet(file: File): Promise<SheetData> {
   if (!headers.length) throw new SheetError('לא נמצאו כותרות עמודות בקובץ');
 
   return { fileName: file.name, headers, rows };
+}
+
+/** Browser-native SHA-256 used as the retry/idempotency key for an uploaded file. */
+export async function sha256File(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /* ---------- column matching ---------- */

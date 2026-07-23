@@ -125,6 +125,22 @@ export interface SupplierProduct {
 
 export interface PriceHistory { id: string; supplier_product_id: string; price: number; effective_date: string }
 
+export type SupplierPriceSubmissionStatus = 'accepted' | 'accepted_with_rejections' | 'rejected';
+export interface SupplierPriceRejection {
+  row: number;
+  product?: string | null;
+  reason: 'unknown_product' | 'invalid_price' | 'duplicate_product' | 'invalid_row';
+  message: string;
+}
+export interface SupplierPriceSubmission {
+  id: string; org_id: string; supplier_id: string; target_month: string; revision: number;
+  file_name: string; storage_path: string; file_checksum: string;
+  status: SupplierPriceSubmissionStatus;
+  accepted_count: number; rejected_count: number; unchanged_count: number;
+  rejections: SupplierPriceRejection[];
+  submitted_by: string; submitted_at: string; processed_at: string;
+}
+
 export type RequestStatus = 'draft' | 'split' | 'cancelled';
 export interface PurchaseRequest {
   id: string; org_id: string; number: number; status: RequestStatus;

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useParamState } from '../lib/useParamState';
 import { toHebrewError } from "../lib/errors";
-import { TrendingUp, TrendingDown, Upload, History, Pencil, X } from 'lucide-react';
+import { TrendingUp, TrendingDown, Upload, History, Pencil, X, FileCheck2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -9,12 +9,24 @@ import { DataTable, Modal, useToast, ErrorNote, StatusBadge, Note, SkeletonTable
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
 import { fmtDate, todayISO } from '../lib/format';
 import { PRODUCT_AVAILABILITY } from '../lib/status';
-import type { SupplierProduct, Supplier, PriceHistory } from '../lib/types';
+import type { SupplierProduct, Supplier, PriceHistory, SupplierPriceSubmission } from '../lib/types';
 
 type Row = SupplierProduct & { supplier: Supplier; product: { id: string; name: string; unit: string } };
+type ManagerSubmission = SupplierPriceSubmission & { supplier: Pick<Supplier, 'id' | 'name'> };
+
+const SUBMISSION_STATUS = {
+  accepted: { label: 'נקלט', tone: 'done' },
+  accepted_with_rejections: { label: 'נקלט חלקית', tone: 'await' },
+  rejected: { label: 'נדחה', tone: 'alert' },
+} as const;
+
+const monthLabel = (value: string) => new Intl.DateTimeFormat('he-IL', {
+  month: 'long', year: 'numeric', timeZone: 'UTC',
+}).format(new Date(`${value.slice(0, 7)}-01T00:00:00Z`));
 
 export default function PriceLists() {
   const { profile } = useAuth();
+  const canWrite = profile?.role === 'owner' || profile?.role === 'office';
   const toast = useToast();
   const [supplierFilter, setSupplierFilter] = useState('');
   // '1' via ?increases=1 (from the dashboard price-increase card); re-syncs on navigation.
@@ -32,13 +44,20 @@ export default function PriceLists() {
       .select('*, supplier:suppliers(id, name, status), product:products(id, name, unit)')
       .order('updated_at', { ascending: false })) as Promise<Row[]>);
 
+  const { data: submissions, loading: submissionsLoading, error: submissionsError } = useQuery(async () => {
+    if (!canWrite) return [];
+    return unwrap(await supabase.from('supplier_price_submissions')
+      .select('*, supplier:suppliers!supplier_price_submissions_supplier_fk(id, name)')
+      .order('target_month', { ascending: false })
+      .order('revision', { ascending: false })
+      .limit(50)) as ManagerSubmission[];
+  }, [canWrite]);
+
   const suppliers = useMemo(() => {
     const map = new Map<string, string>();
     data?.forEach((r) => map.set(r.supplier.id, r.supplier.name));
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'he'));
   }, [data]);
-
-  const canWrite = profile?.role === 'owner' || profile?.role === 'office';
 
   const rows = (data ?? []).filter((r) =>
     (!supplierFilter || r.supplier_id === supplierFilter) &&
@@ -103,6 +122,32 @@ export default function PriceLists() {
             </label>
           </>
         } />
+
+      {canWrite && (
+        <section className="card p-4" aria-labelledby="price-submissions-heading">
+          <div className="flex items-center gap-2 mb-3">
+            <FileCheck2 size={18} className="text-action" aria-hidden="true" />
+            <h2 id="price-submissions-heading" className="section-title">הגשות מחירון חודשיות</h2>
+          </div>
+          {submissionsLoading ? <p className="text-sm text-ink-muted">טוען קבלות הגשה…</p>
+            : submissionsError ? <ErrorNote message={submissionsError} />
+              : submissions?.length ? (
+                <div className="divide-y divide-line-soft">
+                  {submissions.map((submission) => (
+                    <div key={submission.id} className="py-3 first:pt-0 last:pb-0">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="font-medium text-ink">{submission.supplier.name} · {monthLabel(submission.target_month)} · גרסה <span className="num">{submission.revision}</span></div>
+                        <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
+                      </div>
+                      <div className="mt-1 text-sm text-ink-muted break-words">
+                        {submission.file_name} · נקלטו <span className="num">{submission.accepted_count}</span> · ללא שינוי <span className="num">{submission.unchanged_count}</span> · נדחו <span className="num">{submission.rejected_count}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="text-sm text-ink-muted">עדיין אין הגשות חודשיות.</p>}
+        </section>
+      )}
 
       {historyFor && <PriceHistoryModal row={historyFor} onClose={() => setHistoryFor(null)} />}
       {editFor && (

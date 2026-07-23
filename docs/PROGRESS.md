@@ -26,6 +26,29 @@ push, ‏deploy או מיגרציה לסביבה חיה; הצלחה מקומית
 
 ---
 
+## P1B — הגשת מחירון חודשית (23.07.2026, ענף יישום מקומי)
+
+מיגרציה `0026_supplier_price_submissions.sql` מוסיפה ledger קבלות immutable לפי ארגון,
+ספק, חודש ו־revision, ודלי פרטי ייעודי בנתיב
+`{org_id}/price-submissions/{supplier_id}/{submission_id}/{file}`. אותו checksum באותו חודש
+מחזיר את הקבלה המקורית; קובץ מתקן יוצר revision חדש. `submit_supplier_price_list` מאמת קובץ
+שבבעלות המגיש, מסווג כל שורה, וקולט באותה עסקת DB את המחירים התקינים, `price_history`, הקבלה
+וה־audit. מוצר לא מוכר נדחה ואינו יוצר מוצר קטלוג. כשל DB מבטל את כל כתיבות ה־DB; כשל לאחר
+העלאת קובץ מפעיל ניקוי של orphan לא רשום, שאינו ניתן לקריאה.
+
+מסך הספק משתמש ב־`importSheet.ts` המשותף ל־XLSX/CSV, מחשב SHA-256 ב־Web Crypto, מציג חודש,
+קבלה, דחיות והיסטוריית הגשות ומספק תבנית עם מזהי מוצר ושמות קנוניים. `/prices` מציג למנהל/ת
+הרכש היסטוריית קבלות, בעוד `import_supplier_prices` הוותיק נשאר ל־`owner`/`office` בלבד;
+ספק אינו יכול לעקוף את מסלול ההגשה החדש דרך ה־RPC הישן.
+
+**אימות נוכחי:** `supabase/tests/p1_price_submissions.sql` מכסה קליטה חלקית, מוצר לא מוכר,
+retry, ‏revision, rollback, ספק מתחרה ודייר שני. `npm.cmd ci` ו־`npm.cmd run build` עברו,
+כולל TypeScript וכל בדיקות הלוגיקה המשורשרות; `git diff --check` ובדיקת scope סטטית עברו.
+בדיקת DB/reset טרם הורצה משום ש־P1C מחזיק בלעדית את Supabase המקומי; אין להפוך מצב זה
+ל־PASS. לא בוצעו push, ‏deploy או מיגרציה חיה.
+
+---
+
 ## פריסת production מאומתת — P0–P4 (23.07.2026)
 
 **קוד ו־Git:** שרשרת P0–P4 נבדקה מחדש מתוך worktree נקי ומבודד. הקומיטים של P0, ‏P1,
