@@ -4,6 +4,11 @@
 
 begin;
 
+-- Storage API 2.109.1 blocks direct SQL deletes before RLS is evaluated. This test-only,
+-- transaction-local opt-in lets the synthetic DELETE fixtures exercise the real policies;
+-- the setting rolls back with the harness and is never part of a migration or product path.
+select set_config('storage.allow_delete_query', 'true', true);
+
 create function pg_temp.p1b_assert(p_condition boolean, p_message text)
 returns void
 language plpgsql
@@ -278,8 +283,9 @@ select pg_temp.p1b_assert(
   'service-only intake was not discarded'
 );
 
--- Replacing or mutating the object after the claim cannot smuggle different bytes into the
--- prepared payload: the service preparation step rechecks object id and version metadata.
+-- Replacing the object after the claim cannot smuggle different bytes into the prepared
+-- payload. Change its immutable identity explicitly: Storage's updated_at trigger uses now(),
+-- which is transaction-stable and therefore cannot model a version change in this harness.
 select claim_supplier_price_intake(
   '74000000-0000-0000-0000-000000000009',
   '21000000-0000-0000-0000-000000000003',
@@ -291,7 +297,7 @@ select claim_supplier_price_intake(
 );
 reset role;
 update storage.objects
-set updated_at = updated_at + interval '1 second'
+set id = '65000000-0000-4000-8000-000000000009'
 where bucket_id = 'price-submissions'
   and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/64000000-0000-4000-8000-000000000009/changed-stage.csv';
 set local role service_role;
