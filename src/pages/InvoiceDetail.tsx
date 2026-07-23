@@ -38,8 +38,10 @@ export default function InvoiceDetail() {
     const invoice = unwrap(await supabase.from('invoices')
       .select('*, supplier:suppliers(id, name), orders:invoice_order_links(order_id, purchase_orders(id, number, status)), receipts:invoice_receipt_links(receipt_id, goods_receipts(id, number, received_at))')
       .eq('id', id!).single()) as FullInvoice;
-    const balance = unwrap(await supabase.from('invoice_balances').select('*').eq('invoice_id', id!).maybeSingle()) as
-      { paid_amount: number; credited_amount: number; balance: number } | null;
+    const balance = isProcurementManager
+      ? null
+      : unwrap(await supabase.from('invoice_balances').select('*').eq('invoice_id', id!).maybeSingle()) as
+        { paid_amount: number; credited_amount: number; balance: number } | null;
     const allocations = isProcurementManager
       ? []
       : unwrap(await supabase.from('payment_allocations')
@@ -155,13 +157,17 @@ export default function InvoiceDetail() {
 
       {/* print-area on the money + details cards: shadows/borders drop in print so the sheet
           stays a clean invoice document (same convention as the Orders print sheet). */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className={`grid gap-3 ${isProcurementManager ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
         <div className="card card-pad print-area"><div className="text-xs text-ink-muted">סה״כ חשבונית</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(inv.total_amount)}</div>
           <div className="text-xs text-ink-muted mt-0.5">לפני מע״מ {fmtMoneyExact(inv.amount_before_vat)} + מע״מ {fmtMoneyExact(inv.vat_amount)}</div></div>
-        <div className="card card-pad print-area"><div className="text-xs text-ink-muted">שולם</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.paid_amount ?? 0)}</div></div>
-        {/* credited = already offset, a settled claim like "paid" — done, not the retired violet (audit 2026-07-21) */}
-        <div className="card card-pad print-area"><div className="text-xs text-ink-muted">זוכה</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.credited_amount ?? 0)}</div></div>
-        <div className="card card-pad print-area"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`text-lg font-bold num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
+        {!isProcurementManager && (
+          <>
+            <div className="card card-pad print-area"><div className="text-xs text-ink-muted">שולם</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.paid_amount ?? 0)}</div></div>
+            {/* credited = already offset, a settled claim like "paid" — done, not the retired violet (audit 2026-07-21) */}
+            <div className="card card-pad print-area"><div className="text-xs text-ink-muted">זוכה</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.credited_amount ?? 0)}</div></div>
+            <div className="card card-pad print-area"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`text-lg font-bold num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
