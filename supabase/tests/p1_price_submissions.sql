@@ -80,7 +80,7 @@ insert into storage.objects (bucket_id, name, owner, metadata) values
   ),
   (
     'price-submissions',
-    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-0000-0000-000000000002/same-bytes.csv',
+    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-4000-8000-000000000002/same-bytes.csv',
     '21000000-0000-0000-0000-000000000003',
     '{"mimetype":"text/csv","size":100}'::jsonb
   ),
@@ -92,7 +92,7 @@ insert into storage.objects (bucket_id, name, owner, metadata) values
   ),
   (
     'price-submissions',
-    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-0000-0000-000000000005/db-failure.csv',
+    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-4000-8000-000000000005/db-failure.csv',
     '21000000-0000-0000-0000-000000000003',
     '{"mimetype":"text/csv","size":100}'::jsonb
   ),
@@ -186,9 +186,9 @@ from (values
     '11000000-0000-0000-0000-000000000001'::uuid,
     '21000000-0000-0000-0000-000000000003'::uuid,
     '31000000-0000-0000-0000-000000000001'::uuid,
-    '61000000-0000-0000-0000-000000000002'::uuid, '2026-07-01'::date,
+    '61000000-0000-4000-8000-000000000002'::uuid, '2026-07-01'::date,
     'same-bytes.csv'::text,
-    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-0000-0000-000000000002/same-bytes.csv'::text,
+    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-4000-8000-000000000002/same-bytes.csv'::text,
     repeat('a', 64)::text,
     '[{"source_row":2,"product_id":"41000000-0000-0000-0000-000000000001","product_name":"P1B Product A1","price_text":"12","available":true}]'::jsonb,
     'lost response retry'::text
@@ -210,9 +210,9 @@ from (values
     '11000000-0000-0000-0000-000000000001'::uuid,
     '21000000-0000-0000-0000-000000000003'::uuid,
     '31000000-0000-0000-0000-000000000001'::uuid,
-    '61000000-0000-0000-0000-000000000005'::uuid, '2026-07-01'::date,
+    '61000000-0000-4000-8000-000000000005'::uuid, '2026-07-01'::date,
     'db-failure.csv'::text,
-    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-0000-0000-000000000005/db-failure.csv'::text,
+    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-4000-8000-000000000005/db-failure.csv'::text,
     repeat('e', 64)::text,
     '[{"source_row":2,"product_id":"41000000-0000-0000-0000-000000000001","product_name":"P1B Product A1","price_text":"17","available":true}]'::jsonb,
     'forced database rollback'::text
@@ -567,6 +567,16 @@ select pg_temp.p1b_assert(
     where supplier_product_id = '51000000-0000-0000-0000-000000000001'),
   'checksum retry duplicated price history'
 );
+with deleted as (
+  delete from storage.objects
+  where bucket_id = 'price-submissions'
+    and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-4000-8000-000000000002/same-bytes.csv'
+  returning 1
+)
+select pg_temp.p1b_assert(
+  (select count(*) = 1 from deleted),
+  'idempotent retry staging orphan was not removable by its uploader'
+);
 
 -- A corrected file for the same month creates revision 2 instead of overwriting revision 1.
 select pg_temp.p1b_assert(
@@ -660,7 +670,7 @@ select pg_temp.p1b_assert(
 select pg_temp.p1b_assert(
   not exists (
     select 1 from supplier_price_submissions
-    where id = '61000000-0000-0000-0000-000000000005'
+    where id = '61000000-0000-4000-8000-000000000005'
   ),
   'ledger failure left a submission receipt'
 );
@@ -685,13 +695,13 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 delete from storage.objects
 where bucket_id = 'price-submissions'
-  and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-0000-0000-000000000005/db-failure.csv';
+  and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-4000-8000-000000000005/db-failure.csv';
 reset role;
 select pg_temp.p1b_assert(
   not exists (
     select 1 from storage.objects
     where bucket_id = 'price-submissions'
-      and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-0000-0000-000000000005/db-failure.csv'
+      and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/61000000-0000-4000-8000-000000000005/db-failure.csv'
   ),
   'uploader could not remove an unregistered orphan'
 );
