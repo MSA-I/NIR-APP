@@ -11,8 +11,14 @@
 // called with the user's JWT so Postgres remains the role/tenant command boundary.
 
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.91.1';
-import * as Papa from 'https://esm.sh/papaparse@5.4.1?target=denonext';
+import * as PapaModule from 'https://esm.sh/papaparse@5.4.1?target=denonext';
 import * as XLSX from 'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs';
+
+// esm.sh exposes PapaParse as a CommonJS default at runtime, while @types/papaparse declares
+// named members only. Resolve that interop boundary explicitly so Deno types and Edge agree.
+const Papa = (
+  (PapaModule as unknown as { default?: typeof PapaModule }).default ?? PapaModule
+);
 
 const BUCKET = 'price-submissions';
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
