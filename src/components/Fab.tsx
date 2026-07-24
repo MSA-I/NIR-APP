@@ -97,8 +97,7 @@ export default function Fab() {
   }, [open]);
 
   const actions = quickActionsForPath(profile?.role, pathname);
-  // ponytail: dashboard shows an inline QuickActionsRow instead of the floating FAB
-  if (pathname === '/dashboard' || !actions.length) return null;
+  if (!actions.length) return null;
 
   const itemClass =
     'speed-dial-item flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface ps-4 pe-3 py-2.5 ' +

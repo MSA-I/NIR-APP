@@ -17,8 +17,6 @@ import {
 import { chartTheme } from '../lib/theme';
 import { mergeWeeklyComparison, topCategoriesWithOther } from '../lib/dashboardSeries';
 import { fetchAll } from '../lib/supabasePaging';
-import QuickActionsRow from '../components/QuickActions';
-import { useQuickCapture } from '../components/QuickCapture';
 
 const money = (v: number) => `₪${Math.round(v).toLocaleString('he-IL')}`;
 // audit round 2: glance values are whole-shekel by convention — the three money-strip tiles round to
@@ -299,7 +297,6 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
-  const capture = useQuickCapture();
   const { data, loading, error, refetch, fetching } = useQuery(async () => {
     const now = new Date();
     const todayISO = businessTodayISO();
@@ -568,9 +565,6 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
-
-      <QuickActionsRow onCapture={capture.openCapture} busy={capture.busy} />
-      {capture.element}
 
       {/* Truth-reporting (CLAUDE.md): a failed load/refetch shows an inline note WITH retry and keeps
           whatever data we still hold on screen — it never blanks the sections that did load. */}
