@@ -338,7 +338,7 @@ export default function Dashboard() {
       fetchAll((from, to) => supabase.from('supplier_products').select('id, product_id, current_price').eq('available', true).order('id').range(from, to)),
       // open commitments — any date, so a PO sent months ago that is still open still counts. Also
       // serves the "awaiting goods receipt" queue, replacing the old serial round-trip.
-      fetchAll((from, to) => supabase.from('purchase_orders').select('id, status, items:purchase_order_items(qty, unit_price, received_qty)').in('status', ['sent', 'confirmed', 'partial']).order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('purchase_orders').select('id, status, expected_date, items:purchase_order_items(qty, unit_price, received_qty)').in('status', ['sent', 'confirmed', 'partial']).order('id').range(from, to)),
     ]);
 
     const orders = ordersRes as unknown as { created_at: string; items: { qty: number; unit_price: number }[] }[];
@@ -355,7 +355,7 @@ export default function Dashboard() {
     const priceRows = priceUpRes as unknown as { current_price: number; previous_price: number | null; price_effective_date: string; product: { id: string; name: string }; supplier: { name: string } }[];
     const reqItems = reqItemsRes as unknown as { qty: number; unit_price: number | null; product_id: string }[];
     const offers = offersRes as unknown as { product_id: string; current_price: number }[];
-    const openPos = openPoRes as unknown as { items: { qty: number; unit_price: number; received_qty: number }[] }[];
+    const openPos = openPoRes as unknown as { expected_date: string | null; items: { qty: number; unit_price: number; received_qty: number }[] }[];
 
     const orderValue = (o: { items: { qty: number; unit_price: number }[] }) => o.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
 
@@ -398,6 +398,8 @@ export default function Dashboard() {
 
     const committedSum = openPos.length ? openPos.reduce((s, o) => s + o.items.reduce((t, i) => t + i.qty * i.unit_price, 0), 0) : null;
     const remainingSum = openPos.reduce((s, o) => s + o.items.reduce((t, i) => t + Math.max(0, (i.qty - i.received_qty) * i.unit_price), 0), 0);
+    // open orders (sent/confirmed/partial) past their requested delivery date — a late supplier.
+    const lateDeliveries = openPos.filter((o) => o.expected_date && o.expected_date < todayISO).length;
 
     // ── estimated savings this month: chosen price vs the most expensive available offer.
     const maxOffer = new Map<string, number>();
@@ -407,6 +409,12 @@ export default function Dashboard() {
       const max = maxOffer.get(it.product_id) ?? it.unit_price;
       return s + Math.max(0, (max - it.unit_price) * it.qty);
     }, 0) : null;
+    // savings as a % of the worst-case (most-expensive-offer) basket, so the ₪ figure has a scale.
+    const savingsBaseline = reqItems.reduce((s, it) => {
+      if (it.unit_price == null) return s;
+      return s + (maxOffer.get(it.product_id) ?? it.unit_price) * it.qty;
+    }, 0);
+    const savingsPct = savings != null && savingsBaseline > 0 ? (savings / savingsBaseline) * 100 : null;
 
     // ── price increases (from the 30-day set). The attention metric is SUPPLIERS, not products.
     const priceIncreases = priceRows
@@ -501,6 +509,7 @@ export default function Dashboard() {
       { key: 'exceptions', label: 'חריגים פתוחים', count: exceptions.length, tone: 'alert', to: '/exceptions?status=open', hint: highExceptions ? `${highExceptions} בחומרה גבוהה` : undefined, clearLabel: 'אין חריגים פתוחים' },
       { key: 'credits', label: 'זיכויים פתוחים', count: credits.length, amount: openCreditsSum, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
       { key: 'commitments', label: 'התחייבויות רכש פתוחות', count: openPos.length, amount: committedSum, tone: 'idle', to: '/orders?status=open', hint: remainingSum > 0 ? `נותר לקבלה ${fmtMoney(remainingSum)}` : undefined, clearLabel: 'אין התחייבויות פתוחות' },
+      { key: 'late-delivery', label: 'הזמנות באיחור באספקה', count: lateDeliveries, tone: 'alert', to: '/receiving', clearLabel: 'אין הזמנות באיחור' },
       { key: 'price-increases', label: 'ספקים שהעלו מחירים (30 יום)', count: priceIncreaseSuppliers, tone: 'await', to: '/prices?increases=1', clearLabel: 'אין שינויי מחירים' },
     ];
 
@@ -508,7 +517,7 @@ export default function Dashboard() {
       fetchedAt: new Date(),   // query-completion time → drives the "עודכן ב-" stamp
       attention,
       money: { openBalance, openInvoiceCount, paidMonth, paidDelta, purchasedMonth, purchasedDelta, monthKey },
-      monthly, weekly, paidWeekly, momChange, categories, savings,
+      monthly, weekly, paidWeekly, momChange, categories, savings, savingsPct,
       priceIncreases: priceIncreases.slice(0, 6),
       priceIncreaseCount: priceIncreases.length,
       topBalances,
@@ -588,7 +597,7 @@ export default function Dashboard() {
               spark={data.paidWeekly} sparkLabel="מגמת תשלומים לספקים בשמונה השבועות האחרונים" />
             <BandStat title="נרכש החודש" value={data.money.purchasedMonth} to="/orders?status=all"
               icon={ShoppingCart} context="מתחילת החודש" delta={data.money.purchasedDelta}
-              aux={data.savings != null ? `חיסכון משוער ${fmtMoney(data.savings)}` : undefined}
+              aux={data.savings != null ? `חיסכון משוער ${fmtMoney(data.savings)}${data.savingsPct != null ? ` · ${data.savingsPct.toFixed(0)}%` : ''}` : undefined}
               spark={data.weekly} sparkLabel="מגמת רכש בשמונה השבועות האחרונים" />
           </div>
 
