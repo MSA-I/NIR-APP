@@ -223,8 +223,12 @@ export default function NewOrder() {
   const draftItems = useMemo<DraftItemInput[]>(() => cart.map((item) => ({
     product_id: item.product.id,
     qty: item.qty,
-    chosen_supplier_id: item.chosenSupplierId,
-  })), [cart]);
+    // Freeze the actual chosen-or-cheapest supplier. Leaving this null (the raw "use cheapest"
+    // value) let the saved draft keep a null chosen_supplier_id, which finalize rejects as
+    // "draft_supplier_unavailable". Resolving the cheapest available offer here keeps it non-null
+    // whenever an offer exists, matching what the review screen already shows the user.
+    chosen_supplier_id: item.chosenSupplierId ?? (offersByProduct.get(item.product.id) ?? [])[0]?.supplier_id ?? null,
+  })), [cart, offersByProduct]);
   latestDraftRef.current = { requestId: draftId, notes, expectedDate, editorStep: step, items: draftItems };
 
   const runSaveQueue = useCallback((force = false): Promise<boolean> => {
