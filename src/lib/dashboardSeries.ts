@@ -1,6 +1,8 @@
 export type DashboardCategory = { name: string; total: number };
 export type DashboardWeeklyPoint = { week: string; total: number; count: number };
+// Index signature so a comparison row is a valid chart point-bag (ComparisonLineChart reads by key).
 export type DashboardWeeklyComparison = {
+  [key: string]: string | number | null;
   week: string;
   purchases: number | null;
   payments: number | null;

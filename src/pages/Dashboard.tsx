@@ -1,9 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart,
-  Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from 'recharts';
+import { type ReactNode } from 'react';
 import { Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RotateCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
@@ -11,37 +7,22 @@ import { Skeleton, StatusBadge, Note, AttentionZone, TaskLine, type AttentionIte
 import { EXCEPTION_TYPE, SEVERITY } from '../lib/status';
 import {
   addCalendarDays, BUSINESS_TIME_ZONE, dateStartInstant, daysInCalendarMonth,
-  fmtMoney, fmtMoneyExact, fmtMonth, shiftCalendarMonth, startOfCalendarWeek,
-  todayISO as businessTodayISO, toTimeZoneISO,
+  fmtMoney, fmtMoneyExact, fmtMonth, localDateKey, shiftCalendarMonth, startOfCalendarWeek,
+  todayISO as businessTodayISO,
 } from '../lib/format';
 import { chartTheme } from '../lib/theme';
 import { mergeWeeklyComparison, topCategoriesWithOther } from '../lib/dashboardSeries';
+import { CategoryDonut, ComparisonLineChart, money, moneyShort, SpendBarChart, TrendSparkline } from '../components/charts';
 import { fetchAll } from '../lib/supabasePaging';
 
-const money = (v: number) => `₪${Math.round(v).toLocaleString('he-IL')}`;
 // audit round 2: glance values are whole-shekel by convention — the three money-strip tiles round to
 // whole ₪ so they read consistently at a glance (₪8,131 not ₪14,842.6). Tables elsewhere keep exact
 // amounts; format.ts is untouched. null stays null → "—", never a fake rounded 0 (CLAUDE.md:37).
 const glanceMoney = (v: number | null) => fmtMoney(v == null ? null : Math.round(v));
-// compact ₪ for dense axes (the 8-bar weekly series): full labels overlap at that count.
-const moneyShort = (v: number) => (Math.abs(v) >= 1000 ? `₪${(v / 1000).toLocaleString('he-IL', { maximumFractionDigits: 1 })}k` : `₪${Math.round(v)}`);
 // "עודכן ב-HH:MM" freshness stamp — the screen promises real-time, so it says when it last read.
 const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TIME_ZONE });
 
 type WeeklyPoint = { week: string; total: number; count: number; label: string };
-
-function useReducedMotion() {
-  const [reduced, setReduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReduced(media.matches);
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
-
-  return reduced;
-}
 
 function DeltaChip({ value }: { value: number }) {
   const rounded = Math.round(value);
@@ -55,76 +36,6 @@ function DeltaChip({ value }: { value: number }) {
       <span className="num" dir="ltr">{rounded > 0 ? '+' : ''}{rounded}%</span>
       <span className="sr-only">מול אותם ימים בחודש הקודם</span>
     </span>
-  );
-}
-
-function ChartViewport({ className, label, style, children }: {
-  className: string;
-  label: string;
-  style?: CSSProperties;
-  children: (animation: { active: boolean; finish: () => void }) => ReactNode;
-}) {
-  const reducedMotion = useReducedMotion();
-  const ref = useRef<HTMLDivElement>(null);
-  const initialLabel = useRef(label);
-  const [visible, setVisible] = useState(() => reducedMotion || !('IntersectionObserver' in window));
-  const [finished, setFinished] = useState(() => reducedMotion || !('IntersectionObserver' in window));
-
-  useEffect(() => {
-    if (reducedMotion || !('IntersectionObserver' in window)) {
-      setVisible(true);
-      setFinished(true);
-      return;
-    }
-    const element = ref.current;
-    if (!element) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return;
-      setVisible(true);
-      observer.disconnect();
-    }, { threshold: 0.18 });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [reducedMotion]);
-
-  useEffect(() => {
-    if (label !== initialLabel.current) setFinished(true);
-  }, [label]);
-
-  return (
-    <div ref={ref} dir="ltr" className={className} style={style} role="img" aria-label={label}>
-      {visible
-        ? children({ active: !finished && !reducedMotion, finish: () => setFinished(true) })
-        : <span className="sr-only">{label}</span>}
-    </div>
-  );
-}
-
-function TrendSparkline({ points, label }: { points: WeeklyPoint[]; label: string }) {
-  const gradientId = `dashboardSpark${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
-  const t = chartTheme();
-  const plotted = points.map((point) => ({ ...point, total: point.count > 0 ? point.total : null }));
-  const ariaLabel = `${label}: ${points.map((point) => `${point.week} ${point.count ? fmtMoneyExact(point.total) : 'אין רשומות'}`).join(', ')}`;
-
-  return (
-    <ChartViewport className="h-7 min-w-16 flex-1" label={ariaLabel}>
-      {(animation) => (
-        <ResponsiveContainer>
-          <AreaChart data={plotted} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
-            <defs>
-              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={t.bar} stopOpacity={0.18} />
-                <stop offset="100%" stopColor={t.bar} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <Area type="linear" dataKey="total" stroke={t.bar} strokeWidth={1.5}
-              fill={`url(#${gradientId})`} dot={{ r: 1.5, strokeWidth: 0 }} connectNulls={false}
-              isAnimationActive={animation.active} animationDuration={500} animationEasing="ease-out"
-              onAnimationEnd={animation.finish} />
-          </AreaChart>
-        </ResponsiveContainer>
-      )}
-    </ChartViewport>
   );
 }
 
@@ -213,7 +124,6 @@ function OperationsDisclosure({ title, count, summary, empty, children }: {
 
 // Calendar buckets are anchored to the business timezone, not the browser/server timezone.
 const pad = (n: number) => String(n).padStart(2, '0');
-const localDateKey = (value: string) => value.includes('T') ? toTimeZoneISO(new Date(value)) : value.slice(0, 10);
 
 // audit round 2: the loading state was <PageLoader/> — a centred spinner that collapses the page
 // height and jumps when data lands, exactly what ui.tsx warns against on a known layout (and this is
@@ -544,7 +454,6 @@ export default function Dashboard() {
   const t = chartTheme();
   const taskTotal = data ? Object.values(data.queue).reduce((sum, count) => sum + count, 0) : 0;
   const weeklyComparison = data ? mergeWeeklyComparison(data.weekly, data.paidWeekly) : [];
-  const hasWeeklyComparison = weeklyComparison.some((point) => point.purchases != null || point.payments != null);
   const categoryTotal = data?.categories.reduce((sum, category) => sum + category.total, 0) ?? 0;
   const monthlyAria = data ? `הוצאות רכש לפי חודש: ${data.monthly.length
     ? data.monthly.map((point) => `${point.month} ${point.count ? fmtMoneyExact(point.total) : 'אין חשבוניות'}`).join(', ')
@@ -623,67 +532,15 @@ export default function Dashboard() {
                     </span>
                   )}
                 </div>
-                <ChartViewport className="mt-2 h-32 sm:h-48" label={monthlyAria}>
-                  {(animation) => data.monthly.length ? (
-                    <ResponsiveContainer>
-                      <BarChart data={data.monthly} margin={{ top: 24, left: 8, right: 8 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={t.grid} />
-                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: t.tick }} axisLine={false} tickLine={false} />
-                        <YAxis hide />
-                        <Tooltip cursor={false} formatter={(value) => fmtMoneyExact(Number(value))} isAnimationActive={animation.active} />
-                        <Bar dataKey="total" name="סה״כ" fill={t.bar} radius={[4, 4, 0, 0]} maxBarSize={52}
-                          isAnimationActive={animation.active} animationDuration={550} animationEasing="ease-out" onAnimationEnd={animation.finish}>
-                          {data.monthly.map((point, index) => (
-                            <Cell key={point.month} fill={t.bars[(data.monthly.length - 1 - index) % t.bars.length]} />
-                          ))}
-                          <LabelList dataKey="label" position="top" style={{ fontSize: 12, fill: t.label }} />
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : <div className="flex h-full items-center justify-center text-sm text-ink-muted">אין נתוני חשבוניות לתקופה</div>}
-                </ChartViewport>
+                <SpendBarChart
+                  points={data.monthly.map((point) => ({ key: point.month, label: point.label, total: point.total }))}
+                  ariaLabel={monthlyAria} emptyMessage="אין נתוני חשבוניות לתקופה" />
               </section>
 
               <section className="border-t border-line-soft p-4 sm:p-5 lg:col-span-5 lg:border-t-0" aria-labelledby="category-trend-title">
                 <h3 id="category-trend-title" className="text-sm font-semibold text-ink-body">תמהיל הרכש החודש</h3>
                 <p className="text-xs text-ink-muted">ארבע הקטגוריות הגדולות וכל היתר</p>
-                {categoryTotal > 0 ? (
-                  <div className="mt-2 flex min-h-36 flex-col items-stretch gap-3 sm:min-h-44 sm:flex-row sm:items-center">
-                    <ChartViewport className="relative mx-auto h-28 w-28 shrink-0 sm:h-40 sm:w-40" label={categoriesAria}>
-                      {(animation) => (
-                        <>
-                          <ResponsiveContainer>
-                            <PieChart>
-                              <Pie data={data.categories} dataKey="total" nameKey="name" innerRadius="60%" outerRadius="88%"
-                                rootTabIndex={-1} paddingAngle={2} stroke="none" isAnimationActive={animation.active} animationDuration={550}
-                                animationEasing="ease-out" onAnimationEnd={animation.finish}>
-                                {data.categories.map((category, index) => (
-                                  <Cell key={category.name} fill={category.name === 'אחר' ? t.bars[4] : t.bars[index % 4]} />
-                                ))}
-                              </Pie>
-                            </PieChart>
-                          </ResponsiveContainer>
-                          <div className="pointer-events-none absolute inset-0 grid place-content-center text-center" aria-hidden="true">
-                            <span className="text-xs text-ink-muted">סה״כ</span>
-                            <span className="num text-sm font-semibold text-ink">{moneyShort(categoryTotal)}</span>
-                          </div>
-                        </>
-                      )}
-                    </ChartViewport>
-                    <ul className="min-w-0 flex-1 space-y-1.5 text-xs">
-                      {data.categories.map((category, index) => (
-                        <li key={category.name} className="flex items-center gap-2">
-                          <span className="size-2 shrink-0 rounded-full" aria-hidden="true"
-                            style={{ backgroundColor: category.name === 'אחר' ? t.bars[4] : t.bars[index % 4] }} />
-                          <span className="min-w-0 flex-1 break-words text-ink-mid sm:truncate">{category.name}</span>
-                          <span className="shrink-0 text-ink-muted" title={fmtMoneyExact(category.total)}>
-                            <span className="num">{moneyShort(category.total)}</span> · <span className="num">{Math.round((category.total / categoryTotal) * 100)}%</span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : <div className="flex h-24 items-center justify-center text-center text-sm text-ink-muted sm:h-44">{categoryEmptyMessage}</div>}
+                <CategoryDonut slices={data.categories} total={categoryTotal} ariaLabel={categoriesAria} emptyMessage={categoryEmptyMessage} />
               </section>
 
               <section className="border-t border-line-soft p-4 sm:p-5 lg:col-span-12" aria-labelledby="weekly-trend-title">
@@ -697,25 +554,9 @@ export default function Dashboard() {
                     <span className="inline-flex items-center gap-1.5"><span className="w-6 border-t-2 border-dashed" style={{ borderColor: t.bars[2] }} />תשלומים</span>
                   </div>
                 </div>
-                <ChartViewport className="mt-2 h-32 sm:h-48" label={weeklyAria}>
-                  {(animation) => hasWeeklyComparison ? (
-                    <ResponsiveContainer>
-                      <LineChart data={weeklyComparison} margin={{ top: 8, left: 8, right: 8 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={t.grid} />
-                        <XAxis dataKey="week" tick={{ fontSize: 12, fill: t.tick }} axisLine={false} tickLine={false} />
-                        <YAxis hide />
-                        <Tooltip cursor={false} formatter={(value) => value == null ? '—' : fmtMoneyExact(Number(value))}
-                          isAnimationActive={animation.active} />
-                        <Line type="linear" dataKey="purchases" name="רכש" stroke={t.bars[0]} strokeWidth={2}
-                          dot={{ r: 2.5, strokeWidth: 0 }} connectNulls={false} isAnimationActive={animation.active} animationDuration={550}
-                          animationEasing="ease-out" onAnimationEnd={animation.finish} />
-                        <Line type="linear" dataKey="payments" name="תשלומים" stroke={t.bars[2]} strokeWidth={2}
-                          strokeDasharray="6 4" dot={{ r: 2.5, strokeWidth: 0 }} connectNulls={false} isAnimationActive={animation.active}
-                          animationDuration={550} animationEasing="ease-out" onAnimationEnd={animation.finish} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  ) : <div className="flex h-full items-center justify-center text-sm text-ink-muted">אין רכש או תשלומים בשמונת השבועות האחרונים</div>}
-                </ChartViewport>
+                <ComparisonLineChart points={weeklyComparison} xKey="week" legend={false}
+                  series={[{ key: 'purchases', name: 'רכש', color: t.bars[0] }, { key: 'payments', name: 'תשלומים', color: t.bars[2], dashed: true }]}
+                  ariaLabel={weeklyAria} emptyMessage="אין רכש או תשלומים בשמונת השבועות האחרונים" />
               </section>
             </div>
           </section>

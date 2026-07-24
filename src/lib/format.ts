@@ -35,6 +35,10 @@ export function toTimeZoneISO(d: Date, timeZone = BUSINESS_TIME_ZONE) {
 export const todayISO = () => toTimeZoneISO(new Date());
 export const currentMonthISO = (d = new Date()) => toTimeZoneISO(d).slice(0, 7);
 
+// Business-timezone calendar day for a stored value: a timestamp is projected onto Israel time;
+// a plain YYYY-MM-DD date is taken as-is. Used by chart bucketers so a row lands in the right day.
+export const localDateKey = (value: string) => (value.includes('T') ? toTimeZoneISO(new Date(value)) : value.slice(0, 10));
+
 function parseCalendarDate(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) throw new RangeError('Invalid date: expected YYYY-MM-DD');
@@ -105,6 +109,56 @@ export function dateStartInstant(value: string, timeZone = BUSINESS_TIME_ZONE) {
     if (correction === 0) break;
   }
   return new Date(instant).toISOString();
+}
+
+export type WeeklyBucket = { week: string; total: number; count: number };
+export type MonthlyBucket = { key: string; total: number; count: number };
+
+/**
+ * N consecutive Sunday-start week buckets ending with the week containing `todayISO`. Each bucket keeps
+ * a `count` so an empty week reads as a real gap, never a fabricated 0 (CLAUDE.md). Value label is left
+ * to the caller. Powers the dashboards' weekly trend charts.
+ */
+export function weeklyBuckets(
+  rows: readonly { date: string; value: number }[],
+  { todayISO: today, weeks = 8 }: { todayISO: string; weeks?: number },
+): WeeklyBucket[] {
+  const currentWeekStart = startOfCalendarWeek(today);
+  const buckets = Array.from({ length: weeks }, (_, idx) => {
+    const key = addCalendarDays(currentWeekStart, -(weeks - 1 - idx) * 7);
+    return { key, week: `${key.slice(8, 10)}/${key.slice(5, 7)}`, total: 0, count: 0 };
+  });
+  const byWeek = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+  for (const row of rows) {
+    const bucket = byWeek.get(startOfCalendarWeek(localDateKey(row.date)));
+    if (!bucket) continue;
+    bucket.total += row.value;
+    bucket.count += 1;
+  }
+  return buckets.map(({ week, total, count }) => ({ week, total, count }));
+}
+
+/**
+ * N consecutive calendar-month buckets ending with `monthKey` (YYYY-MM), oldest→newest. Empty months
+ * stay as `count: 0` so the axis is continuous; an entirely empty source stays empty.
+ */
+export function monthlyBuckets(
+  rows: readonly { date: string; value: number }[],
+  { monthKey, months }: { monthKey: string; months: number },
+): MonthlyBucket[] {
+  const byMonth = new Map<string, { total: number; count: number }>();
+  for (const row of rows) {
+    const m = localDateKey(row.date).slice(0, 7);
+    const bucket = byMonth.get(m) ?? { total: 0, count: 0 };
+    bucket.total += row.value;
+    bucket.count += 1;
+    byMonth.set(m, bucket);
+  }
+  return Array.from({ length: months }, (_, idx) => {
+    const key = shiftCalendarMonth(monthKey, -(months - 1 - idx));
+    const bucket = byMonth.get(key) ?? { total: 0, count: 0 };
+    return { key, total: bucket.total, count: bucket.count };
+  });
 }
 
 export const DAY_NAMES = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
