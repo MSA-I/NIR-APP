@@ -355,7 +355,7 @@ export default function Dashboard() {
     const priceRows = priceUpRes as unknown as { current_price: number; previous_price: number | null; price_effective_date: string; product: { id: string; name: string }; supplier: { name: string } }[];
     const reqItems = reqItemsRes as unknown as { qty: number; unit_price: number | null; product_id: string }[];
     const offers = offersRes as unknown as { product_id: string; current_price: number }[];
-    const openPos = openPoRes as unknown as { expected_date: string | null; items: { qty: number; unit_price: number; received_qty: number }[] }[];
+    const openPos = openPoRes as unknown as { status: string; expected_date: string | null; items: { qty: number; unit_price: number; received_qty: number }[] }[];
 
     const orderValue = (o: { items: { qty: number; unit_price: number }[] }) => o.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
 
@@ -400,6 +400,8 @@ export default function Dashboard() {
     const remainingSum = openPos.reduce((s, o) => s + o.items.reduce((t, i) => t + Math.max(0, (i.qty - i.received_qty) * i.unit_price), 0), 0);
     // open orders (sent/confirmed/partial) past their requested delivery date — a late supplier.
     const lateDeliveries = openPos.filter((o) => o.expected_date && o.expected_date < todayISO).length;
+    // orders sent to a supplier but not yet confirmed as received — a reminder to chase confirmation (3.3).
+    const awaitingConfirmation = openPos.filter((o) => o.status === 'sent').length;
 
     // ── estimated savings this month: chosen price vs the most expensive available offer.
     const maxOffer = new Map<string, number>();
@@ -510,6 +512,7 @@ export default function Dashboard() {
       { key: 'credits', label: 'זיכויים פתוחים', count: credits.length, amount: openCreditsSum, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
       { key: 'commitments', label: 'התחייבויות רכש פתוחות', count: openPos.length, amount: committedSum, tone: 'idle', to: '/orders?status=open', hint: remainingSum > 0 ? `נותר לקבלה ${fmtMoney(remainingSum)}` : undefined, clearLabel: 'אין התחייבויות פתוחות' },
       { key: 'late-delivery', label: 'הזמנות באיחור באספקה', count: lateDeliveries, tone: 'alert', to: '/receiving', clearLabel: 'אין הזמנות באיחור' },
+      { key: 'awaiting-confirmation', label: 'הזמנות ממתינות לאישור ספק', count: awaitingConfirmation, tone: 'await', to: '/orders?status=sent', clearLabel: 'כל ההזמנות אושרו' },
       { key: 'price-increases', label: 'ספקים שהעלו מחירים (30 יום)', count: priceIncreaseSuppliers, tone: 'await', to: '/prices?increases=1', clearLabel: 'אין שינויי מחירים' },
     ];
 

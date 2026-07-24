@@ -173,8 +173,28 @@ async function scanPaymentsDueSoon(): Promise<Alert | null> {
  *                   business input, not something to derive.
  */
 
+// Phase 3.3 — remind about orders that were sent to a supplier but not yet confirmed as received.
+// (An in-app reminder; a proactive WhatsApp/push reminder waits on the WhatsApp Business API.)
+async function scanOrdersAwaitingConfirmation(): Promise<Alert | null> {
+  const { count, error } = await supabase
+    .from('purchase_orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'sent');
+  if (error) throw new Error(error.message);
+  const total = count ?? 0;
+  if (!total) return null;
+  return {
+    code: 'orders_awaiting_confirmation',
+    severity: 'warning',
+    title: `${total} הזמנות שנשלחו וטרם אושרו על ידי הספק`,
+    detail: 'ההזמנות נשלחו לספק אך טרם התקבל אישור קבלה — כדאי לוודא מולו.',
+    to: '/orders?status=sent',
+  };
+}
+
 const SCANS = [
   { code: 'duplicate_invoice', label: 'חשבוניות כפולות', run: scanDuplicateInvoices },
+  { code: 'orders_awaiting_confirmation', label: 'הזמנות ללא אישור', run: scanOrdersAwaitingConfirmation },
   { code: 'price_increase', label: 'עליות מחיר', run: scanPriceIncreases },
   { code: 'above_average_price', label: 'מחירים מעל הממוצע', run: scanPricedAboveAverage },
   { code: 'invoice_without_order', label: 'חשבוניות ללא הזמנה', run: scanInvoicesWithoutOrder },
