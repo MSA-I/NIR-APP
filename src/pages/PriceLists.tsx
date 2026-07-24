@@ -8,6 +8,8 @@ import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
 import { fmtDate, todayISO } from '../lib/format';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { chartTheme } from '../lib/theme';
 import { PRODUCT_AVAILABILITY } from '../lib/status';
 import type { SupplierProduct, Supplier, PriceHistory, SupplierPriceSubmission } from '../lib/types';
 
@@ -164,6 +166,27 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
     unwrap(await supabase.from('price_history').select('*').eq('supplier_product_id', row.id).order('effective_date', { ascending: false })), [row.id]);
   return (
     <Modal open onClose={onClose} title={`היסטוריית מחירים — ${row.product.name} (${row.supplier.name})`}>
+      {data && data.length >= 2 && (() => {
+        const t = chartTheme();
+        const asc = [...data].reverse();
+        const first = asc[0].price;
+        const last = asc[asc.length - 1].price;
+        const stroke = last > first ? t.trendUp : last < first ? t.trendDown : t.flat;
+        const chartData = asc.map((h) => ({ date: fmtDate(h.effective_date), price: h.price }));
+        return (
+          <div dir="ltr" className="mb-4 h-56 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+                <CartesianGrid stroke={t.grid} strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="date" tick={{ fill: t.tick, fontSize: 11 }} tickLine={false} axisLine={{ stroke: t.grid }} minTickGap={24} />
+                <YAxis tick={{ fill: t.tick, fontSize: 11 }} tickLine={false} axisLine={false} width={52} tickFormatter={(v) => `₪${v}`} />
+                <Tooltip formatter={(v: number) => [`₪${v.toFixed(2)}`, 'מחיר']} />
+                <Line type="stepAfter" dataKey="price" stroke={stroke} strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()}
       {data?.length ? (
         <table className="w-full">
           <thead><tr><th className="th">תאריך</th><th className="th">מחיר</th></tr></thead>
