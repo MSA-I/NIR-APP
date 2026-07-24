@@ -4,7 +4,7 @@ import { Settings as SettingsIcon, Users, MailPlus, Send, Ban } from 'lucide-rea
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageLoader, useToast, ErrorNote, DataTable, StatusBadge, ConfirmDialog, type Column } from '../components/ui';
+import { PageLoader, useToast, ErrorNote, DataTable, StatusBadge, ConfirmDialog, Modal, type Column } from '../components/ui';
 import { INVITATION_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime } from '../lib/format';
 import {
@@ -28,6 +28,9 @@ export default function Settings() {
   const [resendTarget, setResendTarget] = useState<Invitation | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<Invitation | null>(null);
   const [accessTarget, setAccessTarget] = useState<Profile | null>(null);
+  const [roleTarget, setRoleTarget] = useState<Profile | null>(null);
+  const [nextRole, setNextRole] = useState<Role>('office');
+  const [roleReason, setRoleReason] = useState('');
   const [dialogBusy, setDialogBusy] = useState(false);
 
   const { data: users, loading, error, refetch } = useQuery<Profile[]>(async () =>
@@ -66,6 +69,31 @@ export default function Settings() {
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     toast(u.active ? 'המשתמש הושבת' : 'המשתמש הופעל');
     setAccessTarget(null);
+    void refetch();
+  }
+
+  function openRoleChange(u: Profile) {
+    setNextRole(u.role);
+    setRoleReason('');
+    setRoleTarget(u);
+  }
+
+  async function changeRole() {
+    if (!roleTarget) return;
+    setDialogBusy(true);
+    // Reuses the same access RPC the deactivate flow uses; it audits with a reason and
+    // stays the authorization boundary (only an owner may reassign roles).
+    const res = await supabase.rpc('manage_profile_access', {
+      p_profile_id: roleTarget.id,
+      p_role: nextRole,
+      p_active: roleTarget.active,
+      p_supplier_id: roleTarget.supplier_id,
+      p_reason: roleReason.trim(),
+    });
+    setDialogBusy(false);
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    toast(`התפקיד עודכן ל${roleLabels[nextRole] ?? nextRole}`);
+    setRoleTarget(null);
     void refetch();
   }
 
@@ -182,7 +210,12 @@ export default function Settings() {
                 <td className="td">{u.active ? <span className="badge-done">פעיל</span> : <span className="badge-idle">מושבת</span>}</td>
                   <td className="td">
                     {u.id !== profile?.id && (
-                      <button className="btn-ghost py-1! text-xs" onClick={() => setAccessTarget(u)}>{u.active ? 'השבתה' : 'הפעלה'}</button>
+                      <div className="flex flex-wrap gap-1">
+                        {u.role !== 'supplier' && (
+                          <button className="btn-ghost py-1! text-xs" onClick={() => openRoleChange(u)}>שינוי תפקיד</button>
+                        )}
+                        <button className="btn-ghost py-1! text-xs" onClick={() => setAccessTarget(u)}>{u.active ? 'השבתה' : 'הפעלה'}</button>
+                      </div>
                     )}
                 </td>
               </tr>
@@ -245,6 +278,35 @@ export default function Settings() {
         requireReason
         busy={dialogBusy}
       />
+
+      <Modal
+        open={!!roleTarget}
+        onClose={() => setRoleTarget(null)}
+        title={`שינוי תפקיד — ${roleTarget?.full_name ?? ''}`}
+        description={`תפקיד נוכחי: ${roleTarget ? (roleLabels[roleTarget.role] ?? roleTarget.role) : ''}`}
+        busy={dialogBusy}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="label" htmlFor="role-change-select">תפקיד חדש</label>
+            <select id="role-change-select" className="input" value={nextRole}
+              onChange={(e) => setNextRole(e.target.value as Role)}>
+              {INVITABLE_ROLES.map((r) => <option key={r} value={r}>{roleLabels[r] ?? r}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="role-change-reason">סיבה</label>
+            <input id="role-change-reason" className="input" value={roleReason}
+              onChange={(e) => setRoleReason(e.target.value)} placeholder="למשל: החלפת מנהל רכש" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button className="btn-secondary" disabled={dialogBusy} onClick={() => setRoleTarget(null)}>ביטול</button>
+            <button className="btn-primary"
+              disabled={dialogBusy || nextRole === roleTarget?.role || !roleReason.trim()}
+              onClick={() => void changeRole()}>שמירת התפקיד</button>
+          </div>
+        </div>
+      </Modal>
 
       <ConfirmDialog
         open={!!resendTarget}
