@@ -5,7 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
 import { APP_NAME } from '../lib/branding';
 import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
-import Fab, { quickActionsForPath } from './Fab';
+import Fab from './Fab';
 import NotificationBell from './NotificationBell';
 import { useDialogLayer, useToast } from './ui';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
@@ -93,7 +93,6 @@ export default function Layout() {
   const role = profile?.role;
   // Section 5: payer/supplier get no search box — their routes are dead ends for it.
   const canSearch = canGlobalSearch(role);
-  const hasQuickActions = quickActionsForPath(role, location.pathname).length > 0;
   // Unfiled-documents pill (0014): counted only for staff who can act on that queue. The
   // Only procurement staff can act on the gallery queue. A known count > 0 is required,
   // so null (loading) and 0 never fabricate an all-clear or workload.
@@ -228,7 +227,7 @@ export default function Layout() {
           <Menu size={22} />
         </button>
         <div className="flex min-h-11 min-w-0 flex-1 items-center px-2 font-bold" title={orgName}>{orgName}</div>
-        <div className={`flex items-center gap-1 ${hasQuickActions ? 'pe-14' : ''}`}>
+        <div className="flex items-center gap-1">
           <NotificationBell onShell />
           {canSearch && (
             <button className="flex items-center justify-center min-w-11 min-h-11 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
