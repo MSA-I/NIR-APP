@@ -559,7 +559,8 @@ export default function NewOrder() {
             </div>
           </section>
 
-          <SupplierComparison cart={cart} offersByProduct={offersByProduct} supplierById={supplierById} effective={effective} />
+          <SupplierComparison cart={cart} offersByProduct={offersByProduct} supplierById={supplierById} effective={effective}
+            onChoose={(productId, supplierId) => setCart((current) => current.map((row) => row.product.id === productId ? { ...row, chosenSupplierId: supplierId } : row))} />
 
           <section aria-labelledby="supplier-split-title" className="border-y border-line-strong bg-surface">
             <div className="flex items-center gap-2 border-b border-line-soft px-3 py-3 sm:px-4"><Split size={17} aria-hidden="true" /><h2 id="supplier-split-title" className="section-title">פיצול הזמנות לספקים</h2></div>
@@ -639,11 +640,12 @@ function SummaryRow({ label, value, tone }: { label: string; value: string; tone
   return <div className="flex flex-wrap items-center justify-between gap-2 py-3"><span className="text-ink-muted">{label}</span><strong className={`num text-end ${tone === 'done' ? 'text-done-fg' : tone === 'await' ? 'text-await-fg' : 'text-ink'}`}>{value}</strong></div>;
 }
 
-function SupplierComparison({ cart, offersByProduct, supplierById, effective }: {
+function SupplierComparison({ cart, offersByProduct, supplierById, effective, onChoose }: {
   cart: CartItem[];
   offersByProduct: Map<string, SupplierProduct[]>;
   supplierById: Map<string, Supplier>;
   effective: (item: CartItem) => { sp: SupplierProduct | null; recommended: SupplierProduct | null };
+  onChoose: (productId: string, supplierId: string) => void;
 }) {
   const rows = cart.map((item) => {
     const { sp } = effective(item);
@@ -656,7 +658,7 @@ function SupplierComparison({ cart, offersByProduct, supplierById, effective }: 
   return (
     <section aria-labelledby="supplier-comparison-title" className="border-y border-line-strong bg-surface">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line-soft px-3 py-3 sm:px-4">
-        <div><h2 id="supplier-comparison-title" className="section-title">השוואת מחיר לכל מוצר</h2><p className="mt-0.5 text-xs text-ink-muted">המחיר נשמר בהזמנה לפי הספק שנבחר ברגע השליחה.</p></div>
+        <div><h2 id="supplier-comparison-title" className="section-title">השוואת מחיר לכל מוצר</h2><p className="mt-0.5 text-xs text-ink-muted">לחצו על ספק כדי לבחור בו למוצר. המחיר נשמר בהזמנה לפי הספק שנבחר ברגע השליחה.</p></div>
         <div className="text-start sm:text-end"><span className="block text-xs text-ink-muted">חיסכון אפשרי בבחירה הזולה</span><strong className={`num text-base ${saving > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(saving)}</strong></div>
       </div>
       <div className="divide-y divide-line-soft">
@@ -674,11 +676,14 @@ function SupplierComparison({ cart, offersByProduct, supplierById, effective }: 
                   const total = offer.current_price * item.qty;
                   const difference = Math.max(0, total - cheapestTotal);
                   const selected = sp?.supplier_id === offer.supplier_id;
-                  return <div key={offer.id} className={`grid gap-1 px-2 py-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-4 ${selected ? 'bg-action-wash/45' : ''}`}>
+                  return <button type="button" key={offer.id}
+                    onClick={() => onChoose(item.product.id, offer.supplier_id)} aria-pressed={selected}
+                    aria-label={`בחירת ${supplierById.get(offer.supplier_id)?.name ?? 'ספק'} עבור ${item.product.name}`}
+                    className={`grid w-full gap-1 px-2 py-2 text-start row-hover cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-4 ${selected ? 'bg-action-wash/45' : ''}`}>
                     <div className="font-medium text-ink-body">{supplierById.get(offer.supplier_id)?.name ?? 'ספק לא זמין'}{selected && <span className="ms-2 text-xs text-action">נבחר</span>}</div>
                     <div className="text-xs text-ink-muted"><span className="num">{fmtMoneyExact(offer.current_price)}</span> × <span className="num">{item.qty}</span> = <strong className="num text-ink">{fmtMoneyExact(total)}</strong></div>
                     <div className={`text-xs font-medium sm:min-w-36 sm:text-end ${difference === 0 ? 'text-done-fg' : 'text-await-fg'}`}>{difference === 0 ? 'המחיר הנמוך ביותר' : `בחירה בזול תחסוך ${fmtMoneyExact(difference)}`}</div>
-                  </div>;
+                  </button>;
                 })}
               </div> : <div className="text-alert-fg">אין הצעת מחיר פעילה למוצר</div>}
             </div>
