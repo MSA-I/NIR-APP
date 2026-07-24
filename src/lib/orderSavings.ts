@@ -2,7 +2,7 @@ export interface SavingsLine {
   productId: string;
   qty: number;
   chosenSupplierId: string | null;
-  offers: { supplierId: string; unitPrice: number }[];
+  offers: { supplierId: string; unitPrice: number; minQty: number | null }[];
 }
 
 export interface OrderSavings {
@@ -28,10 +28,13 @@ export function calculateOrderSavings(lines: SavingsLine[]): OrderSavings {
     const sorted = [...line.offers].sort((a, b) =>
       a.unitPrice - b.unitPrice
       || (a.supplierId < b.supplierId ? -1 : a.supplierId > b.supplierId ? 1 : 0));
-    const offer = line.chosenSupplierId
-      ? sorted.find((candidate) => candidate.supplierId === line.chosenSupplierId) ?? null
-      : sorted[0] ?? null;
-    return { line, offer, cheapest: sorted[0] ?? null };
+    // A supplier is usable only when the ordered qty meets its minimum-order quantity. This
+    // mirrors split()/draftItems() in NewOrder so the summary, the saved draft, and the total
+    // sent to the server all agree (the server enforces qty >= min_qty).
+    const usable = sorted.filter((candidate) => candidate.minQty == null || line.qty >= candidate.minQty);
+    const chosen = line.chosenSupplierId ? usable.find((candidate) => candidate.supplierId === line.chosenSupplierId) : undefined;
+    const offer = chosen ?? usable[0] ?? null;
+    return { line, offer, cheapest: usable[0] ?? null };
   });
 
   const complete = lines.length > 0 && selected.every(({ offer }) => offer !== null);

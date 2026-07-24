@@ -220,11 +220,22 @@ export default function NewOrder() {
     setHydrated(true);
   }, [data, explicitDraftId, loadKey, offersByProduct, toast]);
 
+  // Single source of truth for which supplier a line resolves to. A supplier is usable only when
+  // the ordered qty meets its minimum-order quantity (the server enforces qty >= min_qty). Keep an
+  // explicit pick while it stays usable, else the cheapest offer that is, else none. split(),
+  // effective(), draftItems and calculateOrderSavings all use this same rule so the summary, the
+  // saved draft, and the total sent to the server never diverge.
+  const usableOffer = useCallback((item: CartItem): SupplierProduct | null => {
+    const offers = offersByProduct.get(item.product.id) ?? [];
+    const picked = item.chosenSupplierId ? offers.find((o) => o.supplier_id === item.chosenSupplierId) : null;
+    return picked && meetsMin(picked, item.qty) ? picked : offers.find((o) => meetsMin(o, item.qty)) ?? null;
+  }, [offersByProduct]);
+
   const draftItems = useMemo<DraftItemInput[]>(() => cart.map((item) => ({
     product_id: item.product.id,
     qty: item.qty,
-    chosen_supplier_id: item.chosenSupplierId,
-  })), [cart]);
+    chosen_supplier_id: usableOffer(item)?.supplier_id ?? null,
+  })), [cart, usableOffer]);
   latestDraftRef.current = { requestId: draftId, notes, expectedDate, editorStep: step, items: draftItems };
 
   const runSaveQueue = useCallback((force = false): Promise<boolean> => {
@@ -338,17 +349,15 @@ export default function NewOrder() {
 
   function effective(item: CartItem): { sp: SupplierProduct | null; recommended: SupplierProduct | null } {
     const offers = offersByProduct.get(item.product.id) ?? [];
-    const recommended = offers[0] ?? null;
-    const sp = item.chosenSupplierId ? offers.find((offer) => offer.supplier_id === item.chosenSupplierId) ?? null : recommended;
-    return { sp, recommended };
+    const recommended = offers.find((offer) => meetsMin(offer, item.qty)) ?? null;
+    return { sp: usableOffer(item), recommended };
   }
 
   const split = useMemo(() => {
     const groups = new Map<string, { supplier: Supplier; items: { item: CartItem; sp: SupplierProduct }[]; subtotal: number }>();
     const noSupplier: CartItem[] = [];
     for (const item of cart) {
-      const offers = offersByProduct.get(item.product.id) ?? [];
-      const sp = item.chosenSupplierId ? offers.find((offer) => offer.supplier_id === item.chosenSupplierId) ?? null : offers[0] ?? null;
+      const sp = usableOffer(item);
       if (!sp) { noSupplier.push(item); continue; }
       const supplier = supplierById.get(sp.supplier_id);
       if (!supplier) { noSupplier.push(item); continue; }
@@ -358,13 +367,13 @@ export default function NewOrder() {
       groups.set(supplier.id, group);
     }
     return { groups: [...groups.values()], noSupplier };
-  }, [cart, offersByProduct, supplierById]);
+  }, [cart, usableOffer, supplierById]);
   const total = split.groups.reduce((sum, group) => sum + group.subtotal, 0);
   const savings = useMemo(() => calculateOrderSavings(cart.map((item) => ({
     productId: item.product.id,
     qty: item.qty,
     chosenSupplierId: item.chosenSupplierId,
-    offers: (offersByProduct.get(item.product.id) ?? []).map((offer) => ({ supplierId: offer.supplier_id, unitPrice: offer.current_price })),
+    offers: (offersByProduct.get(item.product.id) ?? []).map((offer) => ({ supplierId: offer.supplier_id, unitPrice: offer.current_price, minQty: offer.min_qty })),
   }))), [cart, offersByProduct]);
   const singleSupplierName = savings.singleSupplierId ? supplierById.get(savings.singleSupplierId)?.name ?? null : null;
 
@@ -462,11 +471,14 @@ export default function NewOrder() {
           </div>
           {saveError && saveStatus === 'error' && <p role="alert" className="text-xs text-alert-fg">{saveError}</p>}
         </div>
-        <div className="flex flex-wrap gap-2">
-          {(draftId || cart.length > 0) && <button type="button" className="btn-ghost text-alert-solid" disabled={busy} onClick={() => setCancelOpen(true)}><XCircle size={15} /> ביטול טיוטה</button>}
-          <button type="button" className="btn-primary" disabled={busy || !cart.length || split.noSupplier.length > 0} onClick={() => void openReview()}>
-            <CheckCircle2 size={15} /> סקירה ואישור
-          </button>
+        <div className="flex flex-col items-stretch gap-1 sm:items-end">
+          <div className="flex flex-wrap gap-2">
+            {(draftId || cart.length > 0) && <button type="button" className="btn-ghost text-alert-solid" disabled={busy} onClick={() => setCancelOpen(true)}><XCircle size={15} /> ביטול טיוטה</button>}
+            <button type="button" className="btn-primary" disabled={busy || !cart.length || split.noSupplier.length > 0} onClick={() => void openReview()}>
+              <CheckCircle2 size={15} /> סקירה ואישור
+            </button>
+          </div>
+          {split.noSupplier.length > 0 && <p className="text-xs text-alert-fg sm:text-end">יש {split.noSupplier.length} פריטים מתחת למינימום הזמנה — הגדל כמות או הסר כדי להמשיך</p>}
         </div>
       </div>
 
@@ -548,8 +560,8 @@ export default function NewOrder() {
                     <div className="text-sm"><span className="text-ink-muted">כמות </span><b className="num">{item.qty}</b></div>
                     <select className="input" aria-label={`ספק עבור ${item.product.name}`} value={item.chosenSupplierId ?? ''}
                       onChange={(event) => setCart((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, chosenSupplierId: event.target.value || null } : row))}>
-                      <option value="">{recommended ? `הזול ביותר: ${supplierById.get(recommended.supplier_id)?.name} — ₪${recommended.current_price.toFixed(2)}` : 'אין ספק זמין'}</option>
-                      {offers.map((offer) => <option key={offer.id} value={offer.supplier_id}>{supplierById.get(offer.supplier_id)?.name} — ₪{offer.current_price.toFixed(2)}</option>)}
+                      <option value="">{recommended ? `הזול ביותר: ${supplierById.get(recommended.supplier_id)?.name} — ₪${recommended.current_price.toFixed(2)}` : offers.length ? `הגדל כמות — מינימום הזמנה ${Math.min(...offers.map((o) => o.min_qty ?? 1))}` : 'אין ספק זמין'}</option>
+                      {offers.map((offer) => <option key={offer.id} value={offer.supplier_id} disabled={!meetsMin(offer, item.qty)}>{supplierById.get(offer.supplier_id)?.name} — ₪{offer.current_price.toFixed(2)}{offer.min_qty && offer.min_qty > 1 ? ` · מינ׳ ${offer.min_qty}` : ''}</option>)}
                     </select>
                     <div className="text-sm font-semibold num">{sp ? fmtMoneyExact(sp.current_price * item.qty) : '—'}</div>
                     <button type="button" className="grid size-11 place-items-center text-ink-faint hover:bg-surface-sunken hover:text-alert-solid" onClick={() => setCart((current) => current.filter((_, rowIndex) => rowIndex !== index))} aria-label={`הסרת ${item.product.name}`}><Trash2 size={15} /></button>
@@ -564,7 +576,24 @@ export default function NewOrder() {
 
           <section aria-labelledby="supplier-split-title" className="border-y border-line-strong bg-surface">
             <div className="flex items-center gap-2 border-b border-line-soft px-3 py-3 sm:px-4"><Split size={17} aria-hidden="true" /><h2 id="supplier-split-title" className="section-title">פיצול הזמנות לספקים</h2></div>
-            {split.noSupplier.length > 0 && <div className="flex items-start gap-2 border-b border-alert-line bg-alert-wash px-3 py-2.5 text-sm text-alert-fg sm:px-4"><AlertTriangle size={16} className="mt-0.5 shrink-0" />ללא ספק זמין: {split.noSupplier.map((item) => item.product.name).join(', ')}</div>}
+            {split.noSupplier.length > 0 && <div className="border-b border-alert-line bg-alert-wash px-3 py-2.5 text-sm text-alert-fg sm:px-4">
+              <div className="flex items-start gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0" /><span>ללא ספק זמין לכמות שנבחרה — הגדל כמות למינימום או הסר:</span></div>
+              <ul className="mt-1.5 space-y-1.5">
+                {split.noSupplier.map((item) => {
+                  const o = offersByProduct.get(item.product.id) ?? [];
+                  const min = o.reduce((m, x) => Math.min(m, x.min_qty ?? 1), Infinity);
+                  return (
+                    <li key={item.product.id} className="flex flex-wrap items-center gap-2">
+                      <span className="min-w-0 flex-1 break-words">{item.product.name}{o.length > 0 && Number.isFinite(min) ? ` · מינימום ${min}` : ' · אין הצעת ספק'}</span>
+                      {o.length > 0 && Number.isFinite(min) && (
+                        <button type="button" className="btn-secondary py-1! text-xs" onClick={() => setCart((current) => current.map((row) => row.product.id === item.product.id ? { ...row, qty: min } : row))}>הגדל ל-{min}</button>
+                      )}
+                      <button type="button" className="btn-ghost py-1! text-xs" onClick={() => setCart((current) => current.filter((row) => row.product.id !== item.product.id))}>הסר</button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>}
             <div className="divide-y divide-line-soft">
               {split.groups.map((group) => {
                 const underMin = group.supplier.min_order_amount != null && group.subtotal < group.supplier.min_order_amount;
@@ -634,6 +663,13 @@ export default function NewOrder() {
         confirmLabel="ביטול הטיוטה" danger requireReason busy={busy} />
     </div>
   );
+}
+
+/** A supplier offer is usable for a line only when the ordered qty meets its minimum-order
+ *  quantity. The server (save/finalize RPC) enforces `qty >= min_qty`; the UI must match it,
+ *  otherwise the cheapest-shown supplier resolves to none server-side and the order fails. */
+function meetsMin(offer: SupplierProduct, qty: number): boolean {
+  return offer.min_qty == null || qty >= offer.min_qty;
 }
 
 function SummaryRow({ label, value, tone }: { label: string; value: string; tone?: 'done' | 'await' }) {
