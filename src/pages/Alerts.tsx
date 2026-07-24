@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { RefreshCw, ChevronLeft, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';
+import { useParamState } from '../lib/useParamState';
 import { buildSummary, type Summary } from '../lib/summary';
 import type { AlertSeverity } from '../lib/alerts';
 import { fmtDateTime } from '../lib/format';
@@ -28,6 +29,7 @@ export default function Alerts() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { data, loading, fetching, error, refetch } = useQuery<Summary>(() => buildSummary(), []);
+  const [sevFilter, setSevFilter] = useParamState('severity');
 
   // Opening the canonical alerts screen acknowledges everything delivered to the bell.
   // Wait for a successful load so a network failure never clears unseen work.
@@ -38,6 +40,10 @@ export default function Alerts() {
   if (loading) return <SkeletonCards count={5} cols={5} title />;
   if (error && !data) return <ErrorNote message={error} />;
   if (!data) return null;
+
+  const SEV_ORDER: AlertSeverity[] = ['critical', 'warning', 'info'];
+  const present = SEV_ORDER.filter((s) => data.alerts.some((a) => a.severity === s));
+  const shown = sevFilter ? data.alerts.filter((a) => a.severity === sevFilter) : data.alerts;
 
   return (
     <div className="space-y-5">
@@ -64,7 +70,21 @@ export default function Alerts() {
       )}
 
       <div>
-        <h2 className="section-title mb-2">דורש טיפול</h2>
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h2 className="section-title">דורש טיפול</h2>
+          {present.length > 1 && (
+            <div className="flex flex-wrap gap-1" role="group" aria-label="סינון התראות לפי סוג">
+              <button type="button" onClick={() => setSevFilter('')} aria-pressed={!sevFilter}
+                className={`${!sevFilter ? 'badge-info' : 'badge-idle'} cursor-pointer`}>הכל</button>
+              {present.map((s) => (
+                <button key={s} type="button" onClick={() => setSevFilter(s)} aria-pressed={sevFilter === s}
+                  className={`${sevFilter === s ? SEVERITY_BADGE[s] : 'badge-idle'} cursor-pointer`}>
+                  {SEVERITY_LABEL[s]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {data.complete && data.alerts.length === 0 ? (
           // Deliberately not a row of zeros: "nothing found" is a different statement from
           // "we measured seven things and they were all zero", and only the first is true.
@@ -72,9 +92,9 @@ export default function Alerts() {
             <ShieldCheck size={18} className="text-done-solid shrink-0" />
             לא נמצאו התראות פתוחות בבדיקות שהמערכת יודעת להריץ.
           </div>
-        ) : data.alerts.length > 0 ? (
+        ) : shown.length > 0 ? (
           <div className="card divide-y divide-line-soft overflow-hidden">
-            {data.alerts.map((a) => (
+            {shown.map((a) => (
               <button key={a.code} onClick={() => navigate(a.to)}
                 className="w-full text-start flex items-center gap-3 px-4 py-3 row-hover cursor-pointer">
                 <span className={`${SEVERITY_BADGE[a.severity]} shrink-0`}>{SEVERITY_LABEL[a.severity]}</span>
@@ -85,6 +105,10 @@ export default function Alerts() {
                 <ChevronLeft size={16} className="text-ink-ghost shrink-0" />
               </button>
             ))}
+          </div>
+        ) : data.alerts.length > 0 ? (
+          <div className="card card-pad text-sm text-ink-soft">
+            אין התראות מסוג זה. <button type="button" className="text-action underline" onClick={() => setSevFilter('')}>הצג הכל</button>
           </div>
         ) : (
           <div className="card card-pad text-sm text-ink-soft">
