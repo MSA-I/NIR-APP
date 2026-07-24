@@ -12,13 +12,8 @@ import { DashboardFrame, ChartCard } from './parts';
 
 type Product = { available: boolean | null; price_effective_date: string | null };
 type History = { effective_date: string };
-type Submission = { target_month: string; status: string; accepted_count: number; rejected_count: number; unchanged_count: number; created_at: string };
-
-const SUBMISSION_STATUS: Record<string, string> = {
-  accepted: 'התקבלה',
-  accepted_with_rejections: 'התקבלה חלקית',
-  rejected: 'נדחתה',
-};
+// Live schema (differs from migration 0026): a monthly price-list submission, valued by row composition.
+type Submission = { effective_month: string; row_count: number; created_count: number; updated_count: number; unchanged_count: number; submitted_at: string };
 
 /**
  * Supplier control room. RLS exposes only this supplier's own catalog, price history and monthly
@@ -32,7 +27,7 @@ export default function SupplierDashboard() {
     const [productsRes, historyRes, submissionsRes] = await Promise.all([
       fetchAll((from, to) => supabase.from('supplier_products').select('available, price_effective_date').order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('price_history').select('effective_date').gte('effective_date', `${shiftCalendarMonth(monthKey, -5)}-01`).order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('supplier_price_submissions').select('target_month, status, accepted_count, rejected_count, unchanged_count, created_at').order('target_month').range(from, to)),
+      fetchAll((from, to) => supabase.from('supplier_price_submissions').select('effective_month, row_count, created_count, updated_count, unchanged_count, submitted_at').order('effective_month').range(from, to)),
     ]);
 
     const products = productsRes as unknown as Product[];
@@ -40,14 +35,14 @@ export default function SupplierDashboard() {
     const submissions = submissionsRes as unknown as Submission[];
 
     const last = submissions[submissions.length - 1];
-    const submitted = !!last && last.target_month.slice(0, 7) === monthKey;
+    const submitted = !!last && last.effective_month.slice(0, 7) === monthKey;
     const updatedThisMonth = history.filter((h) => h.effective_date.slice(0, 7) === monthKey).length;
 
     const kpis: ScoreItem[] = [
       { label: 'מוצרים במחירון', value: fmtNum(products.length) },
       { label: 'זמינים', value: fmtNum(products.filter((p) => p.available).length) },
       { label: 'עודכנו החודש', value: fmtNum(updatedThisMonth) },
-      { label: 'הגשה אחרונה', value: last ? fmtMonth(last.target_month) : '—', sub: last ? SUBMISSION_STATUS[last.status] ?? last.status : undefined, numeric: false },
+      { label: 'הגשה אחרונה', value: last ? fmtMonth(last.effective_month) : '—', sub: last ? `${last.row_count} שורות` : undefined, numeric: false },
     ];
 
     // ── charts
@@ -55,12 +50,12 @@ export default function SupplierDashboard() {
       .map((b) => ({ key: fmtMonth(`${b.key}-01`), label: b.count ? fmtNum(b.total) : '', total: b.total }));
 
     const intake: LinePoint[] = submissions.slice(-6).map((s) => ({
-      x: fmtMonth(s.target_month),
-      accepted: s.accepted_count,
-      rejected: s.rejected_count,
+      x: fmtMonth(s.effective_month),
+      created: s.created_count,
+      updated: s.updated_count,
     }));
 
-    return { kpis, submitted, lastDate: last?.created_at ?? null, changes, intake };
+    return { kpis, submitted, lastDate: last?.submitted_at ?? null, changes, intake };
   });
 
   if (loading) return <SkeletonCards count={4} cols={4} title />;
@@ -92,10 +87,10 @@ export default function SupplierDashboard() {
             ariaLabel={`שינויי מחיר לפי חודש: ${data.changes.map((p) => `${p.key} ${p.label || 'אין'}`).join(', ')}`}
             emptyMessage="אין שינויי מחיר בתקופה" />
         </ChartCard>
-        <ChartCard title="קליטת הגשות" subtitle="שורות שהתקבלו מול שנדחו בכל הגשה">
+        <ChartCard title="הרכב הגשות" subtitle="מחירים חדשים מול מחירים שעודכנו בכל הגשה">
           <ComparisonLineChart points={data.intake} xKey="x" legend valueFormatter={fmtNum}
-            series={[{ key: 'accepted', name: 'התקבלו', color: t.bars[0] }, { key: 'rejected', name: 'נדחו', color: t.bars[2], dashed: true }]}
-            ariaLabel="שורות מחירון שהתקבלו מול שנדחו, לפי הגשה"
+            series={[{ key: 'created', name: 'חדשים', color: t.bars[0] }, { key: 'updated', name: 'עודכנו', color: t.bars[2], dashed: true }]}
+            ariaLabel="מחירים חדשים מול מעודכנים, לפי הגשה"
             emptyMessage="אין היסטוריית הגשות" />
         </ChartCard>
       </div>
