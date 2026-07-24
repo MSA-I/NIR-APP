@@ -49,5 +49,6 @@ export async function finalizeOrderDraft(requestId: string, expectedTotal: numbe
   return unwrap(await supabase.rpc('finalize_purchase_request_draft', {
     p_request_id: requestId,
     p_expected_total: expectedTotal,
+    p_reason: 'אישור הזמנה',
   })) as FinalizedDraft;
 }

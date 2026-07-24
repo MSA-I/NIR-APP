@@ -25,7 +25,9 @@ const moneyFromCents = (value: bigint) => Number(value) / 100;
 
 export function calculateOrderSavings(lines: SavingsLine[]): OrderSavings {
   const selected = lines.map((line) => {
-    const sorted = [...line.offers].sort((a, b) => a.unitPrice - b.unitPrice);
+    const sorted = [...line.offers].sort((a, b) =>
+      a.unitPrice - b.unitPrice
+      || (a.supplierId < b.supplierId ? -1 : a.supplierId > b.supplierId ? 1 : 0));
     const offer = line.chosenSupplierId
       ? sorted.find((candidate) => candidate.supplierId === line.chosenSupplierId) ?? null
       : sorted[0] ?? null;
@@ -42,7 +44,7 @@ export function calculateOrderSavings(lines: SavingsLine[]): OrderSavings {
 
   let singleSupplierId: string | null = null;
   let singleSupplierUnits: bigint | null = null;
-  const candidates = new Set(lines.flatMap((line) => line.offers.map((offer) => offer.supplierId)));
+  const candidates = [...new Set(lines.flatMap((line) => line.offers.map((offer) => offer.supplierId)))].sort();
   for (const supplierId of candidates) {
     let total = 0n;
     let coversBasket = true;
@@ -51,7 +53,11 @@ export function calculateOrderSavings(lines: SavingsLine[]): OrderSavings {
       if (!offers.length) { coversBasket = false; break; }
       total += lineUnits(line.qty, Math.min(...offers.map((offer) => offer.unitPrice)));
     }
-    if (coversBasket && (singleSupplierUnits === null || total < singleSupplierUnits)) {
+    if (coversBasket && (
+      singleSupplierUnits === null
+      || total < singleSupplierUnits
+      || (total === singleSupplierUnits && (singleSupplierId === null || supplierId < singleSupplierId))
+    )) {
       singleSupplierId = supplierId;
       singleSupplierUnits = total;
     }

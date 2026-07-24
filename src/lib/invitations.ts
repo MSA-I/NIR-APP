@@ -65,8 +65,11 @@ export const sendInvite = (email: string, role: Role) =>
 export const resendInvite = (invitationId: string) =>
   callSendInvite({ action: 'resend', invitationId });
 
-export async function revokeInvite(invitationId: string): Promise<string | null> {
-  const { error } = await supabase.rpc('revoke_invitation', { p_id: invitationId });
+export async function revokeInvite(invitationId: string, reason: string): Promise<string | null> {
+  const { error } = await supabase.rpc('revoke_invitation', {
+    p_id: invitationId,
+    p_reason: reason,
+  });
   return error ? error.message : null;
 }
 

@@ -232,6 +232,8 @@ function Stepper({ current, doneByData, skipped, onSelect }: {
           <li key={s.key} className="flex-1 min-w-40 border-b sm:border-b-0 sm:border-s border-line-soft first:border-s-0">
             <button
               onClick={() => onSelect(i)}
+              aria-current={active ? 'step' : undefined}
+              aria-pressed={active}
               className={`w-full flex items-center gap-2.5 px-4 py-3 text-start transition-colors cursor-pointer
                 ${active ? 'bg-action-wash/60' : 'hover:bg-surface-sunken'}`}>
               <span className={`flex size-8 shrink-0 items-center justify-center rounded-full
@@ -310,29 +312,29 @@ function BusinessStep({ onSaved }: { onSaved: () => void }) {
       />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <label className="label">שם העסק *</label>
-          <input className="input" value={f.name} onChange={(e) => set('name', e.target.value)} />
+          <label className="label" htmlFor="onboarding-business-name">שם העסק *</label>
+          <input id="onboarding-business-name" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} />
         </div>
         <div>
-          <label className="label">ח.פ / עוסק מורשה</label>
-          <input className="input" dir="ltr" value={f.tax_id} onChange={(e) => set('tax_id', e.target.value)} />
+          <label className="label" htmlFor="onboarding-tax-id">ח.פ / עוסק מורשה</label>
+          <input id="onboarding-tax-id" className="input" dir="ltr" value={f.tax_id} onChange={(e) => set('tax_id', e.target.value)} />
         </div>
         <div>
-          <label className="label">שיעור מע״מ (%)</label>
-          <input type="number" step="0.5" min="0" max="100" className="input num"
+          <label className="label" htmlFor="onboarding-vat-rate">שיעור מע״מ (%)</label>
+          <input id="onboarding-vat-rate" type="number" step="0.5" min="0" max="100" className="input num"
             value={f.vat_rate} onChange={(e) => set('vat_rate', e.target.value)} />
         </div>
         <div>
-          <label className="label">אימייל ליצירת קשר</label>
-          <input className="input" dir="ltr" value={f.contact_email} onChange={(e) => set('contact_email', e.target.value)} />
+          <label className="label" htmlFor="onboarding-contact-email">אימייל ליצירת קשר</label>
+          <input id="onboarding-contact-email" className="input" dir="ltr" value={f.contact_email} onChange={(e) => set('contact_email', e.target.value)} />
         </div>
         <div>
-          <label className="label">טלפון</label>
-          <input className="input" dir="ltr" value={f.contact_phone} onChange={(e) => set('contact_phone', e.target.value)} />
+          <label className="label" htmlFor="onboarding-contact-phone">טלפון</label>
+          <input id="onboarding-contact-phone" className="input" dir="ltr" value={f.contact_phone} onChange={(e) => set('contact_phone', e.target.value)} />
         </div>
         <div className="sm:col-span-2">
-          <label className="label">כתובת</label>
-          <input className="input" value={f.address} onChange={(e) => set('address', e.target.value)} />
+          <label className="label" htmlFor="onboarding-address">כתובת</label>
+          <input id="onboarding-address" className="input" value={f.address} onChange={(e) => set('address', e.target.value)} />
         </div>
       </div>
       <div className="flex justify-end">
@@ -441,7 +443,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
       {saveError && <ErrorNote message={saveError} />}
 
       <div className="flex gap-2">
-        <input className="input" placeholder="שם קטגוריה" value={draft}
+        <input className="input" aria-label="שם קטגוריה חדשה" placeholder="שם קטגוריה" value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(draft); } }} />
         <button className="btn-secondary whitespace-nowrap" onClick={() => add(draft)}><Plus size={15} /> הוספה</button>
@@ -452,7 +454,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
           <div className="text-xs font-medium text-ink-muted mb-2">הצעות — לחיצה מוסיפה לרשימה</div>
           <div className="flex flex-wrap gap-1.5">
             {suggestions.map((s) => (
-              <button key={s} onClick={() => add(s)}
+              <button key={s} aria-label={`הוספת הקטגוריה ${s}`} onClick={() => add(s)}
                 className="rounded-lg border border-line-strong px-2.5 py-1.5 text-xs text-ink-soft hover:bg-surface-sunken cursor-pointer">
                 <Plus size={12} className="inline -mt-px me-1" />{s}
               </button>
@@ -468,6 +470,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
           {list.map((c, i) => (
             <li key={c.id ?? `new-${i}`} className="flex items-center gap-2 px-3 py-2">
               <input className="input border-transparent! bg-transparent! focus:bg-surface! focus:border-line-strong!"
+                aria-label={`שם הקטגוריה ${c.name || i + 1}`}
                 value={c.name}
                 onChange={(e) => setItems(list.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
               {!c.id && <span className="badge-info shrink-0">חדשה</span>}
@@ -495,12 +498,13 @@ interface ImportRow { id: string; row: number }
 
 type Parser<T> = (rows: SheetRow[], cols: Record<string, string>) => MapResult<T>;
 
-function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, confirmMessage, onDone, children }: {
+function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, confirmMessage, requireReason = false, onDone, children }: {
   fields: readonly FieldSpec[];
   parse: Parser<T>;
   columns: Column<T>[];
-  commit: (rows: T[]) => Promise<string[]>;
+  commit: (rows: T[], reason?: string) => Promise<string[]>;
   confirmMessage: (count: number) => string;
+  requireReason?: boolean;
   onDone: () => void;
   children?: ReactNode;
 }) {
@@ -546,13 +550,14 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
     setParsed(parse(sheet.rows, cols));
   }
 
-  async function run() {
+  async function run(reason?: string) {
     if (!parsed) return;
-    setConfirming(false);
     setBusy(true);
     setFailure(null);
     try {
-      setReport(await commit(parsed.valid));
+      const nextReport = await commit(parsed.valid, reason);
+      setReport(nextReport);
+      setConfirming(false);
     } catch (e) {
       setFailure(errMsg(e));
     } finally {
@@ -590,7 +595,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
         </div>
 
         {parsed.valid.length > 0 ? (
-          <DataTable rows={parsed.valid} columns={columns} pageSize={10} mobile="scroll" />
+          <DataTable rows={parsed.valid} columns={columns} pageSize={10} mobile="scroll" rowLabel={(row) => `שורת ייבוא ${row.row}`} />
         ) : (
           <EmptyState title="אין שורות תקינות לייבוא" subtitle="בדוק את מיפוי העמודות או את תוכן הקובץ" />
         )}
@@ -609,11 +614,12 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
         <ConfirmDialog
           open={confirming}
           onClose={() => setConfirming(false)}
-          onConfirm={() => void run()}
+          onConfirm={(reason) => void run(reason)}
           busy={busy}
           title="אישור ייבוא"
           message={confirmMessage(parsed.valid.length)}
           confirmLabel="ייבוא"
+          requireReason={requireReason}
         />
       </div>
     );
@@ -629,8 +635,8 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {fields.map((f) => (
             <div key={f.key}>
-              <label className="label">{f.label}{f.required && ' *'}</label>
-              <select className="input" value={cols[f.key] ?? ''}
+              <label className="label" htmlFor={`import-column-${f.key}`}>{f.label}{f.required && ' *'}</label>
+              <select id={`import-column-${f.key}`} className="input" value={cols[f.key] ?? ''}
                 onChange={(e) => setCols((m) => ({ ...m, [f.key]: e.target.value }))}>
                 <option value="">— ללא —</option>
                 {sheet.headers.map((h) => <option key={h} value={h}>{h}</option>)}
@@ -641,7 +647,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
 
         <div className="overflow-x-auto border border-line rounded-lg">
           <table className="w-full">
-            <thead className="bg-surface-sunken"><tr>{sheet.headers.map((h) => <th key={h} className="th">{h}</th>)}</tr></thead>
+            <thead className="bg-surface-sunken"><tr>{sheet.headers.map((h) => <th key={h} scope="col" className="th">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-line-soft">
               {sheet.rows.slice(0, 5).map((r, i) => (
                 <tr key={i}>{sheet.headers.map((h) => <td key={h} className="td text-ink-muted">{cellText(r, h, 60) || '—'}</td>)}</tr>
@@ -928,7 +934,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
     });
   };
 
-  async function commit(rows: ProductDraft[]): Promise<string[]> {
+  async function commit(rows: ProductDraft[], reason?: string): Promise<string[]> {
     const { products, suppliers, categories } = index.current;
     const orgId = profile!.org_id;
 
@@ -963,37 +969,40 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
 
     // 3. price rows — only where a supplier resolved and the price survived validation
     let pricesSet = 0;
+    let pricesUnchanged = 0;
+    let priceBatchError: string | null = null;
     const priceFailures: number[] = [];
+    const priceRows: { supplier_id: string; product_id: string; price: number; available: boolean; sourceRow: number }[] = [];
     for (const r of rows) {
       if (r.price == null) continue;
       const supplierId = suppliers.get(nameKey(r.supplier));
       const productId = r.existingProductId ?? products.get(nameKey(r.name));
       if (!supplierId || !productId) { priceFailures.push(r.row); continue; }
+      priceRows.push({ supplier_id: supplierId, product_id: productId, price: r.price, available: true, sourceRow: r.row });
+    }
 
-      const ins = await supabase.from('supplier_products').insert({
-        org_id: orgId,
-        supplier_id: supplierId,
-        product_id: productId,
-        current_price: r.price,
-        price_effective_date: todayISO(),
-      }).select('id').single();
-
-      if (ins.error || !ins.data) { priceFailures.push(r.row); continue; }
-      await supabase.from('price_history').insert({
-        org_id: orgId,
-        supplier_product_id: (ins.data as { id: string }).id,
-        price: r.price,
-        effective_date: todayISO(),
-        created_by: profile!.id,
+    if (priceRows.length) {
+      const imported = await supabase.rpc('import_supplier_prices', {
+        p_rows: priceRows.map(({ sourceRow: _sourceRow, ...row }) => row),
+        p_effective_date: todayISO(),
+        p_reason: reason?.trim() || null,
       });
-      pricesSet++;
+      if (imported.error) {
+        priceFailures.push(...priceRows.map((row) => row.sourceRow));
+        priceBatchError = errMsg(imported.error);
+      } else {
+        const result = imported.data as { created: number; updated: number; unchanged: number };
+        pricesSet = result.created + result.updated;
+        pricesUnchanged = result.unchanged;
+      }
     }
 
     const lines = [`נוצרו ${createdProducts} מוצרים.`];
     if (newCategoryNames.length) lines.push(`נוצרו ${newCategoryNames.length} קטגוריות חדשות מתוך הקובץ.`);
     lines.push(pricesSet ? `נקבעו ${pricesSet} מחירי ספק.` : 'לא נקבעו מחירי ספק בייבוא הזה.');
+    if (pricesUnchanged) lines.push(`${pricesUnchanged} מחירים כבר היו זהים ולא יצרו היסטוריה נוספת.`);
     if (priceFailures.length) {
-      lines.push(`${priceFailures.length} מחירים לא נשמרו (שורות ${priceFailures.slice(0, 10).join(', ')}${priceFailures.length > 10 ? ' ועוד' : ''}) — ייתכן שכבר קיים מחיר לאותו ספק ומוצר.`);
+      lines.push(`${priceFailures.length} מחירים לא נשמרו (שורות ${priceFailures.slice(0, 10).join(', ')}${priceFailures.length > 10 ? ' ועוד' : ''}).${priceBatchError ? ` הסיבה: ${priceBatchError}` : ''}`);
     }
     return lines;
   }
@@ -1036,6 +1045,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
         parse={parse}
         columns={columns}
         commit={commit}
+        requireReason
         confirmMessage={(n) => `${n} שורות ייכתבו למערכת: מוצרים חדשים, קטגוריות חסרות ומחירי ספק.`}
         onDone={onDone}>
         <p className="text-sm text-ink-soft">

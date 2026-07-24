@@ -14,11 +14,14 @@ npm run dev        # http://localhost:5199
 `.env` (ראה `.env.example`):
 
 ```
-VITE_SUPABASE_URL=https://rkftlbctohswhbbiaqin.supabase.co
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon key>
 ```
 
-## משתמשי דמו — קיימים רק לאחר טעינת חבילת הדמו (סיסמה לכולם: `SupplyFlowDemo2026!`)
+## משתמשי דמו — קיימים רק לאחר טעינת חבילת הדמו
+
+לכל חשבון דמו נדרשת סיסמה חזקה וייחודית מתוך manifest חיצוני לריפו. הסקריפט אינו
+כולל סיסמת ברירת־מחדל ואינו מדפיס סיסמאות; ראו `scripts/create-users.ps1`.
 
 | אימייל | תפקיד | מסך בית |
 |---|---|---|
@@ -36,6 +39,8 @@ VITE_SUPABASE_ANON_KEY=<anon key>
 - `supabase/migrations/0001_init.sql` — סכימה מלאה: 30 טבלאות, 15 enums, RLS לכל טבלה, טריגר ביקורת גנרי, views ליתרות, bucket אחסון `documents`.
 - `supabase/migrations/0002_payer_execution.sql` — הרשאות ביצוע העברות + RPC לעדכון סטטוס תשלום.
 - `supabase/migrations/0003_kitchen_balance_read.sql` — views של יתרות עם סינון ארגון.
+- `supabase/migrations/0020_p0_identity_audit.sql`–`0022_p0_security_contract.sql` — גבולות
+  זהות/lifecycle, FK רב־דייריים, audit שרתי, מחיקה רכה והרשאת מסמכים/Storage מבוססת שורה.
 - `supabase/seed.sql` — seed ניטרלי לדייר חדש: שורת ארגון + קטגוריות התחלתיות בלבד.
 - `supabase/demo/` — חבילת הדמו כדייר נפרד ("עסק לדוגמה"): 15 ספקים, 46 מוצרים וכל
   תרחישי הקצה הפיננסיים. נטענת לפי דרישה, ואינה חלק מהתקנה אצל לקוח.
@@ -44,10 +49,11 @@ VITE_SUPABASE_ANON_KEY=<anon key>
 
 ```powershell
 $env:SUPABASE_ACCESS_TOKEN = "sbp_..."   # טוקן אישי מ-supabase.com/dashboard/account/tokens
-.\scripts\db-query.ps1 -SqlFile supabase\migrations\0001_init.sql
+.\scripts\db-query.ps1 -SqlFile supabase\migrations\0001_init.sql -ProjectRef "<project-ref>"
 ```
 
-טעינת חבילת הדמו: `scripts\create-users.ps1` (פעם אחת לפרויקט), ואז `scripts\seed-demo.ps1`.
+טעינת חבילת הדמו: `scripts\create-users.ps1` עם URL ו־manifest מפורשים, ואז
+`scripts\seed-demo.ps1 -ProjectRef "<project-ref>"`. היעד הידוע של production נדחה כברירת־מחדל.
 
 ## בדיקה ידנית מומלצת (Happy Path)
 
@@ -61,6 +67,31 @@ $env:SUPABASE_ACCESS_TOKEN = "sbp_..."   # טוקן אישי מ-supabase.com/das
 והרץ בדיקות כדי לראות את מנוע הכפילויות בפעולה.
 
 `npm run build` מריץ בדיקת טיפוסים מלאה + בנייה.
+
+בדיקות P0 הן מקומיות והרסניות למסד `supplyflow-p0` בלבד; כל אחת דורשת opt-in מפורש:
+
+```powershell
+.\scripts\check-p0-security.ps1 -ResetLocalDatabase
+.\scripts\check-p0-upgrade.ps1 -ResetUpgradeDatabase
+```
+
+## שער איכות P4 — מקומי בלבד
+
+לאחר התקנת התלויות, הפקודה היחידה שמריצה את כל שערי הקוד, המסד והדפדפן היא:
+
+```powershell
+npm.cmd run quality
+```
+
+השער משתמש בתשתיות ובבדיקות הקיימות: build ובדיקות Node, ‏P0/P1/P2 SQL, ‏Supabase CLI,
+Docker ו־Chrome/Edge. הוא הרסני **רק** לפרויקט Supabase המקומי `supplyflow-p0`
+(`http://127.0.0.1:55431`), מסרב לכתובת אחרת ומאפס את המסד המקומי בסיום. בדיקות הדפדפן
+משתמשות ב־`PLAYWRIGHT_CORE_PATH` אם הוגדר, או ב־runtime המקומי הקיים של Codex, ושומרות
+ראיות מחוץ לריפו תחת `.codex/visualizations` בפרופיל המשתמש. אפשר לשנות רק את יעד הראיות
+באמצעות `QUALITY_ARTIFACT_ROOT`.
+
+חוסר ב־Docker/Supabase/דפדפן/runtime, בדיקה מדולגת או ממצא בדפדפן מחזירים קוד יציאה שאינו
+אפס; אין מסלול fallback שמדווח הצלחה.
 
 ## תיעוד נוסף
 

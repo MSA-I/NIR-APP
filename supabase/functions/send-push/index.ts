@@ -11,8 +11,8 @@
 //
 // service_role is used deliberately and stays server-side (CLAUDE.md iron rule):
 // the function must read every org's subscriptions and delete dead ones, which no
-// single user's RLS view allows. It never mutates business data — only
-// push_subscriptions cleanup on 404/410 (subscription expired at the push service).
+// single user's RLS view allows. It never mutates financial/business rows — only the durable
+// notification outbox/delivery state and push_subscriptions cleanup on 404/410.
 //
 // Required environment (supabase secrets set ...):
 //   PUSH_FN_SECRET     -- shared secret; the SAME value is seeded into private.push_config
@@ -39,6 +39,7 @@ import webpush from 'npm:web-push@3.6.7';
  * no shared module). If one side changes, change the other in the same commit. */
 const DUE_SOON_DAYS = 7;
 const PR_ACTIVE = ['draft', 'pending_approval', 'approved', 'sent_for_execution'];
+const NOTIFIABLE_ORG_STATUSES = ['trial', 'active'];
 
 /** The in-app alerts screen is an owner/office decision surface (App.tsx FINANCE guard).
  *  The bell and Push use the same audience so a notification never links to a forbidden page. */
@@ -53,16 +54,11 @@ interface SubRow {
   auth: string;
 }
 
-interface NotificationInsert {
-  org_id: string;
+interface PendingNotification {
+  notification_id: string;
   user_id: string;
-  event_code: string;
-  entity_key: string;
-  severity: NotificationSeverity;
-  title: string;
-  body: string;
-  target_url: string;
-  dedupe_key: string;
+  notification_dedupe_key: string;
+  created: boolean;
 }
 
 interface PushPayload {
@@ -103,25 +99,38 @@ function businessDate(n = 0): string {
   return date.toISOString().slice(0, 10);
 }
 
-async function recipientIds(admin: SupabaseClient, orgId: string): Promise<string[]> {
-  const { data, error } = await admin.from('profiles').select('id')
-    .eq('org_id', orgId).eq('active', true).in('role', ALERT_ROLES);
+async function organizationCanNotify(admin: SupabaseClient, orgId: string): Promise<boolean> {
+  const { data, error } = await admin.from('organizations').select('id')
+    .eq('id', orgId).in('status', NOTIFIABLE_ORG_STATUSES).maybeSingle();
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => row.id as string);
+  return !!data;
 }
 
-/** Inserts only genuinely new events. The unique user_id+dedupe_key constraint turns an
- *  Edge retry into a no-op; the returned ids are exactly the users eligible for Push. */
-async function insertNotifications(
+async function enqueueNotification(
   admin: SupabaseClient,
-  rows: NotificationInsert[],
-): Promise<string[]> {
-  if (!rows.length) return [];
-  const { data, error } = await admin.from('notifications')
-    .upsert(rows, { onConflict: 'user_id,dedupe_key', ignoreDuplicates: true })
-    .select('user_id');
+  values: {
+    orgId: string;
+    eventCode: string;
+    entityKey: string;
+    severity: NotificationSeverity;
+    title: string;
+    body: string;
+    targetUrl: string;
+    dedupeKey: string;
+  },
+): Promise<PendingNotification[]> {
+  const { data, error } = await admin.rpc('enqueue_notification_delivery', {
+    p_org_id: values.orgId,
+    p_event_code: values.eventCode,
+    p_entity_key: values.entityKey,
+    p_severity: values.severity,
+    p_title: values.title,
+    p_body: values.body,
+    p_target_url: values.targetUrl,
+    p_dedupe_key: values.dedupeKey,
+  });
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => row.user_id as string);
+  return (data ?? []) as PendingNotification[];
 }
 
 async function subscriptionsForUsers(
@@ -137,23 +146,31 @@ async function subscriptionsForUsers(
   return (data ?? []) as SubRow[];
 }
 
-/** Claims a standing condition once per lifecycle, and once more on warning→critical.
- *  The SQL function locks the event-state row, so concurrent triggers cannot double-claim. */
-async function claimStandingEvent(
+/** Claims a standing condition and persists every recipient row in the same DB transaction.
+ *  A repeated call returns only rows whose Push delivery is still pending. */
+async function claimStandingEventAndNotify(
   admin: SupabaseClient,
-  orgId: string,
-  eventCode: string,
-  entityKey: string,
-  severity: NotificationSeverity,
-): Promise<string | null> {
-  const { data, error } = await admin.rpc('claim_notification_event', {
-    p_org_id: orgId,
-    p_event_code: eventCode,
-    p_entity_key: entityKey,
-    p_severity: severity,
+  values: {
+    orgId: string;
+    eventCode: string;
+    entityKey: string;
+    severity: NotificationSeverity;
+    title: string;
+    body: string;
+    targetUrl: string;
+  },
+): Promise<PendingNotification[]> {
+  const { data, error } = await admin.rpc('claim_notification_event_and_notify', {
+    p_org_id: values.orgId,
+    p_event_code: values.eventCode,
+    p_entity_key: values.entityKey,
+    p_severity: values.severity,
+    p_title: values.title,
+    p_body: values.body,
+    p_target_url: values.targetUrl,
   });
   if (error) throw new Error(error.message);
-  return typeof data === 'string' && data ? data : null;
+  return (data ?? []) as PendingNotification[];
 }
 
 async function closeStandingEvent(
@@ -207,6 +224,66 @@ async function sendToSubs(
   return counts;
 }
 
+async function recordPushResult(
+  admin: SupabaseClient,
+  rows: PendingNotification[],
+  delivered: boolean,
+  error: string | null,
+): Promise<void> {
+  await Promise.all(rows.map(async (row) => {
+    const { error: writeError } = await admin.rpc('record_notification_push_result', {
+      p_notification_id: row.notification_id,
+      p_delivered: delivered,
+      p_error: error,
+    });
+    if (writeError) throw new Error(writeError.message);
+  }));
+}
+
+/** Sends at most one Push payload per user for this invocation. Notification rows are the
+ * durable outbox: successful/no-subscription deliveries are completed, while provider
+ * failures stay pending and are returned again when the same event is retried. */
+async function deliverQueuedNotifications(
+  admin: SupabaseClient,
+  orgId: string,
+  rows: PendingNotification[],
+  payloadFor: (userRows: PendingNotification[]) => PushPayload,
+): Promise<SendCounts> {
+  const totals: SendCounts = { sent: 0, failed: 0, removed: 0 };
+  if (!rows.length) return totals;
+
+  const byUser = new Map<string, PendingNotification[]>();
+  for (const row of rows) {
+    const current = byUser.get(row.user_id) ?? [];
+    current.push(row);
+    byUser.set(row.user_id, current);
+  }
+  const subs = await subscriptionsForUsers(admin, orgId, [...byUser.keys()]);
+
+  const results = await Promise.all([...byUser.entries()].map(async ([userId, userRows]) => {
+    const result = await sendToSubs(
+      admin,
+      subs.filter((sub) => sub.user_id === userId),
+      payloadFor(userRows),
+    );
+    const delivered = result.failed === 0;
+    await recordPushResult(
+      admin,
+      userRows,
+      delivered,
+      delivered ? null : `${result.failed}_push_delivery_failures`,
+    );
+    return result;
+  }));
+
+  for (const result of results) {
+    totals.sent += result.sent;
+    totals.failed += result.failed;
+    totals.removed += result.removed;
+  }
+  return totals;
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method !== 'POST') return fail('method_not_allowed', 'POST only', 405);
 
@@ -250,15 +327,26 @@ Deno.serve(async (req: Request): Promise<Response> => {
       ? 'מחיר אחד עודכן כלפי מעלה במחירון'
       : `${count} מחירים עודכנו כלפי מעלה במחירון`;
     try {
-      const recipients = await recipientIds(admin, body.org_id);
-      const insertedUsers = await insertNotifications(admin, recipients.map((userId) => ({
-        org_id: body.org_id!, user_id: userId, event_code: 'price_increase',
-        entity_key: body.payload!.event_key!, severity: 'warning', title, body: message,
-        target_url: '/prices', dedupe_key: `price_increase:${body.payload!.event_key}`,
-      })));
-      const subs = await subscriptionsForUsers(admin, body.org_id, insertedUsers);
-      const results = await sendToSubs(admin, subs, { title, body: message, url: '/prices' });
-      return json({ ok: true, notifications: insertedUsers.length, results }, 200);
+      if (!await organizationCanNotify(admin, body.org_id)) {
+        return json({ ok: true, notifications: 0, results: { sent: 0, failed: 0, removed: 0 } }, 200);
+      }
+      const pending = await enqueueNotification(admin, {
+        orgId: body.org_id,
+        eventCode: 'price_increase',
+        entityKey: body.payload.event_key,
+        severity: 'warning',
+        title,
+        body: message,
+        targetUrl: '/prices',
+        dedupeKey: `price_increase:${body.payload.event_key}`,
+      });
+      const results = await deliverQueuedNotifications(
+        admin,
+        body.org_id,
+        pending,
+        () => ({ title, body: message, url: '/prices' }),
+      );
+      return json({ ok: true, notifications: pending.filter((row) => row.created).length, results }, 200);
     } catch (e) {
       return fail('query_failed', e instanceof Error ? e.message : 'notification write failed', 500);
     }
@@ -271,27 +359,32 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return fail('invalid_request', 'duplicate_invoice_check payload is incomplete', 400);
     }
     try {
+      if (!await organizationCanNotify(admin, body.org_id)) {
+        return json({ ok: true, notifications: 0 }, 200);
+      }
       if (!body.payload.active) {
         await closeStandingEvent(admin, body.org_id, 'duplicate_invoice', [body.payload.entity_key]);
         return json({ ok: true, notifications: 0 }, 200);
       }
-      const dedupeKey = await claimStandingEvent(
-        admin, body.org_id, 'duplicate_invoice', body.payload.entity_key, 'critical',
-      );
-      if (!dedupeKey) return json({ ok: true, notifications: 0 }, 200);
-
-      const recipients = await recipientIds(admin, body.org_id);
       const count = Math.max(2, Math.floor(body.payload.count));
       const title = 'חשד לחשבונית כפולה';
       const message = `${count} חשבוניות של אותו ספק נושאות אותו מספר`;
-      const insertedUsers = await insertNotifications(admin, recipients.map((userId) => ({
-        org_id: body.org_id!, user_id: userId, event_code: 'duplicate_invoice',
-        entity_key: body.payload!.entity_key!, severity: 'critical', title, body: message,
-        target_url: '/invoices', dedupe_key: dedupeKey,
-      })));
-      const subs = await subscriptionsForUsers(admin, body.org_id, insertedUsers);
-      const results = await sendToSubs(admin, subs, { title, body: message, url: '/invoices' });
-      return json({ ok: true, notifications: insertedUsers.length, results }, 200);
+      const pending = await claimStandingEventAndNotify(admin, {
+        orgId: body.org_id,
+        eventCode: 'duplicate_invoice',
+        entityKey: body.payload.entity_key,
+        severity: 'critical',
+        title,
+        body: message,
+        targetUrl: '/invoices',
+      });
+      const results = await deliverQueuedNotifications(
+        admin,
+        body.org_id,
+        pending,
+        () => ({ title, body: message, url: '/invoices' }),
+      );
+      return json({ ok: true, notifications: pending.filter((row) => row.created).length, results }, 200);
     } catch (e) {
       return fail('query_failed', e instanceof Error ? e.message : 'notification write failed', 500);
     }
@@ -301,7 +394,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (body.event === 'payment_due_scan') {
     const { data: orgRows, error: orgErr } = await admin
       .from('profiles')
-      .select('org_id').eq('active', true).in('role', ALERT_ROLES);
+      .select('org_id, organization:organizations!profiles_org_id_fkey!inner(status)')
+      .eq('active', true).in('role', ALERT_ROLES)
+      .in('organization.status', NOTIFIABLE_ORG_STATUSES);
     if (orgErr) return fail('query_failed', orgErr.message, 500);
 
     const orgIds = [...new Set((orgRows ?? []).map((r) => r.org_id as string))];
@@ -335,35 +430,33 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
       try {
         await closeStandingEvent(admin, orgId, 'payment_due', resolvedKeys);
-        const recipients = await recipientIds(admin, orgId);
-        const rows: NotificationInsert[] = [];
+        const rows: PendingNotification[] = [];
         const today = businessDate();
         for (const due of dueRows ?? []) {
           const severity: NotificationSeverity = String(due.due_date) < today ? 'critical' : 'warning';
-          const dedupeKey = await claimStandingEvent(admin, orgId, 'payment_due', due.id as string, severity);
-          if (!dedupeKey) continue;
           const title = severity === 'critical' ? 'תשלום עבר את מועד הפירעון' : 'תשלום מתקרב לפירעון';
           const message = `דרישת תשלום #${due.number} · מועד ${due.due_date}`;
-          rows.push(...recipients.map((userId) => ({
-            org_id: orgId, user_id: userId, event_code: 'payment_due',
-            entity_key: due.id as string, severity, title, body: message,
-            target_url: '/payment-requests', dedupe_key: `${dedupeKey}:${userId}`,
-          })));
+          rows.push(...await claimStandingEventAndNotify(admin, {
+            orgId,
+            eventCode: 'payment_due',
+            entityKey: due.id as string,
+            severity,
+            title,
+            body: message,
+            targetUrl: '/payment-requests',
+          }));
         }
 
-        const insertedUsers = await insertNotifications(admin, rows);
-        const subs = await subscriptionsForUsers(admin, orgId, insertedUsers);
-        const countsByUser = new Map<string, number>();
-        for (const userId of insertedUsers) countsByUser.set(userId, (countsByUser.get(userId) ?? 0) + 1);
-        const results: SendCounts = { sent: 0, failed: 0, removed: 0 };
-        for (const [userId, count] of countsByUser) {
-          const sent = await sendToSubs(admin, subs.filter((sub) => sub.user_id === userId), {
+        const results = await deliverQueuedNotifications(
+          admin,
+          orgId,
+          rows,
+          (userRows) => ({
             title: 'תשלומים דורשים תשומת לב',
-            body: count === 1 ? 'דרישת תשלום חדשה דורשת טיפול' : `${count} דרישות תשלום חדשות דורשות טיפול`,
+            body: userRows.length === 1 ? 'דרישת תשלום חדשה דורשת טיפול' : `${userRows.length} דרישות תשלום חדשות דורשות טיפול`,
             url: '/payment-requests',
-          });
-          results.sent += sent.sent; results.failed += sent.failed; results.removed += sent.removed;
-        }
+          }),
+        );
         perOrg[orgId] = { ...results, due: (dueRows ?? []).length };
       } catch (e) {
         console.error('due notification failed for org', orgId, e instanceof Error ? e.message : e);

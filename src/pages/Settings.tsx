@@ -7,7 +7,6 @@ import { useAuth } from '../auth/AuthContext';
 import { PageLoader, useToast, ErrorNote, DataTable, StatusBadge, ConfirmDialog, type Column } from '../components/ui';
 import { INVITATION_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime } from '../lib/format';
-import { logAction } from '../lib/audit';
 import {
   INVITABLE_ROLES, INVITATION_COLUMNS, invitationStatusOf,
   sendInvite, resendInvite, revokeInvite, type Invitation,
@@ -28,6 +27,7 @@ export default function Settings() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [resendTarget, setResendTarget] = useState<Invitation | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<Invitation | null>(null);
+  const [accessTarget, setAccessTarget] = useState<Profile | null>(null);
   const [dialogBusy, setDialogBusy] = useState(false);
 
   const { data: users, loading, error, refetch } = useQuery<Profile[]>(async () =>
@@ -53,10 +53,19 @@ export default function Settings() {
     toast('ההגדרות נשמרו — ייכנסו לתוקף בכניסה הבאה');
   }
 
-  async function toggleActive(u: Profile) {
-    const res = await supabase.from('profiles').update({ active: u.active! }).eq('id', u.id);
+  async function toggleActive(u: Profile, reason?: string) {
+    setDialogBusy(true);
+    const res = await supabase.rpc('manage_profile_access', {
+      p_profile_id: u.id,
+      p_role: u.role,
+      p_active: !u.active,
+      p_supplier_id: u.supplier_id,
+      p_reason: reason?.trim() ?? '',
+    });
+    setDialogBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     toast(u.active ? 'המשתמש הושבת' : 'המשתמש הופעל');
+    setAccessTarget(null);
     void refetch();
   }
 
@@ -67,13 +76,6 @@ export default function Settings() {
     setInviting(false);
     if (err) { setInviteError(err); return; }
 
-    await logAction({
-      orgId: profile!.org_id,
-      action: 'invitation_sent',
-      entityType: 'invitations',
-      entityId: result?.invitationId,
-      newValues: { email: inviteEmail.trim().toLowerCase(), role: inviteRole },
-    });
     toast(`ההזמנה נשלחה אל ${result?.email ?? inviteEmail.trim()}`);
     setInviteEmail('');
     void refetchInvites();
@@ -86,13 +88,6 @@ export default function Settings() {
     setDialogBusy(false);
     if (err) { toast(err, 'error'); return; }
 
-    await logAction({
-      orgId: profile!.org_id,
-      action: 'invitation_resent',
-      entityType: 'invitations',
-      entityId: resendTarget.id,
-      newValues: { email: resendTarget.email },
-    });
     toast('ההזמנה נשלחה מחדש — הקישור הקודם בוטל');
     setResendTarget(null);
     void refetchInvites();
@@ -101,18 +96,10 @@ export default function Settings() {
   async function onRevoke(reason?: string) {
     if (!revokeTarget) return;
     setDialogBusy(true);
-    const err = await revokeInvite(revokeTarget.id);
+    const err = await revokeInvite(revokeTarget.id, reason?.trim() ?? '');
     setDialogBusy(false);
     if (err) { toast(err, 'error'); return; }
 
-    await logAction({
-      orgId: profile!.org_id,
-      action: 'invitation_revoked',
-      entityType: 'invitations',
-      entityId: revokeTarget.id,
-      reason,
-      oldValues: { email: revokeTarget.email, role: revokeTarget.role },
-    });
     toast('ההזמנה בוטלה');
     setRevokeTarget(null);
     void refetchInvites();
@@ -169,18 +156,23 @@ export default function Settings() {
       <div className="card card-pad space-y-4">
         <h2 className="section-title">הגדרות עסק</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div><label className="label">שיעור מע״מ (%)</label><input type="number" step="0.5" className="input num" value={vatRate} onChange={(e) => setVatRate(e.target.value)} /></div>
-          <div><label className="label">טווח ימים להתאמת בנק</label><input type="number" className="input num" value={matchDays} onChange={(e) => setMatchDays(e.target.value)} /></div>
-          <div><label className="label">סטיית סכום מותרת (₪)</label><input type="number" step="0.5" className="input num" value={tolerance} onChange={(e) => setTolerance(e.target.value)} /></div>
+          <div><label className="label" htmlFor="settings-vat-rate">שיעור מע״מ (%)</label><input id="settings-vat-rate" type="number" step="0.5" className="input num" value={vatRate} onChange={(e) => setVatRate(e.target.value)} /></div>
+          <div><label className="label" htmlFor="settings-match-days">טווח ימים להתאמת בנק</label><input id="settings-match-days" type="number" className="input num" value={matchDays} onChange={(e) => setMatchDays(e.target.value)} /></div>
+          <div><label className="label" htmlFor="settings-tolerance">סטיית סכום מותרת (₪)</label><input id="settings-tolerance" type="number" step="0.5" className="input num" value={tolerance} onChange={(e) => setTolerance(e.target.value)} /></div>
         </div>
         <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>שמירה</button></div>
       </div>
 
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-line-soft section-title flex items-center gap-2"><Users size={17} /> משתמשים והרשאות</div>
-        <div className="overflow-x-auto">
+        <div
+          className="overflow-x-auto [contain:layout]"
+          role="region"
+          aria-label="טבלת משתמשים והרשאות"
+          tabIndex={0}
+        >
         <table className="w-full">
-          <thead className="bg-surface-sunken"><tr><th className="th">שם</th><th className="th">תפקיד</th><th className="th">טלפון</th><th className="th">סטטוס</th><th className="th"></th></tr></thead>
+          <thead className="bg-surface-sunken"><tr><th scope="col" className="th">שם</th><th scope="col" className="th">תפקיד</th><th scope="col" className="th">טלפון</th><th scope="col" className="th">סטטוס</th><th scope="col" className="th"><span className="sr-only">פעולות</span></th></tr></thead>
           <tbody className="divide-y divide-line-soft">
             {users?.map((u) => (
               <tr key={u.id}>
@@ -188,10 +180,10 @@ export default function Settings() {
                 <td className="td">{roleLabels[u.role]}</td>
                 <td className="td" dir="ltr">{u.phone ?? '—'}</td>
                 <td className="td">{u.active ? <span className="badge-done">פעיל</span> : <span className="badge-idle">מושבת</span>}</td>
-                <td className="td">
-                  {u.id !== profile?.id && (
-                    <button className="btn-ghost py-1! text-xs" onClick={() => void toggleActive(u)}>{u.active ? 'השבתה' : 'הפעלה'}</button>
-                  )}
+                  <td className="td">
+                    {u.id !== profile?.id && (
+                      <button className="btn-ghost py-1! text-xs" onClick={() => setAccessTarget(u)}>{u.active ? 'השבתה' : 'הפעלה'}</button>
+                    )}
                 </td>
               </tr>
             ))}
@@ -233,10 +225,26 @@ export default function Settings() {
           columns={inviteColumns}
           searchable
           searchFn={(r, q) => r.email.toLowerCase().includes(q)}
+          searchLabel="חיפוש בהזמנות עובדים"
+          rowLabel={(r) => `הזמנה עבור ${r.email}`}
           emptyTitle="לא נשלחו הזמנות"
           emptySubtitle="הזמנה שנשלחה תופיע כאן עם הסטטוס והתוקף שלה"
         />
       </div>
+
+      <ConfirmDialog
+        open={!!accessTarget}
+        onClose={() => setAccessTarget(null)}
+        onConfirm={(reason) => { if (accessTarget) void toggleActive(accessTarget, reason); }}
+        title={accessTarget?.active ? 'השבתת משתמש' : 'הפעלת משתמש'}
+        message={accessTarget?.active
+          ? `הגישה של ${accessTarget?.full_name ?? ''} למערכת תיחסם.`
+          : `הגישה של ${accessTarget?.full_name ?? ''} למערכת תוחזר.`}
+        confirmLabel={accessTarget?.active ? 'השבתה' : 'הפעלה'}
+        danger={accessTarget?.active}
+        requireReason
+        busy={dialogBusy}
+      />
 
       <ConfirmDialog
         open={!!resendTarget}

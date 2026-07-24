@@ -45,3 +45,23 @@ export function countAboveAverage(
   }
   return over;
 }
+
+export interface AlertScanDefinition<T> {
+  code: string;
+  label: string;
+  run: () => Promise<T | null>;
+}
+
+export async function settleAlertScans<T>(scans: readonly AlertScanDefinition<T>[]) {
+  const settled = await Promise.allSettled(scans.map((scan) => scan.run()));
+  const alerts: T[] = [];
+  const failures: { code: string; label: string }[] = [];
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      if (result.value) alerts.push(result.value);
+    } else {
+      failures.push({ code: scans[index].code, label: scans[index].label });
+    }
+  });
+  return { alerts, failures, complete: failures.length === 0 };
+}

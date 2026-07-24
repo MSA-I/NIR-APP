@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 /**
@@ -10,19 +10,24 @@ import { useSearchParams } from 'react-router-dom';
  * keeps the target component mounted across those navigations, so a plain `useState` seed
  * silently ignores every navigation after the first — the screen would not re-filter.
  *
- * This keeps local edits working (the user changing a dropdown calls the setter) while
- * adopting a new value whenever the URL param itself changes. It reads the URL but does not
- * write back to it: the setter updates local state only, matching how the existing filters
- * behave once the user takes over.
+ * The URL is the source of truth: the setter writes only its owned parameter (with replace,
+ * so filter edits do not spam history) and preserves every unrelated deep-link parameter.
+ * Back/Forward and same-route navigation therefore re-render from the current URL directly.
  *
  * Intended to replace `useState(params.get(name) ?? fallback)` in the filterable target
  * pages (Invoices, Exceptions, PaymentRequests, Bank, Credits, Orders, PriceLists,
  * Suppliers, Payments). Wiring it into those pages is owned by their sections.
  */
 export function useParamState(name: string, fallback = ''): [string, (v: string) => void] {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const paramValue = params.get(name) ?? fallback;
-  const [value, setValue] = useState(paramValue);
-  useEffect(() => { setValue(paramValue); }, [paramValue]);
-  return [value, setValue];
+  const setValue = useCallback((value: string) => {
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      if (value) next.set(name, value);
+      else next.delete(name);
+      return next;
+    }, { replace: true });
+  }, [name, setParams]);
+  return [paramValue, setValue];
 }

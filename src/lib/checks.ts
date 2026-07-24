@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 import { unwrap } from './useQuery';
+import { addCalendarDays, fmtDate } from './format';
+import { fetchAll, fetchInChunks } from './supabasePaging';
 
 export type CheckSeverity = 'info' | 'warning' | 'critical';
 export interface CheckResult {
@@ -23,29 +25,33 @@ export async function runInvoiceChecks(inv: {
   if (!inv.supplier_id || !inv.invoice_number) return results;
 
   // 1. exact duplicate: same supplier + invoice number
-  let dupQ = supabase.from('invoices').select('id, invoice_date, total_amount, payment_status')
-    .eq('supplier_id', inv.supplier_id).eq('invoice_number', inv.invoice_number).is('deleted_at', null);
-  if (inv.id) dupQ = dupQ.neq('id', inv.id);
-  const dups = unwrap(await dupQ) as { id: string; invoice_date: string; total_amount: number; payment_status: string }[];
+  const dups = await fetchAll<{ id: string; invoice_date: string; total_amount: number; payment_status: string }>((from, to) => {
+    let query = supabase.from('invoices').select('id, invoice_date, total_amount, payment_status')
+      .eq('supplier_id', inv.supplier_id).eq('invoice_number', inv.invoice_number).is('deleted_at', null);
+    if (inv.id) query = query.neq('id', inv.id);
+    return query.order('id').range(from, to);
+  });
   for (const d of dups) {
     results.push({
       code: 'duplicate_number',
       severity: 'critical',
-      message: `קיימת חשבונית עם אותו מספר לאותו ספק (מ־${new Date(d.invoice_date).toLocaleDateString('he-IL')}, ₪${d.total_amount.toLocaleString()}${d.payment_status === 'paid' ? ', שולמה' : ''})`,
+      message: `קיימת חשבונית עם אותו מספר לאותו ספק (מ־${fmtDate(d.invoice_date)}, ₪${d.total_amount.toLocaleString()}${d.payment_status === 'paid' ? ', שולמה' : ''})`,
     });
   }
 
   // 2. similar: same supplier + same amount within 7 days, different number
   if (inv.invoice_date && inv.total_amount > 0) {
-    const from = new Date(inv.invoice_date); from.setDate(from.getDate() - 7);
-    const to = new Date(inv.invoice_date); to.setDate(to.getDate() + 7);
-    let simQ = supabase.from('invoices').select('id, invoice_number, invoice_date')
-      .eq('supplier_id', inv.supplier_id).eq('total_amount', inv.total_amount)
-      .neq('invoice_number', inv.invoice_number)
-      .gte('invoice_date', from.toISOString().slice(0, 10)).lte('invoice_date', to.toISOString().slice(0, 10))
-      .is('deleted_at', null);
-    if (inv.id) simQ = simQ.neq('id', inv.id);
-    const sims = unwrap(await simQ) as { invoice_number: string }[];
+    const dateFrom = addCalendarDays(inv.invoice_date, -7);
+    const dateTo = addCalendarDays(inv.invoice_date, 7);
+    const sims = await fetchAll<{ id: string; invoice_number: string }>((from, to) => {
+      let query = supabase.from('invoices').select('id, invoice_number, invoice_date')
+        .eq('supplier_id', inv.supplier_id).eq('total_amount', inv.total_amount)
+        .neq('invoice_number', inv.invoice_number)
+        .gte('invoice_date', dateFrom).lte('invoice_date', dateTo)
+        .is('deleted_at', null);
+      if (inv.id) query = query.neq('id', inv.id);
+      return query.order('id').range(from, to);
+    });
     if (sims.length) {
       results.push({
         code: 'similar_invoice',
@@ -57,8 +63,10 @@ export async function runInvoiceChecks(inv: {
 
   // 3. order totals vs invoice total
   if (inv.linkedOrderIds?.length) {
-    const items = unwrap(await supabase.from('purchase_order_items').select('order_id, qty, unit_price, received_qty').in('order_id', inv.linkedOrderIds)) as
-      { qty: number; unit_price: number; received_qty: number }[];
+    const items = await fetchInChunks(inv.linkedOrderIds, (ids) =>
+      fetchAll<{ id: string; qty: number; unit_price: number; received_qty: number }>((from, to) =>
+        supabase.from('purchase_order_items').select('id, order_id, qty, unit_price, received_qty')
+          .in('order_id', ids).order('id').range(from, to)));
     const orderTotal = items.reduce((s, i) => s + i.qty * i.unit_price, 0);
     const receivedTotal = items.reduce((s, i) => s + i.received_qty * i.unit_price, 0);
     if (Math.abs(orderTotal - inv.total_amount) > AMOUNT_TOLERANCE) {
@@ -79,8 +87,9 @@ export async function runInvoiceChecks(inv: {
 
   if (inv.id) {
     // 4. existing payment request
-    const prs = unwrap(await supabase.from('payment_request_invoices')
-      .select('payment_request_id, payment_requests!inner(number, status)').eq('invoice_id', inv.id)) as
+    const prs = await fetchAll((from, to) => supabase.from('payment_request_invoices')
+      .select('invoice_id, payment_request_id, payment_requests!inner(number, status)').eq('invoice_id', inv.id!)
+      .order('payment_request_id').range(from, to)) as unknown as
       { payment_requests: { number: number; status: string } }[];
     const active = prs.filter((p) => !['cancelled'].includes(p.payment_requests.status));
     if (active.length) {
@@ -91,23 +100,22 @@ export async function runInvoiceChecks(inv: {
       });
     }
 
-    // 5. matching bank transaction already confirmed
-    const bank = unwrap(await supabase.from('bank_allocations').select('id, confirmed').eq('invoice_id', inv.id)) as { confirmed: boolean }[];
-    if (bank.some((b) => b.confirmed)) {
+    // 5–6. Narrow server signals preserve bank/payment privacy for procurement managers.
+    const financial = unwrap(await supabase.rpc('invoice_financial_check_signals', {
+      p_invoice_id: inv.id,
+    })) as { bank_match_exists: boolean; already_paid: boolean };
+    if (financial.bank_match_exists) {
       results.push({ code: 'bank_matched', severity: 'info', message: 'קיימת תנועת בנק מותאמת לחשבונית זו' });
     }
-
-    // 6. already paid
-    const bal = unwrap(await supabase.from('invoice_balances').select('*').eq('invoice_id', inv.id).maybeSingle()) as
-      { paid_amount: number; balance: number } | null;
-    if (bal && bal.balance <= 0) {
+    if (financial.already_paid) {
       results.push({ code: 'already_paid', severity: 'critical', message: 'החשבונית כבר מסומנת כמשולמת במלואה — תשלום נוסף יהיה כפול' });
     }
   }
 
   // 7. open credits for this supplier that should be deducted
-  const credits = unwrap(await supabase.from('credit_requests').select('amount, status')
-    .eq('supplier_id', inv.supplier_id).in('status', ['open', 'requested', 'received'])) as { amount: number }[];
+  const credits = await fetchAll<{ id: string; amount: number; status: string }>((from, to) => supabase.from('credit_requests')
+    .select('id, amount, status').eq('supplier_id', inv.supplier_id).in('status', ['open', 'requested', 'received'])
+    .order('id').range(from, to));
   if (credits.length) {
     const sum = credits.reduce((s, c) => s + c.amount, 0);
     results.push({
@@ -129,30 +137,45 @@ export async function runPaymentRequestChecks(pr: {
 }): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
 
-  // 1. linked invoices already paid / balances
-  if (pr.invoiceIds.length) {
-    const bals = unwrap(await supabase.from('invoice_balances').select('*').in('invoice_id', pr.invoiceIds)) as
-      { invoice_id: string; balance: number; paid_amount: number }[];
-    const paid = bals.filter((b) => b.balance <= 0);
-    if (paid.length) {
-      results.push({ code: 'invoice_paid', severity: 'critical', message: `${paid.length} מהחשבוניות המקושרות כבר שולמו במלואן` });
-    }
-    const totalBalance = bals.reduce((s, b) => s + Math.max(0, b.balance), 0);
-    if (Math.abs(totalBalance - pr.amount) > AMOUNT_TOLERANCE) {
-      results.push({
-        code: 'amount_vs_balance',
-        severity: 'warning',
-        message: `סכום הדרישה (₪${pr.amount.toLocaleString()}) שונה מיתרת החשבוניות המקושרות (₪${totalBalance.toLocaleString()})`,
-      });
-    }
+  // 1. Server-side financial signals expose decisions, never balances or bank rows.
+  const financial = unwrap(await supabase.rpc('payment_request_financial_check_signals', {
+    p_supplier_id: pr.supplier_id,
+    p_amount: pr.amount,
+    p_invoice_ids: pr.invoiceIds,
+    p_payment_request_id: pr.id ?? null,
+  })) as {
+    requested_invoice_count: number;
+    visible_invoice_count: number;
+    paid_invoice_count: number;
+    unapproved_invoice_count: number;
+    amount_matches_open_balance: boolean;
+    similar_bank_transfer_exists: boolean;
+  };
+  if (financial.visible_invoice_count !== financial.requested_invoice_count) {
+    results.push({ code: 'invoice_visibility', severity: 'critical', message: 'לא ניתן לאמת את כל החשבוניות המקושרות לדרישה' });
+  }
+  if (financial.paid_invoice_count > 0) {
+    results.push({ code: 'invoice_paid', severity: 'critical', message: `${financial.paid_invoice_count} מהחשבוניות המקושרות כבר שולמו במלואן` });
+  }
+  if (financial.unapproved_invoice_count > 0) {
+    results.push({ code: 'invoice_unapproved', severity: 'critical', message: 'הדרישה כוללת חשבונית שטרם אושרה לתשלום' });
+  }
+  if (!financial.amount_matches_open_balance) {
+    results.push({
+      code: 'amount_vs_balance',
+      severity: 'warning',
+      message: 'סכום הדרישה שונה מהיתרה הפתוחה של החשבוניות המקושרות',
+    });
   }
 
   // 2. similar active payment request
-  let simQ = supabase.from('payment_requests').select('id, number, status')
-    .eq('supplier_id', pr.supplier_id).eq('amount', pr.amount)
-    .in('status', ['draft', 'pending_approval', 'approved', 'sent_for_execution', 'executed', 'matched']);
-  if (pr.id) simQ = simQ.neq('id', pr.id);
-  const sims = unwrap(await simQ) as { number: number }[];
+  const sims = await fetchAll<{ id: string; number: number }>((from, to) => {
+    let query = supabase.from('payment_requests').select('id, number, status')
+      .eq('supplier_id', pr.supplier_id).eq('amount', pr.amount)
+      .in('status', ['draft', 'pending_approval', 'approved', 'sent_for_execution', 'executed', 'matched']);
+    if (pr.id) query = query.neq('id', pr.id);
+    return query.order('id').range(from, to);
+  });
   if (sims.length) {
     results.push({
       code: 'similar_pr',
@@ -161,22 +184,18 @@ export async function runPaymentRequestChecks(pr: {
     });
   }
 
-  // 3. similar bank transaction (same supplier, same amount, last 45 days)
-  const since = new Date(); since.setDate(since.getDate() - 45);
-  const txs = unwrap(await supabase.from('bank_transactions').select('id, tx_date')
-    .eq('supplier_id', pr.supplier_id).eq('amount', pr.amount).eq('is_debit', true)
-    .gte('tx_date', since.toISOString().slice(0, 10))) as { tx_date: string }[];
-  if (txs.length) {
+  // 3. Similar bank transfer, without exposing its date or row.
+  if (financial.similar_bank_transfer_exists) {
     results.push({
       code: 'similar_bank_tx',
       severity: 'warning',
-      message: `קיימת העברה בנקאית באותו סכום לספק זה (${txs.map((t) => new Date(t.tx_date).toLocaleDateString('he-IL')).join(', ')}) — ודא שלא שולם כבר`,
+      message: 'קיימת העברה בנקאית דומה לספק זה — יש לוודא שלא שולם כבר',
     });
   }
 
   // 4. open credits to deduct
-  const credits = unwrap(await supabase.from('credit_requests').select('amount')
-    .eq('supplier_id', pr.supplier_id).in('status', ['open', 'requested', 'received'])) as { amount: number }[];
+  const credits = await fetchAll<{ id: string; amount: number }>((from, to) => supabase.from('credit_requests').select('id, amount')
+    .eq('supplier_id', pr.supplier_id).in('status', ['open', 'requested', 'received']).order('id').range(from, to));
   if (credits.length) {
     const sum = credits.reduce((s, c) => s + c.amount, 0);
     results.push({ code: 'open_credit', severity: 'warning', message: `זיכויים פתוחים בסך ₪${sum.toLocaleString()} טרם קוזזו מהדרישה` });

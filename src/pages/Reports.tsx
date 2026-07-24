@@ -1,61 +1,66 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { FileSpreadsheet, Printer, Send, CheckCircle2 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { StatusBadge, useToast, ErrorNote, SkeletonCards, Note } from '../components/ui';
+import { StatusBadge, useToast, ConfirmDialog, ErrorNote, SkeletonCards, Note } from '../components/ui';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
-import { fmtMoneyExact, fmtDate, fmtMonth, monthRange } from '../lib/format';
-import { logAction } from '../lib/audit';
-import { ok, toHebrewError } from '../lib/errors';
+import { currentMonthISO, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange } from '../lib/format';
+import { toHebrewError } from '../lib/errors';
+import { fetchAll } from '../lib/supabasePaging';
+import { buildMonthlyWorkbook } from '../lib/monthlyReport';
+import * as XLSX from 'xlsx';
 
 export default function Reports() {
   const { profile, org } = useAuth();
   const toast = useToast();
-  const now = new Date();
-  const [month, setMonth] = useState(now.toISOString().slice(0, 7)); // YYYY-MM
+  const [month, setMonth] = useState(currentMonthISO());
   const [busy, setBusy] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
 
-  const { data, loading, error, refetch } = useQuery(async () => {
+  const { data, loading, fetching, error, refetch } = useQuery(async () => {
     const { start, end } = monthRange(month);
-    const [invRes, payRes, credRes, excRes, bankRes, exportRes] = await Promise.all([
-      supabase.from('invoices').select('*, supplier:suppliers(name)').gte('invoice_date', start).lt('invoice_date', end).is('deleted_at', null).order('invoice_date'),
-      supabase.from('payments').select('*, supplier:suppliers(name)').gte('paid_date', start).lt('paid_date', end).order('paid_date'),
-      supabase.from('credit_requests').select('*, supplier:suppliers(name)').gte('created_at', start).lt('created_at', end),
-      supabase.from('exceptions').select('*, supplier:suppliers(name)').in('status', ['open', 'in_progress']),
-      supabase.from('bank_transactions').select('status').gte('tx_date', start).lt('tx_date', end),
+    const instants = monthInstantRange(month);
+    const [invoices, payments, credits, exceptions, bank, exportRes] = await Promise.all([
+      fetchAll((from, to) => supabase.from('invoices').select('*, supplier:suppliers(name)')
+        .gte('invoice_date', start).lt('invoice_date', end).is('deleted_at', null)
+        .order('invoice_date').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('payments').select('*, supplier:suppliers(name)')
+        .gte('paid_date', start).lt('paid_date', end).order('paid_date').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('credit_requests').select('*, supplier:suppliers(name)')
+        .gte('created_at', instants.start).lt('created_at', instants.end).order('created_at').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('exceptions').select('*, supplier:suppliers(name)')
+        .in('status', ['open', 'in_progress']).order('created_at').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('bank_transactions').select('id, status')
+        .gte('tx_date', start).lt('tx_date', end).order('tx_date').order('id').range(from, to)),
       supabase.from('monthly_exports').select('*').eq('month', `${month}-01`).maybeSingle(),
     ]);
     return {
-      invoices: unwrap(invRes) as ({ id: string; invoice_number: string; invoice_date: string; total_amount: number; amount_before_vat: number; vat_amount: number; review_status: string; payment_status: string; export_status: string; supplier: { name: string } })[],
-      payments: unwrap(payRes) as ({ number: number; paid_date: string; amount: number; method: string | null; reference: string | null; supplier: { name: string } })[],
-      credits: unwrap(credRes) as ({ number: number; reason: string; amount: number; status: string; supplier: { name: string } })[],
-      exceptions: unwrap(excRes) as ({ id: string; type: string; title: string; supplier: { name: string } | null })[],
-      bank: unwrap(bankRes) as { status: string }[],
+      invoices: invoices as ({ id: string; invoice_number: string; invoice_date: string; total_amount: number; amount_before_vat: number; vat_amount: number; review_status: string; payment_status: string; export_status: string; supplier: { name: string } })[],
+      payments: payments as ({ id: string; number: number; paid_date: string; amount: number; method: string | null; reference: string | null; supplier: { name: string } })[],
+      credits: credits as ({ id: string; number: number; reason: string; amount: number; status: string; supplier: { name: string } })[],
+      exceptions: exceptions as ({ id: string; type: string; title: string; supplier: { name: string } | null })[],
+      bank: bank as { id: string; status: string }[],
       export: unwrap(exportRes) as { id: string; status: string; sent_at: string | null } | null,
+      generatedAt: new Date(),
     };
   }, [month]);
 
-  const isOffice = !!profile && ['owner', 'office'].includes(profile.role);
+  const canManageExport = !!profile && ['owner', 'accountant'].includes(profile.role);
 
   function exportExcel() {
-    if (!data) return;
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.invoices.map((i) => ({
-      'ספק': i.supplier.name, 'מספר חשבונית': i.invoice_number, 'תאריך': i.invoice_date,
-      'לפני מע"מ': i.amount_before_vat, 'מע"מ': i.vat_amount, 'סה"כ': i.total_amount,
-      'סטטוס בדיקה': INVOICE_REVIEW_STATUS[i.review_status]?.label, 'סטטוס תשלום': INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
-    }))), 'חשבוניות');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.payments.map((p) => ({
-      'ספק': p.supplier.name, 'תאריך': p.paid_date, 'סכום': p.amount, 'אמצעי': p.method, 'אסמכתא': p.reference,
-    }))), 'תשלומים');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.credits.map((c) => ({
-      'ספק': c.supplier.name, 'סיבה': CREDIT_REASON[c.reason], 'סכום': c.amount, 'סטטוס': CREDIT_STATUS[c.status]?.label,
-    }))), 'זיכויים');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.exceptions.map((e) => ({
-      'סוג': EXCEPTION_TYPE[e.type], 'תיאור': e.title, 'ספק': e.supplier?.name ?? '',
-    }))), 'חריגים פתוחים');
+    if (!data || fetching || error) return;
+    const wb = buildMonthlyWorkbook({
+      orgName: org?.name, month, generatedAt: data.generatedAt, data,
+      labels: {
+        invoiceReview: INVOICE_REVIEW_STATUS,
+        invoicePayment: INVOICE_PAYMENT_STATUS,
+        creditReason: CREDIT_REASON,
+        creditStatus: CREDIT_STATUS,
+        exceptionType: EXCEPTION_TYPE,
+      },
+    });
     // This file lands in an accountant's inbox, and an accountant serves several businesses.
     // The name has to say whose report it is; a fixed tenant name would break multi-tenancy.
     // Strip only what filesystems object to; Hebrew names are fine and are the whole point.
@@ -63,23 +68,17 @@ export default function Reports() {
     XLSX.writeFile(wb, `${slug || 'supplyflow'}-report-${month}.xlsx`);
   }
 
-  async function markSent() {
-    if (!data || !profile) return;
+  async function markSent(reason?: string) {
+    if (!data || !profile || fetching || error) return;
     setBusy(true);
     try {
-      // ok() on every write: supabase-js resolves successfully on a rejected statement, so
-      // without it a failed update still fell through to the success toast below.
-      if (data.export) {
-        ok(await supabase.from('monthly_exports').update({ status: 'sent', sent_at: new Date().toISOString(), sent_by: profile.id }).eq('id', data.export.id));
-      } else {
-        ok(await supabase.from('monthly_exports').insert({
-          org_id: profile.org_id, month: `${month}-01`, status: 'sent', sent_at: new Date().toISOString(), sent_by: profile.id,
-        }));
-      }
-      const ids = data.invoices.filter((i) => i.export_status === 'not_sent').map((i) => i.id);
-      if (ids.length) ok(await supabase.from('invoices').update({ export_status: 'sent' }).in('id', ids));
-      const audit = await logAction({ orgId: profile.org_id, action: 'month_sent_to_accountant', entityType: 'monthly_exports', reason: month });
-      toast(audit.logged ? 'החודש סומן כהועבר לרו״ח' : 'החודש סומן כהועבר לרו״ח — אך הפעולה לא נרשמה ביומן הביקורת');
+      unwrap(await supabase.rpc('mark_month_export_sent', {
+        p_month: `${month}-01`,
+        p_invoice_ids: data.invoices.map((invoice) => invoice.id),
+        p_reason: reason?.trim() || null,
+      }));
+      setSendOpen(false);
+      toast('החודש סומן כהועבר לרו״ח');
       void refetch();
     } catch (e) {
       toast(toHebrewError(e), 'error');
@@ -89,7 +88,8 @@ export default function Reports() {
   }
 
   if (loading) return <SkeletonCards count={6} cols={6} title />;
-  if (error || !data) return <ErrorNote message={error ?? 'שגיאה'} />;
+  if (error && !data) return <ErrorNote message={error} />;
+  if (!data) return <ErrorNote message="שגיאה" />;
 
   const totals = {
     invoices: data.invoices.reduce((s, i) => s + i.total_amount, 0),
@@ -105,42 +105,58 @@ export default function Reports() {
     m.set(p.supplier.name, (m.get(p.supplier.name) ?? 0) + p.amount);
     return m;
   }, new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]);
+  const metricLinkClass = 'card card-pad block transition-colors hover:border-action-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
 
   return (
     <div className="space-y-4">
+      {error && <ErrorNote message={error} />}
+      {fetching && data && <Note tone="idle">הדוח מתעדכן. הייצוא והסימון מושבתים עד להשלמת הרענון.</Note>}
       <div className="flex flex-wrap items-center justify-between gap-3 no-print">
-        <h1 className="page-title">דוח חודשי לרואת חשבון</h1>
+        <div>
+          <h1 className="page-title">דוח חודשי לרואת חשבון</h1>
+          <p className="mt-1 text-xs text-ink-muted">הנתונים הושלמו {fmtDateTime(data.generatedAt)} ואינם snapshot טרנזקציוני.</p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
-          <input type="month" className="input w-auto!" value={month} onChange={(e) => setMonth(e.target.value)} />
-          <button className="btn-secondary" onClick={exportExcel}><FileSpreadsheet size={15} /> ייצוא Excel</button>
-          <button className="btn-secondary" onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
-          {isOffice && (
+          <label className="sr-only" htmlFor="monthly-report-month">חודש הדוח</label>
+          <input id="monthly-report-month" type="month" className="input w-auto!" value={month} onChange={(e) => setMonth(e.target.value)} />
+          <button className="btn-secondary" disabled={fetching || !!error} onClick={exportExcel}><FileSpreadsheet size={15} /> ייצוא Excel</button>
+          <button className="btn-secondary" disabled={fetching || !!error} onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
+          {canManageExport && (
             data.export?.status === 'sent'
               ? <span className="badge-done flex items-center gap-1"><CheckCircle2 size={13} /> הועבר לרו״ח {data.export.sent_at ? fmtDate(data.export.sent_at) : ''}</span>
-              : <button className="btn-primary" disabled={busy} onClick={() => void markSent()}><Send size={15} /> סימון כהועבר לרו״ח</button>
+              : <button className="btn-primary" disabled={busy || fetching || !!error} onClick={() => setSendOpen(true)}><Send size={15} /> סימון כהועבר לרו״ח</button>
           )}
         </div>
       </div>
 
-      <div className="print-area space-y-4">
+      <ConfirmDialog open={sendOpen} onClose={() => setSendOpen(false)}
+        onConfirm={(reason) => void markSent(reason)}
+        title="סימון הדוח כהועבר לרו״ח"
+        message="רשימת החשבוניות הנוכחית תישמר כצילום מצב, וכל הסימון יתבצע בעסקה אחת."
+        confirmLabel="סימון כהועבר" requireReason busy={busy} />
+
+      <div className="print-area monthly-report space-y-4">
         <div className="hidden print:block">
           {/* Printed header handed to the accountant — carries the tenant's own name. */}
           <h2 className="text-xl font-bold">{`${org?.name ? `${org.name} — ` : ''}דוח חודשי ${fmtMonth(`${month}-01`)}`}</h2>
+          <p className="text-xs">נוצר {fmtDateTime(data.generatedAt)}</p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
-          <div className="card card-pad"><div className="text-xs text-ink-muted">חשבוניות</div><div className="text-lg font-bold">{data.invoices.length}</div></div>
-          <div className="card card-pad"><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.invoices)}</div></div>
-          <div className="card card-pad"><div className="text-xs text-ink-muted">מע״מ</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.vat)}</div></div>
-          <div className="card card-pad"><div className="text-xs text-ink-muted">שולם החודש</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(totals.paid)}</div></div>
-          <div className="card card-pad"><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`text-lg font-bold ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></div>
-          <div className="card card-pad"><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`text-lg font-bold ${totals.unmatchedBank ? 'text-alert-solid' : ''}`}>{totals.unmatchedBank}</div></div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">חשבוניות</div><div className="text-lg font-bold num">{data.invoices.length}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.invoices)}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.vat)}</div></Link>
+          <Link className={metricLinkClass} to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(totals.paid)}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${month}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`text-lg font-bold num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Link>
+          <Link className={metricLinkClass} to={`/bank?month=${month}&status=attention`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`text-lg font-bold num ${totals.unmatchedBank ? 'text-alert-solid' : ''}`}>{totals.unmatchedBank}</div></Link>
+          <Link className={metricLinkClass} to={`/credits?month=${month}&status=all`}><div className="text-xs text-ink-muted">זיכויים בחודש</div><div className="text-lg font-bold num">{data.credits.length}</div></Link>
+          <Link className={metricLinkClass} to="/exceptions?status=open"><div className="text-xs text-ink-muted">חריגים פתוחים</div><div className={`text-lg font-bold num ${data.exceptions.length ? 'text-await-fg' : ''}`}>{data.exceptions.length}</div></Link>
         </div>
 
         {data.exceptions.length > 0 && (
           <Note tone="await">
             <div className="w-full">
-              <h2 className="text-base font-semibold mb-2">חריגים פתוחים שדורשים טיפול לפני סגירת החודש ({data.exceptions.length})</h2>
+              <h2 className="text-base font-semibold mb-2">חריגים פתוחים כרגע שדורשים טיפול לפני סגירת החודש ({data.exceptions.length})</h2>
               <ul className="space-y-1 list-disc list-inside">
                 {data.exceptions.map((e) => <li key={e.id}>{EXCEPTION_TYPE[e.type]} — {e.title}</li>)}
               </ul>
@@ -150,18 +166,43 @@ export default function Reports() {
 
         <div className="card overflow-hidden">
           <div className="px-4 py-3 border-b border-line-soft section-title">חשבוניות {fmtMonth(`${month}-01`)}</div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="חשבוניות בדוח">
+            {data.invoices.map((i) => (
+              <li key={i.id} className="p-4">
+                <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="break-words font-medium text-ink-body">{i.supplier.name}</div>
+                    <div className="mt-0.5 text-xs text-ink-muted"><span className="num" dir="ltr">{i.invoice_number}</span> · {fmtDate(i.invoice_date)}</div>
+                  </div>
+                  <div className="num shrink-0 font-semibold text-ink-body">{fmtMoneyExact(i.total_amount)}</div>
+                </div>
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div><dt className="text-xs text-ink-muted">לפני מע״מ</dt><dd className="num mt-0.5">{fmtMoneyExact(i.amount_before_vat)}</dd></div>
+                  <div><dt className="text-xs text-ink-muted">מע״מ</dt><dd className="num mt-0.5">{fmtMoneyExact(i.vat_amount)}</dd></div>
+                </dl>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <StatusBadge meta={INVOICE_REVIEW_STATUS[i.review_status]} />
+                  <StatusBadge meta={INVOICE_PAYMENT_STATUS[i.payment_status]} />
+                </div>
+              </li>
+            ))}
+            {!data.invoices.length && <li className="p-4 text-center text-sm text-ink-muted">אין חשבוניות בחודש זה</li>}
+            <li className="flex min-h-11 flex-wrap items-center justify-between gap-2 bg-surface-sunken px-4 py-3 font-bold">
+              <span>סה״כ</span><span className="num">{fmtMoneyExact(totals.invoices)}</span>
+            </li>
+          </ul>
+          <div className="report-table-wrap hidden overflow-x-auto xl:block print:block">
+            <table className="report-invoices w-full">
               <thead className="bg-surface-sunken"><tr>
-                <th className="th">ספק</th><th className="th">מס׳</th><th className="th">תאריך</th>
-                <th className="th">לפני מע״מ</th><th className="th">מע״מ</th><th className="th">סה״כ</th>
-                <th className="th">בדיקה</th><th className="th">תשלום</th>
+                <th scope="col" className="th">ספק</th><th scope="col" className="th">מס׳</th><th scope="col" className="th">תאריך</th>
+                <th scope="col" className="th">לפני מע״מ</th><th scope="col" className="th">מע״מ</th><th scope="col" className="th">סה״כ</th>
+                <th scope="col" className="th">בדיקה</th><th scope="col" className="th">תשלום</th>
               </tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {data.invoices.map((i) => (
                   <tr key={i.id}>
                     <td className="td">{i.supplier.name}</td>
-                    <td className="td" dir="ltr">{i.invoice_number}</td>
+                    <td className="td num" dir="ltr">{i.invoice_number}</td>
                     <td className="td">{fmtDate(i.invoice_date)}</td>
                     <td className="td num">{fmtMoneyExact(i.amount_before_vat)}</td>
                     <td className="td num">{fmtMoneyExact(i.vat_amount)}</td>
@@ -172,7 +213,7 @@ export default function Reports() {
                 ))}
               </tbody>
               <tfoot><tr className="border-t-2 border-line font-bold">
-                <td className="td" colSpan={3}>סה״כ</td>
+                <th scope="row" className="td text-start" colSpan={3}>סה״כ</th>
                 <td className="td num">{fmtMoneyExact(totals.beforeVat)}</td>
                 <td className="td num">{fmtMoneyExact(totals.vat)}</td>
                 <td className="td num">{fmtMoneyExact(totals.invoices)}</td>
@@ -185,13 +226,23 @@ export default function Reports() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-line-soft section-title">תשלומים לפי ספק</div>
-            <div className="overflow-x-auto">
+            <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="תשלומים לפי ספק">
+              {paymentsBySupplier.map(([name, sum]) => (
+                <li key={name} className="flex min-h-11 min-w-0 items-center justify-between gap-3 px-4 py-3">
+                  <span className="min-w-0 break-words text-sm">{name}</span>
+                  <span className="num shrink-0 font-medium">{fmtMoneyExact(sum)}</span>
+                </li>
+              ))}
+              {!paymentsBySupplier.length && <li className="p-4 text-center text-sm text-ink-muted">אין תשלומים בחודש זה</li>}
+            </ul>
+            <div className="report-table-wrap hidden overflow-x-auto xl:block print:block">
             <table className="w-full">
+              <thead className="bg-surface-sunken"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סכום ששולם</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {paymentsBySupplier.map(([name, sum]) => (
                   <tr key={name}><td className="td">{name}</td><td className="td num font-medium">{fmtMoneyExact(sum)}</td></tr>
                 ))}
-                {!paymentsBySupplier.length && <tr><td className="td text-ink-muted text-center py-6">אין תשלומים בחודש זה</td></tr>}
+                {!paymentsBySupplier.length && <tr><td colSpan={2} className="td text-ink-muted text-center py-6">אין תשלומים בחודש זה</td></tr>}
               </tbody>
             </table>
             </div>
@@ -199,8 +250,24 @@ export default function Reports() {
 
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-line-soft section-title">זיכויים</div>
-            <div className="overflow-x-auto">
+            <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="זיכויים בדוח">
+              {data.credits.map((c) => (
+                <li key={c.id} className="p-4">
+                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="break-words font-medium text-ink-body">{c.supplier.name}</div>
+                      <div className="mt-0.5 break-words text-xs text-ink-muted">{CREDIT_REASON[c.reason]}</div>
+                    </div>
+                    <span className="num shrink-0 font-medium">{fmtMoneyExact(c.amount)}</span>
+                  </div>
+                  <div className="mt-3"><StatusBadge meta={CREDIT_STATUS[c.status]} /></div>
+                </li>
+              ))}
+              {!data.credits.length && <li className="p-4 text-center text-sm text-ink-muted">אין זיכויים בחודש זה</li>}
+            </ul>
+            <div className="report-table-wrap hidden overflow-x-auto xl:block print:block">
             <table className="w-full">
+              <thead className="bg-surface-sunken"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סיבה</th><th scope="col" className="th">סכום</th><th scope="col" className="th">סטטוס</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {data.credits.map((c) => (
                   <tr key={c.number}>
@@ -210,7 +277,7 @@ export default function Reports() {
                     <td className="td"><StatusBadge meta={CREDIT_STATUS[c.status]} /></td>
                   </tr>
                 ))}
-                {!data.credits.length && <tr><td className="td text-ink-muted text-center py-6">אין זיכויים בחודש זה</td></tr>}
+                {!data.credits.length && <tr><td colSpan={4} className="td text-ink-muted text-center py-6">אין זיכויים בחודש זה</td></tr>}
               </tbody>
             </table>
             </div>

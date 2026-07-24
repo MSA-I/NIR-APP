@@ -9,7 +9,6 @@ import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, PageLoader, useToast, ConfirmDialog, Modal, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
 import { PO_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, todayISO } from '../lib/format';
-import { logAction } from '../lib/audit';
 import { sendOrderWhatsApp, orderWhatsAppLink } from '../lib/share';
 import { cancelOrderDraft } from '../lib/orderDrafts';
 import type { PurchaseOrder, PurchaseOrderItem, PoStatus } from '../lib/types';
@@ -65,10 +64,12 @@ export function OrdersList() {
   async function cancelOrder(reason?: string) {
     if (!cancelTarget) return;
     setBusy(true);
-    const res = await supabase.from('purchase_orders').update({ status: 'cancelled' }).eq('id', cancelTarget.id);
+    const res = await supabase.rpc('cancel_purchase_order', {
+      p_purchase_order_id: cancelTarget.id,
+      p_reason: reason ?? null,
+    });
     setBusy(false);
     if (res.error) { setCancelTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
-    await logAction({ orgId: cancelTarget.org_id, action: 'order_status:cancelled', entityType: 'purchase_orders', entityId: cancelTarget.id, reason });
     setCancelTarget(null);
     toast('ההזמנה בוטלה');
     void refetch();
@@ -100,11 +101,11 @@ export function OrdersList() {
     : null;
 
   const columns: Column<OrderRow>[] = [
-    { key: 'num', header: 'מס׳', priority: 3, sortValue: (r) => r.number, render: (r) => <span className="font-medium">#{r.number}</span> },
+    { key: 'num', header: 'מס׳', priority: 3, className: 'num', sortValue: (r) => r.number, render: (r) => <span className="font-medium">#{r.number}</span> },
     { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
     { key: 'created', header: 'נוצרה', sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
     { key: 'expected', header: 'אספקה', sortValue: (r) => r.expected_date ?? '', render: (r) => fmtDate(r.expected_date) },
-    { key: 'items', header: 'פריטים', priority: 3, render: (r) => r.items.length },
+    { key: 'items', header: 'פריטים', priority: 3, className: 'num', render: (r) => r.items.length },
     { key: 'total', header: 'סה״כ', className: 'num', mobileLabel: null, sortValue: orderTotal, render: (r) => fmtMoneyExact(orderTotal(r)) },
     { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={PO_STATUS[r.status]} /> },
   ];
@@ -130,7 +131,7 @@ export function OrdersList() {
               {data.drafts.map((draft) => (
                 <div key={draft.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-3 sm:px-4">
                   <div className="min-w-0">
-                    <div className="font-medium text-ink-body">טיוטה #{draft.number}</div>
+                    <div className="font-medium text-ink-body num">טיוטה #{draft.number}</div>
                     <div className="text-xs text-ink-muted">עודכנה {fmtDateTime(draft.updated_at)} · <span className="num">{draft.items.length}</span> מוצרים · {fmtMoneyExact(draftTotal(draft))}</div>
                   </div>
                   <div className="ms-auto flex gap-2">
@@ -146,9 +147,11 @@ export function OrdersList() {
 
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || String(r.number).includes(q)}
+        searchLabel="חיפוש בהזמנות רכש"
+        rowLabel={(r) => `הזמנת רכש מספר ${r.number} עבור ${r.supplier.name}`}
         onRowClick={(r) => navigate(`/orders/${r.id}`)}
         mobile="cards"
-        mobileTitle={(r) => <>#{r.number} · {r.supplier.name}</>}
+        mobileTitle={(r) => <><span className="num">#{r.number}</span> · {r.supplier.name}</>}
         mobileTrailing={(r) => <StatusBadge meta={PO_STATUS[r.status]} />}
         rowActions={(r) => [
           { key: 'edit', label: 'עריכה', icon: Pencil, hidden: !canWrite, onSelect: () => navigate(`/orders/${r.id}`) },
@@ -166,7 +169,7 @@ export function OrdersList() {
           },
         ]}
         toolbar={
-          <select className="input w-auto!" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <select className="input w-auto!" aria-label="סינון הזמנות רכש לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="open">הזמנות פתוחות</option>
             <option value="all">הכל</option>
             {Object.entries(PO_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
@@ -205,7 +208,7 @@ export function OrderDetail() {
   const [confirmExpected, setConfirmExpected] = useState('');  // optional: set/correct אספקה מבוקשת at confirmation
   const [busy, setBusy] = useState(false);
   const [params, setParams] = useSearchParams();
-  const printedRef = useRef(false);
+  const printedRef = useRef<string | null>(null);
 
   const { data: order, loading, error, refetch } = useQuery(async () =>
     unwrap(await supabase.from('purchase_orders')
@@ -215,8 +218,8 @@ export function OrderDetail() {
   // ?print=1 (Orders list "הדפסה" action): print once when the data is on screen, then strip
   // the param so refresh/back does not re-open the dialog.
   useEffect(() => {
-    if (printedRef.current || params.get('print') !== '1' || !order) return;
-    printedRef.current = true;
+    if (printedRef.current === order?.id || params.get('print') !== '1' || !order) return;
+    printedRef.current = order.id;
     window.print();
     const next = new URLSearchParams(params);
     next.delete('print');
@@ -225,21 +228,44 @@ export function OrderDetail() {
 
   const canWrite = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
 
-  async function setStatus(status: PoStatus, reason?: string, extra?: Record<string, unknown>) {
-    if (!order) return;
+  async function setStatus(
+    status: PoStatus,
+    reason: string,
+    confirmationNote: string | null = null,
+    expectedDate: string | null = null,
+  ): Promise<boolean> {
+    if (!order) return false;
     setBusy(true);
-    const patch: Record<string, unknown> = { status, ...extra };
-    if (status === 'sent') patch.sent_at = new Date().toISOString();
-    const res = await supabase.from('purchase_orders').update(patch).eq('id', order.id);
+    const res = await supabase.rpc('transition_purchase_order_status', {
+      p_purchase_order_id: order.id,
+      p_target_status: status,
+      p_reason: reason,
+      p_confirmation_note: confirmationNote,
+      p_expected_date: expectedDate,
+    });
+    if (res.error) { setBusy(false); toast(toHebrewError(res.error.message), 'error'); return false; }
     setBusy(false);
     setConfirm(null);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-    await logAction({ orgId: order.org_id, action: `order_status:${status}`, entityType: 'purchase_orders', entityId: order.id, reason });
     toast('הסטטוס עודכן');
+    void refetch();
+    return true;
+  }
+
+  async function cancelOrder(reason?: string) {
+    if (!order) return;
+    setBusy(true);
+    const res = await supabase.rpc('cancel_purchase_order', {
+      p_purchase_order_id: order.id,
+      p_reason: reason ?? null,
+    });
+    setBusy(false);
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    setConfirm(null);
+    toast('ההזמנה בוטלה');
     void refetch();
   }
 
-  // The WhatsApp order-send flow (link building, wa.me open, mark-as-sent, audit log) lives in
+  // The WhatsApp order-send flow (link building, wa.me open and reasoned status command) lives in
   // lib/share.ts and is shared with the Orders list row actions.
   async function sendWhatsApp() {
     if (!order) return;
@@ -254,9 +280,9 @@ export function OrderDetail() {
   const total = order.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
   const underMin = order.supplier.min_order_amount != null && total < order.supplier.min_order_amount;
 
-  const transitions: { from: PoStatus[]; to: PoStatus; label: string; icon: typeof Send }[] = [
-    { from: ['draft'], to: 'ready', label: 'סימון כמוכנה', icon: CheckCircle2 },
-    { from: ['ready'], to: 'sent', label: 'סימון כנשלחה לספק', icon: Send },
+  const transitions: { from: PoStatus[]; to: PoStatus; label: string; reason: string; icon: typeof Send }[] = [
+    { from: ['draft'], to: 'ready', label: 'סימון כמוכנה', reason: 'סימון הזמנה כמוכנה', icon: CheckCircle2 },
+    { from: ['ready'], to: 'sent', label: 'סימון כנשלחה לספק', reason: 'שליחת הזמנה לספק', icon: Send },
   ];
   const waLink = orderWhatsAppLink(order, orgName);
 
@@ -264,7 +290,7 @@ export function OrderDetail() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3 no-print">
         <div>
-          <h1 className="page-title flex items-center gap-3">הזמנה #{order.number} <StatusBadge meta={PO_STATUS[order.status]} /></h1>
+          <h1 className="page-title flex items-center gap-3"><span className="num">הזמנה #{order.number}</span> <StatusBadge meta={PO_STATUS[order.status]} /></h1>
           <div className="text-sm text-ink-muted mt-1">
             {order.supplier.name} · נוצרה {fmtDateTime(order.created_at)}
             {order.sent_at && <> · נשלחה {fmtDateTime(order.sent_at)}</>}
@@ -272,12 +298,12 @@ export function OrderDetail() {
         </div>
         <div className="flex flex-wrap gap-2">
           {canWrite && transitions.filter((t) => t.from.includes(order.status)).map((t) => (
-            <button key={t.to} className="btn-primary" disabled={busy} onClick={() => void setStatus(t.to)}>
+            <button key={t.to} className="btn-primary" disabled={busy} onClick={() => void setStatus(t.to, t.reason)}>
               <t.icon size={15} /> {t.label}
             </button>
           ))}
           {canWrite && waLink && ['draft', 'ready', 'sent'].includes(order.status) && (
-            <button className="btn text-white bg-done-solid hover:bg-done-on-soft" onClick={() => void sendWhatsApp()}>
+            <button className="btn text-white bg-done-solid hover:bg-done-on-soft" disabled={busy} onClick={() => void sendWhatsApp()}>
               <MessageCircle size={15} /> שליחה ב-WhatsApp
             </button>
           )}
@@ -322,9 +348,9 @@ export function OrderDetail() {
         <table className="w-full">
           <thead className="bg-surface-sunken border-b border-line-soft">
             <tr>
-              <th className="th">מוצר</th><th className="th">יח׳</th><th className="th">כמות</th>
-              <th className="th">מחיר יח׳ (בעת ההזמנה)</th><th className="th">סה״כ</th>
-              {order.status !== 'draft' && <th className="th no-print">התקבל</th>}
+              <th scope="col" className="th">מוצר</th><th scope="col" className="th">יח׳</th><th scope="col" className="th">כמות</th>
+              <th scope="col" className="th">מחיר יח׳ (בעת ההזמנה)</th><th scope="col" className="th">סה״כ</th>
+              {order.status !== 'draft' && <th scope="col" className="th no-print">התקבל</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-line-soft">
@@ -345,7 +371,7 @@ export function OrderDetail() {
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-line">
-              <td className="td font-bold" colSpan={4}>סה״כ להזמנה</td>
+              <th scope="row" className="td text-start font-bold" colSpan={4}>סה״כ להזמנה</th>
               <td className="td num font-bold">{fmtMoneyExact(total)}</td>
               {order.status !== 'draft' && <td className="no-print" />}
             </tr>
@@ -356,25 +382,30 @@ export function OrderDetail() {
       </div>
 
       <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)}
-        onConfirm={(reason) => confirm && void setStatus(confirm.status, reason)}
+        onConfirm={(reason) => confirm && void cancelOrder(reason)}
         title={confirm?.label ?? ''} message="האם לבטל את ההזמנה? הפעולה תתועד ביומן הביקורת." danger requireReason busy={busy} />
 
-      <Modal open={supplierConfirmOpen} onClose={() => setSupplierConfirmOpen(false)} title="אישור קבלת הזמנה ע״י הספק">
+      <Modal open={supplierConfirmOpen} onClose={() => setSupplierConfirmOpen(false)} title="אישור קבלת הזמנה ע״י הספק" busy={busy} statusMessage={busy ? 'שומר את אישור הספק' : undefined}>
         <p className="text-sm text-ink-soft mb-3">מועד האישור והמשתמש המסמן יתועדו במערכת וביומן הביקורת.</p>
-        <label className="label">איך התקבל האישור? (לא חובה)</label>
-        <input className="input" placeholder='למשל: "אושר ב-WhatsApp ע״י דוד"' value={confirmNote} onChange={(e) => setConfirmNote(e.target.value)} />
-        <label className="label mt-3">אספקה מבוקשת (לא חובה — לעדכון תאריך היעד)</label>
-        <input type="date" className="input" min={todayISO()} value={confirmExpected} onChange={(e) => setConfirmExpected(e.target.value)} />
+        <label className="label" htmlFor="supplier-confirm-note">איך התקבל האישור? (לא חובה)</label>
+        <input id="supplier-confirm-note" className="input" placeholder='למשל: "אושר ב-WhatsApp ע״י דוד"' value={confirmNote} onChange={(e) => setConfirmNote(e.target.value)} />
+        <label className="label mt-3" htmlFor="supplier-confirm-date">אספקה מבוקשת (לא חובה — לעדכון תאריך היעד)</label>
+        <input id="supplier-confirm-date" type="date" className="input" min={todayISO()} value={confirmExpected} onChange={(e) => setConfirmExpected(e.target.value)} />
         <div className="flex justify-end gap-2 mt-5">
-          <button className="btn-secondary" onClick={() => setSupplierConfirmOpen(false)}>ביטול</button>
-          <button className="btn-primary" disabled={busy} onClick={() => {
-            setSupplierConfirmOpen(false);
-            void setStatus('confirmed', confirmNote || undefined, {
-              confirmed_at: new Date().toISOString(),
-              confirmation_note: confirmNote.trim() || null,
-              ...(confirmExpected ? { expected_date: confirmExpected } : {}),
-            });
-          }}>
+          <button className="btn-secondary" disabled={busy} onClick={() => setSupplierConfirmOpen(false)}>ביטול</button>
+          <button className="btn-primary" disabled={busy} onClick={() => void (async () => {
+            const saved = await setStatus(
+              'confirmed',
+              'אישור ספק להזמנה',
+              confirmNote.trim() || null,
+              confirmExpected || null,
+            );
+            if (saved) {
+              setSupplierConfirmOpen(false);
+              setConfirmNote('');
+              setConfirmExpected('');
+            }
+          })()}>
             <CheckCircle2 size={15} /> אישור
           </button>
         </div>

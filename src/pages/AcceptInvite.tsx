@@ -129,8 +129,8 @@ export default function AcceptInvite() {
         </div>
 
         <div>
-          <label className="label">אימייל</label>
-          <input className="input" dir="ltr" value={lookup.email ?? ''} disabled readOnly />
+          <label className="label" htmlFor="invite-email">אימייל</label>
+          <input id="invite-email" className="input" dir="ltr" value={lookup.email ?? ''} disabled readOnly />
         </div>
         <div>
           <label className="label" htmlFor="fullName">שם מלא</label>
@@ -153,7 +153,7 @@ export default function AcceptInvite() {
             value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </div>
 
-        {formError && <div className="text-sm text-alert-solid">{formError}</div>}
+        {formError && <div role="alert" className="text-sm text-alert-solid">{formError}</div>}
 
         <button type="submit" className="btn-primary w-full" disabled={busy}>
           {busy ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={15} />}

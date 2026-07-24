@@ -38,7 +38,8 @@ function corsFor(req: Request): Record<string, string> {
 type ErrorCode =
   | 'unauthenticated' | 'not_owner' | 'invalid_request' | 'invalid_email'
   | 'already_member' | 'role_not_invitable' | 'invitation_unknown'
-  | 'invitation_accepted' | 'invitation_revoked' | 'email_failed' | 'misconfigured';
+  | 'invitation_accepted' | 'invitation_revoked' | 'invite_cooldown'
+  | 'invite_daily_limit' | 'email_failed' | 'misconfigured';
 
 interface InviteRequest {
   action: 'create' | 'resend';
@@ -57,11 +58,11 @@ interface IssuedInvitation {
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  owner: 'הנהלה',
+  owner: 'מנהל/בעלים',
   kitchen: 'מנהל מטבח',
-  office: 'מזכירות',
+  office: 'מנהל רכש',
   payer: 'מבצע העברות',
-  accountant: 'רואה חשבון',
+  accountant: 'הנהלת חשבונות',
 };
 
 /** Hebrew message per error code -- the UI shows these verbatim. */
@@ -75,6 +76,8 @@ const MESSAGE: Record<ErrorCode, string> = {
   invitation_unknown: 'ההזמנה לא נמצאה',
   invitation_accepted: 'ההזמנה כבר נוצלה',
   invitation_revoked: 'ההזמנה בוטלה',
+  invite_cooldown: 'נשלחה הזמנה לאחרונה. נסה שוב בעוד דקה.',
+  invite_daily_limit: 'מכסת ההזמנות היומית הושגה. נסה שוב מחר.',
   email_failed: 'ההזמנה נוצרה אך שליחת המייל נכשלה — נסה "שליחה מחדש"',
   misconfigured: 'שירות המיילים אינו מוגדר בסביבה זו',
 };
@@ -98,6 +101,7 @@ function codeFromPgError(message: string): ErrorCode {
   const known: ErrorCode[] = [
     'not_owner', 'invalid_email', 'already_member', 'role_not_invitable',
     'invitation_unknown', 'invitation_accepted', 'invitation_revoked',
+    'invite_cooldown', 'invite_daily_limit',
   ];
   return known.find((c) => message.includes(c)) ?? 'invalid_request';
 }
@@ -188,13 +192,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_email: body.email,
       p_role: body.role,
     });
-    if (error) return fail(cors, codeFromPgError(error.message), 403);
+    if (error) {
+      const code = codeFromPgError(error.message);
+      return fail(cors, code, code === 'invite_cooldown' || code === 'invite_daily_limit' ? 429 : 403);
+    }
     issued = data as IssuedInvitation;
   } else {
     if (typeof body.invitationId !== 'string') return fail(cors, 'invalid_request', 400);
 
     const { data, error } = await supabase.rpc('resend_invitation', { p_id: body.invitationId });
-    if (error) return fail(cors, codeFromPgError(error.message), 403);
+    if (error) {
+      const code = codeFromPgError(error.message);
+      return fail(cors, code, code === 'invite_cooldown' || code === 'invite_daily_limit' ? 429 : 403);
+    }
     issued = data as IssuedInvitation;
   }
 

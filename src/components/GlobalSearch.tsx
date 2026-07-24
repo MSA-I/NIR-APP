@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Loader2, X, Truck, Package, FileText, ClipboardList, CreditCard, RotateCcw, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { StatusBadge } from './ui';
+import { StatusBadge, useDialogLayer } from './ui';
 import { SUPPLIER_STATUS, PO_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, type StatusMeta } from '../lib/status';
 import { fmtMoneyExact } from '../lib/format';
 import type { Role, SearchHit, SearchEntity as EntityType } from '../lib/types';
@@ -27,9 +27,9 @@ const PRODUCT_STATUS: Record<string, StatusMeta> = {
 // payer/supplier have no reachable target at all → no search box (see canGlobalSearch).
 const ALLOWED: Record<Role, EntityType[]> = {
   owner:      ['supplier', 'product', 'invoice', 'order', 'payment', 'credit'],
-  office:     ['supplier', 'product', 'invoice', 'order', 'payment', 'credit'],
+  office:     ['supplier', 'product', 'invoice', 'order', 'credit'],
   kitchen:    ['supplier', 'product', 'invoice', 'order', 'credit'],            // no /payments
-  accountant: ['supplier', 'invoice', 'order', 'payment', 'credit'],            // no /products
+  accountant: ['invoice', 'payment', 'credit'],                                // approved invoices are enforced by RLS
   payer:      [],
   supplier:   [],
 };
@@ -90,10 +90,17 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
   const [term, setTerm] = useState('');
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const [activeIndex, setActiveIndex] = useState(-1);
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const seqRef = useRef(0);
+  const listboxId = useId();
+  const { panelRef, requestClose: closeMobileSearch } = useDialogLayer<HTMLDivElement>({
+    open: variant === 'mobile',
+    onClose: () => onClose?.(),
+    initialFocus: () => inputRef.current,
+  });
 
   const q = term.trim();
   const hasTerm = q.length >= 2;
@@ -103,12 +110,13 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
   // debounce alone cannot stop a slow old answer from overwriting a fast new one.
   useEffect(() => {
     const seq = ++seqRef.current;
-    if (q.length < 2) { setHits(null); setLoading(false); return; }
+    if (q.length < 2) { setHits(null); setLoading(false); setSearchError(''); return; }
+    setSearchError('');
     setLoading(true);
     const t = setTimeout(async () => {
       const { data, error } = await supabase.rpc('global_search', { q, per_type: 5 });
       if (seq !== seqRef.current) return; // superseded — drop this response
-      if (error) { setHits([]); setLoading(false); return; }
+      if (error) { setHits(null); setSearchError('החיפוש נכשל — נסה שוב'); setLoading(false); return; }
       const rows = ((data ?? []) as SearchHit[]).filter((h) => allowed.includes(h.entity));
       setHits(rows);
       setLoading(false);
@@ -146,8 +154,8 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
   // Keep the active option in view.
   useEffect(() => {
     if (activeIndex < 0) return;
-    document.getElementById(`gs-opt-${activeIndex}`)?.scrollIntoView({ block: 'nearest' });
-  }, [activeIndex]);
+    document.getElementById(`${listboxId}-opt-${activeIndex}`)?.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex, listboxId]);
 
   function open(hit: SearchHit) {
     navigate(targetFor(hit));
@@ -170,7 +178,7 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
       if (hit) { e.preventDefault(); open(hit); }
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      if (variant === 'mobile') onClose?.();
+      if (variant === 'mobile') { e.stopPropagation(); closeMobileSearch(); }
       else if (term) setTerm('');
       else inputRef.current?.blur();
     }
@@ -192,9 +200,9 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
         placeholder="חיפוש ספקים, חשבוניות, הזמנות..."
         role="combobox"
         aria-expanded={panelOpen}
-        aria-controls="gs-listbox"
+        aria-controls={listboxId}
         aria-autocomplete="list"
-        aria-activedescendant={activeIndex >= 0 ? `gs-opt-${activeIndex}` : undefined}
+        aria-activedescendant={activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined}
         aria-label="חיפוש כללי"
         value={term}
         onChange={(e) => setTerm(e.target.value)}
@@ -202,28 +210,35 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
       />
-      {loading && <Loader2 size={15} className="animate-spin absolute top-1/2 -translate-y-1/2 end-3 text-ink-faint" />}
+      {loading && (
+        <span role="status" className="absolute top-1/2 -translate-y-1/2 end-3 text-ink-faint">
+          <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+          <span className="sr-only">מחפש</span>
+        </span>
+      )}
     </div>
   );
 
-  const panelBody = !hasTerm ? (
+  const panelBody = searchError ? (
+    <div role="alert" className="px-3 py-6 text-center text-sm text-alert-fg">{searchError}</div>
+  ) : !hasTerm ? (
     <div className="px-3 py-3 text-xs text-ink-faint">חיפוש {hintLabels}</div>
   ) : loading && !hits ? null : hits && hits.length === 0 ? (
     <div className="px-3 py-6 text-center text-sm text-ink-muted">לא נמצאו תוצאות עבור «{q}»</div>
   ) : (
-    <ul id="gs-listbox" role="listbox" aria-label="תוצאות חיפוש" className="py-1">
+    <ul id={listboxId} role="listbox" aria-label="תוצאות חיפוש" className="py-1">
       {renderGroups.map((g) => {
         const Icon = g.meta.icon;
         return (
           <li key={g.entity} role="group" aria-label={g.meta.label}>
-            <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+            <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-[11px] font-semibold text-ink-muted">
               <Icon size={13} /> {g.meta.label}
             </div>
             <ul role="presentation">
               {g.items.map(({ hit, index }) => (
                 <li
                   key={hit.id}
-                  id={`gs-opt-${index}`}
+                  id={`${listboxId}-opt-${index}`}
                   role="option"
                   aria-selected={index === activeIndex}
                   onMouseDown={(e) => { e.preventDefault(); open(hit); }}
@@ -248,10 +263,11 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
 
   if (variant === 'mobile') {
     return (
-      <div role="dialog" aria-modal="true" aria-label="חיפוש כללי" className="lg:hidden fixed inset-0 z-50 bg-surface flex flex-col">
+      <div id="mobile-global-search" ref={panelRef} role="dialog" aria-modal="true" aria-label="חיפוש כללי" tabIndex={-1}
+        className="phone-safe-dialog lg:hidden fixed inset-0 z-50 bg-surface flex flex-col focus:outline-none">
         <div className="flex items-center gap-2 border-b border-line p-3">
           {field}
-          <button className="btn-ghost p-2!" onClick={() => onClose?.()} aria-label="סגירה"><X size={20} /></button>
+          <button className="btn-ghost p-2!" onClick={() => closeMobileSearch()} aria-label="סגירה"><X size={20} /></button>
         </div>
         <div className="flex-1 overflow-y-auto">{panelBody}</div>
         <div aria-live="polite" className="sr-only">{liveMsg}</div>
@@ -263,7 +279,7 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
     <div className="relative w-full max-w-xl">
       {field}
       {panelOpen && (
-        <div className="absolute top-full inset-x-0 mt-1 card shadow-lg max-h-[70vh] overflow-y-auto">
+        <div className="absolute top-full inset-x-0 mt-1 card shadow-menu max-h-[70vh] overflow-y-auto">
           {panelBody}
         </div>
       )}

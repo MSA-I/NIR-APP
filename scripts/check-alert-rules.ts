@@ -7,6 +7,7 @@
  * a duplicate is a repeated key, not a repeated row.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { countDuplicateKeys, countAboveAverage } from '../src/lib/alertRules.ts';
 
 /* ---- countDuplicateKeys ---- */
@@ -78,5 +79,30 @@ assert.equal(countAboveAverage([
   { product_id: 'q', current_price: 50 },
   { product_id: 'q', current_price: 500 },
 ], 0.15), 2, 'products are averaged independently');
+
+/* ---- actionable links and P2 context ---- */
+
+const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+const alertsSource = source('../src/lib/alerts.ts');
+const invoicesSource = source('../src/pages/Invoices.tsx');
+const paymentsSource = source('../src/pages/PaymentRequests.tsx');
+const exceptionsSource = source('../src/pages/Exceptions.tsx');
+const bankSource = source('../src/pages/Bank.tsx');
+const receivingSource = source('../src/pages/Receiving.tsx');
+
+assert.match(alertsSource, /\/invoices\?attention=duplicates/, 'duplicate alert keeps its invoice filter');
+assert.match(alertsSource, /\/invoices\?attention=without-order/, 'unlinked-invoice alert keeps its invoice filter');
+assert.match(alertsSource, /\/payment-requests\?status=active&due=soon/, 'due alert keeps its treatment window');
+assert.match(alertsSource, /\/prices\?increases=1/, 'price-rise alert keeps its price filter');
+assert.match(invoicesSource, /attentionFilter === 'duplicates'/, 'invoice duplicate target consumes its filter');
+assert.match(paymentsSource, /dueFilter === 'soon'/, 'payment target consumes the due-soon filter');
+assert.match(exceptionsSource, /\/payment-requests\?id=\$\{row\.payment_request_id\}/, 'exception links to its payment request');
+assert.match(exceptionsSource, /\/bank\?id=\$\{row\.bank_transaction_id\}/, 'exception links to its bank transaction');
+assert.match(bankSource, /transaction\.id === idFilter/, 'bank target consumes a transaction id');
+assert.doesNotMatch(exceptionsSource, /`\$\{k\}: /, 'exception metadata keys are not rendered raw');
+assert.match(receivingSource, /דורש פעולה/, 'receiving keeps the focused queue');
+assert.match(receivingSource, /הצג הכל/, 'receiving keeps mobile disclosure');
+assert.match(receivingSource, /type="search"/, 'receiving keeps order search');
+assert.doesNotMatch(receivingSource, /receiving-reason/, 'routine receiving does not ask for duplicate audit prose');
 
 console.log('alert rules: all checks passed');

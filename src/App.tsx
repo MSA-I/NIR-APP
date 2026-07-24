@@ -1,7 +1,8 @@
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import { lazy, Suspense, type ReactNode } from 'react';
+import { Component, lazy, Suspense, useState, type ReactNode } from 'react';
 import { useAuth, homeFor } from './auth/AuthContext';
-import { PageLoader } from './components/ui';
+import { PageLoader, useToast } from './components/ui';
+import { toHebrewError } from './lib/errors';
 import type { Role } from './lib/types';
 
 // Eager: the auth shell that must paint before (or regardless of) a resolved session.
@@ -12,7 +13,7 @@ import Login from './pages/Login';
 import AcceptInvite from './pages/AcceptInvite';
 
 // Lazy: every screen behind the Layout loads its own chunk on demand, so a supplier hitting
-// /my-prices or a payer hitting /pay never downloads Dashboard/Reports (and recharts) up front.
+// /my-prices or a payment executor hitting /pay never downloads Dashboard/Reports (and recharts) up front.
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Alerts = lazy(() => import('./pages/Alerts'));
 const SuppliersList = lazy(() => import('./pages/Suppliers').then((m) => ({ default: m.SuppliersList })));
@@ -41,6 +42,30 @@ const Settings = lazy(() => import('./pages/Settings'));
 const SupplierPrices = lazy(() => import('./pages/SupplierPrices'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
+
+class LazyRouteErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div role="alert" className="card card-pad mx-auto my-8 max-w-lg text-center">
+        <h1 className="page-title">לא ניתן לטעון את המסך</h1>
+        <p className="mt-2 text-sm text-ink-soft">ייתכן שהאפליקציה עודכנה בזמן שהכרטיסייה הייתה פתוחה.</p>
+        <button type="button" className="btn-primary mt-5" onClick={() => window.location.reload()}>רענון וטעינה מחדש</button>
+      </div>
+    );
+  }
+}
+
+function LazyPageBoundary({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  return <LazyRouteErrorBoundary key={pathname}>{children}</LazyRouteErrorBoundary>;
+}
 
 function Guard({ roles, children }: { roles: Role[]; children: ReactNode }) {
   const { session, profile, loading } = useAuth();
@@ -78,6 +103,20 @@ const READERS: Role[] = ['owner', 'office', 'kitchen', 'accountant'];
  */
 function AccountUnavailable() {
   const { signOut } = useAuth();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+
+  async function handleSignOut() {
+    setBusy(true);
+    const result = await signOut();
+    setBusy(false);
+    if (result.error) {
+      toast(toHebrewError(result.error), 'error');
+      return;
+    }
+    if (result.pushWarning) toast(result.pushWarning, 'error');
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="card card-pad max-w-md text-center">
@@ -86,14 +125,50 @@ function AccountUnavailable() {
           לא ניתן לטעון את פרטי החשבון. ייתכן שהגישה הושעתה או שהמשתמש הושבת.
           לפרטים יש לפנות למנהל המערכת.
         </p>
-        <button className="btn-secondary mt-5" onClick={() => void signOut()}>התנתקות</button>
+        <button className="btn-secondary mt-5" disabled={busy} onClick={() => void handleSignOut()}>
+          {busy ? 'מתנתק…' : 'התנתקות'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BootstrapUnavailable() {
+  const { bootstrapError, retryBootstrap, signOut } = useAuth();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+
+  async function handleSignOut() {
+    setBusy(true);
+    const result = await signOut();
+    setBusy(false);
+    if (result.error) {
+      toast(toHebrewError(result.error), 'error');
+      return;
+    }
+    if (result.pushWarning) toast(result.pushWarning, 'error');
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="card card-pad max-w-md text-center">
+        <h1 className="page-title">לא ניתן לטעון את החשבון</h1>
+        <p className="text-ink-soft mt-2">
+          {bootstrapError ?? 'אירעה תקלה זמנית בטעינת פרטי החשבון.'} החיבור נשאר פעיל ואפשר לנסות שוב.
+        </p>
+        <div className="mt-5 flex justify-center gap-2">
+          <button className="btn-primary" disabled={busy} onClick={retryBootstrap}>ניסיון חוזר</button>
+          <button className="btn-secondary" disabled={busy} onClick={() => void handleSignOut()}>
+            {busy ? 'מתנתק…' : 'התנתקות'}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
 export default function App() {
-  const { session, profile, loading, isPlatformAdmin } = useAuth();
+  const { session, profile, loading, bootstrapError, isPlatformAdmin } = useAuth();
   const { pathname } = useLocation();
 
   // The public routes must render regardless of a broken session. Someone accepting an
@@ -106,14 +181,17 @@ export default function App() {
   // the unavailable screen.
   if (!isPublic && session && !loading && !profile && isPlatformAdmin) {
     return (
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
-          <Route path="/admin" element={<PlatformGuard><Admin /></PlatformGuard>} />
-          <Route path="*" element={<Navigate to="/admin" replace />} />
-        </Routes>
-      </Suspense>
+      <LazyPageBoundary>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/admin" element={<PlatformGuard><Admin /></PlatformGuard>} />
+            <Route path="*" element={<Navigate to="/admin" replace />} />
+          </Routes>
+        </Suspense>
+      </LazyPageBoundary>
     );
   }
+  if (!isPublic && session && !loading && !profile && bootstrapError) return <BootstrapUnavailable />;
   if (!isPublic && session && !loading && !profile) return <AccountUnavailable />;
 
   return (
@@ -124,19 +202,19 @@ export default function App() {
         {/* One Suspense boundary for every lazy page, nested under the Layout so the shell
             (nav, requires-attention strip) stays mounted and only the content area shows
             PageLoader while a page chunk loads. */}
-        <Route element={<Suspense fallback={<PageLoader />}><Outlet /></Suspense>}>
+        <Route element={<LazyPageBoundary><Suspense fallback={<PageLoader />}><Outlet /></Suspense></LazyPageBoundary>}>
         <Route path="/" element={loading ? <PageLoader /> : <Navigate to={homeFor(profile?.role)} replace />} />
 
         <Route path="/dashboard" element={<Guard roles={FINANCE}><Dashboard /></Guard>} />
 
-        <Route path="/suppliers" element={<Guard roles={READERS}><SuppliersList /></Guard>} />
-        <Route path="/suppliers/:id" element={<Guard roles={READERS}><SupplierCard /></Guard>} />
+        <Route path="/suppliers" element={<Guard roles={STAFF}><SuppliersList /></Guard>} />
+        <Route path="/suppliers/:id" element={<Guard roles={STAFF}><SupplierCard /></Guard>} />
         <Route path="/products" element={<Guard roles={STAFF}><Products /></Guard>} />
         <Route path="/prices" element={<Guard roles={STAFF}><PriceLists /></Guard>} />
 
         <Route path="/orders/new" element={<Guard roles={STAFF}><NewOrder /></Guard>} />
-        <Route path="/orders" element={<Guard roles={READERS}><OrdersList /></Guard>} />
-        <Route path="/orders/:id" element={<Guard roles={READERS}><OrderDetail /></Guard>} />
+        <Route path="/orders" element={<Guard roles={STAFF}><OrdersList /></Guard>} />
+        <Route path="/orders/:id" element={<Guard roles={STAFF}><OrderDetail /></Guard>} />
 
         <Route path="/receiving" element={<Guard roles={STAFF}><ReceivingList /></Guard>} />
         <Route path="/receiving/:orderId" element={<Guard roles={STAFF}><ReceiveOrder /></Guard>} />
@@ -144,20 +222,21 @@ export default function App() {
         <Route path="/invoices" element={<Guard roles={READERS}><InvoicesList /></Guard>} />
         <Route path="/invoices/new" element={<Guard roles={STAFF}><InvoiceNew /></Guard>} />
         <Route path="/invoices/:id" element={<Guard roles={READERS}><InvoiceDetail /></Guard>} />
-        <Route path="/documents" element={<Guard roles={READERS}><DocumentsGallery /></Guard>} />
+        <Route path="/documents" element={<Guard roles={STAFF}><DocumentsGallery /></Guard>} />
         <Route path="/inbox" element={<Navigate to="/documents?filing=unfiled" replace />} />
 
         <Route path="/credits" element={<Guard roles={READERS}><Credits /></Guard>} />
         <Route path="/payment-requests" element={<Guard roles={FINANCE}><PaymentRequests /></Guard>} />
-        <Route path="/payments" element={<Guard roles={['owner', 'office', 'accountant']}><Payments /></Guard>} />
-        <Route path="/pay" element={<Guard roles={['payer']}><PayerQueue /></Guard>} />
+        <Route path="/payments" element={<Guard roles={['owner', 'accountant']}><Payments /></Guard>} />
+        <Route path="/pay/emergency" element={<Guard roles={['owner']}><PayerQueue mode="emergency" /></Guard>} />
+        <Route path="/pay" element={<Guard roles={['payer', 'accountant']}><PayerQueue /></Guard>} />
 
-        <Route path="/bank" element={<Guard roles={['owner', 'office', 'accountant']}><Bank /></Guard>} />
+        <Route path="/bank" element={<Guard roles={['owner', 'accountant']}><Bank /></Guard>} />
         <Route path="/exceptions" element={<Guard roles={READERS}><Exceptions /></Guard>} />
         <Route path="/alerts" element={<Guard roles={FINANCE}><Alerts /></Guard>} />
-        <Route path="/expenses" element={<Guard roles={['owner', 'office', 'accountant']}><Expenses /></Guard>} />
-        <Route path="/reports" element={<Guard roles={['owner', 'office', 'accountant']}><Reports /></Guard>} />
-        <Route path="/audit" element={<Guard roles={['owner', 'office', 'accountant']}><AuditLogPage /></Guard>} />
+        <Route path="/expenses" element={<Guard roles={['owner', 'accountant']}><Expenses /></Guard>} />
+        <Route path="/reports" element={<Guard roles={['owner', 'accountant']}><Reports /></Guard>} />
+        <Route path="/audit" element={<Guard roles={['owner', 'accountant']}><AuditLogPage /></Guard>} />
         <Route path="/settings" element={<Guard roles={['owner']}><Settings /></Guard>} />
         <Route path="/my-prices" element={<Guard roles={['supplier']}><SupplierPrices /></Guard>} />
 

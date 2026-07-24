@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useParamState } from '../lib/useParamState';
 import { toHebrewError } from "../lib/errors";
-import { TrendingUp, TrendingDown, Upload, History, Pencil, X } from 'lucide-react';
+import { TrendingUp, TrendingDown, Upload, History, Pencil, X, FileCheck2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -9,12 +9,24 @@ import { DataTable, Modal, useToast, ErrorNote, StatusBadge, Note, SkeletonTable
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
 import { fmtDate, todayISO } from '../lib/format';
 import { PRODUCT_AVAILABILITY } from '../lib/status';
-import type { SupplierProduct, Supplier, PriceHistory } from '../lib/types';
+import type { SupplierProduct, Supplier, PriceHistory, SupplierPriceSubmission } from '../lib/types';
 
 type Row = SupplierProduct & { supplier: Supplier; product: { id: string; name: string; unit: string } };
+type ManagerSubmission = SupplierPriceSubmission & { supplier: Pick<Supplier, 'id' | 'name'> };
+
+const SUBMISSION_STATUS = {
+  accepted: { label: 'נקלט', tone: 'done' },
+  accepted_with_rejections: { label: 'נקלט חלקית', tone: 'await' },
+  rejected: { label: 'נדחה', tone: 'alert' },
+} as const;
+
+const monthLabel = (value: string) => new Intl.DateTimeFormat('he-IL', {
+  month: 'long', year: 'numeric', timeZone: 'UTC',
+}).format(new Date(`${value.slice(0, 7)}-01T00:00:00Z`));
 
 export default function PriceLists() {
   const { profile } = useAuth();
+  const canWrite = profile?.role === 'owner' || profile?.role === 'office';
   const toast = useToast();
   const [supplierFilter, setSupplierFilter] = useState('');
   // '1' via ?increases=1 (from the dashboard price-increase card); re-syncs on navigation.
@@ -32,13 +44,20 @@ export default function PriceLists() {
       .select('*, supplier:suppliers(id, name, status), product:products(id, name, unit)')
       .order('updated_at', { ascending: false })) as Promise<Row[]>);
 
+  const { data: submissions, loading: submissionsLoading, error: submissionsError } = useQuery(async () => {
+    if (!canWrite) return [];
+    return unwrap(await supabase.from('supplier_price_submissions')
+      .select('*, supplier:suppliers!supplier_price_submissions_supplier_fk(id, name)')
+      .order('target_month', { ascending: false })
+      .order('revision', { ascending: false })
+      .limit(50)) as ManagerSubmission[];
+  }, [canWrite]);
+
   const suppliers = useMemo(() => {
     const map = new Map<string, string>();
     data?.forEach((r) => map.set(r.supplier.id, r.supplier.name));
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'he'));
   }, [data]);
-
-  const canWrite = profile?.role === 'owner' || profile?.role === 'office';
 
   const rows = (data ?? []).filter((r) =>
     (!supplierFilter || r.supplier_id === supplierFilter) &&
@@ -80,6 +99,8 @@ export default function PriceLists() {
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q) || r.supplier.name.toLowerCase().includes(q)}
+        searchLabel="חיפוש במחירונים"
+        rowLabel={(r) => `${r.product.name} אצל ${r.supplier.name}`}
         rowActions={(r) => [
           { key: 'history', label: 'היסטוריית מחירים', icon: History, onSelect: () => setHistoryFor(r) },
           { key: 'edit', label: 'עדכון מחיר', icon: Pencil, hidden: !canWrite, onSelect: () => setEditFor(r) },
@@ -91,7 +112,7 @@ export default function PriceLists() {
                 <X size={14} /> {activeProductName ?? 'מוצר'}
               </button>
             )}
-            <select className="input w-auto!" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
+            <select className="input w-auto!" aria-label="סינון מחירונים לפי ספק" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
               <option value="">כל הספקים</option>
               {suppliers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
             </select>
@@ -101,6 +122,32 @@ export default function PriceLists() {
             </label>
           </>
         } />
+
+      {canWrite && (
+        <section className="card p-4" aria-labelledby="price-submissions-heading">
+          <div className="flex items-center gap-2 mb-3">
+            <FileCheck2 size={18} className="text-action" aria-hidden="true" />
+            <h2 id="price-submissions-heading" className="section-title">הגשות מחירון חודשיות</h2>
+          </div>
+          {submissionsLoading ? <p className="text-sm text-ink-muted">טוען קבלות הגשה…</p>
+            : submissionsError ? <ErrorNote message={submissionsError} />
+              : submissions?.length ? (
+                <div className="divide-y divide-line-soft">
+                  {submissions.map((submission) => (
+                    <div key={submission.id} className="py-3 first:pt-0 last:pb-0">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="font-medium text-ink">{submission.supplier.name} · {monthLabel(submission.target_month)} · גרסה <span className="num">{submission.revision}</span></div>
+                        <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
+                      </div>
+                      <div className="mt-1 text-sm text-ink-muted break-words">
+                        {submission.file_name} · נקלטו <span className="num">{submission.accepted_count}</span> · ללא שינוי <span className="num">{submission.unchanged_count}</span> · נדחו <span className="num">{submission.rejected_count}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="text-sm text-ink-muted">עדיין אין הגשות חודשיות.</p>}
+        </section>
+      )}
 
       {historyFor && <PriceHistoryModal row={historyFor} onClose={() => setHistoryFor(null)} />}
       {editFor && (
@@ -132,43 +179,40 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
 }
 
 function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => void; onSaved: () => void }) {
-  const { profile } = useAuth();
   const toast = useToast();
   const [price, setPrice] = useState(row.current_price.toString());
   const [date, setDate] = useState(todayISO());
   const [available, setAvailable] = useState(row.available);
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function save() {
     const p = Number(price);
     if (!p || p <= 0) { toast('מחיר לא תקין', 'error'); return; }
+    if (!reason.trim()) { toast('נדרשת סיבה לעדכון המחיר', 'error'); return; }
     setBusy(true);
-    const upd = await supabase.from('supplier_products').update({
-      current_price: p,
-      previous_price: p !== row.current_price ? row.current_price : row.previous_price,
-      price_effective_date: date,
-      available,
-    }).eq('id', row.id);
+    const upd = await supabase.rpc('set_supplier_product_price', {
+      p_supplier_product_id: row.id,
+      p_price: p,
+      p_effective_date: date,
+      p_available: available,
+      p_reason: reason.trim(),
+    });
     if (upd.error) { setBusy(false); toast(toHebrewError(upd.error.message), 'error'); return; }
-    if (p !== row.current_price) {
-      await supabase.from('price_history').insert({
-        org_id: profile!.org_id, supplier_product_id: row.id, price: p, effective_date: date,
-        created_by: profile!.id,
-      });
-    }
     setBusy(false);
     onSaved();
   }
 
   return (
-    <Modal open onClose={onClose} title={`עדכון מחיר — ${row.product.name} (${row.supplier.name})`}>
+    <Modal open onClose={onClose} title={`עדכון מחיר — ${row.product.name} (${row.supplier.name})`} busy={busy} statusMessage={busy ? 'שומר את המחיר' : undefined}>
       <div className="space-y-4">
-        <div><label className="label">מחיר חדש (₪)</label><input type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
-        <div><label className="label">בתוקף מתאריך</label><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        <div><label className="label" htmlFor="price-list-price">מחיר חדש (₪)</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
+        <div><label className="label" htmlFor="price-list-date">בתוקף מתאריך</label><input id="price-list-date" type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="rounded" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> זמין אצל הספק</label>
+        <div><label className="label">סיבת העדכון *</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
-        <button className="btn-secondary" onClick={onClose}>ביטול</button>
+        <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
         <button className="btn-primary" disabled={busy} onClick={() => void save()}>שמירה</button>
       </div>
     </Modal>
@@ -177,12 +221,12 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
 
 /** Import price list: expects columns ספק / מוצר / מחיר (or supplier/product/price). */
 function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const { profile } = useAuth();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<{ supplier: string; product: string; price: number }[]>([]);
   const [report, setReport] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reason, setReason] = useState('');
 
   async function onFile(file: File) {
     try {
@@ -208,45 +252,36 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   }
 
   async function runImport() {
+    if (!reason.trim()) { toast('נדרשת סיבה לייבוא המחירון', 'error'); return; }
     setBusy(true);
-    const suppliers = unwrap(await supabase.from('suppliers').select('id, name')) as { id: string; name: string }[];
-    const products = unwrap(await supabase.from('products').select('id, name')) as { id: string; name: string }[];
-    const sps = unwrap(await supabase.from('supplier_products').select('id, supplier_id, product_id, current_price, previous_price')) as SupplierProduct[];
-    let updated = 0, created = 0, skipped = 0;
-    for (const row of preview) {
-      const sup = suppliers.find((s) => s.name.trim() === row.supplier);
-      const prod = products.find((p) => p.name.trim() === row.product);
-      if (!sup || !prod) { skipped++; continue; }
-      const existing = sps.find((sp) => sp.supplier_id === sup.id && sp.product_id === prod.id);
-      if (existing) {
-        if (existing.current_price !== row.price) {
-          await supabase.from('supplier_products').update({
-            current_price: row.price, previous_price: existing.current_price, price_effective_date: todayISO(),
-          }).eq('id', existing.id);
-          await supabase.from('price_history').insert({
-            org_id: profile!.org_id, supplier_product_id: existing.id, price: row.price, effective_date: todayISO(), created_by: profile!.id,
-          });
-          updated++;
-        }
-      } else {
-        const ins = await supabase.from('supplier_products').insert({
-          org_id: profile!.org_id, supplier_id: sup.id, product_id: prod.id,
-          current_price: row.price, price_effective_date: todayISO(),
-        }).select('id').single();
-        if (!ins.error && ins.data) {
-          await supabase.from('price_history').insert({
-            org_id: profile!.org_id, supplier_product_id: ins.data.id, price: row.price, effective_date: todayISO(), created_by: profile!.id,
-          });
-          created++;
-        }
+    try {
+      const suppliers = unwrap(await supabase.from('suppliers').select('id, name')) as { id: string; name: string }[];
+      const products = unwrap(await supabase.from('products').select('id, name')) as { id: string; name: string }[];
+      const unresolved: number[] = [];
+      const rows = preview.flatMap((row, index) => {
+        const supplier = suppliers.find((candidate) => candidate.name.trim() === row.supplier);
+        const product = products.find((candidate) => candidate.name.trim() === row.product);
+        if (!supplier || !product) { unresolved.push(index + 2); return []; }
+        return [{ supplier_id: supplier.id, product_id: product.id, price: row.price, available: true }];
+      });
+      if (unresolved.length) {
+        throw new Error(`הייבוא בוטל: ספק או מוצר לא נמצאו בשם מדויק בשורות ${unresolved.slice(0, 12).join(', ')}.`);
       }
+      const imported = unwrap(await supabase.rpc('import_supplier_prices', {
+        p_rows: rows,
+        p_effective_date: todayISO(),
+        p_reason: reason.trim(),
+      })) as { updated: number; created: number; unchanged: number };
+      setReport(`עודכנו ${imported.updated} מחירים, נוצרו ${imported.created} רשומות חדשות, ${imported.unchanged} ללא שינוי.`);
+    } catch (e) {
+      toast(toHebrewError(e), 'error');
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
-    setReport(`עודכנו ${updated} מחירים, נוצרו ${created} רשומות חדשות, דולגו ${skipped} שורות (ספק/מוצר לא נמצא בשם מדויק).`);
   }
 
   return (
-    <Modal open onClose={onClose} title="ייבוא מחירון מ־Excel / CSV" wide>
+    <Modal open onClose={onClose} title="ייבוא מחירון מ־Excel / CSV" wide busy={busy} statusMessage={report ?? (busy ? 'מייבא את המחירון' : undefined)}>
       {report ? (
         <div className="space-y-4">
           <Note tone="done">{report}</Note>
@@ -257,7 +292,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           <div className="text-sm text-ink-soft">{preview.length} שורות זוהו. ההתאמה מתבצעת לפי שם ספק ושם מוצר מדויקים.</div>
           <div className="max-h-64 overflow-y-auto border border-line-soft rounded-lg">
             <table className="w-full">
-              <thead className="bg-surface-sunken sticky top-0"><tr><th className="th">ספק</th><th className="th">מוצר</th><th className="th">מחיר</th></tr></thead>
+              <thead className="bg-surface-sunken sticky top-0"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">מוצר</th><th scope="col" className="th">מחיר</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {preview.slice(0, 100).map((r, i) => (
                   <tr key={i}><td className="td">{r.supplier}</td><td className="td">{r.product}</td><td className="td num">₪{r.price.toFixed(2)}</td></tr>
@@ -265,15 +300,16 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
               </tbody>
             </table>
           </div>
+          <div><label className="label">סיבת הייבוא *</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
           <div className="flex justify-end gap-2">
-            <button className="btn-secondary" onClick={() => setPreview([])}>חזרה</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => setPreview([])}>חזרה</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>{busy ? 'מייבא...' : 'אישור וייבוא'}</button>
           </div>
         </div>
       ) : (
         <div className="text-center py-8">
           <p className="text-sm text-ink-soft mb-4">בחר קובץ Excel או CSV עם העמודות: <b>ספק</b>, <b>מוצר</b>, <b>מחיר</b></p>
-          <button className="btn-primary" onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
+          <button className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
           <input ref={fileRef} type="file" hidden accept=".xlsx,.xls,.csv" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
         </div>
       )}

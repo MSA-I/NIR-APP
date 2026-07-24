@@ -21,6 +21,14 @@ const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undef
 
 export type PushStatus = 'unsupported' | 'no-key' | 'denied' | 'subscribed' | 'not-subscribed';
 
+export interface PushCleanupResult {
+  /** null means there was no browser subscription to remove. */
+  localRemoved: boolean | null;
+  /** null means there was no endpoint whose authenticated server row could be targeted. */
+  serverRemoved: boolean | null;
+  warning: string | null;
+}
+
 export function isPushSupported(): boolean {
   return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
@@ -143,4 +151,73 @@ export async function unsubscribePush(): Promise<string | null> {
   } catch {
     return 'כיבוי ההתראות נכשל — נסה שוב';
   }
+}
+
+/**
+ * Best-effort cleanup for the current browser immediately before logout.
+ *
+ * Server and browser cleanup are deliberately attempted independently: a database/RLS
+ * failure must not prevent us from invalidating the device endpoint, while a browser
+ * failure must not prevent removal of the authenticated row. The caller must always
+ * continue logout, but surface `warning` verbatim instead of claiming full removal.
+ */
+export async function cleanupPushBeforeSignOut(): Promise<PushCleanupResult> {
+  if (!isPushSupported()) return { localRemoved: null, serverRemoved: null, warning: null };
+
+  let sub: PushSubscription | null = null;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    sub = await reg?.pushManager.getSubscription() ?? null;
+  } catch {
+    return {
+      localRemoved: false,
+      serverRemoved: null,
+      warning: 'לא ניתן היה לבדוק את מנוי ההתראות במכשיר. ההתנתקות הושלמה, אך יש לבטל את ההתראות בהגדרות האתר בדפדפן לפני שימוש במכשיר משותף.',
+    };
+  }
+
+  if (!sub) return { localRemoved: null, serverRemoved: null, warning: null };
+
+  const endpoint = sub.endpoint;
+  let serverRemoved = false;
+  let localRemoved = false;
+
+  try {
+    // Returning the deleted id is the proof: a mutation with no error but zero RLS-visible
+    // rows is not enough to claim that the server record was removed.
+    const { data, error } = await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint).select('id');
+    serverRemoved = !error && Array.isArray(data) && data.length > 0;
+  } catch {
+    serverRemoved = false;
+  }
+
+  try {
+    localRemoved = await sub.unsubscribe();
+  } catch {
+    localRemoved = false;
+  }
+
+  if (serverRemoved && localRemoved) return { serverRemoved, localRemoved, warning: null };
+
+  if (localRemoved) {
+    return {
+      serverRemoved,
+      localRemoved,
+      warning: 'מנוי ההתראות במכשיר בוטל, אך ניקוי הרשומה בשרת לא אומת. כדי לנסות שוב, יש להתחבר מחדש ולהפעיל ואז לכבות את ההתראות בהגדרות.',
+    };
+  }
+
+  if (serverRemoved) {
+    return {
+      serverRemoved,
+      localRemoved,
+      warning: 'רשומת ההתראות בשרת הוסרה, אך ביטול המנוי בדפדפן לא אומת. יש לבטל את ההתראות בהגדרות האתר בדפדפן לפני שימוש במכשיר משותף.',
+    };
+  }
+
+  return {
+    serverRemoved,
+    localRemoved,
+    warning: 'ניקוי מנוי ההתראות נכשל בשרת ובדפדפן. ההתנתקות הושלמה, אך יש לבטל את ההתראות בהגדרות האתר בדפדפן; אפשר גם להתחבר מחדש ולנסות שוב.',
+  };
 }

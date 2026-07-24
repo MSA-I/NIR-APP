@@ -1,22 +1,35 @@
 import { CreditCard, X } from 'lucide-react';
+import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { useQuery, unwrap } from '../lib/useQuery';
+import { useQuery } from '../lib/useQuery';
 import { DataTable, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import type { Payment } from '../lib/types';
+import { fetchAll } from '../lib/supabasePaging';
 
 type Row = Payment & {
   supplier: { name: string };
   allocations: { amount: number; invoice: { invoice_number: string } | null }[];
+  executor: { full_name: string } | null;
 };
 
 export default function Payments() {
   const [params, setParams] = useSearchParams();
   const { data, loading, error } = useQuery(async () =>
-    unwrap(await supabase.from('payments')
-      .select('*, supplier:suppliers(name), allocations:payment_allocations(amount, invoice:invoices(invoice_number))')
-      .order('paid_date', { ascending: false })) as Promise<Row[]>);
+    fetchAll<Row>((from, to) => supabase.from('payments')
+      .select('*, supplier:suppliers(name), allocations:payment_allocations(amount, invoice:invoices(invoice_number)), executor:profiles!p0_payments_actor_tenant_fk(full_name)')
+      .order('paid_date', { ascending: false }).order('id').range(from, to)));
+
+  useEffect(() => {
+    const id = params.get('id');
+    if (!id || !data || data.some((row) => row.id === id)) return;
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('id');
+      return next;
+    }, { replace: true });
+  }, [data, params, setParams]);
 
   const columns: Column<Row>[] = [
     { key: 'num', header: 'מס׳', sortValue: (r) => r.number, render: (r) => `#${r.number}` },
@@ -25,6 +38,7 @@ export default function Payments() {
     { key: 'amount', header: 'סכום', className: 'num', sortValue: (r) => r.amount, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
     { key: 'method', header: 'אמצעי', render: (r) => r.method ?? '—' },
     { key: 'ref', header: 'אסמכתא', render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
+    { key: 'executor', header: 'בוצע על ידי', priority: 3, render: (r) => r.executor?.full_name ?? '—' },
     {
       key: 'invoices', header: 'חשבוניות', priority: 3, render: (r) => (
         <span className="text-ink-muted" dir="ltr">

@@ -8,11 +8,49 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
 import { EXCEPTION_TYPE, EXCEPTION_STATUS, SEVERITY } from '../lib/status';
-import { fmtDate } from '../lib/format';
+import { fmtDate, fmtMoneyExact } from '../lib/format';
 import { logAction } from '../lib/audit';
 import type { ExceptionRow, ExceptionStatus } from '../lib/types';
 
 type Row = ExceptionRow & { supplier: { name: string } | null };
+
+const DETAIL_LABELS: Record<string, string> = {
+  evidence: 'ראיה',
+  description: 'תיאור',
+  date: 'תאריך',
+  amount: 'סכום',
+  expected: 'צפוי',
+  actual: 'בפועל',
+  difference: 'פער',
+  reason: 'סיבה',
+  notes: 'הערה',
+  invoice_number: 'מספר חשבונית',
+  payment_number: 'מספר תשלום',
+};
+
+function businessDetailLines(details: Record<string, unknown> | null): string[] {
+  if (!details) return [];
+  return Object.entries(details).flatMap(([key, raw]) => {
+    if (raw == null || key === 'code' || key === 'checks') return [];
+    const values = Array.isArray(raw)
+      ? raw
+      : typeof raw === 'object'
+        ? Object.values(raw as Record<string, unknown>)
+        : [raw];
+    const label = DETAIL_LABELS[key] ?? 'פרט נוסף';
+    return values.flatMap((value) => {
+      if (!['string', 'number', 'boolean'].includes(typeof value)) return [];
+      const text = key === 'amount' && typeof value === 'number'
+        ? fmtMoneyExact(value)
+        : key === 'date' && typeof value === 'string'
+          ? fmtDate(value)
+          : typeof value === 'boolean'
+            ? (value ? 'כן' : 'לא')
+            : String(value);
+      return `${label}: ${text}`;
+    });
+  });
+}
 
 export default function Exceptions() {
   const navigate = useNavigate();
@@ -69,23 +107,25 @@ export default function Exceptions() {
       <h1 className="page-title flex items-center gap-2"><AlertTriangle size={22} className="text-await-solid" /> חריגים</h1>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.title.toLowerCase().includes(q) || (r.supplier?.name ?? '').toLowerCase().includes(q)}
+        searchLabel="חיפוש בחריגים"
+        rowLabel={(r) => `חריג: ${r.title}`}
         onRowClick={(r) => setSelected(r)}
         toolbar={
           <>
             {idFilter && (
               <button className="btn-ghost text-sm text-action" onClick={() => setIdFilter('')}>הצג את כל החריגים</button>
             )}
-            <select className="input w-auto!" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setIdFilter(''); }}>
+            <select className="input w-auto!" aria-label="סינון חריגים לפי סטטוס" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setIdFilter(''); }}>
               <option value="open">פתוחים ובטיפול</option>
               <option value="resolved">טופלו</option>
               <option value="dismissed">נדחו</option>
               <option value="all">הכל</option>
             </select>
-            <select className="input w-auto!" value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setIdFilter(''); }}>
+            <select className="input w-auto!" aria-label="סינון חריגים לפי סוג" value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setIdFilter(''); }}>
               <option value="">כל הסוגים</option>
               {Object.entries(EXCEPTION_TYPE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
-            <select className="input w-auto!" value={severityFilter} onChange={(e) => { setSeverityFilter(e.target.value); setIdFilter(''); }}>
+            <select className="input w-auto!" aria-label="סינון חריגים לפי חומרה" value={severityFilter} onChange={(e) => { setSeverityFilter(e.target.value); setIdFilter(''); }}>
               <option value="">כל החומרות</option>
               {Object.entries(SEVERITY).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
@@ -132,20 +172,14 @@ function ExceptionDetail({ row, canWrite, onClose, onChanged, onNavigate }: {
 
   const links: { label: string; path: string }[] = [];
   if (row.invoice_id) links.push({ label: 'לחשבונית', path: `/invoices/${row.invoice_id}` });
-  if (row.payment_request_id) links.push({ label: 'לדרישות תשלום', path: '/payment-requests' });
-  if (row.bank_transaction_id) links.push({ label: 'להתאמות בנק', path: '/bank' });
+  if (row.payment_request_id) links.push({ label: 'לדרישת התשלום', path: `/payment-requests?id=${row.payment_request_id}` });
+  if (row.bank_transaction_id) links.push({ label: 'לתנועת הבנק', path: `/bank?id=${row.bank_transaction_id}` });
   if (row.supplier_id) links.push({ label: 'לכרטיס הספק', path: `/suppliers/${row.supplier_id}` });
 
-  const detailLines: string[] = [];
-  if (row.details) {
-    for (const [k, v] of Object.entries(row.details)) {
-      if (Array.isArray(v)) detailLines.push(...v.map(String));
-      else if (k !== 'checks') detailLines.push(`${k}: ${String(v)}`);
-    }
-  }
+  const detailLines = businessDetailLines(row.details);
 
   return (
-    <Modal open onClose={onClose} title={EXCEPTION_TYPE[row.type]}>
+    <Modal open onClose={onClose} title={EXCEPTION_TYPE[row.type]} busy={busy} statusMessage={busy ? 'מעדכן את החריג' : undefined}>
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <StatusBadge meta={SEVERITY[row.severity]} />
@@ -169,8 +203,8 @@ function ExceptionDetail({ row, canWrite, onClose, onChanged, onNavigate }: {
         {canWrite && ['open', 'in_progress'].includes(row.status) && (
           <>
             <div>
-              <label className="label">הערת טיפול / סיכום</label>
-              <textarea className="input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+              <label className="label" htmlFor="exception-resolution-note">הערת טיפול / סיכום</label>
+              <textarea id="exception-resolution-note" className="input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               {row.status === 'open' && <button className="btn-secondary" disabled={busy} onClick={() => void setStatus('in_progress')}>סימון בטיפול</button>}
