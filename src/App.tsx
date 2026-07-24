@@ -15,6 +15,7 @@ import AcceptInvite from './pages/AcceptInvite';
 // Lazy: every screen behind the Layout loads its own chunk on demand, so a supplier hitting
 // /my-prices or a payment executor hitting /pay never downloads Dashboard/Reports (and recharts) up front.
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const RoleDashboard = lazy(() => import('./pages/RoleDashboard'));
 const Alerts = lazy(() => import('./pages/Alerts'));
 const SuppliersList = lazy(() => import('./pages/Suppliers').then((m) => ({ default: m.SuppliersList })));
 const SupplierCard = lazy(() => import('./pages/Suppliers').then((m) => ({ default: m.SupplierCard })));
@@ -35,6 +36,7 @@ const Payments = lazy(() => import('./pages/Payments'));
 const Bank = lazy(() => import('./pages/Bank'));
 const Exceptions = lazy(() => import('./pages/Exceptions'));
 const Reports = lazy(() => import('./pages/Reports'));
+const Analytics = lazy(() => import('./pages/Analytics'));
 const Expenses = lazy(() => import('./pages/Expenses'));
 const DocumentsGallery = lazy(() => import('./pages/DocumentsInbox'));
 const AuditLogPage = lazy(() => import('./pages/AuditLog'));
@@ -92,6 +94,13 @@ function PlatformGuard({ children }: { children: ReactNode }) {
 const STAFF: Role[] = ['owner', 'office', 'kitchen'];
 const FINANCE: Role[] = ['owner', 'office'];
 const READERS: Role[] = ['owner', 'office', 'kitchen', 'accountant'];
+const ALL_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'];
+
+/** /dashboard is every role's home: finance gets the full Dashboard, others a role-tailored one. */
+function DashboardHome() {
+  const { profile } = useAuth();
+  return profile && FINANCE.includes(profile.role) ? <Dashboard /> : <RoleDashboard />;
+}
 
 /**
  * A live session whose profile will not load. Before 0006 this was unreachable in practice;
@@ -205,7 +214,7 @@ export default function App() {
         <Route element={<LazyPageBoundary><Suspense fallback={<PageLoader />}><Outlet /></Suspense></LazyPageBoundary>}>
         <Route path="/" element={loading ? <PageLoader /> : <Navigate to={homeFor(profile?.role)} replace />} />
 
-        <Route path="/dashboard" element={<Guard roles={FINANCE}><Dashboard /></Guard>} />
+        <Route path="/dashboard" element={<Guard roles={ALL_ROLES}><DashboardHome /></Guard>} />
 
         <Route path="/suppliers" element={<Guard roles={STAFF}><SuppliersList /></Guard>} />
         <Route path="/suppliers/:id" element={<Guard roles={STAFF}><SupplierCard /></Guard>} />
@@ -236,6 +245,7 @@ export default function App() {
         <Route path="/alerts" element={<Guard roles={FINANCE}><Alerts /></Guard>} />
         <Route path="/expenses" element={<Guard roles={['owner', 'accountant']}><Expenses /></Guard>} />
         <Route path="/reports" element={<Guard roles={['owner', 'accountant']}><Reports /></Guard>} />
+        <Route path="/analytics" element={<Guard roles={['owner', 'office', 'accountant']}><Analytics /></Guard>} />
         <Route path="/audit" element={<Guard roles={['owner', 'accountant']}><AuditLogPage /></Guard>} />
         <Route path="/settings" element={<Guard roles={['owner']}><Settings /></Guard>} />
         <Route path="/my-prices" element={<Guard roles={['supplier']}><SupplierPrices /></Guard>} />

@@ -141,13 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export const useAuth = () => useContext(AuthContext);
 
-/** Landing route per role */
-export function homeFor(role: string | undefined): string {
-  switch (role) {
-    case 'kitchen': return '/receiving';
-    case 'payer': return '/pay';
-    case 'accountant': return '/pay';
-    case 'supplier': return '/my-prices';
-    default: return '/dashboard';
-  }
+/** Landing route per role. Every role now lands on its own role-tailored /dashboard. */
+export function homeFor(_role: string | undefined): string {
+  return '/dashboard';
 }
