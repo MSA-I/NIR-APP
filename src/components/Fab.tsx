@@ -4,7 +4,6 @@ import { useAuth } from '../auth/AuthContext';
 import { useQuickCapture } from './QuickCapture';
 
 const CAPTURE_ROLES = ['owner', 'office', 'kitchen'];
-const CAPTURE_SUPPRESSED_PATHS = ['/orders/new', '/invoices/new', '/receiving/:orderId'] as const;
 
 /** One global tool, not a speed dial: capture the paper now and file it later. */
 export default function Fab() {
@@ -12,11 +11,11 @@ export default function Fab() {
   const { pathname } = useLocation();
   const { openCapture, element, busy } = useQuickCapture();
 
-  if (!profile || !CAPTURE_ROLES.includes(profile.role)
-    || CAPTURE_SUPPRESSED_PATHS.some((path) => matchPath(path, pathname) != null)) return null;
+  if (!profile || !CAPTURE_ROLES.includes(profile.role) || pathname === '/dashboard') return null;
+  const aboveTaskbar = matchPath('/receiving/:orderId', pathname) != null;
 
   return (
-    <div className="phone-fab fixed z-40 no-print">
+    <div className={`phone-fab fixed z-40 no-print ${aboveTaskbar ? 'phone-fab-taskbar' : ''}`}>
       <button type="button" onClick={openCapture} disabled={busy}
         aria-label={busy ? 'מעלה מסמך' : 'צילום מסמך'} title="צילום מסמך"
         className="grid size-12 place-items-center border border-action-line bg-action text-white shadow-fab transition-colors hover:bg-action-hover active:bg-action-solid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:opacity-60">

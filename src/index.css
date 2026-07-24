@@ -215,6 +215,10 @@ body {
   inset-block-end: max(1rem, env(safe-area-inset-bottom));
 }
 
+.phone-fab-taskbar {
+  inset-block-end: calc(5.25rem + env(safe-area-inset-bottom));
+}
+
 .phone-taskbar {
   inset-block-end: 0;
   padding-block-end: calc(0.75rem + env(safe-area-inset-bottom));
