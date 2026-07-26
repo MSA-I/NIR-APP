@@ -33,9 +33,9 @@ export default function SupplierGroupCard({ group, products, onOpenFix, onOpenGr
       </div>
 
       <dl className="grid grid-cols-2 gap-px border-y border-line-soft bg-line-soft text-xs sm:grid-cols-4">
-        <LedgerMetric label="מינימום ספק" value={fmtMoneyExact(supplier.minOrderAmount)} />
-        <LedgerMetric label="חסר למינימום" value={supplier.minOrderAmount == null ? '—' : belowMinimum ? fmtMoneyExact(shortfall) : fmtMoneyExact(0)} tone={supplier.minOrderAmount == null ? undefined : belowMinimum ? 'await' : 'done'} />
-        <LedgerMetric label="תרומת חיסכון" value={savingsContribution == null ? '—' : signedMoney(savingsContribution)} />
+        <LedgerMetric label="מינימום ספק" value={fmtMoneyExact(supplier.minOrderAmount)} numeric />
+        <LedgerMetric label="חסר למינימום" value={supplier.minOrderAmount == null ? '—' : belowMinimum ? fmtMoneyExact(shortfall) : fmtMoneyExact(0)} tone={supplier.minOrderAmount == null ? undefined : belowMinimum ? 'await' : 'done'} numeric={supplier.minOrderAmount != null} />
+        <LedgerMetric label="תרומת חיסכון" value={savingsContribution == null ? '—' : signedMoney(savingsContribution)} numeric={savingsContribution != null} />
         <LedgerMetric label="סטטוס" value={belowMinimum ? 'דורש השלמה' : 'מוכן'} tone={belowMinimum ? 'await' : 'done'} />
       </dl>
 
@@ -62,11 +62,11 @@ export default function SupplierGroupCard({ group, products, onOpenFix, onOpenGr
   );
 }
 
-function LedgerMetric({ label, value, tone }: { label: string; value: string; tone?: 'done' | 'await' }) {
+function LedgerMetric({ label, value, tone, numeric = false }: { label: string; value: string; tone?: 'done' | 'await'; numeric?: boolean }) {
   return (
     <div className="bg-surface px-3 py-2.5">
       <dt className="text-ink-muted">{label}</dt>
-      <dd className={`num mt-0.5 font-semibold ${tone === 'done' ? 'text-done-fg' : tone === 'await' ? 'text-await-fg' : 'text-ink'}`}>{value}</dd>
+      <dd className={`mt-0.5 font-semibold ${numeric ? 'num ' : ''}${tone === 'done' ? 'text-done-fg' : tone === 'await' ? 'text-await-fg' : 'text-ink'}`}>{value}</dd>
     </div>
   );
 }

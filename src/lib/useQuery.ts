@@ -20,11 +20,14 @@ export function useQuery<T>(fn: () => Promise<T>, deps: unknown[] = []) {
     setError(null);
     try {
       const next = await fnRef.current();
-      if (gate.isCurrent(request)) setData(next);
+      if (!gate.isCurrent(request)) return false;
+      setData(next);
+      return true;
     } catch (e) {
       // Every page renders this through ErrorNote, so a raw Postgres string here reaches
       // a Hebrew-speaking user on any screen that fails to load.
       if (gate.isCurrent(request)) setError(toHebrewError(e));
+      return false;
     } finally {
       if (gate.isCurrent(request)) setFetching(false);
     }

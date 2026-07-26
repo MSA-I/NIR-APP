@@ -69,7 +69,7 @@ export default function MinimumFixPanel({
                   <OptionLabel option={option} products={products} suppliers={suppliers} />
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1 text-xs">
-                  <span className="num text-ink-muted">{optionCost(option)}</span>
+                  <span className="text-ink-muted"><OptionCost option={option} /></span>
                   {outcome === 'done' && <span className="badge-done">עובר את המינימום</span>}
                   {outcome === 'await' && <span className="badge-await">עדיין חסר <span className="num ms-1">{fmtMoneyExact(remainingShortfall)}</span></span>}
                 </span>
@@ -136,15 +136,11 @@ function positiveDifference(minimum: number | null | undefined, subtotal: number
   return minimum == null ? null : Math.max(0, Math.round((minimum - subtotal) * 100) / 100);
 }
 
-function optionCost(option: ResolutionOption): string {
-  if (option.kind === 'increase_qty') return `+${fmtMoneyExact(option.costDelta)} · סה״כ ${fmtMoneyExact(option.subtotalAfter)}`;
-  if (option.kind === 'move_line' || option.kind === 'move_group') return signedMoney(option.costDelta);
-  return `−${fmtMoneyExact(option.refund)}`;
-}
-
-function signedMoney(value: number): string {
-  if (value === 0) return 'ללא שינוי בעלות';
-  return `${value > 0 ? '+' : '−'}${fmtMoneyExact(Math.abs(value))}`;
+function OptionCost({ option }: { option: ResolutionOption }) {
+  if (option.kind === 'increase_qty') return <><span className="num">+{fmtMoneyExact(option.costDelta)}</span> · סה״כ <span className="num">{fmtMoneyExact(option.subtotalAfter)}</span></>;
+  if ((option.kind === 'move_line' || option.kind === 'move_group') && option.costDelta === 0) return <>ללא שינוי בעלות</>;
+  const value = option.kind === 'move_line' || option.kind === 'move_group' ? option.costDelta : -option.refund;
+  return <span className="num">{value > 0 ? '+' : '−'}{fmtMoneyExact(Math.abs(value))}</span>;
 }
 
 function optionKey(option: ResolutionOption, index: number): string {

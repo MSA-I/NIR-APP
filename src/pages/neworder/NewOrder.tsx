@@ -77,10 +77,15 @@ interface PriceSnapshotLine {
   assignmentMode: 'auto' | 'pinned';
 }
 
-interface PendingPriceDiff {
+interface PriceSnapshot {
   prices: Map<string, number>;
   lines: PriceSnapshotLine[];
   oldTotal: number | null;
+}
+
+interface PendingPriceDiff extends PriceSnapshot {
+  refreshId: number;
+  sourceOffers: readonly SupplierProduct[] | null;
 }
 
 interface PriceDiffLine extends PriceSnapshotLine {
@@ -136,6 +141,7 @@ export default function NewOrder() {
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [nextOrderItems, setNextOrderItems] = useState<NextOrderItem[]>([]);
   const [nextOrderBusyId, setNextOrderBusyId] = useState<string | null>(null);
+  const [pendingNextOrderAdd, setPendingNextOrderAdd] = useState<NextOrderItem | null>(null);
   const [priceDiff, setPriceDiff] = useState<PriceDiffReport | null>(null);
   const [priceRefreshVersion, setPriceRefreshVersion] = useState(0);
 
@@ -153,6 +159,7 @@ export default function NewOrder() {
   const priceSnapshotRef = useRef<Map<string, number>>(new Map());
   const priceSnapshotLinesRef = useRef<PriceSnapshotLine[]>([]);
   const pendingPriceDiffRef = useRef<PendingPriceDiff | null>(null);
+  const priceRefreshSequenceRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -356,7 +363,7 @@ export default function NewOrder() {
   })), [cart, resolvedByProduct]);
   latestDraftRef.current = { requestId: draftId, notes, expectedDate, editorStep: step, items: draftItems };
 
-  const currentPriceSnapshot = useMemo<PendingPriceDiff>(() => {
+  const currentPriceSnapshot = useMemo<PriceSnapshot>(() => {
     const prices = new Map<string, number>();
     const lines: PriceSnapshotLine[] = [];
     for (const group of split.groups) {
@@ -387,7 +394,7 @@ export default function NewOrder() {
 
   useEffect(() => {
     const pending = pendingPriceDiffRef.current;
-    if (!pending || priceRefreshVersion === 0) return;
+    if (!pending || pending.refreshId !== priceRefreshVersion || pending.sourceOffers === data?.sps) return;
     const nextLinesByProduct = new Map(currentPriceSnapshot.lines.map((line) => [line.productId, line]));
     const changes: PriceDiffLine[] = [];
     for (const oldLine of pending.lines) {
@@ -458,6 +465,25 @@ export default function NewOrder() {
     void task.finally(() => { if (activeSaveRef.current === task) activeSaveRef.current = null; });
     return task;
   }, []);
+
+  useEffect(() => {
+    if (!pendingNextOrderAdd) return;
+    let active = true;
+    const item = pendingNextOrderAdd;
+    void (async () => {
+      if (!await runSaveQueue(true)) return;
+      await dismissNextOrderItem(item.id);
+      if (active) setNextOrderItems((current) => current.filter((candidate) => candidate.id !== item.id));
+    })()
+      .catch((failure) => { if (active) toast(toHebrewError(failure), 'error'); })
+      .finally(() => {
+        if (!active) return;
+        setPendingNextOrderAdd(null);
+        setNextOrderBusyId(null);
+      });
+    return () => { active = false; };
+  // useToast is intentionally unstable; depending on it would restart this transaction after a toast.
+  }, [pendingNextOrderAdd, runSaveQueue]);
 
   const scheduleSave = useCallback((delay: number) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -564,23 +590,17 @@ export default function NewOrder() {
       .catch((failure) => toast(toHebrewError(failure), 'error'));
   }
 
-  async function addNextOrderItem(item: NextOrderItem) {
+  function addNextOrderItem(item: NextOrderItem) {
     setNextOrderBusyId(item.id);
-    try {
-      const product = data?.products.find((candidate) => candidate.id === item.product_id);
-      if (!product?.active) {
-        toast('המוצר אינו פעיל עוד ולכן דולג', 'error');
-        return;
-      }
-      await dismissNextOrderItem(item.id);
-      setNextOrderItems((current) => current.filter((candidate) => candidate.id !== item.id));
-      dispatch({ type: 'ADD_PRODUCT', product });
-      dispatch({ type: 'SET_QTY', productId: product.id, qty: item.qty });
-    } catch (failure) {
-      toast(toHebrewError(failure), 'error');
-    } finally {
+    const product = data?.products.find((candidate) => candidate.id === item.product_id);
+    if (!product?.active) {
+      toast('המוצר אינו פעיל עוד ולכן דולג', 'error');
       setNextOrderBusyId(null);
+      return;
     }
+    dispatch({ type: 'ADD_PRODUCT', product });
+    dispatch({ type: 'SET_QTY', productId: product.id, qty: item.qty });
+    setPendingNextOrderAdd(item);
   }
 
   async function dismissNextItem(item: NextOrderItem) {
@@ -630,10 +650,13 @@ export default function NewOrder() {
     } catch (failure) {
       const raw = failure instanceof Error ? failure.message : String(failure);
       if (raw.includes('draft_price_changed')) {
+        const refreshId = ++priceRefreshSequenceRef.current;
         pendingPriceDiffRef.current = {
           prices: new Map(priceSnapshotRef.current.size ? priceSnapshotRef.current : currentPriceSnapshot.prices),
           lines: (priceSnapshotLinesRef.current.length ? priceSnapshotLinesRef.current : currentPriceSnapshot.lines).map((line) => ({ ...line })),
           oldTotal: savings.splitTotal,
+          refreshId,
+          sourceOffers: data?.sps ?? null,
         };
         const saved = await runSaveQueue(true);
         if (!saved) {
@@ -641,8 +664,12 @@ export default function NewOrder() {
           toast('המחירים השתנו, אך לא ניתן היה לרענן את הטיוטה. נסו שוב.', 'error');
           return;
         }
-        await refetch();
-        setPriceRefreshVersion((version) => version + 1);
+        if (!await refetch()) {
+          pendingPriceDiffRef.current = null;
+          toast('המחירים השתנו, אך לא ניתן היה לרענן אותם. נסו שוב.', 'error');
+          return;
+        }
+        setPriceRefreshVersion(refreshId);
         toast('המחירים השתנו. הסיכום רוענן — יש לעבור עליו ולאשר שוב.', 'error');
       } else if (raw.includes('draft_supplier_unavailable')) {
         await refetch();
@@ -752,7 +779,7 @@ export default function NewOrder() {
             const hasWhatsApp = !!(order.supplier.whatsapp || order.supplier.phone);
             return (
               <div key={order.id} className="flex flex-wrap items-center gap-2 py-3">
-                <div><div className="font-medium text-ink-body">{order.supplier.name}</div><div className="text-xs text-ink-muted num">הזמנה #{order.number}</div></div>
+                <div><div className="font-medium text-ink-body">{order.supplier.name}</div><div className="text-xs text-ink-muted">הזמנה #<span className="num">{order.number}</span></div></div>
                 <div className="ms-auto">
                   {order.status === 'sent' ? <span className="badge badge-done">נשלחה</span>
                     : hasWhatsApp ? <button type="button" className="btn-primary" disabled={sendingId !== null} onClick={() => void sendQueuedOrder(order)}>{sendingId === order.id ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={15} />} שליחה ב-WhatsApp</button>
@@ -787,7 +814,7 @@ function PriceDiffModal({ report, onClose }: { report: PriceDiffReport | null; o
                 <div><span className="block text-xs text-ink-muted">לפני · {line.supplierName}</span><span className="num font-semibold">{fmtMoneyExact(line.oldUnitPrice)}</span> ליחידה</div>
                 <span className="text-ink-faint" aria-hidden="true">←</span>
                 <div><span className="block text-xs text-ink-muted">עכשיו · {line.newSupplierName}</span><span className="num font-semibold">{fmtMoneyExact(line.newUnitPrice)}</span> ליחידה</div>
-                <div className={`num font-semibold sm:text-end ${line.delta == null ? 'text-ink-muted' : line.delta > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{line.delta == null ? 'לא זמין' : signedMoney(line.delta)}</div>
+                <div className={`font-semibold sm:text-end ${line.delta == null ? 'text-ink-muted' : `num ${line.delta > 0 ? 'text-await-fg' : 'text-done-fg'}`}`}>{line.delta == null ? 'לא זמין' : signedMoney(line.delta)}</div>
               </div>
               <div className="mt-1 text-xs text-ink-muted">סכום שורה: <span className="num">{fmtMoneyExact(line.oldLineTotal)}</span> ← <span className="num font-semibold text-ink">{fmtMoneyExact(line.newLineTotal)}</span></div>
             </div>

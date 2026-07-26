@@ -18,7 +18,6 @@ export async function listNextOrderItems(orgId: string): Promise<NextOrderItem[]
   return unwrap(await supabase.from('next_order_items')
     .select('id, product_id, qty, source_request_id, created_at, product:products!next_order_items_product_tenant_fk!inner(id, name, unit, active)')
     .eq('org_id', orgId)
-    .eq('product.active', true)
     .gt('created_at', cutoff)
     .order('created_at', { ascending: false })) as NextOrderItem[];
 }
