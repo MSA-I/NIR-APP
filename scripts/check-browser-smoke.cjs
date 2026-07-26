@@ -759,40 +759,264 @@ async function receivingAccessibility(browser) {
 }
 
 async function orderSupplierComparison(browser) {
-  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
+  const context = await browser.newContext({
+    locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 1440, height: 900 },
+  });
   const page = await context.newPage();
-  captureConsole(page, 'order-supplier-comparison');
+  captureConsole(page, 'order-split-journey');
+  const product = 'לחמניות המבורגר (ארגז 48)';
+  const waitForDraftSave = () => page.waitForResponse((response) =>
+    response.request().method() === 'POST'
+    && response.url().includes('/rest/v1/rpc/save_purchase_request_draft'));
+  const waitForSaved = () => page.getByRole('heading', { name: 'הזמנה חדשה' }).locator('..')
+    .getByRole('status').filter({ hasText: 'נשמר' }).waitFor({ timeout: 25_000 });
+  const captureOrderState = async (state, fullPage = true) => {
+    for (const [width, height] of [[1440, 900], [390, 844]]) {
+      await page.setViewportSize({ width, height });
+      await page.waitForTimeout(100);
+      await auditAccessibility(page, `new-order:${state}:${width}`);
+      const fileName = `new-order-${state}-${width}.png`;
+      await page.screenshot({ path: path.join(outDir, fileName), fullPage });
+      report.screenshots.push(fileName);
+    }
+  };
+
   try {
     await login(page, 'kitchen');
     await page.goto(`${baseURL}/orders/new?fresh=1`);
     await settle(page);
-    await page.getByRole('button', { name: 'בחירת מלפפונים' }).click();
+    assert(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches),
+      'new-order context did not honor prefers-reduced-motion');
+
+    await page.getByRole('button', { name: `בחירת ${product}` }).click();
+    await page.getByRole('button', { name: `הוספת כמות ${product}` }).click();
+    await page.waitForURL((url) => url.pathname === '/orders/new' && url.searchParams.has('draft'), { timeout: 25_000 });
+    await waitForSaved();
+
+    const stepTwoSave = waitForDraftSave();
     await page.getByRole('button', { name: 'המשך לספקים' }).click();
-    const supplierSelect = page.getByRole('combobox', { name: 'ספק עבור מלפפונים' });
-    await supplierSelect.selectOption('aa000000-0000-4000-8000-000000000002');
+    assert((await stepTwoSave).ok(), 'saving supplier step failed');
+    await waitForSaved();
+    let comparison = page.locator('section[aria-labelledby="supplier-comparison-title"]');
+    await comparison.waitFor();
+    const goldPick = comparison.getByRole('button', { name: `בחירת מאפה זהב עבור ${product}` });
+    assert.equal(await goldPick.getAttribute('aria-pressed'), 'true', 'cheapest supplier was not selected automatically');
 
-    const comparison = page.locator('section[aria-labelledby="supplier-comparison-title"]');
-    await comparison.getByText('משק ירוק').waitFor();
-    await comparison.getByText('חוות השדה').waitFor();
-    await comparison.getByText(/בחירה בזול תחסוך/).waitFor();
-    await auditAccessibility(page, 'order-supplier-comparison-1440');
-    await page.screenshot({ path: path.join(outDir, 'order-supplier-comparison-1440.png'), fullPage: true });
-    report.screenshots.push('order-supplier-comparison-1440.png');
+    const pinSave = waitForDraftSave();
+    await goldPick.click();
+    assert((await pinSave).ok(), 'pinning the cheapest supplier was not saved');
+    await waitForSaved();
+    await comparison.getByRole('button', { name: 'בטל הצמדה' }).waitFor();
+    const draftUrl = page.url();
 
-    await page.setViewportSize({ width: 390, height: 844 });
-    await comparison.scrollIntoViewIfNeeded();
-    const width = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
-    assert.ok(width.scroll <= width.client, `order comparison overflowed at 390px: ${width.scroll} > ${width.client}`);
-    await auditAccessibility(page, 'order-supplier-comparison-390');
-    await page.screenshot({ path: path.join(outDir, 'order-supplier-comparison-390.png'), fullPage: true });
-    report.screenshots.push('order-supplier-comparison-390.png');
+    await page.reload();
+    await settle(page);
+    assert.equal(page.url(), draftUrl, 'draft URL changed during reload');
+    const supplierStep = page.getByRole('button', { name: /02.*ספקים וחלוקה/ });
+    assert.equal(await supplierStep.getAttribute('aria-current'), 'step', 'draft did not restore supplier step');
+    comparison = page.locator('section[aria-labelledby="supplier-comparison-title"]');
+    await comparison.getByRole('button', { name: 'בטל הצמדה' }).waitFor();
+    assert.equal(await comparison.getByRole('button', { name: `בחירת מאפה זהב עבור ${product}` }).getAttribute('aria-pressed'), 'true',
+      'pinned cheapest supplier did not survive reload');
 
-    await page.getByRole('button', { name: 'סקירה ואישור' }).click();
-    const review = page.getByRole('dialog', { name: 'סיכום ההזמנה' });
-    await review.waitFor();
-    assert.equal(await review.getByText('סיבת אישור ההזמנה').count(), 0, 'routine order approval must not ask for a reason');
-    await review.getByRole('button', { name: 'אשר ושלח הזמנה' }).click();
-    await page.getByRole('dialog', { name: 'שליחת הזמנות לספקים' }).waitFor({ timeout: 25_000 });
+    const brokenPinSave = waitForDraftSave();
+    await page.getByRole('button', { name: /01.*מוצרים וכמויות/ }).click();
+    await page.getByRole('button', { name: `הפחתת כמות ${product}` }).click();
+    await page.getByRole('button', { name: 'המשך לספקים' }).click();
+    assert((await brokenPinSave).ok(), 'saving the below-minimum pin state failed');
+    await waitForSaved();
+
+    const blocked = page.locator('section[aria-labelledby="blocked-lines-title"]');
+    await blocked.waitFor();
+    assert.match(await blocked.innerText(), /הצמדה לא תקפה · מינימום\s*2/, 'broken pin did not expose min_qty 2');
+    const growBrokenPin = blocked.getByRole('button', { name: /^הגדל ל-\s*2/ });
+    assert((await growBrokenPin.innerText()).includes('58.50'), 'broken-pin increase did not show the exact added cost');
+    await blocked.getByRole('button', { name: 'בטל הצמדה' }).waitFor();
+    assert(await page.getByRole('button', { name: /03.*סיכום ואישור/ }).isDisabled(), 'broken pin did not gate summary step');
+    await captureOrderState('blocked-pin');
+
+    const unpinSave = waitForDraftSave();
+    await blocked.getByRole('button', { name: 'בטל הצמדה' }).click();
+    assert((await unpinSave).ok(), 'unpinning the broken supplier was not saved');
+    await waitForSaved();
+    await blocked.waitFor({ state: 'hidden' });
+    const splitSection = page.locator('section[aria-labelledby="supplier-split-title"]');
+    await splitSection.getByText('מאפיית הלחם החם', { exact: true }).waitFor();
+
+    const underMinimumSave = waitForDraftSave();
+    await page.getByRole('button', { name: /01.*מוצרים וכמויות/ }).click();
+    await page.getByRole('button', { name: `הוספת כמות ${product}` }).click();
+    await page.getByRole('button', { name: `הוספת כמות ${product}` }).click();
+    await page.getByRole('button', { name: 'המשך לספקים' }).click();
+    assert((await underMinimumSave).ok(), 'saving the under-minimum basket failed');
+    await waitForSaved();
+
+    await splitSection.getByText('מאפה זהב', { exact: true }).waitFor();
+    const underMinimumText = await splitSection.innerText();
+    for (const amount of ['175.50', '200.00', '24.50']) {
+      assert(underMinimumText.includes(amount), `under-minimum supplier group omitted ${amount}`);
+    }
+    await captureOrderState('under-minimum');
+
+    const fixOpener = splitSection.getByRole('button', { name: /הצג פתרונות/ });
+    await fixOpener.focus();
+    await page.keyboard.press('Enter');
+    const fixes = page.getByRole('dialog', { name: 'פתרונות עבור מאפה זהב' });
+    await fixes.waitFor();
+    const fixesHandle = await fixes.elementHandle();
+    await page.waitForFunction((node) => document.activeElement === node, fixesHandle, { timeout: 3_000 });
+
+    const increase = fixes.getByRole('button', { name: /הגדל "לחמניות המבורגר \(ארגז 48\)" מ-\s*3 ל-\s*4/ });
+    const moveLine = fixes.getByRole('button', { name: /^העבר "לחמניות המבורגר \(ארגז 48\)" ל"מאפיית הלחם החם"/ });
+    const moveGroup = fixes.getByRole('button', { name: /העבר את כל\s*1 הפריטים ל"מאפיית הלחם החם"/ });
+    const remove = fixes.getByRole('button', { name: /הסר "לחמניות המבורגר \(ארגז 48\)" מההזמנה/ });
+    const defer = fixes.getByRole('button', { name: /הסר ושמור את "לחמניות המבורגר \(ארגז 48\)" להזמנה הבאה/ });
+    assert((await fixes.innerText()).includes('24.50'), 'fix panel omitted the exact shortfall');
+    assert((await increase.innerText()).includes('58.50') && (await increase.innerText()).includes('234.00'),
+      'increase option omitted its exact cost or resulting subtotal');
+    assert((await moveLine.innerText()).includes('10.50'), 'move-line option omitted its exact cost');
+    assert((await moveGroup.innerText()).includes('10.50'), 'move-group option omitted its exact cost');
+    assert((await remove.innerText()).includes('175.50'), 'remove option omitted its exact refund');
+    assert((await defer.innerText()).includes('175.50'), 'defer option omitted its exact refund');
+    await captureOrderState('minimum-fixes', false);
+
+    const modalTargets = await fixes.getByRole('button').evaluateAll((nodes) => nodes.map((node) => {
+      const rect = node.getBoundingClientRect();
+      return { width: rect.width, height: rect.height, text: node.textContent?.trim() };
+    }));
+    assert(modalTargets.every(({ width, height }) => width >= 44 && height >= 44),
+      `minimum-fix target below 44px at 390px: ${JSON.stringify(modalTargets)}`);
+    const moving = await fixes.evaluate((node) => {
+      const milliseconds = (value) => Math.max(...value.split(',').map((part) => {
+        const duration = Number.parseFloat(part) || 0;
+        return part.trim().endsWith('ms') ? duration : duration * 1000;
+      }));
+      return [node, ...node.querySelectorAll('*')].flatMap((element) => {
+        const style = getComputedStyle(element);
+        return style.animationName !== 'none' && milliseconds(style.animationDuration) > 20
+          ? [{ tag: element.tagName, animation: style.animationName, duration: style.animationDuration }]
+          : [];
+      });
+    });
+    assert.deepEqual(moving, [], `minimum-fix panel ignored reduced motion: ${JSON.stringify(moving)}`);
+
+    await page.keyboard.press('Tab');
+    const closeFixes = fixes.getByRole('button', { name: 'סגירה' });
+    assert(await closeFixes.evaluate((node) => document.activeElement === node), 'Tab did not reach the fix-panel close button');
+    const optionButtons = fixes.locator('.dialog-safe-body button');
+    await page.keyboard.press('Tab');
+    assert(await optionButtons.first().evaluate((node) => document.activeElement === node), 'Tab did not enter the fix options');
+    await page.keyboard.press('Tab');
+    assert(await optionButtons.nth(1).evaluate((node) => document.activeElement === node), 'Tab did not advance between fix options');
+    await page.keyboard.press('Escape');
+    await fixes.waitFor({ state: 'hidden' });
+    const openerHandle = await fixOpener.elementHandle();
+    await page.waitForFunction((node) => document.activeElement === node, openerHandle, { timeout: 3_000 });
+
+    await fixOpener.focus();
+    await page.keyboard.press('Enter');
+    await fixes.waitFor();
+    const moveLineSave = waitForDraftSave();
+    await moveLine.click();
+    assert((await moveLineSave).ok(), 'moving the line to the alternative supplier was not saved');
+    await waitForSaved();
+    await fixes.waitFor({ state: 'hidden' });
+    await splitSection.getByText('מאפיית הלחם החם', { exact: true }).waitFor();
+    assert.equal(await splitSection.getByText('מאפה זהב', { exact: true }).count(), 0,
+      'move-line left the source supplier group in the split');
+    assert(!(await splitSection.innerText()).includes('חסרים'), 'move-line did not clear the minimum shortfall');
+    assert(await page.getByRole('button', { name: 'המשך לסיכום ואישור' }).isEnabled(),
+      'move-line resolution did not leave the order eligible for summary');
+    const bakeryPick = comparison.getByRole('button', { name: `בחירת מאפיית הלחם החם עבור ${product}` });
+    assert.equal(await bakeryPick.getAttribute('aria-pressed'), 'true', 'move-line did not pin the alternative supplier');
+
+    const restoreAutomaticSave = waitForDraftSave();
+    await comparison.getByRole('button', { name: 'בטל הצמדה' }).click();
+    assert((await restoreAutomaticSave).ok(), 'returning the moved line to automatic assignment was not saved');
+    await waitForSaved();
+    await splitSection.getByText('מאפה זהב', { exact: true }).waitFor();
+    await fixOpener.waitFor();
+    assert.equal(await goldPick.getAttribute('aria-pressed'), 'true',
+      'automatic assignment did not return the line to the cheapest supplier');
+
+    await fixOpener.focus();
+    await page.keyboard.press('Enter');
+    await fixes.waitFor();
+    const increaseSave = waitForDraftSave();
+    await increase.focus();
+    await page.keyboard.press('Enter');
+    assert((await increaseSave).ok(), 'live minimum resolution was not saved');
+    await waitForSaved();
+    await fixes.getByText('הקבוצה עוברת כעת את מינימום ההזמנה.').waitFor();
+    assert((await fixes.innerText()).includes('234.00'), 'live minimum resolution did not update the subtotal');
+    await page.keyboard.press('Escape');
+    await fixes.waitFor({ state: 'hidden' });
+
+    const restoreUnderMinimumSave = waitForDraftSave();
+    await page.getByRole('button', { name: /01.*מוצרים וכמויות/ }).click();
+    await page.getByRole('button', { name: `הפחתת כמות ${product}` }).click();
+    await page.getByRole('button', { name: 'המשך לספקים' }).click();
+    assert((await restoreUnderMinimumSave).ok(), 'restoring the under-minimum basket failed');
+    await waitForSaved();
+    await splitSection.getByRole('button', { name: /הצג פתרונות/ }).click();
+    await fixes.waitFor();
+
+    const deferWrite = page.waitForResponse((response) =>
+      response.request().method() === 'POST' && response.url().includes('/rest/v1/next_order_items'));
+    const emptyDraftSave = waitForDraftSave();
+    await fixes.getByRole('button', { name: /הסר ושמור את "לחמניות המבורגר \(ארגז 48\)" להזמנה הבאה/ }).click();
+    assert((await deferWrite).ok(), 'defer did not persist the next-order item');
+    await page.getByText('הפריט נשמר להזמנה הבאה', { exact: true }).waitFor();
+    assert((await emptyDraftSave).ok(), 'defer did not remove the line from the saved draft');
+    await waitForSaved();
+    await fixes.waitFor({ state: 'hidden' });
+    await page.getByRole('heading', { name: 'בחירת מוצרים' }).waitFor();
+
+    await page.goto(`${baseURL}/orders/new?fresh=1`);
+    await settle(page);
+    const reminder = page.locator('section[aria-labelledby="next-order-title"]');
+    await reminder.waitFor();
+    await reminder.getByText(product, { exact: true }).waitFor();
+    assert.match(await reminder.innerText(), /כמות\s*3/, 'next-order reminder did not preserve quantity 3');
+    await captureOrderState('products');
+
+    const reminderDelete = page.waitForResponse((response) =>
+      response.request().method() === 'DELETE' && response.url().includes('/rest/v1/next_order_items'));
+    await reminder.getByRole('button', { name: 'הוסף להזמנה' }).click();
+    assert((await reminderDelete).ok(), 'adding the reminder did not dismiss its stored row');
+    await reminder.waitFor({ state: 'hidden' });
+    await page.waitForURL((url) => url.pathname === '/orders/new' && url.searchParams.has('draft'), { timeout: 25_000 });
+    await waitForSaved();
+    assert((await page.locator(`[aria-label="כמות ${product}"]`).innerText()).includes('3'), 'reminder did not restore quantity 3 to the cart');
+
+    const restoredStepTwoSave = waitForDraftSave();
+    await page.getByRole('button', { name: 'המשך לספקים' }).click();
+    assert((await restoredStepTwoSave).ok(), 'saving the restored reminder basket failed');
+    await waitForSaved();
+    await splitSection.getByText('מאפה זהב', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'המשך לסיכום ואישור' }).click();
+    await page.getByRole('heading', { name: 'סיכום ההזמנה' }).waitFor();
+
+    const summaryStep = page.getByRole('button', { name: /03.*סיכום ואישור/ });
+    assert.equal(await summaryStep.getAttribute('aria-current'), 'step', 'summary step did not become current');
+    assert.equal(await page.getByRole('dialog', { name: 'סיכום ההזמנה' }).count(), 0, 'summary regressed to a review dialog');
+    const minimumSummary = page.locator('section[aria-labelledby="minimum-summary-title"]');
+    await minimumSummary.getByRole('heading', { name: /1 ספקים מתחת למינימום ההזמנה שלהם.*תישלח כרגיל/ }).waitFor();
+    assert((await minimumSummary.innerText()).includes('24.50'), 'summary omitted the exact supplier shortfall');
+    const confirm = page.getByRole('button', { name: 'אשר ושלח הזמנות' });
+    assert(await confirm.isEnabled(), 'supplier minimum incorrectly blocked final approval');
+    assert.equal(await page.getByText('סיבת אישור ההזמנה').count(), 0, 'routine order approval asks for a reason');
+    await captureOrderState('summary');
+
+    const finalize = page.waitForResponse((response) =>
+      response.request().method() === 'POST'
+      && response.url().includes('/rest/v1/rpc/finalize_purchase_request_draft'));
+    await confirm.click();
+    assert((await finalize).ok(), 'under-minimum draft was rejected during finalize');
+    const sendQueue = page.getByRole('dialog', { name: 'שליחת הזמנות לספקים' });
+    await sendQueue.waitFor({ timeout: 25_000 });
+    await sendQueue.getByText('מאפה זהב', { exact: true }).waitFor();
+    await sendQueue.getByRole('button', { name: 'שליחה ב-WhatsApp' }).waitFor();
   } finally {
     await closeContext(context);
   }
@@ -1164,7 +1388,7 @@ async function run(name, check) {
     await run('dashboard, quick actions and dialogs', () => dashboardAndDialogs(browser));
     await run('DataTable, ActionMenu, route focus and mobile search', () => tableKeyboardAndSearch(browser));
     await run('receiving contextual names and accessibility', () => receivingAccessibility(browser));
-    await run('order supplier savings and reason-free approval', () => orderSupplierComparison(browser));
+    await run('order split, minimum fixes and reason-free approval', () => orderSupplierComparison(browser));
     await run('payment-request names and modal stack', () => paymentRequestNamesAndModalStack(browser));
     await run('bank contextual names and accessibility', () => bankContextualNames(browser));
     await run('partial Alerts never all-clear or mark read', () => alertsPartialFailure(browser));
