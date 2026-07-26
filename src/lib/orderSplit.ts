@@ -349,9 +349,9 @@ export function resolutionOptions(
     if (!line) continue;
     const sourceLineUnits = resolvedUnits(resolved);
     const sourceSubtotalAfterUnits = sourceUnits - sourceLineUnits;
-    const sourceStillBelow = sourceGroup != null
-      && sourceGroup.lines.length > 1
-      && !clearsMinimum(sourceGroup.supplier, sourceSubtotalAfterUnits);
+    const sourceStillBelow = sourceGroup != null && (resolved.status !== 'ok'
+      ? sourceGroup.belowMinimum
+      : sourceGroup.lines.length > 1 && !clearsMinimum(sourceGroup.supplier, sourceSubtotalAfterUnits));
     const targetOffers = new Map<string, SplitOffer>();
     for (const candidate of input.offersByProduct.get(line.productId) ?? []) {
       if (candidate.supplierId === supplierId || !input.suppliers.has(candidate.supplierId)) continue;

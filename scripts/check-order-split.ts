@@ -369,7 +369,9 @@ const mixedGonePinInput = splitInput(
   ],
   [supplier(CHEAP), supplier(EXPENSIVE, 20)],
 );
-assert.ok(resolutionOptions(resolveSplit(mixedGonePinInput), mixedGonePinInput, EXPENSIVE)
-  .some((option) => option.kind === 'move_line' && option.productId === 'gone' && option.toSupplierId === CHEAP));
+const mixedGoneRepair = resolutionOptions(resolveSplit(mixedGonePinInput), mixedGonePinInput, EXPENSIVE)
+  .find((option) => option.kind === 'move_line' && option.productId === 'gone' && option.toSupplierId === CHEAP);
+assert.equal(mixedGoneRepair?.kind, 'move_line');
+if (mixedGoneRepair?.kind === 'move_line') assert.equal(mixedGoneRepair.sourceStillBelow, true);
 
 console.log('order split checks passed');
