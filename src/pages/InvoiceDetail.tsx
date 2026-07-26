@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { toHebrewError } from '../lib/errors';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { Loader2, Send, CheckCircle2, RotateCcw, SearchCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';

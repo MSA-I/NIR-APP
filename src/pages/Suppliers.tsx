@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { Plus, Phone, Mail, MapPin, Clock, Truck, Star, TrendingUp, TrendingDown, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';

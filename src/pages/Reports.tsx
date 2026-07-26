@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { FileSpreadsheet, Printer, Send, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';

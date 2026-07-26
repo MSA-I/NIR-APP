@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { Plus, AlertTriangle, AlertOctagon, Info, Pencil, Copy, Share2, Printer, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';

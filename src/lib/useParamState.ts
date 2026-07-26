@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 /**
  * A filter value seeded from a URL query param that RE-SYNCS when the param changes.

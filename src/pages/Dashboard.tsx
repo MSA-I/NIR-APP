@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { type ReactNode } from 'react';
 import { Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RotateCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';

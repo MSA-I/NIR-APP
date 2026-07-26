@@ -1,4 +1,4 @@
-import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router';
 import { Component, lazy, Suspense, useState, type ReactNode } from 'react';
 import { useAuth, homeFor } from './auth/AuthContext';
 import { PageLoader, useToast } from './components/ui';

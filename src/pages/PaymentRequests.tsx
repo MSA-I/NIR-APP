@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toHebrewError } from '../lib/errors';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { Plus, Loader2, Send, CheckCircle2, ShieldAlert, XCircle, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';

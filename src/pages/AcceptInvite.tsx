@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { Loader2, UserPlus, AlertCircle, MailCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { homeFor } from '../auth/AuthContext';

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router';
 import { Loader2, Plus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { quickActionsFor } from '../lib/quickActions';

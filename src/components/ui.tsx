@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, createContext, useContext, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { ChevronRight, ChevronLeft, Search, X, Loader2, Inbox, Bell, Check } from 'lucide-react';
 import type { StatusMeta, Tone } from '../lib/status';
 import { fmtMoney } from '../lib/format';

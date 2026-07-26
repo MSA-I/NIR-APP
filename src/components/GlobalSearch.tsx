@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Search, Loader2, X, Truck, Package, FileText, ClipboardList, CreditCard, RotateCcw, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { StatusBadge, useDialogLayer } from './ui';

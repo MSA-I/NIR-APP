@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router';
 import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, Inbox } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';

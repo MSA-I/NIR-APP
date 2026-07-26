@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { toHebrewError } from '../lib/errors';
 import { Plus, Pencil, Copy, Power } from 'lucide-react';
 import { supabase } from '../lib/supabase';

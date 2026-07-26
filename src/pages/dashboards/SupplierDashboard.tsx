@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Camera, ReceiptText, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useQuery } from '../../lib/useQuery';

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router';
 import { Loader2, Lock } from 'lucide-react';
 import { useAuth, homeFor } from '../auth/AuthContext';
 import { APP_NAME } from '../lib/branding';

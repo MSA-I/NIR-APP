@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { toHebrewError } from "../lib/errors";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';

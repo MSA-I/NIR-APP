@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Eye, RotateCcw } from 'lucide-react';
 import { toHebrewError } from '../lib/errors';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Check, CheckCircle2, Clock3, Loader2, MessageCircle, XCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useQuery, unwrap } from '../../lib/useQuery';

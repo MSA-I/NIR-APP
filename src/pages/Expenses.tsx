@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { Banknote, Calculator, ChevronLeft, FileSpreadsheet, Printer, ReceiptText, type LucideIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';

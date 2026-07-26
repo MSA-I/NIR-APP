@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useEffect } from 'react';
 import { RefreshCw, ChevronLeft, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';

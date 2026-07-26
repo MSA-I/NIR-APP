@@ -1,6 +1,6 @@
 import { CreditCard, X } from 'lucide-react';
 import { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { DataTable, ErrorNote, SkeletonTable, type Column } from '../components/ui';
