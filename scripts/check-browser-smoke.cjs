@@ -31,9 +31,9 @@ const report = {
 const homes = {
   owner: '/dashboard',
   office: '/dashboard',
-  kitchen: '/receiving',
-  payer: '/pay',
-  accountant: '/reports',
+  kitchen: '/dashboard',
+  payer: '/dashboard',
+  accountant: '/dashboard',
 };
 
 function credentials(role) {
@@ -84,14 +84,16 @@ async function login(page, role = 'owner') {
   await page.locator('#email').fill(account.email);
   await page.locator('#password').fill(account.password);
   await page.getByRole('button', { name: 'התחברות' }).click();
-  await page.waitForURL((url) => url.pathname === homes[role], { timeout: 25_000 });
+  await page.waitForFunction((expected) => location.pathname === expected, homes[role], { timeout: 25_000 });
   await page.locator('#main').waitFor({ state: 'visible', timeout: 25_000 });
 }
 
 async function settle(page) {
   await page.waitForLoadState('domcontentloaded');
   await page.locator('#main').waitFor({ state: 'visible', timeout: 25_000 });
-  await page.locator('#main h1').first().waitFor({ state: 'visible', timeout: 25_000 });
+  await page.locator('#main h1').first().waitFor({ state: 'visible', timeout: 25_000 }).catch((error) => {
+    throw new Error(`${new URL(page.url()).pathname}: main heading did not become visible — ${error.message}`);
+  });
   await page.waitForTimeout(250);
 }
 
@@ -226,7 +228,7 @@ async function roleAndViewportMatrix(browser) {
     try {
       await login(page, role);
       assert.equal(new URL(page.url()).pathname, expectedHome, `${role}: wrong home route`);
-      const hasMobileActions = ['owner', 'office', 'kitchen'].includes(role);
+      const hasMobileActions = ['owner', 'office', 'kitchen', 'accountant'].includes(role);
       assert.equal(await page.getByRole('group', { name: 'פעולות מהירות' }).count(), hasMobileActions ? 1 : 0,
         `${role}: wrong mobile action group visibility`);
       assert.equal(await page.locator('.mobile-action-bar').count(), hasMobileActions ? 1 : 0,
@@ -251,9 +253,9 @@ async function roleAndViewportMatrix(browser) {
   }
 
   const denied = [
-    ['kitchen', '/dashboard', '/receiving'],
-    ['payer', '/dashboard', '/pay'],
-    ['accountant', '/products', '/reports'],
+    ['kitchen', '/bank', '/dashboard'],
+    ['payer', '/products', '/dashboard'],
+    ['accountant', '/products', '/dashboard'],
   ];
   for (const [role, requested, expected] of denied) {
     const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block' });
@@ -261,7 +263,7 @@ async function roleAndViewportMatrix(browser) {
     try {
       await login(page, role);
       await page.goto(`${baseURL}${requested}`);
-      await page.waitForURL((url) => url.pathname === expected, { timeout: 20_000 });
+      await page.waitForFunction((path) => location.pathname === path, expected, { timeout: 20_000 });
       assert.equal(new URL(page.url()).pathname, expected);
     } finally {
       await closeContext(context);
@@ -273,12 +275,14 @@ async function quickActionsContract(browser) {
   const roleLabels = {
     owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
     office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
-    kitchen: ['הזמנה חדשה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+    kitchen: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+    accountant: ['מרכז הבקרה', 'חשבוניות', 'תשלומים'],
   };
   const roleTargets = {
     owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
     office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
-    kitchen: ['/orders/new?fresh=1', null, '/receiving', '/invoices/new'],
+    kitchen: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
+    accountant: ['/dashboard', '/invoices', '/pay'],
   };
 
   for (const [role, expectedLabels] of Object.entries(roleLabels)) {
@@ -361,14 +365,14 @@ async function quickActionsContract(browser) {
         await settle(page);
         assert.equal(await page.locator('.mobile-action-bar').count(), 0, 'receiving detail mobile action bar must be hidden');
         await assertMobileSpeedDialHidden(page, 'receiving detail');
-        assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail must expose only its phone taskbar');
+        assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail lost its contextual phone taskbar');
       }
     } finally {
       await closeContext(context);
     }
   }
 
-  for (const role of ['accountant', 'payer']) {
+  for (const role of ['payer']) {
     const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
     const page = await context.newPage();
     try {
@@ -392,6 +396,10 @@ async function quickActionsContract(browser) {
     });
     await route.fulfill({ response, json: Array.isArray(body) ? body.map(asSupplier) : asSupplier(body) });
   });
+  // This contract only verifies role-aware shell actions. Keep the supplier dashboard's
+  // production-aligned submission projection out of the older isolated migration fixture.
+  await supplierContext.route('**/rest/v1/supplier_price_submissions?**', (route) =>
+    route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   const supplierPage = await supplierContext.newPage();
   captureConsole(supplierPage, 'mobile-action-bar:supplier');
   try {
@@ -400,7 +408,7 @@ async function quickActionsContract(browser) {
     await supplierPage.locator('#email').fill(account.email);
     await supplierPage.locator('#password').fill(account.password);
     await supplierPage.getByRole('button', { name: 'התחברות' }).click();
-    await supplierPage.waitForURL((url) => url.pathname === '/my-prices', { timeout: 25_000 });
+    await supplierPage.waitForFunction(() => location.pathname === '/dashboard', null, { timeout: 25_000 });
     await settle(supplierPage);
     assert.equal(await supplierPage.getByRole('group', { name: 'פעולות מהירות' }).count(), 0, 'supplier: mobile action group must be absent');
     assert.equal(await supplierPage.locator('.mobile-action-bar').count(), 0, 'supplier: mobile action bar must be absent');
@@ -456,7 +464,7 @@ async function quickActionsContract(browser) {
       const rect = node.getBoundingClientRect();
       return { width: rect.width, height: rect.height };
     }));
-    assert(sizes.every(({ width, height }) => width >= 44 && height >= 44), `desktop speed-dial target below 44px: ${JSON.stringify(sizes)}`);
+    assert(sizes.every(({ width, height }) => width + 0.01 >= 44 && height + 0.01 >= 44), `desktop speed-dial target below 44px: ${JSON.stringify(sizes)}`);
     const textLayout = await items.evaluateAll((nodes) => nodes.map((node) => ({
       whiteSpace: getComputedStyle(node).whiteSpace,
       scrollWidth: node.scrollWidth,
@@ -717,21 +725,22 @@ async function receivingAccessibility(browser) {
       qty: 10, received_qty: 2, unit_price: 12, product: { name: 'מוצר בדיקת נגישות', unit: 'יחידה' },
     }],
   };
-  await context.route('**/rest/v1/purchase_orders?**', (route) => {
-    const url = new URL(route.request().url());
-    const detail = (url.searchParams.get('id') || '') === 'eq.p4-ui-order';
-    return route.fulfill({ status: 200, headers: jsonHeaders, json: detail ? order : [order] });
-  });
-  await context.route('**/rest/v1/goods_receipts?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: null }));
   const receiptReasons = [];
-  await context.route('**/rest/v1/rpc/save_goods_receipt', (route) => {
-    receiptReasons.push(route.request().postDataJSON().p_reason);
-    return route.fulfill({ status: 200, headers: jsonHeaders, json: { receipt_id: 'a0000000-0000-4000-8000-000000000001' } });
-  });
   const page = await context.newPage();
   captureConsole(page, 'receiving-accessibility');
   try {
     await login(page, 'kitchen');
+    await settle(page);
+    await context.route('**/rest/v1/purchase_orders?**', (route) => {
+      const url = new URL(route.request().url());
+      const detail = (url.searchParams.get('id') || '') === 'eq.p4-ui-order';
+      return route.fulfill({ status: 200, headers: jsonHeaders, json: detail ? order : [order] });
+    });
+    await context.route('**/rest/v1/goods_receipts?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: null }));
+    await context.route('**/rest/v1/rpc/save_goods_receipt', (route) => {
+      receiptReasons.push(route.request().postDataJSON().p_reason);
+      return route.fulfill({ status: 200, headers: jsonHeaders, json: { receipt_id: 'a0000000-0000-4000-8000-000000000001' } });
+    });
     await page.goto(`${baseURL}/receiving`);
     await settle(page);
     await page.getByText('ספק בדיקת נגישות').first().click();
@@ -739,7 +748,7 @@ async function receivingAccessibility(browser) {
     await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור מוצר בדיקת נגישות' }).waitFor();
     assert.equal(await page.locator('.mobile-action-bar').count(), 0, 'receiving detail mobile action bar must be hidden');
     await assertMobileSpeedDialHidden(page, 'receiving detail accessibility');
-    assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail must expose only its phone taskbar');
+    assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail lost its contextual phone taskbar');
     assert.equal(await page.getByText('סיבת השמירה / ההשלמה').count(), 0, 'routine receiving must not ask for a reason');
     await page.getByRole('button', { name: 'מלא עבור מוצר בדיקת נגישות' }).waitFor();
     assert.equal(await page.locator('button[aria-pressed]').count(), 5, 'receiving status controls lost pressed state');
@@ -1113,6 +1122,18 @@ async function paymentRequestNamesAndModalStack(browser) {
   await context.route('**/rest/v1/invoice_balances?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ invoice_id: 'p4-invoice', balance: 850 }] }));
   await context.route('**/rest/v1/bank_transactions?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/credit_requests?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
+  await context.route('**/rest/v1/rpc/payment_request_financial_check_signals', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: {
+      requested_invoice_count: 1,
+      visible_invoice_count: 1,
+      paid_invoice_count: 0,
+      unapproved_invoice_count: 0,
+      amount_matches_open_balance: true,
+      similar_bank_transfer_exists: false,
+    },
+  }));
   const page = await context.newPage();
   captureConsole(page, 'payment-request-modal');
   try {

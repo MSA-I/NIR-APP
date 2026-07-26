@@ -193,13 +193,11 @@ select pg_temp.p2_assert(
       on tenant_fk.contype = 'f'
      and tenant_fk.conrelid = old_fk.conrelid
      and tenant_fk.confrelid = old_fk.confrelid
-     and tenant_fk.conname like 'p0\_%\_tenant\_fk' escape '\'
      and cardinality(tenant_fk.conkey) = 2
      and old_fk.conkey[1] = tenant_fk.conkey[2]
      and old_fk.confkey[1] = tenant_fk.confkey[2]
     where old_fk.contype = 'f'
       and old_fk.connamespace = 'public'::regnamespace
-      and old_fk.conname not like 'p0\_%' escape '\'
       and cardinality(old_fk.conkey) = 1
   ),
   'legacy FKs still make tenant-safe PostgREST embeds ambiguous'

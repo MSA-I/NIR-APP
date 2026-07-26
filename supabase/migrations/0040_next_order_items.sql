@@ -6,8 +6,8 @@
 create table public.next_order_items (
   id uuid primary key default gen_random_uuid(),
   org_id uuid not null references public.organizations(id),
-  user_id uuid not null default auth.uid() references public.profiles(id) on delete cascade,
-  product_id uuid not null references public.products(id) on delete cascade,
+  user_id uuid not null default auth.uid(),
+  product_id uuid not null,
   qty numeric(12,2) not null check (qty > 0),
   source_request_id uuid,
   created_at timestamptz not null default now(),

@@ -15,7 +15,7 @@ alter table purchase_requests
 -- ===== 2. pinned_supplier_id — a user fact, nullable on purpose =====
 
 alter table purchase_request_items
-  add column pinned_supplier_id uuid references suppliers(id);
+  add column pinned_supplier_id uuid;
 
 -- Mirrors p0_pri_chosen_supplier_tenant_fk (0021:206): a pin may never cross a tenant.
 alter table purchase_request_items
