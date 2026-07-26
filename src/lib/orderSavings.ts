@@ -52,7 +52,8 @@ export function calculateOrderSavings(lines: SavingsLine[]): OrderSavings {
     let total = 0n;
     let coversBasket = true;
     for (const line of lines) {
-      const offers = line.offers.filter((offer) => offer.supplierId === supplierId);
+      const offers = line.offers.filter((offer) => offer.supplierId === supplierId
+        && (offer.minQty == null || line.qty >= offer.minQty));
       if (!offers.length) { coversBasket = false; break; }
       total += lineUnits(line.qty, Math.min(...offers.map((offer) => offer.unitPrice)));
     }

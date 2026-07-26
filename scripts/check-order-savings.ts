@@ -27,4 +27,17 @@ const tie = calculateOrderSavings([
 assert.equal(tie.singleSupplierId, '00000000-0000-0000-0000-000000000001');
 assert.equal(tie.allCheapest, true);
 
+const belowMinimumSingleSupplier = calculateOrderSavings([
+  { productId: 'min-a', qty: 2, chosenSupplierId: null, offers: [
+    { supplierId: 's1', unitPrice: 10, minQty: null },
+    { supplierId: 's2', unitPrice: 5, minQty: 10 },
+  ] },
+  { productId: 'min-b', qty: 2, chosenSupplierId: null, offers: [
+    { supplierId: 's1', unitPrice: 10, minQty: null },
+    { supplierId: 's2', unitPrice: 5, minQty: null },
+  ] },
+]);
+assert.equal(belowMinimumSingleSupplier.singleSupplierId, 's1');
+assert.equal(belowMinimumSingleSupplier.singleSupplierTotal, 40);
+
 console.log('order savings checks passed');

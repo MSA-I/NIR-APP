@@ -58,7 +58,8 @@ export type ResolutionOption =
   | { kind: 'move_line'; productId: string; toSupplierId: string; unitPriceDelta: number;
       costDelta: number; sourceSubtotalAfter: number; sourceStillBelow: boolean;
       targetSubtotalAfter: number; targetClearsMin: boolean; requiresQty: number | null }
-  | { kind: 'move_group'; productIds: string[]; toSupplierId: string; lineCount: number;
+  | { kind: 'move_group'; productIds: string[]; quantityChanges: { productId: string; toQty: number }[];
+      toSupplierId: string; lineCount: number;
       costDelta: number; targetSubtotalAfter: number; targetClearsMin: boolean }
   | { kind: 'remove_line'; productId: string; refund: number; sourceSubtotalAfter: number; savingsDelta: number }
   | { kind: 'defer_line'; productId: string; refund: number; sourceSubtotalAfter: number; savingsDelta: number };
@@ -77,7 +78,8 @@ export type SplitAction =
   | { type: 'BUMP_QTY'; productId: string; toQty: number }
   | { type: 'PIN_SUPPLIER'; productId: string; supplierId: string }
   | { type: 'UNPIN'; productId: string }
-  | { type: 'MOVE_GROUP'; fromSupplierId: string; toSupplierId: string; productIds: readonly string[] }
+  | { type: 'MOVE_GROUP'; fromSupplierId: string; toSupplierId: string; productIds: readonly string[];
+      quantityChanges: readonly { productId: string; toQty: number }[] }
   | { type: 'CONSOLIDATE'; supplierId: string }
   | { type: 'RESET_ALL_AUTO' }
   | { type: 'DEFER_PRODUCT'; productId: string };
@@ -340,7 +342,7 @@ export function resolutionOptions(
   const gonePins = split.blocked.filter((line) => line.status === 'pin_supplier_gone'
     && line.assignment.mode === 'pinned'
     && line.assignment.supplierId === supplierId);
-  const movableLines = sourceGroup?.lines ?? gonePins;
+  const movableLines = [...(sourceGroup?.lines ?? []), ...gonePins];
 
   for (const resolved of movableLines) {
     const line = inputLineByProduct.get(resolved.productId);
@@ -402,6 +404,9 @@ export function resolutionOptions(
       options.push({
         kind: 'move_group',
         productIds: sourceGroup.lines.map((line) => line.productId),
+        quantityChanges: targetLines
+          .filter((entry) => entry.qtyAfter !== entry.line.qty)
+          .map((entry) => ({ productId: entry.line.productId, toQty: entry.qtyAfter })),
         toSupplierId: targetSupplier.id,
         lineCount: sourceGroup.lines.length,
         costDelta: moneyFromUnits(movedUnits - sourceUnits),
@@ -471,8 +476,16 @@ export function splitReducer(state: CartState, action: SplitAction): CartState {
       return assignProducts(state, [action.productId], { mode: 'pinned', supplierId: action.supplierId });
     case 'UNPIN':
       return assignProducts(state, [action.productId], { mode: 'auto' });
-    case 'MOVE_GROUP':
-      return assignProducts(state, action.productIds, { mode: 'pinned', supplierId: action.toSupplierId });
+    case 'MOVE_GROUP': {
+      const assigned = assignProducts(state, action.productIds, { mode: 'pinned', supplierId: action.toSupplierId });
+      if (!action.quantityChanges.length) return assigned;
+      const byId = { ...assigned.byId };
+      for (const change of action.quantityChanges) {
+        const line = byId[change.productId];
+        if (line) byId[change.productId] = { ...line, qty: change.toQty };
+      }
+      return { ...assigned, byId };
+    }
     case 'CONSOLIDATE':
       return assignProducts(state, state.order, { mode: 'pinned', supplierId: action.supplierId });
     case 'RESET_ALL_AUTO':

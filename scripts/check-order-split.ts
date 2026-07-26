@@ -172,6 +172,7 @@ const moved = splitReducer(twoProducts, {
   fromSupplierId: CHEAP,
   toSupplierId: THIRD,
   productIds: cheapProductIds,
+  quantityChanges: [],
 });
 assert.deepEqual(moved.byId.a.assignment, { mode: 'pinned', supplierId: THIRD });
 assert.deepEqual(moved.byId.b.assignment, { mode: 'auto' });
@@ -243,6 +244,38 @@ const groupMoves = resolutionOptions(resolveSplit(groupInput), groupInput, CHEAP
 assert.equal(groupMoves.length, 1);
 assert.equal(groupMoves[0].toSupplierId, EXPENSIVE);
 assert.deepEqual(groupMoves[0].productIds, ['g1', 'g2', 'g3']);
+
+// Group moves apply target minQty increases atomically, matching the option's displayed total.
+const groupMinQtyInput = splitInput(
+  [auto('gm1', 2), auto('gm2', 3)],
+  [
+    ['gm1', [offer(CHEAP, 10), offer(EXPENSIVE, 12, 5)]],
+    ['gm2', [offer(CHEAP, 10), offer(EXPENSIVE, 11)]],
+  ],
+  [supplier(CHEAP, 100), supplier(EXPENSIVE, 50)],
+);
+const groupMinQtyOption = resolutionOptions(resolveSplit(groupMinQtyInput), groupMinQtyInput, CHEAP)
+  .find((option) => option.kind === 'move_group' && option.toSupplierId === EXPENSIVE);
+assert.equal(groupMinQtyOption?.kind, 'move_group');
+if (groupMinQtyOption?.kind === 'move_group') {
+  assert.deepEqual(groupMinQtyOption.quantityChanges, [{ productId: 'gm1', toQty: 5 }]);
+  const state: CartState = {
+    order: ['gm1', 'gm2'],
+    byId: { gm1: auto('gm1', 2), gm2: auto('gm2', 3) },
+    products: { gm1: product('gm1'), gm2: product('gm2') },
+  };
+  const applied = splitReducer(state, {
+    type: 'MOVE_GROUP',
+    fromSupplierId: CHEAP,
+    toSupplierId: EXPENSIVE,
+    productIds: groupMinQtyOption.productIds,
+    quantityChanges: groupMinQtyOption.quantityChanges,
+  });
+  const appliedSplit = resolveSplit({ ...groupMinQtyInput, lines: applied.order.map((id) => applied.byId[id]) });
+  assert.equal(applied.byId.gm1.qty, 5);
+  assert.equal(appliedSplit.blocked.length, 0);
+  assert.equal(appliedSplit.groups[0].subtotal, groupMinQtyOption.targetSubtotalAfter);
+}
 
 const removalOptions = resolutionOptions(minimumSplit, minimumInput, CHEAP);
 const remove = removalOptions.find((option) => option.kind === 'remove_line');
@@ -316,5 +349,17 @@ if (repair?.kind === 'increase_qty') {
 }
 assert.ok(resolutionOptions(gonePin, gonePinInput, THIRD)
   .some((option) => option.kind === 'move_line' && option.toSupplierId === CHEAP));
+
+// A missing pinned offer still gets repair options when the same supplier owns other valid lines.
+const mixedGonePinInput = splitInput(
+  [pinned('valid', EXPENSIVE), pinned('gone', EXPENSIVE)],
+  [
+    ['valid', [offer(EXPENSIVE, 5)]],
+    ['gone', [offer(CHEAP, 7)]],
+  ],
+  [supplier(CHEAP), supplier(EXPENSIVE, 20)],
+);
+assert.ok(resolutionOptions(resolveSplit(mixedGonePinInput), mixedGonePinInput, EXPENSIVE)
+  .some((option) => option.kind === 'move_line' && option.productId === 'gone' && option.toSupplierId === CHEAP));
 
 console.log('order split checks passed');
