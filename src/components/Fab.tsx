@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, matchPath, useLocation } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { quickActionsFor } from '../lib/quickActions';
 import { useQuickCapture } from './QuickCapture';
 
 const QUICK_ACTIONS_MENU_ID = 'global-quick-actions';
+const FOCUSED_TASK_PATHS = ['/orders/new', '/invoices/new', '/receiving/:orderId'] as const;
 
 export default function Fab() {
   const { profile } = useAuth();
@@ -89,7 +90,7 @@ export default function Fab() {
   }, [open]);
 
   const actions = quickActionsFor(profile?.role);
-  if (!actions.length) return null;
+  if (!actions.length || FOCUSED_TASK_PATHS.some((path) => matchPath(path, pathname))) return null;
 
   const itemClass =
     'speed-dial-item flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface ps-4 pe-3 py-2.5 ' +

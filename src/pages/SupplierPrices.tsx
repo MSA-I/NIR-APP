@@ -178,7 +178,7 @@ function SubmissionHistory({ submissions }: { submissions: SupplierPriceSubmissi
                 <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
               </div>
               <div className="mt-1 min-w-0 text-xs text-ink-muted sm:text-sm">
-                <div className="truncate" title={submission.file_name}>{submission.file_name}</div>
+                <div className="truncate" title={submission.file_name ?? undefined}>{submission.file_name ?? 'הגשה מדור קודם'}</div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
                   <span>נקלטו <span className="num">{submission.accepted_count}</span></span>
                   <span>ללא שינוי <span className="num">{submission.unchanged_count}</span></span>
@@ -461,6 +461,7 @@ async function edgeErrorMessage(error: unknown) {
 }
 
 function receiptFromSubmission(submission: SupplierPriceSubmission): SubmissionReceipt {
+  if (!submission.storage_path) throw new SubmissionError('הקבלה שנשמרה חסרה נתיב קובץ. אין להעלות מחדש לפני בדיקה.');
   return {
     submission_id: submission.id,
     revision: submission.revision,

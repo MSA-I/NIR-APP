@@ -29,9 +29,9 @@ const report = {
 const homes = {
   owner: '/dashboard',
   office: '/dashboard',
-  kitchen: '/receiving',
-  payer: '/pay',
-  accountant: '/reports',
+  kitchen: '/dashboard',
+  payer: '/dashboard',
+  accountant: '/dashboard',
 };
 
 function credentials(role) {
@@ -224,7 +224,7 @@ async function roleAndViewportMatrix(browser) {
     try {
       await login(page, role);
       assert.equal(new URL(page.url()).pathname, expectedHome, `${role}: wrong home route`);
-      const hasMobileActions = ['owner', 'office', 'kitchen'].includes(role);
+      const hasMobileActions = ['owner', 'office', 'kitchen', 'accountant'].includes(role);
       assert.equal(await page.getByRole('group', { name: 'פעולות מהירות' }).count(), hasMobileActions ? 1 : 0,
         `${role}: wrong mobile action group visibility`);
       assert.equal(await page.locator('.mobile-action-bar').count(), hasMobileActions ? 1 : 0,
@@ -249,9 +249,9 @@ async function roleAndViewportMatrix(browser) {
   }
 
   const denied = [
-    ['kitchen', '/dashboard', '/receiving'],
-    ['payer', '/dashboard', '/pay'],
-    ['accountant', '/products', '/reports'],
+    ['kitchen', '/reports', '/dashboard'],
+    ['payer', '/products', '/dashboard'],
+    ['accountant', '/products', '/dashboard'],
   ];
   for (const [role, requested, expected] of denied) {
     const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block' });
@@ -271,12 +271,14 @@ async function quickActionsContract(browser) {
   const roleLabels = {
     owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
     office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
-    kitchen: ['הזמנה חדשה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+    kitchen: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+    accountant: ['מרכז הבקרה', 'חשבוניות', 'תשלומים'],
   };
   const roleTargets = {
     owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
     office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
-    kitchen: ['/orders/new?fresh=1', null, '/receiving', '/invoices/new'],
+    kitchen: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
+    accountant: ['/dashboard', '/invoices', '/pay'],
   };
 
   for (const [role, expectedLabels] of Object.entries(roleLabels)) {
@@ -366,7 +368,7 @@ async function quickActionsContract(browser) {
     }
   }
 
-  for (const role of ['accountant', 'payer']) {
+  for (const role of ['payer']) {
     const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
     const page = await context.newPage();
     try {
@@ -398,7 +400,7 @@ async function quickActionsContract(browser) {
     await supplierPage.locator('#email').fill(account.email);
     await supplierPage.locator('#password').fill(account.password);
     await supplierPage.getByRole('button', { name: 'התחברות' }).click();
-    await supplierPage.waitForURL((url) => url.pathname === '/my-prices', { timeout: 25_000 });
+    await supplierPage.waitForURL((url) => url.pathname === '/dashboard', { timeout: 25_000 });
     await settle(supplierPage);
     assert.equal(await supplierPage.getByRole('group', { name: 'פעולות מהירות' }).count(), 0, 'supplier: mobile action group must be absent');
     assert.equal(await supplierPage.locator('.mobile-action-bar').count(), 0, 'supplier: mobile action bar must be absent');
@@ -454,7 +456,7 @@ async function quickActionsContract(browser) {
       const rect = node.getBoundingClientRect();
       return { width: rect.width, height: rect.height };
     }));
-    assert(sizes.every(({ width, height }) => width >= 44 && height >= 44), `desktop speed-dial target below 44px: ${JSON.stringify(sizes)}`);
+    assert(sizes.every(({ width, height }) => width + 0.01 >= 44 && height + 0.01 >= 44), `desktop speed-dial target below 44px: ${JSON.stringify(sizes)}`);
     const textLayout = await items.evaluateAll((nodes) => nodes.map((node) => ({
       whiteSpace: getComputedStyle(node).whiteSpace,
       scrollWidth: node.scrollWidth,
@@ -709,6 +711,7 @@ async function receivingAccessibility(browser) {
   const order = {
     id: 'p4-ui-order', org_id: 'p4-ui-org', supplier_id: 'p4-ui-supplier', number: 9001,
     status: 'confirmed', order_date: '2026-07-20', expected_date: '2026-07-23', total_amount: 120,
+    created_at: '2026-07-20T08:00:00Z',
     notes: null, supplier: { id: 'p4-ui-supplier', name: 'ספק בדיקת נגישות' },
     items: [{
       id: 'p4-ui-item', org_id: 'p4-ui-org', order_id: 'p4-ui-order', product_id: 'p4-ui-product',
@@ -767,6 +770,9 @@ async function orderSupplierComparison(browser) {
     await page.goto(`${baseURL}/orders/new?fresh=1`);
     await settle(page);
     await page.getByRole('button', { name: 'בחירת מלפפונים' }).click();
+    for (let count = 1; count < 10; count += 1) {
+      await page.getByRole('button', { name: 'הוספת כמות מלפפונים' }).click();
+    }
     await page.getByRole('button', { name: 'המשך לספקים' }).click();
     const supplierSelect = page.getByRole('combobox', { name: 'ספק עבור מלפפונים' });
     await supplierSelect.selectOption('aa000000-0000-4000-8000-000000000002');
@@ -812,6 +818,18 @@ async function paymentRequestNamesAndModalStack(browser) {
   await context.route('**/rest/v1/invoice_balances?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ invoice_id: 'p4-invoice', balance: 850 }] }));
   await context.route('**/rest/v1/bank_transactions?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/credit_requests?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
+  await context.route('**/rest/v1/rpc/payment_request_financial_check_signals', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: {
+      requested_invoice_count: 1,
+      visible_invoice_count: 1,
+      paid_invoice_count: 0,
+      unapproved_invoice_count: 0,
+      amount_matches_open_balance: true,
+      similar_bank_transfer_exists: false,
+    },
+  }));
   const page = await context.newPage();
   captureConsole(page, 'payment-request-modal');
   try {

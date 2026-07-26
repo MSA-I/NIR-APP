@@ -1,5 +1,5 @@
 -- P0 browser-write, trusted-server CRUD and reasoned-command regression harness. Run only against an isolated local
--- database after applying migrations through 0035_reasoned_purchase_order_status.sql.
+-- database after applying migrations through 0041_reasoned_purchase_order_status.sql.
 \set ON_ERROR_STOP on
 
 begin;

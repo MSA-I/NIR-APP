@@ -134,11 +134,12 @@ export interface SupplierPriceRejection {
 }
 export interface SupplierPriceSubmission {
   id: string; org_id: string; supplier_id: string; target_month: string; revision: number;
-  file_name: string; storage_path: string; file_checksum: string;
+  file_name: string | null; storage_path: string | null; file_checksum: string | null;
   status: SupplierPriceSubmissionStatus;
+  row_count: number; created_count: number; updated_count: number;
   accepted_count: number; rejected_count: number; unchanged_count: number;
   rejections: SupplierPriceRejection[];
-  submitted_by: string; submitted_at: string; processed_at: string;
+  submitted_by: string | null; submitted_at: string; processed_at: string;
 }
 
 export type RequestStatus = 'draft' | 'split' | 'cancelled';

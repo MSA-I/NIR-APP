@@ -1,5 +1,5 @@
 -- P1 concurrency harness. Run only against a disposable database that already has all
--- project migrations through 0023_p1_financial_command_boundaries.sql applied. The harness uses
+-- project migrations through 0029_whatsapp_delivery_guards.sql applied. The harness uses
 -- dblink to create two real PostgreSQL sessions and intentionally commits its fixtures.
 -- Clone/reset the database before every run. Run psql as the disposable database superuser;
 -- each worker immediately switches to the authenticated role before invoking application RPCs.
@@ -51,7 +51,19 @@ insert into suppliers (id, org_id, name) values
 insert into products (id, org_id, name, unit) values
   ('41000000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', 'P1 product price', 'unit'),
   ('41000000-0000-0000-0000-000000000002', '11000000-0000-0000-0000-000000000001', 'P1 product finalize', 'unit'),
-  ('41000000-0000-0000-0000-000000000003', '11000000-0000-0000-0000-000000000001', 'P1 product tie', 'unit');
+  ('41000000-0000-0000-0000-000000000003', '11000000-0000-0000-0000-000000000001', 'P1 product tie', 'unit'),
+  ('41000000-0000-0000-0000-000000000004', '11000000-0000-0000-0000-000000000001', 'Inventory stocktake race', 'unit');
+
+insert into inventory_movements (
+  id, org_id, product_id, movement_type, quantity_delta, counted_quantity,
+  negative_override, reason, created_by
+) values
+  ('41900000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001',
+   '41000000-0000-0000-0000-000000000004', 'stocktake', 10, 10,
+   false, 'initial physical count', '21000000-0000-0000-0000-000000000001'),
+  ('41900000-0000-0000-0000-000000000002', '11000000-0000-0000-0000-000000000001',
+   '41000000-0000-0000-0000-000000000004', 'adjustment', 5, null,
+   false, 'adjustment targeted by reversal', '21000000-0000-0000-0000-000000000001');
 
 insert into supplier_products (
   id, org_id, supplier_id, product_id, current_price, price_effective_date, available
@@ -344,6 +356,48 @@ begin
 end
 $$;
 
+create function p1_concurrency_test.run_inventory_stocktake(p_hold_seconds double precision)
+returns jsonb
+language plpgsql
+security invoker
+as $$
+declare v_result jsonb;
+begin
+  perform p1_concurrency_test.activate('21000000-0000-0000-0000-000000000001');
+  v_result := record_inventory_stocktake(
+    '41900000-0000-0000-0000-000000000003',
+    '41000000-0000-0000-0000-000000000004',
+    12,
+    'concurrent physical count'
+  );
+  perform pg_sleep(p_hold_seconds);
+  return v_result;
+end
+$$;
+
+create function p1_concurrency_test.run_inventory_reversal_after_stocktake()
+returns jsonb
+language plpgsql
+security invoker
+as $$
+begin
+  perform p1_concurrency_test.activate('21000000-0000-0000-0000-000000000001');
+  begin
+    return reverse_inventory_movement(
+      '41900000-0000-0000-0000-000000000004',
+      '41900000-0000-0000-0000-000000000002',
+      false,
+      'reversal racing physical count'
+    );
+  exception when sqlstate 'P0001' then
+    if sqlerrm not like '%inventory_target_superseded_by_stocktake%' then
+      raise;
+    end if;
+    return jsonb_build_object('error', 'inventory_target_superseded_by_stocktake');
+  end;
+end
+$$;
+
 select dblink_connect_u(
   'p1_a',
   format('dbname=%L user=%L', current_database(), 'postgres')
@@ -432,6 +486,34 @@ select p1_concurrency_test.assert(
 select p1_concurrency_test.assert(
   (select count(*) = 1 from goods_receipts where id = '72000000-0000-0000-0000-000000000001'),
   'concurrent receipt completion created duplicate receipts'
+);
+
+-- A physical count that commits while a reversal waits on the same product must
+-- become the latest truth. The waiting reversal may not commit behind that count.
+select dblink_send_query('p1_a', 'select p1_concurrency_test.run_inventory_stocktake(1.2)');
+select pg_sleep(0.15);
+select dblink_send_query('p1_b', 'select p1_concurrency_test.run_inventory_reversal_after_stocktake()');
+insert into p1_concurrency_test.results
+select 'stocktake_vs_reversal', 'a', result from dblink_get_result('p1_a') as t(result jsonb);
+insert into p1_concurrency_test.results
+select 'stocktake_vs_reversal', 'b', result from dblink_get_result('p1_b') as t(result jsonb);
+select count(*) from dblink_get_result('p1_a') as t(result jsonb);
+select count(*) from dblink_get_result('p1_b') as t(result jsonb);
+select p1_concurrency_test.assert(
+  (select result->>'error' = 'inventory_target_superseded_by_stocktake'
+   from p1_concurrency_test.results
+   where case_name = 'stocktake_vs_reversal' and runner = 'b'),
+  'reversal committed after a concurrent later physical count'
+);
+select p1_concurrency_test.assert(
+  not exists (
+    select 1 from inventory_movements
+    where id = '41900000-0000-0000-0000-000000000004'
+  )
+  and (select sum(quantity_delta) = 12 from inventory_movements
+       where org_id = '11000000-0000-0000-0000-000000000001'
+         and product_id = '41000000-0000-0000-0000-000000000004'),
+  'stocktake/reversal race did not preserve the physical count as latest truth'
 );
 
 select dblink_send_query('p1_a', 'select p1_concurrency_test.run_same_credit(1.2)');

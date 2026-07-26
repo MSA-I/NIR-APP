@@ -1,5 +1,5 @@
 -- Focused P4 contract for reasoned purchase-order status transitions.
--- Run only against an isolated local database after migration 0035.
+-- Run only against an isolated local database after migration 0041.
 \set ON_ERROR_STOP on
 
 begin;

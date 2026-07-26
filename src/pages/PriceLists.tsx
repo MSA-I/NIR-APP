@@ -142,7 +142,7 @@ export default function PriceLists() {
                         <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
                       </div>
                       <div className="mt-1 text-sm text-ink-muted break-words">
-                        {submission.file_name} · נקלטו <span className="num">{submission.accepted_count}</span> · ללא שינוי <span className="num">{submission.unchanged_count}</span> · נדחו <span className="num">{submission.rejected_count}</span>
+                        {submission.file_name ?? 'הגשה מדור קודם'} · נקלטו <span className="num">{submission.accepted_count}</span> · ללא שינוי <span className="num">{submission.unchanged_count}</span> · נדחו <span className="num">{submission.rejected_count}</span>
                       </div>
                     </div>
                   ))}
