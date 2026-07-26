@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertTriangle, Check, CheckCircle2, Clock3, Loader2, MessageCircle, Split, Trash2, XCircle } from 'lucide-react';
+import { Check, CheckCircle2, Clock3, Loader2, MessageCircle, XCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useQuery, unwrap } from '../../lib/useQuery';
 import { useAuth } from '../../auth/AuthContext';
 import { ConfirmDialog, ErrorNote, Modal, PageLoader, useToast } from '../../components/ui';
 import { useCategories } from '../Suppliers';
-import { fmtMoneyExact, todayISO } from '../../lib/format';
+import { fmtMoneyExact } from '../../lib/format';
 import { toHebrewError } from '../../lib/errors';
 import {
   cancelOrderDraft,
@@ -20,6 +20,7 @@ import { calculateOrderSavings } from '../../lib/orderSavings';
 import { sendOrderWhatsApp } from '../../lib/share';
 import type { Product, PurchaseOrder, Supplier, SupplierProduct } from '../../lib/types';
 import ProductStep from './ProductStep';
+import SupplierSplitStep from './SupplierSplitStep';
 
 interface CartItem {
   product: Product;
@@ -497,79 +498,13 @@ export default function NewOrder() {
           onQty={(productId, qty) => setCart((current) => current.flatMap((item) => item.product.id !== productId ? [item] : qty > 0 ? [{ ...item, qty }] : []))}
           onContinue={() => setStep(2)} />
       ) : (
-        <div className="space-y-4">
-          <section aria-labelledby="selected-products-title" className="border-y border-line-strong bg-surface">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft px-3 py-3 sm:px-4">
-              <h2 id="selected-products-title" className="section-title">פריטים וספקים</h2>
-              <span className="text-sm text-ink-muted">סה״כ משוער <b className="num text-ink">{fmtMoneyExact(total)}</b></span>
-            </div>
-            <div className="divide-y divide-line-soft">
-              {cart.map((item, index) => {
-                const offers = offersByProduct.get(item.product.id) ?? [];
-                const { sp, recommended } = effective(item);
-                return (
-                  <div key={item.product.id} className="grid items-center gap-3 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_5rem_minmax(13rem,1fr)_7rem_2.75rem] sm:px-4">
-                    <div className="min-w-0"><div className="break-words text-sm font-medium text-ink-body sm:truncate">{item.product.name}</div><div className="text-xs text-ink-muted">{item.product.unit}</div></div>
-                    <div className="text-sm"><span className="text-ink-muted">כמות </span><b className="num">{item.qty}</b></div>
-                    <select className="input" aria-label={`ספק עבור ${item.product.name}`} value={item.chosenSupplierId ?? ''}
-                      onChange={(event) => setCart((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, chosenSupplierId: event.target.value || null } : row))}>
-                      <option value="">{recommended ? `הזול ביותר: ${supplierById.get(recommended.supplier_id)?.name} — ₪${recommended.current_price.toFixed(2)}` : offers.length ? `הגדל כמות — מינימום הזמנה ${Math.min(...offers.map((o) => o.min_qty ?? 1))}` : 'אין ספק זמין'}</option>
-                      {offers.map((offer) => <option key={offer.id} value={offer.supplier_id} disabled={!meetsMin(offer, item.qty)}>{supplierById.get(offer.supplier_id)?.name} — ₪{offer.current_price.toFixed(2)}{offer.min_qty && offer.min_qty > 1 ? ` · מינ׳ ${offer.min_qty}` : ''}</option>)}
-                    </select>
-                    <div className="text-sm font-semibold num">{sp ? fmtMoneyExact(sp.current_price * item.qty) : '—'}</div>
-                    <button type="button" className="grid size-11 place-items-center text-ink-faint hover:bg-surface-sunken hover:text-alert-solid" onClick={() => setCart((current) => current.filter((_, rowIndex) => rowIndex !== index))} aria-label={`הסרת ${item.product.name}`}><Trash2 size={15} /></button>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          <SupplierComparison cart={cart} offersByProduct={offersByProduct} supplierById={supplierById} effective={effective}
-            onChoose={(productId, supplierId) => setCart((current) => current.map((row) => row.product.id === productId ? { ...row, chosenSupplierId: supplierId } : row))} />
-
-          <section aria-labelledby="supplier-split-title" className="border-y border-line-strong bg-surface">
-            <div className="flex items-center gap-2 border-b border-line-soft px-3 py-3 sm:px-4"><Split size={17} aria-hidden="true" /><h2 id="supplier-split-title" className="section-title">פיצול הזמנות לספקים</h2></div>
-            {split.noSupplier.length > 0 && <div className="border-b border-alert-line bg-alert-wash px-3 py-2.5 text-sm text-alert-fg sm:px-4">
-              <div className="flex items-start gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0" /><span>ללא ספק זמין לכמות שנבחרה — הגדל כמות למינימום או הסר:</span></div>
-              <ul className="mt-1.5 space-y-1.5">
-                {split.noSupplier.map((item) => {
-                  const o = offersByProduct.get(item.product.id) ?? [];
-                  const min = o.reduce((m, x) => Math.min(m, x.min_qty ?? 1), Infinity);
-                  return (
-                    <li key={item.product.id} className="flex flex-wrap items-center gap-2">
-                      <span className="min-w-0 flex-1 break-words">{item.product.name}{o.length > 0 && Number.isFinite(min) ? ` · מינימום ${min}` : ' · אין הצעת ספק'}</span>
-                      {o.length > 0 && Number.isFinite(min) && (
-                        <button type="button" className="btn-secondary py-1! text-xs" onClick={() => setCart((current) => current.map((row) => row.product.id === item.product.id ? { ...row, qty: min } : row))}>הגדל ל-{min}</button>
-                      )}
-                      <button type="button" className="btn-ghost py-1! text-xs" onClick={() => setCart((current) => current.filter((row) => row.product.id !== item.product.id))}>הסר</button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>}
-            <div className="divide-y divide-line-soft">
-              {split.groups.map((group) => {
-                const underMin = group.supplier.min_order_amount != null && group.subtotal < group.supplier.min_order_amount;
-                return (
-                  <div key={group.supplier.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 sm:px-4 ${underMin ? 'bg-await-wash' : ''}`}>
-                    <span className="font-medium text-ink-body">{group.supplier.name}</span><span className="text-xs text-ink-muted">{group.items.length} פריטים</span>
-                    <span className="ms-auto font-semibold num">{fmtMoneyExact(group.subtotal)}</span>
-                    {underMin && <span className="w-full text-xs text-await-fg">מתחת למינימום הזמנה של {fmtMoneyExact(group.supplier.min_order_amount!)}</span>}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="sm:col-span-2"><label className="label" htmlFor="new-order-notes">הערות</label><input id="new-order-notes" className="input" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="למשל: אספקה לכניסה הראשית" /></div>
-            <div><label className="label" htmlFor="new-order-expected-date">אספקה מבוקשת</label><input id="new-order-expected-date" type="date" className="input" value={expectedDate} min={todayISO()} onChange={(event) => setExpectedDate(event.target.value)} /></div>
-          </div>
-          <div className="flex items-center border-t border-line-strong bg-surface px-3 py-3 sm:px-4">
-            <button type="button" className="btn-secondary" disabled={busy} onClick={() => setStep(1)}>חזרה למוצרים וכמויות</button>
-            <span className="ms-auto text-xs text-ink-muted">האישור נמצא בראש המסך</span>
-          </div>
-        </div>
+        <SupplierSplitStep cart={cart} offersByProduct={offersByProduct} supplierById={supplierById} effective={effective}
+          groups={split.groups} noSupplier={split.noSupplier} total={total}
+          notes={notes} setNotes={setNotes} expectedDate={expectedDate} setExpectedDate={setExpectedDate} busy={busy}
+          onSupplier={(productId, supplierId) => setCart((current) => current.map((row) => row.product.id === productId ? { ...row, chosenSupplierId: supplierId } : row))}
+          onRemove={(productId) => setCart((current) => current.filter((row) => row.product.id !== productId))}
+          onQty={(productId, qty) => setCart((current) => current.map((row) => row.product.id === productId ? { ...row, qty } : row))}
+          onBack={() => setStep(1)} />
       )}
 
       <Modal open={reviewOpen} onClose={() => setReviewOpen(false)} title="סיכום ההזמנה" busy={busy} statusMessage={busy ? 'יוצר את ההזמנות לספקים' : undefined}>
@@ -627,58 +562,4 @@ function meetsMin(offer: SupplierProduct, qty: number): boolean {
 
 function SummaryRow({ label, value, tone }: { label: string; value: string; tone?: 'done' | 'await' }) {
   return <div className="flex flex-wrap items-center justify-between gap-2 py-3"><span className="text-ink-muted">{label}</span><strong className={`num text-end ${tone === 'done' ? 'text-done-fg' : tone === 'await' ? 'text-await-fg' : 'text-ink'}`}>{value}</strong></div>;
-}
-
-function SupplierComparison({ cart, offersByProduct, supplierById, effective, onChoose }: {
-  cart: CartItem[];
-  offersByProduct: Map<string, SupplierProduct[]>;
-  supplierById: Map<string, Supplier>;
-  effective: (item: CartItem) => { sp: SupplierProduct | null; recommended: SupplierProduct | null };
-  onChoose: (productId: string, supplierId: string) => void;
-}) {
-  const rows = cart.map((item) => {
-    const { sp } = effective(item);
-    const cheapest = (offersByProduct.get(item.product.id) ?? [])[0] ?? null;
-    const delta = sp && cheapest ? Math.max(0, (sp.current_price - cheapest.current_price) * item.qty) : 0;
-    return { item, sp, cheapest, delta };
-  });
-  if (!rows.length) return null;
-  const saving = rows.reduce((sum, row) => sum + row.delta, 0);
-  return (
-    <section aria-labelledby="supplier-comparison-title" className="border-y border-line-strong bg-surface">
-      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line-soft px-3 py-3 sm:px-4">
-        <div><h2 id="supplier-comparison-title" className="section-title">השוואת מחיר לכל מוצר</h2><p className="mt-0.5 text-xs text-ink-muted">לחצו על ספק כדי לבחור בו למוצר. המחיר נשמר בהזמנה לפי הספק שנבחר ברגע השליחה.</p></div>
-        <div className="text-start sm:text-end"><span className="block text-xs text-ink-muted">חיסכון אפשרי בבחירה הזולה</span><strong className={`num text-base ${saving > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(saving)}</strong></div>
-      </div>
-      <div className="divide-y divide-line-soft">
-        {rows.map(({ item, sp, cheapest }) => {
-          const offers = offersByProduct.get(item.product.id) ?? [];
-          const cheapestTotal = cheapest ? cheapest.current_price * item.qty : 0;
-          return (
-            <div key={item.product.id} className="px-3 py-3 text-sm sm:px-4">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <div className="font-medium text-ink-body">{item.product.name}</div>
-                <div className="text-xs text-ink-muted">כמות <span className="num">{item.qty}</span></div>
-              </div>
-              {offers.length ? <div className="divide-y divide-line-soft border-y border-line-soft">
-                {offers.map((offer) => {
-                  const total = offer.current_price * item.qty;
-                  const difference = Math.max(0, total - cheapestTotal);
-                  const selected = sp?.supplier_id === offer.supplier_id;
-                  return <button type="button" key={offer.id}
-                    onClick={() => onChoose(item.product.id, offer.supplier_id)} aria-pressed={selected}
-                    aria-label={`בחירת ${supplierById.get(offer.supplier_id)?.name ?? 'ספק'} עבור ${item.product.name}`}
-                    className={`grid w-full gap-1 px-2 py-2 text-start row-hover cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-4 ${selected ? 'bg-action-wash/45' : ''}`}>
-                    <div className="font-medium text-ink-body">{supplierById.get(offer.supplier_id)?.name ?? 'ספק לא זמין'}{selected && <span className="ms-2 text-xs text-action">נבחר</span>}</div>
-                    <div className="text-xs text-ink-muted"><span className="num">{fmtMoneyExact(offer.current_price)}</span> × <span className="num">{item.qty}</span> = <strong className="num text-ink">{fmtMoneyExact(total)}</strong></div>
-                    <div className={`text-xs font-medium sm:min-w-36 sm:text-end ${difference === 0 ? 'text-done-fg' : 'text-await-fg'}`}>{difference === 0 ? 'המחיר הנמוך ביותר' : `בחירה בזול תחסוך ${fmtMoneyExact(difference)}`}</div>
-                  </button>;
-                })}
-              </div> : <div className="text-alert-fg">אין הצעת מחיר פעילה למוצר</div>}
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
 }
