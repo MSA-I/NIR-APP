@@ -54,7 +54,7 @@ interface DraftSnapshot {
   requestId: string | null;
   notes: string;
   expectedDate: string;
-  editorStep: 1 | 2;
+  editorStep: 1 | 2 | 3;
   items: DraftItemInput[];
 }
 
@@ -83,7 +83,7 @@ export default function NewOrder() {
   }), [state]);
   const [notes, setNotes] = useState('');
   const [expectedDate, setExpectedDate] = useState('');
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftNumber, setDraftNumber] = useState<number | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -121,7 +121,7 @@ export default function NewOrder() {
   }, [loadKey]);
 
   useEffect(() => {
-    if (step === 2 && cart.length === 0) setStep(1);
+    if (step > 1 && cart.length === 0) setStep(1);
   }, [cart.length, step]);
 
   const { data, loading, error, refetch } = useQuery(async () => {
@@ -176,7 +176,7 @@ export default function NewOrder() {
     let nextCart: CartItem[] = [];
     let nextNotes = '';
     let nextExpectedDate = '';
-    let nextStep: 1 | 2 = 1;
+    let nextStep: 1 | 2 | 3 = 1;
     let nextDraftId: string | null = null;
     let nextDraftNumber: number | null = null;
     let draftNeedsRepair = false;
@@ -212,7 +212,9 @@ export default function NewOrder() {
       });
       nextNotes = data.draft.notes ?? '';
       nextExpectedDate = data.draft.expected_date ?? '';
-      nextStep = data.draft.editor_step === 2 && nextCart.length ? 2 : 1;
+      nextStep = nextCart.length && (data.draft.editor_step === 2 || data.draft.editor_step === 3)
+        ? data.draft.editor_step
+        : 1;
       nextDraftId = data.draft.id;
       nextDraftNumber = data.draft.number;
       if (draftNeedsRepair) toast('מוצרים שאינם פעילים הוסרו מהטיוטה והיא תישמר מחדש');
@@ -402,7 +404,7 @@ export default function NewOrder() {
 
   async function openReview() {
     if (!cart.length || split.blocked.length) return;
-    setStep(2);
+    setStep(3);
     if (await runSaveQueue()) setReviewOpen(true);
     else toast('יש לתקן את שגיאת השמירה לפני אישור ההזמנה', 'error');
   }
@@ -505,7 +507,7 @@ export default function NewOrder() {
         </div>
       </div>
 
-      <nav aria-label="שלבי הזמנה" className="grid grid-cols-2 border-y border-line-strong bg-surface">
+      <nav aria-label="שלבי הזמנה" className="grid grid-cols-3 border-y border-line-strong bg-surface">
         <button type="button" onClick={() => setStep(1)} aria-current={step === 1 ? 'step' : undefined}
           className={`flex min-h-14 items-center gap-2 border-b-2 px-4 text-start transition-colors ${step === 1 ? 'border-action bg-action-wash/50 text-ink' : 'border-transparent text-ink-muted hover:bg-surface-sunken'}`}>
           <span className="num text-xs">01</span><span className="text-sm font-semibold">מוצרים וכמויות</span>
@@ -513,6 +515,10 @@ export default function NewOrder() {
         <button type="button" disabled={!cart.length} onClick={() => setStep(2)} aria-current={step === 2 ? 'step' : undefined}
           className={`flex min-h-14 items-center gap-2 border-b-2 border-s border-line-soft px-4 text-start transition-colors disabled:opacity-50 ${step === 2 ? 'border-b-action bg-action-wash/50 text-ink' : 'border-b-transparent text-ink-muted hover:bg-surface-sunken'}`}>
           <span className="num text-xs">02</span><span className="text-sm font-semibold">ספקים וסיכום</span>
+        </button>
+        <button type="button" disabled={!cart.length || split.blocked.length > 0} onClick={() => void openReview()} aria-current={step === 3 ? 'step' : undefined}
+          className={`flex min-h-14 items-center gap-2 border-b-2 border-s border-line-soft px-4 text-start transition-colors disabled:opacity-50 ${step === 3 ? 'border-b-action bg-action-wash/50 text-ink' : 'border-b-transparent text-ink-muted hover:bg-surface-sunken'}`}>
+          <span className="num text-xs">03</span><span className="text-sm font-semibold">סיכום ואישור</span>
         </button>
       </nav>
 

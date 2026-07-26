@@ -144,7 +144,7 @@ export interface SupplierPriceSubmission {
 export type RequestStatus = 'draft' | 'split' | 'cancelled';
 export interface PurchaseRequest {
   id: string; org_id: string; number: number; status: RequestStatus;
-  notes: string | null; expected_date: string | null; editor_step: 1 | 2;
+  notes: string | null; expected_date: string | null; editor_step: 1 | 2 | 3;
   created_by: string | null; created_at: string; updated_at: string;
 }
 export interface PurchaseRequestItem {

@@ -18,7 +18,7 @@ export interface SaveDraftInput {
   requestId: string | null;
   notes: string;
   expectedDate: string;
-  editorStep: 1 | 2;
+  editorStep: 1 | 2 | 3;
   items: DraftItemInput[];
 }
 
