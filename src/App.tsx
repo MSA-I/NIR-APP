@@ -21,7 +21,7 @@ const SuppliersList = lazy(() => import('./pages/Suppliers').then((m) => ({ defa
 const SupplierCard = lazy(() => import('./pages/Suppliers').then((m) => ({ default: m.SupplierCard })));
 const Products = lazy(() => import('./pages/Products'));
 const PriceLists = lazy(() => import('./pages/PriceLists'));
-const NewOrder = lazy(() => import('./pages/NewOrder'));
+const NewOrder = lazy(() => import('./pages/neworder/NewOrder'));
 const OrdersList = lazy(() => import('./pages/Orders').then((m) => ({ default: m.OrdersList })));
 const OrderDetail = lazy(() => import('./pages/Orders').then((m) => ({ default: m.OrderDetail })));
 const ReceivingList = lazy(() => import('./pages/Receiving').then((m) => ({ default: m.ReceivingList })));

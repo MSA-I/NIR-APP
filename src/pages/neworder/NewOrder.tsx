@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Check, CheckCircle2, Clock3, Loader2, MessageCircle, Minus, Plus, Search, Split, Trash2, XCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { useQuery, unwrap } from '../lib/useQuery';
-import { useAuth } from '../auth/AuthContext';
-import { ConfirmDialog, ErrorNote, Modal, PageLoader, useToast } from '../components/ui';
-import { useCategories } from './Suppliers';
-import { fmtMoneyExact, todayISO } from '../lib/format';
-import { toHebrewError } from '../lib/errors';
+import { supabase } from '../../lib/supabase';
+import { useQuery, unwrap } from '../../lib/useQuery';
+import { useAuth } from '../../auth/AuthContext';
+import { ConfirmDialog, ErrorNote, Modal, PageLoader, useToast } from '../../components/ui';
+import { useCategories } from '../Suppliers';
+import { fmtMoneyExact, todayISO } from '../../lib/format';
+import { toHebrewError } from '../../lib/errors';
 import {
   cancelOrderDraft,
   finalizeOrderDraft,
@@ -15,10 +15,10 @@ import {
   saveOrderDraft,
   type DraftItemInput,
   type OrderDraftFlushDetail,
-} from '../lib/orderDrafts';
-import { calculateOrderSavings } from '../lib/orderSavings';
-import { sendOrderWhatsApp } from '../lib/share';
-import type { Product, PurchaseOrder, Supplier, SupplierProduct } from '../lib/types';
+} from '../../lib/orderDrafts';
+import { calculateOrderSavings } from '../../lib/orderSavings';
+import { sendOrderWhatsApp } from '../../lib/share';
+import type { Product, PurchaseOrder, Supplier, SupplierProduct } from '../../lib/types';
 
 interface CartItem {
   product: Product;
