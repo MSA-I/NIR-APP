@@ -490,6 +490,8 @@ try {
 
     $browserEnvironment = @{
       QUALITY_BASE_URL = "http://127.0.0.1:$previewPort"
+      QUALITY_API_URL = [string]$localEnvironment.API_URL
+      QUALITY_SERVICE_ROLE_KEY = [string]$localEnvironment.SERVICE_ROLE_KEY
       QUALITY_ARTIFACT_DIR = $artifactDirectory
       QUALITY_PASSWORD_SEED = $credentialSeed
       QUALITY_BROWSER_PATH = Find-ChromiumExecutable

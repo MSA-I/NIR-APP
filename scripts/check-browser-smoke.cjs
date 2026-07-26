@@ -2,12 +2,14 @@ const fs = require('fs');
 const path = require('path');
 const assert = require('assert/strict');
 
-for (const name of ['QUALITY_BASE_URL', 'QUALITY_ARTIFACT_DIR', 'QUALITY_PASSWORD_SEED', 'QUALITY_BROWSER_PATH', 'PLAYWRIGHT_CORE_PATH']) {
+for (const name of ['QUALITY_BASE_URL', 'QUALITY_API_URL', 'QUALITY_SERVICE_ROLE_KEY', 'QUALITY_ARTIFACT_DIR', 'QUALITY_PASSWORD_SEED', 'QUALITY_BROWSER_PATH', 'PLAYWRIGHT_CORE_PATH']) {
   if (!process.env[name]) throw new Error(`Missing required browser-gate environment: ${name}`);
 }
 
 const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH);
 const baseURL = process.env.QUALITY_BASE_URL;
+const apiURL = process.env.QUALITY_API_URL;
+const serviceRoleKey = process.env.QUALITY_SERVICE_ROLE_KEY;
 const outDir = process.env.QUALITY_ARTIFACT_DIR;
 const browserPath = process.env.QUALITY_BROWSER_PATH;
 const passwordSeed = process.env.QUALITY_PASSWORD_SEED;
@@ -763,8 +765,23 @@ async function orderSupplierComparison(browser) {
     locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 1440, height: 900 },
   });
   const page = await context.newPage();
-  captureConsole(page, 'order-split-journey');
+  captureConsole(page, 'order-split-journey', [/finalize_purchase_request_draft/, /draft_price_changed/]);
   const product = 'לחמניות המבורגר (ארגז 48)';
+  const qualitySupplierPrice = async (price) => {
+    const response = await fetch(`${apiURL}/rest/v1/supplier_products?supplier_id=eq.aa000000-0000-4000-8000-000000000004&product_id=eq.bb000000-0000-4000-8000-000000000009`, {
+      method: 'PATCH',
+      headers: {
+        apikey: serviceRoleKey,
+        authorization: `Bearer ${serviceRoleKey}`,
+        'content-type': 'application/json',
+        prefer: 'return=representation',
+      },
+      body: JSON.stringify({ current_price: price }),
+    });
+    assert(response.ok, `quality price update failed with HTTP ${response.status}`);
+    const rows = await response.json();
+    assert.equal(rows.length, 1, 'quality price update did not match the seeded supplier offer');
+  };
   const waitForDraftSave = () => page.waitForResponse((response) =>
     response.request().method() === 'POST'
     && response.url().includes('/rest/v1/rpc/save_purchase_request_draft'));
@@ -980,10 +997,21 @@ async function orderSupplierComparison(browser) {
     assert.match(await reminder.innerText(), /כמות\s*3/, 'next-order reminder did not preserve quantity 3');
     await captureOrderState('products');
 
+    const reminderWrites = [];
+    const trackReminderWrite = (request) => {
+      if (request.url().includes('/rest/v1/rpc/save_purchase_request_draft')) reminderWrites.push('save');
+      if (request.method() === 'DELETE' && request.url().includes('/rest/v1/next_order_items')) reminderWrites.push('delete');
+    };
+    page.on('request', trackReminderWrite);
+    const reminderSave = waitForDraftSave();
     const reminderDelete = page.waitForResponse((response) =>
       response.request().method() === 'DELETE' && response.url().includes('/rest/v1/next_order_items'));
     await reminder.getByRole('button', { name: 'הוסף להזמנה' }).click();
+    assert((await reminderSave).ok(), 'adding the reminder was not saved before dismissal');
     assert((await reminderDelete).ok(), 'adding the reminder did not dismiss its stored row');
+    page.off('request', trackReminderWrite);
+    assert(reminderWrites.indexOf('save') >= 0 && reminderWrites.indexOf('save') < reminderWrites.indexOf('delete'),
+      `next-order reminder was deleted before its draft save: ${JSON.stringify(reminderWrites)}`);
     await reminder.waitFor({ state: 'hidden' });
     await page.waitForURL((url) => url.pathname === '/orders/new' && url.searchParams.has('draft'), { timeout: 25_000 });
     await waitForSaved();
@@ -1008,6 +1036,36 @@ async function orderSupplierComparison(browser) {
     assert.equal(await page.getByText('סיבת אישור ההזמנה').count(), 0, 'routine order approval asks for a reason');
     await captureOrderState('summary');
 
+    await qualitySupplierPrice(60);
+    const firstPriceReject = page.waitForResponse((response) =>
+      response.request().method() === 'POST'
+      && response.url().includes('/rest/v1/rpc/finalize_purchase_request_draft'));
+    await confirm.click();
+    assert.equal((await firstPriceReject).status(), 400, 'first changed price did not reject the stale total');
+    const priceDiff = page.getByRole('dialog', { name: 'המחירים השתנו' });
+    await priceDiff.waitFor({ timeout: 25_000 });
+    const firstPriceText = await priceDiff.innerText();
+    for (const amount of ['58.50', '60.00', '175.50', '180.00', '4.50']) {
+      assert(firstPriceText.includes(amount), `first price diff omitted ${amount}`);
+    }
+    await captureOrderState('price-change', false);
+    await priceDiff.getByRole('button', { name: 'חזרה לסיכום ולאישור מחדש' }).click();
+    await priceDiff.waitFor({ state: 'hidden' });
+
+    await qualitySupplierPrice(61.5);
+    const secondPriceReject = page.waitForResponse((response) =>
+      response.request().method() === 'POST'
+      && response.url().includes('/rest/v1/rpc/finalize_purchase_request_draft'));
+    await confirm.click();
+    assert.equal((await secondPriceReject).status(), 400, 'second changed price did not reject the stale total');
+    await priceDiff.waitFor({ timeout: 25_000 });
+    const secondPriceText = await priceDiff.innerText();
+    for (const amount of ['60.00', '61.50', '180.00', '184.50', '4.50']) {
+      assert(secondPriceText.includes(amount), `second price diff omitted ${amount}`);
+    }
+    await priceDiff.getByRole('button', { name: 'חזרה לסיכום ולאישור מחדש' }).click();
+    await priceDiff.waitFor({ state: 'hidden' });
+
     const finalize = page.waitForResponse((response) =>
       response.request().method() === 'POST'
       && response.url().includes('/rest/v1/rpc/finalize_purchase_request_draft'));
@@ -1018,7 +1076,11 @@ async function orderSupplierComparison(browser) {
     await sendQueue.getByText('מאפה זהב', { exact: true }).waitFor();
     await sendQueue.getByRole('button', { name: 'שליחה ב-WhatsApp' }).waitFor();
   } finally {
-    await closeContext(context);
+    try {
+      await qualitySupplierPrice(58.5);
+    } finally {
+      await closeContext(context);
+    }
   }
 }
 
