@@ -6,7 +6,6 @@ import { useQuery, unwrap } from '../../lib/useQuery';
 import { useAuth } from '../../auth/AuthContext';
 import { ConfirmDialog, ErrorNote, Modal, PageLoader, useToast } from '../../components/ui';
 import { useCategories } from '../Suppliers';
-import { fmtMoneyExact } from '../../lib/format';
 import { toHebrewError } from '../../lib/errors';
 import {
   cancelOrderDraft,
@@ -21,6 +20,7 @@ import { sendOrderWhatsApp } from '../../lib/share';
 import type { Product, PurchaseOrder, Supplier, SupplierProduct } from '../../lib/types';
 import ProductStep from './ProductStep';
 import SupplierSplitStep from './SupplierSplitStep';
+import SummaryStep from './SummaryStep';
 
 interface CartItem {
   product: Product;
@@ -508,22 +508,8 @@ export default function NewOrder() {
       )}
 
       <Modal open={reviewOpen} onClose={() => setReviewOpen(false)} title="סיכום ההזמנה" busy={busy} statusMessage={busy ? 'יוצר את ההזמנות לספקים' : undefined}>
-        <div className="divide-y divide-line-soft border-y border-line-strong text-sm">
-          <SummaryRow label="מספר ספקים" value={String(savings.supplierCount)} />
-          <SummaryRow label="מספר מוצרים" value={String(cart.length)} />
-          <SummaryRow label="עלות לאחר חלוקה" value={fmtMoneyExact(savings.splitTotal)} />
-          <SummaryRow label="מחיר אצל ספק יחיד" value={savings.singleSupplierTotal === null ? '—' : `${fmtMoneyExact(savings.singleSupplierTotal)}${singleSupplierName ? ` · ${singleSupplierName}` : ''}`} />
-          <SummaryRow label={savings.savings !== null && savings.savings < 0 ? 'תוספת עלות לעומת ספק יחיד' : 'חיסכון לעומת ספק יחיד'}
-            value={savings.savings === null ? '—' : `${fmtMoneyExact(Math.abs(savings.savings))} (${Math.abs(savings.savingsPercent ?? 0).toFixed(1)}%)`} />
-          <SummaryRow label="כל המוצרים הוקצו לספק הזול ביותר" value={savings.allCheapest ? '✓ כן' : 'לא'} tone={savings.allCheapest ? 'done' : 'await'} />
-        </div>
-        {savings.singleSupplierTotal === null && <p className="mt-3 text-sm text-ink-muted">אין ספק יחיד שמציע את כל מוצרי הסל, ולכן לא מוצגת טענת חיסכון.</p>}
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" className="btn-secondary" disabled={busy} onClick={() => setReviewOpen(false)}>חזרה לעריכה</button>
-          <button type="button" className="btn-primary" disabled={busy || savings.splitTotal === null} onClick={() => void finalizeDraft()}>
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} אשר ושלח הזמנה
-          </button>
-        </div>
+        <SummaryStep savings={savings} singleSupplierName={singleSupplierName} productCount={cart.length} busy={busy}
+          onBack={() => setReviewOpen(false)} onConfirm={() => void finalizeDraft()} />
       </Modal>
 
       <Modal open={sendQueue !== null} onClose={() => navigate('/orders')} title="שליחת הזמנות לספקים" busy={sendingId !== null} statusMessage={sendingId ? 'פותח את הודעת הספק ומעדכן את ההזמנה' : undefined}>
@@ -558,8 +544,4 @@ export default function NewOrder() {
  *  otherwise the cheapest-shown supplier resolves to none server-side and the order fails. */
 function meetsMin(offer: SupplierProduct, qty: number): boolean {
   return offer.min_qty == null || qty >= offer.min_qty;
-}
-
-function SummaryRow({ label, value, tone }: { label: string; value: string; tone?: 'done' | 'await' }) {
-  return <div className="flex flex-wrap items-center justify-between gap-2 py-3"><span className="text-ink-muted">{label}</span><strong className={`num text-end ${tone === 'done' ? 'text-done-fg' : tone === 'await' ? 'text-await-fg' : 'text-ink'}`}>{value}</strong></div>;
 }
