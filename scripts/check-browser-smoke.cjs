@@ -998,19 +998,24 @@ async function orderSupplierComparison(browser) {
     await captureOrderState('products');
 
     const reminderWrites = [];
-    const trackReminderWrite = (request) => {
-      if (request.url().includes('/rest/v1/rpc/save_purchase_request_draft')) reminderWrites.push('save');
-      if (request.method() === 'DELETE' && request.url().includes('/rest/v1/next_order_items')) reminderWrites.push('delete');
+    const trackReminderRequest = (request) => {
+      if (request.method() === 'DELETE' && request.url().includes('/rest/v1/next_order_items')) reminderWrites.push('delete-request');
     };
-    page.on('request', trackReminderWrite);
+    const trackReminderResponse = (response) => {
+      if (response.ok() && response.request().method() === 'POST'
+          && response.url().includes('/rest/v1/rpc/save_purchase_request_draft')) reminderWrites.push('save-response');
+    };
+    page.on('request', trackReminderRequest);
+    page.on('response', trackReminderResponse);
     const reminderSave = waitForDraftSave();
     const reminderDelete = page.waitForResponse((response) =>
       response.request().method() === 'DELETE' && response.url().includes('/rest/v1/next_order_items'));
     await reminder.getByRole('button', { name: 'הוסף להזמנה' }).click();
     assert((await reminderSave).ok(), 'adding the reminder was not saved before dismissal');
     assert((await reminderDelete).ok(), 'adding the reminder did not dismiss its stored row');
-    page.off('request', trackReminderWrite);
-    assert(reminderWrites.indexOf('save') >= 0 && reminderWrites.indexOf('save') < reminderWrites.indexOf('delete'),
+    page.off('request', trackReminderRequest);
+    page.off('response', trackReminderResponse);
+    assert(reminderWrites.indexOf('save-response') >= 0 && reminderWrites.indexOf('save-response') < reminderWrites.indexOf('delete-request'),
       `next-order reminder was deleted before its draft save: ${JSON.stringify(reminderWrites)}`);
     await reminder.waitFor({ state: 'hidden' });
     await page.waitForURL((url) => url.pathname === '/orders/new' && url.searchParams.has('draft'), { timeout: 25_000 });
@@ -1044,10 +1049,16 @@ async function orderSupplierComparison(browser) {
     assert.equal((await firstPriceReject).status(), 400, 'first changed price did not reject the stale total');
     const priceDiff = page.getByRole('dialog', { name: 'המחירים השתנו' });
     await priceDiff.waitFor({ timeout: 25_000 });
-    const firstPriceText = await priceDiff.innerText();
-    for (const amount of ['58.50', '60.00', '175.50', '180.00', '4.50']) {
-      assert(firstPriceText.includes(amount), `first price diff omitted ${amount}`);
-    }
+    const priceLine = priceDiff.getByText(product, { exact: true }).locator('..').locator('..');
+    const normalizeMoneyText = (value) => value.replace(/[\u061c\u200e\u200f]/g, '').replace(/\s+/g, ' ').trim();
+    const firstLineText = normalizeMoneyText(await priceLine.innerText());
+    const firstPriceText = normalizeMoneyText(await priceDiff.innerText());
+    assert.match(firstLineText, /לפני · מאפה זהב 58\.50 ₪ ליחידה ← עכשיו · מאפה זהב 60\.00 ₪ ליחידה \+4\.50 ₪/,
+      'first price diff reversed or mislabeled the unit-price change');
+    assert.match(firstLineText, /סכום שורה: 175\.50 ₪ ← 180\.00 ₪/,
+      'first price diff reversed or omitted the line totals');
+    assert.match(firstPriceText, /סכום ההזמנה 175\.50 ₪ ← 180\.00 ₪ · \+4\.50 ₪/,
+      'first price diff reversed or omitted the order totals');
     await captureOrderState('price-change', false);
     await priceDiff.getByRole('button', { name: 'חזרה לסיכום ולאישור מחדש' }).click();
     await priceDiff.waitFor({ state: 'hidden' });
@@ -1059,10 +1070,14 @@ async function orderSupplierComparison(browser) {
     await confirm.click();
     assert.equal((await secondPriceReject).status(), 400, 'second changed price did not reject the stale total');
     await priceDiff.waitFor({ timeout: 25_000 });
-    const secondPriceText = await priceDiff.innerText();
-    for (const amount of ['60.00', '61.50', '180.00', '184.50', '4.50']) {
-      assert(secondPriceText.includes(amount), `second price diff omitted ${amount}`);
-    }
+    const secondLineText = normalizeMoneyText(await priceLine.innerText());
+    const secondPriceText = normalizeMoneyText(await priceDiff.innerText());
+    assert.match(secondLineText, /לפני · מאפה זהב 60\.00 ₪ ליחידה ← עכשיו · מאפה זהב 61\.50 ₪ ליחידה \+4\.50 ₪/,
+      'second price diff reversed or mislabeled the unit-price change');
+    assert.match(secondLineText, /סכום שורה: 180\.00 ₪ ← 184\.50 ₪/,
+      'second price diff reversed or omitted the line totals');
+    assert.match(secondPriceText, /סכום ההזמנה 180\.00 ₪ ← 184\.50 ₪ · \+4\.50 ₪/,
+      'second price diff reversed or omitted the order totals');
     await priceDiff.getByRole('button', { name: 'חזרה לסיכום ולאישור מחדש' }).click();
     await priceDiff.waitFor({ state: 'hidden' });
 
