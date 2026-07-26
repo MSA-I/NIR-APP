@@ -12,7 +12,7 @@ $expectedProjectId = "supplyflow-p0"
 $expectedApiUrl = "http://127.0.0.1:55431"
 $dbContainer = "supabase_db_supplyflow-p0"
 $restContainer = "supabase_rest_supplyflow-p0"
-$previewPort = 5204
+$previewPort = $null
 $previewProcess = $null
 $previewStdout = $null
 $previewStderr = $null
@@ -293,7 +293,19 @@ function Find-PlaywrightCore {
   throw "The existing Playwright runtime was not found. No fallback test is reported as passed."
 }
 
+function Get-FreeTcpPort {
+  $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+  try {
+    $listener.Start()
+    return ([Net.IPEndPoint]$listener.LocalEndpoint).Port
+  }
+  finally {
+    $listener.Stop()
+  }
+}
+
 function Start-PreviewServer {
+  $script:previewPort = Get-FreeTcpPort
   $script:previewStdout = [IO.Path]::GetTempFileName()
   $script:previewStderr = [IO.Path]::GetTempFileName()
   $script:previewProcess = Start-Process -FilePath (Get-Command node).Source `

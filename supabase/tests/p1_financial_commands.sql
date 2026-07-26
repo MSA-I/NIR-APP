@@ -1,5 +1,5 @@
 -- P1 regression harness. Run only against an isolated local database after applying all
--- project migrations through 0041, including the reasoned purchase-order status command.
+-- project migrations through 0042, including the explicit profile self-service ACL.
 \set ON_ERROR_STOP on
 
 begin;
