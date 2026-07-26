@@ -7,10 +7,11 @@
 
 ---
 
-## עורך הזמנה — מינימום הזמנה ופיצול ידני (26.07.2026, הושלם מקומית)
+## עורך הזמנה — המשך לספקים, מינימום ופיצול ידני (26.07.2026, production)
 
-**מצב:** התוכנית `docs/plans/2026-07-26-minimum-order-and-manual-split.md` מומשה במלואה בענף
-`codex/order-flow-suppliers`, מבסיס `944fd1a`; קוד האינטגרציה האחרון שנבדק הוא `20030d6`.
+**מצב:** התוכניות `docs/plans/2026-07-26-order-flow-continue-to-suppliers.md` ו־
+`docs/plans/2026-07-26-minimum-order-and-manual-split.md` מומשו, מוזגו עם שושלת הייצור הרציפה בקומיט
+`d12de2c`, נדחפו ל־`origin/main` ונפרסו לסביבה החיה.
 
 עורך ההזמנה הוא כעת מסלול קבוע בן שלושה שלבים: מוצרים וכמויות, ספקים וחלוקה, וסיכום ואישור.
 הפיצול האוטומטי דטרמיניסטי ומבוסס מחיר; פין ספק הוא בחירה מפורשת שנשמרת בטיוטה; כמות מינימום נאכפת
@@ -20,15 +21,24 @@
 
 **סכימה:** `0043_order_split_step_and_pins.sql` מוסיפה `editor_step` ופין ספק עם FK דיירי מורכב;
 `0044_next_order_items.sql` מוסיפה רשימת "להזמנה הבאה" פר־משתמש עם RLS ו־FKs דייריים מורכבים.
-שתי המיגרציות עברו reset נקי, מסלול upgrade ובדיקות tenant/ACL מקומיות — אך **לא הוחלו במסד חי**.
+לפני השינוי נוצר גיבוי טרי של schema/data/roles. שתי המיגרציות חיות, וה־ledger רציף `0001`–`0044`.
+קריאת postflight עברה 10/10 חוזי FK/RLS/ACL/RPC, טבלת `next_order_items` נשארה ריקה, וטביעות
+הרשומות של בקשות הרכש ופריטיהן לא השתנו בזמן הפריסה והאימות.
 
 **אימות מלא — PASS ללא דילוגים:** `npm.cmd run quality` הסתיים ב־exit code 0: build ובדיקות הלוגיקה,
-`npm audit` עם 0 חולשות, 266 assertions של P0, בדיקות upgrade/P1/P1B/P2, Edge ב־10/100/1,000 שורות,
-41 בדיקות fixture דייריות, מסע supplier-to-credit עם 18 שורות audit סמנטיות, ו־20/20 קבוצות דפדפן עם
-35 בדיקות viewport, ‏21 ביקורות נגישות, ‏22 צילומי מסך ו־PDF בגודל 308,097 bytes. הראיות נמצאות ב־
-`C:\Users\art1\.codex\visualizations\2026\07\26\019f9ecc-7ae9-7e41-aec3-0df0c9ff03b8\2026\07\26\20260726-195518-p4-quality-gates`.
+`npm audit` עם 0 חולשות, P0, ‏upgrade, ‏P1/P1B/P2, ‏Edge והמסע המשולב. ריצה טרייה על `d12de2c`
+בסביבת Supabase מקומית מבודדת עברה 21 קבוצות דפדפן, 42 בדיקות viewport, ‏22 ביקורות נגישות,
+23 צילומי מסך, אפס כשלים, אפס שגיאות console ו־PDF בגודל 308,202 bytes. הראיות נמצאות ב־
+`C:\Users\art1\.codex\visualizations\2026\07\26\20260726-223148-p4-quality-gates`.
 
-**מסירה:** לא בוצעו push, deploy או מיגרציה לסביבה חיה. הקבצים הלא־מנוהלים שהיו בתיקיית העבודה נשמרו ללא שינוי.
+**מסירה חיה — PASS:** ‏Cloudflare Pages project ‏`supplyflow` נפרס ב־
+`https://e5d693a1.supplyflow-baq.pages.dev` וב־`https://supplyflow-baq.pages.dev`. כל 62 קבצי `dist`
+הושוו ב־SHA-256 בשתי הכתובות: 124/124 התאמות. התחברות חיה עברה ב־`/prices`, ‏`/my-prices`
+וב־`/orders/new?fresh=1` בדסקטופ וב־390px: ‏RTL, שלושת שלבי ההזמנה, ללא redirect, ‏alert,
+overflow או diagnostics. לא נוצרה טיוטה ולא שונתה היסטוריה עסקית. הראיות והגיבוי נמצאים תחת
+`C:\Users\art1\.codex\visualizations\2026\07\26\20260726-221841-order-flow-production-release` ו־
+`C:\Users\art1\.codex\visualizations\2026\07\26\019f9ecc-7ae9-7e41-aec3-0df0c9ff03b8\2026\07\26\20260726-221713-order-flow-production-rollout`.
+לא נפרסו Edge Functions ולא שונו secrets. הקבצים הלא־מנוהלים ב־checkout המקורי נשמרו ללא שינוי.
 
 ---
 
