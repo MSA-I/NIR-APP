@@ -241,6 +241,8 @@ DataTable, וממוקם מהקצה הלוגי של הטריגר (RTL-aware). ה�
 לטריגר וסגירה בלחיצה בחוץ, במעבר route או בחציית breakpoint. הפתיחה משתמשת ב־opacity ובתזוזת block קטנה: 140ms ‏ease-out
 עם stagger של 15ms, וסימן הפלוס מסתובב ל־X במשך 180ms. תחת `prefers-reduced-motion` האנימציה והמעבר מבוטלים והמצב הסופי מוצג מיד.
 
+בדסקטופ מעטפת ה־speed-dial מעוגנת ל־`inset-block-start` בלבד (`inset-block-end: auto`), כדי שהתפריט ייפתח כולו בתוך ה־viewport ולא יימתח לגובה המסך.
+
 שני המצבים מוסתרים במסכים ממוקדים שכבר מחזיקים פעולה ראשית — `/orders/new`, ‏`/invoices/new`, ‏`/receiving/:orderId` — כדי שלא יתחרו בה.
 
 ### התראות חדשות
