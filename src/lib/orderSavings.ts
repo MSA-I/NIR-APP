@@ -18,10 +18,11 @@ export interface OrderSavings {
 // Both qty and unit_price are NUMERIC(..., 2) in Postgres. Multiplying their
 // integer hundredths keeps the browser on the same decimal path as Postgres,
 // including half-cent cases such as 2.50 × 4.03 = 10.075 → 10.08.
-const hundredths = (value: number) => BigInt(Math.round(value * 100));
-const lineUnits = (qty: number, unitPrice: number) => hundredths(qty) * hundredths(unitPrice);
-const centsFromUnits = (value: bigint) => (value + 50n) / 100n;
-const moneyFromCents = (value: bigint) => Number(value) / 100;
+// Exported for orderSplit.ts — one money implementation for the whole order editor.
+export const hundredths = (value: number) => BigInt(Math.round(value * 100));
+export const lineUnits = (qty: number, unitPrice: number) => hundredths(qty) * hundredths(unitPrice);
+export const centsFromUnits = (value: bigint) => (value + 50n) / 100n;
+export const moneyFromCents = (value: bigint) => Number(value) / 100;
 
 export function calculateOrderSavings(lines: SavingsLine[]): OrderSavings {
   const selected = lines.map((line) => {
