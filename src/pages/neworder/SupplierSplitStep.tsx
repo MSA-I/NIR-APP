@@ -1,18 +1,11 @@
 import { AlertTriangle, Split, Trash2 } from 'lucide-react';
 import { fmtMoneyExact, todayISO } from '../../lib/format';
+import type { ResolvedLine, SplitLine, SupplierGroup } from '../../lib/orderSplit';
 import type { Product, Supplier, SupplierProduct } from '../../lib/types';
 import SupplierGroupCard from './SupplierGroupCard';
 
-interface SupplierCartItem {
+interface SupplierCartItem extends SplitLine {
   product: Product;
-  qty: number;
-  chosenSupplierId: string | null;
-}
-
-interface SupplierSplitGroup {
-  supplier: Supplier;
-  items: { item: SupplierCartItem; sp: SupplierProduct }[];
-  subtotal: number;
 }
 
 interface SupplierSplitStepProps {
@@ -20,8 +13,8 @@ interface SupplierSplitStepProps {
   offersByProduct: ReadonlyMap<string, readonly SupplierProduct[]>;
   supplierById: ReadonlyMap<string, Supplier>;
   effective: (item: SupplierCartItem) => { sp: SupplierProduct | null; recommended: SupplierProduct | null };
-  groups: readonly SupplierSplitGroup[];
-  noSupplier: readonly SupplierCartItem[];
+  groups: readonly SupplierGroup[];
+  blocked: readonly ResolvedLine[];
   total: number;
   notes: string;
   setNotes: (value: string) => void;
@@ -40,7 +33,7 @@ export default function SupplierSplitStep({
   supplierById,
   effective,
   groups,
-  noSupplier,
+  blocked,
   total,
   notes,
   setNotes,
@@ -52,6 +45,11 @@ export default function SupplierSplitStep({
   onQty,
   onBack,
 }: SupplierSplitStepProps) {
+  const cartByProduct = new Map(cart.map((item) => [item.productId, item]));
+  const noSupplier = blocked.flatMap((line) => {
+    const item = cartByProduct.get(line.productId);
+    return item ? [item] : [];
+  });
   return (
     <div className="space-y-4">
       <section aria-labelledby="selected-products-title" className="border-y border-line-strong bg-surface">
@@ -67,7 +65,7 @@ export default function SupplierSplitStep({
               <div key={item.product.id} className="grid items-center gap-3 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_5rem_minmax(13rem,1fr)_7rem_2.75rem] sm:px-4">
                 <div className="min-w-0"><div className="break-words text-sm font-medium text-ink-body sm:truncate">{item.product.name}</div><div className="text-xs text-ink-muted">{item.product.unit}</div></div>
                 <div className="text-sm"><span className="text-ink-muted">כמות </span><b className="num">{item.qty}</b></div>
-                <select className="input" aria-label={`ספק עבור ${item.product.name}`} value={item.chosenSupplierId ?? ''}
+                <select className="input" aria-label={`ספק עבור ${item.product.name}`} value={item.assignment.mode === 'pinned' ? item.assignment.supplierId : ''}
                   onChange={(event) => onSupplier(item.product.id, event.target.value || null)}>
                   <option value="">{recommended ? `הזול ביותר: ${supplierById.get(recommended.supplier_id)?.name} — ₪${recommended.current_price.toFixed(2)}` : offers.length ? `הגדל כמות — מינימום הזמנה ${Math.min(...offers.map((o) => o.min_qty ?? 1))}` : 'אין ספק זמין'}</option>
                   {offers.map((offer) => <option key={offer.id} value={offer.supplier_id} disabled={!meetsMin(offer, item.qty)}>{supplierById.get(offer.supplier_id)?.name} — ₪{offer.current_price.toFixed(2)}{offer.min_qty && offer.min_qty > 1 ? ` · מינ׳ ${offer.min_qty}` : ''}</option>)}
@@ -104,7 +102,7 @@ export default function SupplierSplitStep({
           </ul>
         </div>}
         <div className="divide-y divide-line-soft">
-          {groups.map((group) => <SupplierGroupCard key={group.supplier.id} supplier={group.supplier} itemCount={group.items.length} subtotal={group.subtotal} />)}
+          {groups.map((group) => <SupplierGroupCard key={group.supplier.id} supplier={group.supplier} itemCount={group.lines.length} subtotal={group.subtotal} />)}
         </div>
       </section>
 

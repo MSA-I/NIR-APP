@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, CheckCircle2, Clock3, Loader2, MessageCircle, XCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -15,18 +15,18 @@ import {
   type DraftItemInput,
   type OrderDraftFlushDetail,
 } from '../../lib/orderDrafts';
-import { calculateOrderSavings } from '../../lib/orderSavings';
+import { resolveSplit, splitReducer, type CartState, type SplitLine } from '../../lib/orderSplit';
 import { sendOrderWhatsApp } from '../../lib/share';
 import type { Product, PurchaseOrder, Supplier, SupplierProduct } from '../../lib/types';
 import ProductStep from './ProductStep';
 import SupplierSplitStep from './SupplierSplitStep';
 import SummaryStep from './SummaryStep';
 
-interface CartItem {
+interface CartItem extends SplitLine {
   product: Product;
-  qty: number;
-  chosenSupplierId: string | null;
 }
+
+const EMPTY_CART: CartState = { order: [], byId: {}, products: {} };
 
 interface DraftRow {
   id: string;
@@ -75,7 +75,12 @@ export default function NewOrder() {
   const { data: categories } = useCategories();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [state, dispatch] = useReducer(splitReducer, EMPTY_CART);
+  const cart = useMemo(() => state.order.flatMap((productId) => {
+    const line = state.byId[productId];
+    const product = state.products[productId];
+    return line && product ? [{ ...line, product }] : [];
+  }), [state]);
   const [notes, setNotes] = useState('');
   const [expectedDate, setExpectedDate] = useState('');
   const [step, setStep] = useState<1 | 2>(1);
@@ -181,7 +186,14 @@ export default function NewOrder() {
       nextCart = data.source.items.flatMap((item) => {
         if (!item.product?.active) { skipped += 1; return []; }
         const sourceStillAvailable = (offersByProduct.get(item.product_id) ?? []).some((offer) => offer.supplier_id === data.source!.supplier_id);
-        return [{ product: item.product, qty: item.qty, chosenSupplierId: sourceStillAvailable ? data.source!.supplier_id : null }];
+        return [{
+          product: item.product,
+          productId: item.product_id,
+          qty: item.qty,
+          assignment: sourceStillAvailable
+            ? { mode: 'pinned' as const, supplierId: data.source!.supplier_id }
+            : { mode: 'auto' as const },
+        }];
       });
       nextNotes = data.source.notes ?? '';
       nextExpectedDate = data.source.expected_date ?? '';
@@ -189,7 +201,14 @@ export default function NewOrder() {
     } else if (data.draft) {
       nextCart = data.draft.items.flatMap((item) => {
         if (!item.product?.active) { draftNeedsRepair = true; return []; }
-        return [{ product: item.product, qty: item.qty, chosenSupplierId: item.chosen_supplier_id }];
+        return [{
+          product: item.product,
+          productId: item.product_id,
+          qty: item.qty,
+          assignment: item.chosen_supplier_id
+            ? { mode: 'pinned' as const, supplierId: item.chosen_supplier_id }
+            : { mode: 'auto' as const },
+        }];
       });
       nextNotes = data.draft.notes ?? '';
       nextExpectedDate = data.draft.expected_date ?? '';
@@ -206,12 +225,23 @@ export default function NewOrder() {
       notes: nextNotes,
       expectedDate: nextExpectedDate,
       editorStep: nextStep,
-      items: nextCart.map((item) => ({ product_id: item.product.id, qty: item.qty, chosen_supplier_id: item.chosenSupplierId })),
+      items: nextCart.map((item) => ({
+        product_id: item.productId,
+        qty: item.qty,
+        chosen_supplier_id: item.assignment.mode === 'pinned' ? item.assignment.supplierId : null,
+      })),
     };
     latestDraftRef.current = snapshot;
     lastSavedSignatureRef.current = nextDraftId && !draftNeedsRepair ? draftSignature(snapshot) : '';
     finalizedRef.current = false;
-    setCart(nextCart);
+    dispatch({
+      type: 'HYDRATE',
+      state: {
+        order: nextCart.map((item) => item.productId),
+        byId: Object.fromEntries(nextCart.map(({ product: _product, ...line }) => [line.productId, line])),
+        products: Object.fromEntries(nextCart.map((item) => [item.productId, item.product])),
+      },
+    });
     setNotes(nextNotes);
     setExpectedDate(nextExpectedDate);
     setStep(nextStep);
@@ -222,22 +252,28 @@ export default function NewOrder() {
     setHydrated(true);
   }, [data, explicitDraftId, loadKey, offersByProduct, toast]);
 
-  // Single source of truth for which supplier a line resolves to. A supplier is usable only when
-  // the ordered qty meets its minimum-order quantity (the server enforces qty >= min_qty). Keep an
-  // explicit pick while it stays usable, else the cheapest offer that is, else none. split(),
-  // effective(), draftItems and calculateOrderSavings all use this same rule so the summary, the
-  // saved draft, and the total sent to the server never diverge.
-  const usableOffer = useCallback((item: CartItem): SupplierProduct | null => {
-    const offers = offersByProduct.get(item.product.id) ?? [];
-    const picked = item.chosenSupplierId ? offers.find((o) => o.supplier_id === item.chosenSupplierId) : null;
-    return picked && meetsMin(picked, item.qty) ? picked : offers.find((o) => meetsMin(o, item.qty)) ?? null;
-  }, [offersByProduct]);
-
+  const split = useMemo(() => resolveSplit({
+    lines: cart.map(({ product: _product, ...line }) => line),
+    offersByProduct: new Map([...offersByProduct].map(([productId, offers]) => [productId, offers.map((offer) => ({
+      supplierId: offer.supplier_id,
+      unitPrice: offer.current_price,
+      minQty: offer.min_qty,
+    }))])),
+    suppliers: new Map([...supplierById].map(([supplierId, supplier]) => [supplierId, {
+      id: supplier.id,
+      name: supplier.name,
+      minOrderAmount: supplier.min_order_amount,
+    }])),
+  }), [cart, offersByProduct, supplierById]);
+  const resolvedByProduct = useMemo(() => new Map([
+    ...split.groups.flatMap((group) => group.lines),
+    ...split.blocked,
+  ].map((line) => [line.productId, line])), [split]);
   const draftItems = useMemo<DraftItemInput[]>(() => cart.map((item) => ({
-    product_id: item.product.id,
+    product_id: item.productId,
     qty: item.qty,
-    chosen_supplier_id: usableOffer(item)?.supplier_id ?? null,
-  })), [cart, usableOffer]);
+    chosen_supplier_id: resolvedByProduct.get(item.productId)?.supplierId ?? null,
+  })), [cart, resolvedByProduct]);
   latestDraftRef.current = { requestId: draftId, notes, expectedDate, editorStep: step, items: draftItems };
 
   const runSaveQueue = useCallback((force = false): Promise<boolean> => {
@@ -346,37 +382,17 @@ export default function NewOrder() {
   }, [navigate, runSaveQueue, toast]);
 
   function effective(item: CartItem): { sp: SupplierProduct | null; recommended: SupplierProduct | null } {
-    const offers = offersByProduct.get(item.product.id) ?? [];
+    const offers = offersByProduct.get(item.productId) ?? [];
     const recommended = offers.find((offer) => meetsMin(offer, item.qty)) ?? null;
-    return { sp: usableOffer(item), recommended };
+    const supplierId = resolvedByProduct.get(item.productId)?.supplierId;
+    return { sp: supplierId ? offers.find((offer) => offer.supplier_id === supplierId) ?? null : null, recommended };
   }
 
-  const split = useMemo(() => {
-    const groups = new Map<string, { supplier: Supplier; items: { item: CartItem; sp: SupplierProduct }[]; subtotal: number }>();
-    const noSupplier: CartItem[] = [];
-    for (const item of cart) {
-      const sp = usableOffer(item);
-      if (!sp) { noSupplier.push(item); continue; }
-      const supplier = supplierById.get(sp.supplier_id);
-      if (!supplier) { noSupplier.push(item); continue; }
-      const group = groups.get(supplier.id) ?? { supplier, items: [], subtotal: 0 };
-      group.items.push({ item, sp });
-      group.subtotal += sp.current_price * item.qty;
-      groups.set(supplier.id, group);
-    }
-    return { groups: [...groups.values()], noSupplier };
-  }, [cart, usableOffer, supplierById]);
-  const total = split.groups.reduce((sum, group) => sum + group.subtotal, 0);
-  const savings = useMemo(() => calculateOrderSavings(cart.map((item) => ({
-    productId: item.product.id,
-    qty: item.qty,
-    chosenSupplierId: item.chosenSupplierId,
-    offers: (offersByProduct.get(item.product.id) ?? []).map((offer) => ({ supplierId: offer.supplier_id, unitPrice: offer.current_price, minQty: offer.min_qty })),
-  }))), [cart, offersByProduct]);
+  const { total, savings } = split;
   const singleSupplierName = savings.singleSupplierId ? supplierById.get(savings.singleSupplierId)?.name ?? null : null;
 
   async function openReview() {
-    if (!cart.length || split.noSupplier.length) return;
+    if (!cart.length || split.blocked.length) return;
     setStep(2);
     if (await runSaveQueue()) setReviewOpen(true);
     else toast('יש לתקן את שגיאת השמירה לפני אישור ההזמנה', 'error');
@@ -472,11 +488,11 @@ export default function NewOrder() {
         <div className="flex flex-col items-stretch gap-1 sm:items-end">
           <div className="flex flex-wrap gap-2">
             {(draftId || cart.length > 0) && <button type="button" className="btn-ghost text-alert-solid" disabled={busy} onClick={() => setCancelOpen(true)}><XCircle size={15} /> ביטול טיוטה</button>}
-            <button type="button" className="btn-primary" disabled={busy || !cart.length || split.noSupplier.length > 0} onClick={() => void openReview()}>
+            <button type="button" className="btn-primary" disabled={busy || !cart.length || split.blocked.length > 0} onClick={() => void openReview()}>
               <CheckCircle2 size={15} /> סקירה ואישור
             </button>
           </div>
-          {split.noSupplier.length > 0 && <p className="text-xs text-alert-fg sm:text-end">יש {split.noSupplier.length} פריטים מתחת למינימום הזמנה — הגדל כמות או הסר כדי להמשיך</p>}
+          {split.blocked.length > 0 && <p className="text-xs text-alert-fg sm:text-end">יש {split.blocked.length} פריטים מתחת למינימום הזמנה — הגדל כמות או הסר כדי להמשיך</p>}
         </div>
       </div>
 
@@ -494,16 +510,18 @@ export default function NewOrder() {
       {step === 1 ? (
         <ProductStep products={data?.products ?? []} categories={categories ?? []} offersByProduct={offersByProduct}
           cart={cart} q={q} setQ={setQ} cat={cat} setCat={setCat}
-          onAdd={(product) => setCart((current) => [...current, { product, qty: 1, chosenSupplierId: null }])}
-          onQty={(productId, qty) => setCart((current) => current.flatMap((item) => item.product.id !== productId ? [item] : qty > 0 ? [{ ...item, qty }] : []))}
+          onAdd={(product) => dispatch({ type: 'ADD_PRODUCT', product })}
+          onQty={(productId, qty) => dispatch(qty > 0 ? { type: 'SET_QTY', productId, qty } : { type: 'REMOVE_PRODUCT', productId })}
           onContinue={() => setStep(2)} />
       ) : (
         <SupplierSplitStep cart={cart} offersByProduct={offersByProduct} supplierById={supplierById} effective={effective}
-          groups={split.groups} noSupplier={split.noSupplier} total={total}
+          groups={split.groups} blocked={split.blocked} total={total}
           notes={notes} setNotes={setNotes} expectedDate={expectedDate} setExpectedDate={setExpectedDate} busy={busy}
-          onSupplier={(productId, supplierId) => setCart((current) => current.map((row) => row.product.id === productId ? { ...row, chosenSupplierId: supplierId } : row))}
-          onRemove={(productId) => setCart((current) => current.filter((row) => row.product.id !== productId))}
-          onQty={(productId, qty) => setCart((current) => current.map((row) => row.product.id === productId ? { ...row, qty } : row))}
+          onSupplier={(productId, supplierId) => dispatch(supplierId
+            ? { type: 'PIN_SUPPLIER', productId, supplierId }
+            : { type: 'UNPIN', productId })}
+          onRemove={(productId) => dispatch({ type: 'REMOVE_PRODUCT', productId })}
+          onQty={(productId, qty) => dispatch({ type: 'BUMP_QTY', productId, toQty: qty })}
           onBack={() => setStep(1)} />
       )}
 
@@ -539,9 +557,7 @@ export default function NewOrder() {
   );
 }
 
-/** A supplier offer is usable for a line only when the ordered qty meets its minimum-order
- *  quantity. The server (save/finalize RPC) enforces `qty >= min_qty`; the UI must match it,
- *  otherwise the cheapest-shown supplier resolves to none server-side and the order fails. */
+/** Client-only guard: the server does not enforce min_qty, so the editor must not order below it. */
 function meetsMin(offer: SupplierProduct, qty: number): boolean {
   return offer.min_qty == null || qty >= offer.min_qty;
 }
