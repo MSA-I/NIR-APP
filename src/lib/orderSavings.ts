@@ -29,9 +29,8 @@ export function calculateOrderSavings(lines: SavingsLine[]): OrderSavings {
     const sorted = [...line.offers].sort((a, b) =>
       a.unitPrice - b.unitPrice
       || (a.supplierId < b.supplierId ? -1 : a.supplierId > b.supplierId ? 1 : 0));
-    // A supplier is usable only when the ordered qty meets its minimum-order quantity. This
-    // mirrors split()/draftItems() in NewOrder so the summary, the saved draft, and the total
-    // sent to the server all agree (the server enforces qty >= min_qty).
+    // A client-only rule. The server does not enforce min_qty anywhere; keeping the UI stricter
+    // is what stops us from ordering below a supplier's minimum.
     const usable = sorted.filter((candidate) => candidate.minQty == null || line.qty >= candidate.minQty);
     const chosen = line.chosenSupplierId ? usable.find((candidate) => candidate.supplierId === line.chosenSupplierId) : undefined;
     const offer = chosen ?? usable[0] ?? null;
