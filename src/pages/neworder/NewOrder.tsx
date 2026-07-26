@@ -35,7 +35,7 @@ interface DraftRow {
   expected_date: string | null;
   editor_step: number;
   updated_at: string;
-  items: { product_id: string; qty: number; chosen_supplier_id: string | null; product: Product | null }[];
+  items: { product_id: string; qty: number; chosen_supplier_id: string | null; pinned_supplier_id: string | null; product: Product | null }[];
 }
 
 interface SourceOrder {
@@ -60,7 +60,7 @@ interface DraftSnapshot {
 
 const draftSignature = (draft: DraftSnapshot) => JSON.stringify([
   draft.notes.trim(), draft.expectedDate, draft.editorStep,
-  draft.items.map((item) => [item.product_id, item.qty, item.chosen_supplier_id]),
+  draft.items.map((item) => [item.product_id, item.qty, item.chosen_supplier_id, item.pinned_supplier_id]),
 ]);
 
 export default function NewOrder() {
@@ -138,7 +138,7 @@ export default function NewOrder() {
         .eq('id', fromOrderId).maybeSingle()) as SourceOrder | null;
     } else if (!startFresh && profile) {
       let query = supabase.from('purchase_requests')
-        .select('id, number, notes, expected_date, editor_step, updated_at, items:purchase_request_items(product_id, qty, chosen_supplier_id, product:products(*))')
+        .select('id, number, notes, expected_date, editor_step, updated_at, items:purchase_request_items(product_id, qty, chosen_supplier_id, pinned_supplier_id, product:products(*))')
         .eq('status', 'draft').eq('created_by', profile.id);
       query = explicitDraftId
         ? query.eq('id', explicitDraftId)
@@ -205,8 +205,8 @@ export default function NewOrder() {
           product: item.product,
           productId: item.product_id,
           qty: item.qty,
-          assignment: item.chosen_supplier_id
-            ? { mode: 'pinned' as const, supplierId: item.chosen_supplier_id }
+          assignment: item.pinned_supplier_id
+            ? { mode: 'pinned' as const, supplierId: item.pinned_supplier_id }
             : { mode: 'auto' as const },
         }];
       });
@@ -225,11 +225,19 @@ export default function NewOrder() {
       notes: nextNotes,
       expectedDate: nextExpectedDate,
       editorStep: nextStep,
-      items: nextCart.map((item) => ({
-        product_id: item.productId,
-        qty: item.qty,
-        chosen_supplier_id: item.assignment.mode === 'pinned' ? item.assignment.supplierId : null,
-      })),
+      items: data.draft && !draftNeedsRepair
+        ? data.draft.items.map((item) => ({
+          product_id: item.product_id,
+          qty: item.qty,
+          chosen_supplier_id: item.chosen_supplier_id,
+          pinned_supplier_id: item.pinned_supplier_id,
+        }))
+        : nextCart.map((item) => ({
+          product_id: item.productId,
+          qty: item.qty,
+          chosen_supplier_id: item.assignment.mode === 'pinned' ? item.assignment.supplierId : null,
+          pinned_supplier_id: item.assignment.mode === 'pinned' ? item.assignment.supplierId : null,
+        })),
     };
     latestDraftRef.current = snapshot;
     lastSavedSignatureRef.current = nextDraftId && !draftNeedsRepair ? draftSignature(snapshot) : '';
@@ -273,6 +281,7 @@ export default function NewOrder() {
     product_id: item.productId,
     qty: item.qty,
     chosen_supplier_id: resolvedByProduct.get(item.productId)?.supplierId ?? null,
+    pinned_supplier_id: item.assignment.mode === 'pinned' ? item.assignment.supplierId : null,
   })), [cart, resolvedByProduct]);
   latestDraftRef.current = { requestId: draftId, notes, expectedDate, editorStep: step, items: draftItems };
 
@@ -325,7 +334,7 @@ export default function NewOrder() {
     saveTimerRef.current = setTimeout(() => { saveTimerRef.current = null; void runSaveQueue(); }, delay);
   }, [runSaveQueue]);
 
-  const immediateSignature = JSON.stringify([step, draftItems.map((item) => [item.product_id, item.qty, item.chosen_supplier_id])]);
+  const immediateSignature = JSON.stringify([step, draftItems.map((item) => [item.product_id, item.qty, item.chosen_supplier_id, item.pinned_supplier_id])]);
   const textSignature = JSON.stringify([notes, expectedDate]);
   useEffect(() => {
     if (!hydrated || finalizedRef.current) return;

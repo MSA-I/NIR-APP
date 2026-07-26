@@ -11,6 +11,7 @@ export interface DraftItemInput {
   product_id: string;
   qty: number;
   chosen_supplier_id: string | null;
+  pinned_supplier_id: string | null;
 }
 
 export interface SaveDraftInput {
