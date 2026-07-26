@@ -1,5 +1,5 @@
 -- P1 regression harness. Run only against an isolated local database after applying all
--- project migrations through 0035, including the reasoned purchase-order status command.
+-- project migrations through 0042, including the explicit profile self-service ACL.
 \set ON_ERROR_STOP on
 
 begin;
@@ -102,12 +102,12 @@ insert into supplier_products (
   id, org_id, supplier_id, product_id, current_price, price_effective_date, available
 ) values
   ('50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', 10, '2026-07-01', true),
-  ('50000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000001', 10, '2026-07-01', true),
+  ('50000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000001', 20, '2026-07-01', true),
   ('50000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000003', '40000000-0000-0000-0000-000000000003', 30, '2026-07-01', true);
 
 insert into price_history (org_id, supplier_product_id, price, effective_date) values
   ('10000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001', 10, '2026-07-01'),
-  ('10000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000002', 10, '2026-07-01'),
+  ('10000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000002', 20, '2026-07-01'),
   ('10000000-0000-0000-0000-000000000002', '50000000-0000-0000-0000-000000000003', 30, '2026-07-01');
 
 insert into purchase_orders (
@@ -618,7 +618,7 @@ select pg_temp.p1_assert(
 );
 select import_supplier_prices(
   '[
-    {"supplier_id":"30000000-0000-0000-0000-000000000001","product_id":"40000000-0000-0000-0000-000000000001","price":13,"available":true},
+    {"supplier_id":"30000000-0000-0000-0000-000000000001","product_id":"40000000-0000-0000-0000-000000000001","price":13.5,"available":true},
     {"supplier_id":"30000000-0000-0000-0000-000000000001","product_id":"40000000-0000-0000-0000-000000000002","price":20,"available":true}
   ]'::jsonb,
   '2026-07-13', 'ייבוא מחירון בדיקה'
@@ -651,13 +651,20 @@ begin
 end
 $$;
 
--- Supplier agent may write only its own price rows.
+-- Supplier agent price writes are limited to the monthly submission RPC.
 reset role;
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000006', true);
 set local role authenticated;
-select set_supplier_product_price(
+do $$
+begin
+  perform set_supplier_product_price(
   '50000000-0000-0000-0000-000000000001', 13.5, '2026-07-15', true, 'עדכון ספק'
-);
+  );
+  raise exception 'expected supplier manual price rejection';
+exception when sqlstate '42501' then
+  if sqlerrm not like '%price_write_not_authorized%' then raise; end if;
+end
+$$;
 do $$
 begin
   perform set_supplier_product_price(

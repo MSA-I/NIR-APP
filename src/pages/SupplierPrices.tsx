@@ -10,14 +10,23 @@ import { fmtDate, todayISO } from '../lib/format';
 import { PRODUCT_AVAILABILITY } from '../lib/status';
 import type {
   Product,
-  Supplier,
   SupplierPriceRejection,
   SupplierPriceSubmission,
   SupplierProduct,
 } from '../lib/types';
 
-type Row = SupplierProduct & { product: { id: string; name: string; unit: string } };
+type Row = Omit<SupplierProduct, 'product'> & { product: { id: string; name: string; unit: string } };
 type CatalogProduct = Pick<Product, 'id' | 'name' | 'unit'>;
+type PortalPrice = Omit<SupplierProduct, 'id' | 'org_id' | 'supplier_id' | 'product'> & {
+  supplier_product_id: string;
+  product_name: string;
+  unit: string;
+};
+interface SupplierPortalContext {
+  organization_name: string;
+  supplier: { id: string; name: string };
+  prices: PortalPrice[];
+}
 
 interface SubmissionRow {
   source_row: number;
@@ -58,30 +67,34 @@ const monthLabel = (value: string) => new Intl.DateTimeFormat('he-IL', {
 
 /** Supplier agent portal — RLS is the boundary; this page never receives another supplier id. */
 export default function SupplierPrices() {
-  const { profile, org } = useAuth();
+  const { profile } = useAuth();
   const toast = useToast();
   const [editFor, setEditFor] = useState<Row | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
   const { data, loading, error, refetch } = useQuery(async () => {
     const supplierId = profile!.supplier_id!;
-    const [supplierResult, rowsResult, productsResult, submissionsResult] = await Promise.all([
-      supabase.from('suppliers').select('*').eq('id', supplierId).single(),
-      supabase.from('supplier_products')
-        .select('*, product:products(id, name, unit)')
-        .eq('supplier_id', supplierId)
-        .order('updated_at', { ascending: false }),
-      supabase.from('products').select('id, name, unit').eq('active', true).order('name'),
+    const [portalResult, submissionsResult] = await Promise.all([
+      supabase.rpc('supplier_portal_context'),
       supabase.from('supplier_price_submissions').select('*')
         .eq('supplier_id', supplierId)
         .order('target_month', { ascending: false })
         .order('revision', { ascending: false })
         .limit(24),
     ]);
+    const portal = unwrap(portalResult) as SupplierPortalContext;
+    const rows = portal.prices.map<Row>((price) => ({
+      ...price,
+      id: price.supplier_product_id,
+      org_id: profile!.org_id,
+      supplier_id: portal.supplier.id,
+      product: { id: price.product_id, name: price.product_name, unit: price.unit },
+    }));
     return {
-      supplier: unwrap(supplierResult) as Supplier,
-      rows: unwrap(rowsResult) as Row[],
-      products: unwrap(productsResult) as CatalogProduct[],
+      organizationName: portal.organization_name,
+      supplier: portal.supplier,
+      rows,
+      products: rows.map<CatalogProduct>(({ product }) => product),
       submissions: unwrap(submissionsResult) as SupplierPriceSubmission[],
     };
   });
@@ -122,7 +135,7 @@ export default function SupplierPrices() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="page-title flex items-center gap-2"><Tags size={22} /> המחירון שלי</h1>
-          <div className="text-sm text-ink-muted mt-1">{`${data.supplier.name} — עדכון מחירים וזמינות${org?.name ? ` עבור ${org.name}` : ''}`}</div>
+          <div className="text-sm text-ink-muted mt-1">{`${data.supplier.name} — עדכון מחירים וזמינות עבור ${data.organizationName}`}</div>
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="btn-secondary" onClick={downloadTemplate}><Download size={15} /> הורדת תבנית</button>
@@ -151,7 +164,7 @@ export default function SupplierPrices() {
       )}
       {importOpen && (
         <ImportModal
-          orgId={org!.id}
+          orgId={profile!.org_id}
           supplierId={profile!.supplier_id!}
           products={data.products}
           onClose={() => setImportOpen(false)}
@@ -178,7 +191,7 @@ function SubmissionHistory({ submissions }: { submissions: SupplierPriceSubmissi
                 <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
               </div>
               <div className="mt-1 min-w-0 text-xs text-ink-muted sm:text-sm">
-                <div className="truncate" title={submission.file_name}>{submission.file_name}</div>
+                <div className="truncate" title={submission.file_name ?? undefined}>{submission.file_name ?? 'הגשה מדור קודם'}</div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
                   <span>נקלטו <span className="num">{submission.accepted_count}</span></span>
                   <span>ללא שינוי <span className="num">{submission.unchanged_count}</span></span>
@@ -461,6 +474,7 @@ async function edgeErrorMessage(error: unknown) {
 }
 
 function receiptFromSubmission(submission: SupplierPriceSubmission): SubmissionReceipt {
+  if (!submission.storage_path) throw new SubmissionError('הקבלה שנשמרה חסרה נתיב קובץ. אין להעלות מחדש לפני בדיקה.');
   return {
     submission_id: submission.id,
     revision: submission.revision,

@@ -4,55 +4,27 @@
 
 -- ===== Submission receipt ledger =====
 
-create table public.supplier_price_submissions (
-  id uuid primary key,
-  org_id uuid not null references public.organizations(id),
-  supplier_id uuid not null,
-  target_month date not null,
-  revision integer not null,
-  file_name text not null,
-  storage_path text not null,
-  file_checksum text not null,
-  status text not null,
-  accepted_count integer not null default 0,
-  rejected_count integer not null default 0,
-  unchanged_count integer not null default 0,
-  rejections jsonb not null default '[]'::jsonb,
-  submitted_by uuid not null,
-  submitted_at timestamptz not null default now(),
-  processed_at timestamptz not null default now(),
-  constraint supplier_price_submissions_supplier_fk
-    foreign key (org_id, supplier_id) references public.suppliers(org_id, id),
-  constraint supplier_price_submissions_submitter_fk
-    foreign key (org_id, submitted_by) references public.profiles(org_id, id),
-  constraint supplier_price_submissions_month_start_check
-    check (target_month = date_trunc('month', target_month)::date),
-  constraint supplier_price_submissions_revision_check check (revision > 0),
-  constraint supplier_price_submissions_file_name_check
-    check (length(trim(file_name)) between 1 and 255 and file_name !~ '[\\/]'),
-  constraint supplier_price_submissions_checksum_check
-    check (file_checksum ~ '^[0-9a-f]{64}$'),
-  constraint supplier_price_submissions_status_check
-    check (status in ('accepted', 'accepted_with_rejections', 'rejected')),
-  constraint supplier_price_submissions_counts_check
-    check (accepted_count >= 0 and rejected_count >= 0 and unchanged_count >= 0),
-  constraint supplier_price_submissions_rejections_check
-    check (jsonb_typeof(rejections) = 'array'),
-  constraint supplier_price_submissions_path_check check (
-    array_length(string_to_array(storage_path, '/'), 1) = 5
-    and split_part(storage_path, '/', 1) = org_id::text
-    and split_part(storage_path, '/', 2) = 'price-submissions'
-    and split_part(storage_path, '/', 3) = supplier_id::text
-    and split_part(storage_path, '/', 4) = id::text
-    and split_part(storage_path, '/', 5) <> ''
-    and split_part(storage_path, '/', 6) = ''
-  ),
-  constraint supplier_price_submissions_month_revision_key
-    unique (org_id, supplier_id, target_month, revision),
-  constraint supplier_price_submissions_month_checksum_key
-    unique (org_id, supplier_id, target_month, file_checksum),
-  constraint supplier_price_submissions_storage_path_key unique (org_id, storage_path)
-);
+-- 0025 created the production ledger under the roadmap contract. Migration 0030
+-- aligns it in place before this migration installs the trusted P1B behavior.
+do $$
+begin
+  if to_regclass('public.supplier_price_submissions') is null
+     or not exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public'
+         and table_name = 'supplier_price_submissions'
+         and column_name = 'target_month'
+     )
+     or not exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public'
+         and table_name = 'supplier_price_submissions'
+         and column_name = 'file_checksum'
+     ) then
+    raise exception '0032 refused: 0030 supplier submission alignment is missing.';
+  end if;
+end
+$$;
 
 create index supplier_price_submissions_supplier_month_idx
   on public.supplier_price_submissions (org_id, supplier_id, target_month desc, revision desc);
@@ -68,12 +40,18 @@ begin
 end
 $$;
 
+drop trigger if exists supplier_price_submissions_immutable
+  on public.supplier_price_submissions;
 create trigger supplier_price_submissions_immutable
   before update or delete on public.supplier_price_submissions
   for each row execute function public.p1b_price_submission_immutable();
 
+drop function if exists public.reject_supplier_price_submission_mutation();
+
 alter table public.supplier_price_submissions enable row level security;
 
+drop policy if exists supplier_price_submissions_select
+  on public.supplier_price_submissions;
 create policy supplier_price_submissions_select
 on public.supplier_price_submissions
 for select to authenticated
@@ -222,10 +200,202 @@ using (
 
 -- ===== Close the legacy supplier bypass while preserving manager imports =====
 
--- Reuse the already-tested 0023 atomic importer behind two explicit command boundaries.
--- Its original EXECUTE grant is removed after the rename, so suppliers cannot invoke it.
-alter function public.import_supplier_prices(jsonb, date, text)
-  rename to p1_import_supplier_prices_internal;
+-- Production migration 0025 replaced the tested 0023 importer with a manager-only
+-- implementation. Restore the original atomic importer as a private helper, then remove
+-- the legacy public entry point so every supplier write flows through a submission.
+create or replace function public.p1_import_supplier_prices_internal(
+  p_rows jsonb,
+  p_effective_date date,
+  p_reason text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_org uuid := auth_org();
+  v_user uuid := auth.uid();
+  v_role user_role := auth_role();
+  v_supplier uuid := auth_supplier();
+  v_reason text := nullif(trim(p_reason), '');
+  v_count int;
+  v_distinct_count int;
+  v_row record;
+  v_existing supplier_products;
+  v_created int := 0;
+  v_updated int := 0;
+  v_unchanged int := 0;
+begin
+  if v_org is null or v_user is null
+     or v_role not in ('owner', 'office', 'supplier') then
+    raise exception 'price_import_not_authorized' using errcode = '42501';
+  end if;
+  if p_rows is null or jsonb_typeof(p_rows) <> 'array'
+     or p_effective_date is null or v_reason is null then
+    raise exception 'price_import_invalid' using errcode = '22023';
+  end if;
+
+  select count(*), count(distinct (supplier_id, product_id))
+    into v_count, v_distinct_count
+  from jsonb_to_recordset(p_rows) as row(
+    supplier_id uuid,
+    product_id uuid,
+    price numeric,
+    available boolean
+  );
+
+  if v_count = 0 or v_count > 5000 or v_count <> v_distinct_count
+     or exists (
+       select 1
+       from jsonb_to_recordset(p_rows) as row(
+         supplier_id uuid,
+         product_id uuid,
+         price numeric,
+         available boolean
+       )
+       where supplier_id is null or product_id is null or price is null
+          or round(price, 2) <= 0 or round(price, 2) > 1000000
+     ) then
+    raise exception 'price_import_invalid' using errcode = '22023';
+  end if;
+
+  -- Supplier rows serialize creation of a new supplier/product pair. Products and existing
+  -- price rows are then locked in UUID order to keep batch and finalize lock order stable.
+  perform 1
+  from suppliers s
+  join (
+    select distinct supplier_id
+    from jsonb_to_recordset(p_rows) as row(
+      supplier_id uuid, product_id uuid, price numeric, available boolean
+    )
+  ) input on input.supplier_id = s.id
+  where s.org_id = v_org and s.deleted_at is null
+  order by s.id
+  for update of s;
+
+  perform 1
+  from products p
+  join (
+    select distinct product_id
+    from jsonb_to_recordset(p_rows) as row(
+      supplier_id uuid, product_id uuid, price numeric, available boolean
+    )
+  ) input on input.product_id = p.id
+  where p.org_id = v_org and p.active
+  order by p.id
+  for update of p;
+
+  perform 1
+  from supplier_products sp
+  join (
+    select supplier_id, product_id
+    from jsonb_to_recordset(p_rows) as row(
+      supplier_id uuid, product_id uuid, price numeric, available boolean
+    )
+  ) input on input.supplier_id = sp.supplier_id and input.product_id = sp.product_id
+  where sp.org_id = v_org
+  order by sp.id
+  for update of sp;
+
+  if exists (
+    select 1
+    from jsonb_to_recordset(p_rows) as row(
+      supplier_id uuid, product_id uuid, price numeric, available boolean
+    )
+    left join suppliers s
+      on s.id = row.supplier_id and s.org_id = v_org and s.deleted_at is null
+    left join products p
+      on p.id = row.product_id and p.org_id = v_org and p.active
+    where s.id is null or p.id is null
+       or (v_role = 'supplier' and (v_supplier is null or row.supplier_id <> v_supplier))
+  ) then
+    raise exception 'price_import_target_invalid' using errcode = '22023';
+  end if;
+
+  perform set_config('app.p1_financial_writer', v_user::text, true);
+
+  for v_row in
+    select supplier_id, product_id, round(price, 2) as price, coalesce(available, true) as available
+    from jsonb_to_recordset(p_rows) as row(
+      supplier_id uuid, product_id uuid, price numeric, available boolean
+    )
+    order by supplier_id, product_id
+  loop
+    v_existing := null;
+    select * into v_existing
+    from supplier_products sp
+    where sp.org_id = v_org
+      and sp.supplier_id = v_row.supplier_id
+      and sp.product_id = v_row.product_id
+    for update;
+
+    if not found then
+      insert into supplier_products (
+        org_id, supplier_id, product_id, current_price,
+        price_effective_date, available
+      ) values (
+        v_org, v_row.supplier_id, v_row.product_id, v_row.price,
+        p_effective_date, v_row.available
+      ) returning * into v_existing;
+
+      insert into price_history (
+        org_id, supplier_product_id, price, effective_date, created_by
+      ) values (
+        v_org, v_existing.id, v_row.price, p_effective_date, v_user
+      );
+      v_created := v_created + 1;
+    elsif round(v_existing.current_price, 2) <> v_row.price
+       or v_existing.price_effective_date <> p_effective_date
+       or v_existing.available <> v_row.available then
+      update supplier_products
+      set current_price = v_row.price,
+          previous_price = case
+            when round(v_existing.current_price, 2) <> v_row.price then v_existing.current_price
+            else v_existing.previous_price
+          end,
+          price_effective_date = p_effective_date,
+          available = v_row.available
+      where id = v_existing.id;
+
+      if round(v_existing.current_price, 2) <> v_row.price
+         or v_existing.price_effective_date <> p_effective_date then
+        insert into price_history (
+          org_id, supplier_product_id, price, effective_date, created_by
+        ) values (
+          v_org, v_existing.id, v_row.price, p_effective_date, v_user
+        );
+      end if;
+      v_updated := v_updated + 1;
+    else
+      v_unchanged := v_unchanged + 1;
+    end if;
+  end loop;
+
+  insert into audit_logs (
+    org_id, user_id, action, entity_type, entity_id, old_values, new_values, reason
+  ) values (
+    v_org, v_user, 'supplier_prices_imported', 'supplier_products', null, null,
+    jsonb_build_object(
+      'row_count', v_count,
+      'created', v_created,
+      'updated', v_updated,
+      'unchanged', v_unchanged,
+      'effective_date', p_effective_date
+    ),
+    v_reason
+  );
+
+  return jsonb_build_object(
+    'row_count', v_count,
+    'created', v_created,
+    'updated', v_updated,
+    'unchanged', v_unchanged
+  );
+end
+$$;
+
+drop function public.import_supplier_prices(jsonb, date, text);
 
 revoke all on function public.p1_import_supplier_prices_internal(jsonb, date, text)
   from public, anon, authenticated;
@@ -505,12 +675,15 @@ begin
   insert into public.supplier_price_submissions (
     id, org_id, supplier_id, target_month, revision,
     file_name, storage_path, file_checksum, status,
-    accepted_count, rejected_count, unchanged_count, rejections,
+    accepted_count, rejected_count, unchanged_count,
+    row_count, created_count, updated_count, rejections,
     submitted_by
   ) values (
     p_submission_id, v_org, p_supplier_id, p_target_month, v_revision,
     trim(p_file_name), p_storage_path, v_checksum, v_status,
-    v_accepted, v_rejected, v_unchanged, v_rejections,
+    v_accepted, v_rejected, v_unchanged,
+    v_created + v_updated + v_unchanged + v_rejected,
+    v_created, v_updated, v_rejections,
     v_user
   ) returning * into v_submission;
 

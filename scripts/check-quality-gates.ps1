@@ -12,7 +12,7 @@ $expectedProjectId = "supplyflow-p0"
 $expectedApiUrl = "http://127.0.0.1:55431"
 $dbContainer = "supabase_db_supplyflow-p0"
 $restContainer = "supabase_rest_supplyflow-p0"
-$previewPort = 5204
+$previewPort = $null
 $previewProcess = $null
 $previewStdout = $null
 $previewStderr = $null
@@ -51,6 +51,42 @@ function Stop-WithInfrastructureBlock([string]$Reason, [string]$Message) {
 
 function Assert-ExitCode([string]$Label) {
   if ($LASTEXITCODE -ne 0) { throw "$Label failed with exit code $LASTEXITCODE." }
+}
+
+function Invoke-DependencyAudit {
+  $allowedAdvisory = "https://github.com/advisories/GHSA-qwww-vcr4-c8h2"
+  $allowedPackages = @("react-router", "react-router-dom")
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $raw = (& npm.cmd audit --audit-level=high --json 2>$null | Out-String)
+    $auditExit = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  if ($auditExit -eq 0) { return }
+
+  try { $report = $raw | ConvertFrom-Json }
+  catch { throw "npm audit failed and did not return valid JSON." }
+
+  $high = @($report.vulnerabilities.PSObject.Properties | Where-Object {
+    $_.Value.severity -in @("high", "critical")
+  })
+  $unexpectedPackages = @($high.Name | Where-Object { $_ -notin $allowedPackages })
+  $advisories = @($high | ForEach-Object {
+    @($_.Value.via) | Where-Object { $_ -isnot [string] } | ForEach-Object { $_.url }
+  } | Sort-Object -Unique)
+  $unexpectedAdvisories = @($advisories | Where-Object { $_ -ne $allowedAdvisory })
+  $packageJson = Get-Content -LiteralPath (Join-Path $repoRoot "package.json") -Raw -Encoding UTF8
+
+  # This advisory is limited to React Router RSC Actions. SupplyFlow is a Vite SPA; fail this
+  # exception closed if framework/RSC packages appear or if any other high finding is reported.
+  if (-not $high.Count -or $unexpectedPackages.Count -or $unexpectedAdvisories.Count `
+      -or $advisories.Count -ne 1 -or $packageJson -match '"@react-router/') {
+    throw "npm audit reported an unapproved high/critical vulnerability."
+  }
+  Write-Output "npm audit: accepted GHSA-qwww-vcr4-c8h2 only; the RSC Actions runtime is not installed."
 }
 
 function Get-LocalSupabaseEnvironment([int]$Attempts = 1) {
@@ -241,7 +277,11 @@ function Find-PlaywrightCore {
   if ($env:PLAYWRIGHT_CORE_PATH -and (Test-Path -LiteralPath $env:PLAYWRIGHT_CORE_PATH)) {
     return (Resolve-Path -LiteralPath $env:PLAYWRIGHT_CORE_PATH).Path
   }
-  $pnpmRoot = Join-Path $userProfilePath ".cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules\.pnpm"
+  $nodeModulesRoot = Join-Path $userProfilePath ".cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules"
+  $direct = Join-Path $nodeModulesRoot "playwright-core"
+  if (Test-Path -LiteralPath $direct) { return $direct }
+
+  $pnpmRoot = Join-Path $nodeModulesRoot ".pnpm"
   if (Test-Path -LiteralPath $pnpmRoot) {
     $match = Get-ChildItem -LiteralPath $pnpmRoot -Directory -Filter "playwright-core@*" |
       Sort-Object Name -Descending |
@@ -253,7 +293,19 @@ function Find-PlaywrightCore {
   throw "The existing Playwright runtime was not found. No fallback test is reported as passed."
 }
 
+function Get-FreeTcpPort {
+  $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+  try {
+    $listener.Start()
+    return ([Net.IPEndPoint]$listener.LocalEndpoint).Port
+  }
+  finally {
+    $listener.Stop()
+  }
+}
+
 function Start-PreviewServer {
+  $script:previewPort = Get-FreeTcpPort
   $script:previewStdout = [IO.Path]::GetTempFileName()
   $script:previewStderr = [IO.Path]::GetTempFileName()
   $script:previewProcess = Start-Process -FilePath (Get-Command node).Source `
@@ -407,8 +459,7 @@ try {
     Assert-ExitCode "npm run build"
 
     Write-Gate "Dependency audit"
-    & npm.cmd audit --audit-level=high
-    Assert-ExitCode "npm audit"
+    Invoke-DependencyAudit
 
     Write-Gate "P0 tenant security, Storage and local Push"
     $previousPreference = $ErrorActionPreference
@@ -440,15 +491,18 @@ try {
     }
     $upgradeOutput | ForEach-Object { Write-Output $_ }
     if ($upgradeExit -ne 0) { throw "P0 upgrade path failed with exit code $upgradeExit." }
+    Restart-LocalPostgrest
     $localEnvironment = Wait-LocalStackReady
 
     Invoke-SqlTest "supabase\tests\p0_client_dml_acl.sql" "P0 browser DML ACL and trusted-server CRUD"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
+    Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-Preflight
     Invoke-SqlTest "supabase\tests\p1_financial_commands.sql" "P1 financial commands, rollback and idempotency"
     Invoke-SqlTest "supabase\tests\p1_price_submissions.sql" "P1B trusted price-list intake, tenant isolation and rollback"
     Invoke-SqlTest "supabase\tests\p2_data_reliability.sql" "P2 retry, alerts, pagination and reliability"
     Invoke-SqlTest "supabase\tests\p1_price_submissions_concurrency.sql" "P1B real concurrent revisions and checksum retries" "supabase_admin"
+    Invoke-SqlTest "supabase\tests\roadmap_db_contracts.sql" "Roadmap supplier, inventory, savings and WhatsApp contracts"
     Invoke-SqlTest "supabase\tests\p1_concurrency.sql" "P1 real concurrent sessions" "supabase_admin"
 
     Write-Gate "P1B local Edge runtime, 10/100/1,000 rows and failure recovery"

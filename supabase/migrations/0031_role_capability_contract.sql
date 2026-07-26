@@ -292,7 +292,9 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 -- Supplier performance contains procurement and price-list intelligence, not accounting context.
-create or replace view public.supplier_metrics
+-- Preserve the roadmap order-load columns while applying the remediation role and delivery rules.
+drop view public.supplier_metrics;
+create view public.supplier_metrics
 with (security_invoker = on, security_barrier = on) as
 with cfg as (
   select (now() - interval '180 days') as since
@@ -317,6 +319,18 @@ with cfg as (
   from deliveries v, cfg
   where v.received_at is not null and v.received_at >= cfg.since
   group by v.org_id, v.supplier_id
+), o as (
+  select po.org_id, po.supplier_id,
+    count(*) as open_orders,
+    count(*) filter (
+      where po.expected_date is not null
+        and po.status <> 'ready'
+        and po.expected_date < (now() at time zone 'Asia/Jerusalem')::date
+    ) as late_open_orders
+  from public.purchase_orders po
+  where po.org_id = auth_org()
+    and po.status in ('ready', 'sent', 'confirmed', 'partial')
+  group by po.org_id, po.supplier_id
 ), x as (
   select e.org_id, e.supplier_id,
     count(*) filter (where e.status in ('open','in_progress')) as open_exceptions,
@@ -335,19 +349,31 @@ with cfg as (
   from public.credit_requests cr
   where cr.org_id = auth_org()
   group by cr.org_id, cr.supplier_id
+), price_events as (
+  select h.id, h.org_id, h.supplier_product_id, h.price, h.effective_date,
+    lag(h.price) over (
+      partition by h.org_id, h.supplier_product_id
+      order by h.effective_date, h.created_at, h.id
+    ) as previous_price
+  from public.price_history h
+  where h.org_id = auth_org()
 ), p as (
   select sp.org_id, sp.supplier_id,
          count(distinct sp.id) as priced_items,
          count(h.id) as price_changes_window,
          max(h.effective_date) as last_price_change
   from public.supplier_products sp
-  left join public.price_history h
+  left join price_events h
     on h.org_id = sp.org_id and h.supplier_product_id = sp.id
    and h.effective_date >= (select since::date from cfg)
+   and h.previous_price is not null
+   and h.price is distinct from h.previous_price
   where sp.org_id = auth_org()
   group by sp.org_id, sp.supplier_id
 )
 select s.id as supplier_id,
+  coalesce(o.open_orders, 0) as open_orders,
+  coalesce(o.late_open_orders, 0) as late_open_orders,
   coalesce(d.otd_samples, 0) as otd_samples,
   coalesce(d.otd_on_time, 0) as otd_on_time,
   case when coalesce(d.otd_samples, 0) = 0 then null
@@ -365,6 +391,7 @@ select s.id as supplier_id,
   coalesce(p.price_changes_window, 0) as price_changes_window,
   p.last_price_change
 from public.suppliers s
+left join o on o.org_id = s.org_id and o.supplier_id = s.id
 left join d on d.org_id = s.org_id and d.supplier_id = s.id
 left join x on x.org_id = s.org_id and x.supplier_id = s.id
 left join c on c.org_id = s.org_id and c.supplier_id = s.id
@@ -372,7 +399,7 @@ left join p on p.org_id = s.org_id and p.supplier_id = s.id
 where s.org_id = auth_org() and s.deleted_at is null
   and auth_role() in ('owner', 'office', 'kitchen');
 
-revoke all on public.supplier_metrics from public, anon;
+revoke all on public.supplier_metrics from public, anon, authenticated;
 grant select on public.supplier_metrics to authenticated;
 
 drop policy if exists documents_select on public.documents;

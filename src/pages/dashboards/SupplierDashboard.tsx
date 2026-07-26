@@ -12,8 +12,7 @@ import { DashboardFrame, ChartCard } from './parts';
 
 type Product = { available: boolean | null; price_effective_date: string | null };
 type History = { effective_date: string };
-// Live schema (differs from migration 0026): a monthly price-list submission, valued by row composition.
-type Submission = { effective_month: string; row_count: number; created_count: number; updated_count: number; unchanged_count: number; submitted_at: string };
+type Submission = { target_month: string; row_count: number; created_count: number; updated_count: number; unchanged_count: number; submitted_at: string };
 
 /**
  * Supplier control room. RLS exposes only this supplier's own catalog, price history and monthly
@@ -27,7 +26,7 @@ export default function SupplierDashboard() {
     const [productsRes, historyRes, submissionsRes] = await Promise.all([
       fetchAll((from, to) => supabase.from('supplier_products').select('available, price_effective_date').order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('price_history').select('effective_date').gte('effective_date', `${shiftCalendarMonth(monthKey, -5)}-01`).order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('supplier_price_submissions').select('effective_month, row_count, created_count, updated_count, unchanged_count, submitted_at').order('effective_month').range(from, to)),
+      fetchAll((from, to) => supabase.from('supplier_price_submissions').select('target_month, row_count, created_count, updated_count, unchanged_count, submitted_at').order('target_month').range(from, to)),
     ]);
 
     const products = productsRes as unknown as Product[];
@@ -35,14 +34,14 @@ export default function SupplierDashboard() {
     const submissions = submissionsRes as unknown as Submission[];
 
     const last = submissions[submissions.length - 1];
-    const submitted = !!last && last.effective_month.slice(0, 7) === monthKey;
+    const submitted = !!last && last.target_month.slice(0, 7) === monthKey;
     const updatedThisMonth = history.filter((h) => h.effective_date.slice(0, 7) === monthKey).length;
 
     const kpis: ScoreItem[] = [
       { label: 'מוצרים במחירון', value: fmtNum(products.length) },
       { label: 'זמינים', value: fmtNum(products.filter((p) => p.available).length) },
       { label: 'עודכנו החודש', value: fmtNum(updatedThisMonth) },
-      { label: 'הגשה אחרונה', value: last ? fmtMonth(last.effective_month) : '—', sub: last ? `${last.row_count} שורות` : undefined, numeric: false },
+      { label: 'הגשה אחרונה', value: last ? fmtMonth(last.target_month) : '—', sub: last ? `${last.row_count} שורות` : undefined, numeric: false },
     ];
 
     // ── charts
@@ -50,7 +49,7 @@ export default function SupplierDashboard() {
       .map((b) => ({ key: fmtMonth(`${b.key}-01`), label: b.count ? fmtNum(b.total) : '', total: b.total }));
 
     const intake: LinePoint[] = submissions.slice(-6).map((s) => ({
-      x: fmtMonth(s.effective_month),
+      x: fmtMonth(s.target_month),
       created: s.created_count,
       updated: s.updated_count,
     }));

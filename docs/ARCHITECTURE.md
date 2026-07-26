@@ -40,12 +40,13 @@ supabase/
                            0018 טיוטות הזמנה אטומיות · 0019 מטא־דאטה לגלריית מסמכים
                            0020 זהות/lifecycle/audit · 0021 שלמות דייר · 0022 חוזה P0/Storage
                            0023 פקודות פיננסיות P1 · 0024 אמינות נתונים והתראות P2
-                           0025 חוזה תפקידים: owner/office/accountant · 0026 הגשות מחירון חודשיות
-                           0027 בטיחות trigger פיננסי משותף · 0028 תיקוני גבול פיננסי P0
-                           0029 intake מהימן להגשות מחירון · 0030 allowlist כתיבה ופקודות מנומקות
-                           0031 ניקוי orphan של uploader · 0032 qualification למדיניות Storage
-                           0033 שחזור CRUD ל-service_role בלבד לאחר cutover ה-ACL
-                           0034 מצב מסירת התראות server-only · 0035 מעברי סטטוס הזמנה מנומקים
+                           0025 פורטל מחירוני ספק · 0026 יומן מלאי · 0027 snapshot חיסכון
+                           0028 הודעות WhatsApp להזמנה · 0029 הגנות מסירה · 0030 גשר יישור סכימה
+                           0031 חוזה תפקידים · 0032 הגשות מחירון חודשיות · 0033 בטיחות trigger פיננסי
+                           0034 תיקוני גבול פיננסי P0 · 0035 intake מהימן להגשות מחירון
+                           0036 allowlist כתיבה ופקודות מנומקות · 0037 ניקוי orphan של uploader
+                           0038 qualification למדיניות Storage · 0039 שחזור CRUD ל-service_role
+                           0040 מצב מסירת התראות server-only · 0041 מעברי סטטוס הזמנה מנומקים
   functions/               admin-provision · send-invite · send-push · submit-price-list — service_role נשאר בשרת
   seed.sql                 seed ניטרלי לדייר חדש (ארגון + קטגוריות)
   demo/                    חבילת הדמו כדייר נפרד + reset + audit בידוד
@@ -118,27 +119,27 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 - ה־cutover של P1 הושלם ב־`0023`: מדיניות הכתיבה הישירה של payer לדרישה, תשלום והקצאה
   הוסרו, והפעולה עוברת רק דרך `execute_payment_request`. מסמך `P0-P1-SECURITY-HANDOFF.md`
   נשמר כחוזה היסטורי ומסומן כממומש.
-- `0025` מפרידה את תפקידי `office` ו־`accountant`: הפקודה הרגילה
+- `0031` מפרידה את תפקידי `office` ו־`accountant`: הפקודה הרגילה
   `execute_payment_request` זמינה ל־`payer`/`accountant`; `owner` משתמש רק ב־
   `execute_emergency_payment_request`, שדורשת רשומת `amr` מסוג `password` מהחמש דקות
   האחרונות, סיבה ו־audit מסוג `payment_request_emergency_executed`. ‏`unmatch_bank_transaction`
   מסירה רק התאמה לתשלום קיים; התאמה ישירה לחשבונית דורשת תיקון כספי נפרד ואינה מוחקת תשלום.
-- `0028` סוגרת את פערי ההמשך של אותו חוזה: מחיקת חשבונית רכה עוברת רק דרך
+- `0034` סוגרת את פערי ההמשך של אותו חוזה: מחיקת חשבונית רכה עוברת רק דרך
   `soft_delete_invoice` האטומי ונחסמת כשקיים קשר כספי; אותות בדיקה אינם חושפים בנק או
   יתרה ל־`office`/`kitchen`; תור `accountant` כולל דרישה רק כל עוד כל חשבוניותיה מאושרות
   ולא מחוקות; והסרת התאמה מרובת תשלומים מחזירה את כל הדרישות המקושרות ל־`executed`.
-- `0030` מחליפה DML משתמע ב־allowlist עמודות מפורש לכתיבות הדפדפן הלא־רגישות. שינוי
+- `0036` מחליפה DML משתמע ב־allowlist עמודות מפורש לכתיבות הדפדפן הלא־רגישות. שינוי
   `suppliers.deleted_at`, שינוי `products.active` וביטול הזמנה עוברים רק דרך
   `soft_delete_supplier`, ‏`set_product_active` ו־`cancel_purchase_order`; כל פקודה נועלת
   את הרשומה, דורשת סיבה וכותבת audit באותה עסקה, ו־trigger חוסם מסלול ישיר ישן.
 - ל־`purchase_requests` ולפריטיה אין DML ישיר ל־`authenticated`. פקודות השמירה והביטול
   הוותיקות פועלות כ־`SECURITY DEFINER` עם `search_path = public, pg_temp`; רק overload
   ה־finalize בעל שלושת הארגומנטים, הכולל `reason`, ניתן לביצוע מן ה־API.
-- `0031`–`0033` משלימות את גבול הקליטה בלי לפתוח אותו מחדש: uploader יכול לנקות רק staging
+- `0035`, ‏`0037`–`0039` משלימות את גבול הקליטה בלי לפתוח אותו מחדש: uploader יכול לנקות רק staging
   orphan שלו, מדיניות Storage מפנה במפורש ל־`storage.objects.name`, ו־`service_role` מקבל
   מחדש CRUD על טבלאות `public` לצורכי Edge Functions. ה־grants של משתמשי הדפדפן נשארים
   allowlist מצומצם ונבדקים בנפרד.
-- `0034` נועלת את `notification_event_states` ל־`service_role`. ‏`0035` מסירה מן הדפדפן
+- `0040` נועלת את `notification_event_states` ל־`service_role`. ‏`0041` מסירה מן הדפדפן
   UPDATE ישיר של `purchase_orders.status/sent_at/confirmed_at/confirmation_note/expected_date`.
   המעברים `draft→ready/sent`, ‏`ready→sent` ו־`sent→confirmed` עוברים דרך
   `transition_purchase_order_status`, שנועלת את ההזמנה, גוזרת דייר ושחקן מן ה־JWT, דורשת

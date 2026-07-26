@@ -34,6 +34,7 @@ const homes = {
   kitchen: '/dashboard',
   payer: '/dashboard',
   accountant: '/dashboard',
+  supplier: '/dashboard',
 };
 
 function credentials(role) {
@@ -95,6 +96,30 @@ async function settle(page) {
     throw new Error(`${new URL(page.url()).pathname}: main heading did not become visible — ${error.message}`);
   });
   await page.waitForTimeout(250);
+}
+
+async function supplierPortalProjection(browser) {
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  const requests = [];
+  captureConsole(page, 'supplier-portal-projection');
+  page.on('request', (request) => requests.push(new URL(request.url()).pathname));
+  try {
+    await login(page, 'supplier');
+    await settle(page);
+    requests.length = 0;
+    await page.goto(`${baseURL}/my-prices`);
+    await settle(page);
+    await page.getByRole('heading', { name: 'היסטוריית הגשות' }).waitFor();
+    assert(requests.includes('/rest/v1/rpc/supplier_portal_context'), 'supplier portal projection RPC was not used');
+    assert.equal(requests.some((requestPath) => /^\/rest\/v1\/(suppliers|supplier_products|products)$/.test(requestPath)), false,
+      'supplier portal queried a base catalog table blocked by its RLS contract');
+    assert.equal(await page.locator('main [role="alert"]').count(), 0, 'supplier portal rendered an error alert');
+    await page.screenshot({ path: path.join(outDir, 'supplier-portal-390.png') });
+    report.screenshots.push('supplier-portal-390.png');
+  } finally {
+    await closeContext(context);
+  }
 }
 
 async function auditAccessibility(page, scope) {
@@ -719,6 +744,7 @@ async function receivingAccessibility(browser) {
   const order = {
     id: 'p4-ui-order', org_id: 'p4-ui-org', supplier_id: 'p4-ui-supplier', number: 9001,
     status: 'confirmed', order_date: '2026-07-20', expected_date: '2026-07-23', total_amount: 120,
+    created_at: '2026-07-20T08:00:00Z',
     notes: null, supplier: { id: 'p4-ui-supplier', name: 'ספק בדיקת נגישות' },
     items: [{
       id: 'p4-ui-item', org_id: 'p4-ui-org', order_id: 'p4-ui-order', product_id: 'p4-ui-product',
@@ -1481,6 +1507,7 @@ async function run(name, check) {
   const browser = await chromium.launch({ headless: true, executablePath: browserPath });
   try {
     await run('role and viewport matrix', () => roleAndViewportMatrix(browser));
+    await run('supplier portal uses the RLS-safe projection', () => supplierPortalProjection(browser));
     await run('mobile action bar and desktop speed-dial contract', () => quickActionsContract(browser));
     await run('overlay stacking and breakpoint reset', () => overlayStacking(browser));
     await run('dashboard, quick actions and dialogs', () => dashboardAndDialogs(browser));

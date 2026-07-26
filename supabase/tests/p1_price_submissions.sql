@@ -1,5 +1,5 @@
 -- P1B supplier price submission regression harness. Run only against an isolated local
--- database after applying migrations through 0032_p1b_qualified_storage_paths.sql.
+-- database after applying migrations through 0038_p1b_qualified_storage_paths.sql.
 \set ON_ERROR_STOP on
 
 begin;
@@ -136,7 +136,8 @@ insert into storage.objects (bucket_id, name, owner, metadata) values
 -- Trusted fixture receipts let the RLS checks prove competitor and second-tenant isolation.
 insert into supplier_price_submissions (
   id, org_id, supplier_id, target_month, revision, file_name, storage_path,
-  file_checksum, status, accepted_count, rejected_count, unchanged_count, submitted_by
+  file_checksum, status, accepted_count, rejected_count, unchanged_count,
+  row_count, created_count, updated_count, submitted_by
 ) values
   (
     '62000000-0000-0000-0000-000000000001',
@@ -144,7 +145,7 @@ insert into supplier_price_submissions (
     '31000000-0000-0000-0000-000000000002', '2026-07-01', 1,
     'competitor-ledger.csv',
     '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/62000000-0000-0000-0000-000000000001/competitor-ledger.csv',
-    repeat('c', 64), 'accepted', 1, 0, 0,
+    repeat('c', 64), 'accepted', 1, 0, 0, 1, 1, 0,
     '21000000-0000-0000-0000-000000000002'
   ),
   (
@@ -153,7 +154,7 @@ insert into supplier_price_submissions (
     '31000000-0000-0000-0000-000000000003', '2026-07-01', 1,
     'tenant-ledger.csv',
     '11000000-0000-0000-0000-000000000002/price-submissions/31000000-0000-0000-0000-000000000003/62000000-0000-0000-0000-000000000002/tenant-ledger.csv',
-    repeat('d', 64), 'accepted', 1, 0, 0,
+    repeat('d', 64), 'accepted', 1, 0, 0, 1, 1, 0,
     '21000000-0000-0000-0000-000000000004'
   );
 
@@ -485,6 +486,7 @@ select pg_temp.p1b_assert(
 );
 select pg_temp.p1b_assert(
   (select revision = 1 and accepted_count = 1 and rejected_count = 1 and unchanged_count = 0
+          and row_count = 2 and created_count = 0 and updated_count = 1
      from supplier_price_submissions
     where id = '61000000-0000-0000-0000-000000000001'),
   'first receipt counts or revision are wrong'

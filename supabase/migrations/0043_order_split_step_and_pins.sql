@@ -1,4 +1,4 @@
--- 0039 — A third editor step, and pins that survive a reload.
+-- 0043 — A third editor step, and pins that survive a reload.
 -- Forward-only after 0035. Two independent facts:
 --   (a) editor_step gains a third value: the final summary is a step, not a modal.
 --   (b) purchase_request_items records WHY a supplier was chosen — user pin vs auto-split.
