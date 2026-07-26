@@ -146,6 +146,15 @@ assert.deepEqual(pinnedState.byId.a.assignment, { mode: 'pinned', supplierId: EX
 assert.deepEqual(setQtyState.byId.a.assignment, pinnedState.byId.a.assignment);
 assert.deepEqual(bumpedState.byId.a.assignment, pinnedState.byId.a.assignment);
 
+// A price refresh changes only derived money; it never hydrates over a fresh pin.
+const pinnedBeforePriceChange = resolve([pinnedState.byId.a], [['a', [offer(CHEAP, 10), offer(EXPENSIVE, 12)]]]);
+const pinnedAfterPriceChange = resolve([pinnedState.byId.a], [['a', [offer(CHEAP, 10), offer(EXPENSIVE, 14)]]]);
+assert.deepEqual(pinnedState.byId.a.assignment, { mode: 'pinned', supplierId: EXPENSIVE });
+assert.equal(pinnedBeforePriceChange.groups[0].supplier.id, EXPENSIVE);
+assert.equal(pinnedAfterPriceChange.groups[0].supplier.id, EXPENSIVE);
+assert.equal(pinnedBeforePriceChange.groups[0].lines[0].unitPrice, 12);
+assert.equal(pinnedAfterPriceChange.groups[0].lines[0].unitPrice, 14);
+
 // 12. Every newly added product begins in auto mode.
 assert.deepEqual(withProduct.byId.a.assignment, { mode: 'auto' });
 
@@ -227,6 +236,7 @@ assert.equal(moveLine?.kind, 'move_line');
 if (moveLine?.kind === 'move_line') {
   assert.equal(moveLine.requiresQty, 10);
   assert.equal(moveLine.costDelta, 90);
+  assert.equal(moveLine.sourceStillBelow, false);
   assert.equal(moveLine.targetSubtotalAfter, 120);
 }
 
