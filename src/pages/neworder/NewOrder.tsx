@@ -15,7 +15,17 @@ import {
   type DraftItemInput,
   type OrderDraftFlushDetail,
 } from '../../lib/orderDrafts';
-import { resolveSplit, splitReducer, type CartState, type SplitLine } from '../../lib/orderSplit';
+import {
+  resolveSplit,
+  splitReducer,
+  type CartState,
+  type ResolutionOption,
+  type SplitInput,
+  type SplitLine,
+} from '../../lib/orderSplit';
+import { centsFromUnits, hundredths, lineUnits, moneyFromCents } from '../../lib/orderSavings';
+import { deferProduct, dismissNextOrderItem, listNextOrderItems, type NextOrderItem } from '../../lib/nextOrderItems';
+import { fmtMoneyExact } from '../../lib/format';
 import { sendOrderWhatsApp } from '../../lib/share';
 import type { Product, PurchaseOrder, Supplier, SupplierProduct } from '../../lib/types';
 import ProductStep from './ProductStep';
@@ -58,6 +68,37 @@ interface DraftSnapshot {
   items: DraftItemInput[];
 }
 
+interface PriceSnapshotLine {
+  productId: string;
+  productName: string;
+  supplierId: string;
+  supplierName: string;
+  qty: number;
+  assignmentMode: 'auto' | 'pinned';
+}
+
+interface PendingPriceDiff {
+  prices: Map<string, number>;
+  lines: PriceSnapshotLine[];
+  oldTotal: number | null;
+}
+
+interface PriceDiffLine extends PriceSnapshotLine {
+  newSupplierId: string | null;
+  newSupplierName: string;
+  oldUnitPrice: number;
+  newUnitPrice: number | null;
+  oldLineTotal: number;
+  newLineTotal: number | null;
+  delta: number | null;
+}
+
+interface PriceDiffReport {
+  lines: PriceDiffLine[];
+  oldTotal: number | null;
+  newTotal: number | null;
+}
+
 const draftSignature = (draft: DraftSnapshot) => JSON.stringify([
   draft.notes.trim(), draft.expectedDate, draft.editorStep,
   draft.items.map((item) => [item.product_id, item.qty, item.chosen_supplier_id, item.pinned_supplier_id]),
@@ -90,10 +131,13 @@ export default function NewOrder() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle');
   const [saveError, setSaveError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [reviewOpen, setReviewOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [sendQueue, setSendQueue] = useState<QueueOrder[] | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [nextOrderItems, setNextOrderItems] = useState<NextOrderItem[]>([]);
+  const [nextOrderBusyId, setNextOrderBusyId] = useState<string | null>(null);
+  const [priceDiff, setPriceDiff] = useState<PriceDiffReport | null>(null);
+  const [priceRefreshVersion, setPriceRefreshVersion] = useState(0);
 
   const latestDraftRef = useRef<DraftSnapshot | null>(null);
   const lastSavedSignatureRef = useRef('');
@@ -105,6 +149,10 @@ export default function NewOrder() {
   const finalizedRef = useRef(false);
   const appliedLoadKeyRef = useRef<string | null>(null);
   const previousAutoRef = useRef<{ immediate: string; text: string } | null>(null);
+  const previousStepRef = useRef<1 | 2 | 3 | null>(null);
+  const priceSnapshotRef = useRef<Map<string, number>>(new Map());
+  const priceSnapshotLinesRef = useRef<PriceSnapshotLine[]>([]);
+  const pendingPriceDiffRef = useRef<PendingPriceDiff | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -115,8 +163,28 @@ export default function NewOrder() {
   }, []);
 
   useEffect(() => {
+    if (!org?.id) { setNextOrderItems([]); return; }
+    let active = true;
+    void listNextOrderItems(org.id)
+      .then((items) => {
+        if (!active) return;
+        const visible = items.filter((item) => item.product.active);
+        setNextOrderItems(visible);
+        if (visible.length !== items.length) toast('פריט לא פעיל שנשמר להזמנה הבאה דולג');
+      })
+      .catch((failure) => { if (active) toast(toHebrewError(failure), 'error'); });
+    return () => { active = false; };
+  // Intentionally load once per organization. useToast returns a new callback after each toast.
+  }, [org?.id]);
+
+  useEffect(() => {
     appliedLoadKeyRef.current = null;
     previousAutoRef.current = null;
+    previousStepRef.current = null;
+    priceSnapshotRef.current = new Map();
+    priceSnapshotLinesRef.current = [];
+    pendingPriceDiffRef.current = null;
+    setPriceDiff(null);
     setHydrated(false);
   }, [loadKey]);
 
@@ -262,7 +330,7 @@ export default function NewOrder() {
     setHydrated(true);
   }, [data, explicitDraftId, loadKey, offersByProduct, toast]);
 
-  const split = useMemo(() => resolveSplit({
+  const splitInput = useMemo<SplitInput>(() => ({
     lines: cart.map(({ product: _product, ...line }) => line),
     offersByProduct: new Map([...offersByProduct].map(([productId, offers]) => [productId, offers.map((offer) => ({
       supplierId: offer.supplier_id,
@@ -275,6 +343,7 @@ export default function NewOrder() {
       minOrderAmount: supplier.min_order_amount,
     }])),
   }), [cart, offersByProduct, supplierById]);
+  const split = useMemo(() => resolveSplit(splitInput), [splitInput]);
   const resolvedByProduct = useMemo(() => new Map([
     ...split.groups.flatMap((group) => group.lines),
     ...split.blocked,
@@ -286,6 +355,66 @@ export default function NewOrder() {
     pinned_supplier_id: item.assignment.mode === 'pinned' ? item.assignment.supplierId : null,
   })), [cart, resolvedByProduct]);
   latestDraftRef.current = { requestId: draftId, notes, expectedDate, editorStep: step, items: draftItems };
+
+  const currentPriceSnapshot = useMemo<PendingPriceDiff>(() => {
+    const prices = new Map<string, number>();
+    const lines: PriceSnapshotLine[] = [];
+    for (const group of split.groups) {
+      for (const line of group.lines) {
+        if (line.unitPrice == null) continue;
+        prices.set(priceKey(line.productId, group.supplier.id), line.unitPrice);
+        lines.push({
+          productId: line.productId,
+          productName: state.products[line.productId]?.name ?? 'מוצר',
+          supplierId: group.supplier.id,
+          supplierName: group.supplier.name,
+          qty: line.qty,
+          assignmentMode: line.assignment.mode,
+        });
+      }
+    }
+    return { prices, lines, oldTotal: split.savings.splitTotal };
+  }, [split, state.products]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (step === 3 && previousStepRef.current !== 3) {
+      priceSnapshotRef.current = new Map(currentPriceSnapshot.prices);
+      priceSnapshotLinesRef.current = currentPriceSnapshot.lines.map((line) => ({ ...line }));
+    }
+    previousStepRef.current = step;
+  }, [currentPriceSnapshot, hydrated, step]);
+
+  useEffect(() => {
+    const pending = pendingPriceDiffRef.current;
+    if (!pending || priceRefreshVersion === 0) return;
+    const nextLinesByProduct = new Map(currentPriceSnapshot.lines.map((line) => [line.productId, line]));
+    const changes: PriceDiffLine[] = [];
+    for (const oldLine of pending.lines) {
+      const oldUnitPrice = pending.prices.get(priceKey(oldLine.productId, oldLine.supplierId));
+      if (oldUnitPrice == null) continue;
+      const nextMeta = nextLinesByProduct.get(oldLine.productId) ?? null;
+      const nextResolved = resolvedByProduct.get(oldLine.productId) ?? null;
+      const newUnitPrice = nextResolved?.unitPrice ?? null;
+      if (nextMeta?.supplierId === oldLine.supplierId && newUnitPrice === oldUnitPrice) continue;
+      const oldLineTotal = exactLineTotal(oldLine.qty, oldUnitPrice);
+      const newLineTotal = nextResolved?.lineTotal ?? null;
+      changes.push({
+        ...oldLine,
+        newSupplierId: nextMeta?.supplierId ?? null,
+        newSupplierName: nextMeta?.supplierName ?? 'טרם הוקצה ספק',
+        oldUnitPrice,
+        newUnitPrice,
+        oldLineTotal,
+        newLineTotal,
+        delta: newLineTotal == null ? null : moneyFromCents(hundredths(newLineTotal) - hundredths(oldLineTotal)),
+      });
+    }
+    pendingPriceDiffRef.current = null;
+    priceSnapshotRef.current = new Map(currentPriceSnapshot.prices);
+    priceSnapshotLinesRef.current = currentPriceSnapshot.lines.map((line) => ({ ...line }));
+    setPriceDiff({ lines: changes, oldTotal: pending.oldTotal, newTotal: split.savings.splitTotal });
+  }, [currentPriceSnapshot, data?.sps, priceRefreshVersion, resolvedByProduct, split.savings.splitTotal]);
 
   const runSaveQueue = useCallback((force = false): Promise<boolean> => {
     if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
@@ -392,21 +521,78 @@ export default function NewOrder() {
     };
   }, [navigate, runSaveQueue, toast]);
 
-  function effective(item: CartItem): { sp: SupplierProduct | null; recommended: SupplierProduct | null } {
-    const offers = offersByProduct.get(item.productId) ?? [];
-    const recommended = offers.find((offer) => meetsMin(offer, item.qty)) ?? null;
-    const supplierId = resolvedByProduct.get(item.productId)?.supplierId;
-    return { sp: supplierId ? offers.find((offer) => offer.supplier_id === supplierId) ?? null : null, recommended };
-  }
-
-  const { total, savings } = split;
+  const { savings } = split;
   const singleSupplierName = savings.singleSupplierId ? supplierById.get(savings.singleSupplierId)?.name ?? null : null;
 
-  async function openReview() {
+  async function goToSummary() {
     if (!cart.length || split.blocked.length) return;
-    setStep(3);
-    if (await runSaveQueue()) setReviewOpen(true);
+    if (await runSaveQueue()) setStep(3);
     else toast('יש לתקן את שגיאת השמירה לפני אישור ההזמנה', 'error');
+  }
+
+  function applyResolution(option: ResolutionOption, fromSupplierId: string) {
+    if (option.kind === 'increase_qty') {
+      dispatch({ type: 'BUMP_QTY', productId: option.productId, toQty: option.toQty });
+      return;
+    }
+    if (option.kind === 'move_line') {
+      if (option.requiresQty != null) dispatch({ type: 'BUMP_QTY', productId: option.productId, toQty: option.requiresQty });
+      dispatch({ type: 'PIN_SUPPLIER', productId: option.productId, supplierId: option.toSupplierId });
+      return;
+    }
+    if (option.kind === 'move_group') {
+      dispatch({
+        type: 'MOVE_GROUP',
+        fromSupplierId,
+        toSupplierId: option.toSupplierId,
+        productIds: option.productIds,
+        quantityChanges: option.quantityChanges,
+      });
+      return;
+    }
+    if (option.kind === 'remove_line') {
+      dispatch({ type: 'REMOVE_PRODUCT', productId: option.productId });
+      return;
+    }
+    const line = state.byId[option.productId];
+    if (!line || !org?.id) return;
+    void deferProduct(org.id, option.productId, line.qty, latestDraftRef.current?.requestId ?? null)
+      .then(() => {
+        dispatch({ type: 'DEFER_PRODUCT', productId: option.productId });
+        toast('הפריט נשמר להזמנה הבאה');
+      })
+      .catch((failure) => toast(toHebrewError(failure), 'error'));
+  }
+
+  async function addNextOrderItem(item: NextOrderItem) {
+    setNextOrderBusyId(item.id);
+    try {
+      const product = data?.products.find((candidate) => candidate.id === item.product_id);
+      if (!product?.active) {
+        toast('המוצר אינו פעיל עוד ולכן דולג', 'error');
+        return;
+      }
+      await dismissNextOrderItem(item.id);
+      setNextOrderItems((current) => current.filter((candidate) => candidate.id !== item.id));
+      dispatch({ type: 'ADD_PRODUCT', product });
+      dispatch({ type: 'SET_QTY', productId: product.id, qty: item.qty });
+    } catch (failure) {
+      toast(toHebrewError(failure), 'error');
+    } finally {
+      setNextOrderBusyId(null);
+    }
+  }
+
+  async function dismissNextItem(item: NextOrderItem) {
+    setNextOrderBusyId(item.id);
+    try {
+      await dismissNextOrderItem(item.id);
+      setNextOrderItems((current) => current.filter((candidate) => candidate.id !== item.id));
+    } catch (failure) {
+      toast(toHebrewError(failure), 'error');
+    } finally {
+      setNextOrderBusyId(null);
+    }
   }
 
   async function cancelDraft(reason?: string) {
@@ -439,17 +625,28 @@ export default function NewOrder() {
       const orders = unwrap(await supabase.from('purchase_orders')
         .select('*, supplier:suppliers(name, phone, whatsapp), items:purchase_order_items(qty, unit_price, product:products(name, unit))')
         .in('id', finalized.order_ids).order('number')) as QueueOrder[];
-      setReviewOpen(false);
       setSendQueue(orders);
       toast(`נוצרו ${finalized.order_count} הזמנות ספק`);
     } catch (failure) {
       const raw = failure instanceof Error ? failure.message : String(failure);
       if (raw.includes('draft_price_changed')) {
-        await runSaveQueue(true);
+        pendingPriceDiffRef.current = {
+          prices: new Map(priceSnapshotRef.current.size ? priceSnapshotRef.current : currentPriceSnapshot.prices),
+          lines: (priceSnapshotLinesRef.current.length ? priceSnapshotLinesRef.current : currentPriceSnapshot.lines).map((line) => ({ ...line })),
+          oldTotal: savings.splitTotal,
+        };
+        const saved = await runSaveQueue(true);
+        if (!saved) {
+          pendingPriceDiffRef.current = null;
+          toast('המחירים השתנו, אך לא ניתן היה לרענן את הטיוטה. נסו שוב.', 'error');
+          return;
+        }
         await refetch();
+        setPriceRefreshVersion((version) => version + 1);
         toast('המחירים השתנו. הסיכום רוענן — יש לעבור עליו ולאשר שוב.', 'error');
       } else if (raw.includes('draft_supplier_unavailable')) {
         await refetch();
+        setStep(2);
         toast('אחד הספקים אינו זמין עוד. יש לבחור ספק מחדש.', 'error');
       } else {
         toast(toHebrewError(failure), 'error');
@@ -491,7 +688,7 @@ export default function NewOrder() {
           <p className="mt-1 text-sm text-ink-muted">בחירת מוצרים תחילה, אישור ספקים ומחירים לאחר מכן</p>
           <div className={`mt-2 flex min-h-6 items-center gap-1.5 text-xs ${saveStatus === 'error' ? 'text-alert-fg' : 'text-ink-muted'}`} role="status" aria-live="polite">
             {saveStatus === 'saving' ? <Loader2 size={13} className="animate-spin" /> : saveStatus === 'saved' ? <Check size={13} /> : <Clock3 size={13} />}
-            <span>{draftNumber ? `טיוטה #${draftNumber} · ` : ''}{saveLabel}</span>
+            <span>{draftNumber ? <>טיוטה <span className="num">#{draftNumber}</span> · </> : null}{saveLabel}</span>
             {saveStatus === 'error' && <button type="button" className="font-semibold underline" onClick={() => void runSaveQueue()}>ניסיון חוזר</button>}
           </div>
           {saveError && saveStatus === 'error' && <p role="alert" className="text-xs text-alert-fg">{saveError}</p>}
@@ -499,11 +696,11 @@ export default function NewOrder() {
         <div className="flex flex-col items-stretch gap-1 sm:items-end">
           <div className="flex flex-wrap gap-2">
             {(draftId || cart.length > 0) && <button type="button" className="btn-ghost text-alert-solid" disabled={busy} onClick={() => setCancelOpen(true)}><XCircle size={15} /> ביטול טיוטה</button>}
-            <button type="button" className="btn-primary" disabled={busy || !cart.length || split.blocked.length > 0} onClick={() => void openReview()}>
+            <button type="button" className="btn-primary" disabled={busy || !cart.length || split.blocked.length > 0} onClick={() => void goToSummary()}>
               <CheckCircle2 size={15} /> סקירה ואישור
             </button>
           </div>
-          {split.blocked.length > 0 && <p className="text-xs text-alert-fg sm:text-end">יש {split.blocked.length} פריטים מתחת למינימום הזמנה — הגדל כמות או הסר כדי להמשיך</p>}
+          {split.blocked.length > 0 && <p className="text-xs text-alert-fg sm:text-end">יש <span className="num">{split.blocked.length}</span> פריטים ללא הקצאת ספק תקפה — יש לתקן אותם כדי להמשיך</p>}
         </div>
       </div>
 
@@ -514,9 +711,9 @@ export default function NewOrder() {
         </button>
         <button type="button" disabled={!cart.length} onClick={() => setStep(2)} aria-current={step === 2 ? 'step' : undefined}
           className={`flex min-h-14 items-center gap-2 border-b-2 border-s border-line-soft px-4 text-start transition-colors disabled:opacity-50 ${step === 2 ? 'border-b-action bg-action-wash/50 text-ink' : 'border-b-transparent text-ink-muted hover:bg-surface-sunken'}`}>
-          <span className="num text-xs">02</span><span className="text-sm font-semibold">ספקים וסיכום</span>
+          <span className="num text-xs">02</span><span className="text-sm font-semibold">ספקים וחלוקה</span>
         </button>
-        <button type="button" disabled={!cart.length || split.blocked.length > 0} onClick={() => void openReview()} aria-current={step === 3 ? 'step' : undefined}
+        <button type="button" disabled={!cart.length || split.blocked.length > 0} onClick={() => void goToSummary()} aria-current={step === 3 ? 'step' : undefined}
           className={`flex min-h-14 items-center gap-2 border-b-2 border-s border-line-soft px-4 text-start transition-colors disabled:opacity-50 ${step === 3 ? 'border-b-action bg-action-wash/50 text-ink' : 'border-b-transparent text-ink-muted hover:bg-surface-sunken'}`}>
           <span className="num text-xs">03</span><span className="text-sm font-semibold">סיכום ואישור</span>
         </button>
@@ -527,23 +724,26 @@ export default function NewOrder() {
           cart={cart} q={q} setQ={setQ} cat={cat} setCat={setCat}
           onAdd={(product) => dispatch({ type: 'ADD_PRODUCT', product })}
           onQty={(productId, qty) => dispatch(qty > 0 ? { type: 'SET_QTY', productId, qty } : { type: 'REMOVE_PRODUCT', productId })}
-          onContinue={() => setStep(2)} />
-      ) : (
-        <SupplierSplitStep cart={cart} offersByProduct={offersByProduct} supplierById={supplierById} effective={effective}
-          groups={split.groups} blocked={split.blocked} total={total}
+          onContinue={() => setStep(2)} nextOrderItems={nextOrderItems} nextOrderBusyId={nextOrderBusyId}
+          onAddNextOrderItem={(item) => void addNextOrderItem(item)} onDismissNextOrderItem={(item) => void dismissNextItem(item)} />
+      ) : step === 2 ? (
+        <SupplierSplitStep cart={cart} offersByProduct={offersByProduct} supplierById={supplierById} split={split} input={splitInput}
           notes={notes} setNotes={setNotes} expectedDate={expectedDate} setExpectedDate={setExpectedDate} busy={busy}
           onSupplier={(productId, supplierId) => dispatch(supplierId
             ? { type: 'PIN_SUPPLIER', productId, supplierId }
             : { type: 'UNPIN', productId })}
           onRemove={(productId) => dispatch({ type: 'REMOVE_PRODUCT', productId })}
           onQty={(productId, qty) => dispatch({ type: 'BUMP_QTY', productId, toQty: qty })}
-          onBack={() => setStep(1)} />
+          onResolve={applyResolution}
+          onConsolidate={(supplierId) => dispatch({ type: 'CONSOLIDATE', supplierId })}
+          onBack={() => setStep(1)} onContinue={() => void goToSummary()} />
+      ) : (
+        <SummaryStep split={split} products={new Map(Object.entries(state.products))} singleSupplierName={singleSupplierName}
+          productCount={cart.length} notes={notes} expectedDate={expectedDate} busy={busy}
+          onBack={() => setStep(2)} onConfirm={() => void finalizeDraft()} />
       )}
 
-      <Modal open={reviewOpen} onClose={() => setReviewOpen(false)} title="סיכום ההזמנה" busy={busy} statusMessage={busy ? 'יוצר את ההזמנות לספקים' : undefined}>
-        <SummaryStep savings={savings} singleSupplierName={singleSupplierName} productCount={cart.length} busy={busy}
-          onBack={() => setReviewOpen(false)} onConfirm={() => void finalizeDraft()} />
-      </Modal>
+      <PriceDiffModal report={priceDiff} onClose={() => setPriceDiff(null)} />
 
       <Modal open={sendQueue !== null} onClose={() => navigate('/orders')} title="שליחת הזמנות לספקים" busy={sendingId !== null} statusMessage={sendingId ? 'פותח את הודעת הספק ומעדכן את ההזמנה' : undefined}>
         <p className="mb-3 text-sm text-ink-soft">כל הזמנה תסומן כנשלחה רק לאחר פתיחת הודעת WhatsApp שלה.</p>
@@ -572,7 +772,43 @@ export default function NewOrder() {
   );
 }
 
-/** Client-only guard: the server does not enforce min_qty, so the editor must not order below it. */
-function meetsMin(offer: SupplierProduct, qty: number): boolean {
-  return offer.min_qty == null || qty >= offer.min_qty;
+function PriceDiffModal({ report, onClose }: { report: PriceDiffReport | null; onClose: () => void }) {
+  const totalDelta = report?.oldTotal != null && report.newTotal != null
+    ? moneyFromCents(hundredths(report.newTotal) - hundredths(report.oldTotal))
+    : null;
+  return (
+    <Modal open={report !== null} onClose={onClose} title="המחירים השתנו" description="הטיוטה רועננה מול המחירים הפעילים. בדקו את השינויים ואשרו את ההזמנה שוב." wide>
+      {report?.lines.length ? (
+        <div className="divide-y divide-line-strong border-y border-line-strong">
+          {report.lines.map((line) => (
+            <div key={line.productId} className="px-3 py-3 text-sm">
+              <div className="flex flex-wrap items-start justify-between gap-2"><strong className="text-ink-body">{line.productName}</strong><span className={line.assignmentMode === 'pinned' ? 'badge-info' : 'badge-idle'}>{line.assignmentMode === 'pinned' ? 'ספק מוצמד — ההצמדה נשמרה' : line.newSupplierId !== line.supplierId ? 'בחירה אוטומטית — הספק השתנה' : 'בחירה אוטומטית'}</span></div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-center">
+                <div><span className="block text-xs text-ink-muted">לפני · {line.supplierName}</span><span className="num font-semibold">{fmtMoneyExact(line.oldUnitPrice)}</span> ליחידה</div>
+                <span className="text-ink-faint" aria-hidden="true">←</span>
+                <div><span className="block text-xs text-ink-muted">עכשיו · {line.newSupplierName}</span><span className="num font-semibold">{fmtMoneyExact(line.newUnitPrice)}</span> ליחידה</div>
+                <div className={`num font-semibold sm:text-end ${line.delta == null ? 'text-ink-muted' : line.delta > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{line.delta == null ? 'לא זמין' : signedMoney(line.delta)}</div>
+              </div>
+              <div className="mt-1 text-xs text-ink-muted">סכום שורה: <span className="num">{fmtMoneyExact(line.oldLineTotal)}</span> ← <span className="num font-semibold text-ink">{fmtMoneyExact(line.newLineTotal)}</span></div>
+            </div>
+          ))}
+        </div>
+      ) : report ? <div className="note-info">המחירים נבדקו מחדש ולא נמצא שינוי נוסף בשורות ההזמנה.</div> : null}
+      {report && <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-y border-line-strong py-3 text-sm"><span>סכום ההזמנה</span><strong className="num">{fmtMoneyExact(report.oldTotal)} ← {fmtMoneyExact(report.newTotal)}{totalDelta != null ? ` · ${signedMoney(totalDelta)}` : ''}</strong></div>}
+      <div className="mt-5 flex justify-end"><button type="button" className="btn-primary" onClick={onClose}>חזרה לסיכום ולאישור מחדש</button></div>
+    </Modal>
+  );
+}
+
+function priceKey(productId: string, supplierId: string): string {
+  return `${productId}|${supplierId}`;
+}
+
+function exactLineTotal(qty: number, unitPrice: number): number {
+  return moneyFromCents(centsFromUnits(lineUnits(qty, unitPrice)));
+}
+
+function signedMoney(value: number): string {
+  if (value === 0) return fmtMoneyExact(0);
+  return `${value > 0 ? '+' : '−'}${fmtMoneyExact(Math.abs(value))}`;
 }
