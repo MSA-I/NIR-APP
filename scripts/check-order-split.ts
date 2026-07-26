@@ -154,6 +154,8 @@ assert.equal(pinnedBeforePriceChange.groups[0].supplier.id, EXPENSIVE);
 assert.equal(pinnedAfterPriceChange.groups[0].supplier.id, EXPENSIVE);
 assert.equal(pinnedBeforePriceChange.groups[0].lines[0].unitPrice, 12);
 assert.equal(pinnedAfterPriceChange.groups[0].lines[0].unitPrice, 14);
+assert.equal(pinnedBeforePriceChange.groups[0].lines[0].lineTotal, 12);
+assert.equal(pinnedAfterPriceChange.groups[0].lines[0].lineTotal, 14);
 
 // 12. Every newly added product begins in auto mode.
 assert.deepEqual(withProduct.byId.a.assignment, { mode: 'auto' });
