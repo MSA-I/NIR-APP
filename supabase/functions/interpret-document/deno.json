@@ -1,0 +1,13 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.91.1",
+    "zod": "npm:zod@3.25.76"
+  },
+  "lock": {
+    "path": "./deno.lock",
+    "frozen": true
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}
