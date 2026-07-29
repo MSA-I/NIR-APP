@@ -97,6 +97,7 @@ interface BeginContext {
   org_id: string;
   document_id: string;
   actor_id: string;
+  interpretation_started_at?: string;
   extraction_id: string;
   extraction_contract_version?: string;
   extraction_payload?: ExtractionContract;
@@ -167,6 +168,9 @@ function pgError(message: string): EdgeError {
   if (message.includes("document_interpretation_in_progress")) {
     return new EdgeError("interpretation_in_progress", 409);
   }
+  if (message.includes("document_interpretation_attempt_mismatch")) {
+    return new EdgeError("interpretation_in_progress", 409);
+  }
   if (message.includes("document_interpretation_status_invalid")) {
     return new EdgeError("invalid_job_state", 409);
   }
@@ -195,12 +199,14 @@ async function markFailed(
   jobId: string,
   extractionId: string,
   actorId: string,
+  interpretationStartedAt: string,
   code: string,
 ): Promise<void> {
   const failed = await admin.rpc("fail_document_interpretation", {
     p_job_id: jobId,
     p_extraction_id: extractionId,
     p_actor_id: actorId,
+    p_interpretation_started_at: interpretationStartedAt,
     p_error_code: code,
     p_error_message: null,
   });
@@ -331,18 +337,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
       idempotent: true,
     }, 200);
   }
+  const interpretationStartedAt = context.interpretation_started_at;
   if (
     context.org_id !== profile.org_id || context.job_id !== job.id ||
     context.extraction_id !== extraction.id || context.actor_id !== actorId ||
+    typeof interpretationStartedAt !== "string" || !interpretationStartedAt ||
     context.extraction_contract_version !== "1" || !context.extraction_payload
   ) {
-    await markFailed(
-      admin,
-      job.id,
-      extraction.id,
-      actorId,
-      "unsupported_extraction_contract",
-    );
+    if (typeof interpretationStartedAt === "string" && interpretationStartedAt) {
+      await markFailed(
+        admin,
+        job.id,
+        extraction.id,
+        actorId,
+        interpretationStartedAt,
+        "unsupported_extraction_contract",
+      );
+    }
     return fail(cors, new EdgeError("unsupported_extraction_contract", 409));
   }
 
@@ -395,6 +406,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_job_id: job.id,
       p_extraction_id: extraction.id,
       p_actor_id: actorId,
+      p_interpretation_started_at: interpretationStartedAt,
       p_provider: PROVIDER,
       p_model: MODEL_ID,
       p_prompt_version: PROMPT_VERSION,
@@ -408,6 +420,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_duration_ms: durationMs,
     });
     if (saved.error || !saved.data) {
+      if (saved.error?.message.includes("document_interpretation_conflict")) {
+        throw new EdgeError("interpretation_conflict", 409);
+      }
+      if (saved.error?.message.includes("document_interpretation_attempt_mismatch")) {
+        throw new EdgeError("interpretation_in_progress", 409);
+      }
+      if (saved.error?.message.includes("document_interpretation_actor_mismatch")) {
+        throw new EdgeError("interpretation_in_progress", 409);
+      }
+      if (saved.error?.message.includes("document_interpretation_actor_invalid")) {
+        throw new EdgeError("not_authorized", 403);
+      }
       const existingId = await existingInterpretation(
         admin,
         context.org_id,
@@ -420,9 +444,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
           status: "review",
           idempotent: true,
         }, 200);
-      }
-      if (saved.error?.message.includes("document_interpretation_conflict")) {
-        throw new EdgeError("interpretation_conflict", 409);
       }
       throw new EdgeError("persistence_failed", 503);
     }
@@ -441,7 +462,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       : error instanceof EdgeError
       ? error
       : new EdgeError("service_unavailable", 503);
-    await markFailed(admin, job.id, extraction.id, actorId, edgeError.code);
+    await markFailed(
+      admin,
+      job.id,
+      extraction.id,
+      actorId,
+      interpretationStartedAt,
+      edgeError.code,
+    );
     console.error("interpret-document failed", edgeError.code);
     return fail(cors, edgeError);
   }

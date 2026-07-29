@@ -186,7 +186,12 @@ select document_learning_test.assert(
     )
     and not has_function_privilege(
       'authenticated',
-      'public.save_document_interpretation(uuid,uuid,uuid,text,text,text,text,jsonb,jsonb,integer)',
+      'public.save_document_interpretation(uuid,uuid,uuid,timestamp with time zone,text,text,text,text,jsonb,jsonb,integer)',
+      'EXECUTE'
+    )
+    and not has_function_privilege(
+      'authenticated',
+      'public.fail_document_interpretation(uuid,uuid,uuid,timestamp with time zone,text,text)',
       'EXECUTE'
     )
     and has_function_privilege(
@@ -194,7 +199,12 @@ select document_learning_test.assert(
     )
     and has_function_privilege(
       'service_role',
-      'public.save_document_interpretation(uuid,uuid,uuid,text,text,text,text,jsonb,jsonb,integer)',
+      'public.save_document_interpretation(uuid,uuid,uuid,timestamp with time zone,text,text,text,text,jsonb,jsonb,integer)',
+      'EXECUTE'
+    )
+    and has_function_privilege(
+      'service_role',
+      'public.fail_document_interpretation(uuid,uuid,uuid,timestamp with time zone,text,text)',
       'EXECUTE'
     ),
   'RPC grants do not preserve the authenticated/service boundary'
@@ -210,14 +220,16 @@ insert into auth.users (id, email) values
   ('26000000-0000-4000-8000-000000000002', 'document-office-a@example.test'),
   ('26000000-0000-4000-8000-000000000003', 'document-kitchen-a@example.test'),
   ('26000000-0000-4000-8000-000000000004', 'document-accountant-a@example.test'),
-  ('26000000-0000-4000-8000-000000000005', 'document-owner-b@example.test');
+  ('26000000-0000-4000-8000-000000000005', 'document-owner-b@example.test'),
+  ('26000000-0000-4000-8000-000000000006', 'document-cleanup-a@example.test');
 
 insert into public.profiles (id, org_id, full_name, role) values
   ('26000000-0000-4000-8000-000000000001', '16000000-0000-4000-8000-000000000001', 'Document owner A', 'owner'),
   ('26000000-0000-4000-8000-000000000002', '16000000-0000-4000-8000-000000000001', 'Document office A', 'office'),
   ('26000000-0000-4000-8000-000000000003', '16000000-0000-4000-8000-000000000001', 'Document kitchen A', 'kitchen'),
   ('26000000-0000-4000-8000-000000000004', '16000000-0000-4000-8000-000000000001', 'Document accountant A', 'accountant'),
-  ('26000000-0000-4000-8000-000000000005', '16000000-0000-4000-8000-000000000002', 'Document owner B', 'owner');
+  ('26000000-0000-4000-8000-000000000005', '16000000-0000-4000-8000-000000000002', 'Document owner B', 'owner'),
+  ('26000000-0000-4000-8000-000000000006', '16000000-0000-4000-8000-000000000001', 'Document cleanup A', 'office');
 
 insert into public.suppliers (id, org_id, name) values
   ('36000000-0000-4000-8000-000000000001', '16000000-0000-4000-8000-000000000001', 'ספק A'),
@@ -234,18 +246,24 @@ select
   '16000000-0000-4000-8000-000000000001/document-learning/' || n || '.pdf',
   n || '.pdf', 'application/pdf', 'other',
   '26000000-0000-4000-8000-000000000001'
-from generate_series(1, 4) n;
+from generate_series(1, 9) n;
 
 insert into public.document_processing_jobs (
-  id, org_id, document_id, requested_by, status, input_checksum
+  id, org_id, document_id, requested_by, status, input_checksum,
+  interpretation_actor_id, interpretation_started_at
 )
 select
   ('56000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
   '16000000-0000-4000-8000-000000000001',
   ('46000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
   '26000000-0000-4000-8000-000000000001',
-  'extracted', 'etag:' || repeat(n::text, 64)
-from generate_series(1, 4) n;
+  case when n in (5, 6, 9) then 'interpreting' else 'extracted' end,
+  'etag:' || repeat(n::text, 64),
+  case when n in (5, 6, 9)
+    then '26000000-0000-4000-8000-000000000002'::uuid else null end,
+  case when n in (5, 9) then now() - interval '6 minutes'
+       when n = 6 then now() else null end
+from generate_series(1, 9) n;
 
 insert into public.document_extractions (
   id, org_id, job_id, document_id, engine, model, model_version,
@@ -264,7 +282,7 @@ select
       else 'מסמך בדיקה ' || n
     end
   )
-from generate_series(1, 4) n;
+from generate_series(1, 9) n;
 
 create temporary table document_learning_business_snapshot as
 select 'document'::text as kind, id, to_jsonb(d) as value
@@ -338,6 +356,8 @@ select public.save_document_interpretation(
   '56000000-0000-4000-8000-000000000001',
   '66000000-0000-4000-8000-000000000001',
   '26000000-0000-4000-8000-000000000002',
+  (select interpretation_started_at from public.document_processing_jobs
+   where id = '56000000-0000-4000-8000-000000000001'),
   'anthropic', 'claude-sonnet-5', 'interpret-document-v1', '1',
   document_learning_test.interpretation_payload(
     '36000000-0000-4000-8000-000000000001', 'בדיקת Claude 1'
@@ -350,6 +370,7 @@ reset role;
 select document_learning_test.assert(
   (:'dl_begin_payload'::jsonb - array[
     'job_id', 'org_id', 'document_id', 'actor_id', 'extraction_id',
+    'interpretation_started_at',
     'extraction_contract_version', 'extraction_payload', 'document_kind',
     'current_supplier_id', 'already_interpreted'
   ]) = '{}'::jsonb
@@ -385,6 +406,8 @@ select public.save_document_interpretation(
   '56000000-0000-4000-8000-000000000002',
   '66000000-0000-4000-8000-000000000002',
   '26000000-0000-4000-8000-000000000003',
+  (select interpretation_started_at from public.document_processing_jobs
+   where id = '56000000-0000-4000-8000-000000000002'),
   'anthropic', 'claude-sonnet-5', 'interpret-document-v1', '1',
   document_learning_test.interpretation_payload(
     '36000000-0000-4000-8000-000000000001', 'בדיקת Claude 2'
@@ -433,6 +456,8 @@ select public.save_document_interpretation(
   '56000000-0000-4000-8000-000000000003',
   '66000000-0000-4000-8000-000000000003',
   '26000000-0000-4000-8000-000000000003',
+  (select interpretation_started_at from public.document_processing_jobs
+   where id = '56000000-0000-4000-8000-000000000003'),
   'anthropic', 'claude-sonnet-5', 'interpret-document-v1', '1',
   document_learning_test.interpretation_payload(
     '36000000-0000-4000-8000-000000000001', 'בדיקת Claude 3'
@@ -468,6 +493,8 @@ select public.save_document_interpretation(
   '56000000-0000-4000-8000-000000000004',
   '66000000-0000-4000-8000-000000000004',
   '26000000-0000-4000-8000-000000000003',
+  (select interpretation_started_at from public.document_processing_jobs
+   where id = '56000000-0000-4000-8000-000000000004'),
   'anthropic', 'claude-sonnet-5', 'interpret-document-v1', '1',
   document_learning_test.interpretation_payload(
     '36000000-0000-4000-8000-000000000001', 'בדיקת Claude 4'
@@ -509,12 +536,17 @@ select public.add_document_feedback(
 \gset dl_feedback_
 reset role;
 
+select correction_annotation_id::text as annotation_id
+from public.document_feedback where id = :'dl_feedback_feedback_id'::uuid
+\gset dl_replacement_
+
 select document_learning_test.assert(
   (select payload = :'dl_original_payload'::jsonb
    from public.document_interpretations where id = :'dl_i1_interpretation_id'::uuid)
     and (select not a.active and a.correction_annotation_id = f.correction_annotation_id
                 and f.feedback_type = 'corrected'
                 and replacement.source = 'user'
+                and replacement.applied_for_user_id = '26000000-0000-4000-8000-000000000002'
                 and replacement.interpretation_id = a.interpretation_id
          from public.document_annotations a
          join public.document_feedback f on f.id = :'dl_feedback_feedback_id'::uuid
@@ -522,6 +554,333 @@ select document_learning_test.assert(
          where a.id = :'dl_claude_annotation_id'::uuid),
   'feedback rewrote interpretation history or did not append a same-interpretation correction'
 );
+
+-- A stale interpretation may be reclaimed under the job row lock; its old timestamp is a fence.
+create temporary table document_learning_stale_attempt as
+select interpretation_started_at
+from public.document_processing_jobs
+where id = '56000000-0000-4000-8000-000000000005';
+grant select on document_learning_stale_attempt to service_role;
+
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+select public.begin_document_interpretation(
+  '56000000-0000-4000-8000-000000000005',
+  '66000000-0000-4000-8000-000000000005',
+  '26000000-0000-4000-8000-000000000002'
+)::text as payload
+\gset dl_reclaimed_same_
+
+do $$
+declare
+  v_old_started_at timestamptz;
+begin
+  select interpretation_started_at into v_old_started_at
+  from document_learning_stale_attempt;
+
+  begin
+    perform public.save_document_interpretation(
+      '56000000-0000-4000-8000-000000000005',
+      '66000000-0000-4000-8000-000000000005',
+      '26000000-0000-4000-8000-000000000002',
+      v_old_started_at,
+      'anthropic', 'claude-sonnet-5', 'interpret-document-v1', '1',
+      document_learning_test.interpretation_payload(null), '{}'::jsonb, 20
+    );
+    raise exception 'expected stale save attempt rejection';
+  exception when sqlstate '55000' then
+    if sqlerrm <> 'document_interpretation_attempt_mismatch' then raise; end if;
+  end;
+
+  begin
+    perform public.fail_document_interpretation(
+      '56000000-0000-4000-8000-000000000005',
+      '66000000-0000-4000-8000-000000000005',
+      '26000000-0000-4000-8000-000000000002',
+      v_old_started_at, 'provider_timeout', null
+    );
+    raise exception 'expected stale failure attempt rejection';
+  exception when sqlstate '55000' then
+    if sqlerrm <> 'document_interpretation_attempt_mismatch' then raise; end if;
+  end;
+end
+$$;
+reset role;
+
+select document_learning_test.assert(
+  (select interpretation_actor_id = '26000000-0000-4000-8000-000000000002'
+          and interpretation_started_at =
+            (:'dl_reclaimed_same_payload'::jsonb ->> 'interpretation_started_at')::timestamptz
+          and interpretation_started_at > now() - interval '1 minute'
+   from public.document_processing_jobs
+   where id = '56000000-0000-4000-8000-000000000005')
+    and exists (
+      select 1 from public.audit_logs
+      where action = 'document_interpretation_reclaimed'
+        and entity_id = '56000000-0000-4000-8000-000000000005'
+    ),
+  'stale same-actor reclaim did not rotate the timestamp fence or audit it'
+);
+
+-- A fresh interpretation cannot be reclaimed, while a stale one may move to another active actor.
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+do $$
+begin
+  perform public.begin_document_interpretation(
+    '56000000-0000-4000-8000-000000000006',
+    '66000000-0000-4000-8000-000000000006',
+    '26000000-0000-4000-8000-000000000003'
+  );
+  raise exception 'expected fresh interpretation reclaim rejection';
+exception when sqlstate '55000' then
+  if sqlerrm <> 'document_interpretation_in_progress' then raise; end if;
+end
+$$;
+reset role;
+
+create temporary table document_learning_cross_actor_attempt as
+select
+  interpretation_actor_id,
+  interpretation_started_at,
+  (
+    select count(*)::integer
+    from public.audit_logs
+    where action = 'document_interpretation_reclaimed'
+      and entity_id = '56000000-0000-4000-8000-000000000009'
+  ) as reclaim_audit_count
+from public.document_processing_jobs
+where id = '56000000-0000-4000-8000-000000000009';
+grant select on document_learning_cross_actor_attempt to service_role;
+
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+do $$
+declare
+  v_before record;
+  v_actor uuid;
+  v_started_at timestamptz;
+  v_audit_count integer;
+begin
+  select * into v_before from document_learning_cross_actor_attempt;
+
+  begin
+    perform public.begin_document_interpretation(
+      '56000000-0000-4000-8000-000000000009',
+      '66000000-0000-4000-8000-000000000009',
+      '26000000-0000-4000-8000-000000000005'
+    );
+    raise exception 'expected cross-tenant actor rejection';
+  exception when sqlstate '42501' then
+    if sqlerrm <> 'document_interpretation_actor_invalid' then raise; end if;
+  end;
+
+  select interpretation_actor_id, interpretation_started_at
+  into v_actor, v_started_at
+  from public.document_processing_jobs
+  where id = '56000000-0000-4000-8000-000000000009';
+  select count(*)::integer into v_audit_count
+  from public.audit_logs
+  where action = 'document_interpretation_reclaimed'
+    and entity_id = '56000000-0000-4000-8000-000000000009';
+
+  if v_actor is distinct from v_before.interpretation_actor_id
+     or v_started_at is distinct from v_before.interpretation_started_at
+     or v_audit_count is distinct from v_before.reclaim_audit_count then
+    raise exception 'cross-tenant reclaim attempt changed the job or audit ledger';
+  end if;
+end
+$$;
+
+select public.begin_document_interpretation(
+  '56000000-0000-4000-8000-000000000009',
+  '66000000-0000-4000-8000-000000000009',
+  '26000000-0000-4000-8000-000000000003'
+)::text as payload
+\gset dl_reclaimed_cross_
+
+do $$
+declare
+  v_old_actor uuid;
+  v_old_started_at timestamptz;
+begin
+  select interpretation_actor_id, interpretation_started_at
+  into v_old_actor, v_old_started_at
+  from document_learning_cross_actor_attempt;
+
+  begin
+    perform public.save_document_interpretation(
+      '56000000-0000-4000-8000-000000000009',
+      '66000000-0000-4000-8000-000000000009',
+      v_old_actor, v_old_started_at,
+      'anthropic', 'claude-sonnet-5', 'interpret-document-v1', '1',
+      document_learning_test.interpretation_payload(null), '{}'::jsonb, 20
+    );
+    raise exception 'expected old actor save rejection after reclaim';
+  exception when sqlstate '42501' then
+    if sqlerrm <> 'document_interpretation_actor_mismatch' then raise; end if;
+  end;
+
+  begin
+    perform public.fail_document_interpretation(
+      '56000000-0000-4000-8000-000000000009',
+      '66000000-0000-4000-8000-000000000009',
+      v_old_actor, v_old_started_at, 'provider_timeout', null
+    );
+    raise exception 'expected old actor failure rejection after reclaim';
+  exception when sqlstate '42501' then
+    if sqlerrm <> 'document_interpretation_actor_mismatch' then raise; end if;
+  end;
+end
+$$;
+reset role;
+
+select document_learning_test.assert(
+  (select interpretation_actor_id = '26000000-0000-4000-8000-000000000002'
+   from public.document_processing_jobs
+   where id = '56000000-0000-4000-8000-000000000006')
+    and not exists (
+      select 1 from public.audit_logs
+      where action = 'document_interpretation_reclaimed'
+        and entity_id = '56000000-0000-4000-8000-000000000006'
+    )
+    and (select status = 'interpreting'
+                and interpretation_actor_id = '26000000-0000-4000-8000-000000000003'
+                and interpretation_started_at =
+                  (:'dl_reclaimed_cross_payload'::jsonb ->> 'interpretation_started_at')::timestamptz
+         from public.document_processing_jobs
+         where id = '56000000-0000-4000-8000-000000000009')
+    and not exists (
+      select 1 from public.document_interpretations
+      where job_id = '56000000-0000-4000-8000-000000000009'
+    )
+    and (select count(*) = snapshot.reclaim_audit_count + 1
+         from public.audit_logs audit
+         cross join document_learning_cross_actor_attempt snapshot
+         where audit.action = 'document_interpretation_reclaimed'
+           and audit.entity_id = '56000000-0000-4000-8000-000000000009'
+         group by snapshot.reclaim_audit_count),
+  'fresh/cross-tenant reclaim guard or the old-attempt fence failed'
+);
+
+-- Failure cleanup is fenced to the bound actor/timestamp but survives actor deactivation.
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+select public.begin_document_interpretation(
+  '56000000-0000-4000-8000-000000000007',
+  '66000000-0000-4000-8000-000000000007',
+  '26000000-0000-4000-8000-000000000006'
+);
+do $$
+declare
+  v_started_at timestamptz;
+begin
+  select interpretation_started_at into v_started_at
+  from public.document_processing_jobs
+  where id = '56000000-0000-4000-8000-000000000007';
+  begin
+    perform public.fail_document_interpretation(
+      '56000000-0000-4000-8000-000000000007',
+      '66000000-0000-4000-8000-000000000007',
+      '26000000-0000-4000-8000-000000000001',
+      v_started_at, 'provider_timeout', null
+    );
+    raise exception 'expected wrong actor cleanup rejection';
+  exception when sqlstate '42501' then
+    if sqlerrm <> 'document_interpretation_actor_mismatch' then raise; end if;
+  end;
+end
+$$;
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+update public.profiles set active = false
+where id = '26000000-0000-4000-8000-000000000006';
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+select public.fail_document_interpretation(
+  '56000000-0000-4000-8000-000000000007',
+  '66000000-0000-4000-8000-000000000007',
+  '26000000-0000-4000-8000-000000000006',
+  (select interpretation_started_at from public.document_processing_jobs
+   where id = '56000000-0000-4000-8000-000000000007'),
+  'provider_timeout', null
+);
+reset role;
+
+select document_learning_test.assert(
+  (select status = 'failed' and last_error_code = 'provider_timeout'
+   from public.document_processing_jobs
+   where id = '56000000-0000-4000-8000-000000000007'),
+  'the bound inactive actor could not clean up its interpretation attempt'
+);
+
+-- DB validation rejects overlong annotation labels/tag keys even when no target row is expanded.
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+select public.begin_document_interpretation(
+  '56000000-0000-4000-8000-000000000008',
+  '66000000-0000-4000-8000-000000000008',
+  '26000000-0000-4000-8000-000000000002'
+);
+do $$
+declare
+  v_started_at timestamptz;
+  v_payload jsonb;
+begin
+  select interpretation_started_at into v_started_at
+  from public.document_processing_jobs
+  where id = '56000000-0000-4000-8000-000000000008';
+
+  v_payload := jsonb_set(
+    jsonb_set(
+      document_learning_test.interpretation_payload(null),
+      '{suggested_annotations,0,label}', to_jsonb(repeat('א', 201))
+    ),
+    '{suggested_annotations,0,target_block_ids}', '[]'::jsonb
+  );
+  begin
+    perform public.save_document_interpretation(
+      '56000000-0000-4000-8000-000000000008',
+      '66000000-0000-4000-8000-000000000008',
+      '26000000-0000-4000-8000-000000000002', v_started_at,
+      'anthropic', 'claude-sonnet-5', 'interpret-document-v1', '1',
+      v_payload, '{}'::jsonb, 20
+    );
+    raise exception 'expected overlong annotation label rejection';
+  exception when sqlstate '22023' then
+    if sqlerrm <> 'document_interpretation_invalid' then raise; end if;
+  end;
+
+  v_payload := jsonb_set(
+    jsonb_set(
+      document_learning_test.interpretation_payload(null),
+      '{suggested_annotations,0,tag_key}', to_jsonb(repeat('x', 101))
+    ),
+    '{suggested_annotations,0,target_block_ids}', '[]'::jsonb
+  );
+  begin
+    perform public.save_document_interpretation(
+      '56000000-0000-4000-8000-000000000008',
+      '66000000-0000-4000-8000-000000000008',
+      '26000000-0000-4000-8000-000000000002', v_started_at,
+      'anthropic', 'claude-sonnet-5', 'interpret-document-v1', '1',
+      v_payload, '{}'::jsonb, 20
+    );
+    raise exception 'expected overlong annotation tag rejection';
+  exception when sqlstate '22023' then
+    if sqlerrm <> 'document_interpretation_invalid' then raise; end if;
+  end;
+end
+$$;
+select public.fail_document_interpretation(
+  '56000000-0000-4000-8000-000000000008',
+  '66000000-0000-4000-8000-000000000008',
+  '26000000-0000-4000-8000-000000000002',
+  (select interpretation_started_at from public.document_processing_jobs
+   where id = '56000000-0000-4000-8000-000000000008'),
+  'validation_test_complete', null
+);
+reset role;
 
 -- Even with trusted-server CRUD grants, ledger triggers reject in-place mutation.
 select set_config('request.jwt.claim.role', 'service_role', true);
@@ -595,6 +954,10 @@ select count(*)::text as office_annotations_visible
 from public.document_annotations
 where applied_for_user_id = '26000000-0000-4000-8000-000000000002'
 \gset dl_kitchen_annotations_
+select count(*)::text as replacement_visible
+from public.document_annotations
+where id = :'dl_replacement_annotation_id'::uuid
+\gset dl_kitchen_replacement_
 select count(*)::text as tenant_b_rules_visible
 from public.document_learning_rules
 where org_id = '16000000-0000-4000-8000-000000000002'
@@ -606,6 +969,7 @@ select document_learning_test.assert(
     and :'dl_bi_interpretations_visible'::integer = 0
     and :'dl_kitchen_personal_visible'::integer = 0
     and :'dl_kitchen_annotations_office_annotations_visible'::integer = 0
+    and :'dl_kitchen_replacement_replacement_visible'::integer = 0
     and :'dl_kitchen_tenant_tenant_b_rules_visible'::integer = 0
     and (select org_id = '16000000-0000-4000-8000-000000000002'
          from public.document_learning_rules where id = :'dl_tenant_b_rule_id'::uuid),

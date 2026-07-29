@@ -189,7 +189,8 @@ test("Claude payload contains only allowlisted structured extraction and context
   const request = JSON.parse(String(init?.body)) as Record<string, unknown>;
   assert.equal(request.model, MODEL_ID);
   assert.equal(request.max_tokens, MAX_OUTPUT_TOKENS);
-  assert.equal(request.temperature, 0);
+  assert.equal("temperature" in request, false);
+  assert.deepEqual(request.thinking, { type: "disabled" });
   assert.ok("output_config" in request);
   assert.ok(!("output_format" in request));
 
@@ -327,6 +328,24 @@ test("well-shaped output with invented evidence IDs is still a technical failure
       content: [{
         type: "text",
         text: JSON.stringify(providerWireInterpretation(invented)),
+      }],
+    }))) as typeof fetch;
+  await assert.rejects(
+    createAnthropicProvider({ apiKey: "test-key", fetchImpl }).interpret(
+      payload(),
+    ),
+    (error) => errorCode(error) === "provider_invalid_output",
+  );
+});
+
+test("annotation labels above the database limit fail provider validation", async () => {
+  const oversized = validInterpretation();
+  oversized.suggested_annotations[0].label = "א".repeat(201);
+  const fetchImpl = (async () =>
+    jsonResponse(providerResponse({
+      content: [{
+        type: "text",
+        text: JSON.stringify(providerWireInterpretation(oversized)),
       }],
     }))) as typeof fetch;
   await assert.rejects(

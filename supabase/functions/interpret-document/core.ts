@@ -155,7 +155,7 @@ export const InterpretationSchema = z.object({
   suggested_annotations: z.array(
     z.object({
       tag_key: z.string().min(1).max(100),
-      label: z.string().min(1).max(300),
+      label: z.string().min(1).max(200),
       target_block_ids: evidenceIds,
       evidence_mark_ids: evidenceIds,
       confidence,
@@ -651,7 +651,7 @@ export function createAnthropicProvider(
       const requestBody = JSON.stringify({
         model: MODEL_ID,
         max_tokens: MAX_OUTPUT_TOKENS,
-        temperature: 0,
+        thinking: { type: "disabled" },
         system: SYSTEM_PROMPT,
         messages: [{
           role: "user",

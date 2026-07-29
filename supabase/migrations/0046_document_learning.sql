@@ -105,9 +105,9 @@ begin
          'tag_key', 'label', 'target_block_ids', 'evidence_mark_ids', 'confidence'
        ])
        or jsonb_typeof(v_item -> 'tag_key') <> 'string'
-       or length(v_item ->> 'tag_key') = 0
+       or length(trim(v_item ->> 'tag_key')) not between 1 and 100
        or jsonb_typeof(v_item -> 'label') <> 'string'
-       or length(v_item ->> 'label') = 0
+       or length(trim(v_item ->> 'label')) not between 1 and 200
        or not public.smart_document_string_array_valid(v_item -> 'target_block_ids')
        or not public.smart_document_string_array_valid(v_item -> 'evidence_mark_ids')
        or not public.smart_document_confidence_valid(v_item -> 'confidence') then
@@ -163,14 +163,25 @@ begin
 
   if new.interpretation_actor_id is distinct from old.interpretation_actor_id
      or new.interpretation_started_at is distinct from old.interpretation_started_at then
-    if old.interpretation_actor_id is not null
-       or old.interpretation_started_at is not null
-       or old.status <> 'extracted'
-       or new.status <> 'interpreting'
-       or new.interpretation_actor_id is null
-       or new.interpretation_started_at is null
-       or current_setting('app.document_interpretation_writer', true)
-            is distinct from new.interpretation_actor_id::text then
+    if old.status = 'extracted'
+       and new.status = 'interpreting'
+       and old.interpretation_actor_id is null
+       and old.interpretation_started_at is null
+       and new.interpretation_actor_id is not null
+       and new.interpretation_started_at is not null
+       and current_setting('app.document_interpretation_writer', true)
+            is not distinct from new.interpretation_actor_id::text then
+      null;
+    elsif old.status = 'interpreting'
+       and new.status = 'interpreting'
+       and old.interpretation_actor_id is not null
+       and old.interpretation_started_at <= clock_timestamp() - interval '5 minutes'
+       and new.interpretation_actor_id is not null
+       and new.interpretation_started_at > old.interpretation_started_at
+       and current_setting('app.document_interpretation_writer', true)
+            is not distinct from new.interpretation_actor_id::text then
+      null;
+    else
       raise exception 'document_interpretation_actor_immutable' using errcode = '42501';
     end if;
   elsif old.status = 'extracted' and new.status = 'interpreting' then
@@ -855,7 +866,7 @@ begin
     ) values (
       v_annotation.org_id, v_annotation.interpretation_id, v_annotation.extraction_id,
       v_annotation.document_id, v_annotation.target_kind, v_annotation.target_id,
-      v_tag_key, v_label, 'user', v_annotation.applied_for_user_id,
+      v_tag_key, v_label, 'user', v_actor,
       v_annotation.confidence,
       v_annotation.evidence_mark_ids, v_actor
     ) returning id into v_correction_id;
@@ -1068,6 +1079,8 @@ declare
   v_document public.documents;
   v_existing_id uuid;
   v_rule_count integer;
+  v_reclaimed boolean := false;
+  v_attempt_started_at timestamptz;
 begin
   if auth.role() is distinct from 'service_role' then
     raise exception 'not_authorized' using errcode = '42501';
@@ -1107,9 +1120,12 @@ begin
     );
   end if;
   if v_job.status = 'interpreting' then
-    raise exception 'document_interpretation_in_progress' using errcode = '55000';
-  end if;
-  if v_job.status <> 'extracted' then
+    if v_job.interpretation_started_at is null
+       or v_job.interpretation_started_at > clock_timestamp() - interval '5 minutes' then
+      raise exception 'document_interpretation_in_progress' using errcode = '55000';
+    end if;
+    v_reclaimed := true;
+  elsif v_job.status <> 'extracted' then
     raise exception 'document_interpretation_status_invalid' using errcode = '55000';
   end if;
 
@@ -1124,23 +1140,45 @@ begin
   update public.document_processing_jobs
   set status = 'interpreting',
       interpretation_actor_id = p_actor_id,
-      interpretation_started_at = now()
-  where id = v_job.id;
+      interpretation_started_at = clock_timestamp()
+  where id = v_job.id
+  returning interpretation_started_at into v_attempt_started_at;
 
-  insert into public.audit_logs (
-    org_id, user_id, action, entity_type, entity_id, new_values, reason
-  ) values (
-    v_job.org_id, null, 'document_interpretation_started',
-    'document_processing_jobs', v_job.id,
-    jsonb_build_object('extraction_id', v_extraction.id, 'actor_id', p_actor_id),
-    'server-side structured interpretation started'
-  );
+  if v_reclaimed then
+    insert into public.audit_logs (
+      org_id, user_id, action, entity_type, entity_id, old_values, new_values, reason
+    ) values (
+      v_job.org_id, null, 'document_interpretation_reclaimed',
+      'document_processing_jobs', v_job.id,
+      jsonb_build_object(
+        'extraction_id', v_extraction.id,
+        'actor_id', v_job.interpretation_actor_id,
+        'started_at', v_job.interpretation_started_at
+      ),
+      jsonb_build_object(
+        'extraction_id', v_extraction.id,
+        'actor_id', p_actor_id,
+        'started_at', v_attempt_started_at
+      ),
+      'stale document interpretation reclaimed after five minutes'
+    );
+  else
+    insert into public.audit_logs (
+      org_id, user_id, action, entity_type, entity_id, new_values, reason
+    ) values (
+      v_job.org_id, null, 'document_interpretation_started',
+      'document_processing_jobs', v_job.id,
+      jsonb_build_object('extraction_id', v_extraction.id, 'actor_id', p_actor_id),
+      'server-side structured interpretation started'
+    );
+  end if;
 
   return jsonb_build_object(
     'job_id', v_job.id,
     'org_id', v_job.org_id,
     'document_id', v_job.document_id,
     'actor_id', p_actor_id,
+    'interpretation_started_at', v_attempt_started_at,
     'extraction_id', v_extraction.id,
     'extraction_contract_version', v_extraction.contract_version,
     'extraction_payload', v_extraction.payload,
@@ -1155,6 +1193,7 @@ create or replace function public.save_document_interpretation(
   p_job_id uuid,
   p_extraction_id uuid,
   p_actor_id uuid,
+  p_interpretation_started_at timestamptz,
   p_provider text,
   p_model text,
   p_prompt_version text,
@@ -1205,6 +1244,12 @@ begin
     raise exception 'document_processing_job_unknown' using errcode = 'P0002';
   end if;
   perform public.assert_document_interpretation_actor(v_job.org_id, p_actor_id);
+  if v_job.interpretation_actor_id is distinct from p_actor_id then
+    raise exception 'document_interpretation_actor_mismatch' using errcode = '42501';
+  end if;
+  if v_job.interpretation_started_at is distinct from p_interpretation_started_at then
+    raise exception 'document_interpretation_attempt_mismatch' using errcode = '55000';
+  end if;
 
   select * into v_existing
   from public.document_interpretations
@@ -1223,9 +1268,6 @@ begin
   end if;
   if v_job.status <> 'interpreting' then
     raise exception 'document_interpretation_status_invalid' using errcode = '55000';
-  end if;
-  if v_job.interpretation_actor_id is distinct from p_actor_id then
-    raise exception 'document_interpretation_actor_mismatch' using errcode = '42501';
   end if;
 
   select * into v_extraction
@@ -1309,6 +1351,7 @@ create or replace function public.fail_document_interpretation(
   p_job_id uuid,
   p_extraction_id uuid,
   p_actor_id uuid,
+  p_interpretation_started_at timestamptz,
   p_error_code text,
   p_error_message text default null
 )
@@ -1336,16 +1379,19 @@ begin
   if not found then
     raise exception 'document_processing_job_unknown' using errcode = 'P0002';
   end if;
-  perform public.assert_document_interpretation_actor(v_job.org_id, p_actor_id);
+  if v_job.interpretation_actor_id is null
+     or v_job.interpretation_actor_id is distinct from p_actor_id then
+    raise exception 'document_interpretation_actor_mismatch' using errcode = '42501';
+  end if;
+  if v_job.interpretation_started_at is distinct from p_interpretation_started_at then
+    raise exception 'document_interpretation_attempt_mismatch' using errcode = '55000';
+  end if;
   if not exists (
     select 1 from public.document_extractions e
     where e.org_id = v_job.org_id and e.id = p_extraction_id
       and e.job_id = v_job.id and e.document_id = v_job.document_id
   ) then
     raise exception 'document_extraction_unknown' using errcode = 'P0002';
-  end if;
-  if v_job.interpretation_actor_id is distinct from p_actor_id then
-    raise exception 'document_interpretation_actor_mismatch' using errcode = '42501';
   end if;
   if v_job.status = 'failed' and v_job.last_error_code = v_error_code then
     return v_job.id;
@@ -1398,14 +1444,14 @@ revoke all on function public.begin_document_interpretation(uuid, uuid, uuid)
   from public, anon, authenticated;
 grant execute on function public.begin_document_interpretation(uuid, uuid, uuid) to service_role;
 revoke all on function public.save_document_interpretation(
-  uuid, uuid, uuid, text, text, text, text, jsonb, jsonb, integer
+  uuid, uuid, uuid, timestamptz, text, text, text, text, jsonb, jsonb, integer
 ) from public, anon, authenticated;
 grant execute on function public.save_document_interpretation(
-  uuid, uuid, uuid, text, text, text, text, jsonb, jsonb, integer
+  uuid, uuid, uuid, timestamptz, text, text, text, text, jsonb, jsonb, integer
 ) to service_role;
-revoke all on function public.fail_document_interpretation(uuid, uuid, uuid, text, text)
+revoke all on function public.fail_document_interpretation(uuid, uuid, uuid, timestamptz, text, text)
   from public, anon, authenticated;
-grant execute on function public.fail_document_interpretation(uuid, uuid, uuid, text, text)
+grant execute on function public.fail_document_interpretation(uuid, uuid, uuid, timestamptz, text, text)
   to service_role;
 
 comment on table public.document_interpretations is
