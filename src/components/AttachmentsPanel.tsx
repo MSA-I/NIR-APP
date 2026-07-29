@@ -1,5 +1,6 @@
 import { Eye, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { fmtDate, fmtDateTime } from '../lib/format';
 import { ok, toHebrewError } from '../lib/errors';
@@ -7,11 +8,17 @@ import { supabase } from '../lib/supabase';
 import type { DocumentRow } from '../lib/types';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { ActionMenu } from './ActionMenu';
-import { ConfirmDialog, ErrorNote, Note, Skeleton, useToast } from './ui';
-import { uploadDocument } from './FileUpload';
+import { ConfirmDialog, ErrorNote, Note, Skeleton, StatusBadge, useToast } from './ui';
+import {
+  DOCUMENT_UPLOAD_ACCEPT,
+  documentUploadFailure,
+  mergeDocumentUploadSummary,
+  uploadDocument,
+} from './FileUpload';
 import { openReservedPopup } from '../lib/popup';
-import { mergeUploadBatchSummary, runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
+import { runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
+import { DOCUMENT_PROCESSING_STAGE_META, useDocumentProcessing } from '../lib/useDocumentProcessing';
 
 export interface LinkedReceipt {
   id: string;
@@ -41,6 +48,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
   const receiptById = new Map(receipts.map((receipt) => [receipt.id, receipt]));
   const canDelete = profile?.role === 'owner' || profile?.role === 'office';
   const canUpload = profile != null && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canReview = canUpload;
 
   const { data, loading, error, refetch } = useQuery<{ items: AttachmentItem[]; thumbs: Record<string, string> }>(async () => {
     const invoicePromise = fetchAll<DocumentRow>((from, to) => supabase.from('documents').select('*')
@@ -75,6 +83,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
     }
     return { items, thumbs };
   }, [invoiceId, receiptsKey]);
+  const processing = useDocumentProcessing(canReview && data ? data.items.map(({ doc }) => doc.id) : []);
 
   async function uploadFiles(files: File[], previousSummary: UploadBatchSummary | null = null) {
     if (!files.length || !profile || !canUpload) return;
@@ -85,18 +94,25 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
       const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, 'invoice', invoiceId, file, {
         documentKind: 'invoice', supplierId: invoice.supplier_id, documentDate: invoice.invoice_date,
       }));
-      const failed = result.failed.map(({ item }) => item);
+      const failures = result.failed.map(({ item, error }) => ({ item, ...documentUploadFailure(error) }));
+      const failed = failures.filter(({ retryable }) => retryable).map(({ item }) => item);
+      const registered = failures.filter(({ registered: isRegistered }) => isRegistered).length;
       setRetryFiles(failed);
-      setUploadSummary(mergeUploadBatchSummary(previousSummary, result, (file) => file.name));
-      if (result.succeeded.length) await refetch();
-      if (failed.length) {
-        toast(`${result.succeeded.length} מסמכים הועלו, ${failed.length} נכשלו: ${failed.map((file) => file.name).join(', ')}`, 'error');
+      const summary = mergeDocumentUploadSummary(previousSummary, files, result);
+      setUploadSummary(summary);
+      if (result.succeeded.length || registered) await refetch();
+      if (summary.failed.length) {
+        const detail = failures[0] ? ` ${failures[0].message}` : '';
+        toast(`${summary.succeeded.length} הועלו וממתינים לעיבוד, ${summary.failed.length} לא הושלמו.${detail}`, 'error');
       } else {
-        toast(result.succeeded.length === 1 ? 'המסמך הועלה' : `${result.succeeded.length} מסמכים הועלו`);
+        toast(result.succeeded.length === 1 ? 'הועלה וממתין לעיבוד' : `${result.succeeded.length} קבצים הועלו וממתינים לעיבוד`);
       }
     } catch (e) {
       setRetryFiles(files);
-      setUploadSummary({ succeeded: previousSummary?.succeeded ?? [], failed: files.map((file) => file.name) });
+      setUploadSummary(mergeDocumentUploadSummary(previousSummary, files, {
+        succeeded: [],
+        failed: files.map((item) => ({ item, error: e })),
+      }));
       toast(toHebrewError(e), 'error');
     } finally {
       setBusy(false);
@@ -148,7 +164,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
             הוספת קבצים
           </button>
-          <input ref={inputRef} type="file" hidden multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,image/avif,application/pdf"
+          <input ref={inputRef} type="file" hidden multiple accept={DOCUMENT_UPLOAD_ACCEPT} data-document-upload-input
             onChange={(event) => void onPick(event.target.files)} />
         </>}
       </div>
@@ -156,13 +172,15 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
       {uploadSummary && (
         <Note tone={uploadSummary.failed.length ? 'alert' : 'done'} className="mb-2">
           <div role="status">
-            <div><span className="num">{uploadSummary.succeeded.length}</span> הועלו · <span className="num">{uploadSummary.failed.length}</span> נכשלו</div>
+            <div><span className="num">{uploadSummary.succeeded.length}</span> הועלו וממתינים לעיבוד · <span className="num">{uploadSummary.failed.length}</span> לא הושלמו</div>
             {uploadSummary.failed.length > 0 && (
               <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs">נכשלו: {uploadSummary.failed.join(', ')}</span>
-                <button type="button" className="btn-ghost min-h-11" disabled={busy} onClick={() => void uploadFiles(retryFiles, uploadSummary)}>
-                  ניסיון חוזר לנכשלים בלבד
-                </button>
+                {retryFiles.length > 0 && (
+                  <button type="button" className="btn-ghost min-h-11" disabled={busy} onClick={() => void uploadFiles(retryFiles, uploadSummary)}>
+                    ניסיון חוזר לנכשלים בלבד
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -170,6 +188,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
       )}
 
       {error && data && <ErrorNote message={error} />}
+      {processing.error && data && <ErrorNote message={processing.error} />}
       {error && !data ? (
         <ErrorNote message={error} />
       ) : loading ? (
@@ -187,6 +206,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
           {data.items.map(({ doc, source, sourceDate, direct }) => {
             const thumb = data.thumbs[doc.storage_path];
             const image = !!thumb && !!doc.mime_type?.startsWith('image/');
+            const stage = processing.data ? processing.snapshots[doc.id]?.stage ?? 'unprocessed' : null;
             return (
               <li key={doc.id} className="flex min-h-16 items-center gap-3 py-2">
                 <button type="button" onClick={() => void open(doc)} aria-label={`פתיחת ${doc.file_name}`}
@@ -200,6 +220,18 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-muted">
                     <span className="font-medium text-ink-soft">{source}</span>
                     <span>{sourceDate ? fmtDate(sourceDate) : fmtDateTime(doc.created_at)}</span>
+                    {canReview && (
+                      <span data-document-processing-status={stage ?? 'loading'}>
+                        {stage
+                          ? <StatusBadge meta={DOCUMENT_PROCESSING_STAGE_META[stage]} />
+                          : <><Skeleton className="h-6 w-24" /><span className="sr-only">סטטוס העיבוד נטען</span></>}
+                      </span>
+                    )}
+                    {canReview && (
+                      <Link to={`/documents/${doc.id}/review`} className="link inline-flex min-h-11 items-center" data-document-review-link>
+                        בדיקת מסמך
+                      </Link>
+                    )}
                   </div>
                 </div>
                 <ActionMenu label={`פעולות עבור ${doc.file_name}`} items={[

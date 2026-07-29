@@ -1,18 +1,108 @@
 import { useEffect, useRef, useState } from 'react';
 import { Camera, FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
+import { Link } from 'react-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
-import { useToast, Skeleton, ConfirmDialog, ErrorNote, Note } from './ui';
+import { useToast, Skeleton, ConfirmDialog, ErrorNote, Note, StatusBadge } from './ui';
 import { ok, toHebrewError } from '../lib/errors';
 import { useQuery, unwrap } from '../lib/useQuery';
 import type { DocumentKind, DocumentRow } from '../lib/types';
 import { fmtDateTime } from '../lib/format';
 import { openReservedPopup } from '../lib/popup';
-import { mergeUploadBatchSummary, runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
+import {
+  mergeUploadBatchSummary,
+  runUploadBatch,
+  type UploadBatchResult,
+  type UploadBatchSummary,
+} from '../lib/uploadBatch';
 import { fetchAll } from '../lib/supabasePaging';
+import { DOCUMENT_PROCESSING_STAGE_META, useDocumentProcessing } from '../lib/useDocumentProcessing';
 
-const MAX_DIM = 1600;      // enough to read an invoice; a raw phone photo is ~4x this
-const JPEG_QUALITY = 0.8;
+export const DOCUMENT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+
+const DOCUMENT_MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  heic: 'image/heic',
+  heif: 'image/heif',
+  gif: 'image/gif',
+  avif: 'image/avif',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  csv: 'text/csv',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  rtf: 'application/rtf',
+  txt: 'text/plain',
+  html: 'text/html',
+  htm: 'text/html',
+  odt: 'application/vnd.oasis.opendocument.text',
+};
+
+const DOCUMENT_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/gif', 'image/avif',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/rtf', 'text/rtf',
+  'text/plain', 'text/html',
+  'application/vnd.oasis.opendocument.text',
+]);
+
+export const DOCUMENT_UPLOAD_ACCEPT = [
+  ...DOCUMENT_MIME_TYPES,
+  ...Object.keys(DOCUMENT_MIME_BY_EXTENSION).map((extension) => `.${extension}`),
+].join(',');
+
+class DocumentUploadError extends Error {
+  constructor(message: string, readonly retryable: boolean, readonly registered = false) {
+    super(message);
+  }
+}
+
+export function documentUploadFailure(error: unknown) {
+  if (error instanceof DocumentUploadError) {
+    return { message: error.message, retryable: error.retryable, registered: error.registered };
+  }
+  const raw = error instanceof Error ? error.message : String(error);
+  const retryable = /(?:failed to fetch|fetch failed|network|timed? ?out|temporar(?:y|ily)|service unavailable|\b(?:408|429|5\d\d)\b)/i.test(raw);
+  return { message: toHebrewError(error), retryable, registered: false };
+}
+
+export function mergeDocumentUploadSummary(
+  previous: UploadBatchSummary | null,
+  attempted: readonly File[],
+  result: UploadBatchResult<File>,
+) {
+  const remainingAttempts = new Map<string, number>();
+  for (const file of attempted) remainingAttempts.set(file.name, (remainingAttempts.get(file.name) ?? 0) + 1);
+  const untouchedFailures = (previous?.failed ?? []).filter((name) => {
+    const count = remainingAttempts.get(name) ?? 0;
+    if (!count) return true;
+    remainingAttempts.set(name, count - 1);
+    return false;
+  });
+  const current = mergeUploadBatchSummary(previous, result, (file) => file.name);
+  return { ...current, failed: [...untouchedFailures, ...current.failed] };
+}
+
+function uploadMimeType(file: File) {
+  if (file.size > DOCUMENT_UPLOAD_MAX_BYTES) {
+    throw new DocumentUploadError('הקובץ גדול מ־10MB. יש לבחור קובץ קטן יותר.', false);
+  }
+  const suppliedMime = file.type.trim().toLowerCase();
+  if (DOCUMENT_MIME_TYPES.has(suppliedMime)) return suppliedMime;
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+  const extensionMime = DOCUMENT_MIME_BY_EXTENSION[extension];
+  if (extensionMime) return extensionMime;
+  throw new DocumentUploadError('סוג הקובץ אינו נתמך. ניתן להעלות PDF, תמונה, Excel, Word, RTF, TXT, HTML או ODT.', false);
+}
 
 export const DOCUMENT_KIND_OPTIONS: { value: DocumentKind; label: string }[] = [
   { value: 'invoice', label: 'חשבונית' },
@@ -31,6 +121,7 @@ export interface DocumentMetadata {
   documentKind?: DocumentKind;
   supplierId?: string | null;
   documentDate?: string | null;
+  enqueueProcessing?: boolean;
 }
 
 function defaultDocumentKind(entityType: string): DocumentKind {
@@ -41,34 +132,6 @@ function defaultDocumentKind(entityType: string): DocumentKind {
 }
 
 /**
- * Shrinks a phone photo (~3.5MB) to ~350KB before upload. Invoices are read, not zoomed,
- * so 1600px is plenty -- and documents are kept 7 years, so the storage never shrinks back.
- * Non-images (PDFs) and anything that fails to decode pass through untouched.
- */
-async function compressImage(file: File): Promise<File> {
-  if (!file.type.startsWith('image/')) return file;
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, MAX_DIM / Math.max(bitmap.width, bitmap.height));
-    if (scale === 1 && file.size < 500_000) { bitmap.close(); return file; }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) { bitmap.close(); return file; }
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
-
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', JPEG_QUALITY));
-    if (!blob || blob.size >= file.size) return file;   // already smaller than we'd make it
-    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
-  } catch {
-    return file;   // HEIC on an old browser, corrupt file -- upload the original
-  }
-}
-
-/**
  * Uploads a file to the private `documents` bucket and registers it on an entity.
  * A null entityId is an inbox capture (migration 0014): the file lands under
  * {org_id}/inbox/ and the row carries entity_type='inbox' with no entity until it is
@@ -76,23 +139,26 @@ async function compressImage(file: File): Promise<File> {
  * reads only the leading org segment.
  */
 export async function uploadDocument(orgId: string, entityType: string, entityId: string | null, file: File, metadata: DocumentMetadata = {}) {
-  const upload = await compressImage(file);
-  const safeName = upload.name.replace(/[^\w.\-]+/g, '_');
+  const mimeType = uploadMimeType(file);
+  const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+  const { data: user, error: userError } = await supabase.auth.getUser();
+  if (userError || !user.user) throw new Error(userError?.message ?? 'unauthenticated');
   // org_id must lead the path -- the bucket's RLS policy reads it to enforce tenant isolation.
   const path = entityId
     ? `${orgId}/${entityType}/${entityId}/${Date.now()}_${safeName}`
     : `${orgId}/inbox/${Date.now()}_${safeName}`;
-  const up = await supabase.storage.from('documents').upload(path, upload, { contentType: upload.type });
+  // Upload the exact File object. Canvas/Blob conversion would discard source pixels,
+  // orientation and metadata needed by OCR and long-term document evidence.
+  const up = await supabase.storage.from('documents').upload(path, file, { contentType: mimeType });
   if (up.error) throw new Error(up.error.message);
-  const { data: user } = await supabase.auth.getUser();
   const ins = await supabase.from('documents').insert({
     org_id: orgId, entity_type: entityType, entity_id: entityId,
-    storage_path: path, file_name: file.name, mime_type: upload.type, uploaded_by: user.user?.id,
+    storage_path: path, file_name: file.name, mime_type: mimeType, uploaded_by: user.user.id,
     document_kind: metadata.documentKind ?? defaultDocumentKind(entityType),
     supplier_id: metadata.supplierId ?? null,
     document_date: metadata.documentDate ?? null,
-  });
-  if (ins.error) {
+  }).select('id').single();
+  if (ins.error || !ins.data) {
     // The row never existed, so this cleanup can only target the object created above.
     // Preserve the insert error: a cleanup failure is secondary and must not hide the cause.
     try {
@@ -101,8 +167,21 @@ export async function uploadDocument(orgId: string, entityType: string, entityId
     } catch (cleanupError) {
       console.error('[supplyflow] failed to clean up unregistered document', cleanupError);
     }
-    throw new Error(ins.error.message);
+    throw new Error(ins.error?.message ?? 'document registration failed');
   }
+  if (metadata.enqueueProcessing === false) {
+    return { documentId: ins.data.id, jobId: null };
+  }
+  const queued = await supabase.rpc('enqueue_document_processing', { p_document_id: ins.data.id });
+  if (queued.error || typeof queued.data !== 'string') {
+    // The source and registry row are durable now; retrying the whole upload would duplicate them.
+    throw new DocumentUploadError(
+      'הקובץ נשמר, אך לא נכנס לתור העיבוד. ניתן לנסות עיבוד מחדש מגלריית המסמכים.',
+      false,
+      true,
+    );
+  }
+  return { documentId: ins.data.id, jobId: queued.data };
 }
 
 async function entityMetadata(entityType: string, entityId: string, documentKind: DocumentKind): Promise<DocumentMetadata> {
@@ -140,6 +219,8 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   const [pending, setPending] = useState<DocumentRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [documentKind, setDocumentKind] = useState<DocumentKind>(() => defaultDocumentKind(entityType));
+  const canDelete = profile?.role === 'owner' || profile?.role === 'office';
+  const canReview = profile != null && ['owner', 'office', 'kitchen'].includes(profile.role);
 
   useEffect(() => setDocumentKind(defaultDocumentKind(entityType)), [entityType]);
 
@@ -147,26 +228,40 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
     fetchAll<DocumentRow>((from, to) => supabase.from('documents').select('*').eq('entity_type', entityType).eq('entity_id', entityId)
       .is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to)),
     [entityType, entityId]);
+  const processing = useDocumentProcessing(canReview && docs ? docs.map((doc) => doc.id) : []);
 
   async function uploadFiles(files: File[], previousSummary: UploadBatchSummary | null = null) {
     if (!files.length || !profile) return;
     setBusy(true);
     try {
       const metadata = await entityMetadata(entityType, entityId, documentKind);
-      const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, entityType, entityId, file, metadata));
-      const failed = result.failed.map(({ item }) => item);
+      const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, entityType, entityId, file, {
+        ...metadata,
+        enqueueProcessing: canReview,
+      }));
+      const failures = result.failed.map(({ item, error }) => ({ item, ...documentUploadFailure(error) }));
+      const failed = failures.filter(({ retryable }) => retryable).map(({ item }) => item);
+      const registered = failures.filter(({ registered: isRegistered }) => isRegistered).length;
       setRetryFiles(failed);
-      const summary = mergeUploadBatchSummary(previousSummary, result, (file) => file.name);
+      const summary = mergeDocumentUploadSummary(previousSummary, files, result);
       setUploadSummary(summary);
-      if (result.succeeded.length) await refetch();
-      if (failed.length) {
-        toast(`${result.succeeded.length} קבצים הועלו, ${failed.length} נכשלו: ${failed.map((file) => file.name).join(', ')}`, 'error');
+      if (result.succeeded.length || registered) await refetch();
+      if (summary.failed.length) {
+        const succeededLabel = canReview ? 'הועלו וממתינים לעיבוד' : 'הועלו';
+        const detail = failures[0] ? ` ${failures[0].message}` : '';
+        toast(`${summary.succeeded.length} ${succeededLabel}, ${summary.failed.length} לא הושלמו.${detail}`, 'error');
       } else {
-        toast(result.succeeded.length === 1 ? 'הקובץ הועלה בהצלחה' : `${result.succeeded.length} קבצים הועלו בהצלחה`);
+        toast(canReview
+          ? result.succeeded.length === 1 ? 'הועלה וממתין לעיבוד' : `${result.succeeded.length} קבצים הועלו וממתינים לעיבוד`
+          : result.succeeded.length === 1 ? 'הקובץ הועלה בהצלחה' : `${result.succeeded.length} קבצים הועלו בהצלחה`);
       }
     } catch (e) {
-      setRetryFiles(files);
-      setUploadSummary({ succeeded: previousSummary?.succeeded ?? [], failed: files.map((file) => file.name) });
+      const failure = documentUploadFailure(e);
+      setRetryFiles(failure.retryable ? files : []);
+      setUploadSummary(mergeDocumentUploadSummary(previousSummary, files, {
+        succeeded: [],
+        failed: files.map((item) => ({ item, error: e })),
+      }));
       toast(toHebrewError(e), 'error');
     } finally {
       setBusy(false);
@@ -213,8 +308,6 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
     }
   }
 
-  const canDelete = profile?.role === 'owner' || profile?.role === 'office';
-
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
@@ -236,26 +329,32 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
               {capture ? 'צילום / העלאה' : 'העלאת קובץ'}
           </button>
         </div>}
-        <input ref={inputRef} type="file" hidden multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,image/avif,application/pdf"
+        <input ref={inputRef} type="file" hidden multiple accept={DOCUMENT_UPLOAD_ACCEPT} data-document-upload-input
           {...(capture ? { capture: 'environment' as const } : {})}
           onChange={(e) => void onPick(e.target.files)} />
       </div>
       {uploadSummary && (
         <Note tone={uploadSummary.failed.length ? 'alert' : 'done'} className="mb-2">
           <div role="status">
-            <div><span className="num">{uploadSummary.succeeded.length}</span> הועלו · <span className="num">{uploadSummary.failed.length}</span> נכשלו</div>
+            <div>
+              <span className="num">{uploadSummary.succeeded.length}</span> {canReview ? 'הועלו וממתינים לעיבוד' : 'הועלו'} ·{' '}
+              <span className="num">{uploadSummary.failed.length}</span> לא הושלמו
+            </div>
             {uploadSummary.failed.length > 0 && (
               <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs">נכשלו: {uploadSummary.failed.join(', ')}</span>
-                <button type="button" className="btn-ghost min-h-11" disabled={busy} onClick={() => void uploadFiles(retryFiles, uploadSummary)}>
-                  ניסיון חוזר לנכשלים בלבד
-                </button>
+                {retryFiles.length > 0 && (
+                  <button type="button" className="btn-ghost min-h-11" disabled={busy} onClick={() => void uploadFiles(retryFiles, uploadSummary)}>
+                    ניסיון חוזר לנכשלים בלבד
+                  </button>
+                )}
               </div>
             )}
           </div>
         </Note>
       )}
       {error && docs && <ErrorNote message={error} />}
+      {processing.error && docs && <ErrorNote message={processing.error} />}
       {fetching && docs && <div className="mb-2 text-xs text-ink-muted" role="status">רשימת המסמכים מתעדכנת…</div>}
       {error && !docs ? (
         <ErrorNote message={error} />
@@ -274,19 +373,34 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
         </div>
       ) : docs?.length ? (
         <ul className="divide-y divide-line-soft border border-line-soft rounded-lg">
-          {docs.map((d) => (
-            <li key={d.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-              <FileText size={15} className="text-ink-faint shrink-0" />
-              <button className="link truncate" onClick={() => void open(d)}>{d.file_name}</button>
-              <span className="hidden text-xs text-ink-muted sm:inline">{documentKindLabel(d.document_kind)}</span>
-              <span className="text-xs text-ink-muted ms-auto shrink-0">{fmtDateTime(d.created_at)}</span>
-              {canDelete && (
-                <button className="btn-ghost p-1.5! min-w-11 min-h-11 text-ink-faint hover:text-alert-solid" onClick={() => setPending(d)} aria-label="מחיקה">
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </li>
-          ))}
+          {docs.map((d) => {
+            const stage = processing.data ? processing.snapshots[d.id]?.stage ?? 'unprocessed' : null;
+            return (
+              <li key={d.id} className="flex min-h-14 flex-wrap items-center gap-2 px-3 py-2 text-sm">
+                <FileText size={15} className="shrink-0 text-ink-faint" />
+                <button className="link min-w-32 flex-1 truncate text-start" onClick={() => void open(d)}>{d.file_name}</button>
+                <span className="hidden text-xs text-ink-muted sm:inline">{documentKindLabel(d.document_kind)}</span>
+                {canReview && (
+                  <span data-document-processing-status={stage ?? 'loading'}>
+                    {stage
+                      ? <StatusBadge meta={DOCUMENT_PROCESSING_STAGE_META[stage]} />
+                      : <><Skeleton className="h-6 w-24" /><span className="sr-only">סטטוס העיבוד נטען</span></>}
+                  </span>
+                )}
+                <span className="text-xs text-ink-muted">{fmtDateTime(d.created_at)}</span>
+                {canReview && (
+                  <Link to={`/documents/${d.id}/review`} className="btn-ghost min-h-11 px-2!" data-document-review-link>
+                    בדיקה
+                  </Link>
+                )}
+                {canDelete && (
+                  <button className="btn-ghost p-1.5! min-w-11 min-h-11 text-ink-faint hover:text-alert-solid" onClick={() => setPending(d)} aria-label="מחיקה">
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <div className="text-sm text-ink-muted border border-dashed border-line rounded-lg px-3 py-4 text-center">אין מסמכים</div>

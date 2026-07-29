@@ -1,0 +1,472 @@
+import { useEffect, useMemo } from 'react';
+import type { DocumentExportTemplate } from './documentExport';
+import { supabase } from './supabase';
+import { fetchAll, fetchInChunks } from './supabasePaging';
+import type {
+  DocumentExtraction,
+  DocumentProcessingJob,
+  DocumentProcessingStatus,
+  DocumentRow,
+} from './types';
+import { useQuery } from './useQuery';
+
+export const DOCUMENT_PROCESSING_CHANGED_EVENT = 'sf:document-processing-changed';
+
+export type DocumentProcessingStage =
+  | 'unprocessed'
+  | 'queued'
+  | 'processing'
+  | 'review'
+  | 'completed'
+  | 'failed';
+
+export const DOCUMENT_PROCESSING_STAGE_META: Record<
+  DocumentProcessingStage,
+  { label: string; tone: 'idle' | 'await' | 'info' | 'done' | 'alert' }
+> = {
+  unprocessed: { label: 'טרם נשלח לעיבוד', tone: 'idle' },
+  queued: { label: 'ממתין לעיבוד', tone: 'await' },
+  processing: { label: 'בעיבוד', tone: 'info' },
+  review: { label: 'דורש בדיקה', tone: 'await' },
+  completed: { label: 'הושלם', tone: 'done' },
+  failed: { label: 'נכשל', tone: 'alert' },
+};
+
+export type InterpretationContract = {
+  schema_version: '1';
+  document_type:
+    | 'invoice'
+    | 'delivery_note'
+    | 'credit_note'
+    | 'price_list'
+    | 'quote'
+    | 'payment_confirmation'
+    | 'other';
+  document_type_confidence: number | null;
+  supplier: {
+    suggested_id: string | null;
+    suggested_name: string | null;
+    confidence: number | null;
+    evidence_block_ids: string[];
+  };
+  fields: Array<{
+    key: string;
+    value: string | number | boolean | null;
+    confidence: number | null;
+    evidence_block_ids: string[];
+  }>;
+  line_items: Array<{
+    source_row: number | null;
+    values: Record<string, string | number | null>;
+    evidence_block_ids: string[];
+  }>;
+  suggested_annotations: Array<{
+    tag_key: string;
+    label: string;
+    target_block_ids: string[];
+    evidence_mark_ids: string[];
+    confidence: number | null;
+  }>;
+};
+
+export interface DocumentInterpretation {
+  id: string;
+  org_id: string;
+  job_id: string;
+  extraction_id: string;
+  document_id: string;
+  interpreted_for_user_id: string;
+  provider: string;
+  model: string;
+  prompt_version: string;
+  schema_version: '1';
+  payload: InterpretationContract;
+  suggested_supplier_id: string | null;
+  usage: Record<string, unknown>;
+  duration_ms: number | null;
+  created_at: string;
+}
+
+export interface DocumentAnnotation {
+  id: string;
+  org_id: string;
+  interpretation_id: string;
+  extraction_id: string;
+  document_id: string;
+  target_kind: 'block' | 'mark';
+  target_id: string;
+  tag_key: string;
+  label: string;
+  source: 'user' | 'rule' | 'claude';
+  applied_for_user_id: string | null;
+  rule_id: string | null;
+  rule_version: number | null;
+  confidence: number | null;
+  evidence_mark_ids: string[];
+  active: boolean;
+  created_by: string | null;
+  created_at: string;
+  corrected_at: string | null;
+  corrected_by: string | null;
+  correction_annotation_id: string | null;
+}
+
+export interface DocumentRuleApplication {
+  id: string;
+  org_id: string;
+  interpretation_id: string;
+  extraction_id: string;
+  document_id: string;
+  rule_id: string;
+  rule_version: number;
+  applied_for_user_id: string;
+  target_kind: 'mark';
+  target_id: string;
+  confidence: number | null;
+  annotation_id: string;
+  created_at: string;
+}
+
+export interface DocumentLearningRule {
+  id: string;
+  org_id: string;
+  family_id: string;
+  version: number;
+  user_id: string | null;
+  document_type: InterpretationContract['document_type'] | null;
+  supplier_id: string | null;
+  mark_kind: 'circle' | 'check' | 'cross' | 'underline' | 'star' | 'custom' | 'unknown';
+  mark_fingerprint: string | null;
+  tag_key: string;
+  label: string;
+  active: boolean;
+  created_by: string;
+  created_at: string;
+  disabled_at: string | null;
+  disabled_by: string | null;
+  disable_reason: string | null;
+}
+
+export interface DocumentReviewCorrection {
+  id: string;
+  org_id: string;
+  interpretation_id: string;
+  extraction_id: string;
+  document_id: string;
+  target_kind: 'block' | 'table_cell';
+  target_id: string;
+  row_index: number | null;
+  column_index: number | null;
+  revision: number;
+  input_checksum: string;
+  contract_version: '1';
+  original_text: string;
+  before_text: string;
+  corrected_text: string;
+  actor_id: string;
+  reason: string;
+  created_at: string;
+}
+
+export interface DocumentTypeReviewDecision {
+  id: string;
+  org_id: string;
+  interpretation_id: string;
+  extraction_id: string;
+  document_id: string;
+  revision: number;
+  decision: 'approved' | 'rejected';
+  suggested_document_type: InterpretationContract['document_type'];
+  approved_document_type: InterpretationContract['document_type'] | null;
+  input_checksum: string;
+  contract_version: '1';
+  actor_id: string;
+  reason: string;
+  created_at: string;
+}
+
+export interface DocumentFeedback {
+  id: string;
+  org_id: string;
+  interpretation_id: string;
+  annotation_id: string;
+  feedback_type: 'accepted' | 'rejected' | 'corrected';
+  before_value: Record<string, unknown>;
+  after_value: Record<string, unknown>;
+  actor_id: string;
+  reason: string;
+  correction_annotation_id: string | null;
+  created_at: string;
+}
+
+export interface DocumentExportTemplateRow {
+  id: string;
+  org_id: string;
+  owner_user_id: string | null;
+  document_type: InterpretationContract['document_type'] | null;
+  supplier_id: string | null;
+  active_version_id: string | null;
+  active: boolean;
+  created_by: string;
+  created_at: string;
+  disabled_at: string | null;
+  disabled_by: string | null;
+  disable_reason: string | null;
+}
+
+export interface DocumentExportTemplateVersion {
+  id: string;
+  org_id: string;
+  template_id: string;
+  version: number;
+  schema_version: '1';
+  format: DocumentExportTemplate['format'];
+  contract: DocumentExportTemplate;
+  created_by: string;
+  created_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+}
+
+export interface DocumentExportRow {
+  id: string;
+  org_id: string;
+  document_id: string;
+  extraction_id: string;
+  interpretation_id: string;
+  template_id: string;
+  template_version_id: string;
+  format: DocumentExportTemplate['format'];
+  content_checksum: string;
+  storage_path: string | null;
+  result_metadata: Record<string, unknown>;
+  created_by: string;
+  created_at: string;
+}
+
+export interface DocumentProcessingSnapshot {
+  documentId: string;
+  stage: DocumentProcessingStage;
+  document: DocumentRow | null;
+  job: DocumentProcessingJob | null;
+  jobs: DocumentProcessingJob[];
+  extraction: DocumentExtraction | null;
+  extractions: DocumentExtraction[];
+  interpretation: DocumentInterpretation | null;
+  interpretations: DocumentInterpretation[];
+  annotations: DocumentAnnotation[];
+  ruleApplications: DocumentRuleApplication[];
+  learningRules: DocumentLearningRule[];
+  reviewCorrections: DocumentReviewCorrection[];
+  typeReviewDecisions: DocumentTypeReviewDecision[];
+  feedback: DocumentFeedback[];
+  exportTemplates: DocumentExportTemplateRow[];
+  exportTemplateVersions: DocumentExportTemplateVersion[];
+  exports: DocumentExportRow[];
+}
+
+const ALL_COLUMNS = '*';
+
+export function documentProcessingStage(status?: DocumentProcessingStatus): DocumentProcessingStage {
+  if (!status) return 'unprocessed';
+  if (status === 'queued') return 'queued';
+  if (status === 'leased' || status === 'extracted' || status === 'interpreting') return 'processing';
+  return status;
+}
+
+function createSnapshot(documentId: string): DocumentProcessingSnapshot {
+  return {
+    documentId,
+    stage: 'unprocessed',
+    document: null,
+    job: null,
+    jobs: [],
+    extraction: null,
+    extractions: [],
+    interpretation: null,
+    interpretations: [],
+    annotations: [],
+    ruleApplications: [],
+    learningRules: [],
+    reviewCorrections: [],
+    typeReviewDecisions: [],
+    feedback: [],
+    exportTemplates: [],
+    exportTemplateVersions: [],
+    exports: [],
+  };
+}
+
+async function fetchByColumnIds<T>(
+  table: string,
+  column: string,
+  ids: readonly string[],
+): Promise<T[]> {
+  if (!ids.length) return [];
+  return fetchInChunks(ids, (chunk) => fetchAll<T>((from, to) => supabase
+    .from(table)
+    .select(ALL_COLUMNS)
+    .in(column, chunk)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(from, to)));
+}
+
+async function fetchByDocumentIds<T>(table: string, documentIds: readonly string[]): Promise<T[]> {
+  return fetchByColumnIds<T>(table, 'document_id', documentIds);
+}
+
+async function fetchJobs(documentIds: readonly string[] | null): Promise<DocumentProcessingJob[]> {
+  if (documentIds?.length === 0) return [];
+  if (documentIds) return fetchByDocumentIds<DocumentProcessingJob>('document_processing_jobs', documentIds);
+  return fetchAll<DocumentProcessingJob>((from, to) => supabase
+    .from('document_processing_jobs')
+    .select(ALL_COLUMNS)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(from, to));
+}
+
+async function fetchRowsByIds<T>(table: string, ids: readonly string[]): Promise<T[]> {
+  return fetchByColumnIds<T>(table, 'id', ids);
+}
+
+async function loadProcessing(
+  documentIds: readonly string[] | null,
+  details: boolean,
+): Promise<Record<string, DocumentProcessingSnapshot>> {
+  const jobs = await fetchJobs(documentIds);
+  const ids = documentIds ?? [...new Set(jobs.map((job) => job.document_id))];
+  const snapshots = Object.fromEntries(ids.map((id) => [id, createSnapshot(id)]));
+
+  for (const job of jobs) {
+    const snapshot = snapshots[job.document_id] ??= createSnapshot(job.document_id);
+    snapshot.jobs.push(job);
+    if (!snapshot.job) {
+      snapshot.job = job;
+      snapshot.stage = documentProcessingStage(job.status);
+    }
+  }
+
+  if (!details || ids.length === 0) return snapshots;
+
+  // Reprocessing preserves old attempts. Resolve the current job first so review layers
+  // can never combine evidence or decisions from different attempts of one document.
+  const currentJobIds = Object.values(snapshots).flatMap((snapshot) => snapshot.job ? [snapshot.job.id] : []);
+  const [documents, extractions, interpretations] = await Promise.all([
+    fetchInChunks(ids, (chunk) => fetchAll<DocumentRow>((from, to) => supabase
+      .from('documents').select(ALL_COLUMNS).in('id', chunk).is('deleted_at', null)
+      .order('created_at', { ascending: false }).order('id').range(from, to))),
+    fetchByColumnIds<DocumentExtraction>('document_extractions', 'job_id', currentJobIds),
+    fetchByColumnIds<DocumentInterpretation>('document_interpretations', 'job_id', currentJobIds),
+  ]);
+
+  for (const document of documents) snapshots[document.id].document = document;
+  for (const extraction of extractions) {
+    const snapshot = snapshots[extraction.document_id];
+    if (snapshot?.job?.id !== extraction.job_id) continue;
+    snapshot.extractions.push(extraction);
+    snapshot.extraction ??= extraction;
+  }
+  for (const interpretation of interpretations) {
+    const snapshot = snapshots[interpretation.document_id];
+    if (snapshot?.job?.id !== interpretation.job_id) continue;
+    snapshot.interpretations.push(interpretation);
+    snapshot.interpretation ??= interpretation;
+  }
+
+  const currentInterpretationIds = Object.values(snapshots)
+    .flatMap((snapshot) => snapshot.interpretation ? [snapshot.interpretation.id] : []);
+  const [annotations, ruleApplications, reviewCorrections, typeReviewDecisions, feedback,
+    exports, exportTemplates] = await Promise.all([
+    fetchByColumnIds<DocumentAnnotation>('document_annotations', 'interpretation_id', currentInterpretationIds),
+    fetchByColumnIds<DocumentRuleApplication>('document_rule_applications', 'interpretation_id', currentInterpretationIds),
+    fetchByColumnIds<DocumentReviewCorrection>('document_review_corrections', 'interpretation_id', currentInterpretationIds),
+    fetchByColumnIds<DocumentTypeReviewDecision>('document_type_review_decisions', 'interpretation_id', currentInterpretationIds),
+    fetchByColumnIds<DocumentFeedback>('document_feedback', 'interpretation_id', currentInterpretationIds),
+    fetchByColumnIds<DocumentExportRow>('document_exports', 'interpretation_id', currentInterpretationIds),
+    fetchAll<DocumentExportTemplateRow>((from, to) => supabase
+      .from('document_export_templates').select(ALL_COLUMNS).eq('active', true)
+      .order('created_at', { ascending: false }).order('id').range(from, to)),
+  ]);
+
+  const [learningRules, exportTemplateVersions] = await Promise.all([
+    fetchRowsByIds<DocumentLearningRule>(
+      'document_learning_rules',
+      [...new Set(ruleApplications.map((application) => application.rule_id))],
+    ),
+    fetchRowsByIds<DocumentExportTemplateVersion>(
+      'document_export_template_versions',
+      exportTemplates.flatMap((template) => template.active_version_id ? [template.active_version_id] : []),
+    ),
+  ]);
+
+  for (const annotation of annotations) {
+    const snapshot = snapshots[annotation.document_id];
+    if (snapshot?.interpretation?.id === annotation.interpretation_id) snapshot.annotations.push(annotation);
+  }
+  for (const application of ruleApplications) {
+    const snapshot = snapshots[application.document_id];
+    if (snapshot?.interpretation?.id === application.interpretation_id) snapshot.ruleApplications.push(application);
+  }
+  for (const correction of reviewCorrections) {
+    const snapshot = snapshots[correction.document_id];
+    if (snapshot?.interpretation?.id === correction.interpretation_id) snapshot.reviewCorrections.push(correction);
+  }
+  for (const decision of typeReviewDecisions) {
+    const snapshot = snapshots[decision.document_id];
+    if (snapshot?.interpretation?.id === decision.interpretation_id) snapshot.typeReviewDecisions.push(decision);
+  }
+  const annotationById = new Map(annotations.map((annotation) => [annotation.id, annotation]));
+  for (const item of feedback) {
+    const annotation = annotationById.get(item.annotation_id);
+    if (!annotation) continue;
+    const snapshot = snapshots[annotation.document_id];
+    if (snapshot?.interpretation?.id === item.interpretation_id) snapshot.feedback.push(item);
+  }
+  for (const item of exports) {
+    const snapshot = snapshots[item.document_id];
+    if (snapshot?.interpretation?.id === item.interpretation_id) snapshot.exports.push(item);
+  }
+
+  for (const snapshot of Object.values(snapshots)) {
+    const ruleIds = new Set(snapshot.ruleApplications.map((application) => application.rule_id));
+    snapshot.learningRules = learningRules.filter((rule) => ruleIds.has(rule.id));
+    snapshot.exportTemplates = snapshot.interpretation ? exportTemplates : [];
+    const templateIds = new Set(snapshot.exportTemplates.map((template) => template.id));
+    snapshot.exportTemplateVersions = exportTemplateVersions.filter((version) => templateIds.has(version.template_id));
+  }
+
+  return snapshots;
+}
+
+export function useDocumentProcessing(
+  documentIds?: readonly string[],
+  { details = false }: { details?: boolean } = {},
+) {
+  const idsKey = documentIds ? [...new Set(documentIds)].sort().join(',') : '*';
+  const normalizedIds = useMemo(
+    () => idsKey === '*' ? null : idsKey ? idsKey.split(',') : [],
+    [idsKey],
+  );
+  const query = useQuery(
+    () => loadProcessing(normalizedIds, details),
+    [idsKey, details],
+  );
+  const enabled = normalizedIds === null || normalizedIds.length > 0;
+
+  useEffect(() => {
+    if (!enabled) return;
+    const refresh = () => { void query.refetch(); };
+    const interval = window.setInterval(refresh, 10_000);
+    window.addEventListener('focus', refresh);
+    window.addEventListener(DOCUMENT_PROCESSING_CHANGED_EVENT, refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener(DOCUMENT_PROCESSING_CHANGED_EVENT, refresh);
+    };
+  }, [enabled, query.refetch]);
+
+  return { ...query, snapshots: query.data ?? {} };
+}
