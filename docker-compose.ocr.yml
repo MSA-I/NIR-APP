@@ -1,0 +1,57 @@
+name: supplyflow-ocr
+
+services:
+  worker:
+    image: supplyflow-ocr-worker:2026-07-29
+    pull_policy: never
+    build:
+      context: ./worker/ocr
+      dockerfile: Dockerfile
+      pull: false
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 45s
+    read_only: true
+    tmpfs:
+      - /var/tmp/supplyflow-ocr:rw,noexec,nosuid,nodev,size=512m,mode=0700,uid=10001,gid=10001
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=0700,uid=10001,gid=10001
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      OCR_WORKER_TOKEN: ${OCR_WORKER_TOKEN:-}
+      OCR_WORKER_ID: ${OCR_WORKER_ID:-}
+      OCR_ADAPTER: ${OCR_ADAPTER:-disabled}
+      OCR_LEASE_SECONDS: ${OCR_LEASE_SECONDS:-120}
+      OCR_HEARTBEAT_SECONDS: ${OCR_HEARTBEAT_SECONDS:-30}
+      OCR_POLL_SECONDS: ${OCR_POLL_SECONDS:-2}
+      OCR_MAX_BACKOFF_SECONDS: ${OCR_MAX_BACKOFF_SECONDS:-30}
+      OCR_REQUEST_TIMEOUT_SECONDS: ${OCR_REQUEST_TIMEOUT_SECONDS:-15}
+      OCR_JOB_TIMEOUT_SECONDS: ${OCR_JOB_TIMEOUT_SECONDS:-300}
+      OCR_MAX_MEMORY_MB: ${OCR_MAX_MEMORY_MB:-2048}
+      OCR_MAX_JOB_ATTEMPTS: ${OCR_MAX_JOB_ATTEMPTS:-3}
+      OCR_TEMP_ROOT: /var/tmp/supplyflow-ocr
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    networks:
+      - ocr_private
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  ocr_private:
+    driver: bridge
+    # No ports are published; outbound TLS remains available for Edge polling.
+    internal: false

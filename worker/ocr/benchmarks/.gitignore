@@ -1,0 +1,5 @@
+corpus/
+runs/
+metrics*.json
+manifest.json
+!manifest.example.json
