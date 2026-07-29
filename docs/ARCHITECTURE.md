@@ -204,6 +204,14 @@ lost update, ושינוי ב־Storage חוסם שמירה. המסמך ננעל �
 רשאי לערוך רק price list שהוא העלה ושפוענח עבורו. אין DML מהדפדפן, אין שינוי ל־payload של
 `document_extractions`/`document_interpretations`, וכל הצלחה נכתבת ל־audit עם סיבה.
 
+מיגרציה `0050_document_type_review_decisions.sql` מפרידה בין הצעת `document_type` הבלתי־משתנה
+שב־interpretation לבין הכרעת review. ‏`review_document_type` מוסיפה revision ל־
+`document_type_review_decisions` עם `approved_document_type` נפרד (או `null` בדחייה), נועלת document
+ואז interpretation/job, ודוחה job שאינו ב־`review`, ‏suggestion/checksum/contract/revision ישנים או
+Storage שהשתנה. retry זהה מוחזר כאידמפוטנטי; שינוי ללא שינוי ערך נדחה. Owner/office/kitchen בלבד
+רשאים להכריע. ספק יכול לקרוא דרך RLS רק הכרעה של מחירון שבבעלותו, אך אינו מקבל RPC להכרעה;
+suggested supplier/fields נשארים display-only עד שיוגדר עבורם חוזה סמכותי נפרד.
+
 ## גבול פקודות פיננסי P1 — ממומש מקומית
 
 > מיגרציות P0 הן `0020`–`0022`, מיגרציית P1 היא `0023`, וכולן משולבות בענף P2 המקומי.

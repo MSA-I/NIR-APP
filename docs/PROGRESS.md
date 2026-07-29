@@ -7,6 +7,24 @@
 
 ---
 
+## OCR חכם — הכרעת סוג מסמך ל־PLAN-05 (29.07.2026, מקומי בלבד)
+
+**מצב:** החסם של PLAN-05 טופל קדימה בלבד ב־`0050_document_type_review_decisions.sql`.
+הצעת `document_type` של Claude נשארת immutable, והכרעת approve/reject נשמרת כ־revision append-only
+עם ערך מאושר נפרד, audit וסיבה. `review_document_type` מוגבלת ל־owner/office/kitchen; ספק יכול לקרוא
+דרך RLS רק הכרעה של מחירון בבעלותו ואינו רשאי להכריע. suggested supplier/fields נשארים display-only.
+
+**שערי בטיחות:** document ננעל לפני interpretation/job; הפקודה נכשלת על job שאינו `review`, ‏suggestion,
+checksum, contract או revision ישנים ועל Storage שהשתנה. retry זהה אידמפוטנטי ושינוי ללא שינוי נדחה.
+
+**אימות מקומי:** reset נקי החיל בהצלחה את `0001`–`0050`; ‏`document_learning.sql` עבר עם בדיקות
+roles, supplier RPC denied/owned SELECT, retry, unchanged, stale context, lock order, RLS, audit
+ו־immutability. לא בוצעו commit, merge, push, deploy או migration לייצור.
+**P2 שיורי:** race ייעודי בשני sessions לא נוסף; נעילת interpretation/job, מפתח revision ייחודי
+ו־assertion מבני לסדר הנעילות מכסים את שער החוזה הנוכחי.
+
+---
+
 ## OCR חכם — חוזה שמירת review ל־PLAN-05 (29.07.2026, מקומי בלבד)
 
 **מצב:** לאחר מיזוג גלים 1–3 ב־`3bf3340`, preflight של PLAN-05 מצא שאין API סמכותי לתיקון
