@@ -46,6 +46,7 @@ type ErrorCode =
   | 'supplier_unavailable'
   | 'idempotency_conflict'
   | 'catalog_changed'
+  | 'review_required'
   | 'service_unavailable';
 
 const MESSAGE: Record<ErrorCode, string> = {
@@ -67,6 +68,7 @@ const MESSAGE: Record<ErrorCode, string> = {
   supplier_unavailable: 'הספק אינו זמין עוד. רענן את המסך לפני הגשה נוספת.',
   idempotency_conflict: 'מזהה ההגשה כבר נקלט עם קובץ אחר. רענן את היסטוריית ההגשות ונסה שוב.',
   catalog_changed: 'קטלוג המוצרים השתנה בזמן הקליטה. רענן את המסך ובדוק שוב את הקובץ.',
+  review_required: 'מסלול בדיקת המחירון השתנה או אינו מוכן לאישור. רענן את המסמך ובדוק שוב.',
   service_unavailable: 'שירות קליטת המחירונים אינו זמין כרגע. נסה שוב בעוד מספר דקות.',
 };
 
@@ -86,6 +88,22 @@ interface SubmitRequest {
   targetMonth?: string;
   fileName?: string;
   storagePath?: string;
+  reason?: string;
+}
+
+interface ConfirmApprovedRow {
+  lineItemIndex?: number;
+  productId?: string;
+  priceText?: string;
+  available?: boolean;
+}
+
+interface ConfirmRequest {
+  mode?: string;
+  documentId?: string;
+  interpretationId?: string;
+  targetMonth?: string;
+  approvedRows?: ConfirmApprovedRow[];
   reason?: string;
 }
 
@@ -306,13 +324,22 @@ function pgError(message: string): IntakeError {
   if (message.includes('price_submission_file_missing')) return new IntakeError('file_missing', 404);
   if (message.includes('price_submission_intake_busy')) return new IntakeError('intake_busy', 409);
   if (message.includes('price_submission_intake_required')) return new IntakeError('intake_required', 409);
-  if (message.includes('price_submission_file_changed')) return new IntakeError('file_changed', 409);
+  if (message.includes('price_submission_file_changed')
+      || message.includes('document_source_changed')) {
+    return new IntakeError('file_changed', 409);
+  }
   if (message.includes('price_submission_supplier_invalid')) return new IntakeError('supplier_unavailable', 409);
   if (message.includes('price_submission_idempotency_conflict')) {
     return new IntakeError('idempotency_conflict', 409);
   }
   if (message.includes('price_import_target_invalid') || message.includes('supplier_product_not_found')) {
     return new IntakeError('catalog_changed', 409);
+  }
+  if (message.includes('price_submission_document_invalid')
+      || message.includes('price_submission_interpretation_invalid')
+      || message.includes('price_submission_job_invalid')
+      || message.includes('price_submission_extraction_invalid')) {
+    return new IntakeError('review_required', 409);
   }
   if (message.includes('price_submission_invalid')
       || message.includes('price_submission_intake_invalid')
@@ -349,12 +376,117 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const { data: userData, error: userError } = await caller.auth.getUser();
   if (userError || !userData.user) return fail(cors, new IntakeError('unauthenticated', 401));
 
-  let body: SubmitRequest;
+  let parsedBody: unknown;
   try {
-    body = await req.json() as SubmitRequest;
+    parsedBody = await req.json();
   } catch {
     return fail(cors, new IntakeError('invalid_request', 400));
   }
+  if (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {
+    return fail(cors, new IntakeError('invalid_request', 400));
+  }
+
+  const confirmBody = parsedBody as ConfirmRequest;
+  if (confirmBody.mode === 'confirm') {
+    const expectedKeys = new Set([
+      'mode', 'documentId', 'interpretationId',
+      'targetMonth', 'approvedRows', 'reason',
+    ]);
+    const documentId = confirmBody.documentId ?? '';
+    const interpretationId = confirmBody.interpretationId ?? '';
+    const targetMonth = confirmBody.targetMonth ?? '';
+    const reason = confirmBody.reason?.trim() ?? '';
+    const approvedRows = confirmBody.approvedRows;
+    if (Object.keys(confirmBody).some((key) => !expectedKeys.has(key))
+        || !UUID.test(documentId)
+        || !UUID.test(interpretationId) || !MONTH_START.test(targetMonth)
+        || reason.length < 1 || reason.length > 1000
+        || !Array.isArray(approvedRows) || approvedRows.length < 1
+        || approvedRows.length > MAX_ROWS) {
+      return fail(cors, new IntakeError('invalid_request', 400));
+    }
+
+    const seenIndexes = new Set<number>();
+    for (const row of approvedRows) {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) {
+        return fail(cors, new IntakeError('invalid_request', 400));
+      }
+      const rowKeys = Object.keys(row);
+      if (rowKeys.some((key) => !['lineItemIndex', 'productId', 'priceText', 'available'].includes(key))
+          || !Number.isInteger(row.lineItemIndex) || Number(row.lineItemIndex) < 0
+          || Number(row.lineItemIndex) > 4999 || seenIndexes.has(Number(row.lineItemIndex))
+          || typeof row.productId !== 'string' || !UUID.test(row.productId)
+          || typeof row.priceText !== 'string'
+          || row.priceText.trim().length < 1 || row.priceText.trim().length > 64
+          || (row.available !== undefined && typeof row.available !== 'boolean')) {
+        return fail(cors, new IntakeError('invalid_request', 400));
+      }
+      seenIndexes.add(Number(row.lineItemIndex));
+    }
+
+    const intakeId = crypto.randomUUID();
+    let prepared = false;
+    try {
+      const preparation = await admin.rpc('prepare_ocr_supplier_price_intake', {
+        p_intake_id: intakeId,
+        p_actor_id: userData.user.id,
+        p_submission_id: interpretationId,
+        p_document_id: documentId,
+        p_interpretation_id: interpretationId,
+        p_target_month: targetMonth,
+        p_approved_rows: approvedRows.map((row) => ({
+          lineItemIndex: row.lineItemIndex,
+          productId: row.productId,
+          priceText: row.priceText?.trim(),
+          available: row.available ?? true,
+        })),
+        p_reason: reason,
+      });
+      if (preparation.error || !preparation.data) {
+        throw pgError(preparation.error?.message ?? 'price_submission_intake_invalid');
+      }
+      // From this point the database may contain a short-lived intake even if a malformed
+      // bridge response prevents submission, so the finally block must own cleanup.
+      prepared = true;
+      const bridge = preparation.data as Record<string, unknown>;
+      const checksum = String(bridge.file_checksum ?? '');
+      if (bridge.intake_id !== intakeId || !UUID.test(String(bridge.supplier_id ?? ''))
+          || !/^[0-9a-f]{64}$/.test(checksum)) {
+        throw new IntakeError('service_unavailable', 503);
+      }
+
+      const submitted = await caller.rpc('submit_supplier_price_list', { p_intake_id: intakeId });
+      if (!submitted.error && submitted.data) {
+        return ok(cors, submitted.data as SubmissionReceipt);
+      }
+
+      const byId = await caller.from('supplier_price_submissions').select('*')
+        .eq('id', interpretationId).maybeSingle();
+      if (!byId.error && byId.data) return ok(cors, receiptFromRow(byId.data));
+      const byChecksum = await caller.from('supplier_price_submissions').select('*')
+        .eq('target_month', targetMonth).eq('file_checksum', checksum)
+        .eq('source_interpretation_id', interpretationId).maybeSingle();
+      if (!byChecksum.error && byChecksum.data) return ok(cors, receiptFromRow(byChecksum.data));
+
+      throw pgError(submitted.error?.message ?? 'submission_failed');
+    } catch (error) {
+      const safe = error instanceof IntakeError ? error : new IntakeError('service_unavailable', 503);
+      console.error('submit-price-list confirm failed:', safe.code);
+      return fail(cors, safe);
+    } finally {
+      if (prepared) {
+        await admin.rpc('discard_supplier_price_intake', {
+          p_intake_id: intakeId,
+          p_actor_id: userData.user.id,
+        });
+      }
+    }
+  }
+
+  if ('mode' in parsedBody) {
+    return fail(cors, new IntakeError('invalid_request', 400));
+  }
+  const body = parsedBody as SubmitRequest;
 
   const submissionId = body.submissionId ?? '';
   const supplierId = body.supplierId ?? '';
