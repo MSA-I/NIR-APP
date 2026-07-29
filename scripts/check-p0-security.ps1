@@ -683,8 +683,8 @@ try {
   $crossPath = "$orgB/invoice/$invoiceB/cross-prefix.pdf"
   $response = Invoke-BinaryRequest -Method Post -Uri "$apiUrl/storage/v1/object/documents/$crossPath" -Headers $ownerHeaders -ContentType "application/pdf" -Bytes $pdfBytes
   Assert-Blocked $response "storage upload rejects another tenant prefix"
-  $unsafePath = "$orgA/invoice/$invoiceA/unsafe.txt"
-  $response = Invoke-BinaryRequest -Method Post -Uri "$apiUrl/storage/v1/object/documents/$unsafePath" -Headers $ownerHeaders -ContentType "text/plain" -Bytes ([System.Text.Encoding]::UTF8.GetBytes("unsafe"))
+  $unsafePath = "$orgA/invoice/$invoiceA/unsafe.exe"
+  $response = Invoke-BinaryRequest -Method Post -Uri "$apiUrl/storage/v1/object/documents/$unsafePath" -Headers $ownerHeaders -ContentType "application/x-msdownload" -Bytes ([System.Text.Encoding]::UTF8.GetBytes("unsafe"))
   Assert-Blocked $response "storage upload rejects non-allowlisted MIME"
   $orphanPath = "$orgA/inbox/$($accounts.ownerA.Id)/orphan.pdf"
   $response = Invoke-BinaryRequest -Method Post -Uri "$apiUrl/storage/v1/object/documents/$orphanPath" -Headers $ownerHeaders -ContentType "application/pdf" -Bytes $pdfBytes
