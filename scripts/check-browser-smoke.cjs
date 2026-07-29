@@ -20,6 +20,7 @@ fs.mkdirSync(outDir, { recursive: true });
 const report = {
   generatedAt: new Date().toISOString(),
   passed: [],
+  skipped: [],
   failures: [],
   viewports: [],
   accessibility: [],
@@ -27,6 +28,16 @@ const report = {
   pdf: null,
   consoleErrors: [],
 };
+
+const OCR_REVIEW_DOCUMENT_ID = '97000000-0000-4000-8000-000000000004';
+const OCR_STAGE_FIXTURES = [
+  ['97000000-0000-4000-8000-000000000001', 'טרם נשלח לעיבוד'],
+  ['97000000-0000-4000-8000-000000000002', 'ממתין לעיבוד'],
+  ['97000000-0000-4000-8000-000000000003', 'בעיבוד'],
+  ['97000000-0000-4000-8000-000000000004', 'דורש בדיקה'],
+  ['97000000-0000-4000-8000-000000000005', 'הושלם'],
+  ['97000000-0000-4000-8000-000000000006', 'נכשל'],
+];
 
 const homes = {
   owner: '/dashboard',
@@ -1491,8 +1502,79 @@ async function adminState(browser) {
   }
 }
 
+async function documentOcrAcceptance(browser) {
+  const mobile = await browser.newContext({
+    locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 390, height: 844 },
+  });
+  const gallery = await mobile.newPage();
+  captureConsole(gallery, 'ocr-documents');
+  try {
+    await login(gallery, 'owner');
+    await gallery.goto(`${baseURL}/documents`);
+    await settle(gallery);
+    await gallery.locator('[data-testid="documents-page"]').waitFor({ timeout: 25_000 });
+
+    for (const [documentId, expectedLabel] of OCR_STAGE_FIXTURES) {
+      const badge = gallery.locator(
+        `[data-testid="document-processing-status"][data-document-id="${documentId}"]:visible`,
+      );
+      await badge.waitFor({ state: 'visible', timeout: 25_000 });
+      assert.equal((await badge.innerText()).trim(), expectedLabel, `${documentId}: unexpected OCR stage`);
+    }
+
+    const processingFilter = gallery.locator('[data-testid="documents-processing-filter"]');
+    await processingFilter.selectOption('failed');
+    await gallery.waitForFunction((failedId) => {
+      const visible = [...document.querySelectorAll('[data-testid="document-processing-status"]')]
+        .filter((element) => element.getBoundingClientRect().height > 0)
+        .map((element) => element.getAttribute('data-document-id'));
+      return visible.length === 1 && visible[0] === failedId;
+    }, OCR_STAGE_FIXTURES[5][0]);
+    await auditAccessibility(gallery, 'ocr-documents/390');
+    await gallery.screenshot({ path: path.join(outDir, 'ocr-documents-390.png'), fullPage: true });
+    report.screenshots.push('ocr-documents-390.png');
+  } finally {
+    await closeContext(mobile);
+  }
+
+  const desktop = await browser.newContext({
+    locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 1440, height: 900 },
+  });
+  const review = await desktop.newPage();
+  captureConsole(review, 'ocr-review');
+  try {
+    await login(review, 'owner');
+    await review.goto(`${baseURL}/documents/${OCR_REVIEW_DOCUMENT_ID}/review?panel=export`);
+    await settle(review);
+    await review.locator('[data-testid="document-review-page"]').waitFor({ timeout: 25_000 });
+    await review.locator('[data-testid="document-source-viewer"]').waitFor();
+    await review.locator('[data-testid="document-review-proposals"]').waitFor();
+    await review.locator('[data-testid="document-annotations-keyboard"]').waitFor();
+    const exportPreview = review.locator('[data-testid="document-export-preview"]');
+    await exportPreview.waitFor();
+    await auditAccessibility(review, 'ocr-review/1440');
+    await review.screenshot({ path: path.join(outDir, 'ocr-review-1440.png'), fullPage: true });
+    report.screenshots.push('ocr-review-1440.png');
+
+    await exportPreview.getByRole('button', { name: 'הפקת preview' }).click();
+    await exportPreview.getByRole('heading', { name: 'תוצאת preview' }).waitFor({ timeout: 10_000 });
+    assert.equal(await exportPreview.locator('thead th').count(), 3, 'OCR export preview did not render three fixture columns');
+    assert.equal(await exportPreview.locator('tbody tr').count(), 2, 'OCR export preview did not render two fixture rows');
+    assert.equal(await exportPreview.getByText(/Checksum:/).count(), 1, 'OCR export preview did not expose a checksum');
+    await review.screenshot({ path: path.join(outDir, 'ocr-export-preview-1440.png'), fullPage: true });
+    report.screenshots.push('ocr-export-preview-1440.png');
+  } finally {
+    await closeContext(desktop);
+  }
+}
+
 async function run(name, check) {
-  if (process.env.QUALITY_ONLY && !name.includes(process.env.QUALITY_ONLY)) return;
+  if (process.env.QUALITY_ONLY && !name.includes(process.env.QUALITY_ONLY)) {
+    const reason = `QUALITY_ONLY=${process.env.QUALITY_ONLY}`;
+    report.skipped.push({ name, reason });
+    console.log(`${name}: SKIP — ${reason}`);
+    return;
+  }
   try {
     await check();
     report.passed.push(name);
@@ -1527,16 +1609,24 @@ async function run(name, check) {
     await run('Push logout browser failure', () => pushLogout(browser, 'browser-failure', true, false));
     await run('Push logout double failure', () => pushLogout(browser, 'double-failure', false, false));
     await run('Admin password and Clipboard state', () => adminState(browser));
+    await run('OCR documents, review, status and export', () => documentOcrAcceptance(browser));
   } finally {
     await browser.close();
   }
 
+  if (process.env.QUALITY_REQUIRE_ALL === '1' && report.skipped.length) {
+    report.failures.push({
+      name: 'browser checks were skipped',
+      message: JSON.stringify(report.skipped),
+    });
+  }
   if (report.consoleErrors.length) {
     report.failures.push({ name: 'unexpected browser console errors', message: JSON.stringify(report.consoleErrors) });
   }
   fs.writeFileSync(path.join(outDir, 'p4-browser-report.json'), JSON.stringify(report, null, 2), 'utf8');
   console.log(JSON.stringify({
     passed: report.passed.length,
+    skipped: report.skipped,
     failed: report.failures.length,
     viewportChecks: report.viewports.length,
     accessibilityAudits: report.accessibility.length,

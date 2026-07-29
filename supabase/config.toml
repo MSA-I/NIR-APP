@@ -55,9 +55,21 @@ otp_length = 6
 otp_expiry = 3600
 
 [edge_runtime]
-enabled = false
+enabled = true
 policy = "oneshot"
 inspector_port = 55483
+
+[functions.document-processing]
+verify_jwt = false
+
+[functions.interpret-document]
+verify_jwt = true
+
+[functions.submit-price-list]
+verify_jwt = true
+
+[functions.send-push]
+verify_jwt = false
 
 [analytics]
 enabled = false
