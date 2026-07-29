@@ -1,0 +1,74 @@
+{
+  "schema_version": "1",
+  "contract_version": "1",
+  "model_decision": {
+    "status": "unselected",
+    "reason": "pending_target_24gb_and_corpus_evidence"
+  },
+  "corpus": {
+    "root": "D:/private/supplyflow-ocr-corpus",
+    "licensed_or_anonymized": true,
+    "minimum_documents": 200,
+    "minimum_mark_documents": 40
+  },
+  "target_hardware": {
+    "gpu_index": 0,
+    "minimum_vram_mib": 24000
+  },
+  "thresholds": {
+    "clean_printed_cer_max": 0.05,
+    "scan_photo_cer_max": 0.10,
+    "table_cell_f1_min": 0.90,
+    "document_type_macro_f1_min": 0.95,
+    "supplier_match_precision_min": 0.95,
+    "mark_precision_min": 0.95,
+    "mark_recall_min": 0.85,
+    "p95_seconds_per_page_max": 10.0,
+    "soak_hours_min": 2.0
+  },
+  "engines": [
+    {
+      "id": "unlimited-ocr",
+      "model": "baidu/Unlimited-OCR",
+      "revision": "07dea832e22aefee32ad281d4b80551282e1c168",
+      "license": "MIT",
+      "artifact_sha256": [],
+      "image": "registry.example.invalid/supplyflow/unlimited-ocr@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "timeout_seconds": 1200,
+      "command": ["python", "/app/benchmark_adapter.py"],
+      "accuracy_results": "runs/unlimited-ocr-accuracy.jsonl",
+      "soak_results": "runs/unlimited-ocr-soak.jsonl",
+      "soak_memory_review": "pending"
+    },
+    {
+      "id": "qwen3-vl-8b",
+      "model": "Qwen/Qwen3-VL-8B-Instruct",
+      "revision": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+      "license": "Apache-2.0",
+      "artifact_sha256": [],
+      "image": "registry.example.invalid/supplyflow/qwen3-vl-8b@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "timeout_seconds": 1200,
+      "command": ["python", "/app/benchmark_adapter.py"],
+      "accuracy_results": "runs/qwen3-vl-8b-accuracy.jsonl",
+      "soak_results": "runs/qwen3-vl-8b-soak.jsonl",
+      "soak_memory_review": "pending"
+    },
+    {
+      "id": "tesseract-heb-eng",
+      "model": "tesseract heb+eng",
+      "revision": "tesseract-ocr=5.3.0-2;tessdata-eng+heb=1:4.1.0-2",
+      "license": "Apache-2.0",
+      "artifact_sha256": [
+        "11f9e43ab227f786352a50f75c94c2e9906f1baba86d93276da19da7ce0904db",
+        "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+      ],
+      "image": "registry.example.invalid/supplyflow/tesseract-heb-eng@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "timeout_seconds": 1200,
+      "command": ["python", "/app/benchmark_adapter.py"],
+      "accuracy_results": "runs/tesseract-heb-eng-accuracy.jsonl",
+      "soak_results": "runs/tesseract-heb-eng-soak.jsonl",
+      "soak_memory_review": "pending"
+    }
+  ],
+  "documents": []
+}
