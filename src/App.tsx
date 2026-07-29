@@ -39,6 +39,7 @@ const Reports = lazy(() => import('./pages/Reports'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const Expenses = lazy(() => import('./pages/Expenses'));
 const DocumentsGallery = lazy(() => import('./pages/DocumentsInbox'));
+const DocumentReview = lazy(() => import('./pages/DocumentReview'));
 const AuditLogPage = lazy(() => import('./pages/AuditLog'));
 const Settings = lazy(() => import('./pages/Settings'));
 const SupplierPrices = lazy(() => import('./pages/SupplierPrices'));
@@ -95,6 +96,7 @@ const STAFF: Role[] = ['owner', 'office', 'kitchen'];
 const FINANCE: Role[] = ['owner', 'office'];
 const READERS: Role[] = ['owner', 'office', 'kitchen', 'accountant'];
 const ALL_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'];
+const DOCUMENT_REVIEWERS: Role[] = ['owner', 'office', 'kitchen', 'supplier'];
 
 /** /dashboard is every role's home: finance gets the full Dashboard, others a role-tailored one. */
 function DashboardHome() {
@@ -232,6 +234,7 @@ export default function App() {
         <Route path="/invoices/new" element={<Guard roles={STAFF}><InvoiceNew /></Guard>} />
         <Route path="/invoices/:id" element={<Guard roles={READERS}><InvoiceDetail /></Guard>} />
         <Route path="/documents" element={<Guard roles={STAFF}><DocumentsGallery /></Guard>} />
+        <Route path="/documents/:documentId/review" element={<Guard roles={DOCUMENT_REVIEWERS}><DocumentReview /></Guard>} />
         <Route path="/inbox" element={<Navigate to="/documents?filing=unfiled" replace />} />
 
         <Route path="/credits" element={<Guard roles={READERS}><Credits /></Guard>} />

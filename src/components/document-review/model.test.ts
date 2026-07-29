@@ -1,0 +1,168 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import type {
+  DocumentFeedback,
+  DocumentReviewCorrection,
+  DocumentTypeReviewDecision,
+  ReviewSnapshot,
+} from './model';
+// @ts-expect-error Node's type-stripping test runner requires the explicit TypeScript extension.
+import { bboxDescription, latestCorrections, latestFeedbackByAnnotation, latestTypeReviewDecision, resolveExportTemplateWinner, resolvedText, ruleWhy } from './model.ts';
+
+const correction = (revision: number, text: string): DocumentReviewCorrection => ({
+  id: `correction-${revision}`,
+  org_id: 'org',
+  interpretation_id: 'interpretation',
+  extraction_id: 'extraction',
+  document_id: 'document',
+  target_kind: 'block',
+  target_id: 'block-1',
+  row_index: null,
+  column_index: null,
+  revision,
+  input_checksum: 'etag:1111111111111111',
+  contract_version: '1',
+  original_text: 'מקור',
+  before_text: revision === 1 ? 'מקור' : 'תיקון ראשון',
+  corrected_text: text,
+  actor_id: 'actor',
+  reason: 'בדיקה',
+  created_at: '2026-07-29T00:00:00Z',
+});
+
+test('review overlays keep immutable evidence and select the newest fenced revision', () => {
+  const latest = latestCorrections([correction(2, 'תיקון שני'), correction(1, 'תיקון ראשון')]);
+  assert.deepEqual(resolvedText('מקור', latest, 'block', 'block-1'), {
+    text: 'תיקון שני',
+    revision: 2,
+    corrected: true,
+  });
+  assert.deepEqual(resolvedText('מקור אחר', latest, 'block', 'block-2'), {
+    text: 'מקור אחר',
+    revision: 0,
+    corrected: false,
+  });
+});
+
+test('location and rule explanations stay textual', () => {
+  assert.match(bboxDescription([0.1, 0.2, 0.8, 0.9]), /10%–80%/);
+  assert.match(ruleWhy({
+    id: 'rule', org_id: 'org', family_id: 'family', version: 3, user_id: 'user', document_type: 'invoice',
+    supplier_id: null, mark_kind: 'check', mark_fingerprint: 'fingerprint', tag_key: 'approved',
+    label: 'מאושר', active: true, created_by: 'user', created_at: '2026-07-29T00:00:00Z',
+    disabled_at: null, disabled_by: null, disable_reason: null,
+  }), /כלל אישי.*גרסה 3.*טביעת/);
+});
+
+test('document type review uses the highest append-only revision', () => {
+  const decision = (revision: number, value: 'approved' | 'rejected'): DocumentTypeReviewDecision => ({
+    id: `decision-${revision}`,
+    org_id: 'org',
+    interpretation_id: 'interpretation',
+    extraction_id: 'extraction',
+    document_id: 'document',
+    revision,
+    decision: value,
+    suggested_document_type: 'invoice',
+    approved_document_type: value === 'approved' ? 'invoice' : null,
+    input_checksum: 'etag:1111111111111111',
+    contract_version: '1',
+    actor_id: 'actor',
+    reason: 'בדיקה',
+    created_at: '2026-07-29T00:00:00Z',
+  });
+
+  assert.equal(latestTypeReviewDecision([decision(2, 'rejected'), decision(1, 'approved')])?.revision, 2);
+  assert.equal(latestTypeReviewDecision([]), null);
+});
+
+test('annotation feedback uses the latest decision and prevents an older decision resurfacing', () => {
+  const feedback = (id: string, createdAt: string): DocumentFeedback => ({
+    id,
+    org_id: 'org',
+    interpretation_id: 'interpretation',
+    annotation_id: 'annotation',
+    feedback_type: id === 'feedback-2' ? 'accepted' : 'rejected',
+    before_value: {},
+    after_value: {},
+    actor_id: 'actor',
+    reason: 'בדיקה',
+    correction_annotation_id: null,
+    created_at: createdAt,
+  });
+
+  const latest = latestFeedbackByAnnotation([
+    feedback('feedback-1', '2026-07-29T10:00:00Z'),
+    feedback('feedback-2', '2026-07-29T11:00:00Z'),
+  ]);
+  assert.equal(latest.get('annotation')?.id, 'feedback-2');
+});
+
+test('export preview resolves one approved active template by the database precedence', () => {
+  type TemplateRow = ReviewSnapshot['exportTemplates'][number];
+  type TemplateVersion = ReviewSnapshot['exportTemplateVersions'][number];
+  const template = (
+    id: string,
+    ownerUserId: string | null,
+    documentType: TemplateRow['document_type'],
+    supplierId: string | null,
+  ): TemplateRow => ({
+    id,
+    org_id: 'org',
+    owner_user_id: ownerUserId,
+    document_type: documentType,
+    supplier_id: supplierId,
+    active_version_id: `${id}-version`,
+    active: true,
+    created_by: 'actor',
+    created_at: '2026-07-29T00:00:00Z',
+    disabled_at: null,
+    disabled_by: null,
+    disable_reason: null,
+  });
+  const version = (row: TemplateRow, approved: boolean): TemplateVersion => ({
+    id: row.active_version_id!,
+    org_id: row.org_id,
+    template_id: row.id,
+    version: 1,
+    schema_version: '1',
+    format: 'table',
+    contract: {
+      schema_version: '1',
+      name: row.id,
+      format: 'table',
+      scope: {
+        document_type: row.document_type,
+        supplier_id: row.supplier_id,
+        user_id: row.owner_user_id,
+      },
+      columns: [{ key: 'kind', label: 'סוג', source_path: 'document_type', type: 'text', required: true }],
+    },
+    created_by: 'actor',
+    created_at: '2026-07-29T00:00:00Z',
+    approved_by: approved ? 'approver' : null,
+    approved_at: approved ? '2026-07-29T00:01:00Z' : null,
+  });
+  const personalSupplier = template('personal-supplier', 'actor', null, 'supplier');
+  const organizationSupplier = template('organization-supplier', null, null, 'supplier');
+  const personalType = template('personal-type', 'actor', 'invoice', null);
+  const global = template('global', null, null, null);
+  const snapshot = {
+    interpretation: {
+      org_id: 'org',
+      suggested_supplier_id: 'supplier',
+      payload: { document_type: 'invoice' },
+    },
+    exportTemplates: [global, personalType, organizationSupplier, personalSupplier],
+    exportTemplateVersions: [
+      version(global, true),
+      version(personalType, true),
+      version(organizationSupplier, true),
+      version(personalSupplier, false),
+    ],
+  } as ReviewSnapshot;
+
+  assert.equal(resolveExportTemplateWinner(snapshot, 'actor')?.row.id, 'organization-supplier');
+  snapshot.interpretation!.suggested_supplier_id = null;
+  assert.equal(resolveExportTemplateWinner(snapshot, 'actor')?.row.id, 'personal-type');
+});

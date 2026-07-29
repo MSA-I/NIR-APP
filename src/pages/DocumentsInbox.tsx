@@ -1,18 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router';
-import { Eye, FileInput, Files, FileText, Loader2, ReceiptText, Search, Upload, X } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router';
+import { Eye, FileDown, FileInput, Files, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, Search, Upload, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { INBOX_CHANGED_EVENT } from '../components/QuickCapture';
-import { DataTable, ErrorNote, Modal, Note, SkeletonTable, useToast, type Column } from '../components/ui';
+import { ConfirmDialog, DataTable, ErrorNote, Modal, Note, SkeletonTable, useToast, type Column } from '../components/ui';
 import { ok, toHebrewError } from '../lib/errors';
 import { fmtDate, fmtDateTime, todayISO } from '../lib/format';
 import type { DocumentKind, DocumentRow } from '../lib/types';
-import { DOCUMENT_KIND_OPTIONS, documentKindLabel, uploadDocument } from '../components/FileUpload';
+import {
+  DOCUMENT_KIND_OPTIONS,
+  DOCUMENT_UPLOAD_ACCEPT,
+  documentKindLabel,
+  documentUploadFailure,
+  mergeDocumentUploadSummary,
+  uploadDocument,
+} from '../components/FileUpload';
 import { openReservedPopup } from '../lib/popup';
-import { mergeUploadBatchSummary, runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
+import { runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
 import { fetchAll } from '../lib/supabasePaging';
+import {
+  DOCUMENT_PROCESSING_CHANGED_EVENT,
+  DOCUMENT_PROCESSING_STAGE_META,
+  useDocumentProcessing,
+  type DocumentProcessingStage,
+} from '../lib/useDocumentProcessing';
 
 type RefileTarget = 'invoice' | 'goods_receipt';
 type SupplierOption = { id: string; name: string };
@@ -21,6 +34,27 @@ type GalleryDocument = DocumentRow & { supplier: SupplierOption | null };
 type InvoicePick = { id: string; invoice_number: string; invoice_date: string; supplier: { name: string } | null };
 type ReceiptPick = { id: string; number: number; received_at: string; order: { supplier: { name: string } | null } | null };
 type RefileOption = { id: string; title: string; sub: string };
+
+const PROCESSING_FILTERS: Array<{ value: DocumentProcessingStage; label: string }> =
+  (Object.entries(DOCUMENT_PROCESSING_STAGE_META) as Array<
+    [DocumentProcessingStage, (typeof DOCUMENT_PROCESSING_STAGE_META)[DocumentProcessingStage]]
+  >).map(([value, { label }]) => ({ value, label }));
+
+function ProcessingBadge({ documentId, stage }: { documentId: string; stage: DocumentProcessingStage | null }) {
+  if (!stage) {
+    return (
+      <span data-testid="document-processing-status" data-document-id={documentId} className="badge-idle">
+        סטטוס לא זמין
+      </span>
+    );
+  }
+  const meta = DOCUMENT_PROCESSING_STAGE_META[stage];
+  return (
+    <span data-testid="document-processing-status" data-document-id={documentId} className={`badge-${meta.tone}`}>
+      {meta.label}
+    </span>
+  );
+}
 
 function isUnfiled(doc: DocumentRow) {
   return doc.entity_type === 'inbox' || doc.entity_id === null;
@@ -148,18 +182,21 @@ function UploadModal({ suppliers, onClose, onDone }: {
         supplierId: supplierId || null,
         documentDate: documentDate || null,
       }));
-      const failed = result.failed.map(({ item }) => item);
+      const failures = result.failed.map(({ item, error }) => ({ item, ...documentUploadFailure(error) }));
+      const failed = failures.filter(({ retryable }) => retryable).map(({ item }) => item);
+      const registered = failures.filter(({ registered: isRegistered }) => isRegistered).length;
       setFiles(failed);
-      const summary = mergeUploadBatchSummary(uploadSummary, result, (file) => file.name);
+      const summary = mergeDocumentUploadSummary(uploadSummary, files, result);
       setUploadSummary(summary);
-      if (result.succeeded.length) {
+      if (result.succeeded.length || registered) {
         window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
         await onDone();
       }
-      if (failed.length) {
-        toast(`${summary.succeeded.length} מסמכים הועלו, ${failed.length} נכשלו: ${failed.map((file) => file.name).join(', ')}`, 'error');
+      if (summary.failed.length) {
+        const currentFailure = failures[0]?.message;
+        toast(`${summary.succeeded.length} הועלו וממתינים לעיבוד, ${summary.failed.length} לא הושלמו.${currentFailure ? ` ${currentFailure}` : ''}`, 'error');
       } else {
-        toast(summary.succeeded.length === 1 ? 'המסמך הועלה' : `${summary.succeeded.length} מסמכים הועלו`);
+        toast(summary.succeeded.length === 1 ? 'הועלה וממתין לעיבוד' : `${summary.succeeded.length} מסמכים הועלו וממתינים לעיבוד`);
         onClose();
       }
     } catch (error) {
@@ -176,7 +213,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
         <label className="block">
           <span className="label">קובץ</span>
           <input type="file" className="input" multiple
-            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,image/avif,application/pdf"
+            accept={DOCUMENT_UPLOAD_ACCEPT}
             disabled={busy || !!uploadSummary?.failed.length}
             onChange={(event) => { setUploadSummary(null); setFiles(Array.from(event.target.files ?? [])); }} />
           {files.length > 0 && <div className="mt-1 text-xs text-ink-muted">{files.map((file) => file.name).join(', ')}</div>}
@@ -203,18 +240,20 @@ function UploadModal({ suppliers, onClose, onDone }: {
         {uploadSummary && (
           <Note tone={uploadSummary.failed.length ? 'alert' : 'done'}>
             <div role="status">
-              <div><span className="num">{uploadSummary.succeeded.length}</span> הועלו · <span className="num">{uploadSummary.failed.length}</span> נכשלו</div>
-              {uploadSummary.failed.length > 0 && <div className="mt-1 text-xs">נכשלו: {uploadSummary.failed.join(', ')}. ניסיון חוזר ישלח רק אותם.</div>}
+              <div><span className="num">{uploadSummary.succeeded.length}</span> הועלו וממתינים לעיבוד · <span className="num">{uploadSummary.failed.length}</span> לא הושלמו</div>
+              {uploadSummary.failed.length > 0 && <div className="mt-1 text-xs">לא הושלמו: {uploadSummary.failed.join(', ')}. ניסיון חוזר ישלח רק קבצים שניתן לנסות שוב.</div>}
             </div>
           </Note>
         )}
       </div>
       <div className="mt-5 flex justify-end gap-2">
         <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-        <button type="button" className="btn-primary" disabled={busy || files.length === 0} onClick={() => void submit()}>
-          {busy ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-          {uploadSummary?.failed.length ? 'ניסיון חוזר לנכשלים בלבד' : 'העלאה'}
-        </button>
+        {(!uploadSummary || files.length > 0) && (
+          <button type="button" className="btn-primary" disabled={busy || files.length === 0} onClick={() => void submit()}>
+            {busy ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+            {uploadSummary?.failed.length ? 'ניסיון חוזר לנכשלים בלבד' : 'העלאה'}
+          </button>
+        )}
       </div>
     </Modal>
   );
@@ -225,11 +264,18 @@ function UploadModal({ suppliers, onClose, onDone }: {
 export default function DocumentsGallery() {
   const { profile } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const filingParam = params.get('filing');
   const filing = filingParam === 'linked' || filingParam === 'unfiled' ? filingParam : 'all';
+  const processingParam = params.get('processing');
+  const processingFilter = PROCESSING_FILTERS.some(({ value }) => value === processingParam)
+    ? processingParam as DocumentProcessingStage
+    : 'all';
   const canFile = profile?.role === 'owner' || profile?.role === 'office';
   const canUpload = !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canEnqueue = canUpload;
+  const canRetry = canFile;
 
   const [q, setQ] = useState('');
   const [supplierId, setSupplierId] = useState('');
@@ -238,6 +284,8 @@ export default function DocumentsGallery() {
   const [to, setTo] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [refile, setRefile] = useState<{ doc: DocumentRow; target: RefileTarget } | null>(null);
+  const [retryDoc, setRetryDoc] = useState<DocumentRow | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
   const { data, loading, fetching, error, refetch } = useQuery<{
     docs: GalleryDocument[]; suppliers: SupplierOption[];
@@ -248,6 +296,8 @@ export default function DocumentsGallery() {
       .is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to)) as unknown as GalleryDocument[];
     return { docs, suppliers };
   }, []);
+  const documentIds = useMemo(() => data?.docs.map((doc) => doc.id) ?? [], [data]);
+  const processing = useDocumentProcessing(documentIds);
 
   useEffect(() => {
     const onChanged = () => { void refetch(); };
@@ -261,19 +311,28 @@ export default function DocumentsGallery() {
     const needle = q.trim().toLowerCase();
     return (data?.docs ?? []).filter((doc) => {
       const date = doc.document_date ?? doc.created_at.slice(0, 10);
+      const stage = processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed';
       return (!needle || doc.file_name.toLowerCase().includes(needle))
         && (!supplierId || (supplierId === 'none' ? !doc.supplier_id : doc.supplier_id === supplierId))
         && (!kind || doc.document_kind === kind)
         && (filing === 'all' || (filing === 'unfiled' ? isUnfiled(doc) : !isUnfiled(doc)))
+        && (processingFilter === 'all' || stage === processingFilter)
         && (!from || date >= from)
         && (!to || date <= to);
     });
-  }, [data, q, supplierId, kind, filing, from, to]);
+  }, [data, q, supplierId, kind, filing, processingFilter, processing.data, processing.snapshots, from, to]);
 
   function setFiling(value: string) {
     const next = new URLSearchParams(params);
     if (value === 'all') next.delete('filing');
     else next.set('filing', value);
+    setParams(next, { replace: true });
+  }
+
+  function setProcessing(value: string) {
+    const next = new URLSearchParams(params);
+    if (value === 'all') next.delete('processing');
+    else next.set('processing', value);
     setParams(next, { replace: true });
   }
 
@@ -283,7 +342,34 @@ export default function DocumentsGallery() {
     setKind('');
     setFrom('');
     setTo('');
-    setFiling('all');
+    const next = new URLSearchParams(params);
+    next.delete('filing');
+    next.delete('processing');
+    setParams(next, { replace: true });
+  }
+
+  function review(doc: DocumentRow, panel?: 'export') {
+    const query = panel ? `?panel=${panel}` : '';
+    navigate(`/documents/${encodeURIComponent(doc.id)}/review${query}`);
+  }
+
+  async function retry(reason?: string) {
+    if (!retryDoc) return;
+    const wasUnprocessed = processing.snapshots[retryDoc.id]?.stage === 'unprocessed';
+    if (!wasUnprocessed && !reason) return;
+    setRetrying(true);
+    try {
+      ok(wasUnprocessed
+        ? await supabase.rpc('enqueue_document_processing', { p_document_id: retryDoc.id })
+        : await supabase.rpc('reprocess_document', { p_document_id: retryDoc.id, p_reason: reason }));
+      toast(wasUnprocessed ? 'המסמך נשלח לתור העיבוד' : 'המסמך הוחזר לתור העיבוד');
+      setRetryDoc(null);
+      window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
+    } catch (error) {
+      toast(toHebrewError(error), 'error');
+    } finally {
+      setRetrying(false);
+    }
   }
 
   async function open(doc: DocumentRow) {
@@ -319,15 +405,25 @@ export default function DocumentsGallery() {
       ),
     },
     {
-      key: 'filing', header: 'תיוק', mobileLabel: null, sortValue: (doc) => isUnfiled(doc) ? 0 : 1,
+      key: 'filing', header: 'תיוק', mobileLabel: null, priority: 3, sortValue: (doc) => isUnfiled(doc) ? 0 : 1,
       render: (doc) => <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>,
+    },
+    {
+      key: 'processing', header: 'עיבוד', mobileLabel: null, priority: 3,
+      sortValue: (doc) => processing.snapshots[doc.id]?.stage ?? 'unprocessed',
+      render: (doc) => (
+        <ProcessingBadge
+          documentId={doc.id}
+          stage={processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed'}
+        />
+      ),
     },
   ];
 
-  const hasFilters = !!(q || supplierId || kind || from || to || filing !== 'all');
+  const hasFilters = !!(q || supplierId || kind || from || to || filing !== 'all' || processingFilter !== 'all');
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="documents-page">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="page-title flex items-center gap-2"><Files size={22} /> גלריית מסמכים</h1>
@@ -373,6 +469,14 @@ export default function DocumentsGallery() {
             </select>
           </label>
           <label>
+            <span className="label">סטטוס עיבוד</span>
+            <select data-testid="documents-processing-filter" className="input" value={processingFilter}
+              onChange={(event) => setProcessing(event.target.value)}>
+              <option value="all">הכול</option>
+              {PROCESSING_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </label>
+          <label>
             <span className="label">מתאריך</span>
             <input type="date" className="input num" value={from} onChange={(event) => setFrom(event.target.value)} />
           </label>
@@ -394,24 +498,56 @@ export default function DocumentsGallery() {
       </section>
 
       {error && data && <ErrorNote message={error} />}
+      {processing.error && (
+        <Note tone="alert">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>{processing.error} הנתונים שכבר נטענו נשארו מוצגים.</span>
+            <button data-testid="documents-processing-retry" type="button" className="btn-secondary min-h-11"
+              disabled={processing.fetching} onClick={() => void processing.refetch()}>
+              <RefreshCw size={16} aria-hidden="true" /> ניסיון חוזר
+            </button>
+          </div>
+        </Note>
+      )}
       {fetching && data && <div className="text-xs text-ink-muted" role="status">רשימת המסמכים מתעדכנת…</div>}
-      {error && !data ? <ErrorNote message={error} /> : loading ? <SkeletonTable cols={5} /> : (
+      {processing.fetching && processing.data && <div className="text-xs text-ink-muted" role="status">סטטוסי העיבוד מתעדכנים…</div>}
+      {error && !data ? <ErrorNote message={error} /> : loading ? <SkeletonTable cols={6} /> : (
         <DataTable rows={filtered} columns={columns} pageSize={20}
           rowLabel={(doc) => `מסמך ${doc.file_name}`}
           onRowClick={(doc) => void open(doc)}
           mobileTitle={(doc) => doc.file_name}
-          mobileTrailing={(doc) => <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>}
-          rowActions={(doc) => [
-            { key: 'view', label: 'צפייה', icon: Eye, onSelect: () => void open(doc) },
-            { key: 'invoice', label: 'שיוך לחשבונית', icon: FileInput, hidden: !canFile || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'invoice' }) },
-            { key: 'receipt', label: 'שיוך לקבלת סחורה', icon: ReceiptText, hidden: !canFile || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'goods_receipt' }) },
-          ]}
+          mobileTrailing={(doc) => (
+            <span className="flex flex-wrap justify-end gap-1">
+              <ProcessingBadge documentId={doc.id}
+                stage={processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed'} />
+              <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>
+            </span>
+          )}
+          rowActions={(doc) => {
+            const snapshot = processing.snapshots[doc.id];
+            return [
+              { key: 'review', label: 'בדיקת מסמך', icon: FileSearch, hidden: !snapshot?.job, onSelect: () => review(doc) },
+              { key: 'enqueue', label: 'שליחה לעיבוד', icon: RefreshCw, hidden: !canEnqueue || snapshot?.stage !== 'unprocessed', onSelect: () => setRetryDoc(doc) },
+              { key: 'retry', label: 'עיבוד מחדש', icon: RefreshCw, hidden: !canRetry || snapshot?.stage !== 'failed', onSelect: () => setRetryDoc(doc) },
+              { key: 'export', label: 'ייצוא', icon: FileDown, hidden: snapshot?.stage !== 'review' && snapshot?.stage !== 'completed', onSelect: () => review(doc, 'export') },
+              { key: 'view', label: 'צפייה במקור', icon: Eye, onSelect: () => void open(doc) },
+              { key: 'invoice', label: 'שיוך לחשבונית', icon: FileInput, hidden: !canFile || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'invoice' }) },
+              { key: 'receipt', label: 'שיוך לקבלת סחורה', icon: ReceiptText, hidden: !canFile || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'goods_receipt' }) },
+            ];
+          }}
           emptyTitle={data?.docs.length ? 'לא נמצאו מסמכים לפי הסינון' : 'אין מסמכים במערכת'}
           emptySubtitle={data?.docs.length ? 'שנו או נקו את המסננים כדי לראות מסמכים נוספים' : 'מסמך חדש יופיע כאן מיד לאחר צילום או העלאה'} />
       )}
 
       {uploadOpen && <UploadModal suppliers={data?.suppliers ?? []} onClose={() => setUploadOpen(false)} onDone={refetch} />}
       {refile && <RefileModal doc={refile.doc} target={refile.target} onClose={() => setRefile(null)} onDone={refetch} />}
+      <ConfirmDialog open={!!retryDoc} onClose={() => setRetryDoc(null)} onConfirm={(reason) => void retry(reason)}
+        title={processing.snapshots[retryDoc?.id ?? '']?.stage === 'unprocessed' ? 'שליחת המסמך לעיבוד' : 'עיבוד המסמך מחדש'}
+        message={processing.snapshots[retryDoc?.id ?? '']?.stage === 'unprocessed'
+          ? 'המסמך השמור יישלח כעת לתור העיבוד.'
+          : 'ניסיון חדש שומר את תוצאות העיבוד הקודמות ומוסיף ניסיון נפרד.'}
+        confirmLabel={processing.snapshots[retryDoc?.id ?? '']?.stage === 'unprocessed' ? 'שליחה לתור' : 'החזרה לתור'}
+        requireReason={processing.snapshots[retryDoc?.id ?? '']?.stage !== 'unprocessed'} busy={retrying} />
 
     </div>
   );

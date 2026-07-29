@@ -2,8 +2,13 @@ import { useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from './ui';
 import { toHebrewError } from '../lib/errors';
-import { uploadDocument } from './FileUpload';
-import { mergeUploadBatchSummary, runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
+import {
+  DOCUMENT_UPLOAD_ACCEPT,
+  documentUploadFailure,
+  mergeDocumentUploadSummary,
+  uploadDocument,
+} from './FileUpload';
+import { runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
 
 /**
  * Capture-first upload into the documents inbox (migration 0014): openCapture() opens the
@@ -35,17 +40,20 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
     setBusy(true);
     try {
       const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, 'inbox', null, file));
-      const failed = result.failed.map(({ item }) => item);
+      const failures = result.failed.map(({ item, error }) => ({ item, ...documentUploadFailure(error) }));
+      const failed = failures.filter(({ retryable }) => retryable).map(({ item }) => item);
+      const registered = failures.filter(({ registered: isRegistered }) => isRegistered).length;
       setRetryFiles(failed);
-      const summary = mergeUploadBatchSummary(previousSummary, result, (file) => file.name);
-      setUploadSummary(failed.length ? summary : null);
-      if (failed.length) {
-        const cause = result.failed[0]?.error ? ` — ${toHebrewError(result.failed[0].error)}` : '';
-        toast(`${summary.succeeded.length} נשמרו, ${failed.length} נכשלו (${failed.map((file) => file.name).join(', ')}). לחיצה נוספת תנסה רק אותם${cause}`, 'error');
+      const summary = mergeDocumentUploadSummary(previousSummary, files, result);
+      setUploadSummary(summary.failed.length ? summary : null);
+      if (summary.failed.length) {
+        const detail = failures[0] ? ` ${failures[0].message}` : '';
+        const retryHint = failed.length ? ' לחיצה נוספת תנסה רק את הכשלים הזמניים.' : '';
+        toast(`${summary.succeeded.length} הועלו וממתינים לעיבוד, ${summary.failed.length} לא הושלמו.${detail}${retryHint}`, 'error');
       } else {
-        toast(summary.succeeded.length > 1 ? `${summary.succeeded.length} מסמכים נשמרו במסמכים לא משויכים` : 'המסמך נשמר במסמכים לא משויכים');
+        toast(summary.succeeded.length > 1 ? `${summary.succeeded.length} קבצים הועלו וממתינים לעיבוד` : 'הועלה וממתין לעיבוד');
       }
-      if (result.succeeded.length > 0) {
+      if (result.succeeded.length + registered > 0) {
         window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
         await onUploaded?.();
       }
@@ -65,8 +73,8 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
   }
 
   const element = (
-    <input ref={inputRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,image/avif,application/pdf"
-      capture="environment" className="hidden"
+    <input ref={inputRef} type="file" multiple accept={DOCUMENT_UPLOAD_ACCEPT}
+      capture="environment" className="hidden" data-document-upload-input
       onChange={(e) => void onPick(e.target.files)} />
   );
 
