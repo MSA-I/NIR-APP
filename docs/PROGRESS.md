@@ -7,6 +7,46 @@
 
 ---
 
+## OCR חכם — PLAN-07: integration, benchmark וקבלה (29–30.07.2026, מקומי בלבד)
+
+**פסק קבלה:** `production NOT READY`. בחירת המודל נשארה `unselected`; ברירת המחדל הבטוחה
+של ה־worker היא `OCR_ADAPTER=disabled`. לא הופעל benchmark אמיתי משום שאין במכונה יעד GPU
+של 24GB ואין corpus פרטי/מורשה של 200 מסמכים עם ground truth ו־40 מסמכי סימונים. לכן אין
+טענת CER/F1/latency/soak ואין Go למנוע OCR. ‏`nvidia-smi` זיהה Quadro P2000 עם 5,120MiB,
+driver ‏582.53 ו־compute capability ‏6.1 (CUDA reported ‏13.0). ‏
+`python .\worker\ocr\benchmarks\run.py self-test` עבר עם `benchmark_self_test_passed`.
+
+**קבלה מקומית טרייה:** על הפרויקט המבודד `supplyflow-p0` בוצע reset מוגן שהחיל את
+`0001`–`0050`, ו־`npm.cmd run build` עבר. מסעות owner/office/kitchen על `/documents`
+ועל מסך review, ומסע supplier על `/my-prices`, עברו ב־390px וב־1440px: ‏8/8 שילובי
+תפקיד/viewport, ‏14 screenshots, ‏RTL, אפס overflow, שמות נגישים ואפס שגיאות console/HTTP.
+בדיקות review נוספות עברו 8/8 עם עוד 8 screenshots: ששת מצבי העיבוד, חשבונית עברית,
+טבלה רחבה בתוך scroll מקומי, keyboard/focus restoration, preview ייצוא, הכרעת סוג סמכותית,
+חסימת accountant, וכן 320px עם text-size של 200% ואפס overflow. הצילומים המייצגים נבדקו
+חזותית מול ה־fixture המקומי; לא נעשה שימוש במסמך עסקי אמיתי.
+
+**גבול כתיבה:** smoke התפקידים היה קריאה בלבד. snapshot לפני/אחרי של 26 טבלאות עסקיות,
+כולל מסמכים, מחירונים, הזמנות, קבלות, חשבוניות, תשלומים, בנק וייצוא, חזר עם `changed=[]`.
+בדיקת review נפרדת כתבה רק הכרעת סוג/audit צפויים בתוך fixture disposable; לא נכתבו מחירים
+או נתונים פיננסיים. קובצי ה־Storage של ה־fixture הוסרו ובוצע reset מקומי סופי מוצלח.
+
+**שערי אינטגרציה:** `npm.cmd run quality` עבר פעמיים סביב reset נקי נוסף, ללא skips. בכל
+ריצה עברו build/audit, ‏18 בדיקות Deno, ‏worker self-check, ‏266 assertions של P0, בדיקות
+SQL ומקביליות, local Edge ל־document-processing, ‏provider mock ל־interpret-document ואישור
+מחירון דרך ה־writer היחיד. בכל ריצה עברו גם 22 תרחישי דפדפן, 42 בדיקות viewport, ‏24
+ביקורות נגישות ו־26 screenshots. ‏reset מפריד כעת בין fixture המקביליות שמשאיר job בתור
+לבין OCR Edge, וה־reset הסופי מסיר את fixtures ואת סביבת ה־Edge הסינתטית. הראיות נמצאות תחת
+`C:\Users\art1\.codex\visualizations\2026\07\30\20260730-003648-p4-quality-gates` ו־
+`C:\Users\art1\.codex\visualizations\2026\07\30\20260730-004435-p4-quality-gates`.
+גם Docker Compose config, ‏worker Docker build/self-check ו־benchmark self-test עברו בנפרד.
+
+**חסומים/מדולגים במפורש:** real screen reader/NVDA לא בוצע; ביקורת סמנטית אוטומטית אינה
+תחליף לו. real Claude לא נקרא. לא בוצעו production backup, ‏live ledger, ‏deploy, ‏live
+migration או smoke חי. הראיות החזותיות הייעודיות נמצאות תחת
+`C:\Users\art1\.codex\visualizations\2026\07\29\plan07-acceptance\runs\20260729-232235`.
+
+---
+
 ## OCR חכם — הכרעת סוג מסמך ל־PLAN-05 (29.07.2026, מקומי בלבד)
 
 **מצב:** החסם של PLAN-05 טופל קדימה בלבד ב־`0050_document_type_review_decisions.sql`.

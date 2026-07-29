@@ -16,17 +16,21 @@ $previewPort = $null
 $previewProcess = $null
 $previewStdout = $null
 $previewStderr = $null
-$priceFunctionProcess = $null
-$priceFunctionStdout = $null
-$priceFunctionStderr = $null
-$priceFunctionEnvFile = $null
 $manifestPath = $null
 $artifactDirectory = $null
 $gateSummaryPath = $null
 $gateSummaryWritten = $false
 $startedSupabase = $false
+$supabaseWasRunning = $false
 $localEnvironment = $null
 $databaseWasUsed = $false
+$functionsEnvPath = Join-Path $repoRoot "supabase\functions\.env"
+$functionsEnvCreated = $false
+$ocrWorkerToken = "quality-$([guid]::NewGuid().ToString('N'))"
+$pushFunctionSecret = "quality-$([guid]::NewGuid().ToString('N'))"
+$cleanupPhase = $false
+$credentialSeed = $null
+$ocrBrowserFixtureCleanupRequired = $false
 
 function Write-Gate([string]$Label) {
   Write-Output ""
@@ -45,6 +49,7 @@ function Write-GateSummary([string]$Status, [string]$Scope, [string]$Reason) {
 }
 
 function Stop-WithInfrastructureBlock([string]$Reason, [string]$Message) {
+  if ($script:cleanupPhase) { throw $Message }
   Write-GateSummary "BLOCKED" "infrastructure" $Reason
   throw $Message
 }
@@ -70,7 +75,14 @@ function Invoke-DependencyAudit {
   try { $report = $raw | ConvertFrom-Json }
   catch { throw "npm audit failed and did not return valid JSON." }
 
-  $high = @($report.vulnerabilities.PSObject.Properties | Where-Object {
+  if (-not $report) {
+    Stop-WithInfrastructureBlock "dependency_audit_unavailable" "npm audit returned no report."
+  }
+  $vulnerabilities = $report.PSObject.Properties["vulnerabilities"]
+  if (-not $vulnerabilities) {
+    Stop-WithInfrastructureBlock "dependency_audit_unavailable" "npm audit returned no vulnerability report."
+  }
+  $high = @($vulnerabilities.Value.PSObject.Properties | Where-Object {
     $_.Value.severity -in @("high", "critical")
   })
   $unexpectedPackages = @($high.Name | Where-Object { $_ -notin $allowedPackages })
@@ -190,7 +202,7 @@ function Invoke-SqlTest([string]$RelativePath, [string]$Label, [string]$Database
   $containerPath = "/var/lib/postgresql/p4-$([IO.Path]::GetFileName($RelativePath))"
   Copy-SqlToDatabase $RelativePath $containerPath
   Write-Gate $Label
-  & docker exec -e PGPASSWORD=postgres $dbContainer psql -U $DatabaseUser -d postgres -v ON_ERROR_STOP=1 -f $containerPath
+  & docker exec -e PGPASSWORD=postgres -e PGTZ=Asia/Jerusalem $dbContainer psql -U $DatabaseUser -d postgres -v ON_ERROR_STOP=1 -f $containerPath
   Assert-ExitCode $Label
 }
 
@@ -328,52 +340,78 @@ function Start-PreviewServer {
   }
 }
 
-function Stop-PriceListFunction {
-  if ($script:priceFunctionProcess -and -not $script:priceFunctionProcess.HasExited) {
-    Stop-Process -Id $script:priceFunctionProcess.Id -Force -ErrorAction SilentlyContinue
+function Get-HttpStatus(
+  [string]$Uri,
+  [hashtable]$Headers = @{},
+  [string]$Body = "{}"
+) {
+  try {
+    return (Invoke-WebRequest -UseBasicParsing -Uri $Uri -Method Post -Headers $Headers `
+      -ContentType "application/json" -Body $Body -TimeoutSec 2).StatusCode
   }
-  $script:priceFunctionProcess = $null
-  foreach ($path in @($script:priceFunctionStdout, $script:priceFunctionStderr, $script:priceFunctionEnvFile)) {
-    if ($path -and (Test-Path -LiteralPath $path)) {
-      Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
-    }
+  catch {
+    if ($_.Exception.Response) { return [int]$_.Exception.Response.StatusCode }
+    return -1
   }
-  $script:priceFunctionStdout = $null
-  $script:priceFunctionStderr = $null
-  $script:priceFunctionEnvFile = $null
 }
 
-function Start-PriceListFunction([hashtable]$Environment) {
-  $script:priceFunctionStdout = [IO.Path]::GetTempFileName()
-  $script:priceFunctionStderr = [IO.Path]::GetTempFileName()
-  $script:priceFunctionEnvFile = [IO.Path]::GetTempFileName()
-  $envLines = @(
-    "SUPABASE_URL=$($Environment.API_URL)",
-    "SUPABASE_ANON_KEY=$($Environment.ANON_KEY)",
-    "SUPABASE_SERVICE_ROLE_KEY=$($Environment.SERVICE_ROLE_KEY)",
-    "APP_BASE_URL=http://127.0.0.1:5199"
-  )
-  [IO.File]::WriteAllLines($script:priceFunctionEnvFile, $envLines, (New-Object Text.UTF8Encoding($false)))
-  $script:priceFunctionProcess = Start-Process -FilePath (Get-Command supabase).Source `
-    -ArgumentList @("functions", "serve", "submit-price-list", "--no-verify-jwt", "--env-file", $script:priceFunctionEnvFile) `
-    -WorkingDirectory $repoRoot -WindowStyle Hidden -PassThru `
-    -RedirectStandardOutput $script:priceFunctionStdout -RedirectStandardError $script:priceFunctionStderr
-
-  $readyStatus = 0
+function Wait-LocalEdgeReady {
+  $documentStatus = 0
+  $interpretStatus = 0
+  $priceStatus = 0
   for ($attempt = 0; $attempt -lt 160; $attempt++) {
-    if ($script:priceFunctionProcess.HasExited) { break }
-    try {
-      $readyStatus = (Invoke-WebRequest -UseBasicParsing `
-        -Uri "$expectedApiUrl/functions/v1/submit-price-list" -Method Post `
-        -ContentType "application/json" -Body "{}" -TimeoutSec 2).StatusCode
+    $documentStatus = Get-HttpStatus "$expectedApiUrl/functions/v1/document-processing" `
+      @{ "x-ocr-worker-token" = $ocrWorkerToken }
+    $interpretStatus = Get-HttpStatus "$expectedApiUrl/functions/v1/interpret-document"
+    $priceStatus = Get-HttpStatus "$expectedApiUrl/functions/v1/submit-price-list"
+    if ($documentStatus -eq 400 -and $interpretStatus -eq 401 -and $priceStatus -eq 401) {
+      Write-Output "Local Edge runtime ready: document-processing=400, interpret-document=401, submit-price-list=401."
+      return
     }
-    catch {
-      $readyStatus = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { -1 }
-    }
-    if ($readyStatus -eq 401) { return }
     Start-Sleep -Milliseconds 250
   }
-  Stop-WithInfrastructureBlock "submit_price_list_not_ready" "Local submit-price-list readiness failed (status=$readyStatus)."
+  Stop-WithInfrastructureBlock "local_edge_not_ready" `
+    "Single local Edge runtime readiness failed (document=$documentStatus, interpret=$interpretStatus, price=$priceStatus)."
+}
+
+function ConvertTo-Base64Url([byte[]]$Bytes) {
+  return [Convert]::ToBase64String($Bytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+}
+
+function New-LocalVapidKeys {
+  $ecdsa = New-Object System.Security.Cryptography.ECDsaCng 256
+  try {
+    $parameters = $ecdsa.ExportParameters($true)
+    $publicBytes = New-Object byte[] 65
+    $publicBytes[0] = 4
+    [Array]::Copy($parameters.Q.X, 0, $publicBytes, 1, 32)
+    [Array]::Copy($parameters.Q.Y, 0, $publicBytes, 33, 32)
+    return [pscustomobject]@{
+      PublicKey = ConvertTo-Base64Url $publicBytes
+      PrivateKey = ConvertTo-Base64Url $parameters.D
+    }
+  }
+  finally {
+    $ecdsa.Dispose()
+  }
+}
+
+function New-LocalFunctionsEnvironment {
+  if (Test-Path -LiteralPath $functionsEnvPath) {
+    throw "Refusing to overwrite the existing local Edge environment: $functionsEnvPath"
+  }
+  $vapidKeys = New-LocalVapidKeys
+  $lines = @(
+    "OCR_WORKER_TOKEN=$ocrWorkerToken",
+    "ANTHROPIC_API_KEY=local-provider-mock-not-sent",
+    "APP_BASE_URL=http://127.0.0.1:5199",
+    "PUSH_FN_SECRET=$pushFunctionSecret",
+    "VAPID_PUBLIC_KEY=$($vapidKeys.PublicKey)",
+    "VAPID_PRIVATE_KEY=$($vapidKeys.PrivateKey)",
+    "VAPID_SUBJECT=mailto:quality-local@example.test"
+  )
+  $script:functionsEnvCreated = $true
+  [IO.File]::WriteAllLines($functionsEnvPath, $lines, (New-Object Text.UTF8Encoding($false)))
 }
 
 function Invoke-PriceListEdgeSmoke {
@@ -390,7 +428,6 @@ function Invoke-PriceListEdgeSmoke {
     foreach ($name in $edgeEnvironment.Keys) {
       [Environment]::SetEnvironmentVariable($name, [string]$edgeEnvironment[$name], "Process")
     }
-    Start-PriceListFunction $localEnvironment
     & node (Join-Path $PSScriptRoot "check-p1b-edge-smoke.cjs")
     Assert-ExitCode "P1B local Edge runtime smoke"
   }
@@ -398,7 +435,171 @@ function Invoke-PriceListEdgeSmoke {
     foreach ($name in $edgeEnvironment.Keys) {
       [Environment]::SetEnvironmentVariable($name, $previousEdgeEnvironment[$name], "Process")
     }
-    Stop-PriceListFunction
+  }
+}
+
+function Invoke-OcrEdgeSmoke {
+  $edgeEnvironment = @{
+    OCR_ACCEPTANCE_API_URL = [string]$localEnvironment.API_URL
+    OCR_ACCEPTANCE_ANON_KEY = [string]$localEnvironment.ANON_KEY
+    OCR_ACCEPTANCE_SERVICE_ROLE_KEY = [string]$localEnvironment.SERVICE_ROLE_KEY
+    OCR_ACCEPTANCE_WORKER_TOKEN = $ocrWorkerToken
+    SUPABASE_URL = [string]$localEnvironment.API_URL
+    SUPABASE_ANON_KEY = [string]$localEnvironment.ANON_KEY
+    SUPABASE_SERVICE_ROLE_KEY = [string]$localEnvironment.SERVICE_ROLE_KEY
+    ANTHROPIC_API_KEY = "local-provider-mock-not-sent"
+    APP_BASE_URL = "http://127.0.0.1:5199"
+  }
+  $previousEdgeEnvironment = @{}
+  try {
+    foreach ($name in $edgeEnvironment.Keys) {
+      $previousEdgeEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+      [Environment]::SetEnvironmentVariable($name, [string]$edgeEnvironment[$name], "Process")
+    }
+    & npx.cmd --yes deno run `
+      --config (Join-Path $repoRoot "supabase\functions\interpret-document\deno.json") `
+      --allow-env --allow-net=127.0.0.1:55431 `
+      (Join-Path $repoRoot "scripts\fixtures\ocr\edge-smoke.ts")
+    Assert-ExitCode "OCR Edge and provider-mock integration"
+  }
+  finally {
+    foreach ($name in $edgeEnvironment.Keys) {
+      [Environment]::SetEnvironmentVariable($name, $previousEdgeEnvironment[$name], "Process")
+    }
+  }
+}
+
+function Invoke-InterpretDocumentContractTests {
+  Write-Gate "Interpret-document prompt, provider-failure and authorization contracts"
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $testOutput = @(& npx.cmd --yes deno test `
+      --config (Join-Path $repoRoot "supabase\functions\interpret-document\deno.json") `
+      (Join-Path $repoRoot "supabase\functions\interpret-document\core.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\interpret-document\authorization.test.ts") 2>&1)
+    $testExit = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  $testOutput | ForEach-Object { Write-Output $_ }
+  if ($testExit -ne 0) { throw "Interpret-document contract tests failed with exit code $testExit." }
+  $testText = $testOutput -join "`n"
+  if ($testText -notmatch '(?i)\b[1-9][0-9]*\s+passed\b') {
+    throw "Interpret-document contract tests did not report any completed test."
+  }
+  if ($testText -match '(?i)\b[1-9][0-9]*\s+(?:ignored|skipped)\b') {
+    throw "Interpret-document contract tests reported ignored or skipped cases."
+  }
+}
+
+function Invoke-OcrWorkerSelfCheck {
+  Write-Gate "OCR worker image and no-GPU/no-model self-check"
+  & docker compose -f (Join-Path $repoRoot "docker-compose.ocr.yml") config --quiet
+  Assert-ExitCode "OCR worker Compose validation"
+  & docker build --pull=false -t supplyflow-ocr-worker:acceptance (Join-Path $repoRoot "worker\ocr")
+  Assert-ExitCode "OCR worker image build"
+  & docker run --rm --network none --entrypoint python `
+    supplyflow-ocr-worker:acceptance /app/self_check.py
+  Assert-ExitCode "OCR worker self-check"
+}
+
+function Install-OcrBrowserFixture([string]$Seed) {
+  $fixtureEnvironment = @{
+    OCR_ACCEPTANCE_API_URL = [string]$localEnvironment.API_URL
+    OCR_ACCEPTANCE_ANON_KEY = [string]$localEnvironment.ANON_KEY
+    OCR_ACCEPTANCE_SERVICE_ROLE_KEY = [string]$localEnvironment.SERVICE_ROLE_KEY
+    OCR_ACCEPTANCE_PASSWORD_SEED = $Seed
+  }
+  $previousFixtureEnvironment = @{}
+  try {
+    foreach ($name in $fixtureEnvironment.Keys) {
+      $previousFixtureEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+      [Environment]::SetEnvironmentVariable($name, [string]$fixtureEnvironment[$name], "Process")
+    }
+    $script:ocrBrowserFixtureCleanupRequired = $true
+    & node (Join-Path $repoRoot "scripts\fixtures\ocr\prepare-browser-fixture.cjs")
+    Assert-ExitCode "OCR browser Storage fixture"
+  }
+  finally {
+    foreach ($name in $fixtureEnvironment.Keys) {
+      [Environment]::SetEnvironmentVariable($name, $previousFixtureEnvironment[$name], "Process")
+    }
+  }
+  Invoke-SqlTest "scripts\fixtures\ocr\browser-fixture.sql" "OCR browser review, status and export fixture"
+}
+
+function Remove-OcrBrowserFixture([string]$Seed) {
+  if (-not $localEnvironment -or -not $Seed) {
+    throw "OCR browser fixture cleanup prerequisites are unavailable."
+  }
+  $fixtureEnvironment = @{
+    OCR_ACCEPTANCE_API_URL = [string]$localEnvironment.API_URL
+    OCR_ACCEPTANCE_ANON_KEY = [string]$localEnvironment.ANON_KEY
+    OCR_ACCEPTANCE_SERVICE_ROLE_KEY = [string]$localEnvironment.SERVICE_ROLE_KEY
+    OCR_ACCEPTANCE_PASSWORD_SEED = $Seed
+    OCR_ACCEPTANCE_FIXTURE_ACTION = "cleanup"
+  }
+  $previousFixtureEnvironment = @{}
+  try {
+    foreach ($name in $fixtureEnvironment.Keys) {
+      $previousFixtureEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+      [Environment]::SetEnvironmentVariable($name, [string]$fixtureEnvironment[$name], "Process")
+    }
+    & node (Join-Path $repoRoot "scripts\fixtures\ocr\prepare-browser-fixture.cjs")
+    Assert-ExitCode "OCR browser Storage cleanup"
+    $script:ocrBrowserFixtureCleanupRequired = $false
+  }
+  finally {
+    foreach ($name in $fixtureEnvironment.Keys) {
+      [Environment]::SetEnvironmentVariable($name, $previousFixtureEnvironment[$name], "Process")
+    }
+  }
+}
+
+function Assert-OcrPrerequisites([string]$Config) {
+  $requiredFiles = @(
+    "supabase\migrations\0045_smart_document_processing.sql",
+    "supabase\migrations\0046_document_learning.sql",
+    "supabase\migrations\0047_document_export_templates.sql",
+    "supabase\migrations\0048_ocr_price_submission_bridge.sql",
+    "supabase\migrations\0049_document_review_mutations.sql",
+    "supabase\migrations\0050_document_type_review_decisions.sql",
+    "supabase\tests\smart_document_processing.sql",
+    "supabase\tests\document_learning.sql",
+    "supabase\tests\document_export_templates.sql",
+    "supabase\tests\p1_price_submissions.sql",
+    "supabase\tests\p1_price_submissions_concurrency.sql",
+    "supabase\functions\document-processing\index.ts",
+    "supabase\functions\interpret-document\index.ts",
+    "supabase\functions\interpret-document\core.test.ts",
+    "supabase\functions\interpret-document\authorization.test.ts",
+    "supabase\functions\submit-price-list\index.ts",
+    "worker\ocr\Dockerfile",
+    "worker\ocr\self_check.py",
+    "docker-compose.ocr.yml",
+    "scripts\fixtures\ocr\edge-smoke.ts",
+    "scripts\fixtures\ocr\prepare-browser-fixture.cjs",
+    "scripts\fixtures\ocr\browser-fixture.sql"
+  )
+  $missing = @($requiredFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $repoRoot $_)) })
+  if ($missing.Count) { throw "Missing OCR acceptance prerequisites: $($missing -join ', ')" }
+  if ($Config -notmatch '(?ms)^\[edge_runtime\]\s+enabled\s*=\s*true\b') {
+    throw "OCR acceptance requires the built-in local Edge runtime."
+  }
+  $functionJwt = @{
+    "document-processing" = "false"
+    "interpret-document" = "true"
+    "submit-price-list" = "true"
+    "send-push" = "false"
+  }
+  foreach ($functionName in $functionJwt.Keys) {
+    $expectedJwt = $functionJwt[$functionName]
+    $sectionPattern = "(?m)^\[functions\.$([regex]::Escape($functionName))\]\r?\nverify_jwt\s*=\s*$expectedJwt\s*$"
+    if ($Config -notmatch $sectionPattern) {
+      throw "Missing or unsafe local Edge config for $functionName (verify_jwt=$expectedJwt required)."
+    }
   }
 }
 
@@ -407,8 +608,9 @@ $config = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8
 if ($config -notmatch "(?m)^project_id\s*=\s*`"$([regex]::Escape($expectedProjectId))`"\s*$") {
   throw "Refusing to run: supabase/config.toml is not the isolated $expectedProjectId project."
 }
+Assert-OcrPrerequisites $config
 
-foreach ($command in @("node", "npm.cmd", "supabase", "docker", "powershell")) {
+foreach ($command in @("node", "npm.cmd", "npx.cmd", "supabase", "docker", "powershell")) {
   if (-not (Get-Command $command -ErrorAction SilentlyContinue)) { throw "Required command not found: $command" }
 }
 
@@ -424,25 +626,36 @@ $artifactDirectory = Join-Path $artifactRoot "$artifactStamp-p4-quality-gates"
 New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
 $gateSummaryPath = Join-Path $artifactDirectory "gate-summary.json"
 
+$runError = $null
+$cleanupErrors = @()
+$repoLocationPushed = $false
+Push-Location -LiteralPath $repoRoot
+$repoLocationPushed = $true
 try {
   $localEnvironment = Get-LocalSupabaseEnvironment
-  if (-not $localEnvironment) {
-    Write-Gate "Start isolated local Supabase"
-    $previousPreference = $ErrorActionPreference
-    try {
-      $ErrorActionPreference = "Continue"
-      $startOutput = @(& supabase start 2>&1)
-      $startExit = $LASTEXITCODE
-    }
-    finally {
-      $ErrorActionPreference = $previousPreference
-    }
-    if ($startExit -ne 0) {
-      Stop-WithInfrastructureBlock "local_supabase_start_failed" "Unable to start the isolated local Supabase stack."
-    }
-    $startedSupabase = $true
+  $supabaseWasRunning = $null -ne $localEnvironment
+  New-LocalFunctionsEnvironment
+  if ($supabaseWasRunning) {
+    Write-Gate "Restart isolated local Supabase for the configured Edge runtime"
+    & supabase stop | Out-Null
+    Assert-ExitCode "Stopping the pre-existing isolated Supabase stack"
   }
+  Write-Gate "Start isolated local Supabase with one built-in Edge runtime"
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $startOutput = @(& supabase start 2>&1)
+    $startExit = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  if ($startExit -ne 0) {
+    Stop-WithInfrastructureBlock "local_supabase_start_failed" "Unable to start the isolated local Supabase stack."
+  }
+  $startedSupabase = $true
   $localEnvironment = Wait-LocalStackReady
+  Wait-LocalEdgeReady
   $databaseWasUsed = $true
 
   Write-Gate "PowerShell syntax"
@@ -461,6 +674,9 @@ try {
     Write-Gate "Dependency audit"
     Invoke-DependencyAudit
 
+    Invoke-InterpretDocumentContractTests
+    Invoke-OcrWorkerSelfCheck
+
     Write-Gate "P0 tenant security, Storage and local Push"
     $previousPreference = $ErrorActionPreference
     try {
@@ -468,7 +684,7 @@ try {
       # the child's real exit code instead of letting PS 5 turn progress into an exception.
       $ErrorActionPreference = "Continue"
       $p0Output = @(& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "check-p0-security.ps1") `
-        -ResetLocalDatabase -KeepFixture -ServePushFunction 2>&1)
+        -ResetLocalDatabase -KeepFixture -PushSecret $pushFunctionSecret 2>&1)
       $p0Exit = $LASTEXITCODE
     }
     finally {
@@ -495,7 +711,11 @@ try {
     $localEnvironment = Wait-LocalStackReady
 
     Invoke-SqlTest "supabase\tests\p0_client_dml_acl.sql" "P0 browser DML ACL and trusted-server CRUD"
+    Invoke-SqlTest "supabase\tests\smart_document_processing.sql" "Document queue, tenant boundary, lease fencing and extraction ledger" "supabase_admin"
+    Write-Gate "Reset after committed OCR queue fixtures"
+    Reset-LocalDatabase
     Invoke-SqlTest "supabase\tests\document_learning.sql" "Document interpretation, learning and review mutations"
+    Invoke-SqlTest "supabase\tests\document_export_templates.sql" "Document export scope, approval, precedence and immutable ledger"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-Preflight
@@ -509,11 +729,18 @@ try {
     Write-Gate "P1B local Edge runtime, 10/100/1,000 rows and failure recovery"
     Invoke-PriceListEdgeSmoke
 
-    Write-Gate "Reset after committed concurrency fixtures"
+    Write-Gate "Reset after P1B Edge and committed concurrency fixtures"
+    Reset-LocalDatabase
+
+    Write-Gate "OCR document-processing HTTP, interpretation handler with provider mock, and single-writer confirm"
+    Invoke-OcrEdgeSmoke
+
+    Write-Gate "Reset after OCR Edge fixtures"
     Reset-LocalDatabase
 
     $credentialSeed = [guid]::NewGuid().ToString("N")
     Install-DemoFixture $credentialSeed
+    Install-OcrBrowserFixture $credentialSeed
 
     Write-Gate "P4 integrated supplier-to-credit journey"
     $journeyEnvironment = @{
@@ -529,12 +756,10 @@ try {
         $previousJourneyEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
         [Environment]::SetEnvironmentVariable($name, [string]$journeyEnvironment[$name], "Process")
       }
-      Start-PriceListFunction $localEnvironment
       & node (Join-Path $PSScriptRoot "check-p4-integrated-journey.cjs")
       Assert-ExitCode "P4 integrated journey"
     }
     finally {
-      Stop-PriceListFunction
       foreach ($name in $journeyEnvironment.Keys) {
         [Environment]::SetEnvironmentVariable($name, $previousJourneyEnvironment[$name], "Process")
       }
@@ -551,6 +776,7 @@ try {
       QUALITY_PASSWORD_SEED = $credentialSeed
       QUALITY_BROWSER_PATH = Find-ChromiumExecutable
       PLAYWRIGHT_CORE_PATH = Find-PlaywrightCore
+      QUALITY_REQUIRE_ALL = "1"
     }
     $previousBrowserEnvironment = @{}
     try {
@@ -567,10 +793,6 @@ try {
       }
     }
 
-    Write-Output ""
-    Write-GateSummary "PASS" "quality" "all_gates_passed"
-    Write-Output "P4 quality gates passed with no skipped tests."
-    Write-Output "Browser evidence: $artifactDirectory"
   }
   finally {
     [Environment]::SetEnvironmentVariable("VITE_SUPABASE_URL", $previousUrl, "Process")
@@ -578,28 +800,86 @@ try {
   }
 }
 catch {
+  $runError = $_
   if (-not $gateSummaryWritten) {
     Write-GateSummary "FAIL" "product" "quality_gate_failed"
   }
-  throw
 }
 finally {
-  Stop-PriceListFunction
-  if ($previewProcess -and -not $previewProcess.HasExited) {
-    Stop-Process -Id $previewProcess.Id -Force -ErrorAction SilentlyContinue
-  }
-  foreach ($path in @($previewStdout, $previewStderr, $priceFunctionStdout, $priceFunctionStderr, $priceFunctionEnvFile, $manifestPath)) {
-    if ($path -and (Test-Path -LiteralPath $path)) {
-      Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+  $script:cleanupPhase = $true
+  try {
+    if ($previewProcess -and -not $previewProcess.HasExited) {
+      Stop-Process -Id $previewProcess.Id -Force -ErrorAction SilentlyContinue
+    }
+    foreach ($path in @($previewStdout, $previewStderr, $manifestPath)) {
+      if ($path -and (Test-Path -LiteralPath $path)) {
+        Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+      }
+    }
+    if ($ocrBrowserFixtureCleanupRequired) {
+      Write-Gate "Remove and verify OCR browser Storage fixtures"
+      try { Remove-OcrBrowserFixture $credentialSeed }
+      catch { $cleanupErrors += "OCR browser Storage cleanup failed: $($_.Exception.Message)" }
+    }
+    if ($databaseWasUsed) {
+      Write-Gate "Final isolated database reset"
+      try { Reset-LocalDatabase }
+      catch { $cleanupErrors += "Final local database reset failed: $($_.Exception.Message)" }
+    }
+    if ($startedSupabase) {
+      $previousPreference = $ErrorActionPreference
+      try {
+        $ErrorActionPreference = "Continue"
+        & supabase stop | Out-Null
+        $stopExit = $LASTEXITCODE
+        if ($stopExit -ne 0) { throw "The local Supabase stack could not be stopped (exit $stopExit)." }
+      }
+      catch { $cleanupErrors += $_.Exception.Message }
+      finally { $ErrorActionPreference = $previousPreference }
+    }
+    if ($functionsEnvCreated) {
+      try {
+        if (Test-Path -LiteralPath $functionsEnvPath) {
+          Remove-Item -LiteralPath $functionsEnvPath -Force -ErrorAction Stop
+        }
+        if (Test-Path -LiteralPath $functionsEnvPath) {
+          throw "The file still exists after deletion."
+        }
+      }
+      catch { $cleanupErrors += "The temporary local Edge environment could not be removed: $($_.Exception.Message)" }
+    }
+    if ($supabaseWasRunning) {
+      $previousPreference = $ErrorActionPreference
+      try {
+        $ErrorActionPreference = "Continue"
+        & supabase start | Out-Null
+        $restoreExit = $LASTEXITCODE
+        if ($restoreExit -ne 0) { throw "The pre-existing local Supabase stack could not be restored (exit $restoreExit)." }
+      }
+      catch { $cleanupErrors += $_.Exception.Message }
+      finally { $ErrorActionPreference = $previousPreference }
     }
   }
-  if ($databaseWasUsed) {
-    Write-Gate "Final isolated database reset"
-    try { Reset-LocalDatabase }
-    catch { Write-Warning "Final local database reset failed: $($_.Exception.Message)" }
-  }
-  if ($startedSupabase) {
-    & supabase stop | Out-Null
-    if ($LASTEXITCODE -ne 0) { Write-Warning "The local Supabase stack could not be stopped." }
+  finally {
+    if ($repoLocationPushed) {
+      Pop-Location
+      $repoLocationPushed = $false
+    }
   }
 }
+
+if ($runError) {
+  if ($cleanupErrors.Count) {
+    Write-Warning "Quality cleanup also failed: $($cleanupErrors -join '; ')"
+  }
+  throw $runError
+}
+if ($cleanupErrors.Count) {
+  Write-GateSummary "FAIL" "cleanup" "quality_cleanup_failed"
+  throw "Quality cleanup failed: $($cleanupErrors -join '; ')"
+}
+
+Write-Output ""
+Write-GateSummary "PASS" "quality" "all_gates_passed"
+Write-Output "P4 quality gates passed with no skipped tests."
+Write-Output "Browser evidence: $artifactDirectory"
