@@ -32,7 +32,8 @@ insert into auth.users (id, email) values
   ('21000000-0000-0000-0000-000000000004', 'owner-b-p1b@example.test'),
   ('21000000-0000-0000-0000-000000000005', 'payer-p1b@example.test'),
   ('21000000-0000-0000-0000-000000000006', 'accountant-p1b@example.test'),
-  ('21000000-0000-0000-0000-000000000007', 'kitchen-p1b@example.test');
+  ('21000000-0000-0000-0000-000000000007', 'kitchen-p1b@example.test'),
+  ('21000000-0000-0000-0000-000000000008', 'supplier-b-p1b@example.test');
 
 insert into profiles (id, org_id, full_name, role) values
   ('21000000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', 'P1B owner', 'owner'),
@@ -47,12 +48,19 @@ insert into suppliers (id, org_id, name) values
   ('31000000-0000-0000-0000-000000000002', '11000000-0000-0000-0000-000000000001', 'P1B supplier A2'),
   ('31000000-0000-0000-0000-000000000003', '11000000-0000-0000-0000-000000000002', 'P1B supplier B1');
 
-insert into profiles (id, org_id, full_name, role, supplier_id) values (
-  '21000000-0000-0000-0000-000000000003',
-  '11000000-0000-0000-0000-000000000001',
-  'P1B supplier agent', 'supplier',
-  '31000000-0000-0000-0000-000000000001'
-);
+insert into profiles (id, org_id, full_name, role, supplier_id) values
+  (
+    '21000000-0000-0000-0000-000000000003',
+    '11000000-0000-0000-0000-000000000001',
+    'P1B supplier agent', 'supplier',
+    '31000000-0000-0000-0000-000000000001'
+  ),
+  (
+    '21000000-0000-0000-0000-000000000008',
+    '11000000-0000-0000-0000-000000000001',
+    'P1B supplier B agent', 'supplier',
+    '31000000-0000-0000-0000-000000000002'
+  );
 
 insert into products (id, org_id, name, unit) values
   ('41000000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', 'P1B Product A1', 'unit'),
@@ -956,6 +964,692 @@ select pg_temp.p1b_assert(
   (select current_price = 22 from supplier_products
     where id = '51000000-0000-0000-0000-000000000002'),
   'office legacy importer was not preserved'
+);
+
+-- Reviewed OCR bridge: the supplier can upload/enqueue only its own price-list document.
+reset role;
+insert into products (id, org_id, name, unit) values (
+  '41000000-0000-4000-8000-000000000048',
+  '11000000-0000-0000-0000-000000000001',
+  'P1B OCR Product A1', 'unit'
+);
+insert into supplier_products (
+  id, org_id, supplier_id, product_id, current_price, price_effective_date, available
+) values (
+  '51000000-0000-4000-8000-000000000048',
+  '11000000-0000-0000-0000-000000000001',
+  '31000000-0000-0000-0000-000000000001',
+  '41000000-0000-4000-8000-000000000048', 10, '2026-07-01', true
+);
+insert into price_history (org_id, supplier_product_id, price, effective_date) values (
+  '11000000-0000-0000-0000-000000000001',
+  '51000000-0000-4000-8000-000000000048', 10, '2026-07-01'
+);
+
+-- A complete supplier-B chain proves that RLS and confirmation reject real foreign context,
+-- not only a malformed upload path.
+insert into storage.objects (bucket_id, name, owner, metadata) values (
+  'documents',
+  '11000000-0000-0000-0000-000000000001/supplier/31000000-0000-0000-0000-000000000002/45000000-0000-4000-8000-000000000049/competitor.pdf',
+  '21000000-0000-0000-0000-000000000008',
+  jsonb_build_object(
+    'mimetype', 'application/pdf', 'size', 2048, 'eTag', repeat('b', 64)
+  )
+);
+insert into documents (
+  id, org_id, entity_type, entity_id, supplier_id, storage_path,
+  file_name, mime_type, document_kind, uploaded_by
+) values (
+  '45000000-0000-4000-8000-000000000049',
+  '11000000-0000-0000-0000-000000000001',
+  'supplier', '31000000-0000-0000-0000-000000000002',
+  '31000000-0000-0000-0000-000000000002',
+  '11000000-0000-0000-0000-000000000001/supplier/31000000-0000-0000-0000-000000000002/45000000-0000-4000-8000-000000000049/competitor.pdf',
+  'competitor.pdf', 'application/pdf', 'price_list',
+  '21000000-0000-0000-0000-000000000008'
+);
+insert into document_processing_jobs (
+  id, org_id, document_id, requested_by, status, input_checksum,
+  contract_version, interpretation_actor_id, interpretation_started_at
+) values (
+  '55000000-0000-4000-8000-000000000050',
+  '11000000-0000-0000-0000-000000000001',
+  '45000000-0000-4000-8000-000000000049',
+  '21000000-0000-0000-0000-000000000008',
+  'review', 'etag:' || repeat('b', 64), '1',
+  '21000000-0000-0000-0000-000000000008', now()
+);
+insert into document_extractions (
+  id, org_id, job_id, document_id, engine, model, model_version,
+  input_checksum, contract_version, payload
+) values (
+  '65000000-0000-4000-8000-000000000050',
+  '11000000-0000-0000-0000-000000000001',
+  '55000000-0000-4000-8000-000000000050',
+  '45000000-0000-4000-8000-000000000049',
+  'fixture', 'fixture-model', '1', 'etag:' || repeat('b', 64), '1',
+  jsonb_build_object(
+    'schema_version', '1',
+    'document', jsonb_build_object(
+      'page_count', 1, 'detected_languages', jsonb_build_array('he'),
+      'plain_text', 'מחירון מתחרה', 'partial', false
+    ),
+    'blocks', '[]'::jsonb, 'tables', '[]'::jsonb, 'marks', '[]'::jsonb
+  )
+);
+insert into document_interpretations (
+  id, org_id, job_id, extraction_id, document_id, interpreted_for_user_id,
+  provider, model, prompt_version, schema_version, payload
+) values (
+  '75000000-0000-4000-8000-000000000050',
+  '11000000-0000-0000-0000-000000000001',
+  '55000000-0000-4000-8000-000000000050',
+  '65000000-0000-4000-8000-000000000050',
+  '45000000-0000-4000-8000-000000000049',
+  '21000000-0000-0000-0000-000000000008',
+  'anthropic', 'fixture-model', 'interpret-document-v1', '1',
+  jsonb_build_object(
+    'schema_version', '1', 'document_type', 'price_list',
+    'document_type_confidence', 0.99,
+    'supplier', jsonb_build_object(
+      'suggested_id', '31000000-0000-0000-0000-000000000002',
+      'suggested_name', 'P1B supplier A2', 'confidence', 0.99,
+      'evidence_block_ids', '[]'::jsonb
+    ),
+    'fields', '[]'::jsonb,
+    'line_items', jsonb_build_array(jsonb_build_object(
+      'source_row', 1,
+      'values', jsonb_build_object('product_name', 'Competitor product', 'price', '99'),
+      'evidence_block_ids', '[]'::jsonb
+    )),
+    'suggested_annotations', '[]'::jsonb
+  )
+);
+-- Staff may choose a supplier in their tenant, but the server still owns the UUID/path.
+insert into supplier_price_document_upload_reservations (
+  document_id, org_id, actor_id, supplier_id,
+  file_name, mime_type, storage_path, created_at, expires_at
+) values (
+  '45000000-0000-4000-8000-000000000087',
+  '11000000-0000-0000-0000-000000000001',
+  '21000000-0000-0000-0000-000000000001',
+  '31000000-0000-0000-0000-000000000002',
+  'expired.pdf', 'application/pdf',
+  '11000000-0000-0000-0000-000000000001/supplier/31000000-0000-0000-0000-000000000002/45000000-0000-4000-8000-000000000087/expired.pdf',
+  now() - interval '30 minutes', now() - interval '15 minutes'
+);
+select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select reserve_supplier_price_document_upload(
+  '31000000-0000-0000-0000-000000000002',
+  'staff-prices.pdf', 'application/pdf'
+)::text as staff_reservation
+\gset ocr_
+select
+  :'ocr_staff_reservation'::jsonb ->> 'document_id' as staff_document_id,
+  :'ocr_staff_reservation'::jsonb ->> 'storage_path' as staff_storage_path
+\gset ocr_
+insert into storage.objects (bucket_id, name, owner, metadata) values (
+  'documents', :'ocr_staff_storage_path', auth.uid(),
+  jsonb_build_object(
+    'mimetype', 'application/pdf', 'size', 2048, 'eTag', repeat('d', 64)
+  )
+);
+select register_supplier_price_document(
+  :'ocr_staff_document_id'::uuid
+)::text as staff_registration
+\gset ocr_
+select pg_temp.p1b_assert(
+  :'ocr_staff_reservation'::jsonb ->> 'storage_path'
+    like '11000000-0000-0000-0000-000000000001/supplier/31000000-0000-0000-0000-000000000002/%/staff-prices.pdf'
+  and not (:'ocr_staff_registration'::jsonb ->> 'idempotent')::boolean
+  and exists (
+    select 1 from documents d
+    where d.id = :'ocr_staff_document_id'::uuid
+      and d.org_id = '11000000-0000-0000-0000-000000000001'
+      and d.supplier_id = '31000000-0000-0000-0000-000000000002'
+      and d.uploaded_by = auth.uid()
+  )
+  and exists (
+    select 1 from document_processing_jobs j
+    where j.id = (:'ocr_staff_registration'::jsonb ->> 'job_id')::uuid
+      and j.document_id = :'ocr_staff_document_id'::uuid
+      and j.requested_by = auth.uid()
+  ),
+  'owner reservation did not upload through the existing Storage policy and register one job'
+);
+
+reset role;
+select pg_temp.p1b_assert(
+  not exists (
+    select 1 from supplier_price_document_upload_reservations
+    where document_id = '45000000-0000-4000-8000-000000000087'
+  ),
+  'reserve did not clean up an expired unused reservation'
+);
+select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000003', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+
+select pg_temp.p1b_assert(
+  not has_column_privilege('authenticated', 'public.documents', 'id', 'INSERT')
+  and not has_table_privilege(
+    'authenticated', 'public.supplier_price_document_upload_reservations', 'SELECT'
+  )
+  and not has_table_privilege(
+    'authenticated', 'public.supplier_price_document_upload_reservations', 'INSERT'
+  )
+  and not has_table_privilege(
+    'anon', 'public.supplier_price_document_upload_reservations', 'SELECT'
+  )
+  and not has_table_privilege(
+    'anon', 'public.supplier_price_document_upload_reservations', 'INSERT'
+  )
+  and has_table_privilege(
+    'service_role', 'public.supplier_price_document_upload_reservations', 'SELECT'
+  )
+  and has_table_privilege(
+    'service_role', 'public.supplier_price_document_upload_reservations', 'INSERT'
+  )
+  and has_table_privilege(
+    'service_role', 'public.supplier_price_document_upload_reservations', 'UPDATE'
+  )
+  and has_table_privilege(
+    'service_role', 'public.supplier_price_document_upload_reservations', 'DELETE'
+  ),
+  'P0 reservation ACL is not browser-closed and service-role writable'
+);
+
+do $$
+begin
+  insert into public.documents (id) values (
+    '45000000-0000-4000-8000-000000000088'
+  );
+  raise exception 'expected direct documents.id insert rejection';
+exception when insufficient_privilege then null;
+end
+$$;
+
+do $$
+begin
+  perform reserve_supplier_price_document_upload(
+    '31000000-0000-0000-0000-000000000002',
+    'competitor.pdf', 'application/pdf'
+  );
+  raise exception 'expected cross-supplier reservation rejection';
+exception when sqlstate '42501' then
+  if sqlerrm not like '%not_authorized%' then raise; end if;
+end
+$$;
+
+do $$
+begin
+  insert into storage.objects (bucket_id, name, owner, metadata) values (
+    'documents',
+    '11000000-0000-0000-0000-000000000001/supplier/31000000-0000-0000-0000-000000000001/45000000-0000-4000-8000-000000000089/no-reservation.pdf',
+    auth.uid(),
+    jsonb_build_object('mimetype', 'application/pdf', 'size', 2048, 'eTag', repeat('f', 64))
+  );
+  raise exception 'expected unreserved supplier Storage upload rejection';
+exception when insufficient_privilege then null;
+end
+$$;
+
+select reserve_supplier_price_document_upload(
+  '31000000-0000-0000-0000-000000000001',
+  'prices.pdf', 'application/pdf'
+)::text as reservation
+\gset ocr_
+select
+  :'ocr_reservation'::jsonb ->> 'document_id' as document_id,
+  :'ocr_reservation'::jsonb ->> 'storage_path' as storage_path
+\gset ocr_
+select pg_temp.p1b_assert(
+  (:'ocr_reservation'::jsonb ->> 'document_id')::uuid is not null
+  and :'ocr_storage_path'
+    = '11000000-0000-0000-0000-000000000001/supplier/31000000-0000-0000-0000-000000000001/'
+      || :'ocr_document_id' || '/prices.pdf'
+  and (:'ocr_reservation'::jsonb ->> 'expires_at')::timestamptz > now(),
+  'server reservation did not return a canonical short-lived document path'
+);
+
+insert into storage.objects (bucket_id, name, owner, metadata) values (
+  'documents', :'ocr_storage_path', auth.uid(),
+  jsonb_build_object(
+    'mimetype', 'application/pdf',
+    'size', 2048,
+    'eTag', repeat('a', 64)
+  )
+);
+
+select register_supplier_price_document(
+  :'ocr_document_id'::uuid
+)::text as registration
+\gset ocr_
+select :'ocr_registration'::jsonb ->> 'job_id' as job_id
+\gset ocr_
+select register_supplier_price_document(
+  :'ocr_document_id'::uuid
+)::text as registration_retry
+\gset ocr_
+
+select pg_temp.p1b_assert(
+  not (:'ocr_registration'::jsonb ->> 'idempotent')::boolean
+  and (:'ocr_registration_retry'::jsonb ->> 'idempotent')::boolean
+  and :'ocr_registration_retry'::jsonb ->> 'document_id' = :'ocr_document_id'
+  and :'ocr_registration_retry'::jsonb ->> 'job_id' = :'ocr_job_id'
+  and :'ocr_registration_retry'::jsonb ->> 'storage_path' = :'ocr_storage_path',
+  'document registration retry did not return the original document and job'
+);
+select pg_temp.p1b_assert(
+  supplier_price_upload_authorized(
+    auth_org(), '31000000-0000-0000-0000-000000000001', auth.uid()
+  )
+  and not supplier_price_upload_authorized(
+    auth_org(), '31000000-0000-0000-0000-000000000001',
+    '21000000-0000-0000-0000-000000000008'
+  )
+  and supplier_price_document_owned(
+    auth_org(), :'ocr_document_id'::uuid, auth.uid()
+  )
+  and not supplier_price_document_owned(
+    auth_org(), :'ocr_document_id'::uuid,
+    '21000000-0000-0000-0000-000000000008'
+  ),
+  'supplier authorization helpers were usable as a foreign actor oracle'
+);
+
+select pg_temp.p1b_assert(
+  (select requested_by = auth.uid() and input_checksum = 'etag:' || repeat('a', 64)
+   from document_processing_jobs where id = :'ocr_job_id'::uuid),
+  'server registration did not bind the uploader, enqueue job and current eTag'
+);
+
+-- Service-side extraction and interpretation preserve the exact job/document/extraction chain.
+reset role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+reset role;
+update document_processing_jobs
+set status = 'leased', lease_owner = 'p1b-test-worker', lease_until = now() + interval '1 minute'
+where id = :'ocr_job_id'::uuid;
+
+insert into document_extractions (
+  id, org_id, job_id, document_id, engine, model, model_version,
+  input_checksum, contract_version, payload
+) values (
+  '65000000-0000-4000-8000-000000000048',
+  '11000000-0000-0000-0000-000000000001', :'ocr_job_id'::uuid,
+  :'ocr_document_id'::uuid,
+  'fixture', 'fixture-model', '1', 'etag:' || repeat('a', 64), '1',
+  jsonb_build_object(
+    'schema_version', '1',
+    'document', jsonb_build_object(
+      'page_count', 1, 'detected_languages', jsonb_build_array('he'),
+      'plain_text', 'מחירון ספק', 'partial', false
+    ),
+    'blocks', '[]'::jsonb,
+    'tables', '[]'::jsonb,
+    'marks', '[]'::jsonb
+  )
+);
+update document_processing_jobs
+set status = 'extracted', lease_owner = null, lease_until = null
+where id = :'ocr_job_id'::uuid;
+
+set local role service_role;
+select begin_supplier_price_interpretation(
+  :'ocr_job_id'::uuid,
+  '65000000-0000-4000-8000-000000000048',
+  '21000000-0000-0000-0000-000000000003'
+)::text as begin_payload
+\gset ocr_
+
+select save_supplier_price_interpretation(
+  :'ocr_job_id'::uuid,
+  '65000000-0000-4000-8000-000000000048',
+  '21000000-0000-0000-0000-000000000003',
+  (:'ocr_begin_payload'::jsonb ->> 'interpretation_started_at')::timestamptz,
+  'anthropic', 'fixture-model', 'interpret-document-v1', '1',
+  jsonb_build_object(
+    'schema_version', '1',
+    'document_type', 'price_list',
+    'document_type_confidence', 0.99,
+    'supplier', jsonb_build_object(
+      'suggested_id', '31000000-0000-0000-0000-000000000001',
+      'suggested_name', 'P1B supplier A1',
+      'confidence', 0.99,
+      'evidence_block_ids', '[]'::jsonb
+    ),
+    'fields', '[]'::jsonb,
+    'line_items', jsonb_build_array(
+      jsonb_build_object(
+        'source_row', 1,
+        'values', jsonb_build_object('product_name', 'P1B OCR Product A1', 'price', '24'),
+        'evidence_block_ids', '[]'::jsonb
+      ),
+      jsonb_build_object(
+        'source_row', 2,
+        'values', jsonb_build_object('product_name', 'Unknown OCR product', 'price', '9'),
+        'evidence_block_ids', '[]'::jsonb
+      )
+    ),
+    'suggested_annotations', '[]'::jsonb
+  ),
+  '{}'::jsonb, 10
+) as interpretation_id
+\gset ocr_
+
+reset role;
+select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000003', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select pg_temp.p1b_assert(
+  exists (
+    select 1 from documents where id = :'ocr_document_id'::uuid
+  )
+  and not exists (
+    select 1 from documents where id = '45000000-0000-4000-8000-000000000049'
+  )
+  and exists (
+    select 1 from document_processing_jobs where id = :'ocr_job_id'::uuid
+  )
+  and not exists (
+    select 1 from document_processing_jobs
+    where id = '55000000-0000-4000-8000-000000000050'
+  )
+  and exists (
+    select 1 from document_extractions
+    where id = '65000000-0000-4000-8000-000000000048'
+  )
+  and not exists (
+    select 1 from document_extractions
+    where id = '65000000-0000-4000-8000-000000000050'
+  )
+  and exists (
+    select 1 from document_interpretations where id = :'ocr_interpretation_id'::uuid
+  )
+  and not exists (
+    select 1 from document_interpretations
+    where id = '75000000-0000-4000-8000-000000000050'
+  ),
+  'supplier A could read supplier B document processing or interpretation context'
+);
+select pg_temp.p1b_assert(
+  exists (
+    select 1 from storage.objects
+    where bucket_id = 'documents'
+      and name = :'ocr_storage_path'
+  )
+  and not exists (
+    select 1 from storage.objects
+    where bucket_id = 'documents'
+      and name like '%/45000000-0000-4000-8000-000000000049/competitor.pdf'
+  ),
+  'supplier A could read supplier B source object'
+);
+
+reset role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+do $$
+begin
+  perform prepare_ocr_supplier_price_intake(
+    '79000000-0000-4000-8000-000000000051',
+    '21000000-0000-0000-0000-000000000003',
+    '75000000-0000-4000-8000-000000000050',
+    '45000000-0000-4000-8000-000000000049',
+    '75000000-0000-4000-8000-000000000050',
+    '2026-09-01',
+    jsonb_build_array(jsonb_build_object(
+      'lineItemIndex', 0,
+      'productId', '41000000-0000-4000-8000-000000000048',
+      'priceText', '99', 'available', true
+    )),
+    'cross-supplier confirmation must fail'
+  );
+  raise exception 'expected cross-supplier OCR confirmation rejection';
+exception when sqlstate 'P0002' then
+  if sqlerrm not like '%price_submission_document_invalid%' then raise; end if;
+end
+$$;
+select pg_temp.p1b_assert(
+  not exists (
+    select 1 from supplier_price_submission_intakes
+    where id = '79000000-0000-4000-8000-000000000051'
+  ),
+  'cross-supplier confirmation prepared an intake'
+);
+
+select prepare_ocr_supplier_price_intake(
+  '79000000-0000-4000-8000-000000000048',
+  '21000000-0000-0000-0000-000000000003',
+  :'ocr_interpretation_id'::uuid,
+  :'ocr_document_id'::uuid,
+  :'ocr_interpretation_id'::uuid,
+  '2026-09-01',
+  jsonb_build_array(
+    jsonb_build_object(
+      'lineItemIndex', 0,
+      'productId', '41000000-0000-4000-8000-000000000048',
+      'priceText', '24', 'available', true
+    ),
+    jsonb_build_object(
+      'lineItemIndex', 1,
+      'productId', '49000000-0000-4000-8000-000000000048',
+      'priceText', '9', 'available', true
+    )
+  ),
+  'human approved OCR rows'
+)::text as bridge
+\gset ocr_
+
+select count(*) as product_count_before from products
+where org_id = '11000000-0000-0000-0000-000000000001'
+\gset ocr_
+select count(*) as history_count_before from price_history
+where supplier_product_id = '51000000-0000-4000-8000-000000000048'
+\gset ocr_
+
+reset role;
+select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000003', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+
+select submit_supplier_price_list(
+  '79000000-0000-4000-8000-000000000048'
+)::text as receipt
+\gset ocr_
+
+select pg_temp.p1b_assert(
+  (:'ocr_receipt'::jsonb ->> 'submission_id')::uuid
+    = :'ocr_interpretation_id'::uuid
+  and (:'ocr_receipt'::jsonb ->> 'accepted_count')::integer = 1
+  and (:'ocr_receipt'::jsonb ->> 'rejected_count')::integer = 1
+  and :'ocr_receipt'::jsonb #>> '{rejections,0,reason}' = 'unknown_product',
+  'OCR confirmation did not preserve accepted and unknown-product verdicts'
+);
+select pg_temp.p1b_assert(
+  (select count(*) = :'ocr_product_count_before'::integer from products
+   where org_id = '11000000-0000-0000-0000-000000000001')
+  and not exists (
+    select 1 from products where id = '49000000-0000-4000-8000-000000000048'
+  ),
+  'OCR confirmation created an unknown product'
+);
+select pg_temp.p1b_assert(
+  (select current_price = 24 and price_effective_date = '2026-09-01'
+   from supplier_products where id = '51000000-0000-4000-8000-000000000048')
+  and (select status = 'completed' from document_processing_jobs where id = :'ocr_job_id'::uuid),
+  'OCR confirmation did not commit price and document completion atomically'
+);
+select pg_temp.p1b_assert(
+  (select source_document_id = :'ocr_document_id'::uuid
+          and source_job_id = :'ocr_job_id'::uuid
+          and source_extraction_id = '65000000-0000-4000-8000-000000000048'
+          and source_interpretation_id = :'ocr_interpretation_id'::uuid
+          and source_input_checksum = 'etag:' || repeat('a', 64)
+   from supplier_price_submissions
+   where id = :'ocr_interpretation_id'::uuid),
+  'OCR ledger did not retain the immutable source provenance'
+);
+
+-- Same human confirmation, even under a new submission id, returns the original receipt.
+reset role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+select prepare_ocr_supplier_price_intake(
+  '79000000-0000-4000-8000-000000000049',
+  '21000000-0000-0000-0000-000000000003',
+  :'ocr_interpretation_id'::uuid,
+  :'ocr_document_id'::uuid,
+  :'ocr_interpretation_id'::uuid,
+  '2026-09-01',
+  jsonb_build_array(
+    jsonb_build_object(
+      'lineItemIndex', 1,
+      'productId', '49000000-0000-4000-8000-000000000048',
+      'priceText', '9', 'available', true
+    ),
+    jsonb_build_object(
+      'lineItemIndex', 0,
+       'productId', '41000000-0000-4000-8000-000000000048',
+      'priceText', '24', 'available', true
+    )
+  ),
+  'human approved OCR rows replay'
+);
+reset role;
+select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000003', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select submit_supplier_price_list(
+  '79000000-0000-4000-8000-000000000049'
+)::text as replay_receipt
+\gset ocr_
+select pg_temp.p1b_assert(
+  (:'ocr_replay_receipt'::jsonb ->> 'submission_id')::uuid
+    = :'ocr_interpretation_id'::uuid
+  and (:'ocr_replay_receipt'::jsonb ->> 'idempotent')::boolean
+  and (select count(*) = 1 from supplier_price_submissions
+       where source_interpretation_id = :'ocr_interpretation_id'::uuid)
+  and (select count(*) = :'ocr_history_count_before'::integer + 1 from price_history
+       where supplier_product_id = '51000000-0000-4000-8000-000000000048'),
+  'OCR replay created duplicate ledger or price history'
+);
+
+-- Supplier provider failures use the same current-source fence and clean up the bound attempt.
+reset role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+reset role;
+insert into document_processing_jobs (
+  id, org_id, document_id, requested_by, status, input_checksum, contract_version
+) values (
+  '55000000-0000-4000-8000-000000000049',
+  '11000000-0000-0000-0000-000000000001',
+  :'ocr_document_id'::uuid,
+  '21000000-0000-0000-0000-000000000003',
+  'extracted', 'etag:' || repeat('a', 64), '1'
+);
+insert into document_extractions (
+  id, org_id, job_id, document_id, engine, model, model_version,
+  input_checksum, contract_version, payload
+) select
+  '65000000-0000-4000-8000-000000000049',
+  '11000000-0000-0000-0000-000000000001',
+  '55000000-0000-4000-8000-000000000049',
+  :'ocr_document_id'::uuid,
+  'fixture', 'fixture-model', '1', 'etag:' || repeat('a', 64), '1', payload
+from document_extractions
+where id = '65000000-0000-4000-8000-000000000048';
+set local role service_role;
+select begin_supplier_price_interpretation(
+  '55000000-0000-4000-8000-000000000049',
+  '65000000-0000-4000-8000-000000000049',
+  '21000000-0000-0000-0000-000000000003'
+)::text as failed_begin
+\gset ocr_
+select fail_supplier_price_interpretation(
+  '55000000-0000-4000-8000-000000000049',
+  '65000000-0000-4000-8000-000000000049',
+  '21000000-0000-0000-0000-000000000003',
+  (:'ocr_failed_begin'::jsonb ->> 'interpretation_started_at')::timestamptz,
+  'provider_timeout', null
+);
+select pg_temp.p1b_assert(
+  (select status = 'failed' and last_error_code = 'provider_timeout'
+   from document_processing_jobs
+   where id = '55000000-0000-4000-8000-000000000049'),
+  'supplier failure wrapper left the job in interpreting state'
+);
+
+-- A changed source object is rejected before a new intake can reach the writer.
+reset role;
+update storage.objects
+set metadata = metadata || jsonb_build_object('eTag', repeat('c', 64))
+where bucket_id = 'documents'
+  and name = :'ocr_storage_path';
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+do $$
+declare
+  v_document_id uuid;
+  v_interpretation_id uuid;
+begin
+  select d.id into strict v_document_id
+  from documents d
+  where d.org_id = '11000000-0000-0000-0000-000000000001'
+    and d.uploaded_by = '21000000-0000-0000-0000-000000000003'
+    and d.file_name = 'prices.pdf';
+  select i.id into strict v_interpretation_id
+  from document_interpretations i
+  where i.document_id = v_document_id
+    and i.job_id <> '55000000-0000-4000-8000-000000000049';
+  perform prepare_ocr_supplier_price_intake(
+    '79000000-0000-4000-8000-000000000050',
+    '21000000-0000-0000-0000-000000000003',
+    v_interpretation_id,
+    v_document_id,
+    v_interpretation_id,
+    '2026-10-01',
+    jsonb_build_array(jsonb_build_object(
+      'lineItemIndex', 0,
+      'productId', '41000000-0000-4000-8000-000000000048',
+      'priceText', '25', 'available', true
+    )),
+    'changed object must fail'
+  );
+  raise exception 'expected changed OCR source rejection';
+exception when sqlstate 'P0001' then
+  if sqlerrm not like '%price_submission_file_changed%' then raise; end if;
+end
+$$;
+select pg_temp.p1b_assert(
+  not exists (
+    select 1 from supplier_price_submission_intakes
+    where id = '79000000-0000-4000-8000-000000000050'
+  ),
+  'changed OCR object left a prepared intake'
+);
+
+-- The only authenticated price writer remains the intake-consuming command.
+select pg_temp.p1b_assert(
+  has_function_privilege(
+    'authenticated', 'public.submit_supplier_price_list(uuid)', 'EXECUTE'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'public.prepare_ocr_supplier_price_intake(uuid,uuid,uuid,uuid,uuid,date,jsonb,text)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'public.p1b_submit_supplier_price_list_internal(uuid,uuid,date,text,text,text,jsonb,text)',
+    'EXECUTE'
+  ),
+  'OCR bridge exposed a second authenticated price writer'
 );
 
 reset role;

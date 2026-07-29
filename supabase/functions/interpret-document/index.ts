@@ -79,6 +79,7 @@ interface ProfileRow {
   org_id: string;
   role: string;
   active: boolean;
+  supplier_id: string | null;
 }
 
 interface JobRow {
@@ -86,10 +87,30 @@ interface JobRow {
   org_id: string;
   document_id: string;
   status: string;
+  requested_by: string;
+  input_checksum: string;
+  contract_version: string;
 }
 
 interface ExtractionRow {
   id: string;
+  org_id: string;
+  job_id: string;
+  document_id: string;
+  input_checksum: string;
+  contract_version: string;
+}
+
+interface DocumentRow {
+  id: string;
+  org_id: string;
+  entity_type: string;
+  entity_id: string | null;
+  supplier_id: string | null;
+  document_kind: string;
+  uploaded_by: string;
+  storage_path: string;
+  deleted_at: string | null;
 }
 
 interface BeginContext {
@@ -121,6 +142,33 @@ interface RuleRow {
   tag_key: string;
   label: string;
   version: number;
+}
+
+export function supplierInterpretationContextAllowed(
+  actorId: string,
+  profile: ProfileRow,
+  document: DocumentRow,
+  job: JobRow,
+  extraction: ExtractionRow,
+): boolean {
+  const supplierId = profile.supplier_id;
+  return profile.active && profile.role === "supplier" &&
+    typeof supplierId === "string" && UUID.test(supplierId) &&
+    profile.org_id === document.org_id &&
+    document.entity_type === "supplier" &&
+    document.entity_id === supplierId &&
+    document.supplier_id === supplierId &&
+    document.document_kind === "price_list" &&
+    document.uploaded_by === actorId && document.deleted_at === null &&
+    document.storage_path.startsWith(
+      `${profile.org_id}/supplier/${supplierId}/${document.id}/`,
+    ) &&
+    job.org_id === profile.org_id && job.document_id === document.id &&
+    job.requested_by === actorId && job.contract_version === "1" &&
+    extraction.org_id === profile.org_id && extraction.job_id === job.id &&
+    extraction.document_id === document.id &&
+    extraction.contract_version === job.contract_version &&
+    extraction.input_checksum === job.input_checksum;
 }
 
 function corsFor(req: Request): Record<string, string> {
@@ -177,6 +225,9 @@ function pgError(message: string): EdgeError {
   if (message.includes("document_unknown")) {
     return new EdgeError("invalid_job_state", 409);
   }
+  if (message.includes("document_source_changed")) {
+    return new EdgeError("invalid_job_state", 409);
+  }
   if (message.includes("document_interpretation_conflict")) {
     return new EdgeError("interpretation_conflict", 409);
   }
@@ -201,15 +252,21 @@ async function markFailed(
   actorId: string,
   interpretationStartedAt: string,
   code: string,
+  supplierPriceList: boolean,
 ): Promise<void> {
-  const failed = await admin.rpc("fail_document_interpretation", {
+  const failed = await admin.rpc(
+    supplierPriceList
+      ? "fail_supplier_price_interpretation"
+      : "fail_document_interpretation",
+    {
     p_job_id: jobId,
     p_extraction_id: extractionId,
     p_actor_id: actorId,
     p_interpretation_started_at: interpretationStartedAt,
     p_error_code: code,
     p_error_message: null,
-  });
+    },
+  );
   if (failed.error) {
     console.error("interpret-document failure persistence failed");
   }
@@ -225,7 +282,7 @@ async function existingInterpretation(
   return existing.error || !existing.data ? null : String(existing.data.id);
 }
 
-Deno.serve(async (req: Request): Promise<Response> => {
+export async function handler(req: Request): Promise<Response> {
   const cors = corsFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") {
@@ -276,7 +333,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   const profileResult = await admin.from("profiles").select(
-    "org_id,role,active",
+    "org_id,role,active,supplier_id",
   )
     .eq("id", actorId).maybeSingle();
   if (profileResult.error) {
@@ -284,7 +341,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
   const profile = profileResult.data as ProfileRow | null;
   if (
-    !profile?.active || !["owner", "office", "kitchen"].includes(profile.role)
+    !profile?.active ||
+    !["owner", "office", "kitchen", "supplier"].includes(profile.role)
   ) {
     return fail(cors, new EdgeError("not_authorized", 403));
   }
@@ -302,7 +360,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   const jobResult = await admin.from("document_processing_jobs")
-    .select("id,org_id,document_id,status").eq("id", jobId)
+    .select(
+      "id,org_id,document_id,status,requested_by,input_checksum,contract_version",
+    ).eq("id", jobId)
     .eq("org_id", profile.org_id).maybeSingle();
   if (jobResult.error) {
     return fail(cors, new EdgeError("service_unavailable", 503));
@@ -313,7 +373,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return fail(cors, new EdgeError("invalid_job_state", 409));
   }
 
-  const extractionResult = await admin.from("document_extractions").select("id")
+  const extractionResult = await admin.from("document_extractions").select(
+    "id,org_id,job_id,document_id,input_checksum,contract_version",
+  )
     .eq("org_id", profile.org_id).eq("job_id", job.id)
     .eq("document_id", job.document_id).maybeSingle();
   if (extractionResult.error) {
@@ -322,11 +384,39 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const extraction = extractionResult.data as ExtractionRow | null;
   if (!extraction) return fail(cors, new EdgeError("extraction_unknown", 404));
 
-  const beginResult = await admin.rpc("begin_document_interpretation", {
+  const isSupplier = profile.role === "supplier";
+  if (isSupplier) {
+    const documentResult = await admin.from("documents").select(
+      "id,org_id,entity_type,entity_id,supplier_id,document_kind,uploaded_by,storage_path,deleted_at",
+    ).eq("id", job.document_id).eq("org_id", profile.org_id).maybeSingle();
+    if (documentResult.error) {
+      return fail(cors, new EdgeError("service_unavailable", 503));
+    }
+    const document = documentResult.data as DocumentRow | null;
+    if (
+      !document ||
+      !supplierInterpretationContextAllowed(
+        actorId,
+        profile,
+        document,
+        job,
+        extraction,
+      )
+    ) {
+      return fail(cors, new EdgeError("not_authorized", 403));
+    }
+  }
+
+  const beginResult = await admin.rpc(
+    isSupplier
+      ? "begin_supplier_price_interpretation"
+      : "begin_document_interpretation",
+    {
     p_job_id: job.id,
     p_extraction_id: extraction.id,
     p_actor_id: actorId,
-  });
+    },
+  );
   if (beginResult.error) return fail(cors, pgError(beginResult.error.message));
   const context = beginResult.data as BeginContext;
   if (context.already_interpreted && context.interpretation_id) {
@@ -352,26 +442,34 @@ Deno.serve(async (req: Request): Promise<Response> => {
         actorId,
         interpretationStartedAt,
         "unsupported_extraction_contract",
+        isSupplier,
       );
     }
     return fail(cors, new EdgeError("unsupported_extraction_contract", 409));
   }
 
   try {
-    const [suppliersResult, rulesResult] = await Promise.all([
-      admin.from("suppliers").select("id,name,status").eq(
-        "org_id",
-        context.org_id,
-      )
-        .is("deleted_at", null).order("name").limit(101),
-      admin.from("document_learning_rules")
+    let suppliersQuery = admin.from("suppliers").select("id,name,status").eq(
+      "org_id",
+      context.org_id,
+    ).is("deleted_at", null).order("name").limit(101);
+    let rulesQuery = admin.from("document_learning_rules")
         .select(
           "id,user_id,document_type,supplier_id,mark_kind,mark_fingerprint,tag_key,label,version",
         )
         .eq("org_id", context.org_id).eq("active", true)
         .or(`user_id.is.null,user_id.eq.${actorId}`).order("version", {
           ascending: false,
-        }).limit(201),
+        }).limit(201);
+    if (isSupplier && profile.supplier_id) {
+      suppliersQuery = suppliersQuery.eq("id", profile.supplier_id);
+      rulesQuery = rulesQuery.or(
+        `supplier_id.is.null,supplier_id.eq.${profile.supplier_id}`,
+      );
+    }
+    const [suppliersResult, rulesResult] = await Promise.all([
+      suppliersQuery,
+      rulesQuery,
     ]);
     if (suppliersResult.error || rulesResult.error) {
       throw new EdgeError("context_unavailable", 503);
@@ -380,7 +478,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const suppliers: SupplierCandidate[] =
       ((suppliersResult.data ?? []) as SupplierRow[])
         .map(({ id, name, status }) => ({ id, name, status }));
-    const rules: LearningRuleSummary[] = ((rulesResult.data ?? []) as RuleRow[])
+    if (
+      isSupplier &&
+      (suppliers.length !== 1 || suppliers[0].id !== profile.supplier_id)
+    ) {
+      throw new EdgeError("context_unavailable", 503);
+    }
+    const visibleRules = ((rulesResult.data ?? []) as RuleRow[]).filter(
+      (rule) =>
+        !isSupplier || rule.supplier_id === null ||
+        rule.supplier_id === profile.supplier_id,
+    );
+    const rules: LearningRuleSummary[] = visibleRules
       .sort((a, b) => Number(b.user_id !== null) - Number(a.user_id !== null))
       .map((rule) => ({
         id: rule.id,
@@ -402,7 +511,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const result = await createAnthropicProvider({ apiKey: anthropicKey })
       .interpret(providerPayload);
     const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
-    const saved = await admin.rpc("save_document_interpretation", {
+    const saved = await admin.rpc(
+      isSupplier
+        ? "save_supplier_price_interpretation"
+        : "save_document_interpretation",
+      {
       p_job_id: job.id,
       p_extraction_id: extraction.id,
       p_actor_id: actorId,
@@ -418,7 +531,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         input_truncation: providerPayload.truncation,
       },
       p_duration_ms: durationMs,
-    });
+      },
+    );
     if (saved.error || !saved.data) {
       if (saved.error?.message.includes("document_interpretation_conflict")) {
         throw new EdgeError("interpretation_conflict", 409);
@@ -431,6 +545,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
       if (saved.error?.message.includes("document_interpretation_actor_invalid")) {
         throw new EdgeError("not_authorized", 403);
+      }
+      if (saved.error?.message.includes("document_source_changed")) {
+        throw new EdgeError("invalid_job_state", 409);
       }
       const existingId = await existingInterpretation(
         admin,
@@ -469,8 +586,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
       actorId,
       interpretationStartedAt,
       edgeError.code,
+      isSupplier,
     );
     console.error("interpret-document failed", edgeError.code);
     return fail(cors, edgeError);
   }
-});
+}
+
+if (import.meta.main) {
+  Deno.serve(handler);
+}
