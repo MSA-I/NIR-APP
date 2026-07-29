@@ -47,6 +47,8 @@ supabase/
                            0036 allowlist כתיבה ופקודות מנומקות · 0037 ניקוי orphan של uploader
                            0038 qualification למדיניות Storage · 0039 שחזור CRUD ל-service_role
                            0040 מצב מסירת התראות server-only · 0041 מעברי סטטוס הזמנה מנומקים
+                           0042 ACL פרופיל · 0043 פיצול הזמנה · 0044 פריטים להזמנה הבאה
+                           0045 חוזה עיבוד מסמכים, תור ו-Storage
   functions/               admin-provision · send-invite · send-push · submit-price-list — service_role נשאר בשרת
   seed.sql                 seed ניטרלי לדייר חדש (ארגון + קטגוריות)
   demo/                    חבילת הדמו כדייר נפרד + reset + audit בידוד
@@ -115,7 +117,8 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
   tenant ו־old/new מן המוטציה האמיתית, וסיבת פעולת P0 רגישה נכתבת בתוך פקודת ה־RPC שלה.
 - אין DELETE קשיח דרך JWT לרשומות פיננסיות. ב־Storage קריאה ניתנת רק כאשר קיימת שורת
   `documents` מורשית לאותו path; payer קורא רק מסמך שהוא העלה. מחיקה מותרת רק ל־orphan חדש
-  של אותו uploader שאין אליו שורת מסמך. bucket המסמכים פרטי וחוסם HTML/SVG.
+  של אותו uploader שאין אליו שורת מסמך. bucket המסמכים פרטי; allowlist ‏`0045` חוסם
+  SVG וקובצי executable, אך מאפשר `text/html` כמסמך מקור לעיבוד מבוקר.
 - ה־cutover של P1 הושלם ב־`0023`: מדיניות הכתיבה הישירה של payer לדרישה, תשלום והקצאה
   הוסרו, והפעולה עוברת רק דרך `execute_payment_request`. מסמך `P0-P1-SECURITY-HANDOFF.md`
   נשמר כחוזה היסטורי ומסומן כממומש.
@@ -157,6 +160,9 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
   פריטי הטיוטה, ובסיום נועל אותה, מאמת מחיר נוכחי ויוצר את כל הזמנות הספק או אף אחת.
 - **מסמך ותוכן עסקי הם שני צירים:** `documents.entity_type/entity_id` קובעים תיוק, ואילו
   `document_kind/supplier_id/document_date` מאפשרים גלריה וסינון בלי לנחש את סוגו של מסמך היסטורי.
+- **מקור, חילוץ ואמת עסקית הם שלושה צירים:** `documents` שומר את המקור; תור העיבוד מנהל
+  עבודה ו-retry; ‏`document_extractions` שומר ראיית חילוץ immutable. פלט OCR או parser הוא
+  הצעה בלבד ואינו מעדכן חשבונית, קבלה, זיכוי, מחיר או יתרה.
 - **מחיקה רכה בלבד** לרשומות כספיות (`deleted_at` / סטטוס בוטל).
 - **ביקורת server-authored:** טריגרי DB על כל היישויות הרגישות גוזרים old/new, משתמש ודייר
   מן המוטציה. פעולות פקודה אטומיות כותבות סיבה באותו RPC; הדפדפן אינו רשאי להוסיף שורת audit.
@@ -164,6 +170,30 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
   לעדכן רק `read_at`. ‏`notification_event_states` היא server-only ומגדירה מחזור מסירה אחד,
   הסלמת warning→critical ומחזור חדש לאחר פתרון. מ־`0024` ה־claim ויצירת שורות הנמענים הם
   עסקה אחת; שורת notification היא outbox עמיד, וכשל Push משאיר `push_sent_at` ריק לניסיון חוזר.
+
+## חוזה עיבוד מסמכים חכם — תשתית בלבד
+
+מיגרציה `0045_smart_document_processing.sql` מוסיפה את `document_processing_jobs` ואת
+`document_extractions` לצד רשם המקור הקיים. לכל שורה `org_id`, קשרים דייריים מורכבים ו-RLS;
+תוצאה שנשמרה אינה נערכת או נמחקת. עיבוד חוזר יוצר job חדש ושומר את הראיות הקודמות.
+
+מחזור חיי job הוא `queued → leased → extracted → interpreting → review → completed`, עם
+`failed` לכשל סופי. lease שפג ניתן לתביעה מחדש; claim, heartbeat, complete ו-fail הם פקודות
+שרת בלבד ואינם granted ל-`authenticated`. ‏`enqueue_document_processing` אידמפוטנטית לפי
+מסמך, checksum וגרסת חוזה פעילה. ה-checksum נגזר server-side מ-`eTag` מנורמל של אובייקט
+Storage; אובייקט בלי `eTag` אינו נכנס לתור.
+`reprocess_document` דורשת owner/office, סיבה ו-audit.
+
+`ExtractionContract` גרסה `1` שומר טקסט, blocks, tables וסימונים. עמוד הוא 1-based,
+ו-bbox הוא `[xMin, yMin, xMax, yMax]` מנורמל ל-`0..1`; ‏confidence לא ידוע הוא `null`,
+לא אפס. מקור הסמכות
+לסוג הקובץ הוא bytes שנבדקו; extension היא רמז בלבד. גבולות ברירת המחדל הם 10MB למקור,
+100 עמודי PDF, ‏5,000 שורות spreadsheet, ‏2 מיליון תווי טקסט ו-100MB לאחר decompression.
+קובץ מוצפן, פגום או לא נתמך נכשל בקוד מפורש ללא fallback שקט.
+
+החוזה הזה אינו טוען שמנוע OCR פרטי, parser, פרשנות Claude, מסך review או bridge למחירון
+כבר מומשו. אלה צרכנים מאוחרים של התור; בפרט, מחיר מאושר ממשיך להיכתב רק דרך
+`submit_supplier_price_list`.
 
 ## גבול פקודות פיננסי P1 — ממומש מקומית
 
