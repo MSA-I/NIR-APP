@@ -1,5 +1,5 @@
--- PLAN-03 document interpretation and learned-annotation contract.
--- Run against a freshly reset disposable local database after migration 0046.
+-- PLAN-03 document interpretation/learning plus PLAN-05 review-mutation contract.
+-- Run against a freshly reset disposable local database after migration 0049.
 -- Every fixture is rolled back; the test never writes business data permanently.
 \set ON_ERROR_STOP on
 
@@ -43,7 +43,13 @@ as $$
         'text', 'סהכ 100', 'confidence', 0.92
       )
     ),
-    'tables', '[]'::jsonb,
+    'tables', jsonb_build_array(jsonb_build_object(
+      'id', 'table-1', 'page', 1,
+      'bbox', jsonb_build_array(0.1, 0.2, 0.9, 0.8),
+      'rows', jsonb_build_array(jsonb_build_array(jsonb_build_object(
+        'text', 'תא מקורי', 'bbox', 'null'::jsonb
+      )))
+    )),
     'marks', jsonb_build_array(jsonb_build_object(
       'id', 'mark-1', 'page', 1, 'kind', 'circle',
       'bbox', jsonb_build_array(0.05, 0.05, 0.2, 0.2),
@@ -101,8 +107,9 @@ select document_learning_test.assert(
     and to_regclass('public.document_learning_rules') is not null
     and to_regclass('public.document_annotations') is not null
     and to_regclass('public.document_feedback') is not null
-    and to_regclass('public.document_rule_applications') is not null,
-  'one or more PLAN-03 tables are missing'
+    and to_regclass('public.document_rule_applications') is not null
+    and to_regclass('public.document_review_corrections') is not null,
+  'one or more document interpretation/review tables are missing'
 );
 
 select document_learning_test.assert(
@@ -113,13 +120,14 @@ select document_learning_test.assert(
      'public.document_learning_rules'::regclass,
      'public.document_annotations'::regclass,
      'public.document_feedback'::regclass,
-     'public.document_rule_applications'::regclass
+     'public.document_rule_applications'::regclass,
+     'public.document_review_corrections'::regclass
    ])),
-  'RLS and FORCE RLS are not enabled on every PLAN-03 table'
+  'RLS and FORCE RLS are not enabled on every document interpretation/review table'
 );
 
 select document_learning_test.assert(
-  (select count(*) >= 11
+  (select count(*) >= 13
    from pg_constraint
    where contype = 'f'
      and conrelid = any(array[
@@ -127,7 +135,8 @@ select document_learning_test.assert(
        'public.document_learning_rules'::regclass,
        'public.document_annotations'::regclass,
        'public.document_feedback'::regclass,
-       'public.document_rule_applications'::regclass
+       'public.document_rule_applications'::regclass,
+       'public.document_review_corrections'::regclass
      ])
      and pg_get_constraintdef(oid) ilike 'FOREIGN KEY (org_id,%'),
   'tenant-composite foreign keys are incomplete'
@@ -164,7 +173,7 @@ select document_learning_test.assert(
     )
    from unnest(array[
      'document_interpretations', 'document_learning_rules', 'document_annotations',
-     'document_feedback', 'document_rule_applications'
+     'document_feedback', 'document_rule_applications', 'document_review_corrections'
    ]) t),
   'browser read-only or trusted-server CRUD table grants are incorrect'
 );
@@ -180,6 +189,26 @@ select document_learning_test.assert(
     )
     and has_function_privilege(
       'authenticated', 'public.add_document_feedback(uuid,text,jsonb,text)', 'EXECUTE'
+    )
+    and has_function_privilege(
+      'authenticated',
+      'public.add_document_annotation(uuid,text,text,text,text,text,text,text)',
+      'EXECUTE'
+    )
+    and has_function_privilege(
+      'authenticated',
+      'public.add_document_review_correction(uuid,text,text,integer,integer,text,text,text,text,text,integer)',
+      'EXECUTE'
+    )
+    and not has_function_privilege(
+      'service_role',
+      'public.add_document_annotation(uuid,text,text,text,text,text,text,text)',
+      'EXECUTE'
+    )
+    and not has_function_privilege(
+      'service_role',
+      'public.add_document_review_correction(uuid,text,text,integer,integer,text,text,text,text,text,integer)',
+      'EXECUTE'
     )
     and not has_function_privilege(
       'authenticated', 'public.begin_document_interpretation(uuid,uuid,uuid)', 'EXECUTE'
@@ -210,6 +239,38 @@ select document_learning_test.assert(
   'RPC grants do not preserve the authenticated/service boundary'
 );
 
+select document_learning_test.assert(
+  position(
+    'for share of d' in lower(pg_get_functiondef(
+      'public.add_document_annotation(uuid,text,text,text,text,text,text,text)'::regprocedure
+    ))
+  ) > 0
+    and position(
+      'for update of i, j' in lower(pg_get_functiondef(
+        'public.add_document_annotation(uuid,text,text,text,text,text,text,text)'::regprocedure
+      ))
+    ) > position(
+      'for share of d' in lower(pg_get_functiondef(
+        'public.add_document_annotation(uuid,text,text,text,text,text,text,text)'::regprocedure
+      ))
+    )
+    and position(
+      'for share of d' in lower(pg_get_functiondef(
+        'public.add_document_review_correction(uuid,text,text,integer,integer,text,text,text,text,text,integer)'::regprocedure
+      ))
+    ) > 0
+    and position(
+      'for update of i, j' in lower(pg_get_functiondef(
+        'public.add_document_review_correction(uuid,text,text,integer,integer,text,text,text,text,text,integer)'::regprocedure
+      ))
+    ) > position(
+      'for share of d' in lower(pg_get_functiondef(
+        'public.add_document_review_correction(uuid,text,text,integer,integer,text,text,text,text,text,integer)'::regprocedure
+      ))
+    ),
+  'review mutations do not preserve the document -> interpretation/job lock order'
+);
+
 -- Two tenants and three allowed actors in tenant A.
 insert into public.organizations (id, name, status) values
   ('16000000-0000-4000-8000-000000000001', 'Document learning tenant A', 'active'),
@@ -221,7 +282,8 @@ insert into auth.users (id, email) values
   ('26000000-0000-4000-8000-000000000003', 'document-kitchen-a@example.test'),
   ('26000000-0000-4000-8000-000000000004', 'document-accountant-a@example.test'),
   ('26000000-0000-4000-8000-000000000005', 'document-owner-b@example.test'),
-  ('26000000-0000-4000-8000-000000000006', 'document-cleanup-a@example.test');
+  ('26000000-0000-4000-8000-000000000006', 'document-cleanup-a@example.test'),
+  ('26000000-0000-4000-8000-000000000007', 'document-supplier-a@example.test');
 
 insert into public.profiles (id, org_id, full_name, role) values
   ('26000000-0000-4000-8000-000000000001', '16000000-0000-4000-8000-000000000001', 'Document owner A', 'owner'),
@@ -235,6 +297,14 @@ insert into public.suppliers (id, org_id, name) values
   ('36000000-0000-4000-8000-000000000001', '16000000-0000-4000-8000-000000000001', 'ספק A'),
   ('36000000-0000-4000-8000-000000000002', '16000000-0000-4000-8000-000000000002', 'ספק B');
 
+insert into public.profiles (id, org_id, full_name, role, supplier_id) values
+  (
+    '26000000-0000-4000-8000-000000000007',
+    '16000000-0000-4000-8000-000000000001',
+    'Document supplier A', 'supplier',
+    '36000000-0000-4000-8000-000000000001'
+  );
+
 insert into public.documents (
   id, org_id, entity_type, entity_id, storage_path, file_name, mime_type,
   document_kind, uploaded_by
@@ -247,6 +317,40 @@ select
   n || '.pdf', 'application/pdf', 'other',
   '26000000-0000-4000-8000-000000000001'
 from generate_series(1, 9) n;
+
+insert into public.documents (
+  id, org_id, entity_type, entity_id, storage_path, file_name, mime_type,
+  document_kind, supplier_id, uploaded_by
+) values (
+  '46000000-0000-4000-8000-000000000010',
+  '16000000-0000-4000-8000-000000000001',
+  'supplier', '36000000-0000-4000-8000-000000000001',
+  '16000000-0000-4000-8000-000000000001/supplier/36000000-0000-4000-8000-000000000001/46000000-0000-4000-8000-000000000010/price-list.pdf',
+  'price-list.pdf', 'application/pdf', 'price_list',
+  '36000000-0000-4000-8000-000000000001',
+  '26000000-0000-4000-8000-000000000007'
+);
+
+insert into storage.objects (bucket_id, name, owner, metadata)
+select
+  'documents',
+  '16000000-0000-4000-8000-000000000001/document-learning/' || n || '.pdf',
+  '26000000-0000-4000-8000-000000000001'::uuid,
+  jsonb_build_object(
+    'mimetype', 'application/pdf',
+    'size', 1024,
+    'eTag', repeat(n::text, 64)
+  )
+from generate_series(1, 9) n;
+
+insert into storage.objects (bucket_id, name, owner, metadata) values (
+  'documents',
+  '16000000-0000-4000-8000-000000000001/supplier/36000000-0000-4000-8000-000000000001/46000000-0000-4000-8000-000000000010/price-list.pdf',
+  '26000000-0000-4000-8000-000000000007',
+  jsonb_build_object(
+    'mimetype', 'application/pdf', 'size', 1024, 'eTag', repeat('a', 64)
+  )
+);
 
 insert into public.document_processing_jobs (
   id, org_id, document_id, requested_by, status, input_checksum,
@@ -264,6 +368,18 @@ select
   case when n in (5, 9) then now() - interval '6 minutes'
        when n = 6 then now() else null end
 from generate_series(1, 9) n;
+
+insert into public.document_processing_jobs (
+  id, org_id, document_id, requested_by, status, input_checksum,
+  interpretation_actor_id, interpretation_started_at
+) values (
+  '56000000-0000-4000-8000-000000000010',
+  '16000000-0000-4000-8000-000000000001',
+  '46000000-0000-4000-8000-000000000010',
+  '26000000-0000-4000-8000-000000000007',
+  'review', 'etag:' || repeat('a', 64),
+  '26000000-0000-4000-8000-000000000007', now()
+);
 
 insert into public.document_extractions (
   id, org_id, job_id, document_id, engine, model, model_version,
@@ -283,6 +399,38 @@ select
     end
   )
 from generate_series(1, 9) n;
+
+insert into public.document_extractions (
+  id, org_id, job_id, document_id, engine, model, model_version,
+  input_checksum, contract_version, payload
+) values (
+  '66000000-0000-4000-8000-000000000010',
+  '16000000-0000-4000-8000-000000000001',
+  '56000000-0000-4000-8000-000000000010',
+  '46000000-0000-4000-8000-000000000010',
+  'fixture', 'fixture-model', '1.0.0',
+  'etag:' || repeat('a', 64), '1',
+  document_learning_test.extraction_payload('מחירון ספק')
+);
+
+insert into public.document_interpretations (
+  id, org_id, job_id, extraction_id, document_id, interpreted_for_user_id,
+  provider, model, prompt_version, schema_version, payload
+) values (
+  '76000000-0000-4000-8000-000000000010',
+  '16000000-0000-4000-8000-000000000001',
+  '56000000-0000-4000-8000-000000000010',
+  '66000000-0000-4000-8000-000000000010',
+  '46000000-0000-4000-8000-000000000010',
+  '26000000-0000-4000-8000-000000000007',
+  'anthropic', 'claude-sonnet-5', 'interpret-document-v1', '1',
+  jsonb_set(
+    document_learning_test.interpretation_payload(
+      '36000000-0000-4000-8000-000000000001'
+    ),
+    '{document_type}', to_jsonb('price_list'::text)
+  )
+);
 
 create temporary table document_learning_business_snapshot as
 select 'document'::text as kind, id, to_jsonb(d) as value
@@ -554,6 +702,421 @@ select document_learning_test.assert(
          where a.id = :'dl_claude_annotation_id'::uuid),
   'feedback rewrote interpretation history or did not append a same-interpretation correction'
 );
+
+-- Review mutations append actor-scoped annotations and versioned text overlays.
+select
+  e.id::text as extraction_id,
+  e.input_checksum,
+  e.contract_version,
+  e.payload::text as extraction_payload,
+  e.payload #>> '{blocks,0,text}' as block_text,
+  i.payload::text as interpretation_payload
+from public.document_interpretations i
+join public.document_extractions e
+  on e.org_id = i.org_id and e.id = i.extraction_id
+where i.id = :'dl_i1_interpretation_id'::uuid
+\gset dl_review_
+
+create temporary table document_learning_review_context as
+select id as interpretation_id
+from public.document_interpretations
+where id = :'dl_i1_interpretation_id'::uuid;
+grant select on document_learning_review_context to authenticated;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select public.add_document_annotation(
+  :'dl_i1_interpretation_id'::uuid,
+  'block', 'block-2', 'manual_note', 'הערה חד-פעמית',
+  'הוספת הערת בדיקה', :'dl_review_input_checksum', :'dl_review_contract_version'
+) as annotation_id
+\gset dl_review_annotation_
+select public.add_document_annotation(
+  :'dl_i1_interpretation_id'::uuid,
+  'block', 'block-2', 'manual_note', 'הערה חד-פעמית',
+  'retry must be idempotent', :'dl_review_input_checksum', :'dl_review_contract_version'
+) as annotation_id
+\gset dl_review_annotation_retry_
+select public.add_document_review_correction(
+  :'dl_i1_interpretation_id'::uuid,
+  'block', 'block-1', null, null,
+  :'dl_review_block_text', 'טקסט מתוקן ראשון', 'תיקון בלוק ראשון',
+  :'dl_review_input_checksum', :'dl_review_contract_version', 0
+)::text as result
+\gset dl_review_block_v1_
+select public.add_document_review_correction(
+  :'dl_i1_interpretation_id'::uuid,
+  'table_cell', 'table-1', 0, 0,
+  'תא מקורי', 'תא מתוקן', 'תיקון תא בטבלה',
+  :'dl_review_input_checksum', :'dl_review_contract_version', 0
+)::text as result
+\gset dl_review_cell_v1_
+select public.add_document_review_correction(
+  :'dl_i1_interpretation_id'::uuid,
+  'block', 'block-1', null, null,
+  'טקסט מתוקן ראשון', 'טקסט מתוקן שני', 'תיקון בלוק נוסף',
+  :'dl_review_input_checksum', :'dl_review_contract_version', 1
+)::text as result
+\gset dl_review_block_v2_
+
+do $$
+declare
+  v_interpretation_id uuid;
+  v_original_text text;
+begin
+  select i.id, e.payload #>> '{blocks,0,text}'
+  into v_interpretation_id, v_original_text
+  from public.document_interpretations i
+  join public.document_extractions e
+    on e.org_id = i.org_id and e.id = i.extraction_id
+  where i.job_id = '56000000-0000-4000-8000-000000000001';
+
+  begin
+    perform public.add_document_annotation(
+      v_interpretation_id, 'block', 'block-1', 'stale_source', 'stale source',
+      'wrong expected checksum must fail', 'etag:' || repeat('f', 64), '1'
+    );
+    raise exception 'expected review checksum rejection';
+  exception when sqlstate '55000' then
+    if sqlerrm <> 'document_review_source_changed' then raise; end if;
+  end;
+
+  begin
+    perform public.add_document_review_correction(
+      v_interpretation_id, 'block', 'block-1', null, null,
+      'טקסט מתוקן שני', 'contract mismatch', 'wrong contract must fail',
+      'etag:' || repeat('1', 64), '2', 2
+    );
+    raise exception 'expected review contract rejection';
+  exception when sqlstate '55000' then
+    if sqlerrm <> 'document_review_source_changed' then raise; end if;
+  end;
+
+  begin
+    perform public.add_document_review_correction(
+      v_interpretation_id, 'block', 'block-1', null, null,
+      v_original_text, 'stale overwrite', 'stale revision must fail',
+      'etag:' || repeat('1', 64), '1', 0
+    );
+    raise exception 'expected stale review revision rejection';
+  exception when sqlstate '40001' then
+    if sqlerrm <> 'document_review_revision_conflict' then raise; end if;
+  end;
+
+  begin
+    perform public.add_document_review_correction(
+      v_interpretation_id, 'block', 'missing-block', null, null,
+      'missing', 'new', 'missing target must fail',
+      'etag:' || repeat('1', 64), '1', 0
+    );
+    raise exception 'expected missing review target rejection';
+  exception when sqlstate 'P0002' then
+    if sqlerrm <> 'document_review_target_unknown' then raise; end if;
+  end;
+
+  begin
+    perform public.add_document_review_correction(
+      v_interpretation_id, 'block', 'block-1', null, null,
+      'טקסט מתוקן שני', 'טקסט מתוקן שני', 'no-op must fail',
+      'etag:' || repeat('1', 64), '1', 2
+    );
+    raise exception 'expected unchanged review correction rejection';
+  exception when sqlstate '22023' then
+    if sqlerrm <> 'document_review_correction_unchanged' then raise; end if;
+  end;
+
+  begin
+    perform public.add_document_annotation(
+      v_interpretation_id, 'mark', 'missing-mark', 'missing', 'missing',
+      'missing target must fail', 'etag:' || repeat('1', 64), '1'
+    );
+    raise exception 'expected missing annotation target rejection';
+  exception when sqlstate '23514' then
+    if sqlerrm <> 'document_annotation_target_invalid' then raise; end if;
+  end;
+end
+$$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000003', true);
+set local role authenticated;
+select public.add_document_annotation(
+  :'dl_i1_interpretation_id'::uuid,
+  'mark', 'mark-1', 'kitchen_note', 'הערת מטבח',
+  'בדיקת הרשאת מטבח', :'dl_review_input_checksum', :'dl_review_contract_version'
+) as annotation_id
+\gset dl_review_kitchen_
+reset role;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000001', true);
+set local role authenticated;
+select public.add_document_annotation(
+  :'dl_i1_interpretation_id'::uuid,
+  'block', 'block-2', 'owner_note', 'הערת בעלים',
+  'בדיקת הרשאת בעלים', :'dl_review_input_checksum', :'dl_review_contract_version'
+) as annotation_id
+\gset dl_review_owner_
+reset role;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000004', true);
+set local role authenticated;
+do $$
+begin
+  perform public.add_document_annotation(
+    (select id from public.document_interpretations
+     where job_id = '56000000-0000-4000-8000-000000000001'),
+    'block', 'block-1', 'forbidden', 'forbidden', 'accountant must fail',
+    'etag:' || repeat('1', 64), '1'
+  );
+  raise exception 'expected accountant review rejection';
+exception when sqlstate '42501' then
+  if sqlerrm <> 'not_authorized' then raise; end if;
+end
+$$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000005', true);
+set local role authenticated;
+do $$
+begin
+  perform public.add_document_annotation(
+    (select id from public.document_interpretations
+     where job_id = '56000000-0000-4000-8000-000000000001'),
+    'block', 'block-1', 'forbidden', 'forbidden', 'cross tenant must fail',
+    'etag:' || repeat('1', 64), '1'
+  );
+  raise exception 'expected cross-tenant review rejection';
+exception when sqlstate 'P0002' then
+  if sqlerrm <> 'document_interpretation_unknown' then raise; end if;
+end
+$$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000007', true);
+set local role authenticated;
+select public.add_document_annotation(
+  '76000000-0000-4000-8000-000000000010',
+  'mark', 'mark-1', 'supplier_note', 'הערת ספק',
+  'ספק מתקן מחירון בבעלותו', 'etag:' || repeat('a', 64), '1'
+) as annotation_id
+\gset dl_review_supplier_annotation_
+select public.add_document_review_correction(
+  '76000000-0000-4000-8000-000000000010',
+  'block', 'block-1', null, null,
+  'מחירון ספק', 'מחירון ספק מתוקן', 'ספק מתקן טקסט במחירון שלו',
+  'etag:' || repeat('a', 64), '1', 0
+)::text as result
+\gset dl_review_supplier_correction_
+select count(*)::text as own_corrections
+from public.document_review_corrections
+where interpretation_id = '76000000-0000-4000-8000-000000000010'
+\gset dl_review_supplier_visible_
+select count(*)::text as own_annotations
+from public.document_annotations
+where id = :'dl_review_supplier_annotation_annotation_id'::uuid
+\gset dl_review_supplier_annotation_visible_
+select count(*)::text as staff_corrections
+from public.document_review_corrections
+where interpretation_id = :'dl_i1_interpretation_id'::uuid
+\gset dl_review_supplier_hidden_
+do $$
+begin
+  perform public.add_document_annotation(
+    (select interpretation_id from document_learning_review_context),
+    'block', 'block-1', 'forbidden', 'forbidden', 'foreign document must fail',
+    'etag:' || repeat('1', 64), '1'
+  );
+  raise exception 'expected supplier foreign-document rejection';
+exception when sqlstate 'P0002' then
+  if sqlerrm <> 'document_interpretation_unknown' then raise; end if;
+end
+$$;
+reset role;
+
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+update public.document_processing_jobs
+set status = 'completed'
+where id = '56000000-0000-4000-8000-000000000010';
+reset role;
+
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+do $$
+begin
+  perform public.add_document_annotation(
+    '76000000-0000-4000-8000-000000000010',
+    'block', 'block-1', 'late_note', 'late note', 'completed job must fail',
+    'etag:' || repeat('a', 64), '1'
+  );
+  raise exception 'expected completed review rejection';
+exception when sqlstate '55000' then
+  if sqlerrm <> 'document_review_status_invalid' then raise; end if;
+end
+$$;
+reset role;
+
+select set_config('request.jwt.claim.role', 'service_role', true);
+insert into public.document_processing_jobs (
+  id, org_id, document_id, requested_by, status, input_checksum,
+  interpretation_actor_id, interpretation_started_at
+) values (
+  '56000000-0000-4000-8000-000000000011',
+  '16000000-0000-4000-8000-000000000001',
+  '46000000-0000-4000-8000-000000000010',
+  '26000000-0000-4000-8000-000000000002',
+  'review', 'etag:' || repeat('a', 64),
+  '26000000-0000-4000-8000-000000000002', now()
+);
+insert into public.document_extractions (
+  id, org_id, job_id, document_id, engine, model, model_version,
+  input_checksum, contract_version, payload
+) values (
+  '66000000-0000-4000-8000-000000000011',
+  '16000000-0000-4000-8000-000000000001',
+  '56000000-0000-4000-8000-000000000011',
+  '46000000-0000-4000-8000-000000000010',
+  'fixture', 'fixture-model', '1.0.0',
+  'etag:' || repeat('a', 64), '1',
+  document_learning_test.extraction_payload('מחירון ספק')
+);
+insert into public.document_interpretations (
+  id, org_id, job_id, extraction_id, document_id, interpreted_for_user_id,
+  provider, model, prompt_version, schema_version, payload
+) values (
+  '76000000-0000-4000-8000-000000000011',
+  '16000000-0000-4000-8000-000000000001',
+  '56000000-0000-4000-8000-000000000011',
+  '66000000-0000-4000-8000-000000000011',
+  '46000000-0000-4000-8000-000000000010',
+  '26000000-0000-4000-8000-000000000002',
+  'anthropic', 'claude-sonnet-5', 'interpret-document-v1', '1',
+  jsonb_set(
+    document_learning_test.interpretation_payload(
+      '36000000-0000-4000-8000-000000000001'
+    ),
+    '{document_type}', to_jsonb('price_list'::text)
+  )
+);
+reset role;
+
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+do $$
+begin
+  perform public.add_document_annotation(
+    '76000000-0000-4000-8000-000000000011',
+    'block', 'block-1', 'forbidden', 'forbidden',
+    'staff interpretation on owned document must fail',
+    'etag:' || repeat('a', 64), '1'
+  );
+  raise exception 'expected supplier interpretation-actor rejection';
+exception when sqlstate 'P0002' then
+  if sqlerrm <> 'document_interpretation_unknown' then raise; end if;
+end
+$$;
+reset role;
+
+select document_learning_test.assert(
+  :'dl_review_annotation_annotation_id'::uuid = :'dl_review_annotation_retry_annotation_id'::uuid
+    and (:'dl_review_block_v1_result'::jsonb ->> 'revision')::integer = 1
+    and (:'dl_review_block_v2_result'::jsonb ->> 'revision')::integer = 2
+    and (:'dl_review_cell_v1_result'::jsonb ->> 'revision')::integer = 1
+    and (:'dl_review_supplier_correction_result'::jsonb ->> 'revision')::integer = 1
+    and :'dl_review_supplier_visible_own_corrections'::integer = 1
+    and :'dl_review_supplier_annotation_visible_own_annotations'::integer = 1
+    and :'dl_review_supplier_hidden_staff_corrections'::integer = 0,
+  'review mutation results, idempotency or supplier RLS are incorrect'
+);
+
+select document_learning_test.assert(
+  (select payload = :'dl_review_extraction_payload'::jsonb
+   from public.document_extractions where id = :'dl_review_extraction_id'::uuid)
+    and (select payload = :'dl_review_interpretation_payload'::jsonb
+         from public.document_interpretations where id = :'dl_i1_interpretation_id'::uuid)
+    and (select count(*) = 2
+         from public.document_review_corrections
+         where interpretation_id = :'dl_i1_interpretation_id'::uuid
+           and target_kind = 'block' and target_id = 'block-1')
+    and (select bool_and(
+           (revision = 1 and before_text = :'dl_review_block_text'
+             and corrected_text = 'טקסט מתוקן ראשון')
+           or (revision = 2 and before_text = 'טקסט מתוקן ראשון'
+             and corrected_text = 'טקסט מתוקן שני')
+         )
+         from public.document_review_corrections
+         where interpretation_id = :'dl_i1_interpretation_id'::uuid
+           and target_kind = 'block' and target_id = 'block-1')
+    and (select original_text = 'תא מקורי' and before_text = 'תא מקורי'
+                and corrected_text = 'תא מתוקן' and revision = 1
+         from public.document_review_corrections
+         where interpretation_id = :'dl_i1_interpretation_id'::uuid
+           and target_kind = 'table_cell' and target_id = 'table-1'
+           and row_index = 0 and column_index = 0),
+  'review corrections rewrote evidence or lost revision provenance'
+);
+
+select document_learning_test.assert(
+  (select count(*) = 4 from public.audit_logs where action = 'document_annotation_created')
+    and (select count(*) = 4 from public.audit_logs
+         where action = 'document_review_correction_created')
+    and not exists (
+      select 1 from public.audit_logs
+      where action = 'document_review_correction_created'
+        and (old_values::text || new_values::text) similar to
+          '%(טקסט מתוקן|תא מתוקן|מחירון ספק מתוקן)%'
+    ),
+  'review audit is missing, duplicated or contains raw corrected text'
+);
+
+set local role service_role;
+do $$
+begin
+  update public.document_review_corrections set reason = 'mutated'
+  where id = (select id from public.document_review_corrections order by created_at limit 1);
+  raise exception 'expected immutable review correction update rejection';
+exception when sqlstate '42501' then
+  if sqlerrm <> 'document_review_corrections_immutable' then raise; end if;
+end
+$$;
+do $$
+begin
+  delete from public.document_review_corrections
+  where id = (select id from public.document_review_corrections order by created_at limit 1);
+  raise exception 'expected immutable review correction delete rejection';
+exception when sqlstate '42501' then
+  if sqlerrm <> 'document_review_corrections_immutable' then raise; end if;
+end
+$$;
+reset role;
+
+update storage.objects
+set metadata = jsonb_set(metadata, '{eTag}', to_jsonb(repeat('b', 64)))
+where bucket_id = 'documents'
+  and name = '16000000-0000-4000-8000-000000000001/document-learning/1.pdf';
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+do $$
+begin
+  perform public.add_document_review_correction(
+    (select id from public.document_interpretations
+     where job_id = '56000000-0000-4000-8000-000000000001'),
+    'block', 'block-1', null, null,
+    'טקסט מתוקן שני', 'source changed', 'changed source must fail',
+    'etag:' || repeat('1', 64), '1', 2
+  );
+  raise exception 'expected changed source rejection';
+exception when sqlstate '55000' then
+  if sqlerrm <> 'document_review_source_changed' then raise; end if;
+end
+$$;
+reset role;
+update storage.objects
+set metadata = jsonb_set(metadata, '{eTag}', to_jsonb(repeat('1', 64)))
+where bucket_id = 'documents'
+  and name = '16000000-0000-4000-8000-000000000001/document-learning/1.pdf';
 
 -- A stale interpretation may be reclaimed under the job row lock; its old timestamp is a fence.
 create temporary table document_learning_stale_attempt as

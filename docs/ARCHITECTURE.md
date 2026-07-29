@@ -195,6 +195,15 @@ Storage; אובייקט בלי `eTag` אינו נכנס לתור.
 כבר מומשו. אלה צרכנים מאוחרים של התור; בפרט, מחיר מאושר ממשיך להיכתב רק דרך
 `submit_supplier_price_list`.
 
+מיגרציה `0049_document_review_mutations.sql` מוסיפה שכבת review בלבד מעל הראיות הבלתי־משתנות.
+`add_document_annotation` ממחזרת את `document_annotations` ל־annotation חד־פעמי ואישי;
+`add_document_review_correction` מוסיפה revisions ל־`document_review_corrections` עבור block או
+תא טבלה. הטקסט המקורי, checksum וגרסת החוזה נגזרים ונבדקים בשרת; revision וטקסט צפויים חוסמים
+lost update, ושינוי ב־Storage חוסם שמירה. המסמך ננעל לפני ה־interpretation/job כדי לחסום מחיקה
+או השלמה מקבילה בלי להפוך את סדר הנעילות של `0048`. Owner/office/kitchen רשאים לערוך בדייר שלהם; supplier
+רשאי לערוך רק price list שהוא העלה ושפוענח עבורו. אין DML מהדפדפן, אין שינוי ל־payload של
+`document_extractions`/`document_interpretations`, וכל הצלחה נכתבת ל־audit עם סיבה.
+
 ## גבול פקודות פיננסי P1 — ממומש מקומית
 
 > מיגרציות P0 הן `0020`–`0022`, מיגרציית P1 היא `0023`, וכולן משולבות בענף P2 המקומי.
