@@ -242,7 +242,7 @@ export interface ExceptionRow {
   supplier?: Supplier;
 }
 
-export type DocumentKind = 'invoice' | 'delivery_note' | 'credit' | 'quote' | 'payment_confirmation' | 'other';
+export type DocumentKind = 'invoice' | 'delivery_note' | 'credit' | 'quote' | 'price_list' | 'payment_confirmation' | 'other';
 export interface DocumentRow {
   id: string; org_id: string; entity_type: string;
   entity_id: string | null; // null only while entity_type='inbox' — captured, not yet filed (0014)
@@ -250,6 +250,86 @@ export interface DocumentRow {
   document_kind: DocumentKind; supplier_id: string | null; document_date: string | null;
   uploaded_by: string | null; created_at: string;
   deleted_at: string | null; deleted_by: string | null; // 0010 — soft delete; the stored file is kept
+}
+
+export type DocumentProcessingStatus =
+  | 'queued'
+  | 'leased'
+  | 'extracted'
+  | 'interpreting'
+  | 'review'
+  | 'completed'
+  | 'failed';
+
+export type ExtractionBlockType = 'text' | 'heading' | 'table' | 'image' | 'handwriting';
+export type ExtractionMarkKind = 'circle' | 'check' | 'cross' | 'underline' | 'star' | 'custom' | 'unknown';
+export type ExtractionBoundingBox = [xMin: number, yMin: number, xMax: number, yMax: number];
+
+export type ExtractionContract = {
+  schema_version: '1';
+  document: {
+    page_count: number;
+    detected_languages: string[];
+    plain_text: string;
+    partial: boolean;
+  };
+  blocks: Array<{
+    id: string;
+    page: number;
+    type: ExtractionBlockType;
+    bbox: ExtractionBoundingBox;
+    text: string;
+    confidence: number | null;
+  }>;
+  tables: Array<{
+    id: string;
+    page: number;
+    bbox: ExtractionBoundingBox;
+    rows: Array<Array<{ text: string; bbox: ExtractionBoundingBox | null }>>;
+  }>;
+  marks: Array<{
+    id: string;
+    page: number;
+    kind: ExtractionMarkKind;
+    bbox: ExtractionBoundingBox;
+    nearby_block_ids: string[];
+    confidence: number | null;
+    fingerprint: string | null;
+  }>;
+};
+
+export interface DocumentProcessingJob {
+  id: string;
+  org_id: string;
+  document_id: string;
+  requested_by: string;
+  status: DocumentProcessingStatus;
+  input_checksum: string;
+  contract_version: string;
+  priority: number;
+  attempt_count: number;
+  lease_owner: string | null;
+  lease_until: string | null;
+  last_error_code: string | null;
+  last_error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentExtraction {
+  id: string;
+  org_id: string;
+  job_id: string;
+  document_id: string;
+  engine: string;
+  model: string;
+  model_version: string;
+  input_checksum: string;
+  contract_version: string;
+  payload: ExtractionContract;
+  duration_ms: number | null;
+  resource_metadata: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface AuditLog {
