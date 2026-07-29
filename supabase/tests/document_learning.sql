@@ -1,5 +1,5 @@
--- PLAN-03 document interpretation/learning plus PLAN-05 review-mutation contract.
--- Run against a freshly reset disposable local database after migration 0049.
+-- PLAN-03 document interpretation/learning plus PLAN-05 review contracts.
+-- Run against a freshly reset disposable local database after migration 0050.
 -- Every fixture is rolled back; the test never writes business data permanently.
 \set ON_ERROR_STOP on
 
@@ -108,7 +108,8 @@ select document_learning_test.assert(
     and to_regclass('public.document_annotations') is not null
     and to_regclass('public.document_feedback') is not null
     and to_regclass('public.document_rule_applications') is not null
-    and to_regclass('public.document_review_corrections') is not null,
+    and to_regclass('public.document_review_corrections') is not null
+    and to_regclass('public.document_type_review_decisions') is not null,
   'one or more document interpretation/review tables are missing'
 );
 
@@ -121,13 +122,14 @@ select document_learning_test.assert(
      'public.document_annotations'::regclass,
      'public.document_feedback'::regclass,
      'public.document_rule_applications'::regclass,
-     'public.document_review_corrections'::regclass
+     'public.document_review_corrections'::regclass,
+     'public.document_type_review_decisions'::regclass
    ])),
   'RLS and FORCE RLS are not enabled on every document interpretation/review table'
 );
 
 select document_learning_test.assert(
-  (select count(*) >= 13
+  (select count(*) >= 15
    from pg_constraint
    where contype = 'f'
      and conrelid = any(array[
@@ -136,7 +138,8 @@ select document_learning_test.assert(
        'public.document_annotations'::regclass,
        'public.document_feedback'::regclass,
        'public.document_rule_applications'::regclass,
-       'public.document_review_corrections'::regclass
+        'public.document_review_corrections'::regclass,
+        'public.document_type_review_decisions'::regclass
      ])
      and pg_get_constraintdef(oid) ilike 'FOREIGN KEY (org_id,%'),
   'tenant-composite foreign keys are incomplete'
@@ -173,7 +176,8 @@ select document_learning_test.assert(
     )
    from unnest(array[
      'document_interpretations', 'document_learning_rules', 'document_annotations',
-     'document_feedback', 'document_rule_applications', 'document_review_corrections'
+      'document_feedback', 'document_rule_applications', 'document_review_corrections',
+      'document_type_review_decisions'
    ]) t),
   'browser read-only or trusted-server CRUD table grants are incorrect'
 );
@@ -200,6 +204,11 @@ select document_learning_test.assert(
       'public.add_document_review_correction(uuid,text,text,integer,integer,text,text,text,text,text,integer)',
       'EXECUTE'
     )
+    and has_function_privilege(
+      'authenticated',
+      'public.review_document_type(uuid,text,text,text,text,text,integer)',
+      'EXECUTE'
+    )
     and not has_function_privilege(
       'service_role',
       'public.add_document_annotation(uuid,text,text,text,text,text,text,text)',
@@ -209,6 +218,26 @@ select document_learning_test.assert(
       'service_role',
       'public.add_document_review_correction(uuid,text,text,integer,integer,text,text,text,text,text,integer)',
       'EXECUTE'
+    )
+    and not has_function_privilege(
+      'service_role',
+      'public.review_document_type(uuid,text,text,text,text,text,integer)',
+      'EXECUTE'
+    )
+    and not has_function_privilege(
+      'anon',
+      'public.review_document_type(uuid,text,text,text,text,text,integer)',
+      'EXECUTE'
+    )
+    and not exists (
+      select 1
+      from pg_proc p
+      cross join lateral aclexplode(
+        coalesce(p.proacl, acldefault('f', p.proowner))
+      ) acl
+      where p.oid = 'public.review_document_type(uuid,text,text,text,text,text,integer)'::regprocedure
+        and acl.grantee = 0
+        and acl.privilege_type = 'EXECUTE'
     )
     and not has_function_privilege(
       'authenticated', 'public.begin_document_interpretation(uuid,uuid,uuid)', 'EXECUTE'
@@ -267,6 +296,20 @@ select document_learning_test.assert(
       'for share of d' in lower(pg_get_functiondef(
         'public.add_document_review_correction(uuid,text,text,integer,integer,text,text,text,text,text,integer)'::regprocedure
       ))
+    )
+    and position(
+      'for share of d' in lower(pg_get_functiondef(
+        'public.review_document_type(uuid,text,text,text,text,text,integer)'::regprocedure
+      ))
+    ) > 0
+    and position(
+      'for update of i, j' in lower(pg_get_functiondef(
+        'public.review_document_type(uuid,text,text,text,text,text,integer)'::regprocedure
+      ))
+    ) > position(
+      'for share of d' in lower(pg_get_functiondef(
+        'public.review_document_type(uuid,text,text,text,text,text,integer)'::regprocedure
+      ))
     ),
   'review mutations do not preserve the document -> interpretation/job lock order'
 );
@@ -283,7 +326,9 @@ insert into auth.users (id, email) values
   ('26000000-0000-4000-8000-000000000004', 'document-accountant-a@example.test'),
   ('26000000-0000-4000-8000-000000000005', 'document-owner-b@example.test'),
   ('26000000-0000-4000-8000-000000000006', 'document-cleanup-a@example.test'),
-  ('26000000-0000-4000-8000-000000000007', 'document-supplier-a@example.test');
+  ('26000000-0000-4000-8000-000000000007', 'document-supplier-a@example.test'),
+  ('26000000-0000-4000-8000-000000000008', 'document-payer-a@example.test'),
+  ('26000000-0000-4000-8000-000000000009', 'document-inactive-a@example.test');
 
 insert into public.profiles (id, org_id, full_name, role) values
   ('26000000-0000-4000-8000-000000000001', '16000000-0000-4000-8000-000000000001', 'Document owner A', 'owner'),
@@ -291,7 +336,11 @@ insert into public.profiles (id, org_id, full_name, role) values
   ('26000000-0000-4000-8000-000000000003', '16000000-0000-4000-8000-000000000001', 'Document kitchen A', 'kitchen'),
   ('26000000-0000-4000-8000-000000000004', '16000000-0000-4000-8000-000000000001', 'Document accountant A', 'accountant'),
   ('26000000-0000-4000-8000-000000000005', '16000000-0000-4000-8000-000000000002', 'Document owner B', 'owner'),
-  ('26000000-0000-4000-8000-000000000006', '16000000-0000-4000-8000-000000000001', 'Document cleanup A', 'office');
+  ('26000000-0000-4000-8000-000000000006', '16000000-0000-4000-8000-000000000001', 'Document cleanup A', 'office'),
+  ('26000000-0000-4000-8000-000000000008', '16000000-0000-4000-8000-000000000001', 'Document payer A', 'payer');
+
+insert into public.profiles (id, org_id, full_name, role, active) values
+  ('26000000-0000-4000-8000-000000000009', '16000000-0000-4000-8000-000000000001', 'Document inactive A', 'office', false);
 
 insert into public.suppliers (id, org_id, name) values
   ('36000000-0000-4000-8000-000000000001', '16000000-0000-4000-8000-000000000001', 'ספק A'),
@@ -717,6 +766,226 @@ join public.document_extractions e
 where i.id = :'dl_i1_interpretation_id'::uuid
 \gset dl_review_
 
+-- Document-type decisions keep the immutable suggestion separate from reviewed truth.
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select public.review_document_type(
+  :'dl_i1_interpretation_id'::uuid, 'approved', 'invoice',
+  'אישור סוג המסמך', :'dl_review_input_checksum', :'dl_review_contract_version', 0
+)::text as result
+\gset dl_type_office_
+select public.review_document_type(
+  :'dl_i1_interpretation_id'::uuid, 'approved', 'invoice',
+  'אישור סוג המסמך', :'dl_review_input_checksum', :'dl_review_contract_version', 0
+)::text as result
+\gset dl_type_office_retry_
+do $$
+declare
+  v_interpretation_id uuid;
+begin
+  select id into v_interpretation_id
+  from public.document_interpretations
+  where job_id = '56000000-0000-4000-8000-000000000001';
+
+  begin
+    perform public.review_document_type(
+      v_interpretation_id, 'rejected', 'invoice', 'stale revision must fail',
+      'etag:' || repeat('1', 64), '1', 0
+    );
+    raise exception 'expected document-type revision conflict';
+  exception when sqlstate '40001' then
+    if sqlerrm <> 'document_type_review_revision_conflict' then raise; end if;
+  end;
+
+  begin
+    perform public.review_document_type(
+      v_interpretation_id, 'approved', 'invoice', 'unchanged decision must fail',
+      'etag:' || repeat('1', 64), '1', 1
+    );
+    raise exception 'expected unchanged document-type rejection';
+  exception when sqlstate '22023' then
+    if sqlerrm <> 'document_type_review_unchanged' then raise; end if;
+  end;
+
+  begin
+    perform public.review_document_type(
+      v_interpretation_id, 'rejected', 'price_list', 'stale suggestion must fail',
+      'etag:' || repeat('1', 64), '1', 1
+    );
+    raise exception 'expected stale document-type suggestion rejection';
+  exception when sqlstate '55000' then
+    if sqlerrm <> 'document_type_review_context_changed' then raise; end if;
+  end;
+
+  begin
+    perform public.review_document_type(
+      v_interpretation_id, 'rejected', 'invoice', 'stale checksum must fail',
+      'etag:' || repeat('f', 64), '1', 1
+    );
+    raise exception 'expected stale document-type checksum rejection';
+  exception when sqlstate '55000' then
+    if sqlerrm <> 'document_type_review_context_changed' then raise; end if;
+  end;
+
+  begin
+    perform public.review_document_type(
+      v_interpretation_id, 'rejected', 'invoice', 'stale contract must fail',
+      'etag:' || repeat('1', 64), '2', 1
+    );
+    raise exception 'expected stale document-type contract rejection';
+  exception when sqlstate '55000' then
+    if sqlerrm <> 'document_type_review_context_changed' then raise; end if;
+  end;
+end
+$$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000003', true);
+set local role authenticated;
+select public.review_document_type(
+  :'dl_i1_interpretation_id'::uuid, 'rejected', 'invoice',
+  'המטבח דחה את סוג המסמך', :'dl_review_input_checksum', :'dl_review_contract_version', 1
+)::text as result
+\gset dl_type_kitchen_
+reset role;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000001', true);
+set local role authenticated;
+select public.review_document_type(
+  :'dl_i1_interpretation_id'::uuid, 'approved', 'invoice',
+  'הבעלים אישר מחדש', :'dl_review_input_checksum', :'dl_review_contract_version', 2
+)::text as result
+\gset dl_type_owner_
+select public.review_document_type(
+  '76000000-0000-4000-8000-000000000010', 'approved', 'price_list',
+  'הבעלים אישר מחירון ספק', 'etag:' || repeat('a', 64), '1', 0
+)::text as result
+\gset dl_type_supplier_document_
+reset role;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000004', true);
+set local role authenticated;
+do $$
+begin
+  perform public.review_document_type(
+    (select id from public.document_interpretations
+     where job_id = '56000000-0000-4000-8000-000000000001'),
+    'approved', 'invoice', 'accountant must fail', 'etag:' || repeat('1', 64), '1', 3
+  );
+  raise exception 'expected accountant document-type rejection';
+exception when sqlstate '42501' then
+  if sqlerrm <> 'not_authorized' then raise; end if;
+end
+$$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000008', true);
+set local role authenticated;
+do $$
+begin
+  perform public.review_document_type(
+    (select id from public.document_interpretations
+     where job_id = '56000000-0000-4000-8000-000000000001'),
+    'approved', 'invoice', 'payer must fail', 'etag:' || repeat('1', 64), '1', 3
+  );
+  raise exception 'expected payer document-type rejection';
+exception when sqlstate '42501' then
+  if sqlerrm <> 'not_authorized' then raise; end if;
+end
+$$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000009', true);
+set local role authenticated;
+do $$
+begin
+  perform public.review_document_type(
+    (select id from public.document_interpretations
+     where job_id = '56000000-0000-4000-8000-000000000001'),
+    'approved', 'invoice', 'inactive profile must fail', 'etag:' || repeat('1', 64), '1', 3
+  );
+  raise exception 'expected inactive-profile document-type rejection';
+exception when sqlstate '42501' then
+  if sqlerrm <> 'not_authorized' then raise; end if;
+end
+$$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000005', true);
+set local role authenticated;
+do $$
+begin
+  perform public.review_document_type(
+    (select id from public.document_interpretations
+     where job_id = '56000000-0000-4000-8000-000000000001'),
+    'approved', 'invoice', 'cross tenant must fail', 'etag:' || repeat('1', 64), '1', 3
+  );
+  raise exception 'expected cross-tenant document-type rejection';
+exception when sqlstate 'P0002' then
+  if sqlerrm <> 'document_interpretation_unknown' then raise; end if;
+end
+$$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000007', true);
+set local role authenticated;
+select count(*)::text as own_decisions
+from public.document_type_review_decisions
+where interpretation_id = '76000000-0000-4000-8000-000000000010'
+\gset dl_type_supplier_visible_
+select count(*)::text as staff_decisions
+from public.document_type_review_decisions
+where interpretation_id = :'dl_i1_interpretation_id'::uuid
+\gset dl_type_supplier_hidden_
+do $$
+begin
+  perform public.review_document_type(
+    '76000000-0000-4000-8000-000000000010',
+    'rejected', 'price_list', 'supplier must not approve type',
+    'etag:' || repeat('a', 64), '1', 1
+  );
+  raise exception 'expected supplier document-type mutation rejection';
+exception when sqlstate '42501' then
+  if sqlerrm <> 'not_authorized' then raise; end if;
+end
+$$;
+reset role;
+
+select document_learning_test.assert(
+  (:'dl_type_office_result'::jsonb ->> 'revision')::integer = 1
+    and not (:'dl_type_office_result'::jsonb ->> 'idempotent')::boolean
+    and (:'dl_type_office_retry_result'::jsonb ->> 'idempotent')::boolean
+    and :'dl_type_office_result'::jsonb ->> 'decision_id'
+      = :'dl_type_office_retry_result'::jsonb ->> 'decision_id'
+    and (:'dl_type_kitchen_result'::jsonb ->> 'revision')::integer = 2
+    and :'dl_type_kitchen_result'::jsonb ->> 'approved_document_type' is null
+    and (:'dl_type_owner_result'::jsonb ->> 'revision')::integer = 3
+    and :'dl_type_owner_result'::jsonb ->> 'approved_document_type' = 'invoice'
+    and :'dl_type_supplier_visible_own_decisions'::integer = 1
+    and :'dl_type_supplier_hidden_staff_decisions'::integer = 0,
+  'document-type review revisions, retry behavior or supplier RLS are incorrect'
+);
+
+select document_learning_test.assert(
+  (select count(*) = 3
+   from public.document_type_review_decisions
+   where interpretation_id = :'dl_i1_interpretation_id'::uuid)
+    and (select suggested_document_type = 'invoice'
+                and approved_document_type = 'invoice'
+                and decision = 'approved'
+         from public.document_type_review_decisions
+         where interpretation_id = :'dl_i1_interpretation_id'::uuid
+         order by revision desc limit 1)
+    and (select count(*) = 4
+         from public.audit_logs where action = 'document_type_review_decided')
+    and (select document_kind = 'other'
+         from public.documents where id = '46000000-0000-4000-8000-000000000001')
+    and (select document_kind = 'price_list'
+         from public.documents where id = '46000000-0000-4000-8000-000000000010'),
+  'document-type suggestion/decision separation or audit history is incorrect'
+);
+
 create temporary table document_learning_review_context as
 select id as interpretation_id
 from public.document_interpretations
@@ -941,6 +1210,7 @@ set status = 'completed'
 where id = '56000000-0000-4000-8000-000000000010';
 reset role;
 
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000007', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 do $$
@@ -951,6 +1221,22 @@ begin
     'etag:' || repeat('a', 64), '1'
   );
   raise exception 'expected completed review rejection';
+exception when sqlstate '55000' then
+  if sqlerrm <> 'document_review_status_invalid' then raise; end if;
+end
+$$;
+reset role;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000001', true);
+set local role authenticated;
+do $$
+begin
+  perform public.review_document_type(
+    '76000000-0000-4000-8000-000000000010',
+    'rejected', 'price_list', 'completed job must fail',
+    'etag:' || repeat('a', 64), '1', 1
+  );
+  raise exception 'expected completed document-type review rejection';
 exception when sqlstate '55000' then
   if sqlerrm <> 'document_review_status_invalid' then raise; end if;
 end
@@ -1001,6 +1287,7 @@ insert into public.document_interpretations (
 );
 reset role;
 
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000007', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 do $$
@@ -1089,6 +1376,24 @@ exception when sqlstate '42501' then
   if sqlerrm <> 'document_review_corrections_immutable' then raise; end if;
 end
 $$;
+do $$
+begin
+  update public.document_type_review_decisions set reason = 'mutated'
+  where id = (select id from public.document_type_review_decisions order by created_at limit 1);
+  raise exception 'expected immutable document-type decision update rejection';
+exception when sqlstate '42501' then
+  if sqlerrm <> 'document_type_review_decisions_immutable' then raise; end if;
+end
+$$;
+do $$
+begin
+  delete from public.document_type_review_decisions
+  where id = (select id from public.document_type_review_decisions order by created_at limit 1);
+  raise exception 'expected immutable document-type decision delete rejection';
+exception when sqlstate '42501' then
+  if sqlerrm <> 'document_type_review_decisions_immutable' then raise; end if;
+end
+$$;
 reset role;
 
 update storage.objects
@@ -1110,6 +1415,19 @@ begin
   raise exception 'expected changed source rejection';
 exception when sqlstate '55000' then
   if sqlerrm <> 'document_review_source_changed' then raise; end if;
+end
+$$;
+do $$
+begin
+  perform public.review_document_type(
+    (select id from public.document_interpretations
+     where job_id = '56000000-0000-4000-8000-000000000001'),
+    'rejected', 'invoice', 'changed storage must fail',
+    'etag:' || repeat('1', 64), '1', 3
+  );
+  raise exception 'expected changed-storage document-type rejection';
+exception when sqlstate '55000' then
+  if sqlerrm <> 'document_type_review_context_changed' then raise; end if;
 end
 $$;
 reset role;
