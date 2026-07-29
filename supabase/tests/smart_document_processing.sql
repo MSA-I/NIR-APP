@@ -697,12 +697,37 @@ select smart_document_processing_test.assert(
 );
 
 -- Complete the first lifecycle so an explicit reasoned reprocess can create a new job.
+select (to_regprocedure('public.begin_document_interpretation(uuid,uuid,uuid)') is not null) as available
+\gset smart_learning_
+\if :smart_learning_available
+begin;
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+select public.begin_document_interpretation(
+  :'smart_first_job_id'::uuid,
+  :'smart_complete_extraction_id'::uuid,
+  '25000000-0000-4000-8000-000000000001'
+)::text as payload
+\gset smart_begin_
+select public.save_document_interpretation(
+  :'smart_first_job_id'::uuid,
+  :'smart_complete_extraction_id'::uuid,
+  '25000000-0000-4000-8000-000000000001',
+  (:'smart_begin_payload'::jsonb ->> 'interpretation_started_at')::timestamptz,
+  'fixture', 'fixture-model', 'smart-document-test', '1',
+  '{"schema_version":"1","document_type":"other","document_type_confidence":null,"supplier":{"suggested_id":null,"suggested_name":null,"confidence":null,"evidence_block_ids":[]},"fields":[],"line_items":[],"suggested_annotations":[]}'::jsonb,
+  '{}'::jsonb, 1
+);
+reset role;
+commit;
+\else
 update public.document_processing_jobs
 set status = 'interpreting'
 where id = :'smart_first_job_id'::uuid;
 update public.document_processing_jobs
 set status = 'review'
 where id = :'smart_first_job_id'::uuid;
+\endif
 update public.document_processing_jobs
 set status = 'completed'
 where id = :'smart_first_job_id'::uuid;
