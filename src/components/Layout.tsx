@@ -223,7 +223,7 @@ export default function Layout() {
       {/* Mobile top bar */}
       <header className="phone-safe-header lg:hidden sticky top-0 z-40 bg-shell text-shell-ink border-b border-shell-ink/10 flex min-w-0 items-center no-print">
         <button ref={menuButtonRef} type="button"
-          className="flex items-center justify-center min-w-11 min-h-11 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           onClick={() => setMobileOpen(true)} aria-label="פתיחת תפריט" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
           <Menu size={22} />
         </button>
@@ -231,7 +231,7 @@ export default function Layout() {
         <div className="flex items-center gap-1">
           <NotificationBell onShell />
           {canSearch && (
-            <button className="flex items-center justify-center min-w-11 min-h-11 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
+            <button className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
               aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={21} /></button>
           )}
         </div>
