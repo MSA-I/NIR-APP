@@ -7,6 +7,27 @@
 
 ---
 
+## OCR חכם — חוזה שמירת review ל־PLAN-05 (29.07.2026, מקומי בלבד)
+
+**מצב:** לאחר מיזוג גלים 1–3 ב־`3bf3340`, preflight של PLAN-05 מצא שאין API סמכותי לתיקון
+טקסט/תא או להוספת annotation חד־פעמי. התיקון נעשה קדימה בלבד ב־
+`0049_document_review_mutations.sql`; ‏`0045`/`0046` והראיות הקיימות לא שוכתבו.
+
+`document_review_corrections` הוא ledger append-only של block/table-cell revisions. שתי פקודות
+authenticated גוזרות tenant/actor/context מהשרת, נועלות document ואז interpretation/job, ובודקות target,
+job במצב review, checksum מול job/extraction/Storage, גרסת חוזה ו־expected revision/text. ספק רשאי
+לערוך רק price list שהוא העלה ושפוענח עבורו; owner/office/kitchen נשארים בתחום הדייר שלהם.
+הדפדפן מקבל SELECT ו־RPC בלבד, ללא DML ישיר; UPDATE/DELETE נדחים גם ל־service_role ב־trigger.
+
+**אימות מקומי:** reset החיל בהצלחה את `0001`–`0049`; בדיקת `document_learning.sql` כוללת כעת
+block, table cell, revisions, stale write, Storage eTag, תפקידי צוות, accountant, cross-tenant,
+supplier-owned price list, actor/requester fences, job שהושלם, סדר נעילות, RLS, audit ואי־שינוי
+byte-for-byte ל־extraction/interpretation. `npm.cmd run quality` עבר במלואו ללא בדיקות שדולגו,
+כולל 266 בדיקות P0, בדיקות SQL/concurrency והמסע המשולב ב־21 תרחישי דפדפן. לא בוצעו push,
+deploy או migration לייצור.
+
+---
+
 ## עורך הזמנה — המשך לספקים, מינימום ופיצול ידני (26.07.2026, production)
 
 **מצב:** התוכניות `docs/plans/2026-07-26-order-flow-continue-to-suppliers.md` ו־
