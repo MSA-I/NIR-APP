@@ -24,7 +24,10 @@ from .retry import retry_call
 
 DEFAULT_OPENAI_MODEL = "gpt-5.6-terra"
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
-OPENAI_MAX_OUTPUT_TOKENS = 2_048
+# A dense A4 supplier invoice runs to ~60 Hebrew line items; 2048 truncated real documents on the
+# first try. This is a ceiling, not a reservation -- only generated tokens are billed, so the
+# headroom costs nothing on small pages and turns a hard failure into a complete transcription.
+OPENAI_MAX_OUTPUT_TOKENS = 16_384
 OPENAI_ATTEMPTS = 2
 OPENAI_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 OPENAI_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
