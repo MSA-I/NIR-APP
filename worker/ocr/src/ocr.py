@@ -5,6 +5,7 @@ import csv
 import io
 import json
 import os
+import re
 import subprocess
 import time
 import urllib.error
@@ -65,9 +66,40 @@ OPENAI_SYSTEM_PROMPT = (
 OPENAI_USER_TEXT = "Transcribe every visible text line of this page."
 
 
+# QA by resampling. Every transcription error measured on the Hebrew benchmark was stochastic --
+# a decimal shift, a price and total drifting together, a dropped table, an invented product, and
+# one price misread on a blurry photo but read correctly from a sharper one. None of those survive
+# a second independent pass reliably, which makes resampling the only check covering all of them.
+#
+# OCR_QA_PASSES is a CEILING, not a fixed count: transcription stops as soon as two passes agree
+# on the numbers. A clean page therefore costs two calls and only a disagreement pays for a third.
+# 1 turns the layer off; 2 keeps the second opinion but drops the tie-breaker, which marks more
+# pages for human review rather than resolving them.
+DEFAULT_QA_PASSES = 3
+MAX_QA_PASSES = 3
+NUMBER_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
 def openai_model_name() -> str:
     configured = (os.environ.get("OCR_OPENAI_MODEL") or "").strip()
     return configured or DEFAULT_OPENAI_MODEL
+
+
+def openai_qa_passes() -> int:
+    try:
+        value = int(os.environ.get("OCR_QA_PASSES", str(DEFAULT_QA_PASSES)))
+    except ValueError:
+        raise ProcessingError("worker_config_invalid", "OCR_QA_PASSES must be an integer") from None
+    if not 1 <= value <= MAX_QA_PASSES:
+        raise ProcessingError("worker_config_invalid", "OCR_QA_PASSES must be between 1 and 3")
+    return value
+
+
+def _line_signature(line: str) -> tuple[str, ...]:
+    """The consensus key for one line. Only numbers are compared, because a wording difference
+    between two passes is cosmetic while a digit difference is money. Thousands separators are
+    normalised so "1,392.00" and "1392.00" are not counted as a disagreement."""
+    return tuple(match.group(0).replace(",", "") for match in NUMBER_RE.finditer(line))
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,11 +243,13 @@ class OpenAiOcrAdapter:
         api_key: str,
         *,
         model: str | None = None,
+        qa_passes: int | None = None,
         opener: Any | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.api_key = api_key
         self.model = model or openai_model_name()
+        self.qa_passes = qa_passes if qa_passes is not None else openai_qa_passes()
         self.opener = opener or urllib.request.build_opener(_NoRedirect())
         self.sleep = sleep
 
@@ -223,9 +257,10 @@ class OpenAiOcrAdapter:
         blocks: list[dict[str, Any]] = []
         page_text: list[str] = []
         for page in pages:
-            lines = self._transcribe(page, limits)
+            lines, reproduced = self._transcribe_with_consensus(page, limits)
             total = len(lines)
             for index, text in enumerate(lines, start=1):
+                # index is 1-based; reproduced is 0-based.
                 blocks.append(
                     {
                         "id": f"ocr-p{page.page}-l{index}",
@@ -234,10 +269,12 @@ class OpenAiOcrAdapter:
                         # Synthesised reading-order band, not measured geometry. Full width claims
                         # no horizontal precision; the vertical band is true by construction.
                         "bbox": [0.0, (index - 1) / total, 1.0, index / total],
-                        # Never let the model score itself: self-reported confidence is
-                        # uncalibrated, and a confident wrong number is worse than "unknown".
                         "text": text,
-                        "confidence": None,
+                        # The only confidence this adapter asserts, and it is measured rather than
+                        # self-reported: 0.0 means no other pass reproduced this line's numbers,
+                        # so a reviewer must read it against the original. null stays "unknown" --
+                        # reproduction is not proof, since two passes can repeat one misreading.
+                        "confidence": None if reproduced[index - 1] else 0.0,
                     }
                 )
             page_text.append("\n".join(lines))
@@ -257,6 +294,37 @@ class OpenAiOcrAdapter:
             "tables": [],
             "marks": [],
         }
+
+    def _transcribe_with_consensus(
+        self, page: PageImage, limits: ExtractionLimits
+    ) -> tuple[list[str], list[bool]]:
+        """Transcribes, then resamples until each line's numbers have been reproduced.
+
+        Comparison is per line, not per page. A page-level match was tried first and is
+        unachievably strict: line segmentation itself varies between passes, so on a 37-row
+        invoice one unstable barcode digit condemned the whole document. Measured on four real
+        documents, page-level matching flagged 4 of 4 including two known-clean ones, which is
+        the same as flagging nothing.
+
+        Returns the transcription and, per line, whether another pass reproduced its numbers.
+        Lines carrying no numbers are reported as not-in-question rather than confirmed: there is
+        nothing on them for this check to compare, and money is what it is here to protect.
+        """
+        lines = self._transcribe(page, limits)
+        if self.qa_passes < 2:
+            # "Not checked" must not be reported as "checked and failed".
+            return lines, [True] * len(lines)
+        signatures = [_line_signature(line) for line in lines]
+        confirmed = [not signature for signature in signatures]
+        for _ in range(1, min(self.qa_passes, MAX_QA_PASSES)):
+            if all(confirmed):
+                break
+            seen = {_line_signature(line) for line in self._transcribe(page, limits)}
+            confirmed = [
+                already or signature in seen
+                for already, signature in zip(confirmed, signatures)
+            ]
+        return lines, confirmed
 
     def _transcribe(self, page: PageImage, limits: ExtractionLimits) -> list[str]:
         try:

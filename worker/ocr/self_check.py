@@ -433,16 +433,21 @@ class _FakeResponse:
 
 
 class _FakeOpener:
-    """Stands in for urllib's opener so the provider adapter runs with no network at all."""
+    """Stands in for urllib's opener so the provider adapter runs with no network at all.
 
-    def __init__(self, envelope: dict[str, Any]) -> None:
-        self.envelope = envelope
+    Accepts either one envelope, replayed for every call, or a list consumed in order so a
+    resampling QA pass can be given deliberately disagreeing answers.
+    """
+
+    def __init__(self, envelope: dict[str, Any] | list[dict[str, Any]]) -> None:
+        self.envelopes = envelope if isinstance(envelope, list) else [envelope]
         self.requests: list[Any] = []
 
     def open(self, request: Any, timeout: float | None = None) -> _FakeResponse:
         del timeout
+        index = min(len(self.requests), len(self.envelopes) - 1)
         self.requests.append(request)
-        return _FakeResponse(json.dumps(self.envelope, ensure_ascii=False).encode())
+        return _FakeResponse(json.dumps(self.envelopes[index], ensure_ascii=False).encode())
 
 
 def _openai_envelope(lines: list[str], **overrides: Any) -> dict[str, Any]:
@@ -468,6 +473,69 @@ def _openai_envelope(lines: list[str], **overrides: Any) -> dict[str, Any]:
     }
     envelope.update(overrides)
     return envelope
+
+
+def _openai_qa_check(fixtures: Path) -> dict[str, Any]:
+    """The resampling QA layer: transcribe until two independent passes agree on the numbers."""
+    page = PageImage(1, fixtures / "pixel.png", 16, 16)
+    good = ['מוצר א 4.00 יח\' 19.50 ₪ 78.00']
+    # Same numbers, different wording: cosmetic, must count as agreement.
+    reworded = ['פריט א 4.00 יח\' 19.50 ₪ 78.00']
+    # A decimal shift of exactly the kind measured on the real benchmark.
+    shifted = ['מוצר א 4.00 יח\' 195.00 ₪ 78.00']
+    dropped = ['מוצר א']
+
+    def run(envelopes: list[list[str]], passes: int | None = None):
+        opener = _FakeOpener([_openai_envelope(e) for e in envelopes])
+        adapter = OpenAiOcrAdapter(
+            "sk-self-check-000000000000", qa_passes=passes, opener=opener, sleep=lambda _s: None
+        )
+        payload = validate_extraction(adapter.extract([page], DEFAULT_LIMITS), DEFAULT_LIMITS)
+        return payload, len(opener.requests)
+
+    payload, calls = run([good, good])
+    assert calls == 2, f"a reproduced page should cost exactly two passes, made {calls}"
+    assert all(b["confidence"] is None for b in payload["blocks"]), "agreement must not invent a score"
+
+    payload, calls = run([good, reworded])
+    assert calls == 2, "different wording with identical numbers must count as reproduction"
+
+    payload, calls = run([good, shifted, good])
+    assert calls == 3, f"an unreproduced line should escalate to a third pass, made {calls}"
+    assert all(b["confidence"] is None for b in payload["blocks"]), "the third pass reproduced it"
+
+    payload, calls = run([good, shifted, dropped])
+    assert calls == 3, f"escalation must stop at three passes, made {calls}"
+    assert payload["blocks"], "an unreproducible page must still be returned"
+    assert all(b["confidence"] == 0.0 for b in payload["blocks"]), "unstable line was not marked"
+
+    payload, calls = run([good, shifted], passes=1)
+    assert calls == 1, "OCR_QA_PASSES=1 must disable the second opinion"
+    assert all(b["confidence"] is None for b in payload["blocks"]), \
+        "an unchecked page must not be reported as checked-and-failed"
+
+    # The property that page-level comparison could not deliver: one unstable row must not
+    # condemn the stable ones beside it.
+    stable = 'מוצר א 4.00 יח\' 19.50 ₪ 78.00'
+    other = 'מוצר ב 6.00 יח\' 58.00 ₪ 348.00'
+    drifted = 'מוצר ב 6.00 יח\' 5.80 ₪ 34.80'
+    payload, calls = run([[stable, other], [stable, drifted], [stable, drifted]])
+    marked = {b["text"]: b["confidence"] for b in payload["blocks"]}
+    assert marked[stable] is None, "a reproduced line was flagged because a neighbour drifted"
+    assert marked[other] == 0.0, f"the drifting line was not flagged: {marked}"
+
+    # A line carrying no numbers has nothing for this check to compare and must not be flagged.
+    payload, _ = run([['כותרת ללא מספרים', other], ['כותרת ללא מספרים', drifted]])
+    marked = {b["text"]: b["confidence"] for b in payload["blocks"]}
+    assert marked['כותרת ללא מספרים'] is None, "a text-only line must not be reported as unstable"
+
+    return {
+        "agreement": "passed",
+        "escalation": "passed",
+        "per_line_marking": "passed",
+        "text_only_lines": "passed",
+        "opt_out": "passed",
+    }
 
 
 def _openai_adapter_check(fixtures: Path) -> dict[str, Any]:
@@ -834,6 +902,7 @@ def main() -> int:
         _retry_and_cleanup_check(scratch)
         hebrew_order = _hebrew_order_check()
         openai_adapter = _openai_adapter_check(fixtures)
+        openai_qa = _openai_qa_check(fixtures)
         gateway = _gateway_e2e_check(scratch)
         evidence = _tesseract_evidence()
         print(
@@ -846,6 +915,7 @@ def main() -> int:
                     "retry_cleanup": "passed",
                     "hebrew_order": hebrew_order,
                     "openai_adapter": openai_adapter,
+                    "openai_qa": openai_qa,
                     "gateway_e2e": gateway,
                     "tesseract": evidence,
                 },
