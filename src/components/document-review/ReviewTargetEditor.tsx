@@ -243,7 +243,7 @@ export function ReviewTargetEditor({ snapshot, role, target, onClose, onRefetch 
       {target.kind !== 'table_cell' && (
         <form className="mt-5 border-t border-line pt-4" onSubmit={addAnnotation}>
           <h4 className="font-semibold text-ink-body">הוספת משמעות</h4>
-          <p className="mt-1 text-sm text-ink-muted">ההערה נשמרת כשכבה נפרדת ואינה משנה את החילוץ או את פירוש Claude.</p>
+          <p className="mt-1 text-sm text-ink-muted">ההערה נשמרת כשכבה נפרדת ואינה משנה את החילוץ או את הפירוש האוטומטי.</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="label">מפתח משמעות</span>

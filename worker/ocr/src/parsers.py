@@ -40,6 +40,37 @@ FULL_BBOX = [0.0, 0.0, 1.0, 1.0]
 IMAGE_MIME = {"image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "image/gif", "image/avif"}
 
 
+# A Hebrew word, allowing the quote marks that appear inside abbreviations such as בע"מ but never
+# swallowing a quote that belongs to adjacent Latin text.
+HEBREW_RUN = re.compile("[֐-׿]+(?:[\"'׳״][֐-׿]+)*")
+# ך ם ן ף ץ -- in correct Hebrew these appear only as the last letter of a word. A generator that
+# laid the page out in visual order puts them first instead, which is a lexicon-free tell.
+HEBREW_FINALS = "ךםןףץ"
+
+
+def _hebrew_is_reversed(text: str) -> bool:
+    """Detects a text layer stored in visual rather than logical order.
+
+    Measured on a real Israeli supplier receipt: 13 Hebrew words began with a final letter and
+    none ended with one. The same check over spreadsheet text and over image OCR returned 0 vs
+    1701 and 0 vs 75, so the separation is unambiguous in both directions.
+    """
+    starts = ends = 0
+    for word in HEBREW_RUN.findall(text):
+        if len(word) < 2:
+            continue
+        if word[0] in HEBREW_FINALS:
+            starts += 1
+        if word[-1] in HEBREW_FINALS:
+            ends += 1
+    return starts > ends
+
+
+def _reverse_hebrew_runs(text: str) -> str:
+    """Restores logical order. Latin text, digits and layout are left untouched."""
+    return HEBREW_RUN.sub(lambda match: match.group(0)[::-1], text)
+
+
 def _languages(text: str) -> list[str]:
     result: list[str] = []
     if re.search(r"[\u0590-\u05ff]", text):
@@ -489,16 +520,25 @@ def _parse_pdf(path: Path, adapter: OcrAdapter, limits: ExtractionLimits) -> dic
         if total_chars > limits.max_text_chars:
             raise ProcessingError("text_length_limit", "Extracted text exceeds the text limit")
         native_text[page_number] = text
-        if text:
-            blocks.extend(_text_blocks([text], page_number, "pdf"))
-        else:
+        if not text:
             missing.append(page_number)
+
+    # Decided once for the whole document: a single page may not contain enough final letters to
+    # judge, and a per-page decision could repair some pages and not others.
+    if _hebrew_is_reversed("\n".join(native_text.values())):
+        native_text = {page: _reverse_hebrew_runs(text) for page, text in native_text.items()}
+
+    for page_number in sorted(native_text):
+        if native_text[page_number]:
+            blocks.extend(_text_blocks([native_text[page_number]], page_number, "pdf"))
 
     ocr_payload: dict[str, Any] | None = None
     if missing and not isinstance(adapter, DisabledOcrAdapter):
+        # Cap the paid path before rendering, so an oversized scan costs neither renders nor calls.
+        ocr_pages = missing[: limits.max_ai_pages]
         rendered: list[PageImage] = []
         decoded_bytes = 0
-        for page in missing:
+        for page in ocr_pages:
             rendered_page = _render_pdf_page(path, page, limits)
             decoded_bytes += rendered_page.width * rendered_page.height * 3
             if decoded_bytes > limits.max_decompressed_bytes:

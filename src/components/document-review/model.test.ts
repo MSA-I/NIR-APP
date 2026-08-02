@@ -7,7 +7,7 @@ import type {
   ReviewSnapshot,
 } from './model';
 // @ts-expect-error Node's type-stripping test runner requires the explicit TypeScript extension.
-import { bboxDescription, latestCorrections, latestFeedbackByAnnotation, latestTypeReviewDecision, resolveExportTemplateWinner, resolvedText, ruleWhy } from './model.ts';
+import { bboxDescription, latestCorrections, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, resolveExportTemplateWinner, resolvedText, ruleWhy } from './model.ts';
 
 const correction = (revision: number, text: string): DocumentReviewCorrection => ({
   id: `correction-${revision}`,
@@ -165,4 +165,48 @@ test('export preview resolves one approved active template by the database prece
   assert.equal(resolveExportTemplateWinner(snapshot, 'actor')?.row.id, 'organization-supplier');
   snapshot.interpretation!.suggested_supplier_id = null;
   assert.equal(resolveExportTemplateWinner(snapshot, 'actor')?.row.id, 'personal-type');
+});
+
+// The rows below are verbatim from the 2026-08-02 Hebrew benchmark, including the one row where
+// the provider misread a price.
+test('line arithmetic accepts real invoice rows, including thousands separators and currency', () => {
+  assert.equal(
+    lineItemArithmetic({ quantity: '4.00', unit_price: '19.50', line_total: '78.00' })?.consistent,
+    true,
+  );
+  assert.equal(
+    lineItemArithmetic({ quantity: '16.00', unit_price: '87.00', line_total: '1,392.00' })?.consistent,
+    true,
+  );
+  assert.equal(
+    lineItemArithmetic({ quantity: '11.34', unit_price: '₪ 41.00', line_total: '464.94' })?.consistent,
+    true,
+  );
+  assert.equal(
+    lineItemArithmetic({ 'כמות': 4, 'מחיר ליחידה': 19.5, 'סה"כ מחיר': 78 })?.consistent,
+    true,
+  );
+});
+
+test('line arithmetic flags the decimal shift that would corrupt a stored price', () => {
+  // The provider read 3.50 as 35.00 on a real delivery note; the line total stayed correct.
+  const result = lineItemArithmetic({ quantity: '40.00', unit_price: '35.00', line_total: '140.00' });
+  assert.equal(result?.consistent, false);
+  assert.equal(result?.expected, 1400);
+  assert.equal(result?.lineTotal, 140);
+});
+
+test('line arithmetic stays silent when a row has no quantity/price/total triple', () => {
+  assert.equal(lineItemArithmetic({ sku: 'SKU-1', price: '31.90' }), null);
+  assert.equal(lineItemArithmetic({ quantity: 'ארבע', unit_price: '19.50', line_total: '78.00' }), null);
+  assert.equal(lineItemArithmetic({}), null);
+});
+
+test('line arithmetic cannot catch a price and total that drifted together', () => {
+  // Documented limit, not an oversight: on the same benchmark the provider turned 18.00/1.50 into
+  // 187.20/15.60, which multiplies out perfectly. Only a human comparing against the page finds it.
+  assert.equal(
+    lineItemArithmetic({ quantity: '12.00', unit_price: '15.60', line_total: '187.20' })?.consistent,
+    true,
+  );
 });

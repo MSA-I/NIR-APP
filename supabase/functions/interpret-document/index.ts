@@ -1,21 +1,20 @@
-// interpret-document -- server-side Claude interpretation of an existing structured extraction.
-// Claude receives no source file reference or media. The only egress is the allowlisted payload
-// built in core.ts, and every result remains a review suggestion.
+// interpret-document -- server-side model interpretation of an existing structured extraction.
+// The provider receives no source file reference or media. The only egress is the allowlisted
+// payload built in core.ts, and every result remains a review suggestion.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   buildProviderPayload,
-  createAnthropicProvider,
+  createOpenAiProvider,
   type ExtractionContract,
   InterpretationError,
   type LearningRuleSummary,
-  MODEL_ID,
   PROMPT_VERSION,
   SCHEMA_VERSION,
   type SupplierCandidate,
 } from "./core.ts";
 
-const PROVIDER = "anthropic";
+const PROVIDER = "openai";
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -34,6 +33,7 @@ type EdgeErrorCode =
   | "provider_rate_limited"
   | "provider_unavailable"
   | "provider_rejected"
+  | "provider_output_truncated"
   | "provider_invalid_output"
   | "interpretation_conflict"
   | "persistence_failed"
@@ -54,6 +54,7 @@ const MESSAGE: Record<EdgeErrorCode, string> = {
   provider_rate_limited: "שירות הפירוש עמוס כרגע. נסה שוב מאוחר יותר.",
   provider_unavailable: "שירות הפירוש אינו זמין כרגע. נסה שוב מאוחר יותר.",
   provider_rejected: "שירות הפירוש דחה את הבקשה.",
+  provider_output_truncated: "המסמך מורכב מדי לפירוש בבת אחת. נסה שוב על קטע קטן יותר.",
   provider_invalid_output: "שירות הפירוש החזיר תוצאה שאינה ניתנת לאימות.",
   interpretation_conflict: "נשמר כבר פירוש אחר למשימה הזו.",
   persistence_failed: "שמירת פירוש המסמך נכשלה.",
@@ -292,8 +293,8 @@ export async function handler(req: Request): Promise<Response> {
   const url = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!url || !anonKey || !serviceKey || !anthropicKey) {
+  const providerKey = Deno.env.get("OPENAI_API_KEY");
+  if (!url || !anonKey || !serviceKey || !providerKey) {
     return fail(cors, new EdgeError("service_unavailable", 500));
   }
 
@@ -508,7 +509,7 @@ export async function handler(req: Request): Promise<Response> {
       rules,
     );
     const startedAt = performance.now();
-    const result = await createAnthropicProvider({ apiKey: anthropicKey })
+    const result = await createOpenAiProvider({ apiKey: providerKey })
       .interpret(providerPayload);
     const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
     const saved = await admin.rpc(
@@ -521,7 +522,8 @@ export async function handler(req: Request): Promise<Response> {
       p_actor_id: actorId,
       p_interpretation_started_at: interpretationStartedAt,
       p_provider: PROVIDER,
-      p_model: MODEL_ID,
+      // The dated snapshot the provider actually used, not the alias we requested.
+      p_model: result.model,
       p_prompt_version: PROMPT_VERSION,
       p_schema_version: SCHEMA_VERSION,
       p_payload: result.interpretation,
@@ -570,7 +572,7 @@ export async function handler(req: Request): Promise<Response> {
       status: "review",
       schemaVersion: SCHEMA_VERSION,
       promptVersion: PROMPT_VERSION,
-      model: MODEL_ID,
+      model: result.model,
       idempotent: false,
     }, 200);
   } catch (error) {

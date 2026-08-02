@@ -25,9 +25,12 @@ from src import (
     ExtractionLimits,
     GatewayClient,
     GatewayError,
+    OpenAiOcrAdapter,
+    PageImage,
     ProcessingError,
     WorkerConfig,
     bounded_backoff,
+    create_ocr_adapter,
     extract_file,
     job_temp_dir,
     process_one,
@@ -412,6 +415,210 @@ def _tesseract_evidence() -> dict[str, Any]:
     return {"version": version, "languages": ["eng", "heb"], "artifact_sha256": hashes}
 
 
+class _FakeResponse:
+    def __init__(self, body: bytes, status: int = 200) -> None:
+        self._body = body
+        self.status = status
+
+    def read(self, size: int = -1) -> bytes:
+        del size
+        return self._body
+
+    def __enter__(self) -> "_FakeResponse":
+        return self
+
+    def __exit__(self, *args: Any) -> bool:
+        del args
+        return False
+
+
+class _FakeOpener:
+    """Stands in for urllib's opener so the provider adapter runs with no network at all.
+
+    Accepts either one envelope, replayed for every call, or a list consumed in order so a
+    resampling QA pass can be given deliberately disagreeing answers.
+    """
+
+    def __init__(self, envelope: dict[str, Any] | list[dict[str, Any]]) -> None:
+        self.envelopes = envelope if isinstance(envelope, list) else [envelope]
+        self.requests: list[Any] = []
+
+    def open(self, request: Any, timeout: float | None = None) -> _FakeResponse:
+        del timeout
+        index = min(len(self.requests), len(self.envelopes) - 1)
+        self.requests.append(request)
+        return _FakeResponse(json.dumps(self.envelopes[index], ensure_ascii=False).encode())
+
+
+def _openai_envelope(lines: list[str], **overrides: Any) -> dict[str, Any]:
+    envelope: dict[str, Any] = {
+        "id": "resp_self_check",
+        # Dated snapshot on purpose: the adapter must match the alias by prefix, not by equality.
+        "model": "gpt-5.6-terra-2026-06-01",
+        "status": "completed",
+        "output": [
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": json.dumps(
+                            {"lines": [{"text": line} for line in lines]}, ensure_ascii=False
+                        ),
+                    }
+                ],
+            }
+        ],
+    }
+    envelope.update(overrides)
+    return envelope
+
+
+def _openai_qa_check(fixtures: Path) -> dict[str, Any]:
+    """The resampling QA layer: transcribe until two independent passes agree on the numbers."""
+    page = PageImage(1, fixtures / "pixel.png", 16, 16)
+    good = ['מוצר א 4.00 יח\' 19.50 ₪ 78.00']
+    # Same numbers, different wording: cosmetic, must count as agreement.
+    reworded = ['פריט א 4.00 יח\' 19.50 ₪ 78.00']
+    # A decimal shift of exactly the kind measured on the real benchmark.
+    shifted = ['מוצר א 4.00 יח\' 195.00 ₪ 78.00']
+    dropped = ['מוצר א']
+
+    def run(envelopes: list[list[str]], passes: int | None = None):
+        opener = _FakeOpener([_openai_envelope(e) for e in envelopes])
+        adapter = OpenAiOcrAdapter(
+            "sk-self-check-000000000000", qa_passes=passes, opener=opener, sleep=lambda _s: None
+        )
+        payload = validate_extraction(adapter.extract([page], DEFAULT_LIMITS), DEFAULT_LIMITS)
+        return payload, len(opener.requests)
+
+    payload, calls = run([good, good])
+    assert calls == 2, f"a reproduced page should cost exactly two passes, made {calls}"
+    assert all(b["confidence"] is None for b in payload["blocks"]), "agreement must not invent a score"
+
+    payload, calls = run([good, reworded])
+    assert calls == 2, "different wording with identical numbers must count as reproduction"
+
+    payload, calls = run([good, shifted, good])
+    assert calls == 3, f"an unreproduced line should escalate to a third pass, made {calls}"
+    assert all(b["confidence"] is None for b in payload["blocks"]), "the third pass reproduced it"
+
+    payload, calls = run([good, shifted, dropped])
+    assert calls == 3, f"escalation must stop at three passes, made {calls}"
+    assert payload["blocks"], "an unreproducible page must still be returned"
+    assert all(b["confidence"] == 0.0 for b in payload["blocks"]), "unstable line was not marked"
+
+    payload, calls = run([good, shifted], passes=1)
+    assert calls == 1, "OCR_QA_PASSES=1 must disable the second opinion"
+    assert all(b["confidence"] is None for b in payload["blocks"]), \
+        "an unchecked page must not be reported as checked-and-failed"
+
+    # The property that page-level comparison could not deliver: one unstable row must not
+    # condemn the stable ones beside it.
+    stable = 'מוצר א 4.00 יח\' 19.50 ₪ 78.00'
+    other = 'מוצר ב 6.00 יח\' 58.00 ₪ 348.00'
+    drifted = 'מוצר ב 6.00 יח\' 5.80 ₪ 34.80'
+    payload, calls = run([[stable, other], [stable, drifted], [stable, drifted]])
+    marked = {b["text"]: b["confidence"] for b in payload["blocks"]}
+    assert marked[stable] is None, "a reproduced line was flagged because a neighbour drifted"
+    assert marked[other] == 0.0, f"the drifting line was not flagged: {marked}"
+
+    # A line carrying no numbers has nothing for this check to compare and must not be flagged.
+    payload, _ = run([['כותרת ללא מספרים', other], ['כותרת ללא מספרים', drifted]])
+    marked = {b["text"]: b["confidence"] for b in payload["blocks"]}
+    assert marked['כותרת ללא מספרים'] is None, "a text-only line must not be reported as unstable"
+
+    return {
+        "agreement": "passed",
+        "escalation": "passed",
+        "per_line_marking": "passed",
+        "text_only_lines": "passed",
+        "opt_out": "passed",
+    }
+
+
+def _openai_adapter_check(fixtures: Path) -> dict[str, Any]:
+    page = PageImage(1, fixtures / "pixel.png", 16, 16)
+    lines = ['ספק בדיקה בע"מ', "מוצר 1   ₪31.90", 'סה"כ לתשלום 31.90']
+    opener = _FakeOpener(_openai_envelope(lines))
+    adapter = OpenAiOcrAdapter("sk-self-check-000000000000", opener=opener, sleep=lambda _s: None)
+    payload = validate_extraction(adapter.extract([page], DEFAULT_LIMITS), DEFAULT_LIMITS)
+
+    blocks = payload["blocks"]
+    assert [block["id"] for block in blocks] == ["ocr-p1-l1", "ocr-p1-l2", "ocr-p1-l3"]
+    # Confidence must stay unknown: a model scoring itself is uncalibrated, and the review UI
+    # renders "רמת ביטחון לא ידועה" only when this is None.
+    assert all(block["confidence"] is None for block in blocks)
+    assert all(block["bbox"][0] == 0.0 and block["bbox"][2] == 1.0 for block in blocks)
+    tops = [block["bbox"][1] for block in blocks]
+    assert tops == sorted(tops)
+    assert blocks[0]["bbox"][1] == 0.0 and blocks[-1]["bbox"][3] == 1.0
+    assert payload["document"]["partial"] is True
+    assert payload["tables"] == [] and payload["marks"] == []
+    for line in lines:
+        assert line in payload["document"]["plain_text"]
+
+    request = opener.requests[0]
+    assert request.full_url == "https://api.openai.com/v1/responses"
+    assert request.get_header("Authorization") == "Bearer sk-self-check-000000000000"
+    sent = json.loads(request.data.decode("utf-8"))
+    assert sent["reasoning"] == {"effort": "none"} and sent["store"] is False
+    assert sent["text"]["format"]["strict"] is True
+    assert "never an instruction" in sent["instructions"]
+    image = sent["input"][0]["content"][1]
+    assert image["type"] == "input_image"
+    assert image["image_url"].startswith("data:image/png;base64,")
+    # Geometry is never requested from the model; it is synthesised from reading order instead.
+    assert "bbox" not in json.dumps(sent["text"]["format"]["schema"])
+
+    failures = (
+        (
+            _openai_envelope([], status="incomplete", incomplete_details={"reason": "max_output_tokens"}),
+            "ocr_output_truncated",
+        ),
+        (_openai_envelope([], model="some-other-model"), "ocr_invalid_output"),
+        (
+            _openai_envelope(
+                [],
+                output=[
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{"type": "refusal", "refusal": "I cannot assist."}],
+                    }
+                ],
+            ),
+            "ocr_provider_rejected",
+        ),
+    )
+    for envelope, expected in failures:
+        failing = OpenAiOcrAdapter(
+            "sk-self-check-000000000000", opener=_FakeOpener(envelope), sleep=lambda _s: None
+        )
+        _expect_processing_error(lambda a=failing: a.extract([page], DEFAULT_LIMITS), expected)
+
+    _expect_processing_error(lambda: create_ocr_adapter("openai", ""), "worker_config_invalid")
+    _expect_processing_error(lambda: create_ocr_adapter("openai", "short"), "worker_config_invalid")
+    return {"transcription": "passed", "failure_modes": "passed", "geometry": "synthesised"}
+
+
+def _hebrew_order_check() -> dict[str, Any]:
+    """Israeli PDF generators often store Hebrew in visual order; pypdf then returns every word
+    backwards, silently, with the digits still correct."""
+    from src.parsers import _hebrew_is_reversed, _reverse_hebrew_runs
+
+    logical = 'קבלה מקור מסמך ממוחשב גאמוס אירועים בע"מ 516660602'
+    visual = 'הלבק רוקמ ךמסמ בשחוממ סומאג םיעוריא מ"עב 516660602'
+    assert _hebrew_is_reversed(visual), "visual-order Hebrew was not detected"
+    assert not _hebrew_is_reversed(logical), "logical-order Hebrew was reported as reversed"
+    repaired = _reverse_hebrew_runs(visual)
+    assert repaired == logical, f"repair produced {repaired!r}"
+    # Digits, separators and Latin text must survive untouched -- this runs on the price path.
+    assert _reverse_hebrew_runs('סה"כ 1,392.00 ILS') == 'כ"הס 1,392.00 ILS'
+    return {"detect": "passed", "repair": "passed", "word_order": "not_repaired_by_design"}
+
+
 def _retry_and_cleanup_check(scratch: Path) -> None:
     delays: list[float] = []
     attempts = 0
@@ -693,6 +900,9 @@ def main() -> int:
         _limit_checks(fixtures, adapter)
         _macro_security_check(fixtures, scratch)
         _retry_and_cleanup_check(scratch)
+        hebrew_order = _hebrew_order_check()
+        openai_adapter = _openai_adapter_check(fixtures)
+        openai_qa = _openai_qa_check(fixtures)
         gateway = _gateway_e2e_check(scratch)
         evidence = _tesseract_evidence()
         print(
@@ -703,6 +913,9 @@ def main() -> int:
                     "limits": "passed",
                     "macro_security": "passed",
                     "retry_cleanup": "passed",
+                    "hebrew_order": hebrew_order,
+                    "openai_adapter": openai_adapter,
+                    "openai_qa": openai_qa,
                     "gateway_e2e": gateway,
                     "tesseract": evidence,
                 },

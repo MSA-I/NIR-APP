@@ -10,7 +10,7 @@ import socket
 import sys
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 from .errors import GatewayError, ProcessingError
 from .gateway import GatewayClient
 from .limits import DEFAULT_LIMITS, ExtractionLimits
-from .ocr import TesseractOcrAdapter, create_ocr_adapter
+from .ocr import TesseractOcrAdapter, create_ocr_adapter, openai_model_name
 from .parsers import extract_file
 from .retry import bounded_backoff, retry_call
 from .tempfiles import job_temp_dir
@@ -56,6 +56,10 @@ class WorkerConfig:
     max_memory_mb: int
     max_job_attempts: int
     temp_root: Path
+    # Held in the config, never left in the environment: _scrub_credential_env removes it before
+    # any subprocess can inherit it, and it reaches the extraction child as an argument instead.
+    openai_api_key: str = ""
+    max_ai_pages: int = DEFAULT_LIMITS.max_ai_pages
 
     @classmethod
     def from_env(cls) -> "WorkerConfig":
@@ -82,7 +86,10 @@ class WorkerConfig:
         if not worker_id.strip() or len(worker_id) > 200:
             raise ProcessingError("worker_config_invalid", "OCR_WORKER_ID is invalid")
         adapter_name = os.environ.get("OCR_ADAPTER", "disabled").strip().lower()
-        create_ocr_adapter(adapter_name)
+        openai_api_key = os.environ.get("OPENAI_API_KEY", "")
+        # Fail fast at startup rather than on the first document: this also validates that a
+        # provider-backed adapter actually has a key.
+        create_ocr_adapter(adapter_name, openai_api_key)
         lease_seconds = _integer_env("OCR_LEASE_SECONDS", 120, 30, 900)
         heartbeat_seconds = _integer_env("OCR_HEARTBEAT_SECONDS", 30, 5, 450)
         if heartbeat_seconds * 2 > lease_seconds:
@@ -102,11 +109,14 @@ class WorkerConfig:
             _integer_env("OCR_MAX_MEMORY_MB", 2_048, 256, 65_536),
             _integer_env("OCR_MAX_JOB_ATTEMPTS", 3, 1, 20),
             temp_root,
+            openai_api_key,
+            _integer_env("OCR_MAX_AI_PAGES", DEFAULT_LIMITS.max_ai_pages, 1, 100),
         )
 
 
 def _scrub_credential_env() -> None:
     os.environ.pop("OCR_WORKER_TOKEN", None)
+    os.environ.pop("OPENAI_API_KEY", None)
     for name in tuple(os.environ):
         if name.startswith("SUPABASE_"):
             os.environ.pop(name, None)
@@ -135,6 +145,7 @@ def _extract_child(
     source: str,
     claimed_mime: str,
     adapter_name: str,
+    openai_api_key: str,
     job_timeout_seconds: int,
     max_memory_mb: int,
     limits: ExtractionLimits,
@@ -143,9 +154,16 @@ def _extract_child(
     output = Path(result_path)
     temporary = output.with_suffix(".tmp")
     try:
+        # The key arrives as an argument, so it lives only in this process's memory. Scrubbing
+        # still runs first so LibreOffice, pdftoppm and tesseract inherit no credential at all.
         _scrub_credential_env()
         _apply_resource_limits(job_timeout_seconds, max_memory_mb, limits)
-        payload = extract_file(source, claimed_mime, adapter=create_ocr_adapter(adapter_name), limits=limits)
+        payload = extract_file(
+            source,
+            claimed_mime,
+            adapter=create_ocr_adapter(adapter_name, openai_api_key),
+            limits=limits,
+        )
         result: dict[str, Any] = {"ok": True, "payload": payload}
     except ProcessingError as exc:
         result = {
@@ -189,6 +207,7 @@ def _run_extraction(
             str(source),
             claimed_mime,
             config.adapter_name,
+            config.openai_api_key,
             config.job_timeout_seconds,
             config.max_memory_mb,
             limits,
@@ -249,6 +268,10 @@ def _pipeline_identity(adapter_name: str) -> tuple[str, str, str]:
         return "supplyflow-native", "native-parsers", WORKER_VERSION
     if adapter_name == "tesseract":
         return "supplyflow-native+tesseract", "tesseract-heb+eng", TesseractOcrAdapter.version()
+    if adapter_name == "openai":
+        # The exact snapshot is only known per response; the alias plus the API surface is what
+        # this worker can honestly assert about the whole extraction.
+        return "supplyflow-native+openai", openai_model_name(), "v1/responses"
     raise ProcessingError("ocr_adapter_invalid", "Configured OCR adapter is not supported")
 
 
@@ -351,11 +374,12 @@ def run(config: WorkerConfig, stop: threading.Event | None = None) -> None:
         config.token,
         timeout_seconds=config.request_timeout_seconds,
     )
+    limits = replace(DEFAULT_LIMITS, max_ai_pages=config.max_ai_pages)
     failure_count = 0
     _log("worker_started", worker_id=config.worker_id, adapter=config.adapter_name)
     while not stop_event.is_set():
         try:
-            processed = process_one(client, config, stop_event)
+            processed = process_one(client, config, stop_event, limits)
             failure_count = 0
             if not processed:
                 stop_event.wait(config.poll_seconds)

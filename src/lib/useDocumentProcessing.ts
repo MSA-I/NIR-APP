@@ -97,6 +97,8 @@ export interface DocumentAnnotation {
   target_id: string;
   tag_key: string;
   label: string;
+  // 'claude' is the stored legacy token for a provider-generated suggestion; it is never shown
+  // to a user. See ANNOTATION_SOURCE_LABELS in components/document-review/model.ts.
   source: 'user' | 'rule' | 'claude';
   applied_for_user_id: string | null;
   rule_id: string | null;

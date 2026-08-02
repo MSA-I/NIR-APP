@@ -1,9 +1,19 @@
 import { z } from "zod";
 
-export const MODEL_ID = "claude-sonnet-5";
-export const PROMPT_VERSION = "interpret-document-v1";
+export const MODEL_ID = "gpt-5.6-terra";
+// v2: provider moved from Anthropic Messages to OpenAI Responses. The prompt text is unchanged
+// but its delivery (system -> instructions) and the wire envelope are not, so stored rows must
+// not claim v1.
+export const PROMPT_VERSION = "interpret-document-v2";
 export const SCHEMA_VERSION = "1";
-export const MAX_OUTPUT_TOKENS = 4096;
+// A 37-line supplier invoice already truncated at 4096: every line item carries its values as
+// key/value pairs plus evidence ids. A ceiling, not a reservation -- only generated tokens are
+// billed. The schema still permits 500 line items, which no ceiling can cover, so
+// provider_output_truncated remains a reachable and honest outcome for very large price lists.
+export const MAX_OUTPUT_TOKENS = 32_768;
+// Direct analogue of Anthropic's thinking:{type:"disabled"}. Raise to "minimal" only with a
+// matching MAX_OUTPUT_TOKENS increase -- reasoning tokens eat the same budget as the answer.
+export const REASONING_EFFORT = "none";
 export const PROVIDER_TIMEOUT_MS = 18_000;
 export const PROVIDER_MAX_ATTEMPTS = 2;
 export const MAX_PROVIDER_PAYLOAD_BYTES = 384 * 1024;
@@ -165,7 +175,7 @@ export const InterpretationSchema = z.object({
 
 export type InterpretationContract = z.infer<typeof InterpretationSchema>;
 
-// Anthropic Structured Outputs cannot express a record with dynamic keys because every object
+// OpenAI Structured Outputs cannot express a record with dynamic keys because every object
 // must use additionalProperties: false. The provider wire format therefore uses closed key/value
 // entries and is normalized back to InterpretationContract v1 before persistence.
 const ProviderInterpretationSchema = InterpretationSchema.extend({
@@ -190,8 +200,9 @@ const valueUnion = (...types: string[]) => ({
   anyOf: types.map((type) => ({ type })),
 });
 
-// Anthropic's raw schema intentionally omits unsupported range/length constraints. Those are
-// enforced by InterpretationSchema after the response is received.
+// The raw schema intentionally omits range/length constraints. Those are enforced by
+// InterpretationSchema after the response is received, which keeps the provider schema minimal
+// and keeps a single source of truth for the limits.
 export const INTERPRETATION_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -458,7 +469,7 @@ export function buildProviderPayload(
   };
 
   // Section budgets make this invariant conservative. Keep the final guard because this is the
-  // egress boundary: future fields must fail closed instead of silently expanding Claude input.
+  // egress boundary: future fields must fail closed instead of silently expanding provider input.
   if (jsonBytes(payload) > MAX_PROVIDER_PAYLOAD_BYTES) {
     throw new InterpretationError("provider_payload_too_large", 500, false);
   }
@@ -471,6 +482,7 @@ export type InterpretationErrorCode =
   | "provider_rate_limited"
   | "provider_unavailable"
   | "provider_rejected"
+  | "provider_output_truncated"
   | "provider_invalid_output";
 
 export class InterpretationError extends Error {
@@ -493,8 +505,9 @@ export class InterpretationError extends Error {
 export interface ProviderUsage {
   input_tokens: number | null;
   output_tokens: number | null;
-  cache_creation_input_tokens: number | null;
-  cache_read_input_tokens: number | null;
+  total_tokens: number | null;
+  cached_input_tokens: number | null;
+  reasoning_output_tokens: number | null;
 }
 
 export interface ProviderResult {
@@ -508,7 +521,7 @@ export interface InterpretationProvider {
   interpret(payload: ProviderPayload): Promise<ProviderResult>;
 }
 
-export interface AnthropicProviderOptions {
+export interface OpenAiProviderOptions {
   apiKey: string;
   fetchImpl?: typeof fetch;
   sleep?: (milliseconds: number) => Promise<void>;
@@ -534,15 +547,25 @@ function providerUsage(value: unknown): ProviderUsage {
   const usage = value && typeof value === "object"
     ? value as Record<string, unknown>
     : {};
-  const token = (key: string) =>
-    typeof usage[key] === "number" && Number.isFinite(usage[key])
-      ? Math.max(0, Math.trunc(usage[key] as number))
+  const token = (source: Record<string, unknown>, key: string) =>
+    typeof source[key] === "number" && Number.isFinite(source[key])
+      ? Math.max(0, Math.trunc(source[key] as number))
       : null;
+  const details = (key: string) => {
+    const inner = usage[key];
+    return inner && typeof inner === "object"
+      ? inner as Record<string, unknown>
+      : {};
+  };
   return {
-    input_tokens: token("input_tokens"),
-    output_tokens: token("output_tokens"),
-    cache_creation_input_tokens: token("cache_creation_input_tokens"),
-    cache_read_input_tokens: token("cache_read_input_tokens"),
+    input_tokens: token(usage, "input_tokens"),
+    output_tokens: token(usage, "output_tokens"),
+    total_tokens: token(usage, "total_tokens"),
+    cached_input_tokens: token(details("input_tokens_details"), "cached_tokens"),
+    reasoning_output_tokens: token(
+      details("output_tokens_details"),
+      "reasoning_tokens",
+    ),
   };
 }
 
@@ -554,18 +577,53 @@ function parseProviderOutput(
     throw new InterpretationError("provider_invalid_output", 502, false);
   }
   const response = body as Record<string, unknown>;
-  if (response.stop_reason !== "end_turn" || response.model !== MODEL_ID) {
-    throw new InterpretationError("provider_invalid_output", 502, false);
+  if (response.status === "incomplete") {
+    const incomplete = response.incomplete_details;
+    const reason = incomplete && typeof incomplete === "object"
+      ? (incomplete as Record<string, unknown>).reason
+      : null;
+    // Truncation gets its own code: an exhausted output budget is an operational problem, not a
+    // malformed model response, and the two need different fixes.
+    throw new InterpretationError(
+      reason === "max_output_tokens"
+        ? "provider_output_truncated"
+        : "provider_invalid_output",
+      502,
+      false,
+    );
   }
-  const content = response.content;
+  // The model alias resolves to a dated snapshot (gpt-5.6-terra-2026-...), so exact equality
+  // would reject every successful response.
   if (
-    !Array.isArray(content) || content.length !== 1 || !content[0] ||
-    typeof content[0] !== "object" ||
-    (content[0] as Record<string, unknown>).type !== "text"
+    response.status !== "completed" || typeof response.model !== "string" ||
+    !response.model.startsWith(MODEL_ID)
   ) {
     throw new InterpretationError("provider_invalid_output", 502, false);
   }
-  const text = (content[0] as Record<string, unknown>).text;
+  const outputItems = response.output;
+  if (!Array.isArray(outputItems)) {
+    throw new InterpretationError("provider_invalid_output", 502, false);
+  }
+  const message = outputItems.find((item) =>
+    item && typeof item === "object" &&
+    (item as Record<string, unknown>).type === "message"
+  ) as Record<string, unknown> | undefined;
+  const content = message?.content;
+  if (
+    !Array.isArray(content) || content.length !== 1 || !content[0] ||
+    typeof content[0] !== "object"
+  ) {
+    throw new InterpretationError("provider_invalid_output", 502, false);
+  }
+  const part = content[0] as Record<string, unknown>;
+  // A refusal is a deliberate provider decision carrying prose, not JSON. Never parse it.
+  if (part.type === "refusal") {
+    throw new InterpretationError("provider_rejected", 502, false);
+  }
+  if (part.type !== "output_text") {
+    throw new InterpretationError("provider_invalid_output", 502, false);
+  }
+  const text = part.text;
   if (
     typeof text !== "string" ||
     encoder.encode(text).byteLength > MAX_PROVIDER_OUTPUT_BYTES
@@ -630,13 +688,15 @@ function parseProviderOutput(
     provider_request_id: typeof response.id === "string"
       ? boundedText(response.id, 200)
       : null,
-    model: MODEL_ID,
+    // Record the dated snapshot the provider actually used, not the alias we asked for. This is
+    // the only way to attribute a quality regression to a model rotation after the fact.
+    model: boundedText(String(response.model), 200),
     usage: providerUsage(response.usage),
   };
 }
 
-export function createAnthropicProvider(
-  options: AnthropicProviderOptions,
+export function createOpenAiProvider(
+  options: OpenAiProviderOptions,
 ): InterpretationProvider {
   const fetchImpl = options.fetchImpl ?? fetch;
   const sleep = options.sleep ??
@@ -650,18 +710,28 @@ export function createAnthropicProvider(
     async interpret(payload: ProviderPayload): Promise<ProviderResult> {
       const requestBody = JSON.stringify({
         model: MODEL_ID,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        thinking: { type: "disabled" },
-        system: SYSTEM_PROMPT,
-        messages: [{
+        instructions: SYSTEM_PROMPT,
+        input: [{
           role: "user",
           content: [{
-            type: "text",
+            type: "input_text",
             text: `${USER_PREFIX}${JSON.stringify(payload)}${USER_SUFFIX}`,
           }],
         }],
-        output_config: {
-          format: { type: "json_schema", schema: INTERPRETATION_JSON_SCHEMA },
+        max_output_tokens: MAX_OUTPUT_TOKENS,
+        // Correctness, not just cost: reasoning tokens are billed as output AND consume
+        // max_output_tokens, so leaving this on returns status "incomplete" with no usable JSON.
+        reasoning: { effort: REASONING_EFFORT },
+        // No retention. The JSON schema itself is still retained by the provider; it carries
+        // field names only, never customer data.
+        store: false,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "interpretation_v1",
+            schema: INTERPRETATION_JSON_SCHEMA,
+            strict: true,
+          },
         },
       });
 
@@ -671,11 +741,10 @@ export function createAnthropicProvider(
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         let response: Response;
         try {
-          response = await fetchImpl("https://api.anthropic.com/v1/messages", {
+          response = await fetchImpl("https://api.openai.com/v1/responses", {
             method: "POST",
             headers: {
-              "x-api-key": options.apiKey,
-              "anthropic-version": "2023-06-01",
+              authorization: `Bearer ${options.apiKey}`,
               "content-type": "application/json",
             },
             body: requestBody,
@@ -699,7 +768,6 @@ export function createAnthropicProvider(
         if (!response.ok) {
           clearTimeout(timer);
           const transient = response.status === 429 ||
-            response.status === 529 ||
             (response.status >= 500 && response.status <= 599);
           const code = response.status === 429
             ? "provider_rate_limited"
