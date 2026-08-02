@@ -14,6 +14,7 @@ import {
   latestCorrections,
   latestFeedbackByAnnotation,
   latestTypeReviewDecision,
+  lineItemArithmetic,
   resolvedText,
   ruleWhy,
   type ReviewSnapshot,
@@ -348,6 +349,12 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
     () => latestFeedbackByAnnotation(snapshot.feedback),
     [snapshot.feedback],
   );
+  // Surfaced above the table too: a reviewer scanning 37 rows should not have to find the bad one.
+  const inconsistentRows = useMemo(
+    () => (interpretation?.payload.line_items ?? [])
+      .filter((item) => lineItemArithmetic(item.values)?.consistent === false).length,
+    [interpretation],
+  );
 
   if (!interpretation) return null;
 
@@ -402,26 +409,50 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
         {interpretation.payload.line_items.length === 0 ? (
           <p className="mt-3 text-sm text-ink-muted">לא זוהו שורות פריט.</p>
         ) : (
-          <div className="mt-3 max-w-full overflow-x-auto rounded-lg border border-line" tabIndex={0} aria-label="טבלת שורות מוצעות; ניתן לגלול בתוך הטבלה">
-            <table className="min-w-full bg-surface">
-              <thead>
-                <tr className="border-b border-line">
-                  <th className="th">שורת מקור</th>
-                  <th className="th">ערכים מוצעים</th>
-                  <th className="th">ראיות</th>
-                </tr>
-              </thead>
-              <tbody>
-                {interpretation.payload.line_items.map((item, index) => (
-                  <tr key={`${item.source_row ?? 'none'}-${index}`} className="border-b border-line last:border-b-0">
-                    <td className="td num">{item.source_row ?? '—'}</td>
-                    <td className="td"><dl className="space-y-1">{Object.entries(item.values).map(([key, value]) => <div key={key}><dt className="inline font-medium">{key}: </dt><dd className="inline">{valueText(value)}</dd></div>)}</dl></td>
-                    <td className="td break-words">{item.evidence_block_ids.length ? item.evidence_block_ids.join(', ') : '—'}</td>
+          <>
+            {inconsistentRows > 0 && (
+              <Note tone="alert" role="alert" className="mt-3 flex items-start gap-2">
+                <ShieldAlert className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
+                <span>
+                  ב־<span className="num">{inconsistentRows}</span> שורות הכפל אינו מסתדר: כמות × מחיר ליחידה
+                  אינו שווה לסכום השורה. בדוק אותן מול המסמך לפני אישור.
+                </span>
+              </Note>
+            )}
+            <div className="mt-3 max-w-full overflow-x-auto rounded-lg border border-line" tabIndex={0} aria-label="טבלת שורות מוצעות; ניתן לגלול בתוך הטבלה">
+              <table className="min-w-full bg-surface">
+                <thead>
+                  <tr className="border-b border-line">
+                    <th className="th">שורת מקור</th>
+                    <th className="th">ערכים מוצעים</th>
+                    <th className="th">ראיות</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {interpretation.payload.line_items.map((item, index) => {
+                    const arithmetic = lineItemArithmetic(item.values);
+                    return (
+                      <tr key={`${item.source_row ?? 'none'}-${index}`} className="border-b border-line last:border-b-0">
+                        <td className="td num">{item.source_row ?? '—'}</td>
+                        <td className="td">
+                          <dl className="space-y-1">{Object.entries(item.values).map(([key, value]) => <div key={key}><dt className="inline font-medium">{key}: </dt><dd className="inline">{valueText(value)}</dd></div>)}</dl>
+                          {arithmetic && !arithmetic.consistent && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <span className="badge-alert">הכפל אינו מסתדר</span>
+                              <span className="text-xs text-ink-muted">
+                                <span className="num">{arithmetic.quantity}</span> × <span className="num">{arithmetic.unitPrice}</span> = <span className="num">{arithmetic.expected}</span>, ובשורה <span className="num">{arithmetic.lineTotal}</span>
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="td break-words">{item.evidence_block_ids.length ? item.evidence_block_ids.join(', ') : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

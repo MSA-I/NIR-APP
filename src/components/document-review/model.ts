@@ -83,6 +83,63 @@ export function bboxDescription(box: ExtractionContract['blocks'][number]['bbox'
   return `מיקום בעמוד: ${xMin}%–${xMax}% לרוחב, ${yMin}%–${yMax}% לגובה`;
 }
 
+// Keys are chosen by the model, not fixed by the contract, so they are matched by name. Only
+// unambiguous names are listed: a bare `סה"כ` is the quantity subtotal on these invoices, not the
+// money total, and treating it as money would compare the wrong two columns.
+const QUANTITY_KEYS = ['quantity', 'qty', 'כמות'];
+const UNIT_PRICE_KEYS = ['unit_price', 'unitprice', 'price_per_unit', 'price', 'מחיר ליחידה', 'מחיר יחידה'];
+const LINE_TOTAL_KEYS = ['line_total', 'linetotal', 'total_price', 'line_amount', 'total', 'amount', 'סה"כ מחיר'];
+
+/** "1,392.00", "₪ 31.90" and 31.9 all become numbers; anything else becomes null. */
+function numericValue(value: string | number | null): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
+  // Strip currency, thousands separators and the bidi marks that survive RTL transcription.
+  const cleaned = value.replace(/[\s,₪]|[‎‏‪-‮]/g, '');
+  return /^-?\d+(\.\d+)?$/.test(cleaned) ? Number(cleaned) : null;
+}
+
+export interface LineItemArithmetic {
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  expected: number;
+  consistent: boolean;
+}
+
+/**
+ * quantity x unit price = line total, when the interpretation offered all three as numbers.
+ *
+ * Measured on 84 real Hebrew invoice rows: this caught two of the three transcription errors that
+ * moved money, with no false positives. It did NOT catch the third, where the unit price and the
+ * line total drifted together and still multiplied out. A pass means "nothing obviously wrong",
+ * never "verified" — the human approval step remains the thing that protects the price.
+ */
+export function lineItemArithmetic(
+  values: InterpretationContract['line_items'][number]['values'],
+): LineItemArithmetic | null {
+  const pick = (candidates: readonly string[]): number | null => {
+    for (const [key, value] of Object.entries(values)) {
+      if (!candidates.includes(key.trim().toLowerCase())) continue;
+      const parsed = numericValue(value);
+      if (parsed !== null) return parsed;
+    }
+    return null;
+  };
+  const quantity = pick(QUANTITY_KEYS);
+  const unitPrice = pick(UNIT_PRICE_KEYS);
+  const lineTotal = pick(LINE_TOTAL_KEYS);
+  if (quantity === null || unitPrice === null || lineTotal === null) return null;
+  const expected = Math.round(quantity * unitPrice * 100) / 100;
+  return {
+    quantity,
+    unitPrice,
+    lineTotal,
+    expected,
+    consistent: Math.abs(expected - lineTotal) <= 0.02,
+  };
+}
+
 export function correctionKey(
   kind: 'block' | 'table_cell',
   id: string,

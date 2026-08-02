@@ -6,7 +6,11 @@ export const MODEL_ID = "gpt-5.6-terra";
 // not claim v1.
 export const PROMPT_VERSION = "interpret-document-v2";
 export const SCHEMA_VERSION = "1";
-export const MAX_OUTPUT_TOKENS = 4096;
+// A 37-line supplier invoice already truncated at 4096: every line item carries its values as
+// key/value pairs plus evidence ids. A ceiling, not a reservation -- only generated tokens are
+// billed. The schema still permits 500 line items, which no ceiling can cover, so
+// provider_output_truncated remains a reachable and honest outcome for very large price lists.
+export const MAX_OUTPUT_TOKENS = 32_768;
 // Direct analogue of Anthropic's thinking:{type:"disabled"}. Raise to "minimal" only with a
 // matching MAX_OUTPUT_TOKENS increase -- reasoning tokens eat the same budget as the answer.
 export const REASONING_EFFORT = "none";
