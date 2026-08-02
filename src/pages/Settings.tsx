@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toHebrewError } from "../lib/errors";
-import { Settings as SettingsIcon, Users, MailPlus, Send, Ban } from 'lucide-react';
+import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, KeyRound } from 'lucide-react';
+import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -33,6 +34,11 @@ export default function Settings() {
   const [roleReason, setRoleReason] = useState('');
   const [dialogBusy, setDialogBusy] = useState(false);
 
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordBusy, setPasswordBusy] = useState(false);
+
   const { data: users, loading, error, refetch } = useQuery<Profile[]>(async () =>
     unwrap(await supabase.from('profiles').select('*').order('full_name')));
 
@@ -54,6 +60,19 @@ export default function Settings() {
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     toast('ההגדרות נשמרו — ייכנסו לתוקף בכניסה הבאה');
+  }
+
+  async function changePassword() {
+    const problem = passwordProblem(newPassword, confirmPassword);
+    setPasswordError(problem);
+    if (problem) return;
+    setPasswordBusy(true);
+    const res = await supabase.auth.updateUser({ password: newPassword });
+    setPasswordBusy(false);
+    if (res.error) { setPasswordError(toHebrewError(res.error.message)); return; }
+    setNewPassword('');
+    setConfirmPassword('');
+    toast('הסיסמה הוחלפה. היא תידרש בכניסה הבאה.');
   }
 
   async function toggleActive(u: Profile, reason?: string) {
@@ -189,6 +208,30 @@ export default function Settings() {
           <div><label className="label" htmlFor="settings-tolerance">סטיית סכום מותרת (₪)</label><input id="settings-tolerance" type="number" step="0.5" className="input num" value={tolerance} onChange={(e) => setTolerance(e.target.value)} /></div>
         </div>
         <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>שמירה</button></div>
+      </div>
+
+      <div className="card card-pad space-y-4">
+        <div>
+          <h2 className="section-title flex items-center gap-2"><KeyRound size={17} /> החלפת הסיסמה שלך</h2>
+          <p className="text-sm text-ink-muted mt-1">
+            הסיסמה מוחלפת מיד ותידרש בכניסה הבאה. לעובד ששכח סיסמה — הנפק לו סיסמה חדשה ממסך הניהול.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 sm:items-end">
+          <div>
+            <label className="label" htmlFor="new-password">סיסמה חדשה ({MIN_PASSWORD_LENGTH} תווים לפחות)</label>
+            <input id="new-password" type="password" className="input" dir="ltr" autoComplete="new-password"
+              value={newPassword} onChange={(e) => { setNewPassword(e.target.value); setPasswordError(null); }} />
+          </div>
+          <div>
+            <label className="label" htmlFor="confirm-password">אימות סיסמה</label>
+            <input id="confirm-password" type="password" className="input" dir="ltr" autoComplete="new-password"
+              value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); setPasswordError(null); }} />
+          </div>
+          <button className="btn-primary" disabled={passwordBusy || !newPassword || !confirmPassword}
+            onClick={() => void changePassword()}>החלפה</button>
+        </div>
+        {passwordError && <ErrorNote message={passwordError} />}
       </div>
 
       <div className="card overflow-hidden">

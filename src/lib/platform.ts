@@ -23,23 +23,33 @@ export interface ProvisionResult {
   categories_created: number;
 }
 
+export interface ResetPasswordResult {
+  user_id: string;
+  email: string | null;
+}
+
+export type AdminOutcome<T> = { ok: true; result: T } | { ok: false; message: string };
+
 /**
- * Calls the admin-provision Edge Function — the only path that may create a tenant, because
- * it is the only place the service_role key exists. Unpacks the function's typed error body
- * so the operator sees why it failed instead of a bare "non-2xx status".
+ * Calls the admin-provision Edge Function — the only path that may create a tenant or issue a
+ * password, because it is the only place the service_role key exists. Unpacks the function's
+ * typed error body so the operator sees why it failed instead of a bare "non-2xx status".
  */
-export async function provisionOrg(
-  payload: ProvisionPayload,
-): Promise<{ ok: true; result: ProvisionResult } | { ok: false; message: string }> {
-  const { data, error } = await supabase.functions.invoke<ProvisionResult>('admin-provision', { body: payload });
+async function invokeAdmin<T>(body: Record<string, unknown>): Promise<AdminOutcome<T>> {
+  const { data, error } = await supabase.functions.invoke<T>('admin-provision', { body });
 
   if (error) {
     const context = (error as { context?: Response }).context;
     if (context && typeof context.json === 'function') {
       try {
-        const body = (await context.json()) as { error?: { message?: string; detail?: string } };
-        if (body?.error?.message) {
-          return { ok: false, message: body.error.detail ? `${body.error.message} (${body.error.detail})` : body.error.message };
+        const payload = (await context.json()) as { error?: { message?: string; detail?: string } };
+        if (payload?.error?.message) {
+          return {
+            ok: false,
+            message: payload.error.detail
+              ? `${payload.error.message} (${payload.error.detail})`
+              : payload.error.message,
+          };
         }
       } catch {
         // response had no JSON body — fall back to the transport error
@@ -50,6 +60,26 @@ export async function provisionOrg(
 
   if (!data) return { ok: false, message: 'הפונקציה לא החזירה תשובה' };
   return { ok: true, result: data };
+}
+
+export function provisionOrg(payload: ProvisionPayload): Promise<AdminOutcome<ProvisionResult>> {
+  return invokeAdmin<ProvisionResult>({ ...payload });
+}
+
+/**
+ * Issues a new password for an existing user. The recovery valve for "I forgot my password"
+ * while there is no verified sending domain for email recovery — the operator delivers the new
+ * password out of band, exactly like the initial one.
+ */
+export function resetUserPassword(
+  email: string,
+  newPassword: string,
+): Promise<AdminOutcome<ResetPasswordResult>> {
+  return invokeAdmin<ResetPasswordResult>({
+    action: 'reset_password',
+    email,
+    new_password: newPassword,
+  });
 }
 
 const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';

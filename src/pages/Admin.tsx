@@ -1,12 +1,12 @@
 import { useEffect, useId, useState } from 'react';
 import { toHebrewError } from "../lib/errors";
-import { Building2, ShieldCheck, Plus, Copy } from 'lucide-react';
+import { Building2, ShieldCheck, Plus, Copy, KeyRound } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { DataTable, StatusBadge, ConfirmDialog, Modal, useToast, ErrorNote, SkeletonTable, type Column } from '../components/ui';
 import { fmtDate, fmtNum, todayISO } from '../lib/format';
 import { ORG_STATUS } from '../lib/status';
-import { provisionOrg, generatePassword, type PlatformOrg, type ProvisionResult } from '../lib/platform';
+import { provisionOrg, resetUserPassword, generatePassword, type PlatformOrg, type ProvisionResult } from '../lib/platform';
 
 interface NewOrgForm {
   name: string;
@@ -34,6 +34,8 @@ export default function Admin() {
   const [handover, setHandover] = useState<{ email: string; password: string; result: ProvisionResult } | null>(null);
   const [pending, setPending] = useState<{ org: PlatformOrg; action: 'suspend' | 'reactivate' } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
 
   const { data, loading, error, refetch } = useQuery(async () => {
     const isPlatformAdmin = unwrap(await supabase.rpc('is_platform_admin')) as boolean;
@@ -78,6 +80,16 @@ export default function Admin() {
     void refetch();
   }
 
+  async function submitReset(email: string) {
+    setBusy(true);
+    const password = generatePassword();
+    const res = await resetUserPassword(email.trim().toLowerCase(), password);
+    setBusy(false);
+    if (!res.ok) { toast(toHebrewError(res.message), 'error'); return; }
+    setResetting(false);
+    setIssued({ email: res.result.email ?? email.trim(), password });
+  }
+
   const columns: Column<PlatformOrg>[] = [
     { key: 'name', header: 'ארגון', sortValue: (o) => o.name, render: (o) => <span className="font-medium text-ink">{o.name}</span> },
     { key: 'status', header: 'סטטוס', sortValue: (o) => o.status, render: (o) => <StatusBadge meta={ORG_STATUS[o.status]} /> },
@@ -116,13 +128,35 @@ export default function Admin() {
         emptyTitle="אין ארגונים במערכת"
         emptySubtitle="לקוח חדש נפתח כאן — הרשמה עצמית אינה קיימת במערכת"
         toolbar={
-          <button className="btn-primary ms-auto flex items-center gap-1.5" onClick={() => setCreating(true)}>
-            <Plus size={16} /> ארגון חדש
-          </button>
+          <div className="ms-auto flex flex-wrap items-center gap-2">
+            <button className="btn-secondary flex items-center gap-1.5" onClick={() => setResetting(true)}>
+              <KeyRound size={16} /> הנפקת סיסמה
+            </button>
+            <button className="btn-primary flex items-center gap-1.5" onClick={() => setCreating(true)}>
+              <Plus size={16} /> ארגון חדש
+            </button>
+          </div>
         }
       />
 
       <NewOrgModal open={creating} busy={busy} onClose={() => setCreating(false)} onSubmit={submitNewOrg} />
+      <ResetPasswordModal open={resetting} busy={busy} onClose={() => setResetting(false)} onSubmit={submitReset} />
+
+      {issued && (
+        <Modal open onClose={() => setIssued(null)} title="סיסמה חדשה הונפקה — למסירה">
+          <div className="space-y-4">
+            <p className="text-sm text-ink-soft">
+              הסיסמה הקודמת בוטלה והחדשה כבר בתוקף. היא מוצגת פעם אחת בלבד — מסור אותה בערוץ מאובטח
+              ובקש להחליף אותה מ«הגדרות» מיד אחרי הכניסה.
+            </p>
+            <CredentialRow label="אימייל" value={issued.email} onCopy={() => toast('הועתק')} onCopyError={() => toast('ההעתקה נכשלה — יש להעתיק ידנית', 'error')} />
+            <CredentialRow label="סיסמה חדשה" value={issued.password} onCopy={() => toast('הועתק')} onCopyError={() => toast('ההעתקה נכשלה — יש להעתיק ידנית', 'error')} />
+            <div className="flex justify-end">
+              <button className="btn-primary" onClick={() => setIssued(null)}>סגירה</button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {handover && (
         <Modal open onClose={() => setHandover(null)} title="הארגון הוקם — פרטי כניסה למסירה">
@@ -186,6 +220,36 @@ function CredentialRow({ label, value, onCopy, onCopyError }: {
         </button>
       </div>
     </div>
+  );
+}
+
+function ResetPasswordModal({ open, busy, onClose, onSubmit }: {
+  open: boolean; busy: boolean; onClose: () => void; onSubmit: (email: string) => void;
+}) {
+  const [email, setEmail] = useState('');
+  const inputId = useId();
+
+  useEffect(() => { if (!open) setEmail(''); }, [open]);
+  if (!open) return null;
+
+  return (
+    <Modal open onClose={onClose} title="הנפקת סיסמה חדשה למשתמש">
+      <div className="space-y-4">
+        <p className="text-sm text-ink-soft">
+          לשימוש כשמשתמש איבד גישה. הסיסמה נוצרת כאן, מחליפה את הקודמת מיד, ומוצגת פעם אחת בלבד.
+        </p>
+        <div>
+          <label className="label" htmlFor={inputId}>אימייל המשתמש</label>
+          <input id={inputId} type="email" className="input" dir="ltr" placeholder="name@example.com"
+            value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div className="flex justify-end gap-2">
+          <button className="btn-ghost" onClick={onClose}>ביטול</button>
+          <button className="btn-primary" disabled={busy || !email.includes('@')}
+            onClick={() => onSubmit(email)}>הנפקה</button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

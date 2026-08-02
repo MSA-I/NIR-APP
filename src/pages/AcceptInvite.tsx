@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { homeFor } from '../auth/AuthContext';
 import { resolveRoleLabels } from '../lib/status';
 import { APP_NAME } from '../lib/branding';
+import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
 import {
   lookupInvitation, acceptInvitation, acceptErrorMessage,
   type InvitationLookup,
@@ -46,8 +47,8 @@ export default function AcceptInvite() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setFormError(null);
-    if (password.length < 8) { setFormError('הסיסמה חייבת להכיל לפחות 8 תווים.'); return; }
-    if (password !== confirm) { setFormError('הסיסמאות אינן זהות.'); return; }
+    const problem = passwordProblem(password, confirm);
+    if (problem) { setFormError(problem); return; }
 
     setBusy(true);
     try {
@@ -143,7 +144,7 @@ export default function AcceptInvite() {
             value={phone} onChange={(e) => setPhone(e.target.value)} />
         </div>
         <div>
-          <label className="label" htmlFor="password">סיסמה (8 תווים לפחות)</label>
+          <label className="label" htmlFor="password">סיסמה ({MIN_PASSWORD_LENGTH} תווים לפחות)</label>
           <input id="password" type="password" className="input" dir="ltr" autoComplete="new-password" required
             value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
