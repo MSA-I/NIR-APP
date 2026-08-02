@@ -1556,8 +1556,8 @@ async function documentOcrAcceptance(browser) {
     await review.screenshot({ path: path.join(outDir, 'ocr-review-1440.png'), fullPage: true });
     report.screenshots.push('ocr-review-1440.png');
 
-    await exportPreview.getByRole('button', { name: 'הפקת preview' }).click();
-    await exportPreview.getByRole('heading', { name: 'תוצאת preview' }).waitFor({ timeout: 10_000 });
+    await exportPreview.getByRole('button', { name: 'הפקת תצוגה מקדימה' }).click();
+    await exportPreview.getByRole('heading', { name: 'תוצאת התצוגה המקדימה' }).waitFor({ timeout: 10_000 });
     assert.equal(await exportPreview.locator('thead th').count(), 3, 'OCR export preview did not render three fixture columns');
     assert.equal(await exportPreview.locator('tbody tr').count(), 2, 'OCR export preview did not render two fixture rows');
     assert.equal(await exportPreview.getByText(/Checksum:/).count(), 1, 'OCR export preview did not expose a checksum');
