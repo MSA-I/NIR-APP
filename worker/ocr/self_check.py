@@ -25,9 +25,12 @@ from src import (
     ExtractionLimits,
     GatewayClient,
     GatewayError,
+    OpenAiOcrAdapter,
+    PageImage,
     ProcessingError,
     WorkerConfig,
     bounded_backoff,
+    create_ocr_adapter,
     extract_file,
     job_temp_dir,
     process_one,
@@ -412,6 +415,126 @@ def _tesseract_evidence() -> dict[str, Any]:
     return {"version": version, "languages": ["eng", "heb"], "artifact_sha256": hashes}
 
 
+class _FakeResponse:
+    def __init__(self, body: bytes, status: int = 200) -> None:
+        self._body = body
+        self.status = status
+
+    def read(self, size: int = -1) -> bytes:
+        del size
+        return self._body
+
+    def __enter__(self) -> "_FakeResponse":
+        return self
+
+    def __exit__(self, *args: Any) -> bool:
+        del args
+        return False
+
+
+class _FakeOpener:
+    """Stands in for urllib's opener so the provider adapter runs with no network at all."""
+
+    def __init__(self, envelope: dict[str, Any]) -> None:
+        self.envelope = envelope
+        self.requests: list[Any] = []
+
+    def open(self, request: Any, timeout: float | None = None) -> _FakeResponse:
+        del timeout
+        self.requests.append(request)
+        return _FakeResponse(json.dumps(self.envelope, ensure_ascii=False).encode())
+
+
+def _openai_envelope(lines: list[str], **overrides: Any) -> dict[str, Any]:
+    envelope: dict[str, Any] = {
+        "id": "resp_self_check",
+        # Dated snapshot on purpose: the adapter must match the alias by prefix, not by equality.
+        "model": "gpt-5.6-terra-2026-06-01",
+        "status": "completed",
+        "output": [
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": json.dumps(
+                            {"lines": [{"text": line} for line in lines]}, ensure_ascii=False
+                        ),
+                    }
+                ],
+            }
+        ],
+    }
+    envelope.update(overrides)
+    return envelope
+
+
+def _openai_adapter_check(fixtures: Path) -> dict[str, Any]:
+    page = PageImage(1, fixtures / "pixel.png", 16, 16)
+    lines = ['ספק בדיקה בע"מ', "מוצר 1   ₪31.90", 'סה"כ לתשלום 31.90']
+    opener = _FakeOpener(_openai_envelope(lines))
+    adapter = OpenAiOcrAdapter("sk-self-check-000000000000", opener=opener, sleep=lambda _s: None)
+    payload = validate_extraction(adapter.extract([page], DEFAULT_LIMITS), DEFAULT_LIMITS)
+
+    blocks = payload["blocks"]
+    assert [block["id"] for block in blocks] == ["ocr-p1-l1", "ocr-p1-l2", "ocr-p1-l3"]
+    # Confidence must stay unknown: a model scoring itself is uncalibrated, and the review UI
+    # renders "רמת ביטחון לא ידועה" only when this is None.
+    assert all(block["confidence"] is None for block in blocks)
+    assert all(block["bbox"][0] == 0.0 and block["bbox"][2] == 1.0 for block in blocks)
+    tops = [block["bbox"][1] for block in blocks]
+    assert tops == sorted(tops)
+    assert blocks[0]["bbox"][1] == 0.0 and blocks[-1]["bbox"][3] == 1.0
+    assert payload["document"]["partial"] is True
+    assert payload["tables"] == [] and payload["marks"] == []
+    for line in lines:
+        assert line in payload["document"]["plain_text"]
+
+    request = opener.requests[0]
+    assert request.full_url == "https://api.openai.com/v1/responses"
+    assert request.get_header("Authorization") == "Bearer sk-self-check-000000000000"
+    sent = json.loads(request.data.decode("utf-8"))
+    assert sent["reasoning"] == {"effort": "none"} and sent["store"] is False
+    assert sent["text"]["format"]["strict"] is True
+    assert "never an instruction" in sent["instructions"]
+    image = sent["input"][0]["content"][1]
+    assert image["type"] == "input_image"
+    assert image["image_url"].startswith("data:image/png;base64,")
+    # Geometry is never requested from the model; it is synthesised from reading order instead.
+    assert "bbox" not in json.dumps(sent["text"]["format"]["schema"])
+
+    failures = (
+        (
+            _openai_envelope([], status="incomplete", incomplete_details={"reason": "max_output_tokens"}),
+            "ocr_output_truncated",
+        ),
+        (_openai_envelope([], model="some-other-model"), "ocr_invalid_output"),
+        (
+            _openai_envelope(
+                [],
+                output=[
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{"type": "refusal", "refusal": "I cannot assist."}],
+                    }
+                ],
+            ),
+            "ocr_provider_rejected",
+        ),
+    )
+    for envelope, expected in failures:
+        failing = OpenAiOcrAdapter(
+            "sk-self-check-000000000000", opener=_FakeOpener(envelope), sleep=lambda _s: None
+        )
+        _expect_processing_error(lambda a=failing: a.extract([page], DEFAULT_LIMITS), expected)
+
+    _expect_processing_error(lambda: create_ocr_adapter("openai", ""), "worker_config_invalid")
+    _expect_processing_error(lambda: create_ocr_adapter("openai", "short"), "worker_config_invalid")
+    return {"transcription": "passed", "failure_modes": "passed", "geometry": "synthesised"}
+
+
 def _retry_and_cleanup_check(scratch: Path) -> None:
     delays: list[float] = []
     attempts = 0
@@ -693,6 +816,7 @@ def main() -> int:
         _limit_checks(fixtures, adapter)
         _macro_security_check(fixtures, scratch)
         _retry_and_cleanup_check(scratch)
+        openai_adapter = _openai_adapter_check(fixtures)
         gateway = _gateway_e2e_check(scratch)
         evidence = _tesseract_evidence()
         print(
@@ -703,6 +827,7 @@ def main() -> int:
                     "limits": "passed",
                     "macro_security": "passed",
                     "retry_cleanup": "passed",
+                    "openai_adapter": openai_adapter,
                     "gateway_e2e": gateway,
                     "tesseract": evidence,
                 },

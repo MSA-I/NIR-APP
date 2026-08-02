@@ -112,11 +112,22 @@ function providerResponse(supplierId: string) {
     suggested_annotations: [],
   };
   return {
-    id: "msg_ocr_acceptance",
-    model: "claude-sonnet-5",
-    stop_reason: "end_turn",
-    content: [{ type: "text", text: JSON.stringify(interpretation) }],
-    usage: { input_tokens: 50, output_tokens: 25 },
+    id: "resp_ocr_acceptance",
+    // Dated snapshot on purpose: the handler must accept the alias prefix, not exact equality.
+    model: "gpt-5.6-terra-2026-06-01",
+    status: "completed",
+    output: [{
+      type: "message",
+      role: "assistant",
+      content: [{ type: "output_text", text: JSON.stringify(interpretation) }],
+    }],
+    usage: {
+      input_tokens: 50,
+      output_tokens: 25,
+      total_tokens: 75,
+      input_tokens_details: { cached_tokens: 0 },
+      output_tokens_details: { reasoning_tokens: 0 },
+    },
   };
 }
 
@@ -262,12 +273,12 @@ async function main() {
   let providerCalls = 0;
   let providerRequestText = "";
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    if (String(input) !== "https://api.anthropic.com/v1/messages") {
+    if (String(input) !== "https://api.openai.com/v1/responses") {
       return await originalFetch(input, init);
     }
     providerCalls += 1;
     providerRequestText = String(init?.body ?? "");
-    assert.equal(new Headers(init?.headers).get("x-api-key"), required("ANTHROPIC_API_KEY"));
+    assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${required("OPENAI_API_KEY")}`);
     return new Response(JSON.stringify(providerResponse(supplierId)), {
       status: 200,
       headers: { "content-type": "application/json" },

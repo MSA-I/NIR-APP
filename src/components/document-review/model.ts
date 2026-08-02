@@ -65,8 +65,10 @@ export const MARK_KIND_LABELS: Record<ExtractionContract['marks'][number]['kind'
   unknown: 'סימון לא מזוהה',
 };
 
+// `claude` is a legacy stored token, kept because it is baked into two CHECK constraints in
+// migration 0046. Per the project constitution the display label changes here, not the enum.
 export const ANNOTATION_SOURCE_LABELS: Record<DocumentAnnotation['source'], string> = {
-  claude: 'הצעת Claude',
+  claude: 'הצעה אוטומטית',
   rule: 'כלל שנלמד',
   user: 'הערת משתמש',
 };

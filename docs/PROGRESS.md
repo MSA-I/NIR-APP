@@ -7,6 +7,73 @@
 
 ---
 
+## מעבר ל-OpenAI — פירוש ו-OCR (02.08.2026, מקומי בלבד)
+
+**החלטה:** שתי שכבות ה-AI עוברות ל-OpenAI. הפירוש עובר מ-Anthropic Messages ל-**OpenAI Responses**
+עם `gpt-5.6-terra`; ה-OCR הוויזואלי — שמעולם לא עבד בפרודקשן — נבנה לראשונה כמתאם `openai`
+בתוך ה-worker הקיים. ה-worker בפייתון **נשאר**: הפרסרים המקומיים (אקסל/CSV/PDF דיגיטלי/DOCX)
+דטרמיניסטיים וחינמיים, והחלפתם ב-LLM הסתברותי הייתה רגרסיה במסלול היחיד שמזין מחירים אמיתיים.
+
+**שכבת הפירוש** (`supabase/functions/interpret-document/`): `MODEL_ID`→`gpt-5.6-terra`,
+`PROMPT_VERSION`→`interpret-document-v2`, `createAnthropicProvider`→`createOpenAiProvider`,
+`PROVIDER`→`openai`, `ANTHROPIC_API_KEY`→`OPENAI_API_KEY`. הבקשה עוברת ל-`/v1/responses` עם
+`instructions`, ‏`reasoning:{effort:"none"}`, ‏`store:false` ו-`text.format.strict:true`.
+**`SYSTEM_PROMPT`, ‏`InterpretationSchema`, ‏`INTERPRETATION_JSON_SCHEMA` והצלבת מזהי הראיות
+לא שונו** — הסכימה כבר הייתה תואמת strict mode, ולכן אין שינוי חוזה ואין מיגרציה
+(‏`0046` מגביל את `provider`/`model`/`usage` באורך בלבד, לא בערך).
+תוקן: השוואת שם המודל עברה מ-`!==` ל-`startsWith`, אחרת כל תגובה מוצלחת הייתה נדחית כי OpenAI
+מחזיר snapshot מתוארך. נוספו שני מצבי כשל שאין להם אנלוג ב-Anthropic — `refusal` ממופה
+ל-`provider_rejected`, ו-`status:"incomplete"` עם `max_output_tokens` לקוד חדש
+`provider_output_truncated`. ‏`p_model` נשמר כעת כ-snapshot בפועל, לא כ-alias.
+
+**שכבת ה-OCR** (`worker/ocr/`): `OpenAiOcrAdapter` על `urllib` בסטדליב — **אפס תלויות חדשות**,
+‏`requirements.lock` לא השתנה. קריאה אחת לעמוד, סדרתית, ‏`input_image` בבסיס-64 של תמונת העמוד
+המרונדרת בלבד. **גיאומטריה אינה מבוקשת מהמודל**: bbox מסונתז כרצועת שורה
+(`[0, (i-1)/n, 1, i/n]`) ו-`confidence` תמיד `None`, כי קואורדינטות של מודל ראייה נראות
+סבירות ושגויות שיטתית — `validate_extraction` הייתה מקבלת אותן וה-viewer היה מצייר מלבנים
+בטוחים במקום הלא נכון. **תוצאה: `ExtractionContract` וחמשת המאמתים שלו לא השתנו.**
+המפתח עובר כארגומנט ל-`_extract_child` ו-`OPENAI_API_KEY` נוסף ל-`_scrub_credential_env`,
+כך שאף תת-תהליך (LibreOffice/pdftoppm/tesseract) אינו יורש אותו. נוסף `OCR_MAX_AI_PAGES=20`
+ותקרת ריטריי: כשל ספק מסומן לא-retryable כדי שלא יוכפל ב-`OCR_MAX_JOB_ATTEMPTS`.
+**בלוק ה-nvidia הוסר מ-`docker-compose.ocr.yml`** — חסם ה-GPU של 24GB בוטל.
+
+**הטריגר החסר:** עד עכשיו **אף אחד בקוד לא קרא ל-`interpret-document`** — כל job היה נתקע
+ב-`extracted` לנצח. `src/pages/DocumentReview.tsx` קורא לו כעת פעם אחת בכניסה למסך, עם
+`useRef` נגד StrictMode ועם אידמפוטנטיות שרת כרשת ביטחון. זו גם בקרת העלות החזקה ביותר:
+אין תשלום על פירוש מסמך שאיש לא פתח. כשל אינו חוזר אוטומטית.
+
+**שקיפות מול המשתמש:** חמש מחרוזות עבריות שאמרו "Claude" הוחלפו ב"הצעה אוטומטית".
+**לא נכתבה מיגרציה** לשינוי הטוקן `document_annotations.source='claude'` — הוא מוטבע בשני
+אילוצי CHECK ב-`0046`, וחוקת הפרויקט קובעת שתוויות תצוגה משנים ב-frontend ולא באנום.
+
+**שער האיכות המלא עבר.** ‏`npm run quality` הסתיים עם
+`{"status":"PASS","scope":"quality","reason":"all_gates_passed"}` ב-02.08.2026 12:11Z.
+דוח הדפדפן: ‏22 תרחישים עברו, ‏0 כשלים, ‏0 skips, **אפס שגיאות console**, ‏42 בדיקות viewport,
+‏24 ביקורות נגישות ו-26 screenshots. הראיות תחת
+`C:\Users\art1\.codex\visualizations\2026\08\02\20260802-150303-p4-quality-gates`.
+בתוך השער עברו גם: ‏21 בדיקות Deno (13 core + 8 authorization) כולל בדיקות חדשות ל-snapshot
+מתוארך, ‏refusal וקיצוץ פלט; ‏`self_check.py` של ה-worker תחת `--network none` עם הבלוק
+`"openai_adapter": {"failure_modes":"passed","geometry":"synthesised","transcription":"passed"}`;
+ו-`Invoke-OcrEdgeSmoke` שהריץ את ההנדלר האמיתי ב-Edge runtime מול המוק החדש בפורמט Responses
+והחזיר `interpret_handler_provider_mock: true`.
+
+**שתי ריצות קודמות נכשלו על סביבה, לא על קוד**, ושתיהן לא שוחזרו: ‏502 חד-פעמי על
+`p2_above_average_offer_count` (לא ההזרקה המכוונת של התרחיש, שהיא 500 על RPC אחר), ומרוץ
+מוכנות שבו `Wait-LocalApiReady` שרף 80 ניסיונות תוך ~20 שניות כי connection-refused נכשל
+מיידית ולא ממתין ל-timeout — ‏GoTrue עלה נקי מיד אחרי. **שווה להגביל את הלולאה בזמן ולא
+בספירת ניסיונות** (`scripts/check-quality-gates.ps1:144`).
+
+**אימות ויזואלי:** ‏`ocr-review-1440.png` מהריצה הזו נצפה בפועל. אין "Claude" בשום מקום במסך:
+תג הפירוש, כרטיס הכרעת הסוג, הערת הלמידה ותווית המשמעות מציגים "הצעה אוטומטית", ומקור
+הפירוש מציג `openai-fixture · gpt-local-contract-fixture`. ‏RTL תקין, אפס גלישה.
+
+**מה לא בוצע — לא לטעון אחרת:** **לא בוצעה אף קריאה אמיתית ל-OpenAI** ולכן **אין בנצ'מרק
+עברית** — דיוק התמלול של עברית RTL עם מספרים לטיניים משובצים אינו נמדד, וזה בדיוק המקום
+שבו טעות משחיתה מחירים. לא נפרס דבר: המיגרציות `0045`–`0050`, שלוש ה-Edge Functions וה-worker
+עדיין אינם בפרודקשן, ואין מארח ל-worker.
+
+---
+
 ## OCR חכם — PLAN-07: integration, benchmark וקבלה (29–30.07.2026, מקומי בלבד)
 
 **פסק קבלה:** `production NOT READY`. בחירת המודל נשארה `unselected`; ברירת המחדל הבטוחה

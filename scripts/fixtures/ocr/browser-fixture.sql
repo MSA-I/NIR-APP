@@ -163,14 +163,14 @@ values
     '97300000-0000-4000-8000-000000000004', '11111111-1111-4111-8111-111111111111',
     '97100000-0000-4000-8000-000000000004', '97200000-0000-4000-8000-000000000004',
     '97000000-0000-4000-8000-000000000004', :'ocr_owner_id',
-    'anthropic-fixture', 'claude-local-contract-fixture', 'ocr-acceptance-v1', '1',
+    'openai-fixture', 'gpt-local-contract-fixture', 'ocr-acceptance-v1', '1',
     pg_temp.ocr_interpretation_payload(), jsonb_build_object('fixture', true), 315
   ),
   (
     '97300000-0000-4000-8000-000000000005', '11111111-1111-4111-8111-111111111111',
     '97100000-0000-4000-8000-000000000005', '97200000-0000-4000-8000-000000000005',
     '97000000-0000-4000-8000-000000000005', :'ocr_owner_id',
-    'anthropic-fixture', 'claude-local-contract-fixture', 'ocr-acceptance-v1', '1',
+    'openai-fixture', 'gpt-local-contract-fixture', 'ocr-acceptance-v1', '1',
     pg_temp.ocr_interpretation_payload(), jsonb_build_object('fixture', true), 302
   );
 
@@ -182,7 +182,7 @@ values (
   '97400000-0000-4000-8000-000000000004', '11111111-1111-4111-8111-111111111111',
   '97300000-0000-4000-8000-000000000004', '97200000-0000-4000-8000-000000000004',
   '97000000-0000-4000-8000-000000000004',
-  'block', 'block-total', 'manager_review', 'Claude מציע לבדוק את הסכום המסומן',
+  'block', 'block-total', 'manager_review', 'הצעה אוטומטית: לבדוק את הסכום המסומן',
   'claude', 0.92, array['mark-circle']
 );
 

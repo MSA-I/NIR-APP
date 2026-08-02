@@ -15,6 +15,10 @@ class ExtractionLimits:
     max_archive_entries: int = 10_000
     max_image_pixels: int = 40_000_000
     tool_timeout_seconds: int = 120
+    # Pages sent to a paid OCR provider. A 100-page scan would be 100 billed calls and would blow
+    # OCR_JOB_TIMEOUT_SECONDS long before it finished. Beyond the cap the extraction stays
+    # partial, which the contract already reports.
+    max_ai_pages: int = 20
 
 
 DEFAULT_LIMITS = ExtractionLimits()

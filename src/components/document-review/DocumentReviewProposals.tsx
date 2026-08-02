@@ -93,7 +93,7 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
       });
       if (result.error) throw new Error(result.error.message);
       const refreshed = await onRefetch();
-      const success = decision === 'approved' ? 'סוג המסמך אושר ונשמר בנפרד מהצעת Claude' : 'הצעת סוג המסמך נדחתה';
+      const success = decision === 'approved' ? 'סוג המסמך אושר ונשמר בנפרד מההצעה האוטומטית' : 'הצעת סוג המסמך נדחתה';
       if (refreshed) toast(success);
       else toast(`${success}, אך רענון המסך נכשל. יש לרענן ידנית לפני פעולה נוספת.`, 'error');
       setReason('');
@@ -115,7 +115,7 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="document-type-review-title" className="section-title">הכרעת סוג המסמך</h3>
-          <p className="mt-1 text-sm text-ink-muted">הכרעה נשמרת בלדג׳ר נפרד; הצעת Claude אינה משתנה.</p>
+          <p className="mt-1 text-sm text-ink-muted">הכרעה נשמרת בלדג׳ר נפרד; ההצעה האוטומטית אינה משתנה.</p>
         </div>
         <span className={latest?.decision === 'approved' ? 'badge-done' : latest?.decision === 'rejected' ? 'badge-alert' : 'badge-await'}>
           {decisionBadgeLabel}
@@ -124,7 +124,7 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
 
       <dl className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg bg-surface-sunken p-3">
-          <dt className="text-sm font-medium text-ink-soft">הצעת Claude</dt>
+          <dt className="text-sm font-medium text-ink-soft">הצעה אוטומטית</dt>
           <dd className="mt-1 text-ink-body">{suggestedLabel}</dd>
           <dd className="mt-1 text-xs text-ink-muted">{confidenceLabel(currentInterpretation.payload.document_type_confidence)}</dd>
         </div>
@@ -359,7 +359,7 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
             <h2 id="document-proposals-title" className="section-title">פירוש מוצע</h2>
             <p className="mt-1 text-sm text-ink-muted">הערכים הבאים הופקו אוטומטית ואינם עובדות מאושרות.</p>
           </div>
-          <span className="badge-await">הצעת Claude</span>
+          <span className="badge-await">הצעה אוטומטית</span>
         </div>
         <Note tone="await" className="mt-4">
           <ShieldAlert className="mt-0.5 shrink-0" size={18} aria-hidden="true" />

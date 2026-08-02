@@ -403,7 +403,7 @@ function New-LocalFunctionsEnvironment {
   $vapidKeys = New-LocalVapidKeys
   $lines = @(
     "OCR_WORKER_TOKEN=$ocrWorkerToken",
-    "ANTHROPIC_API_KEY=local-provider-mock-not-sent",
+    "OPENAI_API_KEY=local-provider-mock-not-sent",
     "APP_BASE_URL=http://127.0.0.1:5199",
     "PUSH_FN_SECRET=$pushFunctionSecret",
     "VAPID_PUBLIC_KEY=$($vapidKeys.PublicKey)",
@@ -447,7 +447,7 @@ function Invoke-OcrEdgeSmoke {
     SUPABASE_URL = [string]$localEnvironment.API_URL
     SUPABASE_ANON_KEY = [string]$localEnvironment.ANON_KEY
     SUPABASE_SERVICE_ROLE_KEY = [string]$localEnvironment.SERVICE_ROLE_KEY
-    ANTHROPIC_API_KEY = "local-provider-mock-not-sent"
+    OPENAI_API_KEY = "local-provider-mock-not-sent"
     APP_BASE_URL = "http://127.0.0.1:5199"
   }
   $previousEdgeEnvironment = @{}

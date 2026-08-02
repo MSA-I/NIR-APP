@@ -496,9 +496,11 @@ def _parse_pdf(path: Path, adapter: OcrAdapter, limits: ExtractionLimits) -> dic
 
     ocr_payload: dict[str, Any] | None = None
     if missing and not isinstance(adapter, DisabledOcrAdapter):
+        # Cap the paid path before rendering, so an oversized scan costs neither renders nor calls.
+        ocr_pages = missing[: limits.max_ai_pages]
         rendered: list[PageImage] = []
         decoded_bytes = 0
-        for page in missing:
+        for page in ocr_pages:
             rendered_page = _render_pdf_page(path, page, limits)
             decoded_bytes += rendered_page.width * rendered_page.height * 3
             if decoded_bytes > limits.max_decompressed_bytes:

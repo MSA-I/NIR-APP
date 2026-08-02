@@ -20,6 +20,11 @@ services:
       OCR_WORKER_TOKEN: ${OCR_WORKER_TOKEN:-}
       OCR_WORKER_ID: ${OCR_WORKER_ID:-}
       OCR_ADAPTER: ${OCR_ADAPTER:-disabled}
+      # Required only when OCR_ADAPTER=openai. Use a project-scoped key with a monthly budget cap:
+      # that cap is the only cost control that still works when this code is wrong.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OCR_OPENAI_MODEL: ${OCR_OPENAI_MODEL:-gpt-5.6-terra}
+      OCR_MAX_AI_PAGES: ${OCR_MAX_AI_PAGES:-20}
       OCR_LEASE_SECONDS: ${OCR_LEASE_SECONDS:-120}
       OCR_HEARTBEAT_SECONDS: ${OCR_HEARTBEAT_SECONDS:-30}
       OCR_POLL_SECONDS: ${OCR_POLL_SECONDS:-2}
@@ -36,14 +41,8 @@ services:
     pids_limit: 256
     networks:
       - ocr_private
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities:
-                - gpu
+    # No GPU reservation: visual OCR runs through the OpenAI Responses API, so this worker is a
+    # poll loop plus native parsers and fits on any small always-on host.
     logging:
       driver: local
       options:
