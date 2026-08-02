@@ -99,9 +99,11 @@ export function ReceivingList() {
       ) : !filtered.length ? (
         <div className="card"><EmptyState title="לא נמצאו הזמנות" subtitle="אפשר לשנות את החיפוש או הסינון" /></div>
       ) : !focusedQueue ? (
-        <div className="space-y-3" aria-label="תוצאות קבלת סחורה">
+        // section, not div: aria-label on a roleless div is dropped by screen readers, so this list
+        // of results arrived unnamed. Matches the labelled section in the focused-queue branch below.
+        <section className="space-y-3" aria-label="תוצאות קבלת סחורה">
           {filtered.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} onOpen={() => navigate(`/receiving/${order.id}`)} />)}
-        </div>
+        </section>
       ) : (
         <>
           <section className="space-y-3" aria-labelledby="receiving-attention-title">

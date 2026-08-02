@@ -67,7 +67,7 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="document-export-title" className="section-title">תצוגה מקדימה לייצוא</h2>
-          <p className="mt-1 text-sm text-ink-muted">התצוגה נוצרת בזמן אמת באמצעות generator המאושר. היא אינה שומרת קובץ ואינה משנה נתונים.</p>
+          <p className="mt-1 text-sm text-ink-muted">התצוגה נוצרת בזמן אמת באמצעות מנוע הייצוא המאושר. היא אינה שומרת קובץ ואינה משנה נתונים.</p>
         </div>
         <FileSpreadsheet className="text-action" size={24} aria-hidden="true" />
       </div>
@@ -82,7 +82,7 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
               <p className="mt-1 break-words font-medium text-ink-body">{selected.contract.name} · {formatLabel[selected.contract.format]}</p>
             </div>
             <button type="button" className="btn-primary shrink-0" onClick={() => void buildPreview()} disabled={busy}>
-              {busy ? <Loader2 className="animate-spin" size={17} aria-hidden="true" /> : <RefreshCw size={17} aria-hidden="true" />} הפקת preview
+              {busy ? <Loader2 className="animate-spin" size={17} aria-hidden="true" /> : <RefreshCw size={17} aria-hidden="true" />} הפקת תצוגה מקדימה
             </button>
           </div>
 
@@ -97,11 +97,13 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
           {result && (
             <div className="mt-5 min-w-0" aria-live="polite">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-semibold text-ink-body">תוצאת preview</h3>
-                <span className="badge-done">{formatLabel[result.format]} · {result.rows.length} שורות</span>
+                <h3 className="font-semibold text-ink-body">תוצאת התצוגה המקדימה</h3>
+                <span className="badge-done">{formatLabel[result.format]} · <span className="num">{result.rows.length}</span> שורות</span>
               </div>
-              <p className="mt-2 break-all text-xs text-ink-muted">Checksum: <span dir="ltr" className="num">{result.checksum}</span></p>
-              <div className="mt-3 max-w-full overflow-x-auto rounded-lg border border-line" tabIndex={0} aria-label="תצוגת טבלת הייצוא; ניתן לגלול בתוך הטבלה">
+              <p className="mt-2 break-all text-xs text-ink-muted">טביעת מקור: <span dir="ltr" className="num">{result.checksum}</span></p>
+              {/* role="region" is what makes aria-label announceable: a bare div has no role, so the
+                  name was silently dropped by screen readers and the scroll container arrived unnamed. */}
+              <div className="mt-3 max-w-full overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label="תצוגת טבלת הייצוא; ניתן לגלול בתוך הטבלה">
                 <table className="min-w-full bg-surface">
                   <thead>
                     <tr className="border-b border-line">
@@ -119,7 +121,7 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
                   </tbody>
                 </table>
               </div>
-              {result.rows.length > 100 && <p className="mt-2 text-sm text-ink-muted">מוצגות 100 מתוך {result.rows.length} שורות ב־preview בלבד.</p>}
+              {result.rows.length > 100 && <p className="mt-2 text-sm text-ink-muted">מוצגות <span className="num">100</span> מתוך <span className="num">{result.rows.length}</span> שורות בתצוגה המקדימה בלבד.</p>}
             </div>
           )}
         </>

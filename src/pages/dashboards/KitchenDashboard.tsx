@@ -25,10 +25,10 @@ const orderValue = (items: OrderItem[]) => items.reduce((s, i) => s + i.qty * i.
 
 // A supplier's on-time rate needs ≥5 samples to be claimed (mirrors Suppliers.tsx / Analytics.tsx).
 function otdTone(pct: number | null): ScoreTone {
-  if (pct == null) return 'slate';
-  if (pct >= 90) return 'green';
-  if (pct >= 75) return 'amber';
-  return 'red';
+  if (pct == null) return 'idle';
+  if (pct >= 90) return 'done';
+  if (pct >= 75) return 'await';
+  return 'alert';
 }
 
 /**
@@ -80,7 +80,7 @@ export default function KitchenDashboard() {
 
     const kpis: ScoreItem[] = [
       { label: 'נרכש החודש', value: fmtMoney(purchasedMonth) },
-      { label: 'פתוח לקבלה', value: fmtMoney(openValue), tone: openValue ? 'amber' : 'slate' },
+      { label: 'פתוח לקבלה', value: fmtMoney(openValue), tone: openValue ? 'await' : 'idle' },
       { label: 'הזמנות פתוחות', value: fmtNum(openPos.length) },
       { label: 'יתרת ספקים פתוחה', value: fmtMoney(openBalance) },
       { label: 'עמידה בזמנים', value: fmtPct(otdPct), tone: otdTone(otdPct) },

@@ -263,6 +263,13 @@ export interface DocumentProcessingSnapshot {
   exportTemplates: DocumentExportTemplateRow[];
   exportTemplateVersions: DocumentExportTemplateVersion[];
   exports: DocumentExportRow[];
+  /**
+   * actor uuid → full name, for the review layers that record who acted (corrections, type
+   * decisions, annotation feedback). A missing key is the honest "not visible to you": RLS hides
+   * tenant staff from a supplier account, and the UI renders — rather than falling back to the raw
+   * uuid, which means nothing to the non-technical users in PRODUCT.md.
+   */
+  actorNames: Map<string, string>;
 }
 
 const ALL_COLUMNS = '*';
@@ -294,6 +301,7 @@ function createSnapshot(documentId: string): DocumentProcessingSnapshot {
     exportTemplates: [],
     exportTemplateVersions: [],
     exports: [],
+    actorNames: new Map(),
   };
 }
 
@@ -329,6 +337,22 @@ async function fetchJobs(documentIds: readonly string[] | null): Promise<Documen
 
 async function fetchRowsByIds<T>(table: string, ids: readonly string[]): Promise<T[]> {
   return fetchByColumnIds<T>(table, 'id', ids);
+}
+
+/**
+ * Same lookup AuditLog.tsx:38-40 already uses to turn actor uuids into names, narrowed to the two
+ * columns needed so the other identity columns on `profiles` stay unread. Deliberately does not
+ * throw: these names annotate data the caller already has, so a blocked or partial read must
+ * degrade to — rather than fail the whole review screen.
+ */
+async function fetchActorNames(actorIds: readonly string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(actorIds)];
+  if (!unique.length) return new Map();
+  const rows = await fetchInChunks(unique, async (chunk) => {
+    const { data } = await supabase.from('profiles').select('id, full_name').in('id', chunk);
+    return (data ?? []) as { id: string; full_name: string }[];
+  });
+  return new Map(rows.map((row) => [row.id, row.full_name]));
 }
 
 async function loadProcessing(
@@ -390,7 +414,7 @@ async function loadProcessing(
       .order('created_at', { ascending: false }).order('id').range(from, to)),
   ]);
 
-  const [learningRules, exportTemplateVersions] = await Promise.all([
+  const [learningRules, exportTemplateVersions, actorNames] = await Promise.all([
     fetchRowsByIds<DocumentLearningRule>(
       'document_learning_rules',
       [...new Set(ruleApplications.map((application) => application.rule_id))],
@@ -399,6 +423,11 @@ async function loadProcessing(
       'document_export_template_versions',
       exportTemplates.flatMap((template) => template.active_version_id ? [template.active_version_id] : []),
     ),
+    fetchActorNames([
+      ...reviewCorrections.map((correction) => correction.actor_id),
+      ...typeReviewDecisions.map((decision) => decision.actor_id),
+      ...feedback.map((item) => item.actor_id),
+    ]),
   ]);
 
   for (const annotation of annotations) {
@@ -432,6 +461,7 @@ async function loadProcessing(
   for (const snapshot of Object.values(snapshots)) {
     const ruleIds = new Set(snapshot.ruleApplications.map((application) => application.rule_id));
     snapshot.learningRules = learningRules.filter((rule) => ruleIds.has(rule.id));
+    snapshot.actorNames = actorNames;
     snapshot.exportTemplates = snapshot.interpretation ? exportTemplates : [];
     const templateIds = new Set(snapshot.exportTemplates.map((template) => template.id));
     snapshot.exportTemplateVersions = exportTemplateVersions.filter((version) => templateIds.has(version.template_id));

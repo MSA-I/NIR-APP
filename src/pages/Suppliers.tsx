@@ -9,7 +9,7 @@ import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, PageLoader, useToast, Modal, ErrorNote, ConfirmDialog, type Column } from '../components/ui';
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
 import { SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
-import { fmtMoney, fmtMoneyExact, fmtDate, fmtDays } from '../lib/format';
+import { fmtMoney, fmtMoneyExact, fmtNum, fmtDate, fmtDays } from '../lib/format';
 import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory } from '../lib/types';
 
 // suppliers.rating* are added in migration 0011. The hand-written Supplier type (types.ts) is
@@ -31,10 +31,10 @@ interface SupplierWithBalance extends SupplierRow {
 // On-time tone: green ≥90 / amber ≥75 / red <75 — but slate below 5 samples. A red tag drawn
 // from 3 deliveries is a confident lie; a null pct (no promised dates at all) is slate too.
 function otdTone(m: SupplierMetrics | null | undefined): ScoreTone {
-  if (!m || m.on_time_pct == null || m.otd_samples < 5) return 'slate';
-  if (m.on_time_pct >= 90) return 'green';
-  if (m.on_time_pct >= 75) return 'amber';
-  return 'red';
+  if (!m || m.on_time_pct == null || m.otd_samples < 5) return 'idle';
+  if (m.on_time_pct >= 90) return 'done';
+  if (m.on_time_pct >= 75) return 'await';
+  return 'alert';
 }
 
 // The one decision-support column: open exceptions + open credits, empty (calm) when clean.
@@ -325,19 +325,22 @@ export function SupplierCard() {
   // One card, one grid — the spec sheet (§4.4). Balance + honest metrics; OTD renders — (never
   // 0%) when no promised delivery date was ever recorded (open decision #28, not yet answered).
   const scoreItems: ScoreItem[] = [
-    { label: 'יתרה פתוחה', value: fmtMoneyExact(data.balance), tone: data.balance > 0 ? 'amber' : 'green' },
+    { label: 'יתרה פתוחה', value: fmtMoneyExact(data.balance), tone: data.balance > 0 ? 'await' : 'done' },
     {
       label: 'עמידה בזמנים',
       value: m && m.otd_samples > 0 ? fmtPct(m.on_time_pct) : '—',
       sub: m && m.otd_samples > 0 ? `${m.otd_samples} אספקות` : 'אין תאריך אספקה מוזן',
       tone: otdTone(m),
     },
-    { label: 'זמן אספקה ממוצע', value: fmtLeadDays(m?.avg_lead_days ?? null), sub: 'מהשליחה ועד קבלה', tone: 'slate' },
-    { label: 'חריגים פתוחים', value: String(m?.open_exceptions ?? 0), sub: `${m?.exceptions_lifetime ?? 0} בסה״כ`, tone: (m?.open_exceptions ?? 0) > 0 ? 'red' : 'slate' },
-    { label: 'זיכויים פתוחים', value: String(m?.open_credits ?? 0), sub: fmtMoney(m?.open_credits_amount ?? 0), tone: (m?.open_credits ?? 0) > 0 ? 'amber' : 'slate' },
-    { label: 'שינויי מחיר (180 יום)', value: String(m?.price_changes_window ?? 0), sub: `${m?.priced_items ?? 0} פריטים`, tone: 'slate' },
-    { label: 'מינימום הזמנה', value: fmtMoney(s.min_order_amount), tone: 'slate' },
-    { label: 'תנאי תשלום', value: s.payment_terms ?? '—', tone: 'slate', numeric: false },
+    { label: 'זמן אספקה ממוצע', value: fmtLeadDays(m?.avg_lead_days ?? null), sub: 'מהשליחה ועד קבלה', tone: 'idle' },
+    // No supplier_metrics row = the counts were never computed, which is not the same claim as
+    // "zero open exceptions". fmtNum(null) renders — so the tile stays honest (constitution §"אין ערכים
+    // סטטיים מזויפים"), matching how OTD and lead time above already behave.
+    { label: 'חריגים פתוחים', value: fmtNum(m?.open_exceptions ?? null), sub: m ? `${fmtNum(m.exceptions_lifetime)} בסה״כ` : 'טרם חושבו מדדים', tone: (m?.open_exceptions ?? 0) > 0 ? 'alert' : 'idle' },
+    { label: 'זיכויים פתוחים', value: fmtNum(m?.open_credits ?? null), sub: fmtMoney(m?.open_credits_amount ?? null), tone: (m?.open_credits ?? 0) > 0 ? 'await' : 'idle' },
+    { label: 'שינויי מחיר (180 יום)', value: fmtNum(m?.price_changes_window ?? null), sub: m ? `${fmtNum(m.priced_items)} פריטים` : 'טרם חושבו מדדים', tone: 'idle' },
+    { label: 'מינימום הזמנה', value: fmtMoney(s.min_order_amount), tone: 'idle' },
+    { label: 'תנאי תשלום', value: s.payment_terms ?? '—', tone: 'idle', numeric: false },
   ];
 
   return (

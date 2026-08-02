@@ -9,26 +9,28 @@
 //   RatingStars      — read-only when onChange is omitted; interactive radiogroup otherwise.
 //   PriceSparkline   — a static, axis-less step line for the prices tab.
 //
-// Colors: the metric-tile value colors map to the settled semantic tokens (done/await/alert/info
-// — audit 2026-07-21, once status.ts/index.css finished this wave's rewrite). The star glyphs
-// (RatingStars) and the price trend line (PriceSparkline) stay on raw utilities/hex on purpose:
-// they are a rating affordance and a direction-of-change, not status claims, so the semantic
-// tokens would misrepresent them.
+// Colors: the metric-tile value colors map to the settled semantic tokens, and since the 2026-08-02
+// polish sweep the tiles are also *keyed* by that vocabulary (ScoreTone = status.ts's Tone) rather
+// than by colour names. The star glyphs (RatingStars) and the price trend line (PriceSparkline) stay
+// on raw utilities/hex on purpose: they are a rating affordance and a direction-of-change, not status
+// claims, so the semantic tokens would misrepresent them.
 
 import { LineChart, Line } from 'recharts';
 import { Star } from 'lucide-react';
 import type { SupplierMetrics } from '../lib/types';
+import type { Tone } from '../lib/status';
 import { chartTheme } from '../lib/theme';
 import { useId } from 'react';
 
 export type { SupplierMetrics };  // re-exported so Suppliers.tsx's existing import keeps resolving
 
-// Local tone union, deliberately NOT status.ts's Tone: these are value-colors for metric tiles
-// keyed by plain color names (green/amber/red/…) chosen at the call site from thresholds — a
-// different vocabulary than status.ts's semantic claims. The values below map each onto the
-// settled semantic token so the palette stays single-sourced (audit 2026-07-21). `violet` is
-// gone: it had no caller and no place in the four-meaning language.
-export type ScoreTone = 'slate' | 'green' | 'amber' | 'red' | 'blue';
+// Unified onto status.ts's Tone (polish sweep 2026-08-02). The previous local union keyed tiles by
+// plain colour names (green/amber/red/…) on the theory that a threshold-derived value colour is a
+// different thing from a status claim. It is not: `openBalance ? 'amber' : 'slate'` says "awaiting
+// action" vs "no claim" — exactly await vs idle — and the colour name only hid which of the four
+// meanings was being asserted. One vocabulary now (PRODUCT.md §"שפה סמנטית אחת"); the rendered
+// classes are unchanged, so this renamed nothing on screen.
+export type ScoreTone = Tone;
 
 
 // Metric formatters — kept local rather than added to format.ts, which is not owned this wave.
@@ -36,15 +38,14 @@ export type ScoreTone = 'slate' | 'green' | 'amber' | 'red' | 'blue';
 export const fmtPct = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v)}%`);
 export const fmtLeadDays = (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(1)} ימים`);
 
-// Value text color per tone → the semantic token utilities (audit 2026-07-21). Mirrors KpiCard's
-// mapping (ui.tsx). amber→await-fg lifts the 16px tile value off the failing 3.19:1 contrast that
-// amber-600 gave; green→done-fg, red→alert-fg, blue→info-fg.
+// Value text colour per tone → the semantic token utilities. Mirrors KpiCard's mapping (ui.tsx).
+// await-fg lifts the 16px tile value off the failing 3.19:1 contrast that amber-600 gave.
 const TONE_TEXT: Record<ScoreTone, string> = {
-  slate: 'text-ink',
-  green: 'text-done-fg',
-  amber: 'text-await-fg',
-  red: 'text-alert-fg',
-  blue: 'text-info-fg',
+  idle: 'text-ink',
+  done: 'text-done-fg',
+  await: 'text-await-fg',
+  alert: 'text-alert-fg',
+  info: 'text-info-fg',
 };
 
 export interface ScoreItem {
@@ -68,7 +69,7 @@ export function Scorecard({ items }: { items: ScoreItem[] }) {
         {items.map((it, i) => (
           <div key={i}>
             <div className="text-xs font-medium text-ink-muted">{it.label}</div>
-            <div className={`text-base font-semibold mt-0.5 ${it.numeric === false ? 'text-start' : 'num'} ${TONE_TEXT[it.tone ?? 'slate']}`}>
+            <div className={`text-base font-semibold mt-0.5 ${it.numeric === false ? 'text-start' : 'num'} ${TONE_TEXT[it.tone ?? 'idle']}`}>
               {it.value}
             </div>
             {it.sub && <div className="text-xs text-ink-faint mt-0.5">{it.sub}</div>}

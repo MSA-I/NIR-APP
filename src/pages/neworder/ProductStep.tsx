@@ -80,7 +80,7 @@ export default function ProductStep({ products, categories, offersByProduct, car
                 <span className={`shrink-0 text-xs text-ink-muted ${offers.length ? 'num' : ''}`}>{offers.length ? `₪${offers[0].current_price.toFixed(2)}` : 'אין ספק'}</span>
               </button>
               {carted && (
-                <div className="me-3 flex shrink-0 items-center border border-line-strong bg-surface sm:me-4" aria-label={`כמות ${product.name}`}>
+                <div className="me-3 flex shrink-0 items-center border border-line-strong bg-surface sm:me-4" role="group" aria-label={`כמות ${product.name}`}>
                   <button type="button" className="grid size-11 place-items-center hover:bg-surface-sunken" aria-label={`הפחתת כמות ${product.name}`} onClick={() => onQty(product.id, carted.qty - 1)}><Minus size={14} /></button>
                   <span className="min-w-10 border-x border-line py-2 text-center text-sm font-semibold num">{carted.qty}</span>
                   <button type="button" className="grid size-11 place-items-center hover:bg-surface-sunken" aria-label={`הוספת כמות ${product.name}`} onClick={() => onQty(product.id, carted.qty + 1)}><Plus size={14} /></button>
