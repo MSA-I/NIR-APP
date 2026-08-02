@@ -5,6 +5,10 @@ import './index.css';
 import App from './App';
 import { AuthProvider } from './auth/AuthContext';
 import { ToastProvider } from './components/ui';
+import { initObservability } from './lib/observability';
+
+// Before anything renders, so a crash during the first paint is still reported.
+initObservability();
 
 // Web Push delivery target only — public/sw.js does no offline caching (financial
 // data must stay live). Registration failure is not an app failure: the UI works

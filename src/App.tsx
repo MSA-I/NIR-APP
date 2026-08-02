@@ -3,6 +3,7 @@ import { Component, lazy, Suspense, useState, type ReactNode } from 'react';
 import { useAuth, homeFor } from './auth/AuthContext';
 import { PageLoader, useToast } from './components/ui';
 import { toHebrewError } from './lib/errors';
+import { reportError } from './lib/observability';
 import type { Role } from './lib/types';
 
 // Eager: the auth shell that must paint before (or regardless of) a resolved session.
@@ -51,6 +52,11 @@ class LazyRouteErrorBoundary extends Component<{ children: ReactNode }, { failed
 
   static getDerivedStateFromError() {
     return { failed: true };
+  }
+
+  // The screen already tells the user what to do; this is the half that tells us it happened.
+  componentDidCatch(error: unknown, info: { componentStack?: string | null }) {
+    reportError(error, { componentStack: info.componentStack ?? null });
   }
 
   render() {

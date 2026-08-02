@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
+    "@sentry/react": "^10.69.0",
     "@supabase/supabase-js": "^2.91.1",
     "lucide-react": "^0.563.0",
     "papaparse": "^5.4.1",
