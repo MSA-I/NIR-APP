@@ -204,7 +204,7 @@ function ExceptionDetail({ row, canWrite, onClose, onChanged, onNavigate }: {
           <>
             <div>
               <label className="label" htmlFor="exception-resolution-note">הערת טיפול / סיכום</label>
-              <textarea id="exception-resolution-note" className="input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+              <textarea id="exception-resolution-note" className="input" rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               {row.status === 'open' && <button className="btn-secondary" disabled={busy} onClick={() => void setStatus('in_progress')}>סימון בטיפול</button>}

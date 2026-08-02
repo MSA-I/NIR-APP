@@ -90,6 +90,15 @@ export function correctionKey(
   return `${kind}:${id}:${rowIndex ?? '-'}:${columnIndex ?? '-'}`;
 }
 
+/**
+ * Who performed a review action, as a name. Falls back to — when the profile is not readable
+ * (a supplier account cannot see tenant staff) or no longer exists. Never renders the raw uuid:
+ * an identifier tells a kitchen manager or bookkeeper nothing, and — is the truthful "unknown".
+ */
+export function actorName(snapshot: ReviewSnapshot, actorId: string): string {
+  return snapshot.actorNames.get(actorId) ?? '—';
+}
+
 export function latestCorrections(rows: ReviewSnapshot['reviewCorrections']) {
   const latest = new Map<string, ReviewSnapshot['reviewCorrections'][number]>();
   for (const row of rows) {

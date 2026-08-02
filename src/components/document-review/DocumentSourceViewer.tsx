@@ -44,11 +44,15 @@ function OverlayButton({
   onSelect: (target: ReviewTarget, returnFocus: HTMLButtonElement) => void;
 }) {
   const [xMin, yMin, xMax, yMax] = target.bbox;
+  // No touch minimum on this box: it is sized in % from the bbox, so a min-h-11/min-w-11 would
+  // inflate small marks past their own region and let neighbours overlap and steal each other's
+  // clicks. These overlays are tabIndex={-1} pointer shortcuts — the 44px keyboard path is the
+  // labelled button list below, which is the accessible route by design.
   return (
     <button
       type="button"
       tabIndex={-1}
-      className={`absolute min-h-11 min-w-11 border-2 ${selected ? 'border-action bg-action-wash/60' : 'border-info-line bg-info-wash/20'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus`}
+      className={`absolute border-2 ${selected ? 'border-action bg-action-wash/60' : 'border-info-line bg-info-wash/20'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus`}
       style={{
         insetInlineStart: `${xMin * 100}%`,
         insetBlockStart: `${yMin * 100}%`,
@@ -104,7 +108,7 @@ export function DocumentSourceViewer({
         {sourceUrl && isImage ? (
           <div className="relative mx-auto w-full max-w-4xl bg-surface-sunken">
             <img className="block h-auto w-full" src={sourceUrl} alt={`המסמך המקורי ${fileName}`} />
-            <div className="absolute inset-0" aria-label="קיצורי בחירה באמצעות מצביע">
+            <div className="absolute inset-0" role="group" aria-label="קיצורי בחירה באמצעות מצביע">
               {blocks.map((block) => {
                 const value = resolveBlockText(block);
                 const target: ReviewTarget = {
@@ -117,7 +121,9 @@ export function DocumentSourceViewer({
                 const target: ReviewTarget = {
                   kind: 'mark', id: mark.id, page: mark.page, bbox: mark.bbox,
                   markKind: mark.kind, fingerprint: mark.fingerprint,
-                  label: `${MARK_KIND_LABELS[mark.kind]} ${mark.id}`,
+                  // Kind alone: every consumer of `label` pairs it with bboxDescription, which is what
+                  // actually disambiguates two marks of the same kind. The uuid never read as anything.
+                  label: MARK_KIND_LABELS[mark.kind],
                 };
                 return <OverlayButton key={`mark-${mark.id}`} target={target} selected={selected === targetKey(target)} onSelect={onSelectTarget} />;
               })}
@@ -185,7 +191,9 @@ export function DocumentSourceViewer({
                 const target: ReviewTarget = {
                   kind: 'mark', id: mark.id, page: mark.page, bbox: mark.bbox,
                   markKind: mark.kind, fingerprint: mark.fingerprint,
-                  label: `${MARK_KIND_LABELS[mark.kind]} ${mark.id}`,
+                  // Kind alone: every consumer of `label` pairs it with bboxDescription, which is what
+                  // actually disambiguates two marks of the same kind. The uuid never read as anything.
+                  label: MARK_KIND_LABELS[mark.kind],
                 };
                 return (
                   <button
@@ -197,7 +205,6 @@ export function DocumentSourceViewer({
                   >
                     <span className="block font-medium text-ink-body"><MousePointer2 className="me-1 inline" size={16} aria-hidden="true" />{MARK_KIND_LABELS[mark.kind]}</span>
                     <span className="mt-1 block text-xs text-ink-muted">{confidenceLabel(mark.confidence)} · {bboxDescription(mark.bbox)}</span>
-                    <span className="mt-1 block break-all text-xs text-ink-faint">מזהה: {mark.id}</span>
                   </button>
                 );
               })}
@@ -211,7 +218,7 @@ export function DocumentSourceViewer({
               <h4 id={`table-${table.id}`} className="font-semibold text-ink-body">טבלה {table.id}</h4>
               <span className="text-xs text-ink-muted">{bboxDescription(table.bbox)}</span>
             </div>
-            <div className="mt-2 max-w-full overflow-x-auto rounded-lg border border-line" tabIndex={0} aria-label={`טבלה חזותית ${table.id}; ניתן לגלול בתוך הטבלה`}>
+            <div className="mt-2 max-w-full overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label={`טבלה חזותית ${table.id}; ניתן לגלול בתוך הטבלה`}>
               <table className="min-w-full border-collapse bg-surface">
                 <tbody>
                   {table.rows.map((row, rowIndex) => (

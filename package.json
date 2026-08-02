@@ -10,7 +10,8 @@
     "check:orders": "node scripts/check-order-savings.ts",
     "check:split": "node scripts/check-order-split.ts",
     "check:p2": "node scripts/check-p2-reliability.ts",
-    "build": "tsc --noEmit && npm run check:alerts && npm run check:dashboard && npm run check:orders && npm run check:split && npm run check:p2 && vite build",
+    "check:review": "node --test src/components/document-review/model.test.ts",
+    "build": "tsc --noEmit && npm run check:alerts && npm run check:dashboard && npm run check:orders && npm run check:split && npm run check:p2 && npm run check:review && vite build",
     "quality": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-quality-gates.ps1",
     "preview": "vite preview"
   },

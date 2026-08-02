@@ -146,13 +146,14 @@ export function ErrorNote({ message }: { message: string }) {
 }
 
 /* ---------- KpiCard ---------- */
-export function KpiCard({ title, value, sub, tone = 'slate', onClick }: {
-  title: string; value: string; sub?: string; tone?: 'slate' | 'green' | 'amber' | 'red' | 'blue'; onClick?: () => void;
+export function KpiCard({ title, value, sub, tone = 'idle', onClick }: {
+  title: string; value: string; sub?: string; tone?: Tone; onClick?: () => void;
 }) {
-  // Public prop API (tone: slate|green|amber|red|blue) is unchanged for callers; internally each
-  // maps to a semantic token utility (audit 2026-07-21). amber→await-fg (=amber-700) also lifts
-  // the small-size value off the failing contrast the raw amber-600 gave.
-  const toneCls = { slate: 'text-ink', green: 'text-done-fg', amber: 'text-await-fg', red: 'text-alert-fg', blue: 'text-info-fg' }[tone];
+  // Takes the shared Tone vocabulary (polish sweep 2026-08-02). The prop used to be keyed by colour
+  // name (slate|green|amber|red|blue) while every badge, note and attention row already spoke
+  // done/await/alert/info/idle — one component, two languages for the same five meanings. The class
+  // each maps to is unchanged; await-fg also lifts the small value off the contrast raw amber-600 failed.
+  const toneCls = { idle: 'text-ink', done: 'text-done-fg', await: 'text-await-fg', alert: 'text-alert-fg', info: 'text-info-fg' }[tone];
   return (
     <button onClick={onClick} disabled={!onClick}
       className="card card-pad text-start w-full card-link-hover disabled:hover:border-line disabled:hover:shadow-sm cursor-pointer disabled:cursor-default">
@@ -501,7 +502,11 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
       {requireReason && (
         <div className="mb-4">
           <label className="label" htmlFor={reasonId}>סיבה (חובה — נרשם ביומן הביקורת)</label>
-          <textarea id={reasonId} className="input" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
+          {/* maxLength matches every other audited reason field in the app (document-review's three
+              forms, the type-review decision). The column is unbounded text, so this is a consistency
+              and sanity bound on a justification — free-form `notes` fields stay uncapped on purpose,
+              since truncating business content would be worse than an unbounded box. */}
+          <textarea id={reasonId} className="input" rows={2} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
       )}
       <div className="flex gap-2 justify-end">

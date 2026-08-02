@@ -58,10 +58,10 @@ export default function AccountantDashboard() {
 
     const kpis: ScoreItem[] = [
       { label: 'שולם החודש', value: fmtMoney(paidMonth) },
-      { label: 'יתרת חשבוניות פתוחות', value: fmtMoney(openInvoiceBalance), tone: openInvoiceBalance ? 'amber' : 'slate' },
-      { label: 'תנועות בנק לא מותאמות', value: fmtNum(unmatchedBank), tone: unmatchedBank ? 'amber' : 'slate' },
+      { label: 'יתרת חשבוניות פתוחות', value: fmtMoney(openInvoiceBalance), tone: openInvoiceBalance ? 'await' : 'idle' },
+      { label: 'תנועות בנק לא מותאמות', value: fmtNum(unmatchedBank), tone: unmatchedBank ? 'await' : 'idle' },
       { label: 'זיכויים פתוחים', value: fmtNum(openCreditRows.length), sub: openCreditsSum != null ? fmtMoney(openCreditsSum) : undefined },
-      { label: 'ממתין להעברה לרו״ח', value: fmtNum(notSent), tone: notSent ? 'amber' : 'slate' },
+      { label: 'ממתין להעברה לרו״ח', value: fmtNum(notSent), tone: notSent ? 'await' : 'idle' },
     ];
 
     // ── attention. NOTE: "חשבוניות לבדיקה" (received/in_review) is structurally ~0 for the accountant —

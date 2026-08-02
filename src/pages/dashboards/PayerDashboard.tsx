@@ -42,10 +42,10 @@ export default function PayerDashboard() {
     const paidMonth = paymentsThisMonth.length ? paymentsThisMonth.reduce((s, p) => s + p.amount, 0) : null;
 
     const kpis: ScoreItem[] = [
-      { label: 'לביצוע היום', value: fmtMoney(dueToday.length ? sum(dueToday) : null), tone: dueToday.length ? 'amber' : 'slate' },
-      { label: 'באיחור', value: fmtMoney(overdue.length ? sum(overdue) : null), tone: overdue.length ? 'red' : 'slate' },
+      { label: 'לביצוע היום', value: fmtMoney(dueToday.length ? sum(dueToday) : null), tone: dueToday.length ? 'await' : 'idle' },
+      { label: 'באיחור', value: fmtMoney(overdue.length ? sum(overdue) : null), tone: overdue.length ? 'alert' : 'idle' },
       { label: 'סה״כ ממתין לביצוע', value: fmtMoney(prs.length ? sum(prs) : null) },
-      { label: 'בוצע החודש', value: fmtMoney(paidMonth), tone: paidMonth ? 'green' : 'slate' },
+      { label: 'בוצע החודש', value: fmtMoney(paidMonth), tone: paidMonth ? 'done' : 'idle' },
     ];
 
     const attention: AttentionItem[] = [

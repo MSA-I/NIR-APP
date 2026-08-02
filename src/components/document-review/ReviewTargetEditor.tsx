@@ -4,10 +4,11 @@ import type { Role } from '../../lib/types';
 import { toHebrewError } from '../../lib/errors';
 import { fmtDateTime } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
-import { useToast } from '../ui';
+import { Note, useToast } from '../ui';
 import {
   DOCUMENT_TYPE_LABELS,
   MARK_KIND_LABELS,
+  actorName,
   bboxDescription,
   canManageOrganizationRules,
   correctionKey,
@@ -236,7 +237,7 @@ export function ReviewTargetEditor({ snapshot, role, target, onClose, onRefetch 
       </div>
 
       {!canMutate && (
-        <div className="note-await mt-4" role="status">אפשר לערוך רק כאשר המסמך במצב „דורש בדיקה”. כעת הנתונים מוצגים לקריאה בלבד.</div>
+        <Note tone="await" role="status" className="mt-4">אפשר לערוך רק כאשר המסמך במצב „דורש בדיקה”. כעת הנתונים מוצגים לקריאה בלבד.</Note>
       )}
 
       {target.kind !== 'table_cell' && (
@@ -273,7 +274,7 @@ export function ReviewTargetEditor({ snapshot, role, target, onClose, onRefetch 
               <div>
                 <dt className="font-medium text-ink-soft">מקור התיקון האחרון</dt>
                 <dd className="mt-1 break-words text-ink-body">
-                  {currentCorrection.reason} · {fmtDateTime(currentCorrection.created_at)} · מבצע <span dir="ltr" className="num break-all">{currentCorrection.actor_id}</span>
+                  {currentCorrection.reason} · {fmtDateTime(currentCorrection.created_at)} · מבצע {actorName(snapshot, currentCorrection.actor_id)}
                 </dd>
               </div>
             )}

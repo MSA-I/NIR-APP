@@ -162,9 +162,13 @@ export default function InvoiceDetail() {
           <div className="text-xs text-ink-muted mt-0.5">לפני מע״מ {fmtMoneyExact(inv.amount_before_vat)} + מע״מ {fmtMoneyExact(inv.vat_amount)}</div></div>
         {!isProcurementManager && (
           <>
-            <div className="card card-pad print-area"><div className="text-xs text-ink-muted">שולם</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.paid_amount ?? 0)}</div></div>
+            {/* No invoice_balances row = the ledger has not been computed for this invoice, which is a
+                different claim from "₪0.00 paid". fmtMoneyExact(null) renders — so the tile stays honest.
+                The balance tile below keeps its ?? total_amount fallback: an invoice with no ledger row
+                genuinely owes its full amount, which is a derivation, not an invented figure. */}
+            <div className="card card-pad print-area"><div className="text-xs text-ink-muted">שולם</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.paid_amount ?? null)}</div></div>
             {/* credited = already offset, a settled claim like "paid" — done, not the retired violet (audit 2026-07-21) */}
-            <div className="card card-pad print-area"><div className="text-xs text-ink-muted">זוכה</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.credited_amount ?? 0)}</div></div>
+            <div className="card card-pad print-area"><div className="text-xs text-ink-muted">זוכה</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.credited_amount ?? null)}</div></div>
             <div className="card card-pad print-area"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`text-lg font-bold num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
           </>
         )}

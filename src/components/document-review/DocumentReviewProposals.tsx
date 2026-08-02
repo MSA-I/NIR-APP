@@ -10,6 +10,7 @@ import {
   ANNOTATION_SOURCE_LABELS,
   DOCUMENT_TYPE_LABELS,
   MARK_KIND_LABELS,
+  actorName,
   confidenceLabel,
   latestCorrections,
   latestFeedbackByAnnotation,
@@ -137,7 +138,7 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
 
       {latest && (
         <p className="mt-3 break-words text-xs text-ink-muted">
-          {latest.reason} · {fmtDateTime(latest.created_at)} · מבצע <span dir="ltr" className="num break-all">{latest.actor_id}</span>
+          {latest.reason} · {fmtDateTime(latest.created_at)} · מבצע {actorName(snapshot, latest.actor_id)}
         </p>
       )}
 
@@ -402,7 +403,7 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
         {interpretation.payload.line_items.length === 0 ? (
           <p className="mt-3 text-sm text-ink-muted">לא זוהו שורות פריט.</p>
         ) : (
-          <div className="mt-3 max-w-full overflow-x-auto rounded-lg border border-line" tabIndex={0} aria-label="טבלת שורות מוצעות; ניתן לגלול בתוך הטבלה">
+          <div className="mt-3 max-w-full overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label="טבלת שורות מוצעות; ניתן לגלול בתוך הטבלה">
             <table className="min-w-full bg-surface">
               <thead>
                 <tr className="border-b border-line">
@@ -426,10 +427,10 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
       </div>
 
       <div className="card card-pad">
-        <h3 className="section-title">Annotations והחלטות</h3>
+        <h3 className="section-title">הערות והחלטות</h3>
         <p className="mt-1 text-sm text-ink-muted">המקור מצוין בכל רשומה; רק משוב מפורש משנה את מצב ההצעה.</p>
         <div className="mt-4 space-y-3">
-          {snapshot.annotations.length === 0 && <p className="text-sm text-ink-muted">לא נשמרו annotations למסמך.</p>}
+          {snapshot.annotations.length === 0 && <p className="text-sm text-ink-muted">לא נשמרו הערות למסמך.</p>}
           {snapshot.annotations.map((annotation) => {
             const feedback = feedbackByAnnotation.get(annotation.id);
             return (
@@ -449,7 +450,7 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
                   <div className="mt-3 rounded-lg bg-surface-sunken p-3 text-sm text-ink-soft">
                     <p><strong>{FEEDBACK_LABELS[feedback.feedback_type]}</strong> · {fmtDateTime(feedback.created_at)}</p>
                     <p className="mt-1 break-words">{feedback.reason}</p>
-                    <p className="mt-1 break-all text-xs text-ink-muted">מבצע <span dir="ltr" className="num">{feedback.actor_id}</span></p>
+                    <p className="mt-1 break-words text-xs text-ink-muted">מבצע {actorName(snapshot, feedback.actor_id)}</p>
                   </div>
                 )}
                 {!isSupplier && !feedback && annotation.active && annotation.source !== 'user' && snapshot.job?.status === 'review' && (

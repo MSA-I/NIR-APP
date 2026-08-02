@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { PageLoader, ErrorNote, DataTable, type Column } from '../components/ui';
 import { fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreTone } from '../components/supplier-metrics';
-import { fmtMoney } from '../lib/format';
+import { fmtMoney, fmtNum } from '../lib/format';
 
 /**
  * Supplier-performance KPI page (plan §2.2). The same per-supplier metrics that live on each
@@ -14,15 +14,18 @@ import { fmtMoney } from '../lib/format';
 interface SupplierRow { id: string; name: string; rating: number | null; status: string }
 interface Row { id: string; name: string; rating: number | null; m: SupplierMetrics | null }
 
-// Mirrors Suppliers.tsx: below 5 samples we cannot claim an on-time rate (slate = "not enough data").
+// Mirrors Suppliers.tsx: below 5 samples we cannot claim an on-time rate (idle = "not enough data").
 function otdTone(m: SupplierMetrics | null): ScoreTone {
-  if (!m || m.on_time_pct == null || m.otd_samples < 5) return 'slate';
-  if (m.on_time_pct >= 90) return 'green';
-  if (m.on_time_pct >= 75) return 'amber';
-  return 'red';
+  if (!m || m.on_time_pct == null || m.otd_samples < 5) return 'idle';
+  if (m.on_time_pct >= 90) return 'done';
+  if (m.on_time_pct >= 75) return 'await';
+  return 'alert';
 }
+// Table-cell variant of the tile mapping in supplier-metrics.tsx: idle and info are quieter here
+// because a leaderboard cell sits in a dense column, not on its own tile. Values unchanged by the
+// 2026-08-02 vocabulary unification — only the keys were renamed.
 const toneClass: Record<ScoreTone, string> = {
-  slate: 'text-ink-muted', green: 'text-done-fg', amber: 'text-await-fg', red: 'text-alert-fg', blue: 'text-ink-body',
+  idle: 'text-ink-muted', done: 'text-done-fg', await: 'text-await-fg', alert: 'text-alert-fg', info: 'text-ink-body',
 };
 
 export default function Analytics() {
@@ -48,10 +51,13 @@ export default function Analytics() {
       render: (r) => fmtLeadDays(r.m?.avg_lead_days) },
     { key: 'otd', header: 'עמידה בזמנים', className: 'num', sortValue: (r) => r.m?.on_time_pct ?? -1,
       render: (r) => <span className={toneClass[otdTone(r.m)]}>{fmtPct(r.m?.on_time_pct)}</span> },
+    // A supplier with no supplier_metrics row has no measured counts; rendering 0 would assert
+    // "nothing happened" instead of "not measured". Sorting still treats absence as 0 so the
+    // unmeasured suppliers group at the bottom rather than scattering.
     { key: 'price', header: 'שינויי מחיר (30 יום)', className: 'num', sortValue: (r) => r.m?.price_changes_window ?? 0,
-      render: (r) => r.m?.price_changes_window ?? 0 },
+      render: (r) => fmtNum(r.m?.price_changes_window ?? null) },
     { key: 'exceptions', header: 'חריגים פתוחים', className: 'num', sortValue: (r) => r.m?.open_exceptions ?? 0,
-      render: (r) => r.m?.open_exceptions ?? 0 },
+      render: (r) => fmtNum(r.m?.open_exceptions ?? null) },
     { key: 'credits', header: 'זיכויים פתוחים', className: 'num', sortValue: (r) => r.m?.open_credits_amount ?? 0,
       render: (r) => r.m?.open_credits_amount ? fmtMoney(r.m.open_credits_amount) : '—' },
   ];
