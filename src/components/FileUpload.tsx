@@ -124,6 +124,21 @@ export interface DocumentMetadata {
   enqueueProcessing?: boolean;
 }
 
+/**
+ * True when the processing queue simply is not installed on this database.
+ *
+ * The smart-document migrations ship separately from this bundle, so a frontend can legitimately
+ * run against a database where `enqueue_document_processing` does not exist yet. That is not an
+ * upload failure: the file and its registry row are already durable by the time it is called.
+ * Reporting it as a failure made a stored document look lost and invited a duplicate re-upload.
+ * Any other error — permission, deleted document, bad state — still surfaces.
+ */
+function processingQueueUnavailable(error: { code?: string; message?: string }): boolean {
+  // PGRST202: PostgREST could not find the function. 42883: Postgres undefined_function.
+  if (error.code === 'PGRST202' || error.code === '42883') return true;
+  return /could not find the function|function .* does not exist/i.test(error.message ?? '');
+}
+
 function defaultDocumentKind(entityType: string): DocumentKind {
   if (entityType === 'invoice') return 'invoice';
   if (entityType === 'goods_receipt') return 'delivery_note';
@@ -173,6 +188,9 @@ export async function uploadDocument(orgId: string, entityType: string, entityId
     return { documentId: ins.data.id, jobId: null };
   }
   const queued = await supabase.rpc('enqueue_document_processing', { p_document_id: ins.data.id });
+  if (queued.error && processingQueueUnavailable(queued.error)) {
+    return { documentId: ins.data.id, jobId: null };
+  }
   if (queued.error || typeof queued.data !== 'string') {
     // The source and registry row are durable now; retrying the whole upload would duplicate them.
     throw new DocumentUploadError(

@@ -357,11 +357,32 @@ async function fetchActorNames(actorIds: readonly string[]): Promise<Map<string,
   return new Map(rows.map((row) => [row.id, row.full_name]));
 }
 
+/**
+ * True when the smart-document schema is not installed on this database.
+ *
+ * Migrations 0045-0050 ship separately from this bundle, so the app can legitimately run against
+ * a database without them. That is not an error worth showing anybody: the documents screen
+ * worked before the epic existed and must keep working, simply without processing state.
+ * Matched on the message because fetchAll surfaces only that, not the PostgREST code.
+ */
+function smartDocumentsNotInstalled(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /could not find the table .*document_(processing|extractions|interpretations)/i.test(message)
+    || /relation "?(public\.)?document_processing_jobs"? does not exist/i.test(message);
+}
+
 async function loadProcessing(
   documentIds: readonly string[] | null,
   details: boolean,
 ): Promise<Record<string, DocumentProcessingSnapshot>> {
-  const jobs = await fetchJobs(documentIds);
+  let jobs: DocumentProcessingJob[];
+  try {
+    jobs = await fetchJobs(documentIds);
+  } catch (error) {
+    if (!smartDocumentsNotInstalled(error)) throw error;
+    // Every document reports as unprocessed, which is exactly what it is here.
+    return Object.fromEntries((documentIds ?? []).map((id) => [id, createSnapshot(id)]));
+  }
   const ids = documentIds ?? [...new Set(jobs.map((job) => job.document_id))];
   const snapshots = Object.fromEntries(ids.map((id) => [id, createSnapshot(id)]));
 
