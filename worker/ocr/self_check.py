@@ -535,6 +535,22 @@ def _openai_adapter_check(fixtures: Path) -> dict[str, Any]:
     return {"transcription": "passed", "failure_modes": "passed", "geometry": "synthesised"}
 
 
+def _hebrew_order_check() -> dict[str, Any]:
+    """Israeli PDF generators often store Hebrew in visual order; pypdf then returns every word
+    backwards, silently, with the digits still correct."""
+    from src.parsers import _hebrew_is_reversed, _reverse_hebrew_runs
+
+    logical = 'קבלה מקור מסמך ממוחשב גאמוס אירועים בע"מ 516660602'
+    visual = 'הלבק רוקמ ךמסמ בשחוממ סומאג םיעוריא מ"עב 516660602'
+    assert _hebrew_is_reversed(visual), "visual-order Hebrew was not detected"
+    assert not _hebrew_is_reversed(logical), "logical-order Hebrew was reported as reversed"
+    repaired = _reverse_hebrew_runs(visual)
+    assert repaired == logical, f"repair produced {repaired!r}"
+    # Digits, separators and Latin text must survive untouched -- this runs on the price path.
+    assert _reverse_hebrew_runs('סה"כ 1,392.00 ILS') == 'כ"הס 1,392.00 ILS'
+    return {"detect": "passed", "repair": "passed", "word_order": "not_repaired_by_design"}
+
+
 def _retry_and_cleanup_check(scratch: Path) -> None:
     delays: list[float] = []
     attempts = 0
@@ -816,6 +832,7 @@ def main() -> int:
         _limit_checks(fixtures, adapter)
         _macro_security_check(fixtures, scratch)
         _retry_and_cleanup_check(scratch)
+        hebrew_order = _hebrew_order_check()
         openai_adapter = _openai_adapter_check(fixtures)
         gateway = _gateway_e2e_check(scratch)
         evidence = _tesseract_evidence()
@@ -827,6 +844,7 @@ def main() -> int:
                     "limits": "passed",
                     "macro_security": "passed",
                     "retry_cleanup": "passed",
+                    "hebrew_order": hebrew_order,
                     "openai_adapter": openai_adapter,
                     "gateway_e2e": gateway,
                     "tesseract": evidence,
