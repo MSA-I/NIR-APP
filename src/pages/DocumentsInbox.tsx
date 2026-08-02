@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Eye, FileDown, FileInput, Files, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, Search, Upload, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -298,6 +298,31 @@ export default function DocumentsGallery() {
   }, []);
   const documentIds = useMemo(() => data?.docs.map((doc) => doc.id) ?? [], [data]);
   const processing = useDocumentProcessing(documentIds);
+
+  // A job that has been extracted goes no further on its own: interpretation has to be asked for,
+  // and until it is the document sits in the list looking like work is in progress when none is.
+  // Asking for it here is what makes the queue drain to "דורש בדיקה" by itself. The handler is
+  // idempotent and short-circuits before the paid call, so a repeat costs one round trip.
+  const interpretRequested = useRef(new Set<string>());
+  const { snapshots: processingSnapshots, refetch: refetchProcessing } = processing;
+  useEffect(() => {
+    const pending = Object.values(processingSnapshots)
+      .map((snapshot) => snapshot.job)
+      .filter((job) => job?.status === 'extracted' && !interpretRequested.current.has(job.id));
+    if (!pending.length) return;
+    let cancelled = false;
+    void (async () => {
+      for (const job of pending) {
+        if (cancelled || !job) return;
+        interpretRequested.current.add(job.id);
+        // One at a time: each is a paid model call, and a gallery of twenty should not fire twenty
+        // at once. Failures stay silent here -- the review screen is where they get explained.
+        await supabase.functions.invoke('interpret-document', { body: { jobId: job.id } });
+      }
+      if (!cancelled) await refetchProcessing();
+    })();
+    return () => { cancelled = true; };
+  }, [processingSnapshots, refetchProcessing]);
 
   useEffect(() => {
     const onChanged = () => { void refetch(); };

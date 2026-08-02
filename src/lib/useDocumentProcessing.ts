@@ -16,6 +16,7 @@ export type DocumentProcessingStage =
   | 'unprocessed'
   | 'queued'
   | 'processing'
+  | 'extracted'
   | 'review'
   | 'completed'
   | 'failed';
@@ -27,6 +28,10 @@ export const DOCUMENT_PROCESSING_STAGE_META: Record<
   unprocessed: { label: 'טרם נשלח לעיבוד', tone: 'idle' },
   queued: { label: 'ממתין לעיבוד', tone: 'await' },
   processing: { label: 'בעיבוד', tone: 'info' },
+  // Its own stage because nothing is running here: the text is out and the interpretation is
+  // waiting to be requested. Showing "בעיבוד" told people to wait for something that had already
+  // stopped, which is the one thing a status badge must never do.
+  extracted: { label: 'ממתין לפירוש', tone: 'info' },
   review: { label: 'דורש בדיקה', tone: 'await' },
   completed: { label: 'הושלם', tone: 'done' },
   failed: { label: 'נכשל', tone: 'alert' },
@@ -279,7 +284,8 @@ const ALL_COLUMNS = '*';
 export function documentProcessingStage(status?: DocumentProcessingStatus): DocumentProcessingStage {
   if (!status) return 'unprocessed';
   if (status === 'queued') return 'queued';
-  if (status === 'leased' || status === 'extracted' || status === 'interpreting') return 'processing';
+  if (status === 'extracted') return 'extracted';
+  if (status === 'leased' || status === 'interpreting') return 'processing';
   return status;
 }
 
