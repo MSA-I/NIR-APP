@@ -121,14 +121,17 @@ export default function Fab() {
             </>
           );
           return kind === 'capture' ? (
-            <button key={key} type="button" className={mobileItemClass} data-quick-action-key={key}
+            <button key={key} type="button" className={`${mobileItemClass} mobile-action-raised`} data-quick-action-key={key}
               disabled={busy} aria-busy={busy || undefined}
               aria-label={busy ? 'מעלה מסמך' : retryCount ? `ניסיון חוזר להעלאת ${retryCount} מסמכים` : label}
               title={retryCount ? `ניסיון חוזר לנכשלים בלבד (${retryCount})` : label}
               onClick={openCapture}>
-              {busy
-                ? <><Loader2 size={20} className="shrink-0 animate-spin text-action" aria-hidden="true" /><span className="mobile-action-label">{label}</span></>
-                : content}
+              <span className="mobile-action-puck" aria-hidden="true">
+                {busy
+                  ? <Loader2 size={26} className="animate-spin" aria-hidden="true" />
+                  : <Icon size={26} aria-hidden="true" />}
+              </span>
+              <span className="mobile-action-label">{label}</span>
             </button>
           ) : (
             <Link key={key} to={to!} className={mobileItemClass} data-quick-action-key={key}>{content}</Link>
