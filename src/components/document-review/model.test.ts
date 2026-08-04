@@ -7,7 +7,7 @@ import type {
   ReviewSnapshot,
 } from './model';
 // @ts-expect-error Node's type-stripping test runner requires the explicit TypeScript extension.
-import { bboxDescription, invoiceDraftFromInterpretation, latestCorrections, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, normalizeInvoiceDate, resolveExportTemplateWinner, resolvedText, ruleWhy } from './model.ts';
+import { bboxDescription, creditDraftFromInterpretation, deliveryNoteLines, invoiceDraftFromInterpretation, latestCorrections, matchDeliveryLineProduct, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, normalizeInvoiceDate, resolveExportTemplateWinner, resolvedText, ruleWhy } from './model.ts';
 
 const correction = (revision: number, text: string): DocumentReviewCorrection => ({
   id: `correction-${revision}`,
@@ -87,6 +87,68 @@ test('invoice draft leaves an unparseable date empty rather than plausible', () 
   assert.equal(normalizeInvoiceDate('April 3, 2026'), '');
   assert.equal(normalizeInvoiceDate('03/13/2026'), '');   // month 13: not day-first, so not read
   assert.equal(normalizeInvoiceDate(null), '');
+});
+
+test('delivery note lines are read from either vocabulary the model uses', () => {
+  const payload = {
+    document_type: 'delivery_note',
+    line_items: [
+      { source_row: 1, values: { sku: 'DRK-001', description: 'קולה 1.5 ל׳', quantity: '12' }, evidence_block_ids: [] },
+      { source_row: 2, values: { 'מק״ט': 'DRK-002', 'תיאור': 'מים', 'כמות': 6 }, evidence_block_ids: [] },
+      { source_row: 3, values: { description: 'פריט ללא כמות' }, evidence_block_ids: [] },
+    ],
+    fields: [],
+  } as unknown as Parameters<typeof deliveryNoteLines>[0];
+  assert.deepEqual(deliveryNoteLines(payload), [
+    { sourceRow: 1, sku: 'DRK-001', barcode: null, description: 'קולה 1.5 ל׳', quantity: 12 },
+    { sourceRow: 2, sku: 'DRK-002', barcode: null, description: 'מים', quantity: 6 },
+    { sourceRow: 3, sku: null, barcode: null, description: 'פריט ללא כמות', quantity: null },
+  ]);
+});
+
+test('delivery line matching prefers the supplier own code and refuses to guess', () => {
+  const catalogue = [
+    { productId: 'p1', supplierSku: 'S-100', sku: 'OUR-1', barcode: null, name: 'קולה 1.5 ליטר' },
+    { productId: 'p2', supplierSku: 'OUR-1', sku: 'OUR-2', barcode: null, name: 'מים מינרליים' },
+  ];
+  const line = (over: Partial<Parameters<typeof matchDeliveryLineProduct>[0]>) =>
+    ({ sourceRow: 1, sku: null, barcode: null, description: null, quantity: 1, ...over });
+
+  // The supplier's own catalogue number is what is printed on their delivery note, so it wins even
+  // when the same string is one of our skus on a different product.
+  assert.equal(matchDeliveryLineProduct(line({ sku: 'OUR-1' }), catalogue), 'p2');
+  assert.equal(matchDeliveryLineProduct(line({ sku: 'S-100' }), catalogue), 'p1');
+  // Name matching is exact after normalising whitespace and case, never fuzzy.
+  assert.equal(matchDeliveryLineProduct(line({ description: '  מים   מינרליים ' }), catalogue), 'p2');
+  assert.equal(matchDeliveryLineProduct(line({ description: 'מים' }), catalogue), null);
+  // Two products answering to the same code is not a match: the catalogue cannot say which arrived.
+  assert.equal(matchDeliveryLineProduct(line({ sku: 'DUP' }), [
+    { productId: 'p1', supplierSku: 'DUP', sku: null, barcode: null, name: 'א' },
+    { productId: 'p2', supplierSku: 'DUP', sku: null, barcode: null, name: 'ב' },
+  ]), null);
+  assert.equal(matchDeliveryLineProduct(line({}), catalogue), null);
+});
+
+test('credit draft carries the amount and the credited invoice, never the reason', () => {
+  const payload = {
+    document_type: 'credit_note',
+    fields: [
+      { key: 'document_number', value: 'CN-77', confidence: 0.9, evidence_block_ids: [] },
+      { key: 'reference_invoice_number', value: ' INV-2026-1042 ', confidence: 0.9, evidence_block_ids: [] },
+      { key: 'total', value: '-120.50', confidence: 0.9, evidence_block_ids: [] },
+    ],
+    line_items: [
+      { source_row: 1, values: { description: 'קולה 1.5 ל׳', quantity: '2' }, evidence_block_ids: [] },
+    ],
+  } as unknown as Parameters<typeof creditDraftFromInterpretation>[0];
+  const draft = creditDraftFromInterpretation(payload);
+  // The credit note prints a negative total; the sign is carried by the document type, not the row.
+  assert.equal(draft.amount, '120.5');
+  // The explicit reference beats the credit note's own number.
+  assert.equal(draft.creditedInvoiceNumber, 'INV-2026-1042');
+  assert.equal(draft.notes, 'לפי המסמך: קולה 1.5 ל׳ × 2');
+  // credit_reason is a business fact about why money is owed; the document states an amount only.
+  assert.equal('reason' in draft, false);
 });
 
 test('document type review uses the highest append-only revision', () => {

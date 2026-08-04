@@ -283,6 +283,130 @@ export function invoiceDraftFromInterpretation(payload: InterpretationContract):
   };
 }
 
+const SKU_KEYS = ['sku', 'product_code', 'item_code', 'catalog_number', 'מק״ט', 'מקט', 'מק"ט'];
+const BARCODE_KEYS = ['barcode', 'ברקוד'];
+const DESCRIPTION_KEYS = ['description', 'name', 'product', 'תיאור', 'שם המוצר', 'פריט'];
+const QUANTITY_LINE_KEYS = ['quantity', 'qty', 'כמות', 'כמות שסופקה'];
+// A credit note carries two numbers: its own, and the invoice it credits. Only the second is
+// useful for finding the invoice, so the explicit reference keys are tried first and the generic
+// invoice_number is the fallback -- on a credit note that key usually is the reference.
+const CREDITED_INVOICE_KEYS = [
+  'reference_invoice_number', 'original_invoice_number', 'credited_invoice_number',
+  'related_invoice_number', 'חשבונית מקור', 'מספר חשבונית מקורית',
+  'invoice_number', 'מספר חשבונית',
+];
+
+function lineValue(
+  values: InterpretationContract['line_items'][number]['values'],
+  candidates: readonly string[],
+): string | null {
+  for (const [key, value] of Object.entries(values)) {
+    if (!candidates.includes(key.trim().toLowerCase())) continue;
+    if (value === null || typeof value === 'boolean') continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return null;
+}
+
+export interface DeliveryNoteLine {
+  sourceRow: number | null;
+  sku: string | null;
+  barcode: string | null;
+  description: string | null;
+  quantity: number | null;
+}
+
+/**
+ * The supplied lines of a delivery note, as read. Nothing is matched or resolved here -- that
+ * needs the order, which only the person receiving the goods knows.
+ */
+export function deliveryNoteLines(payload: InterpretationContract): DeliveryNoteLine[] {
+  return payload.line_items.map((item) => ({
+    sourceRow: item.source_row,
+    sku: lineValue(item.values, SKU_KEYS),
+    barcode: lineValue(item.values, BARCODE_KEYS),
+    description: lineValue(item.values, DESCRIPTION_KEYS),
+    quantity: numericValue(lineValue(item.values, QUANTITY_LINE_KEYS)),
+  }));
+}
+
+/**
+ * Match a delivery-note line to a product already in the catalogue.
+ *
+ * Ordered by how strongly each key identifies a product: the supplier's own catalogue number is
+ * what is actually printed on their delivery note, then our sku, then barcode. Name is last and
+ * must be exact after normalising whitespace -- a fuzzy name match on a goods receipt would credit
+ * the wrong product's quantity, and a line left unmatched is visible while a wrong match is not.
+ */
+export function matchDeliveryLineProduct(
+  line: DeliveryNoteLine,
+  catalogue: {
+    productId: string;
+    supplierSku: string | null;
+    sku: string | null;
+    barcode: string | null;
+    name: string;
+  }[],
+): string | null {
+  const norm = (value: string | null) => value?.trim().toLowerCase().replace(/\s+/g, ' ') || null;
+  const sku = norm(line.sku);
+  const barcode = norm(line.barcode);
+  const description = norm(line.description);
+
+  const by = (predicate: (entry: typeof catalogue[number]) => boolean): string | null => {
+    const hits = catalogue.filter(predicate);
+    // Ambiguity is not a match: two products answering to the same code means the catalogue cannot
+    // say which one arrived, and picking either would be a guess about goods and money.
+    return hits.length === 1 ? hits[0].productId : null;
+  };
+
+  return (sku && by((entry) => norm(entry.supplierSku) === sku))
+    ?? (sku && by((entry) => norm(entry.sku) === sku))
+    ?? (barcode && by((entry) => norm(entry.barcode) === barcode))
+    ?? (description && by((entry) => norm(entry.name) === description))
+    ?? null;
+}
+
+export interface CreditDraft {
+  amount: string;
+  creditedInvoiceNumber: string;
+  notes: string;
+}
+
+/**
+ * Prefill for the existing credit-request modal. The reason is deliberately absent: `credit_reason`
+ * is an enum about why the business is owed money (missing, damaged, returned, wrong price...) and
+ * a credit note states an amount, not a cause. Guessing it would put an invented business fact on
+ * a financial record, so it stays the reviewer's choice on the same dropdown as always.
+ */
+export function creditDraftFromInterpretation(payload: InterpretationContract): CreditDraft {
+  const field = (candidates: readonly string[]): string | number | boolean | null => {
+    for (const key of candidates) {
+      const hit = payload.fields.find((item) => item.key.trim().toLowerCase() === key);
+      if (hit && hit.value !== null && hit.value !== '') return hit.value;
+    }
+    return null;
+  };
+  const amount = numericValue(field(TOTAL_KEYS) as string | number | null);
+  const credited = field(CREDITED_INVOICE_KEYS);
+  const lines = payload.line_items
+    .map((item) => {
+      const description = lineValue(item.values, DESCRIPTION_KEYS);
+      const quantity = lineValue(item.values, QUANTITY_LINE_KEYS);
+      return description && quantity ? `${description} × ${quantity}` : description;
+    })
+    .filter((entry): entry is string => !!entry);
+  return {
+    // A credit note prints its total as a positive number; the sign lives in the document type.
+    amount: amount === null ? '' : String(Math.abs(amount)),
+    creditedInvoiceNumber: typeof credited === 'string' || typeof credited === 'number'
+      ? String(credited).trim()
+      : '',
+    notes: lines.length ? `לפי המסמך: ${lines.join(', ')}` : '',
+  };
+}
+
 export function correctionKey(
   kind: 'block' | 'table_cell',
   id: string,

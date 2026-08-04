@@ -30,6 +30,8 @@ const report = {
 };
 
 const OCR_REVIEW_DOCUMENT_ID = '97000000-0000-4000-8000-000000000004';
+const OCR_DELIVERY_DOCUMENT_ID = '97000000-0000-4000-8000-000000000005';
+const OCR_CREDIT_DOCUMENT_ID = '97000000-0000-4000-8000-000000000003';
 const OCR_STAGE_FIXTURES = [
   ['97000000-0000-4000-8000-000000000001', 'טרם נשלח לעיבוד'],
   ['97000000-0000-4000-8000-000000000002', 'ממתין לעיבוד'],
@@ -1575,6 +1577,14 @@ async function documentOcrAcceptance(browser) {
     // asterisk, and a selector that has to reproduce them exactly breaks on punctuation alone.
     const draftNumber = review.locator('#invoice-new-number');
     await draftNumber.waitFor({ timeout: 10_000 });
+    // The prefill is two Supabase round-trips that settle() does not wait for, so wait on the
+    // value rather than on a fixed pause. Asserting straight after settle() passed once and failed
+    // the next run on the same code -- a race in the check, not in the page.
+    await review.waitForFunction(
+      () => document.querySelector('#invoice-new-number').value.length > 0,
+      null,
+      { timeout: 15_000 },
+    ).catch(() => { throw new Error('invoice draft never populated the invoice number field'); });
     assert.equal(await draftNumber.inputValue(), 'INV-2026-1042', 'invoice draft did not carry the interpreted invoice number');
     assert.equal(await review.locator('#invoice-new-total').inputValue(), '745.6', 'invoice draft did not carry the interpreted total');
     assert.equal(await review.locator('#invoice-new-supplier').inputValue(), 'aa000000-0000-4000-8000-000000000008', 'invoice draft did not carry the matched supplier');
@@ -1582,6 +1592,54 @@ async function documentOcrAcceptance(browser) {
     assert.match(await review.locator('#invoice-new-reason').inputValue(), /ocr-04-review\.png/, 'invoice draft did not name its source document in the reason');
     await review.screenshot({ path: path.join(outDir, 'ocr-invoice-draft-1440.png'), fullPage: true });
     report.screenshots.push('ocr-invoice-draft-1440.png');
+
+    // A delivery note drafts a goods receipt, but only as far as the document can honestly go: it
+    // names the supplier and seeds the search, and the order stays the receiver's choice. The
+    // check is that the handover carries the document and says which one, not that anything was
+    // decided for them.
+    await review.goto(`${baseURL}/documents/${OCR_DELIVERY_DOCUMENT_ID}/review`);
+    await settle(review);
+    await review.getByRole('button', { name: 'קליטת סחורה מתעודת המשלוח' }).click();
+    await review.waitForURL(/\/receiving\?document=/, { timeout: 10_000 });
+    await settle(review);
+    const receivingSearch = review.locator('#receiving-search');
+    await receivingSearch.waitFor({ timeout: 10_000 });
+    await review.waitForFunction(
+      () => document.querySelector('#receiving-search').value.length > 0,
+      null,
+      { timeout: 15_000 },
+    ).catch(() => { throw new Error('receiving draft never seeded the supplier search') });
+    // Matched, not compared: the seeded supplier name is whatever the suppliers row holds, and its
+    // gershayim differ between the seed and the interpretation payload.
+    assert.match(await receivingSearch.inputValue(), /משקאות אור/, 'receiving draft did not seed the supplier from the delivery note');
+    const receivingBody = await review.locator('#main').innerText();
+    assert.match(receivingBody, /ocr-05-completed\.png/, 'receiving draft did not name the delivery note it came from');
+    assert.match(receivingBody, /בחר את ההזמנה/, 'receiving draft did not leave the order to the receiver');
+    await review.screenshot({ path: path.join(outDir, 'ocr-receiving-draft-1440.png'), fullPage: true });
+    report.screenshots.push('ocr-receiving-draft-1440.png');
+
+    // A credit note drafts a credit request against the invoice it names. Landing on an invoice at
+    // all is the first assertion: the alternative to resolving the reference is landing on the
+    // wrong invoice, which is invisible once it happens.
+    await review.goto(`${baseURL}/documents/${OCR_CREDIT_DOCUMENT_ID}/review`);
+    await settle(review);
+    await review.getByRole('button', { name: 'פתיחת דרישת זיכוי מהמסמך' }).click();
+    await review.waitForURL(/\/invoices\/[0-9a-f-]{36}/, { timeout: 15_000 });
+    await settle(review);
+    const creditAmount = review.locator('#invoice-credit-amount');
+    await creditAmount.waitFor({ timeout: 15_000 });
+    await review.waitForFunction(
+      () => document.querySelector('#invoice-credit-amount').value.length > 0,
+      null,
+      { timeout: 15_000 },
+    ).catch(() => { throw new Error('credit draft never populated the amount') });
+    assert.equal(await creditAmount.inputValue(), '745.6', 'credit draft did not carry the interpreted amount');
+    assert.match(await review.locator('#invoice-credit-notes').inputValue(), /לפי המסמך/, 'credit draft did not quote the document lines');
+    // credit_reason says WHY money is owed and the document states an amount only, so the dropdown
+    // must still be sitting on its untouched default rather than on something inferred.
+    assert.equal(await review.locator('#invoice-credit-reason').inputValue(), 'wrong_price', 'credit draft inferred a reason the document never stated');
+    await review.screenshot({ path: path.join(outDir, 'ocr-credit-draft-1440.png'), fullPage: true });
+    report.screenshots.push('ocr-credit-draft-1440.png');
   } finally {
     await closeContext(desktop);
   }

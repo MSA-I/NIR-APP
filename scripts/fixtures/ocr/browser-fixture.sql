@@ -190,6 +190,76 @@ from public.document_interpretations i
 join public.document_extractions e on e.org_id = i.org_id and e.id = i.extraction_id
 where i.id = '97300000-0000-4000-8000-000000000004';
 
+-- The same interpretation approved as a delivery note on the other document, so the receiving
+-- draft has a document to start from. Approved directly rather than through review_document_type:
+-- this document's job is 'completed', and the RPC rightly refuses to decide outside review.
+insert into public.document_type_review_decisions (
+  org_id, interpretation_id, extraction_id, document_id, revision,
+  decision, suggested_document_type, approved_document_type,
+  input_checksum, contract_version, actor_id, reason
+)
+select
+  i.org_id, i.id, i.extraction_id, i.document_id, 1,
+  'approved', 'invoice', 'delivery_note',
+  e.input_checksum, e.contract_version, :'ocr_owner_id',
+  'תוקן בפיקסטורת הקבלה לתעודת משלוח כדי לאפשר בדיקת קליטת סחורה'
+from public.document_interpretations i
+join public.document_extractions e on e.org_id = i.org_id and e.id = i.extraction_id
+where i.id = '97300000-0000-4000-8000-000000000005';
+
+-- A third document for the credit-note draft. One document carries one decision ledger, and the
+-- other two are spoken for: 0004 is the invoice draft, 0005 the delivery note.
+insert into public.document_extractions (
+  id, org_id, job_id, document_id, engine, model, model_version,
+  input_checksum, contract_version, payload, duration_ms, resource_metadata
+)
+select
+  '97200000-0000-4000-8000-000000000003'::uuid, j.org_id, j.id, j.document_id,
+  'private-fixture', 'ocr-acceptance-hebrew', '1.0.0', j.input_checksum, j.contract_version,
+  pg_temp.ocr_extraction_payload('חשבונית זיכוי עברית'), 790,
+  jsonb_build_object('fixture', true, 'source', 'local-storage')
+from public.document_processing_jobs j where j.id = '97100000-0000-4000-8000-000000000003';
+
+insert into public.document_interpretations (
+  id, org_id, job_id, extraction_id, document_id, interpreted_for_user_id,
+  provider, model, prompt_version, schema_version, payload, usage, duration_ms
+)
+values (
+  '97300000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111',
+  '97100000-0000-4000-8000-000000000003', '97200000-0000-4000-8000-000000000003',
+  '97000000-0000-4000-8000-000000000003', :'ocr_owner_id',
+  'openai-fixture', 'gpt-local-contract-fixture', 'ocr-acceptance-v1', '1',
+  pg_temp.ocr_interpretation_payload(), jsonb_build_object('fixture', true), 288
+);
+
+insert into public.document_type_review_decisions (
+  org_id, interpretation_id, extraction_id, document_id, revision,
+  decision, suggested_document_type, approved_document_type,
+  input_checksum, contract_version, actor_id, reason
+)
+select
+  i.org_id, i.id, i.extraction_id, i.document_id, 1,
+  'approved', 'invoice', 'credit_note',
+  e.input_checksum, e.contract_version, :'ocr_owner_id',
+  'תוקן בפיקסטורת הקבלה לחשבונית זיכוי כדי לאפשר בדיקת דרישת זיכוי'
+from public.document_interpretations i
+join public.document_extractions e on e.org_id = i.org_id and e.id = i.extraction_id
+where i.id = '97300000-0000-4000-8000-000000000003';
+
+-- The invoice the credit note refers to, by the number the fixture interpretation carries. It
+-- lives here and not in the demo seed on purpose: this file is applied after the last database
+-- reset and after every SQL gate and preflight, so the row exists only for the browser run and
+-- cannot move a financial assertion. Exactly one must match -- the draft refuses to guess between
+-- two invoices sharing a number, and that refusal is asserted in the browser check.
+insert into public.invoices (
+  org_id, supplier_id, invoice_number, invoice_date, received_by,
+  amount_before_vat, vat_amount, total_amount, notes
+) values (
+  '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000008',
+  'INV-2026-1042', current_date - 7, :'ocr_owner_id',
+  632.71, 112.89, 745.60, 'חשבונית פיקסטורה לבדיקת דרישת זיכוי מסריקה'
+);
+
 insert into public.document_annotations (
   id, org_id, interpretation_id, extraction_id, document_id,
   target_kind, target_id, tag_key, label, source, confidence, evidence_mark_ids
