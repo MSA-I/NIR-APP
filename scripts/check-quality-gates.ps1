@@ -300,6 +300,15 @@ function Find-PlaywrightCore {
   if ($env:PLAYWRIGHT_CORE_PATH -and (Test-Path -LiteralPath $env:PLAYWRIGHT_CORE_PATH)) {
     return (Resolve-Path -LiteralPath $env:PLAYWRIGHT_CORE_PATH).Path
   }
+  # The project's own devDependency, and the reason this gate no longer depends on a cache outside
+  # the repository. On 2026-08-04 the machine ran out of disk, the OS reclaimed
+  # ~/.cache/codex-runtimes, and the browser gate stopped being able to run at all -- through no
+  # change to this repository. `playwright-core` (unlike `playwright`) downloads no browsers on
+  # install; the gate launches the system Chrome or Edge that Find-BrowserExecutable locates.
+  $projectCore = Join-Path $repoRoot "node_modules\playwright-core"
+  if (Test-Path -LiteralPath $projectCore) { return $projectCore }
+
+  # Kept as a fallback so a checkout whose dependencies are not installed still finds a runtime.
   $nodeModulesRoot = Join-Path $userProfilePath ".cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules"
   $direct = Join-Path $nodeModulesRoot "playwright-core"
   if (Test-Path -LiteralPath $direct) { return $direct }
