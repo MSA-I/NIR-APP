@@ -13,6 +13,7 @@ import {
   MARK_KIND_LABELS,
   actorName,
   confidenceLabel,
+  creditDraftFromInterpretation,
   fieldKeyLabel,
   latestCorrections,
   latestFeedbackByAnnotation,
@@ -54,7 +55,6 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
   onRefetch: () => Promise<boolean>;
 }) {
   const toast = useToast();
-  const navigate = useNavigate();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState<'approved' | 'rejected' | null>(null);
   // Starts on the model's suggestion, so approving without touching it means what it always meant.
@@ -203,22 +203,94 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
         </Note>
       )}
 
-      {/* The draft is the ordinary invoice form, prefilled -- not a second way to create an
-          invoice. It keeps the duplicate checks, the mandatory reason and create_invoice's audited
-          transaction, so nothing the model read becomes a financial record without a person
-          confirming it in the same screen they would have typed it into by hand. */}
-      {canDecide && latest?.decision === 'approved' && latest.approved_document_type === 'invoice' && (
-        <div className="mt-4 border-t border-line pt-4">
-          <p className="text-sm text-ink-soft">המסמך מסווג כחשבונית. אפשר לפתוח ממנו טיוטת חשבונית עם הערכים שזוהו, לבדוק ולאשר.</p>
-          <button
-            type="button"
-            className="btn-primary mt-3"
-            onClick={() => navigate(`/invoices/new?document=${currentInterpretation.document_id}`)}
-          >
-            <FilePlus2 size={17} aria-hidden="true" /> יצירת טיוטת חשבונית מהמסמך
-          </button>
-        </div>
+      {/* Every draft below opens an existing screen, prefilled -- never a second way to create the
+          record. Each keeps that screen's checks, its mandatory reason and its audited RPC, so
+          nothing the model read becomes a business record without a person confirming it where
+          they would have typed it by hand. What the document cannot say -- which order a delivery
+          note belongs to, why a credit is owed -- stays a field they fill, not a value we invent. */}
+      {canDecide && latest?.decision === 'approved' && (
+        <DocumentDraftAction
+          documentType={latest.approved_document_type}
+          documentId={currentInterpretation.document_id}
+          interpretation={currentInterpretation}
+        />
       )}
+    </div>
+  );
+}
+
+const DRAFT_ACTIONS: Partial<Record<
+  InterpretationContract['document_type'],
+  { blurb: string; label: string }
+>> = {
+  invoice: {
+    blurb: 'המסמך מסווג כחשבונית. אפשר לפתוח ממנו טיוטת חשבונית עם הערכים שזוהו, לבדוק ולאשר.',
+    label: 'יצירת טיוטת חשבונית מהמסמך',
+  },
+  delivery_note: {
+    blurb: 'המסמך מסווג כתעודת משלוח. אפשר לקלוט ממנו סחורה — הכמויות ימולאו מהתעודה, ואת ההזמנה בוחרים ידנית.',
+    label: 'קליטת סחורה מתעודת המשלוח',
+  },
+  credit_note: {
+    blurb: 'המסמך מסווג כחשבונית זיכוי. אפשר לפתוח ממנו דרישת זיכוי על החשבונית המקורית, עם הסכום שזוהה.',
+    label: 'פתיחת דרישת זיכוי מהמסמך',
+  },
+};
+
+function DocumentDraftAction({ documentType, documentId, interpretation }: {
+  documentType: InterpretationContract['document_type'] | null;
+  documentId: string;
+  interpretation: NonNullable<ReviewSnapshot['interpretation']>;
+}) {
+  const navigate = useNavigate();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const action = documentType ? DRAFT_ACTIONS[documentType] : undefined;
+  if (!documentType || !action) return null;
+
+  // A credit note names the invoice it credits, but only the database can say whether we hold that
+  // invoice. Resolving it here means the reviewer either lands on the right invoice or is told
+  // plainly that it was not found -- never silently on the wrong one.
+  async function openCreditDraft() {
+    const draft = creditDraftFromInterpretation(interpretation.payload);
+    const supplierId = interpretation.suggested_supplier_id;
+    if (!draft.creditedInvoiceNumber || !supplierId) {
+      toast('לא זוהתה במסמך החשבונית שאותה מזכים. בחר אותה מהרשימה ופתח ממנה דרישת זיכוי.', 'error');
+      navigate('/invoices');
+      return;
+    }
+    setBusy(true);
+    const found = await supabase.from('invoices').select('id')
+      .eq('supplier_id', supplierId).eq('invoice_number', draft.creditedInvoiceNumber)
+      .is('deleted_at', null).limit(2);
+    setBusy(false);
+    if (found.error) { toast(toHebrewError(found.error.message), 'error'); return; }
+    const rows = (found.data ?? []) as { id: string }[];
+    if (rows.length !== 1) {
+      toast(rows.length === 0
+        ? `לא נמצאה חשבונית ${draft.creditedInvoiceNumber} לספק הזה. בחר אותה מהרשימה.`
+        : `נמצאה יותר מחשבונית אחת במספר ${draft.creditedInvoiceNumber}. בחר את הנכונה מהרשימה.`, 'error');
+      navigate('/invoices');
+      return;
+    }
+    navigate(`/invoices/${rows[0].id}?credit=${documentId}`);
+  }
+
+  return (
+    <div className="mt-4 border-t border-line pt-4">
+      <p className="text-sm text-ink-soft">{action.blurb}</p>
+      <button
+        type="button"
+        className="btn-primary mt-3"
+        disabled={busy}
+        onClick={() => {
+          if (documentType === 'invoice') navigate(`/invoices/new?document=${documentId}`);
+          else if (documentType === 'delivery_note') navigate(`/receiving?document=${documentId}`);
+          else void openCreditDraft();
+        }}
+      >
+        {busy ? <Loader2 className="animate-spin" size={17} aria-hidden="true" /> : <FilePlus2 size={17} aria-hidden="true" />} {action.label}
+      </button>
     </div>
   );
 }

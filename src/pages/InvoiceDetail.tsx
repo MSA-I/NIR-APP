@@ -11,6 +11,8 @@ import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS, CREDIT_REASON } from '../lib/status';
 import { fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
+import { creditDraftFromInterpretation, type CreditDraft } from '../components/document-review/model';
+import type { InterpretationContract } from '../lib/useDocumentProcessing';
 import type { Invoice, InvoiceReviewStatus, CreditReason } from '../lib/types';
 
 type FullInvoice = Invoice & {
@@ -65,6 +67,30 @@ export default function InvoiceDetail() {
     const next = new URLSearchParams(params);
     next.delete('print');
     setParams(next, { replace: true });
+  }, [params, inv, setParams]);
+
+  // ?credit=<documentId> (review screen, "פתיחת דרישת זיכוי מהמסמך"): open the ordinary credit
+  // modal prefilled from the scanned credit note. Same one-shot pattern as ?print above -- the
+  // param is stripped once consumed so a refresh does not reopen it over a credit already made.
+  const [creditDraft, setCreditDraft] = useState<CreditDraft | null>(null);
+  const creditDocumentRef = useRef<string | null>(null);
+  useEffect(() => {
+    const documentId = params.get('credit');
+    if (!documentId || !inv || creditDocumentRef.current === documentId) return;
+    creditDocumentRef.current = documentId;
+    void (async () => {
+      const res = await supabase.from('document_interpretations').select('payload')
+        .eq('document_id', documentId).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      // A missing interpretation is not a reason to refuse: the modal still opens, empty, and the
+      // reviewer types what the paper says.
+      setCreditDraft(res.error || !res.data
+        ? { amount: '', creditedInvoiceNumber: '', notes: '' }
+        : creditDraftFromInterpretation((res.data as { payload: InterpretationContract }).payload));
+      setCreditOpen(true);
+      const next = new URLSearchParams(params);
+      next.delete('credit');
+      setParams(next, { replace: true });
+    })();
   }, [params, inv, setParams]);
 
   useEffect(() => {
@@ -224,19 +250,28 @@ export default function InvoiceDetail() {
       </div>
 
       {creditOpen && (
-        <CreditFromInvoice invoice={inv} onClose={() => setCreditOpen(false)}
-          onSaved={() => { setCreditOpen(false); toast('דרישת הזיכוי נפתחה'); void refetch(); }} />
+        <CreditFromInvoice invoice={inv} draft={creditDraft}
+          onClose={() => { setCreditOpen(false); setCreditDraft(null); }}
+          onSaved={() => { setCreditOpen(false); setCreditDraft(null); toast('דרישת הזיכוי נפתחה'); void refetch(); }} />
       )}
     </div>
   );
 }
 
-function CreditFromInvoice({ invoice, onClose, onSaved }: { invoice: FullInvoice; onClose: () => void; onSaved: () => void }) {
+function CreditFromInvoice({ invoice, draft, onClose, onSaved }: {
+  invoice: FullInvoice;
+  /** Prefill from a scanned credit note; absent when the modal was opened by hand. */
+  draft?: CreditDraft | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const toast = useToast();
   const [creditRequestId] = useState(() => crypto.randomUUID());
+  // The reason is never prefilled. `credit_reason` says why the business is owed money -- missing,
+  // damaged, returned, wrong price -- and a credit note states an amount, not a cause.
   const [reason, setReason] = useState<CreditReason>('wrong_price');
-  const [amount, setAmount] = useState('');
-  const [notes, setNotes] = useState('');
+  const [amount, setAmount] = useState(draft?.amount ?? '');
+  const [notes, setNotes] = useState(draft?.notes ?? '');
   const [busy, setBusy] = useState(false);
 
   async function save() {

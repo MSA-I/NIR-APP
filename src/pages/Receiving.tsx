@@ -1,19 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Plus, Minus, PackageCheck, Save, CheckCircle2, FileText, Camera, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { PageLoader, useToast, StatusBadge, EmptyState, ErrorNote, SkeletonList } from '../components/ui';
+import { PageLoader, useToast, StatusBadge, EmptyState, ErrorNote, SkeletonList, Note } from '../components/ui';
 import { DocumentList } from '../components/FileUpload';
+import { deliveryNoteLines, matchDeliveryLineProduct } from '../components/document-review/model';
 import { PO_STATUS, RECEIPT_LINE_STATUS, type Tone } from '../lib/status';
 import { fmtDate, todayISO } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
+import type { InterpretationContract } from '../lib/useDocumentProcessing';
 import type { PurchaseOrder, PurchaseOrderItem, ReceiptLineStatus } from '../lib/types';
 
 type OrderForReceiving = PurchaseOrder & {
   supplier: { id: string; name: string };
-  items: (PurchaseOrderItem & { product: { name: string; unit: string } })[];
+  items: (PurchaseOrderItem & {
+    product: { id: string; name: string; unit: string; sku: string | null; barcode: string | null };
+  })[];
 };
+
+/** What a scanned delivery note contributes to one order's receipt lines. */
+interface DeliveredMatch {
+  matchedQty: Map<string, number>;
+  /** Named, not counted: a line nobody can place must be visible, not a silent zero. */
+  unmatched: string[];
+  supplierMismatch: boolean;
+}
 
 function needsReceivingAttention(order: OrderForReceiving, today: string): boolean {
   return order.status === 'partial' || (!!order.expected_date && order.expected_date <= today);
@@ -52,6 +64,8 @@ function ReceivingOrderCard({ order, today, onOpen }: {
 /* ============ List of orders awaiting receiving — mobile-first cards ============ */
 export function ReceivingList() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const documentId = params.get('document');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const { data, loading, error } = useQuery(async () =>
@@ -60,8 +74,38 @@ export function ReceivingList() {
       .in('status', ['sent', 'confirmed', 'partial'])
       .order('expected_date', { ascending: true })) as Promise<OrderForReceiving[]>);
 
+  // Receiving from a delivery note: the document names the supplier, never the order. Seeding the
+  // search with the supplier narrows the list to plausible orders; choosing among them stays the
+  // job of whoever is standing at the delivery, because only they can see what actually arrived.
+  // Asked as plain lookups rather than PostgREST embeds: suggested_supplier_id is a generated
+  // column and both relationships here hang off composite tenant foreign keys, which is exactly
+  // where embed resolution turns into a 400 nobody sees until it is live.
+  const { data: source } = useQuery(async () => {
+    if (!documentId) return null;
+    const [interpretation, document] = await Promise.all([
+      supabase.from('document_interpretations').select('suggested_supplier_id')
+        .eq('document_id', documentId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('documents').select('file_name').eq('id', documentId).maybeSingle(),
+    ]);
+    if (interpretation.error || !interpretation.data) return null;
+    const supplierId = (interpretation.data as { suggested_supplier_id: string | null }).suggested_supplier_id;
+    const supplier = supplierId
+      ? await supabase.from('suppliers').select('name').eq('id', supplierId).maybeSingle()
+      : null;
+    return {
+      supplierName: (supplier?.data as { name: string } | null | undefined)?.name ?? null,
+      fileName: (document.data as { file_name: string } | null)?.file_name ?? null,
+    };
+  }, [documentId]);
+
+  const supplierName = source?.supplierName ?? undefined;
+  useEffect(() => { if (supplierName) setSearch(supplierName); }, [supplierName]);
+
   if (loading) return <SkeletonList />;
   if (error) return <ErrorNote message={error} />;
+
+  const openOrder = (orderId: string) =>
+    navigate(`/receiving/${orderId}${documentId ? `?document=${documentId}` : ''}`);
 
   const today = todayISO();
   const query = search.trim().toLowerCase();
@@ -77,6 +121,14 @@ export function ReceivingList() {
   return (
     <div className="space-y-4 max-w-2xl">
       <h1 className="page-title">קבלת סחורה</h1>
+      {documentId && (
+        <Note tone={source ? 'await' : 'alert'}>
+          {source
+            ? <>קליטה מתעודת המשלוח {source.fileName ? <strong>{source.fileName}</strong> : 'שנסרקה'}
+                {supplierName ? <> של <strong>{supplierName}</strong></> : null}. בחר את ההזמנה שאליה הסחורה הגיעה — הכמויות ימולאו מהתעודה.</>
+            : 'לא נמצא פירוש לתעודת המשלוח שביקשת לקלוט. אפשר להמשיך ולבחור הזמנה, אך הכמויות לא ימולאו מראש.'}
+        </Note>
+      )}
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <div>
           <label className="sr-only" htmlFor="receiving-search">חיפוש הזמנה לקבלה</label>
@@ -102,7 +154,7 @@ export function ReceivingList() {
         // section, not div: aria-label on a roleless div is dropped by screen readers, so this list
         // of results arrived unnamed. Matches the labelled section in the focused-queue branch below.
         <section className="space-y-3" aria-label="תוצאות קבלת סחורה">
-          {filtered.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} onOpen={() => navigate(`/receiving/${order.id}`)} />)}
+          {filtered.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} onOpen={() => openOrder(order.id)} />)}
         </section>
       ) : (
         <>
@@ -112,7 +164,7 @@ export function ReceivingList() {
               <span className="badge-await num">{attention.length}</span>
             </div>
             {attention.length
-              ? attention.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} onOpen={() => navigate(`/receiving/${order.id}`)} />)
+              ? attention.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} onOpen={() => openOrder(order.id)} />)
               : <div className="card card-pad text-sm text-ink-soft">אין קבלות שדורשות פעולה כרגע.</div>}
           </section>
 
@@ -124,12 +176,12 @@ export function ReceivingList() {
                   <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
                 </summary>
                 <div className="space-y-3 pt-2">
-                  {remaining.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} onOpen={() => navigate(`/receiving/${order.id}`)} />)}
+                  {remaining.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} onOpen={() => openOrder(order.id)} />)}
                 </div>
               </details>
               <section className="hidden space-y-3 sm:block" aria-labelledby="receiving-other-title">
                 <h2 id="receiving-other-title" className="section-title">הזמנות נוספות</h2>
-                {remaining.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} onOpen={() => navigate(`/receiving/${order.id}`)} />)}
+                {remaining.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} onOpen={() => openOrder(order.id)} />)}
               </section>
             </>
           )}
@@ -144,6 +196,8 @@ interface LineState { qty: number; status: ReceiptLineStatus; notes: string }
 
 export function ReceiveOrder() {
   const { orderId } = useParams<{ orderId: string }>();
+  const [params] = useSearchParams();
+  const documentId = params.get('document');
   const navigate = useNavigate();
   const toast = useToast();
   const [lines, setLines] = useState<Record<string, LineState>>({});
@@ -155,24 +209,76 @@ export function ReceiveOrder() {
 
   const { data, loading, error } = useQuery(async () => {
     const order = unwrap(await supabase.from('purchase_orders')
-      .select('*, supplier:suppliers(id, name), items:purchase_order_items(*, product:products(name, unit))')
+      .select('*, supplier:suppliers(id, name), items:purchase_order_items(*, product:products(id, name, unit, sku, barcode))')
       .eq('id', orderId!).single()) as OrderForReceiving;
     const draft = unwrap(await supabase.from('goods_receipts')
       .select('*, items:goods_receipt_items(*)').eq('order_id', orderId!).eq('status', 'draft').maybeSingle()) as
       ({ id: string; items: { order_item_id: string; qty_received: number; status: ReceiptLineStatus; notes: string | null }[] } | null);
-    return { order, draft };
-  }, [orderId]);
 
-  // hydrate line state from draft or defaults (remaining quantity, full)
+    // Delivery-note quantities, matched against this supplier's catalogue. Loaded with the order so
+    // the two arrive together and the prefill never flashes the defaults first.
+    let delivered: DeliveredMatch | null = null;
+    if (documentId) {
+      const [interpretation, catalogue] = await Promise.all([
+        supabase.from('document_interpretations').select('payload, suggested_supplier_id')
+          .eq('document_id', documentId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('supplier_products').select('product_id, supplier_sku')
+          .eq('supplier_id', order.supplier.id),
+      ]);
+      if (!interpretation.error && interpretation.data) {
+        const payload = (interpretation.data as { payload: InterpretationContract }).payload;
+        const supplierSkus = new Map(
+          ((catalogue.data ?? []) as { product_id: string; supplier_sku: string | null }[])
+            .map((row) => [row.product_id, row.supplier_sku]),
+        );
+        const entries = order.items.map((item) => ({
+          productId: item.product_id,
+          supplierSku: supplierSkus.get(item.product_id) ?? null,
+          sku: item.product.sku,
+          barcode: item.product.barcode,
+          name: item.product.name,
+        }));
+        const matchedQty = new Map<string, number>();
+        const unmatched: string[] = [];
+        for (const line of deliveryNoteLines(payload)) {
+          const productId = matchDeliveryLineProduct(line, entries);
+          if (productId && line.quantity !== null) {
+            matchedQty.set(productId, (matchedQty.get(productId) ?? 0) + line.quantity);
+          } else {
+            unmatched.push(line.description || line.sku || `שורה ${line.sourceRow ?? '—'}`);
+          }
+        }
+        delivered = {
+          matchedQty,
+          unmatched,
+          supplierMismatch: (interpretation.data as { suggested_supplier_id: string | null })
+            .suggested_supplier_id !== null
+            && (interpretation.data as { suggested_supplier_id: string | null }).suggested_supplier_id !== order.supplier.id,
+        };
+      }
+    }
+    return { order, draft, delivered };
+  }, [orderId, documentId]);
+
+  // hydrate line state from an existing draft, then the delivery note, then the remaining quantity.
+  // A saved draft wins: it is a person's own earlier work on this receipt and outranks the scan.
   useEffect(() => {
     if (!data) return;
     const init: Record<string, LineState> = {};
     for (const item of data.order.items) {
       const draftLine = data.draft?.items.find((d) => d.order_item_id === item.id);
       const remaining = Math.max(0, item.qty - item.received_qty);
-      init[item.id] = draftLine
-        ? { qty: draftLine.qty_received, status: draftLine.status, notes: draftLine.notes ?? '' }
-        : { qty: remaining, status: 'full', notes: '' };
+      if (draftLine) {
+        init[item.id] = { qty: draftLine.qty_received, status: draftLine.status, notes: draftLine.notes ?? '' };
+        continue;
+      }
+      const delivered = data.delivered?.matchedQty.get(item.product_id);
+      const qty = delivered ?? remaining;
+      init[item.id] = {
+        qty,
+        status: delivered === undefined ? 'full' : qty === 0 ? 'missing' : qty < remaining ? 'partial' : 'full',
+        notes: '',
+      };
     }
     setLines(init);
   }, [data]);
@@ -281,6 +387,30 @@ export function ReceiveOrder() {
         <div className="text-sm text-ink-muted mt-1">{order.supplier.name} · <span className="num">הזמנה #{order.number}</span></div>
         {data?.draft && <div className="mt-1 text-xs text-await-fg">נטענה טיוטת קבלה שנשמרה קודם</div>}
       </div>
+
+      {/* What the delivery note could and could not place. An unmatched line is named rather than
+          counted: a product the catalogue cannot identify still arrived, and leaving it as a silent
+          zero would read as "nothing came" instead of "nobody knows what this is". */}
+      {data?.delivered && (
+        <Note tone={data.delivered.supplierMismatch ? 'alert' : data.delivered.unmatched.length ? 'await' : 'info'}>
+          <div className="space-y-1">
+            {data.delivered.supplierMismatch && (
+              <div className="font-medium">שים לב: תעודת המשלוח שויכה לספק אחר מספק ההזמנה. בדוק שזו ההזמנה הנכונה.</div>
+            )}
+            {data?.draft
+              ? <div>נטענה טיוטה שנשמרה קודם, ולכן הכמויות שבה גוברות על תעודת המשלוח.</div>
+              : <div>
+                  הכמויות מולאו מתעודת המשלוח עבור <span className="num">{data.delivered.matchedQty.size}</span> פריטים.
+                  שאר השורות נשארו בכמות שהוזמנה. בדוק מול הסחורה שהגיעה בפועל לפני שמירה.
+                </div>}
+            {data.delivered.unmatched.length > 0 && (
+              <div>
+                שורות בתעודה שלא זוהו במחירון הספק ולכן לא מולאו: {data.delivered.unmatched.join(', ')}.
+              </div>
+            )}
+          </div>
+        </Note>
+      )}
 
       {order.items.map((item) => {
         const line = lines[item.id];
