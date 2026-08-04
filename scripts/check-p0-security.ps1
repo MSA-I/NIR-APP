@@ -21,6 +21,7 @@ Add-Type -AssemblyName System.Net.Http
 
 $apiUrl = "http://127.0.0.1:55431"
 $expectedProjectId = "supplyflow-p0"
+$kongContainer = "supabase_kong_supplyflow-p0"
 $script:Passed = 0
 $script:HttpClient = [System.Net.Http.HttpClient]::new()
 
@@ -37,6 +38,27 @@ if ($config -notmatch "(?m)^project_id\s*=\s*`"$([regex]::Escape($expectedProjec
 function Reset-TestDatabase {
   & supabase db reset
   if ($LASTEXITCODE -ne 0) { throw "supabase db reset failed." }
+
+  # `supabase db reset` restarts the auth container, which comes back on a NEW address on the
+  # Docker network. Kong caches the resolved upstream, so every request to /auth/v1/* keeps
+  # returning 502 -- indefinitely, not transiently. Measured 2026-08-04: 90 seconds of polling
+  # stayed at auth=502 while `docker inspect` reported the auth container running AND healthy,
+  # and `wget http://supabase_auth_supplyflow-p0:9999/health` from inside the Kong container
+  # returned 200 with GoTrue v2.193.1. Restarting Kong alone recovered it in about five seconds.
+  # This is the same class of staleness that check-quality-gates.ps1 already handles for
+  # PostgREST's connection pool (Restart-LocalPostgrest); the auth path was never covered.
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    & docker restart $kongContainer | Out-Null
+    $restartExit = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  if ($restartExit -ne 0) {
+    throw "Unable to restart the isolated Kong gateway after database reset; /auth/v1 would stay 502."
+  }
 }
 
 function Get-LocalSupabaseEnvironment {
@@ -265,10 +287,17 @@ function Invoke-Rest {
 }
 
 function Wait-LocalApiReady([string]$ServiceKey) {
+  # Bounded by wall-clock, not by attempt count -- the same correction already made to
+  # Wait-LocalApiReady in check-quality-gates.ps1. A refused connection and a Kong 502 both fail
+  # instantly, so an "80 attempts x 250ms" budget was spent in about twenty seconds, which is less
+  # than GoTrue needs after a full `db reset` and container restart. That produced the recurring
+  # "Auth=502, PostgREST=200" failure: Kong was already forwarding while GoTrue was still starting,
+  # so the run looked like a product failure and was only ever a stopwatch that ran out too early.
   $headers = @{ apikey = $ServiceKey; Authorization = "Bearer $ServiceKey" }
   $authStatus = 0
   $restStatus = 0
-  for ($attempt = 0; $attempt -lt 80; $attempt++) {
+  $deadline = (Get-Date).AddSeconds(180)
+  do {
     try {
       $authStatus = (Invoke-JsonRequest -Method Get -Uri "$apiUrl/auth/v1/health" -Headers $headers).Status
     } catch { $authStatus = -1 }
@@ -277,8 +306,8 @@ function Wait-LocalApiReady([string]$ServiceKey) {
         -ApiKey $ServiceKey -Token $ServiceKey).Status
     } catch { $restStatus = -1 }
     if ($authStatus -eq 200 -and $restStatus -eq 200) { return }
-    Start-Sleep -Milliseconds 250
-  }
+    Start-Sleep -Milliseconds 500
+  } while ((Get-Date) -lt $deadline)
   throw "Local API readiness failed after reset (Auth=$authStatus, PostgREST=$restStatus)."
 }
 

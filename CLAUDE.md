@@ -38,10 +38,15 @@
 
 ## סטאק ופקודות
 
-Vite 6 · React 19 · React Router 7 · TypeScript strict · Supabase · **Tailwind v4 CSS-first** · recharts · lucide-react
+Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **Tailwind v4 CSS-first** · recharts · lucide-react
 
 - `npm run dev` — פורט **5199**
-- `npm run build` = `tsc --noEmit && vite build` — **השער האוטומטי היחיד.** אין linter, אין טסטים.
+- `npm run build` = `tsc --noEmit` + ששת סקריפטי ה-`check:*` + `vite build` — **השער האוטומטי היחיד.**
+  ‏`check:review` מריץ `node --test` על `src/components/document-review/model.test.ts` (16 בדיקות).
+  **אין ESLint ואין Prettier** בריפו, למרות הערות `eslint-disable` שנשארו ב-`src/lib/useQuery.ts`.
+- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ 13
+  סוויטות SQL, ‏`npm audit --audit-level=high`, חוזי Deno, ו-22 תרחישי דפדפן / 266 טענות P0.
+  **ריצה אחת בכל רגע במכונה.** **אין CI** — `.github/` אינו קיים; זו ריצה ידנית.
 - מיגרציות: `scripts/db-query.ps1` (Windows) / `scripts/db-query.sh` (Linux/Mac)
 
 **Tailwind v4: אין `tailwind.config.js`.** טוקנים ב-`@theme` בתוך `src/index.css`. מחלקות מותאמות יכולות `@apply` רק utilities אמיתיים — לכן `btn`/`badge` רשומים כ-`@utility`.

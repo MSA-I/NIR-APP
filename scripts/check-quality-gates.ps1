@@ -12,6 +12,7 @@ $expectedProjectId = "supplyflow-p0"
 $expectedApiUrl = "http://127.0.0.1:55431"
 $dbContainer = "supabase_db_supplyflow-p0"
 $restContainer = "supabase_rest_supplyflow-p0"
+$kongContainer = "supabase_kong_supplyflow-p0"
 $previewPort = $null
 $previewProcess = $null
 $previewStdout = $null
@@ -141,6 +142,36 @@ function Get-LocalSupabaseEnvironment([int]$TimeoutSeconds = 0) {
 }
 
 function Wait-LocalApiReady([hashtable]$Environment) {
+  # The database container itself, before anything is asked of the API. On 2026-08-04 it sat in
+  # Docker's "Created" state -- built and never started -- while PostgREST stayed up answering
+  # PGRST002 "Could not query the database for the schema cache", and Kong turned that into 502s
+  # that surfaced only as a stray console error deep inside the browser run. Measured either way:
+  # with the container down every request fails, and with it healthy the same concurrent burst of
+  # alert RPCs returned 360/360 OK. A dead database should stop the gate here, by name, not show
+  # up later as one unexplained 502.
+  # `docker inspect` on a container that does not exist yet -- the normal state in the seconds
+  # between `supabase stop` and `supabase start` finishing -- writes "no such object" to stderr.
+  # Under this script's `$ErrorActionPreference = "Stop"`, PowerShell 5.1 turns a native command's
+  # stderr into a terminating NativeCommandError even with `2>$null`, so the wait aborted instead
+  # of waiting. Same fix already used for `npm audit` in Invoke-DependencyAudit: drop to Continue
+  # around the native call only, and decide on $LASTEXITCODE.
+  $deadline = (Get-Date).AddSeconds(180)
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    do {
+      $state = (& docker inspect $dbContainer --format "{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}" 2>$null)
+      if ($LASTEXITCODE -eq 0 -and $state -match '^running/(healthy|none)$') { break }
+      if ((Get-Date) -ge $deadline) {
+        Stop-WithInfrastructureBlock "local_database_not_running" "The local database container is '$state', not running and healthy. PostgREST cannot serve against it and every request would fail as 502/503."
+      }
+      Start-Sleep -Milliseconds 500
+    } while ($true)
+  }
+  finally {
+    $ErrorActionPreference = $previousPreference
+  }
+
   $headers = @{
     apikey = [string]$Environment.SERVICE_ROLE_KEY
     Authorization = "Bearer $($Environment.SERVICE_ROLE_KEY)"
@@ -192,6 +223,28 @@ function Restart-LocalPostgrest {
   }
 }
 
+function Restart-LocalKong {
+  # `supabase db reset` also restarts the auth container, which comes back on a NEW address on
+  # the Docker network. Kong caches the resolved upstream, so /auth/v1/* keeps answering 502 --
+  # indefinitely, not transiently. Measured 2026-08-04: 90 seconds of polling stayed at auth=502
+  # while `docker inspect` reported the auth container running AND healthy, and a wget to
+  # http://supabase_auth_supplyflow-p0:9999/health from inside the Kong container returned 200
+  # with GoTrue v2.193.1. Restarting Kong alone recovered it in about five seconds. Same class of
+  # staleness as the PostgREST pool above, on the path that was never covered.
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    & docker restart $kongContainer | Out-Null
+    $restartExit = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  if ($restartExit -ne 0) {
+    Stop-WithInfrastructureBlock "local_kong_restart_failed" "Unable to restart the isolated Kong gateway after database reset; /auth/v1 would stay 502."
+  }
+}
+
 function Reset-LocalDatabase {
   & supabase db reset
   Assert-ExitCode "Local Supabase reset"
@@ -199,6 +252,7 @@ function Reset-LocalDatabase {
   # isolated REST process so its ten-connection pool cannot retain sessions from the old
   # database; a single sequential readiness request is not enough to exercise that pool.
   Restart-LocalPostgrest
+  Restart-LocalKong
   $script:localEnvironment = Wait-LocalStackReady
 }
 

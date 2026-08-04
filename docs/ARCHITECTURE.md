@@ -112,7 +112,12 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
   מפורש. שבע טבלאות ילד/קישור שלא נשאו דייר קיבלו `org_id`; ‏`audit_logs.user_id` הוא החריג
   המתועד, מפני שפעולת platform יכולה להירשם בדייר שהמפעיל אינו חבר בו.
 - טיוטת `purchase_requests` ופריטיה פרטיות ל־`created_by` גם לקריאה בתוך אותו דייר. יתרות
-  ומדדי ספק נשארים views מחושבים, `security_invoker`, וכל join/aggregate שלהם כולל `org_id`.
+  ומדדי ספק נשארים **מחושבים ולא מאוחסנים**, וכל join/aggregate שלהם כולל `org_id`.
+  **עדכון `0022`:** ‏`invoice_balances`/`supplier_balances` **אינם views יותר** — הם נמחקו
+  (`0022:394-395`) והוחלפו בפונקציות `SECURITY DEFINER` מחזירות־קבוצה `p0_invoice_balance_rows()`
+  (`0022:397`) ו־`p0_supplier_balance_rows()` (`0022:440`), מעודנות ב־`0031:233,277`. המסלול עבר
+  ‏`security_invoker` view (`0001`) → definer view לקריאת מטבח (`0003`) → הגנת תפקיד (`0008`) →
+  פונקציות definer (`0022`). העיקרון "יתרה מחושבת, לעולם לא מאוחסנת" לא השתנה; המנגנון כן.
 - `audit_logs` הוא server-authored: אין INSERT/UPDATE/DELETE ל־JWT, ה־triggers גוזרים actor,
   tenant ו־old/new מן המוטציה האמיתית, וסיבת פעולת P0 רגישה נכתבת בתוך פקודת ה־RPC שלה.
 - אין DELETE קשיח דרך JWT לרשומות פיננסיות. ב־Storage קריאה ניתנת רק כאשר קיימת שורת
@@ -151,7 +156,7 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 ## מודל נתונים — עקרונות
 
 - **אין payment_id על חשבונית.** `payment_allocations` (תשלום↔חשבונית/זיכוי, N:M) ו-`bank_allocations` (תנועת בנק↔חשבונית/תשלום, N:M) — תומך בחשבונית המשולמת בכמה תשלומים, תשלום המכסה כמה חשבוניות, תשלומים חלקיים, קיזוזי זיכוי, והעברה בסכום שונה מהחשבונית.
-- **יתרות מחושבות, לא מאוחסנות:** `invoice_balances` = סה״כ − הקצאות תשלום − זיכויים (offset/closed); `supplier_balances` נגזר ממנו. `invoices.payment_status` מרוענן ע״י RPC בטוח (`refresh_invoice_payment_status`).
+- **יתרות מחושבות, לא מאוחסנות:** יתרת חשבונית = סה״כ − הקצאות תשלום − זיכויים (offset/closed); יתרת ספק נגזרת ממנה. `invoices.payment_status` מרוענן ע״י RPC בטוח (`refresh_invoice_payment_status`). **המשטח הוא פונקציות ולא views** — `p0_invoice_balance_rows()` ו־`p0_supplier_balance_rows()` (`0022:397,440`); ראה חוזה אבטחת P0 לעיל.
 - **snapshot מחירים:** `purchase_order_items.unit_price` נקבע ברגע ההזמנה; `price_history` שומר כל שינוי.
 - **הגשת מחירון היא ledger immutable:** ‏`supplier_price_submissions` שומר חודש, revision,
   checksum, נתיב קובץ, סטטוס ומוני נקלט/נדחה/ללא־שינוי. תיקון אינו דורס קבלה קודמת, ומוצר
