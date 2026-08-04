@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
 import { Download, FileCheck2, Pencil, Tags, Upload } from 'lucide-react';
 import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
+import { PriceListUploadModal } from '../components/PriceListUpload';
 import { cellText, matchColumn, nameKey, readSheet } from '../lib/importSheet';
 import { fmtDate, todayISO } from '../lib/format';
 import { PRODUCT_AVAILABILITY } from '../lib/status';
@@ -65,96 +65,6 @@ const SUBMISSION_STATUS = {
 const monthLabel = (value: string) => new Intl.DateTimeFormat('he-IL', {
   month: 'long', year: 'numeric', timeZone: 'UTC',
 }).format(new Date(`${value.slice(0, 7)}-01T00:00:00Z`));
-
-const PRICE_DOCUMENT_ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.gif,.avif,.doc,.docx,.rtf,.txt,.html,.htm,.odt';
-const PRICE_DOCUMENT_MIME: Record<string, string> = {
-  pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
-  heic: 'image/heic', heif: 'image/heif', gif: 'image/gif', avif: 'image/avif', doc: 'application/msword',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', rtf: 'application/rtf',
-  txt: 'text/plain', html: 'text/html', htm: 'text/html', odt: 'application/vnd.oasis.opendocument.text',
-};
-
-class PriceDocumentError extends Error {}
-
-type PriceDocumentReservation = { document_id: string; storage_path: string; expires_at: string };
-type PriceDocumentRegistration = { document_id: string; job_id: string; storage_path: string; idempotent: boolean };
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function priceDocumentMime(file: File) {
-  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
-  return PRICE_DOCUMENT_MIME[extension] ?? null;
-}
-
-function exactKeys(value: Record<string, unknown>, keys: string[]) {
-  return Object.keys(value).sort().join('|') === [...keys].sort().join('|');
-}
-
-function parseReservation(value: unknown, orgId: string, supplierId: string): PriceDocumentReservation {
-  if (!value || typeof value !== 'object') throw new PriceDocumentError('השרת החזיר הקצאת העלאה לא תקינה.');
-  const row = value as Record<string, unknown>;
-  if (!exactKeys(row, ['document_id', 'storage_path', 'expires_at'])
-      || typeof row.document_id !== 'string' || !UUID_PATTERN.test(row.document_id)
-      || typeof row.storage_path !== 'string'
-      || typeof row.expires_at !== 'string' || !Number.isFinite(Date.parse(row.expires_at))
-      || Date.parse(row.expires_at) <= Date.now()) {
-    throw new PriceDocumentError('השרת החזיר הקצאת העלאה לא תקינה.');
-  }
-  const segments = row.storage_path.split('/');
-  if (segments.length !== 5 || segments[0] !== orgId || segments[1] !== 'supplier'
-      || segments[2] !== supplierId || segments[3] !== row.document_id || !segments[4]) {
-    throw new PriceDocumentError('נתיב ההעלאה שהוחזר אינו תואם לספק ולמסמך.');
-  }
-  return row as PriceDocumentReservation;
-}
-
-function parseRegistration(value: unknown, reservation: Pick<PriceDocumentReservation, 'document_id' | 'storage_path'>): PriceDocumentRegistration {
-  if (!value || typeof value !== 'object') throw new PriceDocumentError('השרת לא אישר את רישום המסמך.');
-  const row = value as Record<string, unknown>;
-  if (!exactKeys(row, ['document_id', 'job_id', 'storage_path', 'idempotent'])
-      || row.document_id !== reservation.document_id
-      || typeof row.job_id !== 'string' || !UUID_PATTERN.test(row.job_id)
-      || row.storage_path !== reservation.storage_path
-      || typeof row.idempotent !== 'boolean') {
-    throw new PriceDocumentError('השרת לא אישר את רישום המסמך.');
-  }
-  return row as PriceDocumentRegistration;
-}
-
-async function registerPriceDocument(reservation: Pick<PriceDocumentReservation, 'document_id' | 'storage_path'>) {
-  const registered = await supabase.rpc('register_supplier_price_document', { p_document_id: reservation.document_id });
-  if (registered.error) throw registered.error;
-  return parseRegistration(registered.data, reservation);
-}
-
-async function uploadPriceDocument(orgId: string, supplierId: string, file: File) {
-  if (!file.size) throw new PriceDocumentError('הקובץ ריק.');
-  if (file.size > 10 * 1024 * 1024) throw new PriceDocumentError('הקובץ גדול מ־10MB.');
-  const mimeType = priceDocumentMime(file);
-  if (!mimeType) throw new PriceDocumentError('סוג הקובץ אינו נתמך לעיבוד מסמכים.');
-
-  const reserved = await supabase.rpc('reserve_supplier_price_document_upload', {
-    p_supplier_id: supplierId,
-    p_file_name: file.name,
-    p_mime_type: mimeType,
-  });
-  if (reserved.error) throw reserved.error;
-  const reservation = parseReservation(reserved.data, orgId, supplierId);
-
-  const uploaded = await supabase.storage.from('documents').upload(reservation.storage_path, file, { contentType: mimeType, upsert: false });
-  if (uploaded.error) throw uploaded.error;
-
-  try {
-    const registration = await registerPriceDocument(reservation);
-    return { documentId: registration.document_id, pending: null };
-  } catch (registrationError) {
-    return {
-      documentId: reservation.document_id,
-      pending: reservation,
-      registrationError: registrationError instanceof PriceDocumentError
-        ? registrationError.message : toHebrewError(registrationError),
-    };
-  }
-}
 
 /** Supplier agent portal — RLS is the boundary; this page never receives another supplier id. */
 export default function SupplierPrices() {
@@ -265,84 +175,9 @@ export default function SupplierPrices() {
         />
       )}
       {documentOpen && (
-        <PriceDocumentModal
-          orgId={profile!.org_id}
-          supplierId={profile!.supplier_id!}
-          onClose={() => setDocumentOpen(false)}
-        />
+        <PriceListUploadModal supplier={data.supplier} onClose={() => setDocumentOpen(false)} />
       )}
     </div>
-  );
-}
-
-function PriceDocumentModal({ orgId, supplierId, onClose }: {
-  orgId: string;
-  supplierId: string;
-  onClose: () => void;
-}) {
-  const navigate = useNavigate();
-  const toast = useToast();
-  const [file, setFile] = useState<File | null>(null);
-  const [pendingReservation, setPendingReservation] = useState<Pick<PriceDocumentReservation, 'document_id' | 'storage_path'> | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function submit() {
-    if (!file) { toast('יש לבחור קובץ', 'error'); return; }
-    setBusy(true);
-    try {
-      const result = await uploadPriceDocument(orgId, supplierId, file);
-      if (result.pending) {
-        setPendingReservation(result.pending);
-        toast(`המקור הועלה, אך רישום המסמך לא הושלם: ${result.registrationError}`, 'error');
-        return;
-      }
-      navigate(`/documents/${result.documentId}/review`);
-    } catch (uploadError) {
-      toast(uploadError instanceof PriceDocumentError ? uploadError.message : toHebrewError(uploadError), 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function retryRegistration() {
-    if (!pendingReservation) return;
-    setBusy(true);
-    try {
-      const registered = await registerPriceDocument(pendingReservation);
-      navigate(`/documents/${registered.document_id}/review`);
-    } catch (registrationError) {
-      toast(registrationError instanceof PriceDocumentError ? registrationError.message : toHebrewError(registrationError), 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Modal open onClose={onClose} title="העלאת מחירון כמסמך" busy={busy} statusMessage={busy ? 'שומר ומכניס את המסמך לעיבוד' : undefined}>
-      {pendingReservation ? (
-        <div className="space-y-4">
-          <Note tone="alert">המקור הועלה, אך רישום המסמך עדיין לא הושלם. אין להעלות אותו שוב; נסה להשלים את הרישום.</Note>
-          <div className="flex justify-end gap-2">
-            <button className="btn-secondary" disabled={busy} onClick={onClose}>סגירה</button>
-            <button className="btn-primary" disabled={busy} onClick={() => void retryRegistration()}>ניסיון רישום נוסף</button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <Note tone="info">המקור נשמר כמסמך הספק שלך ומועבר למסך בדיקה. מחיר ייכתב רק לאחר אישור; שורה לא מזוהה ניתנת לשיוך למוצר קיים בלבד.</Note>
-          <label className="block">
-            <span className="label">קובץ מקור *</span>
-            <input type="file" className="input" accept={PRICE_DOCUMENT_ACCEPT} disabled={busy}
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
-            <span className="mt-1 block text-xs text-ink-muted">PDF, תמונה, Word או מסמך טקסט נתמך, עד 10MB.</span>
-          </label>
-          <div className="flex justify-end gap-2">
-            <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-            <button className="btn-primary" disabled={busy} onClick={() => void submit()}>העלאה והמשך לבדיקה</button>
-          </div>
-        </div>
-      )}
-    </Modal>
   );
 }
 

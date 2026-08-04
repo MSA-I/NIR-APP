@@ -1,16 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
-import { Plus, Phone, Mail, MapPin, Clock, Truck, Star, TrendingUp, TrendingDown, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Phone, Mail, MapPin, Clock, Truck, Star, TrendingUp, TrendingDown, Pencil, Trash2, Upload } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, PageLoader, useToast, Modal, ErrorNote, ConfirmDialog, type Column } from '../components/ui';
+import { PriceListUploadModal, SUBMISSION_STATUS, submissionMonthLabel } from '../components/PriceListUpload';
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
 import { SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
 import { fmtMoney, fmtMoneyExact, fmtNum, fmtDate, fmtDays } from '../lib/format';
-import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory } from '../lib/types';
+import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission } from '../lib/types';
 
 // suppliers.rating* are added in migration 0011. The hand-written Supplier type (types.ts) is
 // read-only this wave and does not carry them yet, so extend it locally.
@@ -57,6 +58,7 @@ export function SuppliersList() {
   const { profile } = useAuth();
   const toast = useToast();
   const [editing, setEditing] = useState<SupplierRow | null | 'new'>(null);
+  const [priceUploadFor, setPriceUploadFor] = useState<SupplierWithBalance | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SupplierWithBalance | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
 
@@ -158,6 +160,7 @@ export function SuppliersList() {
         mobileTrailing={(r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} />}
         rowActions={canWrite ? (r) => [
           { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setEditing(r) },
+          { key: 'price-list', label: 'העלאת מחירון', icon: Upload, onSelect: () => setPriceUploadFor(r) },
           { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', onSelect: () => void requestDelete(r) },
         ] : undefined}
         toolbar={
@@ -168,6 +171,10 @@ export function SuppliersList() {
         } />
       {balanceFilter === 'open' && rows.length === 0 && <p className="text-sm text-ink-muted">אין ספקים עם יתרה פתוחה.</p>}
       {editing && <SupplierForm supplier={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refetch(); }} />}
+      {priceUploadFor && (
+        <PriceListUploadModal supplier={{ id: priceUploadFor.id, name: priceUploadFor.name }}
+          onClose={() => setPriceUploadFor(null)} onImported={() => void refetch()} />
+      )}
 
       <ConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}
         onConfirm={(reason) => void deleteSupplier(reason)}
@@ -277,10 +284,14 @@ export function SupplierCard() {
   const { profile } = useAuth();
   const [tab, setTab] = useState<'orders' | 'invoices' | 'payments' | 'credits' | 'prices'>('orders');
   const [editing, setEditing] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const { data, loading, error, refetch } = useQuery(async () => {
     const supplier = unwrap(await supabase.from('suppliers').select('*').eq('id', id!).single()) as SupplierRow;
-    const [orders, invoices, payments, credits, balance, metrics, sps] = await Promise.all([
+    // supplier_price_submissions RLS grants SELECT to owner/office (or the supplier itself) —
+    // other staff roles skip the query instead of reading an empty result as "no history".
+    const staff = profile?.role === 'owner' || profile?.role === 'office';
+    const [orders, invoices, payments, credits, balance, metrics, sps, submissions] = await Promise.all([
       supabase.from('purchase_orders').select('*').eq('supplier_id', id!).order('created_at', { ascending: false }).limit(50),
       supabase.from('invoices').select('*').eq('supplier_id', id!).is('deleted_at', null).order('invoice_date', { ascending: false }).limit(50),
       supabase.from('payments').select('*').eq('supplier_id', id!).order('paid_date', { ascending: false }).limit(50),
@@ -288,6 +299,10 @@ export function SupplierCard() {
       supabase.from('supplier_balances').select('*').eq('supplier_id', id!).maybeSingle(),
       supabase.from('supplier_metrics').select('*').eq('supplier_id', id!).maybeSingle(), // maybeSingle: a role-guarded view may return no row
       supabase.from('supplier_products').select('*, product:products(id,name,unit)').eq('supplier_id', id!).order('updated_at', { ascending: false }),
+      staff
+        ? supabase.from('supplier_price_submissions').select('*').eq('supplier_id', id!)
+          .order('target_month', { ascending: false }).order('revision', { ascending: false }).limit(12)
+        : Promise.resolve({ data: [] as SupplierPriceSubmission[], error: null }),
     ]);
     const prices = unwrap(sps) as PricedProduct[];
     const spIds = prices.map((p) => p.id);
@@ -304,6 +319,8 @@ export function SupplierCard() {
       metrics: (metrics.data as SupplierMetrics | null) ?? null,
       prices,
       history,
+      submissions: unwrap(submissions) as SupplierPriceSubmission[],
+      canSeeSubmissions: staff,
     };
   }, [id]);
 
@@ -366,7 +383,12 @@ export function SupplierCard() {
             {s.cutoff_time && <span className="flex items-center gap-1"><Clock size={13} />סגירת הזמנות {s.cutoff_time.slice(0, 5)}</span>}
           </div>
         </div>
-        {canWrite && <button className="btn-secondary" onClick={() => setEditing(true)}>עריכה</button>}
+        {canWrite && (
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={15} /> העלאת מחירון</button>
+            <button className="btn-secondary" onClick={() => setEditing(true)}>עריכה</button>
+          </div>
+        )}
       </div>
 
       <Scorecard items={scoreItems} />
@@ -424,9 +446,18 @@ export function SupplierCard() {
         ]} rowLabel={(r) => `דרישת זיכוי מספר ${r.number} עבור ${s.name}`} onRowClick={() => navigate('/credits')} emptyTitle="אין זיכויים לספק זה" />
         </div>
       )}
-      {tab === 'prices' && <div role="tabpanel" id="supplier-panel-prices" aria-labelledby="supplier-tab-prices"><SupplierPricesTab rows={data.prices} history={data.history} /></div>}
+      {tab === 'prices' && (
+        <div role="tabpanel" id="supplier-panel-prices" aria-labelledby="supplier-tab-prices">
+          <SupplierPricesTab rows={data.prices} history={data.history}
+            submissions={data.canSeeSubmissions ? data.submissions : null} />
+        </div>
+      )}
 
       {editing && <SupplierForm supplier={s} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); void refetch(); }} />}
+      {uploadOpen && (
+        <PriceListUploadModal supplier={{ id: s.id, name: s.name }}
+          onClose={() => setUploadOpen(false)} onImported={() => void refetch()} />
+      )}
     </div>
   );
 }
@@ -436,7 +467,12 @@ export function SupplierCard() {
  * similarly-named src/pages/SupplierPrices.tsx is the supplier AGENT portal (/my-prices), which
  * must not be confused with it.
  */
-function SupplierPricesTab({ rows, history }: { rows: PricedProduct[]; history: PriceHistory[] }) {
+function SupplierPricesTab({ rows, history, submissions }: {
+  rows: PricedProduct[];
+  history: PriceHistory[];
+  /** null = the viewer's role cannot read the submissions ledger (not the same as "no history"). */
+  submissions: SupplierPriceSubmission[] | null;
+}) {
   const histBySp = useMemo(() => {
     const map = new Map<string, number[]>();
     for (const h of history) {
@@ -501,6 +537,27 @@ function SupplierPricesTab({ rows, history }: { rows: PricedProduct[]; history: 
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q)}
         searchLabel="חיפוש במחירון הספק"
         emptyTitle="אין מחירון לספק זה" />
+
+      {submissions !== null && (
+        <section className="card p-4" aria-labelledby="supplier-card-submissions-heading">
+          <h3 id="supplier-card-submissions-heading" className="section-title mb-3">היסטוריית מחירונים</h3>
+          {submissions.length ? (
+            <div className="divide-y divide-line-soft">
+              {submissions.map((submission) => (
+                <div key={submission.id} className="py-2.5 first:pt-0 last:pb-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium text-ink">{submissionMonthLabel(submission.target_month)} · גרסה <span className="num">{submission.revision}</span></div>
+                    <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
+                  </div>
+                  <div className="mt-1 text-sm text-ink-muted break-words">
+                    {submission.file_name ?? 'הגשה מדור קודם'} · נקלטו <span className="num">{submission.accepted_count}</span> · ללא שינוי <span className="num">{submission.unchanged_count}</span> · נדחו <span className="num">{submission.rejected_count}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <p className="text-sm text-ink-muted">עדיין לא נקלט מחירון לספק זה.</p>}
+        </section>
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RotateCw, Shopp
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { Skeleton, StatusBadge, Note, AttentionZone, TaskLine, type AttentionItem } from '../components/ui';
-import { EXCEPTION_TYPE, SEVERITY } from '../lib/status';
+import { EXCEPTION_TYPE, PO_STATUS, SEVERITY } from '../lib/status';
 import {
   addCalendarDays, BUSINESS_TIME_ZONE, dateStartInstant, daysInCalendarMonth,
   fmtMoney, fmtMoneyExact, fmtMonth, localDateKey, shiftCalendarMonth, startOfCalendarWeek,
@@ -122,6 +122,118 @@ function OperationsDisclosure({ title, count, summary, empty, children }: {
   );
 }
 
+// One order due for delivery today/tomorrow, with the products it should bring.
+type DeliveryOrder = {
+  id: string;
+  number: number;
+  status: string;
+  expected_date: string;
+  supplier_id: string;
+  supplier: { name: string } | null;
+  items: { qty: number; product: { name: string } | null }[];
+};
+
+// אספקות היום ומחר — the morning check-in strip (section 12): which suppliers should show up at
+// the door today and tomorrow. The always-visible face carries the two DISTINCT-supplier counts;
+// the native disclosure (same idiom as OperationsDisclosure, not a modal) reveals the per-order
+// detail: supplier · order number · status · expected products. purchase_orders has no
+// delivery-hour column, so no time is shown or invented. Orders with a NULL expected_date are
+// excluded from the counts and reported honestly as one quiet hint line instead.
+function DeliveriesCard({ today, tomorrow, noDateCount }: {
+  today: DeliveryOrder[];
+  tomorrow: DeliveryOrder[];
+  noDateCount: number;
+}) {
+  const distinctSuppliers = (rows: DeliveryOrder[]) => new Set(rows.map((o) => o.supplier_id)).size;
+  const groups = [
+    { key: 'today', label: 'היום', rows: today, suppliers: distinctSuppliers(today), emptyLabel: 'אין אספקות מתוכננות להיום' },
+    { key: 'tomorrow', label: 'מחר', rows: tomorrow, suppliers: distinctSuppliers(tomorrow), emptyLabel: 'אין אספקות מתוכננות למחר' },
+  ];
+  const total = today.length + tomorrow.length;
+
+  // The honesty line: open orders (same statuses) that simply have no expected_date. Without it,
+  // a quiet card could read "all clear" while five undated orders are still in flight.
+  const noDateHint = noDateCount > 0 ? (
+    <Link to="/orders" className="inline-flex min-h-11 items-center text-xs text-ink-muted hover:text-ink-mid active:text-ink">
+      <span className="num me-1">{noDateCount}</span> הזמנות פתוחות ללא תאריך אספקה
+    </Link>
+  ) : null;
+
+  // Measured zero for both days → the existing all-clear idiom (the card never hides).
+  if (total === 0) {
+    return (
+      <section className="card overflow-hidden">
+        <div className="px-4 py-4 sm:px-5">
+          <h2 className="section-title">אספקות היום ומחר</h2>
+        </div>
+        <div className="border-t border-line-soft px-4 py-2.5 sm:px-5">
+          <div className="flex min-h-11 items-center gap-2 text-sm text-ink-muted">
+            <Check size={15} className="shrink-0 text-done-solid" aria-hidden="true" />
+            <span>אין אספקות מתוכננות להיום ומחר</span>
+            <span className="badge-idle num ms-auto">0</span>
+          </div>
+          {noDateHint}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="card overflow-hidden">
+      <div className="px-4 py-4 sm:px-5">
+        <h2 className="section-title">אספקות היום ומחר</h2>
+        <p className="mt-0.5 text-xs text-ink-muted">ספקים שאמורים לספק סחורה; פירוט ההזמנות בלחיצה</p>
+      </div>
+      <details className="group border-t border-line-soft">
+        <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2 [&::-webkit-details-marker]:hidden sm:px-5">
+          {groups.map((group) => (
+            <span key={group.key} className="flex items-baseline gap-1.5">
+              <span className="text-xs font-medium text-ink-muted">{group.label}</span>
+              <span className={`text-xl font-semibold num sm:text-2xl ${group.suppliers > 0 ? 'text-ink' : 'text-ink-muted'}`}>{group.suppliers}</span>
+              <span className="text-xs text-ink-muted">{group.suppliers === 1 ? 'ספק' : 'ספקים'}</span>
+            </span>
+          ))}
+          <ChevronDown size={16} className="ms-auto shrink-0 text-ink-ghost transition-transform group-open:rotate-180" aria-hidden="true" />
+        </summary>
+        <div className="border-t border-line-soft px-4 pb-4 pt-2 sm:px-5">
+          {groups.map((group) => (
+            <div key={group.key} className="mt-3 first:mt-0">
+              <div className="mb-1 text-xs font-medium text-ink-muted">{group.label}</div>
+              {group.rows.length === 0 ? (
+                <div className="flex items-center gap-1.5 py-1 text-xs text-ink-muted">
+                  <Check size={13} className="shrink-0 text-done-solid" aria-hidden="true" /> {group.emptyLabel}
+                </div>
+              ) : (
+                <ul className="divide-y divide-line-soft">
+                  {group.rows.map((order) => (
+                    <li key={order.id}>
+                      <Link to={`/orders/${order.id}`} className="block min-h-11 rounded-lg px-2 py-2 text-sm hover:bg-surface-sunken active:bg-action-wash/70">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium text-ink-body">{order.supplier?.name ?? '—'}</span>
+                          <span className="num text-xs text-ink-muted">#{order.number}</span>
+                          <StatusBadge meta={PO_STATUS[order.status]} />
+                        </div>
+                        {order.items.length > 0 && (
+                          <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted">
+                            {order.items.map((item, index) => (
+                              <span key={index}>{item.product?.name ?? '—'} <span className="num">×{item.qty}</span></span>
+                            ))}
+                          </div>
+                        )}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+          {noDateHint && <div className="mt-3 border-t border-line-soft pt-2">{noDateHint}</div>}
+        </div>
+      </details>
+    </section>
+  );
+}
+
 // Calendar buckets are anchored to the business timezone, not the browser/server timezone.
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -139,6 +251,16 @@ function DashboardSkeleton() {
       <div className="flex items-center justify-between">
         <Skeleton className="h-7 w-48" />
         <Skeleton className="h-4 w-24" />
+      </div>
+
+      {/* deliveries card (אספקות היום ומחר): title + the two-count summary row */}
+      <div className="card overflow-hidden">
+        <div className="px-4 py-4 sm:px-5"><Skeleton className="h-5 w-40" /></div>
+        <div className="flex min-h-11 items-center gap-6 border-t border-line-soft px-4 py-3 sm:px-5">
+          <Skeleton className="h-6 w-24" />
+          <Skeleton className="h-6 w-24" />
+          <Skeleton className="ms-auto h-4 w-4" />
+        </div>
       </div>
 
       {/* AttentionZone card: header + dense rows (badge · label · amount) */}
@@ -210,6 +332,7 @@ export default function Dashboard() {
   const { data, loading, error, refetch, fetching } = useQuery(async () => {
     const now = new Date();
     const todayISO = businessTodayISO();
+    const tomorrowISO = addCalendarDays(todayISO, 1);
     const monthStart = `${todayISO.slice(0, 7)}-01`;
     const monthKey = todayISO.slice(0, 7); // YYYY-MM, for /payments?month=
     const monthStartTimestamp = dateStartInstant(monthStart);
@@ -225,6 +348,7 @@ export default function Dashboard() {
     const [
       ordersRes, invoicesRes, paymentsRes, balancesRes, prRes, exceptionsRes, creditsRes,
       bankRes, supBalRes, suppliersRes, poItemsRes, priceUpRes, reqItemsRes, offersRes, openPoRes,
+      deliveriesRes,
     ] = await Promise.all([
       // recent orders (8 weeks) — purchased today/week/month + the weekly series. created_at is the
       // time axis, non-draft/cancelled the filter, at snapshot prices (OPEN-DECISIONS #4, locked).
@@ -249,6 +373,10 @@ export default function Dashboard() {
       // open commitments — any date, so a PO sent months ago that is still open still counts. Also
       // serves the "awaiting goods receipt" queue, replacing the old serial round-trip.
       fetchAll((from, to) => supabase.from('purchase_orders').select('id, status, expected_date, items:purchase_order_items(qty, unit_price, received_qty)').in('status', ['sent', 'confirmed', 'partial']).order('id').range(from, to)),
+      // deliveries due today/tomorrow — open POs (sent/confirmed/partial) whose expected_date is
+      // today or tomorrow (OPEN-DECISIONS: a delivery = open order + expected_date). NULL
+      // expected_date rows are excluded by the gte and surfaced as a count from openPos instead.
+      fetchAll((from, to) => supabase.from('purchase_orders').select('id, number, status, expected_date, supplier_id, supplier:suppliers(name), items:purchase_order_items(qty, product:products(name))').in('status', ['sent', 'confirmed', 'partial']).gte('expected_date', todayISO).lte('expected_date', tomorrowISO).order('expected_date').order('id').range(from, to)),
     ]);
 
     const orders = ordersRes as unknown as { created_at: string; items: { qty: number; unit_price: number }[] }[];
@@ -266,6 +394,7 @@ export default function Dashboard() {
     const reqItems = reqItemsRes as unknown as { qty: number; unit_price: number | null; product_id: string }[];
     const offers = offersRes as unknown as { product_id: string; current_price: number }[];
     const openPos = openPoRes as unknown as { status: string; expected_date: string | null; items: { qty: number; unit_price: number; received_qty: number }[] }[];
+    const deliveries = deliveriesRes as unknown as DeliveryOrder[];
 
     const orderValue = (o: { items: { qty: number; unit_price: number }[] }) => o.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
 
@@ -428,6 +557,13 @@ export default function Dashboard() {
 
     return {
       fetchedAt: new Date(),   // query-completion time → drives the "עודכן ב-" stamp
+      // אספקות היום ומחר — split by day here so the card only renders. noDateCount comes from
+      // openPos (already fetched): open orders that carry no expected_date at all.
+      deliveries: {
+        today: deliveries.filter((d) => d.expected_date === todayISO),
+        tomorrow: deliveries.filter((d) => d.expected_date === tomorrowISO),
+        noDateCount: openPos.filter((o) => o.expected_date == null).length,
+      },
       attention,
       money: { openBalance, openInvoiceCount, paidMonth, paidDelta, purchasedMonth, purchasedDelta, monthKey },
       monthly, weekly, paidWeekly, momChange, categories, savings, savingsPct,
@@ -498,6 +634,8 @@ export default function Dashboard() {
 
       {data && (
         <div className="dash-enter space-y-5">
+          <DeliveriesCard today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount} />
+
           <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול" />
 
           <div className="card grid grid-cols-1 sm:grid-cols-3">

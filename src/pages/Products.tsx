@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { toHebrewError } from '../lib/errors';
-import { Plus, Pencil, Copy, Power } from 'lucide-react';
+import { Plus, Pencil, Copy, Power, Upload } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, SkeletonTable, ConfirmDialog, type Column } from '../components/ui';
+import { PriceListUploadModal } from '../components/PriceListUpload';
 import { useCategories } from './Suppliers';
 import type { Product } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
@@ -23,6 +24,7 @@ export default function Products() {
   const [clone, setClone] = useState<Product | null>(null); // "שכפול": prefill without an id
   const [toggleTarget, setToggleTarget] = useState<ProductRow | null>(null);
   const [busyToggle, setBusyToggle] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [catFilter, setCatFilter] = useState('');
   const { data: categories } = useCategories();
 
@@ -46,6 +48,8 @@ export default function Products() {
   });
 
   const canWrite = profile?.role !== 'accountant' && profile?.role !== 'payer';
+  // Narrower than canWrite: the price-import RPC and the document reservation are owner/office only.
+  const canUploadPrices = profile?.role === 'owner' || profile?.role === 'office';
   const rows = (data ?? []).filter((p) => !catFilter || p.category_id === catFilter);
 
   // Open the product editor straight from a global-search result (?id=). Read-only roles never
@@ -102,7 +106,10 @@ export default function Products() {
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title">מוצרים</h1>
-        {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> מוצר חדש</button>}
+        <div className="flex flex-wrap gap-2">
+          {canUploadPrices && <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={16} /> העלאת מחירון ספק</button>}
+          {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> מוצר חדש</button>}
+        </div>
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.sku ?? '').toLowerCase().includes(q)}
@@ -124,6 +131,9 @@ export default function Products() {
         <ProductForm product={editing && editing !== 'new' ? editing : null} initial={clone ?? undefined}
           onClose={() => { setEditing(null); setClone(null); }}
           onSaved={() => { setEditing(null); setClone(null); void refetch(); }} />
+      )}
+      {uploadOpen && (
+        <PriceListUploadModal onClose={() => setUploadOpen(false)} onImported={() => void refetch()} />
       )}
 
       <ConfirmDialog open={!!toggleTarget} onClose={() => setToggleTarget(null)}

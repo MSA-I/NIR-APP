@@ -5,8 +5,9 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { useParamState } from '../lib/useParamState';
-import { DataTable, EmptyState, ErrorNote, Modal, Note, SkeletonCards, StatusBadge, type Column } from '../components/ui';
+import { DataTable, EmptyState, ErrorNote, Modal, Note, SkeletonCards, StatusBadge, useToast, type Column } from '../components/ui';
 import { INVOICE_PAYMENT_STATUS } from '../lib/status';
+import { toHebrewError } from '../lib/errors';
 import {
   addCalendarDays, daysInCalendarMonth, fmtDate, fmtMoney, fmtMoneyExact, fmtNum,
   shiftCalendarMonth, todayISO,
@@ -78,6 +79,7 @@ function StripStat({ title, value, context, icon: Icon }: {
 
 export default function Expenses() {
   const { profile } = useAuth();
+  const toast = useToast();
   const defaults = presetRange('month');
   // useParamState seeds from the URL and re-syncs when it changes; the URL is also WRITTEN
   // (replace, no history spam) so the chosen range is genuinely shareable/bookmarkable.
@@ -171,22 +173,27 @@ export default function Expenses() {
 
   function exportExcel() {
     if (!data || data.invalidRange || fetching || error) return;
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.bySupplier.map((r) => ({
-      'ספק': r.name, 'חשבוניות': r.count, 'סה"כ': r.total,
-      '% מהסך': data.totalAll > 0 ? Number(((r.total / data.totalAll) * 100).toFixed(1)) : null,
-    }))), 'לפי ספק');
-    if (data.categoryBreakdownAvailable) {
-      const catRows: { 'קטגוריה': string; 'ערך בהזמנות מקושרות': number }[] = [...data.catTotals]
-        .sort((a, b) => b.total - a.total)
-        .map((c) => ({ 'קטגוריה': c.name, 'ערך בהזמנות מקושרות': c.total }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'קטגוריות בהזמנות');
+    try {
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.bySupplier.map((r) => ({
+        'ספק': r.name, 'חשבוניות': r.count, 'סה"כ': r.total,
+        '% מהסך': data.totalAll > 0 ? Number(((r.total / data.totalAll) * 100).toFixed(1)) : null,
+      }))), 'לפי ספק');
+      if (data.categoryBreakdownAvailable) {
+        const catRows: { 'קטגוריה': string; 'ערך בהזמנות מקושרות': number }[] = [...data.catTotals]
+          .sort((a, b) => b.total - a.total)
+          .map((c) => ({ 'קטגוריה': c.name, 'ערך בהזמנות מקושרות': c.total }));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'קטגוריות בהזמנות');
+      }
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.invoices.map((i) => ({
+        'ספק': i.supplier?.name ?? '', 'מספר חשבונית': i.invoice_number, 'תאריך': i.invoice_date,
+        'סה"כ': i.total_amount, 'סטטוס תשלום': INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
+      }))), 'חשבוניות');
+      XLSX.writeFile(wb, `expenses-${todayISO()}.xlsx`);
+      toast('קובץ ה-Excel הורד');
+    } catch (e) {
+      toast(toHebrewError(e), 'error');
     }
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.invoices.map((i) => ({
-      'ספק': i.supplier?.name ?? '', 'מספר חשבונית': i.invoice_number, 'תאריך': i.invoice_date,
-      'סה"כ': i.total_amount, 'סטטוס תשלום': INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
-    }))), 'חשבוניות');
-    XLSX.writeFile(wb, `expenses-${todayISO()}.xlsx`);
   }
 
   if (loading) return <SkeletonCards count={3} cols={3} title />;
@@ -197,6 +204,13 @@ export default function Expenses() {
   // A computed sum over a selected range IS data — ₪0 total with 0 invoices is an honest
   // statement. Only the average is genuinely unmeasurable at 0/0 → "—" (CLAUDE.md).
   const avg = hasInvoices ? data.totalAll / data.invoices.length : null;
+
+  // A disabled button looks clickable but does nothing; the title says why it is blocked.
+  const rangeBlockedReason = fetching ? 'הנתונים נטענים…'
+    : error ? 'שגיאה בטעינת הנתונים'
+    : data.invalidRange ? 'טווח התאריכים שגוי — מ־ אחרי עד'
+    : null;
+  const excelBlockedReason = rangeBlockedReason ?? (!hasInvoices ? 'אין חשבוניות בטווח שנבחר' : null);
 
   const categoryRows = [...data.catTotals].sort((a, b) => b.total - a.total);
   const categoryTotal = categoryRows.reduce((sum, row) => sum + row.total, 0);
@@ -220,8 +234,8 @@ export default function Expenses() {
       <div className="flex flex-wrap items-center justify-between gap-3 no-print">
         <h1 className="page-title">ריכוז הוצאות</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <button className="btn-secondary" onClick={exportExcel} disabled={!hasInvoices || fetching || !!error || data.invalidRange}><FileSpreadsheet size={15} /> ייצוא Excel</button>
-          <button className="btn-secondary" disabled={fetching || !!error || data.invalidRange} onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
+          <button className="btn-secondary" onClick={exportExcel} disabled={!hasInvoices || fetching || !!error || data.invalidRange} title={excelBlockedReason ?? 'הורדת הריכוז כקובץ Excel'}><FileSpreadsheet size={15} /> ייצוא Excel</button>
+          <button className="btn-secondary" disabled={fetching || !!error || data.invalidRange} onClick={() => window.print()} title={rangeBlockedReason ?? 'הדפסת הריכוז או שמירה כ-PDF'}><Printer size={15} /> הדפסה / PDF</button>
         </div>
       </div>
 

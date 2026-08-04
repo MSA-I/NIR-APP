@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Loader2 } from 'lucide-react';
+import { CheckCircle2, Loader2, Plus } from 'lucide-react';
 import { Link } from 'react-router';
 import type { Role } from '../../lib/types';
 import { toHebrewError } from '../../lib/errors';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../auth/AuthContext';
 import { Note } from '../ui';
 import type { ReviewSnapshot } from './model';
 
@@ -61,6 +62,16 @@ interface SupplierPortalContext {
 
 function valueText(value: string | number | null): string {
   return value === null ? 'לא זוהה' : String(value);
+}
+
+/** Best-effort name prefill for a new product, taken from the line's own extracted values. */
+function guessLineName(values: Record<string, string | number | null>): string {
+  for (const [key, value] of Object.entries(values)) {
+    if (typeof value === 'string' && value.trim() && /שם|מוצר|פריט|תיאור|name|product|item|desc/i.test(key)) {
+      return value.trim().slice(0, 120);
+    }
+  }
+  return '';
 }
 
 function emptyDrafts(count: number): LineDraft[] {
@@ -139,7 +150,17 @@ export function PriceListReviewConfirmation({
     && snapshot.document.uploaded_by === actorId
     && (role === 'owner' || role === 'office' || role === 'supplier'),
   );
+  const { profile } = useAuth();
+  // Product creation is a staff act (products RLS); the supplier role matches existing items only.
+  const staffCanCreate = role === 'owner' || role === 'office';
   const [drafts, setDrafts] = useState(() => emptyDrafts(lineItems.length));
+  const [newProductFor, setNewProductFor] = useState<number | null>(null);
+  const [newProductName, setNewProductName] = useState('');
+  const [newProductUnit, setNewProductUnit] = useState('יח׳');
+  const [busyCreate, setBusyCreate] = useState(false);
+  // Rendered inside the per-line form — the shared error Note sits below all the lines,
+  // far off-screen on a long price list, so a failure there would look like a dead button.
+  const [createError, setCreateError] = useState<string | null>(null);
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -253,6 +274,31 @@ export function PriceListReviewConfirmation({
       draftIndex === index ? { ...draft, ...patch } : draft));
   }
 
+  // Explicit, per-line product creation. The product exists BEFORE the confirm payload is built,
+  // so the server invariant "האישור אינו יוצר מוצרים" stays intact — creation is its own user act.
+  async function createProduct(index: number) {
+    const name = newProductName.trim();
+    if (!name) { setCreateError('יש להזין שם למוצר החדש.'); return; }
+    if (!profile) return;
+    setBusyCreate(true);
+    setCreateError(null);
+    try {
+      const inserted = await supabase.from('products')
+        .insert({ org_id: profile.org_id, name, unit: newProductUnit.trim() || 'יח׳', active: true })
+        .select('id,name,unit,sku')
+        .single();
+      if (inserted.error) throw inserted.error;
+      const product = inserted.data as ProductOption;
+      setProducts((current) => [...current, product].sort((left, right) => left.name.localeCompare(right.name, 'he')));
+      updateDraft(index, { productId: product.id });
+      setNewProductFor(null);
+    } catch (insertError) {
+      setCreateError(toHebrewError(insertError));
+    } finally {
+      setBusyCreate(false);
+    }
+  }
+
   async function finishWithReceipt(nextReceipt: SubmissionReceipt) {
     setReceipt(nextReceipt);
     setRecoveryError(null);
@@ -362,7 +408,7 @@ export function PriceListReviewConfirmation({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="price-list-review-title" className="section-title">אישור מחירון מפירוש המסמך</h2>
-          <p className="mt-1 text-sm text-ink-muted">כל שורה דורשת בחירה מפורשת במוצר קיים ובמחיר. האישור אינו יוצר מוצרים חדשים.</p>
+          <p className="mt-1 text-sm text-ink-muted">כל שורה דורשת בחירה מפורשת במוצר ובמחיר. האישור עצמו לעולם אינו יוצר מוצרים — מוצר חדש נוצר רק בפעולה מפורשת שלך משורת המסמך.</p>
         </div>
         <span className={receipt ? 'badge-done' : 'badge-await'}>{receipt ? 'נקלט' : 'ממתין לאישור'}</span>
       </div>
@@ -459,6 +505,35 @@ export function PriceListReviewConfirmation({
                       <input className="input num" inputMode="decimal" maxLength={64} value={draft.priceText} onChange={(event) => updateDraft(index, { priceText: event.target.value })} disabled={!draft.approved || busy} />
                     </label>
                   </div>
+                  {staffCanCreate && draft.approved && (
+                    newProductFor === index ? (
+                      <div className="mt-3 rounded-lg border border-line bg-surface-sunken p-3">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label>
+                            <span className="label">שם המוצר החדש *</span>
+                            <input className="input" maxLength={120} value={newProductName} onChange={(event) => setNewProductName(event.target.value)} disabled={busyCreate} />
+                          </label>
+                          <label>
+                            <span className="label">יחידת מידה</span>
+                            <input className="input" maxLength={30} value={newProductUnit} onChange={(event) => setNewProductUnit(event.target.value)} disabled={busyCreate} />
+                          </label>
+                        </div>
+                        {createError && <Note tone="alert" role="alert" className="mt-3">{createError}</Note>}
+                        <div className="mt-3 flex justify-end gap-2">
+                          <button type="button" className="btn-secondary" disabled={busyCreate} onClick={() => { setNewProductFor(null); setCreateError(null); }}>ביטול</button>
+                          <button type="button" className="btn-primary" disabled={busyCreate} onClick={() => void createProduct(index)}>
+                            {busyCreate && <Loader2 className="animate-spin motion-reduce:animate-none" size={15} aria-hidden="true" />}
+                            יצירת המוצר והתאמת השורה
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button type="button" className="btn-ghost mt-2 text-sm text-action" disabled={busy || busyCreate}
+                        onClick={() => { setNewProductFor(index); setNewProductName(guessLineName(item.values)); setNewProductUnit('יח׳'); setCreateError(null); }}>
+                        <Plus size={14} aria-hidden="true" /> המוצר לא קיים בקטלוג? יצירת מוצר חדש מהשורה
+                      </button>
+                    )
+                  )}
                   <label className="mt-3 flex min-h-11 items-center gap-3 text-sm text-ink-body">
                     <input type="checkbox" className="size-5" checked={draft.available} onChange={(event) => updateDraft(index, { available: event.target.checked })} disabled={!draft.approved || busy} />
                     המוצר זמין אצל הספק

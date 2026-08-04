@@ -19,9 +19,14 @@ export default function Reports() {
   const [busy, setBusy] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
 
+  // Browsers without a native month picker fall back to free text, so a value like "07/2026" can
+  // land in state. One sanitized value drives the query, the headings, the filename and the
+  // mark-sent command — what is shown is always what is exported, and no date math ever throws.
+  const safeMonth = /^\d{4}-\d{2}$/.test(month) ? month : currentMonthISO();
+
   const { data, loading, fetching, error, refetch } = useQuery(async () => {
-    const { start, end } = monthRange(month);
-    const instants = monthInstantRange(month);
+    const { start, end } = monthRange(safeMonth);
+    const instants = monthInstantRange(safeMonth);
     const [invoices, payments, credits, exceptions, bank, exportRes] = await Promise.all([
       fetchAll((from, to) => supabase.from('invoices').select('*, supplier:suppliers(name)')
         .gte('invoice_date', start).lt('invoice_date', end).is('deleted_at', null)
@@ -34,7 +39,7 @@ export default function Reports() {
         .in('status', ['open', 'in_progress']).order('created_at').order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('bank_transactions').select('id, status')
         .gte('tx_date', start).lt('tx_date', end).order('tx_date').order('id').range(from, to)),
-      supabase.from('monthly_exports').select('*').eq('month', `${month}-01`).maybeSingle(),
+      supabase.from('monthly_exports').select('*').eq('month', `${safeMonth}-01`).maybeSingle(),
     ]);
     return {
       invoices: invoices as ({ id: string; invoice_number: string; invoice_date: string; total_amount: number; amount_before_vat: number; vat_amount: number; review_status: string; payment_status: string; export_status: string; supplier: { name: string } })[],
@@ -45,27 +50,32 @@ export default function Reports() {
       export: unwrap(exportRes) as { id: string; status: string; sent_at: string | null } | null,
       generatedAt: new Date(),
     };
-  }, [month]);
+  }, [safeMonth]);
 
   const canManageExport = !!profile && ['owner', 'accountant'].includes(profile.role);
 
   function exportExcel() {
     if (!data || fetching || error) return;
-    const wb = buildMonthlyWorkbook({
-      orgName: org?.name, month, generatedAt: data.generatedAt, data,
-      labels: {
-        invoiceReview: INVOICE_REVIEW_STATUS,
-        invoicePayment: INVOICE_PAYMENT_STATUS,
-        creditReason: CREDIT_REASON,
-        creditStatus: CREDIT_STATUS,
-        exceptionType: EXCEPTION_TYPE,
-      },
-    });
-    // This file lands in an accountant's inbox, and an accountant serves several businesses.
-    // The name has to say whose report it is; a fixed tenant name would break multi-tenancy.
-    // Strip only what filesystems object to; Hebrew names are fine and are the whole point.
-    const slug = (org?.name ?? '').replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
-    XLSX.writeFile(wb, `${slug || 'supplyflow'}-report-${month}.xlsx`);
+    try {
+      const wb = buildMonthlyWorkbook({
+        orgName: org?.name, month: safeMonth, generatedAt: data.generatedAt, data,
+        labels: {
+          invoiceReview: INVOICE_REVIEW_STATUS,
+          invoicePayment: INVOICE_PAYMENT_STATUS,
+          creditReason: CREDIT_REASON,
+          creditStatus: CREDIT_STATUS,
+          exceptionType: EXCEPTION_TYPE,
+        },
+      });
+      // This file lands in an accountant's inbox, and an accountant serves several businesses.
+      // The name has to say whose report it is; a fixed tenant name would break multi-tenancy.
+      // Strip only what filesystems object to; Hebrew names are fine and are the whole point.
+      const slug = (org?.name ?? '').replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
+      XLSX.writeFile(wb, `${slug || 'supplyflow'}-report-${safeMonth}.xlsx`);
+      toast('קובץ ה-Excel הורד');
+    } catch (e) {
+      toast(toHebrewError(e), 'error');
+    }
   }
 
   async function markSent(reason?: string) {
@@ -73,7 +83,7 @@ export default function Reports() {
     setBusy(true);
     try {
       unwrap(await supabase.rpc('mark_month_export_sent', {
-        p_month: `${month}-01`,
+        p_month: `${safeMonth}-01`,
         p_invoice_ids: data.invoices.map((invoice) => invoice.id),
         p_reason: reason?.trim() || null,
       }));
@@ -105,6 +115,8 @@ export default function Reports() {
     m.set(p.supplier.name, (m.get(p.supplier.name) ?? 0) + p.amount);
     return m;
   }, new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]);
+  // A disabled button looks clickable but does nothing; the title says why it is blocked.
+  const exportBlockedReason = fetching ? 'הנתונים נטענים…' : error ? 'שגיאה בטעינת הנתונים' : null;
   const metricLinkClass = 'card card-pad block transition-colors hover:border-action-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
 
   return (
@@ -118,9 +130,10 @@ export default function Reports() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="sr-only" htmlFor="monthly-report-month">חודש הדוח</label>
-          <input id="monthly-report-month" type="month" className="input w-auto!" value={month} onChange={(e) => setMonth(e.target.value)} />
-          <button className="btn-secondary" disabled={fetching || !!error} onClick={exportExcel}><FileSpreadsheet size={15} /> ייצוא Excel</button>
-          <button className="btn-secondary" disabled={fetching || !!error} onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
+          {/* The native clear affordance emits '' — keep the previous month instead of a broken query. */}
+          <input id="monthly-report-month" type="month" className="input w-auto!" value={month} onChange={(e) => { if (e.target.value) setMonth(e.target.value); }} />
+          <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הורדת הדוח כקובץ Excel'} onClick={exportExcel}><FileSpreadsheet size={15} /> ייצוא Excel</button>
+          <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הדפסת הדוח או שמירה כ-PDF'} onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
           {canManageExport && (
             data.export?.status === 'sent'
               ? <span className="badge-done flex items-center gap-1"><CheckCircle2 size={13} /> הועבר לרו״ח {data.export.sent_at ? fmtDate(data.export.sent_at) : ''}</span>
@@ -138,18 +151,18 @@ export default function Reports() {
       <div className="print-area monthly-report space-y-4">
         <div className="hidden print:block">
           {/* Printed header handed to the accountant — carries the tenant's own name. */}
-          <h2 className="text-xl font-bold">{`${org?.name ? `${org.name} — ` : ''}דוח חודשי ${fmtMonth(`${month}-01`)}`}</h2>
+          <h2 className="text-xl font-bold">{`${org?.name ? `${org.name} — ` : ''}דוח חודשי ${fmtMonth(`${safeMonth}-01`)}`}</h2>
           <p className="text-xs">נוצר {fmtDateTime(data.generatedAt)}</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">חשבוניות</div><div className="text-lg font-bold num">{data.invoices.length}</div></Link>
-          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.invoices)}</div></Link>
-          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.vat)}</div></Link>
-          <Link className={metricLinkClass} to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(totals.paid)}</div></Link>
-          <Link className={metricLinkClass} to={`/invoices?month=${month}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`text-lg font-bold num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Link>
-          <Link className={metricLinkClass} to={`/bank?month=${month}&status=attention`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`text-lg font-bold num ${totals.unmatchedBank ? 'text-alert-solid' : ''}`}>{totals.unmatchedBank}</div></Link>
-          <Link className={metricLinkClass} to={`/credits?month=${month}&status=all`}><div className="text-xs text-ink-muted">זיכויים בחודש</div><div className="text-lg font-bold num">{data.credits.length}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}`}><div className="text-xs text-ink-muted">חשבוניות</div><div className="text-lg font-bold num">{data.invoices.length}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.invoices)}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.vat)}</div></Link>
+          <Link className={metricLinkClass} to={`/payments?month=${safeMonth}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(totals.paid)}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`text-lg font-bold num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Link>
+          <Link className={metricLinkClass} to={`/bank?month=${safeMonth}&status=attention`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`text-lg font-bold num ${totals.unmatchedBank ? 'text-alert-solid' : ''}`}>{totals.unmatchedBank}</div></Link>
+          <Link className={metricLinkClass} to={`/credits?month=${safeMonth}&status=all`}><div className="text-xs text-ink-muted">זיכויים בחודש</div><div className="text-lg font-bold num">{data.credits.length}</div></Link>
           <Link className={metricLinkClass} to="/exceptions?status=open"><div className="text-xs text-ink-muted">חריגים פתוחים</div><div className={`text-lg font-bold num ${data.exceptions.length ? 'text-await-fg' : ''}`}>{data.exceptions.length}</div></Link>
         </div>
 
@@ -165,7 +178,7 @@ export default function Reports() {
         )}
 
         <div className="card overflow-hidden">
-          <div className="px-4 py-3 border-b border-line-soft section-title">חשבוניות {fmtMonth(`${month}-01`)}</div>
+          <div className="px-4 py-3 border-b border-line-soft section-title">חשבוניות {fmtMonth(`${safeMonth}-01`)}</div>
           <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="חשבוניות בדוח">
             {data.invoices.map((i) => (
               <li key={i.id} className="p-4">

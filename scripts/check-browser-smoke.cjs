@@ -641,9 +641,10 @@ async function dashboardAndDialogs(browser) {
     await login(page, 'owner');
     await page.goto(`${baseURL}/dashboard`);
     await settle(page);
-    const firstDataHeading = page.locator('#main .dash-enter h2').first();
-    await firstDataHeading.waitFor();
-    assert((await firstDataHeading.innerText()).includes('דורש טיפול'), 'dashboard does not begin with the attention zone');
+    const dataHeadings = page.locator('#main .dash-enter h2');
+    await dataHeadings.first().waitFor();
+    assert((await dataHeadings.first().innerText()).includes('אספקות היום ומחר'), 'dashboard does not begin with the deliveries card');
+    assert((await dataHeadings.nth(1).innerText()).includes('דורש טיפול'), 'attention zone is not second, after the deliveries card');
     assert.equal(await page.locator('.speed-dial-trigger').count(), 1, 'dashboard desktop speed-dial missing');
     const contrast = await assertKeyContrast(page);
     await page.screenshot({ path: path.join(outDir, 'dashboard-1440.png'), fullPage: true });
