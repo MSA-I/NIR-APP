@@ -260,6 +260,57 @@ insert into public.invoices (
   632.71, 112.89, 745.60, 'חשבונית פיקסטורה לבדיקת דרישת זיכוי מסריקה'
 );
 
+-- A fourth document for the payment-confirmation panel, plus the payment it confirms. The panel
+-- reconciles rather than executes -- a payer may not read an interpretation at all (0046:557) and
+-- only a payer may call execute_payment_request -- so what is exercised here is the match, which
+-- is the only thing a reviewer on this screen can actually act on.
+insert into public.document_extractions (
+  id, org_id, job_id, document_id, engine, model, model_version,
+  input_checksum, contract_version, payload, duration_ms, resource_metadata
+)
+select
+  '97200000-0000-4000-8000-000000000002'::uuid, j.org_id, j.id, j.document_id,
+  'private-fixture', 'ocr-acceptance-hebrew', '1.0.0', j.input_checksum, j.contract_version,
+  pg_temp.ocr_extraction_payload('אישור העברה בנקאית'), 764,
+  jsonb_build_object('fixture', true, 'source', 'local-storage')
+from public.document_processing_jobs j where j.id = '97100000-0000-4000-8000-000000000002';
+
+insert into public.document_interpretations (
+  id, org_id, job_id, extraction_id, document_id, interpreted_for_user_id,
+  provider, model, prompt_version, schema_version, payload, usage, duration_ms
+)
+values (
+  '97300000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111',
+  '97100000-0000-4000-8000-000000000002', '97200000-0000-4000-8000-000000000002',
+  '97000000-0000-4000-8000-000000000002', :'ocr_owner_id',
+  'openai-fixture', 'gpt-local-contract-fixture', 'ocr-acceptance-v1', '1',
+  pg_temp.ocr_interpretation_payload(), jsonb_build_object('fixture', true), 271
+);
+
+insert into public.document_type_review_decisions (
+  org_id, interpretation_id, extraction_id, document_id, revision,
+  decision, suggested_document_type, approved_document_type,
+  input_checksum, contract_version, actor_id, reason
+)
+select
+  i.org_id, i.id, i.extraction_id, i.document_id, 1,
+  'approved', 'invoice', 'payment_confirmation',
+  e.input_checksum, e.contract_version, :'ocr_owner_id',
+  'תוקן בפיקסטורת הקבלה לאישור תשלום כדי לאפשר בדיקת התאמה'
+from public.document_interpretations i
+join public.document_extractions e on e.org_id = i.org_id and e.id = i.extraction_id
+where i.id = '97300000-0000-4000-8000-000000000002';
+
+-- The payment the confirmation matches, at the same amount the interpretation carries. Like the
+-- invoice above it lives only for the browser run.
+insert into public.payments (
+  org_id, supplier_id, amount, paid_date, method, reference, executed_by, notes
+) values (
+  '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000008',
+  745.60, current_date - 3, 'העברה בנקאית', 'FIXTURE-4471902', :'ocr_owner_id',
+  'תשלום פיקסטורה לבדיקת התאמת אישור תשלום'
+);
+
 insert into public.document_annotations (
   id, org_id, interpretation_id, extraction_id, document_id,
   target_kind, target_id, tag_key, label, source, confidence, evidence_mark_ids

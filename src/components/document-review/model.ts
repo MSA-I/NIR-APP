@@ -407,6 +407,53 @@ export function creditDraftFromInterpretation(payload: InterpretationContract): 
   };
 }
 
+const PAYMENT_REFERENCE_KEYS = [
+  'reference', 'reference_number', 'transaction_reference', 'confirmation_number',
+  'transfer_reference', 'אסמכתא', 'מספר אסמכתא', 'מספר העברה',
+];
+const PAYMENT_DATE_KEYS = [
+  'payment_date', 'paid_date', 'value_date', 'transfer_date', 'date',
+  'תאריך תשלום', 'תאריך ההעברה', 'תאריך ערך', 'תאריך',
+];
+
+export interface PaymentConfirmationFacts {
+  amount: number | null;
+  paidDate: string;
+  reference: string;
+}
+
+/**
+ * What a bank confirmation actually states: an amount, a date and a reference.
+ *
+ * Notably NOT which invoices it settles. In this system that question is already answered before
+ * the money moves -- `execute_payment_request` takes its allocations from the approved payment
+ * request, not from any document -- so a confirmation is evidence that an execution happened, and
+ * never the instruction to perform one.
+ */
+export function paymentConfirmationFacts(payload: InterpretationContract): PaymentConfirmationFacts {
+  const field = (candidates: readonly string[]): string | number | boolean | null => {
+    for (const key of candidates) {
+      const hit = payload.fields.find((item) => item.key.trim().toLowerCase() === key);
+      if (hit && hit.value !== null && hit.value !== '') return hit.value;
+    }
+    return null;
+  };
+  const amount = numericValue(field(TOTAL_KEYS) as string | number | null);
+  const reference = field(PAYMENT_REFERENCE_KEYS);
+  return {
+    amount: amount === null ? null : Math.abs(amount),
+    paidDate: normalizeInvoiceDate(field(PAYMENT_DATE_KEYS) as string | number | boolean | null),
+    reference: typeof reference === 'string' || typeof reference === 'number'
+      ? String(reference).trim()
+      : '',
+  };
+}
+
+/** Money is equal when it is equal to the agora; a shekel of drift is a different payment. */
+export function sameAmount(left: number | null, right: number | null): boolean {
+  return left !== null && right !== null && Math.abs(left - right) <= 0.01;
+}
+
 export function correctionKey(
   kind: 'block' | 'table_cell',
   id: string,

@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import test from 'node:test';
 import type {
   DocumentFeedback,
@@ -7,7 +7,7 @@ import type {
   ReviewSnapshot,
 } from './model';
 // @ts-expect-error Node's type-stripping test runner requires the explicit TypeScript extension.
-import { bboxDescription, creditDraftFromInterpretation, deliveryNoteLines, invoiceDraftFromInterpretation, latestCorrections, matchDeliveryLineProduct, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, normalizeInvoiceDate, resolveExportTemplateWinner, resolvedText, ruleWhy } from './model.ts';
+import { bboxDescription, creditDraftFromInterpretation, deliveryNoteLines, invoiceDraftFromInterpretation, latestCorrections, matchDeliveryLineProduct, paymentConfirmationFacts, sameAmount, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, normalizeInvoiceDate, resolveExportTemplateWinner, resolvedText, ruleWhy } from './model.ts';
 
 const correction = (revision: number, text: string): DocumentReviewCorrection => ({
   id: `correction-${revision}`,
@@ -149,6 +149,33 @@ test('credit draft carries the amount and the credited invoice, never the reason
   assert.equal(draft.notes, 'לפי המסמך: קולה 1.5 ל׳ × 2');
   // credit_reason is a business fact about why money is owed; the document states an amount only.
   assert.equal('reason' in draft, false);
+});
+
+test('payment confirmation reads the amount, date and reference and nothing about invoices', () => {
+  const payload = {
+    document_type: 'payment_confirmation',
+    fields: [
+      { key: 'reference', value: ' 4471902 ', confidence: 0.9, evidence_block_ids: [] },
+      { key: 'payment_date', value: '28/07/2026', confidence: 0.9, evidence_block_ids: [] },
+      { key: 'total', value: '-1,240.00', confidence: 0.9, evidence_block_ids: [] },
+    ],
+    line_items: [],
+  } as unknown as Parameters<typeof paymentConfirmationFacts>[0];
+  assert.deepEqual(paymentConfirmationFacts(payload), {
+    amount: 1240,             // a debit prints negative; the direction is the document's type
+    paidDate: '2026-07-28',
+    reference: '4471902',
+  });
+  // A bank confirmation names no invoice, and this must never start pretending otherwise:
+  // allocations come from the approved payment request, before the money moves.
+  assert.equal('invoiceIds' in paymentConfirmationFacts(payload), false);
+});
+
+test('payment amounts match to the agora, not approximately', () => {
+  assert.equal(sameAmount(1240, 1240.004), true);
+  assert.equal(sameAmount(1240, 1240.5), false);
+  assert.equal(sameAmount(null, 1240), false);
+  assert.equal(sameAmount(1240, null), false);
 });
 
 test('document type review uses the highest append-only revision', () => {

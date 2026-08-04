@@ -32,6 +32,7 @@ const report = {
 const OCR_REVIEW_DOCUMENT_ID = '97000000-0000-4000-8000-000000000004';
 const OCR_DELIVERY_DOCUMENT_ID = '97000000-0000-4000-8000-000000000005';
 const OCR_CREDIT_DOCUMENT_ID = '97000000-0000-4000-8000-000000000003';
+const OCR_PAYMENT_DOCUMENT_ID = '97000000-0000-4000-8000-000000000002';
 const OCR_STAGE_FIXTURES = [
   ['97000000-0000-4000-8000-000000000001', 'טרם נשלח לעיבוד'],
   ['97000000-0000-4000-8000-000000000002', 'ממתין לעיבוד'],
@@ -1641,6 +1642,30 @@ async function documentOcrAcceptance(browser) {
     assert.equal(await review.locator('#invoice-credit-reason').inputValue(), 'wrong_price', 'credit draft inferred a reason the document never stated');
     await review.screenshot({ path: path.join(outDir, 'ocr-credit-draft-1440.png'), fullPage: true });
     report.screenshots.push('ocr-credit-draft-1440.png');
+
+    // A payment confirmation is reconciled, never executed: the reviewer's role cannot call
+    // execute_payment_request and the payer's role cannot read this interpretation. So the check
+    // is that the panel answers "is this real money we moved?" and says where execution lives --
+    // and above all that it offers no button to move money from here.
+    await review.goto(`${baseURL}/documents/${OCR_PAYMENT_DOCUMENT_ID}/review`);
+    await settle(review);
+    const matchPanel = review.getByRole('heading', { name: 'התאמה לתשלומים במערכת' });
+    await matchPanel.waitFor({ timeout: 15_000 });
+    await review.waitForFunction(
+      () => /נמצא תשלום רשום תואם|לא נמצא תשלום/.test(document.querySelector('#main').innerText),
+      null,
+      { timeout: 15_000 },
+    ).catch(() => { throw new Error('payment confirmation panel never reached a verdict') });
+    const paymentPanel = review.locator('[data-testid="payment-confirmation-match"]');
+    const paymentBody = await paymentPanel.innerText();
+    assert.match(paymentBody, /נמצא תשלום רשום תואם/, 'payment confirmation did not match the seeded payment');
+    assert.match(paymentBody, /בעל תפקיד תשלומים/, 'payment confirmation did not say where execution actually happens');
+    // Scoped to the panel, not the page: the sidebar and speed-dial legitimately contain buttons
+    // whose names mention payments, and asserting across the whole document caught those instead.
+    assert.equal(await paymentPanel.getByRole('button').count(), 0,
+      'payment confirmation panel offered a button; executing a payment must not be reachable from the review screen');
+    await review.screenshot({ path: path.join(outDir, 'ocr-payment-match-1440.png'), fullPage: true });
+    report.screenshots.push('ocr-payment-match-1440.png');
   } finally {
     await closeContext(desktop);
   }

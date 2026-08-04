@@ -1,4 +1,4 @@
-# Full P4 quality gate. This script is intentionally destructive only to the isolated
+﻿# Full P4 quality gate. This script is intentionally destructive only to the isolated
 # local Supabase project declared in supabase/config.toml. It never accepts a remote URL.
 #
 # Usage: npm.cmd run quality
@@ -101,9 +101,14 @@ function Invoke-DependencyAudit {
   Write-Output "npm audit: accepted GHSA-qwww-vcr4-c8h2 only; the RSC Actions runtime is not installed."
 }
 
-function Get-LocalSupabaseEnvironment([int]$Attempts = 1) {
+# Bounded by wall-clock, not by attempt count, for the same reason as Wait-LocalApiReady: a probe
+# that fails instantly spends an "80 attempts" budget in seconds, and the containers take longer
+# than that to report ready when the host is under disk or memory pressure. The default of a single
+# attempt was worse still -- one shot straight after `supabase start`, with no wait at all.
+function Get-LocalSupabaseEnvironment([int]$TimeoutSeconds = 0) {
   $required = @("API_URL", "ANON_KEY", "SERVICE_ROLE_KEY")
-  for ($attempt = 0; $attempt -lt $Attempts; $attempt++) {
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while ($true) {
     $values = @{}
     $previousPreference = $ErrorActionPreference
     try {
@@ -129,7 +134,8 @@ function Get-LocalSupabaseEnvironment([int]$Attempts = 1) {
       $missing = @($required | Where-Object { -not $values.ContainsKey($_) -or -not $values[$_] })
       if (-not $missing.Count) { return $values }
     }
-    if ($attempt + 1 -lt $Attempts) { Start-Sleep -Milliseconds 250 }
+    if ((Get-Date) -ge $deadline) { break }
+    Start-Sleep -Milliseconds 500
   }
   return $null
 }
@@ -163,7 +169,7 @@ function Wait-LocalApiReady([hashtable]$Environment) {
 }
 
 function Wait-LocalStackReady {
-  $environment = Get-LocalSupabaseEnvironment -Attempts 80
+  $environment = Get-LocalSupabaseEnvironment -TimeoutSeconds 180
   if (-not $environment) {
     Stop-WithInfrastructureBlock "local_supabase_environment_not_ready" "Local Supabase environment did not become ready."
   }
@@ -639,7 +645,7 @@ $repoLocationPushed = $false
 Push-Location -LiteralPath $repoRoot
 $repoLocationPushed = $true
 try {
-  $localEnvironment = Get-LocalSupabaseEnvironment
+  $localEnvironment = Get-LocalSupabaseEnvironment -TimeoutSeconds 180
   $supabaseWasRunning = $null -ne $localEnvironment
   New-LocalFunctionsEnvironment
   if ($supabaseWasRunning) {
