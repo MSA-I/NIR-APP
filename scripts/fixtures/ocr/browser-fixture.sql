@@ -174,6 +174,22 @@ values
     pg_temp.ocr_interpretation_payload(), jsonb_build_object('fixture', true), 302
   );
 
+-- An approved type decision on the review document. Without one the review screen never reaches
+-- the state where a classified invoice can be drafted, so the draft path would go unexercised.
+insert into public.document_type_review_decisions (
+  org_id, interpretation_id, extraction_id, document_id, revision,
+  decision, suggested_document_type, approved_document_type,
+  input_checksum, contract_version, actor_id, reason
+)
+select
+  i.org_id, i.id, i.extraction_id, i.document_id, 1,
+  'approved', 'invoice', 'invoice',
+  e.input_checksum, e.contract_version, :'ocr_owner_id',
+  'אושר בפיקסטורת הקבלה כדי לאפשר בדיקת טיוטת חשבונית'
+from public.document_interpretations i
+join public.document_extractions e on e.org_id = i.org_id and e.id = i.extraction_id
+where i.id = '97300000-0000-4000-8000-000000000004';
+
 insert into public.document_annotations (
   id, org_id, interpretation_id, extraction_id, document_id,
   target_kind, target_id, tag_key, label, source, confidence, evidence_mark_ids

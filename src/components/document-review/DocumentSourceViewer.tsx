@@ -212,13 +212,15 @@ export function DocumentSourceViewer({
           </div>
         </div>
 
-        {tables.map((table) => (
+        {/* Numbered by position, not by `table.id`: the id is an extraction-internal string
+            ("ocr-p1-t1") that named nothing to the person checking the document. */}
+        {tables.map((table, tableIndex) => (
           <section key={table.id} className="mt-5 min-w-0" aria-labelledby={`table-${table.id}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h4 id={`table-${table.id}`} className="font-semibold text-ink-body">טבלה {table.id}</h4>
+              <h4 id={`table-${table.id}`} className="font-semibold text-ink-body">טבלה <span className="num">{tableIndex + 1}</span></h4>
               <span className="text-xs text-ink-muted">{bboxDescription(table.bbox)}</span>
             </div>
-            <div className="mt-2 max-w-full overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label={`טבלה חזותית ${table.id}; ניתן לגלול בתוך הטבלה`}>
+            <div className="mt-2 max-w-full overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label={`טבלה חזותית ${tableIndex + 1}; ניתן לגלול בתוך הטבלה`}>
               <table className="min-w-full border-collapse bg-surface">
                 <tbody>
                   {table.rows.map((row, rowIndex) => (
