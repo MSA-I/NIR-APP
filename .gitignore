@@ -10,3 +10,11 @@ supabase/.branches/
 .impeccable/live/sessions/
 .impeccable/live/annotations/
 .impeccable/live/server.json
+
+# Local QA runtime state and evidence. These may contain authenticated sessions.
+.env.qa
+.qa-auth/
+.qa-state/
+.qa-runs/
+playwright-report/
+test-results/

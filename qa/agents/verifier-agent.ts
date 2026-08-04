@@ -1,0 +1,144 @@
+import { z } from 'zod';
+import type { QaRole } from '../config/roles.ts';
+import {
+  AgentEvidenceSchema,
+  VerificationRequestSchema,
+  type VerificationRequest,
+} from './contracts.ts';
+import { redactAgentText } from './model-adapter.ts';
+
+const scalarFact = z.union([
+  z.string().max(2_000),
+  z.number().finite(),
+  z.boolean(),
+  z.null(),
+]);
+
+export const VerifierEvidenceSchema = AgentEvidenceSchema.pick({
+  kind: true,
+  ref: true,
+});
+
+export const VerifierResultSchema = z.object({
+  status: z.enum(['verified', 'failed', 'blocked']),
+  summary: z.string().trim().min(1).max(4_000),
+  evidence: z.array(VerifierEvidenceSchema).max(100),
+  facts: z.array(z.object({
+    key: z.string().trim().min(1).max(100).regex(/^[a-z0-9][a-z0-9._-]*$/),
+    value: scalarFact,
+  }).strict()).max(100),
+}).strict();
+
+export type VerifierResult = z.infer<typeof VerifierResultSchema>;
+
+export const BrowserMutationEvidenceSchema = z.object({
+  source: z.literal('browser-action'),
+  step: z.number().int().positive(),
+  actionType: z.enum([
+    'open', 'snapshot', 'click', 'fill', 'select', 'upload', 'press',
+    'scroll', 'wait_for_text', 'screenshot', 'current_url',
+  ]),
+  entityRefs: VerificationRequestSchema.shape.entityRefs.min(1),
+  evidenceRefs: z.array(z.string().trim().min(1).max(500)).min(1).max(50),
+}).strict();
+
+export type BrowserMutationEvidence = z.infer<typeof BrowserMutationEvidenceSchema>;
+
+export interface VerifierCallbackInput {
+  readonly runId: string;
+  readonly role: QaRole;
+  readonly scenarioId: string;
+  readonly step: number;
+  readonly actionType: BrowserMutationEvidence['actionType'];
+  readonly meaningfulBusinessAction: boolean;
+  /** Trusted output of the browser action for this exact step; never supplied by the model. */
+  readonly mutationEvidence: BrowserMutationEvidence | null;
+  readonly request: VerificationRequest;
+}
+
+/** Trusted outer-layer callback. It may close over verifier infrastructure; that closure is never
+ * exposed by VerifierAgent and never appears in role-agent or model input. */
+export type VerifierCallback = (
+  input: VerifierCallbackInput,
+) => Promise<VerifierResult>;
+
+export interface VerifierAgent {
+  readonly allowedCheckIds: readonly string[];
+  verify(input: VerifierCallbackInput): Promise<VerifierResult>;
+}
+
+export class VerifierAgentError extends Error {
+  readonly code:
+    | 'verifier_check_not_allowed'
+    | 'verifier_invalid_request'
+    | 'verifier_invalid_result'
+    | 'verifier_callback_failed';
+
+  constructor(code: VerifierAgentError['code'], options?: { cause?: unknown }) {
+    super(code, options?.cause === undefined ? undefined : { cause: options.cause });
+    this.name = 'VerifierAgentError';
+    this.code = code;
+  }
+}
+
+export function createVerifierAgent(options: {
+  readonly allowedCheckIds: readonly string[];
+  readonly callback: VerifierCallback;
+}): VerifierAgent {
+  const allowed = new Set(options.allowedCheckIds);
+  return Object.freeze({
+    allowedCheckIds: Object.freeze([...allowed]),
+    async verify(input: VerifierCallbackInput): Promise<VerifierResult> {
+      const request = VerificationRequestSchema.safeParse(input.request);
+      if (!request.success) throw new VerifierAgentError('verifier_invalid_request');
+      if (!allowed.has(request.data.checkId)) {
+        throw new VerifierAgentError('verifier_check_not_allowed');
+      }
+      const mutationEvidence = input.mutationEvidence === null
+        ? null
+        : BrowserMutationEvidenceSchema.safeParse(input.mutationEvidence);
+      if (mutationEvidence !== null && !mutationEvidence.success) {
+        throw new VerifierAgentError('verifier_invalid_request');
+      }
+      const trustedMutation = mutationEvidence?.data ?? null;
+      if (input.meaningfulBusinessAction && (
+        trustedMutation === null
+        || trustedMutation.step !== input.step
+        || trustedMutation.actionType !== input.actionType
+      )) {
+        return {
+          status: 'blocked',
+          summary: 'The browser action exposed no trusted mutation evidence for this exact step; model-provided entity references were not used.',
+          evidence: [],
+          facts: [
+            { key: 'trusted_mutation_evidence', value: false },
+            { key: 'verification_step', value: input.step },
+          ],
+        };
+      }
+      const callbackRequest = input.meaningfulBusinessAction && trustedMutation
+        ? { ...request.data, entityRefs: trustedMutation.entityRefs }
+        : request.data;
+      let raw: VerifierResult;
+      try {
+        raw = await options.callback({
+          ...input,
+          request: callbackRequest,
+          mutationEvidence: trustedMutation,
+        });
+      } catch (error) {
+        throw new VerifierAgentError('verifier_callback_failed', { cause: error });
+      }
+      const result = VerifierResultSchema.safeParse(raw);
+      if (!result.success) throw new VerifierAgentError('verifier_invalid_result');
+      return {
+        ...result.data,
+        summary: redactAgentText(result.data.summary, 4_000),
+        evidence: result.data.evidence.map((evidence) => ({
+          ...evidence,
+          ref: redactAgentText(evidence.ref, 500),
+        })),
+      };
+    },
+  });
+}
