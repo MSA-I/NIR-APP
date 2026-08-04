@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { Check, FilePlus2, Loader2, RotateCcw, ShieldAlert, X } from 'lucide-react';
 import type { Role } from '../../lib/types';
@@ -20,6 +20,8 @@ import {
   latestTypeReviewDecision,
   lineItemArithmetic,
   lineItemKeyLabel,
+  paymentConfirmationFacts,
+  sameAmount,
   resolvedText,
   ruleWhy,
   type ReviewSnapshot,
@@ -237,6 +239,107 @@ const DRAFT_ACTIONS: Partial<Record<
   },
 };
 
+/**
+ * A payment confirmation is reconciled here, not executed.
+ *
+ * Executing is `execute_payment_request`, which only a payer may call, and a payer cannot read a
+ * document interpretation at all (0046:557 grants that to owner/office/kitchen). That split is the
+ * separation of duties this system is built on: whoever files the paperwork is not whoever moves
+ * the money. So this panel answers the question a reviewer can actually act on -- does this
+ * confirmation correspond to a payment we really made? -- and says plainly where execution lives.
+ */
+function PaymentConfirmationMatch({ interpretation }: {
+  interpretation: NonNullable<ReviewSnapshot['interpretation']>;
+}) {
+  const facts = useMemo(
+    () => paymentConfirmationFacts(interpretation.payload),
+    [interpretation.payload],
+  );
+  const supplierId = interpretation.suggested_supplier_id;
+  const [state, setState] = useState<
+    { status: 'loading' }
+    | { status: 'error' }
+    | { status: 'ready'; payments: { id: string; number: number; paid_date: string; reference: string | null; amount: number }[];
+        requests: { id: string; number: number; amount: number; status: string }[] }
+  >({ status: 'loading' });
+
+  useEffect(() => {
+    if (!supplierId) { setState({ status: 'ready', payments: [], requests: [] }); return; }
+    let cancelled = false;
+    void (async () => {
+      const [payments, requests] = await Promise.all([
+        supabase.from('payments').select('id, number, paid_date, reference, amount')
+          .eq('supplier_id', supplierId).order('paid_date', { ascending: false }).limit(50),
+        supabase.from('payment_requests').select('id, number, amount, status')
+          .eq('supplier_id', supplierId).in('status', ['approved', 'sent_for_execution']).limit(50),
+      ]);
+      if (cancelled) return;
+      if (payments.error || requests.error) { setState({ status: 'error' }); return; }
+      setState({
+        status: 'ready',
+        payments: (payments.data ?? []) as never,
+        requests: (requests.data ?? []) as never,
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [supplierId]);
+
+  const matchedPayments = state.status === 'ready'
+    ? state.payments.filter((payment) =>
+      sameAmount(facts.amount, payment.amount)
+      || (!!facts.reference && payment.reference?.trim() === facts.reference))
+    : [];
+  const matchedRequests = state.status === 'ready'
+    ? state.requests.filter((request) => sameAmount(facts.amount, request.amount))
+    : [];
+
+  return (
+    <div className="mt-4 border-t border-line pt-4" data-testid="payment-confirmation-match">
+      <h4 className="text-sm font-medium text-ink-soft">התאמה לתשלומים במערכת</h4>
+      <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
+        <div><dt className="text-xs text-ink-muted">סכום במסמך</dt><dd className="num">{facts.amount === null ? '—' : facts.amount}</dd></div>
+        <div><dt className="text-xs text-ink-muted">תאריך</dt><dd className="num">{facts.paidDate || '—'}</dd></div>
+        <div><dt className="text-xs text-ink-muted">אסמכתא</dt><dd className="break-all num" dir="ltr">{facts.reference || '—'}</dd></div>
+      </dl>
+
+      {state.status === 'loading' && <p className="mt-3 text-sm text-ink-muted">בודק מול התשלומים והדרישות של הספק…</p>}
+      {state.status === 'error' && (
+        <Note tone="alert" className="mt-3" role="alert">
+          בדיקת ההתאמה נכשלה. אין להסיק מכך שהתשלום קיים או שאינו קיים.
+        </Note>
+      )}
+      {state.status === 'ready' && (
+        <div className="mt-3 space-y-2 text-sm">
+          {matchedPayments.length > 0 && (
+            <Note tone="done">
+              נמצא תשלום רשום תואם: {matchedPayments.map((payment) => `#${payment.number} מ־${payment.paid_date}`).join(', ')}.
+              המסמך הוא אסמכתא לתשלום שכבר קיים במערכת.
+            </Note>
+          )}
+          {matchedPayments.length === 0 && matchedRequests.length > 0 && (
+            <Note tone="await">
+              אין תשלום רשום בסכום הזה, אך יש דרישת תשלום מאושרת תואמת: {matchedRequests.map((request) => `#${request.number}`).join(', ')}.
+              ייתכן שההעברה בוצעה ועדיין לא נרשמה.
+            </Note>
+          )}
+          {matchedPayments.length === 0 && matchedRequests.length === 0 && (
+            <Note tone="alert" role="alert">
+              {facts.amount === null
+                ? 'לא זוהה סכום במסמך, ולכן לא ניתן להשוות אותו לתשלומים במערכת.'
+                : 'לא נמצא תשלום או דרישת תשלום בסכום הזה לספק. כדאי לברר לפני שמסתמכים על המסמך.'}
+            </Note>
+          )}
+          {/* Said explicitly rather than left to be discovered: the reviewer is not being denied a
+              button by oversight, and hunting for one they will never have is wasted time. */}
+          <p className="text-xs text-ink-muted">
+            רישום ההעברה עצמה נעשה במסך התשלומים בידי בעל תפקיד תשלומים, ולא מכאן.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DocumentDraftAction({ documentType, documentId, interpretation }: {
   documentType: InterpretationContract['document_type'] | null;
   documentId: string;
@@ -246,6 +349,7 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const action = documentType ? DRAFT_ACTIONS[documentType] : undefined;
+  if (documentType === 'payment_confirmation') return <PaymentConfirmationMatch interpretation={interpretation} />;
   if (!documentType || !action) return null;
 
   // A credit note names the invoice it credits, but only the database can say whether we hold that
