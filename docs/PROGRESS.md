@@ -7,6 +7,23 @@
 
 ---
 
+## פריסת גל המחירונים והאספקות (04.08.2026, אחרי הצהריים)
+
+**‏frontend בלבד — אין מיגרציה.** כל ה-RPC שהגל צורך (`reserve/register_supplier_price_document`,
+`import_supplier_prices`, ‏`submit-price-list`) חיים בפרודקשן מאז `0048`; הפריסה לא נגעה במסד.
+
+**הבנייה נעשתה מה-commit, לא מעץ העבודה.** סוכן מקביל עבד באותו רגע על `payment_confirmation`
+(‏`model.ts`, ‏`DocumentReviewProposals.tsx` — לא מקומט), ולכן ה-dist נבנה ב-`git worktree` נקי של
+`561c9fd` בלבד — העבודה שבתהליך לא נשלחה. עותק ה-`.env` שהועתק ל-worktree לצורך הבנייה נמחק איתו.
+
+**אימות:** ‏`wrangler pages deploy` → ‏Production ‏`9b436063` (ענף main, מקור `561c9fd`);
+‏`index.html` החי מפנה ל-chunk החדש, ו-`Dashboard-GdVAirl0.js` + ‏`PriceListUpload-DtrEZiGI.js`
+זהים ‏SHA-256 בית-בית מול הבנייה המקומית, כולל מחרוזות הכרטיס והמודאל. שם הפרויקט ב-Cloudflare
+הוא `supplyflow` (הדומיין `supplyflow-baq.pages.dev`) — פקודה עם `--project-name supplyflow-baq`
+נכשלת.
+
+---
+
 ## העלאת מחירון מכל מסך, כרטיס אספקות היום/מחר, והקשחת ייצוא הדוחות (04.08.2026)
 
 **מנגנון קליטת מחירון אחד, מחומש כניסות.** ‏`src/components/PriceListUpload.tsx` חילץ את הכפילות
