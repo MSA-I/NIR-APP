@@ -7,7 +7,7 @@ import type {
   ReviewSnapshot,
 } from './model';
 // @ts-expect-error Node's type-stripping test runner requires the explicit TypeScript extension.
-import { bboxDescription, latestCorrections, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, resolveExportTemplateWinner, resolvedText, ruleWhy } from './model.ts';
+import { bboxDescription, invoiceDraftFromInterpretation, latestCorrections, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, normalizeInvoiceDate, resolveExportTemplateWinner, resolvedText, ruleWhy } from './model.ts';
 
 const correction = (revision: number, text: string): DocumentReviewCorrection => ({
   id: `correction-${revision}`,
@@ -46,12 +46,47 @@ test('review overlays keep immutable evidence and select the newest fenced revis
 
 test('location and rule explanations stay textual', () => {
   assert.match(bboxDescription([0.1, 0.2, 0.8, 0.9]), /10%–80%/);
+  // A full-width band is what both production paths emit: FULL_BBOX for digital PDF text, and one
+  // band per line from the OpenAI OCR adapter. The constant axis is dropped so the varying one
+  // is not buried under "0%–100% לרוחב" on every single row.
+  assert.equal(bboxDescription([0, 0.26, 1, 0.3]), 'מיקום בעמוד: 26%–30% לגובה');
+  assert.equal(bboxDescription([0, 0, 1, 1]), 'פרוס על פני כל העמוד');
   assert.match(ruleWhy({
     id: 'rule', org_id: 'org', family_id: 'family', version: 3, user_id: 'user', document_type: 'invoice',
     supplier_id: null, mark_kind: 'check', mark_fingerprint: 'fingerprint', tag_key: 'approved',
     label: 'מאושר', active: true, created_by: 'user', created_at: '2026-07-29T00:00:00Z',
     disabled_at: null, disabled_by: null, disable_reason: null,
   }), /כלל אישי.*גרסה 3.*טביעת/);
+});
+
+test('invoice draft reads what the model offered and guesses nothing else', () => {
+  const payload = {
+    document_type: 'invoice', document_type_confidence: 0.9,
+    supplier: { suggested_id: null, suggested_name: 'ספק', confidence: 0.9, evidence_block_ids: [] },
+    fields: [
+      { key: 'invoice_number', value: ' INV-2026-1042 ', confidence: 0.97, evidence_block_ids: [] },
+      { key: 'invoice_date', value: '03/04/2026', confidence: 0.9, evidence_block_ids: [] },
+      { key: 'subtotal', value: '₪ 1,392.00', confidence: 0.9, evidence_block_ids: [] },
+      { key: 'total', value: 745.6, confidence: 0.93, evidence_block_ids: [] },
+    ],
+    line_items: [], suggested_annotations: [],
+  } as unknown as Parameters<typeof invoiceDraftFromInterpretation>[0];
+  assert.deepEqual(invoiceDraftFromInterpretation(payload), {
+    invoice_number: 'INV-2026-1042',
+    invoice_date: '2026-04-03',   // day-first, the convention these documents are printed in
+    before_vat: '1392',
+    vat: '',                      // not offered -> left for the person, never inferred from the others
+    total: '745.6',
+  });
+});
+
+test('invoice draft leaves an unparseable date empty rather than plausible', () => {
+  // A date that is merely probably right lands on a financial record and is invisible once wrong.
+  assert.equal(normalizeInvoiceDate('2026-04-03'), '2026-04-03');
+  assert.equal(normalizeInvoiceDate('3.4.2026'), '2026-04-03');
+  assert.equal(normalizeInvoiceDate('April 3, 2026'), '');
+  assert.equal(normalizeInvoiceDate('03/13/2026'), '');   // month 13: not day-first, so not read
+  assert.equal(normalizeInvoiceDate(null), '');
 });
 
 test('document type review uses the highest append-only revision', () => {

@@ -1,4 +1,4 @@
--- PLAN-03 document interpretation/learning plus PLAN-05 review contracts.
+﻿-- PLAN-03 document interpretation/learning plus PLAN-05 review contracts.
 -- Run against a freshly reset disposable local database after migration 0050.
 -- Every fixture is rolled back; the test never writes business data permanently.
 \set ON_ERROR_STOP on
@@ -206,7 +206,7 @@ select document_learning_test.assert(
     )
     and has_function_privilege(
       'authenticated',
-      'public.review_document_type(uuid,text,text,text,text,text,integer)',
+      'public.review_document_type(uuid,text,text,text,text,text,integer,text)',
       'EXECUTE'
     )
     and not has_function_privilege(
@@ -221,12 +221,12 @@ select document_learning_test.assert(
     )
     and not has_function_privilege(
       'service_role',
-      'public.review_document_type(uuid,text,text,text,text,text,integer)',
+      'public.review_document_type(uuid,text,text,text,text,text,integer,text)',
       'EXECUTE'
     )
     and not has_function_privilege(
       'anon',
-      'public.review_document_type(uuid,text,text,text,text,text,integer)',
+      'public.review_document_type(uuid,text,text,text,text,text,integer,text)',
       'EXECUTE'
     )
     and not exists (
@@ -235,7 +235,7 @@ select document_learning_test.assert(
       cross join lateral aclexplode(
         coalesce(p.proacl, acldefault('f', p.proowner))
       ) acl
-      where p.oid = 'public.review_document_type(uuid,text,text,text,text,text,integer)'::regprocedure
+      where p.oid = 'public.review_document_type(uuid,text,text,text,text,text,integer,text)'::regprocedure
         and acl.grantee = 0
         and acl.privilege_type = 'EXECUTE'
     )
@@ -299,16 +299,16 @@ select document_learning_test.assert(
     )
     and position(
       'for share of d' in lower(pg_get_functiondef(
-        'public.review_document_type(uuid,text,text,text,text,text,integer)'::regprocedure
+        'public.review_document_type(uuid,text,text,text,text,text,integer,text)'::regprocedure
       ))
     ) > 0
     and position(
       'for update of i, j' in lower(pg_get_functiondef(
-        'public.review_document_type(uuid,text,text,text,text,text,integer)'::regprocedure
+        'public.review_document_type(uuid,text,text,text,text,text,integer,text)'::regprocedure
       ))
     ) > position(
       'for share of d' in lower(pg_get_functiondef(
-        'public.review_document_type(uuid,text,text,text,text,text,integer)'::regprocedure
+        'public.review_document_type(uuid,text,text,text,text,text,integer,text)'::regprocedure
       ))
     ),
   'review mutations do not preserve the document -> interpretation/job lock order'
@@ -979,11 +979,97 @@ select document_learning_test.assert(
          order by revision desc limit 1)
     and (select count(*) = 4
          from public.audit_logs where action = 'document_type_review_decided')
-    and (select document_kind = 'other'
+    -- Until 0051 this asserted the document stayed 'other' after an approved 'invoice' decision:
+    -- the confirmed classification sat in the ledger while the gallery kept filtering on the guess
+    -- made at upload time. Recognising the document is the point of running OCR over it, so the
+    -- approval now reaches documents.document_kind and the assertion follows the new contract.
+    and (select document_kind = 'invoice'
          from public.documents where id = '46000000-0000-4000-8000-000000000001')
+    and (select count(*) = 1
+         from public.audit_logs
+         where action = 'document_kind_synced_from_review'
+           and entity_id = '46000000-0000-4000-8000-000000000001'
+           and old_values ->> 'document_kind' = 'other'
+           and new_values ->> 'document_kind' = 'invoice')
+    -- Unchanged: only a rejection was attempted here, and a rejection must never reclassify.
     and (select document_kind = 'price_list'
-         from public.documents where id = '46000000-0000-4000-8000-000000000010'),
+         from public.documents where id = '46000000-0000-4000-8000-000000000010')
+    and (select count(*) = 0
+         from public.audit_logs
+         where action = 'document_kind_synced_from_review'
+           and entity_id = '46000000-0000-4000-8000-000000000010'),
   'document-type suggestion/decision separation or audit history is incorrect'
+);
+
+-- Correction path (0052). Until it existed an approval could only echo the model: when the model
+-- read a document wrong the reviewer could only reject, and the document kept the kind chosen at
+-- upload time with no way back. Here the model said invoice and the reviewer says delivery_note.
+--
+-- Deliberately run against an internal document, not the supplier-owned price list. Correcting a
+-- price_list to anything else revokes the supplier's own access to it: supplier_price_document_owned
+-- requires document_kind = 'price_list' (0048). That is defensible behaviour -- a document that is
+-- not a price list has no business appearing in the supplier price portal -- but it is a real
+-- consequence of a correction, and it does not belong in the middle of an unrelated fixture.
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000001', true);
+set local role authenticated;
+select public.review_document_type(
+  :'dl_i1_interpretation_id'::uuid, 'approved', 'invoice',
+  'הבודק תיקן: זו תעודת משלוח ולא חשבונית',
+  :'dl_review_input_checksum', :'dl_review_contract_version', 3, 'delivery_note'
+)::text as result
+\gset dl_type_corrected_
+
+-- A correction may not smuggle in a type the contract does not know...
+do $$
+begin
+  perform public.review_document_type(
+    (select id from public.document_interpretations
+     where job_id = '56000000-0000-4000-8000-000000000001'),
+    'approved', 'invoice', 'unknown corrected type must fail',
+    'etag:' || repeat('1', 64), '1', 4, 'not_a_document_type'
+  );
+  raise exception 'expected unknown corrected document-type rejection';
+exception when sqlstate '22023' then
+  if sqlerrm <> 'document_type_review_invalid' then raise; end if;
+end
+$$;
+-- ...and a rejection may not name an approved type: "the model is wrong" and "here is the right
+-- answer" are two decisions, and accepting both at once would leave the ledger ambiguous.
+do $$
+begin
+  perform public.review_document_type(
+    (select id from public.document_interpretations
+     where job_id = '56000000-0000-4000-8000-000000000001'),
+    'rejected', 'invoice', 'rejection naming a type must fail',
+    'etag:' || repeat('1', 64), '1', 4, 'delivery_note'
+  );
+  raise exception 'expected rejection-with-approved-type refusal';
+exception when sqlstate '22023' then
+  if sqlerrm <> 'document_type_review_invalid' then raise; end if;
+end
+$$;
+reset role;
+
+select document_learning_test.assert(
+  (:'dl_type_corrected_result'::jsonb ->> 'revision')::integer = 4
+    and :'dl_type_corrected_result'::jsonb ->> 'suggested_document_type' = 'invoice'
+    and :'dl_type_corrected_result'::jsonb ->> 'approved_document_type' = 'delivery_note'
+    and (:'dl_type_corrected_result'::jsonb ->> 'corrected')::boolean
+    -- The model's suggestion is still on the record, unchanged, beside the human's correction.
+    and (select suggested_document_type = 'invoice' and approved_document_type = 'delivery_note'
+         from public.document_type_review_decisions
+         where interpretation_id = :'dl_i1_interpretation_id'::uuid
+         order by revision desc limit 1)
+    and (select document_kind = 'delivery_note'
+         from public.documents where id = '46000000-0000-4000-8000-000000000001')
+    and exists (
+      select 1 from public.audit_logs
+      where action = 'document_kind_synced_from_review'
+        and entity_id = '46000000-0000-4000-8000-000000000001'
+        and old_values ->> 'document_kind' = 'invoice'
+        and new_values ->> 'document_kind' = 'delivery_note'
+    ),
+  'document-type correction did not reach the document, the ledger or the audit trail'
 );
 
 create temporary table document_learning_review_context as
@@ -1873,7 +1959,10 @@ select document_learning_test.assert(
   'required reasoned audit events are incomplete'
 );
 
--- Annotation-only: all original business rows are byte-for-byte unchanged.
+-- Annotation-only, with exactly one named exception: migration 0051 lets an approved human
+-- document-type decision reclassify documents.document_kind. The exception is kept narrow on
+-- purpose -- `- 'document_kind'` strips that one key and nothing else, so any other column on any
+-- business row (and every supplier column, which has no such key) is still compared byte-for-byte.
 select document_learning_test.assert(
   not exists (
     select 1
@@ -1885,8 +1974,29 @@ select document_learning_test.assert(
       select to_jsonb(s) from public.suppliers s
       where snapshot.kind = 'supplier' and s.id = snapshot.id
     ) current on true
-    where current.value is distinct from snapshot.value
+    where current.value - 'document_kind' is distinct from snapshot.value - 'document_kind'
   )
+    -- The exception is not a free pass: a document may only have been reclassified if a person
+    -- approved a type for it with a reason. The model's own suggestion never reaches this column.
+    and not exists (
+      select 1
+      from document_learning_business_snapshot snapshot
+      join public.documents d on snapshot.kind = 'document' and d.id = snapshot.id
+      where d.document_kind is distinct from snapshot.value ->> 'document_kind'
+        and not exists (
+          select 1 from public.document_type_review_decisions r
+          where r.org_id = d.org_id
+            and r.document_id = d.id
+            and r.decision = 'approved'
+            and r.approved_document_type is not null
+            and nullif(trim(r.reason), '') is not null
+        )
+    )
+    and not exists (
+      select 1 from public.audit_logs
+      where action = 'document_kind_synced_from_review'
+        and nullif(trim(reason), '') is null
+    )
     and not exists (
       select 1 from public.document_annotations
       where target_kind not in ('block', 'mark')

@@ -141,7 +141,12 @@ function Wait-LocalApiReady([hashtable]$Environment) {
   }
   $authStatus = 0
   $restStatus = 0
-  for ($attempt = 0; $attempt -lt 80; $attempt++) {
+  # Bounded by wall-clock, not by attempt count. A refused connection fails instantly, so the old
+  # "80 attempts" budget was spent in about twenty seconds -- less than GoTrue needs to come up
+  # after a full db reset and container restart. That produced a recurring "Auth=-1, PostgREST=200"
+  # failure that looked like a broken gate and was only ever a stopwatch that ran out too early.
+  $deadline = (Get-Date).AddSeconds(180)
+  do {
     try {
       $authStatus = (Invoke-WebRequest -UseBasicParsing -Uri "$expectedApiUrl/auth/v1/health" `
         -Headers $headers -TimeoutSec 2).StatusCode
@@ -152,8 +157,8 @@ function Wait-LocalApiReady([hashtable]$Environment) {
         -Headers $headers -TimeoutSec 2).StatusCode
     } catch { $restStatus = -1 }
     if ($authStatus -eq 200 -and $restStatus -eq 200) { return }
-    Start-Sleep -Milliseconds 250
-  }
+    Start-Sleep -Milliseconds 500
+  } while ((Get-Date) -lt $deadline)
   Stop-WithInfrastructureBlock "local_api_not_ready" "Local API readiness failed after reset (Auth=$authStatus, PostgREST=$restStatus)."
 }
 
@@ -566,6 +571,8 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\migrations\0048_ocr_price_submission_bridge.sql",
     "supabase\migrations\0049_document_review_mutations.sql",
     "supabase\migrations\0050_document_type_review_decisions.sql",
+    "supabase\migrations\0051_document_kind_follows_review.sql",
+    "supabase\migrations\0052_document_type_correction.sql",
     "supabase\tests\smart_document_processing.sql",
     "supabase\tests\document_learning.sql",
     "supabase\tests\document_export_templates.sql",

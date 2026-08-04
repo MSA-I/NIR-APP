@@ -100,28 +100,31 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg bg-surface-sunken p-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-ink-soft"><ScanText size={17} aria-hidden="true" /> חילוץ</div>
-            <p className="mt-1 break-words text-sm text-ink-body">{snapshot.extraction ? `${snapshot.extraction.engine} · ${snapshot.extraction.model} ${snapshot.extraction.model_version}` : 'טרם זמין'}</p>
-          </div>
-          <div className="rounded-lg bg-surface-sunken p-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-ink-soft"><Cpu size={17} aria-hidden="true" /> פירוש</div>
-            <p className="mt-1 break-words text-sm text-ink-body">{snapshot.interpretation ? `${snapshot.interpretation.provider} · ${snapshot.interpretation.model}` : 'טרם זמין'}</p>
-          </div>
-          <div className="rounded-lg bg-surface-sunken p-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-ink-soft"><FileCheck2 size={17} aria-hidden="true" /> שכבות בדיקה</div>
-            <p className="mt-1 text-sm text-ink-body"><span className="num">{snapshot.reviewCorrections.length}</span> תיקונים · <span className="num">{snapshot.annotations.length}</span> הערות</p>
-          </div>
+        <div className="mt-4 rounded-lg bg-surface-sunken p-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-ink-soft"><FileCheck2 size={17} aria-hidden="true" /> שכבות בדיקה</div>
+          <p className="mt-1 text-sm text-ink-body"><span className="num">{snapshot.reviewCorrections.length}</span> תיקונים · <span className="num">{snapshot.annotations.length}</span> הערות</p>
         </div>
 
-        {/* The job id, source fingerprint and contract version are support/audit evidence, not
-            decision material. Staged disclosure (DESIGN.md): kept verbatim and reachable, folded
-            so a non-technical reviewer is not met by three opaque identifiers. */}
+        {/* Which engine read the document, the job id, the source fingerprint and the contract
+            version are support/audit evidence, not decision material: knowing the model name does
+            not help a bookkeeper decide whether the price is right. Staged disclosure (DESIGN.md):
+            kept verbatim and reachable, folded so a non-technical reviewer is not met by them. */}
         {snapshot.job && (
           <details className="mt-4 border-t border-line pt-3">
             <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-ink-soft">פרטים טכניים</summary>
             <dl className="mt-2 grid gap-2 text-xs text-ink-muted">
+              <div>
+                <dt className="flex items-center gap-1.5 font-medium text-ink-soft"><ScanText size={14} aria-hidden="true" /> מנוע חילוץ</dt>
+                <dd className="mt-0.5 break-words">{snapshot.extraction ? `${snapshot.extraction.engine} · ${snapshot.extraction.model} ${snapshot.extraction.model_version}` : 'טרם זמין'}</dd>
+              </div>
+              <div>
+                <dt className="flex items-center gap-1.5 font-medium text-ink-soft"><Cpu size={14} aria-hidden="true" /> מנוע פירוש</dt>
+                <dd className="mt-0.5 break-words">
+                  {snapshot.interpretation
+                    ? `${snapshot.interpretation.provider} · ${snapshot.interpretation.model} · prompt ${snapshot.interpretation.prompt_version} · schema ${snapshot.interpretation.schema_version}`
+                    : 'טרם זמין'}
+                </dd>
+              </div>
               <div>
                 <dt className="font-medium text-ink-soft">מזהה משימה</dt>
                 <dd className="mt-0.5 break-all"><span dir="ltr" className="num">{snapshot.job.id}</span></dd>

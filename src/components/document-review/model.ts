@@ -73,14 +73,95 @@ export const ANNOTATION_SOURCE_LABELS: Record<DocumentAnnotation['source'], stri
   user: 'הערת משתמש',
 };
 
+// The model names these keys itself, so this can never be exhaustive. Every entry here was
+// observed coming back from a real Hebrew invoice; anything unlisted falls through to the raw key
+// rather than being guessed at, because a wrong Hebrew label is worse than an English one.
+const FIELD_KEY_LABELS: Record<string, string> = {
+  invoice_number: 'מספר חשבונית',
+  invoice_date: 'תאריך חשבונית',
+  document_number: 'מספר מסמך',
+  document_date: 'תאריך המסמך',
+  print_date: 'תאריך הדפסה',
+  due_date: 'תאריך לתשלום',
+  supplier_name: 'שם הספק',
+  supplier_vat_id: 'ח.פ / עוסק מורשה',
+  supplier_phone: 'טלפון הספק',
+  customer_name: 'שם הלקוח',
+  customer_company_id: 'ח.פ הלקוח',
+  currency: 'מטבע',
+  subtotal: 'סכום לפני מע״מ',
+  total: 'סכום כולל',
+  total_amount: 'סכום כולל',
+  vat_amount: 'מע״מ',
+  vat_rate: 'שיעור מע״מ',
+  discount: 'הנחה',
+  allocation_number: 'מספר הקצאה',
+  delivery_note_number: 'מספר תעודת משלוח',
+  order_number: 'מספר הזמנה',
+  payment_terms: 'תנאי תשלום',
+  document_title: 'כותרת המסמך',
+  document_copy_status: 'מקור או העתק',
+};
+
+// Kept separate from FIELD_KEY_LABELS rather than merged: `total` and `amount` mean the document
+// total at document level and the line total inside a row. One shared map would have to pick one
+// of the two and would be wrong wherever it guessed.
+const LINE_ITEM_KEY_LABELS: Record<string, string> = {
+  sku: 'מק״ט',
+  product_code: 'מק״ט',
+  item_code: 'מק״ט',
+  catalog_number: 'מק״ט',
+  barcode: 'ברקוד',
+  description: 'תיאור',
+  name: 'תיאור',
+  quantity: 'כמות',
+  qty: 'כמות',
+  unit: 'יחידה',
+  unit_price: 'מחיר ליחידה',
+  price: 'מחיר ליחידה',
+  price_per_unit: 'מחיר ליחידה',
+  line_total: 'סה״כ לשורה',
+  total: 'סה״כ לשורה',
+  total_price: 'סה״כ לשורה',
+  line_amount: 'סה״כ לשורה',
+  amount: 'סה״כ לשורה',
+  discount: 'הנחה',
+  vat_rate: 'שיעור מע״מ',
+  notes: 'הערות',
+};
+
+/** Hebrew name for a proposed field, falling back to the key the model chose. */
+export function fieldKeyLabel(key: string): string {
+  return FIELD_KEY_LABELS[key.trim().toLowerCase()] ?? key;
+}
+
+/** Hebrew name for a key inside a proposed line item, falling back to the model's own key. */
+export function lineItemKeyLabel(key: string): string {
+  return LINE_ITEM_KEY_LABELS[key.trim().toLowerCase()] ?? key;
+}
+
 export function confidenceLabel(value: number | null | undefined): string {
   return value == null ? 'רמת ביטחון לא ידועה' : `רמת ביטחון ${Math.round(value * 100)}%`;
 }
 
+/**
+ * Where on the page a block sits, as prose — this is the only locator for a PDF, which renders in
+ * an iframe with no geometric overlay.
+ *
+ * An axis that spans the whole page is dropped rather than printed. Both paths that actually run
+ * in production are full-width by construction: `parsers.py` gives digital PDF text FULL_BBOX
+ * [0,0,1,1], and the OpenAI OCR adapter synthesises one full-width band per line. Printing
+ * "0%–100% לרוחב" on every row is noise that hides the one number that varies, and it reaches
+ * screen readers through the aria-labels too.
+ */
 export function bboxDescription(box: ExtractionContract['blocks'][number]['bbox'] | null): string {
   if (!box) return 'מיקום התא אינו זמין';
   const [xMin, yMin, xMax, yMax] = box.map((value) => Math.round(value * 100));
-  return `מיקום בעמוד: ${xMin}%–${xMax}% לרוחב, ${yMin}%–${yMax}% לגובה`;
+  const axes = [
+    xMin === 0 && xMax === 100 ? null : `${xMin}%–${xMax}% לרוחב`,
+    yMin === 0 && yMax === 100 ? null : `${yMin}%–${yMax}% לגובה`,
+  ].filter((axis): axis is string => axis !== null);
+  return axes.length ? `מיקום בעמוד: ${axes.join(', ')}` : 'פרוס על פני כל העמוד';
 }
 
 // Keys are chosen by the model, not fixed by the contract, so they are matched by name. Only
@@ -137,6 +218,68 @@ export function lineItemArithmetic(
     lineTotal,
     expected,
     consistent: Math.abs(expected - lineTotal) <= 0.02,
+  };
+}
+
+const INVOICE_NUMBER_KEYS = ['invoice_number', 'document_number', 'מספר חשבונית', 'מספר מסמך'];
+const INVOICE_DATE_KEYS = ['invoice_date', 'document_date', 'date', 'תאריך חשבונית', 'תאריך המסמך', 'תאריך'];
+const BEFORE_VAT_KEYS = ['subtotal', 'amount_before_vat', 'net_amount', 'סכום לפני מעמ', 'סה"כ לפני מע"מ'];
+const VAT_KEYS = ['vat_amount', 'vat', 'tax_amount', 'מעמ', 'מע"מ'];
+const TOTAL_KEYS = ['total', 'total_amount', 'grand_total', 'amount_due', 'סכום כולל', 'סה"כ לתשלום'];
+
+/**
+ * dd/mm/yyyy (and dd.mm.yyyy / dd-mm-yyyy) or an already-ISO date, to yyyy-mm-dd for <input
+ * type="date">. Day-first is the Israeli convention these documents are printed in.
+ *
+ * Anything else returns '' and the field is left for the person to fill. A date that is merely
+ * *probably* right is worse than an empty one here: it lands on a financial record, and an empty
+ * required field is visible while a plausible wrong date is not.
+ */
+export function normalizeInvoiceDate(raw: string | number | boolean | null): string {
+  if (typeof raw !== 'string') return '';
+  const text = raw.trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (iso) return text;
+  const dayFirst = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/.exec(text);
+  if (!dayFirst) return '';
+  const [, day, month, year] = dayFirst;
+  if (Number(month) < 1 || Number(month) > 12 || Number(day) < 1 || Number(day) > 31) return '';
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
+export interface InvoiceDraft {
+  invoice_number: string;
+  invoice_date: string;
+  before_vat: string;
+  vat: string;
+  total: string;
+}
+
+/**
+ * Prefill values for the ordinary invoice form, read out of an interpretation.
+ *
+ * This is a draft and nothing more: the form still runs its duplicate checks, still demands a
+ * reason, and still calls create_invoice. A field the model did not offer -- or offered in a shape
+ * that will not parse -- comes back empty rather than guessed.
+ */
+export function invoiceDraftFromInterpretation(payload: InterpretationContract): InvoiceDraft {
+  const pick = (candidates: readonly string[]): string | number | boolean | null => {
+    for (const field of payload.fields) {
+      if (candidates.includes(field.key.trim().toLowerCase())) return field.value;
+    }
+    return null;
+  };
+  const money = (candidates: readonly string[]): string => {
+    const parsed = numericValue(pick(candidates) as string | number | null);
+    return parsed === null ? '' : String(parsed);
+  };
+  const number = pick(INVOICE_NUMBER_KEYS);
+  return {
+    invoice_number: typeof number === 'string' || typeof number === 'number' ? String(number).trim() : '',
+    invoice_date: normalizeInvoiceDate(pick(INVOICE_DATE_KEYS)),
+    before_vat: money(BEFORE_VAT_KEYS),
+    vat: money(VAT_KEYS),
+    total: money(TOTAL_KEYS),
   };
 }
 

@@ -1,10 +1,11 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { Check, Loader2, RotateCcw, ShieldAlert, X } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import { Check, FilePlus2, Loader2, RotateCcw, ShieldAlert, X } from 'lucide-react';
 import type { Role } from '../../lib/types';
 import { toHebrewError } from '../../lib/errors';
 import { fmtDateTime } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
-import type { DocumentAnnotation, DocumentFeedback, DocumentLearningRule } from '../../lib/useDocumentProcessing';
+import type { DocumentAnnotation, DocumentFeedback, DocumentLearningRule, InterpretationContract } from '../../lib/useDocumentProcessing';
 import { Note, useToast } from '../ui';
 import {
   ANNOTATION_SOURCE_LABELS,
@@ -12,10 +13,12 @@ import {
   MARK_KIND_LABELS,
   actorName,
   confidenceLabel,
+  fieldKeyLabel,
   latestCorrections,
   latestFeedbackByAnnotation,
   latestTypeReviewDecision,
   lineItemArithmetic,
+  lineItemKeyLabel,
   resolvedText,
   ruleWhy,
   type ReviewSnapshot,
@@ -51,8 +54,11 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
   onRefetch: () => Promise<boolean>;
 }) {
   const toast = useToast();
+  const navigate = useNavigate();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState<'approved' | 'rejected' | null>(null);
+  // Starts on the model's suggestion, so approving without touching it means what it always meant.
+  const [chosenType, setChosenType] = useState<InterpretationContract['document_type'] | null>(null);
   const interpretation = snapshot.interpretation;
   const extraction = snapshot.extraction;
   const latest = useMemo(
@@ -76,6 +82,11 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
     : latest?.decision === 'rejected'
       ? 'נדחה'
       : 'ממתין להכרעה';
+  const selectedType = chosenType ?? currentInterpretation.payload.document_type;
+  const isCorrection = selectedType !== currentInterpretation.payload.document_type;
+  // Approving the same type twice is what the database calls document_type_review_unchanged, so
+  // the button rests only on that -- an already-approved document can still be corrected.
+  const alreadyApproved = latest?.decision === 'approved' && latest.approved_document_type === selectedType;
 
   async function decide(decision: 'approved' | 'rejected') {
     if (!reason.trim()) {
@@ -92,10 +103,16 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
         p_expected_input_checksum: currentExtraction.input_checksum,
         p_expected_contract_version: currentExtraction.contract_version,
         p_expected_revision: latest?.revision ?? 0,
+        // Only sent on an approval: the server rejects a rejection that also names a type.
+        p_approved_document_type: decision === 'approved' ? selectedType : null,
       });
       if (result.error) throw new Error(result.error.message);
       const refreshed = await onRefetch();
-      const success = decision === 'approved' ? 'סוג המסמך אושר ונשמר בנפרד מההצעה האוטומטית' : 'הצעת סוג המסמך נדחתה';
+      const success = decision === 'rejected'
+        ? 'הצעת סוג המסמך נדחתה'
+        : isCorrection
+          ? `המסמך סווג כ${DOCUMENT_TYPE_LABELS[selectedType]} לפי הכרעתך, במקום ההצעה האוטומטית`
+          : 'סוג המסמך אושר ונשמר בנפרד מההצעה האוטומטית';
       if (refreshed) toast(success);
       else toast(`${success}, אך רענון המסך נכשל. יש לרענן ידנית לפני פעולה נוספת.`, 'error');
       setReason('');
@@ -146,12 +163,32 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
       {canMutate ? (
         <form className="mt-4 border-t border-line pt-4" onSubmit={(event) => event.preventDefault()}>
           <label className="block">
+            <span className="label">סוג המסמך שייקבע</span>
+            <select
+              className="input"
+              value={selectedType}
+              disabled={!!busy}
+              onChange={(event) => setChosenType(event.target.value as InterpretationContract['document_type'])}
+            >
+              {(Object.keys(DOCUMENT_TYPE_LABELS) as InterpretationContract['document_type'][]).map((type) => (
+                <option key={type} value={type}>
+                  {DOCUMENT_TYPE_LABELS[type]}{type === currentInterpretation.payload.document_type ? ' — ההצעה האוטומטית' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          {isCorrection && (
+            <p className="mt-1 text-xs text-ink-muted">
+              ההצעה האוטומטית ({suggestedLabel}) נשמרת כפי שהיא; ההכרעה שלך נרשמת לצידה וקובעת את הסיווג בגלריה.
+            </p>
+          )}
+          <label className="mt-3 block">
             <span className="label">סיבת ההכרעה</span>
             <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={!!busy} />
           </label>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className="btn-primary" disabled={!!busy || latest?.decision === 'approved'} onClick={() => void decide('approved')}>
-              {busy === 'approved' ? <Loader2 className="animate-spin" size={17} aria-hidden="true" /> : <Check size={17} aria-hidden="true" />} אישור הסוג המוצע
+            <button type="button" className="btn-primary" disabled={!!busy || alreadyApproved} onClick={() => void decide('approved')}>
+              {busy === 'approved' ? <Loader2 className="animate-spin" size={17} aria-hidden="true" /> : <Check size={17} aria-hidden="true" />} {isCorrection ? 'קביעת הסוג שבחרת' : 'אישור הסוג המוצע'}
             </button>
             <button type="button" className="btn-danger" disabled={!!busy || latest?.decision === 'rejected'} onClick={() => void decide('rejected')}>
               {busy === 'rejected' ? <Loader2 className="animate-spin" size={17} aria-hidden="true" /> : <X size={17} aria-hidden="true" />} דחיית ההצעה
@@ -164,6 +201,23 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
             ? 'אפשר להכריע את סוג המסמך רק כאשר המשימה במצב „דורש בדיקה”.'
             : 'הכרעת סוג המסמך מוצגת לקריאה בלבד בחשבון ספק.'}
         </Note>
+      )}
+
+      {/* The draft is the ordinary invoice form, prefilled -- not a second way to create an
+          invoice. It keeps the duplicate checks, the mandatory reason and create_invoice's audited
+          transaction, so nothing the model read becomes a financial record without a person
+          confirming it in the same screen they would have typed it into by hand. */}
+      {canDecide && latest?.decision === 'approved' && latest.approved_document_type === 'invoice' && (
+        <div className="mt-4 border-t border-line pt-4">
+          <p className="text-sm text-ink-soft">המסמך מסווג כחשבונית. אפשר לפתוח ממנו טיוטת חשבונית עם הערכים שזוהו, לבדוק ולאשר.</p>
+          <button
+            type="button"
+            className="btn-primary mt-3"
+            onClick={() => navigate(`/invoices/new?document=${currentInterpretation.document_id}`)}
+          >
+            <FilePlus2 size={17} aria-hidden="true" /> יצירת טיוטת חשבונית מהמסמך
+          </button>
+        </div>
       )}
     </div>
   );
@@ -373,17 +427,13 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
           <ShieldAlert className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
           <span>סוג המסמך המוצע הוא <strong>{DOCUMENT_TYPE_LABELS[interpretation.payload.document_type]}</strong> ({confidenceLabel(interpretation.payload.document_type_confidence)}). זו הצעה בלתי משתנה; הכרעה אנושית, אם קיימת, נשמרת בנפרד.</span>
         </Note>
-        <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg bg-surface-sunken p-3">
-            <dt className="text-sm font-medium text-ink-soft">ספק מוצע</dt>
-            <dd className="mt-1 break-words text-ink-body">{interpretation.payload.supplier.suggested_name || 'לא זוהה'}</dd>
-            <dd className="mt-1 text-xs text-ink-muted">{confidenceLabel(interpretation.payload.supplier.confidence)}</dd>
-          </div>
-          <div className="rounded-lg bg-surface-sunken p-3">
-            <dt className="text-sm font-medium text-ink-soft">מקור הפירוש</dt>
-            <dd className="mt-1 text-ink-body">{interpretation.provider} · {interpretation.model}</dd>
-            <dd className="mt-1 text-xs text-ink-muted">Prompt {interpretation.prompt_version} · schema {interpretation.schema_version}</dd>
-          </div>
+        {/* Provider, model, prompt and schema versions used to sit here as a second card of equal
+            weight. They are provenance, not a decision the reviewer makes; they now live in the
+            "פרטים טכניים" disclosure at the top of the workspace. */}
+        <dl className="mt-4 rounded-lg bg-surface-sunken p-3">
+          <dt className="text-sm font-medium text-ink-soft">ספק מוצע</dt>
+          <dd className="mt-1 break-words text-ink-body">{interpretation.payload.supplier.suggested_name || 'לא זוהה'}</dd>
+          <dd className="mt-1 text-xs text-ink-muted">{confidenceLabel(interpretation.payload.supplier.confidence)}</dd>
         </dl>
       </div>
 
@@ -395,10 +445,13 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
           {interpretation.payload.fields.length === 0 && <p className="py-3 text-sm text-ink-muted">לא הוצעו שדות.</p>}
           {interpretation.payload.fields.map((field) => (
             <div key={field.key} className="grid gap-1 py-3 sm:grid-cols-[minmax(8rem,0.4fr)_minmax(0,1fr)] sm:gap-4">
-              <div className="font-medium text-ink-soft">{field.key}</div>
+              <div className="font-medium text-ink-soft">{fieldKeyLabel(field.key)}</div>
               <div className="min-w-0">
                 <div className="break-words text-ink-body">{valueText(field.value)}</div>
-                <div className="mt-1 text-xs text-ink-muted">{confidenceLabel(field.confidence)} · ראיות: {field.evidence_block_ids.length ? field.evidence_block_ids.join(', ') : 'לא צורפו'}</div>
+                {/* Evidence block ids ("block-heading") named nothing a reviewer could act on.
+                    The evidence itself is not lost: the source viewer beside this list is where a
+                    value is checked against the document. */}
+                <div className="mt-1 text-xs text-ink-muted">{confidenceLabel(field.confidence)}</div>
               </div>
             </div>
           ))}
@@ -426,7 +479,6 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
                   <tr className="border-b border-line">
                     <th className="th">שורת מקור</th>
                     <th className="th">ערכים מוצעים</th>
-                    <th className="th">ראיות</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -436,7 +488,7 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
                       <tr key={`${item.source_row ?? 'none'}-${index}`} className="border-b border-line last:border-b-0">
                         <td className="td num">{item.source_row ?? '—'}</td>
                         <td className="td">
-                          <dl className="space-y-1">{Object.entries(item.values).map(([key, value]) => <div key={key}><dt className="inline font-medium">{key}: </dt><dd className="inline">{valueText(value)}</dd></div>)}</dl>
+                          <dl className="space-y-1">{Object.entries(item.values).map(([key, value]) => <div key={key}><dt className="inline font-medium">{lineItemKeyLabel(key)}: </dt><dd className="inline">{valueText(value)}</dd></div>)}</dl>
                           {arithmetic && !arithmetic.consistent && (
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               <span className="badge-alert">הכפל אינו מסתדר</span>
@@ -446,7 +498,6 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
                             </div>
                           )}
                         </td>
-                        <td className="td break-words">{item.evidence_block_ids.length ? item.evidence_block_ids.join(', ') : '—'}</td>
                       </tr>
                     );
                   })}

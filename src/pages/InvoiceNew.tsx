@@ -12,6 +12,8 @@ import { toHebrewError } from '../lib/errors';
 import type { Supplier } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
 import { invoiceCheckFingerprint } from '../lib/checkFingerprint';
+import { invoiceDraftFromInterpretation } from '../components/document-review/model';
+import type { InterpretationContract } from '../lib/useDocumentProcessing';
 
 export default function InvoiceNew() {
   const navigate = useNavigate();
@@ -23,6 +25,7 @@ export default function InvoiceNew() {
   const presetOrder = params.get('order');
   const presetReceipt = params.get('receipt');
   const presetFrom = params.get('from'); // duplicate-as-draft from the Invoices list
+  const presetDocument = params.get('document'); // draft from a reviewed, scanned document
 
   const [f, setF] = useState({
     supplier_id: presetSupplier, invoice_number: '', invoice_date: todayISO(),
@@ -52,6 +55,41 @@ export default function InvoiceNew() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presetFrom]);
+
+  // ?document=<documentId>: draft from a scanned document whose type a reviewer approved. The
+  // interpretation only fills the form -- every value below is still the human's to check, the
+  // duplicate checks still run on it, and create_invoice is still what writes the record. A field
+  // the model did not read comes through empty rather than guessed.
+  useEffect(() => {
+    if (!presetDocument) return;
+    void (async () => {
+      const [interpretation, document] = await Promise.all([
+        supabase.from('document_interpretations').select('payload, suggested_supplier_id')
+          .eq('document_id', presetDocument).order('created_at', { ascending: false })
+          .limit(1).maybeSingle(),
+        supabase.from('documents').select('file_name').eq('id', presetDocument).maybeSingle(),
+      ]);
+      if (interpretation.error || !interpretation.data) {
+        toast('לא נמצא פירוש למסמך המבוקש. אפשר למלא את החשבונית ידנית.', 'error');
+        return;
+      }
+      const src = interpretation.data as { payload: InterpretationContract; suggested_supplier_id: string | null };
+      const draft = invoiceDraftFromInterpretation(src.payload);
+      const fileName = (document.data as { file_name: string } | null)?.file_name;
+      setF((s) => ({
+        ...s,
+        supplier_id: src.suggested_supplier_id ?? s.supplier_id,
+        invoice_number: draft.invoice_number || s.invoice_number,
+        invoice_date: draft.invoice_date || s.invoice_date,
+        before_vat: draft.before_vat || s.before_vat,
+        vat: draft.vat || s.vat,
+        total: draft.total || s.total,
+        // A file name is something a bookkeeper can recognise later; the document uuid is not.
+        reason: s.reason || (fileName ? `נקלטה מהמסמך הסרוק ${fileName}` : 'נקלטה ממסמך סרוק'),
+      }));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetDocument]);
   const [checked, setChecked] = useState<{ fingerprint: string; results: CheckResult[] } | null>(null);
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);

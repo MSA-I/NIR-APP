@@ -1563,6 +1563,25 @@ async function documentOcrAcceptance(browser) {
     assert.equal(await exportPreview.getByText(/טביעת מקור:/).count(), 1, 'OCR export preview did not expose a checksum');
     await review.screenshot({ path: path.join(outDir, 'ocr-export-preview-1440.png'), fullPage: true });
     report.screenshots.push('ocr-export-preview-1440.png');
+
+    // A classified invoice drafts into the ordinary invoice form. What matters is that the values
+    // arrive AND that the form is still the real one -- the duplicate checks and the reason field
+    // are what stop a misread number becoming a financial record, so their absence would be worse
+    // than an empty draft.
+    await review.getByRole('button', { name: 'יצירת טיוטת חשבונית מהמסמך' }).click();
+    await review.waitForURL(/\/invoices\/new\?document=/, { timeout: 10_000 });
+    await settle(review);
+    // Addressed by id, not by label text: these labels carry Hebrew gershayim and a required-field
+    // asterisk, and a selector that has to reproduce them exactly breaks on punctuation alone.
+    const draftNumber = review.locator('#invoice-new-number');
+    await draftNumber.waitFor({ timeout: 10_000 });
+    assert.equal(await draftNumber.inputValue(), 'INV-2026-1042', 'invoice draft did not carry the interpreted invoice number');
+    assert.equal(await review.locator('#invoice-new-total').inputValue(), '745.6', 'invoice draft did not carry the interpreted total');
+    assert.equal(await review.locator('#invoice-new-supplier').inputValue(), 'aa000000-0000-4000-8000-000000000008', 'invoice draft did not carry the matched supplier');
+    assert.equal(await review.locator('#invoice-new-vat').inputValue(), '', 'invoice draft invented a VAT amount the interpretation never offered');
+    assert.match(await review.locator('#invoice-new-reason').inputValue(), /ocr-04-review\.png/, 'invoice draft did not name its source document in the reason');
+    await review.screenshot({ path: path.join(outDir, 'ocr-invoice-draft-1440.png'), fullPage: true });
+    report.screenshots.push('ocr-invoice-draft-1440.png');
   } finally {
     await closeContext(desktop);
   }
