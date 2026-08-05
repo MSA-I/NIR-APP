@@ -274,15 +274,15 @@ function Invoke-SqlTest([string]$RelativePath, [string]$Label, [string]$Database
 function Invoke-Preflight {
   $containerPath = "/var/lib/postgresql/p4-p1_preflight.sql"
   Copy-SqlToDatabase "supabase\tests\p1_preflight.sql" $containerPath
-  Write-Gate "P1 preflight (20 anomaly checks)"
+  Write-Gate "P1 preflight (28 anomaly checks)"
   $output = @(& docker exec -e PGPASSWORD=postgres $dbContainer psql -qAt -F "|" -U postgres -d postgres -v ON_ERROR_STOP=1 -f $containerPath)
   Assert-ExitCode "P1 preflight"
   $rows = @($output | Where-Object { $_ -match '^([^|]+)\|([0-9]+)\|' })
-  if ($rows.Count -ne 20) { throw "P1 preflight returned $($rows.Count) result rows instead of 20." }
+  if ($rows.Count -ne 28) { throw "P1 preflight returned $($rows.Count) result rows instead of 28." }
   $bad = @($rows | Where-Object { [int](($_ -split '\|')[1]) -ne 0 })
   $rows | ForEach-Object { Write-Output $_ }
   if ($bad.Count) { throw "P1 preflight found local fixture anomalies: $($bad -join '; ')" }
-  Write-Output "P1 preflight passed: 20/20 checks returned rows_found=0."
+  Write-Output "P1 preflight passed: 28/28 checks returned rows_found=0."
 }
 
 function Assert-PowerShellSyntax {
@@ -796,7 +796,16 @@ try {
       $ErrorActionPreference = $previousPreference
     }
     $p0Output | ForEach-Object { Write-Output $_ }
-    if ($p0Exit -ne 0) { throw "P0 security acceptance failed with exit code $p0Exit." }
+    if ($p0Exit -ne 0) {
+      # The child cannot write this gate's summary itself; it marks local-stack failures
+      # with a ##GATE-INFRA##<reason> sentinel on stdout so they are classified BLOCKED/
+      # infrastructure here instead of FAIL/product.
+      $p0Infra = @($p0Output | ForEach-Object { "$_" } | Where-Object { $_ -match '##GATE-INFRA##' }) | Select-Object -First 1
+      if ("$p0Infra" -match '##GATE-INFRA##([A-Za-z0-9_-]+)') {
+        Stop-WithInfrastructureBlock $Matches[1] "P0 security acceptance was blocked by local infrastructure ($($Matches[1])), not by a product regression."
+      }
+      throw "P0 security acceptance failed with exit code $p0Exit."
+    }
     if ($p0Output -match '(?i)\bSKIP(?:PED)?\b') { throw "P0 security emitted a skipped test; the gate cannot report success." }
 
     Write-Gate "P0 upgrade path"
@@ -811,7 +820,14 @@ try {
       $ErrorActionPreference = $previousPreference
     }
     $upgradeOutput | ForEach-Object { Write-Output $_ }
-    if ($upgradeExit -ne 0) { throw "P0 upgrade path failed with exit code $upgradeExit." }
+    if ($upgradeExit -ne 0) {
+      # Same sentinel contract as the P0 security child above.
+      $upgradeInfra = @($upgradeOutput | ForEach-Object { "$_" } | Where-Object { $_ -match '##GATE-INFRA##' }) | Select-Object -First 1
+      if ("$upgradeInfra" -match '##GATE-INFRA##([A-Za-z0-9_-]+)') {
+        Stop-WithInfrastructureBlock $Matches[1] "P0 upgrade path was blocked by local infrastructure ($($Matches[1])), not by a product regression."
+      }
+      throw "P0 upgrade path failed with exit code $upgradeExit."
+    }
     # check-p0-upgrade.ps1 runs `supabase db reset` in a CHILD process, so this path needs the same
     # two recycles Reset-LocalDatabase performs -- not just PostgREST. The reset restarts the auth
     # container onto a new Docker address while Kong keeps the cached upstream, and the observed
@@ -829,6 +845,7 @@ try {
     Invoke-SqlTest "supabase\tests\document_export_templates.sql" "Document export scope, approval, precedence and immutable ledger"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
+    Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"
     Invoke-Preflight
     Invoke-SqlTest "supabase\tests\p1_financial_commands.sql" "P1 financial commands, rollback and idempotency"
     Invoke-SqlTest "supabase\tests\p1_price_submissions.sql" "P1B trusted price-list intake, tenant isolation and rollback"
