@@ -286,12 +286,11 @@ export default function InvoiceNew() {
                   {canOpenProcurement
                     ? <Link
                         className="link num"
-                        to={`/receiving/${linkedContext.order.id}`}
+                        to={`/receipts/${linkedContext.receipt.id}`}
                         data-testid="invoice-linked-receipt"
-                        aria-label={`קבלה #${linkedContext.receipt.number} — פתיחת מסך קבלת סחורה להזמנה; המסך מאפשר עדכון קבלה`}
+                        aria-label={`צפייה בקבלה #${linkedContext.receipt.number}`}
                       >קבלה #{linkedContext.receipt.number}</Link>
                     : <span className="num" data-testid="invoice-linked-receipt">קבלה #{linkedContext.receipt.number}</span>}
-                  {canOpenProcurement && <span className="text-xs font-normal text-ink-muted">פתיחת מסך קבלת סחורה להזמנה; המסך מאפשר עדכון קבלה</span>}
                 </dd>
               </div>
             )}

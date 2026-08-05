@@ -27,6 +27,7 @@ const OrdersList = lazy(() => import('./pages/Orders').then((m) => ({ default: m
 const OrderDetail = lazy(() => import('./pages/Orders').then((m) => ({ default: m.OrderDetail })));
 const ReceivingList = lazy(() => import('./pages/Receiving').then((m) => ({ default: m.ReceivingList })));
 const ReceiveOrder = lazy(() => import('./pages/Receiving').then((m) => ({ default: m.ReceiveOrder })));
+const ReceiptDetail = lazy(() => import('./pages/ReceiptDetail'));
 const InvoicesList = lazy(() => import('./pages/Invoices').then((m) => ({ default: m.InvoicesList })));
 const InvoiceNew = lazy(() => import('./pages/InvoiceNew'));
 const InvoiceDetail = lazy(() => import('./pages/InvoiceDetail'));
@@ -235,6 +236,7 @@ export default function App() {
 
         <Route path="/receiving" element={<Guard roles={STAFF}><ReceivingList /></Guard>} />
         <Route path="/receiving/:orderId" element={<Guard roles={STAFF}><ReceiveOrder /></Guard>} />
+        <Route path="/receipts/:receiptId" element={<Guard roles={STAFF}><ReceiptDetail /></Guard>} />
 
         <Route path="/invoices" element={<Guard roles={READERS}><InvoicesList /></Guard>} />
         <Route path="/invoices/new" element={<Guard roles={STAFF}><InvoiceNew /></Guard>} />

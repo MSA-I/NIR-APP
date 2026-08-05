@@ -24,6 +24,12 @@ test('route precedence preserves the sensitive App.tsx authorization distinction
   assert.equal(isRouteAllowed('supplier', '/documents'), false);
   assert.equal(isRouteAllowed('owner', '/pay/emergency'), true);
   assert.equal(isRouteAllowed('owner', '/pay'), false);
+  for (const role of ['owner', 'office', 'kitchen'] as const) {
+    assert.equal(isRouteAllowed(role, '/receipts/example-id'), true);
+  }
+  for (const role of ['payer', 'accountant', 'supplier'] as const) {
+    assert.equal(isRouteAllowed(role, '/receipts/example-id'), false);
+  }
   assert.equal(isRouteAllowed('owner', '/admin'), false);
   assert.equal(isRouteAllowed('owner', 'https://example.com/settings'), false);
   for (const role of QA_ROLES) assert.equal(isRouteAllowed(role, '/dashboard'), true);

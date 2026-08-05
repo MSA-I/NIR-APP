@@ -22,9 +22,8 @@ test('linked order, receipt, supplier and receiving date are visible at 390px', 
   await expect(context.getByTestId('invoice-linked-order')).toHaveText('הזמנה #1');
   await expect(context.getByTestId('invoice-linked-order')).toHaveAttribute('href', `/orders/${ORDER_ID}`);
   await expect(context.getByTestId('invoice-linked-receipt')).toHaveText('קבלה #1');
-  await expect(context.getByTestId('invoice-linked-receipt')).toHaveAttribute('href', `/receiving/${ORDER_ID}`);
-  await expect(context.getByTestId('invoice-linked-receipt')).toHaveAccessibleName('קבלה #1 — פתיחת מסך קבלת סחורה להזמנה; המסך מאפשר עדכון קבלה');
-  await expect(context).toContainText('המסך מאפשר עדכון קבלה');
+  await expect(context.getByTestId('invoice-linked-receipt')).toHaveAttribute('href', `/receipts/${RECEIPT_ID}`);
+  await expect(context.getByTestId('invoice-linked-receipt')).toHaveAccessibleName('צפייה בקבלה #1');
   await expect(context.getByTestId('invoice-linked-supplier')).toHaveText(SUPPLIER_NAME);
   await expect(context).toContainText('02.06.2026');
   await expect(context).toContainText('התקבלה');
@@ -33,6 +32,26 @@ test('linked order, receipt, supplier and receiving date are visible at 390px', 
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   evidence.record('linked-invoice-context', 'order #1, receipt #1, supplier and date visible at 390x844');
   await evidence.screenshot('invoice-linked-context-mobile');
+});
+
+test('linked receipt opens its exact read-only receipt view at 390px', async ({ page, qaRole, evidence }) => {
+  test.skip(qaRole !== 'office', 'One staff role supplies deterministic receipt-detail coverage; route permissions cover all roles.');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/receipts/${RECEIPT_ID}`);
+
+  const detail = page.getByTestId('receipt-detail');
+  await expect(detail).toBeVisible();
+  await expect(detail.getByTestId('receipt-detail-number')).toHaveText('קבלה #1');
+  await expect(detail.getByTestId('receipt-detail-supplier')).toHaveText(SUPPLIER_NAME);
+  await expect(detail.getByTestId('receipt-detail-order')).toHaveAttribute('href', `/orders/${ORDER_ID}`);
+  await expect(detail.getByTestId('receipt-detail-date')).toHaveText('02.06.2026');
+  await expect(detail).toContainText('הושלמה');
+  await expect(detail.getByTestId('receipt-detail-lines')).toContainText('עגבניות');
+  await expect(detail.getByTestId('receipt-detail-lines')).toContainText('40 ק״ג');
+  await expect(detail.locator('button, form, input, select, textarea')).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  evidence.record('linked-receipt-read-only', 'receipt #1 opens by receipt identity with supplier, order, date, status and lines; no mutation controls');
+  await evidence.screenshot('linked-receipt-detail-mobile');
 });
 
 test('save payload keeps validated links while direct creation keeps both links null', async ({ page, qaRole, evidence }) => {
@@ -99,5 +118,9 @@ test('malformed, inaccessible and mismatched identifiers reveal no record and fa
     await expect(page.locator('#main')).not.toContainText(QA_FOREIGN_RECEIPT_ID);
     await expect(page.locator('#main')).not.toContainText(QA_FOREIGN_SUPPLIER_NAME);
   }
+  await page.goto(`/receipts/${QA_FOREIGN_RECEIPT_ID}`);
+  await expect(page.getByTestId('receipt-detail-unavailable')).toContainText('אינה קיימת או שאין לך הרשאה');
+  await expect(page.locator('#main')).not.toContainText(QA_FOREIGN_RECEIPT_ID);
+  await expect(page.locator('#main')).not.toContainText(QA_FOREIGN_SUPPLIER_NAME);
   evidence.record('linked-context-nondisclosure', 'malformed, real cross-tenant and cross-order contexts share one non-disclosing unlinked fallback');
 });

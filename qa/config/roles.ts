@@ -92,6 +92,7 @@ export const ROLE_CONTRACTS: Readonly<Record<QaRole, RoleContract>> = {
       '/suppliers',
       '/orders',
       '/receiving',
+      '/receipts/example-id',
       '/invoices',
       '/documents',
       '/payment-requests',
@@ -113,7 +114,7 @@ export const ROLE_CONTRACTS: Readonly<Record<QaRole, RoleContract>> = {
       { path: '/reports', heading: 'דוח חודשי לרואת חשבון' },
       { path: '/bank', heading: 'התאמות בנק' },
     ],
-    deniedRoutes: denied('/suppliers', '/orders', '/receiving', '/documents', '/payment-requests', '/settings', '/my-prices'),
+    deniedRoutes: denied('/suppliers', '/orders', '/receiving', '/receipts/example-id', '/documents', '/payment-requests', '/settings', '/my-prices'),
   },
   supplier: {
     role: 'supplier',
@@ -129,6 +130,7 @@ export const ROLE_CONTRACTS: Readonly<Record<QaRole, RoleContract>> = {
       '/suppliers',
       '/orders',
       '/receiving',
+      '/receipts/example-id',
       '/invoices',
       '/payment-requests',
       '/pay',
@@ -155,6 +157,7 @@ interface RouteRule {
 export const ROUTE_RULES: readonly RouteRule[] = [
   { pattern: /^\/dashboard$/, roles: ALL },
   { pattern: /^\/(?:suppliers(?:\/[^/]+)?|products|prices|orders(?:\/new|\/[^/]+)?|receiving(?:\/[^/]+)?|invoices\/new|documents)$/, roles: STAFF },
+  { pattern: /^\/receipts\/[^/]+$/, roles: STAFF },
   { pattern: /^\/invoices(?:\/[^/]+)?$/, roles: READERS },
   { pattern: /^\/documents\/[^/]+\/review$/, roles: ['owner', 'office', 'kitchen', 'supplier'] },
   { pattern: /^\/inbox$/, roles: STAFF },

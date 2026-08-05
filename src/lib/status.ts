@@ -55,6 +55,11 @@ export const RECEIPT_LINE_STATUS: Record<string, StatusMeta> = {
   returned: m('הוחזר', 'alert'),         // חריגה שדורשת זיכוי
 };
 
+export const RECEIPT_STATUS: Record<string, StatusMeta> = {
+  draft: m('טיוטה', 'idle'),
+  completed: m('הושלמה', 'done'),
+};
+
 export const INVOICE_REVIEW_STATUS: Record<string, StatusMeta> = {
   received: m('התקבלה', 'await'),        // an untouched received invoice is waiting for review
   in_review: m('בבדיקה', 'await'),       // ממתינה להשלמת בדיקה
