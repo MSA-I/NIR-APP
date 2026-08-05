@@ -5,16 +5,11 @@ import { pathToFileURL } from 'node:url';
 import { chromium } from '@playwright/test';
 import { isPlaywrightInfrastructureFailureText } from '../reporting/playwright.ts';
 import { redactText, safeJson } from '../reporting/redact.ts';
-import {
-  acquireQaLock,
-  anyWindowsProcessIdentityAlive,
-  captureWindowsProcessTree,
-  releaseQaLock,
-  type WindowsProcessIdentity,
-} from './lock.ts';
+import { acquireQaLock, releaseQaLock } from './lock.ts';
 import { deterministicChildEnvironment, loadReadyQaState } from './runtime-state.ts';
 import { scrubPlaywrightTraces } from './scrub-artifacts.ts';
 import { startQaPreview } from './setup.ts';
+import { runWindowsJobCommand } from './windows-job.ts';
 
 type PhaseStatus = 'PASSED' | 'FAILED' | 'BLOCKED' | 'SKIPPED_BY_CONFIGURATION';
 
@@ -278,62 +273,15 @@ function unixProcessGroupAlive(pid: number): boolean {
   }
 }
 
-type WindowsProcessIdentityMap = Map<number, WindowsProcessIdentity>;
-
-function mergeWindowsProcessIdentities(
-  target: WindowsProcessIdentityMap,
-  identities: readonly WindowsProcessIdentity[],
-): void {
-  for (const identity of identities) {
-    // Keep the first identity so a later PID reuse cannot replace the process being tracked.
-    if (!target.has(identity.pid)) target.set(identity.pid, identity);
-  }
-}
-
-async function captureWindowsTreeUntilSuccess(
-  pid: number,
-  identities: WindowsProcessIdentityMap,
-  name: string,
-): Promise<void> {
-  let nextNotice = 0;
-  for (;;) {
-    try {
-      mergeWindowsProcessIdentities(identities, await captureWindowsProcessTree(pid));
-      return;
-    } catch {
-      if (Date.now() >= nextNotice) {
-        process.stderr.write(
-          `[QA BLOCKED] ${name} process tree could not be captured; the shared QA mutex remains held.\n`,
-        );
-        nextNotice = Date.now() + 30_000;
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, 1_000));
-    }
-  }
-}
-
-async function processTreeAlive(
-  pid: number,
-  windowsIdentities: WindowsProcessIdentityMap,
-): Promise<boolean> {
-  if (process.platform !== 'win32') return unixProcessGroupAlive(pid);
-  try {
-    return await anyWindowsProcessIdentityAlive([...windowsIdentities.values()]);
-  } catch {
-    return true;
-  }
-}
-
-async function holdMutexUntilProcessTreeExit(
+async function holdMutexUntilUnixProcessGroupExit(
   child: ChildProcess,
   pid: number,
   name: string,
-  windowsIdentities: WindowsProcessIdentityMap,
 ): Promise<void> {
   let nextNotice = 0;
   while (
     (child.exitCode === null && child.signalCode === null)
-    || await processTreeAlive(pid, windowsIdentities)
+    || unixProcessGroupAlive(pid)
   ) {
     if (Date.now() >= nextNotice) {
       process.stderr.write(
@@ -345,10 +293,9 @@ async function holdMutexUntilProcessTreeExit(
   }
 }
 
-async function terminateProcessTree(
+async function terminateUnixProcessGroup(
   child: ChildProcess,
   name: string,
-  windowsIdentities: WindowsProcessIdentityMap,
 ): Promise<void> {
   const pid = child.pid;
   if (!pid) {
@@ -358,27 +305,6 @@ async function terminateProcessTree(
       );
       await new Promise<void>((resolve) => setTimeout(resolve, 30_000));
     }
-    return;
-  }
-  if (process.platform === 'win32') {
-    const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-    const killerExited = await new Promise<boolean>((resolve) => {
-      const timeout = setTimeout(() => resolve(false), 10_000);
-      killer.once('error', () => {
-        clearTimeout(timeout);
-        resolve(false);
-      });
-      killer.once('exit', () => {
-        clearTimeout(timeout);
-        resolve(true);
-      });
-    });
-    if (!killerExited && killer.exitCode === null) killer.kill();
-    await waitForExit(child, 5_000);
-    await holdMutexUntilProcessTreeExit(child, pid, name, windowsIdentities);
     return;
   }
 
@@ -395,7 +321,40 @@ async function terminateProcessTree(
     }
     await waitForExit(child, 2_000);
   }
-  await holdMutexUntilProcessTreeExit(child, pid, name, windowsIdentities);
+  await holdMutexUntilUnixProcessGroupExit(child, pid, name);
+}
+
+async function runUnixCommand(
+  executable: string,
+  args: readonly string[],
+  options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number },
+  name: string,
+): Promise<{ exitCode: number | null; timedOut: boolean }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, [...args], {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: 'inherit',
+      detached: true,
+    });
+    let timedOut = false;
+    const timeout = setTimeout(async () => {
+      timedOut = true;
+      await terminateUnixProcessGroup(child, name);
+      resolve({ exitCode: null, timedOut: true });
+    }, options.timeoutMs);
+    child.once('error', (error) => {
+      if (timedOut) return;
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.once('exit', async (code, signal) => {
+      if (timedOut) return;
+      clearTimeout(timeout);
+      if (child.pid) await holdMutexUntilUnixProcessGroupExit(child, child.pid, name);
+      resolve({ exitCode: code ?? (signal ? 1 : 0), timedOut: false });
+    });
+  });
 }
 
 async function runCommand(
@@ -405,63 +364,53 @@ async function runCommand(
   options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number },
 ): Promise<PhaseResult> {
   const started = Date.now();
-  let outcome: { exitCode: number | null; timedOut: boolean };
   try {
-    outcome = await new Promise<{ exitCode: number | null; timedOut: boolean }>((resolve, reject) => {
-      const child = spawn(executable, [...args], {
-        cwd: options.cwd,
-        env: options.env,
-        stdio: 'inherit',
-        windowsHide: true,
-        detached: process.platform !== 'win32',
-      });
-      let timedOut = false;
-      const windowsIdentities: WindowsProcessIdentityMap = new Map();
-      let captureQueue = Promise.resolve();
-      const queueWindowsTreeCapture = (): void => {
-        if (process.platform !== 'win32' || !child.pid) return;
-        captureQueue = captureQueue
-          .then(async () => {
-            mergeWindowsProcessIdentities(
-              windowsIdentities,
-              await captureWindowsProcessTree(child.pid!),
-            );
-          })
-          .catch(() => undefined);
+    if (process.platform === 'win32') {
+      const outcome = await runWindowsJobCommand(executable, args, options);
+      if (outcome.status === 'TIMED_OUT') {
+        return {
+          name,
+          status: 'BLOCKED',
+          exitCode: null,
+          durationMs: Date.now() - started,
+          reason: `${name} timed out after ${options.timeoutMs}ms; its Windows Job was closed.`,
+        };
+      }
+      if (outcome.status === 'BLOCKED') {
+        return {
+          name,
+          status: 'BLOCKED',
+          exitCode: null,
+          durationMs: Date.now() - started,
+          reason: redactText(outcome.reason),
+        };
+      }
+      return {
+        name,
+        status: outcome.exitCode === 0 ? 'PASSED' : 'FAILED',
+        exitCode: outcome.exitCode,
+        durationMs: Date.now() - started,
+        reason: outcome.exitCode === 0 ? undefined : name + ' exited with code ' + outcome.exitCode + '.',
       };
-      queueWindowsTreeCapture();
-      const captureInterval = process.platform === 'win32'
-        ? setInterval(queueWindowsTreeCapture, 1_000)
-        : undefined;
-      const finalizeWindowsTreeCapture = async (): Promise<void> => {
-        if (captureInterval) clearInterval(captureInterval);
-        await captureQueue;
-        if (process.platform === 'win32' && child.pid) {
-          await captureWindowsTreeUntilSuccess(child.pid, windowsIdentities, name);
-        }
+    }
+
+    const outcome = await runUnixCommand(executable, args, options, name);
+    if (outcome.timedOut) {
+      return {
+        name,
+        status: 'BLOCKED',
+        exitCode: null,
+        durationMs: Date.now() - started,
+        reason: `${name} timed out after ${options.timeoutMs}ms; its process group termination was verified.`,
       };
-      const timeout = setTimeout(async () => {
-        timedOut = true;
-        await finalizeWindowsTreeCapture();
-        await terminateProcessTree(child, name, windowsIdentities);
-        resolve({ exitCode: null, timedOut: true });
-      }, options.timeoutMs);
-      child.once('error', (error) => {
-        if (timedOut) return;
-        clearTimeout(timeout);
-        if (captureInterval) clearInterval(captureInterval);
-        reject(error);
-      });
-      child.once('exit', async (code, signal) => {
-        if (timedOut) return;
-        clearTimeout(timeout);
-        await finalizeWindowsTreeCapture();
-        if (child.pid) {
-          await holdMutexUntilProcessTreeExit(child, child.pid, name, windowsIdentities);
-        }
-        resolve({ exitCode: code ?? (signal ? 1 : 0), timedOut: false });
-      });
-    });
+    }
+    return {
+      name,
+      status: outcome.exitCode === 0 ? 'PASSED' : 'FAILED',
+      exitCode: outcome.exitCode,
+      durationMs: Date.now() - started,
+      reason: outcome.exitCode === 0 ? undefined : name + ' exited with code ' + outcome.exitCode + '.',
+    };
   } catch (error) {
     return {
       name,
@@ -471,22 +420,6 @@ async function runCommand(
       reason: redactText(error instanceof Error ? error.message : name + ' could not start.'),
     };
   }
-  if (outcome.timedOut) {
-    return {
-      name,
-      status: 'BLOCKED',
-      exitCode: null,
-      durationMs: Date.now() - started,
-      reason: `${name} timed out after ${options.timeoutMs}ms; its process tree termination was verified.`,
-    };
-  }
-  return {
-    name,
-    status: outcome.exitCode === 0 ? 'PASSED' : 'FAILED',
-    exitCode: outcome.exitCode,
-    durationMs: Date.now() - started,
-    reason: outcome.exitCode === 0 ? undefined : name + ' exited with code ' + outcome.exitCode + '.',
-  };
 }
 
 async function writeResult(filePath: string, result: DeterministicRunResult): Promise<void> {

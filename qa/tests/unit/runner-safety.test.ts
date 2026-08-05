@@ -2,11 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
-import {
-  parseWindowsMutexStatus,
-  QA_WINDOWS_MUTEX_NAME,
-  sameWindowsProcessIdentity,
-} from '../../runner/lock.ts';
+import { parseWindowsMutexStatus, QA_WINDOWS_MUTEX_NAME } from '../../runner/lock.ts';
 import { canonicalQaStatePath } from '../../runner/setup.ts';
 
 test('QA state has one canonical repository path', () => {
@@ -24,37 +20,6 @@ test('Windows mutex handshake accepts exact lines and prioritizes BLOCKED', () =
   assert.equal(parseWindowsMutexStatus('prefix LOCKED suffix\n'), undefined);
 });
 
-test('Windows process identity detects PID reuse and fails closed without creation time', () => {
-  assert.equal(
-    sameWindowsProcessIdentity(
-      { pid: 42, creationDate: '20260805090000.000000+180' },
-      { pid: 42, creationDate: '20260805090100.000000+180' },
-    ),
-    false,
-  );
-  assert.equal(
-    sameWindowsProcessIdentity(
-      { pid: 42 },
-      { pid: 42, creationDate: '20260805090100.000000+180' },
-    ),
-    true,
-  );
-  assert.equal(
-    sameWindowsProcessIdentity(
-      { pid: 42, creationDate: '20260805090000.000000+180' },
-      { pid: 42 },
-    ),
-    true,
-  );
-  assert.equal(
-    sameWindowsProcessIdentity(
-      { pid: 42, creationDate: '20260805090000.000000+180' },
-      { pid: 43, creationDate: '20260805090000.000000+180' },
-    ),
-    false,
-  );
-});
-
 test('destructive PowerShell gates use the same abandoned-safe mutex as QA', async () => {
   const scripts = await Promise.all([
     readFile(path.join(process.cwd(), 'scripts', 'check-quality-gates.ps1'), 'utf8'),
@@ -68,22 +33,30 @@ test('destructive PowerShell gates use the same abandoned-safe mutex as QA', asy
   assert.match(scripts[0]!, /-QaMutexAlreadyHeld/);
 });
 
-test('deterministic children have bounded Windows process-tree cleanup', async () => {
-  const source = await readFile(
-    path.join(process.cwd(), 'qa', 'runner', 'deterministic-runner.ts'),
-    'utf8',
-  );
-  assert.match(source, /taskkill\.exe/);
-  assert.match(source, /captureWindowsTreeUntilSuccess/);
-  assert.match(
-    source,
-    /timedOut = true;\s*await finalizeWindowsTreeCapture\(\);\s*await terminateProcessTree/,
-  );
-  assert.match(source, /\['\/PID', String\(child\.pid\), '\/T', '\/F'\]/);
-  assert.match(source, /holdMutexUntilProcessTreeExit/);
-  assert.match(source, /the shared QA mutex remains held/);
-  assert.doesNotMatch(source, /terminated: false/);
-  assert.match(source, /timeoutMs: 900_000/);
+test('deterministic Windows children use a suspended kill-on-close Job Object', async () => {
+  const [runner, launcher, helper, lock] = await Promise.all([
+    readFile(path.join(process.cwd(), 'qa', 'runner', 'deterministic-runner.ts'), 'utf8'),
+    readFile(path.join(process.cwd(), 'qa', 'runner', 'windows-job.ts'), 'utf8'),
+    readFile(path.join(process.cwd(), 'qa', 'runner', 'windows-job.ps1'), 'utf8'),
+    readFile(path.join(process.cwd(), 'qa', 'runner', 'lock.ts'), 'utf8'),
+  ]);
+  assert.match(runner, /runWindowsJobCommand/);
+  assert.match(runner, /timeoutMs: 900_000/);
+  assert.doesNotMatch(runner, /taskkill\.exe|captureWindowsProcessTree|WindowsProcessIdentity/);
+  assert.match(helper, /JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE/);
+  assert.match(helper, /CREATE_SUSPENDED/);
+  assert.ok(helper.indexOf('if (!CreateProcess(') < helper.indexOf('if (!AssignProcessToJobObject(job, process.hProcess))'));
+  assert.ok(helper.indexOf('if (!AssignProcessToJobObject(job, process.hProcess))') < helper.indexOf('if (ResumeThread(process.hThread)'));
+  assert.match(helper, /TerminateJobObject/);
+  assert.match(helper, /QueryInformationJobObject/);
+  assert.match(helper, /OpenProcess\(SYNCHRONIZE, false, \(uint\)parentPid\)/);
+  assert.match(helper, /startup\.hStdOutput = standardOutput/);
+  assert.match(helper, /startup\.hStdError = standardError/);
+  assert.match(helper, /CREATE_UNICODE_ENVIRONMENT/);
+  assert.match(helper, /environmentBlock,\s*cwd,\s*ref startup/);
+  assert.match(launcher, /helper\.stdin\.end\(JSON\.stringify\(specification\), 'utf8'\)/);
+  assert.doesNotMatch(launcher, /\['[^\]]*executable/);
+  assert.doesNotMatch(lock, /WindowsProcessIdentity|captureWindowsProcessTree|CreationDate/);
 });
 
 test('cross-tenant fixture bounds every request and rechecks lock ownership', async () => {
