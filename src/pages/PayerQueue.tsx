@@ -71,6 +71,11 @@ export default function PayerQueue({ mode = 'regular' }: { mode?: PayerQueueMode
                 {r.due_date && <span>לתשלום עד {fmtDate(r.due_date)}</span>}
                 <span>{r.invoices.length} חשבוניות</span>
               </div>
+              {r.open_credit_override_total != null && (
+                <div className="mt-3 text-sm text-await-fg">
+                  אושר בחריגה ללא קיזוז זיכויים בסך <span className="num font-semibold">{fmtMoneyExact(r.open_credit_override_total)}</span>
+                </div>
+              )}
             </button>
           ))}
         </div>
@@ -177,6 +182,13 @@ function ExecuteModal({ pr, mode, onClose, onDone }: { pr: Row; mode: PayerQueue
           <div className="flex justify-between"><dt className="text-ink-muted">מבוצע על ידי</dt><dd>{profile?.full_name ?? 'המשתמש המחובר'}</dd></div>
           <div className="flex justify-between gap-4"><dt className="text-ink-muted">רישום ביומן</dt><dd className="text-start">{mode === 'emergency' ? 'ביצוע תשלום במסלול חירום והסיבה' : 'ביצוע תשלום והסיבה'}</dd></div>
           {pr.notes && <Note tone="await">{pr.notes}</Note>}
+          {pr.open_credit_override_total != null && (
+            <Note tone="alert">
+              <strong>אושר באישור חריג ללא קיזוז הזיכוי.</strong>{' '}
+              הזיכויים הפתוחים בסך <span className="num">{fmtMoneyExact(pr.open_credit_override_total)}</span> לא קוזזו אוטומטית.
+              <span className="block mt-1">סיבת אישור החריגה: {pr.open_credit_override_reason}</span>
+            </Note>
+          )}
         </dl>
 
         <hr className="border-line-soft" />

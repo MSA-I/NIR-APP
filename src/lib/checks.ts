@@ -8,6 +8,7 @@ export interface CheckResult {
   code: string;
   severity: CheckSeverity;
   message: string;
+  amount?: number;
 }
 
 const AMOUNT_TOLERANCE = 1; // ₪ — treat sub-shekel gaps as rounding
@@ -198,7 +199,7 @@ export async function runPaymentRequestChecks(pr: {
     .eq('supplier_id', pr.supplier_id).in('status', ['open', 'requested', 'received']).order('id').range(from, to));
   if (credits.length) {
     const sum = credits.reduce((s, c) => s + c.amount, 0);
-    results.push({ code: 'open_credit', severity: 'warning', message: `זיכויים פתוחים בסך ₪${sum.toLocaleString()} טרם קוזזו מהדרישה` });
+    results.push({ code: 'open_credit', severity: 'warning', amount: sum, message: `זיכויים פתוחים בסך ₪${sum.toLocaleString()} טרם קוזזו מהדרישה` });
   }
 
   return results;
