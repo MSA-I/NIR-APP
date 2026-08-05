@@ -78,11 +78,11 @@ export interface TusUploadHandle {
 }
 
 /**
- * PLAN-07 fallback contract (handoff/6b-upload-contract.md not yet published):
- * `renew_supplier_price_document_upload(p_document_id)` extends `expires_at` only —
- * no re-bind, actor only, `reserved` only, hard 45-minute cap from `created_at`.
- * The return shape is read defensively: a bare timestamp or an object carrying
- * `expires_at` updates the local clock; anything else leaves it unchanged.
+ * Contract: handoff/6b-upload-contract.md §1. `renew_supplier_price_document_upload
+ * (p_document_id uuid) returns jsonb` — extends `expires_at` only (least(now()+15min,
+ * created_at+45min)); no re-bind, actor only, `reserved` only. The return shape is read
+ * defensively: a bare timestamp or an object carrying `expires_at` updates the local
+ * clock; anything else leaves it unchanged.
  */
 async function renewReservation(documentId: string): Promise<string | null> {
   const renewed = await supabase.rpc('renew_supplier_price_document_upload', {
@@ -128,6 +128,27 @@ function translateTusError(error: Error): TusUploadError {
   const cause = detailed.causingError ?? error;
   // toHebrewError logs the original for the developer and maps network/5xx wording.
   return new TusUploadError(toHebrewError(cause), status === null || status >= 500);
+}
+
+/**
+ * The renew RPC's error codes (handoff/6b-upload-contract.md §1). `registered` is the
+ * money rule at the renewal boundary: the document already exists — never re-upload.
+ */
+const RENEWAL_ERROR_HEBREW: [RegExp, string][] = [
+  [/document_upload_reservation_registered/i,
+    'המסמך כבר נרשם במערכת — אין להעלות אותו שוב.'],
+  [/document_upload_reservation_lifetime_exceeded/i,
+    'חלון ההעלאה הסתיים. יש להתחיל את ההעלאה מחדש.'],
+  [/document_upload_reservation_unknown/i,
+    'הקצאת ההעלאה אינה קיימת עוד. יש להתחיל את ההעלאה מחדש.'],
+];
+
+function translateRenewalError(renewError: unknown, patchError: Error): TusUploadError {
+  const raw = renewError instanceof Error ? renewError.message : String(renewError);
+  for (const [pattern, text] of RENEWAL_ERROR_HEBREW) {
+    if (pattern.test(raw)) return new TusUploadError(text, false);
+  }
+  return translateTusError(patchError);
 }
 
 /**
@@ -218,7 +239,7 @@ export function tusUploadToDocuments(file: File | Blob, options: TusDocumentUplo
                 if (nextExpiresAt) expiresAtMs = Date.parse(nextExpiresAt);
                 if (!cancelled) upload?.start();
               })
-              .catch(() => reject(translateTusError(error)));
+              .catch((renewError: unknown) => reject(translateRenewalError(renewError, error)));
             return;
           }
           reject(translateTusError(error));

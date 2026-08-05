@@ -221,6 +221,21 @@ describe('403 during PATCH — exactly one renew-then-resume', () => {
     expect(upload.started).toBe(1);
   });
 
+  it('applies the money rule when renew says the reservation is already registered', async () => {
+    // handoff/6b-upload-contract.md §1: document_upload_reservation_registered means the
+    // registered document already exists — the failure text must forbid a re-upload.
+    supabaseState.rpc.mockResolvedValue({
+      data: null,
+      error: { message: 'document_upload_reservation_registered' },
+    });
+    const { handle, upload } = await startUpload({
+      renewal: { documentId: 'doc-1', expiresAt: inMinutes(10) },
+    });
+    upload.options.onError?.(detailedError(403, 'PATCH'));
+    await expect(handle.done).rejects.toThrow(/המסמך כבר נרשם במערכת — אין להעלות אותו שוב/);
+    expect(upload.started).toBe(1);
+  });
+
   it('does not renew for a 403 outside PATCH or without a renewal option', async () => {
     const creation = await startUpload({ renewal: { documentId: 'doc-1', expiresAt: inMinutes(10) } });
     creation.upload.options.onError?.(detailedError(403, 'POST'));
