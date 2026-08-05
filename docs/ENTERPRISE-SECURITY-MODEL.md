@@ -169,8 +169,9 @@ department / cost_center  צירי סיווג רוחביים, לא היררכי�
    ‏OPEN-DECISIONS ‏#83). ‏`supplier_metrics` (`0031:296-298`) הוא `security_invoker` ויורש את
    הרוכב ממילא.
 6. **‏`demo_verify.sql` מורחב** בטענת בידוד לכל טבלה מסוקפת חדשה. טבלה דיירית שאינה מופיעה שם אינה
-   מכוסה בבדיקת בידוד הדיירים — זו נקודת הכשל השקטה המסוכנת ביותר בשער. (‏`saved_views` מ-`0058`
-   עדיין אינה מכוסה שם — אין לה נתוני דמו בגל הזה; ההרחבה רשומה כהמשך לבעל הסכימה של הגל הבא.)
+   מכוסה בבדיקת בידוד הדיירים — זו נקודת הכשל השקטה המסוכנת ביותר בשער. (חוב `saved_views` מ-`0058`
+   **נפרע בגל 4**: זרועות A/B/C ל-`saved_views` ולארבע טבלאות הגל, ‏`demo_seed.sql` זורע תצוגה
+   שמורה ושורת flag כדי שהזרועות ייבחנו על שורות אמיתיות.)
 7. **בורר הסקופ אינו רשאי לשמור `active_unit_id` על `profiles`.**
    ‏`profiles_guard_privileged_columns` (`0020:34-38`) הוא allowlist של deny-by-default שמשווה
    `to_jsonb(new)` פחות חמש עמודות מותרות; **כל עמודה חדשה שם שוברת בשקט את העדכון-העצמי מהדפדפן.**
@@ -196,26 +197,67 @@ department / cost_center  צירי סיווג רוחביים, לא היררכי�
 
 ## 6. Step-up authentication
 
-**המנגנון כבר קיים, פעם אחת.** `execute_emergency_payment_request` (`0031:760`) דורשת רשומת `amr`
-מסוג `password` מחמש הדקות האחרונות, סיבה, ו-audit ייעודי. **אין MFA/TOTP במערכת.**
+**המנגנון קיים פעם אחת, ומאז גל 4 יש לו שם.** ‏`assert_recent_password_authentication()`
+(‏`0061`) היא החילוץ המילולי של הבדיקה מ-`execute_emergency_payment_request` (‏`0031:788-805`),
+על **ארבע תכונותיה** — ואלו הקבועים שאסור לאבד בשקט:
 
-הפונקציה מוכללת לפונקציה בעלת שם ונדרשת ב: ביצוע תשלום · שינוי `suppliers.bank_details` · שינוי
-הרשאות של משתמש אחר · שינוי הגדרות SSO · ייצוא נתונים פיננסיים רגישים. **אין להמציא מנגנון שני.**
+1. ‏`amr` שאינו מערך JSON נכשל סגור (‏`jsonb_typeof(auth.jwt() -> 'amr') <> 'array'`, נבדק לפני כל איטרציה);
+2. רק רשומות `method = 'password'` נספרות;
+3. ‏`max(timestamp)` הוא רגע הייחוס, לא הרשומה הראשונה;
+4. החלון הוא `[now - 5 minutes, now + 30 seconds]` — תקרת ה-clock-skew ‏+30s פירושה שגם
+   ‏timestamp עתידי נכשל.
+
+השגיאה: ‏`fresh_authentication_required` / ‏SQLSTATE ‏`42501` — מוצמדת בשלוש טענות שער
+(‏`p1_financial_commands.sql:1186-1242`). **אין MFA/TOTP במערכת** ואין `[auth.mfa]` בקונפיג (‏#88).
+
+המסלולים המחווטים (‏`0061`, ‏OPEN-DECISIONS ‏#85): ביצוע תשלום — `execute_payment_request`
+‏(הזרקה להצהרה החיה של `0031:506`) ו-`execute_emergency_payment_request` (הואצל, לא הועתק) ·
+שינוי `suppliers.bank_details` — ‏RPC ‏`update_supplier_bank_details` בלבד (ה-grant העמודתי
+‏`UPDATE (bank_details)` מ-`0036` הוסר) · שינוי הרשאות של משתמש אחר — `manage_profile_access`
+וגם `grant_user_scope`/`revoke_user_scope` (‏grant סקופ משנה מה משתמש אחר רואה — רגיש לפחות
+כמו שינוי תפקידו) · הגדרות SSO — ‏`update_identity_provider_settings` · ייצוא פיננסי רגיש —
+‏`mark_month_export_sent` (ההכרעה: הדוח החודשי לרו"ח; ‏`record_document_export` לא חווט — יומן
+ייצוא המסמכים כבר immutable ומאושר-תהליך). **אין להמציא מנגנון שני**; הצד הנגזר לקריאה בדפדפן
+הוא `session_security_level()` ‏(`0060`) — ‏`'password_fresh'|'standard'`, אותה הערכה בדיוק
+בצורה נטולת-side-effects, לצורך דילוג-כשטרי ב-`ReauthModal`. הצלחה/כשל של הטענה נרשמים
+כ-`step_up_success`/`step_up_failure` ב-`security_events` (כשל שמפיל את העסקה מתגלגל איתה —
+מגבלת Postgres מתועדת, לא הבטחה ריקה).
 
 ## 7. זהות ארגונית
 
-- **‏auth user UUID הוא הזהות. לעולם לא כתובת אימייל.** מיפויי זהות חיצוניים הם טבלה נפרדת.
-- ‏SSO ארגוני (Entra ID · Okta · Google Workspace · SAML) מאחורי feature flag כל עוד תוכנית ה-Supabase
-  או תוכנית הפריסה אינן תומכות בו.
-- כל שינוי זהות והרשאה נכתב ל-`audit_logs` עם סיבה, באותה עסקה.
+- **‏auth user UUID הוא הזהות. לעולם לא כתובת אימייל.** מיפויי זהות חיצוניים הם טבלה נפרדת —
+  ‏`external_identity_mappings` (‏`0060`): ‏`(provider, external_subject)` ייחודי גלובלית, ‏FK
+  מורכב ל-`profiles` שהופך מיפוי חוצה-דיירים לבלתי-אפשרי מבנית, ‏Shape-2 (הדפדפן אינו קורא).
+  כתיבה — רק מסלול service_role של גל SSO עתידי.
+- הגדרות ספק זהות — `identity_provider_settings` (‏`0060`): ‏Shape-2; ‏`secret_config` לעולם אינו
+  חוזר לדפדפן — הקורא `read_identity_provider_settings` (‏owner בלבד) מחזיר את ההיטל הלא-סודי,
+  וה-audit של הפקודה רושם **שמות** מפתחות סוד בלבד. במכוון אין על הטבלה `audit_row_change` —
+  לכידת שורה מלאה הייתה מזליגה סודות דרך `audit_select` (‏`0031:208`).
+- ‏SSO ארגוני (Entra ID · Okta · Google Workspace · SAML) מאחורי ה-flag ‏`sso.enabled` כל עוד
+  תוכנית ה-Supabase או תוכנית הפריסה אינן תומכות בו — ה-flag שולט ב-UI ובהרכבה בלבד; שער ההרשאה
+  של ה-RPC נטול-flag (חוק §8).
+- כל שינוי זהות והרשאה נכתב ל-`audit_logs` עם סיבה, באותה עסקה, ובנוסף נרשם אירוע ב-
+  ‏`security_events` (‏`0060`, ‏#87): ‏`step_up_success`/`step_up_failure` · ‏`permission_change` ·
+  ‏`scope_grant_change` · ‏`sso_config_change` · ‏`org_lifecycle_change`. הטבלה עצמה יומן פורנזי:
+  ‏Shape-2, בלי audit על audit, ‏`actor_user_id` בלי FK כדי שהרשומה תשרוד מחיקת פרופיל.
 
 ## 8. Feature flags — חוק האכיפה
 
 **‏flag יכול רק לכבות יכולת, לעולם לא להרחיב הרשאה.**
 
-פונקציית ההערכה של flag **אינה נקראת מאף `USING` או `WITH CHECK`** של RLS, ולא מאף בדיקת תפקיד בתוך
-RPC. אם יכולת דורשת הרשאה חדשה — ההרשאה נאכפת ב-RLS/RPC ללא תלות ב-flag, וה-flag רק קובע אם ה-UI
-והמסלול פעילים. כך flag שנדלק בטעות אינו יכול לפתוח דלת.
+פונקציית ההערכה — `resolve_feature_flags()` (‏`0059`) — **אינה נקראת מאף `USING` או `WITH CHECK`**
+של RLS, ולא מאף בדיקת תפקיד בתוך RPC (נאכף מבנית בסוויטת `p4_flags_identity.sql`). אם יכולת
+דורשת הרשאה חדשה — ההרשאה נאכפת ב-RLS/RPC ללא תלות ב-flag, וה-flag רק קובע אם ה-UI והמסלול
+פעילים. כך flag שנדלק בטעות אינו יכול לפתוח דלת.
+
+מנגנון (‏`0059`, ‏OPEN-DECISIONS ‏#86): הגדרות גלובליות ב-`private.flag_definitions` (כתיבה
+out-of-band, כמו חברות `platform_admins`; ‏kill switch שמשמעותו **off בלבד** — אין "force on");
+‏config פר-ארגון ב-`org_flag_configurations`, נכתב **רק** דרך `platform_set_org_flag`
+(‏platform_admins + סיבה + audit לארגון היעד). ‏`organizations.settings` פסול כמאחסן flags —
+כתיב-דפדפן ללא audit. ‏targeting (יחידות · אחוז · חלון תאריכים) מאוחסן ומוערך אך ורק בתוך
+הפונקציה, ונכשל-סגור; מיקוד-יחידה ניתן לאחסון ולבדיקה מול שרשרת ברירת-המחדל, אך תרגול rollout
+בין יחידות-אחיות אמיתיות חסום בבריח `multi_unit_org_with_open_exemptions` עד גל ריבוי-היחידות
+(‏§4.5) — שלא יתגלה בשער.
 
 ## 9. אכיפה שאינה משתנה
 
