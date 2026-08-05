@@ -13,7 +13,15 @@ const serviceRoleKey = process.env.QUALITY_SERVICE_ROLE_KEY;
 const outDir = process.env.QUALITY_ARTIFACT_DIR;
 const browserPath = process.env.QUALITY_BROWSER_PATH;
 const passwordSeed = process.env.QUALITY_PASSWORD_SEED;
-const jsonHeaders = { 'access-control-allow-origin': '*', 'content-type': 'application/json', 'content-range': '0-0/1' };
+// content-range must be CORS-exposed or the browser hides it from supabase-js and
+// count:'exact' reads null -> count_unavailable. Real Kong/PostgREST exposes it; the
+// mock must speak the same protocol. (Found when the wave-2 server lists hit /bank.)
+const jsonHeaders = {
+  'access-control-allow-origin': '*',
+  'access-control-expose-headers': 'content-range',
+  'content-type': 'application/json',
+  'content-range': '0-0/1',
+};
 
 fs.mkdirSync(outDir, { recursive: true });
 
