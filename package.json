@@ -20,6 +20,8 @@
     "qa:deterministic": "node qa/runner/deterministic-runner.ts",
     "qa:agents": "node qa/runner/agent-runner.ts",
     "qa:report": "node qa/runner/report-runner.ts",
+    "qa:coverage-manifest": "node qa/coverage/build-manifest.ts && node qa/coverage/build-matrices.ts",
+    "qa:coverage": "node qa/runner/coverage-runner.ts",
     "qa:full": "node qa/runner/full-runner.ts",
     "qa:clean": "node qa/runner/clean.ts",
     "preview": "vite preview"

@@ -239,6 +239,19 @@ npm.cmd run qa:full
 
 `qa:full` מבצע `setup → deterministic → refresh מקומי של הנתונים → agents → cleanup --keep-artifacts → report סופי`. ה־refresh רץ רק לאחר שכל שערי התשתית והראיות הדטרמיניסטיים עברו; כשל מוצר דטרמיניסטי מתועד אינו מונע חקירה, אבל מצב תשתית חסר או לא מוכח חוסם אותה. ה־refresh מאפס את ה־stack המקומי, מנקה credentials ו־auth state, ומבצע `setup` מחדש עם אותו `runId` ואותה תיקיית artifacts כדי שסוכני ה־AI יקבלו dataset טרי. ה־cleanup הסופי רץ גם כאשר שלב מאוחר נכשל, ותוצאתו נכללת בדוח הסופי שנשאר תחת `.qa-runs/<runId>/`. שלב הסוכנים נשאר אופציונלי לפי `QA_AGENT_ENABLED`.
 
+## כיסוי מלא לפי תפקיד
+
+מעל ההרצה הזו יושבת שכבת **כיסוי** נפרדת, שמרחיבה את הבדיקה משישה תרחישי ליבה אל מלאי מלא של מסכים, אזורים, בקרות, פעולות ומצבים לכל תפקיד:
+
+```powershell
+npm.cmd run qa:setup      # חייב לרוץ קודם
+npm.cmd run qa:coverage   # ההילוך המלא, שישה תפקידים סדרתית
+```
+
+היא משתמשת ב-config נפרד של Playwright (`qa/coverage/playwright.coverage.config.ts`) ולא ב-`qa/playwright.config.ts`, משום שזה האחרון מורץ ללא `--project` ולכן כל project שנוסף לו היה משנה בשקט את משמעות השער הדטרמיניסטי ואת משך הריצה. שתי ההרצות חולקות רק את ה-auth setup ואת תיקיית ה-artifacts.
+
+ההילוך **אינו מבצע reset ואינו יוצר, מאשר, משלם או מוחק** — פעולות אלה נשארות בבעלות `qa/deterministic/critical-workflows.spec.ts` עם ה-verifiers שלה. בקרה כספית או הרסנית נרשמת כ"אותרה ולא הופעלה". הפירוט המלא, כולל הגדרת כל אחוז כיסוי והמגבלות, נמצא ב-[`coverage/README.md`](./coverage/README.md).
+
 שער `npm.cmd run quality` הקיים נשאר נפרד וחובה: הוא מכסה RLS, Storage, בידוד רב־דיירי וחוזים משולבים שאינם מוחלפים על ידי מטריצת מסלולי ה־UI. אין להריץ אותו במקביל ל־`qa:setup` או ל־`qa:full`, משום ששני המסלולים משתמשים ב־reset מקומי מבוקר.
 
 ## Credentials, auth state ו־fixtures

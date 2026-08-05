@@ -1,0 +1,1392 @@
+{
+  "generatedFrom": {
+    "commit": "5f9ad8d90f5bee175f7e612a734757376fc44a92",
+    "branch": "codex/qa-full-role-coverage"
+  },
+  "roles": [
+    "owner",
+    "office",
+    "kitchen",
+    "payer",
+    "accountant",
+    "supplier"
+  ],
+  "rows": [
+    {
+      "route": "/admin",
+      "pageComponent": "Admin",
+      "cells": {
+        "owner": {
+          "verdict": "NOT_APPLICABLE",
+          "rationale": "מסלול קונסולת פלטפורמה. מפעיל פלטפורמה אינו תפקיד דייר, ולכן PlatformGuard אינו נגזר ממודל התפקידים — תפקיד דייר צפוי להיות מופנה החוצה.",
+          "navigationVisible": false,
+          "redirectsTo": "/"
+        },
+        "office": {
+          "verdict": "NOT_APPLICABLE",
+          "rationale": "מסלול קונסולת פלטפורמה. מפעיל פלטפורמה אינו תפקיד דייר, ולכן PlatformGuard אינו נגזר ממודל התפקידים — תפקיד דייר צפוי להיות מופנה החוצה.",
+          "navigationVisible": false,
+          "redirectsTo": "/"
+        },
+        "kitchen": {
+          "verdict": "NOT_APPLICABLE",
+          "rationale": "מסלול קונסולת פלטפורמה. מפעיל פלטפורמה אינו תפקיד דייר, ולכן PlatformGuard אינו נגזר ממודל התפקידים — תפקיד דייר צפוי להיות מופנה החוצה.",
+          "navigationVisible": false,
+          "redirectsTo": "/"
+        },
+        "payer": {
+          "verdict": "NOT_APPLICABLE",
+          "rationale": "מסלול קונסולת פלטפורמה. מפעיל פלטפורמה אינו תפקיד דייר, ולכן PlatformGuard אינו נגזר ממודל התפקידים — תפקיד דייר צפוי להיות מופנה החוצה.",
+          "navigationVisible": false,
+          "redirectsTo": "/"
+        },
+        "accountant": {
+          "verdict": "NOT_APPLICABLE",
+          "rationale": "מסלול קונסולת פלטפורמה. מפעיל פלטפורמה אינו תפקיד דייר, ולכן PlatformGuard אינו נגזר ממודל התפקידים — תפקיד דייר צפוי להיות מופנה החוצה.",
+          "navigationVisible": false,
+          "redirectsTo": "/"
+        },
+        "supplier": {
+          "verdict": "NOT_APPLICABLE",
+          "rationale": "מסלול קונסולת פלטפורמה. מפעיל פלטפורמה אינו תפקיד דייר, ולכן PlatformGuard אינו נגזר ממודל התפקידים — תפקיד דייר צפוי להיות מופנה החוצה.",
+          "navigationVisible": false,
+          "redirectsTo": "/"
+        }
+      }
+    },
+    {
+      "route": "/login",
+      "pageComponent": "Login",
+      "cells": {
+        "owner": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "מסלול ציבורי מחוץ ל-Layout. אין guard, ולכן התנהגות מול סשן פעיל נקבעת במסך עצמו ונמדדת בריצה.",
+          "navigationVisible": false
+        },
+        "office": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "מסלול ציבורי מחוץ ל-Layout. אין guard, ולכן התנהגות מול סשן פעיל נקבעת במסך עצמו ונמדדת בריצה.",
+          "navigationVisible": false
+        },
+        "kitchen": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "מסלול ציבורי מחוץ ל-Layout. אין guard, ולכן התנהגות מול סשן פעיל נקבעת במסך עצמו ונמדדת בריצה.",
+          "navigationVisible": false
+        },
+        "payer": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "מסלול ציבורי מחוץ ל-Layout. אין guard, ולכן התנהגות מול סשן פעיל נקבעת במסך עצמו ונמדדת בריצה.",
+          "navigationVisible": false
+        },
+        "accountant": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "מסלול ציבורי מחוץ ל-Layout. אין guard, ולכן התנהגות מול סשן פעיל נקבעת במסך עצמו ונמדדת בריצה.",
+          "navigationVisible": false
+        },
+        "supplier": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "מסלול ציבורי מחוץ ל-Layout. אין guard, ולכן התנהגות מול סשן פעיל נקבעת במסך עצמו ונמדדת בריצה.",
+          "navigationVisible": false
+        }
+      }
+    },
+    {
+      "route": "/accept-invite",
+      "pageComponent": "AcceptInvite",
+      "cells": {
+        "owner": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "מסלול ציבורי מחוץ ל-Layout. אין guard, ולכן התנהגות מול סשן פעיל נקבעת במסך עצמו ונמדדת בריצה.",
+          "navigationVisible": false
+        },
+        "office": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "מסלול ציבורי מחוץ ל-Layout. אין guard, ולכן התנהגות מול סשן פעיל נקבעת במסך עצמו ונמדדת בריצה.",
+          "navigationVisible": false
+        },
+        "kitchen": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "מסלול ציבורי מחוץ ל-Layout. אין guard, ולכן התנהגות מול סשן פעיל נקבעת במסך עצמו ונמדדת בריצה.",
+          "navigationVisible": false
+        },
+        "payer": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "מסלול ציבורי מחוץ ל-Layout. אין guard, ולכן התנהגות מול סשן פעיל נקבעת במסך עצמו ונמדדת בריצה.",
+          "navigationVisible": false
+        },
+        "accountant": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "מסלול ציבורי מחוץ ל-Layout. אין guard, ולכן התנהגות מול סשן פעיל נקבעת במסך עצמו ונמדדת בריצה.",
+          "navigationVisible": false
+        },
+        "supplier": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "מסלול ציבורי מחוץ ל-Layout. אין guard, ולכן התנהגות מול סשן פעיל נקבעת במסך עצמו ונמדדת בריצה.",
+          "navigationVisible": false
+        }
+      }
+    },
+    {
+      "route": "/",
+      "pageComponent": "Navigate",
+      "cells": {
+        "owner": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "המסלול אינו מרנדר מסך אלא מפנה אל (computed at runtime). ההרשאה נקבעת ביעד, לא כאן.",
+          "navigationVisible": false,
+          "redirectsTo": "(computed at runtime)"
+        },
+        "office": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "המסלול אינו מרנדר מסך אלא מפנה אל (computed at runtime). ההרשאה נקבעת ביעד, לא כאן.",
+          "navigationVisible": false,
+          "redirectsTo": "(computed at runtime)"
+        },
+        "kitchen": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "המסלול אינו מרנדר מסך אלא מפנה אל (computed at runtime). ההרשאה נקבעת ביעד, לא כאן.",
+          "navigationVisible": false,
+          "redirectsTo": "(computed at runtime)"
+        },
+        "payer": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "המסלול אינו מרנדר מסך אלא מפנה אל (computed at runtime). ההרשאה נקבעת ביעד, לא כאן.",
+          "navigationVisible": false,
+          "redirectsTo": "(computed at runtime)"
+        },
+        "accountant": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "המסלול אינו מרנדר מסך אלא מפנה אל (computed at runtime). ההרשאה נקבעת ביעד, לא כאן.",
+          "navigationVisible": false,
+          "redirectsTo": "(computed at runtime)"
+        },
+        "supplier": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "המסלול אינו מרנדר מסך אלא מפנה אל (computed at runtime). ההרשאה נקבעת ביעד, לא כאן.",
+          "navigationVisible": false,
+          "redirectsTo": "(computed at runtime)"
+        }
+      }
+    },
+    {
+      "route": "/dashboard",
+      "pageComponent": "DashboardHome",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /dashboard.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /dashboard.",
+          "navigationVisible": true
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /dashboard.",
+          "navigationVisible": true
+        },
+        "payer": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר payer למסלול /dashboard.",
+          "navigationVisible": true
+        },
+        "accountant": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר accountant למסלול /dashboard.",
+          "navigationVisible": true
+        },
+        "supplier": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר supplier למסלול /dashboard.",
+          "navigationVisible": true
+        }
+      }
+    },
+    {
+      "route": "/suppliers",
+      "pageComponent": "SuppliersList",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /suppliers.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /suppliers.",
+          "navigationVisible": true
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /suppliers.",
+          "navigationVisible": true
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/suppliers/:id",
+      "pageComponent": "SupplierCard",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /suppliers/:id.",
+          "navigationVisible": false
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /suppliers/:id.",
+          "navigationVisible": false
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /suppliers/:id.",
+          "navigationVisible": false
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/products",
+      "pageComponent": "Products",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /products.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /products.",
+          "navigationVisible": true
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /products.",
+          "navigationVisible": true
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/prices",
+      "pageComponent": "PriceLists",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /prices.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /prices.",
+          "navigationVisible": true
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /prices.",
+          "navigationVisible": true
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/orders/new",
+      "pageComponent": "NewOrder",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /orders/new.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /orders/new.",
+          "navigationVisible": true
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /orders/new.",
+          "navigationVisible": true
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/orders",
+      "pageComponent": "OrdersList",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /orders.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /orders.",
+          "navigationVisible": true
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /orders.",
+          "navigationVisible": true
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/orders/:id",
+      "pageComponent": "OrderDetail",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /orders/:id.",
+          "navigationVisible": false
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /orders/:id.",
+          "navigationVisible": false
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /orders/:id.",
+          "navigationVisible": false
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/receiving",
+      "pageComponent": "ReceivingList",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /receiving.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /receiving.",
+          "navigationVisible": true
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /receiving.",
+          "navigationVisible": true
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/receiving/:orderId",
+      "pageComponent": "ReceiveOrder",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /receiving/:orderId.",
+          "navigationVisible": false
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /receiving/:orderId.",
+          "navigationVisible": false
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /receiving/:orderId.",
+          "navigationVisible": false
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/invoices",
+      "pageComponent": "InvoicesList",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /invoices.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /invoices.",
+          "navigationVisible": true
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /invoices.",
+          "navigationVisible": true
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר accountant למסלול /invoices.",
+          "navigationVisible": true
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/invoices/new",
+      "pageComponent": "InvoiceNew",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /invoices/new.",
+          "navigationVisible": false
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /invoices/new.",
+          "navigationVisible": false
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /invoices/new.",
+          "navigationVisible": false
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/invoices/:id",
+      "pageComponent": "InvoiceDetail",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /invoices/:id.",
+          "navigationVisible": false
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /invoices/:id.",
+          "navigationVisible": false
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /invoices/:id.",
+          "navigationVisible": false
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר accountant למסלול /invoices/:id.",
+          "navigationVisible": false
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/documents",
+      "pageComponent": "DocumentsGallery",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /documents.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /documents.",
+          "navigationVisible": true
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /documents.",
+          "navigationVisible": true
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/documents/:documentId/review",
+      "pageComponent": "DocumentReview",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /documents/:documentId/review.",
+          "navigationVisible": false
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /documents/:documentId/review.",
+          "navigationVisible": false
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /documents/:documentId/review.",
+          "navigationVisible": false
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר supplier למסלול /documents/:documentId/review.",
+          "navigationVisible": false
+        }
+      }
+    },
+    {
+      "route": "/inbox",
+      "pageComponent": "Navigate",
+      "cells": {
+        "owner": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "המסלול אינו מרנדר מסך אלא מפנה אל /documents?filing=unfiled. ההרשאה נקבעת ביעד, לא כאן.",
+          "navigationVisible": false,
+          "redirectsTo": "/documents?filing=unfiled"
+        },
+        "office": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "המסלול אינו מרנדר מסך אלא מפנה אל /documents?filing=unfiled. ההרשאה נקבעת ביעד, לא כאן.",
+          "navigationVisible": false,
+          "redirectsTo": "/documents?filing=unfiled"
+        },
+        "kitchen": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "המסלול אינו מרנדר מסך אלא מפנה אל /documents?filing=unfiled. ההרשאה נקבעת ביעד, לא כאן.",
+          "navigationVisible": false,
+          "redirectsTo": "/documents?filing=unfiled"
+        },
+        "payer": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "המסלול אינו מרנדר מסך אלא מפנה אל /documents?filing=unfiled. ההרשאה נקבעת ביעד, לא כאן.",
+          "navigationVisible": false,
+          "redirectsTo": "/documents?filing=unfiled"
+        },
+        "accountant": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "המסלול אינו מרנדר מסך אלא מפנה אל /documents?filing=unfiled. ההרשאה נקבעת ביעד, לא כאן.",
+          "navigationVisible": false,
+          "redirectsTo": "/documents?filing=unfiled"
+        },
+        "supplier": {
+          "verdict": "CONDITIONAL_ACCESS",
+          "rationale": "המסלול אינו מרנדר מסך אלא מפנה אל /documents?filing=unfiled. ההרשאה נקבעת ביעד, לא כאן.",
+          "navigationVisible": false,
+          "redirectsTo": "/documents?filing=unfiled"
+        }
+      }
+    },
+    {
+      "route": "/credits",
+      "pageComponent": "Credits",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /credits.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /credits.",
+          "navigationVisible": true
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /credits.",
+          "navigationVisible": true
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר accountant למסלול /credits.",
+          "navigationVisible": true
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/payment-requests",
+      "pageComponent": "PaymentRequests",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /payment-requests.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /payment-requests.",
+          "navigationVisible": true
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל kitchen; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/payments",
+      "pageComponent": "Payments",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /payments.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל office; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל kitchen; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר accountant למסלול /payments.",
+          "navigationVisible": true
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/pay/emergency",
+      "pageComponent": "PayerQueue",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /pay/emergency.",
+          "navigationVisible": false
+        },
+        "office": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל office; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל kitchen; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/pay",
+      "pageComponent": "PayerQueue",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל owner; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "office": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל office; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל kitchen; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "payer": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר payer למסלול /pay.",
+          "navigationVisible": true
+        },
+        "accountant": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר accountant למסלול /pay.",
+          "navigationVisible": true
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/bank",
+      "pageComponent": "Bank",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /bank.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל office; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל kitchen; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר accountant למסלול /bank.",
+          "navigationVisible": true
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/exceptions",
+      "pageComponent": "Exceptions",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /exceptions.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /exceptions.",
+          "navigationVisible": true
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר kitchen למסלול /exceptions.",
+          "navigationVisible": true
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר accountant למסלול /exceptions.",
+          "navigationVisible": true
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/alerts",
+      "pageComponent": "Alerts",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /alerts.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /alerts.",
+          "navigationVisible": true
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל kitchen; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/expenses",
+      "pageComponent": "Expenses",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /expenses.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל office; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל kitchen; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר accountant למסלול /expenses.",
+          "navigationVisible": true
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/reports",
+      "pageComponent": "Reports",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /reports.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל office; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל kitchen; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר accountant למסלול /reports.",
+          "navigationVisible": true
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/analytics",
+      "pageComponent": "Analytics",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /analytics.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר office למסלול /analytics.",
+          "navigationVisible": true
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל kitchen; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר accountant למסלול /analytics.",
+          "navigationVisible": true
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/audit",
+      "pageComponent": "AuditLogPage",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /audit.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל office; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל kitchen; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר accountant למסלול /audit.",
+          "navigationVisible": true
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/settings",
+      "pageComponent": "Settings",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /settings.",
+          "navigationVisible": true
+        },
+        "office": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל office; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל kitchen; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    },
+    {
+      "route": "/my-prices",
+      "pageComponent": "SupplierPrices",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל owner; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "office": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל office; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל kitchen; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר supplier למסלול /my-prices.",
+          "navigationVisible": true
+        }
+      }
+    },
+    {
+      "route": "/onboarding",
+      "pageComponent": "Onboarding",
+      "cells": {
+        "owner": {
+          "verdict": "EXPECTED_ACCESS",
+          "rationale": "Guard ב-App.tsx מתיר owner למסלול /onboarding.",
+          "navigationVisible": false
+        },
+        "office": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל office; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "kitchen": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל kitchen; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "payer": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל payer; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "accountant": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל accountant; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        },
+        "supplier": {
+          "verdict": "EXPECTED_DENIAL",
+          "rationale": "Guard ב-App.tsx אינו כולל supplier; הצפי הוא הפניה לבית של התפקיד.",
+          "navigationVisible": false,
+          "redirectsTo": "homeFor(role)"
+        }
+      }
+    }
+  ]
+}
