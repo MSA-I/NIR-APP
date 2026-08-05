@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, createContext, useContext, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, createContext, useContext, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
-import { ChevronRight, ChevronLeft, Search, X, Loader2, Inbox, Bell, Check } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Search, X, Loader2, Inbox, Bell, Check, Columns3, SlidersHorizontal } from 'lucide-react';
+import {
+  useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel,
+  type ColumnDef, type SortingState,
+} from '@tanstack/react-table';
 import type { StatusMeta, Tone } from '../lib/status';
+import type { ServerSort } from '../lib/serverList';
 import { fmtMoney } from '../lib/format';
 import { ActionMenu, type ActionMenuItem } from './ActionMenu';
 
@@ -119,12 +125,13 @@ export function SkeletonList({ rows = 5, title = true }: { rows?: number; title?
   );
 }
 
-export function EmptyState({ title, subtitle }: { title: string; subtitle?: string }) {
+export function EmptyState({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <Inbox size={36} className="text-ink-ghost mb-3" />
       <div className="text-ink-soft font-medium">{title}</div>
       {subtitle && <div className="text-sm text-ink-muted mt-1">{subtitle}</div>}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }
@@ -571,10 +578,44 @@ export interface Column<T> {
   mobileLabel?: string | null;
 }
 
-export function DataTable<T extends { id: string }>({ rows, columns, onRowClick, searchable, searchFn, searchLabel = 'חיפוש בטבלה', pageSize = 15, emptyTitle = 'אין נתונים להצגה', emptySubtitle, toolbar, mobile = 'cards', mobileTitle, mobileTrailing, rowActions, rowLabel }: {
-  rows: T[]; columns: Column<T>[]; onRowClick?: (row: T) => void;
-  searchable?: boolean; searchFn?: (row: T, q: string) => boolean; searchLabel?: string;
-  pageSize?: number; emptyTitle?: string; emptySubtitle?: string; toolbar?: ReactNode;
+/** Column shape in server mode. `sortValue` is a compile error rather than an ignored prop:
+    a client comparator over one fetched page would sort the page, not the result (ADR-0007). */
+export interface ServerColumn<T> extends Omit<Column<T>, 'sortValue'> {
+  sortValue?: never;
+}
+
+/**
+ * The opt-in server mode of DataTable (PLAN-02 §2.2). Presence of this prop is the switch:
+ * the table stops filtering, sorting and slicing entirely and renders `rows` as the one page
+ * the screen fetched via `fetchServerList`. Page reset on a sort/search/filter change is the
+ * screen's job in this mode — the table only reports the interaction.
+ */
+export interface DataTableServer {
+  /** `ServerListResult.total` — the RLS-filtered COUNT. Never a page length. */
+  total: number;
+  /** Zero-based, mirroring `ServerListRequest.page`. */
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  /** null = no user sort; the screen decides its default order in the request. */
+  sort: readonly ServerSort[] | null;
+  onSortChange: (sort: readonly ServerSort[] | null) => void;
+  /** Only a column whose key is in this set renders a sort button; the rest are plain text. */
+  sortableColumns: ReadonlySet<string>;
+  /** Server-mode search box. The table debounces (>=300ms — every keystroke would pay a
+      filtered COUNT) and emits the settled value only. */
+  search?: { value: string; onChange: (value: string) => void };
+  /** True while a request is in flight. Drives the subtle indicator + aria-busy; never blanks rows. */
+  fetching: boolean;
+}
+
+interface DataTableCommonProps<T> {
+  rows: T[];
+  onRowClick?: (row: T) => void;
+  searchLabel?: string;
+  emptyTitle?: string;
+  emptySubtitle?: string;
+  toolbar?: ReactNode;
   /** 'cards' (default) stacks rows below md; reserve 'scroll' for true matrix previews.
       Search/filter/sort/pagination are shared. */
   mobile?: 'cards' | 'scroll';
@@ -587,52 +628,406 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
   rowActions?: (row: T) => ActionMenuItem[];
   /** Human-readable identity used in row action names, e.g. "חשבונית 123 — ספק א". */
   rowLabel?: (row: T) => string;
-}) {
+  /** Hebrew error text. When set, the body renders an alert Note — a failed result must never
+      fall through to EmptyState and read as "no data" (gate B30). */
+  error?: string | null;
+  /** How many toolbar-slot filters are active. The table cannot see the screen's filters, and
+      without this a filtered-to-empty screen would lie "אין נתונים". Also the trigger badge
+      of the mobile filter sheet. */
+  activeFilters?: number;
+  /** Renders "נקה סינון" (toolbar + filtered-empty state). The table clears the search it owns
+      first, then calls this so the screen clears its own filters. */
+  onClearFilters?: () => void;
+  /** Per-screen localStorage key for the column picker (e.g. 'invoices'). Presence enables the
+      picker. localStorage on purpose and declared temporary — OPEN-DECISIONS #80. */
+  columnPicker?: string;
+}
+
+export interface DataTableClientProps<T> extends DataTableCommonProps<T> {
+  columns: Column<T>[];
+  server?: never;
+  searchable?: boolean;
+  searchFn?: (row: T, q: string) => boolean;
+  pageSize?: number;
+}
+
+export interface DataTableServerProps<T> extends DataTableCommonProps<T> {
+  columns: ServerColumn<T>[];
+  server: DataTableServer;
+  /** In server mode search exists only through `server.search` — a client-side `searchFn`
+      would filter one page and report a wrong count, so the type forbids it. */
+  searchable?: never;
+  searchFn?: never;
+  /** Page size comes only from `server.pageSize`. */
+  pageSize?: never;
+}
+
+/** Discriminated on `server` so a page-local filter/sort cannot compile in server mode. */
+export type DataTableProps<T> = DataTableClientProps<T> | DataTableServerProps<T>;
+
+/** Every keystroke in server mode costs a filtered COUNT; emit only the settled value. */
+const SEARCH_DEBOUNCE_MS = 300;
+
+/** OPEN-DECISIONS #80: column preferences live in localStorage per screen, declared temporary
+    until saved views exist. Reads are validated against the current column keys so a stale or
+    hand-edited entry cannot hide a column that no longer exists. */
+const COLUMN_PREFS_PREFIX = 'sf.columns.';
+
+function readHiddenColumns(storageKey: string | undefined, validKeys: readonly string[]): Record<string, boolean> {
+  if (!storageKey) return {};
+  try {
+    const raw = localStorage.getItem(COLUMN_PREFS_PREFIX + storageKey);
+    if (!raw) return {};
+    const hidden: unknown = JSON.parse(raw);
+    if (!Array.isArray(hidden)) return {};
+    const valid = new Set(validKeys);
+    const state: Record<string, boolean> = {};
+    for (const key of hidden) if (typeof key === 'string' && valid.has(key)) state[key] = false;
+    return state;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * The enterprise toolbar needs to know which of its two layouts is live. The table body itself
+ * keeps both DOM branches mounted and CSS-hidden (`md:hidden` / `hidden md:block` — the browser
+ * gate measures `:visible` on that model and it must not change), but the toolbar cannot do the
+ * same: rendering the screen's `toolbar` slot twice would duplicate every id inside it (gate B6).
+ * Defaults to desktop where matchMedia is unavailable (jsdom).
+ */
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia(query).matches
+      : true);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    mql.addEventListener('change', onChange);
+    setMatches(mql.matches);
+    return () => mql.removeEventListener('change', onChange);
+  }, [query]);
+  return matches;
+}
+
+interface ColumnPickerOption {
+  key: string;
+  header: string;
+  visible: boolean;
+  /** The last visible column cannot be hidden — a table with zero columns is not a state. */
+  disabled: boolean;
+  onToggle: (visible: boolean) => void;
+}
+
+/** Native checkboxes inside their labels: accessible names and state announcements for free,
+    no ids to collide between the picker's popover and sheet renderings (only one is mounted). */
+function ColumnChecklist({ options }: { options: ColumnPickerOption[] }) {
+  return (
+    <div role="group" aria-label="בחירת עמודות" className="flex flex-col">
+      {options.map((o) => (
+        <label key={o.key}
+          className={`flex min-h-11 items-center gap-2.5 rounded-lg px-2 text-sm ${o.disabled ? 'text-ink-faint cursor-default' : 'text-ink-body cursor-pointer hover:bg-surface-sunken'}`}>
+          <input type="checkbox" className="size-4 shrink-0 accent-action" checked={o.visible} disabled={o.disabled}
+            onChange={(event) => o.onToggle(event.target.checked)} />
+          {o.header}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+/** Desktop column picker. Portals to body for the same reason ActionMenu does — the DataTable
+    card is overflow-hidden — and reuses its measure-then-place pattern (end-edge aligned,
+    flipped above when the viewport has no room below, clamped inside). */
+function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const close = useCallback((focusTrigger = false) => {
+    setOpen(false);
+    setPos(null);
+    if (focusTrigger) triggerRef.current?.focus();
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const trigger = triggerRef.current;
+    const panel = panelRef.current;
+    if (!trigger || !panel) return;
+    const rect = trigger.getBoundingClientRect();
+    const pw = panel.offsetWidth;
+    const ph = panel.offsetHeight;
+    const rtl = document.documentElement.dir === 'rtl';
+    let left = rtl ? rect.left : rect.right - pw;
+    left = Math.min(Math.max(left, 8), window.innerWidth - pw - 8);
+    let top = rect.bottom + 4;
+    if (top + ph > window.innerHeight - 8 && rect.top - ph - 4 >= 8) top = rect.top - ph - 4;
+    top = Math.min(Math.max(top, 8), window.innerHeight - ph - 8);
+    setPos({ top, left });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+      close();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation(); // an open popover consumes Escape — a Modal underneath must not also close
+      close(true);
+    };
+    // The page scrolling moves the anchor — close rather than chase it (same call as ActionMenu).
+    // The panel's own overflow scroll is exempt, or scrolling the checklist would dismiss it.
+    const onScroll = (event: Event) => {
+      if (panelRef.current?.contains(event.target as Node)) return;
+      close();
+    };
+    const onResize = () => close();
+    document.addEventListener('pointerdown', onPointerDown, true);
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [open, close]);
+
+  return (
+    <>
+      <button ref={triggerRef} type="button" className="btn-secondary" aria-haspopup="dialog" aria-expanded={open}
+        onClick={() => (open ? close() : setOpen(true))}>
+        <Columns3 size={15} aria-hidden="true" /> עמודות
+      </button>
+      {open && createPortal(
+        <div ref={panelRef}
+          style={{ position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, visibility: pos ? 'visible' : 'hidden' }}
+          className="z-50 min-w-44 max-w-64 max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain border border-line bg-surface p-2 shadow-menu">
+          <ColumnChecklist options={options} />
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+/**
+ * The system's work table, now driven by @tanstack/react-table 8 internally (ADR-0007).
+ *
+ * The engine owns the row model — filter, then sort, then paginate, exactly the old order —
+ * while the markup stays this file's: both the mobile-cards branch and the desktop table are
+ * rendered from the same `visibleColumns` array as before, kept mounted and CSS-hidden.
+ * The existing prop contract is preserved for every current call site; everything enterprise
+ * (server mode, error surface, filter accounting, column picker) is additive and opt-in.
+ * `tsc` over the unchanged pages is the compatibility proof.
+ */
+export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
+  const {
+    rows, columns, onRowClick, searchLabel = 'חיפוש בטבלה',
+    emptyTitle = 'אין נתונים להצגה', emptySubtitle, toolbar, mobile = 'cards',
+    mobileTitle, mobileTrailing, rowActions, rowLabel,
+    error = null, activeFilters = 0, onClearFilters, columnPicker,
+  } = props;
+  const server = props.server;
+  const searchFn = props.searchFn;
+  const searchable = props.searchable ?? false;
+  const pageSize = server ? server.pageSize : (props.pageSize ?? 15);
+
   const [q, setQ] = useState('');
   const [page, setPage] = useState(0);
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
 
-  const filtered = useMemo(() => {
-    let r = rows;
-    if (q && searchFn) r = r.filter((row) => searchFn(row, q.toLowerCase()));
-    if (sort) {
-      const col = columns.find((c) => c.key === sort.key);
-      if (col?.sortValue) {
-        r = [...r].sort((a, b) => {
-          const va = col.sortValue!(a); const vb = col.sortValue!(b);
-          return (va < vb ? -1 : va > vb ? 1 : 0) * sort.dir;
-        });
-      }
+  // Server-mode search: the input is live per keystroke, the emit is debounced. A value pushed
+  // from outside (URL restore, back navigation) syncs in; the ref keeps the two directions from
+  // fighting over the box while a debounce is pending.
+  const serverSearch = server?.search;
+  const serverSearchRef = useRef(serverSearch);
+  serverSearchRef.current = serverSearch;
+  const [searchText, setSearchText] = useState(serverSearch?.value ?? '');
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSearchValue = useRef(serverSearch?.value ?? '');
+  useEffect(() => {
+    const value = serverSearchRef.current?.value ?? '';
+    if (value !== lastSearchValue.current) {
+      lastSearchValue.current = value;
+      setSearchText(value);
     }
-    return r;
-  }, [rows, q, sort, columns, searchFn]);
+  }, [serverSearch?.value]);
+  useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current); }, []);
+  const emitSearch = (value: string) => {
+    setSearchText(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      lastSearchValue.current = value;
+      serverSearchRef.current?.onChange(value);
+    }, SEARCH_DEBOUNCE_MS);
+  };
 
-  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const pageRows = filtered.slice(page * pageSize, (page + 1) * pageSize);
-  useEffect(() => { setPage(0); }, [q, rows.length]);
+  // Column visibility is presentation state, owned here (not by the engine): the picker is
+  // declared temporary (#80) and hiding a column must not disturb the row model.
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(
+    () => readHiddenColumns(columnPicker, columns.map((c) => c.key)),
+  );
+  const setColumnVisible = (key: string, visible: boolean) => {
+    setColumnVisibility((prev) => {
+      const next = { ...prev, [key]: visible };
+      if (columnPicker) {
+        try {
+          const hidden = columns.map((c) => c.key).filter((k) => next[k] === false);
+          localStorage.setItem(COLUMN_PREFS_PREFIX + columnPicker, JSON.stringify(hidden));
+        } catch { /* storage unavailable — the session still works, the preference just is not kept */ }
+      }
+      return next;
+    });
+  };
 
-  return (
-    <div className="card overflow-hidden">
-      {(searchable || toolbar) && (
-        <div className="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft">
-          {searchable && (
-            <div className="relative flex-1 min-w-44 max-w-xs">
-              <Search size={15} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint" />
-              <input className="input ps-9!" aria-label={searchLabel} placeholder="חיפוש..." value={q} onChange={(e) => setQ(e.target.value)} />
-            </div>
-          )}
-          {toolbar}
-        </div>
-      )}
-      {filtered.length === 0 ? (
-        <EmptyState title={emptyTitle} subtitle={emptySubtitle} />
+  const columnDefs = useMemo<ColumnDef<T>[]>(() => columns.map((c) => {
+    const sortValue = c.sortValue as ((row: T) => string | number) | undefined;
+    return {
+      id: c.key,
+      // The identity accessor exists for the engine's benefit: table-core refuses to include a
+      // column in the global-filter pass unless it has an accessorFn, however getColumnCanGlobalFilter
+      // answers. The value itself is never read — searchFn and sortingFn work on row.original.
+      accessorFn: (row: T) => row,
+      enableSorting: !!sortValue,
+      // The exact comparator the old client sort used; react-table negates it for desc,
+      // which is the same arithmetic as the old `* sort.dir`.
+      ...(sortValue ? {
+        sortingFn: (a: { original: T }, b: { original: T }) => {
+          const va = sortValue(a.original);
+          const vb = sortValue(b.original);
+          return va < vb ? -1 : va > vb ? 1 : 0;
+        },
+      } : {}),
+    };
+  }), [columns]);
+
+  // Sorting state only ever names a column that has a client comparator — same guard the old
+  // `filtered` memo applied before sorting.
+  const sorting = useMemo<SortingState>(() => {
+    if (server || !sort) return [];
+    const col = columns.find((candidate) => candidate.key === sort.key);
+    return col?.sortValue ? [{ id: sort.key, desc: sort.dir === -1 }] : [];
+  }, [server, sort, columns]);
+
+  const table = useReactTable<T>({
+    data: rows,
+    columns: columnDefs,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getRowId: (row) => row.id,
+    state: {
+      sorting,
+      pagination: { pageIndex: server ? server.page : page, pageSize },
+      globalFilter: !server && q && searchFn ? q.toLowerCase() : undefined,
+    },
+    // In server mode the engine is told, in its own vocabulary, that every row model is manual:
+    // the rows it holds are one already-filtered, already-sorted, already-sliced page.
+    manualFiltering: !!server,
+    manualSorting: !!server,
+    manualPagination: !!server,
+    rowCount: server ? server.total : undefined,
+    // The caller's searchFn examines the whole row, so it must run once per row: only the first
+    // column participates in the global filter pass.
+    globalFilterFn: (row, _columnId, filterValue) =>
+      searchFn ? searchFn(row.original, String(filterValue)) : true,
+    getColumnCanGlobalFilter: (column) => column.id === columns[0]?.key,
+  });
+
+  const visibleColumns = useMemo(
+    () => columns.filter((c) => columnVisibility[c.key] !== false),
+    [columns, columnVisibility],
+  );
+
+  const filteredCount = server ? server.total : table.getFilteredRowModel().rows.length;
+  const pageRows: T[] = server ? rows : table.getRowModel().rows.map((r) => r.original);
+  const pages = server ? Math.max(1, Math.ceil(server.total / pageSize)) : Math.max(1, table.getPageCount());
+  const currentPage = server ? server.page : page;
+
+  // ADR-0007 fix: the old effect listened to [q, rows.length] and missed sort, so sorting while
+  // on page 4 showed the wrong rows. In server mode the page is screen-owned URL state and this
+  // effect's inputs never move.
+  useEffect(() => { setPage(0); }, [q, rows.length, sort]);
+
+  const hasActiveFilters =
+    (server ? searchText !== '' || (serverSearch?.value ?? '') !== '' : q !== '') || activeFilters > 0;
+  const isEmpty = filteredCount === 0;
+
+  const clearFilters = () => {
+    if (server) {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+      if (serverSearch && (searchText !== '' || serverSearch.value !== '')) {
+        lastSearchValue.current = '';
+        setSearchText('');
+        serverSearch.onChange('');
+      }
+    } else if (q !== '') {
+      setQ('');
+    }
+    onClearFilters?.();
+  };
+
+  // The enterprise toolbar exists only for callers that asked for something enterprise; the
+  // twenty untouched call sites keep the original toolbar markup below, byte for byte.
+  const enterprise = !!server || columnPicker !== undefined;
+  const isDesktop = useMediaQuery('(min-width: 768px)'); // md — the breakpoint that swaps cards/table
+  const [sheetOpen, setSheetOpen] = useState(false);
+  useEffect(() => { if (isDesktop) setSheetOpen(false); }, [isDesktop]);
+
+  const visibleCount = visibleColumns.length;
+  const pickerOptions: ColumnPickerOption[] | null = columnPicker === undefined ? null : columns.map((c) => {
+    const visible = columnVisibility[c.key] !== false;
+    return {
+      key: c.key,
+      header: c.header || c.key,
+      visible,
+      disabled: visible && visibleCount === 1,
+      onToggle: (v: boolean) => setColumnVisible(c.key, v),
+    };
+  });
+
+  const searchBox = (server ? !!serverSearch : searchable) && (
+    <div className="relative flex-1 min-w-44 max-w-xs">
+      <Search size={15} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint" />
+      {server ? (
+        <input className="input ps-9!" aria-label={searchLabel} placeholder="חיפוש..." value={searchText}
+          onChange={(e) => emitSearch(e.target.value)} />
       ) : (
-        <>
+        <input className="input ps-9!" aria-label={searchLabel} placeholder="חיפוש..." value={q}
+          onChange={(e) => setQ(e.target.value)} />
+      )}
+    </div>
+  );
+
+  const sheetHasContent = !!toolbar || pickerOptions !== null;
+
+  const tableBody = error ? (
+    // A failed fetch is a failed fetch. It must never render as "אין נתונים" (gate B30).
+    <div className="p-4"><Note tone="alert" role="alert">{error}</Note></div>
+  ) : isEmpty ? (
+    hasActiveFilters ? (
+      <EmptyState title="אין תוצאות לסינון הנוכחי" subtitle="שנה את הסינון או נקה אותו כדי לראות רשומות"
+        action={<button type="button" className="btn-secondary" onClick={clearFilters}>נקה סינון</button>} />
+    ) : (
+      <EmptyState title={emptyTitle} subtitle={emptySubtitle} />
+    )
+  ) : (
+    <>
           {mobile === 'cards' && (
             <ul className="md:hidden divide-y divide-line-soft">
               {pageRows.map((row) => {
-                const title = mobileTitle ? mobileTitle(row) : columns[0]?.render(row);
-                const details = columns.filter((c, i) => (c.priority ?? 2) <= 2 && !(i === 0 && !mobileTitle));
+                const title = mobileTitle ? mobileTitle(row) : visibleColumns[0]?.render(row);
+                const details = visibleColumns.filter((c, i) => (c.priority ?? 2) <= 2 && !(i === 0 && !mobileTitle));
                 const body = (
                   <>
                     <div className="flex items-center justify-between gap-3">
@@ -691,19 +1086,35 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
             <table className="w-full">
               <thead className="bg-surface-sunken border-b border-line-soft">
                 <tr>
-                  {columns.map((c) => {
+                  {visibleColumns.map((c) => {
                     // Sortable headers are real <button>s (audit 2026-07-21): keyboard focus,
                     // Enter/Space activation and the hover affordance come for free, and aria-sort
                     // exposes the active direction to a screen reader. Visual layout is unchanged —
-                    // the button inherits .th's type via Tailwind's button reset.
-                    const active = sort?.key === c.key;
-                    const ariaSort = !c.sortValue ? undefined : active ? (sort?.dir === 1 ? 'ascending' : 'descending') : 'none';
+                    // the button inherits .th's type via Tailwind's button reset. In server mode
+                    // sortability comes from server.sortableColumns, and a click only reports the
+                    // requested order — rows are never re-ordered locally.
+                    let ariaSort: 'ascending' | 'descending' | 'none' | undefined;
+                    let onSortClick: (() => void) | undefined;
+                    if (server) {
+                      if (server.sortableColumns.has(c.key)) {
+                        const current = server.sort?.[0];
+                        const active = current?.column === c.key ? current : undefined;
+                        ariaSort = active ? ((active.ascending ?? true) ? 'ascending' : 'descending') : 'none';
+                        onSortClick = () => server.onSortChange(active
+                          ? [{ column: c.key, ascending: !(active.ascending ?? true) }]
+                          : [{ column: c.key, ascending: true }]);
+                      }
+                    } else if (c.sortValue) {
+                      const active = sort?.key === c.key;
+                      ariaSort = active ? (sort?.dir === 1 ? 'ascending' : 'descending') : 'none';
+                      onSortClick = () => setSort((s) => s?.key === c.key ? { key: c.key, dir: s.dir === 1 ? -1 : 1 } : { key: c.key, dir: 1 });
+                    }
                     return (
                       <th key={c.key} scope="col" className="th" aria-sort={ariaSort}>
-                        {c.sortValue ? (
+                        {onSortClick ? (
                           <button type="button" className="inline-flex min-h-11 items-center gap-1 hover:text-ink-mid cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
-                            onClick={() => setSort((s) => s?.key === c.key ? { key: c.key, dir: s.dir === 1 ? -1 : 1 } : { key: c.key, dir: 1 })}>
-                            {c.header}{active && (sort?.dir === 1 ? ' ↑' : ' ↓')}
+                            onClick={onSortClick}>
+                            {c.header}{ariaSort === 'ascending' ? ' ↑' : ariaSort === 'descending' ? ' ↓' : ''}
                           </button>
                         ) : c.header}
                       </th>
@@ -718,7 +1129,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
                     <tr key={row.id}
                       className={onRowClick ? 'row-hover cursor-pointer' : ''}
                       onClick={onRowClick ? () => onRowClick(row) : undefined}>
-                      {columns.map((c, index) => (
+                      {visibleColumns.map((c, index) => (
                         <td key={c.key} className={`td ${c.className ?? ''}`}>
                           {index === 0 && onRowClick ? (
                             <button type="button" className="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
@@ -745,18 +1156,87 @@ export function DataTable<T extends { id: string }>({ rows, columns, onRowClick,
               </tbody>
             </table>
           </div>
-          {pages > 1 && (
-            <div className="flex items-center justify-between px-4 py-2.5 border-t border-line-soft text-sm text-ink-muted">
-              <span>{filtered.length} רשומות</span>
-              <div className="flex items-center gap-1">
-                <button className="btn-ghost p-1.5! min-w-11 min-h-11" disabled={page === 0} onClick={() => setPage((p) => p - 1)} aria-label="הקודם"><ChevronRight size={16} /></button>
-                <span className="px-2">{page + 1} / {pages}</span>
-                <button className="btn-ghost p-1.5! min-w-11 min-h-11" disabled={page >= pages - 1} onClick={() => setPage((p) => p + 1)} aria-label="הבא"><ChevronLeft size={16} /></button>
-              </div>
+    </>
+  );
+
+  return (
+    <>
+      <div className="card overflow-hidden" aria-busy={server?.fetching || undefined}>
+        {enterprise ? (
+          (searchBox || sheetHasContent || hasActiveFilters) ? (
+            <div className="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft">
+              {searchBox}
+              {isDesktop ? (
+                <>
+                  {toolbar}
+                  {pickerOptions && <ColumnPickerPopover options={pickerOptions} />}
+                  {hasActiveFilters && (
+                    <button type="button" className="btn-ghost" onClick={clearFilters}>נקה סינון</button>
+                  )}
+                </>
+              ) : sheetHasContent ? (
+                // Below md the screen's filters, the column picker and the clear action live in
+                // one sheet (UI-PLAN §2). The `toolbar` slot is mounted in exactly one of the two
+                // places at a time, so no id inside it can duplicate (gate B6).
+                <button type="button" className="btn-secondary" aria-haspopup="dialog" aria-expanded={sheetOpen}
+                  onClick={() => setSheetOpen(true)}>
+                  <SlidersHorizontal size={15} aria-hidden="true" /> סינון ותצוגה
+                  {activeFilters > 0 && <span className="badge num bg-action-soft text-action-on-soft">{activeFilters}</span>}
+                </button>
+              ) : null}
             </div>
-          )}
-        </>
+          ) : null
+        ) : (searchable || toolbar) ? (
+          <div className="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft">
+            {searchBox}
+            {toolbar}
+          </div>
+        ) : null}
+        {tableBody}
+        {!error && (
+          <div className="flex items-center justify-between px-4 py-2.5 border-t border-line-soft text-sm text-ink-muted">
+            {/* Unconditional and a live region (PLAN-02 §2.2): the count is the filtered total —
+                the server's COUNT in server mode — never a page length, and the element persists
+                across states so a screen reader hears it change, including down to a true 0.
+                An unavailable count never reaches here: it throws upstream (queryResult.ts). */}
+            <span className="flex items-center gap-2">
+              <span aria-live="polite">{filteredCount} רשומות</span>
+              {server?.fetching && <Loader2 size={14} className="animate-spin text-ink-faint" aria-hidden="true" />}
+            </span>
+            {pages > 1 && (
+              <div className="flex items-center gap-1">
+                <button className="btn-ghost p-1.5! min-w-11 min-h-11" disabled={currentPage === 0}
+                  onClick={() => (server ? server.onPageChange(server.page - 1) : setPage((p) => p - 1))}
+                  aria-label="הקודם"><ChevronRight size={16} /></button>
+                <span className="px-2">{currentPage + 1} / {pages}</span>
+                <button className="btn-ghost p-1.5! min-w-11 min-h-11" disabled={currentPage >= pages - 1}
+                  onClick={() => (server ? server.onPageChange(server.page + 1) : setPage((p) => p + 1))}
+                  aria-label="הבא"><ChevronLeft size={16} /></button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      {enterprise && !isDesktop && (
+        // The one mobile sheet, over the existing dialog layer (extracted, not rewritten):
+        // Modal already runs on useDialogLayer and renders as a bottom sheet on phones.
+        <Modal open={sheetOpen} onClose={() => setSheetOpen(false)} title="סינון ותצוגה">
+          <div className="space-y-5">
+            {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
+            {pickerOptions && (
+              <div>
+                <div className="label">עמודות</div>
+                <ColumnChecklist options={pickerOptions} />
+              </div>
+            )}
+            {hasActiveFilters && (
+              <button type="button" className="btn-secondary w-full" onClick={() => { clearFilters(); setSheetOpen(false); }}>
+                נקה סינון
+              </button>
+            )}
+          </div>
+        </Modal>
       )}
-    </div>
+    </>
   );
 }

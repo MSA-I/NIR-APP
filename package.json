@@ -11,7 +11,8 @@
     "check:split": "node scripts/check-order-split.ts",
     "check:p2": "node scripts/check-p2-reliability.ts",
     "check:review": "node --test src/components/document-review/model.test.ts",
-    "build": "tsc --noEmit && npm run check:alerts && npm run check:dashboard && npm run check:orders && npm run check:split && npm run check:p2 && npm run check:review && npm run test && vite build",
+    "check:tokens": "node scripts/check-design-tokens.ts",
+    "build": "tsc --noEmit && npm run check:alerts && npm run check:dashboard && npm run check:orders && npm run check:split && npm run check:p2 && npm run check:review && npm run check:tokens && npm run test && vite build",
     "quality": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-quality-gates.ps1",
     "preview": "vite preview",
     "test": "vitest run"
@@ -21,6 +22,7 @@
     "@sentry/react": "^10.69.0",
     "@supabase/supabase-js": "^2.91.1",
     "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-table": "8.21.3",
     "lucide-react": "^0.563.0",
     "papaparse": "^5.4.1",
     "react": "19.2.8",

@@ -38,6 +38,10 @@ export const DOMAIN = {
   purchaseOrders: 'purchase-orders',
   notifications: 'notifications',
   organization: 'organization',
+  // Wave 2: the two server-list screens that are not invoices. Named after their tables,
+  // in the same kebab style as `price-lists`.
+  payments: 'payments',
+  bank: 'bank-transactions',
 } as const;
 
 export type Domain = (typeof DOMAIN)[keyof typeof DOMAIN];

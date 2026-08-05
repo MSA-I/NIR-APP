@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useQuery as useCachedQuery } from '@tanstack/react-query';
+import { useQuery as useCachedQuery, keepPreviousData as keepPreviousDataFn } from '@tanstack/react-query';
 import { toHebrewError } from './errors';
 import { createRequestGate } from './requestGate';
 import { orgRoot } from './query/keys';
@@ -20,6 +20,17 @@ export interface QueryOptions {
    * O(n) deep compare on every fetch. Set this on large lists.
    */
   structuralSharing?: boolean;
+  /**
+   * Keep the previous key's data on screen while the next key loads, instead of a skeleton.
+   *
+   * This is the paging contract of PLAN-02 §2.3: a page change is a new query key, which is
+   * `isPending` in TanStack v5 and would blank the table the user is reading. Mapped to
+   * `placeholderData: keepPreviousData`; while the previous data is shown, `loading` stays
+   * `false` and `fetching` is `true`. The very first fetch (nothing to show yet) still reports
+   * `loading: true` and drives the skeleton. Opt-in only — a consumer that does not pass it
+   * keeps the exact current semantics.
+   */
+  keepPreviousData?: boolean;
 }
 
 /**
@@ -78,6 +89,7 @@ function useCachedQueryMode<T>(
     queryFn: () => fnRef.current(),
     enabled: key !== undefined,
     structuralSharing: options.structuralSharing,
+    placeholderData: options.keepPreviousData ? keepPreviousDataFn : undefined,
   });
 
   const refetch = useCallback(
@@ -89,7 +101,11 @@ function useCachedQueryMode<T>(
     data: query.data === undefined ? null : query.data,
     // `isLoading` is `isPending && isFetching` -- "nothing to show yet", which is what drives the
     // skeletons. Deliberately not `isPending`: a cached-but-refetching screen already has data.
-    loading: query.isLoading,
+    // The `data === undefined` guard is for `keepPreviousData`: a new key is `isPending` even
+    // while the previous key's rows are shown as placeholder, and a skeleton over rows the user
+    // is reading is exactly what that option exists to prevent. Without a placeholder, pending
+    // implies undefined data, so untouched consumers get an identical value either way.
+    loading: query.isLoading && query.data === undefined,
     fetching: query.isFetching,
     error: query.error ? toHebrewError(query.error) : null,
     refetch,

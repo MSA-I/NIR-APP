@@ -108,6 +108,10 @@ const PATTERNS: [RegExp, string][] = [
     'רשימת החשבוניות או החודש אינם תקינים לדוח שנבחר.'],
   [/Invalid month/i,
     'החודש שנבחר אינו תקין — בחר חודש בפורמט תקין'],
+  // `queryResult.ts` throws this instead of ever letting a missing COUNT render as 0 — zero is a
+  // claim about the business. The sentence says the list is unverified, not empty.
+  [/count_unavailable/i,
+    'לא ניתן לאמת כרגע את מספר הרשומות ברשימה. רענן את המסך ונסה שוב.'],
   [/financial_command_rpc_required|invoice_soft_delete_rpc_required|supplier_soft_delete_rpc_required|product_active_rpc_required|purchase_order_cancel_rpc_required/i,
     'הנתונים השתנו דרך מסלול ישן שנחסם. רענן את האפליקציה ונסה שוב.'],
   [/invoice_create_not_authorized|invoice_review_not_authorized|credit_request_create_not_authorized|credit_request_transition_not_authorized|price_write_not_authorized|price_import_not_authorized|price_submission_not_authorized|price_submission_intake_service_only|month_export_not_authorized|not_authorized/i,

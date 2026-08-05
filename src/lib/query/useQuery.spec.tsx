@@ -109,6 +109,63 @@ describe('useQuery — cached mode (explicit key)', () => {
   });
 });
 
+describe('useQuery — keepPreviousData (PLAN-02 §2.3)', () => {
+  const pageFetcher = () => {
+    const resolvers: Array<(rows: string[]) => void> = [];
+    const fn = vi.fn(() => new Promise<string[]>((resolve) => { resolvers.push(resolve); }));
+    return { fn, resolve: (i: number, rows: string[]) => resolvers[i](rows) };
+  };
+
+  it('first page shows the skeleton; a page change shows the old rows and only `fetching`', async () => {
+    const { fn, resolve } = pageFetcher();
+    const { Wrapper } = wrap('org-1');
+    const { result, rerender } = renderHook(
+      ({ page }: { page: number }) => useQuery(
+        () => fn(),
+        [],
+        [DOMAIN.invoices, 'list', { page }],
+        { keepPreviousData: true },
+      ),
+      { wrapper: Wrapper, initialProps: { page: 0 } },
+    );
+
+    // First fetch: nothing to show yet — this is the one skeleton the screen renders.
+    expect(result.current.loading).toBe(true);
+    expect(result.current.data).toBeNull();
+    await act(async () => { resolve(0, ['page-0 row']); });
+    await waitFor(() => expect(result.current.data).toEqual(['page-0 row']));
+    expect(result.current.loading).toBe(false);
+
+    // Page change = new key. The previous page stays on screen; only `fetching` moves.
+    rerender({ page: 1 });
+    expect(result.current.data).toEqual(['page-0 row']);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.fetching).toBe(true);
+
+    await act(async () => { resolve(1, ['page-1 row']); });
+    await waitFor(() => expect(result.current.data).toEqual(['page-1 row']));
+    expect(result.current.fetching).toBe(false);
+  });
+
+  it('does not change the semantics of a consumer that did not opt in', async () => {
+    const { fn, resolve } = pageFetcher();
+    const { Wrapper } = wrap('org-1');
+    const { result, rerender } = renderHook(
+      ({ page }: { page: number }) => useQuery(() => fn(), [], [DOMAIN.invoices, 'list', { page }]),
+      { wrapper: Wrapper, initialProps: { page: 0 } },
+    );
+    await act(async () => { resolve(0, ['page-0 row']); });
+    await waitFor(() => expect(result.current.data).toEqual(['page-0 row']));
+
+    // Without the flag a new key has nothing to show: loading drives the skeleton again.
+    rerender({ page: 1 });
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    expect(result.current.data).toBeNull();
+    await act(async () => { resolve(1, ['page-1 row']); });
+    await waitFor(() => expect(result.current.data).toEqual(['page-1 row']));
+  });
+});
+
 describe('useQuery — compatibility mode (no key)', () => {
   it('does not share a cache: two consumers fetch twice', async () => {
     const fn = vi.fn().mockResolvedValue(['a']);
