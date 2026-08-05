@@ -7,7 +7,7 @@ package's own `package.json` in `node_modules` at the resolved version, not from
 proprietary and source-available code is never copied into the product.** Pre-release dependencies
 are not used unless no stable compatible alternative exists and the reason is recorded here.
 
-Last verified: **2026-08-04**, against the resolved tree in `node_modules`.
+Last verified: **2026-08-05**, against the resolved tree in `node_modules`.
 
 ---
 
@@ -18,6 +18,9 @@ Last verified: **2026-08-04**, against the resolved tree in `node_modules`.
 | `react` | 19.2.8 | MIT |
 | `react-dom` | 19.2.8 | MIT |
 | `react-router` | 8.3.0 | MIT |
+| `@tanstack/react-query` | 5.101.4 | MIT |
+| `@tanstack/react-table` | 8.21.3 | MIT |
+| `@tanstack/table-core` (dependency of `react-table`) | 8.21.3 | MIT |
 | `@supabase/supabase-js` | 2.110.7 | MIT |
 | `@sentry/react` | 10.69.0 | MIT |
 | `recharts` | 2.15.4 | MIT |
@@ -42,6 +45,14 @@ Last verified: **2026-08-04**, against the resolved tree in `node_modules`.
 | `@types/react` | 19.2.17 | MIT |
 | `@types/react-dom` | 19.2.3 | MIT |
 | `@types/papaparse` | 5.5.2 | MIT |
+| `@tanstack/react-query-devtools` | 5.101.4 | MIT |
+| `vitest` | 4.1.10 | MIT |
+| `@vitest/coverage-v8` | 4.1.10 | MIT |
+| `msw` | 2.15.0 | MIT |
+| `@testing-library/react` | 16.3.2 | MIT |
+| `@testing-library/user-event` | 14.6.3 | MIT |
+| `@testing-library/jest-dom` | 7.0.0 | MIT |
+| `jsdom` | 30.0.1 | MIT |
 
 ### Notes on specific packages
 
@@ -59,6 +70,11 @@ Last verified: **2026-08-04**, against the resolved tree in `node_modules`.
 - **`react-hook-form` and `@hookform/resolvers` are currently installed but imported nowhere in
   `src/`**, and `zod` is imported in exactly one file (`src/lib/documentExport.ts`). Recorded as
   known dependency debt; removal or adoption is a separate decision.
+- **`@tanstack/react-table` is pinned exactly at 8.21.3, not 9.x.** Version 9.0.0 was published on
+  2026-08-04; the brief forbids pre-release/day-old majors without a documented reason. The pin is
+  saved exact (no `^`) in `package.json` so a routine install cannot drift onto 9.x. Licenses for
+  both `@tanstack/react-table` and its single dependency `@tanstack/table-core` were read from the
+  resolved `node_modules` packages (MIT, 8.21.3 each). Installed by wave 2 (table engine).
 
 ---
 
@@ -71,12 +87,6 @@ pass the gate's `npm audit --audit-level=high` step.
 
 | Package | Target version | Wave | Expected license | Purpose |
 |---|---|---|---|---|
-| `vitest`, `@vitest/coverage-v8` | latest stable | 1 | MIT | Unit/integration test runner |
-| `msw` | latest stable | 1 | MIT | Network simulation shared by dev and tests |
-| `@testing-library/react`, `@testing-library/user-event` | latest stable | 1 | MIT | Component testing |
-| `jsdom` | latest stable | 1 | MIT | DOM environment for tests |
-| `@tanstack/react-query` (+ devtools) | **5.101.4** | 1 | MIT | Data fetching, cache, invalidation |
-| `@tanstack/react-table` | **8.21.3** | 2 | MIT | Enterprise table engine |
 | `react-pdf` | **10.4.1** | 6 | MIT | In-app PDF rendering |
 | `tus-js-client` | **4.3.1** | 6b | MIT | Resumable uploads |
 | `workbox-*` | latest stable | 8 | MIT | App-shell caching only — never API responses |
@@ -85,9 +95,6 @@ pass the gate's `npm audit --audit-level=high` step.
 
 **Version constraints that are decisions, not preferences:**
 
-- **`@tanstack/react-table` must be 8.21.3, not 9.x.** Version 9.0.0 was published on 2026-08-04.
-  The brief forbids pre-release dependencies and requires a documented reason for anything that is
-  not the stable compatible choice; a major released the same day is not that.
 - **Do not install `pdfjs-dist` yourself.** `react-pdf@10.4.1` pins `pdfjs-dist@5.4.296` (Apache-2.0)
   exactly. The current standalone release is 6.2.108, and a second copy in the tree produces a
   worker/API version mismatch. Import `{ pdfjs }` from `react-pdf` and load the worker via `?url`.
