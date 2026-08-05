@@ -4,6 +4,14 @@
   "generatedAt": "2026-08-05T12:45:13.1701924+03:00",
   "checkpointCommit": "0f21d7ae7edfcb3872b3aae13ec81bce2722be5a",
   "branch": "codex/qa-multi-agent",
+  "provenance": {
+    "classification": "HISTORICAL_EVIDENCE_ONLY",
+    "sourceRunGitSha": null,
+    "sourceRunWorktreeClean": false,
+    "integrationBranch": "codex/qa-integration-current-main-20260805",
+    "rerunAgainstIntegrationBranch": false,
+    "notice": "Historical QA triage only. The source run cannot be attributed to a clean Git SHA and was not rerun against the current integration branch."
+  },
   "productBehaviorModified": false,
   "pushed": false,
   "merged": false,
