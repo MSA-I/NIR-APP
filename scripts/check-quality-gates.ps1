@@ -470,9 +470,38 @@ function New-LocalVapidKeys {
   }
 }
 
+# True only for a file this gate wrote itself: the mock provider key is a literal that exists
+# nowhere else, and both secrets carry the per-run `quality-<guid>` shape minted at the top of this
+# script. A developer's real .env cannot match all five markers.
+function Test-AbandonedFunctionsEnvironment([string]$Path) {
+  $values = @{}
+  foreach ($line in (Get-Content -LiteralPath $Path -ErrorAction SilentlyContinue)) {
+    $separator = $line.IndexOf("=")
+    if ($separator -gt 0) { $values[$line.Substring(0, $separator)] = $line.Substring($separator + 1) }
+  }
+  return ($values.Count -eq 7 -and
+    $values["OPENAI_API_KEY"] -eq "local-provider-mock-not-sent" -and
+    $values["APP_BASE_URL"] -eq "http://127.0.0.1:5199" -and
+    $values["VAPID_SUBJECT"] -eq "mailto:quality-local@example.test" -and
+    $values["OCR_WORKER_TOKEN"] -match '^quality-[0-9a-f]{32}$' -and
+    $values["PUSH_FN_SECRET"] -match '^quality-[0-9a-f]{32}$')
+}
+
 function New-LocalFunctionsEnvironment {
+  # The refusal below is correct -- this file may hold a developer's real secrets -- but it used to
+  # be unconditional, and the cleanup that deletes it is gated on $functionsEnvCreated, which only
+  # exists inside the run that set it. A run that died therefore left an orphan that blocked EVERY
+  # future run permanently, reported as a bare throw and so classified FAIL/product rather than as
+  # infrastructure. Observed twice on 2026-08-04. Recognise this gate's own leftover and clear it;
+  # refuse anything else, and refuse it as an infrastructure block that says what to do.
   if (Test-Path -LiteralPath $functionsEnvPath) {
-    throw "Refusing to overwrite the existing local Edge environment: $functionsEnvPath"
+    if (Test-AbandonedFunctionsEnvironment $functionsEnvPath) {
+      Write-Output "Removing an abandoned local Edge environment left by an interrupted quality run: $functionsEnvPath"
+      Remove-Item -LiteralPath $functionsEnvPath -Force
+    }
+    else {
+      Stop-WithInfrastructureBlock "local_edge_env_present" "A local Edge environment already exists and was not written by this gate: $functionsEnvPath. It may hold real secrets, so the gate will not overwrite it. Move it aside and re-run."
+    }
   }
   $vapidKeys = New-LocalVapidKeys
   $lines = @(
@@ -783,7 +812,13 @@ try {
     }
     $upgradeOutput | ForEach-Object { Write-Output $_ }
     if ($upgradeExit -ne 0) { throw "P0 upgrade path failed with exit code $upgradeExit." }
+    # check-p0-upgrade.ps1 runs `supabase db reset` in a CHILD process, so this path needs the same
+    # two recycles Reset-LocalDatabase performs -- not just PostgREST. The reset restarts the auth
+    # container onto a new Docker address while Kong keeps the cached upstream, and the observed
+    # signature here was exactly `Auth=-1, PostgREST=200`: REST recycled, auth unreachable. Wave 0
+    # diagnosed and fixed this class at Reset-LocalDatabase and missed this second reset path.
     Restart-LocalPostgrest
+    Restart-LocalKong
     $localEnvironment = Wait-LocalStackReady
 
     Invoke-SqlTest "supabase\tests\p0_client_dml_acl.sql" "P0 browser DML ACL and trusted-server CRUD"

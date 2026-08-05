@@ -69,20 +69,31 @@ verifications.** Each must be checked against its resolved `node_modules/<pkg>/p
 moved into the tables above before the wave that installs it is considered complete, and each must
 pass the gate's `npm audit --audit-level=high` step.
 
-| Package | Wave | Expected license | Purpose |
-|---|---|---|---|
-| `vitest`, `@vitest/coverage-v8` | 1 | MIT | Unit/integration test runner |
-| `msw` | 1 | MIT | Network simulation shared by dev and tests |
-| `@testing-library/react`, `@testing-library/user-event` | 1 | MIT | Component testing |
-| `jsdom` | 1 | MIT | DOM environment for tests |
-| `@tanstack/react-query` (+ devtools) | 1 | MIT | Data fetching, cache, invalidation |
-| `@tanstack/react-table` | 2 | MIT | Enterprise table engine |
-| `react-pdf` | 6 | MIT | In-app PDF rendering |
-| `pdfjs-dist` | 6 | Apache-2.0 | PDF engine behind `react-pdf` |
-| `tus-js-client` | 6 | MIT | Resumable uploads |
-| `workbox-*` | 8 | MIT | App-shell caching only — never API responses |
-| `idb` **or** `dexie` | 8 | ISC / Apache-2.0 | IndexedDB for the offline receiving queue |
-| `@zxing/browser`, `@zxing/library` | 8 | MIT / Apache-2.0 | Barcode scanning pilot, behind a feature flag |
+| Package | Target version | Wave | Expected license | Purpose |
+|---|---|---|---|---|
+| `vitest`, `@vitest/coverage-v8` | latest stable | 1 | MIT | Unit/integration test runner |
+| `msw` | latest stable | 1 | MIT | Network simulation shared by dev and tests |
+| `@testing-library/react`, `@testing-library/user-event` | latest stable | 1 | MIT | Component testing |
+| `jsdom` | latest stable | 1 | MIT | DOM environment for tests |
+| `@tanstack/react-query` (+ devtools) | **5.101.4** | 1 | MIT | Data fetching, cache, invalidation |
+| `@tanstack/react-table` | **8.21.3** | 2 | MIT | Enterprise table engine |
+| `react-pdf` | **10.4.1** | 6 | MIT | In-app PDF rendering |
+| `tus-js-client` | **4.3.1** | 6b | MIT | Resumable uploads |
+| `workbox-*` | latest stable | 8 | MIT | App-shell caching only — never API responses |
+| `idb` **or** `dexie` | latest stable | 8 | ISC / Apache-2.0 | IndexedDB for the offline receiving queue |
+| `@zxing/browser`, `@zxing/library` | latest stable | 8 | MIT / Apache-2.0 | Barcode scanning pilot, behind a feature flag |
+
+**Version constraints that are decisions, not preferences:**
+
+- **`@tanstack/react-table` must be 8.21.3, not 9.x.** Version 9.0.0 was published on 2026-08-04.
+  The brief forbids pre-release dependencies and requires a documented reason for anything that is
+  not the stable compatible choice; a major released the same day is not that.
+- **Do not install `pdfjs-dist` yourself.** `react-pdf@10.4.1` pins `pdfjs-dist@5.4.296` (Apache-2.0)
+  exactly. The current standalone release is 6.2.108, and a second copy in the tree produces a
+  worker/API version mismatch. Import `{ pdfjs }` from `react-pdf` and load the worker via `?url`.
+- **`pdfjs-dist`'s shipped CSS contains raw hex colour literals.** It must be excluded from the
+  zero-hex enforcement grep documented at `DESIGN.md:359`, and the exclusion must be narrow and named
+  rather than a relaxation of the rule.
 
 ## Evaluated and not installed
 
