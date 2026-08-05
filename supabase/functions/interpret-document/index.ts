@@ -184,7 +184,7 @@ function corsFor(req: Request): Record<string, string> {
       ? origin
       : (allowed[0] ?? ""),
     "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type",
+      "authorization, x-client-info, apikey, content-type, x-correlation-id",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     Vary: "Origin",
   };
