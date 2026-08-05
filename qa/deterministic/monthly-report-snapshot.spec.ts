@@ -21,7 +21,7 @@ test('accountant creates and downloads a locked monthly report snapshot at 390px
   await expect(dialog).toContainText('ארגון');
   await expect(dialog).toContainText('זמן יצירה');
   await expect(dialog).toContainText('יוצר הדוח');
-  await expect(dialog).toContainText('לאחר היצירה הגרסה תהפוך לבלתי ניתנת לשינוי');
+  await expect(dialog).toContainText('הגרסה אינה ניתנת לשינוי');
 
   const responsePromise = page.waitForResponse((response) =>
     response.request().method() === 'POST'
