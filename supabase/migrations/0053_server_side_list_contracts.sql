@@ -28,10 +28,21 @@
 -- Both predicates are PostgREST computed fields: a `stable` function whose single argument is the
 -- table's composite type is selectable and filterable from the API
 -- (`/invoices?invoice_has_duplicate=is.true`). They are `security invoker`, so the inner scan sees
--- exactly the rows the caller's own RLS policies allow -- the same set the browser fetches today.
--- That is what makes server and client agree per role instead of only for an owner: a payer sees no
--- `invoice_order_links` rows under `iol_select` (`0031:69`), so every invoice reads as
--- without-order for a payer -- on the server now for the same reason it already did in the browser.
+-- exactly the rows the caller's own RLS policies allow -- the same set the browser fetches today,
+-- so the two agree per role rather than only for an owner.
+--
+-- One role where that inheritance produces a WRONG answer, recorded rather than glossed: a payer
+-- has no branch in `iol_select` (`0031:69`) and therefore sees zero link rows, so
+-- `invoice_without_order` returns true for a payer even on an invoice that has an order. Measured:
+-- the same invoice answers false for an owner and true for a payer. This is not a leak -- a payer
+-- learns nothing it could not already read -- it is a wrong number, which is the failure class this
+-- wave exists to prevent. It is also NOT "what the browser already does": READERS is
+-- `['owner','office','kitchen','accountant']` (`App.tsx:103`), so `/invoices` is guarded against a
+-- payer and the old client-side computation never ran for one. The predicate is reachable through
+-- the API because the grant is to `authenticated`. The constraint that follows belongs to wave 2:
+-- do not expose the without-order filter on a screen a role that cannot read `invoice_order_links`
+-- can reach. Making the predicate `security definer` is not the fix -- it would disclose the
+-- existence of links on invoices the caller may not read.
 --
 -- Both predicates are false for a soft-deleted row. The list query always carries
 -- `deleted_at=is.null`, but a caller that forgets it must not be handed a deleted invoice by an

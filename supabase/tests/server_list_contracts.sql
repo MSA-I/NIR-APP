@@ -23,6 +23,12 @@ $$;
 -- the migration, so that this reference and the predicate can disagree. The separator differs:
 -- JavaScript uses U+0000, which PostgreSQL text cannot hold. A uuid prefix is fixed width, so any
 -- separator is unambiguous -- and ':' is the one `0017:161` already uses for the same key.
+--
+-- What this reference CANNOT see, stated here so the identity claim below is not read as wider than
+-- it is: this is SQL `trim()`, which is `btrim()` and strips spaces only, while the real browser
+-- calls JavaScript `.trim()`, which also strips tabs, newlines and NBSP. Claim 1 therefore proves
+-- identity under the normalisation the two languages SHARE -- case and space padding. The case they
+-- do not share is pinned separately, by name, in the tenant B section.
 create function pg_temp.slc_client_key(p_supplier_id uuid, p_invoice_number text)
 returns text
 language sql
@@ -76,14 +82,19 @@ insert into invoices (
   ('43000000-0000-0000-0000-000000000009', '13000000-0000-0000-0000-000000000001', '33000000-0000-0000-0000-000000000001', 'inv-100',    '2026-01-09', '2026-01-09', 100, 18, 118, null);
 
 -- Tenant B. ...01 carries the SAME normalised number as tenant A's duplicate pair and must stay
--- clean; ...02 and ...03 are tenant B's own pair and must not reach tenant A.
+-- clean; ...02 and ...03 are tenant B's own pair and must not reach tenant A. ...04 and ...05 pin
+-- the trim divergence: they differ only by a leading TAB, so they are grouped by the browser and
+-- not by the server. Because they are not a duplicate pair here, they leave every expected array
+-- in this file unchanged -- and any change to the normalisation makes them appear in one.
 insert into invoices (
   id, org_id, supplier_id, invoice_number, invoice_date, received_date,
   amount_before_vat, vat_amount, total_amount
 ) values
   ('53000000-0000-0000-0000-000000000001', '13000000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000003', 'INV-100', '2026-01-01', '2026-01-01', 100, 18, 118),
   ('53000000-0000-0000-0000-000000000002', '13000000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000003', 'INV-700', '2026-01-02', '2026-01-02', 100, 18, 118),
-  ('53000000-0000-0000-0000-000000000003', '13000000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000003', 'inv-700', '2026-01-03', '2026-01-03', 100, 18, 118);
+  ('53000000-0000-0000-0000-000000000003', '13000000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000003', 'inv-700', '2026-01-03', '2026-01-03', 100, 18, 118),
+  ('53000000-0000-0000-0000-000000000004', '13000000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000003', 'INV-800', '2026-01-04', '2026-01-04', 100, 18, 118),
+  ('53000000-0000-0000-0000-000000000005', '13000000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000003', chr(9) || 'INV-800', '2026-01-05', '2026-01-05', 100, 18, 118);
 
 -- Two of tenant A's invoices are linked to an order; every other live one is "without order".
 insert into purchase_orders (id, org_id, supplier_id, status) values
@@ -311,6 +322,42 @@ reset role;
 select set_config('request.jwt.claim.sub', '23000000-0000-0000-0000-000000000002', true);
 set local role authenticated;
 
+-- ===== The trim divergence, pinned rather than described =====
+--
+-- Claim 1 compares the predicate against a re-implementation of the browser's key written in SQL.
+-- Both use SQL `trim()`, which is `btrim()` and strips spaces only, so that comparison is blind to
+-- exactly one case: JavaScript `.trim()` ALSO strips tabs, newlines and NBSP. The direction matters
+-- -- the browser is the more aggressive one. For `'INV-800'` and `chr(9) || 'INV-800'` the browser
+-- groups them and the server does not, so the server returns the NARROWER set.
+--
+-- This asserts what the server does today, which is the documented decision, not an oversight. If
+-- it ever fails, the normalisation was changed -- and that is a business decision about what
+-- "duplicate" means, not a bug fix. `docs/OPEN-DECISIONS.md` and handoff 1b are where it is argued,
+-- and the same change would have to reach `p2_duplicate_invoice_group_count()` (0024:399) and
+-- `private.notify_duplicate_invoice_check()` (0017:150-168) in the same commit.
+select pg_temp.slc_assert(
+  (select invoice_number from invoices where id = '53000000-0000-0000-0000-000000000005')
+    = chr(9) || 'INV-800'
+  and trim((select invoice_number from invoices where id = '53000000-0000-0000-0000-000000000005'))
+    = chr(9) || 'INV-800',
+  'the tab-padding fixture lost its tab, so the divergence below is no longer being exercised'
+);
+
+select pg_temp.slc_assert(
+  not exists (
+    select 1 from invoices i
+    where i.id in (
+      '53000000-0000-0000-0000-000000000004',
+      '53000000-0000-0000-0000-000000000005'
+    )
+      and public.invoice_has_duplicate(i)
+  ),
+  'tab-padded invoice numbers are now grouped as duplicates: the normalisation was widened beyond '
+  || 'lower(trim(...)), which redefines "duplicate" for the business rather than fixing a bug'
+);
+
+-- Deliberately after the pin above: a widened normalisation breaks this array too, and the first
+-- assertion to fire should be the one that names the cause.
 select pg_temp.slc_assert(
   (
     select array_agg(i.id order by i.id)
