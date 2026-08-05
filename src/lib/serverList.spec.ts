@@ -10,7 +10,12 @@ import {
   SUPPLIER_SEARCH_NARROWED,
   ServerListError,
   fetchServerList,
+  formatSortParam,
   lastPageOf,
+  monthRangePredicates,
+  pageFromParam,
+  pageToParam,
+  parseSortParam,
   searchSupplierIds,
   twoStepSearchPredicate,
   type ServerListClient,
@@ -728,5 +733,68 @@ describe('lastPageOf', () => {
     expect(lastPageOf(10, 10)).toBe(0);
     expect(lastPageOf(11, 10)).toBe(1);
     expect(lastPageOf(42, 10)).toBe(4);
+  });
+});
+
+describe('monthRangePredicates', () => {
+  it('turns a month into a half-open range on the ordering column', () => {
+    expect(monthRangePredicates('invoice_date', '2026-08')).toEqual([
+      { kind: 'gte', column: 'invoice_date', value: '2026-08-01' },
+      { kind: 'lt', column: 'invoice_date', value: '2026-09-01' },
+    ]);
+  });
+
+  it('wraps December into January of the next year', () => {
+    expect(monthRangePredicates('paid_date', '2026-12')).toEqual([
+      { kind: 'gte', column: 'paid_date', value: '2026-12-01' },
+      { kind: 'lt', column: 'paid_date', value: '2027-01-01' },
+    ]);
+  });
+
+  it('degrades a crafted URL value to "no filter" rather than a Postgres date error', () => {
+    expect(monthRangePredicates('tx_date', 'garbage')).toEqual([]);
+    expect(monthRangePredicates('tx_date', '2026-13')).toEqual([]);
+    expect(monthRangePredicates('tx_date', '2026-00')).toEqual([]);
+    expect(monthRangePredicates('tx_date', '')).toEqual([]);
+  });
+});
+
+describe('page as a URL parameter', () => {
+  it('survives the round trip: what navigation restores is the page the user left', () => {
+    expect(pageFromParam(pageToParam(0))).toBe(0);
+    expect(pageFromParam(pageToParam(3))).toBe(3);
+    // Page 0 disappears from the URL entirely rather than lingering as ?page=1.
+    expect(pageToParam(0)).toBe('');
+    expect(pageToParam(3)).toBe('4');
+  });
+
+  it('degrades a crafted value to the first page, never a negative range', () => {
+    expect(pageFromParam('garbage')).toBe(0);
+    expect(pageFromParam('-2')).toBe(0);
+    expect(pageFromParam('0')).toBe(0);
+    expect(pageFromParam('')).toBe(0);
+  });
+});
+
+describe('sort as a URL parameter', () => {
+  const sortable = new Set(['date']);
+
+  it('survives the round trip, which is what keeps sort in the URL honest', () => {
+    const sort = [{ column: 'date', ascending: false }];
+    expect(parseSortParam(formatSortParam(sort), sortable)).toEqual([{ column: 'date', ascending: false }]);
+    expect(parseSortParam(formatSortParam([{ column: 'date', ascending: true }]), sortable))
+      .toEqual([{ column: 'date', ascending: true }]);
+  });
+
+  it('formats no sort as an empty value, so the parameter disappears from the URL', () => {
+    expect(formatSortParam(null)).toBe('');
+    expect(formatSortParam([])).toBe('');
+  });
+
+  it('refuses a crafted sort column instead of handing it to .order()', () => {
+    // An undeclared column is either a PostgREST error or an unindexed full sort per page.
+    expect(parseSortParam('total.asc', sortable)).toBeNull();
+    expect(parseSortParam('date.upside-down', sortable)).toBeNull();
+    expect(parseSortParam('', sortable)).toBeNull();
   });
 });

@@ -1,17 +1,33 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { Upload, Landmark, Link2, AlertTriangle, EyeOff, Loader2, CheckCircle2, Unlink } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
+import { DOMAIN } from '../lib/query/keys';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, Note, type ServerColumn } from '../components/ui';
 import { BANK_TX_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, addCalendarDays } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import type { BankTransaction, BankImport } from '../lib/types';
 import { useParamState } from '../lib/useParamState';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
+import {
+  SUPPLIER_SEARCH_NARROWED,
+  fetchServerList,
+  formatSortParam,
+  monthRangePredicates,
+  pageFromParam,
+  pageToParam,
+  parseSortParam,
+  searchSupplierIds,
+  twoStepSearchPredicate,
+  type ServerListPageReset,
+  type ServerPredicate,
+  type ServerSort,
+} from '../lib/serverList';
 
 type TxRow = BankTransaction & { supplier: { name: string } | null };
 
@@ -38,39 +54,111 @@ function parseDate(v: string): string | null {
 
 const parseAmount = (v: unknown) => Math.abs(Number(String(v ?? '').replace(/[₪,\s]/g, ''))) || 0;
 
+const PAGE_SIZE = 15;
+/** `bank_transactions_org_date_idx` / `..._org_status_date_idx` (0053): tx_date is the one
+    server-backed ordering. The old client-side amount sort was dropped with the conversion. */
+const SORTABLE_COLUMNS: ReadonlySet<string> = new Set(['date']);
+const SORT_COLUMN: Record<string, string> = { date: 'tx_date' };
+const DEFAULT_SORT: readonly ServerSort[] = [{ column: 'tx_date', ascending: false }];
+
 export default function Bank() {
   const { profile, org } = useAuth();
-  const [statusFilter, setStatusFilter] = useParamState('status');
-  const [monthFilter, setMonthFilter] = useParamState('month');
-  const [idFilter, setIdFilter] = useParamState('id');
+  const toast = useToast();
+  const [, setParams] = useSearchParams();
+  const [statusFilter] = useParamState('status');
+  const [monthFilter] = useParamState('month');
+  const [idFilter] = useParamState('id');
+  const [searchTerm] = useParamState('q');
+  const [pageParam] = useParamState('page');
+  const [sortParam] = useParamState('sort');
   const [importOpen, setImportOpen] = useState(false);
   const [selected, setSelected] = useState<TxRow | null>(null);
   const autoOpenedId = useRef<string | null>(null);
   const canOperateBank = !!profile && ['owner', 'accountant'].includes(profile.role);
 
-  const { data, loading, fetching, error, refetch } = useQuery(async () => {
-    const txs = await fetchAll<TxRow>((from, to) => supabase.from('bank_transactions')
-      .select('*, supplier:suppliers!p0_bt_supplier_tenant_fk(name)')
-      .order('tx_date', { ascending: false }).order('id').range(from, to));
-    const imports = unwrap(await supabase.from('bank_imports').select('*').order('imported_at', { ascending: false }).limit(10)) as BankImport[];
-    return { txs, imports };
-  });
+  /** One atomic URL write — see the note in Invoices.tsx: sequential functional setParams calls
+      in the same handler read the same stale snapshot and clobber each other. */
+  const patchParams = useCallback((patch: Record<string, string>) => {
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      for (const [name, value] of Object.entries(patch)) {
+        if (value) next.set(name, value);
+        else next.delete(name);
+      }
+      return next;
+    }, { replace: true });
+  }, [setParams]);
+
+  const page = pageFromParam(pageParam);
+  const uiSort = parseSortParam(sortParam, SORTABLE_COLUMNS);
+
+  const { data, loading, fetching, error, refetch } = useQuery(
+    async () => {
+      const predicates: ServerPredicate[] = [];
+      let narrowed = false;
+      if (idFilter) {
+        // The ?id= pin bypasses every other filter, exactly as the old in-memory branch did.
+        predicates.push({ kind: 'eq', column: 'id', value: idFilter });
+      } else {
+        if (statusFilter) {
+          predicates.push(statusFilter === 'attention'
+            ? { kind: 'in', column: 'status', values: ['unmatched', 'suggested'] }
+            : { kind: 'eq', column: 'status', value: statusFilter });
+        }
+        predicates.push(...monthRangePredicates('tx_date', monthFilter));
+        if (searchTerm) {
+          // description has no trgm index — a search here is a seq scan within the tenant,
+          // accepted at current volume (PLAN-02 §3.2); an index is a DB wave.
+          const suppliers = await searchSupplierIds(supabase, searchTerm);
+          narrowed = suppliers.narrowed;
+          predicates.push(twoStepSearchPredicate(['description', 'reference'], searchTerm, suppliers.ids));
+        }
+      }
+      const result = await fetchServerList<TxRow>(supabase, {
+        table: 'bank_transactions',
+        select: '*, supplier:suppliers!p0_bt_supplier_tenant_fk(name)',
+        predicates,
+        sort: uiSort
+          ? [{ column: SORT_COLUMN[uiSort[0].column], ascending: uiSort[0].ascending }]
+          : DEFAULT_SORT,
+        page,
+        pageSize: PAGE_SIZE,
+      });
+      return { ...result, narrowed };
+    },
+    [],
+    [DOMAIN.bank, 'list', { id: idFilter, status: statusFilter, month: monthFilter, q: searchTerm, sort: sortParam, page }],
+    { keepPreviousData: true, structuralSharing: false },
+  );
+
+  const imports = useQuery(
+    async () => unwrap(await supabase.from('bank_imports').select('*')
+      .order('imported_at', { ascending: false }).limit(10)) as BankImport[],
+    [],
+    [DOMAIN.bank, 'imports'],
+  );
 
   useEffect(() => {
     if (!idFilter || !canOperateBank || !data || autoOpenedId.current === idFilter) return;
-    const match = data.txs.find((transaction) => transaction.id === idFilter);
+    const match = data.rows.find((transaction) => transaction.id === idFilter);
     if (match) { autoOpenedId.current = idFilter; setSelected(match); }
   }, [idFilter, canOperateBank, data]);
 
-  const rows = (data?.txs ?? []).filter((t) => idFilter
-    ? t.id === idFilter
-    : (!monthFilter || t.tx_date.startsWith(monthFilter)) &&
-      (!statusFilter || (statusFilter === 'attention' ? ['unmatched', 'suggested'].includes(t.status) : t.status === statusFilter)));
+  const handledReset = useRef<ServerListPageReset | null>(null);
+  useEffect(() => {
+    const reset = data?.pageReset ?? null;
+    if (!reset || reset === handledReset.current) return;
+    handledReset.current = reset;
+    toast(reset.message);
+    patchParams({ page: pageToParam(reset.servedPage) });
+  }, [data, toast, patchParams]);
 
-  const columns: Column<TxRow>[] = [
-    { key: 'date', header: 'תאריך', sortValue: (r) => r.tx_date, render: (r) => fmtDate(r.tx_date) },
+  const refetchAll = useCallback(() => { void refetch(); void imports.refetch(); }, [refetch, imports.refetch]);
+
+  const columns: ServerColumn<TxRow>[] = [
+    { key: 'date', header: 'תאריך', render: (r) => fmtDate(r.tx_date) },
     { key: 'desc', header: 'תיאור', render: (r) => <span className="max-w-72 truncate inline-block">{r.description}</span> },
-    { key: 'amount', header: 'סכום', className: 'num', sortValue: (r) => r.amount, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
+    { key: 'amount', header: 'סכום', className: 'num', render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
     { key: 'ref', header: 'אסמכתא', className: 'num', render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
     { key: 'supplier', header: 'ספק מזוהה', render: (r) => r.supplier?.name ?? <span className="text-ink-muted">לא זוהה</span> },
     { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={BANK_TX_STATUS[r.status]} /> },
@@ -78,41 +166,59 @@ export default function Bank() {
 
   if (loading) return <SkeletonTable cols={6} />;
   if (error && !data) return <ErrorNote message={error} />;
+  if (!data) return <SkeletonTable cols={6} />;
+
+  const activeFilters = [idFilter, statusFilter, monthFilter].filter(Boolean).length;
 
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
-      {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
+      {imports.error && <ErrorNote message={imports.error} />}
+      {fetching && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title flex items-center gap-2"><Landmark size={22} /> התאמות בנק</h1>
         {canOperateBank && <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> ייבוא תדפיס בנק</button>}
       </div>
 
-      {data?.imports.length ? (
+      {imports.data?.length ? (
         <div className="text-xs text-ink-muted">
-          ייבוא אחרון: {data.imports[0].filename} ({data.imports[0].row_count} שורות, {fmtDateTime(data.imports[0].imported_at)})
+          ייבוא אחרון: {imports.data[0].filename} ({imports.data[0].row_count} שורות, {fmtDateTime(imports.data[0].imported_at)})
         </div>
       ) : null}
 
-      <DataTable rows={rows} columns={columns} searchable
-        searchFn={(r, q) => r.description.toLowerCase().includes(q) || (r.reference ?? '').includes(q) || (r.supplier?.name ?? '').toLowerCase().includes(q)}
+      <DataTable rows={data.rows} columns={columns}
+        error={error}
+        server={{
+          total: data.total,
+          page,
+          pageSize: PAGE_SIZE,
+          onPageChange: (next) => patchParams({ page: pageToParam(next) }),
+          onSortChange: (next) => patchParams({ sort: formatSortParam(next), page: '' }),
+          sort: uiSort,
+          sortableColumns: SORTABLE_COLUMNS,
+          search: { value: searchTerm, onChange: (value) => patchParams({ q: value, page: '' }) },
+          fetching,
+        }}
+        activeFilters={activeFilters}
+        onClearFilters={() => patchParams({ id: '', status: '', month: '', q: '', page: '' })}
         searchLabel="חיפוש בתנועות בנק"
         rowLabel={(r) => `תנועת בנק מיום ${fmtDate(r.tx_date)} בסכום ${fmtMoneyExact(r.amount)} עבור ${r.description}`}
         onRowClick={canOperateBank ? (r) => setSelected(r) : undefined}
         toolbar={
           <>
-            {idFilter && <button className="btn-ghost text-sm text-action" onClick={() => setIdFilter('')}>הצג את כל התנועות</button>}
-            <select className="input w-auto!" aria-label="סינון תנועות בנק לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            {data.narrowed && <span className="text-xs text-await-fg" role="status">{SUPPLIER_SEARCH_NARROWED}</span>}
+            {idFilter && <button className="btn-ghost text-sm text-action" onClick={() => patchParams({ id: '', page: '' })}>הצג את כל התנועות</button>}
+            <select className="input w-auto!" aria-label="סינון תנועות בנק לפי סטטוס" value={statusFilter} onChange={(e) => patchParams({ status: e.target.value, page: '' })}>
               <option value="">כל הסטטוסים</option>
               <option value="attention">דורשות התאמה</option>
               {Object.entries(BANK_TX_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
-            <input type="month" className="input w-auto!" aria-label="סינון תנועות בנק לפי חודש" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} />
+            <input type="month" className="input w-auto!" aria-label="סינון תנועות בנק לפי חודש" value={monthFilter} onChange={(e) => patchParams({ month: e.target.value, page: '' })} />
           </>
         }
         emptyTitle="אין תנועות בנק" emptySubtitle="ייבא תדפיס בנק (CSV / Excel) כדי להתחיל בהתאמות" />
 
-      {importOpen && <BankImportModal onClose={() => setImportOpen(false)} onDone={() => { setImportOpen(false); void refetch(); }} />}
+      {importOpen && <BankImportModal onClose={() => setImportOpen(false)} onDone={() => { setImportOpen(false); refetchAll(); }} />}
       {selected && (
         selected.status === 'matched'
           ? <UnmatchModal tx={selected} onClose={() => setSelected(null)} onChanged={() => { setSelected(null); void refetch(); }} />

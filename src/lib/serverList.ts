@@ -503,6 +503,58 @@ export async function fetchServerList<Row>(
   }
 }
 
+/* ------------------------------------------------------------------ URL-facing helpers */
+
+/**
+ * The month filter as a half-open range on the screen's date column: `'2026-08'` becomes
+ * `[2026-08-01, 2026-09-01)`. The client-side filter this replaces was a string prefix match on the
+ * date, which no index can serve; a range on the ordering column rides the same index the sort uses.
+ *
+ * A value that is not `YYYY-MM` yields no predicates at all. The value arrives from a URL
+ * parameter, and a crafted `?month=` must degrade to "no month filter" — visible as an empty month
+ * input — rather than travel into a Postgres date cast error.
+ */
+export function monthRangePredicates(column: string, month: string): ServerPredicate[] {
+  const match = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!match) return [];
+  const year = Number(match[1]);
+  const monthNumber = Number(match[2]);
+  if (monthNumber < 1 || monthNumber > 12) return [];
+  const next = monthNumber === 12 ? `${year + 1}-01` : `${match[1]}-${String(monthNumber + 1).padStart(2, '0')}`;
+  return [
+    { kind: 'gte', column, value: `${month}-01` },
+    { kind: 'lt', column, value: `${next}-01` },
+  ];
+}
+
+/** Zero-based page as a URL value: page 0 is the absent parameter, page 3 reads as `page=4`. */
+export function pageToParam(page: number): string {
+  return page > 0 ? String(page + 1) : '';
+}
+
+/** The URL value back into a zero-based page. Anything unparseable or crafted is page 0. */
+export function pageFromParam(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 1 ? parsed - 1 : 0;
+}
+
+/** `ServerSort` as a URL parameter value: `'date.desc'`. Empty string when there is no user sort. */
+export function formatSortParam(sort: readonly ServerSort[] | null): string {
+  const first = sort?.[0];
+  return first ? `${first.column}.${first.ascending === false ? 'desc' : 'asc'}` : '';
+}
+
+/**
+ * The URL value back into a sort, refusing columns the screen did not declare sortable. A crafted
+ * `?sort=` must not reach `.order()`: an unknown column is a PostgREST error in Hebrew clothing,
+ * and a known-but-unindexed one is the full sort this wave exists to avoid.
+ */
+export function parseSortParam(value: string, sortable: ReadonlySet<string>): ServerSort[] | null {
+  const match = /^([A-Za-z_][A-Za-z0-9_]*)\.(asc|desc)$/.exec(value);
+  if (!match || !sortable.has(match[1])) return null;
+  return [{ column: match[1], ascending: match[2] === 'asc' }];
+}
+
 /* ------------------------------------------------------------------ cross-table search */
 
 /**
