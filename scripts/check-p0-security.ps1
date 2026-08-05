@@ -204,6 +204,9 @@ function Invoke-JsonRequest {
     [System.Net.Http.HttpMethod]::new($Method.ToUpperInvariant()),
     [Uri]$Uri
   )
+  # Database reset replaces local upstream containers behind Kong. Do not reuse a
+  # connection that was opened against the previous container generation.
+  $request.Headers.ConnectionClose = $true
   foreach ($name in $Headers.Keys) {
     [void]$request.Headers.TryAddWithoutValidation([string]$name, [string]$Headers[$name])
   }

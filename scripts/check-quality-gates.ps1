@@ -182,15 +182,16 @@ function Wait-LocalApiReady([hashtable]$Environment) {
   # "80 attempts" budget was spent in about twenty seconds -- less than GoTrue needs to come up
   # after a full db reset and container restart. That produced a recurring "Auth=-1, PostgREST=200"
   # failure that looked like a broken gate and was only ever a stopwatch that ran out too early.
+  # Disable keep-alive because Windows PowerShell can retain Kong connections across replacement.
   $deadline = (Get-Date).AddSeconds(180)
   do {
     try {
-      $authStatus = (Invoke-WebRequest -UseBasicParsing -Uri "$expectedApiUrl/auth/v1/health" `
-        -Headers $headers -TimeoutSec 2).StatusCode
+      $authStatus = (Invoke-WebRequest -UseBasicParsing -DisableKeepAlive `
+        -Uri "$expectedApiUrl/auth/v1/health" -Headers $headers -TimeoutSec 2).StatusCode
     } catch { $authStatus = -1 }
     try {
-      $restStatus = (Invoke-WebRequest -UseBasicParsing `
-        -Uri "$expectedApiUrl/rest/v1/organizations?select=id&limit=0" `
+      $restStatus = (Invoke-WebRequest -UseBasicParsing -DisableKeepAlive `
+        -Uri "$expectedApiUrl/rest/v1/" `
         -Headers $headers -TimeoutSec 2).StatusCode
     } catch { $restStatus = -1 }
     if ($authStatus -eq 200 -and $restStatus -eq 200) { return }
