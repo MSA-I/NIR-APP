@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { chromium } from '@playwright/test';
 import { isPlaywrightInfrastructureFailureText } from '../reporting/playwright.ts';
 import { redactText, safeJson } from '../reporting/redact.ts';
-import { acquireQaLock, releaseQaLock } from './lock.ts';
+import { acquireQaLock, isWindowsProcessTreeAlive, releaseQaLock } from './lock.ts';
 import { deterministicChildEnvironment, loadReadyQaState } from './runtime-state.ts';
 import { scrubPlaywrightTraces } from './scrub-artifacts.ts';
 import { startQaPreview } from './setup.ts';
@@ -263,8 +263,48 @@ function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
   });
 }
 
-async function terminateProcessTree(child: ChildProcess): Promise<boolean> {
-  if (!child.pid || child.exitCode !== null || child.signalCode !== null) return true;
+function unixProcessGroupAlive(pid: number): boolean {
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+async function processTreeAlive(pid: number): Promise<boolean> {
+  if (process.platform !== 'win32') return unixProcessGroupAlive(pid);
+  try {
+    return await isWindowsProcessTreeAlive(pid);
+  } catch {
+    return true;
+  }
+}
+
+async function holdMutexUntilProcessTreeExit(child: ChildProcess, pid: number, name: string): Promise<void> {
+  let nextNotice = 0;
+  while ((child.exitCode === null && child.signalCode === null) || await processTreeAlive(pid)) {
+    if (Date.now() >= nextNotice) {
+      process.stderr.write(
+        `[QA BLOCKED] ${name} process tree is still alive; the shared QA mutex remains held.\n`,
+      );
+      nextNotice = Date.now() + 30_000;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 1_000));
+  }
+}
+
+async function terminateProcessTree(child: ChildProcess, name: string): Promise<void> {
+  const pid = child.pid;
+  if (!pid) {
+    while (child.exitCode === null && child.signalCode === null) {
+      process.stderr.write(
+        `[QA BLOCKED] ${name} has no process identifier; the shared QA mutex remains held.\n`,
+      );
+      await new Promise<void>((resolve) => setTimeout(resolve, 30_000));
+    }
+    return;
+  }
   if (process.platform === 'win32') {
     const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
       stdio: 'ignore',
@@ -282,22 +322,25 @@ async function terminateProcessTree(child: ChildProcess): Promise<boolean> {
       });
     });
     if (!killerExited && killer.exitCode === null) killer.kill();
-    if (!killerExited) return false;
-    return waitForExit(child, 5_000);
+    await waitForExit(child, 5_000);
+    await holdMutexUntilProcessTreeExit(child, pid, name);
+    return;
   }
 
   try {
-    process.kill(-child.pid, 'SIGTERM');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+    process.kill(-pid, 'SIGTERM');
+  } catch {
+    // Polling below is authoritative; an unproven signal result must not release the mutex.
   }
-  if (await waitForExit(child, 5_000)) return true;
-  try {
-    process.kill(-child.pid, 'SIGKILL');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+  if (!await waitForExit(child, 5_000)) {
+    try {
+      process.kill(-pid, 'SIGKILL');
+    } catch {
+      // Polling below remains fail-closed.
+    }
+    await waitForExit(child, 2_000);
   }
-  return waitForExit(child, 2_000);
+  await holdMutexUntilProcessTreeExit(child, pid, name);
 }
 
 async function runCommand(
@@ -307,9 +350,9 @@ async function runCommand(
   options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number },
 ): Promise<PhaseResult> {
   const started = Date.now();
-  let outcome: { exitCode: number | null; timedOut: boolean; terminated: boolean };
+  let outcome: { exitCode: number | null; timedOut: boolean };
   try {
-    outcome = await new Promise<{ exitCode: number | null; timedOut: boolean; terminated: boolean }>((resolve, reject) => {
+    outcome = await new Promise<{ exitCode: number | null; timedOut: boolean }>((resolve, reject) => {
       const child = spawn(executable, [...args], {
         cwd: options.cwd,
         env: options.env,
@@ -320,20 +363,19 @@ async function runCommand(
       let timedOut = false;
       const timeout = setTimeout(async () => {
         timedOut = true;
-        try {
-          resolve({ exitCode: null, timedOut: true, terminated: await terminateProcessTree(child) });
-        } catch {
-          resolve({ exitCode: null, timedOut: true, terminated: false });
-        }
+        await terminateProcessTree(child, name);
+        resolve({ exitCode: null, timedOut: true });
       }, options.timeoutMs);
       child.once('error', (error) => {
+        if (timedOut) return;
         clearTimeout(timeout);
         reject(error);
       });
-      child.once('exit', (code, signal) => {
+      child.once('exit', async (code, signal) => {
         if (timedOut) return;
         clearTimeout(timeout);
-        resolve({ exitCode: code ?? (signal ? 1 : 0), timedOut: false, terminated: true });
+        if (child.pid) await holdMutexUntilProcessTreeExit(child, child.pid, name);
+        resolve({ exitCode: code ?? (signal ? 1 : 0), timedOut: false });
       });
     });
   } catch (error) {
@@ -351,9 +393,7 @@ async function runCommand(
       status: 'BLOCKED',
       exitCode: null,
       durationMs: Date.now() - started,
-      reason: outcome.terminated
-        ? `${name} timed out after ${options.timeoutMs}ms; its process tree was terminated.`
-        : `${name} timed out after ${options.timeoutMs}ms and its process tree could not be verified as terminated.`,
+      reason: `${name} timed out after ${options.timeoutMs}ms; its process tree termination was verified.`,
     };
   }
   return {

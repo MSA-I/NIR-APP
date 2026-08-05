@@ -34,6 +34,7 @@ export interface CompetingProcess {
 
 interface ProcessSnapshot {
   pid: number;
+  parentPid?: number;
   commandLine: string;
 }
 
@@ -107,7 +108,7 @@ function asPid(value: unknown): number | undefined {
 async function windowsProcessSnapshot(): Promise<ProcessSnapshot[]> {
   const script = [
     'Get-CimInstance Win32_Process',
-    "Select-Object ProcessId,CommandLine",
+    "Select-Object ProcessId,ParentProcessId,CommandLine",
     'ConvertTo-Json -Compress',
   ].join(' | ');
   const { stdout } = await execFileAsync(
@@ -123,8 +124,24 @@ async function windowsProcessSnapshot(): Promise<ProcessSnapshot[]> {
     const record = row as Record<string, unknown>;
     const pid = asPid(record.ProcessId);
     if (!pid) return [];
-    return [{ pid, commandLine: asString(record.CommandLine) }];
+    return [{
+      pid,
+      parentPid: asPid(record.ParentProcessId),
+      commandLine: asString(record.CommandLine),
+    }];
   });
+}
+
+export async function isWindowsProcessTreeAlive(rootPid: number): Promise<boolean> {
+  const snapshot = await windowsProcessSnapshot();
+  const tree = new Set([rootPid]);
+  for (let previousSize = -1; previousSize !== tree.size;) {
+    previousSize = tree.size;
+    for (const processInfo of snapshot) {
+      if (processInfo.parentPid && tree.has(processInfo.parentPid)) tree.add(processInfo.pid);
+    }
+  }
+  return snapshot.some(({ pid }) => tree.has(pid));
 }
 
 async function unixProcessSnapshot(): Promise<ProcessSnapshot[]> {

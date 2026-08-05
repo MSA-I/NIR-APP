@@ -40,5 +40,8 @@ test('deterministic children have bounded Windows process-tree cleanup', async (
   );
   assert.match(source, /taskkill\.exe/);
   assert.match(source, /\['\/PID', String\(child\.pid\), '\/T', '\/F'\]/);
+  assert.match(source, /holdMutexUntilProcessTreeExit/);
+  assert.match(source, /the shared QA mutex remains held/);
+  assert.doesNotMatch(source, /terminated: false/);
   assert.match(source, /timeoutMs: 900_000/);
 });
