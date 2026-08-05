@@ -541,27 +541,34 @@ test.describe.serial('critical cross-role workflow', () => {
     const scenarioId = 'owner-payment-approval';
     const requestId = workflowValue('paymentRequestId');
     const startedAt = new Date().toISOString();
+    const creditOverrideReason = `QA ${readyState.runId} owner credit override`;
+    let creditOverrideTotal = 0;
 
     await runAsRole(browser, testInfo, 'owner', async ({ page, evidence }) => {
       await page.goto(`/payment-requests?id=${requestId}`);
       const detail = page.getByRole('dialog', { name: new RegExp(`דרישת תשלום #.*${MEAT_SUPPLIER_NAME}`) });
       await expect(detail).toBeVisible();
-      const approve = detail.getByRole('button', { name: 'אישור הדרישה', exact: true });
-      if (await approve.count() !== 1) {
-        const warned = await detail.getByRole('button', { name: 'אישור למרות האזהרות', exact: true }).count();
-        await blockScenario(testInfo, scenarioId, 'The prepared request did not expose the normal approval transition.', { criticalWarningBranchVisible: warned === 1 });
-      }
-      await expect(approve).toBeEnabled({ timeout: 20_000 });
-      await approve.click();
-      const confirm = page.getByRole('dialog', { name: 'עדכון דרישת תשלום', exact: true });
-      await confirm.getByLabel('סיבה (חובה — נרשם ביומן הביקורת)', { exact: true }).fill(`QA ${readyState.runId} owner approval`);
+      await expect(detail).toContainText('לספק קיימים זיכויים פתוחים שטרם קוזזו');
+      await expect(detail).toContainText('אישור זה אינו מקזז את הזיכויים ואינו משנה את סכום הדרישה');
+      await expect(detail.getByRole('button', { name: 'אישור רגיל חסום בגלל זיכויים פתוחים', exact: true })).toBeDisabled();
+      const override = detail.getByRole('button', { name: 'אישור חריג ללא קיזוז הזיכוי', exact: true });
+      await expect(override).toBeDisabled();
+      await detail.getByLabel('קראתי והבנתי שהזיכויים לא יקוזזו אוטומטית', { exact: true }).check();
+      await expect(override).toBeEnabled({ timeout: 20_000 });
+      await override.click();
+      const confirm = page.getByRole('dialog', { name: 'אישור חריג ללא קיזוז הזיכוי', exact: true });
+      await confirm.getByLabel('סיבת אישור החריגה', { exact: true }).fill(creditOverrideReason);
       evidence.record('approve-payment-request', requestId);
-      const mutation = await captureMutation(page, '/rest/v1/rpc/transition_payment_request', () =>
-        confirm.getByRole('button', { name: 'אישור', exact: true }).click());
-      expect(mutation.requestBody.p_target_status).toBe('approved');
+      const mutation = await captureMutation(page, '/rest/v1/rpc/approve_payment_request_with_credit_override', () =>
+        confirm.getByRole('button', { name: 'אישור חריג ללא קיזוז הזיכוי', exact: true }).click());
+      creditOverrideTotal = Number(mutation.requestBody.p_expected_open_credit_total);
+      expect(creditOverrideTotal).toBeGreaterThan(0);
+      expect(mutation.requestBody.p_supplier_id).toBe(MEAT_SUPPLIER_ID);
+      expect(mutation.requestBody.p_override_reason).toBe(creditOverrideReason);
 
       await page.goto(`/payment-requests?id=${requestId}`);
       await expect(page.getByRole('button', { name: 'העברה לגורם המבצע', exact: true })).toBeVisible();
+      await expect(page.getByText('הדרישה אושרה באישור חריג ללא קיזוז הזיכוי.', { exact: true })).toBeVisible();
     });
 
     await verifyAfterUi(testInfo, scenarioId, async (runtime) => {
@@ -570,10 +577,19 @@ test.describe.serial('critical cross-role workflow', () => {
       await verifyDatabaseRows(runtime, [{
         id: 'approved-payment-request',
         table: 'payment_requests',
-        select: 'id,org_id,status,approved_by,approved_at',
+        select: 'id,org_id,supplier_id,amount,status,approved_by,approved_at,open_credit_override_total,open_credit_override_reason,open_credit_override_at',
         filters: [{ column: 'id', operator: 'eq', value: requestId }],
         expectedCount: 1,
-        expectedSubsets: [{ id: requestId, org_id: QA_ORGANIZATION_ID, status: 'approved', approved_by: actorUserId }],
+        expectedSubsets: [{
+          id: requestId,
+          org_id: QA_ORGANIZATION_ID,
+          supplier_id: MEAT_SUPPLIER_ID,
+          amount: synthetic.invoice.total,
+          status: 'approved',
+          approved_by: actorUserId,
+          open_credit_override_total: creditOverrideTotal,
+          open_credit_override_reason: creditOverrideReason,
+        }],
       }]),
       await verifyDataIntegrity(runtime, {
         entities: [{ id: 'approved-request-integrity', table: 'payment_requests', rowId: requestId, orgId: QA_ORGANIZATION_ID, expectedFields: { status: 'approved' } }],
