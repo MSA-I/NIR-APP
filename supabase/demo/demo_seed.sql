@@ -179,6 +179,35 @@ insert into products (id, org_id, name, category_id, unit, sku, active) values
 ('bb000000-0000-4000-8000-000000000045', '11111111-1111-4111-8111-111111111111', 'מגש הגשה נירוסטה', 'cc000000-0000-4000-8000-000000000005', 'יח''', 'EQP-001', true),
 ('bb000000-0000-4000-8000-000000000046', '11111111-1111-4111-8111-111111111111', 'סיר נירוסטה 50 ליטר', 'cc000000-0000-4000-8000-000000000005', 'יח''', 'EQP-002', true);
 
+-- ===== Barcodes (wave 8, PLAN-09 §2) =====
+-- Written as an UPDATE rather than folded into the insert above so the diff shows exactly
+-- which catalogue rows gained a code and why. `barcode` participates in no price, total or
+-- balance -- it is a lookup key only (0011:63 search, 0067 index), so no financial number
+-- in this seed moves.
+--
+-- The last two rows share ONE code ON PURPOSE. Both are 1.5-litre case items from the same
+-- drinks importer, and both sit on the SAME receivable order (f012, status 'sent'), so the
+-- ambiguity rule of matchDeliveryLineProduct (model.ts:358-363) is provable end to end:
+-- scanning 7290000000902 while receiving f012 must resolve to NOTHING and say so, because
+-- the catalogue cannot state which of the two cases arrived. This is a real catalogue state
+-- -- one importer case code typed onto two rows during setup -- not a synthetic edge case,
+-- and it is exactly why 0067's index is not unique.
+update products p set barcode = v.barcode
+from (values
+  ('bb000000-0000-4000-8000-000000000001', '7290000000019'),  -- עגבניות
+  ('bb000000-0000-4000-8000-000000000009', '7290000000095'),  -- לחמניות המבורגר (ארגז 48)
+  ('bb000000-0000-4000-8000-000000000011', '7290000000118'),  -- פיתות (שקית 10)
+  ('bb000000-0000-4000-8000-000000000018', '7290000000187'),  -- גבינה צהובה
+  ('bb000000-0000-4000-8000-000000000022', '7290000000224'),  -- ביצים L (תבנית 30)
+  ('bb000000-0000-4000-8000-000000000023', '7290000000231'),  -- קמח לבן (שק 25 ק"ג)
+  ('bb000000-0000-4000-8000-000000000037', '7290000000378'),  -- אקונומיקה 4 ליטר
+  ('bb000000-0000-4000-8000-000000000041', '7290000000415'),  -- צלחות חד"פ (שרוול 50)
+  ('bb000000-0000-4000-8000-000000000031', '7290000000902'),  -- קולה 1.5 ליטר (ארגז 6)   — ambiguous pair
+  ('bb000000-0000-4000-8000-000000000032', '7290000000902')   -- מים מינרליים (ארגז 12)  — ambiguous pair
+) as v(product_id, barcode)
+where p.id = v.product_id::uuid
+  and p.org_id = '11111111-1111-4111-8111-111111111111'::uuid;
+
 -- ===== Supplier price lists (overlapping suppliers enable price comparison) =====
 insert into supplier_products (org_id, supplier_id, product_id, current_price, previous_price, price_effective_date, available, min_qty) values
 -- משק ירוק (aa01) — vegetables, some prices recently increased
