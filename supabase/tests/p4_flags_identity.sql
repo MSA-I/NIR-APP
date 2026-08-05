@@ -805,6 +805,23 @@ select pg_temp.p4_assert(
   and not has_table_privilege('authenticated', 'public.external_identity_mappings', 'SELECT')
   and not has_table_privilege('anon', 'public.security_events', 'SELECT'),
   'the three identity-wave tables must carry no browser read privilege');
+-- "The RPC is the only write path" must be STRUCTURALLY true, not intended: a permissive
+-- policy plus a column grant IS a write path (the pre-0061 bank_details lesson). None of
+-- the four wave tables may hold any browser DML privilege, table- or column-level.
+select pg_temp.p4_assert(
+  not exists (
+    select 1
+    from (values ('public.identity_provider_settings'::regclass),
+                 ('public.external_identity_mappings'::regclass),
+                 ('public.security_events'::regclass),
+                 ('public.org_flag_configurations'::regclass)) t(relation)
+    cross join (values ('anon'), ('authenticated')) r(role_name)
+    cross join (values ('INSERT'), ('UPDATE'), ('DELETE')) p(privilege)
+    where has_table_privilege(r.role_name, t.relation, p.privilege)
+       -- column privileges exist only for SELECT/INSERT/UPDATE/REFERENCES
+       or (p.privilege in ('INSERT', 'UPDATE')
+           and has_any_column_privilege(r.role_name, t.relation, p.privilege))),
+  'a wave-4 table exposes browser DML -- the reasoned RPCs must be the only write path');
 select pg_temp.p4_claims('27000000-0000-0000-0000-000000000001', interval '0');
 set local role authenticated;
 do $$
