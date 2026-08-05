@@ -32,6 +32,7 @@ Last verified: **2026-08-05**, against the resolved tree in `node_modules`.
 | `react-pdf` | 10.4.1 | MIT |
 | `pdfjs-dist` (dependency of `react-pdf`) | 5.4.296 | Apache-2.0 |
 | `xlsx` (SheetJS CE) | 0.20.3 | Apache-2.0 |
+| `tus-js-client` | 4.3.1 | MIT |
 
 ## Build and tooling dependencies
 
@@ -77,6 +78,11 @@ Last verified: **2026-08-05**, against the resolved tree in `node_modules`.
   saved exact (no `^`) in `package.json` so a routine install cannot drift onto 9.x. Licenses for
   both `@tanstack/react-table` and its single dependency `@tanstack/table-core` were read from the
   resolved `node_modules` packages (MIT, 8.21.3 each). Installed by wave 2 (table engine).
+- **`tus-js-client` is pinned exactly at 4.3.1** (no `^`), installed by wave 6b (Upload Center /
+  resumable uploads to the `documents` bucket). License read from the resolved
+  `node_modules/tus-js-client/package.json`: MIT. `npm audit --audit-level=high` was run
+  immediately after the install: zero high/critical findings were introduced (the audit reported
+  only the pre-existing moderate `postcss` advisory, below the gate level).
 - **`react-pdf` is pinned exactly at 10.4.1** (no `^`), which itself pins `pdfjs-dist@5.4.296`
   exactly. `pdfjs-dist` is **not** a direct dependency and must never become one — see the version
   constraint below. Both licenses were read from the resolved `node_modules` packages: `react-pdf`
@@ -95,7 +101,6 @@ pass the gate's `npm audit --audit-level=high` step.
 
 | Package | Target version | Wave | Expected license | Purpose |
 |---|---|---|---|---|
-| `tus-js-client` | **4.3.1** | 6b | MIT | Resumable uploads |
 | `workbox-*` | latest stable | 8 | MIT | App-shell caching only — never API responses |
 | `idb` **or** `dexie` | latest stable | 8 | ISC / Apache-2.0 | IndexedDB for the offline receiving queue |
 | `@zxing/browser`, `@zxing/library` | latest stable | 8 | MIT / Apache-2.0 | Barcode scanning pilot, behind a feature flag |
