@@ -225,7 +225,7 @@ transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מ
 | משפחה | פקודת שרת | נקודת הסריאליזציה והאידמפוטנטיות |
 |---|---|---|
 | ביצוע תשלום | `execute_payment_request` | נעילת הדרישה והיעדים בסדר UUID; unique על דרישה; retry משווה payload קנוני |
-| דרישת תשלום | `create_payment_request`, ‏`transition_payment_request` | UUID לקוח יציב, נעילת חשבוניות/דרישה ומעברי סטטוס שרתיים |
+| דרישת תשלום | `create_payment_request`, ‏`transition_payment_request`, ‏`approve_payment_request_with_credit_override` | UUID לקוח יציב, נעילת חשבוניות/דרישה ומעברי סטטוס שרתיים; `0053` חוסמת אישור רגיל כשקיימים זיכויים ב־`open`/`requested`/`received`, ודורשת override מפורש ומנומק ששומר את סכום הזיכויים בזמן האישור בלי לקזז או לשנות אותם |
 | תדפיס בנק | `import_bank_transactions`, ‏`match_bank_transaction` ופקודות assign/ignore/exception | hash קובץ ושורה, נעילת תנועה, תשלום/הקצאה יחידים |
 | קבלת סחורה | `save_goods_receipt` | UUID קבלה יציב, נעילת הזמנה ופריטים; כמות תקינה נצברת פעם אחת |
 | חשבונית | `create_invoice`, ‏`set_invoice_review_status`, ‏`soft_delete_invoice` | UUID לקוח יציב, בדיקות DB חוזרות, ומחיקה רכה עם נעילה, בדיקת קשרים וסיבת audit באותה עסקה |
