@@ -754,11 +754,13 @@ try {
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-Preflight
     Invoke-SqlTest "supabase\tests\p1_financial_commands.sql" "P1 financial commands, rollback and idempotency"
+    Invoke-SqlTest "supabase\tests\monthly_report_snapshots.sql" "Immutable monthly report snapshots, RLS, audit and export source"
     Invoke-SqlTest "supabase\tests\p1_price_submissions.sql" "P1B trusted price-list intake, tenant isolation and rollback"
     Invoke-SqlTest "supabase\tests\p2_data_reliability.sql" "P2 retry, alerts, pagination and reliability"
     Invoke-SqlTest "supabase\tests\p1_price_submissions_concurrency.sql" "P1B real concurrent revisions and checksum retries" "supabase_admin"
     Invoke-SqlTest "supabase\tests\roadmap_db_contracts.sql" "Roadmap supplier, inventory, savings and WhatsApp contracts"
     Invoke-SqlTest "supabase\tests\p1_concurrency.sql" "P1 real concurrent sessions" "supabase_admin"
+    Invoke-SqlTest "supabase\tests\monthly_report_snapshots_concurrency.sql" "Monthly report snapshot version concurrency" "supabase_admin"
 
     Write-Gate "P1B local Edge runtime, 10/100/1,000 rows and failure recovery"
     Invoke-PriceListEdgeSmoke
