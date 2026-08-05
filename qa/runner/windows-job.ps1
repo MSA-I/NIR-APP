@@ -377,19 +377,94 @@ public static class SupplyFlowWindowsJob
         return ActiveProcesses(job) == 0;
     }
 
-    private static string TerminateAndDrain(IntPtr job, int cleanupTimeoutMs)
+    private static string HoldUntilJobEmpty(IntPtr job, string reason)
     {
-        TerminateJobObject(job, 124);
-        return WaitUntilEmpty(job, cleanupTimeoutMs) ? "JOB_EMPTY" : "JOB_CLOSED";
+        Stopwatch notice = Stopwatch.StartNew();
+        long nextNoticeMs = 0;
+        // Deliberately unbounded: returning without ACTIVE_PROCESS_ZERO would release the QA mutex unsafely.
+        for (;;)
+        {
+            try
+            {
+                if (ActiveProcesses(job) == 0) return "JOB_EMPTY";
+            }
+            catch
+            {
+                // Query failure is not proof of cleanup. Keep the Job handle and mutex alive.
+            }
+            if (notice.ElapsedMilliseconds >= nextNoticeMs)
+            {
+                Console.Error.WriteLine(
+                    "[QA BLOCKED] " + reason
+                    + " The shared QA mutex remains held until ACTIVE_PROCESS_ZERO can be proven.");
+                nextNoticeMs = notice.ElapsedMilliseconds + 30000;
+            }
+            Thread.Sleep(1000);
+        }
     }
 
-    private static SupplyFlowJobRunResult Blocked(string reason, string cleanup)
+    private static string TerminateAndDrainOrHold(IntPtr job, int cleanupTimeoutMs, string reason)
+    {
+        bool terminationRequested = TerminateJobObject(job, 124);
+        if (!terminationRequested)
+        {
+            try
+            {
+                if (ActiveProcesses(job) == 0) return "JOB_EMPTY";
+            }
+            catch
+            {
+                // Fall through to the containment hold below.
+            }
+            return HoldUntilJobEmpty(job, reason + " TerminateJobObject failed.");
+        }
+        try
+        {
+            if (WaitUntilEmpty(job, cleanupTimeoutMs)) return "JOB_EMPTY";
+        }
+        catch
+        {
+            // Fall through to the containment hold below.
+        }
+        return HoldUntilJobEmpty(job, reason + " The cleanup deadline expired.");
+    }
+
+    private static void HoldUntilProcessExit(IntPtr process, string reason)
+    {
+        Stopwatch notice = Stopwatch.StartNew();
+        long nextNoticeMs = 0;
+        // The suspended process cannot run, but its exit must still be proven before the mutex can be released.
+        for (;;)
+        {
+            if (WaitForSingleObject(process, 1000) == WAIT_OBJECT_0) return;
+            if (notice.ElapsedMilliseconds >= nextNoticeMs)
+            {
+                Console.Error.WriteLine(
+                    "[QA BLOCKED] " + reason
+                    + " The shared QA mutex remains held until the suspended process exit is proven.");
+                nextNoticeMs = notice.ElapsedMilliseconds + 30000;
+            }
+        }
+    }
+
+    private static void TerminateUnassignedProcessOrHold(IntPtr process, int cleanupTimeoutMs)
+    {
+        bool terminationRequested = TerminateProcess(process, 125);
+        uint wait = WaitForSingleObject(process, (uint)cleanupTimeoutMs);
+        if (wait == WAIT_OBJECT_0) return;
+        string reason = terminationRequested
+            ? "The unassigned suspended process exceeded its cleanup deadline."
+            : "TerminateProcess failed for an unassigned suspended process.";
+        HoldUntilProcessExit(process, reason);
+    }
+
+    private static SupplyFlowJobRunResult Blocked(string reason)
     {
         return new SupplyFlowJobRunResult
         {
             Status = "BLOCKED",
             ExitCode = null,
-            Cleanup = cleanup,
+            Cleanup = "JOB_EMPTY",
             Reason = reason
         };
     }
@@ -422,7 +497,6 @@ public static class SupplyFlowWindowsJob
         PROCESS_INFORMATION process = new PROCESS_INFORMATION();
         bool processCreated = false;
         bool processAssigned = false;
-        bool processResumed = false;
 
         try
         {
@@ -471,8 +545,6 @@ public static class SupplyFlowWindowsJob
             {
                 throw LastError("ResumeThread");
             }
-            processResumed = true;
-
             Stopwatch elapsed = Stopwatch.StartNew();
             long? primaryExitedAtMs = null;
             uint primaryExitCode = 0;
@@ -481,8 +553,11 @@ public static class SupplyFlowWindowsJob
             {
                 if (WaitForSingleObject(parent, 0) == WAIT_OBJECT_0)
                 {
-                    string cleanup = TerminateAndDrain(job, cleanupTimeoutMs);
-                    return Blocked("The QA parent process exited before the Windows Job completed.", cleanup);
+                    TerminateAndDrainOrHold(
+                        job,
+                        cleanupTimeoutMs,
+                        "The QA parent process exited before the Windows Job completed.");
+                    return Blocked("The QA parent process exited before the Windows Job completed.");
                 }
 
                 uint primaryWait = WaitForSingleObject(process.hProcess, 0);
@@ -490,15 +565,15 @@ public static class SupplyFlowWindowsJob
                 {
                     if (!GetExitCodeProcess(process.hProcess, out primaryExitCode))
                     {
-                        string cleanup = TerminateAndDrain(job, cleanupTimeoutMs);
-                        return Blocked("The primary process exit code could not be read.", cleanup);
+                        TerminateAndDrainOrHold(job, cleanupTimeoutMs, "The primary process exit code could not be read.");
+                        return Blocked("The primary process exit code could not be read.");
                     }
                     primaryExitedAtMs = elapsed.ElapsedMilliseconds;
                 }
                 else if (primaryWait != WAIT_OBJECT_0 && primaryWait != WAIT_TIMEOUT)
                 {
-                    string cleanup = TerminateAndDrain(job, cleanupTimeoutMs);
-                    return Blocked("The primary process state could not be read.", cleanup);
+                    TerminateAndDrainOrHold(job, cleanupTimeoutMs, "The primary process state could not be read.");
+                    return Blocked("The primary process state could not be read.");
                 }
 
                 uint active;
@@ -508,8 +583,11 @@ public static class SupplyFlowWindowsJob
                 }
                 catch
                 {
-                    string cleanup = TerminateAndDrain(job, cleanupTimeoutMs);
-                    return Blocked("The Windows Job active-process count could not be verified.", cleanup);
+                    TerminateAndDrainOrHold(
+                        job,
+                        cleanupTimeoutMs,
+                        "The Windows Job active-process count could not be verified.");
+                    return Blocked("The Windows Job active-process count could not be verified.");
                 }
 
                 if (primaryExitedAtMs.HasValue && active == 0)
@@ -526,39 +604,40 @@ public static class SupplyFlowWindowsJob
                 long nowMs = elapsed.ElapsedMilliseconds;
                 if (nowMs >= timeoutMs)
                 {
-                    string cleanup = TerminateAndDrain(job, cleanupTimeoutMs);
+                    TerminateAndDrainOrHold(job, cleanupTimeoutMs, "The Windows Job command timed out.");
                     return new SupplyFlowJobRunResult
                     {
                         Status = "TIMED_OUT",
                         ExitCode = null,
-                        Cleanup = cleanup,
+                        Cleanup = "JOB_EMPTY",
                         Reason = null
                     };
                 }
                 if (primaryExitedAtMs.HasValue && nowMs - primaryExitedAtMs.Value >= descendantGraceMs)
                 {
-                    string cleanup = TerminateAndDrain(job, cleanupTimeoutMs);
-                    return Blocked("Descendant processes remained after the primary process exited and were terminated.", cleanup);
+                    TerminateAndDrainOrHold(
+                        job,
+                        cleanupTimeoutMs,
+                        "Descendant processes remained after the primary process exited.");
+                    return Blocked("Descendant processes remained after the primary process exited and were terminated.");
                 }
                 Thread.Sleep(25);
             }
         }
         catch (Exception error)
         {
-            string cleanup = "JOB_CLOSED";
+            if (processCreated && !processAssigned)
+            {
+                TerminateUnassignedProcessOrHold(process.hProcess, cleanupTimeoutMs);
+            }
             if (job != IntPtr.Zero)
             {
-                try { cleanup = TerminateAndDrain(job, cleanupTimeoutMs); } catch { cleanup = "JOB_CLOSED"; }
+                TerminateAndDrainOrHold(job, cleanupTimeoutMs, "Windows Job setup or execution failed.");
             }
-            return Blocked(error.Message, cleanup);
+            return Blocked(error.Message);
         }
         finally
         {
-            if (processCreated && (!processAssigned || !processResumed))
-            {
-                TerminateProcess(process.hProcess, 125);
-                WaitForSingleObject(process.hProcess, (uint)cleanupTimeoutMs);
-            }
             if (process.hThread != IntPtr.Zero) CloseHandle(process.hThread);
             if (process.hProcess != IntPtr.Zero) CloseHandle(process.hProcess);
             if (standardInput != IntPtr.Zero && standardInput != INVALID_HANDLE_VALUE) CloseHandle(standardInput);
@@ -593,6 +672,7 @@ function Write-JobResult {
 }
 
 $specification = $null
+$nativeInvocationStarted = $false
 try {
     $rawSpecification = [Console]::In.ReadToEnd()
     $specification = $rawSpecification | ConvertFrom-Json
@@ -606,6 +686,7 @@ try {
         $environment[[string] $property.Name] = [string] $property.Value
     }
     [string[]] $arguments = @($specification.args | ForEach-Object { [string] $_ })
+    $nativeInvocationStarted = $true
     $nativeResult = [SupplyFlowWindowsJob]::Run(
         [string] $specification.executable,
         $arguments,
@@ -620,12 +701,13 @@ try {
     exit 0
 }
 catch {
-    if ($null -ne $specification -and -not [string]::IsNullOrWhiteSpace([string] $specification.resultPath)) {
+    $canProveNoNativeChild = -not $nativeInvocationStarted -and $null -ne $specification
+    if ($canProveNoNativeChild -and -not [string]::IsNullOrWhiteSpace([string] $specification.resultPath)) {
         try {
             $blocked = [PSCustomObject]@{
                 Status = 'BLOCKED'
                 ExitCode = $null
-                Cleanup = 'JOB_CLOSED'
+                Cleanup = 'JOB_EMPTY'
                 Reason = $_.Exception.Message
             }
             Write-JobResult -Specification $specification -NativeResult $blocked

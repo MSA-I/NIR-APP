@@ -9,6 +9,8 @@ const WINDOWS_JOB_HELPER = fileURLToPath(new URL('./windows-job.ps1', import.met
 const DEFAULT_DESCENDANT_GRACE_MS = 10_000;
 const DEFAULT_CLEANUP_TIMEOUT_MS = 10_000;
 const HELPER_STARTUP_GRACE_MS = 20_000;
+const HELPER_SHUTDOWN_GRACE_MS = 10_000;
+const CONTAINMENT_NOTICE_MS = 30_000;
 
 export type WindowsJobCommandResult =
   | { status: 'EXITED'; exitCode: number }
@@ -20,7 +22,7 @@ interface WindowsJobProtocolResult {
   token: string;
   status: 'EXITED' | 'TIMED_OUT' | 'BLOCKED';
   exitCode: number | null;
-  cleanup: 'JOB_EMPTY' | 'JOB_CLOSED';
+  cleanup: 'JOB_EMPTY';
   reason?: string;
 }
 
@@ -51,7 +53,7 @@ function protocolResult(value: unknown, token: string): WindowsJobProtocolResult
   if (!value || typeof value !== 'object') return undefined;
   const result = value as Partial<WindowsJobProtocolResult>;
   if (result.schemaVersion !== 1 || result.token !== token) return undefined;
-  if (result.cleanup !== 'JOB_EMPTY' && result.cleanup !== 'JOB_CLOSED') return undefined;
+  if (result.cleanup !== 'JOB_EMPTY') return undefined;
   if (
     result.status === 'EXITED'
     && result.cleanup === 'JOB_EMPTY'
@@ -69,11 +71,28 @@ function protocolResult(value: unknown, token: string): WindowsJobProtocolResult
   return undefined;
 }
 
-async function waitForHelperExit(child: ReturnType<typeof spawn>): Promise<number | null> {
-  return new Promise((resolve, reject) => {
-    child.once('error', reject);
-    child.once('exit', (code) => resolve(code));
+type HelperEvent =
+  | { kind: 'EXIT'; code: number | null }
+  | { kind: 'ERROR'; error: Error };
+
+function waitForHelperExit(child: ReturnType<typeof spawn>): Promise<HelperEvent> {
+  return new Promise((resolve) => {
+    child.once('error', (error) => resolve({ kind: 'ERROR', error }));
+    child.once('exit', (code) => resolve({ kind: 'EXIT', code }));
   });
+}
+
+function holdWindowsContainment(reason: string): Promise<never> {
+  // This is intentionally the only unbounded path: without JOB_EMPTY, returning
+  // would let runDeterministicQa reach its finally block and release the mutex.
+  const notify = (): void => {
+    process.stderr.write(
+      `[QA BLOCKED] ${reason} The shared QA mutex remains held because ACTIVE_PROCESS_ZERO was not proven.\n`,
+    );
+  };
+  notify();
+  setInterval(notify, CONTAINMENT_NOTICE_MS);
+  return new Promise<never>(() => undefined);
 }
 
 export async function runWindowsJobCommand(
@@ -122,46 +141,52 @@ export async function runWindowsJobCommand(
       },
     );
     helper.stdin.on('error', () => undefined);
+    const helperEvent = waitForHelperExit(helper);
     helper.stdin.end(JSON.stringify(specification), 'utf8');
 
-    let watchdogExpired = false;
-    const watchdog = setTimeout(() => {
-      watchdogExpired = true;
-      // Terminating the helper closes its non-inheritable Job handle. KILL_ON_JOB_CLOSE
-      // then terminates every process that was attached before it was resumed.
+    let secondDeadline: NodeJS.Timeout | undefined;
+    let resolveSecondDeadline!: (event: { kind: 'SECOND_DEADLINE' }) => void;
+    const secondDeadlineEvent = new Promise<{ kind: 'SECOND_DEADLINE' }>((resolve) => {
+      resolveSecondDeadline = resolve;
+    });
+    const lifetimeWatchdog = setTimeout(() => {
+      process.stderr.write(
+        '[QA BLOCKED] The Windows Job helper exceeded its expected lifetime; requesting helper termination.\n',
+      );
       helper.kill();
+      secondDeadline = setTimeout(
+        () => resolveSecondDeadline({ kind: 'SECOND_DEADLINE' }),
+        HELPER_SHUTDOWN_GRACE_MS,
+      );
     }, timeoutMs + descendantGraceMs + cleanupTimeoutMs + HELPER_STARTUP_GRACE_MS);
-    let helperExitCode: number | null;
-    try {
-      helperExitCode = await waitForHelperExit(helper);
-    } finally {
-      clearTimeout(watchdog);
+    const event = await Promise.race([helperEvent, secondDeadlineEvent]);
+    clearTimeout(lifetimeWatchdog);
+    if (secondDeadline) clearTimeout(secondDeadline);
+    if (event.kind === 'SECOND_DEADLINE') {
+      return holdWindowsContainment(
+        'The Windows Job helper did not exit by its second shutdown deadline.',
+      );
     }
-    if (watchdogExpired) {
-      return {
-        status: 'BLOCKED',
-        exitCode: null,
-        reason: 'The Windows Job helper exceeded its bounded lifetime and was closed.',
-      };
+    if (event.kind === 'ERROR') {
+      if (helper.pid === undefined) throw event.error;
+      return holdWindowsContainment(
+        'The started Windows Job helper reported an error without JOB_EMPTY evidence.',
+      );
     }
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(await readFile(resultPath, 'utf8'));
     } catch {
-      return {
-        status: 'BLOCKED',
-        exitCode: null,
-        reason: `The Windows Job helper exited with code ${helperExitCode ?? '<signal>'} without a valid result.`,
-      };
+      return holdWindowsContainment(
+        `The Windows Job helper exited with code ${event.code ?? '<signal>'} without JOB_EMPTY evidence.`,
+      );
     }
     const result = protocolResult(parsed, token);
     if (!result) {
-      return {
-        status: 'BLOCKED',
-        exitCode: null,
-        reason: 'The Windows Job helper returned a malformed or mismatched result.',
-      };
+      return holdWindowsContainment(
+        'The Windows Job helper returned a malformed, mismatched or non-empty result.',
+      );
     }
     if (result.status === 'EXITED') return { status: 'EXITED', exitCode: result.exitCode! };
     if (result.status === 'TIMED_OUT') return { status: 'TIMED_OUT', exitCode: null };

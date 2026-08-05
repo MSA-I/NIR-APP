@@ -56,6 +56,16 @@ test('deterministic Windows children use a suspended kill-on-close Job Object', 
   assert.match(helper, /environmentBlock,\s*cwd,\s*ref startup/);
   assert.match(launcher, /helper\.stdin\.end\(JSON\.stringify\(specification\), 'utf8'\)/);
   assert.doesNotMatch(launcher, /\['[^\]]*executable/);
+  assert.doesNotMatch(`${launcher}\n${helper}`, /JOB_CLOSED/);
+  assert.match(launcher, /cleanup: 'JOB_EMPTY'/);
+  assert.match(launcher, /function holdWindowsContainment/);
+  assert.match(launcher, /HELPER_SHUTDOWN_GRACE_MS/);
+  assert.match(launcher, /kind: 'SECOND_DEADLINE'/);
+  assert.match(launcher, /ACTIVE_PROCESS_ZERO was not proven/);
+  assert.match(helper, /bool terminationRequested = TerminateJobObject\(job, 124\)/);
+  assert.match(helper, /private static string HoldUntilJobEmpty/);
+  assert.match(helper, /mutex remains held until ACTIVE_PROCESS_ZERO can be proven/);
+  assert.match(helper, /return HoldUntilJobEmpty\(job, reason \+ " The cleanup deadline expired\."\)/);
   assert.doesNotMatch(lock, /WindowsProcessIdentity|captureWindowsProcessTree|CreationDate/);
 });
 
