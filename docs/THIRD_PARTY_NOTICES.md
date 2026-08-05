@@ -7,7 +7,7 @@ package's own `package.json` in `node_modules` at the resolved version, not from
 proprietary and source-available code is never copied into the product.** Pre-release dependencies
 are not used unless no stable compatible alternative exists and the reason is recorded here.
 
-Last verified: **2026-08-05**, against the resolved tree in `node_modules`.
+Last verified: **2026-08-06**, against the resolved tree in `node_modules`.
 
 ---
 
@@ -33,6 +33,11 @@ Last verified: **2026-08-05**, against the resolved tree in `node_modules`.
 | `pdfjs-dist` (dependency of `react-pdf`) | 5.4.296 | Apache-2.0 |
 | `xlsx` (SheetJS CE) | 0.20.3 | Apache-2.0 |
 | `tus-js-client` | 4.3.1 | MIT |
+| `idb` | 8.0.3 | ISC |
+| `@zxing/browser` | 0.2.1 | MIT |
+| `@zxing/library` | 0.23.0 | Apache-2.0 |
+| `ts-custom-error` (dependency of `@zxing/library`) | 3.3.1 | MIT |
+| `@zxing/text-encoding` (optional dependency of `@zxing/library`) | 0.9.0 | Unlicense OR Apache-2.0 |
 
 ## Build and tooling dependencies
 
@@ -83,6 +88,23 @@ Last verified: **2026-08-05**, against the resolved tree in `node_modules`.
   `node_modules/tus-js-client/package.json`: MIT. `npm audit --audit-level=high` was run
   immediately after the install: zero high/critical findings were introduced (the audit reported
   only the pre-existing moderate `postcss` advisory, below the gate level).
+- **`idb` is pinned exactly at 8.0.3** (no `^`), installed by wave 8 for the offline goods-receiving
+  store (`src/lib/offlineDb.ts`). License read from the resolved `node_modules/idb/package.json`:
+  ISC. ADR-0006 rejected `localStorage` for this job — synchronous, size-limited, and unable to hold
+  the photo Blobs the queue carries — so a real IndexedDB wrapper was required. `idb` has no
+  dependencies of its own.
+- **The barcode reader is three resolved packages, not two.** Wave 8 installed
+  `@zxing/browser@0.2.1` (MIT) and `@zxing/library@0.23.0` (Apache-2.0), both exact; the resolved
+  tree also pulled `ts-custom-error@3.3.1` (MIT, a dependency of `@zxing/library`) **and**
+  `@zxing/text-encoding@0.9.0` (Unlicense OR Apache-2.0, an *optional* dependency of
+  `@zxing/library` that npm installs by default). PLAN-09 anticipated three new packages; the tree
+  has four, and all four licenses were read from their own `package.json` in `node_modules` at the
+  resolved version. Every one is permissive. `npm audit --audit-level=high` was run immediately
+  after the install and exited **0** — zero high or critical findings introduced; the only reported
+  advisory remains the pre-existing moderate `postcss` one, below the gate level.
+  `@zxing/library` is ~17MB unpacked, so it is reached only through a dynamic `import()` behind the
+  `receiving.barcode` flag and is pinned into its own `barcode` rollup chunk beside recharts
+  (`vite.config.ts`) — it never enters the entry graph.
 - **`react-pdf` is pinned exactly at 10.4.1** (no `^`), which itself pins `pdfjs-dist@5.4.296`
   exactly. `pdfjs-dist` is **not** a direct dependency and must never become one — see the version
   constraint below. Both licenses were read from the resolved `node_modules` packages: `react-pdf`
@@ -101,9 +123,14 @@ pass the gate's `npm audit --audit-level=high` step.
 
 | Package | Target version | Wave | Expected license | Purpose |
 |---|---|---|---|---|
-| `workbox-*` | latest stable | 8 | MIT | App-shell caching only — never API responses |
-| `idb` **or** `dexie` | latest stable | 8 | ISC / Apache-2.0 | IndexedDB for the offline receiving queue |
-| `@zxing/browser`, `@zxing/library` | latest stable | 8 | MIT / Apache-2.0 | Barcode scanning pilot, behind a feature flag |
+| `workbox-*` | latest stable | a later wave | MIT | App-shell caching only — never API responses |
+
+**`workbox-*` was NOT installed by wave 8.** App-shell precaching is deferred on purpose
+(OPEN-DECISIONS #101): the sync queue is plain JS plus IndexedDB and needs no service worker, while
+precaching would rewrite `public/sw.js` and put the `controllerchange` contract behind four gate
+scenarios at risk. The declared consequence: **a reload while offline loses the app shell.** The
+queue survives it. `idb` and the two `@zxing` packages were installed and moved into the tables
+above.
 
 **Version constraints that are decisions, not preferences:**
 
