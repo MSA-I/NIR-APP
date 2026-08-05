@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { execFile } from 'node:child_process';
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { open, readFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -10,6 +10,12 @@ const execFileAsync = promisify(execFile);
 export const LOCAL_QA_PROJECT_ID = 'supplyflow-p0' as const;
 export const LOCAL_QA_API_URL = 'http://127.0.0.1:55431' as const;
 export const QA_LOCK_PATH = path.join(tmpdir(), `${LOCAL_QA_PROJECT_ID}-qa.lock`);
+export const QA_WINDOWS_MUTEX_NAME = `Local\\SupplyFlow-${LOCAL_QA_PROJECT_ID}-qa` as const;
+
+const windowsMutexKeepers = new Map<string, {
+  child: ChildProcessWithoutNullStreams;
+  runId: string;
+}>();
 
 const COMPETING_PROCESS_PATTERNS: ReadonlyArray<{
   readonly kind: CompetingProcess['kind'];
@@ -195,6 +201,78 @@ async function readLockRecord(): Promise<QaLockRecord | undefined> {
   }
 }
 
+async function acquireWindowsMutex(token: string, runId: string): Promise<QaLockResult> {
+  const script = [
+    '$ErrorActionPreference = "Stop"',
+    `$mutex = [System.Threading.Mutex]::new($false, '${QA_WINDOWS_MUTEX_NAME}')`,
+    'try {',
+    'try { $acquired = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $acquired = $true }',
+    'if (-not $acquired) { [Console]::Out.WriteLine("BLOCKED"); exit 2 }',
+    '[Console]::Out.WriteLine("LOCKED")',
+    '[Console]::Out.Flush()',
+    '$null = [Console]::In.ReadLine()',
+    '$mutex.ReleaseMutex()',
+    '} finally { $mutex.Dispose() }',
+  ].join('\n');
+  const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+  const status = await new Promise<'LOCKED' | 'BLOCKED'>((resolve, reject) => {
+    let output = '';
+    let settled = false;
+    const finish = (callback: () => void): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      callback();
+    };
+    const timeout = setTimeout(() => finish(() => {
+      child.kill();
+      reject(new Error('Timed out while acquiring the Windows QA mutex.'));
+    }), 10_000);
+    child.once('error', (error) => finish(() => reject(error)));
+    child.once('exit', (code) => {
+      if (!settled) finish(() => code === 2
+        ? resolve('BLOCKED')
+        : reject(new Error('Windows QA mutex keeper exited before acquisition.')));
+    });
+    child.stdout.on('data', (chunk: Buffer) => {
+      output += chunk.toString('utf8');
+      if (output.includes('LOCKED')) finish(() => resolve('LOCKED'));
+      else if (output.includes('BLOCKED')) finish(() => resolve('BLOCKED'));
+    });
+  });
+  if (status === 'BLOCKED') {
+    child.stdin.end();
+    return {
+      status: 'BLOCKED',
+      code: 'qa_mutex_held',
+      message: 'The shared Windows QA/quality mutex is held by another process.',
+      competingProcesses: [],
+    };
+  }
+  windowsMutexKeepers.set(token, { child, runId });
+  return {
+    status: 'LOCKED',
+    handle: { path: QA_LOCK_PATH, token, runId, pid: child.pid ?? process.pid },
+  };
+}
+
+async function releaseWindowsMutex(handle: QaLockHandle): Promise<boolean> {
+  const keeper = windowsMutexKeepers.get(handle.token);
+  if (!keeper || keeper.runId !== handle.runId || keeper.child.exitCode !== null) return false;
+  const exit = new Promise<boolean>((resolve) => keeper.child.once('exit', (code) => resolve(code === 0)));
+  keeper.child.stdin.end('\n');
+  const exited = await Promise.race([
+    exit,
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5_000)),
+  ]);
+  if (!exited && keeper.child.exitCode === null) keeper.child.kill();
+  windowsMutexKeepers.delete(handle.token);
+  return exited;
+}
+
 export async function acquireQaLock(input: {
   repoRoot: string;
   runId: string;
@@ -220,57 +298,56 @@ export async function acquireQaLock(input: {
     acquiredAt: new Date().toISOString(),
   };
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const file = await open(QA_LOCK_PATH, 'wx', 0o600);
-      try {
-        await file.writeFile(`${JSON.stringify(record, null, 2)}\n`, 'utf8');
-      } finally {
-        await file.close();
-      }
-      return {
-        status: 'LOCKED',
-        handle: {
-          path: QA_LOCK_PATH,
-          token: record.token,
-          runId: record.runId,
-          pid: record.pid,
-        },
-      };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-      const existing = await readLockRecord();
-      if (!existing) {
-        return {
-          status: 'BLOCKED',
-          code: 'qa_mutex_invalid',
-          message: `QA mutex at ${QA_LOCK_PATH} is malformed or unreadable; manual review is required.`,
-          competingProcesses: [],
-        };
-      }
-      if (isPidAlive(existing.pid)) {
-        return {
-          status: 'BLOCKED',
-          code: 'qa_mutex_held',
-          message: `QA mutex is held by process ${existing.pid} for run ${existing.runId}.`,
-          competingProcesses: [{ pid: existing.pid, kind: 'qa-runner' }],
-        };
-      }
-      await unlink(QA_LOCK_PATH);
-    }
-  }
+  if (process.platform === 'win32') return acquireWindowsMutex(record.token, record.runId);
 
-  return {
-    status: 'BLOCKED',
-    code: 'qa_mutex_held',
-    message: 'QA mutex could not be acquired after removing a stale owner.',
-    competingProcesses: [],
-  };
+  try {
+    const file = await open(QA_LOCK_PATH, 'wx', 0o600);
+    try {
+      await file.writeFile(`${JSON.stringify(record, null, 2)}\n`, 'utf8');
+    } finally {
+      await file.close();
+    }
+    return {
+      status: 'LOCKED',
+      handle: {
+        path: QA_LOCK_PATH,
+        token: record.token,
+        runId: record.runId,
+        pid: record.pid,
+      },
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    const existing = await readLockRecord();
+    if (!existing) {
+      return {
+        status: 'BLOCKED',
+        code: 'qa_mutex_invalid',
+        message: `QA mutex at ${QA_LOCK_PATH} is malformed or unreadable; manual review is required.`,
+        competingProcesses: [],
+      };
+    }
+    return {
+      status: 'BLOCKED',
+      code: 'qa_mutex_held',
+      message: isPidAlive(existing.pid)
+        ? `QA mutex is held by process ${existing.pid} for run ${existing.runId}.`
+        : 'The non-Windows QA mutex has a stale owner; manual review is required.',
+      competingProcesses: isPidAlive(existing.pid) ? [{ pid: existing.pid, kind: 'qa-runner' }] : [],
+    };
+  }
 }
 
 export async function assertQaLockOwned(handle: QaLockHandle): Promise<void> {
   if (normalizePath(handle.path) !== normalizePath(QA_LOCK_PATH)) {
     throw new Error('QA lock path does not match the isolated lock path.');
+  }
+  if (process.platform === 'win32') {
+    const keeper = windowsMutexKeepers.get(handle.token);
+    if (!keeper || keeper.runId !== handle.runId || keeper.child.exitCode !== null) {
+      throw new Error('QA mutex ownership was lost.');
+    }
+    return;
   }
   const record = await readLockRecord();
   if (!record || record.token !== handle.token || record.runId !== handle.runId) {
@@ -280,6 +357,7 @@ export async function assertQaLockOwned(handle: QaLockHandle): Promise<void> {
 
 export async function releaseQaLock(handle: QaLockHandle): Promise<boolean> {
   if (normalizePath(handle.path) !== normalizePath(QA_LOCK_PATH)) return false;
+  if (process.platform === 'win32') return releaseWindowsMutex(handle);
   const record = await readLockRecord();
   if (!record || record.token !== handle.token || record.runId !== handle.runId) return false;
   await unlink(QA_LOCK_PATH);

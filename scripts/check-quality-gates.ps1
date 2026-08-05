@@ -10,6 +10,7 @@ $repoRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
 $userProfilePath = [Environment]::GetFolderPath("UserProfile")
 $expectedProjectId = "supplyflow-p0"
 $expectedApiUrl = "http://127.0.0.1:55431"
+$qaMutexName = "Local\SupplyFlow-supplyflow-p0-qa"
 $dbContainer = "supabase_db_supplyflow-p0"
 $restContainer = "supabase_rest_supplyflow-p0"
 $kongContainer = "supabase_kong_supplyflow-p0"
@@ -32,6 +33,26 @@ $pushFunctionSecret = "quality-$([guid]::NewGuid().ToString('N'))"
 $cleanupPhase = $false
 $credentialSeed = $null
 $ocrBrowserFixtureCleanupRequired = $false
+
+function Enter-QaMutex {
+  $mutex = [System.Threading.Mutex]::new($false, $qaMutexName)
+  try {
+    try { $acquired = $mutex.WaitOne(0) }
+    catch [System.Threading.AbandonedMutexException] { $acquired = $true }
+    if (-not $acquired) { throw "The shared SupplyFlow QA/quality mutex is held by another process." }
+    return $mutex
+  }
+  catch {
+    $mutex.Dispose()
+    throw
+  }
+}
+
+function Exit-QaMutex([System.Threading.Mutex]$Mutex) {
+  if (-not $Mutex) { return }
+  $Mutex.ReleaseMutex()
+  $Mutex.Dispose()
+}
 
 function Write-Gate([string]$Label) {
   Write-Output ""
@@ -764,6 +785,7 @@ $gateSummaryPath = Join-Path $artifactDirectory "gate-summary.json"
 $runError = $null
 $cleanupErrors = @()
 $repoLocationPushed = $false
+$qaMutex = Enter-QaMutex
 Push-Location -LiteralPath $repoRoot
 $repoLocationPushed = $true
 try {
@@ -820,7 +842,7 @@ try {
       # the child's real exit code instead of letting PS 5 turn progress into an exception.
       $ErrorActionPreference = "Continue"
       $p0Output = @(& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "check-p0-security.ps1") `
-        -ResetLocalDatabase -KeepFixture -PushSecret $pushFunctionSecret 2>&1)
+        -ResetLocalDatabase -KeepFixture -PushSecret $pushFunctionSecret -QaMutexAlreadyHeld 2>&1)
       $p0Exit = $LASTEXITCODE
     }
     finally {
@@ -1031,6 +1053,8 @@ finally {
       Pop-Location
       $repoLocationPushed = $false
     }
+    Exit-QaMutex $qaMutex
+    $qaMutex = $null
   }
 }
 
