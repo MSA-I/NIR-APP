@@ -29,6 +29,8 @@ Last verified: **2026-08-05**, against the resolved tree in `node_modules`.
 | `@hookform/resolvers` | 3.10.0 | MIT |
 | `zod` | 3.25.76 | MIT |
 | `papaparse` | 5.5.4 | MIT |
+| `react-pdf` | 10.4.1 | MIT |
+| `pdfjs-dist` (dependency of `react-pdf`) | 5.4.296 | Apache-2.0 |
 | `xlsx` (SheetJS CE) | 0.20.3 | Apache-2.0 |
 
 ## Build and tooling dependencies
@@ -75,6 +77,12 @@ Last verified: **2026-08-05**, against the resolved tree in `node_modules`.
   saved exact (no `^`) in `package.json` so a routine install cannot drift onto 9.x. Licenses for
   both `@tanstack/react-table` and its single dependency `@tanstack/table-core` were read from the
   resolved `node_modules` packages (MIT, 8.21.3 each). Installed by wave 2 (table engine).
+- **`react-pdf` is pinned exactly at 10.4.1** (no `^`), which itself pins `pdfjs-dist@5.4.296`
+  exactly. `pdfjs-dist` is **not** a direct dependency and must never become one — see the version
+  constraint below. Both licenses were read from the resolved `node_modules` packages: `react-pdf`
+  10.4.1 MIT, `pdfjs-dist` 5.4.296 Apache-2.0. The pdf.js worker is loaded via `?url` from the same
+  resolved copy (`src/components/document-review/pdfWorker.ts`), so worker and API can never
+  diverge. Installed by wave 6 (PDF review).
 
 ---
 
@@ -87,7 +95,6 @@ pass the gate's `npm audit --audit-level=high` step.
 
 | Package | Target version | Wave | Expected license | Purpose |
 |---|---|---|---|---|
-| `react-pdf` | **10.4.1** | 6 | MIT | In-app PDF rendering |
 | `tus-js-client` | **4.3.1** | 6b | MIT | Resumable uploads |
 | `workbox-*` | latest stable | 8 | MIT | App-shell caching only — never API responses |
 | `idb` **or** `dexie` | latest stable | 8 | ISC / Apache-2.0 | IndexedDB for the offline receiving queue |
@@ -95,12 +102,17 @@ pass the gate's `npm audit --audit-level=high` step.
 
 **Version constraints that are decisions, not preferences:**
 
-- **Do not install `pdfjs-dist` yourself.** `react-pdf@10.4.1` pins `pdfjs-dist@5.4.296` (Apache-2.0)
-  exactly. The current standalone release is 6.2.108, and a second copy in the tree produces a
-  worker/API version mismatch. Import `{ pdfjs }` from `react-pdf` and load the worker via `?url`.
-- **`pdfjs-dist`'s shipped CSS contains raw hex colour literals.** It must be excluded from the
-  zero-hex enforcement grep documented at `DESIGN.md:359`, and the exclusion must be narrow and named
-  rather than a relaxation of the rule.
+- **Do not install `pdfjs-dist` yourself.** `react-pdf@10.4.1` (installed, wave 6) pins
+  `pdfjs-dist@5.4.296` (Apache-2.0) exactly. The standalone release is newer (6.x), and a second
+  copy in the tree produces a worker/API version mismatch. Import `{ pdfjs }` from `react-pdf` and
+  load the worker via `?url` — done once, in `src/components/document-review/pdfWorker.ts`.
+- **`pdfjs-dist`'s shipped CSS contains raw hex colour literals.** Its exclusion from the zero-hex
+  rule (`DESIGN.md:359`) is **structural, not an allowlist**: the enforcement script
+  (`scripts/check-design-tokens.ts:9-31`) walks `.tsx` files under `src/` only, so third-party CSS
+  in `node_modules` never enters the scanned set and no per-file exception exists. Verified at
+  wave 6. In practice the app imports no pdfjs stylesheet at all: the viewer renders PDF pages with
+  the text and annotation layers disabled (`src/components/document-review/PdfSourceView.tsx`), so
+  the hex-bearing CSS stays out of the bundle entirely.
 
 ## Evaluated and not installed
 

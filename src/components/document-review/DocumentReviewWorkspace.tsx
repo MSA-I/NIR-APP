@@ -183,7 +183,7 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
               {selectedTarget ? (
                 <ReviewTargetEditor snapshot={snapshot} role={role} target={selectedTarget} onClose={closeEditor} onRefetch={onRefetch} />
               ) : (
-                <Note tone="idle">בחר קטע, סימון או תא דרך רשימת המקלדת. אם המקור הוא תמונה, אפשר גם לבחור ישירות מעליו כקיצור מצביע.</Note>
+                <Note tone="idle">בחר קטע, סימון או תא דרך רשימת המקלדת. אם המקור הוא תמונה או PDF, אפשר גם לבחור ישירות מעליו כקיצור מצביע.</Note>
               )}
             </div>
             {snapshot.interpretation && <DocumentReviewProposals snapshot={snapshot} role={role} onRefetch={onRefetch} />}

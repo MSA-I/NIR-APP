@@ -145,8 +145,9 @@ export function confidenceLabel(value: number | null | undefined): string {
 }
 
 /**
- * Where on the page a block sits, as prose — this is the only locator for a PDF, which renders in
- * an iframe with no geometric overlay.
+ * Where on the page a block sits, as prose — the accessible locator that reaches screen readers
+ * through the aria-labels of both the overlay shortcuts and the keyboard list, for images and
+ * (since wave 6, via react-pdf) for PDF pages alike.
  *
  * An axis that spans the whole page is dropped rather than printed. Both paths that actually run
  * in production are full-width by construction: `parsers.py` gives digital PDF text FULL_BBOX
