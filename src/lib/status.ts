@@ -96,7 +96,7 @@ export const PAYMENT_REQUEST_STATUS: Record<string, StatusMeta> = {
   pending_approval: m('ממתינה לאישור', 'await'),
   approved: m('מאושרת', 'await'),                 // אושרה אך הכסף טרם הועבר — ממתין לביצוע
   sent_for_execution: m('הועברה לביצוע', 'await'), // ממתין להעברה בפועל
-  executed: m('הועברה בוצעה', 'done'),            // ההעברה בוצעה
+  executed: m('העברה בוצעה', 'done'),             // ההעברה בוצעה
   matched: m('הותאמה לבנק', 'done'),
   investigation: m('דורשת בירור', 'alert'),
   suspected_duplicate: m('חשד לכפילות', 'alert'),

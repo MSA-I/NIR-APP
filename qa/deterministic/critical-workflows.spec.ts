@@ -666,6 +666,8 @@ test.describe.serial('critical cross-role workflow', () => {
       await success.getByRole('button', { name: 'סיום', exact: true }).click();
       await page.reload();
       await expect(page.getByRole('heading', { name: 'תשלומים לביצוע', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'בוצעו לאחרונה', exact: true }).locator('..'))
+        .toContainText('העברה בוצעה');
       await expect(page.getByRole('button').filter({ hasText: MEAT_SUPPLIER_NAME })
         .filter({ hasText: synthetic.invoice.total.toFixed(2) })).toHaveCount(0);
     });
