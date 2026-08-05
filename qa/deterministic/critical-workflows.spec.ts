@@ -456,6 +456,11 @@ test.describe.serial('critical cross-role workflow', () => {
     await runAsRole(browser, testInfo, 'office', async ({ page, evidence }) => {
       await page.goto(`/invoices/new?supplier=${MEAT_SUPPLIER_ID}&order=${orderId}&receipt=${receiptId}`);
       await expect(page.getByRole('heading', { name: 'חשבונית חדשה', exact: true })).toBeVisible();
+      const linkedContext = page.getByTestId('invoice-linked-context');
+      await expect(linkedContext).toBeVisible();
+      await expect(linkedContext.getByTestId('invoice-linked-order')).toHaveAttribute('href', `/orders/${orderId}`);
+      await expect(linkedContext.getByTestId('invoice-linked-receipt')).toContainText('קבלה #');
+      await expect(linkedContext.getByTestId('invoice-linked-supplier')).toHaveText(MEAT_SUPPLIER_NAME);
       await page.getByLabel('מספר חשבונית *', { exact: true }).fill(synthetic.invoice.number);
       await page.getByLabel('סה״כ לתשלום *', { exact: true }).fill(synthetic.invoice.total.toFixed(2));
       await page.getByLabel('סיבת קליטת החשבונית *', { exact: true }).fill(`QA ${readyState.runId} receiving invoice`);
@@ -464,6 +469,9 @@ test.describe.serial('critical cross-role workflow', () => {
       evidence.record('create-invoice', synthetic.invoice.number);
       const invoice = await captureMutation(page, '/rest/v1/rpc/create_invoice', () => save.click());
       workflow.invoiceId = uuid(invoice.requestBody.p_invoice_id, 'invoice');
+      expect(invoice.requestBody.p_supplier_id).toBe(MEAT_SUPPLIER_ID);
+      expect(invoice.requestBody.p_order_id).toBe(orderId);
+      expect(invoice.requestBody.p_receipt_id).toBe(receiptId);
       await expect(page).toHaveURL(`/invoices/${workflow.invoiceId}`);
 
       const transitionInvoice = async (buttonName: string, expectedStatus: string): Promise<void> => {
@@ -507,6 +515,20 @@ test.describe.serial('critical cross-role workflow', () => {
         filters: [{ column: 'id', operator: 'eq', value: invoiceId }],
         expectedCount: 1,
         expectedSubsets: [{ id: invoiceId, org_id: QA_ORGANIZATION_ID, supplier_id: MEAT_SUPPLIER_ID, total_amount: synthetic.invoice.total, review_status: 'approved', payment_status: 'unpaid', received_by: actorUserId }],
+      }, {
+        id: 'single-invoice-order-link',
+        table: 'invoice_order_links',
+        select: 'org_id,invoice_id,order_id',
+        filters: [{ column: 'invoice_id', operator: 'eq', value: invoiceId }],
+        expectedCount: 1,
+        expectedSubsets: [{ org_id: QA_ORGANIZATION_ID, invoice_id: invoiceId, order_id: orderId }],
+      }, {
+        id: 'single-invoice-receipt-link',
+        table: 'invoice_receipt_links',
+        select: 'org_id,invoice_id,receipt_id',
+        filters: [{ column: 'invoice_id', operator: 'eq', value: invoiceId }],
+        expectedCount: 1,
+        expectedSubsets: [{ org_id: QA_ORGANIZATION_ID, invoice_id: invoiceId, receipt_id: receiptId }],
       }, {
         id: 'pending-payment-request',
         table: 'payment_requests',
