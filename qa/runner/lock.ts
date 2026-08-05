@@ -35,7 +35,13 @@ export interface CompetingProcess {
 interface ProcessSnapshot {
   pid: number;
   parentPid?: number;
+  creationDate?: string;
   commandLine: string;
+}
+
+export interface WindowsProcessIdentity {
+  pid: number;
+  creationDate?: string;
 }
 
 interface QaLockRecord {
@@ -108,7 +114,7 @@ function asPid(value: unknown): number | undefined {
 async function windowsProcessSnapshot(): Promise<ProcessSnapshot[]> {
   const script = [
     'Get-CimInstance Win32_Process',
-    "Select-Object ProcessId,ParentProcessId,CommandLine",
+    "Select-Object ProcessId,ParentProcessId,CreationDate,CommandLine",
     'ConvertTo-Json -Compress',
   ].join(' | ');
   const { stdout } = await execFileAsync(
@@ -127,12 +133,13 @@ async function windowsProcessSnapshot(): Promise<ProcessSnapshot[]> {
     return [{
       pid,
       parentPid: asPid(record.ParentProcessId),
+      creationDate: asString(record.CreationDate) || undefined,
       commandLine: asString(record.CommandLine),
     }];
   });
 }
 
-export async function isWindowsProcessTreeAlive(rootPid: number): Promise<boolean> {
+export async function captureWindowsProcessTree(rootPid: number): Promise<WindowsProcessIdentity[]> {
   const snapshot = await windowsProcessSnapshot();
   const tree = new Set([rootPid]);
   for (let previousSize = -1; previousSize !== tree.size;) {
@@ -141,7 +148,31 @@ export async function isWindowsProcessTreeAlive(rootPid: number): Promise<boolea
       if (processInfo.parentPid && tree.has(processInfo.parentPid)) tree.add(processInfo.pid);
     }
   }
-  return snapshot.some(({ pid }) => tree.has(pid));
+  return snapshot
+    .filter(({ pid }) => tree.has(pid))
+    .map(({ pid, creationDate }) => ({ pid, creationDate }));
+}
+
+export function sameWindowsProcessIdentity(
+  expected: WindowsProcessIdentity,
+  actual: WindowsProcessIdentity,
+): boolean {
+  if (expected.pid !== actual.pid) return false;
+  // Missing creation metadata is ambiguous, so keep treating the PID as live (fail closed).
+  if (!expected.creationDate || !actual.creationDate) return true;
+  return expected.creationDate === actual.creationDate;
+}
+
+export async function anyWindowsProcessIdentityAlive(
+  identities: readonly WindowsProcessIdentity[],
+): Promise<boolean> {
+  if (identities.length === 0) return false;
+  const snapshot = await windowsProcessSnapshot();
+  const current = new Map(snapshot.map(({ pid, creationDate }) => [pid, { pid, creationDate }]));
+  return identities.some((identity) => {
+    const actual = current.get(identity.pid);
+    return actual ? sameWindowsProcessIdentity(identity, actual) : false;
+  });
 }
 
 async function unixProcessSnapshot(): Promise<ProcessSnapshot[]> {

@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
-import { parseWindowsMutexStatus, QA_WINDOWS_MUTEX_NAME } from '../../runner/lock.ts';
+import {
+  parseWindowsMutexStatus,
+  QA_WINDOWS_MUTEX_NAME,
+  sameWindowsProcessIdentity,
+} from '../../runner/lock.ts';
 import { canonicalQaStatePath } from '../../runner/setup.ts';
 
 test('QA state has one canonical repository path', () => {
@@ -18,6 +22,37 @@ test('Windows mutex handshake accepts exact lines and prioritizes BLOCKED', () =
   assert.equal(parseWindowsMutexStatus('LOCKED\r\n'), 'LOCKED');
   assert.equal(parseWindowsMutexStatus('BLOCKED\nLOCKED\n'), 'BLOCKED');
   assert.equal(parseWindowsMutexStatus('prefix LOCKED suffix\n'), undefined);
+});
+
+test('Windows process identity detects PID reuse and fails closed without creation time', () => {
+  assert.equal(
+    sameWindowsProcessIdentity(
+      { pid: 42, creationDate: '20260805090000.000000+180' },
+      { pid: 42, creationDate: '20260805090100.000000+180' },
+    ),
+    false,
+  );
+  assert.equal(
+    sameWindowsProcessIdentity(
+      { pid: 42 },
+      { pid: 42, creationDate: '20260805090100.000000+180' },
+    ),
+    true,
+  );
+  assert.equal(
+    sameWindowsProcessIdentity(
+      { pid: 42, creationDate: '20260805090000.000000+180' },
+      { pid: 42 },
+    ),
+    true,
+  );
+  assert.equal(
+    sameWindowsProcessIdentity(
+      { pid: 42, creationDate: '20260805090000.000000+180' },
+      { pid: 43, creationDate: '20260805090000.000000+180' },
+    ),
+    false,
+  );
 });
 
 test('destructive PowerShell gates use the same abandoned-safe mutex as QA', async () => {
@@ -39,6 +74,11 @@ test('deterministic children have bounded Windows process-tree cleanup', async (
     'utf8',
   );
   assert.match(source, /taskkill\.exe/);
+  assert.match(source, /captureWindowsTreeUntilSuccess/);
+  assert.match(
+    source,
+    /timedOut = true;\s*await finalizeWindowsTreeCapture\(\);\s*await terminateProcessTree/,
+  );
   assert.match(source, /\['\/PID', String\(child\.pid\), '\/T', '\/F'\]/);
   assert.match(source, /holdMutexUntilProcessTreeExit/);
   assert.match(source, /the shared QA mutex remains held/);

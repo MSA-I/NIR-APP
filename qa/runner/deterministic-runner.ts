@@ -5,7 +5,13 @@ import { pathToFileURL } from 'node:url';
 import { chromium } from '@playwright/test';
 import { isPlaywrightInfrastructureFailureText } from '../reporting/playwright.ts';
 import { redactText, safeJson } from '../reporting/redact.ts';
-import { acquireQaLock, isWindowsProcessTreeAlive, releaseQaLock } from './lock.ts';
+import {
+  acquireQaLock,
+  anyWindowsProcessIdentityAlive,
+  captureWindowsProcessTree,
+  releaseQaLock,
+  type WindowsProcessIdentity,
+} from './lock.ts';
 import { deterministicChildEnvironment, loadReadyQaState } from './runtime-state.ts';
 import { scrubPlaywrightTraces } from './scrub-artifacts.ts';
 import { startQaPreview } from './setup.ts';
@@ -272,18 +278,63 @@ function unixProcessGroupAlive(pid: number): boolean {
   }
 }
 
-async function processTreeAlive(pid: number): Promise<boolean> {
+type WindowsProcessIdentityMap = Map<number, WindowsProcessIdentity>;
+
+function mergeWindowsProcessIdentities(
+  target: WindowsProcessIdentityMap,
+  identities: readonly WindowsProcessIdentity[],
+): void {
+  for (const identity of identities) {
+    // Keep the first identity so a later PID reuse cannot replace the process being tracked.
+    if (!target.has(identity.pid)) target.set(identity.pid, identity);
+  }
+}
+
+async function captureWindowsTreeUntilSuccess(
+  pid: number,
+  identities: WindowsProcessIdentityMap,
+  name: string,
+): Promise<void> {
+  let nextNotice = 0;
+  for (;;) {
+    try {
+      mergeWindowsProcessIdentities(identities, await captureWindowsProcessTree(pid));
+      return;
+    } catch {
+      if (Date.now() >= nextNotice) {
+        process.stderr.write(
+          `[QA BLOCKED] ${name} process tree could not be captured; the shared QA mutex remains held.\n`,
+        );
+        nextNotice = Date.now() + 30_000;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 1_000));
+    }
+  }
+}
+
+async function processTreeAlive(
+  pid: number,
+  windowsIdentities: WindowsProcessIdentityMap,
+): Promise<boolean> {
   if (process.platform !== 'win32') return unixProcessGroupAlive(pid);
   try {
-    return await isWindowsProcessTreeAlive(pid);
+    return await anyWindowsProcessIdentityAlive([...windowsIdentities.values()]);
   } catch {
     return true;
   }
 }
 
-async function holdMutexUntilProcessTreeExit(child: ChildProcess, pid: number, name: string): Promise<void> {
+async function holdMutexUntilProcessTreeExit(
+  child: ChildProcess,
+  pid: number,
+  name: string,
+  windowsIdentities: WindowsProcessIdentityMap,
+): Promise<void> {
   let nextNotice = 0;
-  while ((child.exitCode === null && child.signalCode === null) || await processTreeAlive(pid)) {
+  while (
+    (child.exitCode === null && child.signalCode === null)
+    || await processTreeAlive(pid, windowsIdentities)
+  ) {
     if (Date.now() >= nextNotice) {
       process.stderr.write(
         `[QA BLOCKED] ${name} process tree is still alive; the shared QA mutex remains held.\n`,
@@ -294,7 +345,11 @@ async function holdMutexUntilProcessTreeExit(child: ChildProcess, pid: number, n
   }
 }
 
-async function terminateProcessTree(child: ChildProcess, name: string): Promise<void> {
+async function terminateProcessTree(
+  child: ChildProcess,
+  name: string,
+  windowsIdentities: WindowsProcessIdentityMap,
+): Promise<void> {
   const pid = child.pid;
   if (!pid) {
     while (child.exitCode === null && child.signalCode === null) {
@@ -323,7 +378,7 @@ async function terminateProcessTree(child: ChildProcess, name: string): Promise<
     });
     if (!killerExited && killer.exitCode === null) killer.kill();
     await waitForExit(child, 5_000);
-    await holdMutexUntilProcessTreeExit(child, pid, name);
+    await holdMutexUntilProcessTreeExit(child, pid, name, windowsIdentities);
     return;
   }
 
@@ -340,7 +395,7 @@ async function terminateProcessTree(child: ChildProcess, name: string): Promise<
     }
     await waitForExit(child, 2_000);
   }
-  await holdMutexUntilProcessTreeExit(child, pid, name);
+  await holdMutexUntilProcessTreeExit(child, pid, name, windowsIdentities);
 }
 
 async function runCommand(
@@ -361,20 +416,49 @@ async function runCommand(
         detached: process.platform !== 'win32',
       });
       let timedOut = false;
+      const windowsIdentities: WindowsProcessIdentityMap = new Map();
+      let captureQueue = Promise.resolve();
+      const queueWindowsTreeCapture = (): void => {
+        if (process.platform !== 'win32' || !child.pid) return;
+        captureQueue = captureQueue
+          .then(async () => {
+            mergeWindowsProcessIdentities(
+              windowsIdentities,
+              await captureWindowsProcessTree(child.pid!),
+            );
+          })
+          .catch(() => undefined);
+      };
+      queueWindowsTreeCapture();
+      const captureInterval = process.platform === 'win32'
+        ? setInterval(queueWindowsTreeCapture, 1_000)
+        : undefined;
+      const finalizeWindowsTreeCapture = async (): Promise<void> => {
+        if (captureInterval) clearInterval(captureInterval);
+        await captureQueue;
+        if (process.platform === 'win32' && child.pid) {
+          await captureWindowsTreeUntilSuccess(child.pid, windowsIdentities, name);
+        }
+      };
       const timeout = setTimeout(async () => {
         timedOut = true;
-        await terminateProcessTree(child, name);
+        await finalizeWindowsTreeCapture();
+        await terminateProcessTree(child, name, windowsIdentities);
         resolve({ exitCode: null, timedOut: true });
       }, options.timeoutMs);
       child.once('error', (error) => {
         if (timedOut) return;
         clearTimeout(timeout);
+        if (captureInterval) clearInterval(captureInterval);
         reject(error);
       });
       child.once('exit', async (code, signal) => {
         if (timedOut) return;
         clearTimeout(timeout);
-        if (child.pid) await holdMutexUntilProcessTreeExit(child, child.pid, name);
+        await finalizeWindowsTreeCapture();
+        if (child.pid) {
+          await holdMutexUntilProcessTreeExit(child, child.pid, name, windowsIdentities);
+        }
         resolve({ exitCode: code ?? (signal ? 1 : 0), timedOut: false });
       });
     });
