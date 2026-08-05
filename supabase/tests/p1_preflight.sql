@@ -312,6 +312,21 @@ outbox_rows_without_target as (
   from private.integration_outbox o
   where nullif(btrim(o.target), '') is null
 ),
+-- ===== Wave 6b upload-reservation check (0065) =====
+-- The orphan class the reservation plane can produce: a claim still 'reserved' past its
+-- expires_at whose bytes already landed in the bucket. Expiry closed the register gate,
+-- so on a quiesced database nothing will ever turn the object into a registered row --
+-- the reservation is sweep-fodder and the stored object is what remains. Read-only,
+-- like every arm here; the sweep itself stays inside reserve (grace-delayed by 0065).
+expired_reservations_with_stored_object as (
+  select r.document_id as id
+  from supplier_price_document_upload_reservations r
+  join storage.objects o
+    on o.bucket_id = 'documents'
+   and o.name = r.storage_path
+  where r.status = 'reserved'
+    and r.expires_at <= now()
+),
 checks(check_name, rows_found, sample_ids) as (
   select 'duplicate_payment_executions', count(*),
     coalesce((select jsonb_agg(id) from (select id from duplicate_payment_executions limit 20) s), '[]'::jsonb)
@@ -427,6 +442,9 @@ checks(check_name, rows_found, sample_ids) as (
   union all select 'outbox_rows_without_target', count(*),
     coalesce((select jsonb_agg(id) from (select id from outbox_rows_without_target limit 20) s), '[]'::jsonb)
   from outbox_rows_without_target
+  union all select 'expired_reservations_with_stored_object', count(*),
+    coalesce((select jsonb_agg(id) from (select id from expired_reservations_with_stored_object limit 20) s), '[]'::jsonb)
+  from expired_reservations_with_stored_object
 )
 select check_name, rows_found, sample_ids
 from checks
