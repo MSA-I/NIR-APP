@@ -59,15 +59,15 @@ begin
   if v_org is null or v_user is null or v_role not in ('owner', 'office') then
     raise exception 'not_authorized' using errcode = '42501';
   end if;
-  if p_payment_request_id is null or v_transition_reason is null
-     or p_target_status not in ('pending_approval', 'approved', 'sent_for_execution', 'investigation', 'cancelled') then
-    raise exception 'payment_request_transition_invalid' using errcode = '22023';
-  end if;
   if (v_override_reason is null) is distinct from (p_expected_supplier_id is null)
      or (v_override_reason is null) is distinct from (p_expected_open_credit_total is null)
      or (v_override_reason is not null and p_expected_open_credit_total <= 0)
      or (v_override_reason is not null and p_target_status <> 'approved') then
     raise exception 'payment_request_credit_override_invalid' using errcode = '22023';
+  end if;
+  if p_payment_request_id is null or v_transition_reason is null
+     or p_target_status not in ('pending_approval', 'approved', 'sent_for_execution', 'investigation', 'cancelled') then
+    raise exception 'payment_request_transition_invalid' using errcode = '22023';
   end if;
   v_target := p_target_status::payment_request_status;
 
