@@ -5,6 +5,7 @@ import { loadReadyQaState } from '../runner/runtime-state.ts';
 const ORDER_ID = 'f0000000-0000-4000-8000-000000000001';
 const RECEIPT_ID = 'f2000000-0000-4000-8000-000000000001';
 const SUPPLIER_ID = 'aa000000-0000-4000-8000-000000000001';
+const SUPPLIER_NAME = 'משק ירוק — ירקות ופירות';
 
 test('linked order, receipt, supplier and receiving date are visible at 390px', async ({ page, qaRole, evidence }) => {
   test.skip(qaRole !== 'office', 'One staff role supplies deterministic visual coverage; route permissions cover the other staff roles.');
@@ -16,11 +17,11 @@ test('linked order, receipt, supplier and receiving date are visible at 390px', 
   await expect(context.getByTestId('invoice-linked-order')).toHaveText('הזמנה #1');
   await expect(context.getByTestId('invoice-linked-order')).toHaveAttribute('href', `/orders/${ORDER_ID}`);
   await expect(context.getByTestId('invoice-linked-receipt')).toHaveText('קבלה #1');
-  await expect(context.getByTestId('invoice-linked-supplier')).toHaveText('משק ירוק');
+  await expect(context.getByTestId('invoice-linked-supplier')).toHaveText(SUPPLIER_NAME);
   await expect(context).toContainText('02.06.2026');
   await expect(context).toContainText('התקבלה');
   await expect(page.getByLabel('ספק *', { exact: true })).toBeDisabled();
-  await expect(page.getByLabel('ספק *', { exact: true }).locator('option:checked')).toHaveText('משק ירוק');
+  await expect(page.getByLabel('ספק *', { exact: true }).locator('option:checked')).toHaveText(SUPPLIER_NAME);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   evidence.record('linked-invoice-context', 'order #1, receipt #1, supplier and date visible at 390x844');
   await evidence.screenshot('invoice-linked-context-mobile');
@@ -30,21 +31,29 @@ test('save payload keeps validated links while direct creation keeps both links 
   test.skip(qaRole !== 'office', 'Financial request payload is exercised once to avoid duplicate fixture writes.');
   const requests: Record<string, unknown>[] = [];
   await page.route('**/rest/v1/rpc/create_invoice', async (route: Route) => {
-    requests.push(route.request().postDataJSON() as Record<string, unknown>);
-    // A successful null response records the exact request without navigating into a record that
-    // was intentionally not written. Production still uses the unchanged create_invoice RPC.
-    await route.fulfill({ status: 200, contentType: 'application/json', body: 'null' });
+    const request = route.request().postDataJSON() as Record<string, unknown>;
+    requests.push(request);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        invoice_id: request.p_invoice_id,
+        review_status: 'pending',
+        duplicate_detected: false,
+      }),
+    });
   });
   const state = await loadReadyQaState();
 
   const submit = async (suffix: string) => {
+    const expectedRequestCount = requests.length + 1;
     await page.getByLabel('מספר חשבונית *', { exact: true }).fill(`CTX-${state.runId.slice(-8)}-${suffix}`);
     await page.getByLabel('סה״כ לתשלום *', { exact: true }).fill('1.18');
     await page.getByLabel('סיבת קליטת החשבונית *', { exact: true }).fill(`QA linked context ${suffix}`);
     const save = page.getByRole('button', { name: /^(?:שמירת חשבונית|שמירה כ״דורשת בירור״)$/ });
     await expect(save).toBeEnabled({ timeout: 20_000 });
     await save.click();
-    await expect.poll(() => requests.length).toBeGreaterThan(0);
+    await expect.poll(() => requests.length).toBe(expectedRequestCount);
   };
 
   await page.goto(`/invoices/new?supplier=${SUPPLIER_ID}&order=${ORDER_ID}&receipt=${RECEIPT_ID}`);
