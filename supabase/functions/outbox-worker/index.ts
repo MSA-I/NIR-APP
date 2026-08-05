@@ -13,13 +13,16 @@
 // worker only ever calls the four 0064 RPCs (claim / complete / fail / replay surface),
 // which are themselves revoked from every browser role. It never touches business rows.
 //
-// Wave-5 scope (PLAN-05 §1.4): NO targets are registered yet, so the outbox is empty by
-// design and every run is a quiet no-op. resolveTarget() below is the wave-7 seam: it
-// answers null for every target name until webhook_subscriptions exist, and a claimed row
-// whose target cannot be resolved records a failed attempt (`target_unregistered`) so
-// at-least-once accounting stays honest. Wave 7 replaces resolveTarget() with a real
-// registry lookup; outbound HTTP must carry the event's correlation id and the
-// idempotency key (handled in deliver() below).
+// Wave-7 scope (PLAN-08): targets are webhook_subscriptions rows, and resolution happens
+// in the DATABASE — claim_integration_outbox (0066) returns each row with the resolved
+// url, the deterministic body serialization, a timestamp and an HMAC-SHA256 signature
+// computed with the subscription's Vault secret. This worker never sees the secret and
+// never re-serializes the event: it posts row.body VERBATIM with the five mandatory
+// headers (core.ts). A row whose target is unknown, inactive or secret-less arrives
+// without url/signature; resolveTarget() answers null and the worker records a failed
+// attempt (`target_unregistered`) so at-least-once accounting stays honest — the wave-5
+// behavior, preserved. The delivery logic lives in core.ts (the interpret-document
+// core-extraction precedent) and is proven by core.test.ts in a dedicated gate step.
 //
 // Required environment (supabase secrets set ...):
 //   OUTBOX_FN_SECRET   -- shared secret; the SAME raw value is stored in Vault and
@@ -31,36 +34,9 @@
 // Missing environment is a deterministic non-200 (`misconfigured`, 500).
 
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
+import { type ClaimedRow, resolveTarget } from './core.ts';
 
 const BATCH_SIZE = 20;
-
-interface ClaimedRow {
-  outbox_id: string;
-  target: string;
-  attempt: number;
-  idempotency_key: string;
-  event: {
-    id: string;
-    sequence: number;
-    event_type: string;
-    schema_version: number;
-    org_id: string;
-    unit_id: string | null;
-    entity_type: string;
-    entity_id: string | null;
-    actor_id: string | null;
-    correlation_id: string;
-    causation_id: string | null;
-    occurred_at: string;
-    payload: Record<string, unknown>;
-    metadata: Record<string, unknown>;
-  };
-}
-
-interface ResolvedTarget {
-  url: string;
-  headers?: Record<string, string>;
-}
 
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -88,31 +64,20 @@ async function constantTimeSecretMatch(presented: string, expected: string): Pro
   return mismatch === 0;
 }
 
-/** Wave-7 seam. No target registry exists in wave 5 (webhook_subscriptions is explicitly
- * a wave-7 table — OPEN-DECISIONS #93), so every target is unresolvable and the outbox
- * stays empty by design. Wave 7 replaces this with a registry lookup. */
-function resolveTarget(_target: string): ResolvedTarget | null {
-  return null;
-}
-
 /** Delivers one claimed row. Correlation propagation contract: the outbound request
- * carries the EVENT's correlation id and the (target, event) idempotency key so the
- * receiver can trace and deduplicate at-least-once redelivery. */
+ * carries the EVENT's correlation id, the (target, event) idempotency key, and the
+ * wave-7 signature pair (x-supplyflow-signature / x-supplyflow-timestamp). The body is
+ * row.body VERBATIM — the database signed exactly those bytes. */
 async function deliver(row: ClaimedRow): Promise<{ ok: boolean; code?: number; error?: string }> {
-  const resolved = resolveTarget(row.target);
+  const resolved = resolveTarget(row);
   if (!resolved) {
     return { ok: false, error: 'target_unregistered' };
   }
   try {
     const response = await fetch(resolved.url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-correlation-id': row.event.correlation_id,
-        'x-idempotency-key': row.idempotency_key,
-        ...resolved.headers,
-      },
-      body: JSON.stringify(row.event),
+      headers: resolved.headers,
+      body: resolved.body,
     });
     if (response.ok) return { ok: true, code: response.status };
     return { ok: false, code: response.status, error: `target_status_${response.status}` };
