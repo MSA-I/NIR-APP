@@ -95,6 +95,8 @@ select pg_temp.p0_acl_assert(
   and has_table_privilege('authenticated', 'public.categories', 'DELETE')
   and has_column_privilege('authenticated', 'public.suppliers', 'name', 'INSERT')
   and has_column_privilege('authenticated', 'public.suppliers', 'name', 'UPDATE')
+  -- 0061: entering bank details while CREATING a supplier stays a plain form write ...
+  and has_column_privilege('authenticated', 'public.suppliers', 'bank_details', 'INSERT')
   and has_column_privilege('authenticated', 'public.products', 'active', 'INSERT')
   and has_column_privilege('authenticated', 'public.products', 'name', 'UPDATE')
   and has_column_privilege('authenticated', 'public.exceptions', 'status', 'UPDATE')
@@ -108,6 +110,10 @@ select pg_temp.p0_acl_assert(
   not has_column_privilege('authenticated', 'public.organizations', 'status', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.suppliers', 'org_id', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.suppliers', 'deleted_at', 'UPDATE')
+  -- ... but CHANGING an existing supplier's bank details is payment-diversion surface:
+  -- 0061 revoked the UPDATE column grant; the only path is update_supplier_bank_details
+  -- (owner/office + step-up + reason + audit).
+  and not has_column_privilege('authenticated', 'public.suppliers', 'bank_details', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.products', 'org_id', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.products', 'active', 'UPDATE')
   and not has_any_column_privilege('authenticated', 'public.purchase_requests', 'INSERT')

@@ -274,15 +274,15 @@ function Invoke-SqlTest([string]$RelativePath, [string]$Label, [string]$Database
 function Invoke-Preflight {
   $containerPath = "/var/lib/postgresql/p4-p1_preflight.sql"
   Copy-SqlToDatabase "supabase\tests\p1_preflight.sql" $containerPath
-  Write-Gate "P1 preflight (28 anomaly checks)"
+  Write-Gate "P1 preflight (33 anomaly checks)"
   $output = @(& docker exec -e PGPASSWORD=postgres $dbContainer psql -qAt -F "|" -U postgres -d postgres -v ON_ERROR_STOP=1 -f $containerPath)
   Assert-ExitCode "P1 preflight"
   $rows = @($output | Where-Object { $_ -match '^([^|]+)\|([0-9]+)\|' })
-  if ($rows.Count -ne 28) { throw "P1 preflight returned $($rows.Count) result rows instead of 28." }
+  if ($rows.Count -ne 33) { throw "P1 preflight returned $($rows.Count) result rows instead of 33." }
   $bad = @($rows | Where-Object { [int](($_ -split '\|')[1]) -ne 0 })
   $rows | ForEach-Object { Write-Output $_ }
   if ($bad.Count) { throw "P1 preflight found local fixture anomalies: $($bad -join '; ')" }
-  Write-Output "P1 preflight passed: 28/28 checks returned rows_found=0."
+  Write-Output "P1 preflight passed: 33/33 checks returned rows_found=0."
 }
 
 function Assert-PowerShellSyntax {
@@ -846,6 +846,7 @@ try {
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"
+    Invoke-SqlTest "supabase\tests\p4_flags_identity.sql" "P4 feature flags, identity tables and the step-up boundary"
     Invoke-Preflight
     Invoke-SqlTest "supabase\tests\p1_financial_commands.sql" "P1 financial commands, rollback and idempotency"
     Invoke-SqlTest "supabase\tests\p1_price_submissions.sql" "P1B trusted price-list intake, tenant isolation and rollback"

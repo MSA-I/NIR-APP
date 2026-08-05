@@ -240,6 +240,42 @@ multi_unit_org_with_open_exemptions as (
     having count(*) > 1
   ) latch
 ),
+-- ===== Wave 4 flags & identity checks (0059-0061) =====
+-- The first is the real anomaly this wave can produce (config keys are deliberately not
+-- FK-bound to private.flag_definitions); the other four are structurally impossible
+-- through NOT NULL / unique / composite-FK constraints and are verified anyway -- a flag
+-- config nobody defined, an event without a tenant, or an identity mapping that crosses
+-- one are exactly the defect classes this report exists to catch before they matter.
+flag_config_without_definition as (
+  select c.id
+  from org_flag_configurations c
+  where not exists (
+    select 1 from private.flag_definitions d where d.flag_key = c.flag_key)
+),
+security_events_without_org as (
+  select e.id
+  from security_events e
+  left join organizations o on o.id = e.org_id
+  where e.org_id is null or o.id is null
+),
+identity_mapping_to_unknown_user as (
+  select m.id
+  from external_identity_mappings m
+  left join profiles p on p.id = m.user_id
+  where p.id is null
+),
+duplicate_identity_mapping as (
+  select (array_agg(id order by id))[1] as id
+  from external_identity_mappings
+  group by provider, external_subject
+  having count(*) > 1
+),
+identity_mapping_cross_tenant as (
+  select m.id
+  from external_identity_mappings m
+  join profiles p on p.id = m.user_id
+  where p.org_id <> m.org_id
+),
 checks(check_name, rows_found, sample_ids) as (
   select 'duplicate_payment_executions', count(*),
     coalesce((select jsonb_agg(id) from (select id from duplicate_payment_executions limit 20) s), '[]'::jsonb)
@@ -325,6 +361,21 @@ checks(check_name, rows_found, sample_ids) as (
   union all select 'multi_unit_org_with_open_exemptions', count(*),
     coalesce((select jsonb_agg(id) from (select id from multi_unit_org_with_open_exemptions limit 20) s), '[]'::jsonb)
   from multi_unit_org_with_open_exemptions
+  union all select 'flag_config_without_definition', count(*),
+    coalesce((select jsonb_agg(id) from (select id from flag_config_without_definition limit 20) s), '[]'::jsonb)
+  from flag_config_without_definition
+  union all select 'security_events_without_org', count(*),
+    coalesce((select jsonb_agg(id) from (select id from security_events_without_org limit 20) s), '[]'::jsonb)
+  from security_events_without_org
+  union all select 'identity_mapping_to_unknown_user', count(*),
+    coalesce((select jsonb_agg(id) from (select id from identity_mapping_to_unknown_user limit 20) s), '[]'::jsonb)
+  from identity_mapping_to_unknown_user
+  union all select 'duplicate_identity_mapping', count(*),
+    coalesce((select jsonb_agg(id) from (select id from duplicate_identity_mapping limit 20) s), '[]'::jsonb)
+  from duplicate_identity_mapping
+  union all select 'identity_mapping_cross_tenant', count(*),
+    coalesce((select jsonb_agg(id) from (select id from identity_mapping_cross_tenant limit 20) s), '[]'::jsonb)
+  from identity_mapping_cross_tenant
 )
 select check_name, rows_found, sample_ids
 from checks

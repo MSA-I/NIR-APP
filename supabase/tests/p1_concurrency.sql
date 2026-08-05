@@ -162,6 +162,14 @@ security invoker
 as $$
 begin
   perform set_config('request.jwt.claim.sub', p_user::text, true);
+  -- 0061 wires step-up into execute_payment_request and mark_month_export_sent; every
+  -- concurrent session carries a fresh password AMR (p1_financial_commands.sql idiom).
+  perform set_config('request.jwt.claims', jsonb_build_object(
+    'sub', p_user::text,
+    'amr', jsonb_build_array(jsonb_build_object(
+      'method', 'password', 'timestamp', extract(epoch from clock_timestamp())::bigint
+    ))
+  )::text, true);
   perform set_config('statement_timeout', '7000', true);
   perform set_config('role', 'authenticated', true);
 end

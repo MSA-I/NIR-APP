@@ -449,6 +449,13 @@ select transition_payment_request(
 
 reset role;
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000004', true);
+-- 0061 wires step-up into payment execution; the payer needs a fresh password AMR.
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '20000000-0000-0000-0000-000000000004',
+  'amr', jsonb_build_array(jsonb_build_object(
+    'method', 'password', 'timestamp', extract(epoch from clock_timestamp())::bigint
+  ))
+)::text, true);
 set local role authenticated;
 select pg_temp.p1_assert(
   (execute_payment_request(
@@ -870,6 +877,13 @@ insert into bank_allocations (
    '92000000-0000-0000-0000-000000000009', '90000000-0000-0000-0000-000000000010',
    20, true, '20000000-0000-0000-0000-000000000001');
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
+-- The month export below is a 0061 step-up path; stamp the owner with a fresh AMR.
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '20000000-0000-0000-0000-000000000001',
+  'amr', jsonb_build_array(jsonb_build_object(
+    'method', 'password', 'timestamp', extract(epoch from clock_timestamp())::bigint
+  ))
+)::text, true);
 set local role authenticated;
 select pg_temp.p1_assert(
   jsonb_array_length((unmatch_bank_transaction(
@@ -947,6 +961,7 @@ select pg_temp.p1_assert(
 -- Accountant can operate approved accounting work but not an unapproved invoice credit.
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
 insert into credit_requests (
   id, org_id, supplier_id, invoice_id, reason, amount, status, created_by
 ) values (
@@ -1107,6 +1122,13 @@ insert into payment_request_invoices (org_id, payment_request_id, invoice_id, am
    '60000000-0000-0000-0000-000000000011', 29.5);
 
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000005', true);
+-- 0061 step-up: the accountant execution also needs a fresh password AMR.
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '20000000-0000-0000-0000-000000000005',
+  'amr', jsonb_build_array(jsonb_build_object(
+    'method', 'password', 'timestamp', extract(epoch from clock_timestamp())::bigint
+  ))
+)::text, true);
 set local role authenticated;
 select pg_temp.p1_assert(
   (execute_payment_request(
