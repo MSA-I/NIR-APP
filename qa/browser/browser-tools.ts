@@ -204,6 +204,7 @@ const TABLE_ENTITY_KINDS: Readonly<Record<string, string>> = {
 const RESPONSE_FACT_KEYS = new Set([
   'status', 'review_status', 'order_status', 'idempotent', 'row_count',
   'accepted_count', 'rejected_count', 'unchanged_count', 'credit_count', 'number',
+  'open_credit_override',
 ]);
 const READ_ONLY_RPC = /^(?:invoice_financial_check_signals|payment_request_financial_check_signals|supplier_portal_context|global_search|is_platform_admin|platform_orgs|p[02]_)/;
 const NETWORK_QUIET_MS = 300;
