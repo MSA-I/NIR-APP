@@ -231,6 +231,14 @@ select pg_temp.p3_assert(
 
 -- ===== (c) Grant and revoke resync the closure synchronously, through the owner RPCs =====
 select set_config('request.jwt.claim.sub', '25000000-0000-0000-0000-000000000001', true);
+-- 0061 wires step-up into the scope commands; the owner needs a fresh password AMR
+-- (p1_financial_commands.sql idiom).
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '25000000-0000-0000-0000-000000000001',
+  'amr', jsonb_build_array(jsonb_build_object(
+    'method', 'password', 'timestamp', extract(epoch from clock_timestamp())::bigint
+  ))
+)::text, true);
 select grant_user_scope(
   '25000000-0000-0000-0000-000000000002', :'unit_branch1', 'P3: widen to the first branch');
 select pg_temp.p3_assert(

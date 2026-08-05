@@ -623,6 +623,24 @@ insert into monthly_exports (org_id, month, status, sent_at, sent_by, notes) val
 ('11111111-1111-4111-8111-111111111111', '2026-06-01', 'sent', '2026-07-06 09:30+03', pg_temp.demo_user('office'), 'הועבר לרו"ח דינה — כולל 3 חריגים פתוחים'),
 ('11111111-1111-4111-8111-111111111111', '2026-07-01', 'open', null, null, null);
 
+-- ===== Wave 4: an explicit flag configuration + a shared saved view =====
+-- One org_flag_configurations row and one saved_views row so the demo_verify.sql arms
+-- added for the wave-4 tables exercise real rows (PLAN-04 §2.5), not empty joins. The
+-- flag row is focused on the demo warehouse and left OFF -- an explicit operator answer
+-- for the demo tenant, not a behaviour change -- and no financial number moves. The unit
+-- id is resolved from the trigger-seeded chain (0054), same as every user resolution
+-- above goes through pg_temp.demo_user.
+insert into org_flag_configurations (id, org_id, flag_key, state, targeting, unit_id)
+select 'fd000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',
+       'receiving.barcode', false, '{}'::jsonb, u.id
+from org_units u
+where u.org_id = '11111111-1111-4111-8111-111111111111' and u.unit_type = 'warehouse';
+
+insert into saved_views (id, org_id, user_id, screen, unit_id, name, payload, shared) values
+('fe000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',
+ pg_temp.demo_user('owner'), 'invoices', null, 'תצוגת חשבוניות משותפת',
+ '{"columns":["invoice_number","supplier","total_amount","review_status"]}'::jsonb, true);
+
 -- Note: the allocation audit rows used to need repairing here — payment_allocations and
 -- bank_allocations had no org_id column, so the audit trigger recorded them with no tenant.
 -- Migration 0009 gives both tables an org_id, so the trigger now attributes them correctly

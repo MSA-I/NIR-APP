@@ -55,6 +55,13 @@ select section, scope, item, value from (
     union all select 'org_units',         count(*) from org_units         where org_id = o.id
     union all select 'user_scope_grants', count(*) from user_scope_grants where org_id = o.id
     union all select 'user_scope_closure', count(*) from user_scope_closure where org_id = o.id
+    -- wave 4 (0058-0061): saved views (the wave-3 debt recorded in 0058:202), flag
+    -- configuration and the identity plane.
+    union all select 'saved_views',       count(*) from saved_views       where org_id = o.id
+    union all select 'org_flag_configurations', count(*) from org_flag_configurations where org_id = o.id
+    union all select 'identity_provider_settings', count(*) from identity_provider_settings where org_id = o.id
+    union all select 'external_identity_mappings', count(*) from external_identity_mappings where org_id = o.id
+    union all select 'security_events',   count(*) from security_events   where org_id = o.id
   ) t on true
   where t.rows > 0
 
@@ -178,6 +185,25 @@ select section, scope, item, value from (
       from documents d join org_units u on u.id = d.unit_id where u.org_id <> d.org_id
     union all select 'inventory_movements -> org_units (unit)', count(*)
       from inventory_movements m join org_units u on u.id = m.unit_id where u.org_id <> m.org_id
+    -- wave 4 (0058-0061): saved views, flag configuration and the identity plane must
+    -- point only inside their own tenant.
+    union all select 'saved_views -> profiles (user)', count(*)
+      from saved_views v left join profiles p on p.id = v.user_id
+      where p.id is null or p.org_id <> v.org_id
+    union all select 'saved_views -> org_units (unit)', count(*)
+      from saved_views v join org_units u on u.id = v.unit_id where u.org_id <> v.org_id
+    union all select 'org_flag_configurations -> org_units (unit)', count(*)
+      from org_flag_configurations c join org_units u on u.id = c.unit_id
+      where u.org_id <> c.org_id
+    union all select 'identity_provider_settings -> organizations', count(*)
+      from identity_provider_settings s left join organizations o on o.id = s.org_id
+      where o.id is null
+    union all select 'external_identity_mappings -> profiles (user)', count(*)
+      from external_identity_mappings m left join profiles p on p.id = m.user_id
+      where p.id is null or p.org_id <> m.org_id
+    union all select 'security_events -> organizations', count(*)
+      from security_events e left join organizations o on o.id = e.org_id
+      where o.id is null
   ) b
 
   union all
@@ -245,6 +271,13 @@ select section, scope, item, value from (
       cross join lateral unnest(c.unit_ids) as member(unit_id)
       left join org_units u on u.id = member.unit_id
       where u.id is null or u.org_id <> c.org_id
+    -- wave 4: a saved view whose owner and pinned unit live in different tenants would
+    -- bridge them through a single row -- exactly the class (C) exists to catch.
+    union all select 'saved_views (user vs unit)', count(*)
+      from saved_views v
+      join profiles p on p.id = v.user_id
+      join org_units u on u.id = v.unit_id
+      where p.org_id <> u.org_id
   ) c
 
 ) all_sections

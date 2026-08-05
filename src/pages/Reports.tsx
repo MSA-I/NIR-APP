@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { StatusBadge, useToast, ConfirmDialog, ErrorNote, SkeletonCards, Note } from '../components/ui';
+import { ReauthModal } from '../components/ReauthModal';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
 import { currentMonthISO, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
@@ -18,6 +19,10 @@ export default function Reports() {
   const [month, setMonth] = useState(currentMonthISO());
   const [busy, setBusy] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
+  // Step-up gate (PLAN-04 §3.2): `mark_month_export_sent` asserts a fresh password AMR entry on
+  // the server (0061). Non-null holds the confirmed reason while ReauthModal decides — a fresh
+  // JWT skips the prompt, a stale one asks for the password before the RPC runs.
+  const [pendingSendReason, setPendingSendReason] = useState<string | null>(null);
 
   // Browsers without a native month picker fall back to free text, so a value like "07/2026" can
   // land in state. One sanitized value drives the query, the headings, the filename and the
@@ -143,10 +148,15 @@ export default function Reports() {
       </div>
 
       <ConfirmDialog open={sendOpen} onClose={() => setSendOpen(false)}
-        onConfirm={(reason) => void markSent(reason)}
+        onConfirm={(reason) => setPendingSendReason(reason ?? '')}
         title="סימון הדוח כהועבר לרו״ח"
         message="רשימת החשבוניות הנוכחית תישמר כצילום מצב, וכל הסימון יתבצע בעסקה אחת."
         confirmLabel="סימון כהועבר" requireReason busy={busy} />
+
+      <ReauthModal open={pendingSendReason !== null}
+        title="אימות זהות לסימון הדוח כהועבר"
+        onConfirm={() => { const reason = pendingSendReason; setPendingSendReason(null); void markSent(reason || undefined); }}
+        onCancel={() => setPendingSendReason(null)} />
 
       <div className="print-area monthly-report space-y-4">
         <div className="hidden print:block">

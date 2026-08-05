@@ -114,6 +114,8 @@ const PATTERNS: [RegExp, string][] = [
     'לא ניתן לאמת כרגע את מספר הרשומות ברשימה. רענן את המסך ונסה שוב.'],
   [/financial_command_rpc_required|invoice_soft_delete_rpc_required|supplier_soft_delete_rpc_required|product_active_rpc_required|purchase_order_cancel_rpc_required/i,
     'הנתונים השתנו דרך מסלול ישן שנחסם. רענן את האפליקציה ונסה שוב.'],
+  [/fresh_authentication_required/i,
+    'נדרש אימות מחדש — הזינו סיסמה כדי לאשר פעולה רגישה.'],
   [/invoice_create_not_authorized|invoice_review_not_authorized|credit_request_create_not_authorized|credit_request_transition_not_authorized|price_write_not_authorized|price_import_not_authorized|price_submission_not_authorized|price_submission_intake_service_only|month_export_not_authorized|not_authorized/i,
     'אין לך הרשאה לבצע את הפעולה הזו.'],
   [/draft_unknown/i,

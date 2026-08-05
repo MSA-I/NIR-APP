@@ -3,6 +3,7 @@ import { Landmark, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useToast, StatusBadge, Modal, EmptyState, ErrorNote, SkeletonList, Note } from '../components/ui';
+import { ReauthModal } from '../components/ReauthModal';
 import { DocumentList } from '../components/FileUpload';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
@@ -88,31 +89,26 @@ export default function PayerQueue({ mode = 'regular' }: { mode?: PayerQueueMode
 }
 
 function ExecuteModal({ pr, mode, onClose, onDone }: { pr: Row; mode: PayerQueueMode; onClose: () => void; onDone: () => void }) {
-  const { session, profile } = useAuth();
+  const { profile } = useAuth();
   const toast = useToast();
   const [f, setF] = useState({ paid_date: todayISO(), reference: '', notes: '', reason: '' });
-  const [password, setPassword] = useState('');
+  const [reauthOpen, setReauthOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [paymentId, setPaymentId] = useState<string | null>(null);
 
-  async function execute() {
+  // Field validation first, then the step-up gate. The emergency path keeps its historical
+  // unconditional password prompt (skipWhenFresh=false); the regular path re-authenticates only
+  // when the JWT's password AMR entry is stale — the server (0061) asserts freshness on both RPCs,
+  // so a fresh session sees no new modal and a stale one is prompted instead of rejected.
+  function requestExecute() {
     if (!f.reference.trim()) { toast('נדרשת אסמכתת העברה', 'error'); return; }
     if (!f.reason.trim()) { toast('נדרשת סיבה לביצוע ההעברה', 'error'); return; }
-    if (mode === 'emergency' && !password) { toast('נדרשת סיסמה לאימות זהות טרי', 'error'); return; }
+    setReauthOpen(true);
+  }
+
+  async function execute() {
     setBusy(true);
     try {
-      if (mode === 'emergency') {
-        const expectedUserId = session?.user.id;
-        const email = session?.user.email;
-        if (!expectedUserId || !email) throw new Error('לא ניתן לאמת את זהות המשתמש המחובר. יש להתחבר מחדש.');
-        const authResult = await supabase.auth.signInWithPassword({ email, password }).finally(() => setPassword(''));
-        if (authResult.error) throw authResult.error;
-        if (authResult.data.user?.id !== expectedUserId) {
-          await supabase.auth.signOut();
-          throw new Error('זהות המשתמש השתנתה בזמן האימות. יש להתחבר מחדש.');
-        }
-      }
-
       const payment = unwrap(await supabase.rpc(mode === 'emergency' ? 'execute_emergency_payment_request' : 'execute_payment_request', {
         p_payment_request_id: pr.id,
         p_paid_date: f.paid_date,
@@ -177,20 +173,22 @@ function ExecuteModal({ pr, mode, onClose, onDone }: { pr: Row; mode: PayerQueue
         <div><label className="label" htmlFor="payment-execution-reference">אסמכתת העברה *</label><input id="payment-execution-reference" className="input num" dir="ltr" value={f.reference} onChange={(e) => setF((s) => ({ ...s, reference: e.target.value }))} /></div>
         <div><label className="label" htmlFor="payment-execution-notes">הערות</label><input id="payment-execution-notes" className="input" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></div>
         <div><label className="label" htmlFor="payment-execution-reason">סיבת ביצוע / אישור הפעולה *</label><input id="payment-execution-reason" className="input" value={f.reason} onChange={(e) => setF((s) => ({ ...s, reason: e.target.value }))} /></div>
-        {mode === 'emergency' && (
-          <div>
-            <label className="label" htmlFor="emergency-payment-password">סיסמת הבעלים לאימות טרי *</label>
-            <input id="emergency-payment-password" type="password" autoComplete="current-password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </div>
-        )}
 
         <div className="flex justify-end gap-2">
           <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-          <button className="btn-primary" disabled={busy} onClick={() => void execute()}>
+          <button className="btn-primary" disabled={busy} onClick={requestExecute}>
             {busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {mode === 'emergency' ? 'ביצוע חירום ורישום ההעברה' : 'ההעברה בוצעה'}
           </button>
         </div>
       </div>
+
+      <ReauthModal
+        open={reauthOpen}
+        skipWhenFresh={mode !== 'emergency'}
+        title={mode === 'emergency' ? 'אימות סיסמת הבעלים לביצוע חירום' : 'אימות זהות לביצוע ההעברה'}
+        onConfirm={() => { setReauthOpen(false); void execute(); }}
+        onCancel={() => setReauthOpen(false)}
+      />
     </Modal>
   );
 }
