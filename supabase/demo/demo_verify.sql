@@ -64,6 +64,10 @@ select section, scope, item, value from (
     union all select 'security_events',   count(*) from security_events   where org_id = o.id
     -- wave 5 (0063): domain events fanned out from the audit trail.
     union all select 'domain_events',     count(*) from domain_events     where org_id = o.id
+    -- wave 7 (0066): the integration adapter plane.
+    union all select 'webhook_subscriptions', count(*) from webhook_subscriptions where org_id = o.id
+    union all select 'external_references',   count(*) from external_references   where org_id = o.id
+    union all select 'integration_failures',  count(*) from integration_failures  where org_id = o.id
   ) t on true
   where t.rows > 0
 
@@ -206,6 +210,16 @@ select section, scope, item, value from (
     union all select 'security_events -> organizations', count(*)
       from security_events e left join organizations o on o.id = e.org_id
       where o.id is null
+    -- wave 7 (0066): the adapter plane must point only inside its own tenant.
+    union all select 'webhook_subscriptions -> organizations', count(*)
+      from webhook_subscriptions w left join organizations o on o.id = w.org_id
+      where o.id is null
+    union all select 'external_references -> organizations', count(*)
+      from external_references r left join organizations o on o.id = r.org_id
+      where o.id is null
+    union all select 'integration_failures -> webhook_subscriptions', count(*)
+      from integration_failures f join webhook_subscriptions w on w.id = f.subscription_id
+      where w.org_id <> f.org_id
   ) b
 
   union all
@@ -286,6 +300,18 @@ select section, scope, item, value from (
       from domain_events e
       join org_units u on u.id = e.unit_id
       where u.org_id <> e.org_id
+    -- wave 7: an external reference whose internal entity lives in another tenant would
+    -- bridge the two through a single row. entity_type is data (0066), so the entity is
+    -- resolved per type -- the demo seeds 'supplier'; 'product'/'invoice' are covered
+    -- defensively, and a seeded type must resolve (a dangling reference is also a defect).
+    union all select 'external_references (org vs entity)', count(*)
+      from external_references r
+      left join suppliers s on r.entity_type = 'supplier' and s.id = r.internal_id
+      left join products p on r.entity_type = 'product' and p.id = r.internal_id
+      left join invoices i on r.entity_type = 'invoice' and i.id = r.internal_id
+      where (r.entity_type = 'supplier' and (s.id is null or s.org_id <> r.org_id))
+         or (r.entity_type = 'product' and (p.id is null or p.org_id <> r.org_id))
+         or (r.entity_type = 'invoice' and (i.id is null or i.org_id <> r.org_id))
   ) c
 
 ) all_sections

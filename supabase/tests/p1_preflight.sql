@@ -281,9 +281,10 @@ identity_mapping_cross_tenant as (
 -- impossible through the composite (org_id, unit_id) FK and verified anyway; an event
 -- whose type no map row names means the emission contract and the map drifted apart.
 -- The outbox three guard delivery hygiene: a claim nobody released, a dead letter with no
--- reason, and the gate canary -- an outbox row without a target is impossible (NOT NULL)
--- and the outbox itself must stay EMPTY until wave 7 registers targets, so any stuck or
--- targetless row here is machinery escaping its design.
+-- reason, and a blank target -- impossible (NOT NULL + check) and verified anyway. The
+-- wave-5 reading of the last arm ("the outbox must stay EMPTY until wave 7 registers
+-- targets") is superseded: wave 7 (0066) registers targets, so the honest successor
+-- canary is outbox_target_unregistered below.
 domain_events_cross_tenant_unit as (
   select e.id
   from domain_events e
@@ -311,6 +312,27 @@ outbox_rows_without_target as (
   select o.id
   from private.integration_outbox o
   where nullif(btrim(o.target), '') is null
+),
+-- ===== Wave 7 integration-adapter check (0066) =====
+-- The honest successor to the wave-5 "empty outbox" canary. Since 0066, rows enter the
+-- outbox only through the enqueue trigger, which fires per ACTIVE webhook subscription --
+-- so a PENDING row whose target has no active subscription is machinery escaping its
+-- design: either the subscription was deactivated/deleted with work still queued (the
+-- worker would burn all 8 attempts on target_unregistered), or something enqueued a
+-- target nobody registered. The second half folds in the orphan-subscription arm: a
+-- subscription whose target is not the generated 'webhook:'||id derivation -- structurally
+-- impossible (stored generated column), verified anyway, in the same read-only pass.
+outbox_target_unregistered as (
+  select o.id
+  from private.integration_outbox o
+  where o.status = 'pending'
+    and not exists (
+      select 1 from webhook_subscriptions w
+      where w.target = o.target and w.active)
+  union all
+  select w.id
+  from webhook_subscriptions w
+  where w.target is distinct from ('webhook:' || w.id::text)
 ),
 -- ===== Wave 6b upload-reservation check (0065) =====
 -- The orphan class the reservation plane can produce: a claim still 'reserved' past its
@@ -442,6 +464,9 @@ checks(check_name, rows_found, sample_ids) as (
   union all select 'outbox_rows_without_target', count(*),
     coalesce((select jsonb_agg(id) from (select id from outbox_rows_without_target limit 20) s), '[]'::jsonb)
   from outbox_rows_without_target
+  union all select 'outbox_target_unregistered', count(*),
+    coalesce((select jsonb_agg(id) from (select id from outbox_target_unregistered limit 20) s), '[]'::jsonb)
+  from outbox_target_unregistered
   union all select 'expired_reservations_with_stored_object', count(*),
     coalesce((select jsonb_agg(id) from (select id from expired_reservations_with_stored_object limit 20) s), '[]'::jsonb)
   from expired_reservations_with_stored_object
