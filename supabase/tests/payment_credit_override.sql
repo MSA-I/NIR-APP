@@ -86,6 +86,7 @@ create temp table credit_state_before as
 select id, status, amount, resolved_at
 from public.credit_requests
 where supplier_id = '92000000-0000-4000-8000-000000000001';
+grant select on credit_state_before to authenticated;
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', '91000000-0000-4000-8000-000000000001', true);
