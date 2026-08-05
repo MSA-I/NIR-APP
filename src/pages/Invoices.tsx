@@ -258,6 +258,7 @@ export function InvoicesList() {
         }}
         activeFilters={activeFilters}
         onClearFilters={clearFilters}
+        columnPicker="invoices"
         searchLabel="חיפוש בחשבוניות"
         rowLabel={(r) => `חשבונית ${r.invoice_number} של ${r.supplier.name}`}
         onRowClick={(r) => navigate(`/invoices/${r.id}`)}

@@ -155,6 +155,7 @@ export default function Payments() {
         }}
         activeFilters={activeFilters}
         onClearFilters={() => patchParams({ id: '', month: '', q: '', page: '' })}
+        columnPicker="payments"
         searchLabel="חיפוש בתשלומים"
         mobile="cards"
         mobileTitle={(r) => <>#{r.number} · {r.supplier.name}</>}

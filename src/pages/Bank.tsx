@@ -201,6 +201,7 @@ export default function Bank() {
         }}
         activeFilters={activeFilters}
         onClearFilters={() => patchParams({ id: '', status: '', month: '', q: '', page: '' })}
+        columnPicker="bank"
         searchLabel="חיפוש בתנועות בנק"
         rowLabel={(r) => `תנועת בנק מיום ${fmtDate(r.tx_date)} בסכום ${fmtMoneyExact(r.amount)} עבור ${r.description}`}
         onRowClick={canOperateBank ? (r) => setSelected(r) : undefined}
