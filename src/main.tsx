@@ -3,9 +3,11 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import './index.css';
 import App from './App';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './auth/AuthContext';
 import { ToastProvider } from './components/ui';
 import { initObservability } from './lib/observability';
+import { createAppQueryClient } from './lib/query/client';
 
 // Before anything renders, so a crash during the first paint is still reported.
 initObservability();
@@ -48,14 +50,21 @@ function ServiceWorkerUpdateNotice() {
   );
 }
 
+// One client for the process. Outside AuthProvider on purpose: the provider must already exist
+// when AuthProvider mounts, and the client itself holds no tenant state — the tenant lives in
+// every key's first segment, so a user switch is one subtree invalidation, not a new client.
+const queryClient = createAppQueryClient();
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider bottomNotice={<ServiceWorkerUpdateNotice />}>
-          <App />
-        </ToastProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthProvider>
+          <ToastProvider bottomNotice={<ServiceWorkerUpdateNotice />}>
+            <App />
+          </ToastProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   </StrictMode>,
 );

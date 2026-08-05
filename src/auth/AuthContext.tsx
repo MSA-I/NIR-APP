@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { Organization, Profile } from '../lib/types';
 import { unwrap } from '../lib/useQuery';
+import { OrgScopeProvider } from '../lib/query/orgScope';
 import { resolveRoleLabels } from '../lib/status';
 import { cleanupPushBeforeSignOut } from '../lib/push';
 import { toHebrewError } from '../lib/errors';
@@ -134,7 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{ session, profile, org, loading, bootstrapError, isPlatformAdmin, roleLabels, signIn, signOut, retryBootstrap }}>
-      {children}
+      {/* Every cache key opens with this value. It is deliberately `org?.id ?? null` and not the
+          profile's org_id: a suspended organisation makes auth_org() return null server-side, and
+          the cache root must move with it so rows read under the live tenant are not served after
+          the tenant stopped being readable. */}
+      <OrgScopeProvider org={org?.id ?? null}>{children}</OrgScopeProvider>
     </AuthContext.Provider>
   );
 }
