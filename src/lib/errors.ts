@@ -48,8 +48,13 @@ const PATTERNS: [RegExp, string][] = [
     'הייבוא בוטל: הקובץ כולל שורה לא תקינה או פרטי קובץ חסרים.'],
   [/receipt_qty_exceeds_order/i,
     'כמות בקבלה אינה תואמת לכמות שנותרה בהזמנה. רענן ובדוק את השורות.'],
-  [/receipt_already_completed|receipt_draft_conflict/i,
-    'לקבלה זו כבר קיימת השלמה או טיוטה אחרת. רענן את המסך.'],
+  // Split apart in wave 8: the offline queue can hit either of these while a device was
+  // disconnected, and the conflict screen asks a different question for each — "another draft
+  // exists for this order" is not "this receipt is already closed".
+  [/receipt_draft_conflict/i,
+    'קיימת טיוטת קבלה אחרת להזמנה הזו. יש להכריע איזו טיוטה מתארת את המשלוח לפני שמירה.'],
+  [/receipt_already_completed/i,
+    'הקבלה הזו כבר הושלמה בשרת ואינה נדרסת. הטיוטה נשמרה במכשיר ונדרשת הכרעה.'],
   [/purchase_order_not_receivable/i,
     'ההזמנה אינה במצב שמאפשר קבלת סחורה.'],
   [/purchase_order_unknown|goods_receipt_invalid/i,
