@@ -52,6 +52,9 @@ select section, scope, item, value from (
     union all select 'comments',          count(*) from comments          where org_id = o.id
     union all select 'monthly_exports',   count(*) from monthly_exports   where org_id = o.id
     union all select 'audit_logs',        count(*) from audit_logs        where org_id = o.id
+    union all select 'org_units',         count(*) from org_units         where org_id = o.id
+    union all select 'user_scope_grants', count(*) from user_scope_grants where org_id = o.id
+    union all select 'user_scope_closure', count(*) from user_scope_closure where org_id = o.id
   ) t on true
   where t.rows > 0
 
@@ -146,6 +149,35 @@ select section, scope, item, value from (
       from audit_logs a join profiles p on p.id = a.user_id
       where p.org_id <> a.org_id
         and not exists (select 1 from platform_admins pa where pa.user_id = a.user_id)
+    -- org scope (0054/0055): the unit tree, the grants, the closure, and every unit
+    -- pointer must stay inside their own tenant.
+    union all select 'org_units -> organizations', count(*)
+      from org_units u left join organizations o on o.id = u.org_id where o.id is null
+    union all select 'org_units parent cross-org', count(*)
+      from org_units u join org_units up on up.id = u.parent_id where up.org_id <> u.org_id
+    union all select 'user_scope_grants -> org_units', count(*)
+      from user_scope_grants g left join org_units u on u.id = g.unit_id
+      where u.id is null or u.org_id <> g.org_id
+    union all select 'user_scope_grants -> profiles', count(*)
+      from user_scope_grants g left join profiles p on p.id = g.user_id
+      where p.id is null or p.org_id <> g.org_id
+    union all select 'user_scope_closure -> user_scope_grants', count(*)
+      from user_scope_closure c
+      where not exists (
+        select 1 from user_scope_grants g
+        where g.org_id = c.org_id and g.user_id = c.user_id)
+    union all select 'invoices -> org_units (unit)', count(*)
+      from invoices i join org_units u on u.id = i.unit_id where u.org_id <> i.org_id
+    union all select 'purchase_orders -> org_units (unit)', count(*)
+      from purchase_orders po join org_units u on u.id = po.unit_id where u.org_id <> po.org_id
+    union all select 'goods_receipts -> org_units (unit)', count(*)
+      from goods_receipts g join org_units u on u.id = g.unit_id where u.org_id <> g.org_id
+    union all select 'payments -> org_units (unit)', count(*)
+      from payments p join org_units u on u.id = p.unit_id where u.org_id <> p.org_id
+    union all select 'documents -> org_units (unit)', count(*)
+      from documents d join org_units u on u.id = d.unit_id where u.org_id <> d.org_id
+    union all select 'inventory_movements -> org_units (unit)', count(*)
+      from inventory_movements m join org_units u on u.id = m.unit_id where u.org_id <> m.org_id
   ) b
 
   union all
@@ -205,6 +237,14 @@ select section, scope, item, value from (
     union all select 'bank_allocations invalid target/amount', count(*)
       from bank_allocations ba
       where ba.amount <= 0 or (ba.invoice_id is null and ba.payment_id is null)
+    -- The closure is the one place where a single row could quietly bridge two tenants:
+    -- an array member pointing at another org's unit would widen auth_scopes() across the
+    -- tenant boundary. Every closure member must exist and belong to the closure's org.
+    union all select 'user_scope_closure (units span tenants)', count(*)
+      from user_scope_closure c
+      cross join lateral unnest(c.unit_ids) as member(unit_id)
+      left join org_units u on u.id = member.unit_id
+      where u.id is null or u.org_id <> c.org_id
   ) c
 
 ) all_sections
