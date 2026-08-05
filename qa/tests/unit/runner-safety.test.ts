@@ -25,3 +25,13 @@ test('destructive PowerShell gates use the same abandoned-safe mutex as QA', asy
   }
   assert.match(scripts[0]!, /-QaMutexAlreadyHeld/);
 });
+
+test('deterministic children have bounded Windows process-tree cleanup', async () => {
+  const source = await readFile(
+    path.join(process.cwd(), 'qa', 'runner', 'deterministic-runner.ts'),
+    'utf8',
+  );
+  assert.match(source, /taskkill\.exe/);
+  assert.match(source, /\['\/PID', String\(child\.pid\), '\/T', '\/F'\]/);
+  assert.match(source, /timeoutMs: 900_000/);
+});

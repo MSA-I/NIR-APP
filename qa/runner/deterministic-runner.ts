@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -248,24 +248,93 @@ async function playwrightRuntimeIntegrityPhase(reportPath: string): Promise<Phas
   }
 }
 
+function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const onExit = (): void => {
+      clearTimeout(timeout);
+      resolve(true);
+    };
+    const timeout = setTimeout(() => {
+      child.off('exit', onExit);
+      resolve(false);
+    }, timeoutMs);
+    child.once('exit', onExit);
+  });
+}
+
+async function terminateProcessTree(child: ChildProcess): Promise<boolean> {
+  if (!child.pid || child.exitCode !== null || child.signalCode !== null) return true;
+  if (process.platform === 'win32') {
+    const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    const killerExited = await new Promise<boolean>((resolve) => {
+      const timeout = setTimeout(() => resolve(false), 10_000);
+      killer.once('error', () => {
+        clearTimeout(timeout);
+        resolve(false);
+      });
+      killer.once('exit', () => {
+        clearTimeout(timeout);
+        resolve(true);
+      });
+    });
+    if (!killerExited && killer.exitCode === null) killer.kill();
+    if (!killerExited) return false;
+    return waitForExit(child, 5_000);
+  }
+
+  try {
+    process.kill(-child.pid, 'SIGTERM');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+  }
+  if (await waitForExit(child, 5_000)) return true;
+  try {
+    process.kill(-child.pid, 'SIGKILL');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+  }
+  return waitForExit(child, 2_000);
+}
+
 async function runCommand(
   name: string,
   executable: string,
   args: readonly string[],
-  options: { cwd: string; env: NodeJS.ProcessEnv },
+  options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number },
 ): Promise<PhaseResult> {
   const started = Date.now();
-  let exitCode: number;
+  let outcome: { exitCode: number | null; timedOut: boolean; terminated: boolean };
   try {
-    exitCode = await new Promise<number>((resolve, reject) => {
+    outcome = await new Promise<{ exitCode: number | null; timedOut: boolean; terminated: boolean }>((resolve, reject) => {
       const child = spawn(executable, [...args], {
         cwd: options.cwd,
         env: options.env,
         stdio: 'inherit',
         windowsHide: true,
+        detached: process.platform !== 'win32',
       });
-      child.once('error', reject);
-      child.once('exit', (code, signal) => resolve(code ?? (signal ? 1 : 0)));
+      let timedOut = false;
+      const timeout = setTimeout(async () => {
+        timedOut = true;
+        try {
+          resolve({ exitCode: null, timedOut: true, terminated: await terminateProcessTree(child) });
+        } catch {
+          resolve({ exitCode: null, timedOut: true, terminated: false });
+        }
+      }, options.timeoutMs);
+      child.once('error', (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+      child.once('exit', (code, signal) => {
+        if (timedOut) return;
+        clearTimeout(timeout);
+        resolve({ exitCode: code ?? (signal ? 1 : 0), timedOut: false, terminated: true });
+      });
     });
   } catch (error) {
     return {
@@ -276,12 +345,23 @@ async function runCommand(
       reason: redactText(error instanceof Error ? error.message : name + ' could not start.'),
     };
   }
+  if (outcome.timedOut) {
+    return {
+      name,
+      status: 'BLOCKED',
+      exitCode: null,
+      durationMs: Date.now() - started,
+      reason: outcome.terminated
+        ? `${name} timed out after ${options.timeoutMs}ms; its process tree was terminated.`
+        : `${name} timed out after ${options.timeoutMs}ms and its process tree could not be verified as terminated.`,
+    };
+  }
   return {
     name,
-    status: exitCode === 0 ? 'PASSED' : 'FAILED',
-    exitCode,
+    status: outcome.exitCode === 0 ? 'PASSED' : 'FAILED',
+    exitCode: outcome.exitCode,
     durationMs: Date.now() - started,
-    reason: exitCode === 0 ? undefined : name + ' exited with code ' + exitCode + '.',
+    reason: outcome.exitCode === 0 ? undefined : name + ' exited with code ' + outcome.exitCode + '.',
   };
 }
 
@@ -337,13 +417,13 @@ export async function runDeterministicQa(repoRoot = process.cwd()): Promise<Dete
   const environment = deterministicChildEnvironment(state);
   let preview: Awaited<ReturnType<typeof startQaPreview>> | undefined;
   try {
-    const staticCommands: ReadonlyArray<readonly [string, string[]]> = [
-      ['qa-typecheck', [path.join(repository, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'qa/tsconfig.json', '--noEmit']],
-      ['qa-unit-integration', ['--test', 'qa/**/*.test.ts']],
-      ['document-export-contract', ['scripts/check-document-export.ts']],
+    const staticCommands: ReadonlyArray<readonly [string, string[], number]> = [
+      ['qa-typecheck', [path.join(repository, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'qa/tsconfig.json', '--noEmit'], 300_000],
+      ['qa-unit-integration', ['--test', 'qa/**/*.test.ts'], 300_000],
+      ['document-export-contract', ['scripts/check-document-export.ts'], 120_000],
     ];
-    for (const [name, args] of staticCommands) {
-      const phase = await runCommand(name, process.execPath, args, { cwd: repository, env: environment });
+    for (const [name, args, timeoutMs] of staticCommands) {
+      const phase = await runCommand(name, process.execPath, args, { cwd: repository, env: environment, timeoutMs });
       phases.push(phase);
       if (phase.status !== 'PASSED') break;
     }
@@ -388,7 +468,7 @@ export async function runDeterministicQa(repoRoot = process.cwd()): Promise<Dete
         'playwright-deterministic',
         process.execPath,
         [playwrightCli, 'test', '-c', 'qa/playwright.config.ts'],
-        { cwd: repository, env: environment },
+        { cwd: repository, env: environment, timeoutMs: 900_000 },
       ));
       phases.push(await criticalWorkflowCoveragePhase(playwrightReport));
       phases.push(await playwrightRuntimeIntegrityPhase(playwrightReport));
