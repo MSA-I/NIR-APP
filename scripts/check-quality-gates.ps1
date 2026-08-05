@@ -847,6 +847,7 @@ try {
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"
     Invoke-SqlTest "supabase\tests\p4_flags_identity.sql" "P4 feature flags, identity tables and the step-up boundary"
+    Invoke-SqlTest "supabase\tests\p4b_correlation.sql" "P4b correlation id header/GUC route and fail-to-NULL contract"
     Invoke-Preflight
     Invoke-SqlTest "supabase\tests\p1_financial_commands.sql" "P1 financial commands, rollback and idempotency"
     Invoke-SqlTest "supabase\tests\p1_price_submissions.sql" "P1B trusted price-list intake, tenant isolation and rollback"
