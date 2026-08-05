@@ -818,6 +818,279 @@ async function receivingAccessibility(browser) {
   }
 }
 
+/* ===================== wave 8: offline receiving and the barcode flag ===================== */
+
+const OFFLINE_ORDER_ID = 'p8-offline-order';
+const OFFLINE_RECEIPT_ID = 'b8000000-0000-4000-8000-000000000001';
+const OFFLINE_PRODUCT_BARCODE = '7290000000019';
+
+function offlineReceivingOrder() {
+  return {
+    id: OFFLINE_ORDER_ID, org_id: 'p8-org', supplier_id: 'p8-supplier', number: 9101,
+    status: 'confirmed', order_date: '2026-07-20', expected_date: '2026-07-23', total_amount: 240,
+    created_at: '2026-07-20T08:00:00Z', notes: null,
+    supplier: { id: 'p8-supplier', name: 'ספק בדיקת לא-מקוון' },
+    items: [{
+      id: 'p8-offline-item', org_id: 'p8-org', order_id: OFFLINE_ORDER_ID, product_id: 'p8-product',
+      qty: 10, received_qty: 0, unit_price: 12,
+      product: {
+        id: 'p8-product', name: 'עגבניות בדיקה', unit: 'ק"ג',
+        sku: 'VEG-P8', barcode: OFFLINE_PRODUCT_BARCODE,
+      },
+    }],
+  };
+}
+
+/** Reads the app's own IndexedDB, so persistence is asserted as a fact rather than inferred. */
+function readOfflineStore(page) {
+  return page.evaluate(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('supplyflow-offline');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const readAll = (name) => new Promise((resolve, reject) => {
+      if (!db.objectStoreNames.contains(name)) return resolve([]);
+      const request = db.transaction(name, 'readonly').objectStore(name).getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const drafts = await readAll('receipt_drafts');
+    const queue = await readAll('sync_queue');
+    const openOrders = await readAll('open_orders');
+    db.close();
+    return {
+      drafts: drafts.map((draft) => ({ orderId: draft.orderId, receiptId: draft.receiptId, keySource: draft.keySource, syncedAt: draft.syncedAt })),
+      queue: queue.map((action) => ({ key: action.idempotencyKey, receiptId: action.payload && action.payload.p_receipt_id, state: action.state, attempts: action.attempts })),
+      openOrderKeys: openOrders.map((entry) => Object.keys(entry.order || {})),
+      cachedItemKeys: openOrders.flatMap((entry) => ((entry.order && entry.order.items) || []).map((item) => Object.keys(item))),
+    };
+  });
+}
+
+/**
+ * Offline goods receiving, end to end (PLAN-09 §3).
+ *
+ * `serviceWorkers: 'block'` stays on deliberately: the queue is plain JS plus IndexedDB and owes
+ * nothing to a service worker. App-shell precaching is a separate deferred decision
+ * (OPEN-DECISIONS #101), and this scenario is written to be true without it — the tab is closed
+ * rather than reloaded offline, which is the honest version of "survives a restart".
+ */
+async function offlineReceiving(browser) {
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+  const order = offlineReceivingOrder();
+  const receiptRequests = [];
+  // The offline period legitimately produces failed requests: background reads, the flag resolver
+  // and the auth refresh all lose the network at once. Their absence would be the surprise.
+  const offlineNoise = [
+    /net::ERR_INTERNET_DISCONNECTED/,
+    /net::ERR_NETWORK_CHANGED/,
+    /net::ERR_NAME_NOT_RESOLVED/,
+    /Failed to fetch/,
+    /TypeError: Failed to fetch/,
+    /\[supplyflow\]/,
+    /AuthRetryableFetchError/,
+  ];
+  try {
+    await context.route('**/rest/v1/purchase_orders?**', (route) => {
+      const url = new URL(route.request().url());
+      const detail = (url.searchParams.get('id') || '') === `eq.${OFFLINE_ORDER_ID}`;
+      return route.fulfill({ status: 200, headers: jsonHeaders, json: detail ? order : [order] });
+    });
+    await context.route('**/rest/v1/goods_receipts?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: null }));
+    await context.route('**/rest/v1/rpc/save_goods_receipt', (route) => {
+      receiptRequests.push(route.request().postDataJSON());
+      return route.fulfill({ status: 200, headers: jsonHeaders, json: { receipt_id: OFFLINE_RECEIPT_ID } });
+    });
+
+    const page = await context.newPage();
+    captureConsole(page, 'offline-receiving', offlineNoise);
+    await login(page, 'kitchen');
+    await page.goto(`${baseURL}/receiving/${OFFLINE_ORDER_ID}`);
+    await settle(page);
+    await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור עגבניות בדיקה' }).waitFor();
+
+    // The key is minted and stored at draft creation, before anything is sent (ADR-0006:37-39).
+    await page.waitForFunction(async () => {
+      const db = await new Promise((resolve) => {
+        const request = indexedDB.open('supplyflow-offline');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => resolve(null);
+      });
+      if (!db || !db.objectStoreNames.contains('receipt_drafts')) return false;
+      const rows = await new Promise((resolve) => {
+        const request = db.transaction('receipt_drafts', 'readonly').objectStore('receipt_drafts').getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => resolve([]);
+      });
+      db.close();
+      return rows.length > 0;
+    }, null, { timeout: 20_000 });
+    const atDraft = await readOfflineStore(page);
+    assert.equal(atDraft.drafts.length, 1, 'no receipt draft was persisted at draft creation');
+    const persistedKey = atDraft.drafts[0].receiptId;
+    assert.match(persistedKey, /^[0-9a-f-]{36}$/i, `persisted receipt key is not a uuid: ${persistedKey}`);
+    // The cached order carries no money: the never-cache rule is structural here, not a promise.
+    for (const keys of atDraft.cachedItemKeys) {
+      assert.equal(keys.includes('unit_price'), false, 'the offline order cache stored a price');
+    }
+    for (const keys of atDraft.openOrderKeys) {
+      assert.equal(keys.includes('total_amount'), false, 'the offline order cache stored an order total');
+    }
+
+    await context.setOffline(true);
+    // spinbutton, not getByLabel: the +/- buttons' own labels contain the same phrase.
+    await page.getByRole('spinbutton', { name: 'כמות שהתקבלה עבור עגבניות בדיקה' }).fill('4');
+    await page.getByRole('button', { name: /סיום קבלה/ }).click();
+
+    await page.locator('[data-testid="receiving-local-draft"]').waitFor({ timeout: 15_000 });
+    const status = page.locator('[data-testid="offline-queue-status"]');
+    await status.waitFor();
+    // Two counters, separate, and a sync time that is a real `—` rather than "just now".
+    assert.equal((await status.locator('[data-testid="offline-pending-actions"]').innerText()).trim(), '1',
+      'the pending-actions counter did not report the queued receipt');
+    assert.equal((await status.locator('[data-testid="offline-pending-uploads"]').innerText()).trim(), '0',
+      'pending uploads were folded into the actions counter');
+    assert.equal((await status.locator('[data-testid="offline-last-sync"]').innerText()).trim(), '—',
+      'an unknown last-sync time was rendered as something other than —');
+    assert.equal(receiptRequests.length, 0, 'a receipt was sent to the server while the device was offline');
+
+    const queued = await readOfflineStore(page);
+    assert.equal(queued.queue.length, 1, 'the receipt was not queued on the device');
+    assert.equal(queued.queue[0].receiptId, persistedKey,
+      'the queued payload does not carry the key persisted at draft creation');
+    await page.screenshot({ path: path.join(outDir, 'receiving-offline-390.png'), fullPage: true });
+    report.screenshots.push('receiving-offline-390.png');
+
+    // The tab dies with the work still queued — the case ADR-0006 actually cares about. A reload
+    // while offline is NOT attempted: without app-shell precaching (#101) it would simply fail, and
+    // the queue's promise is that IndexedDB survives, not that the shell does.
+    await page.close();
+    await context.setOffline(false);
+
+    const resumed = await context.newPage();
+    captureConsole(resumed, 'offline-receiving-resumed', offlineNoise);
+    await resumed.goto(`${baseURL}/receiving/${OFFLINE_ORDER_ID}`);
+    // The stored session normally survives with the context; a token refresh that died mid-offline
+    // can still bounce this page to /login, and that is not what this scenario is measuring.
+    if (new URL(resumed.url()).pathname === '/login') {
+      await login(resumed, 'kitchen');
+      await resumed.goto(`${baseURL}/receiving/${OFFLINE_ORDER_ID}`);
+    }
+    await settle(resumed);
+    const resumedStatus = resumed.locator('[data-testid="offline-queue-status"]');
+    await resumedStatus.waitFor({ timeout: 20_000 });
+    assert.equal((await resumedStatus.locator('[data-testid="offline-pending-actions"]').innerText()).trim(), '1',
+      'the queued receipt did not survive the closed tab');
+
+    // The manual retry the design document mandates (:85).
+    await resumedStatus.getByRole('button', { name: /ניסיון סנכרון עכשיו/ }).click();
+    await resumed.waitForFunction(
+      () => document.querySelector('[data-testid="offline-pending-actions"]') === null
+        || document.querySelector('[data-testid="offline-pending-actions"]').textContent.trim() === '0',
+      null,
+      { timeout: 20_000 },
+    );
+    assert.equal(receiptRequests.length, 1, `save_goods_receipt was called ${receiptRequests.length} times for one receipt`);
+    assert.equal(receiptRequests[0].p_receipt_id, persistedKey,
+      'the receipt was sent under a different key than the one persisted at draft creation');
+    assert.equal(receiptRequests[0].p_complete, true, 'the queued completion was sent as a draft save');
+    // The observed device clock travels in the reason (#100), never in the signature.
+    assert.match(receiptRequests[0].p_reason, /^השלמת קבלת סחורה/,
+      `queued reason was not system-authored: ${receiptRequests[0].p_reason}`);
+    assert.equal(Object.keys(receiptRequests[0]).sort().join(','),
+      'p_complete,p_lines,p_notes,p_open_credits,p_order_id,p_reason,p_receipt_id',
+      'the offline queue sent a different argument set than the screen does');
+
+    const synced = await readOfflineStore(resumed);
+    assert.equal(synced.queue.length, 0, 'the accepted receipt stayed in the queue');
+  } finally {
+    await context.setOffline(false).catch(() => {});
+    await closeContext(context);
+  }
+}
+
+/**
+ * The barcode flag boundary and a denied camera (PLAN-09 §3, second scenario).
+ *
+ * No real camera is exercised: the match itself is a unit-tested pure function, including the
+ * ambiguity case. What is asserted here is the part only a browser can answer — that the flag being
+ * off means nothing renders, and that a refused permission produces a Hebrew explanation plus a
+ * working manual entry rather than a broken screen.
+ */
+async function barcodeFlagAndCamera(browser) {
+  const order = offlineReceivingOrder();
+  const routeOrder = async (context) => {
+    await context.route('**/rest/v1/purchase_orders?**', (route) => {
+      const url = new URL(route.request().url());
+      const detail = (url.searchParams.get('id') || '') === `eq.${OFFLINE_ORDER_ID}`;
+      return route.fulfill({ status: 200, headers: jsonHeaders, json: detail ? order : [order] });
+    });
+    await context.route('**/rest/v1/goods_receipts?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: null }));
+  };
+
+  const off = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+  try {
+    await routeOrder(off);
+    await off.route('**/rest/v1/rpc/resolve_feature_flags', (route) =>
+      route.fulfill({ status: 200, headers: jsonHeaders, json: [{ flag_key: 'receiving.barcode', state: false }] }));
+    const page = await off.newPage();
+    captureConsole(page, 'barcode-flag-off');
+    await login(page, 'kitchen');
+    await page.goto(`${baseURL}/receiving/${OFFLINE_ORDER_ID}`);
+    await settle(page);
+    await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור עגבניות בדיקה' }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'סריקת ברקוד' }).count(), 0,
+      'the scanner rendered while receiving.barcode was off');
+  } finally {
+    await closeContext(off);
+  }
+
+  const on = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+  try {
+    await routeOrder(on);
+    await on.route('**/rest/v1/rpc/resolve_feature_flags', (route) =>
+      route.fulfill({ status: 200, headers: jsonHeaders, json: [{ flag_key: 'receiving.barcode', state: true }] }));
+    // The addInitScript override idiom (:1441): a refused camera, deterministically, with the same
+    // DOMException name a browser raises when someone taps "block".
+    await on.addInitScript(() => {
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+          getUserMedia: async () => {
+            const error = new Error('camera blocked by p8 fixture');
+            error.name = 'NotAllowedError';
+            throw error;
+          },
+          enumerateDevices: async () => [],
+        },
+      });
+    });
+    const page = await on.newPage();
+    captureConsole(page, 'barcode-camera-denied');
+    await login(page, 'kitchen');
+    await page.goto(`${baseURL}/receiving/${OFFLINE_ORDER_ID}`);
+    await settle(page);
+    await page.getByRole('button', { name: 'סריקת ברקוד' }).click();
+    const dialog = page.getByRole('dialog', { name: 'סריקת ברקוד' });
+    await dialog.waitFor();
+    await dialog.getByText(/הרשאה למצלמה/).waitFor({ timeout: 15_000 });
+    const manual = dialog.getByLabel('הזנת קוד ידנית');
+    await manual.waitFor();
+    // The fallback is not decoration: a typed code resolves through the same match chain.
+    await manual.fill(OFFLINE_PRODUCT_BARCODE);
+    await dialog.getByRole('button', { name: 'בדיקת הקוד' }).click();
+    await dialog.getByText(/עגבניות בדיקה/).waitFor({ timeout: 15_000 });
+    await dialog.getByText(/הכמות נשארת להזנה שלך/).waitFor();
+    await page.screenshot({ path: path.join(outDir, 'barcode-camera-denied-390.png'), fullPage: true });
+    report.screenshots.push('barcode-camera-denied-390.png');
+    await dialog.getByRole('button', { name: 'סיום סריקה' }).click();
+    await auditAccessibility(page, 'receiving-barcode');
+  } finally {
+    await closeContext(on);
+  }
+}
+
 async function orderSupplierComparison(browser) {
   const context = await browser.newContext({
     locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 1440, height: 900 },
@@ -1706,6 +1979,8 @@ async function run(name, check) {
     await run('dashboard, quick actions and dialogs', () => dashboardAndDialogs(browser));
     await run('DataTable, ActionMenu, route focus and mobile search', () => tableKeyboardAndSearch(browser));
     await run('receiving contextual names and accessibility', () => receivingAccessibility(browser));
+    await run('offline receiving queues once and keeps its key', () => offlineReceiving(browser));
+    await run('barcode flag off and camera denied', () => barcodeFlagAndCamera(browser));
     await run('order split, minimum fixes and reason-free approval', () => orderSupplierComparison(browser));
     await run('payment-request names and modal stack', () => paymentRequestNamesAndModalStack(browser));
     await run('bank contextual names and accessibility', () => bankContextualNames(browser));

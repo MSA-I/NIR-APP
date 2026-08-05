@@ -21,6 +21,15 @@ export default defineConfig({
           ) {
             return 'recharts';
           }
+          // Same reasoning for the barcode reader (wave 8): @zxing/library is ~17MB unpacked and
+          // is reached only through a dynamic import behind the `receiving.barcode` flag. Naming
+          // the chunk keeps it out of the entry graph even if a static import ever creeps in.
+          if (
+            id.includes('node_modules/@zxing/') ||
+            id.includes('node_modules/ts-custom-error')
+          ) {
+            return 'barcode';
+          }
         },
       },
     },

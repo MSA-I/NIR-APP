@@ -7,8 +7,9 @@ import { APP_NAME } from '../lib/branding';
 import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
 import Fab from './Fab';
 import NotificationBell from './NotificationBell';
-import { useDialogLayer, useToast } from './ui';
+import { ConfirmDialog, useDialogLayer, useToast } from './ui';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
+import { pendingOfflineWork } from '../lib/offlineQueue';
 import type { Role } from '../lib/types';
 import { toHebrewError } from '../lib/errors';
 
@@ -90,6 +91,7 @@ export default function Layout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [pendingOffline, setPendingOffline] = useState<{ actions: number; uploads: number } | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const role = profile?.role;
   // Section 5: payer/supplier get no search box — their routes are dead ends for it.
@@ -148,13 +150,23 @@ export default function Layout() {
   // only when leaving the authenticated shell, never when tenant data finishes loading.
   useEffect(() => () => { document.title = APP_NAME; }, []);
 
-  async function handleSignOut() {
+  async function handleSignOut(confirmedWithPendingWork = false) {
     const detail: OrderDraftFlushDetail = { pending: [] };
     window.dispatchEvent(new CustomEvent<OrderDraftFlushDetail>(ORDER_DRAFT_FLUSH_EVENT, { detail }));
     if (detail.pending.length) {
       const saved = await Promise.all(detail.pending);
       if (saved.some((result) => !result)) {
         toast('לא ניתן להתנתק לפני שמירת טיוטת ההזמנה. יש לנסות שוב.', 'error');
+        return;
+      }
+    }
+    // Signing out clears the session, and a receipt still waiting in the device queue can only be
+    // sent with a session (`OFFLINE-SYNC-DESIGN.md:87-88`). So it is asked, with the counts named,
+    // through ConfirmDialog — never `confirm()`, which cannot be styled, translated or tested.
+    if (!confirmedWithPendingWork) {
+      const pending = await pendingOfflineWork();
+      if (pending.actions > 0 || pending.uploads > 0) {
+        setPendingOffline(pending);
         return;
       }
     }
@@ -270,6 +282,20 @@ export default function Layout() {
       {/* Role-aware quick actions — direct mobile bar and desktop speed dial. The component
           self-gates by role and focused route; Layout never wraps public pages. */}
       <Fab />
+
+      {/* Unsynced receiving work + logout. The counts are named rather than summarised: "2 פעולות"
+          and "1 העלאה" are different work, and a person deciding whether to sign out on a phone
+          with no signal needs to know which of the two they are about to leave behind. */}
+      <ConfirmDialog open={pendingOffline !== null} danger
+        title="יש נתונים שטרם סונכרנו"
+        message={pendingOffline
+          ? `במכשיר הזה ממתינות ${pendingOffline.actions} פעולות קבלה ו-${pendingOffline.uploads} העלאות שלא נשלחו לשרת. `
+            + 'התנתקות מוחקת את הסשן, והפעולות האלה יישלחו רק לאחר התחברות מחדש באותו מכשיר ובאותו דפדפן. '
+            + 'מומלץ להתחבר לרשת, לסנכרן, ורק אז להתנתק.'
+          : ''}
+        confirmLabel="התנתקות בכל זאת"
+        onClose={() => setPendingOffline(null)}
+        onConfirm={() => { setPendingOffline(null); void handleSignOut(true); }} />
     </div>
   );
 }
