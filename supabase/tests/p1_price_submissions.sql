@@ -1066,6 +1066,10 @@ insert into document_interpretations (
   )
 );
 -- Staff may choose a supplier in their tenant, but the server still owns the UUID/path.
+-- The fixture expired TWO HOURS ago -- past the one-hour sweep grace 0065 added -- so the
+-- reserve call below still deletes it. The test's intent is unchanged (expired unused
+-- claims get swept); 0065 only moved WHEN: a claim expired less than an hour stays
+-- renewable and must survive the sweep (proven in p6b_upload_reservations.sql).
 insert into supplier_price_document_upload_reservations (
   document_id, org_id, actor_id, supplier_id,
   file_name, mime_type, storage_path, created_at, expires_at
@@ -1076,7 +1080,7 @@ insert into supplier_price_document_upload_reservations (
   '31000000-0000-0000-0000-000000000002',
   'expired.pdf', 'application/pdf',
   '11000000-0000-0000-0000-000000000001/supplier/31000000-0000-0000-0000-000000000002/45000000-0000-4000-8000-000000000087/expired.pdf',
-  now() - interval '30 minutes', now() - interval '15 minutes'
+  now() - interval '3 hours', now() - interval '2 hours'
 );
 select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);

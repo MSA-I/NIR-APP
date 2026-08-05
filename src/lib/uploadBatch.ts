@@ -8,8 +8,37 @@ export interface UploadBatchSummary {
   failed: string[];
 }
 
-/** Runs every item even after a failure so a retry can contain only the failed subset. */
+export type UploadBatchDelegate = <T>(
+  items: readonly T[],
+  upload: (item: T) => Promise<unknown>,
+) => Promise<UploadBatchResult<T>>;
+
+/**
+ * The Upload Center's queue (wave 6b) registers itself here at module load.
+ *
+ * Registration instead of a static import for one reason: this module is executed by
+ * plain Node in `check:p2` (`scripts/check-p2-reliability.ts`), which cannot load the
+ * Center's .tsx module. In the browser every `runUploadBatch` consumer imports
+ * `FileUpload`, which imports `UploadCenter`, so the delegate is always registered
+ * before the first call and every batch runs through the Center's queue.
+ */
+let uploadBatchDelegate: UploadBatchDelegate | null = null;
+
+export function setUploadBatchDelegate(delegate: UploadBatchDelegate | null) {
+  uploadBatchDelegate = delegate;
+}
+
+/**
+ * Runs every item even after a failure so a retry can contain only the failed subset.
+ *
+ * The signature is load-bearing — four live consumers call it exactly like this. The
+ * implementation delegates to the Upload Center's global queue, which preserves the
+ * sequential per-batch order the server contracts assume and surfaces each file's
+ * upload state in the Center. The resolved result contract is identical either way:
+ * one attempt per item, failures collected, order kept.
+ */
 export async function runUploadBatch<T>(items: readonly T[], upload: (item: T) => Promise<unknown>): Promise<UploadBatchResult<T>> {
+  if (uploadBatchDelegate) return uploadBatchDelegate(items, upload);
   const succeeded: T[] = [];
   const failed: { item: T; error: unknown }[] = [];
   for (const item of items) {

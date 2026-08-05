@@ -11,12 +11,19 @@ import { fmtDateTime } from '../lib/format';
 import { openReservedPopup } from '../lib/popup';
 import {
   mergeUploadBatchSummary,
-  runUploadBatch,
   type UploadBatchResult,
   type UploadBatchSummary,
 } from '../lib/uploadBatch';
 import { fetchAll } from '../lib/supabasePaging';
 import { DOCUMENT_PROCESSING_STAGE_META, useDocumentProcessing } from '../lib/useDocumentProcessing';
+import { TusUploadCancelledError, TusUploadError, tusUploadToDocuments } from '../lib/tusUpload';
+import {
+  UploadCenter,
+  claimActiveUploadTask,
+  enqueueUploadCenterBatch,
+  getUploadCenterSnapshot,
+  subscribeUploadCenter,
+} from './UploadCenter';
 
 export const DOCUMENT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 
@@ -60,19 +67,42 @@ export const DOCUMENT_UPLOAD_ACCEPT = [
   ...Object.keys(DOCUMENT_MIME_BY_EXTENSION).map((extension) => `.${extension}`),
 ].join(',');
 
+/**
+ * The safe resume point after a partial failure (wave 6b, the money rule).
+ * `storagePath` set: the object is already durable — a retry must redo the registration
+ * steps against the SAME path and never upload again. `documentId` also set: the registry
+ * row exists too, and only the processing enqueue is left to redo.
+ */
+export interface DocumentUploadResume {
+  storagePath: string;
+  documentId: string | null;
+}
+
 class DocumentUploadError extends Error {
-  constructor(message: string, readonly retryable: boolean, readonly registered = false) {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+    readonly registered = false,
+    readonly resume: DocumentUploadResume | null = null,
+  ) {
     super(message);
   }
 }
 
+const TRANSIENT_ERROR_PATTERN = /(?:failed to fetch|fetch failed|network|timed? ?out|temporar(?:y|ily)|service unavailable|\b(?:408|429|5\d\d)\b)/i;
+
 export function documentUploadFailure(error: unknown) {
   if (error instanceof DocumentUploadError) {
-    return { message: error.message, retryable: error.retryable, registered: error.registered };
+    return { message: error.message, retryable: error.retryable, registered: error.registered, resume: error.resume };
+  }
+  if (error instanceof TusUploadCancelledError) {
+    return { message: 'ההעלאה בוטלה.', retryable: false, registered: false, resume: null };
+  }
+  if (error instanceof TusUploadError) {
+    return { message: error.message, retryable: error.retryable, registered: false, resume: null };
   }
   const raw = error instanceof Error ? error.message : String(error);
-  const retryable = /(?:failed to fetch|fetch failed|network|timed? ?out|temporar(?:y|ily)|service unavailable|\b(?:408|429|5\d\d)\b)/i.test(raw);
-  return { message: toHebrewError(error), retryable, registered: false };
+  return { message: toHebrewError(error), retryable: TRANSIENT_ERROR_PATTERN.test(raw), registered: false, resume: null };
 }
 
 export function mergeDocumentUploadSummary(
@@ -146,60 +176,137 @@ function defaultDocumentKind(entityType: string): DocumentKind {
   return 'other';
 }
 
+/** Hebrew source labels for the Upload Center's "originating entity" column. */
+const ENTITY_SOURCE_LABELS: Record<string, string> = {
+  invoice: 'חשבונית',
+  goods_receipt: 'קבלת סחורה',
+  payment: 'תשלום',
+  inbox: 'תיבת המסמכים',
+};
+
 /**
- * Uploads a file to the private `documents` bucket and registers it on an entity.
+ * Uploads a file to the private `documents` bucket over tus and registers it on an entity.
  * A null entityId is an inbox capture (migration 0014): the file lands under
  * {org_id}/inbox/ and the row carries entity_type='inbox' with no entity until it is
  * re-filed from /inbox. The stored object never moves on re-filing — the bucket policy
  * reads only the leading org segment.
+ *
+ * Duplicate protection (wave 6b): the path is minted with Date.now() ONLY for a fresh
+ * upload. Once the object is stored, every failure past that point carries a
+ * `DocumentUploadResume`, and a retry passed back through `options.resume` redoes only
+ * the failed step — insert against the same stored path, or the processing enqueue —
+ * mirroring PriceListUpload's pending-registration pattern.
  */
-export async function uploadDocument(orgId: string, entityType: string, entityId: string | null, file: File, metadata: DocumentMetadata = {}) {
+export async function uploadDocument(
+  orgId: string,
+  entityType: string,
+  entityId: string | null,
+  file: File,
+  metadata: DocumentMetadata = {},
+  options: { resume?: DocumentUploadResume | null } = {},
+) {
+  // Claimed in the synchronous prologue, before any await — see UploadCenter's ambient
+  // context note. Null whenever this runs outside the Center's queue.
+  const center = claimActiveUploadTask();
   const mimeType = uploadMimeType(file);
-  const safeName = file.name.replace(/[^\w.\-]+/g, '_');
   const { data: user, error: userError } = await supabase.auth.getUser();
   if (userError || !user.user) throw new Error(userError?.message ?? 'unauthenticated');
-  // org_id must lead the path -- the bucket's RLS policy reads it to enforce tenant isolation.
-  const path = entityId
-    ? `${orgId}/${entityType}/${entityId}/${Date.now()}_${safeName}`
-    : `${orgId}/inbox/${Date.now()}_${safeName}`;
-  // Upload the exact File object. Canvas/Blob conversion would discard source pixels,
-  // orientation and metadata needed by OCR and long-term document evidence.
-  const up = await supabase.storage.from('documents').upload(path, file, { contentType: mimeType });
-  if (up.error) throw new Error(up.error.message);
-  const ins = await supabase.from('documents').insert({
-    org_id: orgId, entity_type: entityType, entity_id: entityId,
-    storage_path: path, file_name: file.name, mime_type: mimeType, uploaded_by: user.user.id,
-    document_kind: metadata.documentKind ?? defaultDocumentKind(entityType),
-    supplier_id: metadata.supplierId ?? null,
-    document_date: metadata.documentDate ?? null,
-  }).select('id').single();
-  if (ins.error || !ins.data) {
-    // The row never existed, so this cleanup can only target the object created above.
-    // Preserve the insert error: a cleanup failure is secondary and must not hide the cause.
+  const resume = options.resume ?? null;
+  let path = resume?.storagePath ?? null;
+  let documentId = resume?.documentId ?? null;
+  let freshUpload = false;
+
+  if (!path) {
+    const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+    // org_id must lead the path -- the bucket's RLS policy reads it to enforce tenant isolation.
+    path = entityId
+      ? `${orgId}/${entityType}/${entityId}/${Date.now()}_${safeName}`
+      : `${orgId}/inbox/${Date.now()}_${safeName}`;
+    // Upload the exact File object (camera captures included — tus takes the File as-is).
+    // Canvas/Blob conversion would discard source pixels, orientation and metadata needed
+    // by OCR and long-term document evidence.
+    const handle = tusUploadToDocuments(file, {
+      objectName: path,
+      contentType: mimeType,
+      onProgress: (percent) => center?.onProgress(percent),
+    });
+    center?.registerAbort(handle.abort);
     try {
-      const cleanup = await supabase.storage.from('documents').remove([up.data.path]);
-      if (cleanup.error) console.error('[supplyflow] failed to clean up unregistered document', cleanup.error.message);
-    } catch (cleanupError) {
-      console.error('[supplyflow] failed to clean up unregistered document', cleanupError);
+      await handle.done;
+    } catch (uploadError) {
+      center?.registerAbort(null);
+      if (uploadError instanceof TusUploadCancelledError) throw uploadError;
+      if (uploadError instanceof TusUploadError) {
+        // Nothing durable exists yet — a full retry is safe and mints a fresh path.
+        throw new DocumentUploadError(uploadError.message, uploadError.retryable);
+      }
+      throw uploadError;
     }
-    throw new Error(ins.error?.message ?? 'document registration failed');
+    center?.registerAbort(null);
+    freshUpload = true;
   }
+  center?.markStored(documentId);
+
+  if (!documentId) {
+    const ins = await supabase.from('documents').insert({
+      org_id: orgId, entity_type: entityType, entity_id: entityId,
+      storage_path: path, file_name: file.name, mime_type: mimeType, uploaded_by: user.user.id,
+      document_kind: metadata.documentKind ?? defaultDocumentKind(entityType),
+      supplier_id: metadata.supplierId ?? null,
+      document_date: metadata.documentDate ?? null,
+    }).select('id').single();
+    if (ins.error || !ins.data) {
+      const insertMessage = ins.error?.message ?? 'document registration failed';
+      // The row never existed, so this cleanup can only target the object created above.
+      // Preserve the insert error: a cleanup failure is secondary and must not hide the cause.
+      // On a resumed attempt the object is deliberately kept — it is the thing being resumed.
+      let objectRemains = !freshUpload;
+      if (freshUpload) {
+        try {
+          const cleanup = await supabase.storage.from('documents').remove([path]);
+          if (cleanup.error) {
+            objectRemains = true;
+            console.error('[supplyflow] failed to clean up unregistered document', cleanup.error.message);
+          }
+        } catch (cleanupError) {
+          objectRemains = true;
+          console.error('[supplyflow] failed to clean up unregistered document', cleanupError);
+        }
+      }
+      if (objectRemains) {
+        // The object is durable but the registry row is not. The retry must redo ONLY the
+        // insert against the same stored path — re-uploading would duplicate the object.
+        throw new DocumentUploadError(
+          'הקובץ נשמר באחסון, אך רישום המסמך לא הושלם. ניסיון חוזר ישלים את הרישום בלי להעלות מחדש.',
+          true,
+          false,
+          { storagePath: path, documentId: null },
+        );
+      }
+      throw new Error(insertMessage);
+    }
+    documentId = ins.data.id;
+  }
+  center?.markRegistered(documentId);
   if (metadata.enqueueProcessing === false) {
-    return { documentId: ins.data.id, jobId: null };
+    return { documentId, jobId: null };
   }
-  const queued = await supabase.rpc('enqueue_document_processing', { p_document_id: ins.data.id });
+  const queued = await supabase.rpc('enqueue_document_processing', { p_document_id: documentId });
   if (queued.error && processingQueueUnavailable(queued.error)) {
-    return { documentId: ins.data.id, jobId: null };
+    return { documentId, jobId: null };
   }
   if (queued.error || typeof queued.data !== 'string') {
-    // The source and registry row are durable now; retrying the whole upload would duplicate them.
+    // The source and registry row are durable now; retrying the whole upload would duplicate
+    // them. `retryable` stays false so a caller without resume-awareness never re-uploads;
+    // a resume-aware caller retries the enqueue alone through `resume`.
     throw new DocumentUploadError(
       'הקובץ נשמר, אך לא נכנס לתור העיבוד. ניתן לנסות עיבוד מחדש מגלריית המסמכים.',
       false,
       true,
+      { storagePath: path, documentId },
     );
   }
-  return { documentId: ins.data.id, jobId: queued.data };
+  return { documentId, jobId: queued.data };
 }
 
 async function entityMetadata(entityType: string, entityId: string, documentKind: DocumentKind): Promise<DocumentMetadata> {
@@ -232,6 +339,14 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  /**
+   * The safe resume point per file (the money rule): once an object is stored, every
+   * retry — this screen's button or the Upload Center's — redoes only the failed step
+   * against the same stored path instead of minting a new Date.now() path.
+   */
+  const resumeRef = useRef(new Map<File, DocumentUploadResume>());
+  const registeredSeenRef = useRef(new Set<string>());
   const [retryFiles, setRetryFiles] = useState<File[]>([]);
   const [uploadSummary, setUploadSummary] = useState<UploadBatchSummary | null>(null);
   const [pending, setPending] = useState<DocumentRow | null>(null);
@@ -248,17 +363,54 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
     [entityType, entityId]);
   const processing = useDocumentProcessing(canReview && docs ? docs.map((doc) => doc.id) : []);
 
+  // A Center-driven retry can register a document while this screen sits idle; refresh
+  // the list when that happens. Batch runs refetch once at their end (busyRef gate).
+  useEffect(() => subscribeUploadCenter(() => {
+    const { entries } = getUploadCenterSnapshot();
+    let changed = false;
+    for (const entry of entries) {
+      if (entry.status === 'registered' && entry.documentId && !registeredSeenRef.current.has(entry.documentId)) {
+        registeredSeenRef.current.add(entry.documentId);
+        changed = true;
+      }
+    }
+    if (changed && !busyRef.current) void refetch();
+  }), [refetch]);
+
   async function uploadFiles(files: File[], previousSummary: UploadBatchSummary | null = null) {
     if (!files.length || !profile) return;
     setBusy(true);
+    busyRef.current = true;
     try {
       const metadata = await entityMetadata(entityType, entityId, documentKind);
-      const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, entityType, entityId, file, {
-        ...metadata,
-        enqueueProcessing: canReview,
-      }));
+      const result = await enqueueUploadCenterBatch(
+        files,
+        (file) => uploadDocument(profile.org_id, entityType, entityId, file, {
+          ...metadata,
+          enqueueProcessing: canReview,
+        }, { resume: resumeRef.current.get(file) ?? null }),
+        {
+          source: ENTITY_SOURCE_LABELS[entityType] ?? 'מסמך מצורף',
+          retry: true,
+          classifyFailure: (file, error) => {
+            const failure = documentUploadFailure(error);
+            // Record the resume point the moment the failure happens, so any retry —
+            // the Center's or this screen's — redoes only the failed step.
+            if (failure.resume) resumeRef.current.set(file, failure.resume);
+            else resumeRef.current.delete(file);
+            return {
+              message: failure.message,
+              retryable: failure.retryable || failure.resume !== null,
+              registered: failure.registered,
+              storedSafely: failure.resume !== null || failure.registered,
+              documentId: failure.resume?.documentId ?? null,
+            };
+          },
+        },
+      );
+      for (const file of result.succeeded) resumeRef.current.delete(file);
       const failures = result.failed.map(({ item, error }) => ({ item, ...documentUploadFailure(error) }));
-      const failed = failures.filter(({ retryable }) => retryable).map(({ item }) => item);
+      const failed = failures.filter(({ retryable, resume }) => retryable || resume !== null).map(({ item }) => item);
       const registered = failures.filter(({ registered: isRegistered }) => isRegistered).length;
       setRetryFiles(failed);
       const summary = mergeDocumentUploadSummary(previousSummary, files, result);
@@ -283,6 +435,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
       toast(toHebrewError(e), 'error');
     } finally {
       setBusy(false);
+      busyRef.current = false;
       if (inputRef.current) inputRef.current.value = '';
     }
   }
@@ -351,6 +504,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
           {...(capture ? { capture: 'environment' as const } : {})}
           onChange={(e) => void onPick(e.target.files)} />
       </div>
+      <UploadCenter />
       {uploadSummary && (
         <Note tone={uploadSummary.failed.length ? 'alert' : 'done'} className="mb-2">
           <div role="status">
