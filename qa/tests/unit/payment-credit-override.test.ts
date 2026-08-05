@@ -7,6 +7,7 @@ const root = process.cwd();
 const migration = readFileSync(path.join(root, 'supabase', 'migrations', '0053_payment_credit_override.sql'), 'utf8');
 const approvalUi = readFileSync(path.join(root, 'src', 'pages', 'PaymentRequests.tsx'), 'utf8');
 const payerUi = readFileSync(path.join(root, 'src', 'pages', 'PayerQueue.tsx'), 'utf8');
+const browserTools = readFileSync(path.join(root, 'qa', 'browser', 'browser-tools.ts'), 'utf8');
 
 describe('open supplier credit approval contract', () => {
   test('ordinary approval is server-blocked and the explicit RPC binds fresh context', () => {
@@ -15,6 +16,7 @@ describe('open supplier credit approval contract', () => {
     assert.match(migration, /p_expected_supplier_id is distinct from v_request\.supplier_id/);
     assert.match(migration, /round\(v_open_credit_total, 2\) <> round\(p_expected_open_credit_total, 2\)/);
     assert.match(migration, /v_role not in \('owner', 'office'\)/);
+    assert.match(browserTools, /'open_credit_override'/);
   });
 
   test('override audit preserves all required decision values without changing credits', () => {
