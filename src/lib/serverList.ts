@@ -62,12 +62,26 @@ export type LeafPredicate =
   | { kind: 'gte'; column: string; value: string | number }
   | { kind: 'lt'; column: string; value: string | number }
   | { kind: 'lte'; column: string; value: string | number }
+  /** An empty `values` throws `invalid_request`: PostgREST parses `in.()` as a syntax error at
+      runtime, and "in nothing" is a filter that matches nothing while looking like a mistake. */
   | { kind: 'in'; column: string; values: readonly (string | number)[] }
   /** `is.null` / `is.true` / `is.false`. Also how an embedded `!left` resource is tested for absence. */
   | { kind: 'is'; column: string; value: null | boolean }
   | { kind: 'not-null'; column: string }
-  /** Case-insensitive contains. See `containsPattern` for what the server does and does not escape. */
+  /**
+   * Case-insensitive contains. User-typed `%`/`_` are escaped before `ilike` — see
+   * `containsPattern`. An empty `text` throws `invalid_request`: `ilike '%%'` excludes NULLs, so
+   * "empty search" would quietly drop rows that a client-side `.includes('')` keeps. The caller
+   * decides what an empty search box means (usually: no predicate at all).
+   */
   | { kind: 'contains-text'; column: string; text: string };
+
+/**
+ * PostgREST `and(...)`. Its value is inside `any-of`: `or=(a,and(b,c))` is the only way to say
+ * "this OR (that AND that)" in one request. Alone it is emitted as `or=(and(...))`, which PostgREST
+ * reads as the same conjunction — one emission path, so the two spellings cannot drift.
+ */
+export type AllOfPredicate = { kind: 'all-of'; of: readonly LeafPredicate[] };
 
 /**
  * The closed set of filters this contract accepts.
@@ -78,8 +92,9 @@ export type LeafPredicate =
  */
 export type ServerPredicate =
   | LeafPredicate
+  | AllOfPredicate
   /** PostgREST `or=(a,b)`. Used for a search box that looks in more than one column. */
-  | { kind: 'any-of'; of: readonly LeafPredicate[] };
+  | { kind: 'any-of'; of: readonly (LeafPredicate | AllOfPredicate)[] };
 
 /* ------------------------------------------------------------------ request and result */
 
@@ -109,6 +124,12 @@ export interface ServerListRequest {
   pageSize: number;
   /** The deterministic tie-breaker column. `id` everywhere in this schema. */
   idColumn?: string;
+  /**
+   * Cancels the HTTP request itself, via supabase-js `.abortSignal()`. A debounced search box only
+   * delays the next request; the superseded one is still on the wire, still paying its COUNT, and
+   * still able to land after the newer answer. Aborting is the half debounce cannot do.
+   */
+  signal?: AbortSignal;
 }
 
 /** Set when the requested page no longer existed. Carries text a Hebrew-speaking user can act on. */
@@ -213,6 +234,8 @@ export interface ListQuery<Row> extends PromiseLike<PostgrestPage<Row>> {
   or(filters: string): ListQuery<Row>;
   order(column: string, options?: { ascending?: boolean; nullsFirst?: boolean }): ListQuery<Row>;
   range(from: number, to: number): ListQuery<Row>;
+  abortSignal(signal: AbortSignal): ListQuery<Row>;
+  limit(count: number): ListQuery<Row>;
 }
 
 export interface ServerListSelectOptions {
@@ -233,11 +256,32 @@ export interface ServerListClient {
  * and inside an `or=(...)` group the value is also unquoted first. `%` is the wildcard SQL itself
  * uses, so it needs no rewrite and behaves the same quoted or not.
  *
- * `%` and `_` typed by the user stay wildcards — PostgREST exposes no ESCAPE clause. That is a
- * search being broader than asked, not a count being wrong, and it is left visible here rather than
- * hidden behind a rewrite that would also break a genuine search for an invoice number with `_`.
+ * User-typed `%`, `_` and `\` are escaped, because `LIKE`'s default escape character is `\` and
+ * PostgREST passes the pattern to `ILIKE` untouched. Without this, a search for `50%` matches every
+ * row starting with "50", and an invoice number with `_` matches numbers it should not — a list
+ * that is silently broader than the search the user typed. An empty `text` is rejected upstream
+ * (see `validateLeaf`); this function only ever wraps a non-empty term.
  */
-const containsPattern = (text: string) => `%${text}%`;
+const escapeLikeWildcards = (text: string) => text.replace(/[\\%_]/g, '\\$&');
+const containsPattern = (text: string) => `%${escapeLikeWildcards(text)}%`;
+
+/**
+ * The runtime guards a leaf needs before it can travel. Both emission paths (`applyPredicate` and
+ * `leafToOrTerm`) call this, so a leaf inside an or-group is held to exactly the same rules as one
+ * applied directly.
+ */
+function validateLeaf(leaf: LeafPredicate): LeafPredicate {
+  if (leaf.kind === 'in' && leaf.values.length === 0) {
+    // Compiles fine, then PostgREST rejects `in.()` at runtime — so it must be caught here.
+    throw new ServerListError('invalid_request', `empty_in_predicate:${leaf.column}`);
+  }
+  if (leaf.kind === 'contains-text' && leaf.text === '') {
+    // `ilike '%%'` matches every non-NULL value — different semantics from the client-side
+    // `.includes('')` it replaces, which keeps NULL-backed rows. Refusing is the honest option.
+    throw new ServerListError('invalid_request', `empty_contains_text_predicate:${leaf.column}`);
+  }
+  return leaf;
+}
 
 /**
  * PostgREST splits an `or=(...)` group on commas, so a value carrying one — a supplier name with a
@@ -250,7 +294,8 @@ const quoteOrValue = (value: string | number | boolean) => {
 };
 
 /** One `or=(...)` term. Kept beside `applyPredicate` so the two cannot drift apart. */
-function leafToOrTerm(leaf: LeafPredicate): string {
+function leafToOrTerm(rawLeaf: LeafPredicate): string {
+  const leaf = validateLeaf(rawLeaf);
   switch (leaf.kind) {
     case 'eq': return `${leaf.column}.eq.${quoteOrValue(leaf.value)}`;
     case 'neq': return `${leaf.column}.neq.${quoteOrValue(leaf.value)}`;
@@ -272,6 +317,22 @@ function leafToOrTerm(leaf: LeafPredicate): string {
 }
 
 /**
+ * `and(a,b)` — one conjunction term. An empty conjunction throws for the same reason an empty
+ * or-group does: `and()` is a PostgREST parse error, and "all of nothing" is vacuously true, which
+ * would widen a filtered list without saying so.
+ */
+function allOfToOrTerm(predicate: AllOfPredicate): string {
+  if (predicate.of.length === 0) {
+    throw new ServerListError('invalid_request', 'empty_all_of_predicate');
+  }
+  return `and(${predicate.of.map(leafToOrTerm).join(',')})`;
+}
+
+/** A member of an `any-of` group: a plain leaf or a nested conjunction. */
+const orMemberToTerm = (member: LeafPredicate | AllOfPredicate): string =>
+  member.kind === 'all-of' ? allOfToOrTerm(member) : leafToOrTerm(member);
+
+/**
  * Applies one predicate to a query.
  *
  * The `never` in the default branch is the enforcement promised above: adding a member to
@@ -279,6 +340,7 @@ function leafToOrTerm(leaf: LeafPredicate): string {
  * a member cannot reach this function at all.
  */
 export function applyPredicate<Row>(query: ListQuery<Row>, predicate: ServerPredicate): ListQuery<Row> {
+  if (predicate.kind !== 'any-of' && predicate.kind !== 'all-of') validateLeaf(predicate);
   switch (predicate.kind) {
     case 'eq': return query.eq(predicate.column, predicate.value);
     case 'neq': return query.neq(predicate.column, predicate.value);
@@ -290,13 +352,18 @@ export function applyPredicate<Row>(query: ListQuery<Row>, predicate: ServerPred
     case 'is': return query.is(predicate.column, predicate.value);
     case 'not-null': return query.not(predicate.column, 'is', null);
     case 'contains-text': return query.ilike(predicate.column, containsPattern(predicate.text));
+    case 'all-of':
+      // One emission path with the nested case: `or=(and(...))` is the same conjunction PostgREST
+      // would read from `and=(...)`, and reusing `allOfToOrTerm` means the two spellings cannot
+      // diverge on quoting or validation.
+      return query.or(allOfToOrTerm(predicate));
     case 'any-of': {
       if (predicate.of.length === 0) {
         // An empty `or=()` is a PostgREST parse error, and treating it as "match everything" would
         // widen a filtered list without saying so.
         throw new ServerListError('invalid_request', 'empty_any_of_predicate');
       }
-      return query.or(predicate.of.map(leafToOrTerm).join(','));
+      return query.or(predicate.of.map(orMemberToTerm).join(','));
     }
     default: {
       const unreachable: never = predicate;
@@ -321,6 +388,8 @@ function buildQuery<Row>(
   let query = client
     .from(request.table)
     .select(request.select, { count: 'exact', head: options.head }) as ListQuery<Row>;
+
+  if (request.signal) query = query.abortSignal(request.signal);
 
   for (const predicate of request.predicates ?? []) query = applyPredicate(query, predicate);
 
@@ -432,4 +501,90 @@ export async function fetchServerList<Row>(
     const last = lastPageOf(total, request.pageSize);
     page = last < page ? last : 0;
   }
+}
+
+/* ------------------------------------------------------------------ cross-table search */
+
+/**
+ * The most supplier ids a search is allowed to inline into one `in.(...)`.
+ *
+ * The bound is URL length: every id is a 36-character UUID and PostgREST reads the whole filter
+ * from the query string. 150 is the same ceiling `fetchInChunks` already enforces for `.in()`
+ * (`supabasePaging.ts:43`) — one constant of the codebase, not two.
+ */
+export const SUPPLIER_SEARCH_ID_CAP = 150;
+
+/**
+ * Shown in the toolbar when the supplier arm of a search was dropped. Exported so the three
+ * converted screens render one wording — the count on screen is only honest while the narrowing
+ * is visible.
+ */
+export const SUPPLIER_SEARCH_NARROWED =
+  'שמות ספקים רבים מדי תואמים לחיפוש, ולכן הוא בוצע על עמודות המסך בלבד. דייקו את שם הספק כדי לחפש גם לפי ספק.';
+
+export interface SupplierIdSearch {
+  /** Empty either because no supplier matched or because the search was narrowed — check `narrowed`. */
+  ids: string[];
+  /**
+   * More than `SUPPLIER_SEARCH_ID_CAP` suppliers matched, so the supplier arm is dropped rather
+   * than truncated. A truncated arm would return a list — and a total — that excludes suppliers
+   * the user's search matches, with nothing on screen admitting it. Dropping the arm narrows the
+   * search to the screen's own columns, and the screen states that (`SUPPLIER_SEARCH_NARROWED`),
+   * so the displayed count is exactly the count of the filter that ran.
+   */
+  narrowed: boolean;
+}
+
+/**
+ * Step one of the cross-table search: which suppliers match the term.
+ *
+ * `DataTable`'s client-side `searchFn` reads `row.supplier.name` off the embedded resource, which
+ * PostgREST cannot filter *the parent* by without turning the embed into an inner join and changing
+ * which rows exist. So the search runs in two steps: a trgm-backed lookup on `suppliers.name`
+ * (`suppliers_name_trgm`, `0011:10`), then `in supplier_id <ids>` as one arm of the screen's
+ * `any-of`. Soft-deleted suppliers are deliberately included — the embedded name the client-side
+ * search read today does not filter `deleted_at` either, and an invoice of a deleted supplier is
+ * still findable by that supplier's name.
+ */
+export async function searchSupplierIds(
+  client: ServerListClient,
+  q: string,
+  signal?: AbortSignal,
+): Promise<SupplierIdSearch> {
+  if (q === '') {
+    // Same rule as `contains-text`: an empty term is the caller forgetting to not search.
+    throw new ServerListError('invalid_request', 'empty_supplier_search');
+  }
+  let query = client.from('suppliers').select('id') as ListQuery<{ id: string }>;
+  if (signal) query = query.abortSignal(signal);
+  // One row past the cap: "151 rows" distinguishes "too many" from "exactly 150" without counting.
+  const response = await query.ilike('name', containsPattern(q)).limit(SUPPLIER_SEARCH_ID_CAP + 1);
+  if (response.error) {
+    throw new ServerListError('request_failed', response.error.message, response.status);
+  }
+  const rows = response.data ?? [];
+  if (rows.length > SUPPLIER_SEARCH_ID_CAP) return { ids: [], narrowed: true };
+  return { ids: rows.map((row) => row.id), narrowed: false };
+}
+
+/**
+ * Step two: the screen's search predicate — its own columns, plus the supplier arm when step one
+ * found any. With no matching suppliers the predicate is the screen columns alone: an `in` over
+ * zero ids is invalid (see `LeafPredicate`), and "no supplier matched" must not erase the rest of
+ * the search.
+ */
+export function twoStepSearchPredicate(
+  screenColumns: readonly string[],
+  q: string,
+  supplierIds: readonly string[],
+): ServerPredicate {
+  return {
+    kind: 'any-of',
+    of: [
+      ...screenColumns.map((column) => ({ kind: 'contains-text', column, text: q } as const)),
+      ...(supplierIds.length > 0
+        ? [{ kind: 'in', column: 'supplier_id', values: supplierIds } as const]
+        : []),
+    ],
+  };
 }

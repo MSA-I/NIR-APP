@@ -6,9 +6,13 @@ import { SUPABASE_URL } from '../test/msw/handlers';
 import { toHebrewError } from './errors';
 import {
   PAGE_NO_LONGER_EXISTS,
+  SUPPLIER_SEARCH_ID_CAP,
+  SUPPLIER_SEARCH_NARROWED,
   ServerListError,
   fetchServerList,
   lastPageOf,
+  searchSupplierIds,
+  twoStepSearchPredicate,
   type ServerListClient,
   type ServerPredicate,
 } from './serverList';
@@ -382,6 +386,108 @@ describe('fetchServerList — filters', () => {
       .rejects.toMatchObject({ code: 'invalid_request' });
   });
 
+  it('emits all-of alone as one and-group', async () => {
+    const seen = useTable('invoices', invoices(1));
+
+    await fetchServerList<Row>(client, request({
+      predicates: [{
+        kind: 'all-of',
+        of: [
+          { kind: 'eq', column: 'review_status', value: 'approved' },
+          { kind: 'is', column: 'deleted_at', value: null },
+        ],
+      }],
+    }));
+
+    // `or=(and(...))` is the same conjunction as `and=(...)` — one emission path for both spellings.
+    expect(seen[0].url.searchParams.get('or'))
+      .toBe('(and(review_status.eq.approved,deleted_at.is.null))');
+  });
+
+  it('emits all-of inside any-of, which is the case it exists for', async () => {
+    const seen = useTable('invoices', invoices(1));
+
+    // "matches the text, OR belongs to this supplier within this month" — expressible in one
+    // request only as or=(leaf,and(leaf,leaf)).
+    await fetchServerList<Row>(client, request({
+      predicates: [{
+        kind: 'any-of',
+        of: [
+          { kind: 'contains-text', column: 'invoice_number', text: '104' },
+          {
+            kind: 'all-of',
+            of: [
+              { kind: 'eq', column: 'supplier_id', value: 'sup-1' },
+              { kind: 'gte', column: 'invoice_date', value: '2026-08-01' },
+            ],
+          },
+        ],
+      }],
+    }));
+
+    expect(seen[0].url.searchParams.get('or'))
+      .toBe('(invoice_number.ilike.%104%,and(supplier_id.eq.sup-1,invoice_date.gte.2026-08-01))');
+  });
+
+  it('refuses an empty all-of, alone and nested — "all of nothing" matches everything', async () => {
+    useTable('invoices', invoices(1));
+
+    await expect(fetchServerList<Row>(client, request({ predicates: [{ kind: 'all-of', of: [] }] })))
+      .rejects.toMatchObject({ code: 'invalid_request' });
+    await expect(fetchServerList<Row>(client, request({
+      predicates: [{
+        kind: 'any-of',
+        of: [{ kind: 'eq', column: 'a', value: 1 }, { kind: 'all-of', of: [] }],
+      }],
+    }))).rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('refuses an empty in-list instead of sending in.() to fail at the server', async () => {
+    useTable('invoices', invoices(1));
+
+    await expect(fetchServerList<Row>(client, request({
+      predicates: [{ kind: 'in', column: 'supplier_id', values: [] }],
+    }))).rejects.toMatchObject({ code: 'invalid_request' });
+    // The same leaf inside an or-group is held to the same rule.
+    await expect(fetchServerList<Row>(client, request({
+      predicates: [{ kind: 'any-of', of: [{ kind: 'in', column: 'supplier_id', values: [] }] }],
+    }))).rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('refuses an empty search term — ilike %% excludes NULLs, unlike .includes("")', async () => {
+    useTable('invoices', invoices(1));
+
+    await expect(fetchServerList<Row>(client, request({
+      predicates: [{ kind: 'contains-text', column: 'invoice_number', text: '' }],
+    }))).rejects.toMatchObject({ code: 'invalid_request' });
+    await expect(fetchServerList<Row>(client, request({
+      predicates: [{ kind: 'any-of', of: [{ kind: 'contains-text', column: 'invoice_number', text: '' }] }],
+    }))).rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('escapes user-typed % and _ so a search means the characters, not the wildcards', async () => {
+    const seen = useTable('invoices', invoices(1));
+
+    await fetchServerList<Row>(client, request({
+      predicates: [{ kind: 'contains-text', column: 'invoice_number', text: '50%_' }],
+    }));
+
+    // Unescaped, `%50%_%` matches any value containing "50" followed by any character.
+    expect(seen[0].url.searchParams.get('invoice_number')).toBe('ilike.%50\\%\\_%');
+  });
+
+  it('escapes wildcards inside an or-group too, where the backslash also forces quoting', async () => {
+    const seen = useTable('invoices', invoices(1));
+
+    await fetchServerList<Row>(client, request({
+      predicates: [{ kind: 'any-of', of: [{ kind: 'contains-text', column: 'invoice_number', text: '50%' }] }],
+    }));
+
+    // The escape backslash is itself a reserved character in an or-group, so the pattern arrives
+    // quoted with the backslash doubled; PostgREST unquotes it back to %50\%%.
+    expect(seen[0].url.searchParams.get('or')).toBe('(invoice_number.ilike."%50\\\\%%")');
+  });
+
   it('applies the same filters to the count probe on the recovery path', async () => {
     const seen = useTable('invoices', invoices(42));
 
@@ -394,6 +500,119 @@ describe('fetchServerList — filters', () => {
     // A probe that counted the unfiltered table would send the user to a page that is not there.
     for (const call of seen) expect(call.url.searchParams.get('deleted_at')).toBe('is.null');
     expect(seen[1].url.searchParams.get('offset')).toBeNull();
+  });
+});
+
+describe('searchSupplierIds — the two-step cross-table search', () => {
+  const suppliers = (count: number) => Array.from({ length: count }, (_, i) => ({ id: `sup-${i}` }));
+
+  /** A suppliers endpoint that answers `select=id` lookups and logs what was asked. */
+  function useSuppliers(rows: { id: string }[]): Seen[] {
+    const seen: Seen[] = [];
+    server.use(http.get(`${SUPABASE_URL}/rest/v1/suppliers`, ({ request: req }) => {
+      const url = new URL(req.url);
+      seen.push({ url, method: req.method, prefer: req.headers.get('prefer') });
+      const limit = Number(url.searchParams.get('limit') ?? String(rows.length));
+      return HttpResponse.json(rows.slice(0, limit));
+    }));
+    return seen;
+  }
+
+  it('asks suppliers by name with the wildcards escaped, one row past the cap', async () => {
+    const seen = useSuppliers(suppliers(2));
+
+    const result = await searchSupplierIds(client, 'כהן 50%');
+
+    expect(result).toEqual({ ids: ['sup-0', 'sup-1'], narrowed: false });
+    expect(seen[0].url.searchParams.get('select')).toBe('id');
+    expect(seen[0].url.searchParams.get('name')).toBe('ilike.%כהן 50\\%%');
+    // The +1 is how "more than the cap" is detected without paying a COUNT.
+    expect(seen[0].url.searchParams.get('limit')).toBe(String(SUPPLIER_SEARCH_ID_CAP + 1));
+  });
+
+  it('drops the supplier arm entirely past the cap, and says so, instead of truncating it', async () => {
+    useSuppliers(suppliers(SUPPLIER_SEARCH_ID_CAP + 1));
+
+    const result = await searchSupplierIds(client, 'בע');
+
+    // Truncating to 150 ids would produce a list — and a total — that silently excludes suppliers
+    // the search matches. Dropping the arm keeps the count honest; the screen must then show
+    // SUPPLIER_SEARCH_NARROWED so the narrowing is visible rather than quiet.
+    expect(result).toEqual({ ids: [], narrowed: true });
+    expect(SUPPLIER_SEARCH_NARROWED).toMatch(/[֐-׿]/);
+  });
+
+  it('returns every id at exactly the cap — 150 matches is not "too many"', async () => {
+    useSuppliers(suppliers(SUPPLIER_SEARCH_ID_CAP));
+
+    const result = await searchSupplierIds(client, 'ספק');
+
+    expect(result.narrowed).toBe(false);
+    expect(result.ids).toHaveLength(SUPPLIER_SEARCH_ID_CAP);
+  });
+
+  it('refuses an empty term, same as contains-text', async () => {
+    await expect(searchSupplierIds(client, '')).rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('carries a refused lookup as request_failed with Hebrew attached', async () => {
+    server.use(http.get(`${SUPABASE_URL}/rest/v1/suppliers`, () => HttpResponse.json(
+      { message: 'permission denied for table suppliers', code: '42501', details: null, hint: null },
+      { status: 403 },
+    )));
+
+    const failure = await searchSupplierIds(client, 'כהן').catch((e: unknown) => e);
+
+    expect(failure).toBeInstanceOf(ServerListError);
+    expect((failure as ServerListError).code).toBe('request_failed');
+    expect((failure as ServerListError).hebrew).toBe('אין לך הרשאה לבצע את הפעולה הזו.');
+  });
+
+  it('composes the screen columns with the supplier arm when there are ids', async () => {
+    const seen = useTable('invoices', invoices(1));
+
+    await fetchServerList<Row>(client, request({
+      predicates: [twoStepSearchPredicate(['invoice_number'], '104', ['sup-1', 'sup-2'])],
+    }));
+
+    expect(seen[0].url.searchParams.get('or'))
+      .toBe('(invoice_number.ilike.%104%,supplier_id.in.(sup-1,sup-2))');
+  });
+
+  it('composes the screen columns alone when no supplier matched — an empty in is not sent', async () => {
+    const seen = useTable('invoices', invoices(1));
+
+    await fetchServerList<Row>(client, request({
+      predicates: [twoStepSearchPredicate(['invoice_number', 'reference'], '104', [])],
+    }));
+
+    expect(seen[0].url.searchParams.get('or'))
+      .toBe('(invoice_number.ilike.%104%,reference.ilike.%104%)');
+  });
+});
+
+describe('fetchServerList — cancellation', () => {
+  it('aborts the request on the wire when the signal fires, and rejects rather than resolving stale', async () => {
+    useTable('invoices', invoices(3));
+    const controller = new AbortController();
+    controller.abort();
+
+    const failure = await fetchServerList<Row>(client, request({ signal: controller.signal }))
+      .catch((e: unknown) => e);
+
+    // postgrest-js reports an aborted fetch as an error result; it must surface as a failure,
+    // never as an empty page that would read as "no results".
+    expect(failure).toBeInstanceOf(ServerListError);
+    expect((failure as ServerListError).message).toMatch(/abort/i);
+  });
+
+  it('leaves a request with an unfired signal untouched', async () => {
+    useTable('invoices', invoices(3));
+
+    const result = await fetchServerList<Row>(client, request({ signal: new AbortController().signal }));
+
+    expect(result.rows).toHaveLength(3);
+    expect(result.total).toBe(3);
   });
 });
 
@@ -430,9 +649,26 @@ describe('ServerPredicate — a filter with no server expression does not compil
       { kind: 'neq', column: 'payment_status', value: 'paid' },
       { kind: 'is', column: 'deleted_at', value: null },
       { kind: 'any-of', of: [{ kind: 'contains-text', column: 'invoice_number', text: 'x' }] },
+      { kind: 'all-of', of: [{ kind: 'eq', column: 'status', value: 'open' }] },
+      {
+        kind: 'any-of',
+        of: [
+          { kind: 'contains-text', column: 'invoice_number', text: 'x' },
+          { kind: 'all-of', of: [{ kind: 'eq', column: 'supplier_id', value: 's' }] },
+        ],
+      },
     ] satisfies ServerPredicate[];
 
-    expect(supported).toHaveLength(4);
+    expect(supported).toHaveLength(6);
+  });
+
+  it('keeps the nesting one level deep — an or inside an or is a restatement, not a shape', () => {
+    // @ts-expect-error — any-of is not a member of any-of; flatten it instead
+    const nested: ServerPredicate = { kind: 'any-of', of: [{ kind: 'any-of', of: [] }] };
+    // @ts-expect-error — all-of members are leaves; a conjunction of disjunctions has no emission
+    const conjunctionOfDisjunctions: ServerPredicate = { kind: 'all-of', of: [{ kind: 'any-of', of: [] }] };
+
+    expect([nested, conjunctionOfDisjunctions]).toHaveLength(2);
   });
 });
 
@@ -456,12 +692,19 @@ describe('fetchServerList — errors', () => {
     expect(toHebrewError(error)).toBe('אין לך הרשאה לבצע את הפעולה הזו.');
   });
 
-  it('gives a missing count Hebrew too, rather than the internal code', async () => {
+  it('gives a missing count its own Hebrew sentence, not the generic fallback and never a 0', async () => {
     server.use(http.get(`${SUPABASE_URL}/rest/v1/invoices`, () => HttpResponse.json(invoices(2))));
 
     const failure = await fetchServerList<Row>(client, request()).catch((e: unknown) => e);
 
-    expect((failure as ServerListError).hebrew).toMatch(/[֐-׿]/);
+    const error = failure as ServerListError;
+    expect(error.code).toBe('count_unavailable');
+    expect(error.hebrew).toBe('לא ניתן לאמת כרגע את מספר הרשומות ברשימה. רענן את המסך ונסה שוב.');
+    // Named mapping, not the FALLBACK sentence — and the raw message stays mappable upstream.
+    expect(error.hebrew).not.toContain('פנה לתמיכה');
+    expect(toHebrewError(error)).toBe(error.hebrew);
+    // The sentence says "unverified", never "empty": a 0 here would be a claim about the business.
+    expect(error.hebrew).not.toContain('0');
   });
 
   it('never lets a Postgres string reach the reader', async () => {
