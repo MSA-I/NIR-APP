@@ -276,6 +276,42 @@ identity_mapping_cross_tenant as (
   join profiles p on p.id = m.user_id
   where p.org_id <> m.org_id
 ),
+-- ===== Wave 5 domain events & outbox checks (0063-0064) =====
+-- The first two guard the event plane: a unit pointer into another tenant is structurally
+-- impossible through the composite (org_id, unit_id) FK and verified anyway; an event
+-- whose type no map row names means the emission contract and the map drifted apart.
+-- The outbox three guard delivery hygiene: a claim nobody released, a dead letter with no
+-- reason, and the gate canary -- an outbox row without a target is impossible (NOT NULL)
+-- and the outbox itself must stay EMPTY until wave 7 registers targets, so any stuck or
+-- targetless row here is machinery escaping its design.
+domain_events_cross_tenant_unit as (
+  select e.id
+  from domain_events e
+  join org_units u on u.id = e.unit_id
+  where u.org_id <> e.org_id
+),
+domain_events_unknown_event_type as (
+  select e.id
+  from domain_events e
+  where not exists (
+    select 1 from private.domain_event_map m where m.event_type = e.event_type)
+),
+stuck_outbox_rows as (
+  select o.id
+  from private.integration_outbox o
+  where (o.status = 'claimed' and o.claimed_at < now() - interval '1 hour')
+     or (o.status = 'pending' and o.next_attempt_at < now() - interval '24 hours')
+),
+dead_letter_without_failure_reason as (
+  select d.id
+  from private.dead_letter_records d
+  where nullif(btrim(d.failure_reason), '') is null
+),
+outbox_rows_without_target as (
+  select o.id
+  from private.integration_outbox o
+  where nullif(btrim(o.target), '') is null
+),
 checks(check_name, rows_found, sample_ids) as (
   select 'duplicate_payment_executions', count(*),
     coalesce((select jsonb_agg(id) from (select id from duplicate_payment_executions limit 20) s), '[]'::jsonb)
@@ -376,6 +412,21 @@ checks(check_name, rows_found, sample_ids) as (
   union all select 'identity_mapping_cross_tenant', count(*),
     coalesce((select jsonb_agg(id) from (select id from identity_mapping_cross_tenant limit 20) s), '[]'::jsonb)
   from identity_mapping_cross_tenant
+  union all select 'domain_events_cross_tenant_unit', count(*),
+    coalesce((select jsonb_agg(id) from (select id from domain_events_cross_tenant_unit limit 20) s), '[]'::jsonb)
+  from domain_events_cross_tenant_unit
+  union all select 'domain_events_unknown_event_type', count(*),
+    coalesce((select jsonb_agg(id) from (select id from domain_events_unknown_event_type limit 20) s), '[]'::jsonb)
+  from domain_events_unknown_event_type
+  union all select 'stuck_outbox_rows', count(*),
+    coalesce((select jsonb_agg(id) from (select id from stuck_outbox_rows limit 20) s), '[]'::jsonb)
+  from stuck_outbox_rows
+  union all select 'dead_letter_without_failure_reason', count(*),
+    coalesce((select jsonb_agg(id) from (select id from dead_letter_without_failure_reason limit 20) s), '[]'::jsonb)
+  from dead_letter_without_failure_reason
+  union all select 'outbox_rows_without_target', count(*),
+    coalesce((select jsonb_agg(id) from (select id from outbox_rows_without_target limit 20) s), '[]'::jsonb)
+  from outbox_rows_without_target
 )
 select check_name, rows_found, sample_ids
 from checks

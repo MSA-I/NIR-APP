@@ -62,6 +62,8 @@ select section, scope, item, value from (
     union all select 'identity_provider_settings', count(*) from identity_provider_settings where org_id = o.id
     union all select 'external_identity_mappings', count(*) from external_identity_mappings where org_id = o.id
     union all select 'security_events',   count(*) from security_events   where org_id = o.id
+    -- wave 5 (0063): domain events fanned out from the audit trail.
+    union all select 'domain_events',     count(*) from domain_events     where org_id = o.id
   ) t on true
   where t.rows > 0
 
@@ -278,6 +280,12 @@ select section, scope, item, value from (
       join profiles p on p.id = v.user_id
       join org_units u on u.id = v.unit_id
       where p.org_id <> u.org_id
+    -- wave 5: an event whose unit pointer lives in another tenant would bridge the two
+    -- through a single row -- structurally impossible (composite FK), verified anyway.
+    union all select 'domain_events (org vs unit)', count(*)
+      from domain_events e
+      join org_units u on u.id = e.unit_id
+      where u.org_id <> e.org_id
   ) c
 
 ) all_sections
