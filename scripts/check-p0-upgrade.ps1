@@ -22,21 +22,35 @@ function Invoke-Checked([scriptblock]$Command, [string]$Label) {
   if ($LASTEXITCODE -ne 0) { throw "$Label failed." }
 }
 
+# A local-stack failure (docker, supabase reset) is not a product regression. The sentinel
+# on stdout lets check-quality-gates.ps1 classify the captured child failure as an
+# infrastructure block instead of FAIL/product. Write-Host so the line reaches the child
+# process stdout regardless of any pipeline capture around the caller.
+function Stop-Infrastructure([string]$Reason, [string]$Message) {
+  Write-Host "##GATE-INFRA##$Reason"
+  throw $Message
+}
+
 function Copy-And-RunSql([string]$Path) {
   $resolved = (Resolve-Path -LiteralPath $Path).Path
   $target = "/var/lib/postgresql/p0-upgrade-$([System.IO.Path]::GetFileName($resolved))"
   & docker cp $resolved "$container`:$target"
-  if ($LASTEXITCODE -ne 0) { throw "copying $resolved failed." }
+  if ($LASTEXITCODE -ne 0) { Stop-Infrastructure "local_database_reset_failed" "copying $resolved failed." }
   & docker exec $container psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f $target
   if ($LASTEXITCODE -ne 0) { throw "running $resolved failed." }
 }
 
 try {
-  Invoke-Checked { & supabase db reset --version 0019 --no-seed } "reset through 0019"
+  # The two `supabase db reset` invocations are environment plumbing, so their failures are
+  # infrastructure; `supabase migration up` exercises the migrations under test, so its
+  # failure stays a product failure (the bare Invoke-Checked throw).
+  & supabase db reset --version 0019 --no-seed
+  if ($LASTEXITCODE -ne 0) { Stop-Infrastructure "local_database_reset_failed" "reset through 0019 failed." }
   Copy-And-RunSql (Join-Path $PSScriptRoot "p0-upgrade-fixture.sql")
   Invoke-Checked { & supabase migration up --local } "P0 migration upgrade"
   Copy-And-RunSql (Join-Path $PSScriptRoot "p0-upgrade-verify.sql")
 }
 finally {
-  Invoke-Checked { & supabase db reset } "restoring local database"
+  & supabase db reset
+  if ($LASTEXITCODE -ne 0) { Stop-Infrastructure "local_database_reset_failed" "restoring local database failed." }
 }

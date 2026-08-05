@@ -30,6 +30,9 @@ select pg_temp.p1_assert(
           from pg_catalog.pg_policy p
           where p.polrelid = c.oid
             and p.polcmd in ('r', '*')
+            -- Only a PERMISSIVE policy grants reads. A table carrying nothing but the 0057
+            -- RESTRICTIVE scope rider is deny-all and must not count as readable.
+            and p.polpermissive
             and (
               0::oid = any(p.polroles)
               or (select oid from pg_catalog.pg_roles where rolname = 'authenticated') = any(p.polroles)
@@ -53,6 +56,8 @@ select pg_temp.p1_assert(
         from pg_catalog.pg_policy p
         where p.polrelid = c.oid
           and p.polcmd in ('r', '*')
+          -- Same polpermissive pin as above: a rider-only table has no read policy.
+          and p.polpermissive
           and (
             0::oid = any(p.polroles)
             or (select oid from pg_catalog.pg_roles where rolname = 'authenticated') = any(p.polroles)

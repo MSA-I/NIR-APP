@@ -35,9 +35,20 @@ if ($config -notmatch "(?m)^project_id\s*=\s*`"$([regex]::Escape($expectedProjec
   throw "Refusing to run: supabase/config.toml is not the isolated $expectedProjectId project."
 }
 
+# A local-stack failure is not a product regression. This child cannot write the parent's
+# gate summary, so it marks the failure with a sentinel on stdout; check-quality-gates.ps1
+# scans the captured output and converts the bare throw into an infrastructure block.
+# Write-Host, not Write-Output: several callers assign function results ($environment =
+# Get-LocalSupabaseEnvironment), and a pipeline object emitted before a throw is discarded
+# with the failed assignment -- host output still reaches the child process stdout.
+function Stop-Infrastructure([string]$Reason, [string]$Message) {
+  Write-Host "##GATE-INFRA##$Reason"
+  throw $Message
+}
+
 function Reset-TestDatabase {
   & supabase db reset
-  if ($LASTEXITCODE -ne 0) { throw "supabase db reset failed." }
+  if ($LASTEXITCODE -ne 0) { Stop-Infrastructure "local_database_reset_failed" "supabase db reset failed." }
 
   # `supabase db reset` restarts the auth container, which comes back on a NEW address on the
   # Docker network. Kong caches the resolved upstream, so every request to /auth/v1/* keeps
@@ -57,7 +68,7 @@ function Reset-TestDatabase {
     $ErrorActionPreference = $previousPreference
   }
   if ($restartExit -ne 0) {
-    throw "Unable to restart the isolated Kong gateway after database reset; /auth/v1 would stay 502."
+    Stop-Infrastructure "local_kong_restart_failed" "Unable to restart the isolated Kong gateway after database reset; /auth/v1 would stay 502."
   }
 }
 
@@ -90,7 +101,7 @@ function Get-LocalSupabaseEnvironment {
     }
     Start-Sleep -Milliseconds 250
   }
-  throw "Local Supabase environment readiness timed out (status=$statusExitCode; missing=$($missing -join ','))."
+  Stop-Infrastructure "local_supabase_environment_not_ready" "Local Supabase environment readiness timed out (status=$statusExitCode; missing=$($missing -join ','))."
 }
 
 function New-Id { return [guid]::NewGuid().Guid }
@@ -161,7 +172,7 @@ function Start-LocalPushFunction([hashtable]$Environment, [string]$Secret) {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     $detail = (Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue).Trim()
     Remove-Item -LiteralPath $stdoutPath, $stderrPath, $envPath -Force -ErrorAction SilentlyContinue
-    throw "Local send-push function did not become ready. $detail"
+    Stop-Infrastructure "local_edge_not_ready" "Local send-push function did not become ready. $detail"
   }
 
   return [pscustomobject]@{
@@ -308,7 +319,7 @@ function Wait-LocalApiReady([string]$ServiceKey) {
     if ($authStatus -eq 200 -and $restStatus -eq 200) { return }
     Start-Sleep -Milliseconds 500
   } while ((Get-Date) -lt $deadline)
-  throw "Local API readiness failed after reset (Auth=$authStatus, PostgREST=$restStatus)."
+  Stop-Infrastructure "local_api_not_ready" "Local API readiness failed after reset (Auth=$authStatus, PostgREST=$restStatus)."
 }
 
 function Add-ServiceRow([string]$Table, [hashtable]$Row, [string]$ServiceKey) {
