@@ -71,6 +71,11 @@ verify_jwt = true
 [functions.send-push]
 verify_jwt = false
 
+# Cron-invoked via pg_net (0064 dispatcher); auth is the constant-time shared secret in
+# x-outbox-cron-secret, not a JWT — the send-push precedent.
+[functions.outbox-worker]
+verify_jwt = false
+
 [analytics]
 enabled = false
 port = 55437
