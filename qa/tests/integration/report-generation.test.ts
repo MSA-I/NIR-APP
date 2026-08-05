@@ -13,7 +13,7 @@ test('generates redacted JSON, Hebrew Markdown, role reports and standalone HTML
   const timestamp = '2026-08-04T10:00:00.000Z';
   const scenario: ScenarioResult = {
     id: 'owner-core',
-    name: 'מסע ליבה לבעלים',
+    name: 'מסע ליבה לבעלים owner@example.com',
     role: 'owner',
     required: true,
     status: 'FAILED',
@@ -124,8 +124,11 @@ test('generates redacted JSON, Hebrew Markdown, role reports and standalone HTML
     const json = await readFile(path.join(root, 'report.json'), 'utf8');
     const markdown = await readFile(path.join(root, 'executive.he.md'), 'utf8');
     const html = await readFile(path.join(root, 'report.html'), 'utf8');
-    assert.match(json, /\[EMAIL_REDACTED\]/);
-    assert.doesNotMatch(json, /owner@example\.com/);
+    const roleMarkdown = await readFile(path.join(root, 'roles', 'owner', 'report.he.md'), 'utf8');
+    for (const artifact of [json, markdown, html, roleMarkdown]) {
+      assert.match(artifact, /\[EMAIL_REDACTED\]/);
+      assert.doesNotMatch(artifact, /owner@example\.com/);
+    }
     assert.match(json, /"optionalBlockedScenarios": 1/);
     assert.match(markdown, /דוח QA מנהלים/);
     assert.match(markdown, /מצב הריצה/);
@@ -134,7 +137,6 @@ test('generates redacted JSON, Hebrew Markdown, role reports and standalone HTML
     assert.match(markdown, /fixture מאושר אינו זמין/);
     assert.match(html, /<html lang="he" dir="rtl">/);
     assert.match(html, /OPTIONAL_BLOCKED/);
-    const roleMarkdown = await readFile(path.join(root, 'roles', 'owner', 'report.he.md'), 'utf8');
     for (const heading of ['משימות שנוסו', 'אזורים נגישים', 'תקלות הרשאה', 'ממצאי נגישות', 'תצפיות שימושיות', 'ניסוחים לא ברורים', 'בעיות התאוששות', 'ראיות', 'ביטחון', 'המלצות']) {
       assert.match(roleMarkdown, new RegExp(heading));
     }

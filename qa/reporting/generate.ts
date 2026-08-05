@@ -4,10 +4,11 @@ import { executiveSummaryMarkdown } from './executive-summary.ts';
 import { writeHtmlReport } from './html.ts';
 import { writeJsonReport } from './json.ts';
 import { writeRoleMarkdownReports } from './markdown.ts';
+import { redactUnknown } from './redact.ts';
 import { RunReportSchema, type RunReport } from './schemas.ts';
 
 export async function generateReports(root: string, input: RunReport): Promise<string[]> {
-  const report = RunReportSchema.parse(input);
+  const report = RunReportSchema.parse(redactUnknown(RunReportSchema.parse(input)));
   await mkdir(root, { recursive: true });
   const jsonPath = path.join(root, 'report.json');
   const executivePath = path.join(root, 'executive.he.md');
