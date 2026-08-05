@@ -7,6 +7,31 @@
 
 ---
 
+## תיקוני QA מאושרים — ארבעה PRs וקבלה מלאה (05.08.2026)
+
+העבודה הושלמה בענפי עבודה מבודדים ונשמרה בארבעה PRs נפרדים מול `codex/qa-multi-agent`; לא בוצעו push ל־`main` או merge. ענף האינטגרציה המקומי נקי ב־`8d3e8872f16dfbef20a856ab1821c86ccd0fa227`.
+
+- [PR #5](https://github.com/MSA-I/NIR-APP/pull/5) — הקשר הזמנת רכש וקבלה נראה לפני שמירת חשבונית; מזהי ספק/ארגון נעולים, קלט לא מורשה אינו חושף נתונים, ויצירה ישירה ללא קישורים נשמרה. Issue #2 תוקן ונבדק.
+- [PR #4](https://github.com/MSA-I/NIR-APP/pull/4) — תווית `executed` מוצגת כ־`העברה בוצעה` בלי שינוי enum או לוגיקת תשלום. Issue #3 תוקן ונבדק.
+- [PR #6](https://github.com/MSA-I/NIR-APP/pull/6) — `0053_payment_credit_override.sql`: זיכויים פתוחים מחייבים override מפורש ומנומק דרך RPC שרתי; אין קיזוז או שינוי זיכוי אוטומטי, הסכום אינו משתנה, וההחלטה נרשמת ב־audit. הרשאות האישור לא הורחבו.
+- [PR #7](https://github.com/MSA-I/NIR-APP/pull/7) — `0054_monthly_report_snapshots.sql`: דוח חי נשמר לצד גרסאות snapshot סופיות, נעולות ומובנות במסד; owner/accountant בלבד, RLS ו־FORCE RLS, מניעת update/delete, גרסאות מקביליות ללא מספר כפול, checksum וייצוא XLSX מהנתונים הנעולים.
+
+**שערים סופיים על ה־SHA המשולב:** `npm.cmd ci`, ‏`npm.cmd run build`, ‏`npm.cmd run qa:typecheck`, ‏`npm.cmd run qa:test` (134/134) ו־`npm.cmd run quality` עברו לפי הסדר. ראיית `quality`:
+`C:\Users\art1\.codex\visualizations\2026\08\05\20260805-182143-p4-quality-gates\gate-summary.json`
+עם `PASS / quality / all_gates_passed`. נשארו שתי אזהרות קיימות שאינן כשל שער: dependency אחת בחומרה moderate ואזהרת bundle גדול מ־500KB.
+
+**קבלת AI מלאה:** `qa-20260805153333-0d0678b9` הסתיימה בקוד 0 עם `runStatus=COMPLETED` ו־`productQualityStatus=PASS_WITH_FINDINGS`. כל ששת סוכני התפקידים השלימו, 13 פעולות משמעותיות אומתו עצמאית, ואפס פעולות נשארו ללא אימות. כל שש הזרימות הקריטיות עברו: ספק, מטבח, משרד, בעלים, משלם ורואה חשבון. Playwright: ‏51 עברו, 34 דילוגי role/configuration מתוכננים, אפס failures ו־flaky; בדוח המאוחד 60 תרחישים עברו, אפס נכשלו/נחסמו, ו־platform-admin נשאר optional blocked לפי ההגדרה.
+
+הדוח מכיל 32 תצפיות AI ברמת `info` בלבד ואפס findings מאומתים בחומרה critical/high/medium. מספר תצפיות סותרות את הראיות המהימנות (למשל טענת “אין שדה סיבה” מול אישור override מתועד); הן אינן מסווגות כבאג בלי triage נפרד. ה־cleanup עבר, reset בוצע וכל artifacts נשמרו.
+
+**ראיות כספיות ונתונים:** בדיקות `payment_credit_override.sql`, ‏`monthly_report_snapshots.sql` ו־`monthly_report_snapshots_concurrency.sql` נכללו בשער `quality`. אימותי הסוכנים הוכיחו tenant/supplier integrity, audit מנומק, מניעת כפילויות, תשלום N:M ויתרת חשבונית מחושבת. ה־snapshot XLSX הסופי נפתח ללא formulas, נבנה מהשורות והסכומים הנעולים, ו־SHA-256 של artifact הקבלה הוא `5D39A6B5EDFF225178E9D42929B05D0F5886994F452F5A83CBF39C57DB7D781B`.
+
+**Artifacts סופיים:**
+`D:\משה פרוייקטים\פיתוח אתרים\NIR-APP-WORKTREES\qa-multi-agent\.qa-runs\qa-20260805153333-0d0678b9`
+ו־`C:\Users\art1\.codex\visualizations\2026\08\05\20260805-182143-p4-quality-gates`.
+
+---
+
 ## מערכת QA רב־סוכנית — קבלת AI מלאה הושלמה (05.08.2026)
 
 העבודה מבודדת ב־`codex/qa-multi-agent` וב־`NIR-APP-WORKTREES/qa-multi-agent`; קומיט הביניים הוא
