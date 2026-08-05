@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
-import { statistics, exitDecision, roleScorecards } from '../../reporting/aggregate.ts';
+import { coverageExceptions, statistics, exitDecision, roleScorecards } from '../../reporting/aggregate.ts';
 import { createFinding } from '../../reporting/finding.ts';
 import { generateReports } from '../../reporting/generate.ts';
 import { RunReportSchema, type RoleResult, type ScenarioResult } from '../../reporting/schemas.ts';
@@ -23,18 +23,44 @@ test('generates redacted JSON, Hebrew Markdown, role reports and standalone HTML
     steps: [],
     findingIds: [],
     evidence: ['evidence/shot.png'],
+    blockerType: 'PRODUCT',
   };
   const role: RoleResult = {
     role: 'owner',
     purpose: 'קבלת החלטות ואישור חריגים',
     status: 'FAILED',
     scenarioIds: [scenario.id],
-    successfulTasks: [],
-    blockedTasks: ['שמירה'],
-    inaccessibleAreas: [],
-    unexpectedAccessibleAreas: [],
+    tasksAttempted: ['שמירה'],
+    tasksCompleted: [],
+    tasksBlocked: ['שמירה'],
+    accessibleAreas: ['/dashboard'],
+    unexpectedlyInaccessibleAreas: ['/orders'],
+    unexpectedlyAccessibleAreas: [],
+    functionalDefects: ['high: שמירה נכשלה'],
+    permissionDefects: [],
+    accessibilityFindings: [],
+    usabilityObservations: [],
+    unclearWording: [],
+    recoveryProblems: [],
     evidence: scenario.evidence,
+    confidence: 1,
+    recommendations: ['לתקן את השמירה'],
     limitations: ['נדרשת בדיקת קורא מסך אנושית'],
+  };
+  const optionalPlatform: ScenarioResult = {
+    id: 'platform-admin',
+    name: 'ניהול פלטפורמה',
+    role: 'platform',
+    required: false,
+    status: 'OPTIONAL_BLOCKED',
+    startedAt: timestamp,
+    endedAt: timestamp,
+    durationMs: 0,
+    steps: [],
+    findingIds: [],
+    evidence: [],
+    limitation: 'fixture מאושר אינו זמין',
+    blockerType: 'CONFIGURATION',
   };
   const finding = createFinding({
     runId: 'qa-test-run',
@@ -57,12 +83,13 @@ test('generates redacted JSON, Hebrew Markdown, role reports and standalone HTML
     createdAt: timestamp,
   });
   scenario.findingIds.push(finding.id);
-  const decision = exitDecision([scenario], [finding], false);
+  const decision = exitDecision([scenario, optionalPlatform], [finding], false);
   const report = RunReportSchema.parse({
-    schemaVersion: 1,
+    schemaVersion: 2,
     runId: 'qa-test-run',
     generatedAt: timestamp,
-    overallStatus: decision.status,
+    runStatus: decision.runStatus,
+    productQualityStatus: decision.productQualityStatus,
     environment: {
       target: 'local-isolated',
       baseUrl: 'http://127.0.0.1:4173',
@@ -75,17 +102,21 @@ test('generates redacted JSON, Hebrew Markdown, role reports and standalone HTML
       locale: 'he-IL',
       localProof: ['loopback URL'],
     },
-    scenarios: [scenario],
+    scenarios: [scenario, optionalPlatform],
     roles: [role],
     findings: [finding],
-    scorecards: roleScorecards([role], [scenario], [finding]),
-    statistics: statistics([scenario], [finding]),
-    blockedItems: [],
+    scorecards: roleScorecards([role], [scenario, optionalPlatform], [finding]),
+    statistics: statistics([scenario, optionalPlatform], [finding]),
+    coverageExceptions: coverageExceptions([scenario, optionalPlatform]),
     limitations: role.limitations,
     humanTestingRequired: ['קורא מסך אמיתי'],
     evidencePaths: scenario.evidence,
     exitDecision: decision,
   });
+  assert.throws(
+    () => RunReportSchema.parse({ ...report, coverageExceptions: [] }),
+    /Every blocked or skipped scenario/,
+  );
 
   try {
     const files = await generateReports(root, report);
@@ -95,8 +126,19 @@ test('generates redacted JSON, Hebrew Markdown, role reports and standalone HTML
     const html = await readFile(path.join(root, 'report.html'), 'utf8');
     assert.match(json, /\[EMAIL_REDACTED\]/);
     assert.doesNotMatch(json, /owner@example\.com/);
+    assert.match(json, /"optionalBlockedScenarios": 1/);
     assert.match(markdown, /דוח QA מנהלים/);
+    assert.match(markdown, /מצב הריצה/);
+    assert.match(markdown, /מצב איכות המוצר/);
+    assert.match(markdown, /platform-admin/);
+    assert.match(markdown, /fixture מאושר אינו זמין/);
     assert.match(html, /<html lang="he" dir="rtl">/);
+    assert.match(html, /OPTIONAL_BLOCKED/);
+    const roleMarkdown = await readFile(path.join(root, 'roles', 'owner', 'report.he.md'), 'utf8');
+    for (const heading of ['משימות שנוסו', 'אזורים נגישים', 'תקלות הרשאה', 'ממצאי נגישות', 'תצפיות שימושיות', 'ניסוחים לא ברורים', 'בעיות התאוששות', 'ראיות', 'ביטחון', 'המלצות']) {
+      assert.match(roleMarkdown, new RegExp(heading));
+    }
+    assert.match(roleMarkdown, /\.\.\/\.\.\/evidence\/shot\.png/);
     assert.doesNotMatch(html, /https?:\/\/(?:cdn|unpkg|jsdelivr)/i);
   } finally {
     await rm(root, { recursive: true, force: true });

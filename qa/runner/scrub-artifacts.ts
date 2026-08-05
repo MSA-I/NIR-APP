@@ -15,6 +15,7 @@ async function traceFiles(root: string): Promise<string[]> {
 export async function scrubPlaywrightTraces(artifactRoot: string): Promise<string[]> {
   const root = path.resolve(artifactRoot);
   const traces = await traceFiles(root);
+  if (traces.length === 0) throw new Error('Required Playwright trace artifact is missing.');
   for (const trace of traces) {
     const relative = path.relative(root, trace);
     if (relative.startsWith('..') || path.isAbsolute(relative)) {

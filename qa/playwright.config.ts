@@ -40,11 +40,11 @@ export default defineConfig({
     navigationTimeout: qa.navigationTimeoutMs,
     screenshot: 'off',
     video: 'off',
-    // Authentication traces remain disabled below. Role traces are retained only for a
-    // failing attempt, without embedded screenshots or source files, and MUST be passed
+    // Authentication traces remain disabled below. Role traces are retained for every
+    // acceptance attempt, without embedded screenshots or source files, and MUST be passed
     // through qa/reporting/scrub-traces.ts before publication; the runner removes the raw zip.
     trace: {
-      mode: 'on-first-retry',
+      mode: 'on',
       screenshots: false,
       snapshots: false,
       sources: false,

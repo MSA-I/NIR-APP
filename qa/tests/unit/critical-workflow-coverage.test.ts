@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { evaluateCriticalWorkflowCoverage } from '../../runner/deterministic-runner.ts';
+import {
+  evaluateCriticalWorkflowCoverage,
+  evaluatePlaywrightRuntimeIntegrity,
+} from '../../runner/deterministic-runner.ts';
 
 const ids = [
   'supplier-price-list',
@@ -27,4 +30,15 @@ test('critical workflow coverage fails closed for missing, skipped, or failed ev
   assert.equal(evaluateCriticalWorkflowCoverage(report(Object.fromEntries(ids.slice(1).map((id) => [id, 'passed'])))).status, 'BLOCKED');
   assert.equal(evaluateCriticalWorkflowCoverage(report(Object.fromEntries(ids.map((id) => [id, id === ids[0] ? 'skipped' : 'passed'])))).status, 'BLOCKED');
   assert.equal(evaluateCriticalWorkflowCoverage(report(Object.fromEntries(ids.map((id) => [id, id === ids[0] ? 'failed' : 'passed'])))).status, 'FAILED');
+});
+
+test('Playwright runtime integrity separates harness failures from product assertions', () => {
+  const infrastructure = report(Object.fromEntries(ids.map((id) => [id, id === ids[0] ? 'failed' : 'passed'])));
+  const failedResult = infrastructure.suites[0]!.specs[0]!.tests[0]!.results[0]! as Record<string, unknown>;
+  failedResult.error = { message: 'page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:4173' };
+  assert.equal(evaluatePlaywrightRuntimeIntegrity(infrastructure).status, 'FAILED');
+
+  failedResult.error = { message: 'expect(locator).toBeVisible: expected visible, received hidden' };
+  assert.equal(evaluatePlaywrightRuntimeIntegrity(infrastructure).status, 'PASSED');
+  assert.equal(evaluatePlaywrightRuntimeIntegrity({}).status, 'BLOCKED');
 });

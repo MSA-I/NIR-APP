@@ -87,6 +87,11 @@ test('export verifier parses generated CSV, XLSX, PDF, and JPG inside artifact r
         kind: 'csv',
         filePath: byKind.get('bank-csv')!,
         expectedHeaders: ['date', 'description', 'amount', 'reference', 'qa_run_id'],
+        expectedRowSubsets: [{
+          description: data.bankTransaction.description,
+          amount: data.bankTransaction.amount,
+          reference: data.bankTransaction.reference,
+        }],
         exactRowCount: 1,
         total: { column: 'amount', expected: data.bankTransaction.amount },
       },
@@ -95,6 +100,11 @@ test('export verifier parses generated CSV, XLSX, PDF, and JPG inside artifact r
         kind: 'xlsx',
         filePath: byKind.get('price-list-xlsx')!,
         expectedHeaders: ['product_id', 'product_name', 'price', 'qa_run_id'],
+        expectedRowSubsets: [{
+          product_id: data.products[0]!.id,
+          product_name: data.products[0]!.name,
+          price: data.products[0]!.price,
+        }],
         exactRowCount: 3,
         forbidFormulas: true,
         total: { column: 'price', expected: data.products.reduce((sum, product) => sum + product.price, 0) },
@@ -110,6 +120,15 @@ test('export verifier parses generated CSV, XLSX, PDF, and JPG inside artifact r
     const result = await verifyExportFiles(expectations, directory);
     assert.equal(result.status, 'PASS');
     assert.ok(result.checks.every(({ status }) => status === 'PASS'));
+
+    const wrongBusinessRow = await verifyExportFiles([{
+      id: 'wrong-business-row',
+      kind: 'xlsx',
+      filePath: byKind.get('price-list-xlsx')!,
+      expectedRowSubsets: [{ product_id: data.products[0]!.id, price: data.products[0]!.price + 1 }],
+    }], directory);
+    assert.equal(wrongBusinessRow.status, 'FAIL');
+    assert.equal(wrongBusinessRow.checks[0]?.evidence?.expectedRowSubsetsPresent, false);
   } finally {
     const relative = path.relative(managedRoot, directory);
     assert.ok(relative && !relative.startsWith('..') && !path.isAbsolute(relative));

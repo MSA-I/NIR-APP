@@ -7,6 +7,12 @@ import { createFinding, retryClassification, severityFor } from './finding.ts';
 import { redactText } from './redact.ts';
 import type { Finding, ScenarioResult, StepResult } from './schemas.ts';
 
+const PLAYWRIGHT_INFRASTRUCTURE_FAILURE = /(?:target\s+(?:page,\s*context\s+or\s+browser|page|context|browser)\s+(?:has\s+been\s+)?closed|target\s+crashed|browser(?:type)?\.launch|browser\s+process\s+exited|worker\s+process\s+exited|executable\s+doesn['’]?t\s+exist|protocol\s+error|(?:net::)?err_connection_(?:refused|reset)|econnrefused|\benoent\b|qa\s+mutex|environment\s+lock|chromium\s+(?:is\s+)?(?:missing|unavailable)|preview\s+(?:is\s+)?(?:missing|unavailable|not\s+ready|stopped)|fixture[^\n]*(?:missing|unavailable)|verifier[^\n]*(?:missing|unavailable)|evidence[^\n]*(?:missing|unavailable|malformed)|report[^\n]*(?:missing|unavailable|malformed))/i;
+
+export function isPlaywrightInfrastructureFailureText(value: string): boolean {
+  return PLAYWRIGHT_INFRASTRUCTURE_FAILURE.test(value);
+}
+
 const AttachmentSchema = z.object({
   name: z.string(),
   contentType: z.string().optional(),
@@ -157,8 +163,9 @@ export function parsePlaywrightReport(
   for (const spec of report.suites.flatMap((suite) => collectSpecs(suite))) {
     for (const test of spec.tests) {
       const id = identifier(test.projectName, spec.file, spec.title);
-      const blockedReason = test.annotations
-        .find(({ description }) => description?.startsWith('BLOCKED '))?.description;
+      const skipReason = test.annotations
+        .find(({ type, description }) => type === 'skip' && description?.trim())?.description?.trim();
+      const blockedReason = skipReason?.startsWith('BLOCKED ') ? skipReason : undefined;
       const attempts = steps(test.results, options.artifactRoot, generatedAt, Boolean(blockedReason));
       const final = test.results.at(-1);
       const status = runStatus(final?.status, Boolean(blockedReason));
@@ -181,7 +188,9 @@ export function parsePlaywrightReport(
         evidence,
         limitation: status === 'BLOCKED'
           ? redactText(blockedReason ?? 'Playwright did not return an execution result.')
-          : undefined,
+          : status === 'SKIPPED_BY_CONFIGURATION'
+            ? redactText(skipReason ?? 'Playwright skipped this configured project.')
+            : undefined,
       };
 
       const attemptPasses = test.results.map((result) => result.status === 'passed');

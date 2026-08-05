@@ -301,7 +301,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
               </tbody>
             </table>
           </div>
-          <div><label className="label">סיבת הייבוא *</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+          <div><label className="label" htmlFor="bank-import-reason">סיבת הייבוא *</label><input id="bank-import-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
           <div className="flex justify-end gap-2">
             <button className="btn-secondary" disabled={busy} onClick={() => { setHeaders([]); setRawRows([]); }}>קובץ אחר</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>
@@ -494,6 +494,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   }
 
   const chosenSum = Object.values(chosenInvoices).reduce((s, v) => s + v, 0);
+  const manualTotalValid = chosenSum <= tx.amount && Math.abs(chosenSum - tx.amount) <= tolerance;
   const supplierName = data?.suppliers.find((supplier) => supplier.id === supplierId)?.name ?? 'הספק הנבחר';
   const transactionLabel = `תנועת הבנק מיום ${fmtDate(tx.tx_date)} בסכום ${fmtMoneyExact(tx.amount)}`;
 
@@ -575,10 +576,10 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
               ) : <div className="text-sm text-ink-muted">אין חשבוניות פתוחות לספק</div>}
               {chosenSum > 0 && (
                 <div className="flex items-center justify-between mt-2 text-sm">
-                  <span className={Math.abs(chosenSum - tx.amount) > 1 ? 'text-await-fg' : 'text-done-fg'}>
+                  <span className={manualTotalValid ? 'text-done-fg' : 'text-await-fg'}>
                     הוקצה {fmtMoneyExact(chosenSum)} מתוך {fmtMoneyExact(tx.amount)}
                   </span>
-                  <button className="btn-primary" disabled={busy} onClick={() => void confirmManual()}>אישור התאמה ידנית</button>
+                  <button className="btn-primary" disabled={busy || !manualTotalValid} onClick={() => void confirmManual()}>אישור התאמה ידנית</button>
                 </div>
               )}
             </fieldset>

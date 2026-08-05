@@ -16,21 +16,26 @@ import { z } from 'zod';
 import {
   AgentEvidenceSchema,
   AgentObservationSchema,
+  RoleStepDecisionSchema,
   RoleSummarySchema,
 } from '../agents/contracts.ts';
-import { VerifierResultSchema } from '../agents/verifier-agent.ts';
+import { BrowserMutationEvidenceSchema, VerifierResultSchema } from '../agents/verifier-agent.ts';
 import { QA_ROLES, type QaRole } from '../config/roles.ts';
 import { getScenario } from '../scenarios/index.ts';
-import { exitDecision, roleScorecards, statistics } from '../reporting/aggregate.ts';
+import { coverageExceptions, exitDecision, roleScorecards, statistics } from '../reporting/aggregate.ts';
 import { deduplicateFindings } from '../reporting/deduplicate.ts';
 import { createFinding, enforceAgentEvidence } from '../reporting/finding.ts';
 import { generateReports } from '../reporting/generate.ts';
-import { readPlaywrightReport } from '../reporting/playwright.ts';
+import {
+  isPlaywrightInfrastructureFailureText,
+  readPlaywrightReport,
+} from '../reporting/playwright.ts';
 import { redactText, safeJson } from '../reporting/redact.ts';
 import {
   EnvironmentSchema,
   RunReportSchema,
   type Finding,
+  type BlockerType,
   type RoleResult,
   type RunReport,
   type RunStatus,
@@ -92,6 +97,7 @@ const AgentRoleRunSchema = z.object({
   scenarioId: z.string().min(1),
   scenarioName: z.string().min(1),
   status: z.enum(['completed', 'blocked', 'failed', 'step_limit']),
+  blockerType: z.enum(['PRODUCT', 'INFRASTRUCTURE', 'CONFIGURATION']).nullable(),
   terminalReason: z.string(),
   steps: z.array(z.object({
     step: z.number().int().nonnegative(),
@@ -102,6 +108,8 @@ const AgentRoleRunSchema = z.object({
   verificationResults: z.array(z.object({
     step: z.number().int().nonnegative(),
     checkId: z.string().min(1),
+    actionId: z.string().uuid().nullable().optional().default(null),
+    mutationEvidence: BrowserMutationEvidenceSchema.nullable().optional().default(null),
     result: VerifierResultSchema,
   }).strict()),
   observations: z.array(AgentObservationSchema),
@@ -112,12 +120,27 @@ const AgentRoleRunSchema = z.object({
   unverifiedMeaningfulActions: z.number().int().nonnegative(),
   helpQuestion: z.string().nullable(),
   diagnostics: z.array(z.string()),
-}).strict();
+}).strict().superRefine((result, context) => {
+  const validPair = (result.status === 'completed' && result.blockerType === null)
+    || (result.status === 'failed'
+      && (result.blockerType === 'PRODUCT' || result.blockerType === 'INFRASTRUCTURE'))
+    || (result.status === 'blocked'
+      && (result.blockerType === 'INFRASTRUCTURE' || result.blockerType === 'CONFIGURATION'))
+    || (result.status === 'step_limit' && result.blockerType === 'INFRASTRUCTURE');
+  if (!validPair) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['blockerType'],
+      message: 'blockerType must match the exact persisted role status contract.',
+    });
+  }
+});
 
-const AgentRunSchema = z.object({
+export const AgentRunSchema = z.object({
   schemaVersion: z.literal(1),
   runId: z.string().min(1),
   status: z.enum(['PASSED', 'FAILED', 'BLOCKED', 'SKIPPED_BY_CONFIGURATION']),
+  blockerType: z.enum(['PRODUCT', 'INFRASTRUCTURE', 'CONFIGURATION']).nullable(),
   reason: z.string(),
   startedAt: z.string().datetime(),
   endedAt: z.string().datetime(),
@@ -142,7 +165,22 @@ const AgentRunSchema = z.object({
   }).strict().nullable(),
   evidencePaths: z.array(z.string()),
   exitCode: z.number().int().min(0).max(2),
-}).strict();
+}).strict().superRefine((result, context) => {
+  const validPair = (result.status === 'PASSED' && result.blockerType === null)
+    || (result.status === 'FAILED'
+      && (result.blockerType === 'PRODUCT' || result.blockerType === 'INFRASTRUCTURE'))
+    || (result.status === 'BLOCKED'
+      && (result.blockerType === 'INFRASTRUCTURE' || result.blockerType === 'CONFIGURATION'))
+    || (result.status === 'SKIPPED_BY_CONFIGURATION'
+      && result.blockerType === 'CONFIGURATION');
+  if (!validPair) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['blockerType'],
+      message: 'blockerType must match the exact persisted agent status contract.',
+    });
+  }
+});
 
 const ReportMetadataSchema = z.object({
   schemaVersion: z.literal(1),
@@ -162,7 +200,7 @@ const CleanupRunSchema = z.object({
 }).strict();
 
 type StoredDeterministicRun = z.infer<typeof DeterministicRunSchema>;
-type StoredAgentRun = z.infer<typeof AgentRunSchema>;
+export type StoredAgentRun = z.infer<typeof AgentRunSchema>;
 type StoredAgentRoleRun = z.infer<typeof AgentRoleRunSchema>;
 type ReportMetadata = z.infer<typeof ReportMetadataSchema>;
 type StoredCleanupRun = z.infer<typeof CleanupRunSchema>;
@@ -175,9 +213,10 @@ export interface ReportRunnerOptions {
 }
 
 export interface ReportRunResult {
-  schemaVersion: 1;
+  schemaVersion: 2;
   runId: string | null;
-  status: 'PASSED' | 'FAILED' | 'BLOCKED';
+  runStatus: 'COMPLETED' | 'BLOCKED' | 'INFRASTRUCTURE_FAILED';
+  productQualityStatus: 'PASS' | 'PASS_WITH_FINDINGS' | 'FAIL';
   generatedAt: string;
   artifactRoot: string | null;
   reportPaths: string[];
@@ -191,7 +230,7 @@ interface ReportContext {
   metadata: ReportMetadata;
 }
 
-interface AgentCoverage {
+export interface AgentCoverage {
   scenarios: ScenarioResult[];
   findings: Finding[];
   blockedItems: string[];
@@ -225,7 +264,7 @@ async function exists(target: string): Promise<boolean> {
   }
 }
 
-function exitCodeFor(status: ReportRunResult['status']): 0 | 1 | 2 {
+function exitCodeFor(status: 'PASSED' | 'FAILED' | 'BLOCKED'): 0 | 1 | 2 {
   return status === 'PASSED' ? 0 : status === 'FAILED' ? 1 : 2;
 }
 
@@ -521,6 +560,7 @@ function syntheticScenario(input: {
   role?: string;
   required: boolean;
   status: RunStatus;
+  blockerType?: BlockerType;
   generatedAt: string;
   message: string;
 }): ScenarioResult {
@@ -546,12 +586,49 @@ function syntheticScenario(input: {
     findingIds: [],
     evidence: [],
     limitation: input.message,
+    blockerType: input.status === 'PASSED'
+      ? undefined
+      : input.blockerType
+        ?? (input.status === 'SKIPPED_BY_CONFIGURATION' || input.status === 'OPTIONAL_BLOCKED'
+          ? 'CONFIGURATION'
+          : 'INFRASTRUCTURE'),
   };
+}
+
+function playwrightBlockerType(scenario: ScenarioResult): BlockerType | undefined {
+  if (scenario.status === 'PASSED') return undefined;
+  if (scenario.status === 'SKIPPED_BY_CONFIGURATION' || scenario.status === 'OPTIONAL_BLOCKED') {
+    return 'CONFIGURATION';
+  }
+  const failureText = [
+    scenario.limitation,
+    ...scenario.steps.map(({ message }) => message),
+  ].filter((value): value is string => Boolean(value)).join('\n');
+  if (isPlaywrightInfrastructureFailureText(failureText)) return 'INFRASTRUCTURE';
+  if (scenario.status === 'FAILED') return 'PRODUCT';
+  return scenario.name.includes('[critical:')
+    ? 'PRODUCT'
+    : 'INFRASTRUCTURE';
+}
+
+function deterministicBlockerType(
+  result: StoredDeterministicRun,
+  playwrightScenarios: readonly ScenarioResult[],
+  playwrightExists: boolean,
+): BlockerType | undefined {
+  if (result.status === 'PASSED') return undefined;
+  const productPhaseNames = new Set(['playwright-deterministic', 'critical-workflow-coverage']);
+  const nonPassing = result.phases.filter(({ status }) => status === 'FAILED' || status === 'BLOCKED');
+  if (!playwrightExists || nonPassing.some(({ name }) => !productPhaseNames.has(name))) return 'INFRASTRUCTURE';
+  return playwrightScenarios.some((scenario) =>
+    scenario.required && scenario.status === 'BLOCKED' && scenario.blockerType !== 'PRODUCT')
+    ? 'INFRASTRUCTURE'
+    : 'PRODUCT';
 }
 
 function agentScenarioStatus(status: StoredAgentRoleRun['status']): ScenarioResult['status'] {
   if (status === 'completed') return 'PASSED';
-  if (status === 'blocked') return 'BLOCKED';
+  if (status === 'blocked' || status === 'step_limit') return 'BLOCKED';
   return 'FAILED';
 }
 
@@ -602,7 +679,33 @@ function verifierSource(checkId: string): Finding['source'] {
   return 'database';
 }
 
-function buildAgentCoverage(
+function appendUnavailableRoleCoverage(
+  coverage: AgentCoverage,
+  input: {
+    generatedAt: string;
+    required: boolean;
+    status: Extract<RunStatus, 'BLOCKED' | 'SKIPPED_BY_CONFIGURATION'>;
+    blockerType: Extract<BlockerType, 'INFRASTRUCTURE' | 'CONFIGURATION'>;
+    reason: string;
+  },
+): void {
+  for (const role of QA_ROLES) {
+    const message = `${input.reason} תפקיד: ${role}.`;
+    coverage.scenarios.push(syntheticScenario({
+      id: `agent-${role}-${input.status === 'BLOCKED' ? 'missing' : 'disabled'}`,
+      name: `כיסוי סוכן AI — ${role}`,
+      role,
+      required: input.required,
+      status: input.status,
+      blockerType: input.blockerType,
+      generatedAt: input.generatedAt,
+      message,
+    }));
+    if (input.status === 'BLOCKED') coverage.blockedItems.push(message);
+  }
+}
+
+export function buildAgentCoverage(
   agent: StoredAgentRun | null,
   input: {
     runId: string;
@@ -623,7 +726,7 @@ function buildAgentCoverage(
   };
 
   if (!agent) {
-    const expected = input.deterministicStatus === 'PASSED' && input.agentMode === 'enabled';
+    const expected = input.agentMode === 'enabled';
     const status: RunStatus = expected ? 'BLOCKED' : 'SKIPPED_BY_CONFIGURATION';
     const message = expected
       ? 'שלב סוכני ה-AI הוגדר לפעול אך קובץ התוצאה השמור חסר.'
@@ -635,9 +738,17 @@ function buildAgentCoverage(
       name: 'שלב סוכני AI חקרניים',
       required: expected,
       status,
+      blockerType: expected ? 'INFRASTRUCTURE' : 'CONFIGURATION',
       generatedAt: input.generatedAt,
       message,
     }));
+    appendUnavailableRoleCoverage(coverage, {
+      generatedAt: input.generatedAt,
+      required: expected,
+      status,
+      blockerType: expected ? 'INFRASTRUCTURE' : 'CONFIGURATION',
+      reason: message,
+    });
     coverage.limitations.push(message);
     if (expected) coverage.blockedItems.push(message);
     return coverage;
@@ -657,9 +768,17 @@ function buildAgentCoverage(
       name: 'שלב סוכני AI חקרניים',
       required: false,
       status: 'SKIPPED_BY_CONFIGURATION',
+      blockerType: 'CONFIGURATION',
       generatedAt: input.generatedAt,
       message,
     }));
+    appendUnavailableRoleCoverage(coverage, {
+      generatedAt: input.generatedAt,
+      required: false,
+      status: 'SKIPPED_BY_CONFIGURATION',
+      blockerType: 'CONFIGURATION',
+      reason: message,
+    });
     coverage.limitations.push(message);
     return coverage;
   }
@@ -671,9 +790,17 @@ function buildAgentCoverage(
       name: 'שלב סוכני AI חקרניים',
       required: true,
       status: 'BLOCKED',
+      blockerType: 'INFRASTRUCTURE',
       generatedAt: input.generatedAt,
       message,
     }));
+    appendUnavailableRoleCoverage(coverage, {
+      generatedAt: input.generatedAt,
+      required: true,
+      status: 'BLOCKED',
+      blockerType: 'INFRASTRUCTURE',
+      reason: message,
+    });
     coverage.blockedItems.push(message);
     return coverage;
   }
@@ -683,6 +810,7 @@ function buildAgentCoverage(
     name: 'שער תזמור סוכני AI',
     required: true,
     status: agent.status,
+    blockerType: agent.blockerType ?? undefined,
     generatedAt: input.generatedAt,
     message: redactText(agent.reason),
   });
@@ -697,6 +825,7 @@ function buildAgentCoverage(
     const roleEvidence = unique([
       ...roleRun.evidenceRefs,
       ...roleRun.evidence.map(({ ref }) => ref),
+      ...roleRun.verificationResults.flatMap(({ mutationEvidence }) => mutationEvidence?.evidenceRefs ?? []),
     ].flatMap((candidate) => {
       const ref = managedEvidenceRef(input.artifactRoot, candidate);
       return ref ? [ref] : [];
@@ -704,6 +833,7 @@ function buildAgentCoverage(
     coverage.evidencePaths.push(...roleEvidence);
 
     const findings: Finding[] = [];
+    const verifierBlockers: string[] = [];
     for (const observation of roleRun.observations) {
       const allowedRefs = new Set(observation.evidenceRefs);
       findings.push(enforceAgentEvidence(createFinding({
@@ -731,9 +861,9 @@ function buildAgentCoverage(
 
     for (const verification of roleRun.verificationResults) {
       if (verification.result.status === 'blocked') {
-        coverage.blockedItems.push(
-          `${roleRun.role}: המאמת ${verification.checkId} נחסם — ${redactText(verification.result.summary)}`,
-        );
+        const message = `${roleRun.role}: המאמת ${verification.checkId} נחסם — ${redactText(verification.result.summary)}`;
+        coverage.blockedItems.push(message);
+        verifierBlockers.push(message);
         continue;
       }
       if (verification.result.status !== 'failed') continue;
@@ -779,6 +909,8 @@ function buildAgentCoverage(
     const status = agentScenarioStatus(roleRun.status);
     const limitationParts = [
       ...roleRun.missingEvidenceKinds.map((kind) => `חסרה ראיה מסוג ${redactText(kind)}.`),
+      ...verifierBlockers,
+      ...(roleRun.status === 'blocked' ? [redactText(roleRun.terminalReason)] : []),
       ...(roleRun.unverifiedMeaningfulActions > 0
         ? [`${roleRun.unverifiedMeaningfulActions} פעולות משמעותיות לא אומתו באופן עצמאי.`]
         : []),
@@ -796,6 +928,7 @@ function buildAgentCoverage(
       findingIds: findings.map(({ id }) => id),
       evidence: roleEvidence,
       limitation: limitationParts.length ? limitationParts.join(' ') : undefined,
+      blockerType: status === 'PASSED' ? undefined : roleRun.blockerType ?? 'INFRASTRUCTURE',
     });
     coverage.findings.push(...findings);
     coverage.limitations.push(...limitationParts);
@@ -805,6 +938,21 @@ function buildAgentCoverage(
     if (roleRun.summary?.humanReviewRequired) {
       coverage.humanTestingRequired.push(`סקירה אנושית לממצאי סוכן התפקיד ${roleRun.role}.`);
     }
+  }
+
+  for (const role of QA_ROLES.filter((candidate) => !coverage.roleRuns.has(candidate))) {
+    const message = `לא קיימת תוצאת סוכן AI שמורה לתפקיד ${role}.`;
+    coverage.scenarios.push(syntheticScenario({
+      id: `agent-${role}-missing`,
+      name: `AI role-agent coverage — ${role}`,
+      role,
+      required: true,
+      status: 'BLOCKED',
+      blockerType: 'INFRASTRUCTURE',
+      generatedAt: input.generatedAt,
+      message,
+    }));
+    coverage.blockedItems.push(message);
   }
 
   if (agent.status === 'BLOCKED') {
@@ -828,15 +976,40 @@ function aggregateRoleStatus(scenarios: readonly ScenarioResult[]): RoleResult['
   if (!scenarios.length) return 'BLOCKED';
   if (scenarios.some(({ status }) => status === 'FAILED')) return 'FAILED';
   if (scenarios.some(({ required, status }) => required && status === 'BLOCKED')) return 'BLOCKED';
+  const agentScenarios = scenarios.filter(({ id }) => id.startsWith('agent-'));
+  if (agentScenarios.length > 0
+      && agentScenarios.every(({ status }) => status === 'SKIPPED_BY_CONFIGURATION')) {
+    return 'SKIPPED_BY_CONFIGURATION';
+  }
   if (scenarios.every(({ status }) => status === 'SKIPPED_BY_CONFIGURATION')) {
     return 'SKIPPED_BY_CONFIGURATION';
   }
+  if (scenarios.every(({ status }) => status === 'OPTIONAL_BLOCKED')) return 'OPTIONAL_BLOCKED';
   if (scenarios.some(({ status }) => status === 'PASSED')) return 'PASSED';
   return 'BLOCKED';
 }
 
-function buildRoles(
+export function completedOpenAreas(
+  steps: readonly {
+    decision?: unknown;
+    receipt: z.infer<typeof ModelReceiptSchema> | null;
+  }[],
+): string[] {
+  return unique(steps.flatMap(({ decision, receipt }) => {
+    if (receipt?.status !== 'completed' || receipt.actionType !== 'open') return [];
+    const parsed = RoleStepDecisionSchema.safeParse(decision);
+    if (!parsed.success
+        || parsed.data.decision !== 'action'
+        || parsed.data.action?.type !== 'open'
+        || !parsed.data.action.route
+        || receipt.summary !== `opened:${parsed.data.action.route}`) return [];
+    return [redactText(parsed.data.action.route)];
+  }));
+}
+
+export function buildRoles(
   scenarios: readonly ScenarioResult[],
+  findings: readonly Finding[],
   roleRuns: ReadonlyMap<QaRole, StoredAgentRoleRun>,
   includePlatformAdmin: boolean,
 ): RoleResult[] {
@@ -846,6 +1019,8 @@ function buildRoles(
   ];
   return roles.map((role) => {
     const roleScenarios = scenarios.filter((scenario) => scenario.role === role);
+    const roleFindings = findings.filter((finding) =>
+      finding.role === role || finding.affectedRoles.includes(role));
     const agent = role === 'platform' ? undefined : roleRuns.get(role);
     const completedGoals = agent?.summary?.completedGoals.map(redactText) ?? [];
     const blockedGoals = agent?.summary?.blockedGoals.map(redactText) ?? [];
@@ -854,30 +1029,59 @@ function buildRoles(
       ...(agent?.missingEvidenceKinds.map((kind) => `חסרה ראיה מסוג ${redactText(kind)}.`) ?? []),
       ...(agent && agent.status !== 'completed' ? [redactText(agent.terminalReason)] : []),
     ];
+    const findingText = (finding: Finding) => `${finding.severity}: ${finding.title} — ${finding.status}`;
+    const permissionFindings = roleFindings.filter((finding) =>
+      finding.category === 'authorization' || finding.category === 'security');
+    const confidence = roleFindings.length
+      ? roleFindings.reduce((total, finding) => total + finding.confidence, 0) / roleFindings.length
+      : null;
     return {
       role,
       purpose: ROLE_PURPOSES[role],
       status: aggregateRoleStatus(roleScenarios),
       scenarioIds: roleScenarios.map(({ id }) => id),
-      successfulTasks: unique([
+      tasksAttempted: unique([
+        ...completedGoals,
+        ...blockedGoals,
+        ...roleScenarios
+          .filter(({ status }) => status !== 'SKIPPED_BY_CONFIGURATION' && status !== 'OPTIONAL_BLOCKED')
+          .map(({ name }) => name),
+      ]),
+      tasksCompleted: unique([
         ...completedGoals,
         ...roleScenarios.filter(({ status }) => status === 'PASSED').map(({ name }) => name),
       ]),
-      blockedTasks: unique([
+      tasksBlocked: unique([
         ...blockedGoals,
         ...roleScenarios
           .filter(({ status }) => status === 'BLOCKED' || status === 'FAILED')
           .map(({ name }) => name),
       ]),
-      inaccessibleAreas: unique(blockedGoals),
-      unexpectedAccessibleAreas: [],
+      accessibleAreas: completedOpenAreas(agent?.steps ?? []),
+      unexpectedlyInaccessibleAreas: [],
+      unexpectedlyAccessibleAreas: [],
+      functionalDefects: roleFindings
+        .filter((finding) => finding.category === 'functional' || finding.category === 'data_integrity')
+        .map(findingText),
+      permissionDefects: permissionFindings.map(findingText),
+      accessibilityFindings: roleFindings
+        .filter((finding) => finding.category === 'accessibility')
+        .map(findingText),
+      usabilityObservations: roleFindings
+        .filter((finding) => ['usability', 'visual', 'performance', 'rtl'].includes(finding.category))
+        .map(findingText),
+      unclearWording: roleFindings.filter((finding) => finding.category === 'copy').map(findingText),
+      recoveryProblems: roleFindings.filter((finding) => finding.category === 'resilience').map(findingText),
       evidence: unique(roleScenarios.flatMap(({ evidence }) => evidence)),
+      confidence,
+      recommendations: unique(roleFindings.flatMap(({ recommendedFix }) =>
+        recommendedFix ? [recommendedFix] : [])),
       limitations: unique(limitations),
     };
   });
 }
 
-function platformAdminScenario(generatedAt: string): ScenarioResult {
+function platformAdminScenario(generatedAt: string, enabled: boolean): ScenarioResult {
   const definition = getScenario('platform-admin');
   const reason = definition.blockedReason
     ?? 'לא קיימת זהות platform-admin מקומית ומאושרת.';
@@ -886,9 +1090,37 @@ function platformAdminScenario(generatedAt: string): ScenarioResult {
     name: definition.title,
     role: 'platform',
     required: false,
-    status: 'BLOCKED',
+    status: enabled ? 'OPTIONAL_BLOCKED' : 'SKIPPED_BY_CONFIGURATION',
+    blockerType: 'CONFIGURATION',
     generatedAt,
-    message: reason,
+    message: enabled ? reason : 'כיסוי platform-admin האופציונלי הושבת לפי הגדרה.',
+  });
+}
+
+export function cleanupVerificationScenario(
+  cleanup: StoredCleanupRun | null,
+  generatedAt: string,
+): ScenarioResult {
+  if (!cleanup) {
+    return syntheticScenario({
+      id: 'cleanup-verification',
+      name: 'אימות ניקוי סביבת QA',
+      required: true,
+      status: 'BLOCKED',
+      blockerType: 'INFRASTRUCTURE',
+      generatedAt,
+      message: 'קובץ cleanup.json חסר; לא ניתן להוכיח שה-state הזמני נוקה ושמשאבי ההרצה שוחררו.',
+    });
+  }
+  const status: RunStatus = cleanup.status === 'CLEAN' ? 'PASSED' : cleanup.status;
+  return syntheticScenario({
+    id: 'cleanup-verification',
+    name: 'אימות ניקוי סביבת QA',
+    required: true,
+    status,
+    blockerType: status === 'PASSED' ? undefined : 'INFRASTRUCTURE',
+    generatedAt,
+    message: redactText(cleanup.reason),
   });
 }
 
@@ -897,11 +1129,7 @@ function truthfulDecision(
   findings: readonly Finding[],
   failOnMedium: boolean,
 ): RunReport['exitDecision'] {
-  const decision = exitDecision(scenarios, findings, failOnMedium);
-  return {
-    ...decision,
-    exitCode: decision.status === 'PASSED' ? 0 : decision.status === 'FAILED' ? 1 : 2,
-  };
+  return exitDecision(scenarios, findings, failOnMedium);
 }
 
 async function loadDeterministicResult(context: ReportContext): Promise<StoredDeterministicRun | null> {
@@ -959,6 +1187,7 @@ async function loadAgentResult(context: ReportContext): Promise<StoredAgentRun |
   const roleEvidence = result.orchestrator?.roleResults.flatMap((roleRun) => [
     ...roleRun.evidence.map(({ ref }) => ref),
     ...roleRun.evidenceRefs,
+    ...roleRun.verificationResults.flatMap(({ mutationEvidence }) => mutationEvidence?.evidenceRefs ?? []),
     ...roleRun.verificationResults.flatMap(({ result: verification }) =>
       verification.evidence.map(({ ref }) => ref)),
   ]) ?? [];
@@ -1006,6 +1235,8 @@ async function buildReport(
   ];
   const blockedItems: string[] = [];
   const evidencePaths: string[] = [];
+  let deterministicGateScenario: ScenarioResult | undefined;
+  let playwrightScenarios: ScenarioResult[] = [];
 
   const deterministicResultRef = managedEvidenceRef(context.artifactRoot, DETERMINISTIC_RESULT_RELATIVE_PATH);
   const playwrightResultPath = path.join(context.artifactRoot, PLAYWRIGHT_RESULT_RELATIVE_PATH);
@@ -1020,6 +1251,7 @@ async function buildReport(
       }),
     ];
     const scenario = deterministicScenario(deterministic, deterministicEvidence);
+    deterministicGateScenario = scenario;
     scenarios.push(scenario);
     if (scenario.status === 'BLOCKED') {
       blockedItems.push(`השער הדטרמיניסטי: ${scenario.limitation ?? 'חסרה ראיה מספקת.'}`);
@@ -1049,7 +1281,11 @@ async function buildReport(
     } catch {
       throw new ReportRunnerIssue('FAILED', 'Stored Playwright report is malformed and cannot be aggregated.');
     }
-    scenarios.push(...parsed.scenarios);
+    playwrightScenarios = parsed.scenarios.map((scenario) => ({
+      ...scenario,
+      blockerType: playwrightBlockerType(scenario),
+    }));
+    scenarios.push(...playwrightScenarios);
     findings.push(...parsed.findings);
     evidencePaths.push(PLAYWRIGHT_RESULT_RELATIVE_PATH);
   } else if (deterministic?.status === 'PASSED') {
@@ -1067,6 +1303,14 @@ async function buildReport(
     limitations.push('לא נוצר דוח Playwright משום שההרצה הדטרמיניסטית לא הגיעה לשלב הדפדפן.');
   }
 
+  if (deterministic && deterministicGateScenario) {
+    deterministicGateScenario.blockerType = deterministicBlockerType(
+      deterministic,
+      playwrightScenarios,
+      playwrightExists,
+    );
+  }
+
   const agentCoverage = buildAgentCoverage(agent, {
     runId: context.metadata.runId,
     artifactRoot: context.artifactRoot,
@@ -1080,31 +1324,23 @@ async function buildReport(
   limitations.push(...agentCoverage.limitations);
   evidencePaths.push(...agentCoverage.evidencePaths);
 
+  const cleanupScenario = cleanupVerificationScenario(cleanup, generatedAt);
+  scenarios.push(cleanupScenario);
   if (cleanup) {
     const cleanupRef = managedEvidenceRef(context.artifactRoot, CLEANUP_RESULT_RELATIVE_PATH);
-    const cleanupStatus: RunStatus = cleanup.status === 'CLEAN' ? 'PASSED' : cleanup.status;
-    scenarios.push(syntheticScenario({
-      id: 'cleanup-verification',
-      name: 'אימות ניקוי סביבת QA',
-      required: true,
-      status: cleanupStatus,
-      generatedAt,
-      message: redactText(cleanup.reason),
-    }));
-    const scenario = scenarios.at(-1)!;
-    scenario.evidence = cleanupRef ? [cleanupRef] : [];
+    cleanupScenario.evidence = cleanupRef ? [cleanupRef] : [];
     if (cleanupRef) evidencePaths.push(cleanupRef);
-    if (cleanupStatus === 'BLOCKED') blockedItems.push(redactText(cleanup.reason));
-    if (cleanupStatus !== 'PASSED') limitations.push(redactText(cleanup.reason));
+    if (cleanupScenario.status === 'BLOCKED') blockedItems.push(redactText(cleanup.reason));
+    if (cleanupScenario.status !== 'PASSED') limitations.push(redactText(cleanup.reason));
+  } else {
+    blockedItems.push(cleanupScenario.limitation!);
+    limitations.push(cleanupScenario.limitation!);
   }
 
   const includePlatformAdmin = options.includePlatformAdmin ?? true;
-  if (includePlatformAdmin) {
-    const platform = platformAdminScenario(generatedAt);
-    scenarios.push(platform);
-    blockedItems.push(`[אופציונלי] ${platform.name}: ${platform.limitation ?? 'חסר fixture מאושר.'}`);
-    limitations.push('תרחיש platform-admin נשאר BLOCKED ואופציונלי עד ליצירת fixture מקומי נפרד ומאושר.');
-  }
+  const platform = platformAdminScenario(generatedAt, includePlatformAdmin);
+  scenarios.push(platform);
+  limitations.push('כיסוי platform-admin אופציונלי עד ליצירת fixture מקומי נפרד ומאושר.');
 
   const deduplicatedFindings = deduplicateFindings(findings);
   const findingIdsByScenario = new Map<string, string[]>();
@@ -1122,7 +1358,7 @@ async function buildReport(
     ]);
   }
 
-  const roles = buildRoles(scenarios, agentCoverage.roleRuns, includePlatformAdmin);
+  const roles = buildRoles(scenarios, deduplicatedFindings, agentCoverage.roleRuns, includePlatformAdmin);
   const decision = truthfulDecision(
     scenarios,
     deduplicatedFindings,
@@ -1140,18 +1376,21 @@ async function buildReport(
     ...agentCoverage.humanTestingRequired,
   ]);
 
+  limitations.push(...blockedItems);
+
   return RunReportSchema.parse({
-    schemaVersion: 1,
+    schemaVersion: 2,
     runId: context.metadata.runId,
     generatedAt,
-    overallStatus: decision.status,
+    runStatus: decision.runStatus,
+    productQualityStatus: decision.productQualityStatus,
     environment: context.metadata.environment,
     scenarios,
     roles,
     findings: deduplicatedFindings,
     scorecards: roleScorecards(roles, scenarios, deduplicatedFindings),
     statistics: statistics(scenarios, deduplicatedFindings),
-    blockedItems: unique(blockedItems),
+    coverageExceptions: coverageExceptions(scenarios),
     limitations: unique(limitations),
     humanTestingRequired,
     evidencePaths: unique(evidencePaths),
@@ -1166,34 +1405,35 @@ export async function runQaReport(options: ReportRunnerOptions = {}): Promise<Re
     context = await resolveReportContext(options);
     const report = await buildReport(context, options, generatedAt);
     const reportPaths = await generateReports(context.artifactRoot, report);
-    const status = report.exitDecision.status === 'SKIPPED_BY_CONFIGURATION'
-      ? 'BLOCKED'
-      : report.exitDecision.status;
     const reasons = report.exitDecision.reasons;
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       runId: report.runId,
-      status,
+      runStatus: report.runStatus,
+      productQualityStatus: report.productQualityStatus,
       generatedAt,
       artifactRoot: context.artifactRoot,
       reportPaths,
       reason: reasons.length
         ? reasons.join('; ')
-        : status === 'PASSED' ? 'Reports generated successfully.' : 'Report exit policy blocked the run.',
-      exitCode: exitCodeFor(status),
+        : 'Reports generated successfully.',
+      exitCode: report.exitDecision.exitCode as 0 | 1 | 2,
     };
   } catch (error) {
-    const status = error instanceof ReportRunnerIssue ? error.status : 'FAILED';
+    const runStatus = error instanceof ReportRunnerIssue && error.status === 'BLOCKED'
+      ? 'BLOCKED' as const
+      : 'INFRASTRUCTURE_FAILED' as const;
     const reason = redactText(error instanceof Error ? error.message : 'QA report generation failed.');
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       runId: context?.metadata.runId ?? null,
-      status,
+      runStatus,
+      productQualityStatus: 'PASS',
       generatedAt,
       artifactRoot: context?.artifactRoot ?? null,
       reportPaths: [],
       reason,
-      exitCode: exitCodeFor(status),
+      exitCode: runStatus === 'BLOCKED' ? 2 : 1,
     };
   }
 }

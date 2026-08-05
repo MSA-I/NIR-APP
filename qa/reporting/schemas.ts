@@ -1,7 +1,22 @@
 import { z } from 'zod';
 
-export const RunStatusSchema = z.enum(['PASSED', 'FAILED', 'BLOCKED', 'SKIPPED_BY_CONFIGURATION']);
+export const RunStatusSchema = z.enum([
+  'PASSED',
+  'FAILED',
+  'BLOCKED',
+  'SKIPPED_BY_CONFIGURATION',
+  'OPTIONAL_BLOCKED',
+]);
 export type RunStatus = z.infer<typeof RunStatusSchema>;
+
+export const RunExecutionStatusSchema = z.enum(['COMPLETED', 'BLOCKED', 'INFRASTRUCTURE_FAILED']);
+export type RunExecutionStatus = z.infer<typeof RunExecutionStatusSchema>;
+
+export const ProductQualityStatusSchema = z.enum(['PASS', 'PASS_WITH_FINDINGS', 'FAIL']);
+export type ProductQualityStatus = z.infer<typeof ProductQualityStatusSchema>;
+
+export const BlockerTypeSchema = z.enum(['PRODUCT', 'INFRASTRUCTURE', 'CONFIGURATION']);
+export type BlockerType = z.infer<typeof BlockerTypeSchema>;
 
 export const FindingSourceSchema = z.enum([
   'playwright',
@@ -102,19 +117,41 @@ export const ScenarioResultSchema = z.object({
   findingIds: z.array(z.string()),
   evidence: z.array(z.string()),
   limitation: z.string().optional(),
+  blockerType: BlockerTypeSchema.optional(),
 }).strict();
 export type ScenarioResult = z.infer<typeof ScenarioResultSchema>;
+
+export const CoverageExceptionSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  role: z.string().min(1),
+  reason: z.string().min(1),
+  required: z.boolean(),
+  status: z.enum(['BLOCKED', 'SKIPPED_BY_CONFIGURATION', 'OPTIONAL_BLOCKED']),
+  blockerType: BlockerTypeSchema,
+}).strict();
+export type CoverageException = z.infer<typeof CoverageExceptionSchema>;
 
 export const RoleResultSchema = z.object({
   role: z.string().min(1),
   purpose: z.string().min(1),
   status: RunStatusSchema,
   scenarioIds: z.array(z.string()),
-  successfulTasks: z.array(z.string()),
-  blockedTasks: z.array(z.string()),
-  inaccessibleAreas: z.array(z.string()),
-  unexpectedAccessibleAreas: z.array(z.string()),
+  tasksAttempted: z.array(z.string()),
+  tasksCompleted: z.array(z.string()),
+  tasksBlocked: z.array(z.string()),
+  accessibleAreas: z.array(z.string()),
+  unexpectedlyInaccessibleAreas: z.array(z.string()),
+  unexpectedlyAccessibleAreas: z.array(z.string()),
+  functionalDefects: z.array(z.string()),
+  permissionDefects: z.array(z.string()),
+  accessibilityFindings: z.array(z.string()),
+  usabilityObservations: z.array(z.string()),
+  unclearWording: z.array(z.string()),
+  recoveryProblems: z.array(z.string()),
   evidence: z.array(z.string()),
+  confidence: z.number().min(0).max(1).nullable(),
+  recommendations: z.array(z.string()),
   limitations: z.array(z.string()),
 }).strict();
 export type RoleResult = z.infer<typeof RoleResultSchema>;
@@ -148,10 +185,11 @@ export const RoleScoreSchema = z.object({
 export type RoleScore = z.infer<typeof RoleScoreSchema>;
 
 export const RunReportSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   runId: z.string().min(1),
   generatedAt: z.string().datetime(),
-  overallStatus: RunStatusSchema,
+  runStatus: RunExecutionStatusSchema,
+  productQualityStatus: ProductQualityStatusSchema,
   environment: EnvironmentSchema,
   scenarios: z.array(ScenarioResultSchema),
   roles: z.array(RoleResultSchema),
@@ -164,17 +202,65 @@ export const RunReportSchema = z.object({
     passedScenarios: z.number().int().nonnegative(),
     failedScenarios: z.number().int().nonnegative(),
     blockedScenarios: z.number().int().nonnegative(),
+    skippedScenarios: z.number().int().nonnegative(),
+    optionalBlockedScenarios: z.number().int().nonnegative(),
     flakyScenarios: z.number().int().nonnegative(),
   }).strict(),
-  blockedItems: z.array(z.string()),
+  coverageExceptions: z.array(CoverageExceptionSchema),
   limitations: z.array(z.string()),
   humanTestingRequired: z.array(z.string()),
   evidencePaths: z.array(z.string()),
   exitDecision: z.object({
-    status: RunStatusSchema,
+    runStatus: RunExecutionStatusSchema,
+    productQualityStatus: ProductQualityStatusSchema,
     exitCode: z.number().int().nonnegative(),
     reasons: z.array(z.string()),
   }).strict(),
-}).strict();
+}).strict().superRefine((report, context) => {
+  if (report.runStatus !== report.exitDecision.runStatus
+      || report.productQualityStatus !== report.exitDecision.productQualityStatus) {
+    context.addIssue({
+      code: 'custom',
+      path: ['exitDecision'],
+      message: 'Top-level statuses must match the exit decision.',
+    });
+  }
+  const expectedExitCode = report.runStatus === 'BLOCKED'
+    ? 2
+    : report.runStatus === 'INFRASTRUCTURE_FAILED' || report.productQualityStatus === 'FAIL' ? 1 : 0;
+  if (report.exitDecision.exitCode !== expectedExitCode) {
+    context.addIssue({
+      code: 'custom',
+      path: ['exitDecision', 'exitCode'],
+      message: 'Exit code does not match run and product quality statuses.',
+    });
+  }
+  const expected = report.scenarios.filter((scenario) =>
+    scenario.status === 'BLOCKED'
+      || scenario.status === 'SKIPPED_BY_CONFIGURATION'
+      || scenario.status === 'OPTIONAL_BLOCKED');
+  if (expected.length !== report.coverageExceptions.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['coverageExceptions'],
+      message: 'Every blocked or skipped scenario must have exactly one coverage exception.',
+    });
+    return;
+  }
+  for (const scenario of expected) {
+    const matches = report.coverageExceptions.filter((item) =>
+      item.id === scenario.id
+        && item.name === scenario.name
+        && item.role === scenario.role
+        && item.required === scenario.required
+        && item.status === scenario.status);
+    if (matches.length !== 1) {
+      context.addIssue({
+        code: 'custom',
+        path: ['coverageExceptions'],
+        message: `Coverage exception is missing or ambiguous for scenario ${scenario.id}.`,
+      });
+    }
+  }
+});
 export type RunReport = z.infer<typeof RunReportSchema>;
-

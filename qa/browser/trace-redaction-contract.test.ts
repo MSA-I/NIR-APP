@@ -94,3 +94,22 @@ test('a trace scrub failure deletes every raw trace in the managed artifact root
   await assert.rejects(readFile(first), { code: 'ENOENT' });
   await assert.rejects(readFile(second), { code: 'ENOENT' });
 });
+
+test('a successful acceptance scrub retains a managed trace and rejects an empty run', async (t) => {
+  const directory = await mkdtemp(join(process.cwd(), '.qa-test-trace-required-'));
+  t.after(async () => rm(directory, { recursive: true, force: true }));
+  const traceDirectory = join(directory, 'playwright', 'green-test');
+  const trace = join(traceDirectory, 'trace.zip');
+  await mkdir(traceDirectory, { recursive: true });
+  await writeFile(trace, zipSync({
+    'trace.trace': new TextEncoder().encode(`${syntheticContextOptionsEvent()}\n`),
+  }));
+
+  assert.deepEqual(await scrubPlaywrightTraces(directory), ['playwright/green-test/trace.zip']);
+  const retained = Buffer.concat(Object.values(unzipSync(new Uint8Array(await readFile(trace))))
+    .map((entry) => Buffer.from(entry)));
+  assert.equal(retained.includes(Buffer.from(SYNTHETIC_ACCESS_MARKER)), false);
+
+  await rm(trace, { force: true });
+  await assert.rejects(scrubPlaywrightTraces(directory), /trace artifact is missing/);
+});

@@ -10,6 +10,15 @@ export type QaModelAvailability =
   | { readonly status: 'ready' }
   | { readonly status: 'blocked'; readonly reason: string };
 
+export interface ModelScenarioStepProjection {
+  readonly id: string;
+  readonly route: string;
+  readonly action: string;
+  readonly expected: string;
+  readonly mutatesData: boolean;
+  readonly verifierIds: readonly string[];
+}
+
 export interface ModelScenarioProjection {
   readonly id: string;
   readonly name: string;
@@ -18,6 +27,10 @@ export interface ModelScenarioProjection {
   readonly allowedFixtureNames: readonly string[];
   readonly allowedVerificationChecks: readonly string[];
   readonly evidenceRequirements: readonly string[];
+  readonly steps: readonly ModelScenarioStepProjection[];
+  readonly completedStepIds: readonly string[];
+  readonly pendingMutationStepId: string | null;
+  readonly pendingVerificationStepId: string | null;
 }
 
 export interface ModelStepReceipt {
@@ -92,12 +105,14 @@ export type QaModelErrorCode =
 export class QaModelError extends Error {
   readonly code: QaModelErrorCode;
   readonly retryable: boolean;
+  readonly retryAfterMs: number | null;
   readonly safeRawResponse: string | null;
 
   constructor(
     code: QaModelErrorCode,
     options: {
       retryable: boolean;
+      retryAfterMs?: number | null;
       safeRawResponse?: string | null;
       cause?: unknown;
     },
@@ -106,6 +121,7 @@ export class QaModelError extends Error {
     this.name = 'QaModelError';
     this.code = code;
     this.retryable = options.retryable;
+    this.retryAfterMs = options.retryAfterMs ?? null;
     this.safeRawResponse = options.safeRawResponse ?? null;
   }
 }

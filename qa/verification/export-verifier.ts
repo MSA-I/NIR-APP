@@ -7,6 +7,7 @@ interface ExportExpectationBase {
   id: string;
   filePath: string;
   expectedHeaders?: readonly string[];
+  expectedRowSubsets?: readonly Readonly<Record<string, string | number | boolean | null>>[];
   exactRowCount?: number;
   minRowCount?: number;
 }
@@ -118,6 +119,48 @@ function numericTotal(
   return { matches: Math.abs(actual - total.expected) <= (total.tolerance ?? 0.01), actual };
 }
 
+function numericCell(value: unknown): number | null {
+  const parsed = typeof value === 'number'
+    ? value
+    : Number(String(value ?? '').replace(/[₪,\s]/g, ''));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function cellMatches(actual: unknown, expected: string | number | boolean | null): boolean {
+  if (expected === null) return actual === null || actual === undefined || String(actual).trim() === '';
+  if (typeof expected === 'number') {
+    const parsed = numericCell(actual);
+    return parsed !== null && Math.abs(parsed - expected) <= 0.01;
+  }
+  if (typeof expected === 'boolean') return actual === expected;
+  return String(actual ?? '').trim() === expected.trim();
+}
+
+function expectedRowsMatch(
+  headers: readonly string[],
+  rows: readonly (readonly unknown[])[],
+  expectedRows: ExportExpectationBase['expectedRowSubsets'],
+): { matches: boolean; matchedCount: number; expectedCount: number } {
+  if (!expectedRows?.length) return { matches: true, matchedCount: 0, expectedCount: 0 };
+  const headerIndexes = new Map(headers.map((header, index) => [header, index]));
+  let matchedCount = 0;
+  const availableRows = new Set(rows.map((_row, index) => index));
+  for (const expected of expectedRows) {
+    const match = [...availableRows].find((rowIndex) => Object.entries(expected).every(([header, value]) => {
+      const columnIndex = headerIndexes.get(header);
+      return columnIndex !== undefined && cellMatches(rows[rowIndex]?.[columnIndex], value);
+    }));
+    if (match === undefined) continue;
+    availableRows.delete(match);
+    matchedCount += 1;
+  }
+  return {
+    matches: matchedCount === expectedRows.length,
+    matchedCount,
+    expectedCount: expectedRows.length,
+  };
+}
+
 async function verifyXlsx(
   expectation: SpreadsheetExportExpectation,
   buffer: Buffer,
@@ -136,9 +179,11 @@ async function verifyXlsx(
     .map(([address]) => address);
   const rowsCheck = rowCountCheck(expectation, dataRows.length);
   const headerCheck = headersMatch(headers, expectation.expectedHeaders);
+  const expectedRowsCheck = expectedRowsMatch(headers, dataRows, expectation.expectedRowSubsets);
   const totalCheck = numericTotal(headers, dataRows, expectation.total);
   const formulasAllowed = expectation.forbidFormulas === false || formulaCells.length === 0;
-  const passed = rowsCheck.passed && headerCheck && totalCheck.matches && formulasAllowed;
+  const passed = rowsCheck.passed && headerCheck && expectedRowsCheck.matches
+    && totalCheck.matches && formulasAllowed;
   return {
     id: expectation.id,
     status: passed ? 'PASS' : 'FAIL',
@@ -149,6 +194,9 @@ async function verifyXlsx(
       expectedHeadersPresent: headerCheck,
       rowCount: dataRows.length,
       rowCountFailure: rowsCheck.reason,
+      expectedRowSubsetCount: expectedRowsCheck.expectedCount,
+      matchedRowSubsetCount: expectedRowsCheck.matchedCount,
+      expectedRowSubsetsPresent: expectedRowsCheck.matches,
       totalMatches: totalCheck.matches,
       actualTotal: totalCheck.actual,
       formulaCellCount: formulaCells.length,
@@ -165,8 +213,9 @@ async function verifyCsv(
   const dataRows = rows.slice(1);
   const rowsCheck = rowCountCheck(expectation, dataRows.length);
   const headerCheck = headersMatch(headers, expectation.expectedHeaders);
+  const expectedRowsCheck = expectedRowsMatch(headers, dataRows, expectation.expectedRowSubsets);
   const totalCheck = numericTotal(headers, dataRows, expectation.total);
-  const passed = rowsCheck.passed && headerCheck && totalCheck.matches;
+  const passed = rowsCheck.passed && headerCheck && expectedRowsCheck.matches && totalCheck.matches;
   return {
     id: expectation.id,
     status: passed ? 'PASS' : 'FAIL',
@@ -176,6 +225,9 @@ async function verifyCsv(
       expectedHeadersPresent: headerCheck,
       rowCount: dataRows.length,
       rowCountFailure: rowsCheck.reason,
+      expectedRowSubsetCount: expectedRowsCheck.expectedCount,
+      matchedRowSubsetCount: expectedRowsCheck.matchedCount,
+      expectedRowSubsetsPresent: expectedRowsCheck.matches,
       totalMatches: totalCheck.matches,
       actualTotal: totalCheck.actual,
     },

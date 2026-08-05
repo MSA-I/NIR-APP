@@ -1,4 +1,11 @@
-import type { Finding, RoleResult, RoleScore, RunReport, RunStatus, ScenarioResult } from './schemas.ts';
+import type {
+  CoverageException,
+  Finding,
+  RoleResult,
+  RoleScore,
+  RunReport,
+  ScenarioResult,
+} from './schemas.ts';
 
 function countBy(values: readonly string[]): Record<string, number> {
   return values.reduce<Record<string, number>>((counts, value) => {
@@ -8,7 +15,8 @@ function countBy(values: readonly string[]): Record<string, number> {
 }
 
 function percent(results: readonly ScenarioResult[]): number | null {
-  const measured = results.filter((result) => result.status !== 'SKIPPED_BY_CONFIGURATION');
+  const measured = results.filter((result) =>
+    result.status !== 'SKIPPED_BY_CONFIGURATION' && result.status !== 'OPTIONAL_BLOCKED');
   if (!measured.length) return null;
   return Math.round((measured.filter((result) => result.status === 'PASSED').length / measured.length) * 100);
 }
@@ -31,7 +39,8 @@ export function roleScorecards(
       ? 'BLOCKED_BY_CRITICAL'
       : high
         ? 'BLOCKED_BY_HIGH'
-        : roleScenarios.length
+        : roleScenarios.some((scenario) =>
+          scenario.status !== 'SKIPPED_BY_CONFIGURATION' && scenario.status !== 'OPTIONAL_BLOCKED')
           ? roleScenarios.some((scenario) => scenario.status !== 'PASSED') ? 'DEGRADED' : 'OK'
           : 'NO_EVIDENCE';
     return {
@@ -57,8 +66,30 @@ export function statistics(scenarios: readonly ScenarioResult[], findings: reado
     passedScenarios: scenarios.filter((scenario) => scenario.status === 'PASSED').length,
     failedScenarios: scenarios.filter((scenario) => scenario.status === 'FAILED').length,
     blockedScenarios: scenarios.filter((scenario) => scenario.status === 'BLOCKED').length,
+    skippedScenarios: scenarios.filter((scenario) => scenario.status === 'SKIPPED_BY_CONFIGURATION').length,
+    optionalBlockedScenarios: scenarios.filter((scenario) => scenario.status === 'OPTIONAL_BLOCKED').length,
     flakyScenarios: findings.filter((finding) => finding.reproducibility === 'intermittent').length,
   };
+}
+
+export function coverageExceptions(scenarios: readonly ScenarioResult[]): CoverageException[] {
+  return scenarios.flatMap((scenario) => {
+    if (scenario.status !== 'BLOCKED'
+        && scenario.status !== 'SKIPPED_BY_CONFIGURATION'
+        && scenario.status !== 'OPTIONAL_BLOCKED') return [];
+    return [{
+      id: scenario.id,
+      name: scenario.name,
+      role: scenario.role,
+      reason: scenario.limitation?.trim()
+        || scenario.steps.find((step) => step.status !== 'PASSED')?.message?.trim()
+        || 'לא נרשמה סיבת ביצוע.',
+      required: scenario.required,
+      status: scenario.status,
+      blockerType: scenario.blockerType
+        ?? (scenario.status === 'BLOCKED' ? 'INFRASTRUCTURE' : 'CONFIGURATION'),
+    }];
+  });
 }
 
 export function exitDecision(
@@ -66,17 +97,42 @@ export function exitDecision(
   findings: readonly Finding[],
   failOnMedium: boolean,
 ): RunReport['exitDecision'] {
-  const failures: string[] = [];
-  const blocked: string[] = [];
-  if (scenarios.some((scenario) => scenario.status === 'FAILED')) failures.push('תרחיש דטרמיניסטי נכשל');
-  if (scenarios.some((scenario) => scenario.required && scenario.status === 'BLOCKED')) blocked.push('תרחיש חובה חסום');
-  if (findings.some((finding) => finding.status === 'confirmed' && ['critical', 'high'].includes(finding.severity))) {
-    failures.push('קיים ממצא מאומת בחומרה גבוהה או קריטית');
-  }
-  if (failOnMedium && findings.some((finding) => finding.status === 'confirmed' && finding.severity === 'medium')) {
-    failures.push('הוגדר כשל CI על ממצא בינוני מאומת');
-  }
-  const status: RunStatus = failures.length ? 'FAILED' : blocked.length ? 'BLOCKED' : 'PASSED';
-  const reasons = [...failures, ...blocked];
-  return { status, exitCode: status === 'PASSED' ? 0 : 1, reasons };
+  const infrastructureFailures = scenarios.filter((scenario) =>
+    scenario.required && scenario.status === 'FAILED' && scenario.blockerType === 'INFRASTRUCTURE');
+  const executionBlockers = scenarios.filter((scenario) =>
+    scenario.required
+      && ['BLOCKED', 'SKIPPED_BY_CONFIGURATION', 'OPTIONAL_BLOCKED'].includes(scenario.status)
+      && scenario.blockerType !== 'PRODUCT');
+  const productScenarioFailures = scenarios.filter((scenario) =>
+    (scenario.status === 'FAILED' && scenario.blockerType !== 'INFRASTRUCTURE')
+      || (scenario.status === 'BLOCKED' && scenario.blockerType === 'PRODUCT'));
+  const highFindings = findings.filter((finding) =>
+    finding.status === 'confirmed' && ['critical', 'high'].includes(finding.severity));
+  const mediumGateFindings = failOnMedium
+    ? findings.filter((finding) => finding.status === 'confirmed' && finding.severity === 'medium')
+    : [];
+
+  const runStatus = infrastructureFailures.length
+    ? 'INFRASTRUCTURE_FAILED' as const
+    : executionBlockers.length
+      ? 'BLOCKED' as const
+      : 'COMPLETED' as const;
+  const productQualityStatus = productScenarioFailures.length || highFindings.length || mediumGateFindings.length
+    ? 'FAIL' as const
+    : findings.some((finding) => finding.status !== 'false_positive')
+      ? 'PASS_WITH_FINDINGS' as const
+      : 'PASS' as const;
+  const reasons = [
+    ...infrastructureFailures.map((scenario) => `כשל תשתית: ${scenario.id}`),
+    ...executionBlockers.map((scenario) => `כיסוי חובה נחסם: ${scenario.id}`),
+    ...productScenarioFailures.map((scenario) => `תרחיש מוצר נכשל: ${scenario.id}`),
+    ...(highFindings.length ? ['קיים ממצא מוצר מאומת בחומרה גבוהה או קריטית'] : []),
+    ...(mediumGateFindings.length ? ['ממצא בינוני מאומת הוגדר כמכשיל את שער האיכות'] : []),
+  ];
+  const exitCode = runStatus === 'INFRASTRUCTURE_FAILED'
+    ? 1
+    : runStatus === 'BLOCKED'
+      ? 2
+      : productQualityStatus === 'FAIL' ? 1 : 0;
+  return { runStatus, productQualityStatus, exitCode, reasons };
 }

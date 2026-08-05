@@ -3,6 +3,7 @@ import { createQaConfig } from '../config/qa.config.ts';
 import { ROLE_CONTRACTS } from '../config/roles.ts';
 import { test, expect } from '../browser/fixture.ts';
 import { redactText } from '../browser/redaction.ts';
+import { loadReadyQaState } from '../runner/runtime-state.ts';
 
 const qa = createQaConfig();
 
@@ -48,6 +49,24 @@ test('keyboard entry bypasses the persistent shell through route focus or the sk
   await expect(skip).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(main).toBeFocused();
+});
+
+test('bank import reason exposes its visible label as the accessible name', async ({ page, qaRole, evidence }) => {
+  test.skip(qaRole !== 'accountant', 'Bank import belongs to the accountant role.');
+  const state = await loadReadyQaState();
+  const bankFile = state.fixtureFiles['bank-csv'];
+  expect(bankFile, 'The bank CSV fixture must exist after QA setup.').toBeTruthy();
+
+  evidence.record('accessible-name', 'bank-import-reason');
+  await page.goto('/bank');
+  await page.getByRole('button', { name: 'ייבוא תדפיס בנק', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'ייבוא תדפיס בנק', exact: true });
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    dialog.getByRole('button', { name: 'בחירת קובץ', exact: true }).click(),
+  ]);
+  await chooser.setFiles(bankFile!);
+  await expect(dialog.getByRole('textbox', { name: 'סיבת הייבוא *', exact: true })).toBeVisible();
 });
 
 test('kitchen receiving remains usable at the mobile contract viewport', async ({ page, qaRole, evidence }) => {

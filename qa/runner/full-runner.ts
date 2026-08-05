@@ -1,7 +1,7 @@
 import { access, mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { RunStatus } from '../reporting/schemas.ts';
+import type { BlockerType, RunStatus } from '../reporting/schemas.ts';
 import { redactText, safeJson } from '../reporting/redact.ts';
 import { runAgentQa, type AgentRunResult } from './agent-runner.ts';
 import { cleanupQaRun, type CleanupResult } from './clean.ts';
@@ -27,17 +27,19 @@ export interface FullRunnerOptions {
 }
 
 export interface FullPhaseResult {
-  name: 'setup' | 'deterministic' | 'agents' | 'report' | 'cleanup';
+  name: 'setup' | 'deterministic' | 'agent-data-refresh' | 'agents' | 'report' | 'cleanup';
   status: RunStatus;
+  blockerType?: BlockerType;
   exitCode: 0 | 1 | 2;
   reason: string;
   artifact?: string;
 }
 
 export interface FullRunResult {
-  schemaVersion: 1;
+  schemaVersion: 2;
   runId: string | null;
-  status: 'PASSED' | 'FAILED' | 'BLOCKED';
+  runStatus: 'COMPLETED' | 'BLOCKED' | 'INFRASTRUCTURE_FAILED';
+  productQualityStatus: 'PASS' | 'PASS_WITH_FINDINGS' | 'FAIL';
   startedAt: string;
   endedAt: string;
   repoRoot: string;
@@ -54,15 +56,92 @@ function unique(values: readonly string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
 
-function normalizedExit(status: FullRunResult['status'] | RunStatus): 0 | 1 | 2 {
-  if (status === 'PASSED' || status === 'SKIPPED_BY_CONFIGURATION') return 0;
+function normalizedExit(status: RunStatus): 0 | 1 | 2 {
+  if (status === 'PASSED' || status === 'SKIPPED_BY_CONFIGURATION' || status === 'OPTIONAL_BLOCKED') return 0;
   return status === 'FAILED' ? 1 : 2;
 }
 
-function fullStatus(phases: readonly FullPhaseResult[]): FullRunResult['status'] {
-  if (phases.some(({ status }) => status === 'FAILED')) return 'FAILED';
+function fallbackRunStatus(phases: readonly FullPhaseResult[]): FullRunResult['runStatus'] {
+  if (phases.some(({ status, blockerType }) => status === 'FAILED' && blockerType !== 'PRODUCT')) {
+    return 'INFRASTRUCTURE_FAILED';
+  }
   if (phases.some(({ status }) => status === 'BLOCKED')) return 'BLOCKED';
-  return 'PASSED';
+  return 'COMPLETED';
+}
+
+export function mergeFullRunStatus(
+  phases: readonly FullPhaseResult[],
+  reportRunStatus?: FullRunResult['runStatus'] | null,
+): FullRunResult['runStatus'] {
+  const phaseRunStatus = fallbackRunStatus(phases);
+  if (phaseRunStatus === 'INFRASTRUCTURE_FAILED'
+      || reportRunStatus === 'INFRASTRUCTURE_FAILED') {
+    return 'INFRASTRUCTURE_FAILED';
+  }
+  if (phaseRunStatus === 'BLOCKED' || reportRunStatus === 'BLOCKED') return 'BLOCKED';
+  return 'COMPLETED';
+}
+
+export function mergeProductQualityStatus(
+  phases: readonly FullPhaseResult[],
+  reportProductQualityStatus?: FullRunResult['productQualityStatus'] | null,
+): FullRunResult['productQualityStatus'] {
+  if (phases.some(({ status, blockerType }) =>
+    status === 'FAILED' && blockerType === 'PRODUCT')) {
+    return 'FAIL';
+  }
+  return reportProductQualityStatus ?? 'PASS';
+}
+
+const REQUIRED_AGENT_PRECONDITION_PHASES = [
+  'qa-typecheck',
+  'qa-unit-integration',
+  'document-export-contract',
+  'chromium-installed',
+  'preview-ready',
+  'playwright-runtime-integrity',
+  'trace-redaction',
+  'preview-stopped',
+  'environment-lock-release',
+] as const;
+
+const PRODUCT_RESULT_PHASES = [
+  'playwright-deterministic',
+  'critical-workflow-coverage',
+] as const;
+
+/**
+ * Agent exploration may continue after a proved product failure, but never when a deterministic
+ * prerequisite or evidence-cleanup phase is missing, blocked, or failed.
+ */
+export function deterministicAgentPreconditionsSatisfied(
+  result: DeterministicRunResult,
+): boolean {
+  const exactlyOneWithStatus = (name: string, accepted: readonly RunStatus[]): boolean => {
+    const matching = result.phases.filter((phase) => phase.name === name);
+    return matching.length === 1 && accepted.includes(matching[0]!.status);
+  };
+  const required = new Set<string>(REQUIRED_AGENT_PRECONDITION_PHASES);
+  const product = new Set<string>(PRODUCT_RESULT_PHASES);
+  return REQUIRED_AGENT_PRECONDITION_PHASES.every((name) =>
+    exactlyOneWithStatus(name, ['PASSED']))
+    && PRODUCT_RESULT_PHASES.every((name) =>
+      exactlyOneWithStatus(name, ['PASSED', 'FAILED']))
+    && result.phases.every((phase) =>
+      required.has(phase.name)
+        ? phase.status === 'PASSED'
+        : product.has(phase.name)
+          ? phase.status === 'PASSED' || phase.status === 'FAILED'
+          : phase.status === 'PASSED');
+}
+
+function fullExitCode(
+  runStatus: FullRunResult['runStatus'],
+  productQualityStatus: FullRunResult['productQualityStatus'],
+): 0 | 1 | 2 {
+  if (runStatus === 'BLOCKED') return 2;
+  if (runStatus === 'INFRASTRUCTURE_FAILED' || productQualityStatus === 'FAIL') return 1;
+  return 0;
 }
 
 function setupPhase(result: SetupResult): FullPhaseResult {
@@ -85,6 +164,9 @@ function deterministicPhase(result: DeterministicRunResult): FullPhaseResult {
   return {
     name: 'deterministic',
     status: result.status,
+    blockerType: result.status === 'PASSED'
+      ? undefined
+      : deterministicAgentPreconditionsSatisfied(result) ? 'PRODUCT' : 'INFRASTRUCTURE',
     exitCode: normalizedExit(result.status),
     reason: nonPassing.length ? nonPassing.join('; ') : 'Deterministic QA gates passed.',
     artifact: result.playwrightReport,
@@ -95,15 +177,22 @@ function agentPhase(result: AgentRunResult): FullPhaseResult {
   return {
     name: 'agents',
     status: result.status,
+    blockerType: result.blockerType ?? undefined,
     exitCode: normalizedExit(result.status),
     reason: redactText(result.reason),
   };
 }
 
-function reportPhase(result: ReportRunResult): FullPhaseResult {
+export function reportPhase(result: ReportRunResult): FullPhaseResult {
+  const status: RunStatus = result.runStatus === 'COMPLETED'
+    ? result.productQualityStatus === 'FAIL' ? 'FAILED' : 'PASSED'
+    : result.runStatus === 'BLOCKED' ? 'BLOCKED' : 'FAILED';
   return {
     name: 'report',
-    status: result.status,
+    status,
+    blockerType: status === 'PASSED'
+      ? undefined
+      : result.runStatus === 'COMPLETED' ? 'PRODUCT' : 'INFRASTRUCTURE',
     exitCode: result.exitCode,
     reason: redactText(result.reason),
     artifact: result.reportPaths.find((value) => path.basename(value) === 'report.json'),
@@ -119,6 +208,92 @@ function cleanupPhase(result: CleanupResult): FullPhaseResult {
     reason: result.status === 'CLEAN'
       ? 'Cleanup reset and managed-path verification completed; report artifacts were preserved.'
       : redactText(result.reason),
+  };
+}
+
+export function agentDataRefreshPhase(
+  expected: { runId: string; artifactRoot: string },
+  cleanupResult: CleanupResult | null,
+  refreshedSetup: SetupResult | null,
+): FullPhaseResult {
+  const name = 'agent-data-refresh' as const;
+  if (!cleanupResult) {
+    return {
+      name,
+      status: 'FAILED',
+      blockerType: 'INFRASTRUCTURE',
+      exitCode: 1,
+      reason: 'The pre-agent local cleanup did not return a result.',
+      artifact: expected.artifactRoot,
+    };
+  }
+  if (cleanupResult.status !== 'CLEAN') {
+    return {
+      name,
+      status: cleanupResult.status,
+      blockerType: 'INFRASTRUCTURE',
+      exitCode: normalizedExit(cleanupResult.status),
+      reason: redactText(cleanupResult.reason),
+      artifact: expected.artifactRoot,
+    };
+  }
+  if (cleanupResult.runId !== expected.runId) {
+    return {
+      name,
+      status: 'FAILED',
+      blockerType: 'INFRASTRUCTURE',
+      exitCode: 1,
+      reason: 'The pre-agent cleanup result does not belong to the expected QA run.',
+      artifact: expected.artifactRoot,
+    };
+  }
+  if (!cleanupResult.resetPerformed || !cleanupResult.artifactsPreserved) {
+    return {
+      name,
+      status: 'FAILED',
+      blockerType: 'INFRASTRUCTURE',
+      exitCode: 1,
+      reason: 'The pre-agent cleanup did not prove a local reset with preserved artifacts.',
+      artifact: expected.artifactRoot,
+    };
+  }
+  if (!refreshedSetup) {
+    return {
+      name,
+      status: 'FAILED',
+      blockerType: 'INFRASTRUCTURE',
+      exitCode: 1,
+      reason: 'The pre-agent setup did not return a result after the local reset.',
+      artifact: expected.artifactRoot,
+    };
+  }
+  if (refreshedSetup.status !== 'READY') {
+    return {
+      name,
+      status: refreshedSetup.status,
+      blockerType: 'INFRASTRUCTURE',
+      exitCode: normalizedExit(refreshedSetup.status),
+      reason: redactText(refreshedSetup.reason),
+      artifact: expected.artifactRoot,
+    };
+  }
+  if (refreshedSetup.runId !== expected.runId
+      || path.resolve(refreshedSetup.artifactRoot) !== path.resolve(expected.artifactRoot)) {
+    return {
+      name,
+      status: 'FAILED',
+      blockerType: 'INFRASTRUCTURE',
+      exitCode: 1,
+      reason: 'The refreshed setup did not preserve the original runId and artifact root.',
+      artifact: expected.artifactRoot,
+    };
+  }
+  return {
+    name,
+    status: 'PASSED',
+    exitCode: 0,
+    reason: 'The local database, credentials, fixtures, and role auth states were rebuilt for the AI phase under the original runId.',
+    artifact: expected.artifactRoot,
   };
 }
 
@@ -189,17 +364,20 @@ export async function runFullQa(options: FullRunnerOptions = {}): Promise<FullRu
   let agents: AgentRunResult | null = null;
   let report: ReportRunResult | null = null;
   let cleanup: CleanupResult | null = null;
+  let cleanupTarget: SetupResult | null = null;
+  let cleanEnvironmentBeforeAgent: CleanupResult | null = null;
   let reportPreparationError: unknown;
 
   try {
     setup = await setupQaRun({ repoRoot, baseUrl: options.baseUrl });
+    cleanupTarget = setup;
     phases.push(setupPhase(setup));
   } catch (error) {
     phases.push(failedPhase('setup', error));
   }
 
-  const setupReady = setup?.status === 'READY';
-  if (setupReady) {
+  const initialReadySetup = setup?.status === 'READY' ? setup : null;
+  if (initialReadySetup) {
     try {
       await prepareQaReportMetadata(repoRoot);
     } catch (error) {
@@ -212,18 +390,58 @@ export async function runFullQa(options: FullRunnerOptions = {}): Promise<FullRu
       phases.push(failedPhase('deterministic', error));
     }
 
-    if (deterministic?.status === 'PASSED') {
+    if (deterministic && deterministicAgentPreconditionsSatisfied(deterministic)) {
+      let refreshPhase: FullPhaseResult;
       try {
-        agents = await runAgentQa(repoRoot);
-        phases.push(agentPhase(agents));
+        const refreshCleanup = await cleanupQaRun({
+          repoRoot,
+          statePath: initialReadySetup.statePath,
+          keepArtifacts: true,
+        });
+        let refreshedSetup: SetupResult | null = null;
+        if (refreshCleanup.status === 'CLEAN') {
+          cleanEnvironmentBeforeAgent = refreshCleanup;
+          cleanupTarget = null;
+          refreshedSetup = await setupQaRun({
+            repoRoot,
+            baseUrl: options.baseUrl,
+            runId: initialReadySetup.runId,
+          });
+          cleanupTarget = refreshedSetup;
+        }
+        refreshPhase = agentDataRefreshPhase({
+          runId: initialReadySetup.runId,
+          artifactRoot: initialReadySetup.artifactRoot,
+        }, refreshCleanup, refreshedSetup);
       } catch (error) {
-        phases.push(failedPhase('agents', error));
+        refreshPhase = failedPhase('agent-data-refresh', error);
+      }
+      phases.push(refreshPhase);
+
+      if (refreshPhase.status === 'PASSED') {
+        try {
+          agents = await runAgentQa(repoRoot);
+          phases.push(agentPhase(agents));
+        } catch (error) {
+          phases.push(failedPhase('agents', error));
+        }
+      } else {
+        phases.push(notRunPhase(
+          'agents',
+          'BLOCKED',
+          'Agent phase was not run because the isolated pre-agent dataset refresh did not complete safely.',
+        ));
       }
     } else {
       phases.push(notRunPhase(
+        'agent-data-refresh',
+        'BLOCKED',
+        'The pre-agent dataset refresh was not run because deterministic infrastructure preconditions did not complete safely.',
+      ));
+      phases.push(notRunPhase(
         'agents',
         'BLOCKED',
-        'Agent phase was not run because the deterministic gate did not pass.',
+        'Agent phase was not run because one or more deterministic infrastructure preconditions did not complete safely.',
       ));
     }
 
@@ -232,30 +450,39 @@ export async function runFullQa(options: FullRunnerOptions = {}): Promise<FullRu
       ? `Report and execution phases were not run because setup returned ${setup.status}.`
       : 'Report and execution phases were not run because setup failed unexpectedly.';
     phases.push(notRunPhase('deterministic', 'BLOCKED', prerequisite));
+    phases.push(notRunPhase('agent-data-refresh', 'BLOCKED', prerequisite));
     phases.push(notRunPhase('agents', 'BLOCKED', prerequisite));
   }
 
   const ownsCleanupState = Boolean(
-    setup?.cleanupRequired
-      && (setup.status === 'READY' || !('code' in setup) || setup.code !== 'existing_qa_state'),
+    cleanupTarget?.cleanupRequired
+      && (cleanupTarget.status === 'READY'
+        || !('code' in cleanupTarget)
+        || cleanupTarget.code !== 'existing_qa_state'),
   );
-  if (setup && ownsCleanupState) {
+  if (cleanupTarget && ownsCleanupState) {
     try {
       cleanup = await cleanupQaRun({
         repoRoot,
-        statePath: setup.statePath,
+        statePath: cleanupTarget.statePath,
         keepArtifacts: true,
       });
       phases.push(cleanupPhase(cleanup));
     } catch (error) {
       phases.push(failedPhase('cleanup', error));
     }
-  } else if (setup?.status !== 'READY' && setup && 'code' in setup && setup.code === 'existing_qa_state') {
+  } else if (cleanupTarget?.status !== 'READY'
+      && cleanupTarget
+      && 'code' in cleanupTarget
+      && cleanupTarget.code === 'existing_qa_state') {
     phases.push(notRunPhase(
       'cleanup',
       'BLOCKED',
       'An existing QA state belongs to another run; full-runner did not clean it automatically.',
     ));
+  } else if (cleanEnvironmentBeforeAgent?.status === 'CLEAN') {
+    cleanup = cleanEnvironmentBeforeAgent;
+    phases.push(cleanupPhase(cleanup));
   } else {
     phases.push(notRunPhase(
       'cleanup',
@@ -264,14 +491,19 @@ export async function runFullQa(options: FullRunnerOptions = {}): Promise<FullRu
     ));
   }
 
-  if (setupReady && setup && await exists(setup.artifactRoot)) {
+  if (initialReadySetup && await exists(initialReadySetup.artifactRoot)) {
     try {
       const cleanupPhaseResult = [...phases].reverse().find(({ name }) => name === 'cleanup');
-      await writeCleanupResult(setup.artifactRoot, setup.runId, cleanup, cleanupPhaseResult);
+      await writeCleanupResult(
+        initialReadySetup.artifactRoot,
+        initialReadySetup.runId,
+        cleanup,
+        cleanupPhaseResult,
+      );
       if (reportPreparationError) throw reportPreparationError;
       report = await runQaReport({
         repoRoot,
-        artifactRoot: setup.artifactRoot,
+        artifactRoot: initialReadySetup.artifactRoot,
         failOnMedium: options.failOnMedium,
         includePlatformAdmin: options.includePlatformAdmin,
       });
@@ -286,11 +518,13 @@ export async function runFullQa(options: FullRunnerOptions = {}): Promise<FullRu
     phases.push(notRunPhase('report', 'BLOCKED', prerequisite));
   }
 
-  const status = fullStatus(phases);
+  const runStatus = mergeFullRunStatus(phases, report?.runStatus);
+  const productQualityStatus = mergeProductQualityStatus(phases, report?.productQualityStatus);
   const result: FullRunResult = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     runId: setup?.runId ?? null,
-    status,
+    runStatus,
+    productQualityStatus,
     startedAt,
     endedAt: new Date().toISOString(),
     repoRoot,
@@ -304,7 +538,7 @@ export async function runFullQa(options: FullRunnerOptions = {}): Promise<FullRu
     artifactsPreserved: cleanup?.status === 'CLEAN'
       ? cleanup.artifactsPreserved
       : Boolean(cleanup?.artifactsPreserved),
-    exitCode: normalizedExit(status),
+    exitCode: fullExitCode(runStatus, productQualityStatus),
   };
 
   if (result.artifactRoot && await exists(result.artifactRoot)) {
@@ -312,7 +546,7 @@ export async function runFullQa(options: FullRunnerOptions = {}): Promise<FullRu
       await writeFullResult(result.artifactRoot, result);
     } catch (error) {
       const reason = redactText(error instanceof Error ? error.message : 'Full-run result could not be persisted.');
-      result.status = 'FAILED';
+      result.runStatus = 'INFRASTRUCTURE_FAILED';
       result.exitCode = 1;
       result.issues = unique([...result.issues, `full-result: ${reason}`]);
       result.endedAt = new Date().toISOString();

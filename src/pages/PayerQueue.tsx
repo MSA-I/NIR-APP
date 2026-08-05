@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Landmark, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -9,6 +9,7 @@ import { fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import type { PaymentRequest } from '../lib/types';
 import { useAuth } from '../auth/AuthContext';
+import { useSearchParams } from 'react-router';
 
 /**
  * Focused execution view for payment executors (payer and accountant roles).
@@ -24,6 +25,9 @@ type PayerQueueMode = 'regular' | 'emergency';
 
 export default function PayerQueue({ mode = 'regular' }: { mode?: PayerQueueMode }) {
   const [selected, setSelected] = useState<Row | null>(null);
+  const [params] = useSearchParams();
+  const idFilter = params.get('id');
+  const autoOpenedId = useRef<string | null>(null);
 
   const { data, loading, error, refetch } = useQuery(async () =>
     unwrap(await supabase.from('payment_requests')
@@ -31,11 +35,18 @@ export default function PayerQueue({ mode = 'regular' }: { mode?: PayerQueueMode
       .in('status', ['approved', 'sent_for_execution', 'executed', 'matched'])
       .order('due_date', { ascending: true, nullsFirst: false })) as Promise<Row[]>);
 
+  useEffect(() => {
+    if (!idFilter || !data || autoOpenedId.current === idFilter) return;
+    const match = data.find((request) => request.id === idFilter);
+    if (match) { autoOpenedId.current = idFilter; setSelected(match); }
+  }, [idFilter, data]);
+
   if (loading) return <SkeletonList />;
   if (error) return <ErrorNote message={error} />;
 
-  const pending = (data ?? []).filter((r) => ['approved', 'sent_for_execution'].includes(r.status));
-  const done = (data ?? []).filter((r) => ['executed', 'matched'].includes(r.status));
+  const rows = (data ?? []).filter((r) => !idFilter || r.id === idFilter);
+  const pending = rows.filter((r) => ['approved', 'sent_for_execution'].includes(r.status));
+  const done = rows.filter((r) => ['executed', 'matched'].includes(r.status));
 
   return (
     <div className="space-y-5 max-w-2xl">

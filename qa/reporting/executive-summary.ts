@@ -1,14 +1,23 @@
 import type { RunReport } from './schemas.ts';
 
-const label: Record<RunReport['overallStatus'], string> = {
-  PASSED: 'עבר',
-  FAILED: 'נכשל',
+const runLabel: Record<RunReport['runStatus'], string> = {
+  COMPLETED: 'הושלמה',
   BLOCKED: 'חסום',
-  SKIPPED_BY_CONFIGURATION: 'דולג לפי הגדרה',
+  INFRASTRUCTURE_FAILED: 'כשל תשתית',
+};
+
+const qualityLabel: Record<RunReport['productQualityStatus'], string> = {
+  PASS: 'עבר',
+  PASS_WITH_FINDINGS: 'עבר עם ממצאים',
+  FAIL: 'נכשל',
 };
 
 function count(report: RunReport, key: string): number {
   return report.statistics.bySeverity[key] ?? 0;
+}
+
+function cell(value: string): string {
+  return value.replaceAll('|', '\\|').replace(/\r?\n/g, ' ');
 }
 
 function findings(
@@ -35,14 +44,20 @@ export function executiveSummaryMarkdown(report: RunReport): string {
   const categories = Object.entries(report.statistics.byCategory)
     .map(([category, total]) => `${category}: ${total}`)
     .join(', ') || 'אין';
+  const coverage = report.coverageExceptions.map((item) =>
+    `| \`${cell(item.id)}\` | ${cell(item.name)} | ${cell(item.role)} | ${item.status} | ${item.required ? 'חובה' : 'אופציונלי'} | ${cell(item.reason)} |`,
+  );
   return `# דוח QA מנהלים — SupplyFlow\n\n` +
-    `**מצב כולל:** ${label[report.overallStatus]}  \n` +
+    `**מצב הריצה:** ${runLabel[report.runStatus]}  \n` +
+    `**מצב איכות המוצר:** ${qualityLabel[report.productQualityStatus]}  \n` +
     `**מזהה הרצה:** \`${report.runId}\`  \n` +
     `**סביבה:** ${report.environment.projectId} · ${report.environment.baseUrl} · ${report.environment.gitSha}\n\n` +
     `## תמונת מצב\n\n` +
     `- תרחישים שעברו: ${report.statistics.passedScenarios}\n` +
     `- תרחישים שנכשלו: ${report.statistics.failedScenarios}\n` +
     `- תרחישים חסומים: ${report.statistics.blockedScenarios}\n` +
+    `- תרחישים שדולגו לפי הגדרה: ${report.statistics.skippedScenarios}\n` +
+    `- תרחישים אופציונליים חסומים: ${report.statistics.optionalBlockedScenarios}\n` +
     `- ממצאים: קריטי ${count(report, 'critical')}, גבוה ${count(report, 'high')}, בינוני ${count(report, 'medium')}, נמוך ${count(report, 'low')}, מידע ${count(report, 'info')}\n\n` +
     `**תפקידים שנבדקו:** ${report.roles.map((role) => role.role).join(', ') || 'אין'}  \n` +
     `**ממצאים לפי קטגוריה:** ${categories}  \n` +
@@ -53,7 +68,7 @@ export function executiveSummaryMarkdown(report: RunReport): string {
     `## נגישות\n\n${findings(report, ['accessibility'], 'לא נמצאו ממצאי axe חוסמים; בדיקה אוטומטית אינה כיסוי מלא.')}\n\n` +
     `## כרטיס תפקידים\n\n| תפקיד | מצב | השלמת ליבה | הרשאות | התאוששות | נגישות | מובייל | בהירות | נכונות נתונים | יציבות |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n${scorecard.join('\n')}\n\n` +
     `## כרטיס תהליכים מקצה לקצה\n\n| תרחיש | תפקיד | מצב | משך |\n|---|---|---:|---:|\n${workflows.join('\n') || '| אין | — | BLOCKED | — |'}\n\n` +
-    `## כיסוי חסום\n\n${report.blockedItems.length ? report.blockedItems.map((item) => `- ${item}`).join('\n') : '- אין.'}\n\n` +
+    `## כיסוי חסום או מדולג\n\n| מזהה | שם | תפקיד | מצב | חיוביות | סיבה |\n|---|---|---|---|---|---|\n${coverage.join('\n') || '| — | אין | — | — | — | — |'}\n\n` +
     `## סדר טיפול מומלץ\n\n` +
     `1. בידוד דיירים, הרשאות ופעולות כספיות לא מורשות.\n` +
     `2. נכונות סכומים, כפילויות ומעברי סטטוס.\n` +

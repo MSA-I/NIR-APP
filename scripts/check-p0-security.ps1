@@ -21,6 +21,7 @@ Add-Type -AssemblyName System.Net.Http
 
 $apiUrl = "http://127.0.0.1:55431"
 $expectedProjectId = "supplyflow-p0"
+$gatewayContainer = "supabase_kong_supplyflow-p0"
 $script:Passed = 0
 $script:HttpClient = [System.Net.Http.HttpClient]::new()
 
@@ -37,6 +38,8 @@ if ($config -notmatch "(?m)^project_id\s*=\s*`"$([regex]::Escape($expectedProjec
 function Reset-TestDatabase {
   & supabase db reset
   if ($LASTEXITCODE -ne 0) { throw "supabase db reset failed." }
+  $restartOutput = @(& docker restart $gatewayContainer 2>$null)
+  if ($LASTEXITCODE -ne 0) { throw "Kong restart after database reset failed." }
 }
 
 function Get-LocalSupabaseEnvironment {
@@ -171,6 +174,9 @@ function Invoke-JsonRequest {
     [System.Net.Http.HttpMethod]::new($Method.ToUpperInvariant()),
     [Uri]$Uri
   )
+  # Database reset replaces local upstream containers behind Kong. Do not reuse a
+  # connection that was opened against the previous container generation.
+  $request.Headers.ConnectionClose = $true
   foreach ($name in $Headers.Keys) {
     [void]$request.Headers.TryAddWithoutValidation([string]$name, [string]$Headers[$name])
   }
@@ -268,7 +274,8 @@ function Wait-LocalApiReady([string]$ServiceKey) {
   $headers = @{ apikey = $ServiceKey; Authorization = "Bearer $ServiceKey" }
   $authStatus = 0
   $restStatus = 0
-  for ($attempt = 0; $attempt -lt 80; $attempt++) {
+  $deadline = (Get-Date).AddSeconds(180)
+  do {
     try {
       $authStatus = (Invoke-JsonRequest -Method Get -Uri "$apiUrl/auth/v1/health" -Headers $headers).Status
     } catch { $authStatus = -1 }
@@ -278,7 +285,7 @@ function Wait-LocalApiReady([string]$ServiceKey) {
     } catch { $restStatus = -1 }
     if ($authStatus -eq 200 -and $restStatus -eq 200) { return }
     Start-Sleep -Milliseconds 250
-  }
+  } while ((Get-Date) -lt $deadline)
   throw "Local API readiness failed after reset (Auth=$authStatus, PostgREST=$restStatus)."
 }
 

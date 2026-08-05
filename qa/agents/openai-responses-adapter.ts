@@ -17,13 +17,28 @@ import {
 } from './model-adapter.ts';
 
 export const QA_OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
-export const DEFAULT_QA_MODEL_TIMEOUT_MS = 18_000;
+export const DEFAULT_QA_MODEL_TIMEOUT_MS = 60_000;
 export const DEFAULT_QA_MAX_OUTPUT_TOKENS = 8_192;
 
 const MAX_PROVIDER_INPUT_BYTES = 192 * 1024;
 const DEFAULT_MAX_PROVIDER_RESPONSE_BYTES = 512 * 1024;
 const MAX_REPAIR_OUTPUT_CHARS = 24_000;
+const MAX_RETRY_AFTER_MS = 60_000;
 const encoder = new TextEncoder();
+
+function retryAfterMs(headers: Headers): number | null {
+  const milliseconds = Number(headers.get('retry-after-ms'));
+  if (Number.isFinite(milliseconds) && milliseconds > 0) {
+    return Math.min(Math.ceil(milliseconds), MAX_RETRY_AFTER_MS);
+  }
+  const value = headers.get('retry-after');
+  if (!value) return null;
+  const seconds = Number(value);
+  const delay = Number.isFinite(seconds) ? seconds * 1_000 : Date.parse(value) - Date.now();
+  return Number.isFinite(delay) && delay > 0
+    ? Math.min(Math.ceil(delay), MAX_RETRY_AFTER_MS)
+    : null;
+}
 
 export interface OpenAiResponsesAdapterOptions {
   readonly apiKey: string;
@@ -256,7 +271,10 @@ export function createOpenAiResponsesAdapter(
     if (!response.ok) {
       clearTimeout(timer);
       if (response.status === 429) {
-        throw new QaModelError('model_rate_limited', { retryable: true });
+        throw new QaModelError('model_rate_limited', {
+          retryable: true,
+          retryAfterMs: retryAfterMs(response.headers),
+        });
       }
       if (response.status >= 500 && response.status <= 599) {
         throw new QaModelError('model_unavailable', { retryable: true });

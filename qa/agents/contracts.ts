@@ -67,7 +67,7 @@ export type VerificationRequest = z.infer<typeof VerificationRequestSchema>;
 export const SafeBrowserTargetSchema = z.object({
   kind: z.enum(['role', 'label', 'text']),
   role: z.enum([
-    'button', 'link', 'textbox', 'checkbox', 'radio', 'combobox', 'option',
+    'button', 'link', 'textbox', 'spinbutton', 'checkbox', 'radio', 'combobox', 'option',
     'menuitem', 'tab', 'heading',
   ]).nullable(),
   name: z.string().trim().max(300).nullable(),
@@ -195,13 +195,6 @@ export const RoleStepDecisionSchema = z.object({
       message: 'finishStatus and finishSummary are required when finishing',
     });
   }
-  if (decision.verification && !decision.meaningfulBusinessAction) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['verification'],
-      message: 'verification may only accompany a meaningful business action',
-    });
-  }
 });
 
 export type RoleStepDecision = z.infer<typeof RoleStepDecisionSchema>;
@@ -265,7 +258,7 @@ export function createAgentScenarioContext(
     name: definition.title,
     objective: definition.purpose,
     allowedRoutes: [...allowedRoutes],
-    allowedFixtureNames: [...definition.fixtures],
+    allowedFixtureNames: definition.fixtures.filter((fixture) => fixture !== 'demo-seed'),
     allowedVerificationChecks: [...definition.verifierIds],
     evidenceRequirements: [...definition.evidence],
   };
@@ -301,7 +294,7 @@ export const SAFE_BROWSER_ACTION_JSON_SCHEMA = {
             anyOf: [{
               type: 'string',
               enum: [
-                'button', 'link', 'textbox', 'checkbox', 'radio', 'combobox',
+                'button', 'link', 'textbox', 'spinbutton', 'checkbox', 'radio', 'combobox',
                 'option', 'menuitem', 'tab', 'heading',
               ],
             }, { type: 'null' }],

@@ -12,6 +12,8 @@ $expectedProjectId = "supplyflow-p0"
 $expectedApiUrl = "http://127.0.0.1:55431"
 $dbContainer = "supabase_db_supplyflow-p0"
 $restContainer = "supabase_rest_supplyflow-p0"
+$authContainer = "supabase_auth_supplyflow-p0"
+$gatewayContainer = "supabase_kong_supplyflow-p0"
 $previewPort = $null
 $previewProcess = $null
 $previewStdout = $null
@@ -145,15 +147,16 @@ function Wait-LocalApiReady([hashtable]$Environment) {
   # "80 attempts" budget was spent in about twenty seconds -- less than GoTrue needs to come up
   # after a full db reset and container restart. That produced a recurring "Auth=-1, PostgREST=200"
   # failure that looked like a broken gate and was only ever a stopwatch that ran out too early.
+  # Disable keep-alive because Windows PowerShell can retain Kong connections across replacement.
   $deadline = (Get-Date).AddSeconds(180)
   do {
     try {
-      $authStatus = (Invoke-WebRequest -UseBasicParsing -Uri "$expectedApiUrl/auth/v1/health" `
-        -Headers $headers -TimeoutSec 2).StatusCode
+      $authStatus = (Invoke-WebRequest -UseBasicParsing -DisableKeepAlive `
+        -Uri "$expectedApiUrl/auth/v1/health" -Headers $headers -TimeoutSec 2).StatusCode
     } catch { $authStatus = -1 }
     try {
-      $restStatus = (Invoke-WebRequest -UseBasicParsing `
-        -Uri "$expectedApiUrl/rest/v1/organizations?select=id&limit=0" `
+      $restStatus = (Invoke-WebRequest -UseBasicParsing -DisableKeepAlive `
+        -Uri "$expectedApiUrl/rest/v1/" `
         -Headers $headers -TimeoutSec 2).StatusCode
     } catch { $restStatus = -1 }
     if ($authStatus -eq 200 -and $restStatus -eq 200) { return }
@@ -171,18 +174,42 @@ function Wait-LocalStackReady {
   return $environment
 }
 
-function Restart-LocalPostgrest {
+function Restart-LocalApiServices {
+  $containersReady = $false
+  $deadline = (Get-Date).AddSeconds(180)
+  do {
+    $previousPreference = $ErrorActionPreference
+    try {
+      $ErrorActionPreference = "Continue"
+      $inspectOutput = @(& docker inspect --format "{{.State.Status}}" `
+        $restContainer $authContainer 2>$null)
+      $inspectExit = $LASTEXITCODE
+    }
+    finally {
+      $ErrorActionPreference = $previousPreference
+    }
+    if ($inspectExit -eq 0 -and $inspectOutput.Count -eq 2 `
+        -and -not @($inspectOutput | Where-Object { $_ -ne "running" }).Count) {
+      $containersReady = $true
+      break
+    }
+    Start-Sleep -Milliseconds 500
+  } while ((Get-Date) -lt $deadline)
+  if (-not $containersReady) {
+    Stop-WithInfrastructureBlock "local_api_services_not_recreated" "Auth or PostgREST was not recreated after the local database reset."
+  }
+
   $previousPreference = $ErrorActionPreference
   try {
     $ErrorActionPreference = "Continue"
-    & docker restart $restContainer | Out-Null
+    $restartOutput = @(& docker restart $restContainer $gatewayContainer 2>$null)
     $restartExit = $LASTEXITCODE
   }
   finally {
     $ErrorActionPreference = $previousPreference
   }
   if ($restartExit -ne 0) {
-    Stop-WithInfrastructureBlock "local_postgrest_restart_failed" "Unable to restart the isolated PostgREST service after database reset."
+    Stop-WithInfrastructureBlock "local_api_services_restart_failed" "Unable to restart the isolated PostgREST and Kong services after database reset."
   }
 }
 
@@ -192,7 +219,7 @@ function Reset-LocalDatabase {
   # `supabase db reset` replaces PostgreSQL while keeping PostgREST alive. Recycle the
   # isolated REST process so its ten-connection pool cannot retain sessions from the old
   # database; a single sequential readiness request is not enough to exercise that pool.
-  Restart-LocalPostgrest
+  Restart-LocalApiServices
   $script:localEnvironment = Wait-LocalStackReady
 }
 
@@ -639,7 +666,7 @@ $repoLocationPushed = $false
 Push-Location -LiteralPath $repoRoot
 $repoLocationPushed = $true
 try {
-  $localEnvironment = Get-LocalSupabaseEnvironment
+  $localEnvironment = Get-LocalSupabaseEnvironment -Attempts 120
   $supabaseWasRunning = $null -ne $localEnvironment
   New-LocalFunctionsEnvironment
   if ($supabaseWasRunning) {
@@ -714,7 +741,7 @@ try {
     }
     $upgradeOutput | ForEach-Object { Write-Output $_ }
     if ($upgradeExit -ne 0) { throw "P0 upgrade path failed with exit code $upgradeExit." }
-    Restart-LocalPostgrest
+    Restart-LocalApiServices
     $localEnvironment = Wait-LocalStackReady
 
     Invoke-SqlTest "supabase\tests\p0_client_dml_acl.sql" "P0 browser DML ACL and trusted-server CRUD"

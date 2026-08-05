@@ -3,6 +3,7 @@ import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from '@playwright/test';
+import { isPlaywrightInfrastructureFailureText } from '../reporting/playwright.ts';
 import { redactText, safeJson } from '../reporting/redact.ts';
 import { acquireQaLock, releaseQaLock } from './lock.ts';
 import { deterministicChildEnvironment, loadReadyQaState } from './runtime-state.ts';
@@ -155,6 +156,66 @@ export function evaluateCriticalWorkflowCoverage(report: unknown): PhaseResult {
   };
 }
 
+export function evaluatePlaywrightRuntimeIntegrity(report: unknown): PhaseResult {
+  const root = record(report);
+  if (!root || !Array.isArray(root.suites)) {
+    return {
+      name: 'playwright-runtime-integrity',
+      status: 'BLOCKED',
+      exitCode: null,
+      durationMs: 0,
+      reason: 'The Playwright JSON report is missing or malformed.',
+    };
+  }
+
+  const infrastructureErrors: string[] = [];
+  const inspectError = (value: unknown): void => {
+    const candidate = record(value);
+    if (!candidate) return;
+    for (const message of [candidate.message, candidate.value]) {
+      if (typeof message === 'string' && isPlaywrightInfrastructureFailureText(message)) {
+        infrastructureErrors.push(message);
+      }
+    }
+  };
+  const visitSuite = (value: unknown): void => {
+    const suite = record(value);
+    if (!suite) return;
+    for (const specValue of array(suite.specs)) {
+      const spec = record(specValue);
+      if (!spec) continue;
+      for (const testValue of array(spec.tests)) {
+        const reportTest = record(testValue);
+        if (!reportTest) continue;
+        for (const resultValue of array(reportTest.results)) {
+          const result = record(resultValue);
+          if (!result || !['failed', 'timedOut', 'interrupted'].includes(String(result.status ?? ''))) continue;
+          inspectError(result.error);
+          for (const error of array(result.errors)) inspectError(error);
+        }
+      }
+    }
+    for (const child of array(suite.suites)) visitSuite(child);
+  };
+  for (const error of array(root.errors)) inspectError(error);
+  for (const suite of root.suites) visitSuite(suite);
+
+  return infrastructureErrors.length > 0
+    ? {
+        name: 'playwright-runtime-integrity',
+        status: 'FAILED',
+        exitCode: 1,
+        durationMs: 0,
+        reason: `Playwright runtime or harness failure detected: ${redactText(infrastructureErrors[0]!).slice(0, 500)}`,
+      }
+    : {
+        name: 'playwright-runtime-integrity',
+        status: 'PASSED',
+        exitCode: 0,
+        durationMs: 0,
+      };
+}
+
 async function criticalWorkflowCoveragePhase(reportPath: string): Promise<PhaseResult> {
   const started = Date.now();
   try {
@@ -167,6 +228,22 @@ async function criticalWorkflowCoveragePhase(reportPath: string): Promise<PhaseR
       exitCode: null,
       durationMs: Date.now() - started,
       reason: 'The Playwright JSON report was missing or malformed; critical workflow coverage was not inferred.',
+    };
+  }
+}
+
+async function playwrightRuntimeIntegrityPhase(reportPath: string): Promise<PhaseResult> {
+  const started = Date.now();
+  try {
+    const parsed: unknown = JSON.parse(await readFile(reportPath, 'utf8'));
+    return { ...evaluatePlaywrightRuntimeIntegrity(parsed), durationMs: Date.now() - started };
+  } catch {
+    return {
+      name: 'playwright-runtime-integrity',
+      status: 'BLOCKED',
+      exitCode: null,
+      durationMs: Date.now() - started,
+      reason: 'The Playwright JSON report was missing or malformed; runtime integrity was not inferred.',
     };
   }
 }
@@ -314,6 +391,7 @@ export async function runDeterministicQa(repoRoot = process.cwd()): Promise<Dete
         { cwd: repository, env: environment },
       ));
       phases.push(await criticalWorkflowCoveragePhase(playwrightReport));
+      phases.push(await playwrightRuntimeIntegrityPhase(playwrightReport));
       try {
         redactedTraces.push(...await scrubPlaywrightTraces(state.artifactRoot));
         phases.push({ name: 'trace-redaction', status: 'PASSED', exitCode: 0, durationMs: 0 });
@@ -343,7 +421,14 @@ export async function runDeterministicQa(repoRoot = process.cwd()): Promise<Dete
       }
     }
     const released = await releaseQaLock(lock.handle);
-    if (!released) {
+    if (released) {
+      phases.push({
+        name: 'environment-lock-release',
+        status: 'PASSED',
+        exitCode: 0,
+        durationMs: 0,
+      });
+    } else {
       phases.push({
         name: 'environment-lock-release',
         status: 'FAILED',

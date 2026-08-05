@@ -9,6 +9,7 @@ import { chromium } from '@playwright/test';
 import {
   FIXTURE_MANIFEST_FILE,
   generateSyntheticFixtureFiles,
+  loadGeneratedFixtureManifest,
   type GeneratedFixtureManifest,
   type SyntheticFixtureKind,
 } from '../fixtures/index.ts';
@@ -31,6 +32,8 @@ export const QA_AUTH_RELATIVE_ROOT = '.qa-auth';
 export const QA_BASE_URL = 'http://127.0.0.1:4173';
 export const QA_DATABASE_CONTAINER = 'supabase_db_supplyflow-p0';
 export const QA_REST_CONTAINER = 'supabase_rest_supplyflow-p0';
+export const QA_API_GATEWAY_CONTAINER = 'supabase_kong_supplyflow-p0';
+export const QA_RUN_ID_PATTERN = /^qa-\d{14}-[0-9a-f]{8}$/;
 
 export const QA_ACCOUNT_ROLES = [
   'owner',
@@ -100,6 +103,7 @@ export function isReadyQaRunState(state: QaRunState): state is ReadyQaRunState {
 export interface SetupOptions {
   repoRoot?: string;
   baseUrl?: string;
+  runId?: string;
 }
 
 interface SetupResultBase {
@@ -137,6 +141,16 @@ class SetupStepError extends Error {
 function createRunId(): string {
   const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   return `qa-${timestamp}-${randomUUID().slice(0, 8)}`;
+}
+
+export function validateQaRunId(value: string): string {
+  if (!QA_RUN_ID_PATTERN.test(value)) {
+    throw new SetupStepError(
+      'invalid_run_id',
+      'QA runId must match qa-YYYYMMDDHHMMSS-xxxxxxxx and contain no path characters.',
+    );
+  }
+  return value;
 }
 
 function ensureLoopbackBaseUrl(value: string): string {
@@ -324,9 +338,19 @@ async function resetLocalDatabase(repoRoot: string, lock: QaLockHandle): Promise
     label: 'Reset isolated local Supabase database',
     timeoutMs: 300_000,
   });
+  await runGuardedCommand(lock, 'supabase', ['start'], {
+    cwd: repoRoot,
+    label: 'Reconcile isolated local Supabase services after reset',
+    timeoutMs: 300_000,
+  });
   await runGuardedCommand(lock, 'docker', ['restart', QA_REST_CONTAINER], {
     cwd: repoRoot,
     label: 'Restart isolated local PostgREST container',
+    timeoutMs: 60_000,
+  });
+  await runGuardedCommand(lock, 'docker', ['restart', QA_API_GATEWAY_CONTAINER], {
+    cwd: repoRoot,
+    label: 'Refresh isolated local API gateway upstreams',
     timeoutMs: 60_000,
   });
 }
@@ -665,7 +689,7 @@ function safeFailure(error: unknown): { code: string; reason: string } {
 export async function setupQaRun(options: SetupOptions = {}): Promise<SetupResult> {
   const repoRoot = path.resolve(options.repoRoot ?? process.cwd());
   const baseUrl = ensureLoopbackBaseUrl(options.baseUrl ?? QA_BASE_URL);
-  const runId = createRunId();
+  const runId = validateQaRunId(options.runId ?? createRunId());
   const environment = buildEnvironment(baseUrl);
   const statePath = path.join(repoRoot, QA_STATE_RELATIVE_PATH);
   const artifactRoot = path.join(repoRoot, QA_ARTIFACTS_RELATIVE_ROOT, runId);
@@ -809,7 +833,12 @@ export async function setupQaRun(options: SetupOptions = {}): Promise<SetupResul
     await seedAndVerifyDemo(repoRoot, lock);
     state.setupSteps.push('demo_seed_verified');
 
-    const fixtureManifest = await generateSyntheticFixtureFiles({ runId, directory: fixtureRoot });
+    const fixtureManifest = await stateAlreadyExists(fixtureManifestPath)
+      ? await loadGeneratedFixtureManifest(fixtureRoot)
+      : await generateSyntheticFixtureFiles({ runId, directory: fixtureRoot });
+    if (fixtureManifest.runId !== runId) {
+      throw new SetupStepError('fixture_run_mismatch', 'Synthetic fixtures belong to a different QA run.');
+    }
     state.fixtureFiles = Object.fromEntries(
       fixtureManifest.files.map((file) => [file.kind, file.path]),
     ) as Partial<Record<SyntheticFixtureKind, string>>;
@@ -890,7 +919,8 @@ function isMainModule(): boolean {
 if (isMainModule()) {
   const repoArgument = process.argv.find((value) => value.startsWith('--repo-root='))?.slice('--repo-root='.length);
   const baseUrlArgument = process.argv.find((value) => value.startsWith('--base-url='))?.slice('--base-url='.length);
-  const result = await setupQaRun({ repoRoot: repoArgument, baseUrl: baseUrlArgument });
+  const runIdArgument = process.argv.find((value) => value.startsWith('--run-id='))?.slice('--run-id='.length);
+  const result = await setupQaRun({ repoRoot: repoArgument, baseUrl: baseUrlArgument, runId: runIdArgument });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   process.exitCode = result.status === 'READY' ? 0 : result.status === 'BLOCKED' ? 2 : 1;
 }

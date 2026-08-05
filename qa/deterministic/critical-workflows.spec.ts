@@ -5,6 +5,7 @@ import {
   type Browser,
   type Locator,
   type Page,
+  type Request,
   type TestInfo,
 } from '@playwright/test';
 import { storageStatePath } from '../auth/storage-state.ts';
@@ -61,6 +62,7 @@ interface RoleSession {
 }
 
 interface CapturedMutation {
+  request: Request;
   requestBody: Record<string, unknown>;
   responseBody: unknown;
 }
@@ -101,6 +103,12 @@ function workflowValue(key: keyof WorkflowState): string {
   return value;
 }
 
+function nextMonthStart(month: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!match) throw new Error(`Invalid report month: ${month}.`);
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]), 1)).toISOString().slice(0, 10);
+}
+
 async function roleUserId(runtime: LocalVerificationRuntime, role: QaRole): Promise<string> {
   const client = runtime.createServiceClient() as unknown as {
     from(table: 'profiles'): { select(columns: 'id'): ProfileLookupQuery };
@@ -135,7 +143,7 @@ async function captureMutation(
   expect(response.ok(), `${pathname} returned HTTP ${response.status()}.`).toBe(true);
   const requestBody = asRecord(request.postDataJSON(), `${pathname} request`);
   const responseBody: unknown = await response.json().catch(() => null);
-  return { requestBody, responseBody };
+  return { request, requestBody, responseBody };
 }
 
 async function chooseFile(page: Page, button: Locator, filePath: string): Promise<void> {
@@ -585,7 +593,7 @@ test.describe.serial('critical cross-role workflow', () => {
     });
   });
 
-  test('[critical:payer-transfer-execution] payer executes once; retry coverage is fail-closed', async ({ browser }, testInfo) => {
+  test('[critical:payer-transfer-execution] payer execution replay is idempotent', async ({ browser }, testInfo) => {
     const scenarioId = 'payer-transfer-execution';
     const requestId = workflowValue('paymentRequestId');
     const invoiceId = workflowValue('invoiceId');
@@ -604,15 +612,40 @@ test.describe.serial('critical cross-role workflow', () => {
       await dialog.getByLabel('אסמכתת העברה *', { exact: true }).fill(synthetic.payment.reference);
       await dialog.getByLabel('סיבת ביצוע / אישור הפעולה *', { exact: true }).fill(`QA ${readyState.runId} transfer execution`);
       evidence.record('execute-payment-request', requestId);
-      const mutation = await captureMutation(page, '/rest/v1/rpc/execute_payment_request', () =>
-        dialog.getByRole('button', { name: 'ההעברה בוצעה', exact: true }).click());
+      let uiExecutionRequestCount = 0;
+      const countUiExecution = (request: Request) => {
+        if (request.method() === 'POST' && endpointPath(request.url()) === '/rest/v1/rpc/execute_payment_request') {
+          uiExecutionRequestCount += 1;
+        }
+      };
+      page.on('request', countUiExecution);
+      let mutation: CapturedMutation;
+      try {
+        mutation = await captureMutation(page, '/rest/v1/rpc/execute_payment_request', () =>
+          dialog.getByRole('button', { name: 'ההעברה בוצעה', exact: true }).dblclick());
+      } finally {
+        page.off('request', countUiExecution);
+      }
+      expect(uiExecutionRequestCount, 'A payer double-click must dispatch one execution RPC.').toBe(1);
       expect(mutation.requestBody.p_payment_request_id).toBe(requestId);
       workflow.paymentId = uuid(responseRecord(mutation.responseBody, 'payment response').payment_id, 'payment');
       const success = page.getByRole('dialog', { name: 'ההעברה נרשמה', exact: true });
       await expect(success).toBeVisible();
+
+      evidence.record('replay-payment-request', requestId);
+      const replayResponse = await page.request.fetch(mutation.request);
+      expect(replayResponse.ok(), `payment replay returned HTTP ${replayResponse.status()}.`).toBe(true);
+      const replay = responseRecord(await replayResponse.json(), 'payment replay response');
+      expect(replay.idempotent).toBe(true);
+      expect(replay.payment_id).toBe(workflow.paymentId);
+      expect(replay.payment_request_id).toBe(requestId);
+      expect(replay.status).toBe('executed');
+
       await success.getByRole('button', { name: 'סיום', exact: true }).click();
       await page.reload();
       await expect(page.getByRole('heading', { name: 'תשלומים לביצוע', exact: true })).toBeVisible();
+      await expect(page.getByRole('button').filter({ hasText: MEAT_SUPPLIER_NAME })
+        .filter({ hasText: synthetic.invoice.total.toFixed(2) })).toHaveCount(0);
     });
 
     const paymentId = workflowValue('paymentId');
@@ -620,7 +653,7 @@ test.describe.serial('critical cross-role workflow', () => {
       const actorUserId = await roleUserId(runtime, 'payer');
       return [
       await verifyDatabaseRows(runtime, [{
-        id: 'single-payment-row',
+        id: 'single-payment-row-and-reference',
         table: 'payments',
         select: 'id,org_id,supplier_id,payment_request_id,amount,reference,executed_by',
         filters: [{ column: 'payment_request_id', operator: 'eq', value: requestId }],
@@ -657,13 +690,9 @@ test.describe.serial('critical cross-role workflow', () => {
       }]),
     ];
     });
-
-    await blockScenario(testInfo, scenarioId,
-      'The successful request moves to a non-actionable history row, so a retry after success cannot be performed through the real payer UI.',
-      { initialMutationVerified: true, exactPaymentRows: 1, missingRequiredStep: 'retry-after-success' });
   });
 
-  test('[critical:accountant-reconciliation] accountant import requires a named reason control', async ({ browser }, testInfo) => {
+  test('[critical:accountant-reconciliation] accountant imports, reconciles, reports and exports', async ({ browser }, testInfo) => {
     const scenarioId = 'accountant-reconciliation';
     const bankFile = await fixturePath(testInfo, scenarioId, 'bank-csv');
     const startedAt = new Date().toISOString();
@@ -705,7 +734,10 @@ test.describe.serial('critical cross-role workflow', () => {
       workflow.bankTransactionId = uuid(matched.requestBody.p_bank_transaction_id, 'bank transaction');
 
       await page.getByLabel('חיפוש בתנועות בנק', { exact: true }).fill(synthetic.bankTransaction.description);
-      await expect(page.getByText('מותאמת', { exact: true })).toBeVisible();
+      const matchedRow = page.getByRole('table').getByRole('row')
+        .filter({ hasText: synthetic.bankTransaction.description });
+      await expect(matchedRow).toHaveCount(1);
+      await expect(matchedRow.getByText('מותאמת', { exact: true })).toBeVisible();
       await page.goto('/reports');
       await expect(page.getByRole('heading', { name: 'דוח חודשי לרואת חשבון', exact: true })).toBeVisible();
       await page.getByLabel('חודש הדוח', { exact: true }).fill(workflowValue('paymentMonth'));
@@ -726,6 +758,29 @@ test.describe.serial('critical cross-role workflow', () => {
       ?? await blockScenario(testInfo, scenarioId, 'The monthly workbook download was not captured.');
     await verifyAfterUi(testInfo, scenarioId, async (runtime) => {
       const actorUserId = await roleUserId(runtime, 'accountant');
+      const reportMonth = workflowValue('paymentMonth');
+      const reportPaymentsResponse = await runtime.createServiceClient()
+        .from('payments')
+        .select('id,amount,reference')
+        .eq('org_id', QA_ORGANIZATION_ID)
+        .gte('paid_date', `${reportMonth}-01`)
+        .lt('paid_date', nextMonthStart(reportMonth));
+      if (reportPaymentsResponse.error) {
+        throw new Error('The verifier could not read the trusted monthly payment total from the local database.');
+      }
+      const reportPayments = (reportPaymentsResponse.data ?? []) as Array<{
+        id: string;
+        amount: number | string;
+        reference: string | null;
+      }>;
+      const exportedPayment = reportPayments.find(({ id }) => id === paymentId);
+      if (!exportedPayment || exportedPayment.reference !== synthetic.payment.reference) {
+        throw new Error('The run payment was missing from the trusted monthly database slice.');
+      }
+      const databasePaymentTotal = reportPayments.reduce((sum, row) => sum + Number(row.amount), 0);
+      if (!Number.isFinite(databasePaymentTotal)) {
+        throw new Error('The trusted monthly payment total was not numeric.');
+      }
       return [
       await verifyDatabaseRows(runtime, [{
         id: 'bank-import-row',
@@ -774,8 +829,14 @@ test.describe.serial('critical cross-role workflow', () => {
         filePath: downloadPath,
         sheetName: 'תשלומים',
         expectedHeaders: ['ספק', 'תאריך', 'סכום', 'אמצעי', 'אסמכתא'],
-        minRowCount: 1,
+        expectedRowSubsets: [{
+          'ספק': MEAT_SUPPLIER_NAME,
+          'סכום': Number(exportedPayment.amount),
+          'אסמכתא': exportedPayment.reference,
+        }],
+        exactRowCount: reportPayments.length,
         forbidFormulas: true,
+        total: { column: 'סכום', expected: databasePaymentTotal },
       }], readyState.artifactRoot),
     ];
     });

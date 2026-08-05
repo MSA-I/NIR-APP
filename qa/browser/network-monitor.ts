@@ -31,6 +31,7 @@ export function matchesExpectedNetworkDenial(
 const MAX_NETWORK_ENTRIES = 1_500;
 const STALLED_REQUEST_MS = 15_000;
 const EXCESSIVE_REPEAT_COUNT = 20;
+const EXCESSIVE_REPEAT_AVERAGE_INTERVAL_MS = 5_000;
 
 export class NetworkMonitor {
   readonly entries: NetworkEvidence[] = [];
@@ -38,6 +39,7 @@ export class NetworkMonitor {
   private readonly expectedDenials: ExpectedNetworkDenial[] = [];
   private readonly observedExpectedDenials = new Set<number>();
   private readonly startedAt = new Map<Request, number>();
+  private readonly repeats = new Map<string, { count: number; burst: boolean; recent: number[] }>();
   private droppedEntries = 0;
   private readonly onRequest = (request: Request): void => {
     this.startedAt.set(request, Date.now());
@@ -89,8 +91,25 @@ export class NetworkMonitor {
   }
 
   private push(entry: NetworkEvidence): void {
-    if (this.entries.length < MAX_NETWORK_ENTRIES) this.entries.push(entry);
-    else this.droppedEntries += 1;
+    if (this.entries.length >= MAX_NETWORK_ENTRIES) {
+      this.droppedEntries += 1;
+      return;
+    }
+    this.entries.push(entry);
+    const key = `${entry.method} ${entry.url}`;
+    const now = Date.now();
+    const repeat = this.repeats.get(key);
+    if (repeat) {
+      repeat.count += 1;
+      repeat.recent.push(now);
+      if (repeat.recent.length > EXCESSIVE_REPEAT_COUNT + 1) repeat.recent.shift();
+      const firstAt = repeat.recent[0] ?? now;
+      const averageInterval = (now - firstAt) / Math.max(1, repeat.recent.length - 1);
+      if (repeat.recent.length > EXCESSIVE_REPEAT_COUNT
+        && averageInterval < EXCESSIVE_REPEAT_AVERAGE_INTERVAL_MS) repeat.burst = true;
+    } else {
+      this.repeats.set(key, { count: 1, burst: false, recent: [now] });
+    }
   }
 
   get droppedCount(): number {
@@ -126,13 +145,10 @@ export class NetworkMonitor {
       }
     }
 
-    const counts = new Map<string, number>();
-    for (const { method, url } of this.entries) {
-      const key = `${method} ${url}`;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    for (const [request, count] of counts) {
-      if (count > EXCESSIVE_REPEAT_COUNT) issues.push(`${request}: repeated ${count} times`);
+    for (const [request, { count, burst }] of this.repeats) {
+      if (burst) {
+        issues.push(`${request}: repeated ${count} times`);
+      }
     }
     if (this.droppedEntries > 0) issues.push(`network evidence limit exceeded by ${this.droppedEntries} entries`);
     for (const [index, expected] of this.expectedDenials.entries()) {
