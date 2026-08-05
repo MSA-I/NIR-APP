@@ -9,6 +9,7 @@ test('QA runners import under Node native TypeScript execution without side effe
     import('../../runner/report-runner.ts'),
     import('../../runner/clean.ts'),
     import('../../runner/full-runner.ts'),
+    import('../../runner/coverage-runner.ts'),
   ]);
-  assert.equal(modules.length, 6);
+  assert.equal(modules.length, 7);
 });

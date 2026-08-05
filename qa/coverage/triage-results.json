@@ -1,0 +1,78 @@
+{
+  "runId": "qa-20260805215729-a2aad57b",
+  "results": [
+    {
+      "id": "TRIAGE-001",
+      "title": "יעדי מגע קטנים מ-44px",
+      "role": null,
+      "route": null,
+      "classification": "CONFIRMED_DEFECT",
+      "rationale": "למטבח יש חוזה מובייל מפורש בסוויטה הקיימת (390x844, ללא גלישה, יעדי מגע 44px), ולכן 1 המופעים של המטבח הם פגם. 4 המופעים הנותרים בתפקידים אחרים אינם תחת החוזה הזה ודורשים הכרעת בעל מוצר בנפרד. המסלולים של המטבח: /suppliers/:id. [כלל: visual/kitchen-mobile-contract]",
+      "reproducedTimes": 5,
+      "evidence": [],
+      "duplicateOf": null
+    },
+    {
+      "id": "TRIAGE-002",
+      "title": "טעינה תקועה בכשל רשת",
+      "role": null,
+      "route": "__failed-request__",
+      "classification": "BUSINESS_DECISION_REQUIRED",
+      "rationale": "ממצא שימושיות/התנהגות שאינו חוצה סף אובייקטיבי. דורש הכרעת בעל מוצר. [כלל: usability/product-decision]",
+      "reproducedTimes": 6,
+      "evidence": [
+        "failed-request-owner.png",
+        "failed-request-office.png",
+        "failed-request-kitchen.png",
+        "failed-request-payer.png",
+        "failed-request-accountant.png",
+        "failed-request-supplier.png"
+      ],
+      "duplicateOf": null
+    },
+    {
+      "id": "TRIAGE-003",
+      "title": "גלישה אופקית",
+      "role": null,
+      "route": null,
+      "classification": "CONFIRMED_DEFECT",
+      "rationale": "למטבח יש חוזה מובייל מפורש בסוויטה הקיימת (390x844, ללא גלישה, יעדי מגע 44px), ולכן 2 המופעים של המטבח הם פגם. 4 המופעים הנותרים בתפקידים אחרים אינם תחת החוזה הזה ודורשים הכרעת בעל מוצר בנפרד. המסלולים של המטבח: /invoices, /prices. [כלל: visual/kitchen-mobile-contract]",
+      "reproducedTimes": 6,
+      "evidence": [
+        "tablet-overflow-owner.png",
+        "tablet-overflow-office.png",
+        "tablet-overflow-kitchen.png"
+      ],
+      "duplicateOf": null
+    },
+    {
+      "id": "TRIAGE-004",
+      "title": "מסלול נגיש שאינו מופיע בניווט",
+      "role": null,
+      "route": null,
+      "classification": "BUSINESS_DECISION_REQUIRED",
+      "rationale": "מסלול נגיש שאינו בניווט אינו באג בהכרח — ייתכן שהכניסה אליו היא קישור הקשרי מכוון. ההכרעה היא של בעל המוצר. [כלל: discoverability/product-decision]",
+      "reproducedTimes": 5,
+      "evidence": [],
+      "duplicateOf": null
+    },
+    {
+      "id": "TRIAGE-005",
+      "title": "הפרות Axe חוסמות",
+      "role": null,
+      "route": null,
+      "classification": "CONFIRMED_DEFECT",
+      "rationale": "כלל נגישות אובייקטיבי שנמדד ישירות ב-DOM, ללא פרשנות. נצפה ב-4 מקומות. [כלל: accessibility/objective-violation]",
+      "reproducedTimes": 4,
+      "evidence": [
+        "desktop-owner.png",
+        "tablet-owner.png",
+        "mobile-owner.png",
+        "responsive: desktop: ללא גלישה | tablet: ללא גלישה | mobile: ללא גלישה",
+        "desktop-office.png",
+        "tablet-office.png"
+      ],
+      "duplicateOf": null
+    }
+  ]
+}

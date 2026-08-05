@@ -1,0 +1,194 @@
+{
+  "runId": "qa-20260805215729-a2aad57b",
+  "generatedAt": "2026-08-05T22:23:05.511Z",
+  "branch": "codex/qa-full-role-coverage",
+  "commit": "5f9ad8d90f5bee175f7e612a734757376fc44a92",
+  "coverageStatus": "COVERAGE_BLOCKED",
+  "productQualityStatus": "FAIL",
+  "totals": {
+    "routes": 35,
+    "sections": 96,
+    "controls": 694,
+    "actions": 548,
+    "componentCoverageRecords": 4301,
+    "stateCoverageRecords": 2398
+  },
+  "roles": [
+    {
+      "role": "owner",
+      "coverageStatus": "COVERAGE_BLOCKED",
+      "assignedRoutes": 35,
+      "inspectedRoutes": 35,
+      "notInspectedRoutes": [],
+      "discoveredControls": 1702,
+      "testedControls": 1658,
+      "percentages": {
+        "routes": 100,
+        "components": 60.4,
+        "actions": 21,
+        "forms": 88.1,
+        "tables": 100,
+        "dialogs": 100,
+        "permissions": 94.3,
+        "accessibility": 92.9,
+        "states": 12.6,
+        "responsiveViewports": 92.9,
+        "dataPersistence": 92.9
+      },
+      "unexplainedGaps": [
+        "243 בקרות מהמניפסט לא קיבלו הכרעת נוכחות במסלולים הנגישים."
+      ],
+      "blockedItems": [
+        "/documents/:documentId/review: מסלול פרמטרי: לא נמצא מזהה דוגמה דרך מסך הרשימה /documents. לא הומצא מזהה.",
+        "/receiving/:orderId: מסלול פרמטרי: לא נמצא מזהה דוגמה דרך מסך הרשימה /receiving. לא הומצא מזהה."
+      ]
+    },
+    {
+      "role": "office",
+      "coverageStatus": "COVERAGE_BLOCKED",
+      "assignedRoutes": 35,
+      "inspectedRoutes": 35,
+      "notInspectedRoutes": [],
+      "discoveredControls": 1180,
+      "testedControls": 1130,
+      "percentages": {
+        "routes": 100,
+        "components": 57.2,
+        "actions": 14.9,
+        "forms": 85,
+        "tables": 100,
+        "dialogs": 100,
+        "permissions": 94.3,
+        "accessibility": 90,
+        "states": 16.6,
+        "responsiveViewports": 90,
+        "dataPersistence": 90
+      },
+      "unexplainedGaps": [
+        "207 בקרות מהמניפסט לא קיבלו הכרעת נוכחות במסלולים הנגישים."
+      ],
+      "blockedItems": [
+        "/documents/:documentId/review: מסלול פרמטרי: לא נמצא מזהה דוגמה דרך מסך הרשימה /documents. לא הומצא מזהה.",
+        "/receiving/:orderId: מסלול פרמטרי: לא נמצא מזהה דוגמה דרך מסך הרשימה /receiving. לא הומצא מזהה."
+      ]
+    },
+    {
+      "role": "kitchen",
+      "coverageStatus": "COVERAGE_BLOCKED",
+      "assignedRoutes": 35,
+      "inspectedRoutes": 35,
+      "notInspectedRoutes": [],
+      "discoveredControls": 972,
+      "testedControls": 919,
+      "percentages": {
+        "routes": 100,
+        "components": 56.3,
+        "actions": 13,
+        "forms": 84.2,
+        "tables": 100,
+        "dialogs": 100,
+        "permissions": 94.3,
+        "accessibility": 88.2,
+        "states": 19,
+        "responsiveViewports": 88.2,
+        "dataPersistence": 88.2
+      },
+      "unexplainedGaps": [
+        "192 בקרות מהמניפסט לא קיבלו הכרעת נוכחות במסלולים הנגישים."
+      ],
+      "blockedItems": [
+        "/documents/:documentId/review: מסלול פרמטרי: לא נמצא מזהה דוגמה דרך מסך הרשימה /documents. לא הומצא מזהה.",
+        "/receiving/:orderId: מסלול פרמטרי: לא נמצא מזהה דוגמה דרך מסך הרשימה /receiving. לא הומצא מזהה."
+      ]
+    },
+    {
+      "role": "payer",
+      "coverageStatus": "COVERAGE_PARTIAL",
+      "assignedRoutes": 35,
+      "inspectedRoutes": 35,
+      "notInspectedRoutes": [],
+      "discoveredControls": 50,
+      "testedControls": 55,
+      "percentages": {
+        "routes": 100,
+        "components": 97.3,
+        "actions": 0,
+        "forms": 100,
+        "tables": 0,
+        "dialogs": 100,
+        "permissions": 100,
+        "accessibility": 100,
+        "states": 60,
+        "responsiveViewports": 100,
+        "dataPersistence": 100
+      },
+      "unexplainedGaps": [
+        "1 בקרות מהמניפסט לא קיבלו הכרעת נוכחות במסלולים הנגישים."
+      ],
+      "blockedItems": []
+    },
+    {
+      "role": "accountant",
+      "coverageStatus": "COVERAGE_PARTIAL",
+      "assignedRoutes": 35,
+      "inspectedRoutes": 35,
+      "notInspectedRoutes": [],
+      "discoveredControls": 458,
+      "testedControls": 472,
+      "percentages": {
+        "routes": 100,
+        "components": 83.3,
+        "actions": 11.1,
+        "forms": 100,
+        "tables": 100,
+        "dialogs": 100,
+        "permissions": 100,
+        "accessibility": 100,
+        "states": 25.3,
+        "responsiveViewports": 100,
+        "dataPersistence": 100
+      },
+      "unexplainedGaps": [
+        "27 בקרות מהמניפסט לא קיבלו הכרעת נוכחות במסלולים הנגישים."
+      ],
+      "blockedItems": []
+    },
+    {
+      "role": "supplier",
+      "coverageStatus": "COVERAGE_BLOCKED",
+      "assignedRoutes": 35,
+      "inspectedRoutes": 35,
+      "notInspectedRoutes": [],
+      "discoveredControls": 109,
+      "testedControls": 67,
+      "percentages": {
+        "routes": 100,
+        "components": 44.8,
+        "actions": 4.2,
+        "forms": 26.7,
+        "tables": 100,
+        "dialogs": 100,
+        "permissions": 97.1,
+        "accessibility": 66.7,
+        "states": 55.6,
+        "responsiveViewports": 66.7,
+        "dataPersistence": 66.7
+      },
+      "unexplainedGaps": [
+        "48 בקרות מהמניפסט לא קיבלו הכרעת נוכחות במסלולים הנגישים."
+      ],
+      "blockedItems": [
+        "/documents/:documentId/review: מסלול פרמטרי: לא נמצא מזהה דוגמה דרך מסך הרשימה /documents. לא הומצא מזהה."
+      ]
+    }
+  ],
+  "limitations": [
+    "הענף נבנה על codex/qa-multi-agent, שהוא 43 קומיטים מאחורי main. הכיסוי מתאר את האפליקציה בענף הזה בלבד — ולא את DataTable, הרשימות בצד שרת, ReauthModal/step-up, org scope ו-feature flags שקיימים ב-main.",
+    "הילוך הכיסוי קורא ומנווט. הוא אינו יוצר, מאשר, משלם או מוחק: פעולות אלה שייכות ל-qa/deterministic/critical-workflows.spec.ts עם verifiers עצמאיים, וחזרה עליהן כאן הייתה משנה את אותם fixtures.",
+    "בקרה כספית או הרסנית תועדה כ\"אותרה ולא הופעלה\". זהו כיסוי מלאי, לא כיסוי ביצוע.",
+    "Axe מכסה כללים אוטומטיים בלבד. היעדר הפרה אינו הוכחת תאימות WCAG 2.1 AA, ונדרשת בדיקת קורא-מסך אנושית בעברית ו-RTL.",
+    "מצב שלא הופק בבטחה סומן NOT_OBSERVED ולא נספר ככיסוי. אין כאן טענה לכיסוי מצבים מלא.",
+    "סריקת בקרות מוגבלת ל-400 בקרות למסך. מסך שחצה את התקרה מסומן במפורש.",
+    "הנתונים סינתטיים וקטנים; אין כאן מבחן עומס, ביצועים או נפח אמיתי."
+  ]
+}
