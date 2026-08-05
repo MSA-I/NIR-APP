@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
-import { QA_WINDOWS_MUTEX_NAME } from '../../runner/lock.ts';
+import { parseWindowsMutexStatus, QA_WINDOWS_MUTEX_NAME } from '../../runner/lock.ts';
 import { canonicalQaStatePath } from '../../runner/setup.ts';
 
 test('QA state has one canonical repository path', () => {
@@ -11,6 +11,13 @@ test('QA state has one canonical repository path', () => {
     canonicalQaStatePath(repoRoot),
     path.join(path.resolve(repoRoot), '.qa-state', 'current.json'),
   );
+});
+
+test('Windows mutex handshake accepts exact lines and prioritizes BLOCKED', () => {
+  assert.equal(parseWindowsMutexStatus('BLOCKED\r\n'), 'BLOCKED');
+  assert.equal(parseWindowsMutexStatus('LOCKED\r\n'), 'LOCKED');
+  assert.equal(parseWindowsMutexStatus('BLOCKED\nLOCKED\n'), 'BLOCKED');
+  assert.equal(parseWindowsMutexStatus('prefix LOCKED suffix\n'), undefined);
 });
 
 test('destructive PowerShell gates use the same abandoned-safe mutex as QA', async () => {

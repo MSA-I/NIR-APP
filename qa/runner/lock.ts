@@ -201,6 +201,13 @@ async function readLockRecord(): Promise<QaLockRecord | undefined> {
   }
 }
 
+export function parseWindowsMutexStatus(output: string): 'LOCKED' | 'BLOCKED' | undefined {
+  const values = output.split(/\r?\n/).map((line) => line.trim());
+  if (values.includes('BLOCKED')) return 'BLOCKED';
+  if (values.includes('LOCKED')) return 'LOCKED';
+  return undefined;
+}
+
 async function acquireWindowsMutex(token: string, runId: string): Promise<QaLockResult> {
   const script = [
     '$ErrorActionPreference = "Stop"',
@@ -239,8 +246,8 @@ async function acquireWindowsMutex(token: string, runId: string): Promise<QaLock
     });
     child.stdout.on('data', (chunk: Buffer) => {
       output += chunk.toString('utf8');
-      if (output.includes('LOCKED')) finish(() => resolve('LOCKED'));
-      else if (output.includes('BLOCKED')) finish(() => resolve('BLOCKED'));
+      const parsed = parseWindowsMutexStatus(output);
+      if (parsed) finish(() => resolve(parsed));
     });
   });
   if (status === 'BLOCKED') {
