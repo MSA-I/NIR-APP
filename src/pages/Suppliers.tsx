@@ -7,6 +7,7 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, PageLoader, useToast, Modal, ErrorNote, ConfirmDialog, type Column } from '../components/ui';
+import { ReauthModal } from '../components/ReauthModal';
 import { PriceListUploadModal, SUBMISSION_STATUS, submissionMonthLabel } from '../components/PriceListUpload';
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
 import { SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
@@ -185,10 +186,19 @@ export function SuppliersList() {
   );
 }
 
-function SupplierForm({ supplier, onClose, onSaved }: { supplier: SupplierRow | null; onClose: () => void; onSaved: () => void }) {
+// Exported for the wave-4 bank-details spec; the app itself reaches it only through this file.
+export function SupplierForm({ supplier, onClose, onSaved }: { supplier: SupplierRow | null; onClose: () => void; onSaved: () => void }) {
   const { profile } = useAuth();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  // The dedicated bank-details step (PLAN-04 §3.2). `suppliers.bank_details` left the direct
+  // UPDATE column grant in 0061; changing it goes through `update_supplier_bank_details`
+  // (step-up + mandatory reason + audit). `bankStep` holds the new value while the reason
+  // dialog is up; `bankReauth` holds the confirmed reason while ReauthModal decides.
+  const [bankStep, setBankStep] = useState<{ nextBank: string | null } | null>(null);
+  const [bankReauth, setBankReauth] = useState<string | null>(null);
+  const [bankBusy, setBankBusy] = useState(false);
+
   const [f, setF] = useState({
     name: supplier?.name ?? '', tax_id: supplier?.tax_id ?? '', contact_name: supplier?.contact_name ?? '',
     phone: supplier?.phone ?? '', whatsapp: supplier?.whatsapp ?? '', email: supplier?.email ?? '',
@@ -208,22 +218,59 @@ function SupplierForm({ supplier, onClose, onSaved }: { supplier: SupplierRow | 
     setBusy(true);
     const newRating = f.rating || null; // 0 (cleared) → null; DB checks 1..5
     const ratingChanged = newRating !== (supplier?.rating ?? null);
+    // bank_details is deliberately absent from this row: on UPDATE the column has no direct
+    // grant any more, and sending it unchanged would fail the whole save. It rides the INSERT
+    // (whose grant kept it), and on change it goes through the dedicated RPC below.
     const row = {
       name: f.name.trim(), tax_id: f.tax_id || null, contact_name: f.contact_name || null,
       phone: f.phone || null, whatsapp: f.whatsapp || null, email: f.email || null, address: f.address || null,
       min_order_amount: f.min_order_amount ? Number(f.min_order_amount) : null,
-      payment_terms: f.payment_terms || null, bank_details: f.bank_details || null, notes: f.notes || null,
+      payment_terms: f.payment_terms || null, notes: f.notes || null,
       status: f.status, delivery_days: f.delivery_days, cutoff_time: f.cutoff_time || null,
       rating: newRating, rating_note: f.rating_note || null,
       // Timestamp moves only when the rating itself changed — otherwise "עודכן {date}" would lie.
       rating_updated_at: ratingChanged ? new Date().toISOString() : (supplier?.rating_updated_at ?? null),
     };
-    const res = supplier
-      ? await supabase.from('suppliers').update(row).eq('id', supplier.id)
-      : await supabase.from('suppliers').insert({ ...row, org_id: profile!.org_id });
-    setBusy(false);
+    if (supplier) {
+      const nextBank = f.bank_details || null;
+      const bankChanged = nextBank !== (supplier.bank_details ?? null);
+      const res = await supabase.from('suppliers').update(row).eq('id', supplier.id);
+      setBusy(false);
+      if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+      if (bankChanged) { setBankStep({ nextBank }); return; }
+      toast('הספק עודכן');
+      onSaved();
+    } else {
+      const res = await supabase.from('suppliers').insert({ ...row, bank_details: f.bank_details || null, org_id: profile!.org_id });
+      setBusy(false);
+      if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+      toast('הספק נוצר');
+      onSaved();
+    }
+  }
+
+  async function saveBankDetails(reason: string) {
+    if (!supplier || !bankStep) return;
+    setBankBusy(true);
+    const res = await supabase.rpc('update_supplier_bank_details', {
+      p_supplier_id: supplier.id,
+      p_bank_details: bankStep.nextBank,
+      p_reason: reason.trim(),
+    });
+    setBankBusy(false);
+    // On failure the reason dialog stays open for a retry; the other fields are already saved.
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-    toast(supplier ? 'הספק עודכן' : 'הספק נוצר');
+    toast('פרטי הבנק עודכנו ונרשמו ביומן הביקורת');
+    setBankStep(null);
+    onSaved();
+  }
+
+  // Cancelling the bank step is not a silent no-op: the other fields were already saved, and the
+  // user must hear that the bank change specifically did not happen.
+  function cancelBankStep() {
+    setBankStep(null);
+    setBankReauth(null);
+    toast('פרטי הבנק לא עודכנו — שאר השדות נשמרו', 'error');
     onSaved();
   }
 
@@ -273,6 +320,24 @@ function SupplierForm({ supplier, onClose, onSaved }: { supplier: SupplierRow | 
         <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
         <button className="btn-primary" disabled={busy} onClick={() => void save()}>{busy ? 'שומר…' : 'שמירה'}</button>
       </div>
+
+      <ConfirmDialog
+        open={!!bankStep}
+        onClose={cancelBankStep}
+        onConfirm={(reason) => setBankReauth(reason ?? '')}
+        title="עדכון פרטי בנק"
+        message={`פרטי הבנק של ״${supplier?.name ?? f.name}״ ישתנו ל: ${bankStep?.nextBank ?? 'ללא פרטי בנק'}. השינוי דורש אימות סיסמה טרי ונרשם ביומן הביקורת.`}
+        confirmLabel="אישור העדכון"
+        requireReason
+        busy={bankBusy}
+      />
+
+      <ReauthModal
+        open={bankReauth !== null}
+        title="אימות זהות לעדכון פרטי בנק"
+        onConfirm={() => { const reason = bankReauth; setBankReauth(null); void saveBankDetails(reason ?? ''); }}
+        onCancel={() => setBankReauth(null)}
+      />
     </Modal>
   );
 }

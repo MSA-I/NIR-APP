@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { PageLoader, useToast, ErrorNote, DataTable, StatusBadge, ConfirmDialog, Modal, type Column } from '../components/ui';
+import { ReauthModal } from '../components/ReauthModal';
 import { INVITATION_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime } from '../lib/format';
 import {
@@ -33,6 +34,11 @@ export default function Settings() {
   const [nextRole, setNextRole] = useState<Role>('office');
   const [roleReason, setRoleReason] = useState('');
   const [dialogBusy, setDialogBusy] = useState(false);
+  // Step-up gate (PLAN-04 §3.2): `manage_profile_access` asserts a fresh password AMR entry on
+  // the server (0061). The pending closure holds the confirmed action while ReauthModal decides —
+  // a JWT fresher than ~4 minutes skips the prompt entirely (mandatory for the B23–B24 flow,
+  // where the gate logs in seconds before deactivating), a stale one asks for the password.
+  const [pendingSensitive, setPendingSensitive] = useState<{ run: () => void } | null>(null);
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -311,7 +317,7 @@ export default function Settings() {
       <ConfirmDialog
         open={!!accessTarget}
         onClose={() => setAccessTarget(null)}
-        onConfirm={(reason) => { if (accessTarget) void toggleActive(accessTarget, reason); }}
+        onConfirm={(reason) => { if (accessTarget) setPendingSensitive({ run: () => void toggleActive(accessTarget, reason) }); }}
         title={accessTarget?.active ? 'השבתת משתמש' : 'הפעלת משתמש'}
         message={accessTarget?.active
           ? `הגישה של ${accessTarget?.full_name ?? ''} למערכת תיחסם.`
@@ -346,7 +352,7 @@ export default function Settings() {
             <button className="btn-secondary" disabled={dialogBusy} onClick={() => setRoleTarget(null)}>ביטול</button>
             <button className="btn-primary"
               disabled={dialogBusy || nextRole === roleTarget?.role || !roleReason.trim()}
-              onClick={() => void changeRole()}>שמירת התפקיד</button>
+              onClick={() => setPendingSensitive({ run: () => void changeRole() })}>שמירת התפקיד</button>
           </div>
         </div>
       </Modal>
@@ -371,6 +377,13 @@ export default function Settings() {
         danger
         requireReason
         busy={dialogBusy}
+      />
+
+      <ReauthModal
+        open={!!pendingSensitive}
+        title="אימות זהות לשינוי הרשאות"
+        onConfirm={() => { const pending = pendingSensitive; setPendingSensitive(null); pending?.run(); }}
+        onCancel={() => setPendingSensitive(null)}
       />
     </div>
   );
