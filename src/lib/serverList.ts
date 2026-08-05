@@ -30,9 +30,13 @@
  *    have no defined order between pages, so without it rows duplicate or disappear.
  *    `supabasePaging.ts:6` asks callers to remember; this module does not let them forget.
  * 4. **A filter with no server expression does not compile.** `ServerPredicate` is a closed union
- *    and `applyPredicate` is exhaustive, so a filter that only JavaScript can evaluate — the
- *    duplicate-suspicion branch in `Invoices.tsx:77-84` counts occurrences across the entire
- *    result set — cannot be passed in and quietly become true for one page.
+ *    and `applyPredicate` is exhaustive, so a filter that only JavaScript can evaluate cannot be
+ *    passed in and quietly become true for one page. The invoice duplicate filter is the case that
+ *    made this rule: `Invoices.tsx:77-84` counts `(supplier_id, invoice_number)` occurrences across
+ *    the entire result set, and two twins can land on different pages, so computed per page it
+ *    reports "no duplicates" exactly when there are some. Migration `0053` answers it properly with
+ *    the computed fields `invoice_has_duplicate` and `invoice_without_order`, which are ordinary
+ *    boolean predicates here; what stays uninvitable is the client-side computation.
  * 5. **Every failure carries Hebrew.** `ServerListError.hebrew` is `toHebrewError` applied once, at
  *    the throw. See the note on `ServerListError` for why `message` deliberately stays raw.
  */

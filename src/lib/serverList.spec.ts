@@ -305,7 +305,7 @@ describe('fetchServerList — filters', () => {
       { kind: 'lte', column: 'total_amount', value: 5000 },
       { kind: 'in', column: 'export_status', values: ['pending', 'sent'] },
       { kind: 'is', column: 'deleted_at', value: null },
-      { kind: 'is', column: 'has_duplicate_key_match', value: true },
+      { kind: 'is', column: 'invoice_has_duplicate', value: true },
       { kind: 'not-null', column: 'filed_at' },
       { kind: 'contains-text', column: 'invoice_number', text: '104' },
     ];
@@ -319,22 +319,29 @@ describe('fetchServerList — filters', () => {
     expect(params.getAll('total_amount')).toEqual(['gt.0', 'lte.5000']);
     expect(params.get('export_status')).toBe('in.(pending,sent)');
     expect(params.get('deleted_at')).toBe('is.null');
-    expect(params.get('has_duplicate_key_match')).toBe('is.true');
+    expect(params.get('invoice_has_duplicate')).toBe('is.true');
     expect(params.get('filed_at')).toBe('not.is.null');
     expect(params.get('invoice_number')).toBe('ilike.%104%');
   });
 
-  it('expresses the without-order branch as an absent embedded resource', async () => {
+  it('carries the attention filters as the computed fields 0053 delivered', async () => {
     const seen = useTable('invoices', invoices(1));
 
-    // `Invoices.tsx:93` reads `order_links.length === 0` off rows already in memory. On the server
-    // that is a left-joined embed tested for null, which is a real predicate over the whole table.
+    // `Invoices.tsx:92-93` reads both branches off rows already in memory: it counts duplicate keys
+    // across the whole result set and checks `order_links.length === 0`. `0053` exposes each as a
+    // PostgREST computed field (`handoff/1b-server-list-contract.md` §1), so both become predicates
+    // over the whole table rather than over whichever page happened to load.
     await fetchServerList<Row>(client, request({
-      select: '*, order_links:invoice_order_links!left(order_id)',
-      predicates: [{ kind: 'is', column: 'order_links', value: null }],
+      predicates: [
+        { kind: 'is', column: 'deleted_at', value: null },
+        { kind: 'eq', column: 'invoice_without_order', value: true },
+      ],
     }));
 
-    expect(seen[0].url.searchParams.get('order_links')).toBe('is.null');
+    expect(seen[0].url.searchParams.get('invoice_without_order')).toBe('eq.true');
+    // The computed fields already exclude soft-deleted rows, but the partial indexes behind them
+    // are `where deleted_at is null` and a query that omits it does not use them.
+    expect(seen[0].url.searchParams.get('deleted_at')).toBe('is.null');
   });
 
   it('searches more than one column in a single or-group', async () => {
@@ -399,8 +406,9 @@ describe('ServerPredicate — a filter with no server expression does not compil
   it('rejects filters that only JavaScript can evaluate', () => {
     // The duplicate-suspicion branch counts `(supplier_id, invoice_number)` occurrences across the
     // whole result set (`Invoices.tsx:77-84`). Two twins can land on different pages, so computed
-    // per page it reports "no duplicates" exactly when there are some. It has no expression here
-    // until 0053 supplies a server-side duplicate key.
+    // per page it reports "no duplicates" exactly when there are some. `0053` answers the question
+    // properly as `invoice_has_duplicate`; the client-side computation stays unrepresentable, which
+    // is what stops a screen from carrying it over unchanged.
     // @ts-expect-error — not a member of the closed union
     const duplicates: ServerPredicate = { kind: 'duplicates-in-result-set', column: 'invoice_number' };
 
