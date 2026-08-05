@@ -844,6 +844,7 @@ export async function setupQaRun(options: SetupOptions = {}): Promise<SetupResul
     await installCrossTenantInvoiceContextFixture({
       apiUrl: localEnvironment.apiUrl,
       serviceRoleKey: localEnvironment.serviceRoleKey,
+      lock,
     });
     state.setupSteps.push('cross_tenant_invoice_context_fixture_ready');
 

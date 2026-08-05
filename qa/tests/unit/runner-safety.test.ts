@@ -45,3 +45,12 @@ test('deterministic children have bounded Windows process-tree cleanup', async (
   assert.doesNotMatch(source, /terminated: false/);
   assert.match(source, /timeoutMs: 900_000/);
 });
+
+test('cross-tenant fixture bounds every request and rechecks lock ownership', async () => {
+  const source = await readFile(
+    path.join(process.cwd(), 'qa', 'fixtures', 'cross-tenant-invoice-context.ts'),
+    'utf8',
+  );
+  assert.equal(source.match(/\.abortSignal\(fixtureSignal\(\)\)/g)?.length, 8);
+  assert.equal(source.match(/await assertQaLockOwned\(options\.lock\)/g)?.length, 8);
+});
