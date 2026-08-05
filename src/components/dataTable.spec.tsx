@@ -49,18 +49,18 @@ describe('DataTable — server-mode type exclusion (compile-time, enforced by ts
   // These consts exist to host @ts-expect-error directives: if the discriminated union ever
   // stops rejecting client-side processing props in server mode, `tsc --noEmit` fails the build.
   it('keeps the invalid shapes referenced so the compile-time cases stay in the program', () => {
+    // @ts-expect-error -- searchFn cannot be passed in server mode: it would filter one page
     const badSearchFn: DataTableProps<Row> = {
       rows: [],
       columns: serverColumns,
       server: makeServer(),
-      // @ts-expect-error -- searchFn cannot be passed in server mode: it would filter one page
       searchFn: (row: Row, q: string) => row.name.includes(q),
     };
+    // @ts-expect-error -- pageSize comes only from server.pageSize in server mode
     const badPageSize: DataTableProps<Row> = {
       rows: [],
       columns: serverColumns,
       server: makeServer(),
-      // @ts-expect-error -- pageSize comes only from server.pageSize in server mode
       pageSize: 20,
     };
     const badColumns: ServerColumn<Row>[] = [
