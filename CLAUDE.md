@@ -41,8 +41,9 @@
 Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **Tailwind v4 CSS-first** · recharts · lucide-react
 
 - `npm run dev` — פורט **5199**
-- `npm run build` = `tsc --noEmit` + ששת סקריפטי ה-`check:*` + `vite build` — **השער האוטומטי היחיד.**
+- `npm run build` = `tsc --noEmit` + שבעת סקריפטי ה-`check:*` + `vitest run` (‏`npm run test`) + `vite build` — **השער האוטומטי היחיד.**
   ‏`check:review` מריץ `node --test` על `src/components/document-review/model.test.ts` (16 בדיקות).
+  ‏`check:tokens` אוכף את חוק הטוקנים של `DESIGN.md` — אפס מחלקות פלטה גולמיות ואפס הקסים ב-`.tsx`.
   **אין ESLint ואין Prettier** בריפו, למרות הערות `eslint-disable` שנשארו ב-`src/lib/useQuery.ts`.
 - `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ 13
   סוויטות SQL, ‏`npm audit --audit-level=high`, חוזי Deno, ו-22 תרחישי דפדפן / 266 טענות P0.

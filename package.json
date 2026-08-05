@@ -11,7 +11,8 @@
     "check:split": "node scripts/check-order-split.ts",
     "check:p2": "node scripts/check-p2-reliability.ts",
     "check:review": "node --test src/components/document-review/model.test.ts",
-    "build": "tsc --noEmit && npm run check:alerts && npm run check:dashboard && npm run check:orders && npm run check:split && npm run check:p2 && npm run check:review && npm run test && vite build",
+    "check:tokens": "node scripts/check-design-tokens.ts",
+    "build": "tsc --noEmit && npm run check:alerts && npm run check:dashboard && npm run check:orders && npm run check:split && npm run check:p2 && npm run check:review && npm run check:tokens && npm run test && vite build",
     "quality": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-quality-gates.ps1",
     "preview": "vite preview",
     "test": "vitest run"
