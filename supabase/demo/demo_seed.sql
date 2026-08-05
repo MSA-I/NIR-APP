@@ -641,6 +641,34 @@ insert into saved_views (id, org_id, user_id, screen, unit_id, name, payload, sh
  pg_temp.demo_user('owner'), 'invoices', null, 'תצוגת חשבוניות משותפת',
  '{"columns":["invoice_number","supplier","total_amount","review_status"]}'::jsonb, true);
 
+-- ===== Wave 7: one INACTIVE webhook subscription + one external reference =====
+-- The subscription is DELIBERATELY inactive (PLAN-08, OPEN-DECISIONS #98: no live target
+-- in the demo): the demo_verify A-arm exercises a real row, while p5's empty-outbox arm
+-- and the outbox_target_unregistered preflight arm stay silent -- an inactive
+-- subscription enqueues nothing, so no demo command ever writes outbox rows. The signing
+-- secret is a Vault reference (the 0028 shape); the raw value is a demo placeholder,
+-- never a live credential. demo_reset removes the org (both rows cascade with it) but
+-- not the Vault row, so a stale same-name secret from a previous load is deleted first
+-- (safe despite the restrict FK: the referencing subscription died with the previous
+-- demo org).
+delete from vault.secrets where name = 'demo-webhook-signing-secret';
+
+insert into webhook_subscriptions (id, org_id, url, event_types, secret_id, active, description)
+values (
+  'ff000000-0000-4000-8000-000000000001',
+  '11111111-1111-4111-8111-111111111111',
+  'https://demo.supplyflow.local/hooks/erp',
+  array['invoice.created', 'invoice.approved', 'payment.executed'],
+  vault.create_secret('demo-webhook-signing-secret-value', 'demo-webhook-signing-secret',
+                      'Demo webhook signing secret (placeholder, not a credential)'),
+  false,
+  'חיבור ERP לדוגמה — כבוי'
+);
+
+insert into external_references (id, org_id, provider, entity_type, internal_id, external_id) values
+('ff100000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',
+ 'demo-erp', 'supplier', 'aa000000-0000-4000-8000-000000000005', 'ERP-SUP-1001');
+
 -- Note: the allocation audit rows used to need repairing here — payment_allocations and
 -- bank_allocations had no org_id column, so the audit trigger recorded them with no tenant.
 -- Migration 0009 gives both tables an org_id, so the trigger now attributes them correctly

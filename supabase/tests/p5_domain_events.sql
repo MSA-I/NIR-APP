@@ -295,6 +295,13 @@ $$;
 
 -- ===== (g) the outbox is empty by design, and an empty outbox claims nothing =====
 
+-- ORDER DEPENDENCY (wave 7): since 0066, an ACTIVE webhook_subscriptions row makes every
+-- matching domain event enqueue outbox rows -- including the fixture events this file
+-- creates above. The assertion below therefore holds only while no active subscription
+-- exists when this suite runs: the gate runs p5 before the demo fixture is installed
+-- (whose only subscription is INACTIVE), and p7_integration_adapters.sql rolls its
+-- subscriptions back. Seeding an ACTIVE subscription into the gate database before this
+-- point would honestly fail this arm -- move the seed, not the assertion.
 select pg_temp.p5_assert(
   (select count(*) from private.integration_outbox) = 0,
   'no target is registered in this wave, so the outbox must be EMPTY by design');

@@ -22,8 +22,14 @@
 
 ## 2. אירועי דומיין
 
-טבלאות: `domain_events` · `integration_outbox` · `integration_deliveries` · `external_references` ·
-`integration_failures` · `webhook_subscriptions` · `idempotency_keys` · `dead_letter_records`.
+טבלאות, משויכות לסעיף שמגדיר אותן (תיקון ציטוט גל 7 — הרשימה כאן שימשה בעבר כאילו כולן
+"טבלאות אירועים" של הסעיף הזה, וטבלאות ה-outbox של §3 וטבלאות המתאמים של §4 צוטטו זו כזו):
+
+| מישור | טבלאות | היכן |
+|---|---|---|
+| אירועים (סעיף זה) | `domain_events` | ‏`0063`, ‏public |
+| ‏outbox (‏§3) | `integration_outbox` · `integration_deliveries` · `idempotency_keys` · `dead_letter_records` | ‏`0064`, ‏**private** |
+| מתאמים (‏§4) | `external_references` · `webhook_subscriptions` · `integration_failures` | ‏`0066`, ‏public |
 
 **כל אירוע נושא:** מזהה אירוע · סוג · **גרסת סכימה** · `org_id` · מזהי סקופ רלוונטיים · מזהה ישות ·
 מזהה שחקן (כשקיים) · **מזהה קורלציה** · **מזהה סיבתיות** · חותמת התרחשות · payload · מטא-דאטה.
@@ -74,6 +80,14 @@ Edge Function ייעודית, מופעלת ב-`pg_cron` דרך `pg_net`, עם: �
 `outbox-worker` של גל 5) נכנסת **רק** למפת `$functionJwt` — לא ל-`Wait-LocalEdgeReady` ולא
 לרשימת ה-OCR.
 
+> **מומש:** גל 5 (‏`0064`) — הטבלאות, ארבעת ה-RPCs של ה-worker (‏claim/complete/fail/replay),
+> ‏Edge Function ‏`outbox-worker` ו-cron דקתי במתכונת ה-vault של `0028`. **גל 7 (‏`0066`) הרחיב
+> את ה-claim בלבד:** כל שורה נתבעת נושאת גם ‏url, ‏body דטרמיניסטי, ‏timestamp וחתימת
+> ‏HMAC-SHA256 שנחתמה **בתוך Postgres** בסוד ה-Vault של המנוי (‏OPEN-DECISIONS ‏#97);
+> ה-worker שולח את ה-body מילולית עם `x-supplyflow-signature`/`x-supplyflow-timestamp`
+> ולעולם אינו רואה סוד. הלוגיקה הנבדקת חולצה ל-`outbox-worker/core.ts` (תקדים
+> ‏interpret-document) עם צעד deno ייעודי בשער.
+
 ---
 
 ## 4. המתאמים
@@ -94,6 +108,17 @@ entity_type, internal_id, external_id)`. זה הגבול. אין עמודות `o
 **מסך מצב אינטגרציות** (מפעילים בלבד): ספק · מצב חיבור · סנכרון מוצלח אחרון · רשומות ממתינות ·
 רשומות שנכשלו · ניסיון חוזר · בעיות מיפוי · מצב אישורים · מצב webhook · עקבות ביקורת.
 **אין מסכי תצורה ספציפיים לספק עד שספק ממומש בפועל.**
+
+> **מומש בגל 7 (‏`0066` + ‏`src/lib/adapters/`):** שלוש טבלאות המתאמים — ‏`webhook_subscriptions`
+> (רישום יעדי ה-outbox; ‏target נגזר מבנית `'webhook:'||id`; הפעלה = פקודת בעלים עם step-up,
+> ‏#98), ‏`external_references` (הטופל שלמעלה, מילולית, עם זוג uniques דו-כיווני), ו-
+> ‏`integration_failures` (כשלי מתאם/נכנס — הגבול מול `integration_deliveries` הוכרע ב-#99).
+> מהממשקים שברשימה מומשו **שלושה** עם mock ו-spec לכל אחד: ‏`AccountingAdapter` (שבע המתודות
+> שלמעלה), ‏`ErpAdapter` ו-`WmsAdapter` — אפס יבואנים בעיצוב עד שספק אמיתי נבחר. יתר השמות
+> (‏Identity/Notification/Search/Workflow/Rules/DocumentExtraction/FileStorage/FeatureFlag)
+> נשארים עתידיים — חלקם כבר קיימים כמערכות פנימיות וחלקם שייכים לגל 9. **מסך האינטגרציות
+> נדחה (‏#98)** — ‏`read_webhook_subscriptions()` ו-`read_integration_failures()` הם המשטח
+> שהמסך העתידי יקרא.
 
 ---
 
