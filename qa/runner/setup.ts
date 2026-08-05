@@ -9,6 +9,7 @@ import { chromium } from '@playwright/test';
 import {
   FIXTURE_MANIFEST_FILE,
   generateSyntheticFixtureFiles,
+  installCrossTenantInvoiceContextFixture,
   loadGeneratedFixtureManifest,
   type GeneratedFixtureManifest,
   type SyntheticFixtureKind,
@@ -839,6 +840,12 @@ export async function setupQaRun(options: SetupOptions = {}): Promise<SetupResul
 
     await seedAndVerifyDemo(repoRoot, lock);
     state.setupSteps.push('demo_seed_verified');
+
+    await installCrossTenantInvoiceContextFixture({
+      apiUrl: localEnvironment.apiUrl,
+      serviceRoleKey: localEnvironment.serviceRoleKey,
+    });
+    state.setupSteps.push('cross_tenant_invoice_context_fixture_ready');
 
     const fixtureManifest = await stateAlreadyExists(fixtureManifestPath)
       ? await loadGeneratedFixtureManifest(fixtureRoot)
