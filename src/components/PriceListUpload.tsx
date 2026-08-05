@@ -17,6 +17,13 @@ import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow, nameKey
 import { fetchAll } from '../lib/supabasePaging';
 import { todayISO } from '../lib/format';
 import type { Supplier } from '../lib/types';
+import { TusUploadCancelledError, TusUploadError, tusUploadToDocuments } from '../lib/tusUpload';
+import {
+  UploadCenter,
+  claimActiveUploadTask,
+  enqueueUploadCenterBatch,
+  markUploadCenterDocumentRegistered,
+} from './UploadCenter';
 
 /** Shared display metadata for supplier_price_submissions rows (the per-supplier history ledger). */
 export const SUBMISSION_STATUS = {
@@ -92,6 +99,8 @@ export async function registerPriceDocument(reservation: Pick<PriceDocumentReser
 }
 
 export async function uploadPriceDocument(orgId: string, supplierId: string, file: File) {
+  // Claimed in the synchronous prologue, before any await — null outside the Center's queue.
+  const center = claimActiveUploadTask();
   if (!file.size) throw new PriceDocumentError('הקובץ ריק.');
   if (file.size > 10 * 1024 * 1024) throw new PriceDocumentError('הקובץ גדול מ־10MB.');
   const mimeType = priceDocumentMime(file);
@@ -105,11 +114,29 @@ export async function uploadPriceDocument(orgId: string, supplierId: string, fil
   if (reserved.error) throw reserved.error;
   const reservation = parseReservation(reserved.data, orgId, supplierId);
 
-  const uploaded = await supabase.storage.from('documents').upload(reservation.storage_path, file, { contentType: mimeType, upsert: false });
-  if (uploaded.error) throw uploaded.error;
+  // Resumable upload against the reserved path (wave 6b). The reservation's expires_at
+  // drives the proactive renewal on chunk completion, and a 403 mid-PATCH gets exactly
+  // one renew-then-resume before the failure surfaces (PLAN-07 §1.5).
+  const handle = tusUploadToDocuments(file, {
+    objectName: reservation.storage_path,
+    contentType: mimeType,
+    onProgress: (percent) => center?.onProgress(percent),
+    renewal: { documentId: reservation.document_id, expiresAt: reservation.expires_at },
+  });
+  center?.registerAbort(handle.abort);
+  try {
+    await handle.done;
+  } catch (uploadError) {
+    center?.registerAbort(null);
+    if (uploadError instanceof TusUploadCancelledError) throw uploadError;
+    throw uploadError instanceof TusUploadError ? new PriceDocumentError(uploadError.message) : uploadError;
+  }
+  center?.registerAbort(null);
+  center?.markStored(reservation.document_id);
 
   try {
     const registration = await registerPriceDocument(reservation);
+    center?.markRegistered(registration.document_id);
     return { documentId: registration.document_id, pending: null };
   } catch (registrationError) {
     return {
@@ -225,7 +252,29 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
         if (!isStaff) throw new PriceDocumentError('קובצי Excel מוגשים דרך "הגשת מחירון חודשי".');
         await parseSheet(file);
       } else {
-        const result = await uploadPriceDocument(orgId, supplierId, file);
+        // Runs through the Upload Center's queue so the file gets a per-file progress row;
+        // the runner's resolved value (pending registration included) stays authoritative.
+        // Boxed because the assignment happens inside the runner closure.
+        const outcome: { value: Awaited<ReturnType<typeof uploadPriceDocument>> | null } = { value: null };
+        const batch = await enqueueUploadCenterBatch(
+          [file],
+          async () => {
+            outcome.value = await uploadPriceDocument(orgId, supplierId, file);
+            return outcome.value;
+          },
+          {
+            source: 'מחירון ספק',
+            supplierName: supplierName ?? null,
+            classifyFailure: (_item, error) => ({
+              message: error instanceof PriceDocumentError ? error.message : toHebrewError(error),
+              retryable: false,
+            }),
+          },
+        );
+        const result = outcome.value;
+        if (batch.failed.length || !result) {
+          throw batch.failed[0]?.error ?? new PriceDocumentError('ההעלאה לא הושלמה.');
+        }
         if (result.pending) {
           setPendingReservation(result.pending);
           toast(`המקור הועלה, אך רישום המסמך לא הושלם: ${result.registrationError}`, 'error');
@@ -234,6 +283,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
         navigate(`/documents/${result.documentId}/review`);
       }
     } catch (error) {
+      if (error instanceof TusUploadCancelledError) return;
       toast(error instanceof PriceDocumentError ? error.message : toHebrewError(error), 'error');
     } finally {
       setBusy(false);
@@ -295,6 +345,8 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
     setBusy(true);
     try {
       const registered = await registerPriceDocument(pendingReservation);
+      // Lift the matching Upload Center row out of the pending-registration money state.
+      markUploadCenterDocumentRegistered(registered.document_id);
       navigate(`/documents/${registered.document_id}/review`);
     } catch (registrationError) {
       toast(registrationError instanceof PriceDocumentError ? registrationError.message : toHebrewError(registrationError), 'error');
@@ -309,6 +361,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
     <Modal open onClose={onClose} title={supplier ? `העלאת מחירון — ${supplier.name}` : 'העלאת מחירון'}
       wide={!!preview} busy={busy}
       statusMessage={busy ? (preview ? 'קולט את המחירון' : 'מעבד את הקובץ') : undefined}>
+      <UploadCenter />
       {report ? (
         <div className="space-y-4">
           <Note tone="done" role="status">{report}</Note>
