@@ -1,24 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageLoader, useToast, ConfirmDialog, ErrorNote, Note } from '../components/ui';
+import { PageLoader, useToast, ConfirmDialog, ErrorNote, Note, StatusBadge } from '../components/ui';
 import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
-import { todayISO } from '../lib/format';
+import { fmtDate, todayISO } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import type { Supplier } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
 import { invoiceCheckFingerprint } from '../lib/checkFingerprint';
 import { invoiceDraftFromInterpretation } from '../components/document-review/model';
 import type { InterpretationContract } from '../lib/useDocumentProcessing';
+import { PO_STATUS } from '../lib/status';
+import {
+  isUuid,
+  resolveInvoiceLinkedContext,
+  type InvoiceContextOrder,
+  type InvoiceContextReceipt,
+  type InvoiceContextSupplier,
+} from '../lib/invoiceLinkedContext';
 
 export default function InvoiceNew() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { org } = useAuth();
+  const { org, profile } = useAuth();
   const toast = useToast();
 
   const presetSupplier = params.get('supplier') ?? '';
@@ -101,6 +109,40 @@ export default function InvoiceNew() {
     fetchAll<Supplier>((from, to) => supabase.from('suppliers').select('*').is('deleted_at', null)
       .order('name').order('id').range(from, to)));
 
+  const linksRequested = !!presetOrder || !!presetReceipt;
+  const { data: linkResolution, loading: linksLoading } = useQuery(async () => {
+    if (!linksRequested) return resolveInvoiceLinkedContext(null, null, null, null, null);
+    if ((presetOrder && !isUuid(presetOrder)) || (presetReceipt && !isUuid(presetReceipt))) {
+      return resolveInvoiceLinkedContext(presetOrder, presetReceipt, null, null, null);
+    }
+    try {
+      const receipt = presetReceipt
+        ? unwrap(await supabase.from('goods_receipts').select('id, number, order_id, received_at')
+          .eq('id', presetReceipt).maybeSingle()) as InvoiceContextReceipt | null
+        : null;
+      const orderId = presetOrder ?? receipt?.order_id ?? null;
+      const order = orderId
+        ? unwrap(await supabase.from('purchase_orders').select('id, number, supplier_id, status')
+          .eq('id', orderId).maybeSingle()) as InvoiceContextOrder | null
+        : null;
+      const supplier = order
+        ? unwrap(await supabase.from('suppliers').select('id, name').eq('id', order.supplier_id)
+          .is('deleted_at', null).maybeSingle()) as InvoiceContextSupplier | null
+        : null;
+      return resolveInvoiceLinkedContext(presetOrder, presetReceipt, order, receipt, supplier);
+    } catch {
+      // Missing, inaccessible and malformed identifiers deliberately share one outcome. The UI
+      // must not reveal whether a record exists outside the current tenant.
+      return { status: 'invalid' as const };
+    }
+  }, [presetOrder, presetReceipt, linksRequested]);
+
+  const linkedContext = linkResolution?.status === 'linked' ? linkResolution : null;
+  const effectiveSupplierId = linkedContext?.supplier.id ?? f.supplier_id;
+  const linkedOrderId = linkedContext?.orderId ?? null;
+  const linkedReceiptId = linkedContext?.receiptId ?? null;
+  const canOpenProcurement = profile?.role === 'owner' || profile?.role === 'office' || profile?.role === 'kitchen';
+
   const vatRate = (org?.vat_rate ?? 18) / 100;
   const set = (k: string, v: string) => setF((s) => ({ ...s, [k]: v }));
 
@@ -114,10 +156,10 @@ export default function InvoiceNew() {
     setF((s) => ({ ...s, total: v, before_vat: n ? (n / (1 + vatRate)).toFixed(2) : s.before_vat, vat: n ? (n - n / (1 + vatRate)).toFixed(2) : s.vat }));
   }
 
-  const linkedOrderIds = presetOrder ? [presetOrder] : [];
-  const checkFingerprint = f.supplier_id && f.invoice_number.trim() && Number(f.total) > 0
+  const linkedOrderIds = linkedOrderId ? [linkedOrderId] : [];
+  const checkFingerprint = effectiveSupplierId && f.invoice_number.trim() && Number(f.total) > 0
     ? invoiceCheckFingerprint({
-      supplierId: f.supplier_id, invoiceNumber: f.invoice_number, invoiceDate: f.invoice_date,
+      supplierId: effectiveSupplierId, invoiceNumber: f.invoice_number, invoiceDate: f.invoice_date,
       totalAmount: Number(f.total), linkedOrderIds,
     })
     : null;
@@ -133,7 +175,7 @@ export default function InvoiceNew() {
     setChecking(true);
     const t = setTimeout(() => {
       void runInvoiceChecks({
-        supplier_id: f.supplier_id, invoice_number: f.invoice_number.trim(), invoice_date: f.invoice_date,
+        supplier_id: effectiveSupplierId, invoice_number: f.invoice_number.trim(), invoice_date: f.invoice_date,
         total_amount: Number(f.total), linkedOrderIds,
       }).then((results) => {
         if (checkSequence.current === sequence && latestFingerprint.current === checkFingerprint) {
@@ -156,7 +198,7 @@ export default function InvoiceNew() {
   const checksReady = checkFingerprint != null && checks != null && !checking && !checkError;
 
   async function save(overrideReason?: string) {
-    if (!f.supplier_id || !f.invoice_number.trim() || !Number(f.total)) {
+    if (!effectiveSupplierId || !f.invoice_number.trim() || !Number(f.total)) {
       toast('ספק, מספר חשבונית וסכום הם שדות חובה', 'error');
       return;
     }
@@ -170,7 +212,7 @@ export default function InvoiceNew() {
       let freshChecks: CheckResult[];
       try {
         freshChecks = await runInvoiceChecks({
-          supplier_id: f.supplier_id, invoice_number: f.invoice_number.trim(), invoice_date: f.invoice_date,
+          supplier_id: effectiveSupplierId, invoice_number: f.invoice_number.trim(), invoice_date: f.invoice_date,
           total_amount: Number(f.total), linkedOrderIds,
         });
       } catch (checkFailure) {
@@ -183,15 +225,15 @@ export default function InvoiceNew() {
       setCheckError(null);
       const inv = unwrap(await supabase.rpc('create_invoice', {
         p_invoice_id: invoiceId,
-        p_supplier_id: f.supplier_id,
+        p_supplier_id: effectiveSupplierId,
         p_invoice_number: f.invoice_number.trim(),
         p_invoice_date: f.invoice_date,
         p_amount_before_vat: Number(f.before_vat) || 0,
         p_vat_amount: Number(f.vat) || 0,
         p_total_amount: Number(f.total),
         p_notes: f.notes.trim() || null,
-        p_order_id: presetOrder,
-        p_receipt_id: presetReceipt,
+        p_order_id: linkedOrderId,
+        p_receipt_id: linkedReceiptId,
         p_override_reason: overrideReason?.trim() || null,
         p_reason: f.reason.trim(),
       })) as { invoice_id: string; review_status: string; duplicate_detected: boolean };
@@ -207,21 +249,69 @@ export default function InvoiceNew() {
     }
   }
 
-  if (loading) return <PageLoader />;
+  if (loading || linksLoading) return <PageLoader />;
   if (error) return <ErrorNote message={error} />;
 
   return (
     <div className="max-w-2xl space-y-4">
       <h1 className="page-title">חשבונית חדשה</h1>
-      {presetOrder && <div className="text-sm text-ink-muted">החשבונית תקושר אוטומטית להזמנה ולקבלת הסחורה שממנה הגעת.</div>}
+      {linkedContext && (
+        <section className="note-info space-y-3" aria-labelledby="invoice-linked-context-title" data-testid="invoice-linked-context">
+          <div>
+            <h2 id="invoice-linked-context-title" className="font-semibold text-ink">רשומות שיקושרו לחשבונית</h2>
+            <p className="mt-1 text-sm">
+              החשבונית החדשה תקושר {linkedContext.orderId && linkedContext.receiptId
+                ? 'להזמנת הרכש ולקבלת הסחורה הבאות'
+                : linkedContext.orderId ? 'להזמנת הרכש הבאה' : 'לקבלת הסחורה הבאה'} לאחר השמירה.
+            </p>
+          </div>
+          <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-ink-muted">ספק</dt>
+              <dd className="mt-0.5 font-medium" data-testid="invoice-linked-supplier">{linkedContext.supplier.name}</dd>
+            </div>
+            <div>
+              <dt className="text-ink-muted">{linkedContext.orderId ? 'הזמנת רכש' : 'הזמנת המקור של הקבלה'}</dt>
+              <dd className="mt-0.5 flex flex-wrap items-center gap-2">
+                {canOpenProcurement
+                  ? <Link className="link num" to={`/orders/${linkedContext.order.id}`} data-testid="invoice-linked-order">הזמנה #{linkedContext.order.number}</Link>
+                  : <span className="num" data-testid="invoice-linked-order">הזמנה #{linkedContext.order.number}</span>}
+                <StatusBadge meta={PO_STATUS[linkedContext.order.status]} />
+              </dd>
+            </div>
+            {linkedContext.receipt && (
+              <div>
+                <dt className="text-ink-muted">קבלת סחורה</dt>
+                <dd className="mt-0.5 font-medium num" data-testid="invoice-linked-receipt">קבלה #{linkedContext.receipt.number}</dd>
+              </div>
+            )}
+            {linkedContext.receipt && (
+              <div>
+                <dt className="text-ink-muted">תאריך קבלה</dt>
+                <dd className="mt-0.5 num">{fmtDate(linkedContext.receipt.received_at)}</dd>
+              </div>
+            )}
+          </dl>
+        </section>
+      )}
+      {linksRequested && linkResolution?.status === 'invalid' && (
+        <div data-testid="invoice-linked-context-unavailable">
+          <Note tone="await" role="status">
+            לא ניתן לטעון את רשומות המקור. אפשר להמשיך ולשמור את החשבונית ללא קישור.
+          </Note>
+        </div>
+      )}
 
       <div className="card card-pad grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
           <label className="label" htmlFor="invoice-new-supplier">ספק *</label>
-          <select id="invoice-new-supplier" className="input" value={f.supplier_id} onChange={(e) => set('supplier_id', e.target.value)}>
+          <select id="invoice-new-supplier" className="input" value={effectiveSupplierId}
+            disabled={!!linkedContext} aria-describedby={linkedContext ? 'invoice-linked-supplier-help' : undefined}
+            onChange={(e) => set('supplier_id', e.target.value)}>
             <option value="">בחר ספק...</option>
             {suppliers?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
+          {linkedContext && <div id="invoice-linked-supplier-help" className="mt-1 text-xs text-ink-muted">הספק נקבע לפי הרשומות המקושרות ואינו ניתן לשינוי כאן.</div>}
         </div>
         <div><label className="label" htmlFor="invoice-new-number">מספר חשבונית *</label><input id="invoice-new-number" className="input num" dir="ltr" value={f.invoice_number} onChange={(e) => set('invoice_number', e.target.value)} /></div>
         <div><label className="label" htmlFor="invoice-new-date">תאריך חשבונית *</label><input id="invoice-new-date" type="date" className="input" value={f.invoice_date} onChange={(e) => set('invoice_date', e.target.value)} /></div>
