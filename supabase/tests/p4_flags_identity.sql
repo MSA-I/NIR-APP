@@ -8,9 +8,11 @@
 --   (b) platform_set_org_flag demands platform membership and a reason, audits, targets
 --       (percentage / date window / unit focus) evaluate fail-closed, and configuration
 --       never leaks across tenants;
---   (c) step-up: EVERY wired path fails on missing, stale and future (beyond the +30s
---       skew ceiling) password AMR with 'fresh_authentication_required'/42501, and passes
---       on a fresh one;
+--   (c) step-up: structurally, every path SECURITY-MODEL §6 names carries the assertion
+--       call (signature-resolved, and proven non-vacuous by mutation -- the UI-less SSO
+--       path cannot quietly lose it); then behaviourally, EVERY wired path fails on
+--       missing, stale and future (beyond the +30s skew ceiling) password AMR with
+--       'fresh_authentication_required'/42501 and passes on a fresh one;
 --   (d) suppliers.bank_details: the direct column write is revoked, the rest of the 0036
 --       allowlist survives, and update_supplier_bank_details enforces role + step-up +
 --       reason + tenant with a reasoned audit;
@@ -320,8 +322,71 @@ select set_config('request.jwt.claims', '', true);
 update private.flag_definitions set kill_switch = false where flag_key = 'receiving.barcode';
 
 -- ===== (c) Step-up on every wired path =====
--- Every path: missing AMR, stale (10 minutes old), future (10 minutes ahead -- beyond the
--- +30s skew ceiling), then fresh succeeds.
+
+-- (c0) STRUCTURAL COVERAGE FIRST -- the §6 equivalent of A1/A3/A5.
+-- The behavioural tests below drive each path through a screen-shaped call, but a path
+-- with no UI has nothing to remind a later wave that it must keep the assertion: a
+-- redeclaration that silently drops `perform assert_recent_password_authentication()`
+-- would leave those tests passing only for the paths someone remembered to exercise.
+-- This helper pins the SECURITY-MODEL §6 list itself, resolved by exact signature, so an
+-- argument drift fails here instead of degrading quietly. update_identity_provider_settings
+-- is on the list precisely because it has no screen in this wave.
+create function pg_temp.p4_stepup_uncovered()
+returns setof text
+language sql stable
+as $$
+  select wired.signature
+  from (values
+    ('public.execute_payment_request(uuid,date,text,text,text,jsonb,text)'),
+    ('public.execute_emergency_payment_request(uuid,date,text,text,text,jsonb,text)'),
+    ('public.manage_profile_access(uuid,user_role,boolean,uuid,text)'),
+    ('public.mark_month_export_sent(date,uuid[],text)'),
+    ('public.grant_user_scope(uuid,uuid,text)'),
+    ('public.revoke_user_scope(uuid,uuid,text)'),
+    ('public.update_identity_provider_settings(text,boolean,jsonb,jsonb,text)'),
+    ('public.update_supplier_bank_details(uuid,text,text)')
+  ) as wired(signature)
+  where to_regprocedure(wired.signature) is null
+     or coalesce(
+          (select p.prosrc
+             from pg_catalog.pg_proc p
+            where p.oid = to_regprocedure(wired.signature)::oid),
+          '') !~ 'assert_recent_password_authentication'
+$$;
+
+select pg_temp.p4_assert(
+  not exists (select 1 from pg_temp.p4_stepup_uncovered()),
+  'a SECURITY-MODEL §6 path lost its step-up call or drifted its signature -- every named '
+  || 'path must call assert_recent_password_authentication, including the ones with no UI');
+
+-- The check must actually DETECT the loss (the p3 mutation idiom): redeclare the one
+-- UI-less path as a stub without the call, expect the helper to flag exactly it, roll
+-- back, and prove coverage is whole again.
+savepoint mutation_stepup;
+create or replace function update_identity_provider_settings(
+  p_provider text,
+  p_enabled boolean,
+  p_config jsonb,
+  p_secret_config jsonb,
+  p_reason text
+) returns uuid
+language plpgsql security definer set search_path = public as $$
+begin
+  raise exception 'p4_mutated_stub' using errcode = 'P0001';
+end
+$$;
+select pg_temp.p4_assert(
+  exists (
+    select 1 from pg_temp.p4_stepup_uncovered() uncovered
+    where uncovered = 'public.update_identity_provider_settings(text,boolean,jsonb,jsonb,text)'),
+  'the §6 coverage check must detect a redeclaration that drops the step-up call');
+rollback to savepoint mutation_stepup;
+select pg_temp.p4_assert(
+  not exists (select 1 from pg_temp.p4_stepup_uncovered()),
+  'rolling the mutation back must restore full §6 coverage');
+
+-- Every path behaviourally: missing AMR, stale (10 minutes old), future (10 minutes
+-- ahead -- beyond the +30s skew ceiling), then fresh succeeds.
 
 -- --- execute_payment_request (payer) ---
 select pg_temp.p4_claims('27000000-0000-0000-0000-000000000005', null);
