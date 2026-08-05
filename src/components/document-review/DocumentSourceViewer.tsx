@@ -1,12 +1,18 @@
+import { lazy, Suspense } from 'react';
 import { ExternalLink, FileText, MousePointer2 } from 'lucide-react';
 import type { ExtractionContract } from '../../lib/types';
 import { Note } from '../ui';
+import { bboxToPageRect, type PageRotation } from './bboxGeometry';
 import {
   MARK_KIND_LABELS,
   bboxDescription,
   confidenceLabel,
   type ReviewTarget,
 } from './model';
+
+// Lazy on purpose: pdf.js is ~1MB of rendering engine that image documents never need. The
+// import happens only when a PDF actually reaches the viewer, and lands in its own chunk.
+const PdfSourceView = lazy(() => import('./PdfSourceView'));
 
 interface DocumentSourceViewerProps {
   fileName: string;
@@ -34,16 +40,21 @@ const targetKey = (target: ReviewTarget | null) => target
   ? `${target.kind}:${target.id}:${target.kind === 'table_cell' ? `${target.rowIndex}:${target.columnIndex}` : ''}`
   : '';
 
+/** Percentage string without binary-float noise: 1−0.8 is 0.19999999999999996, shown as "20%". */
+const pct = (fraction: number) => `${Number((fraction * 100).toFixed(4))}%`;
+
 function OverlayButton({
   target,
+  rotation,
   selected,
   onSelect,
 }: {
   target: Exclude<ReviewTarget, { kind: 'table_cell' }>;
+  rotation: PageRotation;
   selected: boolean;
   onSelect: (target: ReviewTarget, returnFocus: HTMLButtonElement) => void;
 }) {
-  const [xMin, yMin, xMax, yMax] = target.bbox;
+  const rect = bboxToPageRect(target.bbox, rotation);
   // No touch minimum on this box: it is sized in % from the bbox, so a min-h-11/min-w-11 would
   // inflate small marks past their own region and let neighbours overlap and steal each other's
   // clicks. These overlays are tabIndex={-1} pointer shortcuts — the 44px keyboard path is the
@@ -54,10 +65,17 @@ function OverlayButton({
       tabIndex={-1}
       className={`absolute border-2 ${selected ? 'border-action bg-action-wash/60' : 'border-info-line bg-info-wash/20'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus`}
       style={{
-        insetInlineStart: `${xMin * 100}%`,
-        insetBlockStart: `${yMin * 100}%`,
-        inlineSize: `${Math.max(0.01, xMax - xMin) * 100}%`,
-        blockSize: `${Math.max(0.01, yMax - yMin) * 100}%`,
+        // Physical `left` on purpose — the sanctioned exception to the logical-properties rule.
+        // bbox values are physical measurements of the source raster with a top-LEFT origin
+        // (validated as such by smart_document_bbox_valid, migration 0045:198), so they are
+        // direction-independent data, not layout. Under <html dir="rtl">, insetInlineStart
+        // resolves to `right` and mirrors every box horizontally across the page
+        // (01-ADVERSARIAL-REVIEW-FINDINGS.md §10). Layout stays logical; measurements stay
+        // physical. insetBlockStart is fine: the vertical axis does not flip with direction.
+        left: pct(rect.left),
+        insetBlockStart: pct(rect.top),
+        inlineSize: pct(Math.max(0.01, rect.width)),
+        blockSize: pct(Math.max(0.01, rect.height)),
       }}
       aria-label={`בחירת ${target.label}. ${bboxDescription(target.bbox)}`}
       aria-pressed={selected}
@@ -65,6 +83,51 @@ function OverlayButton({
     >
       <span className="sr-only">{target.label}</span>
     </button>
+  );
+}
+
+/**
+ * The pointer-shortcut layer: one absolutely-positioned box per block and mark of the current
+ * page, as a child of whatever box renders the page (image or PDF), so zoom and resize keep the
+ * boxes aligned for free. `rotation` is 0 for images — the raster on screen is the raster that
+ * was measured — and the rendered page's intrinsic /Rotate for PDFs.
+ */
+function OverlayShortcuts({
+  blocks,
+  marks,
+  rotation,
+  selected,
+  onSelectTarget,
+  resolveBlockText,
+}: {
+  blocks: ExtractionContract['blocks'];
+  marks: ExtractionContract['marks'];
+  rotation: PageRotation;
+  selected: string;
+  onSelectTarget: (target: ReviewTarget, returnFocus: HTMLButtonElement) => void;
+  resolveBlockText: DocumentSourceViewerProps['resolveBlockText'];
+}) {
+  return (
+    <div className="absolute inset-0" role="group" aria-label="קיצורי בחירה באמצעות מצביע">
+      {blocks.map((block) => {
+        const value = resolveBlockText(block);
+        const target: ReviewTarget = {
+          kind: 'block', id: block.id, page: block.page, text: block.text,
+          bbox: block.bbox, label: `קטע טקסט: ${value.text}`,
+        };
+        return <OverlayButton key={`block-${block.id}`} target={target} rotation={rotation} selected={selected === targetKey(target)} onSelect={onSelectTarget} />;
+      })}
+      {marks.map((mark) => {
+        const target: ReviewTarget = {
+          kind: 'mark', id: mark.id, page: mark.page, bbox: mark.bbox,
+          markKind: mark.kind, fingerprint: mark.fingerprint,
+          // Kind alone: every consumer of `label` pairs it with bboxDescription, which is what
+          // actually disambiguates two marks of the same kind. The uuid never read as anything.
+          label: MARK_KIND_LABELS[mark.kind],
+        };
+        return <OverlayButton key={`mark-${mark.id}`} target={target} rotation={rotation} selected={selected === targetKey(target)} onSelect={onSelectTarget} />;
+      })}
+    </div>
   );
 }
 
@@ -108,29 +171,38 @@ export function DocumentSourceViewer({
         {sourceUrl && isImage ? (
           <div className="relative mx-auto w-full max-w-4xl bg-surface-sunken">
             <img className="block h-auto w-full" src={sourceUrl} alt={`המסמך המקורי ${fileName}`} />
-            <div className="absolute inset-0" role="group" aria-label="קיצורי בחירה באמצעות מצביע">
-              {blocks.map((block) => {
-                const value = resolveBlockText(block);
-                const target: ReviewTarget = {
-                  kind: 'block', id: block.id, page: block.page, text: block.text,
-                  bbox: block.bbox, label: `קטע טקסט: ${value.text}`,
-                };
-                return <OverlayButton key={`block-${block.id}`} target={target} selected={selected === targetKey(target)} onSelect={onSelectTarget} />;
-              })}
-              {marks.map((mark) => {
-                const target: ReviewTarget = {
-                  kind: 'mark', id: mark.id, page: mark.page, bbox: mark.bbox,
-                  markKind: mark.kind, fingerprint: mark.fingerprint,
-                  // Kind alone: every consumer of `label` pairs it with bboxDescription, which is what
-                  // actually disambiguates two marks of the same kind. The uuid never read as anything.
-                  label: MARK_KIND_LABELS[mark.kind],
-                };
-                return <OverlayButton key={`mark-${mark.id}`} target={target} selected={selected === targetKey(target)} onSelect={onSelectTarget} />;
-              })}
-            </div>
+            <OverlayShortcuts
+              blocks={blocks}
+              marks={marks}
+              rotation={0}
+              selected={selected}
+              onSelectTarget={onSelectTarget}
+              resolveBlockText={resolveBlockText}
+            />
           </div>
         ) : sourceUrl && isPdf ? (
-          <iframe className="h-[32rem] w-full" src={sourceUrl} title={`המסמך המקורי ${fileName}`} />
+          <Suspense
+            fallback={
+              <div className="flex min-h-64 items-center justify-center p-6 text-sm text-ink-muted" role="status">
+                טוען את קובץ ה־PDF…
+              </div>
+            }
+          >
+            <PdfSourceView
+              sourceUrl={sourceUrl}
+              page={page}
+              renderOverlay={(rotation) => (
+                <OverlayShortcuts
+                  blocks={blocks}
+                  marks={marks}
+                  rotation={rotation}
+                  selected={selected}
+                  onSelectTarget={onSelectTarget}
+                  resolveBlockText={resolveBlockText}
+                />
+              )}
+            />
+          </Suspense>
         ) : (
           <div className="flex min-h-64 flex-col items-center justify-center gap-3 p-6 text-center text-ink-muted">
             <FileText size={36} aria-hidden="true" />
