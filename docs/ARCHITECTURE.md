@@ -79,7 +79,7 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 | `/exceptions` | חריגים | `owner`, `office`, `kitchen`, `accountant` |
 | `/alerts` | מרכז התראות חי + סימון התראות פעמון כנקראו | `owner`, `office` |
 | `/expenses` | ריכוז הוצאות לפי ספק + פירוט קטגוריות משני | `owner`, `accountant` |
-| `/reports` | דוח חודשי + ייצוא | `owner`, `accountant` |
+| `/reports` | דוח חודשי חי + יצירה, גרסאות והורדה של דוחות סופיים נעולים | `owner`, `accountant` |
 | `/audit` | יומן ביקורת | `owner`, `accountant` |
 | `/settings` | משתמשים + הגדרות עסק | `owner` |
 | `/admin` | lifecycle של ארגונים | מפעיל פלטפורמה בלבד |
@@ -232,13 +232,18 @@ transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מ
 | זיכוי מחשבונית | `create_invoice_credit_request`, ‏`transition_credit_request` | UUID לקוח יציב, נעילת חשבונית לפני זיכוי, מעברי סטטוס שרתיים ורענון יתרה באותה עסקה |
 | מחיר מנהל/ידני | `set_supplier_product_price`, ‏`import_supplier_prices` | נעילת `supplier_products`; מחיר נוכחי ו־`price_history` נכתבים יחד; batch legacy הוא `owner`/`office` בלבד |
 | הגשת מחירון ספק | `submit-price-list` → `submit_supplier_price_list` | Edge נועל ומאמת את גרסת אובייקט ה־Storage, גוזר hash ושורות מהבייטים; נעילת ספק מסדרת revision; ‏checksum חודשי מחזיר אותה קבלה; intake, מחיר, היסטוריה, קבלה ו־audit נסגרים באותה עסקת DB |
-| חודש לרו״ח | `mark_month_export_sent` | נעילת ארגון/export/חשבוניות ו־snapshot ממוין של `invoice_ids` |
+| חודש לרו״ח | `mark_month_export_sent`, ‏`create_monthly_report_snapshot` | הסימון הישן נועל רשימת `invoice_ids`; ‏`0054` יוצרת בנוסף snapshot סופי קנוני של חשבוניות מאושרות, תשלומים, זיכויים, חריגים ובנק בנקודת DB אחת, עם גרסה, SHA-256 ו־audit אטומי |
 | אישור טיוטת הזמנה | `finalize_purchase_request_draft` | נעילת טיוטה, פריטים ומחירים בסדר קבוע; שינוי מחיר מחזיר `draft_price_changed` |
 | מעבר סטטוס הזמנה | `transition_purchase_order_status` | נעילת הזמנה דיירית; allowlist מעברים; חותמות זמן ו־audit מנומק נכתבים אטומית; retry זהה אידמפוטנטי |
 
 שובר השוויון בהמלצת מחיר הוא `(current_price, supplier_id)` הן ב־`save_purchase_request_draft`
 והן בדפדפן. בחירה ידנית של משתמש נשמרת, אבל המחיר והזמינות שלה נבדקים שוב תחת נעילה.
 `purchase_order_items.unit_price` נשאר snapshot ואינו משתנה לאחר יצירת ההזמנה.
+
+`monthly_report_snapshots` הוא מקור הסמכות לדוח הסופי לרו״ח. כל גרסה שומרת metadata, ‏totals
+ושורות מפורטות כ־JSONB מובנה; RLS מאפשר קריאה ויצירה רק ל־`owner`/`accountant`, ו־trigger יחד
+עם הסרת DML ישיר חוסמים update/delete. הדוח הסופי כולל תמיד חשבוניות מאושרות בלבד, ללא תלות
+בתפקיד שיצר אותו, וה־XLSX נבנה מן ה־snapshot השמור. `/reports` החי נשאר best-effort ונפרד.
 
 ### חוזה הגשת מחירון P1B
 
