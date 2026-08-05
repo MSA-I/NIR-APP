@@ -153,6 +153,10 @@ export function validateQaRunId(value: string): string {
   return value;
 }
 
+export function canonicalQaStatePath(repoRoot: string): string {
+  return path.join(path.resolve(repoRoot), QA_STATE_RELATIVE_PATH);
+}
+
 function ensureLoopbackBaseUrl(value: string): string {
   const parsed = new URL(value);
   const port = Number(parsed.port);
@@ -304,6 +308,9 @@ export async function readQaRunState(statePath: string): Promise<QaRunState> {
 }
 
 export async function writeQaRunState(state: QaRunState): Promise<void> {
+  if (path.resolve(state.statePath) !== canonicalQaStatePath(state.repoRoot)) {
+    throw new SetupStepError('invalid_state_path', 'QA statePath must be repo/.qa-state/current.json.');
+  }
   const stateDirectory = path.dirname(state.statePath);
   await mkdir(stateDirectory, { recursive: true });
   const temporaryPath = path.join(stateDirectory, `.${state.runId}.tmp`);
@@ -691,7 +698,7 @@ export async function setupQaRun(options: SetupOptions = {}): Promise<SetupResul
   const baseUrl = ensureLoopbackBaseUrl(options.baseUrl ?? QA_BASE_URL);
   const runId = validateQaRunId(options.runId ?? createRunId());
   const environment = buildEnvironment(baseUrl);
-  const statePath = path.join(repoRoot, QA_STATE_RELATIVE_PATH);
+  const statePath = canonicalQaStatePath(repoRoot);
   const artifactRoot = path.join(repoRoot, QA_ARTIFACTS_RELATIVE_ROOT, runId);
   const authRoot = path.join(repoRoot, QA_AUTH_RELATIVE_ROOT, runId);
   const fixtureRoot = path.join(artifactRoot, 'fixtures');

@@ -3,6 +3,15 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { QA_WINDOWS_MUTEX_NAME } from '../../runner/lock.ts';
+import { canonicalQaStatePath } from '../../runner/setup.ts';
+
+test('QA state has one canonical repository path', () => {
+  const repoRoot = path.join(process.cwd(), 'nested', '..');
+  assert.equal(
+    canonicalQaStatePath(repoRoot),
+    path.join(path.resolve(repoRoot), '.qa-state', 'current.json'),
+  );
+});
 
 test('destructive PowerShell gates use the same abandoned-safe mutex as QA', async () => {
   const scripts = await Promise.all([

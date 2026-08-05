@@ -17,7 +17,7 @@ import {
 import {
   QA_ARTIFACTS_RELATIVE_ROOT,
   QA_AUTH_RELATIVE_ROOT,
-  QA_STATE_RELATIVE_PATH,
+  canonicalQaStatePath,
   readQaRunState,
   writeQaRunState,
   type QaRunState,
@@ -89,6 +89,27 @@ async function exists(target: string): Promise<boolean> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
     throw error;
+  }
+}
+
+async function artifactExists(target?: string): Promise<boolean> {
+  if (!target) return false;
+  try {
+    return await exists(target);
+  } catch {
+    return false;
+  }
+}
+
+async function managedArtifactExists(state: QaRunState, repoRoot: string): Promise<boolean> {
+  try {
+    return artifactExists(assertExactDescendant(
+      state.artifactRoot,
+      path.join(repoRoot, QA_ARTIFACTS_RELATIVE_ROOT),
+      state.runId,
+    ));
+  } catch {
+    return false;
   }
 }
 
@@ -171,6 +192,9 @@ function validateStatePaths(state: QaRunState, repoRoot: string, actualStatePath
   artifactRoot: string;
   credentialsManifest: string;
 } {
+  if (path.resolve(actualStatePath) !== canonicalQaStatePath(repoRoot)) {
+    throw new CleanupError('state_path_mismatch', 'Cleanup accepts only repo/.qa-state/current.json.');
+  }
   if (path.resolve(state.repoRoot) !== path.resolve(repoRoot)) {
     throw new CleanupError('state_repo_mismatch', 'QA state belongs to a different repository root.');
   }
@@ -214,10 +238,22 @@ function safeFailure(error: unknown): { code: string; reason: string } {
 
 export async function cleanupQaRun(options: CleanupOptions = {}): Promise<CleanupResult> {
   const repoRoot = path.resolve(options.repoRoot ?? process.cwd());
-  const statePath = path.resolve(options.statePath ?? path.join(repoRoot, QA_STATE_RELATIVE_PATH));
+  const statePath = canonicalQaStatePath(repoRoot);
   const keepArtifacts = options.keepArtifacts ?? false;
   const removed: string[] = [];
   let state: QaRunState;
+
+  if (options.statePath && path.resolve(options.statePath) !== statePath) {
+    return {
+      status: 'BLOCKED',
+      statePath,
+      code: 'state_path_mismatch',
+      reason: 'Cleanup accepts only repo/.qa-state/current.json.',
+      resetPerformed: false,
+      artifactsPreserved: false,
+      removed,
+    };
+  }
 
   try {
     await assertIsolatedLocalTarget(repoRoot, LOCAL_QA_API_URL);
@@ -229,7 +265,7 @@ export async function cleanupQaRun(options: CleanupOptions = {}): Promise<Cleanu
       statePath,
       ...failure,
       resetPerformed: false,
-      artifactsPreserved: keepArtifacts,
+      artifactsPreserved: false,
       removed,
     };
   }
@@ -245,7 +281,7 @@ export async function cleanupQaRun(options: CleanupOptions = {}): Promise<Cleanu
       statePath,
       ...failure,
       resetPerformed: false,
-      artifactsPreserved: true,
+      artifactsPreserved: await managedArtifactExists(state, repoRoot),
       removed,
     };
   }
@@ -261,7 +297,7 @@ export async function cleanupQaRun(options: CleanupOptions = {}): Promise<Cleanu
       code: 'process_inspection_failed',
       reason: 'Cleanup could not prove that the isolated stack is free of competing processes.',
       resetPerformed: false,
-      artifactsPreserved: true,
+      artifactsPreserved: await artifactExists(paths.artifactRoot),
       removed,
     };
   }
@@ -273,7 +309,7 @@ export async function cleanupQaRun(options: CleanupOptions = {}): Promise<Cleanu
       code: lockResult.code,
       reason: lockResult.message,
       resetPerformed: false,
-      artifactsPreserved: true,
+      artifactsPreserved: await artifactExists(paths.artifactRoot),
       removed,
     };
   }
@@ -324,7 +360,7 @@ export async function cleanupQaRun(options: CleanupOptions = {}): Promise<Cleanu
       runId: state.runId,
       statePath,
       resetPerformed: true,
-      artifactsPreserved: keepArtifacts,
+      artifactsPreserved: await artifactExists(paths.artifactRoot),
       removed,
     };
   } catch (error) {
@@ -344,7 +380,7 @@ export async function cleanupQaRun(options: CleanupOptions = {}): Promise<Cleanu
       statePath,
       ...failure,
       resetPerformed,
-      artifactsPreserved: true,
+      artifactsPreserved: await artifactExists(paths.artifactRoot),
       removed,
     };
   }
