@@ -68,7 +68,7 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 | `/orders/new` | הזמנה מרוכזת ← השוואת ספקים ← פיצול | `owner`, `office`, `kitchen` |
 | `/orders`, `/orders/:id` | הזמנות + תצוגת הדפסה | קוראים |
 | `/receiving`, `/receiving/:orderId` | קבלת סחורה (מובייל) | `owner`, `office`, `kitchen` |
-| `/invoices`, `/invoices/new`, `/invoices/:id` | חשבוניות + בדיקות אוטומטיות | קוראים / כותבים |
+| `/invoices`, `/invoices/new`, `/invoices/:id` | חשבוניות + בדיקות אוטומטיות; יצירה מקושרת מציגה מראש הקשר הזמנה/קבלה אנושי שנקרא תחת RLS ושולחת ל־`create_invoice` רק מזהים שנפתרו ואומתו | קוראים / כותבים |
 | `/documents` | גלריית מסמכים + סינון + שיוך לחשבונית/קבלת סחורה | `owner`, `office`, `kitchen`; ל־`accountant` מסמכי חשבונית מאושרת/תשלום בלבד |
 | `/inbox` | הפניה ל־`/documents?filing=unfiled` | משתמשים מורשים |
 | `/credits` | זיכויים | קוראים |
