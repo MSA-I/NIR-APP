@@ -498,8 +498,8 @@ describe('per-step browser mutation protocol', () => {
     role: 'owner' as const,
     step: 'approve-payment-request',
     refs: [ref('payment_request')],
-    entries: [entry('/rest/v1/rpc/transition_payment_request', {
-      status: 'approved', idempotent: false,
+    entries: [entry('/rest/v1/rpc/approve_payment_request_with_credit_override', {
+      status: 'approved', open_credit_override: true, idempotent: false,
     }, [ref('payment_request')])],
   }, {
     role: 'payer' as const,

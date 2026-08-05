@@ -204,6 +204,8 @@ export interface PaymentRequest {
   id: string; org_id: string; number: number; supplier_id: string; amount: number;
   due_date: string | null; status: PaymentRequestStatus; notes: string | null;
   created_by: string | null; approved_by: string | null; approved_at: string | null;
+  open_credit_override_total: number | null; open_credit_override_reason: string | null;
+  open_credit_override_at: string | null;
   executor_notes: string | null; created_at: string;
   supplier?: Supplier;
 }

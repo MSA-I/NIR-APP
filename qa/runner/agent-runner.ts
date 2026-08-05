@@ -147,7 +147,7 @@ const ALLOWED_MUTATION_PATHS: Readonly<Record<QaRole, readonly RegExp[]>> = {
     /^\/rest\/v1\/documents$/,
     /^\/storage\/v1\/object\/documents(?:\/|$)/,
   ],
-  owner: [/^\/rest\/v1\/rpc\/transition_payment_request$/],
+  owner: [/^\/rest\/v1\/rpc\/(?:transition_payment_request|approve_payment_request_with_credit_override)$/],
   payer: [/^\/rest\/v1\/rpc\/execute_payment_request$/],
   accountant: [
     /^\/rest\/v1\/rpc\/(?:import_bank_transactions|match_bank_transaction|mark_month_export_sent)$/,
@@ -304,13 +304,14 @@ const STEP_MUTATION_CONTRACTS: Readonly<Record<string, MutationStepContract>> = 
   },
   'approve-payment-request': {
     role: 'owner',
-    allowedRequests: [post(/^\/rest\/v1\/rpc\/transition_payment_request$/)],
-    requiredRequests: [post(/^\/rest\/v1\/rpc\/transition_payment_request$/)],
-    responsePath: /^\/rest\/v1\/rpc\/transition_payment_request$/,
+    allowedRequests: [post(/^\/rest\/v1\/rpc\/approve_payment_request_with_credit_override$/)],
+    requiredRequests: [post(/^\/rest\/v1\/rpc\/approve_payment_request_with_credit_override$/)],
+    responsePath: /^\/rest\/v1\/rpc\/approve_payment_request_with_credit_override$/,
     requiredEntityKinds: ['payment_request'],
     allowedEntityKinds: ['payment_request'],
     responseFacts: [
       { key: 'status', expected: 'approved' },
+      { key: 'open_credit_override', expected: true },
       { key: 'idempotent', expected: false },
     ],
   },
