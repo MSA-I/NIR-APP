@@ -34,7 +34,10 @@
 `invoice.review_required` · `invoice.approved` · `credit.created` · `payment_request.created` ·
 `payment_request.approved` · `payment.executed` · `bank_transaction.imported` ·
 `reconciliation.completed` · `document.uploaded` · `document.processing_completed` ·
-`document.processing_failed` · `user.access_changed`.
+`document.processing_failed` · `user.access_changed` · `month_export.sent` ·
+`supplier.bank_details_changed` (שני האחרונים — הרחבת גל 5 מטבלת הגזירה; המיפוי המלא
+‏action→event נזרע ב-`private.domain_event_map`, ‏`0063`, והכרעות שמות ללא מקבילה חיה מדויקת
+מתועדות ב-OPEN-DECISIONS ‏#94).
 
 ### 2.1 אטומיות — ההכרעה
 
@@ -51,6 +54,12 @@
 טריגר גנרי נשאר מתאים ל-`audit_logs` (מה השתנה), ולא לאירועי דומיין (מה קרה עסקית). **שתי שכבות, שתי
 שאלות.**
 
+> **מומש בגל 5 (‏ADR-0009, מיגרציה `0063`):** הכלל קדימה בעינו — פקודה חדשה פולטת inline.
+> ה-**retrofit** ל-71 הפקודות הקיימות מומש כ-fan-out מ-`audit_logs` דרך
+> ‏`private.domain_event_map` (allowlist; ‏action לא ממופה ⇒ אפס אירועים), משום ששמונה גופי
+> פקודה חיים קיימים רק ב-pg_proc (הזרקות `0031`/`0061`) ואסור לגעת בהם. שורת ה-audit נושאת
+> את הכוונה — ולכן הטריגר על audit_logs אינו "טריגר על טבלה עסקית" שסעיף זה פוסל.
+
 ## 3. עובד ה-outbox
 
 Edge Function ייעודית, מופעלת ב-`pg_cron` דרך `pg_net`, עם: ניסיונות חוזרים · השהיה מעריכה · מסירה
@@ -59,9 +68,11 @@ Edge Function ייעודית, מופעלת ב-`pg_cron` דרך `pg_net`, עם: �
 **עסקאות עסקיות אינן נצמדות לשירותים חיצוניים** — הפקודה כותבת ל-outbox ומסתיימת; המסירה היא צעד
 נפרד שיכול להיכשל בלי להחזיר את הכסף אחורה.
 
-⚠️ **הוספת Edge Function שוברת את השער בשלושה מקומות מקודדים** — מפת `$functionJwt`
-(`check-quality-gates.ps1:630-642`), הקודים `400/401/401` ב-`Wait-LocalEdgeReady` (`:404`), ורשימת
-24 הנתיבים ב-`Assert-OcrPrerequisites` (`:599-624`). זה חלק מהמשימה, לא הפתעה.
+⚠️ **הוספת Edge Function נבחנת מול שלושה מקומות מקודדים בשער** — מפת `$functionJwt`
+(`check-quality-gates.ps1:696-709`), הקודים `400/401/401` ב-`Wait-LocalEdgeReady` (`:441`), ורשימת
+24 הנתיבים ב-`Assert-OcrPrerequisites` (`:665-689`). פונקציה cron-ית (תקדים `send-push`, וכמוה
+`outbox-worker` של גל 5) נכנסת **רק** למפת `$functionJwt` — לא ל-`Wait-LocalEdgeReady` ולא
+לרשימת ה-OCR.
 
 ---
 
