@@ -38,10 +38,11 @@ select pg_temp.snapshot_assert(
     and not has_table_privilege('authenticated', 'public.monthly_report_snapshots', 'INSERT')
     and not has_table_privilege('authenticated', 'public.monthly_report_snapshots', 'UPDATE')
     and not has_table_privilege('authenticated', 'public.monthly_report_snapshots', 'DELETE')
-    and not has_table_privilege('service_role', 'public.monthly_report_snapshots', 'INSERT')
-    and not has_table_privilege('service_role', 'public.monthly_report_snapshots', 'UPDATE')
-    and not has_table_privilege('service_role', 'public.monthly_report_snapshots', 'DELETE'),
-  'snapshot writes are not fully command-only'
+    and has_table_privilege('service_role', 'public.monthly_report_snapshots', 'SELECT')
+    and has_table_privilege('service_role', 'public.monthly_report_snapshots', 'INSERT')
+    and has_table_privilege('service_role', 'public.monthly_report_snapshots', 'UPDATE')
+    and has_table_privilege('service_role', 'public.monthly_report_snapshots', 'DELETE'),
+  'snapshot ACL diverges from authenticated command-only writes or trusted-server CRUD'
 );
 
 insert into public.organizations (id, name, status) values

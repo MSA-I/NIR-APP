@@ -45,7 +45,8 @@ create policy monthly_report_snapshots_select
   );
 
 revoke all on table public.monthly_report_snapshots from public, anon, authenticated, service_role;
-grant select on table public.monthly_report_snapshots to authenticated, service_role;
+grant select on table public.monthly_report_snapshots to authenticated;
+grant select, insert, update, delete on table public.monthly_report_snapshots to service_role;
 
 create or replace function public.reject_monthly_report_snapshot_mutation()
 returns trigger
