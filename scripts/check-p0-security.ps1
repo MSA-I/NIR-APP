@@ -640,11 +640,22 @@ try {
   $response = Invoke-Rest -Method Post -Resource "rpc/resend_invitation" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{ p_id = $invitationId }
   Assert-Blocked $response "invitation resend cooldown enforced"
   Assert-True ($response.Content -match "invite_cooldown") "invitation cooldown exposes a stable error code"
-  $response = Invoke-Rest -Method Post -Resource "rpc/revoke_invitation" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{ p_id = $invitationId; p_reason = "P0 invitation revocation" }
+  # The revocation doubles as the end-to-end correlation proof (0062): the reasoned command
+  # is called over HTTP with an x-correlation-id header, and the id must land on its audit
+  # row through the column DEFAULT alone -- no RPC signature carries it.
+  $correlationId = New-Id
+  $correlationHeaders = New-Headers $anonKey $accounts.ownerA.Token
+  $correlationHeaders["x-correlation-id"] = $correlationId
+  $response = Invoke-JsonRequest -Method Post -Uri "$apiUrl/rest/v1/rpc/revoke_invitation" -Headers $correlationHeaders -Body @{ p_id = $invitationId; p_reason = "P0 invitation revocation" }
   Assert-Status $response @(204) "invitation revoked with reason"
   $inviteAudit = Get-Rows "audit_logs?action=eq.invitation_revoked&entity_id=eq.$invitationId&select=user_id,reason&limit=1" $accounts.ownerA $anonKey "invitation audit read"
   Assert-Count $inviteAudit 1 "invitation revocation is audited"
   Assert-True ($inviteAudit[0].user_id -eq $accounts.ownerA.Id -and [bool]$inviteAudit[0].reason) "invitation audit records actor and reason"
+  $response = Invoke-Rest -Method Get -Resource "audit_logs?action=eq.invitation_revoked&entity_id=eq.$invitationId&select=correlation_id&limit=1" -ApiKey $serviceKey -Token $serviceKey
+  Assert-Status $response @(200) "trusted correlation audit verification"
+  $correlationAudit = @($response.Json)
+  Assert-Count $correlationAudit 1 "correlation audit row read back"
+  Assert-True ([string]$correlationAudit[0].correlation_id -eq $correlationId) "x-correlation-id header lands on the reasoned-command audit row"
 
   # Composite tenant constraints are tested through service-role PostgREST, which bypasses
   # RLS but not database integrity. Every request below is otherwise structurally valid.

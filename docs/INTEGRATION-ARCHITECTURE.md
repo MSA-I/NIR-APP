@@ -88,24 +88,33 @@ entity_type, internal_id, external_id)`. זה הגבול. אין עמודות `o
 
 ## 5. מזהה קורלציה
 
-**היום אינו קיים כלל** — לא נוצר, לא נשלח בכותרות, לא מועבר ל-RPC, לא נרשם. `src/lib/supabase.ts`
-הוא 10 שורות בלי שום `global.headers`.
+**מומש בגל 4b (מיגרציה `0062`):** הלקוח מייצר מזהה **פר-בקשה** (`crypto.randomUUID()` בעטיפת
+ה-`fetch` של `src/lib/supabase.ts`, בקשות `/rest/v1` **בלבד** — auth/storage/functions אינם
+מקבלים את הכותרת, כדי שההתנהגות המקומית מול Kong תהיה זהה להתנהגות בענן, שבו ה-preflight של
+פונקציות נענה מרשימות Allow-Headers סגורות) → נשלח כ-`x-correlation-id` → נקלט ב-Postgres דרך
+`current_setting('request.headers', true)` → נרשם ל-`audit_logs.correlation_id` באמצעות **DEFAULT
+עמודתי** (`public.request_correlation_id()`). קיבוץ מפורש של פעולה מרובת-בקשות: ‏
+`withCorrelationId(id, fn)` (‏OPEN-DECISIONS ‏#89). כותרת פגומה **לעולם אינה מפילה כתיבה** —
+ה-helper הוא fail-to-NULL.
 
-**המסלול:** הלקוח מייצר מזהה לכל פעולת משתמש → נשלח כ-header גלובלי → **מועבר גם כארגומנט מפורש
-לפקודות ה-RPC** → נכתב ל-`audit_logs` ול-`domain_events` → מועבר ל-Edge Functions ולעובד ה-OCR →
-נקשר ל-Sentry.
+**המסלול הוא header/GUC, לא ארגומנט RPC.** גרסה קודמת של הסעיף הציעה "מועבר גם כארגומנט מפורש
+לפקודות ה-RPC" — ההצעה צומצמה: ארגומנט היה דורש שינוי 28+ חתימות, וה-header משיג את אותה תוצאה
+בלי לגעת באף אחת מהן. ‏`domain_events` (גל 5), ‏Edge Functions, עובד ה-OCR ו-Sentry הם המשך עתידי
+של אותו מסלול — הכותרת כבר מותרת ב-CORS של ארבע הפונקציות כהכנה.
 
 ✅ **הכותרת כן מגיעה ל-Postgres.** ‏PostgREST חושף כל כותרת בקשה דרך
 `current_setting('request.headers', true)::json`, קריא בתוך פונקציית `SECURITY DEFINER`. לכן
-`emit_domain_event()` יכול לקרוא `->>'x-correlation-id'` **בלי לשנות אף חתימת RPC** — מה שמוזיל
-מהותית את הוספת האירועים ל-28 הפקודות. בנוסף `set_config('app.correlation_id', …, true)` כדי
-שטריגרים יראו אותו.
+`emit_domain_event()` העתידי יוכל לקרוא את המזהה **בלי לשנות אף חתימת RPC**. ‏GUC מפורש —
+`set_config('app.correlation_id', <uuid>, true)` — **גובר על הכותרת** ומשמש שרת מהימן לטביעת
+מזהה שורש (למשל בגוף job של ‏cron; ‏`cron.schedule` הוא upsert לפי שם — `0028:1032` — כך
+שהוספת הטבעה מתכנסת בלי לשכפל תזמונים).
 
-⚠️ **שתי מגבלות אמיתיות:**
-1. **‏`global.headers` נקבע פעם אחת ב-`createClient`** (`src/lib/supabase.ts:10`), ולכן ערך סטטי אינו
-   יכול לשאת מזהה **פר-פעולה**. נדרשת עטיפת `global.fetch` שמזריקה את הכותרת לכל בקשה.
-2. **המסלול אינו מכסה** Realtime, חיבורי DB ישירים ו-`pg_cron`→`pg_net`→Edge. עבודה שמקורה ב-cron
-   מנפיקה **מזהה שורש** ומשרשרת אליו דרך `causation_id`.
+⚠️ **מגבלות אמיתיות:**
+1. **המסלול אינו מכסה** Realtime, חיבורי DB ישירים ו-`pg_cron`→`pg_net`→Edge. עבודה שמקורה
+   ב-cron מנפיקה **מזהה שורש** דרך ה-GUC ומשרשרת אליו דרך `causation_id` (גל 5).
+2. **התנגשות עתידית — ‏`traceparent`:** ‏supabase-js ‏2.110 (המותקן) כולל תמיכת W3C trace
+   propagation, כבויה כברירת מחדל. אם תופעל אי-פעם, שני מנגנוני מעקב ירוצו זה לצד זה — נקודת
+   ההחלטה תהיה איחוד על traceparent או השארת `x-correlation-id` כמזהה העסקי הצר.
 
 **העמדה הפרטית הקיימת נשמרת ללא שינוי:** `tracesSampleRate: 0`, ללא session replay, ו-`beforeBreadcrumb`
 ממשיך למחוק כל breadcrumb של console — כי `toHebrewError` מדפיס הודעת שרת גולמית שעלולה לנקוב בשם ספק
