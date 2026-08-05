@@ -1,5 +1,10 @@
 import type { Route } from '@playwright/test';
 import { test, expect } from '../browser/fixture.ts';
+import {
+  QA_FOREIGN_ORDER_ID,
+  QA_FOREIGN_RECEIPT_ID,
+  QA_FOREIGN_SUPPLIER_NAME,
+} from '../fixtures/cross-tenant-invoice-context.ts';
 import { loadReadyQaState } from '../runner/runtime-state.ts';
 
 const ORDER_ID = 'f0000000-0000-4000-8000-000000000001';
@@ -17,6 +22,9 @@ test('linked order, receipt, supplier and receiving date are visible at 390px', 
   await expect(context.getByTestId('invoice-linked-order')).toHaveText('הזמנה #1');
   await expect(context.getByTestId('invoice-linked-order')).toHaveAttribute('href', `/orders/${ORDER_ID}`);
   await expect(context.getByTestId('invoice-linked-receipt')).toHaveText('קבלה #1');
+  await expect(context.getByTestId('invoice-linked-receipt')).toHaveAttribute('href', `/receiving/${ORDER_ID}`);
+  await expect(context.getByTestId('invoice-linked-receipt')).toHaveAccessibleName('קבלה #1 — פתיחת מסך קבלת סחורה להזמנה; המסך מאפשר עדכון קבלה');
+  await expect(context).toContainText('המסך מאפשר עדכון קבלה');
   await expect(context.getByTestId('invoice-linked-supplier')).toHaveText(SUPPLIER_NAME);
   await expect(context).toContainText('02.06.2026');
   await expect(context).toContainText('התקבלה');
@@ -77,7 +85,7 @@ test('malformed, inaccessible and mismatched identifiers reveal no record and fa
   test.skip(qaRole !== 'office', 'The non-disclosure state is role-independent and is exercised once.');
   const cases = [
     '/invoices/new?order=not-a-uuid&receipt=also-not-a-uuid',
-    '/invoices/new?order=90000000-0000-4000-8000-000000000099&receipt=92000000-0000-4000-8000-000000000099',
+    `/invoices/new?order=${QA_FOREIGN_ORDER_ID}&receipt=${QA_FOREIGN_RECEIPT_ID}`,
     `/invoices/new?order=${ORDER_ID}&receipt=f2000000-0000-4000-8000-000000000002`,
   ];
   for (const route of cases) {
@@ -87,6 +95,9 @@ test('malformed, inaccessible and mismatched identifiers reveal no record and fa
     await expect(page.getByLabel('ספק *', { exact: true })).toBeEnabled();
     await expect(page.locator('#main')).not.toContainText(ORDER_ID);
     await expect(page.locator('#main')).not.toContainText(RECEIPT_ID);
+    await expect(page.locator('#main')).not.toContainText(QA_FOREIGN_ORDER_ID);
+    await expect(page.locator('#main')).not.toContainText(QA_FOREIGN_RECEIPT_ID);
+    await expect(page.locator('#main')).not.toContainText(QA_FOREIGN_SUPPLIER_NAME);
   }
-  evidence.record('linked-context-nondisclosure', 'malformed, unavailable and cross-order contexts share one unlinked fallback');
+  evidence.record('linked-context-nondisclosure', 'malformed, real cross-tenant and cross-order contexts share one non-disclosing unlinked fallback');
 });
