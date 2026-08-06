@@ -1,6 +1,11 @@
 import {
+  type ApplyDecision,
   applyInterpretationDecision,
   type DecisionRpcClient,
+  resumeExistingInterpretation,
+  type RpcBuilder,
+  type RpcResult,
+  saveAndDecideInterpretation,
   supplierInterpretationContextAllowed,
 } from "./index.ts";
 
@@ -172,24 +177,55 @@ Deno.test("supplier interpretation rejects a non-canonical storage path", () => 
 // did not happen. So the helper must resolve for EVERY outcome, including a client that throws.
 
 const INTERPRETATION = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const SECOND_INTERPRETATION = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
-function recordingClient(
-  outcome: () => { error: { message: string } | null },
-): { client: DecisionRpcClient; calls: Array<[string, Record<string, unknown>]> } {
+function stubBuilder(result: RpcResult, signals: AbortSignal[]): RpcBuilder {
+  const settled = Promise.resolve(result);
+  return Object.assign(settled, {
+    abortSignal(signal: AbortSignal) {
+      signals.push(signal);
+      return settled;
+    },
+  });
+}
+
+interface RecordedClient {
+  client: DecisionRpcClient;
+  calls: Array<[string, Record<string, unknown>]>;
+  signals: AbortSignal[];
+}
+
+function recordingClient(result: RpcResult): RecordedClient {
   const calls: Array<[string, Record<string, unknown>]> = [];
+  const signals: AbortSignal[] = [];
   return {
     calls,
+    signals,
     client: {
       rpc(fn: string, args: Record<string, unknown>) {
         calls.push([fn, args]);
-        return Promise.resolve(outcome());
+        return stubBuilder(result, signals);
       },
     },
   };
 }
 
-Deno.test("the decision is called by name with the saved interpretation and the actor", async () => {
-  const { client, calls } = recordingClient(() => ({ error: null }));
+function recordingApply(): { apply: ApplyDecision; calls: string[][] } {
+  const calls: string[][] = [];
+  return {
+    calls,
+    apply: (_admin, jobId, interpretationId, actorId) => {
+      calls.push([jobId, interpretationId, actorId]);
+      return Promise.resolve();
+    },
+  };
+}
+
+Deno.test("the decision is called by name, bounded, with the interpretation and the actor", async () => {
+  const { client, calls, signals } = recordingClient({
+    data: { outcome: "queued_for_review", reason_code: "autonomy_disabled" },
+    error: null,
+  });
   await applyInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
   if (calls.length !== 1) throw new Error("expected exactly one rpc call");
   const [name, args] = calls[0];
@@ -208,12 +244,45 @@ Deno.test("the decision is called by name with the saved interpretation and the 
   if (Object.keys(args).length !== 3) {
     throw new Error(`unexpected extra rpc arguments: ${JSON.stringify(args)}`);
   }
+  // service_role carries no statement_timeout and no lock_timeout, and 0077 takes `for update`
+  // on documents. An unbounded call here holds a 200 the tenant already paid for.
+  if (signals.length !== 1 || !(signals[0] instanceof AbortSignal)) {
+    throw new Error("the decision was issued without an abort signal");
+  }
+});
+
+Deno.test("a successful decision reports its verdict rather than passing in silence", async () => {
+  const { client } = recordingClient({
+    data: {
+      outcome: "auto_applied",
+      reason_code: null,
+      invoice_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      auto_action_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    },
+    error: null,
+  });
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (...parts: unknown[]) => lines.push(parts.map(String).join(" "));
+  try {
+    await applyInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
+  } finally {
+    console.log = original;
+  }
+  // A call that just authored an invoice with no human behind it must be findable in the log.
+  const reported = lines.join("\n");
+  if (
+    !reported.includes("auto_applied") ||
+    !reported.includes("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+  ) {
+    throw new Error(`the verdict was not reported: ${reported}`);
+  }
 });
 
 Deno.test("a refused decision resolves quietly and never unwinds into the failure path", async () => {
-  const { client } = recordingClient(() => ({
+  const { client } = recordingClient({
     error: { message: "autonomy_threshold_missing" },
-  }));
+  });
   // Resolving is the whole assertion: a throw here would reach the handler's catch, which calls
   // markFailed on a job whose interpretation is already stored.
   await applyInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
@@ -229,8 +298,142 @@ Deno.test("a client that throws outright still cannot lose the saved interpretat
 
   const rejecting: DecisionRpcClient = {
     rpc() {
-      return Promise.reject(new Error("aborted"));
+      return {
+        abortSignal: () => Promise.reject(new Error("aborted")),
+      } as unknown as RpcBuilder;
     },
   };
   await applyInterpretationDecision(rejecting, JOB, INTERPRETATION, ACTOR);
+});
+
+// ===== The wiring itself, not only the parts =====
+//
+// Every test above passes with the decision disconnected from the pipeline entirely. The handler
+// cannot be driven here -- it reads Deno.env before anything else and the gate runs `deno test`
+// with no permissions -- so the post-save step and the replay step are exported and pinned
+// directly. Deleting either call inside them fails here rather than shipping green.
+
+Deno.test("a saved interpretation is offered to the decision exactly once", async () => {
+  const { client } = recordingClient({ data: INTERPRETATION, error: null });
+  const { apply, calls } = recordingApply();
+  const persisted = await saveAndDecideInterpretation({
+    admin: client,
+    isSupplier: false,
+    jobId: JOB,
+    actorId: ACTOR,
+    args: { p_job_id: JOB },
+    findExisting: () => Promise.resolve(null),
+    apply,
+  });
+  if (persisted.interpretationId !== INTERPRETATION || persisted.idempotent) {
+    throw new Error(`unexpected persistence result: ${JSON.stringify(persisted)}`);
+  }
+  // The id passed on must be the one the save returned, not the job and not the request.
+  if (
+    calls.length !== 1 || calls[0][0] !== JOB ||
+    calls[0][1] !== INTERPRETATION || calls[0][2] !== ACTOR
+  ) {
+    throw new Error(`the decision was not offered the saved id: ${JSON.stringify(calls)}`);
+  }
+});
+
+Deno.test("a supplier price list is never offered to the decision", async () => {
+  const { client } = recordingClient({ data: INTERPRETATION, error: null });
+  const { apply, calls } = recordingApply();
+  await saveAndDecideInterpretation({
+    admin: client,
+    isSupplier: true,
+    jobId: JOB,
+    actorId: ACTOR,
+    args: { p_job_id: JOB },
+    findExisting: () => Promise.resolve(null),
+    apply,
+  });
+  if (calls.length !== 0) {
+    throw new Error("a supplier price list reached the decision layer");
+  }
+});
+
+Deno.test("an interpretation that failed to save is never offered to the decision", async () => {
+  const { client } = recordingClient({
+    data: null,
+    error: { message: "document_interpretation_conflict" },
+  });
+  const { apply, calls } = recordingApply();
+  let raised = false;
+  try {
+    await saveAndDecideInterpretation({
+      admin: client,
+      isSupplier: false,
+      jobId: JOB,
+      actorId: ACTOR,
+      args: { p_job_id: JOB },
+      findExisting: () => Promise.resolve(null),
+      apply,
+    });
+  } catch {
+    raised = true;
+  }
+  if (!raised) throw new Error("a save conflict should still fail the request");
+  if (calls.length !== 0) {
+    throw new Error("a decision was taken on an interpretation that was never saved");
+  }
+});
+
+Deno.test("a replay re-offers the decision, because nothing else ever will", async () => {
+  const { client } = recordingClient({ data: null, error: null });
+  const { apply, calls } = recordingApply();
+  const replayed = await resumeExistingInterpretation({
+    admin: client,
+    isSupplier: false,
+    jobId: JOB,
+    actorId: ACTOR,
+    context: {
+      already_interpreted: true,
+      interpretation_id: SECOND_INTERPRETATION,
+    },
+    apply,
+  });
+  if (replayed !== SECOND_INTERPRETATION) {
+    throw new Error(`the replay lost the interpretation id: ${replayed}`);
+  }
+  // A decision lost to a transient failure leaves nothing in the database and no product path
+  // that would come back for it. This call is the retry.
+  if (calls.length !== 1 || calls[0][1] !== SECOND_INTERPRETATION) {
+    throw new Error(`the replay did not re-offer the decision: ${JSON.stringify(calls)}`);
+  }
+});
+
+Deno.test("a replay of a supplier price list stays out of the decision layer", async () => {
+  const { client } = recordingClient({ data: null, error: null });
+  const { apply, calls } = recordingApply();
+  const replayed = await resumeExistingInterpretation({
+    admin: client,
+    isSupplier: true,
+    jobId: JOB,
+    actorId: ACTOR,
+    context: { already_interpreted: true, interpretation_id: INTERPRETATION },
+    apply,
+  });
+  if (replayed !== INTERPRETATION) throw new Error("the replay lost the id");
+  if (calls.length !== 0) {
+    throw new Error("a supplier replay reached the decision layer");
+  }
+});
+
+Deno.test("a first run is not a replay and decides nothing before the interpretation exists", async () => {
+  const { client } = recordingClient({ data: null, error: null });
+  const { apply, calls } = recordingApply();
+  const replayed = await resumeExistingInterpretation({
+    admin: client,
+    isSupplier: false,
+    jobId: JOB,
+    actorId: ACTOR,
+    context: { already_interpreted: false },
+    apply,
+  });
+  if (replayed !== null) throw new Error("a first run was mistaken for a replay");
+  if (calls.length !== 0) {
+    throw new Error("a decision was taken before any interpretation existed");
+  }
 });
