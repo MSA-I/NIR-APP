@@ -6,9 +6,16 @@
 // reaches the two panels a reviewer actually reads, that every one of them is still present inside
 // a disclosure that starts closed, and that the supplier — the one value carried into a payee
 // field — says out loud what a middling grade obliges.
+//
+// Who this screen is for, since it is the reason the numbers left it: `document_interpretations`
+// is readable by owner/office/kitchen (`document_interpretations_select`, migration 0046), and a
+// supplier account reaches it read-only for price documents it owns
+// (`supplier_price_document_interpretations_select`, `0048_ocr_price_submission_bridge.sql:516`).
+// Not one of those is an engineer. The source viewer is not an expert surface.
 
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import type { ReviewSnapshot } from './model';
 
@@ -111,6 +118,16 @@ const renderWorkspace = (supplierConfidence: number | null) => render(
 
 const technicalDetails = () => screen.getByText('פרטים טכניים').closest('details') as HTMLDetailsElement;
 
+/**
+ * Open it the way a reviewer does. The contents do not exist until then — the rows are one per
+ * block and mark across the whole document, so they are built on demand rather than rendered and
+ * re-diffed behind a shut disclosure on every workspace interaction.
+ */
+async function openTechnicalDetails() {
+  await userEvent.click(screen.getByText('פרטים טכניים'));
+  return technicalDetails();
+}
+
 describe('confidence leaves the review screens and stays inside the disclosure', () => {
   it('prints no percentage in the two panels a reviewer reads', () => {
     renderWorkspace(0.62);
@@ -132,8 +149,16 @@ describe('confidence leaves the review screens and stays inside the disclosure',
     // the reviewer can check against the document in front of them — and it is the sole thing
     // telling two identical marks apart, and the locator screen readers get. A confidence score is
     // a claim they cannot check against anything, which is why that one moved.
+    //
+    // Split on the separator before matching. The grade and the location share one <span>
+    // (DocumentSourceViewer.tsx:250,279), so testing the element's whole textContent would let any
+    // new percentage hide behind the "מיקום בעמוד" already in it — verified: an injected
+    // "התאמה 42%" left this suite green until the assertion was made per segment.
     for (const node of within(screen.getByTestId('document-annotations-keyboard')).queryAllByText(/\d+%/)) {
-      expect(node.textContent).toMatch(/מיקום בעמוד|פרוס על פני כל העמוד/);
+      for (const segment of (node.textContent ?? '').split(' · ')) {
+        if (!segment.includes('%')) continue;
+        expect(segment).toMatch(/מיקום בעמוד|פרוס על פני כל העמוד/);
+      }
     }
 
     // The grade itself is present and verbal.
@@ -141,15 +166,18 @@ describe('confidence leaves the review screens and stays inside the disclosure',
     expect(within(screen.getByTestId('document-annotations-keyboard')).getAllByText(/לא ודאי/).length).toBeGreaterThan(0);
   });
 
-  it('keeps every number, closed by default, inside פרטים טכניים', () => {
+  it('keeps every number, closed by default, inside פרטים טכניים', async () => {
     renderWorkspace(0.62);
-    const details = technicalDetails();
 
-    // Collapsed: the reviewer who does not want the machine never meets it.
-    expect(details.open).toBe(false);
+    // Collapsed: the reviewer who does not want the machine never meets it — and while it is shut
+    // the rows are not built at all, which is what keeps a long price list from paying for them.
+    expect(technicalDetails().open).toBe(false);
+    expect(screen.queryByText('87%')).toBeNull();
 
-    // Present, verbatim, and reachable in one click — document type, supplier, field, block, mark.
-    const disclosure = within(details);
+    const disclosure = within(await openTechnicalDetails());
+    expect(technicalDetails().open).toBe(true);
+
+    // Present and reachable in one click — document type, supplier, field, block, mark.
     expect(disclosure.getByText('87%')).toBeInTheDocument();
     expect(disclosure.getByText('62%')).toBeInTheDocument();
     expect(disclosure.getByText('93%')).toBeInTheDocument();
@@ -160,9 +188,9 @@ describe('confidence leaves the review screens and stays inside the disclosure',
     expect(disclosure.getByText('mark-1')).toBeInTheDocument();
   });
 
-  it('shows — for a confidence the contract never carried, never a fabricated 0%', () => {
+  it('shows — for a confidence the contract never carried, never a fabricated 0%', async () => {
     renderWorkspace(null);
-    const disclosure = within(technicalDetails());
+    const disclosure = within(await openTechnicalDetails());
     expect(disclosure.getAllByText('—').length).toBeGreaterThan(0);
     expect(disclosure.queryByText('0%')).toBeNull();
   });

@@ -34,6 +34,19 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [selectedTarget, setSelectedTarget] = useState<ReviewTarget | null>(null);
+  /**
+   * The technical disclosure builds its rows only once someone opens it.
+   *
+   * `extractionEvidence` is one row per block and mark across the WHOLE document, not the current
+   * page, and nothing in the pipeline caps block count — `worker/ocr/src/limits.py` bounds pages
+   * and payload bytes, never blocks — while `price_list` is a first-class document_kind here, i.e.
+   * exactly the many-line document. Rendered unconditionally, React would build and then re-diff
+   * those rows on every workspace re-render (selecting a target, changing page, refetching) for
+   * content nobody has asked to see. Tens of rows on an invoice is free; thousands on a long price
+   * list, re-diffed per interaction, is not. `<details>` stays the collapsed-by-default control —
+   * this only decides when its contents come into existence.
+   */
+  const [technicalOpen, setTechnicalOpen] = useState(false);
   const returnFocusRef = useRef<HTMLButtonElement | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const extraction = snapshot.extraction?.payload ?? null;
@@ -203,7 +216,10 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
             here, and an extraction whose job row is not readable must not take its evidence with
             it. Each row inside still states its own availability. */}
         {(snapshot.job || snapshot.extraction || snapshot.interpretation) && (
-          <details className="mt-4 border-t border-line pt-3">
+          <details
+            className="mt-4 border-t border-line pt-3"
+            onToggle={(event) => setTechnicalOpen(event.currentTarget.open)}
+          >
             <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-ink-soft">פרטים טכניים</summary>
             <dl className="mt-2 grid gap-2 text-xs text-ink-muted">
               <div>
@@ -242,14 +258,15 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
                 shown without this sentence reads as a probability that the value is correct, and
                 it is not one: it is the engine's self-report about its own reading. The sentence
                 does not appear when there is nothing under it to describe. */}
-            {(interpretationEvidence.length > 0 || extractionEvidence.length > 0) && (
+            {technicalOpen && (interpretationEvidence.length > 0 || extractionEvidence.length > 0) && (
               <p className="mt-3 text-xs text-ink-muted">
                 האחוזים הם דיווח עצמי של המנוע על איכות הקריאה, ואינם הסתברות שהערך נכון. המסכים
-                עצמם מציגים דרגה מילולית; כאן נשמר המספר כפי שהתקבל, לצד מזהי הראיה.
+                עצמם מציגים דרגה מילולית; כאן מוצג המספר עצמו, מעוגל לשתי ספרות אחרי הנקודה, לצד
+                מזהי הראיה.
               </p>
             )}
 
-            {interpretationEvidence.length > 0 && (
+            {technicalOpen && interpretationEvidence.length > 0 && (
               <div
                 className="mt-2 max-w-full overflow-x-auto rounded-lg border border-line"
                 role="region"
@@ -282,7 +299,7 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
               </div>
             )}
 
-            {extractionEvidence.length > 0 && (
+            {technicalOpen && extractionEvidence.length > 0 && (
               <div
                 className="mt-2 max-w-full overflow-x-auto rounded-lg border border-line"
                 role="region"

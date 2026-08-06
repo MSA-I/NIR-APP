@@ -84,12 +84,39 @@ test('an absent confidence says it is unknown and never poses as the lowest grad
     assert.notEqual(confidenceLabel(missing), confidenceLabel(0));
     assert.equal(confidencePercent(missing), '—');
   }
-  // The number is moved, not deleted: the technical disclosure still prints it verbatim.
+  // The number is moved, not deleted: the technical disclosure still prints it.
   assert.equal(confidencePercent(0.87), '87%');
-  assert.equal(confidencePercent(0.865), '87%');
   assert.equal(confidencePercent(1), '100%');
   // A measured zero prints as 0%, because something did measure it. Only absence prints —.
   assert.equal(confidencePercent(0), '0%');
+});
+
+test('the disclosure does not round a value across the threshold it is being judged by', () => {
+  // Whole percent turned 0.899 into "90%" on the one surface built for diagnosis, next to a screen
+  // saying "זוהה חלקית" against a documented 0.9 cut point — a contradiction created purely by the
+  // display. Two decimals, and the trailing zeros stripped so ordinary values stay readable.
+  assert.equal(confidenceLabel(0.899), 'זוהה חלקית');
+  assert.equal(confidencePercent(0.899), '89.9%');
+  assert.equal(confidencePercent(0.865), '86.5%');
+  assert.equal(confidencePercent(0.8749), '87.49%');
+  // Binary-float noise does not leak: 0.87*100 is 87.00000000000001.
+  assert.equal(confidencePercent(0.87), '87%');
+  assert.equal(confidencePercent(0.62), '62%');
+});
+
+test('a confidence outside the contract range cannot buy the strongest claim', () => {
+  // Unreachable through every write path today, which is exactly why it would be believed if it
+  // ever appeared. Above 1 is a broken payload: it must not read as "זוהה בבירור", and it must not
+  // silence the supplier check either.
+  assert.equal(confidenceLabel(1.5), 'רמת הזיהוי אינה ידועה');
+  assert.equal(confidenceLabel(101), 'רמת הזיהוי אינה ידועה');
+  assert.notEqual(supplierMatchCaution(1.5), null);
+  // Below 0 is equally broken but falls into the loudest grade, which errs toward more scrutiny.
+  // A corrupt number that under-claims needs no guard, so this stays as it is.
+  assert.equal(confidenceLabel(-1), 'לא ודאי');
+  // The disclosure still shows the corruption rather than laundering it into a plausible number.
+  assert.equal(confidencePercent(1.5), '150%');
+  assert.equal(confidencePercent(-1), '-100%');
 });
 
 test('a supplier match that is not clear carries an instruction, a field of the same grade does not', () => {

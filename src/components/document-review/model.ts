@@ -170,12 +170,27 @@ const CONFIDENCE_PARTIAL = 0.7;
  * says that, and a provider's self-reported confidence never can.
  */
 export function confidenceLabel(value: number | null | undefined): string {
-  // Non-finite is absence, not a low score: NaN falling through the comparisons would silently
-  // read as "לא ודאי", which is a claim about the document that nothing measured.
-  if (value == null || !Number.isFinite(value)) return 'רמת הזיהוי אינה ידועה';
+  if (!usableConfidence(value)) return 'רמת הזיהוי אינה ידועה';
   if (value >= CONFIDENCE_CLEAR) return 'זוהה בבירור';
   if (value >= CONFIDENCE_PARTIAL) return 'זוהה חלקית';
   return 'לא ודאי';
+}
+
+/**
+ * Whether a stored confidence can be graded at all.
+ *
+ * Three ways it cannot. Absent is absent. Non-finite is absence too, not a low score: NaN falling
+ * through the comparisons would silently read as "לא ודאי", a claim about the document that
+ * nothing measured. And above 1 is outside the contract's range — a broken payload, whose one
+ * unacceptable outcome is producing the *strongest* claim on the screen, so it reads as unknown.
+ *
+ * Deliberately not bounded below: a negative is equally broken, but it falls into "לא ודאי", which
+ * errs toward more scrutiny rather than less. A corrupt number that under-claims needs no guard.
+ * `confidencePercent` prints all of these verbatim — the disclosure exists to show the corruption,
+ * not to launder it.
+ */
+function usableConfidence(value: number | null | undefined): value is number {
+  return value != null && Number.isFinite(value) && value <= 1;
 }
 
 /**
@@ -183,9 +198,20 @@ export function confidenceLabel(value: number | null | undefined): string {
  *
  * Absent prints — and never 0% (CLAUDE.md: an absent metric shows —, because zero is itself a
  * statement about the reading). A measured zero does print as 0%: something did measure it.
+ *
+ * Two decimals, trailing zeros stripped, rather than whole percent. Whole percent rounded 0.899 to
+ * "90%" on the one surface built for diagnosis, beside a screen grading it "זוהה חלקית" against a
+ * documented 0.9 threshold — a contradiction produced entirely by the display. `toFixed` also
+ * absorbs the binary-float noise that makes 0.87*100 come out as 87.00000000000001, the same
+ * reason `DocumentSourceViewer`'s `pct` exists. Any fixed precision still rounds, so the
+ * disclosure says so in words rather than claiming the number is untouched.
+ *
+ * Values outside the contract's 0–1 print as they are. The disclosure exists to show a broken
+ * payload, not to launder it — only `confidenceLabel` refuses to grade one.
  */
 export function confidencePercent(value: number | null | undefined): string {
-  return value == null || !Number.isFinite(value) ? '—' : `${Math.round(value * 100)}%`;
+  if (value == null || !Number.isFinite(value)) return '—';
+  return `${Number((value * 100).toFixed(2))}%`;
 }
 
 /**
@@ -199,10 +225,11 @@ export function confidencePercent(value: number | null | undefined): string {
  * reviewer to infer it. Unknown is not permission to skip the check — it is the reason to run it.
  */
 export function supplierMatchCaution(value: number | null | undefined): string | null {
-  if (value != null && Number.isFinite(value) && value >= CONFIDENCE_CLEAR) return null;
-  return value == null || !Number.isFinite(value)
-    ? 'לא ידוע באיזו ודאות זוהה הספק. יש לאמת את שם הספק מול המסמך לפני שמאשרים ממנו חשבונית או תשלום.'
-    : 'הספק לא זוהה בבירור. יש לאמת את שם הספק מול המסמך לפני שמאשרים ממנו חשבונית או תשלום.';
+  // Same usability test as the grade, so a broken payload cannot buy silence here either.
+  if (usableConfidence(value) && value >= CONFIDENCE_CLEAR) return null;
+  return usableConfidence(value)
+    ? 'הספק לא זוהה בבירור. יש לאמת את שם הספק מול המסמך לפני שמאשרים ממנו חשבונית או תשלום.'
+    : 'לא ידוע באיזו ודאות זוהה הספק. יש לאמת את שם הספק מול המסמך לפני שמאשרים ממנו חשבונית או תשלום.';
 }
 
 /**
