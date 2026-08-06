@@ -62,6 +62,27 @@ begin
   delete from profiles  where org_id = v_org;
   delete from suppliers where org_id = v_org;
 
+  -- The event plane, before the organization. This was a real gap from wave 5 onward, and it
+  -- broke this file: domain_events.org_id references organizations WITHOUT a cascade
+  -- (0063:69), and the audit fan-out fills the table during the seed itself (an inserted
+  -- product, supplier or order each emits an event), so `delete from organizations` failed on
+  -- domain_events_org_id_fkey. Every other table added since wave 3 cascades with the
+  -- organization -- notification_preferences and approval_policy_configurations included --
+  -- which is exactly why this one stood out once it was actually run.
+  --
+  -- The three private tables that reference an event go first. The demo's only webhook
+  -- subscription is deliberately INACTIVE (OPEN-DECISIONS #98), so nothing is ever enqueued
+  -- and these three deletes are no-ops today. They are written anyway: a demo tenant that
+  -- someone switched a subscription on for must still be removable without hand-editing SQL.
+  delete from private.integration_deliveries
+   where outbox_id in (select id from private.integration_outbox where org_id = v_org);
+  delete from private.dead_letter_records
+   where event_id in (select id from domain_events where org_id = v_org);
+  delete from private.idempotency_keys
+   where event_id in (select id from domain_events where org_id = v_org);
+  delete from private.integration_outbox where org_id = v_org;
+  delete from domain_events where org_id = v_org;
+
   delete from organizations where id = v_org;
 
   -- Last: the deletes above each fired the audit trigger and wrote new audit rows. Since
