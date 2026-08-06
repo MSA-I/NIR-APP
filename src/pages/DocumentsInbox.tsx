@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Eye, FileDown, FileInput, Files, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, Search, Upload, X } from 'lucide-react';
+import { Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, Search, Upload, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -451,7 +451,9 @@ export default function DocumentsGallery() {
     <div className="space-y-4" data-testid="documents-page">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="page-title flex items-center gap-2"><Files size={22} /> גלריית מסמכים</h1>
+          {/* Heading and icon track the nav label: pageTitleFor derives the tab title from the
+              sidebar item, so a different word here would put two names on one screen. */}
+          <h1 className="page-title flex items-center gap-2"><FolderOpen size={22} /> תיקיית המסמכים</h1>
           <p className="mt-1 text-sm text-ink-muted">כל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.</p>
         </div>
         {canUpload && (

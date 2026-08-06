@@ -13,20 +13,18 @@ import { pendingOfflineWork } from '../lib/offlineQueue';
 import type { Role } from '../lib/types';
 import { toHebrewError } from '../lib/errors';
 
-interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[] }
+export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[] }
+export interface NavSection { section: string; items: NavItem[] }
 
-// Navigation follows the product work groups: מסמכים / רכש / כספים / בקרה, above them the
-// two ungrouped entry points a person actually opens the app with.
-//
-// Remaining items (מחירונים, דרישות תשלום, התאמות בנק, יומן ביקורת,
-//    הגדרות, and the focused /pay, /my-prices, /admin routes) are slotted by the
-//    obvious procurement/finance/control reading. /pay is shared by payer and accountant.
-//    None of it invents business meaning.
-//
-export const NAV_SECTIONS: { section: string; items: NavItem[] }[] = [
+// Four work groups — מסמכים / רכש / כספים / בקרה — under two ungrouped links that need no
+// header to explain them. The less self-evident items (מחירונים, דרישות תשלום, התאמות בנק,
+// יומן ביקורת, הגדרות, and the focused /pay, /my-prices, /admin routes) sit where the plain
+// procurement/finance/control reading puts them, and /pay is shared by payer and accountant.
+// None of it invents business meaning.
+export const NAV_SECTIONS: NavSection[] = [
   {
-    // מרכז הבקרה ראשון: הוא התשובה לסעיף 12 — מה דורש טיפול, עכשיו. הזמנה חדשה
-    // יורדת למקום שני; היא הפעולה התכופה, אבל לא זו שפותחים איתה את היום.
+    // מרכז הבקרה ראשון: הוא התשובה לסעיף 12 — מה דורש טיפול, עכשיו. הזמנה חדשה אחריו,
+    // כי היא הפעולה התכופה ביותר אבל לא זו שפותחים איתה את היום.
     section: '',
     items: [
       { to: '/dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, roles: ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'] },
@@ -34,12 +32,15 @@ export const NAV_SECTIONS: { section: string; items: NavItem[] }[] = [
     ],
   },
   {
-    // Documents leave כספים: a scanned page is not yet a financial fact. It is read and filed
-    // first, and only then becomes an invoice or a credit — so the queue that does that reading
-    // gets its own group instead of sitting among the ledgers it feeds.
+    // Documents stand apart from כספים because a scanned page is not yet a financial fact: it is
+    // read and filed first, and only then becomes an invoice or a credit. The queue that does the
+    // reading belongs beside the ledgers it feeds, not inside them.
     section: 'מסמכים',
     items: [
       { to: '/documents', label: 'תיקיית המסמכים', icon: FolderOpen, roles: ['owner', 'office', 'kitchen'] },
+      // No route serves this yet, so App.tsx's catch-all sends the click home. Whoever adds the
+      // route must also settle `end` on /documents above: without it both items read as active on
+      // the archive page, with it /documents stops highlighting on /documents/:documentId/review.
       { to: '/documents/archive', label: 'ארכיון', icon: Archive, roles: ['owner', 'office', 'kitchen'] },
     ],
   },
@@ -79,6 +80,23 @@ export const NAV_SECTIONS: { section: string; items: NavItem[] }[] = [
   },
 ];
 
+// What the sidebar actually renders, derived rather than declared: NAV_SECTIONS is the menu on
+// paper, this is the menu a given person sees. Kept pure and exported so the order and the role
+// filtering can be asserted without mounting the shell — the literal alone cannot prove either.
+//
+// Platform operators are a separate axis from tenant roles, so the console cannot ride
+// NAV_SECTIONS' `roles: Role[]` filter — appending a synthetic Role would misrepresent the
+// user_role enum the RLS policies are built on. It is appended after the tenant sections
+// to keep the visual separation between "running this business" and "running the platform".
+export function sectionsForRole(role: Role | undefined, isPlatformAdmin: boolean): NavSection[] {
+  const roleSections = NAV_SECTIONS
+    .map((s) => ({ ...s, items: s.items.filter((i) => role && i.roles.includes(role)) }))
+    .filter((s) => s.items.length > 0);
+  return isPlatformAdmin
+    ? [...roleSections, { section: 'פלטפורמה', items: [{ to: '/admin', label: 'ניהול לקוחות', icon: Building2, roles: [] as Role[] }] }]
+    : roleSections;
+}
+
 const PAGE_TITLE_PATTERNS: [RegExp, string][] = [
   [/^\/suppliers\/[^/]+$/, 'כרטיס ספק'],
   [/^\/orders\/[^/]+$/, 'פרטי הזמנה'],
@@ -115,16 +133,7 @@ export default function Layout() {
   // the product name keeps the header honest — it is never another tenant's name.
   const orgName = org?.name ?? APP_NAME;
 
-  const roleSections = NAV_SECTIONS.map((s) => ({ ...s, items: s.items.filter((i) => role && i.roles.includes(role)) }))
-    .filter((s) => s.items.length > 0);
-
-  // Platform operators are a separate axis from tenant roles, so the console cannot ride
-  // NAV_SECTIONS' `roles: Role[]` filter — appending a synthetic Role would misrepresent the
-  // user_role enum the RLS policies are built on. It is appended after the tenant sections
-  // to keep the visual separation between "running this business" and "running the platform".
-  const sections = isPlatformAdmin
-    ? [...roleSections, { section: 'פלטפורמה', items: [{ to: '/admin', label: 'ניהול לקוחות', icon: Building2, roles: [] as Role[] }] }]
-    : roleSections;
+  const sections = sectionsForRole(role, isPlatformAdmin);
 
   // Group headers only earn their space once there is more than one item to organise. supplier
   // and payer each see a single link, and a "רכש" header over a vendor's own price list reads
