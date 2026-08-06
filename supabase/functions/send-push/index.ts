@@ -41,8 +41,18 @@ const DUE_SOON_DAYS = 7;
 const PR_ACTIVE = ['draft', 'pending_approval', 'approved', 'sent_for_execution'];
 const NOTIFIABLE_ORG_STATUSES = ['trial', 'active'];
 
-/** The in-app alerts screen is an owner/office decision surface (App.tsx FINANCE guard).
- *  The bell and Push use the same audience so a notification never links to a forbidden page. */
+/** MIRROR, NOT AUTHORITY. The audience is decided in ONE place: the `eligible` CTE of
+ *  enqueue_notification_delivery (supabase/migrations/0024_p2_data_reliability.sql:96-102,
+ *  narrowed by notification preferences in 0068). This array is a Deno-side copy of the role
+ *  half of that line, used only for the coarse org discovery below; it must never grow into a
+ *  second audience decision. The roles are the App.tsx FINANCE guard, so a notification never
+ *  links to a page the recipient may not open.
+ *
+ *  Since 0068 the bell and Push audiences MAY DIVERGE, by the recipient's own choice: muting
+ *  Push leaves the notification row standing (the unread-badge contract of OPEN-DECISIONS #39)
+ *  and only settles its Push leg. Preference filtering therefore happens in the database and
+ *  must NOT be re-implemented here -- which also means the row set returned by the delivery
+ *  RPC is the PUSH WORK LIST, not a count of notifications created. */
 const ALERT_ROLES = ['owner', 'office'];
 type NotificationSeverity = 'warning' | 'critical';
 
@@ -392,6 +402,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // ===== event: payment_due_scan — fired daily by pg_cron (0016) =====
   if (body.event === 'payment_due_scan') {
+    // A COARSE ORG FILTER, deliberately not preference-aware: it answers "which organizations
+    // hold anybody who could be notified at all", so the scan can skip the rest. Narrowing it
+    // by notification preferences would be wrong twice over -- an organization where every
+    // recipient muted Push must still get its notification rows (OPEN-DECISIONS #39), and the
+    // per-recipient decision belongs to enqueue_notification_delivery, which applies it.
     const { data: orgRows, error: orgErr } = await admin
       .from('profiles')
       .select('org_id, organization:organizations!profiles_org_id_fkey!inner(status)')
