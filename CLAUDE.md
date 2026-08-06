@@ -46,15 +46,16 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   ‏`check:review` מריץ `node --test` על `src/components/document-review/model.test.ts` (16 בדיקות).
   ‏`check:tokens` אוכף את חוק הטוקנים של `DESIGN.md` — אפס מחלקות פלטה גולמיות ואפס הקסים ב-`.tsx`.
   **אין ESLint ואין Prettier** בריפו, למרות הערות `eslint-disable` שנשארו ב-`src/lib/useQuery.ts`.
-- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **25**
-  סוויטות SQL (‏`check-quality-gates.ps1` — עשרים וחמש קריאות `Invoke-SqlTest` על `supabase/tests/`),
-  ‏**preflight עם 43 זרועות** (`Invoke-Preflight`, ‏`p1_preflight.sql`), ‏`npm audit --audit-level=high`,
+- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **26**
+  סוויטות SQL (‏`check-quality-gates.ps1` — עשרים ושש קריאות `Invoke-SqlTest` על `supabase/tests/`),
+  ‏**preflight עם 44 זרועות** (`Invoke-Preflight`, ‏`p1_preflight.sql`), ‏`npm audit --audit-level=high`,
   חוזי Deno, ו-**25 תרחישי דפדפן** (`check-browser-smoke.cjs`). מספר טענות P0 מדווח בזמן ריצה
   (‏266 בריצה שתועדה) — הוא אינו ליטרל בקוד. **המספרים האלה נמדדו בגל 10; קודם לכן כתוב היה כאן
   ‏13 ו-22, וזה היה שגוי** — סוויטה שלא רשומה כאן עדיין רצה, ומי שקורא את הקובץ הזה היה מסיק
   שבע סוויטות לא קיימות. **המספר סטה שוב ותוקן במדידה ב-B1:** ‏20 היה נכון בגל 10, ואז מיזוג ה-QA
   הוסיף ארבע (‏`payment_credit_override`, ‏`monthly_report_snapshots` ושתי סוויטות ה-concurrency
-  שלהן) בלי לעדכן את השורה הזאת, ו-`p11_document_filing` היא החמישית. **סופרים לפני שכותבים**
+  שלהן) בלי לעדכן את השורה הזאת, ו-`p11_document_filing` היא החמישית. ‏`p13_document_autonomy_config`
+  (‏C1) היא השישית, ונספרה שוב במדידה: ‏26. **סופרים לפני שכותבים**
   (`Invoke-SqlTest .supabase.tests` ב-`check-quality-gates.ps1`), לא מעתיקים את המספר הקודם.
   **ריצה אחת בכל רגע במכונה.** **אין CI** — `.github/` אינו קיים; זו ריצה ידנית.
 - מיגרציות: `scripts/db-query.ps1` (Windows) / `scripts/db-query.sh` (Linux/Mac) — שניהם רצים מול
