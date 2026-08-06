@@ -299,7 +299,9 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     // matching no category is *מועבר* to the archive — moved, not tagged — and a row appearing in
     // both screens was never moved anywhere. Left overlapping, the working folder would refill with
     // exactly the noise the archive exists to absorb, which is the feature failing at its purpose.
-    // This `neq` is that product decision, not a stray filter.
+    // This `neq` is that product decision, not a stray filter. It is also safe to express it with:
+    // documents.entity_type is NOT NULL (0001_init.sql:363), so no row can fall out of both halves
+    // the way a nullable column would, and nothing needs a defensive `.or(...)` around it.
     //
     // Read path only either way: nothing writes 'archive' until 0075 teaches file_document the
     // target, so the archive route lists nothing today. That is the true state of the archive, and
@@ -593,8 +595,15 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
               { key: 'retry', label: 'עיבוד מחדש', icon: RefreshCw, hidden: !canRetry || snapshot?.stage !== 'failed', onSelect: () => setRetryDoc(doc) },
               { key: 'export', label: 'ייצוא', icon: FileDown, hidden: snapshot?.stage !== 'review' && snapshot?.stage !== 'completed', onSelect: () => review(doc, 'export') },
               { key: 'view', label: 'צפייה במקור', icon: Eye, onSelect: () => void open(doc) },
-              { key: 'invoice', label: 'שיוך לחשבונית', icon: FileInput, hidden: !canFile || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'invoice' }) },
-              { key: 'receipt', label: 'שיוך לקבלת סחורה', icon: ReceiptText, hidden: !canFile || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'goods_receipt' }) },
+              // Not offered on the archive, for the same reason the upload button is not. isUnfiled
+              // reads an archived row as unfiled (entity_id is null), so both would render — and
+              // file_document's guard takes only a row still in the inbox (0019:167), so either
+              // would raise document_already_filed, i.e. "המסמך כבר שויך ליעד עסקי" about a document
+              // sitting here precisely because it could not be assigned to any target. Whether a
+              // person may rescue a document from the archive is a real and open question; an
+              // action that always errors is not an answer to it.
+              { key: 'invoice', label: 'שיוך לחשבונית', icon: FileInput, hidden: !canFile || archive || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'invoice' }) },
+              { key: 'receipt', label: 'שיוך לקבלת סחורה', icon: ReceiptText, hidden: !canFile || archive || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'goods_receipt' }) },
             ];
           }}
           emptyTitle={data?.docs.length ? 'לא נמצאו מסמכים לפי הסינון' : empty.title}

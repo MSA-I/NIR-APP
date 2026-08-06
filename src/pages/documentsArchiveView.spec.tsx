@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
@@ -46,7 +47,15 @@ const row = (id: string, fileName: string, entityType: string, entityId: string 
 
 const ARCHIVED = 'לא-מזוהה.pdf';
 const FILED = 'חשבונית-1001.pdf';
-const DOCS = [row('d-1', ARCHIVED, 'archive', null), row('d-2', FILED, 'invoice', 'inv-1')];
+// The inbox row is the positive control for the row-action tests below. Both it and the archived
+// row are unfiled by isUnfiled()'s reading — entity_id is null on each — so if the שיוך actions
+// appear for one and not the other, the archive flag is the only thing that can explain it.
+const UNFILED = 'סריקה-חדשה.pdf';
+const DOCS = [
+  row('d-1', ARCHIVED, 'archive', null),
+  row('d-2', FILED, 'invoice', 'inv-1'),
+  row('d-3', UNFILED, 'inbox', null),
+];
 
 /**
  * The double interprets exactly the two operators the gallery puts on `entity_type`, `eq.` and
@@ -105,6 +114,34 @@ describe('חלוקת המסמכים בין התיקייה לארכיון', () =>
   });
 });
 
+// Until 0075 gives something the ability to file a document to the archive, the heading and the
+// empty state are the whole of that page for a visitor — so they are the part most worth pinning.
+describe('מה שמסך הארכיון אומר על עצמו', () => {
+  it('כותרת הארכיון, בלי הפסקה של תיקיית המסמכים', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({ archive: true });
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('ארכיון מסמכים');
+    expect(screen.queryByText(/כל החשבוניות/)).not.toBeInTheDocument();
+  });
+
+  it('כותרת התיקייה, עם הפסקה שלה', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({});
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('תיקיית המסמכים');
+    expect(screen.getByText(/כל החשבוניות/)).toBeInTheDocument();
+  });
+
+  // The state the archive is actually in until the interpretation layer starts filing, so it has
+  // to say which emptiness it is: an archive holding nothing, not the register holding nothing.
+  it('ארכיון ריק מסביר שהוא ריק, בלשון הארכיון', async () => {
+    server.use(http.get(`${SUPABASE_URL}/rest/v1/documents`, () => HttpResponse.json([])), ...quietTraffic);
+    renderGallery({ archive: true });
+    expect(await screen.findByText('אין מסמכים בארכיון')).toBeInTheDocument();
+    expect(screen.getByText(/לא הצליחה לשייך לאף קטגוריה/)).toBeInTheDocument();
+    expect(screen.queryByText('אין מסמכים במערכת')).not.toBeInTheDocument();
+  });
+});
+
 // The same partition seen from the actions rather than the rows. uploadDocument writes
 // entity_type='inbox', so an upload started from the archive lands in the other half of the
 // partition: the toast reports success and the list the person is looking at never changes.
@@ -122,5 +159,31 @@ describe('כפתור ההעלאה', () => {
     renderGallery({});
     expect(await screen.findAllByText(FILED)).not.toHaveLength(0);
     expect(screen.queryByRole('button', { name: /העלאת מסמך/ })).toBeInTheDocument();
+  });
+});
+
+// file_document takes only a row still in the inbox (0019:167), so offering שיוך on an archived
+// document buys the user "המסמך כבר שויך ליעד עסקי" about a document that is here precisely
+// because it could not be assigned anywhere.
+describe('פעולות השיוך בתפריט השורה', () => {
+  const openMenuFor = async (fileName: string) =>
+    userEvent.click(screen.getAllByRole('button', { name: `פעולות עבור מסמך ${fileName}` })[0]);
+
+  it('אינן מוצעות על מסמך בארכיון', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({ archive: true });
+    await screen.findAllByText(ARCHIVED);
+    await openMenuFor(ARCHIVED);
+    expect(screen.queryByText('שיוך לחשבונית')).not.toBeInTheDocument();
+    expect(screen.queryByText('שיוך לקבלת סחורה')).not.toBeInTheDocument();
+  });
+
+  it('מוצעות על מסמך לא משויך בתיקייה', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({});
+    await screen.findAllByText(UNFILED);
+    await openMenuFor(UNFILED);
+    expect(screen.getByText('שיוך לחשבונית')).toBeInTheDocument();
+    expect(screen.getByText('שיוך לקבלת סחורה')).toBeInTheDocument();
   });
 });
