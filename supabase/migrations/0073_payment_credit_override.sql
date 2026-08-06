@@ -901,7 +901,8 @@ begin
   from visible;
 
   if v_visible_count <> v_requested_count or v_unit_count <> 1 or v_unit is null then
-    raise exception 'payment_request_checks_mismatch' using errcode = 'P0001';
+    -- 22023 is the 0034 contract for this rejection; the P1 suite and error handling pin it.
+    raise exception 'payment_request_checks_mismatch' using errcode = '22023';
   end if;
   perform public.assert_unit_in_scope(v_unit);
 
@@ -938,7 +939,8 @@ begin
              and pri.invoice_id = requested.requested_id
          )
        ) then
-      raise exception 'payment_request_checks_mismatch' using errcode = 'P0001';
+      -- 22023 is the 0034 contract for this rejection; the P1 suite and error handling pin it.
+      raise exception 'payment_request_checks_mismatch' using errcode = '22023';
     end if;
   end if;
 
@@ -966,7 +968,12 @@ begin
     'visible_invoice_count', v_visible_count,
     'paid_invoice_count', v_paid_count,
     'unapproved_invoice_count', v_unapproved_count,
-    'amount_matches_open_balance', abs(round(v_open_balance, 2) - round(p_amount, 2)) <= 1,
+    -- The 0034 anti-oracle, preserved through this rewrite: office can approve against
+    -- invoice status, but cannot probe hidden balances by varying p_amount. Only the
+    -- balance-reading role receives the real comparison; office reads a constant.
+    'amount_matches_open_balance', case when v_role = 'owner'
+      then abs(round(v_open_balance, 2) - round(p_amount, 2)) <= 1
+      else true end,
     -- bank_imports is not legal-entity scoped yet. Returning an organization-wide existence
     -- bit would leak sibling activity, so 0073 reports an explicit unavailable state and makes
     -- no bank query or approval decision from substitute data.

@@ -208,9 +208,13 @@ select pg_temp.p9_assert(
       and p.prosrc ~ ('\m' || r.table_name || '\M')),
   'no wave-9 function body may name an enforced table -- entity names are data');
 
+-- Wave 9 added zero exemptions (the registry stood at 59 through it); 0073 then
+-- DRAINED three -- create_payment_request, transition_payment_request and
+-- payment_request_financial_check_signals gained real scope checks and left the
+-- registry. The pin moves down, never up: additions still fail here by design.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 59,
-  'the definer exemption registry must stay frozen at 59 rows -- zero wave-9 additions');
+  (select count(*) from private.scope_definer_exemptions) = 56,
+  'the definer exemption registry must stay at 56 rows -- 59 minus the three 0073 drained; zero additions allowed');
 
 select pg_temp.p9_assert(
   (select count(*) from private.scope_enforcement_violations()) = 0,
@@ -306,10 +310,15 @@ insert into credit_requests (id, org_id, supplier_id, invoice_id, reason, amount
   ('99000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
    '39000000-0000-4000-8000-000000000001', null, 'damaged', 40, 'open');
 
-insert into payment_requests (id, org_id, supplier_id, amount, status, created_by) values
+-- 0073: a payment request without a legal_entity unit cannot transition at all
+-- (payment_request_scope_unresolved fires before the matrix). The fixture takes the
+-- org's bootstrap entity -- the same one p0_invoices_set_unit gave the linked invoice.
+insert into payment_requests (id, org_id, supplier_id, amount, status, created_by, unit_id) values
   ('a9000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
    '39000000-0000-4000-8000-000000000001', 500, 'draft',
-   '29000000-0000-4000-8000-000000000001');
+   '29000000-0000-4000-8000-000000000001',
+   (select id from org_units
+     where org_id = '19000000-0000-4000-8000-000000000001' and unit_type = 'legal_entity'));
 
 -- org_id carries a default of auth_org(), and this fixture block runs without a subject on
 -- purpose (see p9_claims). Name it explicitly rather than let a NOT NULL default resolve to NULL.
@@ -765,6 +774,13 @@ select pg_temp.p9_probe(
   'invoice_review_transition_invalid',
   $$update invoices set review_status = %L::invoice_review_status
      where id = '69000000-0000-4000-8000-000000000002'$$);
+
+-- 0073 gates approval on open supplier credit and the probe cannot carry an
+-- override, so the fixture credit steps aside before the payment-request probe.
+-- The credit probe below resets its status per pair, so nothing is lost.
+select pg_temp.p9_claims(null);
+update credit_requests set status = 'closed'
+ where id = '99000000-0000-4000-8000-000000000001';
 
 select pg_temp.p9_probe(
   'payment_request',
