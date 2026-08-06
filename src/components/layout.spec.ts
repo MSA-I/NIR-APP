@@ -47,4 +47,17 @@ describe('סדר הניווט', () => {
     const paths = NAV_SECTIONS.flatMap((s) => s.items).map((i) => i.to);
     expect(paths).toHaveLength(new Set(paths).size);
   });
+
+  // NavLink prefix-matches unless told otherwise, so a menu path that is a parent of another menu
+  // path stays lit on the child's page: two elements answering to aria-current="page", which
+  // misreads to a screen reader and hands the mobile drawer's initialFocus the wrong link. The
+  // parents are derived rather than named, so whoever adds the next nested entry is held to the
+  // same rule. Matching on `${to}/` and not startsWith(to) is what React Router does — it matches
+  // whole segments, and a bare prefix would call /pay the parent of /payment-requests.
+  it('כל מסלול שהוא אב של מסלול אחר בתפריט מסומן end', () => {
+    const items = NAV_SECTIONS.flatMap((s) => s.items);
+    const parents = items.filter((item) => items.some((other) => other.to.startsWith(`${item.to}/`)));
+    expect(parents.map((i) => i.to)).not.toEqual([]); // or the rule below passes with nothing to check
+    expect(parents.filter((item) => !item.end).map((i) => i.to)).toEqual([]);
+  });
 });

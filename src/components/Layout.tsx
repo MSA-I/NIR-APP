@@ -13,7 +13,14 @@ import { pendingOfflineWork } from '../lib/offlineQueue';
 import type { Role } from '../lib/types';
 import { toHebrewError } from '../lib/errors';
 
-export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[] }
+// `end` switches off NavLink's default prefix matching, and belongs on every path that is a
+// parent of another path in this menu. Without it /documents and /documents/archive are both
+// active on the archive page: two elements carrying aria-current="page", which is wrong for a
+// screen reader and picks the wrong target for the drawer's initialFocus below, since that
+// queries for exactly that attribute. It is not free — /documents stops highlighting while a
+// document is open at /documents/:documentId/review, so the sidebar shows nothing selected on
+// that screen. One unlit item on a detail page is the smaller harm of the two.
+export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[]; end?: boolean }
 export interface NavSection { section: string; items: NavItem[] }
 
 // Four work groups — מסמכים / רכש / כספים / בקרה — under two ungrouped links that need no
@@ -37,17 +44,14 @@ export const NAV_SECTIONS: NavSection[] = [
     // reading belongs beside the ledgers it feeds, not inside them.
     section: 'מסמכים',
     items: [
-      { to: '/documents', label: 'תיקיית המסמכים', icon: FolderOpen, roles: ['owner', 'office', 'kitchen'] },
-      // No route serves this yet, so App.tsx's catch-all sends the click home. Whoever adds the
-      // route must also settle `end` on /documents above: without it both items read as active on
-      // the archive page, with it /documents stops highlighting on /documents/:documentId/review.
+      { to: '/documents', label: 'תיקיית המסמכים', icon: FolderOpen, roles: ['owner', 'office', 'kitchen'], end: true },
       { to: '/documents/archive', label: 'ארכיון', icon: Archive, roles: ['owner', 'office', 'kitchen'] },
     ],
   },
   {
     section: 'רכש',
     items: [
-      { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office', 'kitchen'] },
+      { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office', 'kitchen'], end: true },
       { to: '/receiving', label: 'קבלת סחורה', icon: PackageCheck, roles: ['owner', 'office', 'kitchen'] },
       { to: '/suppliers', label: 'ספקים', icon: Truck, roles: ['owner', 'office', 'kitchen'] },
       { to: '/products', label: 'מוצרים', icon: Package, roles: ['owner', 'office', 'kitchen'] },
@@ -216,7 +220,7 @@ export default function Layout() {
             {showHeaders && s.section && <div className="px-3 pb-1 text-[11px] font-semibold text-shell-heading">{s.section}</div>}
             <div className="space-y-0.5">
               {s.items.map((item) => (
-                <NavLink key={item.to} to={item.to} className={linkCls} onClick={() => { if (mobileOpen) closeMobileMenu(); }} end={item.to === '/orders'}>
+                <NavLink key={item.to} to={item.to} className={linkCls} onClick={() => { if (mobileOpen) closeMobileMenu(); }} end={item.end}>
                   <item.icon size={17} />
                   {item.label}
                   {/* TaskLine's count-pill anatomy at the item's logical end; both the desktop

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, Search, Upload, X } from 'lucide-react';
+import { Archive, Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, Search, Upload, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -259,9 +259,12 @@ function UploadModal({ suppliers, onClose, onDone }: {
   );
 }
 
-/** `/documents` — one register for every active document. `/inbox` redirects here with
- *  `filing=unfiled`, so capture and archive are two views of the same source of truth. */
-export default function DocumentsGallery() {
+/** One register for every active document, served at two routes. `/documents` is all of it, and
+ *  `/inbox` redirects here with `filing=unfiled` — capture and register are two views of one
+ *  source of truth. `/documents/archive` sets `archive` and narrows the same query to
+ *  `entity_type='archive'`: the documents interpretation could not place, which no one files by
+ *  hand. One component either way, so "what is a document row" has a single answer. */
+export default function DocumentsGallery({ archive = false }: { archive?: boolean }) {
   const { profile } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -292,10 +295,16 @@ export default function DocumentsGallery() {
   }>(async () => {
     const suppliers = await fetchAll<SupplierOption>((from, to) => supabase.from('suppliers').select('id, name')
       .is('deleted_at', null).order('name').order('id').range(from, to));
-    const docs = await fetchAll((from, to) => supabase.from('documents').select('*, supplier:suppliers(id, name)')
-      .is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to)) as unknown as GalleryDocument[];
+    // Read path only: nothing writes `entity_type='archive'` until 0075 teaches file_document the
+    // target, so the archive route returns an empty list today. That is the true state of the
+    // archive, and the empty state below says so rather than dressing it as a failure.
+    const docs = await fetchAll((from, to) => {
+      const rows = supabase.from('documents').select('*, supplier:suppliers(id, name)').is('deleted_at', null);
+      return (archive ? rows.eq('entity_type', 'archive') : rows)
+        .order('created_at', { ascending: false }).order('id').range(from, to);
+    }) as unknown as GalleryDocument[];
     return { docs, suppliers };
-  }, []);
+  }, [archive]);
   const documentIds = useMemo(() => data?.docs.map((doc) => doc.id) ?? [], [data]);
   const processing = useDocumentProcessing(documentIds);
 
@@ -447,14 +456,30 @@ export default function DocumentsGallery() {
 
   const hasFilters = !!(q || supplierId || kind || from || to || filing !== 'all' || processingFilter !== 'all');
 
+  // Heading and icon track the nav label, because pageTitleFor derives the tab title from the
+  // sidebar item and a different word would put two names on one screen. `ארכיון מסמכים` qualifies
+  // the nav item's bare `ארכיון`, which can afford to be short because it sits under the מסמכים
+  // group header; the page has no header above it. One name, one of them qualified.
+  const HeadingIcon = archive ? Archive : FolderOpen;
+  // Two ways to be empty, and they are different facts: a filter that matched nothing, and a
+  // register with nothing in it. Only the second differs between the two routes. Neither may
+  // stand in for a failed read (gate B30) — a failed first load renders ErrorNote instead of the
+  // table, and a failed refetch keeps its own ErrorNote above whatever rows survived.
+  const empty = archive
+    ? { title: 'אין מסמכים בארכיון', subtitle: 'מסמכים שהמערכת לא הצליחה לשייך לאף קטגוריה יופיעו כאן' }
+    : { title: 'אין מסמכים במערכת', subtitle: 'מסמך חדש יופיע כאן מיד לאחר צילום או העלאה' };
+
   return (
     <div className="space-y-4" data-testid="documents-page">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          {/* Heading and icon track the nav label: pageTitleFor derives the tab title from the
-              sidebar item, so a different word here would put two names on one screen. */}
-          <h1 className="page-title flex items-center gap-2"><FolderOpen size={22} /> תיקיית המסמכים</h1>
-          <p className="mt-1 text-sm text-ink-muted">כל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.</p>
+          <h1 className="page-title flex items-center gap-2">
+            <HeadingIcon size={22} /> {archive ? 'ארכיון מסמכים' : 'תיקיית המסמכים'}
+          </h1>
+          {/* No standfirst on the archive. "הכול במקום אחד" is false there, and what is true of it
+              is the empty state's sentence — which is what the page shows anyway until something
+              starts filing documents to the archive. Saying it twice would not make it truer. */}
+          {!archive && <p className="mt-1 text-sm text-ink-muted">כל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.</p>}
         </div>
         {canUpload && (
           <button type="button" className="btn-primary" onClick={() => setUploadOpen(true)}>
@@ -562,8 +587,8 @@ export default function DocumentsGallery() {
               { key: 'receipt', label: 'שיוך לקבלת סחורה', icon: ReceiptText, hidden: !canFile || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'goods_receipt' }) },
             ];
           }}
-          emptyTitle={data?.docs.length ? 'לא נמצאו מסמכים לפי הסינון' : 'אין מסמכים במערכת'}
-          emptySubtitle={data?.docs.length ? 'שנו או נקו את המסננים כדי לראות מסמכים נוספים' : 'מסמך חדש יופיע כאן מיד לאחר צילום או העלאה'} />
+          emptyTitle={data?.docs.length ? 'לא נמצאו מסמכים לפי הסינון' : empty.title}
+          emptySubtitle={data?.docs.length ? 'שנו או נקו את המסננים כדי לראות מסמכים נוספים' : empty.subtitle} />
       )}
 
       {uploadOpen && <UploadModal suppliers={data?.suppliers ?? []} onClose={() => setUploadOpen(false)} onDone={refetch} />}
