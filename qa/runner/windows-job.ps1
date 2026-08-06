@@ -662,7 +662,11 @@ function Write-JobResult {
         status = [string] $NativeResult.Status
         exitCode = $NativeResult.ExitCode
         cleanup = [string] $NativeResult.Cleanup
-        reason = $NativeResult.Reason
+    }
+    # The TypeScript protocol requires reason to be a string or absent; a JSON
+    # null fails validation and turns a valid TIMED_OUT into a containment hold.
+    if ($null -ne $NativeResult.Reason) {
+        $payload.reason = [string] $NativeResult.Reason
     }
     $resultPath = [string] $Specification.resultPath
     $temporaryPath = "$resultPath.$PID.tmp"
@@ -674,7 +678,11 @@ function Write-JobResult {
 $specification = $null
 $nativeInvocationStarted = $false
 try {
-    $rawSpecification = [Console]::In.ReadToEnd()
+    # [Console]::In decodes with the OEM codepage; the parent writes UTF-8, so
+    # non-ASCII environment values (Hebrew paths) arrive mangled. Read the raw
+    # stdin stream as UTF-8 explicitly.
+    $stdinReader = [IO.StreamReader]::new([Console]::OpenStandardInput(), [Text.UTF8Encoding]::new($false))
+    $rawSpecification = $stdinReader.ReadToEnd()
     $specification = $rawSpecification | ConvertFrom-Json
     if ($specification.schemaVersion -ne 1 -or [string]::IsNullOrWhiteSpace([string] $specification.token)) {
         throw 'The Windows Job specification is invalid.'
