@@ -237,6 +237,8 @@
 החלטות #106–#107 אושרו ב-06.08.2026 ומומשו סטטית ב-`0074_monthly_report_snapshots.sql`
 וב-`0073_payment_credit_override.sql` בהתאמה. הן אינן פתוחות עוד; אימות runtime טרם בוצע.
 
+החלטת המשך לבנק: שיוך `bank_imports` ו-`bank_transactions` לישות משפטית הוא שינוי נפרד. עד שיושם, `0073` אינה מריצה שאילתת בנק ארגונית ואינה מחזירה bit שעלול לחשוף פעילות של ישות אחות; היא מחזירה `similar_bank_transfer_check = unavailable` ומציגה אזהרה כללית שאינה חוסמת ואינה מאשרת את הבקשה.
+
 | # | שאלה | ההכרעה | איפה |
 |---|---|---|---|
 | 106 | **מהו הסקופ של snapshot חודשי סופי לרו״ח** | **ישות משפטית אחת בכל snapshot.** הארגון נשאר גבול הדייר וה-metadata, אך דיווח חשבונאי, חשבוניות, תשלומים, בנק ו-`monthly_exports` שייכים לישות משפטית לפי מודל האבטחה. `0074` תקבל `unit_id` מסוג `legal_entity`, ‏FK מרוכב עם `org_id`, רוכב A3 וגרסאות ייחודיות לפי `(org_id, unit_id, month, version)`. Owner או accountant רשאים ליצור ולקרוא רק ישות שנמצאת ב-`auth_scopes()` שלהם. אין `profiles.active_unit_id`; הבחירה מפורשת במסך/URL. | `docs/ENTERPRISE-SECURITY-MODEL.md` §3.5; ‏`0074_monthly_report_snapshots.sql` העתידית |

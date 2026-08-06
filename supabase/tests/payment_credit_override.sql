@@ -176,6 +176,15 @@ select pg_temp.credit_assert(
 );
 
 select pg_temp.credit_assert(
+  public.payment_request_financial_check_signals(
+    '17330000-0000-0000-0000-000000000001', 100,
+    array['17340000-0000-0000-0000-000000000001'::uuid],
+    '17370000-0000-0000-0000-000000000002'
+  ) ->> 'similar_bank_transfer_check' = 'unavailable',
+  'bank comparison must remain explicitly unavailable until bank data is entity-scoped'
+);
+
+select pg_temp.credit_assert(
   (public.transition_payment_request(
     '17370000-0000-0000-0000-000000000001', 'approved', 'normal approval without credits'
   ) ->> 'idempotent')::boolean = false,
@@ -395,6 +404,31 @@ select pg_temp.credit_expect_error(
   'payment_request_credit_scope_unresolved'
 );
 
+-- The restrictive derived policy must hide every sibling, source-less, or supplier-mismatched
+-- row even when the legacy permissive organization policy would otherwise expose it.
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+insert into credit_requests (
+  id, org_id, supplier_id, invoice_id, reason, amount, status
+) values (
+  '17360000-0000-0000-0000-000000000005', '17300000-0000-0000-0000-000000000001',
+  '17330000-0000-0000-0000-000000000002', '17340000-0000-0000-0000-000000000001',
+  'other', 1, 'closed'
+);
+select set_config('request.jwt.claim.sub', '17320000-0000-0000-0000-000000000005', true);
+set local role authenticated;
+select pg_temp.credit_assert(
+  (select count(*) = 1
+          and bool_and(cr.id = '17360000-0000-0000-0000-000000000001')
+   from credit_requests cr
+   where cr.org_id = '17300000-0000-0000-0000-000000000001'),
+  'derived credit RLS must expose only supplier-matched anchors inside auth_scopes()'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '17320000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+
 -- Creation derives the unit from invoices and rejects a mixed-entity payload. No caller
 -- supplies unit_id to create_payment_request.
 select pg_temp.credit_assert(
@@ -429,6 +463,15 @@ select pg_temp.credit_assert(
   (select r.scope_class = 'legal_entity' and r.enforced
    from private.scope_registry r where r.table_name = 'payment_requests'),
   'payment_requests must be an enforced legal-entity table'
+);
+select pg_temp.credit_assert(
+  (select not p.polpermissive
+          and p.polcmd = '*'
+          and p.polroles = array[0::oid]
+   from pg_catalog.pg_policy p
+   where p.polrelid = 'public.credit_requests'::regclass
+     and p.polname = 'credit_requests_derived_scope_rider'),
+  'credit_requests must have a restrictive all-command derived-scope rider for public'
 );
 select pg_temp.credit_assert(
   not exists (

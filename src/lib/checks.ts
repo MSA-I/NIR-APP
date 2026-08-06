@@ -150,7 +150,7 @@ export async function runPaymentRequestChecks(pr: {
     paid_invoice_count: number;
     unapproved_invoice_count: number;
     amount_matches_open_balance: boolean;
-    similar_bank_transfer_exists: boolean;
+    similar_bank_transfer_check: 'unavailable';
     open_credit_total: number;
   };
   if (financial.visible_invoice_count !== financial.requested_invoice_count) {
@@ -186,12 +186,13 @@ export async function runPaymentRequestChecks(pr: {
     });
   }
 
-  // 3. Similar bank transfer, without exposing its date or row.
-  if (financial.similar_bank_transfer_exists) {
+  // 3. Bank data is not legal-entity scoped yet. Keep the check visibly unavailable and
+  // non-blocking instead of querying or inferring from organization-wide activity.
+  if (financial.similar_bank_transfer_check === 'unavailable') {
     results.push({
-      code: 'similar_bank_tx',
+      code: 'similar_bank_unavailable',
       severity: 'warning',
-      message: 'קיימת העברה בנקאית דומה לספק זה — יש לוודא שלא שולם כבר',
+      message: 'בדיקת העברה דומה אינה זמינה עד שיוך בנק לישות',
     });
   }
 

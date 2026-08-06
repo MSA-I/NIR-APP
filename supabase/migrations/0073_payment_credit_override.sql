@@ -199,6 +199,47 @@ begin
 end
 $$;
 
+-- credit_requests remains a derived table: it must not receive an independent unit_id. The
+-- browser-facing RLS boundary therefore proves every populated anchor independently. A row is
+-- visible only when it has at least one anchor, every anchor belongs to the same supplier, and
+-- every anchor's owning unit is already in the caller's materialized scope closure. Keep this
+-- predicate anchor-only: invoking credit_request_legal_entity() here would read credit_requests
+-- recursively from its own policy.
+create policy credit_requests_derived_scope_rider
+  on public.credit_requests
+  as restrictive
+  for all
+  to public
+  using (
+    (invoice_id is not null or receipt_item_id is not null)
+    and (
+      invoice_id is null
+      or exists (
+        select 1
+        from public.invoices i
+        where i.org_id = credit_requests.org_id
+          and i.id = credit_requests.invoice_id
+          and i.supplier_id = credit_requests.supplier_id
+          and i.unit_id = any(public.auth_scopes())
+      )
+    )
+    and (
+      receipt_item_id is null
+      or exists (
+        select 1
+        from public.goods_receipt_items gri
+        join public.goods_receipts gr
+          on gr.org_id = gri.org_id and gr.id = gri.receipt_id
+        join public.purchase_orders po
+          on po.org_id = gr.org_id and po.id = gr.order_id
+        where gri.org_id = credit_requests.org_id
+          and gri.id = credit_requests.receipt_item_id
+          and po.supplier_id = credit_requests.supplier_id
+          and gr.unit_id = any(public.auth_scopes())
+      )
+    )
+  );
+
 -- payment_requests now carries a real legal-entity pointer, so activate the same canonical
 -- restrictive rider used by the six wave-3 tables. NULL remains in the canonical expression
 -- for upgrade/fixture compatibility; every application command below rejects or avoids NULL.
@@ -223,6 +264,25 @@ create policy scope_rider_payment_requests
   for all
   to public
   using ((unit_id is null) or (unit_id = any (auth_scopes())));
+
+-- Creation/replay and every transition of one request must enter the same serialization lane
+-- before either command takes row locks. This removes the historical invoice->request versus
+-- request->invoice cycle without imposing an organization-wide lock.
+create function private.lock_payment_request_command(p_org_id uuid, p_payment_request_id uuid)
+returns void
+language sql
+volatile
+security invoker
+set search_path = pg_catalog
+as $$
+  select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    'payment-request-command:' || p_org_id::text || ':' || p_payment_request_id::text,
+    0
+  ))
+$$;
+
+revoke all on function private.lock_payment_request_command(uuid, uuid)
+  from public, anon, authenticated;
 
 -- ===== 2. Creation binds a request to exactly one in-scope legal entity =====
 
@@ -271,6 +331,8 @@ begin
   if p_allocations is null or jsonb_typeof(p_allocations) <> 'array' then
     raise exception 'allocation_invalid' using errcode = '22023';
   end if;
+
+  perform private.lock_payment_request_command(v_org, p_request_id);
 
   select count(*), count(distinct invoice_id), round(coalesce(sum(amount), 0), 2),
          coalesce(jsonb_agg(
@@ -504,6 +566,8 @@ begin
   end if;
   v_target := p_target_status::payment_request_status;
 
+  perform private.lock_payment_request_command(v_org, p_payment_request_id);
+
   select * into v_request
   from public.payment_requests
   where id = p_payment_request_id and org_id = v_org
@@ -550,17 +614,11 @@ begin
   end if;
 
   if v_target = 'approved' then
-    -- Lock the supplier row first. New credits referencing this supplier require a FK key
-    -- lock and therefore cannot race the stable snapshot below. Existing active credits are
-    -- then locked by id before their derived legal entities are evaluated.
-    perform 1
-    from public.suppliers s
-    where s.id = v_request.supplier_id and s.org_id = v_org and s.deleted_at is null
-    for update;
-    if not found then
-      raise exception 'payment_request_checks_failed' using errcode = 'P0001';
-    end if;
-
+    -- Invoice-linked credit creation locks its invoice before the supplier FK key lock. Keep
+    -- approval in that same order: request serialization -> request row -> invoices -> supplier
+    -- -> credits. The supplier lock still fences receipt-linked/new credit inserts; a creator
+    -- that committed before the fence is visible to the following credit snapshot, while one
+    -- that starts afterwards waits until approval commits.
     perform 1
     from public.invoices i
     join public.payment_request_invoices pri
@@ -592,6 +650,14 @@ begin
           )
         )
     ) then
+      raise exception 'payment_request_checks_failed' using errcode = 'P0001';
+    end if;
+
+    perform 1
+    from public.suppliers s
+    where s.id = v_request.supplier_id and s.org_id = v_org and s.deleted_at is null
+    for update;
+    if not found then
       raise exception 'payment_request_checks_failed' using errcode = 'P0001';
     end if;
 
@@ -761,8 +827,8 @@ grant execute on function public.approve_payment_request_with_credit_override(uu
 -- Re-declared from 0031. The server now returns the scoped open-credit total, so the browser
 -- never reads raw credit rows to construct an approval decision. For an existing request the
 -- supplier, amount, legal entity and exact invoice set are rebound before any credit value is
--- returned. The similar-bank boolean keeps its pre-0073 semantics because bank_imports is a
--- separately deferred legal-entity table (0054); this migration does not invent its scope.
+-- returned. bank_imports remains a separately deferred legal-entity table (0054), so this
+-- function returns an explicit unavailable state instead of leaking an organization-wide bit.
 create or replace function public.payment_request_financial_check_signals(
   p_supplier_id uuid,
   p_amount numeric,
@@ -787,7 +853,6 @@ declare
   v_unapproved_count int;
   v_open_balance numeric;
   v_open_credit_total numeric(12,2) := 0;
-  v_similar_bank boolean;
 begin
   if v_org is null or auth.uid() is null or v_role not in ('owner', 'office') then
     raise exception 'not_authorized' using errcode = '42501';
@@ -886,23 +951,16 @@ begin
     and cr.status in ('open', 'requested', 'received')
     and private.credit_request_legal_entity(cr.id, cr.org_id) = v_unit;
 
-  select exists (
-    select 1
-    from public.bank_transactions bt
-    where bt.org_id = v_org
-      and bt.supplier_id = p_supplier_id
-      and round(bt.amount, 2) = round(p_amount, 2)
-      and bt.is_debit
-      and bt.tx_date >= current_date - 45
-  ) into v_similar_bank;
-
   return jsonb_build_object(
     'requested_invoice_count', v_requested_count,
     'visible_invoice_count', v_visible_count,
     'paid_invoice_count', v_paid_count,
     'unapproved_invoice_count', v_unapproved_count,
     'amount_matches_open_balance', abs(round(v_open_balance, 2) - round(p_amount, 2)) <= 1,
-    'similar_bank_transfer_exists', v_similar_bank,
+    -- bank_imports is not legal-entity scoped yet. Returning an organization-wide existence
+    -- bit would leak sibling activity, so 0073 reports an explicit unavailable state and makes
+    -- no bank query or approval decision from substitute data.
+    'similar_bank_transfer_check', 'unavailable',
     'open_credit_total', v_open_credit_total
   );
 end

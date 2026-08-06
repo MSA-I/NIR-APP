@@ -1453,7 +1453,8 @@ async function paymentRequestNamesAndModalStack(browser) {
       paid_invoice_count: 0,
       unapproved_invoice_count: 0,
       amount_matches_open_balance: true,
-      similar_bank_transfer_exists: false,
+      similar_bank_transfer_check: 'unavailable',
+      open_credit_total: 0,
     },
   }));
   const page = await context.newPage();

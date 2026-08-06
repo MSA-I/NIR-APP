@@ -6,9 +6,22 @@ import { describe, test } from 'node:test';
 const root = process.cwd();
 const migration = readFileSync(path.join(root, 'supabase', 'migrations', '0073_payment_credit_override.sql'), 'utf8');
 const sqlRegression = readFileSync(path.join(root, 'supabase', 'tests', 'payment_credit_override.sql'), 'utf8');
+const concurrencyRegression = readFileSync(path.join(root, 'supabase', 'tests', 'payment_credit_override_concurrency.sql'), 'utf8');
 const approvalUi = readFileSync(path.join(root, 'src', 'pages', 'PaymentRequests.tsx'), 'utf8');
 const payerUi = readFileSync(path.join(root, 'src', 'pages', 'PayerQueue.tsx'), 'utf8');
 const checks = readFileSync(path.join(root, 'src', 'lib', 'checks.ts'), 'utf8');
+const creditPolicy = migration.slice(
+  migration.indexOf('create policy credit_requests_derived_scope_rider'),
+  migration.indexOf('-- payment_requests now carries'),
+);
+const approvalCommand = migration.slice(
+  migration.indexOf('create or replace function public.p1_transition_payment_request'),
+  migration.indexOf('create or replace function public.transition_payment_request'),
+);
+const financialSignals = migration.slice(
+  migration.indexOf('create or replace function public.payment_request_financial_check_signals'),
+  migration.indexOf('revoke all on function public.payment_request_financial_check_signals'),
+);
 
 describe('legal-entity-scoped open supplier credit approval contract', () => {
   test('payment requests gain scope while credit requests remain derived', () => {
@@ -21,6 +34,18 @@ describe('legal-entity-scoped open supplier credit approval contract', () => {
     assert.match(migration, /0073_open_credit_scope_unresolved/);
   });
 
+  test('derived credit RLS proves every populated anchor without recursive policy reads', () => {
+    assert.match(creditPolicy, /as restrictive[\s\S]*for all[\s\S]*to public/);
+    assert.match(creditPolicy, /invoice_id is not null or receipt_item_id is not null/);
+    assert.match(creditPolicy, /i\.supplier_id = credit_requests\.supplier_id/);
+    assert.match(creditPolicy, /i\.unit_id = any\(public\.auth_scopes\(\)\)/);
+    assert.match(creditPolicy, /goods_receipt_items[\s\S]*goods_receipts[\s\S]*purchase_orders/);
+    assert.match(creditPolicy, /po\.supplier_id = credit_requests\.supplier_id/);
+    assert.match(creditPolicy, /gr\.unit_id = any\(public\.auth_scopes\(\)\)/);
+    assert.doesNotMatch(creditPolicy, /credit_request_legal_entity/);
+    assert.match(sqlRegression, /derived credit RLS must expose only supplier-matched anchors inside auth_scopes\(\)/);
+  });
+
   test('trusted commands bind authorization, tenant, supplier, state and replay', () => {
     assert.match(migration, /approve_payment_request_with_credit_override/);
     assert.match(migration, /v_role not in \('owner', 'office'\)/);
@@ -31,6 +56,23 @@ describe('legal-entity-scoped open supplier credit approval contract', () => {
     assert.match(migration, /payment_request_credit_total_changed/);
     assert.match(migration, /nullif\(btrim\(p_override_reason\), ''\)/);
     assert.doesNotMatch(migration, /evaluate_approval_policy\s*\(/);
+  });
+
+  test('creation replay and transitions share one lane before deterministic row locks', () => {
+    assert.match(migration, /create function private\.lock_payment_request_command/);
+    assert.match(migration, /pg_advisory_xact_lock[\s\S]*payment-request-command:/);
+    assert.equal(
+      migration.match(/perform private\.lock_payment_request_command\(v_org, p_(?:request_id|payment_request_id)\)/g)?.length,
+      2,
+    );
+    const invoiceLock = approvalCommand.indexOf('from public.invoices i');
+    const supplierLock = approvalCommand.indexOf('from public.suppliers s');
+    const creditLock = approvalCommand.indexOf('from public.credit_requests cr', supplierLock);
+    assert.ok(invoiceLock >= 0 && supplierLock > invoiceLock && creditLock > supplierLock);
+    assert.match(concurrencyRegression, /creation replay and transition did not both wait on the shared advisory lane/);
+    assert.match(concurrencyRegression, /serialized replay created duplicate links or audit facts/);
+    assert.match(concurrencyRegression, /payment_request_credit_override_required/);
+    assert.match(concurrencyRegression, /ordinary approval did not fail closed after the concurrent credit committed/);
   });
 
   test('one audited transition preserves the override facts without mutating credits', () => {
@@ -58,6 +100,20 @@ describe('legal-entity-scoped open supplier credit approval contract', () => {
     assert.match(approvalUi, /סיבת אישור החריגה/);
     assert.match(approvalUi, /p_expected_open_credit_total: freshOpenCreditTotal/);
     assert.match(approvalUi, /!creditOverrideAcknowledged/);
+  });
+
+  test('bank comparison stays explicit, unavailable and non-blocking until entity-scoped', () => {
+    assert.match(financialSignals, /'similar_bank_transfer_check', 'unavailable'/);
+    assert.doesNotMatch(financialSignals, /bank_transactions/);
+    assert.doesNotMatch(financialSignals, /similar_bank_transfer_exists/);
+    assert.match(checks, /similar_bank_transfer_check: 'unavailable'/);
+    assert.match(checks, /code: 'similar_bank_unavailable'/);
+    assert.match(checks, /בדיקת העברה דומה אינה זמינה עד שיוך בנק לישות/);
+    assert.doesNotMatch(
+      checks.slice(checks.indexOf('export async function runPaymentRequestChecks')),
+      /from\('bank_transactions'\)/,
+    );
+    assert.match(sqlRegression, /bank comparison must remain explicitly unavailable/);
   });
 
   test('payer sees the recorded decision as read-only context', () => {
