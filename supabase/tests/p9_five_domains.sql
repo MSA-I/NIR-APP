@@ -211,10 +211,28 @@ select pg_temp.p9_assert(
 -- Wave 9 added zero exemptions (the registry stood at 59 through it); 0073 then
 -- DRAINED three -- create_payment_request, transition_payment_request and
 -- payment_request_financial_check_signals gained real scope checks and left the
--- registry. The pin moves down, never up: additions still fail here by design.
+-- registry, taking the pin to 56.
+--
+-- 0075:464 then added ONE, and the pin moves to 57. This is the only addition the campaign has
+-- accepted, and it was accepted by decision rather than by drift -- the latch below is what
+-- forced that conversation, which is its whole purpose.
+--
+-- WHY IT IS NOT DRAINABLE, so the multi-unit enablement wave does not have to rediscover it:
+-- public.rescue_document_from_archive(uuid,text) is a definer whose body names `documents`, an
+-- enforced table. Making it INVOKER would require granting UPDATE on document_filings to
+-- authenticated -- and B1's review demonstrated by probe that a browser could then PATCH
+-- reverted_at straight through PostgREST with no reason, defeating the mandatory-reason
+-- contract the owner's ruling established (#110). Draining this row would trade a line of
+-- bookkeeping for an actual hole. The remediation named in its own reason field is the real
+-- one: filter `documents` on auth_scopes() once documents carries a meaningful unit.
+--
+-- The pin still moves only by an explicit edit here. A migration that adds an exemption and
+-- leaves this line alone fails, by design.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 56,
-  'the definer exemption registry must stay at 56 rows -- 59 minus the three 0073 drained; zero additions allowed');
+  (select count(*) from private.scope_definer_exemptions) = 57,
+  'the definer exemption registry must stay at 57 rows -- 59 minus the three 0073 drained, '
+  || 'plus the one 0075:464 added for rescue_document_from_archive (not drainable: invoker '
+  || 'would require granting UPDATE on document_filings to the browser); zero silent additions');
 
 select pg_temp.p9_assert(
   (select count(*) from private.scope_enforcement_violations()) = 0,
