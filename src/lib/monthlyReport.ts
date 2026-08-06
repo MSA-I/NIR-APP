@@ -19,10 +19,16 @@ export interface MonthlyReportSnapshot {
   created_by: string;
   created_by_name: string;
   created_at: string;
-  invoice_rows: MonthlyReportData['invoices'];
+  invoice_rows: (MonthlyReportData['invoices'][number] & {
+    review_status_label?: string;
+    payment_status_label?: string;
+  })[];
   payment_rows: MonthlyReportData['payments'];
-  credit_rows: MonthlyReportData['credits'];
-  exception_rows: MonthlyReportData['exceptions'];
+  credit_rows: (MonthlyReportData['credits'][number] & {
+    reason_label?: string;
+    status_label?: string;
+  })[];
+  exception_rows: (MonthlyReportData['exceptions'][number] & { type_label?: string })[];
   bank_rows: {
     id: string;
     tx_date: string;
@@ -31,6 +37,8 @@ export interface MonthlyReportSnapshot {
     is_debit: boolean;
     reference: string | null;
     status: string;
+    direction_label?: string;
+    status_label?: string;
   }[];
   totals: {
     invoice_count: number;
@@ -45,7 +53,6 @@ export interface MonthlyReportSnapshot {
     bank_transaction_count: number;
     bank_total: number;
     unpaid_invoice_count: number;
-    unmatched_bank_count: number;
   };
   content_hash: string;
 }
@@ -113,9 +120,27 @@ export function buildMonthlyWorkbook(input: {
  */
 export function buildLockedMonthlyWorkbook(input: {
   snapshot: MonthlyReportSnapshot;
-  labels: MonthlyReportLabels;
 }) {
   const { snapshot } = input;
+  // v2 stores every row label beside the raw enum. Older local v1 artifacts remain readable
+  // without consulting today's label maps: their frozen raw value is the conservative fallback.
+  const frozenLabels: MonthlyReportLabels = {
+    invoiceReview: Object.fromEntries(snapshot.invoice_rows.map((row) => [
+      row.review_status, { label: row.review_status_label ?? row.review_status },
+    ])),
+    invoicePayment: Object.fromEntries(snapshot.invoice_rows.map((row) => [
+      row.payment_status, { label: row.payment_status_label ?? row.payment_status },
+    ])),
+    creditReason: Object.fromEntries(snapshot.credit_rows.map((row) => [
+      row.reason, row.reason_label ?? row.reason,
+    ])),
+    creditStatus: Object.fromEntries(snapshot.credit_rows.map((row) => [
+      row.status, { label: row.status_label ?? row.status },
+    ])),
+    exceptionType: Object.fromEntries(snapshot.exception_rows.map((row) => [
+      row.type, row.type_label ?? row.type,
+    ])),
+  };
   const workbook = buildMonthlyWorkbook({
     orgName: snapshot.organization_name,
     month: snapshot.report_month.slice(0, 7),
@@ -126,7 +151,7 @@ export function buildLockedMonthlyWorkbook(input: {
       credits: snapshot.credit_rows,
       exceptions: snapshot.exception_rows,
     },
-    labels: input.labels,
+    labels: frozenLabels,
   });
 
   workbook.Sheets['פרטי הדוח'] = XLSX.utils.aoa_to_sheet([
@@ -140,7 +165,7 @@ export function buildLockedMonthlyWorkbook(input: {
     ['נוצר על ידי', snapshot.created_by_name],
     ['Snapshot ID', snapshot.id],
     ['Checksum', snapshot.content_hash],
-    ['הערה', 'דוח סופי זה נוצר רק מנתוני snapshot נעולים במסד הנתונים וכולל חשבוניות מאושרות בלבד.'],
+    ['הערה', 'דוח סופי זה נוצר רק מנתוני snapshot נעולים במסד הנתונים ומשקף את גבול הדוח החי במועד היצירה.'],
     [],
     ['מדד', 'מספר רשומות', 'סכום'],
     ['חשבוניות', snapshot.totals.invoice_count, snapshot.totals.invoice_total],
@@ -150,16 +175,15 @@ export function buildLockedMonthlyWorkbook(input: {
     ['זיכויים', snapshot.totals.credit_count, snapshot.totals.credit_total],
     ['חריגים פתוחים בעת היצירה', snapshot.totals.exception_count, null],
     ['תנועות בנק', snapshot.totals.bank_transaction_count, snapshot.totals.bank_total],
-    ['תנועות בנק שדרשו תשומת לב', snapshot.totals.unmatched_bank_count, null],
   ]);
 
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(snapshot.bank_rows.map((row) => ({
     'תאריך': row.tx_date,
     'תיאור': row.description,
     'סכום': row.amount,
-    'סוג': row.is_debit ? 'חיוב' : 'זיכוי',
+    'סוג': row.direction_label ?? (row.is_debit ? 'debit' : 'credit'),
     'אסמכתא': row.reference,
-    'סטטוס': row.status,
+    'סטטוס': row.status_label ?? row.status,
   }))), 'תנועות בנק');
 
   return workbook;

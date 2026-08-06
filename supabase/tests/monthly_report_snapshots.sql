@@ -1,5 +1,5 @@
 -- Immutable legal-entity monthly accountant snapshot acceptance.
--- Run only against a freshly reset disposable local database after migration 0074.
+-- Run only against a freshly reset disposable local database after migrations 0073-0074.
 \set ON_ERROR_STOP on
 
 begin;
@@ -12,6 +12,25 @@ begin
   if not coalesce(p_condition, false) then
     raise exception 'Monthly snapshot assertion failed: %', p_message;
   end if;
+end
+$$;
+
+create function pg_temp.snapshot_actor(p_user uuid, p_fresh_password boolean default true)
+returns void
+language plpgsql
+as $$
+begin
+  perform set_config('request.jwt.claim.sub', coalesce(p_user::text, ''), true);
+  perform set_config(
+    'request.jwt.claims',
+    case when p_user is null then '{}'::jsonb else jsonb_build_object(
+      'sub', p_user,
+      'amr', case when p_fresh_password then jsonb_build_array(jsonb_build_object(
+        'method', 'password', 'timestamp', extract(epoch from clock_timestamp())
+      )) else '[]'::jsonb end
+    ) end::text,
+    true
+  );
 end
 $$;
 
@@ -85,6 +104,54 @@ select pg_temp.snapshot_assert(
   ),
   'snapshot audit-to-domain-event mapping is missing'
 );
+select pg_temp.snapshot_assert(
+  to_regclass('public.monthly_report_snapshot_deliveries') is not null
+    and (select relrowsecurity and relforcerowsecurity
+         from pg_class where oid = 'public.monthly_report_snapshot_deliveries'::regclass),
+  'immutable snapshot delivery ledger or its forced RLS is missing'
+);
+select pg_temp.snapshot_assert(
+  exists (
+    select 1 from private.scope_registry
+    where table_name = 'monthly_report_snapshot_deliveries'
+      and scope_class = 'legal_entity' and enforced
+  ),
+  'delivery ledger legal-entity scope is not enforced'
+);
+select pg_temp.snapshot_assert(
+  has_table_privilege('authenticated', 'public.monthly_report_snapshot_deliveries', 'SELECT')
+    and not has_table_privilege('authenticated', 'public.monthly_report_snapshot_deliveries', 'INSERT')
+    and not has_table_privilege('authenticated', 'public.monthly_report_snapshot_deliveries', 'UPDATE')
+    and not has_table_privilege('authenticated', 'public.monthly_report_snapshot_deliveries', 'DELETE'),
+  'authenticated clients must be command-only delivery writers'
+);
+select pg_temp.snapshot_assert(
+  position('assert_recent_password_authentication' in pg_get_functiondef(
+    'public.create_monthly_report_snapshot(date,uuid)'::regprocedure
+  )) > 0,
+  'snapshot creation does not enforce fresh password authentication server-side'
+);
+select pg_temp.snapshot_assert(
+  position('private.credit_request_legal_entity' in pg_get_functiondef(
+    'public.create_monthly_report_snapshot(date,uuid)'::regprocedure
+  )) > 0,
+  'snapshot command does not reuse the 0073 supplier-aware credit resolver'
+);
+select pg_temp.snapshot_assert(
+  position('review_status = ''approved''' in pg_get_functiondef(
+    'public.create_monthly_report_snapshot(date,uuid)'::regprocedure
+  )) = 0,
+  'snapshot still applies an approved-only invoice boundary'
+);
+select pg_temp.snapshot_assert(
+  position('assert_recent_password_authentication' in pg_get_functiondef(
+    'public.mark_monthly_report_snapshot_sent(uuid,text)'::regprocedure
+  )) > 0
+    and position('from public.invoices' in lower(pg_get_functiondef(
+      'public.mark_monthly_report_snapshot_sent(uuid,text)'::regprocedure
+    ))) = 0,
+  'delivery command is not step-up protected or still reads live invoices'
+);
 
 -- ===== Fixture: two tenants and two sibling legal entities in tenant A =====
 insert into public.organizations (id, name, status) values
@@ -156,17 +223,28 @@ insert into public.invoices (
   ('f5740000-0000-0000-0000-000000000002', 'a5740000-0000-0000-0000-000000000001',
    'b5740000-0000-0000-0000-000000000002', 'd5740000-0000-0000-0000-000000000001',
    'SNAP-LE2', '2026-08-03', 'c5740000-0000-0000-0000-000000000001',
-   200, 36, 236, 'approved', 'unpaid');
+   200, 36, 236, 'in_review', 'unpaid');
 
 insert into public.payments (
   id, org_id, unit_id, supplier_id, amount, paid_date, method, reference, executed_by
 ) values
-  ('05740000-0000-0000-0000-000000000001', 'a5740000-0000-0000-0000-000000000001', :'snap_le1',
+  -- unit_id values are deliberately swapped. 0056's dimension default is not authoritative;
+  -- allocations below must determine the reporting entity.
+  ('05740000-0000-0000-0000-000000000001', 'a5740000-0000-0000-0000-000000000001',
+   'b5740000-0000-0000-0000-000000000002',
    'd5740000-0000-0000-0000-000000000001', 40, '2026-08-04', 'bank', 'SNAP-REF',
    'c5740000-0000-0000-0000-000000000001'),
   ('05740000-0000-0000-0000-000000000002', 'a5740000-0000-0000-0000-000000000001',
-   'b5740000-0000-0000-0000-000000000002', 'd5740000-0000-0000-0000-000000000001',
+   :'snap_le1', 'd5740000-0000-0000-0000-000000000001',
    20, '2026-07-04', 'bank', 'SNAP-LE2-REF', 'c5740000-0000-0000-0000-000000000001');
+
+insert into public.payment_allocations (
+  id, org_id, payment_id, invoice_id, amount
+) values
+  ('a5741000-0000-0000-0000-000000000001', 'a5740000-0000-0000-0000-000000000001',
+   '05740000-0000-0000-0000-000000000001', 'f5740000-0000-0000-0000-000000000001', 40),
+  ('a5741000-0000-0000-0000-000000000002', 'a5740000-0000-0000-0000-000000000001',
+   '05740000-0000-0000-0000-000000000002', 'f5740000-0000-0000-0000-000000000002', 20);
 
 insert into public.purchase_orders (id, org_id, unit_id, supplier_id, status, created_by) values
   ('25740000-0000-0000-0000-000000000001', 'a5740000-0000-0000-0000-000000000001', :'snap_branch1',
@@ -224,7 +302,21 @@ insert into public.exceptions (id, org_id, type, status, title, supplier_id, inv
 );
 
 -- ===== Authorized creation, exact stored values, audit and event =====
-select set_config('request.jwt.claim.sub', 'c5740000-0000-0000-0000-000000000001', true);
+select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000001', false);
+set local role authenticated;
+do $$
+begin
+  perform public.create_monthly_report_snapshot(
+    '2026-08-01', current_setting('monthly_snapshot_test.le1')::uuid
+  );
+  raise exception 'snapshot test failure: creation without fresh password was accepted';
+exception when insufficient_privilege then
+  if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
+end
+$$;
+reset role;
+
+select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000001');
 set local role authenticated;
 do $$
 declare v_snapshot public.monthly_report_snapshots;
@@ -246,15 +338,95 @@ begin
   perform pg_temp.snapshot_assert((v_snapshot.totals ->> 'exception_count')::integer = 1, 'attributed exception mismatch');
   perform pg_temp.snapshot_assert((v_snapshot.totals ->> 'bank_transaction_count')::integer = 1, 'bank row count mismatch');
   perform pg_temp.snapshot_assert(jsonb_array_length(v_snapshot.bank_rows) = 1, 'structured bank detail is missing');
+  perform pg_temp.snapshot_assert(
+    v_snapshot.invoice_rows -> 0 ->> 'review_status_label' = 'מאושרת'
+      and v_snapshot.credit_rows -> 0 ? 'reason_label'
+      and v_snapshot.exception_rows -> 0 ? 'type_label'
+      and v_snapshot.bank_rows -> 0 ? 'status_label',
+    'export display labels were not frozen in snapshot rows'
+  );
+  perform set_config('monthly_snapshot_test.snapshot1', v_snapshot.id::text, true);
 
   v_snapshot := public.create_monthly_report_snapshot(
     '2026-08-01', 'b5740000-0000-0000-0000-000000000002'
   );
   perform pg_temp.snapshot_assert(v_snapshot.version = 1, 'LE2 must have an independent version sequence');
   perform pg_temp.snapshot_assert((v_snapshot.totals ->> 'invoice_total')::numeric = 236, 'LE2 leaked or lost invoice data');
+  perform pg_temp.snapshot_assert(
+    v_snapshot.invoice_rows -> 0 ->> 'review_status' = 'in_review',
+    'non-approved invoice from the live report boundary was omitted'
+  );
 end
 $$;
 reset role;
+
+-- Delivery is derived from the locked snapshot identity, is step-up protected and replay-safe.
+select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000001', false);
+set local role authenticated;
+do $$
+begin
+  perform public.mark_monthly_report_snapshot_sent(
+    current_setting('monthly_snapshot_test.snapshot1')::uuid,
+    'ניסיון ללא אימות טרי'
+  );
+  raise exception 'snapshot test failure: delivery without fresh password was accepted';
+exception when insufficient_privilege then
+  if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
+end
+$$;
+reset role;
+
+select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000001');
+set local role authenticated;
+do $$
+declare v_result jsonb;
+begin
+  v_result := public.mark_monthly_report_snapshot_sent(
+    current_setting('monthly_snapshot_test.snapshot1')::uuid,
+    'נמסר לרואת החשבון לבדיקה'
+  );
+  perform pg_temp.snapshot_assert(not (v_result ->> 'idempotent')::boolean, 'first delivery was reported as replay');
+
+  v_result := public.mark_monthly_report_snapshot_sent(
+    current_setting('monthly_snapshot_test.snapshot1')::uuid,
+    'נמסר לרואת החשבון לבדיקה'
+  );
+  perform pg_temp.snapshot_assert((v_result ->> 'idempotent')::boolean, 'identical delivery replay was not idempotent');
+
+  begin
+    perform public.mark_monthly_report_snapshot_sent(
+      current_setting('monthly_snapshot_test.snapshot1')::uuid,
+      'סיבה סותרת'
+    );
+    raise exception 'snapshot test failure: conflicting delivery replay was accepted';
+  exception when others then
+    if sqlerrm not like '%monthly_report_snapshot_delivery_replay_conflict%' then raise; end if;
+  end;
+end
+$$;
+reset role;
+
+select pg_temp.snapshot_assert(
+  (select count(*) = 1 and bool_and(delivery.content_hash = snapshot.content_hash)
+   from public.monthly_report_snapshot_deliveries delivery
+   join public.monthly_report_snapshots snapshot on snapshot.id = delivery.snapshot_id
+   where delivery.snapshot_id = current_setting('monthly_snapshot_test.snapshot1')::uuid),
+  'delivery replay created duplicate ledger rows'
+);
+select pg_temp.snapshot_assert(
+  (select count(*) = 1
+   from public.audit_logs
+   where action = 'monthly_report_snapshot_sent'
+     and new_values ->> 'snapshot_id' = current_setting('monthly_snapshot_test.snapshot1')),
+  'delivery replay created duplicate or missing audit rows'
+);
+select pg_temp.snapshot_assert(
+  (select count(*) = 1
+   from public.domain_events
+   where event_type = 'monthly_report.snapshot_sent'
+     and payload ->> 'snapshot_id' = current_setting('monthly_snapshot_test.snapshot1')),
+  'delivery audit did not emit exactly one domain event'
+);
 
 select pg_temp.snapshot_assert(
   (select content_hash = encode(sha256(convert_to(jsonb_build_object(
@@ -305,7 +477,7 @@ select pg_temp.snapshot_assert(
 );
 
 -- ===== Snapshot stability and explicit later versions =====
-select set_config('request.jwt.claim.sub', '', true);
+select pg_temp.snapshot_actor(null);
 update public.invoices set amount_before_vat = 200, vat_amount = 36, total_amount = 236
 where id = 'f5740000-0000-0000-0000-000000000001';
 update public.suppliers set name = 'Snapshot supplier changed'
@@ -320,7 +492,7 @@ select pg_temp.snapshot_assert(
   'live changes altered historical version 1'
 );
 
-select set_config('request.jwt.claim.sub', 'c5740000-0000-0000-0000-000000000001', true);
+select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000001');
 set local role authenticated;
 do $$
 declare v_snapshot public.monthly_report_snapshots;
@@ -335,7 +507,7 @@ $$;
 reset role;
 
 -- The legal-entity-scoped accountant can create LE1 version 3 and see only LE1 versions.
-select set_config('request.jwt.claim.sub', 'c5740000-0000-0000-0000-000000000002', true);
+select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000002');
 set local role authenticated;
 select pg_temp.snapshot_assert(
   (select count(*) = 1 and bool_and(id = :'snap_le1'::uuid)
@@ -371,7 +543,7 @@ $$;
 reset role;
 
 -- ===== Unauthorized roles and tenant crossing =====
-select set_config('request.jwt.claim.sub', 'c5740000-0000-0000-0000-000000000003', true);
+select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000003');
 set local role authenticated;
 do $$
 begin
@@ -383,13 +555,28 @@ exception when insufficient_privilege then
   if sqlerrm not like '%monthly_report_snapshot_not_authorized%' then raise; end if;
 end
 $$;
+do $$
+begin
+  perform public.mark_monthly_report_snapshot_sent(
+    current_setting('monthly_snapshot_test.snapshot1')::uuid,
+    'office must not deliver'
+  );
+  raise exception 'snapshot test failure: office delivery was accepted';
+exception when insufficient_privilege then
+  if sqlerrm not like '%monthly_report_snapshot_delivery_not_authorized%' then raise; end if;
+end
+$$;
 select pg_temp.snapshot_assert(
   (select count(*) = 0 from public.monthly_report_snapshots),
   'office role read final snapshots'
 );
+select pg_temp.snapshot_assert(
+  (select count(*) = 0 from public.monthly_report_snapshot_deliveries),
+  'office role read final snapshot deliveries'
+);
 reset role;
 
-select set_config('request.jwt.claim.sub', 'c5740000-0000-0000-0000-000000000004', true);
+select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000004');
 set local role authenticated;
 do $$
 begin
@@ -403,7 +590,7 @@ end
 $$;
 reset role;
 
-select set_config('request.jwt.claim.sub', 'c5740000-0000-0000-0000-000000000005', true);
+select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000005');
 set local role authenticated;
 do $$
 begin
@@ -415,15 +602,31 @@ exception when invalid_parameter_value then
   if sqlerrm not like '%monthly_report_snapshot_legal_entity_invalid%' then raise; end if;
 end
 $$;
+do $$
+begin
+  perform public.mark_monthly_report_snapshot_sent(
+    current_setting('monthly_snapshot_test.snapshot1')::uuid,
+    'cross tenant must not deliver'
+  );
+  raise exception 'snapshot test failure: cross-tenant delivery was accepted';
+exception when no_data_found then
+  if sqlerrm not like '%monthly_report_snapshot_delivery_unknown%' then raise; end if;
+end
+$$;
 select pg_temp.snapshot_assert(
   (select count(*) = 0 from public.monthly_report_snapshots
    where org_id = 'a5740000-0000-0000-0000-000000000001'),
   'tenant B read tenant A snapshots'
 );
+select pg_temp.snapshot_assert(
+  (select count(*) = 0 from public.monthly_report_snapshot_deliveries
+   where org_id = 'a5740000-0000-0000-0000-000000000001'),
+  'tenant B read tenant A snapshot deliveries'
+);
 reset role;
 
 -- ===== Fail-closed derived attribution and atomic failure =====
-select set_config('request.jwt.claim.sub', 'c5740000-0000-0000-0000-000000000001', true);
+select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000001');
 set local role authenticated;
 do $$
 declare
@@ -533,6 +736,24 @@ begin
   where org_id = 'a5740000-0000-0000-0000-000000000001'
     and unit_id = current_setting('monthly_snapshot_test.le1')::uuid and version = 1;
   raise exception 'snapshot test failure: immutable row delete was accepted';
+exception when insufficient_privilege then
+  if sqlerrm not like '%monthly_report_snapshot_immutable%' then raise; end if;
+end
+$$;
+do $$
+begin
+  update public.monthly_report_snapshot_deliveries set reason = 'tampered'
+  where snapshot_id = current_setting('monthly_snapshot_test.snapshot1')::uuid;
+  raise exception 'snapshot test failure: immutable delivery update was accepted';
+exception when insufficient_privilege then
+  if sqlerrm not like '%monthly_report_snapshot_immutable%' then raise; end if;
+end
+$$;
+do $$
+begin
+  delete from public.monthly_report_snapshot_deliveries
+  where snapshot_id = current_setting('monthly_snapshot_test.snapshot1')::uuid;
+  raise exception 'snapshot test failure: immutable delivery delete was accepted';
 exception when insufficient_privilege then
   if sqlerrm not like '%monthly_report_snapshot_immutable%' then raise; end if;
 end

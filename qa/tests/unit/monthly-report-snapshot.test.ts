@@ -22,7 +22,7 @@ const snapshot: MonthlyReportSnapshot = {
   unit_id: '40000000-0000-0000-0000-000000000001',
   report_month: '2026-08-01',
   version: 2,
-  report_version: 'monthly-accountant-legal-entity-v1',
+  report_version: 'monthly-accountant-legal-entity-v2',
   organization_name: 'עסק בדיקה',
   legal_entity_name: 'ישות משפטית ירושלים',
   created_by: '20000000-0000-0000-0000-000000000001',
@@ -31,28 +31,30 @@ const snapshot: MonthlyReportSnapshot = {
   invoice_rows: [{
     supplier: { name: 'ספק נעול' }, invoice_number: 'INV-10', invoice_date: '2026-08-02',
     amount_before_vat: 100, vat_amount: 18, total_amount: 118,
-    review_status: 'approved', payment_status: 'unpaid',
+    review_status: 'approved', review_status_label: 'תווית בדיקה נעולה',
+    payment_status: 'unpaid', payment_status_label: 'תווית תשלום נעולה',
   }],
   payment_rows: [{
     supplier: { name: 'ספק נעול' }, paid_date: '2026-08-03', amount: 40,
     method: 'העברה בנקאית', reference: 'REF-1',
   }],
   credit_rows: [{
-    supplier: { name: 'ספק נעול' }, reason: 'wrong_price', amount: 10, status: 'open',
+    supplier: { name: 'ספק נעול' }, reason: 'wrong_price', reason_label: 'סיבת זיכוי נעולה',
+    amount: 10, status: 'open', status_label: 'סטטוס זיכוי נעול',
   }],
   exception_rows: [{
-    type: 'amount_mismatch', title: '=NOW()', supplier: { name: 'ספק נעול' },
+    type: 'amount_mismatch', type_label: 'סוג חריגה נעול', title: '=NOW()', supplier: { name: 'ספק נעול' },
   }],
   bank_rows: [{
     id: '50000000-0000-0000-0000-000000000001', tx_date: '2026-08-04',
     description: '=HYPERLINK("https://invalid.example")', amount: 40, is_debit: true,
-    reference: 'BANK-1', status: 'matched',
+    reference: 'BANK-1', status: 'matched', direction_label: 'כיוון נעול', status_label: 'סטטוס בנק נעול',
   }],
   totals: {
     invoice_count: 1, invoice_total: 118, before_vat_total: 100, vat_total: 18,
     payment_count: 1, payment_total: 40, credit_count: 1, credit_total: 10,
     exception_count: 1, bank_transaction_count: 1, bank_total: 40,
-    unpaid_invoice_count: 1, unmatched_bank_count: 0,
+    unpaid_invoice_count: 1,
   },
   content_hash: 'a'.repeat(64),
 };
@@ -77,12 +79,14 @@ test('live monthly workbook remains explicitly live and best-effort', () => {
 });
 
 test('locked workbook uses only stored rows/totals and carries legal-entity metadata', () => {
-  const bytes = XLSX.write(buildLockedMonthlyWorkbook({ snapshot, labels }), {
+  const bytes = XLSX.write(buildLockedMonthlyWorkbook({ snapshot }), {
     type: 'buffer', bookType: 'xlsx',
   });
   const reopened = XLSX.read(bytes, { type: 'buffer', cellFormula: true });
   const summary = XLSX.utils.sheet_to_json<unknown[]>(reopened.Sheets['פרטי הדוח']!, { header: 1 });
   const invoices = XLSX.utils.sheet_to_json<Record<string, unknown>>(reopened.Sheets['חשבוניות']!);
+  const credits = XLSX.utils.sheet_to_json<Record<string, unknown>>(reopened.Sheets['זיכויים']!);
+  const exceptions = XLSX.utils.sheet_to_json<Record<string, unknown>>(reopened.Sheets['חריגים פתוחים כרגע']!);
   const bank = XLSX.utils.sheet_to_json<Record<string, unknown>>(reopened.Sheets['תנועות בנק']!);
 
   assert.equal(summary[0]?.[1], 'דוח סופי נעול');
@@ -97,12 +101,19 @@ test('locked workbook uses only stored rows/totals and carries legal-entity meta
   assert.equal(summary[19]?.[2], snapshot.totals.bank_total);
   assert.equal(invoices[0]?.['ספק'], 'ספק נעול');
   assert.equal(invoices[0]?.['סה"כ'], 118);
+  assert.equal(invoices[0]?.['סטטוס בדיקה'], 'תווית בדיקה נעולה');
+  assert.equal(invoices[0]?.['סטטוס תשלום'], 'תווית תשלום נעולה');
+  assert.equal(credits[0]?.['סיבה'], 'סיבת זיכוי נעולה');
+  assert.equal(credits[0]?.['סטטוס'], 'סטטוס זיכוי נעול');
+  assert.equal(exceptions[0]?.['סוג'], 'סוג חריגה נעול');
   assert.equal(bank[0]?.['אסמכתא'], 'BANK-1');
+  assert.equal(bank[0]?.['סוג'], 'כיוון נעול');
+  assert.equal(bank[0]?.['סטטוס'], 'סטטוס בנק נעול');
 });
 
 test('re-downloading one snapshot is equivalent and no workbook sheet contains a formula', () => {
-  const first = buildLockedMonthlyWorkbook({ snapshot, labels });
-  const second = buildLockedMonthlyWorkbook({ snapshot: structuredClone(snapshot), labels });
+  const first = buildLockedMonthlyWorkbook({ snapshot });
+  const second = buildLockedMonthlyWorkbook({ snapshot: structuredClone(snapshot) });
   assert.deepEqual(workbookValues(second), workbookValues(first));
 
   for (const [sheetName, sheet] of Object.entries(first.Sheets)) {

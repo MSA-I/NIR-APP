@@ -1,5 +1,5 @@
 -- Real two-session version allocation test for legal-entity monthly snapshots.
--- Run only against a freshly reset disposable local database after migration 0074.
+-- Run only against a freshly reset disposable local database after migrations 0073-0074.
 \set ON_ERROR_STOP on
 
 create extension if not exists dblink;
@@ -40,6 +40,12 @@ as $$
 declare v_snapshot public.monthly_report_snapshots;
 begin
   perform set_config('request.jwt.claim.sub', 'c5750000-0000-0000-0000-000000000001', true);
+  perform set_config('request.jwt.claims', jsonb_build_object(
+    'sub', 'c5750000-0000-0000-0000-000000000001',
+    'amr', jsonb_build_array(jsonb_build_object(
+      'method', 'password', 'timestamp', extract(epoch from clock_timestamp())
+    ))
+  )::text, true);
   perform set_config('statement_timeout', '7000', true);
   perform set_config('role', 'authenticated', true);
   v_snapshot := public.create_monthly_report_snapshot(

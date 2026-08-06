@@ -73,6 +73,19 @@ test('accountant creates and downloads a legal-entity locked snapshot at 390px',
   const formulaCells = workbook.SheetNames.flatMap((name) => Object.entries(workbook.Sheets[name] ?? {})
     .filter(([address, cell]) => !address.startsWith('!') && typeof (cell as XLSX.CellObject).f === 'string'));
   expect(formulaCells).toHaveLength(0);
+
+  await page.getByRole('button', { name: 'סימון כהועבר לרו״ח', exact: true }).click();
+  const deliveryDialog = page.getByRole('dialog', { name: 'סימון דוח סופי כהועבר לרו״ח', exact: true });
+  await expect(deliveryDialog).toContainText(`גרסה ${snapshot.version}`);
+  await deliveryDialog.getByLabel(/סיבה \(חובה/).fill('QA: נמסר לרואת החשבון');
+  const deliveryResponsePromise = page.waitForResponse((candidate) =>
+    candidate.request().method() === 'POST'
+      && new URL(candidate.url()).pathname === '/rest/v1/rpc/mark_monthly_report_snapshot_sent');
+  await deliveryDialog.getByRole('button', { name: 'סימון כהועבר', exact: true }).click();
+  const deliveryResponse = await deliveryResponsePromise;
+  expect(deliveryResponse.ok(), `snapshot delivery returned HTTP ${deliveryResponse.status()}`).toBe(true);
+  await expect(page.getByText(/הועבר לרו״ח/).first()).toBeVisible();
+
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 
   evidence.record('monthly-report-snapshot', `${snapshot.id}:${snapshot.unit_id}:v${snapshot.version}`);
