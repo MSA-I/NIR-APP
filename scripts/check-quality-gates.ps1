@@ -915,6 +915,7 @@ try {
     Invoke-SqlTest "supabase\tests\p1_price_submissions_concurrency.sql" "P1B real concurrent revisions and checksum retries" "supabase_admin"
     Invoke-SqlTest "supabase\tests\roadmap_db_contracts.sql" "Roadmap supplier, inventory, savings and WhatsApp contracts"
     Invoke-SqlTest "supabase\tests\p1_concurrency.sql" "P1 real concurrent sessions" "supabase_admin"
+    Invoke-SqlTest "supabase\tests\payment_credit_override_concurrency.sql" "Concurrent payment replay, approval, execution and credit creation" "supabase_admin"
     Invoke-SqlTest "supabase\tests\monthly_report_snapshots_concurrency.sql" "Concurrent immutable monthly snapshot version allocation" "supabase_admin"
 
     Write-Gate "P1B local Edge runtime, 10/100/1,000 rows and failure recovery"

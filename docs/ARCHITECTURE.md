@@ -173,9 +173,12 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
   מן המוטציה. פעולות פקודה אטומיות כותבות סיבה באותו RPC; הדפדפן אינו רשאי להוסיף שורת audit.
 - **אישור מול זיכוי פתוח אינו קיזוז:** דרישת תשלום קשורה לישות המשפטית של כל החשבוניות שלה.
   אישור רגיל נחסם כשיש לספק זיכוי פתוח באותה ישות; override שרתי דורש סיבה ושומר את סכום
-  הזיכוי שנצפה, אך אינו משנה את סכום הדרישה, מקצה זיכוי או משנה את סטטוס הזיכוי.
+  הזיכוי שנצפה, אך אינו משנה את סכום הדרישה, מקצה זיכוי או משנה את סטטוס הזיכוי. עד שיוגדר
+  scope לבנק, בדיקת העברה דומה מחזירה `unavailable` כללי ואינה חושפת bit ארגוני.
 - **דוח סופי הוא snapshot מובנה ובלתי־משתנה:** כל גרסה נשמרת לפי ארגון, ישות משפטית וחודש,
-  יחד עם rows, totals, metadata ו-hash. ‏XLSX סופי נבנה רק מה-JSONB השמור; הדוח החי נשאר נפרד.
+  יחד עם rows, totals, תוויות תצוגה, metadata ו-hash. ‏XLSX סופי נבנה רק מה-JSONB השמור;
+  יצירה ומסירה דורשות step-up, ומסירה נרשמת ב-ledger immutable שמפנה לגרסת snapshot מדויקת.
+  הדוח החי ו-ledger ‏`monthly_exports` ההיסטורי נשארים נפרדים.
 - **התראות נשמרות פר־נמען:** `notifications` מסוננת ב־RLS לפי `org_id` ו־`auth.uid()`; לקוח רשאי
   לעדכן רק `read_at`. ‏`notification_event_states` היא server-only ומגדירה מחזור מסירה אחד,
   הסלמת warning→critical ומחזור חדש לאחר פתרון. מ־`0024` ה־claim ויצירת שורות הנמענים הם
@@ -245,6 +248,7 @@ transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מ
 | הגשת מחירון ספק | `submit-price-list` → `submit_supplier_price_list` | Edge נועל ומאמת את גרסת אובייקט ה־Storage, גוזר hash ושורות מהבייטים; נעילת ספק מסדרת revision; ‏checksum חודשי מחזיר אותה קבלה; intake, מחיר, היסטוריה, קבלה ו־audit נסגרים באותה עסקת DB |
 | חודש לרו״ח | `mark_month_export_sent` | נעילת ארגון/export/חשבוניות ו־snapshot ממוין של `invoice_ids` |
 | snapshot חודשי סופי | `create_monthly_report_snapshot` | advisory lock לפי ארגון/ישות/חודש, גרסה עולה immutable, ייחוס מקורות fail-closed ו-audit/event באותה עסקה |
+| מסירת snapshot לרו״ח | `mark_monthly_report_snapshot_sent` | step-up, נעילת snapshot מסוננת-scope, recheck הרשאה לאחר המתנה ו-delivery immutable/idempotent לגרסה מדויקת |
 | אישור טיוטת הזמנה | `finalize_purchase_request_draft` | נעילת טיוטה, פריטים ומחירים בסדר קבוע; שינוי מחיר מחזיר `draft_price_changed` |
 | מעבר סטטוס הזמנה | `transition_purchase_order_status` | נעילת הזמנה דיירית; allowlist מעברים; חותמות זמן ו־audit מנומק נכתבים אטומית; retry זהה אידמפוטנטי |
 
