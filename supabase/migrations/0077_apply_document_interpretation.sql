@@ -239,6 +239,153 @@ as $fn$
     '')
 $fn$;
 
+-- ===== The residual denylist, and an honest statement of why it is a denylist =====
+--
+-- Storage keeps its denylist deliberately (faithfulness is the goal, so "keep unless known bad"
+-- is the right default), and that means storage cannot borrow the key's completeness proof. It
+-- gets the closest available substitute: Postgres CAN classify most invisible characters --
+-- `chr(8207) !~ '[[:graph:]]'` is true for the RLM, the SOFT HYPHEN, U+0600 and the TAG block --
+-- and p14 asserts as a PROPERTY that everything this function emits is graphic or a plain space.
+--
+-- But that classification has holes, MEASURED rather than assumed: U+3164 HANGUL FILLER reports
+-- graph=true AND alnum=true, and U+FE0F VARIATION SELECTOR-16 reports graph=true, though neither
+-- has any visual form. So the property assertion alone would leave them in a stored number. The
+-- three ranges below are exactly the holes -- named because Postgres is wrong about them, not
+-- because we are guessing at a set.
+--
+-- THE RESIDUAL RISK IS STATED, NOT HIDDEN: an invisible character Postgres misclassifies and
+-- this list does not name would survive into a stored invoice number and make it harder to find
+-- by search. It could NOT cause a double payment, because duplicate detection runs on
+-- document_text_key, which is an allowlist and is complete by construction. That asymmetry is
+-- the whole reason the two functions have different shapes.
+create or replace function private.document_text_sanitize(p_text text)
+returns text
+language sql
+immutable
+set search_path = public, pg_temp
+as $fn$
+  select nullif(
+    btrim(regexp_replace(
+      regexp_replace(
+        translate(
+          translate(p_text,
+            chr(160) || chr(8239) || chr(8287) || chr(12288),
+            '    '),
+          chr(1564)
+            || chr(8206) || chr(8207)
+            || chr(8234) || chr(8235) || chr(8236) || chr(8237) || chr(8238)
+            || chr(8294) || chr(8295) || chr(8296) || chr(8297)
+            || chr(8203) || chr(8204) || chr(8205)
+            || chr(8288) || chr(8289) || chr(8290) || chr(8291) || chr(8292)
+            || chr(65279)
+            || chr(173) || chr(847) || chr(6158),
+          ''),
+        -- The measured holes in Postgres's own classification.
+        '[' || chr(65024) || '-' || chr(65039)      -- U+FE00-FE0F variation selectors
+            || chr(917760) || '-' || chr(917999)    -- U+E0100-E01EF VS supplement
+            || chr(12644)                           -- U+3164 HANGUL FILLER
+            || ']', '', 'g'),
+      '\s+', ' ', 'g')),
+    '')
+$fn$;
+
+-- ===== Control characters, removed as a CLASS rather than by name =====
+-- The C0 controls (U+0001-U+0008, U+000E-U+001F) and U+007F DEL survived every stage above:
+-- they are not `\s`, so the whitespace collapse never saw them, and naming 33 code points would
+-- have been one more denylist. `[[:cntrl:]]` is a class Postgres classifies CORRECTLY and
+-- completely, so this deletion is a property, not a list -- the same shape as the key's
+-- allowlist, applied where a property happens to be available.
+--
+-- ORDER MATTERS AND IS NOT ARBITRARY: the whitespace collapse runs FIRST, so a tab between two
+-- words still becomes the single space a reader expects. Stripping controls first would turn
+-- `INV<tab>2026` into `INV2026` instead of `INV 2026`, silently joining two fields.
+create or replace function private.document_text_sanitize(p_text text)
+returns text
+language sql
+immutable
+set search_path = public, pg_temp
+as $fn$
+  select nullif(
+    btrim(regexp_replace(
+      regexp_replace(
+        regexp_replace(
+          regexp_replace(
+            translate(
+              translate(p_text,
+                chr(160) || chr(8239) || chr(8287) || chr(12288),
+                '    '),
+              chr(1564)
+                || chr(8206) || chr(8207)
+                || chr(8234) || chr(8235) || chr(8236) || chr(8237) || chr(8238)
+                || chr(8294) || chr(8295) || chr(8296) || chr(8297)
+                || chr(8203) || chr(8204) || chr(8205)
+                || chr(8288) || chr(8289) || chr(8290) || chr(8291) || chr(8292)
+                || chr(65279)
+                || chr(173) || chr(847) || chr(6158),
+              ''),
+            '[' || chr(65024) || '-' || chr(65039)
+                || chr(917760) || '-' || chr(917999)
+                || chr(12644)
+                || ']', '', 'g'),
+          '\s+', ' ', 'g'),
+        '[[:cntrl:]]', '', 'g'),
+      '\s+', ' ', 'g')),
+    '')
+$fn$;
+
+-- ==========================================================================================
+-- THE KEY IS AN ALLOWLIST. THIS IS THE THIRD VERSION AND THE REASON IS THE METHOD, NOT THE
+-- CHARACTERS.
+--
+-- Version one deleted five invisible characters. Review exhibited four more. Version two
+-- completed the bidi controls and the U+2060-2064 range -- twelve of twelve, sets completed
+-- rather than exhibits patched, which was the right instinct applied to the wrong structure.
+-- Review then stopped guessing and SWEPT it: every code point in Cf, Zs, Zl, Zp, Cc plus the
+-- whole Default_Ignorable_Code_Point set, 4,289 candidates, through this function.
+--
+--     413 assigned code points still survived.
+--
+-- Seven were confirmed writing a second live invoice under one number end to end -- U+FE0F,
+-- U+0600, U+E0041, U+206F, U+3164, U+FFF9, U+E0100 -- and the survivors included ALL 272
+-- variation selectors, the entire 96-character TAG block, and U+206A-206F: the deprecated
+-- shaping controls sitting IMMEDIATELY ADJACENT to the range version two had just completed.
+--
+-- A denylist cannot win this. The set that needs completing is 413 wide today and grows with
+-- every Unicode release, so the next omission is a release note away. An invoice number is a
+-- short identifier, not free text, so the safe structure is the opposite one: say what a number
+-- MAY contain and delete everything else. Then a character nobody has heard of is stripped by
+-- default rather than admitted by default, and no future Unicode version can reopen this.
+--
+-- MONOTONICALLY SAFE, which is what makes the inversion acceptable at all: an allowlist can only
+-- produce MORE collisions than the truth, never fewer. A collision queues the document for a
+-- person. So the failure mode of being too narrow is "a human looks at it", and the failure mode
+-- of being too wide is "the business pays twice".
+--
+-- THREE THINGS THAT LOOK LIKE STYLE AND ARE NOT:
+--
+--   1. ALLOWED BY LETTERS AND DIGITS, NEVER BY SCRIPT BLOCK. Review's first attempt permitted
+--      U+0600-06FF wholesale and U+0600 walked straight through -- the Arabic format characters
+--      live INSIDE the Arabic block. The ranges below are letters (U+05D0-05EA, U+0620-064A) and
+--      digits (U+0660-0669), never blocks.
+--
+--   2. WRITTEN WITH chr(), NOT LITERALS -- and here it is not merely discipline, it is required.
+--      A literal Hebrew or Arabic range in a regex produced
+--      `ERROR: invalid regular expression: invalid character range`, because the range operands
+--      reorder visually under RTL and the parser sees them backwards. Same reason as the
+--      invisible-character rule below, louder failure.
+--
+--   3. `/`, `.` and `-` SURVIVE. They are how humans actually separate invoice numbers, and
+--      folding them would make 2026/1 and 2026-1 the same number. Measured after the inversion:
+--      2026/1 <> 2026-1 and INV-123 <> INV123, both preserved exactly.
+--
+-- NULL IS NOW REACHABLE AND IS A STOP. A number made entirely of unrepresentable characters
+-- keys to NULL, and `x = NULL` is NULL -- no duplicate found, auto-apply. The command has an
+-- explicit `v_number_key is null` arm for exactly this; see invoice_number_unrepresentable.
+--
+-- document_text_sanitize STAYS A DENYLIST. For STORAGE you want faithfulness -- the number as
+-- the document printed it, minus only what cannot be seen -- and a known-character list is the
+-- right tool for that. Only the COMPARISON key inverts.
+-- ==========================================================================================
 create or replace function private.document_text_key(p_text text)
 returns text
 language sql
@@ -246,8 +393,15 @@ immutable
 set search_path = public, pg_temp
 as $fn$
   select nullif(
-    lower(regexp_replace(
-      coalesce(private.document_text_sanitize(p_text), ''), '\s', '', 'g')),
+    regexp_replace(
+      lower(coalesce(private.document_text_sanitize(p_text), '')),
+      '[^0-9a-z'
+        || chr(1488) || '-' || chr(1514)   -- U+05D0-05EA Hebrew letters (finals included)
+        || chr(1568) || '-' || chr(1610)   -- U+0620-064A Arabic letters
+        || chr(1632) || '-' || chr(1641)   -- U+0660-0669 Arabic-Indic digits
+        || '/.'                            -- human separators
+        || '-]',                           -- literal hyphen, last so it is not a range
+      '', 'g'),
     '')
 $fn$;
 
@@ -762,6 +916,13 @@ begin
     v_outcome := 'queued_for_review'; v_reason_code := 'supplier_unidentified';
   elsif v_number is null or v_date is null then
     v_outcome := 'queued_for_review'; v_reason_code := 'invoice_identity_missing';
+  elsif v_number_key is null then
+    -- REACHABLE ONLY SINCE THE KEY BECAME AN ALLOWLIST, and it is a hole if left unhandled. A
+    -- number made entirely of characters the key does not represent -- Cyrillic, CJK, emoji,
+    -- or pure punctuation -- collapses to NULL. Every duplicate predicate below then compares
+    -- `something = NULL`, which is NULL, which finds nothing, which auto-applies. This is the
+    -- three-valued-logic failure from I-1 wearing a different hat, and it fails closed here.
+    v_outcome := 'queued_for_review'; v_reason_code := 'invoice_number_unrepresentable';
   elsif length(v_number) > 100 then
     -- Not truncated -- REFUSED. Truncating would store a DIFFERENT number than the document
     -- shows, silently, on a financial record, and would then compare that invented number
@@ -940,8 +1101,13 @@ begin
                  'barcode', li.value #> '{values,barcode}',
                  'description', li.value #> '{values,description}') as item
         from jsonb_array_elements(v_payload -> 'line_items') li
-        where coalesce(nullif(btrim(li.value #>> '{values,sku}'), ''),
-                       nullif(btrim(li.value #>> '{values,barcode}'), '')) is not null
+        -- The skip test uses the SAME key as the match test, deliberately. With btrim here and
+        -- the key there, an identifier made only of characters the key cannot represent would
+        -- pass this guard (btrim leaves it non-empty), then match nothing (its key is NULL),
+        -- and be reported as an item nobody ordered. One function on both sides means the two
+        -- can never disagree about what counts as an identifier.
+        where coalesce(private.document_text_key(li.value #>> '{values,sku}'),
+                       private.document_text_key(li.value #>> '{values,barcode}')) is not null
           and not exists (
             select 1
             from public.purchase_order_items poi

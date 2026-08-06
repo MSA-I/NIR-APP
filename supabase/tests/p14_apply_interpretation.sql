@@ -152,6 +152,38 @@ begin
 end
 $$;
 
+-- ===== The alphabet the comparison key is allowed to produce =====
+-- Restated here INDEPENDENTLY of the migration, so this suite checks the function against a
+-- specification rather than against itself. Written with chr() for the same reason the migration
+-- is: a literal Hebrew or Arabic range inside a regex bracket expression reorders visually under
+-- RTL and Postgres rejects it as `invalid character range`.
+create function pg_temp.p14_allowed_class()
+returns text language sql immutable as $$
+  select '0-9a-z'
+      || chr(1488) || '-' || chr(1514)   -- U+05D0-05EA Hebrew letters
+      || chr(1568) || '-' || chr(1610)   -- U+0620-064A Arabic letters
+      || chr(1632) || '-' || chr(1641)   -- U+0660-0669 Arabic-Indic digits
+      || '/.' || '-'
+$$;
+
+-- Every code point in the BMP (minus the surrogate range, which chr() refuses) and the whole
+-- U+E0000-E0FFF plane where the TAG block and the variation-selector supplement live --
+-- concatenated into ONE string. The key is a per-character transform, so a single call tests
+-- all of them.
+--
+-- WHY ONE STRING AND NOT 67,583 CALLS: the per-code-point form of this assertion measured
+-- 6,314 ms; this form measures 17 ms for the identical property. A six-second assertion in a
+-- gate is a test someone eventually disables, and a disabled test defends nothing.
+create function pg_temp.p14_all_code_points()
+returns text language sql stable as $$
+  select string_agg(chr(cp), '' order by cp)
+  from (
+    select cp from generate_series(1, 65535) cp where cp not between 55296 and 57343
+    union all
+    select cp from generate_series(917504, 921599) cp
+  ) s
+$$;
+
 -- The financial footprint of ONE tenant, as a single comparable string. "Zero writes" is a claim
 -- about a whole surface, not about one table, so it is measured as one.
 create function pg_temp.p14_footprint(p_org uuid)
@@ -1129,60 +1161,157 @@ select pg_temp.p14_assert(
   || 'the fix, in an RTL product where that character arrives constantly');
 
 select pg_temp.p14_assert(
-  pg_temp.p14_dup_variant(32, 'PZ-DUP-1' || chr(9)) = 'duplicate_invoice_number',
-  'stop 3: a trailing TAB must be caught -- btrim strips spaces only');
+  pg_temp.p14_dup_variant(32, 'PZ-DUP' || chr(65039) || '-1') = 'duplicate_invoice_number',
+  'stop 3: U+FE0F VARIATION SELECTOR-16 -- one of 272 variation selectors, none of which a '
+  || 'denylist of named characters had ever heard of');
+
+-- ===== THE BREADTH ASSERTION THAT CANNOT GO STALE =====
+--
+-- Three rounds of this suite named individual characters: five, then four more, then a review
+-- swept every code point in Cf, Zs, Zl, Zp, Cc and Default_Ignorable_Code_Point -- 4,289
+-- candidates -- and found 413 STILL SURVIVING, including all 272 variation selectors, the whole
+-- 96-character TAG block, and U+206A-206F sitting immediately beside the range the previous
+-- round had just "completed". Naming characters cannot win: the set is 413 wide today and grows
+-- with every Unicode release, so a per-character suite is not merely incomplete, it LOOKS
+-- complete while being one release note out of date.
+--
+-- So the assertions below say nothing about which characters are dangerous. They pin the two
+-- halves of a proof:
+--
+--   (A) whatever you feed the key, its OUTPUT contains only characters from the allowed set;
+--   (B) nothing in the allowed set is invisible.
+--
+-- (A) and (B) together mean NO invisible code point can survive -- not the 413, not the ones
+-- Unicode has not published yet -- because there is nowhere in the output for one to be. That
+-- is a property, not a sample, and no future Unicode version can invalidate it.
+select pg_temp.p14_assert(
+  coalesce(
+    regexp_replace(
+      coalesce(private.document_text_key(pg_temp.p14_all_code_points()), ''),
+      '[' || pg_temp.p14_allowed_class() || ']', '', 'g'),
+    '') = '',
+  '(A) 67,583 code points -- the whole BMP minus surrogates, plus the U+E0000 plane where the '
+  || 'TAG block and the variation-selector supplement live -- must produce output containing '
+  || 'ONLY allowed characters. Anything else is a character that survived the key');
 
 select pg_temp.p14_assert(
-  pg_temp.p14_dup_variant(33, chr(160) || 'PZ-DUP-1') = 'duplicate_invoice_number',
-  'stop 3: a leading U+00A0 NO-BREAK SPACE must be caught');
+  (select count(*) = 0 from (
+     select cp from generate_series(48, 57) cp                 -- 0-9
+     union all select cp from generate_series(97, 122) cp      -- a-z
+     union all select cp from generate_series(1488, 1514) cp   -- Hebrew letters
+     union all select cp from generate_series(1568, 1610) cp   -- Arabic letters
+     union all select cp from generate_series(1632, 1641) cp   -- Arabic-Indic digits
+     union all select unnest(array[45, 46, 47]) cp             -- - . /
+   ) a
+   where chr(cp) !~ '[[:graph:]]'),
+  '(B) every character the key is allowed to emit must be GRAPHIC -- visible, printing, not a '
+  || 'space. This is the half that turns (A) into a proof: if the alphabet holds nothing '
+  || 'invisible, nothing invisible can appear in the output');
 
+-- The seven the sweep exhibited, kept as a readable regression so a future reader sees what
+-- (A) is actually defending against rather than only its abstract form.
 select pg_temp.p14_assert(
-  pg_temp.p14_dup_variant(34, 'pz' || chr(8203) || '-dup-1') = 'duplicate_invoice_number',
-  'stop 3: a ZERO WIDTH SPACE in the MIDDLE, plus a case change, must be caught');
+  (select bool_and(private.document_text_key('PZ-DUP' || chr(cp) || '-1') = 'pz-dup-1')
+     from unnest(array[65039, 1536, 917569, 8303, 12644, 65529, 917760]) cp),
+  'the seven code points the sweep confirmed writing a second live invoice -- U+FE0F, U+0600, '
+  || 'U+E0041, U+206F, U+3164, U+FFF9, U+E0100 -- must all collapse onto the clean key');
 
--- THE SECOND ROUND OF DISGUISES. The first version of the delete list handled the five above and
--- let all of these through -- each produced a second live invoice under the same number. They
--- are here one per character, not folded into a loop, because each one is a different reason the
--- list was incomplete and a future edit that drops one should fail by name.
+-- ===== STORAGE: the same breadth question, answered as far as Postgres allows =====
+-- document_text_sanitize stays a DENYLIST on purpose -- storage wants faithfulness, so "keep
+-- unless known bad" is the right default -- which means it cannot borrow the key's completeness
+-- proof. It gets the closest available substitute, asserted as a property over the same 67,583
+-- code points: everything it emits must be GRAPHIC or a plain space.
+--
+-- The failure this defends is a search miss, not a double payment. Duplicate detection runs on
+-- the key, which is complete by construction, so an invisible character surviving into a stored
+-- number cannot cause a second invoice -- only a number a human cannot find. That asymmetry is
+-- why the two functions have different shapes.
+-- WHAT THIS ASSERTS AND WHAT IT DOES NOT, because the first draft asserted more than it meant.
+-- "Everything sanitize emits is [[:graph:]] or a space" FAILED -- on U+0378, U+0530, U+058B and
+-- friends. Those are UNASSIGNED code points: Postgres reports graph=false for them, but they are
+-- not invisible, they render as a visible replacement glyph. Deleting them would be faithfulness
+-- lost for no safety gained, and "unassigned" is a moving target Postgres cannot be queried
+-- about -- a future Unicode release reassigns them and the assertion flips meaning. So the
+-- property asserted is the one that matches the actual harm: nothing ZERO-WIDTH survives.
 select pg_temp.p14_assert(
-  pg_temp.p14_dup_variant(50, 'PZ-DUP-1' || chr(1564)) = 'duplicate_invoice_number',
-  'stop 3: U+061C ARABIC LETTER MARK -- the TWELFTH bidi control. The list carried eleven of a '
-  || 'closed, enumerable set, which is an omission rather than a judgement call, and this '
-  || 'product handles Arabic-language supplier paperwork');
+  regexp_replace(
+    coalesce(private.document_text_sanitize(pg_temp.p14_all_code_points()), ''),
+    '[[:cntrl:]]', '', 'g')
+    = coalesce(private.document_text_sanitize(pg_temp.p14_all_code_points()), ''),
+  'no control character may survive into a STORED invoice number. [[:cntrl:]] is a class '
+  || 'Postgres classifies correctly and completely, so this is a property rather than a list -- '
+  || 'the C0 controls and U+007F used to survive every stage, being neither whitespace nor named');
 
+-- The named invisibles, checked against the STORED form. This one IS list-based, and that is
+-- consistent rather than sloppy: sanitize is a denylist by design (storage wants faithfulness,
+-- so "keep unless known bad" is the right default), and a list-shaped function deserves a
+-- list-shaped test. The completeness argument lives on the KEY, which is what gates duplicates.
 select pg_temp.p14_assert(
-  pg_temp.p14_dup_variant(51, 'PZ-DUP' || chr(8288) || '-1') = 'duplicate_invoice_number',
-  'stop 3: U+2060 WORD JOINER -- the Unicode-designated replacement for U+FEFF used as a '
-  || 'zero-width no-break space. The BOM was already deleted and its successor was not');
+  (select bool_and(private.document_text_sanitize('PZ-' || chr(cp) || 'DUP') = 'PZ-DUP')
+     from unnest(array[
+       173, 847, 1564, 6158, 8203, 8204, 8205, 8206, 8207,
+       8234, 8238, 8288, 8292, 8294, 8297, 12644, 65279,
+       65024, 65039, 917760, 917999]) cp),
+  'every named FORMATTING mark must be stripped from the STORED number -- including U+3164 and '
+  || 'the variation selectors, which Postgres wrongly reports as graph=true and which the '
+  || 'property assertion above therefore cannot see');
 
+-- The unicode SPACES are the other half and behave differently ON PURPOSE: they BECOME a plain
+-- space rather than vanishing. Deleting them would join two fields -- `INV<NBSP>2026` would be
+-- stored as `INV2026` -- so faithfulness means converting, not removing. The key strips the
+-- resulting space afterwards, which is why duplicate detection is unaffected either way.
 select pg_temp.p14_assert(
-  pg_temp.p14_dup_variant(52, 'PZ-DUP' || chr(173) || '-1') = 'duplicate_invoice_number',
-  'stop 3: U+00AD SOFT HYPHEN -- what a PDF text layer carries for hyphenation, fed straight '
-  || 'into a model that reproduces what it sees. This one arrives from real documents, not '
-  || 'from an attacker');
+  (select bool_and(private.document_text_sanitize('PZ' || chr(cp) || 'DUP') = 'PZ DUP')
+     from unnest(array[160, 8239, 8287, 12288]) cp),
+  'the unicode SPACES must become a plain space in the stored number, never vanish -- deleting '
+  || 'them would silently join two fields');
 
-select pg_temp.p14_assert(
-  pg_temp.p14_dup_variant(53, 'PZ-DUP-1' || chr(6158)) = 'duplicate_invoice_number',
-  'stop 3: U+180E MONGOLIAN VOWEL SEPARATOR');
+-- THE RESIDUAL, STATED RATHER THAN PAPERED OVER: an invisible character that Postgres
+-- misclassifies AND the list above does not name would reach a stored invoice number and make it
+-- harder to find by search. It could not cause a double payment, because duplicate detection
+-- runs on document_text_key, which is an allowlist and complete by construction. That asymmetry
+-- is precisely why the two functions have different shapes, and why the weaker guarantee sits on
+-- the side where the failure is a search miss rather than a second payment.
 
-select pg_temp.p14_assert(
-  pg_temp.p14_dup_variant(54, 'PZ-DUP' || chr(847) || '-1') = 'duplicate_invoice_number',
-  'stop 3: U+034F COMBINING GRAPHEME JOINER -- invisible, so it goes; a combining ACCENT is '
-  || 'visible, so it stays. Same rule, both directions');
-
-select pg_temp.p14_assert(
-  pg_temp.p14_dup_variant(55, 'PZ-DUP' || chr(8290) || '-1') = 'duplicate_invoice_number',
-  'stop 3: U+2062 INVISIBLE TIMES -- one of the U+2060-2064 neighbours. All five were measured '
-  || 'surviving, so the whole range went rather than the one character the review exhibited');
-
--- THE LINE, ASSERTED SO IT CANNOT BE CROSSED BY ACCIDENT. Visibly-distinguishable lookalikes are
--- deliberately NOT normalised: a false duplicate blocks a real supplier payment, which is its
--- own harm. If someone ever "improves" the key into homoglyph folding, this fails.
+-- ===== AND THE OPPOSITE BOUNDARY, WHICH THE INVERSION MUST NOT MOVE =====
+-- An allowlist can only produce MORE collisions, and more collisions means more documents
+-- queued for a person -- safe. What it must never do is start folding things a PERSON can tell
+-- apart, because a false duplicate blocks a real supplier payment. Both halves are pinned.
 select pg_temp.p14_assert(
   private.document_text_key('PZ-DUP-1') <> private.document_text_key('PZ-DUP-' || chr(65297))
   and private.document_text_key('PZ-DUP-1') <> private.document_text_key(chr(1040) || 'Z-DUP-1'),
   'full-width digits and Cyrillic homoglyphs must stay DISTINCT -- normalising what a person can '
   || 'see would start refusing genuinely different invoices, and that line is deliberate');
+
+select pg_temp.p14_assert(
+  private.document_text_key('INV-123') <> private.document_text_key('INV123')
+  and private.document_text_key('2026/1') <> private.document_text_key('2026-1')
+  and private.document_text_key('2026.1') <> private.document_text_key('2026-1')
+  and private.document_text_key('INV-123') = private.document_text_key('inv-123'),
+  'the human separators - . / must SURVIVE the allowlist: folding them would make 2026/1 and '
+  || '2026-1 the same invoice. Case must still fold, because it is not a difference a supplier '
+  || 'intends');
+
+-- Hebrew and Arabic numbers are not collateral damage of an allowlist built for Latin.
+select pg_temp.p14_assert(
+  private.document_text_key('חשבונית 2026/17') is not null
+  and private.document_text_key('חשבונית 2026/17')
+      <> private.document_text_key('חשבונית 2026/18')
+  and private.document_text_key('فاتورة 2026/17') is not null,
+  'Hebrew and Arabic invoice numbers must survive the key intact and stay distinct from each '
+  || 'other -- an allowlist that quietly deleted the local scripts would key every Hebrew '
+  || 'number to the same value and queue the entire ledger');
+
+-- ALLOWED BY LETTERS, NEVER BY SCRIPT BLOCK. Review's first allowlist permitted U+0600-06FF
+-- wholesale and U+0600 ARABIC NUMBER SIGN walked straight through -- the Arabic FORMAT
+-- characters live INSIDE the Arabic block, a few code points below the letters.
+select pg_temp.p14_assert(
+  (select bool_and(private.document_text_key('a' || chr(cp) || 'b') = 'ab')
+     from generate_series(1536, 1541) cp)              -- U+0600-0605 Arabic format characters
+  and private.document_text_key('a' || chr(1564) || 'b') = 'ab',   -- U+061C ALM
+  'the Arabic FORMAT characters that live inside the Arabic block must be stripped even though '
+  || 'the Arabic LETTERS are allowed -- this is why the allowlist is by letter range and never '
+  || 'by script block');
 
 select pg_temp.p14_assert(
   (select count(*) = 1 from public.invoices
@@ -1331,6 +1460,40 @@ select pg_temp.p14_assert(
   not exists (select 1 from public.invoices where length(invoice_number) > 100),
   'and nothing that long may have reached the ledger');
 
+-- --- The NULL key the allowlist makes reachable, and why it is a STOP ---
+-- A number written entirely in characters the key does not represent collapses to NULL. Every
+-- duplicate predicate then compares `something = NULL`, which is NULL, which finds nothing,
+-- which auto-applies -- the three-valued-logic failure of I-1 wearing a different hat, and it
+-- only became reachable when the key inverted to an allowlist.
+select pg_temp.p14_seed(
+  44, '14000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000001', 0.99,
+    jsonb_build_array(
+      jsonb_build_object('key', 'invoice_number',
+        'value', chr(1040) || chr(1041) || chr(1042),   -- all-Cyrillic: keys to NULL
+        'confidence', 0.97, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'invoice_date', 'value', '11/04/2026',
+        'confidence', 0.95, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'subtotal', 'value', 1000,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'vat_amount', 'value', 180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'total', 'value', 1180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')))));
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000044') ->> 'reason_code'
+    = 'invoice_number_unrepresentable',
+  'a number the comparison key cannot represent must queue BY NAME -- every duplicate predicate '
+  || 'would otherwise compare against NULL, find nothing, and auto-apply');
+
+select pg_temp.p14_assert(
+  not exists (
+    select 1 from public.invoices
+    where org_id = '14000000-0000-4000-8000-000000000001'
+      and invoice_number = chr(1040) || chr(1041) || chr(1042)),
+  'and no invoice was written under it');
+
 -- --- I-5: the reversal fields cannot be born set, and cannot precede creation ---
 select pg_temp.p14_trusted();
 do $$
@@ -1398,9 +1561,9 @@ select pg_temp.p14_assert(
      select unnest(array[
        'organization_inactive', 'autonomy_disabled', 'document_type_other',
        'confidence_unknown', 'below_confidence_threshold', 'not_an_invoice',
-       'supplier_unidentified', 'invoice_identity_missing', 'invoice_number_unreasonable',
-       'total_missing', 'amounts_unreconciled', 'payment_allocation_conflict',
-       'duplicate_invoice_number']) as code
+       'supplier_unidentified', 'invoice_identity_missing', 'invoice_number_unrepresentable',
+       'invoice_number_unreasonable', 'total_missing', 'amounts_unreconciled',
+       'payment_allocation_conflict', 'duplicate_invoice_number']) as code
    ) expected
    where not exists (
      select 1 from pg_proc
@@ -1409,14 +1572,14 @@ select pg_temp.p14_assert(
   'every reason code this suite claims to cover must still exist in the function');
 
 select pg_temp.p14_assert(
-  (select count(*) = 13 from (
+  (select count(*) = 14 from (
      select distinct (regexp_matches(
        regexp_replace(prosrc, '--[^\n]*', '', 'g'),
        'v_reason_code := ''([a-z_]+)''', 'g'))[1] as code
      from pg_proc
      where oid = 'public.apply_document_interpretation(uuid,uuid,uuid)'::regprocedure
    ) emitted),
-  'the function must emit exactly the 13 reason codes this suite exercises -- a fourteenth '
+  'the function must emit exactly the 14 reason codes this suite exercises -- a fifteenth '
   || 'added without a scenario fails HERE, which is how stops 2, 3 and 4 shipped uncovered');
 
 -- ===== (f) TENANT ISOLATION =====
