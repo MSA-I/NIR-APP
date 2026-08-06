@@ -350,7 +350,55 @@ begin
     raise exception 'allocation_invalid' using errcode = '22023';
   end if;
 
-  -- Lock the exact invoice set before deriving its legal entity or checking balances.
+  -- Existing requests are replay facts. Lock the request before touching any invoice so this
+  -- path has the same request->invoice order as payment execution and transitions. A canonical
+  -- replay is decided entirely from the stored request and junction rows: it must not re-lock
+  -- invoices whose balances or payment statuses may already have advanced after execution.
+  select * into v_request
+  from public.payment_requests
+  where id = p_request_id and org_id = v_org
+  for update;
+
+  if found then
+    if v_request.unit_id is null or not exists (
+      select 1
+      from public.org_units u
+      where u.org_id = v_org
+        and u.id = v_request.unit_id
+        and u.unit_type = 'legal_entity'
+    ) then
+      raise exception 'payment_request_scope_unresolved' using errcode = 'P0001';
+    end if;
+    perform public.assert_unit_in_scope(v_request.unit_id);
+
+    select coalesce(jsonb_agg(
+      jsonb_build_object('invoice_id', pri.invoice_id, 'amount', round(pri.amount_allocated, 2))
+      order by pri.invoice_id
+    ), '[]'::jsonb)
+      into v_existing
+    from public.payment_request_invoices pri
+    where pri.org_id = v_org and pri.payment_request_id = v_request.id;
+
+    if v_request.supplier_id <> p_supplier_id
+       or round(v_request.amount, 2) <> v_amount
+       or v_request.due_date is distinct from p_due_date
+       or v_request.notes is distinct from v_notes
+       or v_existing is distinct from v_input then
+      raise exception 'payment_request_idempotency_conflict' using errcode = 'P0001';
+    end if;
+
+    return jsonb_build_object(
+      'payment_request_id', v_request.id,
+      'number', v_request.number,
+      'status', v_request.status,
+      'amount', v_request.amount,
+      'unit_id', v_request.unit_id,
+      'idempotent', true
+    );
+  end if;
+
+  -- Only a genuinely new request consumes invoice balances. Lock the exact invoice set before
+  -- deriving its legal entity and preserve the global request->invoice command order.
   perform 1
   from public.invoices i
   join (
@@ -380,44 +428,6 @@ begin
     raise exception 'payment_request_scope_invalid' using errcode = 'P0001';
   end if;
   perform public.assert_unit_in_scope(v_unit);
-
-  select * into v_request
-  from public.payment_requests
-  where id = p_request_id and org_id = v_org
-  for update;
-
-  if found then
-    if v_request.unit_id is null then
-      raise exception 'payment_request_scope_unresolved' using errcode = 'P0001';
-    end if;
-    perform public.assert_unit_in_scope(v_request.unit_id);
-
-    select coalesce(jsonb_agg(
-      jsonb_build_object('invoice_id', pri.invoice_id, 'amount', round(pri.amount_allocated, 2))
-      order by pri.invoice_id
-    ), '[]'::jsonb)
-      into v_existing
-    from public.payment_request_invoices pri
-    where pri.org_id = v_org and pri.payment_request_id = v_request.id;
-
-    if v_request.supplier_id <> p_supplier_id
-       or v_request.unit_id is distinct from v_unit
-       or round(v_request.amount, 2) <> v_amount
-       or v_request.due_date is distinct from p_due_date
-       or v_request.notes is distinct from v_notes
-       or v_existing is distinct from v_input then
-      raise exception 'payment_request_idempotency_conflict' using errcode = 'P0001';
-    end if;
-
-    return jsonb_build_object(
-      'payment_request_id', v_request.id,
-      'number', v_request.number,
-      'status', v_request.status,
-      'amount', v_request.amount,
-      'unit_id', v_request.unit_id,
-      'idempotent', true
-    );
-  end if;
 
   if not exists (
     select 1 from public.suppliers s

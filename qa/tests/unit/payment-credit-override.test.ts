@@ -14,6 +14,10 @@ const creditPolicy = migration.slice(
   migration.indexOf('create policy credit_requests_derived_scope_rider'),
   migration.indexOf('-- payment_requests now carries'),
 );
+const createCommand = migration.slice(
+  migration.indexOf('create or replace function public.create_payment_request'),
+  migration.indexOf('revoke all on function public.create_payment_request'),
+);
 const approvalCommand = migration.slice(
   migration.indexOf('create or replace function public.p1_transition_payment_request'),
   migration.indexOf('create or replace function public.transition_payment_request'),
@@ -65,12 +69,26 @@ describe('legal-entity-scoped open supplier credit approval contract', () => {
       migration.match(/perform private\.lock_payment_request_command\(v_org, p_(?:request_id|payment_request_id)\)/g)?.length,
       2,
     );
+    const replayRequestLock = createCommand.indexOf('from public.payment_requests');
+    const newRequestInvoiceLock = createCommand.indexOf('from public.invoices i');
+    const replayReturn = createCommand.indexOf("'idempotent', true");
+    assert.ok(
+      replayRequestLock >= 0
+        && replayReturn > replayRequestLock
+        && newRequestInvoiceLock > replayReturn,
+      'existing replay must return behind the request lock before new-request invoice locks',
+    );
+    assert.match(createCommand, /v_existing is distinct from v_input/);
+    assert.match(createCommand, /perform public\.assert_unit_in_scope\(v_request\.unit_id\)/);
     const invoiceLock = approvalCommand.indexOf('from public.invoices i');
     const supplierLock = approvalCommand.indexOf('from public.suppliers s');
     const creditLock = approvalCommand.indexOf('from public.credit_requests cr', supplierLock);
     assert.ok(invoiceLock >= 0 && supplierLock > invoiceLock && creditLock > supplierLock);
     assert.match(concurrencyRegression, /creation replay and transition did not both wait on the shared advisory lane/);
     assert.match(concurrencyRegression, /serialized replay created duplicate links or audit facts/);
+    assert.match(concurrencyRegression, /create_replay_vs_execution/);
+    assert.match(concurrencyRegression, /replay\/execution race deadlocked or created duplicate money rows/);
+    assert.match(concurrencyRegression, /payment_request_executed/);
     assert.match(concurrencyRegression, /payment_request_credit_override_required/);
     assert.match(concurrencyRegression, /ordinary approval did not fail closed after the concurrent credit committed/);
   });
