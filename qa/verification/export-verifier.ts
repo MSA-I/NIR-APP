@@ -15,6 +15,8 @@ interface ExportExpectationBase {
 export interface SpreadsheetExportExpectation extends ExportExpectationBase {
   kind: 'xlsx';
   sheetName?: string;
+  expectedSheets?: readonly string[];
+  expectedCells?: readonly { sheetName: string; address: string; value: string | number | boolean | null }[];
   forbidFormulas?: boolean;
   total?: { column: string; expected: number; tolerance?: number };
 }
@@ -174,16 +176,25 @@ async function verifyXlsx(
   const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: null });
   const headers = (rows[0] ?? []).map((value) => String(value ?? '').trim());
   const dataRows = rows.slice(1).filter((row) => row.some((value) => value !== null && value !== ''));
-  const formulaCells = Object.entries(sheet)
+  const formulaCells = workbook.SheetNames.flatMap((name) => Object.entries(workbook.Sheets[name] ?? {})
     .filter(([address, cell]) => !address.startsWith('!') && typeof (cell as XLSX.CellObject).f === 'string')
-    .map(([address]) => address);
+    .map(([address]) => `${name}!${address}`));
+  const expectedSheetsPresent = (expectation.expectedSheets ?? [])
+    .every((name) => workbook.SheetNames.includes(name));
+  const expectedCells = expectation.expectedCells ?? [];
+  const matchedCellCount = expectedCells.filter((expected) => {
+    const expectedSheet = workbook.Sheets[expected.sheetName];
+    const actual = expectedSheet?.[expected.address]?.v;
+    return !!expectedSheet && cellMatches(actual, expected.value);
+  }).length;
+  const expectedCellsPresent = matchedCellCount === expectedCells.length;
   const rowsCheck = rowCountCheck(expectation, dataRows.length);
   const headerCheck = headersMatch(headers, expectation.expectedHeaders);
   const expectedRowsCheck = expectedRowsMatch(headers, dataRows, expectation.expectedRowSubsets);
   const totalCheck = numericTotal(headers, dataRows, expectation.total);
   const formulasAllowed = expectation.forbidFormulas === false || formulaCells.length === 0;
   const passed = rowsCheck.passed && headerCheck && expectedRowsCheck.matches
-    && totalCheck.matches && formulasAllowed;
+    && totalCheck.matches && formulasAllowed && expectedSheetsPresent && expectedCellsPresent;
   return {
     id: expectation.id,
     status: passed ? 'PASS' : 'FAIL',
@@ -197,6 +208,11 @@ async function verifyXlsx(
       expectedRowSubsetCount: expectedRowsCheck.expectedCount,
       matchedRowSubsetCount: expectedRowsCheck.matchedCount,
       expectedRowSubsetsPresent: expectedRowsCheck.matches,
+      workbookSheetCount: workbook.SheetNames.length,
+      expectedSheetsPresent,
+      expectedCellCount: expectedCells.length,
+      matchedCellCount,
+      expectedCellsPresent,
       totalMatches: totalCheck.matches,
       actualTotal: totalCheck.actual,
       formulaCellCount: formulaCells.length,
