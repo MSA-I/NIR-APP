@@ -274,15 +274,15 @@ function Invoke-SqlTest([string]$RelativePath, [string]$Label, [string]$Database
 function Invoke-Preflight {
   $containerPath = "/var/lib/postgresql/p4-p1_preflight.sql"
   Copy-SqlToDatabase "supabase\tests\p1_preflight.sql" $containerPath
-  Write-Gate "P1 preflight (40 anomaly checks)"
+  Write-Gate "P1 preflight (42 anomaly checks)"
   $output = @(& docker exec -e PGPASSWORD=postgres $dbContainer psql -qAt -F "|" -U postgres -d postgres -v ON_ERROR_STOP=1 -f $containerPath)
   Assert-ExitCode "P1 preflight"
   $rows = @($output | Where-Object { $_ -match '^([^|]+)\|([0-9]+)\|' })
-  if ($rows.Count -ne 40) { throw "P1 preflight returned $($rows.Count) result rows instead of 40." }
+  if ($rows.Count -ne 42) { throw "P1 preflight returned $($rows.Count) result rows instead of 42." }
   $bad = @($rows | Where-Object { [int](($_ -split '\|')[1]) -ne 0 })
   $rows | ForEach-Object { Write-Output $_ }
   if ($bad.Count) { throw "P1 preflight found local fixture anomalies: $($bad -join '; ')" }
-  Write-Output "P1 preflight passed: 40/40 checks returned rows_found=0."
+  Write-Output "P1 preflight passed: 42/42 checks returned rows_found=0."
 }
 
 function Assert-PowerShellSyntax {
@@ -881,6 +881,7 @@ try {
     Invoke-SqlTest "supabase\tests\p5_domain_events.sql" "P5 domain-event fan-out, outbox lifecycle and map mutation proof"
     Invoke-SqlTest "supabase\tests\p6b_upload_reservations.sql" "P6b upload-reservation renewal, sweep grace and column guard"
     Invoke-SqlTest "supabase\tests\p7_integration_adapters.sql" "P7 webhook subscriptions, enqueue trigger, signed claim and failure ledger"
+    Invoke-SqlTest "supabase\tests\p9_five_domains.sql" "P9 notification preferences, search type gate, approval policy and the transition mirror"
     Invoke-Preflight
     Invoke-SqlTest "supabase\tests\p1_financial_commands.sql" "P1 financial commands, rollback and idempotency"
     Invoke-SqlTest "supabase\tests\p1_price_submissions.sql" "P1B trusted price-list intake, tenant isolation and rollback"
