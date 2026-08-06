@@ -74,12 +74,16 @@ const documents = http.get(`${SUPABASE_URL}/rest/v1/documents`, ({ request }) =>
   return HttpResponse.json(rows);
 });
 
-// The gallery also asks for suppliers (filter dropdown) and for each row's processing job. Neither
-// is under test here, and both are answered empty so the only thing that can vary between the two
-// renders is which documents came back.
+// The gallery also asks for suppliers (filter dropdown), for each row's processing job, and — since
+// 0077 — for the autonomy ledger behind the "שויך אוטומטית" badge. None is under test here, and all
+// are answered empty so the only thing that can vary between the two renders is which documents
+// came back. Answering `document_auto_actions` explicitly rather than leaving it unhandled is
+// deliberate: the query only fires on the SECOND render, once the document ids exist, so an
+// unstubbed endpoint would make these tests pass or fail on timing.
 const quietTraffic = [
   http.get(`${SUPABASE_URL}/rest/v1/suppliers`, () => HttpResponse.json([])),
   http.get(`${SUPABASE_URL}/rest/v1/document_processing_jobs`, () => HttpResponse.json([])),
+  http.get(`${SUPABASE_URL}/rest/v1/document_auto_actions`, () => HttpResponse.json([])),
 ];
 
 function renderGallery(props: { archive?: boolean }) {

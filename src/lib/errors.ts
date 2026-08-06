@@ -164,6 +164,14 @@ const PATTERNS: [RegExp, string][] = [
     'המסמך כבר אינו בארכיון. ייתכן שהוחזר לטיפול בחלון אחר.'],
   [/document_unknown/i,
     'המסמך אינו זמין עוד. ייתכן שהוסר בחלון אחר.'],
+  // 0077 section 4b. Reversal is a ONE-WAY DOOR, and its likeliest real failure is not an attack —
+  // it is two clerks looking at one list, the second a few seconds behind. Both refusals say what
+  // actually happened instead of the generic fallback, and `auto_action_unknown` deliberately does
+  // not distinguish "another tenant's" from "does not exist": that distinction is the leak.
+  [/auto_action_already_reverted|document_auto_action_immutable/i,
+    'השיוך האוטומטי כבר בוטל. רענן את המסך כדי לראות את המצב העדכני.'],
+  [/auto_action_unknown/i,
+    'השיוך האוטומטי אינו זמין עוד. רענן את המסך.'],
   [/reason_required/i,
     'יש להזין סיבה לביצוע הפעולה.'],
   [/row-level security|permission denied|insufficient privilege/i,

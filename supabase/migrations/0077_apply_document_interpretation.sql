@@ -1014,6 +1014,23 @@ begin
     set entity_type = 'archive', entity_id = null
     where id = v_doc.id;
 
+    -- DEFECT (a), CARRIED FORWARD FROM C4'S REVIEW AND FIXED HERE FOR BOTH DECIDING OUTCOMES.
+    -- save_document_interpretation leaves the job at 'review' (0046:1327-1329) and
+    -- STAGE_USER_STATE maps review -> review (useDocumentProcessing.ts:73), so the gallery
+    -- renders "בבדיקה" with the sentence "ממתין לאישורך" over a document the system has just
+    -- finished deciding and that nobody needs to approve. That is the SAME false-attention state
+    -- the entity_type write cites §12 to fix, left broken one table over -- and it is latent only
+    -- while the switch is off. On the day a tenant is enabled it is wrong on the first document.
+    --
+    -- `and status = 'review'` is NOT defensive noise, and this is the exact shape 0048:1743-1748
+    -- already uses for the same table. 0046:199-202 makes review -> completed legal and makes
+    -- completed/failed TERMINAL: an unguarded update against a job that has since failed raises
+    -- document_processing_terminal_state and aborts the WHOLE command -- destroying the invoice
+    -- it had already written, in the name of tidying a badge.
+    update public.document_processing_jobs
+    set status = 'completed', last_error_code = null, last_error_message = null
+    where org_id = v_org and id = v_i.job_id and status = 'review';
+
     -- user_id NULL: no human decided this. audit_row_change's null-actor arm is what makes a
     -- trusted-server write legal here, and it is also the only thing that will let a reader tell
     -- this row apart from a person's archive decision.
@@ -1160,6 +1177,14 @@ begin
         document_date = v_date
     where id = v_doc.id;
 
+    -- The job stage, for the same reason and under the same guard as the archive branch above.
+    -- It matters MORE here: the archived document at least left the working folder, while an
+    -- auto-applied one sits in the register showing "ממתין לאישורך" beside a badge that says it
+    -- is filed to an invoice. The row would contradict itself on two columns at once.
+    update public.document_processing_jobs
+    set status = 'completed', last_error_code = null, last_error_message = null
+    where org_id = v_org and id = v_i.job_id and status = 'review';
+
     insert into audit_logs (
       org_id, user_id, action, entity_type, entity_id, old_values, new_values, reason
     ) values (
@@ -1226,7 +1251,323 @@ comment on function public.apply_document_interpretation(uuid, uuid, uuid) is
   'a null-propagating minimum. Never writes purchase_order_items. Every audit row it writes '
   'carries user_id NULL, because no human decided.';
 
--- ===== 4. Registry (A1) + the A5 exemption + the re-assert block =====
+-- ===== 4. REVERSAL IN ONE REASONED ACTION (task C5) =====
+--
+-- ==========================================================================================
+-- THE OTHER HALF OF THE OWNER'S DECISION. Section 3 lets a model author a financial record;
+-- without this section that record has no way back, and "the machine may write invoices" would
+-- mean "the machine may write invoices you are stuck with". Reversal is not a courtesy feature
+-- bolted on afterwards -- it is the condition under which the permission was grantable at all.
+--
+-- WHO MAY REVERSE, AND WHY IT IS NOT "THE ACTOR WHO DID IT". The usual answer -- the person who
+-- performed the action, or their manager -- has no meaning here: the actor was a machine and
+-- every audit row it wrote carries user_id NULL by design (header note 5). So the authority is
+-- taken from what this codebase already does for the three comparable reversals, not invented:
+-- soft_delete_invoice (0034:120), rescue_document_from_archive (0075:377) and file_document all
+-- gate on owner/office. `kitchen` reads both ledgers and files nothing, and does not reverse.
+--
+-- WHAT IT UNDOES, IN ONE TRANSACTION:
+--   * the invoice          -- SOFT deleted, through the LIVE soft_delete_invoice, never by hand
+--   * the document         -- back to the inbox, the queue a person actually works from
+--   * the filing           -- reverted_at + reverted_reason, the 0075 shape
+--   * the exception        -- dismissed with a note that says WHY, not that anything was checked
+--   * the auto-action row  -- reverted_at/_by/_reason, and never again (the one-way door)
+--
+-- WHAT IT DOES NOT UNDO, DELIBERATELY:
+--   * The two audit rows the creation wrote. Reversal is a SECOND EVENT, not an erasure. "A
+--     machine created this invoice, and then a person disagreed and said why" is the history
+--     worth having; deleting the first half would leave a business unable to answer how many
+--     records its automation wrote.
+--   * document_filings rows. The guard forbids deleting one, and that is the point.
+--   * invoice_order_links. soft_delete_invoice does not unlink for the human path either, and
+--     the link is only reachable through an invoice that is now deleted.
+--   * documents.supplier_id / document_date. The person repudiated the FILING, not everything
+--     the document is known to say -- the same judgement 0075:161-165 made for the archive.
+--
+-- WHY IT REUSES soft_delete_invoice RATHER THAN WRITING deleted_at ITSELF. Three things come
+-- with it that a hand-rolled update would each have had to re-derive and could each have got
+-- wrong: (1) the financial-reference refusal -- an invoice with a payment allocated against it,
+-- an export, or a credit request must NOT vanish, and invoice_has_financial_references is the
+-- existing name for that; (2) the app.p0_invoice_soft_delete_writer GUC that
+-- p0_invoice_soft_delete_guard demands of any caller holding a JWT -- omit it and the update
+-- dies as invoice_soft_delete_rpc_required; (3) its own reasoned audit row. It is a definer
+-- resolving through auth_org()/auth.uid(), which are exactly the values this command already
+-- has, so it composes without any impersonation.
+-- ==========================================================================================
+
+-- ----- 4a. The guard learns the one transition a reversal needs -----
+--
+-- The live refiling predicate admits four legs and `invoice -> inbox` is not among them, so
+-- before this block the document CANNOT go back: the reversal would leave it reading
+-- "משויך" / "שויך לחשבונית" against an invoice that no longer exists, which is precisely the
+-- class of statement this wave has spent its reviews removing.
+--
+-- Read from pg_get_functiondef and patched by anchored substitution -- never re-declared from
+-- 0075's text. That is not ceremony: this function is a live SECURITY DEFINER holding its own A5
+-- exemption, and B1's migration exists because file_document reads `security invoker` in 0019
+-- while 0022:388 had altered it to definer. The anchor is asserted first and the migration fails
+-- if the body has moved.
+--
+-- THE LEG IS NARROW ON PURPOSE, and the difference matters. What is added is
+-- `invoice -> inbox WITH A NULL ENTITY` -- not a general invoice->anything, and emphatically not
+-- the `archive -> invoice` transition that p14's I-2 scenario relies on staying shut: that one is
+-- what stops a replay silently overruling a person who archived a document (0077:844-851). It is
+-- untouched here, and p14 asserts it is still refused.
+do $c5guard$
+declare
+  v_def text := replace(
+    pg_get_functiondef('public.documents_guard_columns()'::regprocedure), e'\r', '');
+  v_anchor text := replace($legacy$    refiling := (old.entity_type = 'inbox'
+                 and ((new.entity_type in ('invoice', 'goods_receipt')
+                       and new.entity_id is not null)
+                      or (new.entity_type = 'archive' and new.entity_id is null)))
+                or (old.entity_type = 'archive'
+                    and new.entity_type = 'inbox'
+                    and new.entity_id is null);$legacy$, e'\r', '');
+  v_replacement text := replace($widened$    refiling := (old.entity_type = 'inbox'
+                 and ((new.entity_type in ('invoice', 'goods_receipt')
+                       and new.entity_id is not null)
+                      or (new.entity_type = 'archive' and new.entity_id is null)))
+                or (old.entity_type = 'archive'
+                    and new.entity_type = 'inbox'
+                    and new.entity_id is null)
+                -- invoice -> inbox (0077, task C5). The fifth leg, and the only one whose OLD
+                -- side is a business target: when a machine-written invoice is reverted its
+                -- document has to leave a target that no longer exists. It carries no entity on
+                -- the way back, exactly like the rescue leg above, so it lands where the two
+                -- manual שיוך actions work on it. `goods_receipt -> inbox` is deliberately NOT
+                -- added: nothing writes a goods_receipt filing automatically, so there is no
+                -- machine decision to reverse and no reasoned command that would perform it.
+                or (old.entity_type = 'invoice'
+                    and new.entity_type = 'inbox'
+                    and new.entity_id is null);$widened$, e'\r', '');
+begin
+  if position(v_anchor in v_def) = 0 then
+    raise exception '0077: documents_guard_columns has moved -- the refiling predicate is not '
+      'where 0075 left it. Re-read the live definition before editing.';
+  end if;
+  execute replace(v_def, v_anchor, v_replacement);
+  -- The same anti-revert assertion 0075:107-110 carries, for the same reason: pg_get_functiondef
+  -- renders the live security setting, so the replay preserves it -- but asserting it is what
+  -- turns "preserved" from an assumption into a fact.
+  if not (select prosecdef from pg_proc
+          where oid = 'public.documents_guard_columns()'::regprocedure) then
+    raise exception '0077: documents_guard_columns lost SECURITY DEFINER in the replay.';
+  end if;
+end
+$c5guard$;
+
+-- The trigger is NOT recreated, for the reason 0075:114-119 states: `create or replace function`
+-- preserves the OID, so documents_guard_columns_trg keeps firing the replaced body, and
+-- recreating it would silently drop any WHEN clause or UPDATE OF list a later migration adds.
+
+-- ----- 4b. The command -----
+create function public.revert_document_auto_action(
+  p_action_id uuid,
+  p_reason text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $revert$
+declare
+  v_org uuid := auth_org();
+  v_user uuid := auth.uid();
+  v_role user_role := auth_role();
+  v_reason text := nullif(btrim(p_reason), '');
+  v_action public.document_auto_actions;
+  v_document public.documents;
+  v_invoice_result jsonb;
+  v_filing_id uuid;
+  v_exception_id uuid;
+  v_returned boolean := false;
+begin
+  -- Order matters and is the rescue_document_from_archive order (0075:377-382): authority first,
+  -- then the reason, then anything that reads a row. A caller with no authority must not be able
+  -- to learn whether an action id exists by watching which refusal comes back.
+  if v_org is null or v_user is null or v_role not in ('owner', 'office') then
+    raise exception 'not_authorized' using errcode = '42501';
+  end if;
+  -- BY NAME, on empty AND on whitespace. `btrim` here is the same one-argument btrim rescue uses
+  -- and it is correct for THIS purpose: a reason made only of an RLM is a reason a human wrote
+  -- and can read back, unlike an invoice number, where invisible characters decide whether the
+  -- business pays twice. The narrow strip is a deliberate difference from document_text_key
+  -- above, not an oversight of it.
+  if v_reason is null then
+    raise exception 'reason_required' using errcode = '22023';
+  end if;
+
+  select * into v_action
+  from document_auto_actions
+  where id = p_action_id and org_id = v_org
+  for update;
+
+  -- The function owner bypasses table RLS, so this predicate is the IDOR boundary: another
+  -- tenant's action id and a non-existent one are indistinguishable to the caller, and neither
+  -- is read. Same shape as 0075:389-393.
+  if not found then
+    raise exception 'auto_action_unknown' using errcode = 'P0002';
+  end if;
+
+  -- REVERSAL IS A ONE-WAY DOOR, and this is the named refusal in front of C2's guard rather than
+  -- a replacement for it. document_auto_actions_guard_columns already rejects any update whose
+  -- `old.reverted_at is not null`, but it raises document_auto_action_immutable -- a schema-level
+  -- name for what is, at this door, an ordinary and likely race: two clerks, one list, one of
+  -- them a few seconds behind. The row lock above serializes them; this tells the second one what
+  -- actually happened. The guard stays underneath as the backstop that holds for every caller,
+  -- including one that never passes through this function.
+  if v_action.reverted_at is not null then
+    raise exception 'auto_action_already_reverted' using errcode = 'P0001';
+  end if;
+
+  -- `deleted_at is null` matches rescue_document_from_archive (0075:386) and the consequence is
+  -- stated rather than left to be discovered: if a person soft-deletes the DOCUMENT first, this
+  -- door closes and the machine's invoice can no longer be undone from the register. It is not
+  -- stranded -- the invoice keeps its own reasoned door, soft_delete_invoice from the invoice
+  -- screen -- and this route is unreachable from the UI anyway, because a removed document is not
+  -- listed. Reverting against a removed document would mean returning it to an inbox nobody can
+  -- see, which is a worse state than the one it replaces.
+  select * into v_document
+  from documents
+  where id = v_action.document_id and org_id = v_org and deleted_at is null
+  for update;
+  if not found then
+    raise exception 'document_unknown' using errcode = 'P0002';
+  end if;
+
+  -- (1) THE INVOICE. Soft delete, through the live command -- see the header of this section for
+  -- the three things it carries that a hand-rolled `update invoices set deleted_at` would not.
+  -- It is idempotent when the invoice is already deleted and it REFUSES, by name, when money has
+  -- been allocated against it: a business that has already paid against this record must not be
+  -- able to make it disappear from a documents screen. document_auto_actions_applied_shape makes
+  -- invoice_id non-null for every auto_applied row, so the guard below is not the normal path --
+  -- it is what keeps this command honest if a later outcome is added that writes no invoice.
+  if v_action.invoice_id is not null then
+    v_invoice_result := public.soft_delete_invoice(v_action.invoice_id, v_reason);
+  end if;
+
+  -- (2) THE DOCUMENT, back to the inbox -- the queue a person works from, where the two manual
+  -- שיוך actions apply to it. Conditional on it still pointing at THIS invoice: if a later
+  -- migration ever gives a human a path to re-file an auto-applied document, reverting must not
+  -- yank it out of wherever that person put it. The GUC is the same tripwire rescue sets
+  -- (0075:398) -- not the security boundary, which is the column grant, but the fence that keeps
+  -- this write on a reasoned path if that grant is ever widened.
+  if v_document.entity_type = 'invoice'
+     and v_document.entity_id is not distinct from v_action.invoice_id then
+    perform set_config('app.document_filing_writer', v_user::text, true);
+    update documents
+    set entity_type = 'inbox', entity_id = null
+    where id = v_document.id;
+    v_returned := true;
+  end if;
+
+  -- (3) THE FILING. reverted_at + reverted_reason, which is every reversal column the 0075 table
+  -- has -- it carries no reverted_by, and one is NOT added here: the actor is recorded on the
+  -- auto-action row below and in the audit row, and widening a table 0075 owns (plus its
+  -- document_filings_reversal_shape constraint) to duplicate a fact already stored twice would be
+  -- a schema change with no reader. Scoped to the filing this ACTION produced, not to "the active
+  -- filing of this document": those are the same row today, and if they ever diverge, reverting
+  -- someone else's decision is the wrong repair.
+  update document_filings
+  set reverted_at = now(),
+      reverted_reason = v_reason
+  where org_id = v_org
+    and id = v_action.filing_id
+    and reverted_at is null
+  returning id into v_filing_id;
+
+  -- (4) THE EXCEPTION 0077 RAISED, if it raised one. OPEN-DECISIONS #112 -- a documented default,
+  -- not a silent choice in code. An exception naming a soft-deleted invoice is the false
+  -- "requires attention" §12 forbids, and worse than noise: the manager cannot act on it at all,
+  -- because the record it names is gone. Meanwhile the reversal repudiates the reading that
+  -- produced it.
+  --
+  -- THE NOTE STATES ITS OWN LIMIT, and that sentence is the decision, not politeness: the
+  -- machine's READING was repudiated, the SHIPMENT was not. The discrepancy may be perfectly
+  -- real. So the note says the exception was closed BECAUSE the automatic filing was reversed and
+  -- explicitly not because anything was investigated, and it carries the action id so a person
+  -- can reopen it deliberately. Anything that implied an investigation happened would be the
+  -- machine claiming work no one did.
+  if v_action.exception_id is not null then
+    update exceptions
+    set status = 'dismissed',
+        resolved_at = now(),
+        resolved_by = v_user,
+        resolution_note = 'נסגרה מפני שהשיוך האוטומטי של המסמך בוטל — ולא מפני שהפער נבדק. '
+          || 'ייתכן שהפער מול ההזמנה אמיתי; כדי לברר אותו יש לפתוח חריגה מחדש. '
+          || 'מזהה הפעולה האוטומטית שבוטלה: ' || v_action.id::text || '. סיבת הביטול: ' || v_reason
+    where org_id = v_org
+      and id = v_action.exception_id
+      and status in ('open', 'in_progress')
+    returning id into v_exception_id;
+  end if;
+
+  -- (5) THE HANDLE ITSELF, closed for good.
+  update document_auto_actions
+  set reverted_at = now(),
+      reverted_by = v_user,
+      reverted_reason = v_reason
+  where id = v_action.id;
+
+  -- THE SECOND EVENT. user_id is the PERSON here, and that asymmetry against section 3's null
+  -- actor is the whole point: a reader of audit_logs can tell the machine's write from the
+  -- human's undo by the one column that could ever distinguish them. old_values carries the
+  -- machine's own decision record, so the row explains what was reversed without a join.
+  insert into audit_logs (
+    org_id, user_id, action, entity_type, entity_id, old_values, new_values, reason
+  ) values (
+    v_org,
+    v_user,
+    'document_auto_action_reverted',
+    'document_auto_actions',
+    v_action.id,
+    jsonb_build_object(
+      'document_id', v_action.document_id,
+      'interpretation_id', v_action.interpretation_id,
+      'invoice_id', v_action.invoice_id,
+      'exception_id', v_action.exception_id,
+      'filing_id', v_action.filing_id,
+      'order_id', v_action.order_id,
+      'entity_type', v_document.entity_type,
+      'decision', v_action.decision),
+    jsonb_build_object(
+      'invoice_deleted', v_invoice_result -> 'status',
+      'entity_type', case when v_returned then 'inbox' else v_document.entity_type end,
+      'filing_reverted', v_filing_id is not null,
+      'exception_dismissed', v_exception_id is not null),
+    v_reason
+  );
+
+  return jsonb_build_object(
+    'auto_action_id', v_action.id,
+    'document_id', v_action.document_id,
+    'invoice_id', v_action.invoice_id,
+    'invoice_deleted', v_invoice_result -> 'status' = to_jsonb('deleted'::text),
+    'document_returned_to_inbox', v_returned,
+    'filing_id', v_filing_id,
+    'filing_reverted', v_filing_id is not null,
+    'exception_id', v_exception_id,
+    'exception_dismissed', v_exception_id is not null);
+end
+$revert$;
+
+revoke all on function public.revert_document_auto_action(uuid, text)
+  from public, anon, authenticated, service_role;
+-- The mirror image of section 3's grant, and deliberately so. The trusted server may WRITE the
+-- automatic invoice and may not undo it; a person may UNDO it and may not invoke the writer.
+-- Each door is open to exactly the party that has something to say through it.
+grant execute on function public.revert_document_auto_action(uuid, text) to authenticated;
+
+comment on function public.revert_document_auto_action(uuid, text) is
+  'Undoes one machine-written filing in a single reasoned transaction, for owner/office with a '
+  'mandatory reason: soft-deletes the invoice through soft_delete_invoice (so an invoice with '
+  'money allocated against it is refused by name), returns the document to the inbox, reverts the '
+  'filing, dismisses the exception the decision raised with a note that says it was closed by the '
+  'reversal rather than by any investigation, and closes the auto-action row for good. Both audit '
+  'rows survive: the creation is history and this is a second event.';
+
+-- ===== 5. Registry (A1) + the A5 exemptions + the re-assert block =====
 -- derived/unenforced, matching all thirteen document_* siblings: this table inherits tenant and
 -- scope through its composite key to documents, and a derived table must never receive its own
 -- scope column (ADR-0004 section 4).
@@ -1246,6 +1587,25 @@ values (
     || 'tenant-composite foreign keys on every row it writes. Remediate by passing the acting '
     || 'unit in from the Edge Function once documents carries a meaningful unit_id; today an '
     || 'inbox document is unit_id NULL by design (0055:112).',
+  'multi-unit enablement wave');
+
+-- The reversal command's own A5 row. Its reason is a DIFFERENT one from the writer's above and
+-- is not copied from it: this command does have a user JWT, so auth_scopes() is populated and the
+-- trusted-server argument does not apply. What it cannot be is INVOKER -- word for word the
+-- reason rescue_document_from_archive states (0075:466-472), and here it is stronger, because an
+-- invoker version would need UPDATE on document_auto_actions AND on document_filings AND on
+-- invoices.deleted_at granted to authenticated, and a plain PostgREST PATCH could then set
+-- reverted_at with no reason at all -- defeating the mandatory-reason contract this command
+-- exists to enforce, on the one ledger that records what a machine did with money.
+insert into private.scope_definer_exemptions (function_signature, reason, target_wave)
+values (
+  'public.revert_document_auto_action(uuid,text)'::regprocedure::text,
+  'rls-preread-single-unit -- cannot be invoker: that would require granting UPDATE on '
+    || 'document_auto_actions, document_filings and invoices.deleted_at to authenticated, '
+    || 'letting a direct PostgREST PATCH revert a machine-written financial decision with no '
+    || 'reason and no soft-delete guard, defeating the mandatory-reason contract. Remediate by '
+    || 'filtering documents on auth_scopes() once documents carries a meaningful unit_id; today '
+    || 'an inbox document is unit_id NULL by design (0055:112).',
   'multi-unit enablement wave');
 
 do $reassert$

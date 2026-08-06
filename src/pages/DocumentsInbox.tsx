@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Archive, Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, Search, Trash2, Undo2, Upload, X } from 'lucide-react';
+import { Archive, Bot, Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, RotateCcw, Search, Trash2, Undo2, Upload, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -19,7 +19,7 @@ import {
 } from '../components/FileUpload';
 import { openReservedPopup } from '../lib/popup';
 import { runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
-import { fetchAll } from '../lib/supabasePaging';
+import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import {
   DOCUMENT_PROCESSING_CHANGED_EVENT,
   DOCUMENT_USER_STATE_FILTERS,
@@ -37,6 +37,41 @@ import {
 type RefileTarget = 'invoice' | 'goods_receipt';
 type SupplierOption = { id: string; name: string };
 type GalleryDocument = DocumentRow & { supplier: SupplierOption | null };
+
+/** One row of `document_auto_actions` (0077): a financial record a machine wrote with no human.
+ *
+ *  This type, and the badge and action built on it, are the FIRST place in `src/` that names what
+ *  the automation did. Until now nothing in the browser referenced `document_auto_actions`,
+ *  `document_filings` or `auto_applied` at all — an invoice the model authored was indistinguishable
+ *  on screen from one a colleague typed, which makes supervising the automation impossible in the
+ *  literal sense: there was nothing to look at.
+ *
+ *  Only the live rows are read (`reverted_at is null`). A reverted decision is history, and its
+ *  document is back in the queue looking like any other unfiled document — which is the truth. */
+type AutoActionRow = {
+  id: string;
+  document_id: string;
+  invoice_id: string | null;
+  decision: { decision_confidence?: number | string | null } | null;
+};
+
+/** The confidence the machine acted on, as a percentage a person can read.
+ *
+ *  NULL means UNKNOWN and says so. It is never rendered as 0% — the constitution's rule about
+ *  dashes instead of zeros, applied where it matters most: "the system was 0% sure and created
+ *  this invoice anyway" is a sentence about the software that would not be true. `decision` is
+ *  jsonb, so the number can arrive as a JSON number or a numeric-as-string; both are accepted and
+ *  anything else is unknown rather than NaN%. */
+function autoActionConfidence(action: AutoActionRow): string {
+  const raw = action.decision?.decision_confidence;
+  const value = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+  if (!Number.isFinite(value)) return 'לא ידועה';
+  return `${Math.round(value * 100)}%`;
+}
+
+function autoActionDescription(action: AutoActionRow): string {
+  return `החשבונית נוצרה אוטומטית על ידי המערכת מתוך המסמך הזה, ללא אישור אדם, ברמת ביטחון ${autoActionConfidence(action)}.`;
+}
 
 type InvoicePick = { id: string; invoice_number: string; invoice_date: string; supplier: { name: string } | null };
 type ReceiptPick = { id: string; number: number; received_at: string; order: { supplier: { name: string } | null } | null };
@@ -108,6 +143,30 @@ export function ProcessingFilterSelect({ value, onChange }: {
  *  has no meaningful answer. */
 function isUnfiled(doc: DocumentRow) {
   return doc.entity_type === 'inbox' || doc.entity_id === null;
+}
+
+/** The filing answer, and — when a machine gave it — who gave it.
+ *
+ *  "משויך" is true of a machine-authored filing and it is not ENOUGH: a person who cannot tell an
+ *  invoice the model wrote from one their colleague typed cannot supervise the automation, and the
+ *  owner's decision to let a model create financial records was granted on the understanding that
+ *  it stays supervisable. So the badge names the author, and the sentence naming the confidence
+ *  rides along as a SIBLING rather than as `title` alone — a tooltip does not exist on touch and
+ *  screen readers treat it inconsistently, which PRODUCT.md's WCAG 2.1 AA target does not allow
+ *  for the only copy that distinguishes a machine's work from a person's. Same pairing, and same
+ *  reason, as ProcessingBadge above. */
+function FilingBadge({ doc, action }: { doc: DocumentRow; action: AutoActionRow | null }) {
+  if (action) {
+    return (
+      <>
+        <span className="badge-info inline-flex items-center gap-1" title={autoActionDescription(action)}>
+          <Bot size={13} aria-hidden="true" /> שויך אוטומטית
+        </span>
+        <span className="sr-only">{autoActionDescription(action)}</span>
+      </>
+    );
+  }
+  return <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>;
 }
 
 /** Re-filing changes only the document's owner record. Metadata selected at upload remains
@@ -349,6 +408,8 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   const [rescuing, setRescuing] = useState(false);
   const [deleteDoc, setDeleteDoc] = useState<DocumentRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [revertDoc, setRevertDoc] = useState<DocumentRow | null>(null);
+  const [reverting, setReverting] = useState(false);
 
   const { data, loading, fetching, error, refetch } = useQuery<{
     docs: GalleryDocument[]; suppliers: SupplierOption[];
@@ -376,6 +437,27 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   }, [archive]);
   const documentIds = useMemo(() => data?.docs.map((doc) => doc.id) ?? [], [data]);
   const processing = useDocumentProcessing(documentIds);
+
+  /** The autonomy ledger, read in its OWN query rather than joined into the list above, and the
+   *  separation is a product decision: a document register that refuses to render because the
+   *  autonomy ledger is unreadable would be the tail wagging the dog. If this read fails the rows
+   *  still list, the badge simply is not there and the reversal is not offered — which is the
+   *  honest degradation, because offering an undo we cannot describe would be worse than none.
+   *  Keyed on a joined string, the `useDocumentProcessing` idiom, so a re-render with an
+   *  identical id list does not re-fetch. */
+  const documentIdsKey = documentIds.join(',');
+  const { data: autoActions, refetch: refetchAutoActions } = useQuery<Record<string, AutoActionRow>>(
+    async () => {
+      if (!documentIds.length) return {};
+      const rows = await fetchInChunks(documentIds, (chunk) => fetchAll<AutoActionRow>((from, to) => supabase
+        .from('document_auto_actions').select('id, document_id, invoice_id, decision')
+        .in('document_id', chunk).is('reverted_at', null)
+        .order('created_at', { ascending: false }).order('id').range(from, to)));
+      return Object.fromEntries(rows.map((row) => [row.document_id, row]));
+    },
+    [documentIdsKey],
+  );
+  const autoActionFor = (doc: DocumentRow): AutoActionRow | null => autoActions?.[doc.id] ?? null;
 
   // A job that has been extracted goes no further on its own: interpretation has to be asked for,
   // and until it is the document sits in the list looking like work is in progress when none is.
@@ -500,6 +582,39 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     }
   }
 
+  /** Undoing what the machine did, in one action, with a mandatory reason.
+   *
+   *  The server is the enforcement: `revert_document_auto_action` refuses an empty or
+   *  whitespace-only reason by name (`reason_required`), refuses anyone who is not owner/office,
+   *  refuses a second reversal (`auto_action_already_reverted`), and refuses outright when money
+   *  has been allocated against the invoice — that last one arrives as
+   *  `invoice_has_financial_references` from the live `soft_delete_invoice`, and `toHebrewError`
+   *  already names it. The dialog is the courtesy, never the fence.
+   *
+   *  `refetch` AND `refetchAutoActions`, because one reversal changes two things a person is
+   *  looking at: the row goes back to לא משויך, and the "שויך אוטומטית" badge must disappear.
+   *  Refreshing one and not the other would leave the screen contradicting itself. */
+  async function revertAutoAction(reason?: string) {
+    const action = revertDoc ? autoActionFor(revertDoc) : null;
+    if (!action || !reason) return;
+    setReverting(true);
+    try {
+      ok(await supabase.rpc('revert_document_auto_action', {
+        p_action_id: action.id,
+        p_reason: reason,
+      }));
+      toast('השיוך האוטומטי בוטל והמסמך חזר לתיקיית המסמכים');
+      setRevertDoc(null);
+      window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+      window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
+      await Promise.all([refetch(), refetchAutoActions()]);
+    } catch (error) {
+      toast(toHebrewError(error), 'error');
+    } finally {
+      setReverting(false);
+    }
+  }
+
   /** Removal from the archive takes NO reason, by the owner's ruling (OPEN-DECISIONS #110), and
    *  needs no new database mechanism: this is decision #28's existing soft delete — the row is
    *  hidden, the stored file is kept for audit. Same statement AttachmentsPanel.tsx:142-144
@@ -559,7 +674,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     },
     archive ? null : {
       key: 'filing', header: 'תיוק', mobileLabel: null, priority: 3, sortValue: (doc) => isUnfiled(doc) ? 0 : 1,
-      render: (doc) => <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>,
+      render: (doc) => <FilingBadge doc={doc} action={autoActionFor(doc)} />,
     },
     {
       key: 'processing', header: 'מצב', mobileLabel: null, priority: 3,
@@ -578,6 +693,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   ] as Array<Column<GalleryDocument> | null>).filter((column): column is Column<GalleryDocument> => column !== null);
 
   const hasFilters = !!(q || supplierId || kind || from || to || filing !== 'all' || processingFilter !== 'all');
+  const revertAction = revertDoc ? autoActionFor(revertDoc) : null;
 
   // Heading and icon track the nav label, because pageTitleFor derives the tab title from the
   // sidebar item and a different word would put two names on one screen. `ארכיון מסמכים` qualifies
@@ -700,13 +816,12 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             <span className="flex flex-wrap justify-end gap-1">
               <ProcessingBadge documentId={doc.id} doc={doc}
                 stage={processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed'} />
-              {!archive && (
-                <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>
-              )}
+              {!archive && <FilingBadge doc={doc} action={autoActionFor(doc)} />}
             </span>
           )}
           rowActions={(doc) => {
             const snapshot = processing.snapshots[doc.id];
+            const autoAction = autoActionFor(doc);
             return [
               { key: 'review', label: 'בדיקת מסמך', icon: FileSearch, hidden: !snapshot?.job, onSelect: () => review(doc) },
               { key: 'enqueue', label: 'שליחה לעיבוד', icon: RefreshCw, hidden: !canEnqueue || snapshot?.stage !== 'unprocessed', onSelect: () => setRetryDoc(doc) },
@@ -728,6 +843,14 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
               // structurally refuses any non-inbox row (0019:167). The document returns to the
               // folder as unfiled, where those two actions then work on it for real.
               { key: 'rescue', label: 'החזרה לטיפול', icon: Undo2, hidden: !canFile || !archive, onSelect: () => setRescueDoc(doc) },
+              // The undo for a decision no human made. Gated on the AUTO-ACTION EXISTING, not on
+              // the document being filed: "this row has an invoice" and "a machine wrote that
+              // invoice" are different facts, and only the second one is reversible here — a
+              // colleague's invoice is undone from the invoice screen, by its own command. The
+              // role gate matches the server's (owner/office, the authority every comparable
+              // reversal in this codebase uses); the server refuses regardless of what this hides.
+              { key: 'revert-auto', label: 'ביטול השיוך האוטומטי', icon: RotateCcw, tone: 'danger',
+                hidden: !canFile || !autoAction, onSelect: () => setRevertDoc(doc) },
               // Removal from the archive: no reason, by the owner's ruling (#110). Nothing new
               // in the database — decision #28's soft delete, the stored file kept for audit.
               { key: 'delete', label: 'הסרה', icon: Trash2, tone: 'danger', hidden: !canFile || !archive, onSelect: () => setDeleteDoc(doc) },
@@ -754,6 +877,17 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         title="החזרת מסמך לטיפול"
         message={`המסמך "${rescueDoc?.file_name ?? ''}" יחזור לתיקיית המסמכים כלא משויך, ויהיה אפשר לשייך אותו לחשבונית או לקבלת סחורה.`}
         confirmLabel="החזרה לטיפול" requireReason busy={rescuing} />
+
+      {/* The one dialog in this app that undoes a financial record nobody authorised by hand, so it
+          says all four things before it offers the button: WHAT the machine did, at what
+          CONFIDENCE, what the undo will change, and what survives it. `requireReason` is not a
+          courtesy here either — the reason lands in audit_logs as the only human sentence attached
+          to the whole episode, and the server refuses an empty one by name regardless. */}
+      <ConfirmDialog open={!!revertDoc} onClose={() => setRevertDoc(null)}
+        onConfirm={(reason) => void revertAutoAction(reason)}
+        title="ביטול השיוך האוטומטי"
+        message={`המסמך "${revertDoc?.file_name ?? ''}" שויך אוטומטית לחשבונית שהמערכת יצרה בעצמה, ללא אישור אדם, ברמת ביטחון ${revertAction ? autoActionConfidence(revertAction) : 'לא ידועה'}. הביטול יסיר את החשבונית (הרשומה נשמרת לביקורת), יחזיר את המסמך לתיקייה כלא משויך, ויסגור חריגה שנפתחה בעקבות השיוך — לא מפני שהפער נבדק. רישום היצירה ורישום הביטול נשמרים שניהם ביומן הביקורת.`}
+        confirmLabel="ביטול השיוך" danger requireReason busy={reverting} />
 
       {/* No requireReason, deliberately: #110 rules that removal from the archive needs none.
           The message says what actually happens to the bytes, because "הסרה" alone would read

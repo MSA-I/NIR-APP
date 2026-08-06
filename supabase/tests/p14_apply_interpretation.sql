@@ -1722,6 +1722,692 @@ select pg_temp.p14_assert(
     where org_id = '14000000-0000-4000-8000-000000000002'),
   'P14 mutation proof: rolling the mutation back must restore the refusal');
 
+-- ==========================================================================================
+-- ===== (n) REVERSAL IN ONE REASONED ACTION (task C5) =====
+--
+-- Everything above proves what a machine may WRITE. This proves it can be taken back, which is
+-- the condition under which the owner's permission was grantable at all. The assertions are
+-- written the same way: "prove the undo actually happened, on every row it claims" and "prove the
+-- refusals refuse", because a reversal that silently half-completes is worse than none -- it
+-- would leave a deleted invoice with a document still filed to it and an exception naming both.
+--
+-- Placed at the END of the suite on purpose. It soft-deletes invoices the sections above counted,
+-- so running earlier would make their counts depend on this section's fixtures.
+-- ==========================================================================================
+
+create function pg_temp.p14_action(p_document uuid)
+returns uuid
+language sql
+stable
+as $$
+  select id from public.document_auto_actions
+  where document_id = p_document and reverted_at is null
+$$;
+
+-- The reversal called the way the BROWSER calls it: a real subject, role `authenticated`, the
+-- EXECUTE grant actually consulted. p14_apply's trusted shape would be the wrong door entirely --
+-- service_role holds no EXECUTE here, which is itself asserted below.
+create function pg_temp.p14_revert(p_sub uuid, p_action uuid, p_reason text)
+returns jsonb
+language plpgsql
+as $$
+declare
+  v_out jsonb;
+begin
+  perform pg_temp.p14_become(p_sub);
+  select public.revert_document_auto_action(p_action, p_reason) into v_out;
+  perform set_config('role', 'none', true);
+  return v_out;
+end
+$$;
+
+-- ----- Structure, before a single reversal runs -----
+
+select pg_temp.p14_assert(
+  to_regprocedure('public.revert_document_auto_action(uuid,text)') is not null,
+  'revert_document_auto_action(uuid,text) must exist -- a machine-authored financial record with '
+  || 'no way back is the trap the whole autonomy decision was conditioned on avoiding');
+
+select pg_temp.p14_assert(
+  (select prosecdef from pg_proc
+   where oid = 'public.revert_document_auto_action(uuid,text)'::regprocedure)
+  and (select rolname = 'postgres' from pg_roles r
+       join pg_proc p on p.proowner = r.oid
+       where p.oid = 'public.revert_document_auto_action(uuid,text)'::regprocedure),
+  'the reversal must be SECURITY DEFINER owned by postgres -- it writes three ledgers a browser '
+  || 'role holds no UPDATE on, and that is what keeps the reason mandatory');
+
+-- THE MIRROR IMAGE OF THE WRITER'S GRANT, and the pairing is the contract: the trusted server may
+-- write the automatic invoice and may not undo it; a person may undo it and may not invoke the
+-- writer. Asserted together so a future grant that collapses them fails here.
+select pg_temp.p14_assert(
+  has_function_privilege(
+    'authenticated', 'public.revert_document_auto_action(uuid,text)', 'EXECUTE')
+  and not has_function_privilege(
+    'service_role', 'public.revert_document_auto_action(uuid,text)', 'EXECUTE')
+  and not has_function_privilege(
+    'anon', 'public.revert_document_auto_action(uuid,text)', 'EXECUTE')
+  and not exists (
+    select 1 from pg_proc p
+    cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+    where p.oid = 'public.revert_document_auto_action(uuid,text)'::regprocedure
+      and acl.grantee = 0 and acl.privilege_type = 'EXECUTE'),
+  'a person may reverse and the machine may not -- never PUBLIC, never anon, never service_role');
+
+select pg_temp.p14_assert(
+  exists (
+    select 1 from private.scope_definer_exemptions
+    where function_signature like 'revert_document_auto_action(%'),
+  'the reversal must carry its own A5 exemption row with a stated reason');
+
+-- SOFT DELETE, PROVEN IN THE BODY AS WELL AS IN THE OUTCOME. CLAUDE.md's iron rule for financial
+-- records is not satisfied by a test that happens to observe a surviving row; a `delete from
+-- invoices` anywhere in this function must be impossible to add without failing here.
+select pg_temp.p14_assert(
+  (select regexp_replace(prosrc, '--[^\n]*', '', 'g') ~ 'soft_delete_invoice'
+      and regexp_replace(prosrc, '--[^\n]*', '', 'g') !~ '\mdelete\s+from\s+(public\.)?invoices\M'
+      and regexp_replace(prosrc, '--[^\n]*', '', 'g') !~ '\mdelete\s+from\s+(public\.)?document_'
+     from pg_proc
+    where oid = 'public.revert_document_auto_action(uuid,text)'::regprocedure),
+  'the reversal must go through the live soft_delete_invoice and must contain no DELETE against '
+  || 'invoices or against either ledger -- the creation is history, not something to erase');
+
+-- ----- The guard's fifth leg: added, and NARROW -----
+
+select pg_temp.p14_assert(
+  (select prosrc ~ 'old\.entity_type = ''invoice'''
+     from pg_proc where oid = 'public.documents_guard_columns()'::regprocedure),
+  'documents_guard_columns must admit invoice -> inbox, or a reverted document stays filed to an '
+  || 'invoice that no longer exists');
+
+select pg_temp.p14_assert(
+  (select prosecdef from pg_proc
+    where oid = 'public.documents_guard_columns()'::regprocedure),
+  'and it must not have lost SECURITY DEFINER in the anchored replay -- that is exactly the '
+  || 'silent downgrade B1''s migration was written to prevent');
+
+-- A WIDENED GUARD THAT NOBODY RE-TESTED IS WORSE THAN THE DEFECT IT FIXED. These four probes run
+-- as the trusted server, so the column grant is not what refuses -- the trigger is. Each was
+-- refused before 0077 section 4a and must still be.
+do $$
+declare
+  v_doc uuid := '44000000-0000-4000-8000-000000000070';
+  v_inv uuid;
+  v_msg text;
+  v_failures text := '';
+begin
+  select id into v_inv from public.invoices
+   where org_id = '14000000-0000-4000-8000-000000000001' and invoice_number = 'P14-1001';
+
+  -- (i) archive -> invoice. p14's I-2 scenario depends on this staying shut: it is what stops a
+  -- replay silently overruling a person who archived a document the system had queued.
+  begin
+    update public.documents set entity_type = 'invoice', entity_id = v_inv
+     where id = '44000000-0000-4000-8000-000000000001';
+    v_failures := v_failures || ' archive->invoice was ADMITTED;';
+  exception when others then
+    v_msg := sqlerrm;
+    if v_msg not like '%only metadata, soft-delete fields, or inbox filing%' then
+      v_failures := v_failures || ' archive->invoice raised the wrong error: ' || v_msg || ';';
+    end if;
+  end;
+
+  -- (ii) invoice -> goods_receipt. The new leg is invoice -> INBOX, not invoice -> anything.
+  begin
+    update public.documents set entity_type = 'goods_receipt', entity_id = v_inv
+     where id = '44000000-0000-4000-8000-000000000006';
+    v_failures := v_failures || ' invoice->goods_receipt was ADMITTED;';
+  exception when others then
+    null;
+  end;
+
+  -- (iii) invoice -> inbox CARRYING AN ENTITY. The leg is exact about the entity, the same way
+  -- 0075's two archive legs are: an inbox row that still points at a business record is the
+  -- half-moved state the whole predicate exists to make unrepresentable.
+  begin
+    update public.documents set entity_type = 'inbox', entity_id = v_inv
+     where id = '44000000-0000-4000-8000-000000000006';
+    v_failures := v_failures || ' invoice->inbox WITH an entity was ADMITTED;';
+  exception when others then
+    null;
+  end;
+
+  -- (iv) goods_receipt -> inbox. Deliberately not added: nothing writes a goods_receipt filing
+  -- automatically, so there is no machine decision to reverse.
+  insert into public.documents (id, org_id, entity_type, entity_id, storage_path, file_name,
+                                mime_type, uploaded_by)
+  values (v_doc, '14000000-0000-4000-8000-000000000001', 'inbox', null,
+          '14000000-0000-4000-8000-000000000001/p14/70.pdf', 'p14-70.pdf', 'application/pdf',
+          '24000000-0000-4000-8000-000000000001');
+  update public.documents set entity_type = 'invoice', entity_id = v_inv where id = v_doc;
+  begin
+    update public.documents set entity_type = 'goods_receipt', entity_id = v_inv where id = v_doc;
+    v_failures := v_failures || ' invoice->goods_receipt (fresh row) was ADMITTED;';
+  exception when others then
+    null;
+  end;
+
+  -- And the leg that WAS added must work, from the same trusted seat.
+  update public.documents set entity_type = 'inbox', entity_id = null where id = v_doc;
+
+  if v_failures <> '' then
+    raise exception 'P14 apply-interpretation assertion failed: the widened guard stopped '
+      'refusing something it refused before --%', v_failures;
+  end if;
+end
+$$;
+
+select pg_temp.p14_assert(
+  (select entity_type = 'inbox' and entity_id is null
+     from public.documents where id = '44000000-0000-4000-8000-000000000070'),
+  'the one transition the reversal needs -- invoice -> inbox with no entity -- must be admitted');
+
+-- THE COLUMN GRANT IS STILL THE FENCE, and widening the trigger must not have moved it. A browser
+-- holds UPDATE on documents.deleted_at/deleted_by and on nothing else, so a direct PATCH of
+-- entity_type is refused before any policy or trigger is consulted (0075:65-72).
+select pg_temp.p14_assert(
+  not has_column_privilege('authenticated', 'public.documents', 'entity_type', 'UPDATE')
+  and not has_column_privilege('authenticated', 'public.documents', 'entity_id', 'UPDATE')
+  and not has_table_privilege('authenticated', 'public.documents', 'UPDATE'),
+  'a browser must still be unable to write entity_type directly -- the guard is a tripwire, the '
+  || 'column grant is the fence, and 0077 must not have moved either');
+
+-- ----- The refusals, before anything is reverted -----
+
+select pg_temp.p14_assert(
+  pg_temp.p14_error(
+    '24000000-0000-4000-8000-000000000001',
+    $$select public.revert_document_auto_action(
+        (select id from public.document_auto_actions
+          where document_id = '44000000-0000-4000-8000-000000000006'), '')$$
+  ) like '%reason_required%',
+  'the reversal must refuse an empty reason, BY NAME -- the rescue_document_from_archive contract');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_error(
+    '24000000-0000-4000-8000-000000000001',
+    $$select public.revert_document_auto_action(
+        (select id from public.document_auto_actions
+          where document_id = '44000000-0000-4000-8000-000000000006'), '   ')$$
+  ) like '%reason_required%',
+  'and a whitespace-only reason, by the same name');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_error(
+    '24000000-0000-4000-8000-000000000001',
+    $$select public.revert_document_auto_action(
+        (select id from public.document_auto_actions
+          where document_id = '44000000-0000-4000-8000-000000000006'), null)$$
+  ) like '%reason_required%',
+  'and a null reason');
+
+select pg_temp.p14_assert(
+  (select reverted_at is null from public.document_auto_actions
+    where document_id = '44000000-0000-4000-8000-000000000006')
+  and (select deleted_at is null from public.invoices
+        where org_id = '14000000-0000-4000-8000-000000000001' and invoice_number = 'P14-1001'),
+  'three refused reversals must have reverted nothing and deleted nothing');
+
+-- TENANT ISOLATION AT THE REVERSAL DOOR. The function owner bypasses RLS, so this predicate is
+-- the whole IDOR boundary: another tenant's action id must be indistinguishable from one that
+-- does not exist. Tenant B's owner is used, and tenant B has no auto-actions of its own.
+select pg_temp.p14_assert(
+  pg_temp.p14_error(
+    '24000000-0000-4000-8000-000000000002',
+    $$select public.revert_document_auto_action(
+        (select id from public.document_auto_actions
+          where document_id = '44000000-0000-4000-8000-000000000006'),
+        'P14: another tenant reaching for a decision that is not theirs')$$
+  ) like '%auto_action_unknown%',
+  'another tenant''s action id must be refused as UNKNOWN -- not as "forbidden", which would '
+  || 'confirm that the row exists');
+
+select pg_temp.p14_assert(
+  (select reverted_at is null from public.document_auto_actions
+    where document_id = '44000000-0000-4000-8000-000000000006'),
+  'and the cross-tenant attempt must have reverted nothing');
+
+-- ROLE. kitchen reads both ledgers (the SELECT policies admit it) and files nothing. The three
+-- comparable reversals in this codebase -- soft_delete_invoice, rescue_document_from_archive and
+-- file_document -- all gate on owner/office, and this one is not allowed to be looser.
+insert into auth.users (id, email) values
+  ('24000000-0000-4000-8000-000000000070', 'p14-kitchen-a@example.test');
+insert into profiles (id, org_id, full_name, role) values
+  ('24000000-0000-4000-8000-000000000070', '14000000-0000-4000-8000-000000000001',
+   'P14 Kitchen A', 'kitchen');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_error(
+    '24000000-0000-4000-8000-000000000070',
+    $$select public.revert_document_auto_action(
+        (select id from public.document_auto_actions
+          where document_id = '44000000-0000-4000-8000-000000000006'),
+        'P14: kitchen attempting a financial reversal')$$
+  ) like '%not_authorized%',
+  'kitchen may READ what the machine did and may not undo it -- same authority as every '
+  || 'comparable reversal in this codebase');
+
+-- ----- The reversal itself, on the document that carries an ORDER LINK and an EXCEPTION -----
+-- Document 13 is the richest auto-action in the suite: invoice, order link, and an open
+-- item_not_ordered exception. If a reversal is coherent anywhere it has to be coherent here.
+
+select pg_temp.p14_assert(
+  (select count(*) = 1 from public.exceptions
+    where org_id = '14000000-0000-4000-8000-000000000001'
+      and status = 'open' and details ->> 'code' = 'item_not_ordered'),
+  'P14 reversal precondition: the exception the decision raised is OPEN');
+
+create temporary table p14_revert_result as
+select pg_temp.p14_revert(
+  '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_action('44000000-0000-4000-8000-000000000013'),
+  'P14: הפריט לא הגיע — החשבונית נוצרה אוטומטית בטעות') as r;
+
+select pg_temp.p14_assert(
+  (select (r ->> 'invoice_deleted')::boolean and (r ->> 'document_returned_to_inbox')::boolean
+      and (r ->> 'filing_reverted')::boolean and (r ->> 'exception_dismissed')::boolean
+     from p14_revert_result),
+  'ONE action must report all four undos -- a reversal that silently does three of them leaves '
+  || 'the manager a state nobody can act on');
+
+-- (1) SOFT delete. The row survives, deleted_at is set, and the file behind it is untouched.
+select pg_temp.p14_assert(
+  (select count(*) = 1 from public.invoices
+    where org_id = '14000000-0000-4000-8000-000000000001'
+      and invoice_number = 'P14-WITH-ORDER'),
+  'the invoice ROW must still exist -- CLAUDE.md admits no hard delete of a financial record');
+
+select pg_temp.p14_assert(
+  (select deleted_at is not null from public.invoices
+    where invoice_number = 'P14-WITH-ORDER'),
+  'and it must be soft-deleted, not merely detached from the document');
+
+select pg_temp.p14_assert(
+  exists (
+    select 1 from audit_logs
+    where entity_type = 'invoices' and action = 'invoice_soft_deleted'
+      and entity_id = (select id from public.invoices where invoice_number = 'P14-WITH-ORDER')
+      and reason like '%נוצרה אוטומטית בטעות%'),
+  'the soft delete must carry the person''s reason -- it runs through the live '
+  || 'soft_delete_invoice, which is where the financial-reference refusal and the writer GUC '
+  || 'live, and re-implementing it here would have had to re-derive both');
+
+-- (2) THE DOCUMENT IS BACK IN THE QUEUE A PERSON WORKS FROM. This is the whole of answer (א):
+-- anything else leaves the row claiming "שויך לחשבונית" about an invoice that is gone.
+select pg_temp.p14_assert(
+  (select entity_type = 'inbox' and entity_id is null
+     from public.documents where id = '44000000-0000-4000-8000-000000000013'),
+  'the document must return to the inbox, where the two manual שיוך actions apply to it');
+
+-- The document keeps what is KNOWN about it. The person repudiated the filing, not the fact that
+-- the page names this supplier -- the same judgement 0075:161-165 made for the archive.
+select pg_temp.p14_assert(
+  (select supplier_id = '34000000-0000-4000-8000-000000000001'
+     from public.documents where id = '44000000-0000-4000-8000-000000000013'),
+  'reverting a filing must not blank the supplier the document actually names');
+
+-- (3) THE FILING, reverted once with the reason.
+select pg_temp.p14_assert(
+  (select reverted_at is not null and reverted_reason like '%בטעות%'
+     from public.document_filings
+    where document_id = '44000000-0000-4000-8000-000000000013'),
+  'the filing must be reverted WITH the reason -- document_filings_reversal_shape makes a '
+  || 'reverted_at with no reason unrepresentable, and this proves the command supplies one');
+
+-- (4) THE STRANDED EXCEPTION -- OPEN-DECISIONS #112. Dismissed, and the note must say WHY in a
+-- way that cannot be mistaken for a finding. The machine's READING was repudiated; the SHIPMENT
+-- was not, so the discrepancy may still be real and a person must be able to reopen it knowing
+-- that no one investigated anything.
+select pg_temp.p14_assert(
+  (select status = 'dismissed' and resolved_by = '24000000-0000-4000-8000-000000000001'
+      and resolved_at is not null
+     from public.exceptions
+    where org_id = '14000000-0000-4000-8000-000000000001'
+      and details ->> 'code' = 'item_not_ordered'),
+  'an exception naming a soft-deleted invoice is the false "requires attention" §12 forbids -- '
+  || 'the manager cannot act on it at all, because the record it names is gone');
+
+select pg_temp.p14_assert(
+  (select resolution_note like '%ולא מפני שהפער נבדק%'
+      and resolution_note like '%יש לפתוח חריגה מחדש%'
+      -- The id is read WITHOUT the `reverted_at is null` filter p14_action carries: by this
+      -- point the action is reverted, and asking for the live one would compare against NULL --
+      -- which is NULL, which is not false, which would let this assertion pass vacuously.
+      and resolution_note like '%' || (select id from public.document_auto_actions
+                                        where document_id = '44000000-0000-4000-8000-000000000013')::text || '%'
+     from public.exceptions
+    where org_id = '14000000-0000-4000-8000-000000000001'
+      and details ->> 'code' = 'item_not_ordered'),
+  'the note must state that the exception was closed BY THE REVERSAL and explicitly not by any '
+  || 'investigation, and must carry the action id so a person can reopen it deliberately -- a '
+  || 'note that implied a check happened would be the machine claiming work nobody did');
+
+-- (5) BOTH AUDIT ROWS SURVIVE. The creation is history; the reversal is a SECOND event. And the
+-- one column that could ever tell a machine from a person carries different values in each.
+select pg_temp.p14_assert(
+  exists (
+    select 1 from audit_logs
+    where org_id = '14000000-0000-4000-8000-000000000001'
+      and action = 'invoice_created_by_interpretation'
+      and user_id is null
+      and reason like '%74000000-0000-4000-8000-000000000013%'),
+  'the CREATION row must survive the reversal, still claiming no human actor -- a business that '
+  || 'erased it could not answer how many records its automation wrote');
+
+select pg_temp.p14_assert(
+  exists (
+    select 1 from audit_logs
+    where org_id = '14000000-0000-4000-8000-000000000001'
+      and action = 'document_auto_action_reverted'
+      and user_id = '24000000-0000-4000-8000-000000000001'
+      and reason like '%בטעות%'
+      and old_values -> 'decision' ->> 'interpretation_id' = '74000000-0000-4000-8000-000000000013'
+      and (new_values ->> 'exception_dismissed')::boolean),
+  'and the reversal must write its own row, signed by the PERSON, carrying the machine''s '
+  || 'decision record so the undo is readable a year later without a join');
+
+-- (6) THE ONE-WAY DOOR. A second reversal is refused by name, and the row is untouched.
+select pg_temp.p14_assert(
+  pg_temp.p14_error(
+    '24000000-0000-4000-8000-000000000001',
+    $$select public.revert_document_auto_action(
+        (select id from public.document_auto_actions
+          where document_id = '44000000-0000-4000-8000-000000000013'),
+        'P14: a second reversal of the same decision')$$
+  ) like '%auto_action_already_reverted%',
+  'reversal is a one-way door -- a reverted decision can be neither un-reverted nor re-reverted '
+  || 'under a different reason');
+
+select pg_temp.p14_assert(
+  (select count(*) = 1 from public.document_auto_actions
+    where document_id = '44000000-0000-4000-8000-000000000013'
+      and reverted_reason like '%בטעות%'),
+  'and the second attempt must not have rewritten the first reason');
+
+-- ----- Defect (a): the job stage actually advances -----
+-- save_document_interpretation leaves the job at 'review' and STAGE_USER_STATE maps review ->
+-- review, so before this fix the register said "בבדיקה / ממתין לאישורך" over a document whose
+-- invoice already existed. Latent while the switch is off; wrong on day one when it is on.
+
+select pg_temp.p14_assert(
+  (select status = 'completed' from public.document_processing_jobs
+    where document_id = '44000000-0000-4000-8000-000000000006'
+      and id = '54000000-0000-4000-8000-000000000006'),
+  'an auto-applied document''s job must reach completed -- otherwise the app tells the manager a '
+  || 'document requires their approval when its invoice already exists and nobody must approve it');
+
+select pg_temp.p14_assert(
+  (select status = 'completed' from public.document_processing_jobs
+    where id = '54000000-0000-4000-8000-000000000005'),
+  'and an ARCHIVED document''s job too -- "the system could not place this" is a decision, not a '
+  || 'thing waiting on a person');
+
+-- The outcomes that DO wait on a person must stay at review. A fix that advanced every job would
+-- have hidden the queue instead of describing it.
+select pg_temp.p14_assert(
+  (select status = 'review' from public.document_processing_jobs
+    where id = '54000000-0000-4000-8000-000000000002'),
+  'a QUEUED-for-review document must stay at review -- that one really is waiting for a person');
+
+-- A job that has since FAILED is left alone. Without the `and status = 'review'` clause this is
+-- not a tidiness question: 0046:201-202 makes failed terminal, so the update would raise
+-- document_processing_terminal_state and abort the whole command AFTER the invoice was written.
+select pg_temp.p14_seed(
+  72, '14000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000001', 0.99,
+    jsonb_build_array(
+      jsonb_build_object('key', 'invoice_number', 'value', 'P14-FAILEDJOB',
+        'confidence', 0.97, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'invoice_date', 'value', '11/04/2026',
+        'confidence', 0.95, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'subtotal', 'value', 1000,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'vat_amount', 'value', 180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'total', 'value', 1180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')))));
+
+-- last_error_code is not optional: document_processing_jobs_error_shape makes a failed job with
+-- no error code unrepresentable -- which is also why the fix's own update nulls both fields, the
+-- same way 0048:1745 does.
+update public.document_processing_jobs
+   set status = 'failed', last_error_code = 'p14_fixture_failure',
+       last_error_message = 'P14 fixture: the job failed after interpretation was saved'
+ where id = '54000000-0000-4000-8000-000000000072';
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000072') ->> 'outcome' = 'auto_applied',
+  'a document whose job has since failed must still auto-apply -- the badge fix must never be '
+  || 'able to abort the write it exists to describe');
+
+select pg_temp.p14_assert(
+  (select status = 'failed' from public.document_processing_jobs
+    where id = '54000000-0000-4000-8000-000000000072')
+  and (select count(*) = 1 from public.invoices
+        where invoice_number = 'P14-FAILEDJOB' and deleted_at is null),
+  'the failed job is left alone and the invoice is written -- both, or the clause is not doing '
+  || 'what it claims');
+
+-- ==========================================================================================
+-- ===== (o) MUTATION PROOFS FOR C5 =====
+-- Three, each stripping ONE thing out of the LIVE function body by anchored substitution (the
+-- p11:982-997 idiom) and showing the specific product harm that returns. A count of assertions
+-- is not a net; this is.
+-- ==========================================================================================
+
+-- --- (o1) The guard's fifth leg is what makes the reversal possible at all ---
+savepoint p14_c5_guard_mutation;
+do $$
+declare
+  v_def text := replace(
+    pg_get_functiondef('public.documents_guard_columns()'::regprocedure), e'\r', '');
+  v_leg text := replace($leg$
+                or (old.entity_type = 'invoice'
+                    and new.entity_type = 'inbox'
+                    and new.entity_id is null);$leg$, e'\r', '');
+begin
+  if position(v_leg in v_def) = 0 then
+    raise exception 'P14 mutation proof cannot run: the invoice -> inbox leg is not where 0077 '
+      'section 4a left it in documents_guard_columns';
+  end if;
+  -- The terminator goes on a LINE OF ITS OWN. Splicing a bare ';' in place of the leg appends it
+  -- to the last line of the leg's own comment block, where `--` swallows it, the assignment never
+  -- terminates and the whole replay dies on a syntax error one statement later -- which would
+  -- have been a mutation proof that proved nothing except that the test was broken.
+  execute replace(v_def, v_leg, e'\n                ;');
+end
+$$;
+
+select pg_temp.p14_assert(
+  pg_temp.p14_error(
+    '24000000-0000-4000-8000-000000000001',
+    $$select public.revert_document_auto_action(
+        (select id from public.document_auto_actions
+          where document_id = '44000000-0000-4000-8000-000000000006'),
+        'P14 mutation: reverting with the guard leg removed')$$
+  ) like '%only metadata, soft-delete fields, or inbox filing%',
+  'P14 C5 mutation proof: with the fifth leg gone the reversal dies at documents_guard_columns -- '
+  || 'the widening is load-bearing, and the trigger is still the thing enforcing it');
+
+select pg_temp.p14_assert(
+  (select reverted_at is null from public.document_auto_actions
+    where document_id = '44000000-0000-4000-8000-000000000006')
+  and (select deleted_at is null from public.invoices where invoice_number = 'P14-1001'),
+  'P14 C5 mutation proof: and the aborted reversal leaves NOTHING half-done -- no deleted '
+  || 'invoice, no reverted action, one transaction or none');
+
+rollback to savepoint p14_c5_guard_mutation;
+
+-- --- (o2) `and status = 'review'` is what stops the badge fix destroying the write ---
+-- THE FIXTURE IS SEEDED BEFORE THE SAVEPOINT, deliberately: `rollback to savepoint` undoes
+-- everything after it, so a fixture created inside the mutation window disappears with the
+-- mutation and the restoration assertion below then fails on a missing interpretation rather
+-- than on the thing it means to measure.
+select pg_temp.p14_seed(
+  73, '14000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000001', 0.99,
+    jsonb_build_array(
+      jsonb_build_object('key', 'invoice_number', 'value', 'P14-MUTANT-STAGE',
+        'confidence', 0.97, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'invoice_date', 'value', '12/04/2026',
+        'confidence', 0.95, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'subtotal', 'value', 1000,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'vat_amount', 'value', 180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'total', 'value', 1180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')))));
+
+update public.document_processing_jobs
+   set status = 'failed', last_error_code = 'p14_fixture_failure',
+       last_error_message = 'P14 fixture: the job failed after interpretation was saved'
+ where id = '54000000-0000-4000-8000-000000000073';
+
+savepoint p14_c5_stage_mutation;
+do $$
+declare
+  v_def text := replace(
+    pg_get_functiondef(
+      'public.apply_document_interpretation(uuid,uuid,uuid)'::regprocedure), e'\r', '');
+  v_anchor text := replace($stage$    update public.document_processing_jobs
+    set status = 'completed', last_error_code = null, last_error_message = null
+    where org_id = v_org and id = v_i.job_id and status = 'review';
+
+    insert into audit_logs ($stage$, e'\r', '');
+  v_naked text := replace($stage$    update public.document_processing_jobs
+    set status = 'completed', last_error_code = null, last_error_message = null
+    where org_id = v_org and id = v_i.job_id;
+
+    insert into audit_logs ($stage$, e'\r', '');
+begin
+  if position(v_anchor in v_def) = 0 then
+    raise exception 'P14 mutation proof cannot run: the auto_applied job-stage update is not '
+      'where 0077 left it';
+  end if;
+  execute replace(v_def, v_anchor, v_naked);
+end
+$$;
+
+select pg_temp.p14_assert(
+  pg_temp.p14_trusted_error(
+    $$select public.apply_document_interpretation(
+        '54000000-0000-4000-8000-000000000073',
+        '74000000-0000-4000-8000-000000000073', null)$$
+  ) like '%document_processing_terminal_state%',
+  'P14 C5 mutation proof: without `and status = ''review''` a job that has since failed aborts '
+  || 'the ENTIRE command on a terminal-state violation');
+
+select pg_temp.p14_assert(
+  (select count(*) = 0 from public.invoices where invoice_number = 'P14-MUTANT-STAGE'),
+  'P14 C5 mutation proof: and the invoice the command had already written is rolled back with '
+  || 'it -- a badge tidy-up destroying a financial write is exactly what the clause prevents');
+
+rollback to savepoint p14_c5_stage_mutation;
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000073') ->> 'outcome' = 'auto_applied',
+  'P14 C5 mutation proof: with the clause restored the same call succeeds again');
+
+-- --- (o3) Dismissing the exception is the only thing that stops a stranded "requires attention" ---
+-- A fresh auto-action with its own OPEN exception, so the proof cannot pass vacuously against
+-- the one document 13 already had dismissed. Seeded and applied BEFORE the savepoint, for the
+-- reason (o2) states: a fixture born inside the mutation window dies with it.
+select pg_temp.p14_seed(
+  74, '14000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000001', 0.99,
+    jsonb_build_array(
+      jsonb_build_object('key', 'invoice_number', 'value', 'P14-MUTANT-EXC',
+        'confidence', 0.97, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'invoice_date', 'value', '13/04/2026',
+        'confidence', 0.95, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'order_number',
+        'value', (select number from public.purchase_orders
+                   where id = '94000000-0000-4000-8000-000000000001'),
+        'confidence', 0.93, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'subtotal', 'value', 1000,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'vat_amount', 'value', 180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'total', 'value', 1180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2'))),
+    jsonb_build_array(
+      jsonb_build_object('source_row', 1,
+        'values', jsonb_build_object('sku', 'SKU-MUTANT-SURPRISE', 'description', 'פריט',
+                                     'quantity', 1),
+        'evidence_block_ids', jsonb_build_array('block-2')))));
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000074') ->> 'outcome' = 'auto_applied',
+  'P14 C5 mutation proof precondition: the fresh document auto-applies');
+
+select pg_temp.p14_assert(
+  (select exception_id is not null from public.document_auto_actions
+    where document_id = '44000000-0000-4000-8000-000000000074'),
+  'P14 C5 mutation proof precondition: and it raised an exception to be stranded');
+
+savepoint p14_c5_exception_mutation;
+do $$
+declare
+  v_def text := replace(
+    pg_get_functiondef('public.revert_document_auto_action(uuid,text)'::regprocedure), e'\r', '');
+  v_start int;
+  v_end int;
+begin
+  v_start := position('  if v_action.exception_id is not null then' in v_def);
+  v_end := position('  -- (5) THE HANDLE ITSELF' in v_def);
+  if v_start = 0 or v_end = 0 or v_end <= v_start then
+    raise exception 'P14 mutation proof cannot run: the exception-dismissal block is not where '
+      '0077 section 4b left it in revert_document_auto_action';
+  end if;
+  execute overlay(v_def placing '' from v_start for v_end - v_start);
+end
+$$;
+
+select pg_temp.p14_revert(
+  '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_action('44000000-0000-4000-8000-000000000074'),
+  'P14 mutation: reverting with the dismissal removed');
+
+select pg_temp.p14_assert(
+  (select status = 'open' from public.exceptions
+    where details ->> 'code' = 'item_not_ordered'
+      and invoice_id = (select id from public.invoices
+                         where invoice_number = 'P14-MUTANT-EXC'))
+  and (select deleted_at is not null from public.invoices
+        where invoice_number = 'P14-MUTANT-EXC'),
+  'P14 C5 mutation proof: with the dismissal gone the manager is left an OPEN exception naming a '
+  || 'soft-deleted invoice -- a "requires attention" nobody can act on, which is the false '
+  || 'attention state §12 forbids. Nothing else in the schema catches it');
+
+rollback to savepoint p14_c5_exception_mutation;
+
+select pg_temp.p14_assert(
+  (select reverted_at is null from public.document_auto_actions
+    where document_id = '44000000-0000-4000-8000-000000000074')
+  and (select deleted_at is null from public.invoices where invoice_number = 'P14-MUTANT-EXC'),
+  'P14 C5 mutation proof: rolling back must restore the un-reverted action and its live invoice');
+
+-- And the restored command dismisses it, which is what makes the proof above a statement about
+-- THIS block rather than about the suite's ordering.
+select pg_temp.p14_revert(
+  '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_action('44000000-0000-4000-8000-000000000074'),
+  'P14: reverting with the dismissal restored');
+
+select pg_temp.p14_assert(
+  (select status = 'dismissed' from public.exceptions
+    where details ->> 'code' = 'item_not_ordered'
+      and invoice_id = (select id from public.invoices
+                         where invoice_number = 'P14-MUTANT-EXC')),
+  'P14 C5 mutation proof: with the block restored the same reversal closes the exception again');
+
+-- ----- Tenant B, one last time -----
+-- Six applications and a reversal later, the isolation witness must still be byte-identical.
+select pg_temp.p14_assert(
+  (select pg_temp.p14_footprint('14000000-0000-4000-8000-000000000002') = b
+     from p14_footprint_before),
+  'reversing in tenant A must not have moved a single row in tenant B either');
+
 rollback;
 
 \echo 'p14_apply_interpretation_passed'
