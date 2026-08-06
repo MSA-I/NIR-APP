@@ -8,6 +8,7 @@ export interface CheckResult {
   code: string;
   severity: CheckSeverity;
   message: string;
+  amount?: number;
 }
 
 const AMOUNT_TOLERANCE = 1; // ₪ — treat sub-shekel gaps as rounding
@@ -150,6 +151,7 @@ export async function runPaymentRequestChecks(pr: {
     unapproved_invoice_count: number;
     amount_matches_open_balance: boolean;
     similar_bank_transfer_exists: boolean;
+    open_credit_total: number;
   };
   if (financial.visible_invoice_count !== financial.requested_invoice_count) {
     results.push({ code: 'invoice_visibility', severity: 'critical', message: 'לא ניתן לאמת את כל החשבוניות המקושרות לדרישה' });
@@ -193,12 +195,15 @@ export async function runPaymentRequestChecks(pr: {
     });
   }
 
-  // 4. open credits to deduct
-  const credits = await fetchAll<{ id: string; amount: number }>((from, to) => supabase.from('credit_requests').select('id, amount')
-    .eq('supplier_id', pr.supplier_id).in('status', ['open', 'requested', 'received']).order('id').range(from, to));
-  if (credits.length) {
-    const sum = credits.reduce((s, c) => s + c.amount, 0);
-    results.push({ code: 'open_credit', severity: 'warning', message: `זיכויים פתוחים בסך ₪${sum.toLocaleString()} טרם קוזזו מהדרישה` });
+  // 4. Scoped open-credit total from the trusted server check. The browser does not read
+  // raw credit rows or aggregate credits from another legal entity.
+  if (financial.open_credit_total > 0) {
+    results.push({
+      code: 'open_credit',
+      severity: 'warning',
+      amount: financial.open_credit_total,
+      message: `זיכויים פתוחים בסך ₪${financial.open_credit_total.toLocaleString()} טרם קוזזו מהדרישה`,
+    });
   }
 
   return results;

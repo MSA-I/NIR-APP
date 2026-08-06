@@ -497,9 +497,9 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
   );
 }
 
-export function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel = 'אישור', danger, requireReason, busy }: {
+export function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel = 'אישור', reasonLabel = 'סיבה (חובה — נרשם ביומן הביקורת)', danger, requireReason, busy }: {
   open: boolean; onClose: () => void; onConfirm: (reason?: string) => void;
-  title: string; message: string; confirmLabel?: string; danger?: boolean; requireReason?: boolean; busy?: boolean;
+  title: string; message: string; confirmLabel?: string; reasonLabel?: string; danger?: boolean; requireReason?: boolean; busy?: boolean;
 }) {
   const [reason, setReason] = useState('');
   const reasonId = useId();
@@ -508,7 +508,7 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
     <Modal open={open} onClose={onClose} title={title} description={message} busy={busy}>
       {requireReason && (
         <div className="mb-4">
-          <label className="label" htmlFor={reasonId}>סיבה (חובה — נרשם ביומן הביקורת)</label>
+          <label className="label" htmlFor={reasonId}>{reasonLabel}</label>
           {/* maxLength matches every other audited reason field in the app (document-review's three
               forms, the type-review decision). The column is unbounded text, so this is a consistency
               and sanity bound on a justification — free-form `notes` fields stay uncapped on purpose,
