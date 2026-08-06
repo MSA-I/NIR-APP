@@ -689,8 +689,11 @@ select pg_temp.snapshot_assert(
 reset role;
 
 -- ===== Fail-closed derived attribution and atomic failure =====
+-- The block runs as the suite owner so the anomaly fixtures can be inserted at
+-- all (browser roles have no direct DML on financial tables); each sub-block
+-- switches to authenticated only for the command under test, and the caught
+-- exception rolls back fixture, command effects and the SET LOCAL together.
 select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000001');
-set local role authenticated;
 do $$
 declare
   v_snapshots_before bigint;
@@ -704,6 +707,7 @@ begin
     where event_type = 'monthly_report.snapshot_created';
 
   begin
+    perform pg_temp.snapshot_actor(null);
     insert into public.credit_requests (
       id, org_id, supplier_id, reason, amount, status, created_by, created_at
     ) values (
@@ -711,6 +715,8 @@ begin
       'd5740000-0000-0000-0000-000000000001', 'other', 1, 'open',
       'c5740000-0000-0000-0000-000000000001', '2026-08-05 10:00:00+03'
     );
+    perform pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000001');
+    set local role authenticated;
     perform public.create_monthly_report_snapshot(
       '2026-08-01', current_setting('monthly_snapshot_test.le1')::uuid
     );
@@ -720,6 +726,7 @@ begin
   end;
 
   begin
+    perform pg_temp.snapshot_actor(null);
     insert into public.bank_transactions (
       id, org_id, import_id, tx_date, description, amount, raw, status, row_hash
     ) values (
@@ -727,6 +734,8 @@ begin
       '65740000-0000-0000-0000-000000000001', '2026-08-06', 'Unattributed bank', 1,
       '{}'::jsonb, 'unmatched', repeat('9', 64)
     );
+    perform pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000001');
+    set local role authenticated;
     perform public.create_monthly_report_snapshot(
       '2026-08-01', current_setting('monthly_snapshot_test.le1')::uuid
     );
@@ -736,10 +745,13 @@ begin
   end;
 
   begin
+    perform pg_temp.snapshot_actor(null);
     insert into public.exceptions (id, org_id, type, status, title) values (
       '95740000-0000-0000-0000-000000000009', 'a5740000-0000-0000-0000-000000000001',
       'unknown_supplier', 'open', 'Unattributed exception'
     );
+    perform pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000001');
+    set local role authenticated;
     perform public.create_monthly_report_snapshot(
       '2026-08-01', current_setting('monthly_snapshot_test.le1')::uuid
     );
@@ -749,6 +761,7 @@ begin
   end;
 
   begin
+    perform pg_temp.snapshot_actor(null);
     insert into public.exceptions (
       id, org_id, type, status, title, invoice_id, payment_id
     ) values (
@@ -756,6 +769,8 @@ begin
       'amount_mismatch', 'open', 'Ambiguous cross-entity exception',
       'f5740000-0000-0000-0000-000000000001', '05740000-0000-0000-0000-000000000002'
     );
+    perform pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000001');
+    set local role authenticated;
     perform public.create_monthly_report_snapshot(
       '2026-08-01', current_setting('monthly_snapshot_test.le1')::uuid
     );

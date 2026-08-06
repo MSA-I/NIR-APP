@@ -196,6 +196,10 @@ insert into monthly_snapshot_concurrency_test.results
 select 'a', result from dblink_get_result('snapshot_a') as t(result jsonb);
 insert into monthly_snapshot_concurrency_test.results
 select 'b', result from dblink_get_result('snapshot_b') as t(result jsonb);
+-- Drain the async end-of-results marker; without this the next dblink_send_query
+-- on the same connection fails silently ("connection busy") and no lock is held.
+select count(*) from dblink_get_result('snapshot_a') as t(result jsonb);
+select count(*) from dblink_get_result('snapshot_b') as t(result jsonb);
 
 select monthly_snapshot_concurrency_test.assert(
   (select array_agg(version order by version) = array[1, 2]
@@ -243,6 +247,10 @@ declare
   v_waiting boolean := false;
 begin
   for attempt in 1..60 loop
+    -- pg_stat_activity is frozen at first access within a transaction; without
+    -- clearing the snapshot every poll re-reads the same stale view and the
+    -- worker's lock wait is never observed.
+    perform pg_stat_clear_snapshot();
     select exists (
       select 1 from pg_stat_activity
       where application_name = 'snapshot_concurrency_worker'
@@ -264,6 +272,8 @@ select released from dblink_get_result('snapshot_a') as t(released text);
 insert into monthly_snapshot_concurrency_test.results
 select 'delivery_revoked', result
 from dblink_get_result('snapshot_b') as t(result jsonb);
+select count(*) from dblink_get_result('snapshot_a') as t(released text);
+select count(*) from dblink_get_result('snapshot_b') as t(result jsonb);
 select monthly_snapshot_concurrency_test.assert(
   (select result ->> 'error' like '%monthly_report_snapshot_delivery_not_authorized%'
    from monthly_snapshot_concurrency_test.results where runner = 'delivery_revoked'),
@@ -300,6 +310,10 @@ declare
   v_waiting boolean := false;
 begin
   for attempt in 1..60 loop
+    -- pg_stat_activity is frozen at first access within a transaction; without
+    -- clearing the snapshot every poll re-reads the same stale view and the
+    -- worker's lock wait is never observed.
+    perform pg_stat_clear_snapshot();
     select exists (
       select 1 from pg_stat_activity
       where application_name = 'snapshot_concurrency_worker'
@@ -317,6 +331,8 @@ select released from dblink_get_result('snapshot_a') as t(released text);
 insert into monthly_snapshot_concurrency_test.results
 select 'create_stale', result
 from dblink_get_result('snapshot_b') as t(result jsonb);
+select count(*) from dblink_get_result('snapshot_a') as t(released text);
+select count(*) from dblink_get_result('snapshot_b') as t(result jsonb);
 select monthly_snapshot_concurrency_test.assert(
   (select result ->> 'error' like '%fresh_authentication_required%'
    from monthly_snapshot_concurrency_test.results where runner = 'create_stale'),

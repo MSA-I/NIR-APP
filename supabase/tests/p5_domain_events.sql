@@ -75,11 +75,12 @@ select pg_temp.p5_assert(
   'the fan-out body must not name any enforced table -- the map holds the names');
 
 -- The seeded map is the 26-row derivation (24 event types; two actions share
--- invoice.created and payment.executed each has two source literals).
+-- invoice.created and payment.executed each has two source literals), plus the
+-- two monthly-report snapshot events 0074 added (created / sent).
 select pg_temp.p5_assert(
-  (select count(*) from private.domain_event_map) = 26
-    and (select count(distinct event_type) from private.domain_event_map) = 24,
-  'private.domain_event_map must hold the seeded 26 rows / 24 event types');
+  (select count(*) from private.domain_event_map) = 28
+    and (select count(distinct event_type) from private.domain_event_map) = 26,
+  'private.domain_event_map must hold the seeded 28 rows / 26 event types');
 
 -- Worker surface ACL: browser roles never touch the outbox RPCs.
 select pg_temp.p5_assert(

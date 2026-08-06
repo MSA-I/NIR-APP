@@ -340,7 +340,7 @@ select payment_credit_concurrency_test.assert(
    from payments
    where payment_request_id = 'a5730000-0000-4000-8000-000000000031')
   and
-  (select count(*) = 1 and sum(amount) = 100
+  (select count(*) = 1 and sum(allocation.amount) = 100
    from payment_allocations allocation
    join payments payment on payment.id = allocation.payment_id
    where payment.payment_request_id = 'a5730000-0000-4000-8000-000000000031'),
