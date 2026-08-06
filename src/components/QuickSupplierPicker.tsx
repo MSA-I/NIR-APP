@@ -27,7 +27,7 @@
  * `#payment-request-supplier` selectors already point.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { QuickCreateSupplier, type QuickCreatedSupplier } from './QuickCreateSupplier';
@@ -49,9 +49,22 @@ export const QUICK_CREATE_SUPPLIER_HINT = 'הספק החדש ייווצר ויי
 /**
  * The fetched list, plus anything created here that the fetch has not caught up with yet.
  *
- * Matched on `id`: once the refetch carries the row, the server's copy wins and the local one
+ * Matched on `id`: once a later fetch carries the row, the server's copy wins and the local one
  * disappears without a second option and without the selection moving. Sorting only happens when
- * something was actually added, so a list already ordered by the server is returned untouched.
+ * something was actually added, so a list already ordered by the server is returned untouched —
+ * an open `<select>` does not reorder under the user's cursor.
+ *
+ * **Two honest limits, since a reader could infer more than this does:**
+ *
+ * 1. `known.has(id)` cannot tell "the fetch has not run yet" from "the row was deleted since". A
+ *    supplier soft-deleted between the create and the next fetch would be kept as an option rather
+ *    than dropped. Nothing prevents that here; it is unreachable today only because no such fetch
+ *    happens (below), and because deleting a supplier one just created is not a real sequence.
+ * 2. There is no refetch to collide with yet. All three callers hold key-less `useQuery` with empty
+ *    deps, which routes to the legacy per-instance mode: no shared cache, no refetch on focus, and
+ *    nothing calls `refetch()` for suppliers on any of the three screens. The collision handling is
+ *    for when one of them is converted to a cached key — correct to have, not currently exercised
+ *    by production.
  */
 export function mergeCreatedSuppliers<T extends SupplierOption>(
   fetched: readonly T[] | null | undefined,
@@ -93,8 +106,12 @@ export function useQuickSupplier<T extends SupplierOption>(
   const { profile } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [created, setCreated] = useState<QuickCreatedSupplier[]>([]);
+  // Synced in an effect, not during render. A render-phase ref write is harmless while every
+  // caller passes a closure over state setters, but it is the shape that fails silently when React
+  // discards a concurrent render — the stale callback survives in the ref. One line to not rely on
+  // that staying true.
   const selectRef = useRef(onSelect);
-  selectRef.current = onSelect;
+  useEffect(() => { selectRef.current = onSelect; }, [onSelect]);
 
   const suppliers = useMemo(() => mergeCreatedSuppliers(fetched, created), [fetched, created]);
   const select = useCallback((supplierId: string) => selectRef.current(supplierId), []);
@@ -119,12 +136,13 @@ export function useQuickSupplier<T extends SupplierOption>(
 /**
  * Label, select, create button and the dialog it opens — one markup for all three screens.
  *
- * Select and button live in one `role="group"`, so the button is announced as part of the field
- * rather than as a loose control that happens to follow one. The group is named *around* the
- * field's label instead of repeating it: `qa/deterministic/invoice-linked-context.spec.ts` locates
- * this select with Playwright's `getByLabel('ספק *', { exact: true })`, which also matches
- * `aria-labelledby`, so a group carrying the identical name would resolve to two elements and put
- * that suite into a strict-mode violation.
+ * When creation is on offer, select and button live in one `role="group"`, so the button is
+ * announced as part of the field rather than as a loose control that happens to follow one. The
+ * group is named *around* the field's label instead of repeating it:
+ * `qa/deterministic/invoice-linked-context.spec.ts` locates this select with Playwright's
+ * `getByLabel('ספק *', { exact: true })`, and `getElementLabels` resolves `aria-labelledby` for any
+ * element, not only labellable ones — a group carrying the identical name would resolve to two
+ * elements and put all four of that suite's page-scoped calls into a strict-mode violation.
  *
  * `disabled` covers both controls on purpose: a supplier field the user may not change is not a
  * field they may add to (the linked-invoice case on /invoices/new). The button stays visible while
@@ -144,15 +162,31 @@ export function SupplierSelectField({
 }) {
   const fieldHintId = `${id}-quick-create-field-hint`;
   const buttonHintId = `${id}-quick-create-hint`;
-  // Pointing the select at the hint while the field is locked would advertise a button that
-  // cannot be pressed, so the hint follows the affordance rather than the permission.
+  /**
+   * Whether creation is actually on offer here and now — not merely permitted.
+   *
+   * Every announcement below hangs off this one flag, and it has to, because the two ways of
+   * getting it wrong are the same mistake pointed at different users:
+   *
+   *   - `picker.canCreate` alone names the group "בחירה או **יצירה**" for a `kitchen` user whose
+   *     button is not rendered. A sighted user sees one control and infers correctly; a screen
+   *     reader user is told an affordance exists, hunts for it, and finds nothing — a dead end
+   *     manufactured by the accessibility layer, in the change whose purpose is removing them.
+   *     (It is also a one-control group, which the role does not mean.)
+   *   - `!disabled` alone leaves the *button's* own hint promising "ייווצר וייבחר מיד בשדה זה"
+   *     on a button that cannot be pressed, on /invoices/new with a linked order.
+   *
+   * So: no button on offer, no group and no hints. Nothing here says a door exists unless one does.
+   */
   const offered = picker.canCreate && !disabled;
   const selectDescribedBy = [describedBy, offered ? fieldHintId : null].filter(Boolean).join(' ');
+  const grouping = offered
+    ? { role: 'group', 'aria-label': `${label.replace(/\s*\*\s*$/, '')} — בחירה או יצירה` }
+    : {};
   return (
     <div className={className}>
       <label className="label" htmlFor={id}>{label}</label>
-      <div className="flex items-center gap-2" role="group"
-        aria-label={`${label.replace(/\s*\*\s*$/, '')} — בחירה או יצירה`}>
+      <div className="flex items-center gap-2" {...grouping}>
         <select id={id} className="input min-w-0" value={value} disabled={disabled}
           aria-describedby={selectDescribedBy || undefined}
           onChange={(event) => picker.select(event.target.value)}>
@@ -161,14 +195,14 @@ export function SupplierSelectField({
         </select>
         {picker.canCreate && (
           <button type="button" className="btn-secondary shrink-0" disabled={disabled}
-            aria-describedby={buttonHintId} onClick={picker.openDialog}>
+            aria-describedby={offered ? buttonHintId : undefined} onClick={picker.openDialog}>
             <Plus size={16} aria-hidden="true" /> ספק חדש
           </button>
         )}
       </div>
-      {picker.canCreate && (
+      {offered && (
         <>
-          {offered && <span id={fieldHintId} className="sr-only">{SUPPLIER_FIELD_QUICK_CREATE_HINT}</span>}
+          <span id={fieldHintId} className="sr-only">{SUPPLIER_FIELD_QUICK_CREATE_HINT}</span>
           <span id={buttonHintId} className="sr-only">{QUICK_CREATE_SUPPLIER_HINT}</span>
         </>
       )}

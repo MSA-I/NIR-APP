@@ -27,6 +27,7 @@ import { SUPABASE_URL } from '../test/msw/handlers';
 import { createAppQueryClient } from '../lib/query/client';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import { ToastProvider } from '../components/ui';
+import { fmtMoneyExact } from '../lib/format';
 
 /** Real supabase-js against the MSW base URL — the PostgREST wire behaviour stays real. */
 vi.mock('../lib/supabase', async () => {
@@ -221,6 +222,11 @@ describe('SupplierSelectField — the affordance next to the select', () => {
 
     expect(screen.getByLabelText('ספק *')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'ספק חדש' })).toBeNull();
+    // And says nothing about creation either. A group named "בחירה או יצירה" around a lone select
+    // tells a screen-reader kitchen user to hunt for an affordance that was never rendered — a
+    // dead end manufactured by the accessibility layer, in the change that exists to remove them.
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(screen.getByLabelText('ספק *')).not.toHaveAccessibleDescription();
   });
 
   it('disables the button with the select — a field you may not change is not a field you may add to', () => {
@@ -233,8 +239,40 @@ describe('SupplierSelectField — the affordance next to the select', () => {
         id="locked-supplier" label="ספק *" placeholder="בחר ספק..." value="" disabled />,
     ));
 
-    expect(screen.getByLabelText('ספק *')).toBeDisabled();
+    const select = screen.getByLabelText('ספק *');
+    expect(select).toBeDisabled();
     expect(newSupplierButton()).toBeDisabled();
+    // Nothing promises a door that cannot be opened: no group, and neither control is described.
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(select).not.toHaveAccessibleDescription();
+    expect(newSupplierButton()).not.toHaveAccessibleDescription();
+
+    // And the references are dropped, not merely left pointing at spans that stopped rendering.
+    // `toHaveAccessibleDescription` cannot tell those apart — an unresolvable id yields no
+    // description either way — but axe's `aria-valid-attr-value` can, and check-browser-smoke
+    // audits these screens. A dangling aria-describedby is a gate failure, not a cosmetic one.
+    expect(select).not.toHaveAttribute('aria-describedby');
+    expect(newSupplierButton()).not.toHaveAttribute('aria-describedby');
+  });
+
+  it('keeps a caller-supplied description when the field is locked', () => {
+    render(wrap(
+      <>
+        <SupplierSelectField
+          picker={{
+            suppliers: [], canCreate: true, dialogOpen: false,
+            openDialog: () => {}, closeDialog: () => {}, select: () => {}, acceptCreated: () => {},
+          }}
+          id="locked-supplier" label="ספק *" placeholder="בחר ספק..." value=""
+          disabled describedBy="locked-supplier-help" />
+        <div id="locked-supplier-help">הספק נקבע לפי הרשומות המקושרות ואינו ניתן לשינוי כאן.</div>
+      </>,
+    ));
+
+    // Dropping the quick-create hint must not drop the caller's own — /invoices/new says exactly
+    // this when a linked order fixed the supplier, and that sentence is the reason it is disabled.
+    expect(screen.getByLabelText('ספק *'))
+      .toHaveAccessibleDescription('הספק נקבע לפי הרשומות המקושרות ואינו ניתן לשינוי כאן.');
   });
 });
 
@@ -358,13 +396,31 @@ describe('InvoiceNew — the same door', () => {
 });
 
 describe('PaymentRequests — the same door', () => {
+  /** One open invoice for `sup-1`, and nothing for anybody else. */
+  const OPEN_INVOICE = {
+    id: 'inv-1', invoice_number: '1001', invoice_date: '2026-07-01',
+    total_amount: 1234, review_status: 'approved', payment_status: 'unpaid',
+  };
+
   const useScreenTables = () => {
     useSupplierTable();
     server.use(
       http.get(`${SUPABASE_URL}/rest/v1/payment_requests`, () => HttpResponse.json([])),
-      http.get(`${SUPABASE_URL}/rest/v1/invoices`, () => HttpResponse.json([])),
+      http.get(`${SUPABASE_URL}/rest/v1/invoices`, ({ request }) => HttpResponse.json(
+        new URL(request.url).searchParams.get('supplier_id') === 'eq.sup-1' ? [OPEN_INVOICE] : [],
+      )),
+      http.post(`${SUPABASE_URL}/rest/v1/rpc/payment_request_financial_check_signals`, () =>
+        HttpResponse.json({
+          requested_invoice_count: 1, visible_invoice_count: 1, paid_invoice_count: 0,
+          unapproved_invoice_count: 0, amount_matches_open_balance: true,
+          similar_bank_transfer_check: 'unavailable', open_credit_total: 0,
+        })),
     );
   };
+
+  /** Intl puts non-breaking spaces in ₪ amounts; both sides get flattened so neither can lie. */
+  const flat = (value: string) => value.replace(/\s+/g, ' ').trim();
+  const amountText = () => flat(screen.getByText('סכום הדרישה').parentElement?.textContent ?? '');
 
   it('creates and selects the supplier inside the new-request dialog', async () => {
     const user = userEvent.setup();
@@ -381,5 +437,41 @@ describe('PaymentRequests — the same door', () => {
 
     await waitFor(() => expect(screen.getByLabelText('ספק *')).toHaveValue('sup-new'));
     expect(screen.getByRole('option', { name: NEW_ROW.name })).toBeInTheDocument();
+  });
+
+  /**
+   * The one invariant in this change that touches money.
+   *
+   * `setChosen({})` in the picker callback (PaymentRequests.tsx:207-210) is load-bearing, and not
+   * obviously so: `amount` sums EVERY value in `chosen` and `invoiceIds` is EVERY key of it, both
+   * independent of whichever `invoices` are currently loaded, and both go straight into `save()`.
+   * Leave `chosen` populated across a supplier change and the saved payment request names supplier
+   * B while carrying supplier A's invoice ids and A's amount.
+   *
+   * Creating a supplier is the route that makes this reachable rather than theoretical: it changes
+   * the supplier without going through the `<select>`. It is covered here for both routes at once,
+   * because both go through the one callback — which is why it was written that way, and therefore
+   * the thing worth pinning.
+   */
+  it('drops the previous supplier\'s chosen invoices — and its amount — when one is created', async () => {
+    const user = userEvent.setup();
+    useScreenTables();
+    useSupplierInsert();
+    render(wrap(<PaymentRequests />, '/payment-requests'));
+
+    await user.click(await screen.findByRole('button', { name: 'דרישה חדשה' }));
+    await screen.findByRole('option', { name: EXISTING.name });
+    await user.selectOptions(screen.getByLabelText('ספק *'), 'sup-1');
+
+    await user.click(await screen.findByRole('checkbox', { name: /בחירת חשבונית 1001/ }));
+    expect(amountText()).toContain(flat(fmtMoneyExact(1234)));
+
+    await createSupplier(user);
+
+    await waitFor(() => expect(screen.getByLabelText('ספק *')).toHaveValue('sup-new'));
+    // The new supplier has no invoices, and the request no longer carries the old one's money.
+    expect(amountText()).toContain(flat(fmtMoneyExact(0)));
+    expect(amountText()).not.toContain(flat(fmtMoneyExact(1234)));
+    expect(screen.queryByRole('checkbox', { name: /בחירת חשבונית 1001/ })).toBeNull();
   });
 });
