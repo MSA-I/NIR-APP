@@ -208,6 +208,10 @@ select pg_temp.p11_assert(
 -- The browser reads filings and never writes them. This is the whole reason the rescue RPC is
 -- SECURITY DEFINER: were it invoker, authenticated would need UPDATE here, and a plain
 -- PostgREST PATCH could then set reverted_at with no reason -- defeating (c) above.
+-- service_role's full CRUD is the project ACL contract, not a statement about this table:
+-- p0_client_dml_acl.sql:36-40 fails if any public server table is missing DELETE for it. So the
+-- grant is asserted here for what it is, and the table's real integrity contract is asserted
+-- separately below, where a trigger enforces it regardless of the grant.
 select pg_temp.p11_assert(
   has_table_privilege('authenticated', 'public.document_filings', 'SELECT')
     and not has_table_privilege('authenticated', 'public.document_filings', 'INSERT')
@@ -217,7 +221,14 @@ select pg_temp.p11_assert(
     and has_table_privilege('service_role', 'public.document_filings', 'INSERT')
     and has_table_privilege('service_role', 'public.document_filings', 'UPDATE')
     and has_table_privilege('service_role', 'public.document_filings', 'DELETE'),
-  'document_filings must be browser-read-only and trusted-server CRUD');
+  'document_filings must be browser-read-only, with the full service_role CRUD the P0 ACL demands');
+
+select pg_temp.p11_assert(
+  exists (
+    select 1 from pg_trigger
+    where tgrelid = 'public.document_filings'::regclass
+      and tgname = 'document_filings_guard_columns_trg' and not tgisinternal),
+  'the filing ledger must carry its column guard -- the grant above cannot be the integrity story');
 
 select pg_temp.p11_assert(
   has_function_privilege(
@@ -250,6 +261,26 @@ select pg_temp.p11_assert(
    where oid = 'public.file_document(uuid,text,uuid,text)'::regprocedure),
   'file_document must remain SECURITY DEFINER (0022:388) -- 0019 text would revert it');
 
+-- The sibling anchor. documents_guard_columns is also a definer and also holds an A5 exemption
+-- row, so a downgrade there is the same class of silent change -- and 0075 patches its body by
+-- the same replay. Asserting one and not the other left a real gap: `alter function
+-- documents_guard_columns() security invoker` used to leave this suite exiting 0.
+select pg_temp.p11_assert(
+  (select prosecdef from pg_proc
+   where oid = 'public.documents_guard_columns()'::regprocedure),
+  'documents_guard_columns must remain SECURITY DEFINER');
+
+-- The trigger 0075 deliberately does NOT recreate must still be wired to it. `create or replace
+-- function` preserves the OID, which is why recreating it was unnecessary -- but "unnecessary"
+-- is only safe if something checks, so this is that check.
+select pg_temp.p11_assert(
+  exists (
+    select 1 from pg_trigger
+    where tgrelid = 'public.documents'::regclass
+      and tgname = 'documents_guard_columns_trg' and not tgisinternal
+      and tgfoid = 'public.documents_guard_columns()'::regprocedure),
+  'documents_guard_columns_trg must still fire the patched guard');
+
 -- The decision NOT to widen the INSERT policy, pinned. file_document performs an UPDATE, so
 -- 'archive' is not needed here; adding it would open a browser upload straight into the
 -- archive, contradicting the screen shipped one commit earlier.
@@ -266,6 +297,49 @@ select pg_temp.p11_assert(
     where conrelid = 'public.documents'::regclass
       and conname = 'documents_inbox_entity'),
   'documents_inbox_entity must still exist -- the hole is narrowed, not dropped');
+
+-- THE FENCE THAT ACTUALLY HOLDS, pinned for the first time in this repo.
+--
+-- 0075 makes a row state legal that was impossible before, so what stops a browser writing it
+-- directly matters more than usual. It is a COLUMN GRANT and nothing else: `authenticated` holds
+-- UPDATE on deleted_at/deleted_by only, and no table-level UPDATE at all. Not the GUC fence in
+-- documents_guard_columns -- that is gated on `auth.uid() is not null` and service_role, the only
+-- grantee of UPDATE on entity_type, has a null auth.uid(), so it never evaluates for the one role
+-- that could perform the write. It is a tripwire for a future grant widening, not today's fence.
+--
+-- p0_client_dml_acl.sql:156 pins documents.storage_path this way and stops there. These two
+-- columns are the ones 0075 puts in play, and nothing asserted them.
+select pg_temp.p11_assert(
+  not has_column_privilege('authenticated', 'public.documents', 'entity_type', 'UPDATE')
+    and not has_column_privilege('authenticated', 'public.documents', 'entity_id', 'UPDATE')
+    and not has_table_privilege('authenticated', 'public.documents', 'UPDATE'),
+  'authenticated must hold no UPDATE on entity_type/entity_id and none on the table');
+
+-- ...and the same fence observed rather than described, in both directions. These run before the
+-- fixture exists, so they probe the grant itself: privilege is checked ahead of row visibility,
+-- which is exactly why a non-existent row still returns permission denied.
+select pg_temp.p11_assert(
+  pg_temp.p11_error(
+    'd1f00000-0000-4000-8000-00000000000a',
+    $$update public.documents set entity_type = 'archive', entity_id = null
+      where id = '00000000-0000-4000-8000-000000000000'$$
+  ) like '%permission denied for table documents%',
+  'a direct PATCH into the archive must be refused at the column grant, by name');
+
+select pg_temp.p11_assert(
+  pg_temp.p11_error(
+    'd1f00000-0000-4000-8000-00000000000a',
+    $$update public.documents set entity_type = 'inbox', entity_id = null
+      where id = '00000000-0000-4000-8000-000000000000'$$
+  ) like '%permission denied for table documents%',
+  'a direct PATCH back out of the archive must be refused the same way');
+
+-- The soft-delete columns stay writable: that is decision #28's reason-free removal path, which
+-- the archive screen now exposes, and it must NOT be collateral damage of the assertions above.
+select pg_temp.p11_assert(
+  has_column_privilege('authenticated', 'public.documents', 'deleted_at', 'UPDATE')
+    and has_column_privilege('authenticated', 'public.documents', 'deleted_by', 'UPDATE'),
+  'the soft-delete columns must stay writable -- removal from the archive depends on them');
 
 -- ===== Fixture: two tenants, four actors, documents about to be archived =====
 
@@ -490,15 +564,48 @@ select pg_temp.p11_assert(
   pg_temp.p11_visible_filings('d1f00000-0000-4000-8000-00000000000d') = 0,
   'tenant B must not see tenant A''s filing row');
 
--- A filing may not point across the tenant boundary at all -- structurally, before any policy.
+-- Two separate mechanisms, asserted separately, each naming its own refusal. Combining them
+-- (a cross-tenant org_id AND no grant) would let either one carry the assertion and prove
+-- neither.
+--
+-- (i) The browser holds no INSERT grant, so a wholly in-tenant, otherwise-valid row is still
+--     refused -- and refused at the privilege layer, by name.
 select pg_temp.p11_assert(
   pg_temp.p11_error(
     'd1f00000-0000-4000-8000-00000000000a',
     $$insert into public.document_filings (org_id, document_id, category, decided_by)
-      values ('d1f00000-0000-4000-8000-000000000002',
+      values ('d1f00000-0000-4000-8000-000000000001',
               'd1f00000-0000-4000-8000-0000000000c2', 'other', 'system')$$
-  ) is not null,
-  'the browser must not be able to write a filing row at all');
+  ) like '%permission denied%',
+  'the browser must hold no INSERT grant on document_filings, refused by name');
+
+select pg_temp.p11_assert(
+  not has_table_privilege('authenticated', 'public.document_filings', 'INSERT'),
+  'the INSERT refusal above must be the missing grant, stated directly');
+
+-- (ii) And independently of any grant, the composite key makes a cross-tenant filing
+--      unrepresentable. Run as the superuser so the grant cannot be what refuses it.
+create function pg_temp.p11_cross_tenant_filing_rejected()
+returns text
+language plpgsql
+as $$
+begin
+  begin
+    insert into public.document_filings (org_id, document_id, category, decided_by)
+    values ('d1f00000-0000-4000-8000-000000000002',
+            'd1f00000-0000-4000-8000-0000000000c2', 'other', 'system');
+    return '(accepted)';
+  exception when foreign_key_violation then
+    return sqlerrm;
+  end;
+end
+$$;
+
+savepoint p11_cross_tenant_filing;
+select pg_temp.p11_assert(
+  pg_temp.p11_cross_tenant_filing_rejected() like '%document_filings_document_tenant_fk%',
+  'tenant B''s org_id with tenant A''s document must fail on the composite key, named');
+rollback to savepoint p11_cross_tenant_filing;
 
 -- ===== 5. Confidence is nullable, and null means unknown -- never a fabricated zero =====
 
@@ -601,6 +708,65 @@ select pg_temp.p11_assert(
   pg_temp.p11_reasonless_reversal_rejected(),
   'setting reverted_at without a reason must be refused by the table itself');
 rollback to savepoint p11_reasonless_reversal;
+
+-- A filing decision is evidence, so it is neither deletable nor rewritable -- by ANY role,
+-- including the trusted server that holds the CRUD grant. These run as the suite's superuser
+-- precisely so no grant can be mistaken for the mechanism: only the trigger can refuse them.
+create function pg_temp.p11_ledger_mutation(p_sql text)
+returns text
+language plpgsql
+as $$
+begin
+  begin
+    execute p_sql;
+    return '(accepted)';
+  exception when others then
+    return sqlerrm;
+  end;
+end
+$$;
+
+savepoint p11_ledger_immutability;
+select pg_temp.p11_assert(
+  pg_temp.p11_ledger_mutation(
+    $$delete from public.document_filings
+      where document_id = 'd1f00000-0000-4000-8000-0000000000c1'$$
+  ) like '%document_filing_immutable%',
+  'a filing row must never be deletable, by name');
+
+select pg_temp.p11_assert(
+  pg_temp.p11_ledger_mutation(
+    $$update public.document_filings set category = 'invoice'
+      where document_id = 'd1f00000-0000-4000-8000-0000000000c1'$$
+  ) like '%document_filing_immutable%',
+  'a decided category must never be rewritten, by name');
+
+select pg_temp.p11_assert(
+  pg_temp.p11_ledger_mutation(
+    $$update public.document_filings set confidence = 0.99
+      where document_id = 'd1f00000-0000-4000-8000-0000000000c1'$$
+  ) like '%document_filing_immutable%',
+  'a recorded confidence must never be rewritten, by name');
+
+-- Reversal is a one-way door: neither un-revertible nor re-revertible under a new reason.
+update public.document_filings
+set reverted_at = now(), reverted_reason = 'ביטול ראשון'
+where document_id = 'd1f00000-0000-4000-8000-0000000000c1';
+
+select pg_temp.p11_assert(
+  pg_temp.p11_ledger_mutation(
+    $$update public.document_filings set reverted_at = null, reverted_reason = null
+      where document_id = 'd1f00000-0000-4000-8000-0000000000c1'$$
+  ) like '%document_filing_immutable%',
+  'a reverted filing must not be un-reverted');
+
+select pg_temp.p11_assert(
+  pg_temp.p11_ledger_mutation(
+    $$update public.document_filings set reverted_reason = 'סיבה אחרת'
+      where document_id = 'd1f00000-0000-4000-8000-0000000000c1'$$
+  ) like '%document_filing_immutable%',
+  'a reversal reason must not be rewritten after the fact');
+rollback to savepoint p11_ledger_immutability;
 
 -- ===== 6. One ACTIVE filing per document -- the partial unique index =====
 

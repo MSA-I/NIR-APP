@@ -318,9 +318,10 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     // documents.entity_type is NOT NULL (0001_init.sql:363), so no row can fall out of both halves
     // the way a nullable column would, and nothing needs a defensive `.or(...)` around it.
     //
-    // Read path only either way: nothing writes 'archive' until 0075 teaches file_document the
-    // target, so the archive route lists nothing today. That is the true state of the archive, and
-    // the empty state below says so rather than dressing it as a failure.
+    // Since 0075, file_document accepts ('archive', null), so this route can list rows. Nothing
+    // fills it automatically yet — the interpretation layer that will (task C2) is not written —
+    // so in practice the archive is still empty for most tenants, and the empty state below says
+    // which emptiness that is rather than dressing it as a failure.
     const docs = await fetchAll((from, to) => {
       const rows = supabase.from('documents').select('*, supplier:suppliers(id, name)').is('deleted_at', null);
       return (archive ? rows.eq('entity_type', 'archive') : rows.neq('entity_type', 'archive'))
@@ -554,8 +555,12 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         </div>
         {/* No upload button on the archive. uploadDocument writes entity_type='inbox', so a file
             sent from here would toast "הועלה וממתין לעיבוד" over a list that stays empty — the app
-            reporting a success the screen contradicts. There is no human path into the archive;
-            only apply_document_interpretation files a document there. */}
+            reporting a success the screen contradicts. What the archive has no path for is
+            CAPTURE: documents_insert does not admit 'archive', so no browser upload can land
+            here. Filing an *existing* document here is a different thing and is possible since
+            0075 — file_document accepts ('archive', null) for owner/office, with a reason and an
+            audit row — it simply has no control on this screen, because the intended filer is
+            the interpretation layer (task C2, not yet written). */}
         {canUpload && !archive && (
           <button type="button" className="btn-primary" onClick={() => setUploadOpen(true)}>
             <Upload size={16} /> העלאת מסמך

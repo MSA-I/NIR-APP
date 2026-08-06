@@ -157,6 +157,13 @@ const PATTERNS: [RegExp, string][] = [
     'המסמך כבר שויך ליעד עסקי.'],
   [/document_target_unknown/i,
     'יעד התיוק אינו זמין עוד. יש לבחור יעד אחר.'],
+  // The archive screen's most likely real race: two clerks, one rescues the document, the
+  // other's list is stale. Both refusals name exactly what happened, so the second person is
+  // told the truth instead of getting the generic fallback.
+  [/document_not_in_archive/i,
+    'המסמך כבר אינו בארכיון. ייתכן שהוחזר לטיפול בחלון אחר.'],
+  [/document_unknown/i,
+    'המסמך אינו זמין עוד. ייתכן שהוסר בחלון אחר.'],
   [/reason_required/i,
     'יש להזין סיבה לביצוע הפעולה.'],
   [/row-level security|permission denied|insufficient privilege/i,

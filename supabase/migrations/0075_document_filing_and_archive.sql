@@ -18,10 +18,15 @@
 --
 --   * documents_insert is NOT widened to admit 'archive'. It is an INSERT policy;
 --     file_document performs an UPDATE, so it is not on this write path at all. Adding
---     'archive' there would create a browser route for uploading straight into the archive --
---     the very path DocumentsInbox.tsx:492-495 states must not exist ("There is no human path
---     into the archive"). The planning note that pointed here cited 0022:662, whose four-value
---     list has been superseded twice (0031, then 0045, which added 'supplier').
+--     'archive' there would let a browser CAPTURE a new file directly into the archive, which
+--     is a different thing from filing an existing one there and is what the archive screen
+--     refuses to offer (DocumentsInbox.tsx, the upload-button comment). Note the precise
+--     claim: after this migration a human path into the archive DOES exist -- file_document is
+--     granted to authenticated and now accepts ('archive', null) -- and it is safe because it
+--     is in-tenant, owner/office-gated, reasoned, audited and reversible. What stays closed is
+--     capture-into-archive, where none of those guarantees would apply. The planning note that
+--     pointed here cited 0022:662, whose four-value list has been superseded twice (0031, then
+--     0045, which added 'supplier').
 --   * docs_storage_read is NOT widened either, and this was checked rather than assumed: it
 --     does reference documents.entity_type, but only inside its ACCOUNTANT arm. The
 --     owner/office/kitchen arm -- the STAFF roles that can reach /documents/archive
@@ -55,8 +60,23 @@ alter table public.documents add constraint documents_inbox_entity
 -- third and fourth: a document moving into the archive because nothing fit, and a document a
 -- person pulled back out. Everything identity-bearing stays frozen -- org_id, storage_path,
 -- file_name, mime_type, uploaded_by, created_at -- so neither can repoint a stored file or move
--- a row between organizations. The GUC fence below the predicate still applies to all four,
--- which is what keeps these transitions reachable ONLY through the reasoned RPCs.
+-- a row between organizations.
+--
+-- WHAT ACTUALLY STOPS A BROWSER FROM WRITING entity_type DIRECTLY -- named precisely, because
+-- 0075 makes a previously impossible row state legal and the boundary deserves to be understood
+-- rather than assumed. It is a COLUMN GRANT, measured in the live catalogue: `authenticated`
+-- holds UPDATE on documents.deleted_at and documents.deleted_by and on nothing else, and holds
+-- no table-level UPDATE at all. A direct PATCH of entity_type in either direction gets
+-- `permission denied for table documents` before any policy or trigger is consulted. p11 probes
+-- both directions and pins both column privileges, because that single grant is the whole fence
+-- and nothing in the repo asserted it (p0_client_dml_acl.sql:156 pins storage_path, not this).
+--
+-- The GUC fence below the predicate (`app.document_filing_writer`) is NOT that boundary and is
+-- not credited as one: it is gated on `auth.uid() is not null`, and service_role -- the only
+-- grantee of UPDATE on entity_type -- has a null auth.uid(), so the fence never evaluates for
+-- the one role that could perform the write. It is a TRIPWIRE: if a future migration ever
+-- widens the column grant to authenticated, the fence starts biting and forces the write back
+-- through the reasoned RPCs. Useful, but not load-bearing today.
 
 do $$
 declare
@@ -80,15 +100,23 @@ begin
     raise exception '0075: documents_guard_columns has moved -- the refiling predicate is not where 0045 left it. Re-read the live definition before editing.';
   end if;
   execute replace(v_def, v_anchor, v_replacement);
+  -- Same anti-revert assertion the sibling patch below carries. This function is a SECURITY
+  -- DEFINER holding its own A5 exemption row, so losing prosecdef here is the same class of
+  -- silent downgrade -- asserting it for one function and not the other was an inconsistency,
+  -- not a judgement that this one matters less.
+  if not (select prosecdef from pg_proc
+          where oid = 'public.documents_guard_columns()'::regprocedure) then
+    raise exception '0075: documents_guard_columns lost SECURITY DEFINER in the replay.';
+  end if;
 end
 $$;
 
--- The trigger keeps firing the replaced function; recreated defensively with identical wiring
--- so this migration stands on its own (the 0014:48-53 idiom).
-drop trigger if exists documents_guard_columns_trg on public.documents;
-create trigger documents_guard_columns_trg
-  before insert or update on public.documents
-  for each row execute function public.documents_guard_columns();
+-- The trigger is deliberately NOT recreated. `create or replace function` preserves the OID, so
+-- documents_guard_columns_trg keeps firing the replaced body untouched -- which is exactly why
+-- 0045 replaced this same function without touching its trigger. Recreating it would be the one
+-- place in this migration doing what its own preamble forbids for functions: re-declaring an
+-- object from remembered text, which would silently drop any WHEN clause or UPDATE OF column
+-- list a future migration adds to that trigger.
 
 -- ===== 3. file_document learns the archive =====
 -- Two anchored substitutions into the LIVE body. Nothing else about the function changes --
@@ -243,7 +271,7 @@ create index document_filings_document_idx
   on public.document_filings (org_id, document_id, decided_at desc);
 
 comment on table public.document_filings is
-  'Append-only record of who decided a document''s category, from which interpretation and at what confidence. Reversal is soft and always reasoned.';
+  'Record of who decided a document''s category, from which interpretation and at what confidence. Rows are never deleted and never rewritten; the only permitted mutation is recording a reversal once, with a reason.';
 comment on column public.document_filings.confidence is
   'Model confidence in 0..1, or NULL when unknown. Never 0 as a stand-in for missing data.';
 
@@ -260,7 +288,55 @@ create policy document_filings_select on public.document_filings
 
 revoke all on table public.document_filings from public, anon, authenticated, service_role;
 grant select on table public.document_filings to authenticated;
+-- Full CRUD to service_role is NOT optional and NOT a statement of intent: p0_client_dml_acl.sql
+-- asserts service_role holds DELETE on every public server table ("service_role is missing full
+-- CRUD on a public server table"). The grant is therefore the project's ACL contract, and the
+-- table's own integrity has to be enforced somewhere else -- which is what the guard below is
+-- for. This is 0050's pattern exactly: grant the CRUD the contract demands, then block what the
+-- ledger must never allow with a trigger.
 grant select, insert, update, delete on table public.document_filings to service_role;
+
+-- The integrity claim, enforced rather than asserted in a comment. A filing decision is evidence:
+-- who decided, from which interpretation, at what confidence. Deleting it or rewriting it would
+-- destroy exactly the audit trail this table exists to be -- so neither is possible, for any
+-- role, including the trusted server. The one permitted mutation is recording a reversal, once.
+--
+-- Not a blanket immutability trigger like document_type_review_decisions': this table is NOT
+-- fully immutable, because rescue must be able to write reverted_at/reverted_reason. It is the
+-- documents_guard_columns idiom instead (the one 0065 also reused) -- a named list of what may
+-- change, and `old.reverted_at is not null` makes a reversal a one-way door: a reverted filing
+-- can be neither un-reverted nor re-reverted under a different reason.
+create function public.document_filings_guard_columns()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'document_filing_immutable' using errcode = '42501';
+  end if;
+  if new.id is distinct from old.id
+     or new.org_id is distinct from old.org_id
+     or new.document_id is distinct from old.document_id
+     or new.category is distinct from old.category
+     or new.supplier_id is distinct from old.supplier_id
+     or new.interpretation_id is distinct from old.interpretation_id
+     or new.confidence is distinct from old.confidence
+     or new.decided_by is distinct from old.decided_by
+     or new.decided_at is distinct from old.decided_at
+     or old.reverted_at is not null then
+    raise exception 'document_filing_immutable' using errcode = '42501';
+  end if;
+  return new;
+end
+$$;
+
+revoke all on function public.document_filings_guard_columns()
+  from public, anon, authenticated, service_role;
+
+create trigger document_filings_guard_columns_trg
+  before update or delete on public.document_filings
+  for each row execute function public.document_filings_guard_columns();
 
 -- ===== 5. Rescue: the complement of filing, and the reason is structural =====
 --
