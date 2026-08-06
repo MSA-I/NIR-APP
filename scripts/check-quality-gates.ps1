@@ -55,8 +55,105 @@ function Stop-WithInfrastructureBlock([string]$Reason, [string]$Message) {
   throw $Message
 }
 
-function Assert-ExitCode([string]$Label) {
-  if ($LASTEXITCODE -ne 0) { throw "$Label failed with exit code $LASTEXITCODE." }
+# ===== Failure classification (wave 10, 10-FINAL-AUDIT Finding 2) =====
+# Wave 3 taught the two CHILD script sites to speak ##GATE-INFRA## (:833-836, :855-858).
+# Every stage that runs in THIS process still threw a bare string into the catch-all at the
+# bottom of the file, which stamps FAIL/product unconditionally. That is how wave 5's libuv
+# teardown crash -- a build that SUCCEEDED, whose Node process then died on exit -- was
+# recorded as a product regression, and how a Docker hiccup during `docker cp` reads the
+# same as a broken invoice command. In a repo with no CI and a ~40-minute manual run, a gate
+# whose worst infrastructure day is indistinguishable from a real regression trains its only
+# operator to discount FAIL.
+#
+# The list is deliberately short and literal: only signatures a PRODUCT defect cannot
+# produce. A failed SQL assertion, a failed Deno contract, a failed browser scenario, a tsc
+# error and a real npm audit finding all match nothing here and stay FAIL/product -- that is
+# the entire point. Adding a signature is a decision to stop trusting a class of failure;
+# keep it rare and keep it specific.
+$script:infrastructureSignatures = @(
+  @{ Reason = "node_libuv_teardown_crash";
+     Pattern = 'Assertion failed: !\(handle->flags & UV_HANDLE_CLOSING\)' },
+  @{ Reason = "docker_container_run_failed";
+     # `Container <id> is not running` is anchored on the daemon's exact wording: a bare
+     # "is not running" also appears inside the daemon-unavailable message below, and the
+     # first match wins, so the loose form would mislabel a dead daemon as a dead container.
+     Pattern = 'error running container|OCI runtime create failed|failed to create task for container|Container \S+ is not running' },
+  @{ Reason = "docker_daemon_unavailable";
+     Pattern = 'Cannot connect to the Docker daemon|error during connect:|docker daemon is not running|Is the docker daemon running' },
+  @{ Reason = "docker_stream_truncated";
+     Pattern = 'unexpected EOF' },
+  @{ Reason = "chromium_launch_failed";
+     Pattern = 'Failed to launch the browser process|browserType\.launch:' }
+)
+
+function Get-InfrastructureFailureReason($Output) {
+  if ($null -eq $Output) { return $null }
+  $text = (@($Output) | ForEach-Object { "$_" }) -join "`n"
+  if (-not $text) { return $null }
+  foreach ($signature in $script:infrastructureSignatures) {
+    if ($text -match $signature.Pattern) { return $signature.Reason }
+  }
+  return $null
+}
+
+# $Output, when the caller captured it, is scanned for the signatures above.
+# $InfrastructureReason names a stage whose non-zero exit is environmental BY CONSTRUCTION --
+# `docker cp` moves a file that was already verified to exist: no product code runs inside
+# it, so there is no product regression it could be reporting.
+# $ExitCode lets a caller that captured output pass the real code explicitly instead of
+# depending on $LASTEXITCODE surviving the intervening pipeline.
+function Assert-ExitCode {
+  param(
+    [Parameter(Mandatory = $true, Position = 0)][string]$Label,
+    [Parameter(Position = 1)]$Output = $null,
+    [string]$InfrastructureReason = "",
+    [Nullable[int]]$ExitCode = $null
+  )
+  $exit = if ($null -ne $ExitCode) { [int]$ExitCode } else { $LASTEXITCODE }
+  if ($exit -eq 0) { return }
+  if ($InfrastructureReason) {
+    Stop-WithInfrastructureBlock $InfrastructureReason "$Label failed with exit code $exit. That stage runs no product code, so this is local infrastructure, not a regression."
+  }
+  $detected = Get-InfrastructureFailureReason $Output
+  if ($detected) {
+    Stop-WithInfrastructureBlock $detected "$Label failed with exit code $exit on a known-environmental signature ($detected), not on a product regression."
+  }
+  throw "$Label failed with exit code $exit."
+}
+
+# Runs one native stage, streaming its combined output to the console AS PLAIN TEXT while
+# collecting it for classification, then asserts the exit code through Assert-ExitCode.
+#
+# Why the stringify-in-pipeline shape rather than `@(& cmd 2>&1)`: at
+# $ErrorActionPreference = "Continue" (mandatory here -- under "Stop" PS 5.1 turns a native
+# command's stderr into a terminating NativeCommandError even with 2>$null, AGENT-BRIEF §1)
+# a captured stderr line arrives as an ErrorRecord, and re-emitting it renders a multi-line
+# red block. psql NOTICEs, `supabase db reset` progress and `deno test` all write ordinary
+# progress to stderr, so that would make the gate's own output unreadable. Stringifying
+# inside the pipeline keeps the lines plain AND keeps them live -- a captured-then-replayed
+# stage would go silent for minutes on the longest steps.
+function Invoke-GateStage {
+  param(
+    [Parameter(Mandatory = $true, Position = 0)][string]$Label,
+    [Parameter(Mandatory = $true, Position = 1)][scriptblock]$Command,
+    [string]$InfrastructureReason = ""
+  )
+  $collected = New-Object System.Collections.ArrayList
+  $stageExit = 0
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    & $Command 2>&1 | ForEach-Object {
+      $text = "$_"
+      [void]$collected.Add($text)
+      Write-Output $text
+    }
+    $stageExit = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  Assert-ExitCode $Label $collected.ToArray() -ExitCode $stageExit -InfrastructureReason $InfrastructureReason
 }
 
 function Invoke-DependencyAudit {
@@ -246,8 +343,9 @@ function Restart-LocalKong {
 }
 
 function Reset-LocalDatabase {
-  & supabase db reset
-  Assert-ExitCode "Local Supabase reset"
+  # Classified, not blanket-infrastructure: a reset that fails because a MIGRATION fails is a
+  # product regression and must stay FAIL/product. Only the Docker-level signatures divert.
+  Invoke-GateStage "Local Supabase reset" { supabase db reset }
   # `supabase db reset` replaces PostgreSQL while keeping PostgREST alive. Recycle the
   # isolated REST process so its ten-connection pool cannot retain sessions from the old
   # database; a single sequential readiness request is not enough to exercise that pool.
@@ -259,30 +357,40 @@ function Reset-LocalDatabase {
 function Copy-SqlToDatabase([string]$RelativePath, [string]$ContainerPath) {
   $source = Join-Path $repoRoot $RelativePath
   if (-not (Test-Path -LiteralPath $source)) { throw "Missing SQL test: $source" }
-  & docker cp $source "${dbContainer}:$ContainerPath"
-  Assert-ExitCode "Copying $RelativePath to the local database container"
+  # The file was just verified to exist and `docker cp` runs no product code, so every way
+  # this can fail is environmental -- a stopped container, a dead daemon, a full disk.
+  Invoke-GateStage "Copying $RelativePath to the local database container" `
+    { docker cp $source "${dbContainer}:$ContainerPath" } `
+    -InfrastructureReason "docker_cp_failed"
 }
 
 function Invoke-SqlTest([string]$RelativePath, [string]$Label, [string]$DatabaseUser = "postgres") {
   $containerPath = "/var/lib/postgresql/p4-$([IO.Path]::GetFileName($RelativePath))"
   Copy-SqlToDatabase $RelativePath $containerPath
   Write-Gate $Label
-  & docker exec -e PGPASSWORD=postgres -e PGTZ=Asia/Jerusalem $dbContainer psql -U $DatabaseUser -d postgres -v ON_ERROR_STOP=1 -f $containerPath
-  Assert-ExitCode $Label
+  # Classified, never blanket-infrastructure: a failed SQL assertion is THE product signal of
+  # this gate and must always reach FAIL/product. Only a container that died between the
+  # `docker cp` above and this exec matches a signature and diverts.
+  Invoke-GateStage $Label {
+    docker exec -e PGPASSWORD=postgres -e PGTZ=Asia/Jerusalem $dbContainer `
+      psql -U $DatabaseUser -d postgres -v ON_ERROR_STOP=1 -f $containerPath
+  }
 }
 
 function Invoke-Preflight {
   $containerPath = "/var/lib/postgresql/p4-p1_preflight.sql"
   Copy-SqlToDatabase "supabase\tests\p1_preflight.sql" $containerPath
-  Write-Gate "P1 preflight (42 anomaly checks)"
+  Write-Gate "P1 preflight (43 anomaly checks)"
+  # Kept as a plain capture (the rows are parsed, not streamed), but the classification
+  # material is now handed to Assert-ExitCode instead of falling to the catch-all.
   $output = @(& docker exec -e PGPASSWORD=postgres $dbContainer psql -qAt -F "|" -U postgres -d postgres -v ON_ERROR_STOP=1 -f $containerPath)
-  Assert-ExitCode "P1 preflight"
+  Assert-ExitCode "P1 preflight" $output
   $rows = @($output | Where-Object { $_ -match '^([^|]+)\|([0-9]+)\|' })
-  if ($rows.Count -ne 42) { throw "P1 preflight returned $($rows.Count) result rows instead of 42." }
+  if ($rows.Count -ne 43) { throw "P1 preflight returned $($rows.Count) result rows instead of 43." }
   $bad = @($rows | Where-Object { [int](($_ -split '\|')[1]) -ne 0 })
   $rows | ForEach-Object { Write-Output $_ }
   if ($bad.Count) { throw "P1 preflight found local fixture anomalies: $($bad -join '; ')" }
-  Write-Output "P1 preflight passed: 42/42 checks returned rows_found=0."
+  Write-Output "P1 preflight passed: 43/43 checks returned rows_found=0."
 }
 
 function Assert-PowerShellSyntax {
@@ -531,8 +639,9 @@ function Invoke-PriceListEdgeSmoke {
     foreach ($name in $edgeEnvironment.Keys) {
       [Environment]::SetEnvironmentVariable($name, [string]$edgeEnvironment[$name], "Process")
     }
-    & node (Join-Path $PSScriptRoot "check-p1b-edge-smoke.cjs")
-    Assert-ExitCode "P1B local Edge runtime smoke"
+    Invoke-GateStage "P1B local Edge runtime smoke" {
+      node (Join-Path $PSScriptRoot "check-p1b-edge-smoke.cjs")
+    }
   }
   finally {
     foreach ($name in $edgeEnvironment.Keys) {
@@ -559,11 +668,12 @@ function Invoke-OcrEdgeSmoke {
       $previousEdgeEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
       [Environment]::SetEnvironmentVariable($name, [string]$edgeEnvironment[$name], "Process")
     }
-    & npx.cmd --yes deno run `
-      --config (Join-Path $repoRoot "supabase\functions\interpret-document\deno.json") `
-      --allow-env --allow-net=127.0.0.1:55431 `
-      (Join-Path $repoRoot "scripts\fixtures\ocr\edge-smoke.ts")
-    Assert-ExitCode "OCR Edge and provider-mock integration"
+    Invoke-GateStage "OCR Edge and provider-mock integration" {
+      npx.cmd --yes deno run `
+        --config (Join-Path $repoRoot "supabase\functions\interpret-document\deno.json") `
+        --allow-env --allow-net=127.0.0.1:55431 `
+        (Join-Path $repoRoot "scripts\fixtures\ocr\edge-smoke.ts")
+    }
   }
   finally {
     foreach ($name in $edgeEnvironment.Keys) {
@@ -587,7 +697,7 @@ function Invoke-InterpretDocumentContractTests {
     $ErrorActionPreference = $previousPreference
   }
   $testOutput | ForEach-Object { Write-Output $_ }
-  if ($testExit -ne 0) { throw "Interpret-document contract tests failed with exit code $testExit." }
+  Assert-ExitCode "Interpret-document contract tests" $testOutput -ExitCode $testExit
   $testText = $testOutput -join "`n"
   if ($testText -notmatch '(?i)\b[1-9][0-9]*\s+passed\b') {
     throw "Interpret-document contract tests did not report any completed test."
@@ -615,7 +725,7 @@ function Invoke-OutboxWorkerContractTests {
     $ErrorActionPreference = $previousPreference
   }
   $testOutput | ForEach-Object { Write-Output $_ }
-  if ($testExit -ne 0) { throw "Outbox-worker contract tests failed with exit code $testExit." }
+  Assert-ExitCode "Outbox-worker contract tests" $testOutput -ExitCode $testExit
   $testText = $testOutput -join "`n"
   if ($testText -notmatch '(?i)\b[1-9][0-9]*\s+passed\b') {
     throw "Outbox-worker contract tests did not report any completed test."
@@ -627,13 +737,17 @@ function Invoke-OutboxWorkerContractTests {
 
 function Invoke-OcrWorkerSelfCheck {
   Write-Gate "OCR worker image and no-GPU/no-model self-check"
+  # Compose validation reads a COMMITTED file, so its failure is a repo defect: left product.
+  # The build and the run can both fail on the daemon, so both are classified.
   & docker compose -f (Join-Path $repoRoot "docker-compose.ocr.yml") config --quiet
   Assert-ExitCode "OCR worker Compose validation"
-  & docker build --pull=false -t supplyflow-ocr-worker:acceptance (Join-Path $repoRoot "worker\ocr")
-  Assert-ExitCode "OCR worker image build"
-  & docker run --rm --network none --entrypoint python `
-    supplyflow-ocr-worker:acceptance /app/self_check.py
-  Assert-ExitCode "OCR worker self-check"
+  Invoke-GateStage "OCR worker image build" {
+    docker build --pull=false -t supplyflow-ocr-worker:acceptance (Join-Path $repoRoot "worker\ocr")
+  }
+  Invoke-GateStage "OCR worker self-check" {
+    docker run --rm --network none --entrypoint python `
+      supplyflow-ocr-worker:acceptance /app/self_check.py
+  }
 }
 
 function Install-OcrBrowserFixture([string]$Seed) {
@@ -771,8 +885,11 @@ try {
   New-LocalFunctionsEnvironment
   if ($supabaseWasRunning) {
     Write-Gate "Restart isolated local Supabase for the configured Edge runtime"
+    # Stopping containers runs no product code; `supabase start` two lines below already
+    # classifies its own failure as local_supabase_start_failed for the same reason.
     & supabase stop | Out-Null
-    Assert-ExitCode "Stopping the pre-existing isolated Supabase stack"
+    Assert-ExitCode "Stopping the pre-existing isolated Supabase stack" `
+      -InfrastructureReason "local_supabase_stop_failed"
   }
   Write-Gate "Start isolated local Supabase with one built-in Edge runtime"
   $previousPreference = $ErrorActionPreference
@@ -802,8 +919,10 @@ try {
     [Environment]::SetEnvironmentVariable("VITE_SUPABASE_ANON_KEY", [string]$localEnvironment.ANON_KEY, "Process")
 
     Write-Gate "Build and existing pure checks"
-    & npm.cmd run build
-    Assert-ExitCode "npm run build"
+    # THE wave-5 entry point (audit Finding 2): the build succeeded and Node crashed on
+    # teardown, and this line reported it as a product regression. tsc errors, check:* script
+    # failures and vitest failures match no signature and still reach FAIL/product.
+    Invoke-GateStage "npm run build" { npm.cmd run build }
 
     Write-Gate "Dependency audit"
     Invoke-DependencyAudit
@@ -921,8 +1040,9 @@ try {
         $previousJourneyEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
         [Environment]::SetEnvironmentVariable($name, [string]$journeyEnvironment[$name], "Process")
       }
-      & node (Join-Path $PSScriptRoot "check-p4-integrated-journey.cjs")
-      Assert-ExitCode "P4 integrated journey"
+      Invoke-GateStage "P4 integrated journey" {
+        node (Join-Path $PSScriptRoot "check-p4-integrated-journey.cjs")
+      }
     }
     finally {
       foreach ($name in $journeyEnvironment.Keys) {
@@ -949,8 +1069,9 @@ try {
         $previousBrowserEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
         [Environment]::SetEnvironmentVariable($name, [string]$browserEnvironment[$name], "Process")
       }
-      & node (Join-Path $PSScriptRoot "check-browser-smoke.cjs")
-      Assert-ExitCode "Browser smoke"
+      Invoke-GateStage "Browser smoke" {
+        node (Join-Path $PSScriptRoot "check-browser-smoke.cjs")
+      }
     }
     finally {
       foreach ($name in $browserEnvironment.Keys) {
@@ -965,6 +1086,17 @@ try {
   }
 }
 catch {
+  # The default is still FAIL/product, and that is correct: an unrecognised failure in a gate
+  # whose job is to catch product regressions must be treated as one. What changed in wave 10
+  # (audit Finding 2) is that the stages which CAN fail environmentally no longer arrive here
+  # unclassified -- Assert-ExitCode / Invoke-GateStage divert them to BLOCKED/infrastructure
+  # with a named reason first.
+  #
+  # Still unclassified, stated so nobody reads this line as complete coverage: the demo/OCR
+  # fixture installers (Install-DemoFixture, Install-OcrBrowserFixture, Remove-OcrBrowserFixture)
+  # and Invoke-DependencyAudit's unapproved-advisory throw. Those can each fail for product
+  # reasons too, so blanket classification would be a lie; adding signatures for them needs
+  # observed failures to name, which this campaign does not have.
   $runError = $_
   if (-not $gateSummaryWritten) {
     Write-GateSummary "FAIL" "product" "quality_gate_failed"

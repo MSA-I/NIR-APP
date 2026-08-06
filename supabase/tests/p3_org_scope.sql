@@ -9,6 +9,9 @@
 --       approved-only) -- the silent-revert detector;
 --   (c) grant -> closure resynced synchronously in the same transaction; revoke -> gone
 --       immediately, through the real owner RPCs with audit;
+--  (c2) the 0071 last-grant floor: a non-last revoke still succeeds, revoking the LAST grant
+--       of an active member is refused by name, the refusal leaves grant/closure/visibility
+--       intact, and a deactivated member may still be emptied;
 --   (d) an org_units cycle is rejected;
 --   (e) A1/A3/A5 actually detect mutations: a weakened rider, an unregistered table and an
 --       uncovered definer -- each rolled back;
@@ -272,6 +275,74 @@ select pg_temp.p3_assert(
      and action in ('user_scope_granted', 'user_scope_revoked')
      and entity_id = '25000000-0000-0000-0000-000000000002') = 2,
   'both scope commands must write reasoned audit rows in the same transaction');
+
+-- ===== (c2) The last-grant guard: narrow to one unit, never to none (0071, audit §G) =====
+-- Before 0071 the chain was: revoke the only grant -> p0_recompute_scope_closure deletes the
+-- closure row -> auth_scopes() coalesces to '{}' -> the RESTRICTIVE rider denies every row on
+-- the five tables whose p0_*_set_unit trigger stamps a non-NULL unit -> both balance
+-- functions return 0. Not an error, not a dash: a confident zero, indistinguishable from an
+-- empty business. The revoke at (c) above deliberately was NOT the last grant, so it is
+-- already the "non-last revoke still succeeds" half; pin that reading, then prove the floor.
+select pg_temp.p3_assert(
+  (select count(*) from user_scope_grants
+   where org_id = '15000000-0000-0000-0000-000000000001'
+     and user_id = '25000000-0000-0000-0000-000000000002') = 1,
+  'the non-last revoke at (c) must have succeeded and left exactly one grant standing');
+
+do $$
+begin
+  perform revoke_user_scope(
+    '25000000-0000-0000-0000-000000000002',
+    '16000000-0000-0000-0000-000000000003', 'P3: take the last unit away');
+  raise exception
+    'P3 org scope assertion failed: the last scope grant of an active member was revoked';
+exception when sqlstate '42501' then
+  if sqlerrm not like '%scope_last_grant_required%' then raise; end if;
+end
+$$;
+
+-- The refusal rolled its own delete back, so grant, closure and visibility all survive.
+select pg_temp.p3_assert(
+  (select count(*) from user_scope_grants
+   where org_id = '15000000-0000-0000-0000-000000000001'
+     and user_id = '25000000-0000-0000-0000-000000000002') = 1,
+  'the refused revoke must leave the grant in place');
+select pg_temp.p3_assert(
+  (select c.unit_ids = array['16000000-0000-0000-0000-000000000003'::uuid]
+   from user_scope_closure c
+   where c.user_id = '25000000-0000-0000-0000-000000000002'),
+  'the refused revoke must leave the closure intact');
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '25000000-0000-0000-0000-000000000002', true);
+select count(*)::text as po_visible from purchase_orders \gset guarded_
+reset role;
+select set_config('request.jwt.claim.sub', '25000000-0000-0000-0000-000000000001', true);
+select pg_temp.p3_assert(:'guarded_po_visible'::int = 2,
+  'after the refused revoke the member still sees their own branch plus the org-visible row '
+  || '-- a zero here IS the audit paragraph-G defect, and it reaches the screen as 0, not a dash');
+
+-- And the floor lifts the moment the member stops being live: deactivating first and then
+-- emptying the grants is legitimate housekeeping, and a deactivated user holds no session
+-- that could be shown a false zero.
+savepoint last_grant_inactive;
+-- Through the real command, not a direct UPDATE: profiles_guard_privileged_columns() blocks
+-- direct writes to role/active/supplier_id (profile_access_rpc_required), which is itself the
+-- right answer -- so the sub-case also proves the guard composes with the actual
+-- deactivation path. Role is passed unchanged; only `active` moves.
+select manage_profile_access(
+  '25000000-0000-0000-0000-000000000002', 'owner', false, null,
+  'P3: deactivate before emptying the scope');
+select revoke_user_scope(
+  '25000000-0000-0000-0000-000000000002',
+  '16000000-0000-0000-0000-000000000003', 'P3: deactivated first, then emptied');
+select pg_temp.p3_assert(
+  not exists (
+    select 1 from user_scope_grants
+    where org_id = '15000000-0000-0000-0000-000000000001'
+      and user_id = '25000000-0000-0000-0000-000000000002'),
+  'a deactivated member may be emptied -- the guard is a floor for LIVE members only');
+rollback to savepoint last_grant_inactive;
 
 -- ===== (d) A cycle in org_units is rejected =====
 -- le1 is branch2's parent, so re-parenting le1 under branch2 closes a two-node loop. The

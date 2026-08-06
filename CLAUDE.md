@@ -13,6 +13,7 @@
 | מסמך | מה יש בו |
 |---|---|
 | `docs/PROGRESS.md` | **קרא ראשון.** איפה עצרנו, מה השלב הנוכחי, מה נדחה ולמה |
+| `docs/DEBT-REGISTER.md` | **קרא שני.** כל הדחייה, החוב והמגבלה הידועה במקום אחד — מה, למה נדחה, איפה ההוכחה, ומה הצעד הזול הבא. אל תתחיל עבודה חדשה לפני שבדקת שהיא לא נמצאת שם |
 | `docs/ARCHITECTURE.md` | כללי מודל הנתונים — מחייבים |
 | `docs/OPEN-DECISIONS.md` | הנחות עסקיות שנקבעו כברירת מחדל ואיפה משנים אותן |
 | `docs/SupplyFlow-SaaS-Plan.html` | תוכנית ההפיכה ל-SaaS: 6 שלבים, עלויות, רגולציה |
@@ -45,9 +46,13 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   ‏`check:review` מריץ `node --test` על `src/components/document-review/model.test.ts` (16 בדיקות).
   ‏`check:tokens` אוכף את חוק הטוקנים של `DESIGN.md` — אפס מחלקות פלטה גולמיות ואפס הקסים ב-`.tsx`.
   **אין ESLint ואין Prettier** בריפו, למרות הערות `eslint-disable` שנשארו ב-`src/lib/useQuery.ts`.
-- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ 13
-  סוויטות SQL, ‏`npm audit --audit-level=high`, חוזי Deno, ו-22 תרחישי דפדפן / 266 טענות P0.
-  **ריצה אחת בכל רגע במכונה.** **אין CI** — `.github/` אינו קיים; זו ריצה ידנית.
+- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **20**
+  סוויטות SQL (‏`check-quality-gates.ps1` — עשרים קריאות `Invoke-SqlTest` על `supabase/tests/`),
+  ‏**preflight עם 43 זרועות** (`Invoke-Preflight`, ‏`p1_preflight.sql`), ‏`npm audit --audit-level=high`,
+  חוזי Deno, ו-**25 תרחישי דפדפן** (`check-browser-smoke.cjs`). מספר טענות P0 מדווח בזמן ריצה
+  (‏266 בריצה שתועדה) — הוא אינו ליטרל בקוד. **המספרים האלה נמדדו בגל 10; קודם לכן כתוב היה כאן
+  ‏13 ו-22, וזה היה שגוי** — סוויטה שלא רשומה כאן עדיין רצה, ומי שקורא את הקובץ הזה היה מסיק
+  שבע סוויטות לא קיימות. **ריצה אחת בכל רגע במכונה.** **אין CI** — `.github/` אינו קיים; זו ריצה ידנית.
 - מיגרציות: `scripts/db-query.ps1` (Windows) / `scripts/db-query.sh` (Linux/Mac)
 
 **Tailwind v4: אין `tailwind.config.js`.** טוקנים ב-`@theme` בתוך `src/index.css`. מחלקות מותאמות יכולות `@apply` רק utilities אמיתיים — לכן `btn`/`badge` רשומים כ-`@utility`.

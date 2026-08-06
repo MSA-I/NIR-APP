@@ -344,7 +344,13 @@ as $$
     ('public.grant_user_scope(uuid,uuid,text)'),
     ('public.revoke_user_scope(uuid,uuid,text)'),
     ('public.update_identity_provider_settings(text,boolean,jsonb,jsonb,text)'),
-    ('public.update_supplier_bank_details(uuid,text,text)')
+    ('public.update_supplier_bank_details(uuid,text,text)'),
+    -- Wave 7's ninth path, added to this registry in wave 10 (audit Finding 5). 0066:285
+    -- calls flipping a webhook subscription active "the same exfiltration class as changing a
+    -- supplier's bank_details, so #85 applies" -- and then did not extend the list, which is
+    -- the exact failure this mechanism was built one wave earlier to prevent. Its behavioural
+    -- arm lives in p7_integration_adapters.sql:643-657; this is the structural half.
+    ('public.set_webhook_subscription_active(uuid,boolean,text)')
   ) as wired(signature)
   where to_regprocedure(wired.signature) is null
      or coalesce(
