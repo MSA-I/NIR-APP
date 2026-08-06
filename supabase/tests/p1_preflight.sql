@@ -192,6 +192,24 @@ users_without_scope_grant as (
     select 1 from user_scope_grants g
     where g.org_id = p.org_id and g.user_id = p.id)
 ),
+profiles_without_any_scope_grant as (
+  -- The 0071 invariant, named separately from users_without_scope_grant above on purpose.
+  -- That arm is broader (every profile, any org status) and therefore already implies this
+  -- one today; this arm states the exact post-guard contract instead of implying it: an
+  -- ACTIVE member of a LIVE organization can never be left with zero grants, because zero
+  -- grants empties the closure, empties auth_scopes(), and turns the 0057 RESTRICTIVE rider
+  -- into a deny-all whose reading on screen is a confident 0 rather than a dash (audit §G).
+  -- Kept distinct so that a future wave which relaxes the broader arm -- e.g. to tolerate
+  -- deactivated profiles or suspended tenants -- cannot silently take this contract with it.
+  select p.id
+  from profiles p
+  join organizations o on o.id = p.org_id
+  where p.active
+    and o.status in ('trial', 'active')
+    and not exists (
+      select 1 from user_scope_grants g
+      where g.org_id = p.org_id and g.user_id = p.id)
+),
 cross_tenant_org_units as (
   select u.id
   from org_units u
@@ -441,6 +459,9 @@ checks(check_name, rows_found, sample_ids) as (
   union all select 'users_without_scope_grant', count(*),
     coalesce((select jsonb_agg(id) from (select id from users_without_scope_grant limit 20) s), '[]'::jsonb)
   from users_without_scope_grant
+  union all select 'profiles_without_any_scope_grant', count(*),
+    coalesce((select jsonb_agg(id) from (select id from profiles_without_any_scope_grant limit 20) s), '[]'::jsonb)
+  from profiles_without_any_scope_grant
   union all select 'cross_tenant_org_units', count(*),
     coalesce((select jsonb_agg(id) from (select id from cross_tenant_org_units limit 20) s), '[]'::jsonb)
   from cross_tenant_org_units

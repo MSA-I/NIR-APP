@@ -130,6 +130,11 @@ const PATTERNS: [RegExp, string][] = [
     'הנתונים השתנו דרך מסלול ישן שנחסם. רענן את האפליקציה ונסה שוב.'],
   [/fresh_authentication_required/i,
     'נדרש אימות מחדש — הזינו סיסמה כדי לאשר פעולה רגישה.'],
+  // 0071: the server refuses to leave an active member with zero scope grants. Without this
+  // sentence the browser would show a bare Postgres string for the one refusal whose whole
+  // purpose is to prevent a silent ₪0 on a financial screen.
+  [/scope_last_grant_required/i,
+    'לא ניתן להסיר את הרשאת היחידה האחרונה של משתמש פעיל — הוא יאבד גישה לכל הנתונים הכספיים והמסכים יציגו אפס. הענק יחידה אחרת לפני הצמצום, או השבת את המשתמש.'],
   [/invoice_create_not_authorized|invoice_review_not_authorized|credit_request_create_not_authorized|credit_request_transition_not_authorized|price_write_not_authorized|price_import_not_authorized|price_submission_not_authorized|price_submission_intake_service_only|month_export_not_authorized|not_authorized/i,
     'אין לך הרשאה לבצע את הפעולה הזו.'],
   [/draft_unknown/i,
