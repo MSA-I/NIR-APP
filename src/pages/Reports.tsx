@@ -1,38 +1,71 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
-import { FileSpreadsheet, Printer, Send, CheckCircle2 } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router';
+import { FileSpreadsheet, Printer, Send, CheckCircle2, LockKeyhole, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { StatusBadge, useToast, ConfirmDialog, ErrorNote, SkeletonCards, Note } from '../components/ui';
+import { StatusBadge, useToast, ConfirmDialog, ErrorNote, SkeletonCards, Note, Modal } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
 import { currentMonthISO, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import { fetchAll } from '../lib/supabasePaging';
-import { buildMonthlyWorkbook } from '../lib/monthlyReport';
+import { buildLockedMonthlyWorkbook, buildMonthlyWorkbook, type MonthlyReportLabels, type MonthlyReportSnapshot } from '../lib/monthlyReport';
 import * as XLSX from 'xlsx';
+
+function toSnapshotHebrewError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  if (/monthly_report_snapshot_unattributed_bank_transactions/i.test(raw)) {
+    return 'לא ניתן ליצור דוח סופי: כל תנועות הבנק בחודש חייבות התאמה מאושרת לחשבונית או לתשלום המשויכים לישות משפטית אחת.';
+  }
+  if (/monthly_report_snapshot_unattributed_(invoices|payments|credits|bank_transactions|exceptions)/i.test(raw)) {
+    return 'לא ניתן ליצור דוח סופי: קיימות רשומות ללא שיוך חד־משמעי לישות משפטית. יש להשלים את השיוך לפני ניסיון נוסף.';
+  }
+  if (/monthly_report_snapshot_legal_entity_invalid|unit_out_of_scope/i.test(raw)) {
+    return 'הישות המשפטית אינה זמינה או אינה בתחום ההרשאה שלך. יש לבחור ישות אחרת.';
+  }
+  if (/monthly_report_snapshot_source_unavailable/i.test(raw)) {
+    return 'לא ניתן להשלים כעת את צילום המצב. הנתונים לא נשמרו ויש לנסות שוב.';
+  }
+  return toHebrewError(error);
+}
 
 export default function Reports() {
   const { profile, org } = useAuth();
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [month, setMonth] = useState(currentMonthISO());
   const [busy, setBusy] = useState(false);
-  const [sendOpen, setSendOpen] = useState(false);
-  // Step-up gate (PLAN-04 §3.2): `mark_month_export_sent` asserts a fresh password AMR entry on
-  // the server (0061). Non-null holds the confirmed reason while ReauthModal decides — a fresh
-  // JWT skips the prompt, a stale one asks for the password before the RPC runs.
-  const [pendingSendReason, setPendingSendReason] = useState<string | null>(null);
+  const [sendSnapshot, setSendSnapshot] = useState<MonthlyReportSnapshot | null>(null);
+  const [snapshotOpen, setSnapshotOpen] = useState(false);
+  const [snapshotReauthOpen, setSnapshotReauthOpen] = useState(false);
+  const [snapshotPreviewAt, setSnapshotPreviewAt] = useState<Date | null>(null);
+  // Both finalization and delivery are server-side step-up paths. These states only control the
+  // password prompt; 0074 independently rejects a stale/missing password AMR claim.
+  const [pendingDelivery, setPendingDelivery] = useState<{
+    snapshot: MonthlyReportSnapshot;
+    reason: string;
+  } | null>(null);
 
   // Browsers without a native month picker fall back to free text, so a value like "07/2026" can
   // land in state. One sanitized value drives the query, the headings, the filename and the
   // mark-sent command — what is shown is always what is exported, and no date math ever throws.
   const safeMonth = /^\d{4}-\d{2}$/.test(month) ? month : currentMonthISO();
+  const canManageExport = !!profile && ['owner', 'accountant'].includes(profile.role);
+  const requestedUnitId = searchParams.get('unit');
 
-  const { data, loading, fetching, error, refetch } = useQuery(async () => {
+  const reportLabels: MonthlyReportLabels = {
+    invoiceReview: INVOICE_REVIEW_STATUS,
+    invoicePayment: INVOICE_PAYMENT_STATUS,
+    creditReason: CREDIT_REASON,
+    creditStatus: CREDIT_STATUS,
+    exceptionType: EXCEPTION_TYPE,
+  };
+
+  const { data, loading, fetching, error } = useQuery(async () => {
     const { start, end } = monthRange(safeMonth);
     const instants = monthInstantRange(safeMonth);
-    const [invoices, payments, credits, exceptions, bank, exportRes] = await Promise.all([
+    const [invoices, payments, credits, exceptions, bank] = await Promise.all([
       fetchAll((from, to) => supabase.from('invoices').select('*, supplier:suppliers(name)')
         .gte('invoice_date', start).lt('invoice_date', end).is('deleted_at', null)
         .order('invoice_date').order('id').range(from, to)),
@@ -44,7 +77,6 @@ export default function Reports() {
         .in('status', ['open', 'in_progress']).order('created_at').order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('bank_transactions').select('id, status')
         .gte('tx_date', start).lt('tx_date', end).order('tx_date').order('id').range(from, to)),
-      supabase.from('monthly_exports').select('*').eq('month', `${safeMonth}-01`).maybeSingle(),
     ]);
     return {
       invoices: invoices as ({ id: string; invoice_number: string; invoice_date: string; total_amount: number; amount_before_vat: number; vat_amount: number; review_status: string; payment_status: string; export_status: string; supplier: { name: string } })[],
@@ -52,25 +84,62 @@ export default function Reports() {
       credits: credits as ({ id: string; number: number; reason: string; amount: number; status: string; supplier: { name: string } })[],
       exceptions: exceptions as ({ id: string; type: string; title: string; supplier: { name: string } | null })[],
       bank: bank as { id: string; status: string }[],
-      export: unwrap(exportRes) as { id: string; status: string; sent_at: string | null } | null,
       generatedAt: new Date(),
     };
   }, [safeMonth]);
 
-  const canManageExport = !!profile && ['owner', 'accountant'].includes(profile.role);
+  const {
+    data: lockedReports,
+    loading: lockedReportsLoading,
+    fetching: lockedReportsFetching,
+    error: lockedReportsError,
+    refetch: refetchLockedReports,
+  } = useQuery(async () => {
+    if (!canManageExport) return { legalEntities: [], selectedUnitId: '', snapshots: [], deliveries: [] };
+
+    const legalEntities = unwrap(await supabase.rpc('read_monthly_report_legal_entities')) as {
+      id: string;
+      name: string;
+    }[];
+    const requestedIsAllowed = !!requestedUnitId
+      && legalEntities.some((unit) => unit.id === requestedUnitId);
+    const selectedUnitId = requestedIsAllowed
+      ? requestedUnitId
+      : requestedUnitId === null && legalEntities.length === 1
+        ? legalEntities[0]!.id
+        : '';
+    const [snapshotRows, deliveryRows] = selectedUnitId
+      ? await Promise.all([
+        fetchAll((from, to) => supabase.from('monthly_report_snapshots').select('*')
+          .eq('unit_id', selectedUnitId)
+          .eq('report_month', `${safeMonth}-01`)
+          .order('version', { ascending: false })
+          .range(from, to)),
+        fetchAll((from, to) => supabase.from('monthly_report_snapshot_deliveries')
+          .select('id, snapshot_id, sent_at, sent_by_name, reason')
+          .eq('unit_id', selectedUnitId)
+          .eq('report_month', `${safeMonth}-01`)
+          .order('snapshot_version', { ascending: false })
+          .range(from, to)),
+      ])
+      : [[], []] as const;
+    const snapshots = snapshotRows as MonthlyReportSnapshot[];
+    const deliveries = deliveryRows as {
+      id: string;
+      snapshot_id: string;
+      sent_at: string;
+      sent_by_name: string;
+      reason: string;
+    }[];
+    return { legalEntities, selectedUnitId, snapshots, deliveries };
+  }, [canManageExport, requestedUnitId, safeMonth]);
 
   function exportExcel() {
     if (!data || fetching || error) return;
     try {
       const wb = buildMonthlyWorkbook({
         orgName: org?.name, month: safeMonth, generatedAt: data.generatedAt, data,
-        labels: {
-          invoiceReview: INVOICE_REVIEW_STATUS,
-          invoicePayment: INVOICE_PAYMENT_STATUS,
-          creditReason: CREDIT_REASON,
-          creditStatus: CREDIT_STATUS,
-          exceptionType: EXCEPTION_TYPE,
-        },
+        labels: reportLabels,
       });
       // This file lands in an accountant's inbox, and an accountant serves several businesses.
       // The name has to say whose report it is; a fixed tenant name would break multi-tenancy.
@@ -83,18 +152,50 @@ export default function Reports() {
     }
   }
 
-  async function markSent(reason?: string) {
-    if (!data || !profile || fetching || error) return;
+  function downloadSnapshot(snapshot: MonthlyReportSnapshot) {
+    try {
+      const workbook = buildLockedMonthlyWorkbook({ snapshot });
+      const orgSlug = snapshot.organization_name.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
+      const unitSlug = snapshot.legal_entity_name.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
+      XLSX.writeFile(
+        workbook,
+        `${orgSlug || 'supplyflow'}-${unitSlug || 'legal-entity'}-final-report-${snapshot.report_month.slice(0, 7)}-v${snapshot.version}.xlsx`,
+      );
+      toast(`גרסה ${snapshot.version} הורדה מה-snapshot הנעול`);
+    } catch (e) {
+      toast(toHebrewError(e), 'error');
+    }
+  }
+
+  async function createSnapshot() {
+    const selectedUnitId = lockedReports?.selectedUnitId;
+    if (!canManageExport || !selectedUnitId || lockedReportsFetching || lockedReportsError) return;
     setBusy(true);
     try {
-      unwrap(await supabase.rpc('mark_month_export_sent', {
+      const snapshot = unwrap(await supabase.rpc('create_monthly_report_snapshot', {
         p_month: `${safeMonth}-01`,
-        p_invoice_ids: data.invoices.map((invoice) => invoice.id),
-        p_reason: reason?.trim() || null,
+        p_unit_id: selectedUnitId,
+      })) as MonthlyReportSnapshot;
+      setSnapshotOpen(false);
+      toast(`דוח סופי נעול גרסה ${snapshot.version} נוצר בהצלחה`);
+      void refetchLockedReports();
+    } catch (e) {
+      toast(toSnapshotHebrewError(e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function markSent(snapshot: MonthlyReportSnapshot, reason: string) {
+    if (!profile || lockedReportsFetching || lockedReportsError) return;
+    setBusy(true);
+    try {
+      unwrap(await supabase.rpc('mark_monthly_report_snapshot_sent', {
+        p_snapshot_id: snapshot.id,
+        p_reason: reason.trim() || null,
       }));
-      setSendOpen(false);
-      toast('החודש סומן כהועבר לרו״ח');
-      void refetch();
+      toast(`גרסה ${snapshot.version} סומנה כהועברה לרו״ח`);
+      void refetchLockedReports();
     } catch (e) {
       toast(toHebrewError(e), 'error');
     } finally {
@@ -123,6 +224,17 @@ export default function Reports() {
   // A disabled button looks clickable but does nothing; the title says why it is blocked.
   const exportBlockedReason = fetching ? 'הנתונים נטענים…' : error ? 'שגיאה בטעינת הנתונים' : null;
   const metricLinkClass = 'card card-pad block transition-colors hover:border-action-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
+  const selectedLegalEntity = lockedReports?.legalEntities.find(
+    (unit) => unit.id === lockedReports.selectedUnitId,
+  ) ?? null;
+  const latestSnapshot = lockedReports?.snapshots[0] ?? null;
+  const snapshotBlockedReason = lockedReportsFetching
+    ? 'נתוני הדוחות הסופיים נטענים…'
+    : lockedReportsError
+      ? 'שגיאה בטעינת הדוחות הסופיים'
+      : !selectedLegalEntity
+        ? 'יש לבחור ישות משפטית מורשית'
+        : null;
 
   return (
     <div className="space-y-4">
@@ -130,7 +242,10 @@ export default function Reports() {
       {fetching && data && <Note tone="idle">הדוח מתעדכן. הייצוא והסימון מושבתים עד להשלמת הרענון.</Note>}
       <div className="flex flex-wrap items-center justify-between gap-3 no-print">
         <div>
-          <h1 className="page-title">דוח חודשי לרואת חשבון</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="page-title">דוח חודשי לרואת חשבון</h1>
+            <span className="badge-idle">דוח חי</span>
+          </div>
           <p className="mt-1 text-xs text-ink-muted">הנתונים הושלמו {fmtDateTime(data.generatedAt)} ואינם snapshot טרנזקציוני.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -139,24 +254,137 @@ export default function Reports() {
           <input id="monthly-report-month" type="month" className="input w-auto!" value={month} onChange={(e) => { if (e.target.value) setMonth(e.target.value); }} />
           <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הורדת הדוח כקובץ Excel'} onClick={exportExcel}><FileSpreadsheet size={15} /> ייצוא Excel</button>
           <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הדפסת הדוח או שמירה כ-PDF'} onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
-          {canManageExport && (
-            data.export?.status === 'sent'
-              ? <span className="badge-done flex items-center gap-1"><CheckCircle2 size={13} /> הועבר לרו״ח {data.export.sent_at ? fmtDate(data.export.sent_at) : ''}</span>
-              : <button className="btn-primary" disabled={busy || fetching || !!error} onClick={() => setSendOpen(true)}><Send size={15} /> סימון כהועבר לרו״ח</button>
-          )}
         </div>
       </div>
 
-      <ConfirmDialog open={sendOpen} onClose={() => setSendOpen(false)}
-        onConfirm={(reason) => setPendingSendReason(reason ?? '')}
-        title="סימון הדוח כהועבר לרו״ח"
-        message="רשימת החשבוניות הנוכחית תישמר כצילום מצב, וכל הסימון יתבצע בעסקה אחת."
+      <ConfirmDialog open={sendSnapshot !== null} onClose={() => setSendSnapshot(null)}
+        onConfirm={(reason) => {
+          if (!sendSnapshot) return;
+          setPendingDelivery({ snapshot: sendSnapshot, reason: reason ?? '' });
+          setSendSnapshot(null);
+        }}
+        title="סימון דוח סופי כהועבר לרו״ח"
+        message={sendSnapshot
+          ? `הסימון יתייחס רק לגרסה ${sendSnapshot.version} הנעולה (${sendSnapshot.content_hash.slice(0, 12)}…). נתוני הדוח החי אינם נקראים בפעולה זו.`
+          : ''}
         confirmLabel="סימון כהועבר" requireReason busy={busy} />
 
-      <ReauthModal open={pendingSendReason !== null}
-        title="אימות זהות לסימון הדוח כהועבר"
-        onConfirm={() => { const reason = pendingSendReason; setPendingSendReason(null); void markSent(reason || undefined); }}
-        onCancel={() => setPendingSendReason(null)} />
+      <ReauthModal open={pendingDelivery !== null}
+        title="אימות זהות לסימון הדוח הסופי כהועבר"
+        onConfirm={() => {
+          const pending = pendingDelivery;
+          setPendingDelivery(null);
+          if (pending) void markSent(pending.snapshot, pending.reason);
+        }}
+        onCancel={() => setPendingDelivery(null)} />
+
+      <ReauthModal open={snapshotReauthOpen}
+        title="אימות זהות ליצירת דוח סופי נעול"
+        onConfirm={() => { setSnapshotReauthOpen(false); void createSnapshot(); }}
+        onCancel={() => setSnapshotReauthOpen(false)} />
+
+      {canManageExport && (
+        <>
+          <Modal open={snapshotOpen} onClose={() => setSnapshotOpen(false)}
+            title="יצירת דוח סופי נעול"
+            description="הדוח ייווצר בשרת ממצב נתונים עקבי ויישמר כגרסה חדשה שאינה ניתנת לשינוי."
+            busy={busy}>
+            <dl className="mb-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              <div><dt className="text-xs text-ink-muted">חודש הדיווח</dt><dd className="mt-0.5 font-medium">{fmtMonth(`${safeMonth}-01`)}</dd></div>
+              <div><dt className="text-xs text-ink-muted">ארגון</dt><dd className="mt-0.5 font-medium">{org?.name ?? '—'}</dd></div>
+              <div><dt className="text-xs text-ink-muted">ישות משפטית</dt><dd className="mt-0.5 font-medium">{selectedLegalEntity?.name ?? '—'}</dd></div>
+              <div><dt className="text-xs text-ink-muted">זמן יצירה</dt><dd className="num mt-0.5">{snapshotPreviewAt ? fmtDateTime(snapshotPreviewAt) : '—'}</dd></div>
+              <div><dt className="text-xs text-ink-muted">יוצר הדוח</dt><dd className="mt-0.5 font-medium">{profile?.full_name ?? '—'}</dd></div>
+              <div>
+                <dt className="text-xs text-ink-muted">Snapshot קיים לחודש</dt>
+                <dd className="mt-0.5 font-medium">{latestSnapshot ? `כן — גרסה ${latestSnapshot.version}` : 'לא קיים עדיין'}</dd>
+              </div>
+            </dl>
+            <Note tone="await">הדוח הסופי משקף את כל החשבוניות שבדוח החי לחודש ולישות שנבחרו. כל תנועת בנק בחודש חייבת התאמה מאושרת לישות אחת; אחרת היצירה תיחסם. לאחר היצירה הגרסה אינה ניתנת לשינוי.</Note>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button type="button" className="btn-secondary" disabled={busy} onClick={() => setSnapshotOpen(false)}>ביטול</button>
+              <button type="button" className="btn-primary" disabled={busy || !selectedLegalEntity} onClick={() => { setSnapshotOpen(false); setSnapshotReauthOpen(true); }}>
+                <LockKeyhole size={15} /> {latestSnapshot ? 'יצירת גרסה חדשה' : 'יצירת דוח סופי נעול'}
+              </button>
+            </div>
+          </Modal>
+
+          <section className="card card-pad no-print" aria-labelledby="locked-reports-title">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 id="locked-reports-title" className="section-title flex items-center gap-2"><LockKeyhole size={16} /> דוחות סופיים נעולים</h2>
+                  <span className="badge-done">דוח סופי נעול</span>
+                </div>
+                <p className="mt-1 text-xs text-ink-muted">כל גרסה שייכת לישות משפטית אחת, נשמרת במסד הנתונים ואינה משתנה יחד עם הדוח החי.</p>
+              </div>
+              <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+                <div className="min-w-0 sm:min-w-56">
+                  <label className="label" htmlFor="monthly-report-legal-entity">ישות משפטית</label>
+                  <select id="monthly-report-legal-entity" className="input w-full" value={lockedReports?.selectedUnitId ?? ''}
+                    disabled={lockedReportsLoading || lockedReportsFetching || !!lockedReportsError}
+                    onChange={(event) => {
+                      const next = new URLSearchParams(searchParams);
+                      if (event.target.value) next.set('unit', event.target.value);
+                      else next.delete('unit');
+                      setSearchParams(next, { replace: true });
+                    }}>
+                    <option value="">בחירת ישות משפטית</option>
+                    {(lockedReports?.legalEntities ?? []).map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}
+                  </select>
+                </div>
+                <button type="button" className="btn-primary self-end" disabled={busy || !!snapshotBlockedReason}
+                  title={snapshotBlockedReason ?? 'יצירת גרסה סופית נעולה'}
+                  onClick={() => { setSnapshotPreviewAt(new Date()); setSnapshotOpen(true); }}>
+                  <LockKeyhole size={15} /> יצירת דוח סופי לרו״ח
+                </button>
+              </div>
+            </div>
+
+            {lockedReportsError && <div className="mt-4"><ErrorNote message={lockedReportsError} /></div>}
+            {!lockedReportsError && !lockedReportsLoading && !lockedReports?.legalEntities.length && (
+              <div className="mt-4"><Note tone="await">לא נמצאה ישות משפטית מורשית להפקת דוח סופי.</Note></div>
+            )}
+            {!lockedReportsError && requestedUnitId && !lockedReports?.selectedUnitId && (
+              <div className="mt-4"><Note tone="await">מזהה הישות המשפטית שבכתובת אינו תקין או שאינו מורשה למשתמש זה.</Note></div>
+            )}
+            {selectedLegalEntity && (
+              lockedReports?.snapshots.length ? (
+                <ul className="mt-4 divide-y divide-line-soft">
+                  {lockedReports.snapshots.map((snapshot) => (
+                    <li key={snapshot.id} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="font-medium">{snapshot.legal_entity_name} · גרסה <span className="num">{snapshot.version}</span></div>
+                        <div className="mt-0.5 break-words text-xs text-ink-muted">
+                          נוצר {fmtDateTime(snapshot.created_at)} · {snapshot.created_by_name} · מבנה {snapshot.report_version}
+                        </div>
+                        {(() => {
+                          const delivery = lockedReports.deliveries.find((item) => item.snapshot_id === snapshot.id);
+                          return delivery ? (
+                            <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-done-fg">
+                              <CheckCircle2 size={13} /> הועבר לרו״ח {fmtDateTime(delivery.sent_at)} · {delivery.sent_by_name} · {delivery.reason}
+                            </div>
+                          ) : null;
+                        })()}
+                      </div>
+                      <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+                        {!lockedReports.deliveries.some((item) => item.snapshot_id === snapshot.id) && (
+                          <button type="button" className="btn-primary" disabled={busy} onClick={() => setSendSnapshot(snapshot)}>
+                            <Send size={15} /> סימון כהועבר לרו״ח
+                          </button>
+                        )}
+                        <button type="button" className="btn-secondary" onClick={() => downloadSnapshot(snapshot)}>
+                          <Download size={15} /> הורדת גרסה {snapshot.version}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : !lockedReportsFetching && <p className="mt-4 text-sm text-ink-muted">אין עדיין דוח סופי נעול לחודש ולישות המשפטית שנבחרו.</p>
+            )}
+          </section>
+        </>
+      )}
 
       <div className="print-area monthly-report space-y-4">
         <div className="hidden print:block">

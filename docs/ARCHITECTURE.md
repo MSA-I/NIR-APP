@@ -68,7 +68,7 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 | `/orders/new` | הזמנה מרוכזת ← השוואת ספקים ← פיצול | `owner`, `office`, `kitchen` |
 | `/orders`, `/orders/:id` | הזמנות + תצוגת הדפסה | קוראים |
 | `/receiving`, `/receiving/:orderId` | קבלת סחורה (מובייל) | `owner`, `office`, `kitchen` |
-| `/invoices`, `/invoices/new`, `/invoices/:id` | חשבוניות + בדיקות אוטומטיות | קוראים / כותבים |
+| `/invoices`, `/invoices/new`, `/invoices/:id` | חשבוניות + בדיקות אוטומטיות; יצירה מקושרת מציגה מראש הקשר הזמנה/קבלה אנושי שנקרא תחת RLS ושולחת ל־`create_invoice` רק מזהים שנפתרו ואומתו | קוראים / כותבים |
 | `/documents` | גלריית מסמכים + סינון + שיוך לחשבונית/קבלת סחורה | `owner`, `office`, `kitchen`; ל־`accountant` מסמכי חשבונית מאושרת/תשלום בלבד |
 | `/inbox` | הפניה ל־`/documents?filing=unfiled` | משתמשים מורשים |
 | `/credits` | זיכויים | קוראים |
@@ -79,7 +79,7 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 | `/exceptions` | חריגים | `owner`, `office`, `kitchen`, `accountant` |
 | `/alerts` | מרכז התראות חי + סימון התראות פעמון כנקראו | `owner`, `office` |
 | `/expenses` | ריכוז הוצאות לפי ספק + פירוט קטגוריות משני | `owner`, `accountant` |
-| `/reports` | דוח חודשי + ייצוא | `owner`, `accountant` |
+| `/reports` | דוח חודשי חי + גרסאות snapshot סופיות ונעולות לפי ישות משפטית | `owner`, `accountant` |
 | `/audit` | יומן ביקורת | `owner`, `accountant` |
 | `/settings` | משתמשים + הגדרות עסק | `owner` |
 | `/admin` | lifecycle של ארגונים | מפעיל פלטפורמה בלבד |
@@ -171,6 +171,14 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 - **מחיקה רכה בלבד** לרשומות כספיות (`deleted_at` / סטטוס בוטל).
 - **ביקורת server-authored:** טריגרי DB על כל היישויות הרגישות גוזרים old/new, משתמש ודייר
   מן המוטציה. פעולות פקודה אטומיות כותבות סיבה באותו RPC; הדפדפן אינו רשאי להוסיף שורת audit.
+- **אישור מול זיכוי פתוח אינו קיזוז:** דרישת תשלום קשורה לישות המשפטית של כל החשבוניות שלה.
+  אישור רגיל נחסם כשיש לספק זיכוי פתוח באותה ישות; override שרתי דורש סיבה ושומר את סכום
+  הזיכוי שנצפה, אך אינו משנה את סכום הדרישה, מקצה זיכוי או משנה את סטטוס הזיכוי. עד שיוגדר
+  scope לבנק, בדיקת העברה דומה מחזירה `unavailable` כללי ואינה חושפת bit ארגוני.
+- **דוח סופי הוא snapshot מובנה ובלתי־משתנה:** כל גרסה נשמרת לפי ארגון, ישות משפטית וחודש,
+  יחד עם rows, totals, תוויות תצוגה, metadata ו-hash. ‏XLSX סופי נבנה רק מה-JSONB השמור;
+  יצירה ומסירה דורשות step-up, ומסירה נרשמת ב-ledger immutable שמפנה לגרסת snapshot מדויקת.
+  הדוח החי ו-ledger ‏`monthly_exports` ההיסטורי נשארים נפרדים.
 - **התראות נשמרות פר־נמען:** `notifications` מסוננת ב־RLS לפי `org_id` ו־`auth.uid()`; לקוח רשאי
   לעדכן רק `read_at`. ‏`notification_event_states` היא server-only ומגדירה מחזור מסירה אחד,
   הסלמת warning→critical ומחזור חדש לאחר פתרון. מ־`0024` ה־claim ויצירת שורות הנמענים הם
@@ -231,6 +239,7 @@ transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מ
 |---|---|---|
 | ביצוע תשלום | `execute_payment_request` | נעילת הדרישה והיעדים בסדר UUID; unique על דרישה; retry משווה payload קנוני |
 | דרישת תשלום | `create_payment_request`, ‏`transition_payment_request` | UUID לקוח יציב, נעילת חשבוניות/דרישה ומעברי סטטוס שרתיים |
+| אישור דרישה מול זיכוי פתוח | `approve_payment_request_with_credit_override` | נעילת דרישה/חשבוניות/זיכויים, בדיקת supplier+scope+total צפוי, סיבה ו-audit אטומי; retry זהה אינו מוסיף audit |
 | תדפיס בנק | `import_bank_transactions`, ‏`match_bank_transaction` ופקודות assign/ignore/exception | hash קובץ ושורה, נעילת תנועה, תשלום/הקצאה יחידים |
 | קבלת סחורה | `save_goods_receipt` | UUID קבלה יציב, נעילת הזמנה ופריטים; כמות תקינה נצברת פעם אחת |
 | חשבונית | `create_invoice`, ‏`set_invoice_review_status`, ‏`soft_delete_invoice` | UUID לקוח יציב, בדיקות DB חוזרות, ומחיקה רכה עם נעילה, בדיקת קשרים וסיבת audit באותה עסקה |
@@ -238,6 +247,8 @@ transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מ
 | מחיר מנהל/ידני | `set_supplier_product_price`, ‏`import_supplier_prices` | נעילת `supplier_products`; מחיר נוכחי ו־`price_history` נכתבים יחד; batch legacy הוא `owner`/`office` בלבד |
 | הגשת מחירון ספק | `submit-price-list` → `submit_supplier_price_list` | Edge נועל ומאמת את גרסת אובייקט ה־Storage, גוזר hash ושורות מהבייטים; נעילת ספק מסדרת revision; ‏checksum חודשי מחזיר אותה קבלה; intake, מחיר, היסטוריה, קבלה ו־audit נסגרים באותה עסקת DB |
 | חודש לרו״ח | `mark_month_export_sent` | נעילת ארגון/export/חשבוניות ו־snapshot ממוין של `invoice_ids` |
+| snapshot חודשי סופי | `create_monthly_report_snapshot` | advisory lock לפי ארגון/ישות/חודש, גרסה עולה immutable, ייחוס מקורות fail-closed ו-audit/event באותה עסקה |
+| מסירת snapshot לרו״ח | `mark_monthly_report_snapshot_sent` | step-up, נעילת snapshot מסוננת-scope, recheck הרשאה לאחר המתנה ו-delivery immutable/idempotent לגרסה מדויקת |
 | אישור טיוטת הזמנה | `finalize_purchase_request_draft` | נעילת טיוטה, פריטים ומחירים בסדר קבוע; שינוי מחיר מחזיר `draft_price_changed` |
 | מעבר סטטוס הזמנה | `transition_purchase_order_status` | נעילת הזמנה דיירית; allowlist מעברים; חותמות זמן ו־audit מנומק נכתבים אטומית; retry זהה אידמפוטנטי |
 

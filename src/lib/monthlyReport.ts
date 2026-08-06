@@ -7,18 +7,70 @@ export interface MonthlyReportData {
   exceptions: { type: string; title: string; supplier: { name: string } | null }[];
 }
 
+export interface MonthlyReportSnapshot {
+  id: string;
+  org_id: string;
+  unit_id: string;
+  report_month: string;
+  version: number;
+  report_version: string;
+  organization_name: string;
+  legal_entity_name: string;
+  created_by: string;
+  created_by_name: string;
+  created_at: string;
+  invoice_rows: (MonthlyReportData['invoices'][number] & {
+    review_status_label?: string;
+    payment_status_label?: string;
+  })[];
+  payment_rows: MonthlyReportData['payments'];
+  credit_rows: (MonthlyReportData['credits'][number] & {
+    reason_label?: string;
+    status_label?: string;
+  })[];
+  exception_rows: (MonthlyReportData['exceptions'][number] & { type_label?: string })[];
+  bank_rows: {
+    id: string;
+    tx_date: string;
+    description: string;
+    amount: number;
+    is_debit: boolean;
+    reference: string | null;
+    status: string;
+    direction_label?: string;
+    status_label?: string;
+  }[];
+  totals: {
+    invoice_count: number;
+    invoice_total: number;
+    before_vat_total: number;
+    vat_total: number;
+    payment_count: number;
+    payment_total: number;
+    credit_count: number;
+    credit_total: number;
+    exception_count: number;
+    bank_transaction_count: number;
+    bank_total: number;
+    unpaid_invoice_count: number;
+  };
+  content_hash: string;
+}
+
+export interface MonthlyReportLabels {
+  invoiceReview: Record<string, { label: string } | undefined>;
+  invoicePayment: Record<string, { label: string } | undefined>;
+  creditReason: Record<string, string | undefined>;
+  creditStatus: Record<string, { label: string } | undefined>;
+  exceptionType: Record<string, string | undefined>;
+}
+
 export function buildMonthlyWorkbook(input: {
   orgName: string | null | undefined;
   month: string;
   generatedAt: Date;
   data: MonthlyReportData;
-  labels: {
-    invoiceReview: Record<string, { label: string } | undefined>;
-    invoicePayment: Record<string, { label: string } | undefined>;
-    creditReason: Record<string, string | undefined>;
-    creditStatus: Record<string, { label: string } | undefined>;
-    exceptionType: Record<string, string | undefined>;
-  };
+  labels: MonthlyReportLabels;
 }) {
   const { data } = input;
   const invoiceTotal = data.invoices.reduce((sum, row) => sum + row.total_amount, 0);
@@ -57,5 +109,82 @@ export function buildMonthlyWorkbook(input: {
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.exceptions.map((row) => ({
     'סוג': input.labels.exceptionType[row.type], 'תיאור': row.title, 'ספק': row.supplier?.name ?? '',
   }))), 'חריגים פתוחים כרגע');
+  return workbook;
+}
+
+/**
+ * Build an accountant workbook exclusively from an immutable database snapshot.
+ *
+ * No live query result, external link or formula is consulted here. Re-downloading a version
+ * therefore produces equivalent workbook values even when the operational tables later change.
+ */
+export function buildLockedMonthlyWorkbook(input: {
+  snapshot: MonthlyReportSnapshot;
+}) {
+  const { snapshot } = input;
+  // v2 stores every row label beside the raw enum. Older local v1 artifacts remain readable
+  // without consulting today's label maps: their frozen raw value is the conservative fallback.
+  const frozenLabels: MonthlyReportLabels = {
+    invoiceReview: Object.fromEntries(snapshot.invoice_rows.map((row) => [
+      row.review_status, { label: row.review_status_label ?? row.review_status },
+    ])),
+    invoicePayment: Object.fromEntries(snapshot.invoice_rows.map((row) => [
+      row.payment_status, { label: row.payment_status_label ?? row.payment_status },
+    ])),
+    creditReason: Object.fromEntries(snapshot.credit_rows.map((row) => [
+      row.reason, row.reason_label ?? row.reason,
+    ])),
+    creditStatus: Object.fromEntries(snapshot.credit_rows.map((row) => [
+      row.status, { label: row.status_label ?? row.status },
+    ])),
+    exceptionType: Object.fromEntries(snapshot.exception_rows.map((row) => [
+      row.type, row.type_label ?? row.type,
+    ])),
+  };
+  const workbook = buildMonthlyWorkbook({
+    orgName: snapshot.organization_name,
+    month: snapshot.report_month.slice(0, 7),
+    generatedAt: new Date(snapshot.created_at),
+    data: {
+      invoices: snapshot.invoice_rows,
+      payments: snapshot.payment_rows,
+      credits: snapshot.credit_rows,
+      exceptions: snapshot.exception_rows,
+    },
+    labels: frozenLabels,
+  });
+
+  workbook.Sheets['פרטי הדוח'] = XLSX.utils.aoa_to_sheet([
+    ['סוג הדוח', 'דוח סופי נעול'],
+    ['שם ארגון', snapshot.organization_name],
+    ['ישות משפטית', snapshot.legal_entity_name],
+    ['חודש', snapshot.report_month.slice(0, 7)],
+    ['גרסת snapshot', snapshot.version],
+    ['גרסת מבנה הדוח', snapshot.report_version],
+    ['נוצר בתאריך', snapshot.created_at],
+    ['נוצר על ידי', snapshot.created_by_name],
+    ['Snapshot ID', snapshot.id],
+    ['Checksum', snapshot.content_hash],
+    ['הערה', 'דוח סופי זה נוצר רק מנתוני snapshot נעולים במסד הנתונים ומשקף את גבול הדוח החי במועד היצירה.'],
+    [],
+    ['מדד', 'מספר רשומות', 'סכום'],
+    ['חשבוניות', snapshot.totals.invoice_count, snapshot.totals.invoice_total],
+    ['לפני מע״מ', snapshot.totals.invoice_count, snapshot.totals.before_vat_total],
+    ['מע״מ', snapshot.totals.invoice_count, snapshot.totals.vat_total],
+    ['תשלומים', snapshot.totals.payment_count, snapshot.totals.payment_total],
+    ['זיכויים', snapshot.totals.credit_count, snapshot.totals.credit_total],
+    ['חריגים פתוחים בעת היצירה', snapshot.totals.exception_count, null],
+    ['תנועות בנק', snapshot.totals.bank_transaction_count, snapshot.totals.bank_total],
+  ]);
+
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(snapshot.bank_rows.map((row) => ({
+    'תאריך': row.tx_date,
+    'תיאור': row.description,
+    'סכום': row.amount,
+    'סוג': row.direction_label ?? (row.is_debit ? 'debit' : 'credit'),
+    'אסמכתא': row.reference,
+    'סטטוס': row.status_label ?? row.status,
+  }))), 'תנועות בנק');
+
   return workbook;
 }

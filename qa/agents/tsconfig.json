@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "include": [
+    "./**/*.ts",
+    "../browser/browser-tools.ts",
+    "../browser/redaction.ts",
+    "../config/roles.ts",
+    "../scenarios/schema.ts"
+  ]
+}

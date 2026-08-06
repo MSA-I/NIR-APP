@@ -201,9 +201,11 @@ export interface CreditRequest {
 
 export type PaymentRequestStatus = 'draft' | 'pending_approval' | 'approved' | 'sent_for_execution' | 'executed' | 'matched' | 'investigation' | 'suspected_duplicate' | 'cancelled';
 export interface PaymentRequest {
-  id: string; org_id: string; number: number; supplier_id: string; amount: number;
+  id: string; org_id: string; unit_id: string | null; number: number; supplier_id: string; amount: number;
   due_date: string | null; status: PaymentRequestStatus; notes: string | null;
   created_by: string | null; approved_by: string | null; approved_at: string | null;
+  open_credit_override_total: number | null; open_credit_override_reason: string | null;
+  open_credit_override_at: string | null;
   executor_notes: string | null; created_at: string;
   supplier?: Supplier;
 }

@@ -55,6 +55,11 @@ export const RECEIPT_LINE_STATUS: Record<string, StatusMeta> = {
   returned: m('הוחזר', 'alert'),         // חריגה שדורשת זיכוי
 };
 
+export const RECEIPT_STATUS: Record<string, StatusMeta> = {
+  draft: m('טיוטה', 'idle'),
+  completed: m('הושלמה', 'done'),
+};
+
 export const INVOICE_REVIEW_STATUS: Record<string, StatusMeta> = {
   received: m('התקבלה', 'await'),        // an untouched received invoice is waiting for review
   in_review: m('בבדיקה', 'await'),       // ממתינה להשלמת בדיקה
@@ -96,7 +101,7 @@ export const PAYMENT_REQUEST_STATUS: Record<string, StatusMeta> = {
   pending_approval: m('ממתינה לאישור', 'await'),
   approved: m('מאושרת', 'await'),                 // אושרה אך הכסף טרם הועבר — ממתין לביצוע
   sent_for_execution: m('הועברה לביצוע', 'await'), // ממתין להעברה בפועל
-  executed: m('הועברה בוצעה', 'done'),            // ההעברה בוצעה
+  executed: m('העברה בוצעה', 'done'),             // ההעברה בוצעה
   matched: m('הותאמה לבנק', 'done'),
   investigation: m('דורשת בירור', 'alert'),
   suspected_duplicate: m('חשד לכפילות', 'alert'),

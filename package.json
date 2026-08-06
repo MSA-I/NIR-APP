@@ -14,6 +14,15 @@
     "check:tokens": "node scripts/check-design-tokens.ts",
     "build": "tsc --noEmit && npm run check:alerts && npm run check:dashboard && npm run check:orders && npm run check:split && npm run check:p2 && npm run check:review && npm run check:tokens && npm run test && vite build",
     "quality": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-quality-gates.ps1",
+    "qa:install-browser": "playwright install chromium",
+    "qa:typecheck": "tsc -p qa/tsconfig.json --noEmit",
+    "qa:test": "node --test qa/**/*.test.ts",
+    "qa:setup": "node qa/runner/setup.ts",
+    "qa:deterministic": "node qa/runner/deterministic-runner.ts",
+    "qa:agents": "node qa/runner/agent-runner.ts",
+    "qa:report": "node qa/runner/report-runner.ts",
+    "qa:full": "node qa/runner/full-runner.ts",
+    "qa:clean": "node qa/runner/clean.ts",
     "preview": "vite preview",
     "test": "vitest run"
   },
@@ -39,6 +48,8 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.0.6",
     "@tanstack/react-query-devtools": "^5.101.4",
     "@testing-library/jest-dom": "^7.0.0",
@@ -50,6 +61,7 @@
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^5.0.0",
     "@vitest/coverage-v8": "^4.1.10",
+    "fflate": "^0.8.3",
     "jsdom": "^30.0.1",
     "msw": "^2.15.0",
     "playwright-core": "^1.62.1",

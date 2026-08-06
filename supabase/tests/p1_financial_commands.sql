@@ -1042,12 +1042,12 @@ select pg_temp.p1_assert(
   'office received a bank-match signal'
 );
 select pg_temp.p1_assert(
-  not (payment_request_financial_check_signals(
+  payment_request_financial_check_signals(
     '30000000-0000-0000-0000-000000000001', 118,
     array['60000000-0000-0000-0000-000000000001'::uuid],
     '80000000-0000-0000-0000-000000000001'
-  )->>'similar_bank_transfer_exists')::boolean,
-  'office received a similar-bank-transfer signal'
+  )->>'similar_bank_transfer_check' = 'unavailable',
+  'payment-request bank comparison must stay unavailable until bank data is entity-scoped'
 );
 select pg_temp.p1_assert(
   (payment_request_financial_check_signals(

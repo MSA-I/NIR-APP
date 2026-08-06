@@ -73,6 +73,7 @@ const PAGE_TITLE_PATTERNS: [RegExp, string][] = [
   [/^\/suppliers\/[^/]+$/, 'כרטיס ספק'],
   [/^\/orders\/[^/]+$/, 'פרטי הזמנה'],
   [/^\/receiving\/[^/]+$/, 'קבלת סחורה'],
+  [/^\/receipts\/[^/]+$/, 'פרטי קבלה'],
   [/^\/invoices\/new$/, 'חשבונית חדשה'],
   [/^\/invoices\/[^/]+$/, 'פרטי חשבונית'],
   [/^\/onboarding$/, 'הקמת המערכת'],

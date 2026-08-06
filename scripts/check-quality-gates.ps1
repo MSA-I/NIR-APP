@@ -10,6 +10,7 @@ $repoRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
 $userProfilePath = [Environment]::GetFolderPath("UserProfile")
 $expectedProjectId = "supplyflow-p0"
 $expectedApiUrl = "http://127.0.0.1:55431"
+$qaMutexName = "Local\SupplyFlow-supplyflow-p0-qa"
 $dbContainer = "supabase_db_supplyflow-p0"
 $restContainer = "supabase_rest_supplyflow-p0"
 $kongContainer = "supabase_kong_supplyflow-p0"
@@ -32,6 +33,26 @@ $pushFunctionSecret = "quality-$([guid]::NewGuid().ToString('N'))"
 $cleanupPhase = $false
 $credentialSeed = $null
 $ocrBrowserFixtureCleanupRequired = $false
+
+function Enter-QaMutex {
+  $mutex = [System.Threading.Mutex]::new($false, $qaMutexName)
+  try {
+    try { $acquired = $mutex.WaitOne(0) }
+    catch [System.Threading.AbandonedMutexException] { $acquired = $true }
+    if (-not $acquired) { throw "The shared SupplyFlow QA/quality mutex is held by another process." }
+    return $mutex
+  }
+  catch {
+    $mutex.Dispose()
+    throw
+  }
+}
+
+function Exit-QaMutex([System.Threading.Mutex]$Mutex) {
+  if (-not $Mutex) { return }
+  $Mutex.ReleaseMutex()
+  $Mutex.Dispose()
+}
 
 function Write-Gate([string]$Label) {
   Write-Output ""
@@ -279,15 +300,16 @@ function Wait-LocalApiReady([hashtable]$Environment) {
   # "80 attempts" budget was spent in about twenty seconds -- less than GoTrue needs to come up
   # after a full db reset and container restart. That produced a recurring "Auth=-1, PostgREST=200"
   # failure that looked like a broken gate and was only ever a stopwatch that ran out too early.
+  # Disable keep-alive because Windows PowerShell can retain Kong connections across replacement.
   $deadline = (Get-Date).AddSeconds(180)
   do {
     try {
-      $authStatus = (Invoke-WebRequest -UseBasicParsing -Uri "$expectedApiUrl/auth/v1/health" `
-        -Headers $headers -TimeoutSec 2).StatusCode
+      $authStatus = (Invoke-WebRequest -UseBasicParsing -DisableKeepAlive `
+        -Uri "$expectedApiUrl/auth/v1/health" -Headers $headers -TimeoutSec 2).StatusCode
     } catch { $authStatus = -1 }
     try {
-      $restStatus = (Invoke-WebRequest -UseBasicParsing `
-        -Uri "$expectedApiUrl/rest/v1/organizations?select=id&limit=0" `
+      $restStatus = (Invoke-WebRequest -UseBasicParsing -DisableKeepAlive `
+        -Uri "$expectedApiUrl/rest/v1/" `
         -Headers $headers -TimeoutSec 2).StatusCode
     } catch { $restStatus = -1 }
     if ($authStatus -eq 200 -and $restStatus -eq 200) { return }
@@ -877,6 +899,7 @@ $gateSummaryPath = Join-Path $artifactDirectory "gate-summary.json"
 $runError = $null
 $cleanupErrors = @()
 $repoLocationPushed = $false
+$qaMutex = Enter-QaMutex
 Push-Location -LiteralPath $repoRoot
 $repoLocationPushed = $true
 try {
@@ -938,7 +961,7 @@ try {
       # the child's real exit code instead of letting PS 5 turn progress into an exception.
       $ErrorActionPreference = "Continue"
       $p0Output = @(& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "check-p0-security.ps1") `
-        -ResetLocalDatabase -KeepFixture -PushSecret $pushFunctionSecret 2>&1)
+        -ResetLocalDatabase -KeepFixture -PushSecret $pushFunctionSecret -QaMutexAlreadyHeld 2>&1)
       $p0Exit = $LASTEXITCODE
     }
     finally {
@@ -1001,6 +1024,8 @@ try {
     Invoke-SqlTest "supabase\tests\p6b_upload_reservations.sql" "P6b upload-reservation renewal, sweep grace and column guard"
     Invoke-SqlTest "supabase\tests\p7_integration_adapters.sql" "P7 webhook subscriptions, enqueue trigger, signed claim and failure ledger"
     Invoke-SqlTest "supabase\tests\p9_five_domains.sql" "P9 notification preferences, search type gate, approval policy and the transition mirror"
+    Invoke-SqlTest "supabase\tests\payment_credit_override.sql" "Payment approval with legal-entity scoped open-credit override"
+    Invoke-SqlTest "supabase\tests\monthly_report_snapshots.sql" "Immutable legal-entity monthly accountant snapshots"
     Invoke-Preflight
     Invoke-SqlTest "supabase\tests\p1_financial_commands.sql" "P1 financial commands, rollback and idempotency"
     Invoke-SqlTest "supabase\tests\p1_price_submissions.sql" "P1B trusted price-list intake, tenant isolation and rollback"
@@ -1009,6 +1034,8 @@ try {
     Invoke-SqlTest "supabase\tests\p1_price_submissions_concurrency.sql" "P1B real concurrent revisions and checksum retries" "supabase_admin"
     Invoke-SqlTest "supabase\tests\roadmap_db_contracts.sql" "Roadmap supplier, inventory, savings and WhatsApp contracts"
     Invoke-SqlTest "supabase\tests\p1_concurrency.sql" "P1 real concurrent sessions" "supabase_admin"
+    Invoke-SqlTest "supabase\tests\payment_credit_override_concurrency.sql" "Concurrent payment replay, approval, execution and credit creation" "supabase_admin"
+    Invoke-SqlTest "supabase\tests\monthly_report_snapshots_concurrency.sql" "Concurrent immutable monthly snapshot version allocation" "supabase_admin"
 
     Write-Gate "P1B local Edge runtime, 10/100/1,000 rows and failure recovery"
     Invoke-PriceListEdgeSmoke
@@ -1162,6 +1189,8 @@ finally {
       Pop-Location
       $repoLocationPushed = $false
     }
+    Exit-QaMutex $qaMutex
+    $qaMutex = $null
   }
 }
 

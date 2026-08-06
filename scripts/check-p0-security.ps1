@@ -12,7 +12,8 @@ param(
   [switch]$ResetLocalDatabase,
   [switch]$KeepFixture,
   [switch]$ServePushFunction,
-  [string]$PushSecret
+  [string]$PushSecret,
+  [switch]$QaMutexAlreadyHeld
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,9 +22,30 @@ Add-Type -AssemblyName System.Net.Http
 
 $apiUrl = "http://127.0.0.1:55431"
 $expectedProjectId = "supplyflow-p0"
+$qaMutexName = "Local\SupplyFlow-supplyflow-p0-qa"
 $kongContainer = "supabase_kong_supplyflow-p0"
 $script:Passed = 0
 $script:HttpClient = [System.Net.Http.HttpClient]::new()
+
+function Enter-QaMutex {
+  $mutex = [System.Threading.Mutex]::new($false, $qaMutexName)
+  try {
+    try { $acquired = $mutex.WaitOne(0) }
+    catch [System.Threading.AbandonedMutexException] { $acquired = $true }
+    if (-not $acquired) { throw "The shared SupplyFlow QA/quality mutex is held by another process." }
+    return $mutex
+  }
+  catch {
+    $mutex.Dispose()
+    throw
+  }
+}
+
+function Exit-QaMutex([System.Threading.Mutex]$Mutex) {
+  if (-not $Mutex) { return }
+  $Mutex.ReleaseMutex()
+  $Mutex.Dispose()
+}
 
 if (-not $ResetLocalDatabase) {
   throw "This test resets the local database. Re-run with -ResetLocalDatabase to acknowledge that scope."
@@ -204,6 +226,9 @@ function Invoke-JsonRequest {
     [System.Net.Http.HttpMethod]::new($Method.ToUpperInvariant()),
     [Uri]$Uri
   )
+  # Database reset replaces local upstream containers behind Kong. Do not reuse a
+  # connection that was opened against the previous container generation.
+  $request.Headers.ConnectionClose = $true
   foreach ($name in $Headers.Keys) {
     [void]$request.Headers.TryAddWithoutValidation([string]$name, [string]$Headers[$name])
   }
@@ -358,6 +383,7 @@ function Get-Rows([string]$Resource, $Account, [string]$AnonKey, [string]$Label)
   return @($response.Json)
 }
 
+$qaMutex = if ($QaMutexAlreadyHeld) { $null } else { Enter-QaMutex }
 Reset-TestDatabase
 $environment = Get-LocalSupabaseEnvironment
 $anonKey = [string]$environment.ANON_KEY
@@ -794,4 +820,6 @@ finally {
   } else {
     Write-Output "Local P0 fixture retained for debugging; no credentials were printed."
   }
+  Exit-QaMutex $qaMutex
+  $qaMutex = $null
 }

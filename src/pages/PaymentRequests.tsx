@@ -443,6 +443,8 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
   const checkSequence = useRef(0);
   const [busy, setBusy] = useState(false);
   const [transitionTarget, setTransitionTarget] = useState<PaymentRequestStatus | null>(null);
+  const [creditOverrideOpen, setCreditOverrideOpen] = useState(false);
+  const [creditOverrideAcknowledged, setCreditOverrideAcknowledged] = useState(false);
 
   const { data: links, loading: linksLoading, error: linksError } = useQuery(async () => {
     const rows = await fetchAll<{
@@ -484,7 +486,15 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
     };
   }, [checkFingerprint]);
 
-  async function setStatus(status: PaymentRequestStatus, reason?: string) {
+  const openCreditTotal = checks?.find((check) => check.code === 'open_credit')?.amount ?? 0;
+
+  useEffect(() => {
+    setCreditOverrideAcknowledged(false);
+    setCreditOverrideOpen(false);
+  }, [pr.id, openCreditTotal]);
+
+  async function setStatus(status: PaymentRequestStatus, reason?: string, withCreditOverride = false) {
+    let freshOpenCreditTotal = 0;
     if (status === 'approved') {
       if (!checkFingerprint || !links || checks == null || checking || checkError || linksError) {
         toast(checkError ?? linksError ?? 'יש להמתין לסיום בדיקות האישור', 'error');
@@ -500,6 +510,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         if (latestFingerprint.current !== checkFingerprint) throw new Error('פרטי הדרישה השתנו במהלך הבדיקה.');
         setChecks(freshChecks);
         setCheckError(null);
+        freshOpenCreditTotal = freshChecks.find((check) => check.code === 'open_credit')?.amount ?? 0;
       } catch (failure) {
         setChecks(null);
         setCheckError('בדיקות האישור נכשלו. הדרישה לא אושרה.');
@@ -507,15 +518,36 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         toast(failure instanceof Error ? failure.message : 'בדיקות האישור נכשלו', 'error');
         return;
       }
+      if (withCreditOverride && freshOpenCreditTotal !== openCreditTotal) {
+        setCreditOverrideAcknowledged(false);
+        setCreditOverrideOpen(false);
+        setBusy(false);
+        toast('סכום הזיכויים השתנה. יש לעבור שוב על האזהרה ולאשר את הסכום המעודכן.', 'error');
+        return;
+      }
+      if (!withCreditOverride && freshOpenCreditTotal > 0) {
+        setBusy(false);
+        toast('לספק קיימים זיכויים פתוחים. נדרש אישור חריג מפורש עם סיבה.', 'error');
+        return;
+      }
     }
-    const res = await supabase.rpc('transition_payment_request', {
-      p_payment_request_id: pr.id,
-      p_target_status: status,
-      p_reason: reason?.trim() || null,
-    });
+    const res = withCreditOverride
+      ? await supabase.rpc('approve_payment_request_with_credit_override', {
+        p_payment_request_id: pr.id,
+        p_supplier_id: pr.supplier_id,
+        p_expected_open_credit_total: freshOpenCreditTotal,
+        p_override_reason: reason?.trim() || null,
+      })
+      : await supabase.rpc('transition_payment_request', {
+        p_payment_request_id: pr.id,
+        p_target_status: status,
+        p_reason: reason?.trim() || null,
+      });
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     setTransitionTarget(null);
+    setCreditOverrideOpen(false);
+    setCreditOverrideAcknowledged(false);
     toast('הסטטוס עודכן');
     onChanged();
   }
@@ -533,6 +565,13 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
           {pr.approved_at && <span className="text-sm text-ink-muted">אושר על ידי {pr.approver?.full_name ?? 'משתמש לא זמין'} · {fmtDate(pr.approved_at)}</span>}
         </div>
         {pr.notes && <div className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-3 py-2">{pr.notes}</div>}
+        {pr.open_credit_override_total != null && (
+          <Note tone="alert">
+            <strong>הדרישה אושרה באישור חריג ללא קיזוז הזיכוי.</strong>{' '}
+            בעת האישור היו זיכויים פתוחים בסך <span className="num">{fmtMoneyExact(pr.open_credit_override_total)}</span>, והם לא קוזזו אוטומטית.
+            <span className="block mt-1">סיבת אישור החריגה: {pr.open_credit_override_reason}</span>
+          </Note>
+        )}
 
         {linksError ? <ErrorNote message={linksError} /> : linksLoading ? (
           <div role="status" className="text-sm text-ink-muted">טוען חשבוניות מקושרות…</div>
@@ -560,16 +599,47 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
           )}
         </div>
 
+        {openCreditTotal > 0 && (
+          <Note tone="alert">
+            <div className="space-y-3">
+              <p className="font-semibold">לספק קיימים זיכויים פתוחים שטרם קוזזו. אישור זה אינו מקזז את הזיכויים ואינו משנה את סכום הדרישה.</p>
+              <dl className="grid gap-2 text-sm sm:grid-cols-2">
+                <div><dt className="text-ink-muted">ספק</dt><dd className="font-medium">{pr.supplier.name}</dd></div>
+                <div><dt className="text-ink-muted">סך זיכויים פתוחים</dt><dd className="font-semibold num">{fmtMoneyExact(openCreditTotal)}</dd></div>
+                <div><dt className="text-ink-muted">סכום דרישת התשלום</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount)}</dd></div>
+                <div><dt className="text-ink-muted">נטו אינפורמטיבי לאחר זיכויים</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount - openCreditTotal)}</dd></div>
+              </dl>
+              <label className="flex min-h-11 items-start gap-2 text-sm font-medium">
+                <input type="checkbox" className="mt-1" checked={creditOverrideAcknowledged}
+                  onChange={(event) => setCreditOverrideAcknowledged(event.target.checked)} />
+                <span>קראתי והבנתי שהזיכויים לא יקוזזו אוטומטית</span>
+              </label>
+            </div>
+          </Note>
+        )}
+
         {isOffice && (
           <div className="flex flex-wrap justify-end gap-2 pt-1">
             {['draft'].includes(pr.status) && (
               <button className="btn-primary" disabled={busy} onClick={() => setTransitionTarget('pending_approval')}><Send size={15} /> שליחה לאישור</button>
             )}
             {['pending_approval', 'suspected_duplicate', 'investigation'].includes(pr.status) && (
-              <button className={hasCritical ? 'btn-danger' : 'btn-primary'} disabled={busy || !checksReady}
-                onClick={() => setTransitionTarget('approved')}>
-                <CheckCircle2 size={15} /> {hasCritical ? 'אישור למרות האזהרות' : 'אישור הדרישה'}
-              </button>
+              openCreditTotal > 0 ? (
+                <>
+                  <button className="btn-secondary" disabled aria-label="אישור רגיל חסום בגלל זיכויים פתוחים">
+                    <CheckCircle2 size={15} /> אישור הדרישה
+                  </button>
+                  <button className="btn-primary" disabled={busy || !checksReady || !creditOverrideAcknowledged}
+                    onClick={() => setCreditOverrideOpen(true)}>
+                    <ShieldAlert size={15} /> אישור חריג ללא קיזוז הזיכוי
+                  </button>
+                </>
+              ) : (
+                <button className={hasCritical ? 'btn-danger' : 'btn-primary'} disabled={busy || !checksReady}
+                  onClick={() => setTransitionTarget('approved')}>
+                  <CheckCircle2 size={15} /> {hasCritical ? 'אישור למרות האזהרות' : 'אישור הדרישה'}
+                </button>
+              )
             )}
             {['approved'].includes(pr.status) && (
               <button className="btn-primary" disabled={busy} onClick={() => setTransitionTarget('sent_for_execution')}><Send size={15} /> העברה לגורם המבצע</button>
@@ -587,6 +657,13 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         message="המעבר והסיבה יישמרו יחד ביומן הביקורת."
         danger={transitionTarget === 'cancelled' || (transitionTarget === 'approved' && hasCritical)}
         requireReason busy={busy} />
+      <ConfirmDialog open={creditOverrideOpen} onClose={() => setCreditOverrideOpen(false)}
+        onConfirm={(reason) => void setStatus('approved', reason, true)}
+        title="אישור חריג ללא קיזוז הזיכוי"
+        message="לספק קיימים זיכויים פתוחים שטרם קוזזו. אישור זה אינו מקזז את הזיכויים ואינו משנה את סכום הדרישה. ההחלטה והסיבה יישמרו ביומן הביקורת."
+        confirmLabel="אישור חריג ללא קיזוז הזיכוי"
+        reasonLabel="סיבת אישור החריגה"
+        danger requireReason busy={busy} />
     </Modal>
   );
 }
