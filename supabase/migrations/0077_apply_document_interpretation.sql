@@ -180,10 +180,24 @@ $anchor$;
 --   `regexp_replace(chr(8207), '\s', '', 'g')` returns the RLM unchanged. They are deleted
 --   outright -- they carry no width and no meaning inside an identifier.
 --
--- PLACED IN `private` SO create_invoice CAN REACH IT. The human path still compares with a bare
--- `trim` (0023:1800-1804) and carries the same exposure through a pasted invoice number; that is
--- P1's contract and its own suite, not this task's to change, but the helper is deliberately
--- where that fix can call it without moving anything.
+-- WHERE THE LINE IS DRAWN, AND THAT IT WAS DRAWN ON PURPOSE. What is removed is exactly the
+-- characters with NO VISUAL FORM -- things a person cannot see, cannot type deliberately, and
+-- cannot tell apart on a printed page. What is NOT removed is anything a person CAN see:
+-- full-width `１` stays distinct from `1`, Cyrillic `А` stays distinct from Latin `A`, and a
+-- combining acute accent stays part of the number it sits on. Those are visibly different
+-- strings, so treating them as the same number would start REFUSING genuinely different
+-- invoices -- a false duplicate blocks a real supplier payment, which is a different and equally
+-- real harm. (U+034F COMBINING GRAPHEME JOINER is in the delete list and a combining ACCENT is
+-- not, and that is the same rule applied consistently: the joiner has no visual form, the accent
+-- does.) A future reader finding homoglyphs unnormalised should know this was decided, not
+-- missed.
+--
+-- PLACED IN `private` SO create_invoice CAN REACH IT -- AND THE ASYMMETRY IS REAL TODAY. The
+-- human path still compares with a bare `trim` (0023:1800-1804), so a person pasting an invoice
+-- number that carries an RLM can still create the exact pair this command now refuses to create.
+-- The machine is, on this one point, stricter than the human. That is P1's contract and its own
+-- suite, not this task's to change, but the helper is deliberately placed where that fix can
+-- call it without moving anything.
 -- ==========================================================================================
 create or replace function private.document_text_sanitize(p_text text)
 returns text
@@ -197,9 +211,29 @@ as $fn$
         translate(p_text,
           chr(160) || chr(8239) || chr(8287) || chr(12288),
           '    '),
-        chr(8203) || chr(8204) || chr(8205) || chr(8206) || chr(8207)
-          || chr(8234) || chr(8235) || chr(8236) || chr(8237) || chr(8238)
-          || chr(8294) || chr(8295) || chr(8296) || chr(8297) || chr(65279),
+        -- Bidi controls -- ALL TWELVE. The first version of this list carried eleven and a
+        -- review found the gap by exhibiting it: U+061C ARABIC LETTER MARK produced a second
+        -- live invoice under an existing number. This is a CLOSED, ENUMERABLE set, so eleven of
+        -- twelve is not a judgement call, it is an omission -- and in a product that handles
+        -- Arabic-language supplier paperwork it is the same hazard as the RLM that started this.
+        chr(1564)                                                       -- U+061C  ALM
+          || chr(8206) || chr(8207)                                     -- U+200E-200F LRM, RLM
+          || chr(8234) || chr(8235) || chr(8236) || chr(8237) || chr(8238)  -- U+202A-202E
+          || chr(8294) || chr(8295) || chr(8296) || chr(8297)           -- U+2066-2069 isolates
+        -- Zero-width joiners and the invisible operators. U+2060 WORD JOINER is the
+        -- Unicode-designated REPLACEMENT for U+FEFF-as-zero-width-no-break-space: the BOM was
+        -- already deleted here and its successor was not. U+2061-2064 are its immediate
+        -- neighbours and every one of them was measured surviving, so the whole 2060-2064 range
+        -- goes rather than the single character the review happened to exhibit.
+          || chr(8203) || chr(8204) || chr(8205)                        -- U+200B-200D ZWSP/NJ/J
+          || chr(8288) || chr(8289) || chr(8290) || chr(8291) || chr(8292)  -- U+2060-2064
+          || chr(65279)                                                 -- U+FEFF  BOM
+        -- Formatting marks with no visual form that arrive from real documents rather than from
+        -- an attacker. U+00AD SOFT HYPHEN is what a PDF text layer carries for hyphenation, and
+        -- this pipeline feeds that text layer to a model that reproduces what it sees.
+          || chr(173)                                                   -- U+00AD SOFT HYPHEN
+          || chr(847)                                                   -- U+034F CGJ
+          || chr(6158),                                                 -- U+180E MONGOLIAN VS
         ''),
       '\s+', ' ', 'g')),
     '')
@@ -913,8 +947,18 @@ begin
             from public.purchase_order_items poi
             join public.products p on p.id = poi.product_id
             where poi.order_id = v_order.id
-              and (lower(btrim(p.sku)) = lower(btrim(li.value #>> '{values,sku}'))
-                or lower(btrim(p.barcode)) = lower(btrim(li.value #>> '{values,barcode}')))
+              -- Normalised on BOTH sides, the same as the duplicate key. This comparison had the
+              -- identical `lower(btrim(...))` defect and it fails in the more insidious
+              -- direction: a line transcribed as `SKU-ORDERED` with a trailing RLM matched
+              -- nothing on the order, so the command opened an item_not_ordered exception
+              -- naming an item that WAS ordered. The note 200 lines below says a false "you did
+              -- not order this" trains the manager to dismiss the exception, "which is worse
+              -- than not raising it" -- so a false positive here is not a lesser bug than the
+              -- duplicate, it is the bug that particular sentence warns about.
+              and (private.document_text_key(p.sku)
+                     = private.document_text_key(li.value #>> '{values,sku}')
+                or private.document_text_key(p.barcode)
+                     = private.document_text_key(li.value #>> '{values,barcode}'))
           )
       ) unordered;
 

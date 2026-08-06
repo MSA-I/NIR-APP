@@ -968,6 +968,52 @@ select pg_temp.p14_assert(
   'the ordered line must NOT be reported (SKU matching is case-insensitive), and the line with '
   || 'no identifier must be SKIPPED rather than guessed at');
 
+-- THE SAME INVISIBLE CHARACTER, ONE COMPARISON OVER. The SKU match had the identical
+-- `lower(btrim(...))` defect, and it fails in the more insidious direction: a line transcribed
+-- as `SKU-ORDERED` with a trailing RLM matched nothing on the order, so the command opened an
+-- item_not_ordered exception naming an item that WAS ordered. That is the false positive this
+-- file's own note calls "worse than not raising it".
+select pg_temp.p14_seed(
+  60, '14000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000001', 0.99,
+    jsonb_build_array(
+      jsonb_build_object('key', 'invoice_number', 'value', 'P14-RLM-SKU',
+        'confidence', 0.97, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'invoice_date', 'value', '10/04/2026',
+        'confidence', 0.95, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'order_number',
+        'value', (select number from public.purchase_orders
+                   where id = '94000000-0000-4000-8000-000000000001'),
+        'confidence', 0.93, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'subtotal', 'value', 1000,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'vat_amount', 'value', 180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'total', 'value', 1180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2'))),
+    jsonb_build_array(
+      jsonb_build_object('source_row', 1,
+        'values', jsonb_build_object('sku', 'SKU-ORDERED' || chr(8207),
+                                     'description', 'עגבניות שרי', 'quantity', 10),
+        'evidence_block_ids', jsonb_build_array('block-2')))));
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000060') ->> 'outcome' = 'auto_applied',
+  'the RLM-SKU document still auto-applies');
+
+select pg_temp.p14_assert(
+  (pg_temp.p14_apply('74000000-0000-4000-8000-000000000060') -> 'exception_id')
+    = 'null'::jsonb,
+  'an item that WAS ordered must not raise item_not_ordered because its SKU carried an '
+  || 'invisible character -- a false "you did not order this" trains the manager to dismiss '
+  || 'the exception, which this file itself calls worse than not raising it');
+
+select pg_temp.p14_assert(
+  (select count(*) = 1 from public.exceptions
+    where org_id = '14000000-0000-4000-8000-000000000001'
+      and details ->> 'code' = 'item_not_ordered'),
+  'and still exactly the ONE genuine exception from the real unordered item');
+
 select pg_temp.p14_assert(
   (select n from p14_order_items_before)
     = (select count(*) from public.purchase_order_items poi
@@ -1093,6 +1139,50 @@ select pg_temp.p14_assert(
 select pg_temp.p14_assert(
   pg_temp.p14_dup_variant(34, 'pz' || chr(8203) || '-dup-1') = 'duplicate_invoice_number',
   'stop 3: a ZERO WIDTH SPACE in the MIDDLE, plus a case change, must be caught');
+
+-- THE SECOND ROUND OF DISGUISES. The first version of the delete list handled the five above and
+-- let all of these through -- each produced a second live invoice under the same number. They
+-- are here one per character, not folded into a loop, because each one is a different reason the
+-- list was incomplete and a future edit that drops one should fail by name.
+select pg_temp.p14_assert(
+  pg_temp.p14_dup_variant(50, 'PZ-DUP-1' || chr(1564)) = 'duplicate_invoice_number',
+  'stop 3: U+061C ARABIC LETTER MARK -- the TWELFTH bidi control. The list carried eleven of a '
+  || 'closed, enumerable set, which is an omission rather than a judgement call, and this '
+  || 'product handles Arabic-language supplier paperwork');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_dup_variant(51, 'PZ-DUP' || chr(8288) || '-1') = 'duplicate_invoice_number',
+  'stop 3: U+2060 WORD JOINER -- the Unicode-designated replacement for U+FEFF used as a '
+  || 'zero-width no-break space. The BOM was already deleted and its successor was not');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_dup_variant(52, 'PZ-DUP' || chr(173) || '-1') = 'duplicate_invoice_number',
+  'stop 3: U+00AD SOFT HYPHEN -- what a PDF text layer carries for hyphenation, fed straight '
+  || 'into a model that reproduces what it sees. This one arrives from real documents, not '
+  || 'from an attacker');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_dup_variant(53, 'PZ-DUP-1' || chr(6158)) = 'duplicate_invoice_number',
+  'stop 3: U+180E MONGOLIAN VOWEL SEPARATOR');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_dup_variant(54, 'PZ-DUP' || chr(847) || '-1') = 'duplicate_invoice_number',
+  'stop 3: U+034F COMBINING GRAPHEME JOINER -- invisible, so it goes; a combining ACCENT is '
+  || 'visible, so it stays. Same rule, both directions');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_dup_variant(55, 'PZ-DUP' || chr(8290) || '-1') = 'duplicate_invoice_number',
+  'stop 3: U+2062 INVISIBLE TIMES -- one of the U+2060-2064 neighbours. All five were measured '
+  || 'surviving, so the whole range went rather than the one character the review exhibited');
+
+-- THE LINE, ASSERTED SO IT CANNOT BE CROSSED BY ACCIDENT. Visibly-distinguishable lookalikes are
+-- deliberately NOT normalised: a false duplicate blocks a real supplier payment, which is its
+-- own harm. If someone ever "improves" the key into homoglyph folding, this fails.
+select pg_temp.p14_assert(
+  private.document_text_key('PZ-DUP-1') <> private.document_text_key('PZ-DUP-' || chr(65297))
+  and private.document_text_key('PZ-DUP-1') <> private.document_text_key(chr(1040) || 'Z-DUP-1'),
+  'full-width digits and Cyrillic homoglyphs must stay DISTINCT -- normalising what a person can '
+  || 'see would start refusing genuinely different invoices, and that line is deliberate');
 
 select pg_temp.p14_assert(
   (select count(*) = 1 from public.invoices
