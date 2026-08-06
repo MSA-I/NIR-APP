@@ -241,16 +241,55 @@ select pg_temp.p13_assert(
 -- Structural first: "the RPC is the only write path" must be TRUE, not intended. A permissive
 -- policy plus a column grant IS a write path (the pre-0061 bank_details lesson), so both are
 -- scanned -- the p4_flags_identity.sql:882-895 idiom.
+-- service_role is in this list because the message says "the only writer", and review found
+-- the gap the shorter list hid: Supabase grants service_role full DML on every new public
+-- table, so `set role service_role` + a plain INSERT stored a threshold BELOW the floor with
+-- no reason and no audit. A scan whose predicate is narrower than its claim is how that passed
+-- unnoticed. The claim is the writer, so the scan is every non-superuser role that could be one.
 select pg_temp.p13_assert(
   not exists (
     select 1
-    from (values ('anon'), ('authenticated')) r(role_name)
+    from (values ('anon'), ('authenticated'), ('service_role')) r(role_name)
     cross join (values ('INSERT'), ('UPDATE'), ('DELETE')) p(privilege)
     where has_table_privilege(r.role_name, 'public.org_autonomy_policies'::regclass, p.privilege)
        or (p.privilege in ('INSERT', 'UPDATE')
            and has_any_column_privilege(
                  r.role_name, 'public.org_autonomy_policies'::regclass, p.privilege))),
-  'org_autonomy_policies exposes browser DML -- the reasoned command must be the only writer');
+  'org_autonomy_policies exposes DML to a non-superuser role -- the reasoned command, a '
+  || 'SECURITY DEFINER owned by postgres, must be the only writer');
+
+-- Behavioural, because a grant table is not a demonstration. This is the exact call review
+-- used to store 0.050 under the 0.900 floor.
+select pg_temp.p13_trusted();
+do $$
+begin
+  set local role service_role;
+  insert into public.org_autonomy_policies (org_id, policy_key, autonomy_enabled, min_confidence)
+  values ('13000000-0000-4000-8000-000000000002', 'document.interpretation', true, 0.050);
+  raise exception 'P13 autonomy config assertion failed: service_role wrote past the floor, '
+    'the reason and the audit';
+exception when insufficient_privilege then
+  null;
+end
+$$;
+
+select pg_temp.p13_trusted();
+do $$
+begin
+  set local role service_role;
+  update public.org_autonomy_policies set min_confidence = 0.050;
+  raise exception 'P13 autonomy config assertion failed: service_role lowered a threshold '
+    'directly';
+exception when insufficient_privilege then
+  null;
+end
+$$;
+
+-- SELECT deliberately survives: a trusted server reading its own tenant's configuration is
+-- legitimate, and revoking it would push a future reader toward re-deriving the answer.
+select pg_temp.p13_assert(
+  has_table_privilege('service_role', 'public.org_autonomy_policies'::regclass, 'SELECT'),
+  'service_role must keep SELECT -- only its write path is closed');
 
 select pg_temp.p13_assert(
   has_table_privilege('authenticated', 'public.org_autonomy_policies'::regclass, 'SELECT')
@@ -516,6 +555,112 @@ set kill_switch = false where policy_key = 'document.interpretation';
 select pg_temp.p13_assert(
   pg_temp.p13_evaluate('23000000-0000-4000-8000-000000000001') = 'true|true|0.950|false',
   'lowering the kill switch must restore the tenant''s own configuration, unchanged');
+
+-- ===== The baseline is not a lever -- "no force-on" as schema, not as comment =====
+-- baseline_enabled sits in the same table, the same row and the same privilege as the kill
+-- switch. Review showed that without a constraint it WAS the force-on counterpart the file
+-- claimed did not exist: one UPDATE turned autonomy on for every tenant that had never been
+-- configured -- all of them, since unconfigured is the default -- with no reason, no audit and
+-- no per-tenant decision. Measured before the fix: an unconfigured organization answered
+-- `configured=false, enabled=TRUE, min=NULL`.
+select pg_temp.p13_trusted();
+do $$
+begin
+  update private.autonomy_policy_definitions
+  set baseline_enabled = true where policy_key = 'document.interpretation';
+  raise exception 'P13 autonomy config assertion failed: baseline_enabled was flipped on -- '
+    'that is a force-on lever, and the file promises none exists';
+exception when check_violation then
+  if sqlerrm not like '%autonomy_definitions_baseline_off%' then raise; end if;
+end
+$$;
+
+-- Layered, and this is the half that matters most: the NOT NULL column protects the ROW, but a
+-- caller acts on the ANSWER. `enabled=true, min_confidence=null` was reachable through the
+-- unconfigured branch, and it does not stay harmless downstream -- `confidence >= null` is
+-- NULL in SQL, but `0.42 >= null` in TypeScript after PostgREST is TRUE, because null coerces
+-- to 0. So: drop the row fence, flip the baseline, and the answer must STILL be off.
+savepoint p13_baseline_mutation;
+
+alter table private.autonomy_policy_definitions
+  drop constraint autonomy_definitions_baseline_off;
+update private.autonomy_policy_definitions
+set baseline_enabled = true where policy_key = 'document.interpretation';
+
+select pg_temp.p13_assert(
+  pg_temp.p13_evaluate('23000000-0000-4000-8000-000000000002') = 'false|false|null|false',
+  'P13 mutation proof: with the row fence dropped and the baseline flipped ON, an unconfigured '
+  || 'tenant must STILL evaluate to disabled -- the answer carries the invariant, not just the row');
+
+select pg_temp.p13_trusted();
+select pg_temp.p13_assert(
+  (select not autonomy_enabled and min_confidence is null
+     from private.autonomy_policy_for_org(
+       '13000000-0000-4000-8000-000000000002', 'document.interpretation')),
+  'P13 mutation proof: the trusted-server door must hold the same line');
+
+-- And prove that second fence is what is holding it: restore the pre-review evaluator body,
+-- which decided `enabled` from the baseline alone, and watch the unsafe state reappear. This
+-- stub is a stand-in, not a copy -- its only difference is the missing null guard.
+create or replace function private.autonomy_policy_for_org(
+  p_org_id     uuid,
+  p_policy_key text
+) returns table (
+  policy_key       text,
+  configured       boolean,
+  autonomy_enabled boolean,
+  min_confidence   numeric,
+  kill_switch      boolean
+)
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare
+  v_definition private.autonomy_policy_definitions;
+begin
+  select * into v_definition
+  from private.autonomy_policy_definitions d where d.policy_key = p_policy_key;
+  return query
+  select p_policy_key,
+         c.id is not null,
+         not v_definition.kill_switch
+           and coalesce(c.autonomy_enabled, v_definition.baseline_enabled),
+         c.min_confidence::numeric,
+         v_definition.kill_switch
+  from (select 1) probe
+  left join org_autonomy_policies c
+    on p_org_id is not null and c.org_id = p_org_id and c.policy_key = p_policy_key;
+end
+$$;
+
+select pg_temp.p13_assert(
+  (select autonomy_enabled and min_confidence is null
+     from private.autonomy_policy_for_org(
+       '13000000-0000-4000-8000-000000000002', 'document.interpretation')),
+  'P13 mutation proof: without the null guard the answer really is enabled-with-no-threshold '
+  || '-- the guard is load-bearing, not decorative');
+
+rollback to savepoint p13_baseline_mutation;
+
+select pg_temp.p13_trusted();
+select pg_temp.p13_assert(
+  pg_temp.p13_evaluate('23000000-0000-4000-8000-000000000002') = 'false|false|null|false'
+  and (select baseline_enabled = false
+         from private.autonomy_policy_definitions
+        where policy_key = 'document.interpretation'),
+  'P13 mutation proof: rolling back must restore both the baseline and the guard');
+
+-- The two keys are one vocabulary: a definition key the tenant table would reject must not be
+-- storable, or it would be undefeatably unconfigurable (fails as a constraint violation inside
+-- the command instead of by name).
+do $$
+begin
+  insert into private.autonomy_policy_definitions (policy_key, description)
+  values ('Document Interpretation', 'a key the tenant table would refuse');
+  raise exception 'P13 autonomy config assertion failed: a definition key was accepted that '
+    'the tenant configuration table would reject';
+exception when check_violation then
+  null;
+end
+$$;
 
 -- ===== The evaluator is not a permission surface =====
 -- It may be called by a command (that is its purpose, unlike the flag evaluator). It may NOT

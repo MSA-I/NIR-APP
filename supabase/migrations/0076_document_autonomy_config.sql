@@ -107,19 +107,33 @@ $$;
 -- row finds exactly the rule that holds now -- a human decides. The schema cannot change
 -- behaviour merely by existing.
 create table private.autonomy_policy_definitions (
-  policy_key             text primary key check (btrim(policy_key) <> ''),
+  -- Same shape as the tenant table's key, deliberately: a definition whose key this pattern
+  -- rejects would be UNCONFIGURABLE per tenant, and would fail as a raw constraint violation
+  -- inside the command rather than by name. The two keys are one vocabulary.
+  policy_key             text primary key check (policy_key ~ '^[a-z0-9_.-]+$'),
   description            text not null,
-  -- Off. Always off. This column exists so the fallback answer has one home instead of being
-  -- a literal in three readers -- not so that a future edit can flip the world on.
-  baseline_enabled       boolean not null default false,
+  -- Off. Always off -- and the CHECK is what makes that sentence true rather than merely
+  -- intended. The column exists so the fallback answer has ONE home instead of being a literal
+  -- in three readers; it is not a lever.
+  --
+  -- WITHOUT THE CHECK THIS COLUMN WAS A FORCE-ON SWITCH, and review proved it: one
+  -- `update ... set baseline_enabled = true` turned autonomy on for every tenant that had
+  -- never been configured -- which is all of them, since unconfigured is the default -- with
+  -- no reason, no audit row and no per-tenant decision. Measured answer for an unconfigured
+  -- organization after that single UPDATE: `configured=false, enabled=TRUE, min=NULL`. That is
+  -- the exact inversion of the owner's ruling that default-off is scope rather than caution,
+  -- and it sat in the same table, same row and same privilege as the kill switch while the
+  -- comment below claimed no force-on counterpart existed.
+  baseline_enabled       boolean not null default false
+    constraint autonomy_definitions_baseline_off check (baseline_enabled = false),
   -- The documented floor. A tenant configuration may sit ABOVE it and never below (§3). This
   -- is the number OPEN-DECISIONS #109 calls a guess.
   baseline_min_confidence numeric(4,3) not null default 0.900
     check (baseline_min_confidence > 0 and baseline_min_confidence <= 1),
   -- Off-only, the 0059:29-32 semantics: a raised kill switch forces autonomy OFF for every
-  -- organization regardless of configuration. There is deliberately NO force-on counterpart.
-  -- The only direction a platform lever may move authority is down; a "force on" would let a
-  -- single platform toggle hand every tenant's ledger to a model.
+  -- organization regardless of configuration. There is deliberately NO force-on counterpart --
+  -- and with the constraint above, that is now a property of the schema instead of a promise
+  -- in a comment. The only direction a platform lever may move authority is down.
   kill_switch            boolean not null default false
 );
 revoke all on table private.autonomy_policy_definitions from public, anon, authenticated;
@@ -176,6 +190,20 @@ create policy org_autonomy_policies_select on org_autonomy_policies
   for select to authenticated using (org_id = auth_org());
 revoke all on table org_autonomy_policies from public, anon, authenticated;
 grant select on table org_autonomy_policies to authenticated;
+
+-- service_role IS a writer unless it is told otherwise: Supabase grants it full DML on every
+-- new public table by default (measured here as `service_role=arwdDxtm/postgres`). Review
+-- proved what that means for this table specifically -- `set role service_role` then a plain
+-- INSERT stored min_confidence = 0.050, BELOW the documented floor, with zero reasoned audit
+-- rows. The tighten-only law and the mandatory reason both live inside the command body, so a
+-- writer that skips the command skips both.
+--
+-- Revoking costs nothing here, which is why this is not the "Supabase default, same as
+-- org_flag_configurations" shrug: the ONLY legitimate writer is a SECURITY DEFINER owned by
+-- postgres, which writes as postgres regardless of the caller's own grants. The future
+-- apply-interpretation command is likewise a definer and is unaffected. SELECT stays, because
+-- a trusted server reading its own tenant's configuration is legitimate.
+revoke insert, update, delete on table org_autonomy_policies from service_role;
 
 create trigger org_autonomy_policies_audit
   after insert or update or delete on org_autonomy_policies
@@ -325,11 +353,24 @@ begin
     raise exception 'autonomy_policy_unknown' using errcode = 'P0002';
   end if;
 
+  -- `and c.min_confidence is not null` is the SAME invariant as the NOT NULL column, restated
+  -- where it is actually consumed. The column protects the ROW; this protects the ANSWER, and
+  -- the answer is what a caller acts on. Enabled-with-no-threshold was reachable through the
+  -- unconfigured branch (a NULL join row supplies a NULL threshold, and only the baseline
+  -- decided `enabled`), and it does NOT stay safe on the way out: `confidence >= null` is NULL
+  -- in SQL and fails closed, but the same comparison in TypeScript after PostgREST is
+  -- `0.42 >= null` -> null coerces to 0 -> TRUE. That is auto-apply-everything, which is the
+  -- precise outcome the threshold exists to prevent.
+  --
+  -- Two fences for one invariant on purpose: if a later migration ever drops the baseline-off
+  -- constraint, the answer stays coherent instead of turning every unconfigured tenant on with
+  -- no threshold. p13 proves that layering by dropping the constraint and checking the answer.
   return query
   select v_key,
          c.id is not null,
          not v_definition.kill_switch
-           and coalesce(c.autonomy_enabled, v_definition.baseline_enabled),
+           and coalesce(c.autonomy_enabled, v_definition.baseline_enabled)
+           and c.min_confidence is not null,
          c.min_confidence::numeric,
          v_definition.kill_switch
   from (select 1) probe
