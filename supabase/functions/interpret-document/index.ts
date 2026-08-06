@@ -273,6 +273,62 @@ async function markFailed(
   }
 }
 
+// The narrowest shape this helper needs, rather than SupabaseClient, so a test can hand it a
+// client that fails in each of the three ways below without constructing a real one.
+export interface DecisionRpcClient {
+  rpc(
+    fn: string,
+    args: Record<string, unknown>,
+  ): PromiseLike<{ error: { message: string } | null }>;
+}
+
+// ===== Acting on a saved interpretation is a separate decision, and a failed decision =====
+// ===== may not cost the interpretation.                                               =====
+//
+// By the time this runs the interpretation row exists, is immutable, and the tenant has already
+// paid for the tokens that produced it. apply_document_interpretation (0077) is the command that
+// may turn it into a financial record without a human, and it has many legitimate ways to refuse
+// -- a suspended tenant, an unresolved autonomy policy, a document somebody already filed. None
+// of those are reasons to lose an interpretation, so this function RESOLVES for every outcome:
+// a Postgres error, a transport failure folded into `error`, or a client that throws outright.
+//
+// It reports the way every other non-fatal failure in this file does -- console.error with no
+// response change -- because markFailed is the opposite behaviour: markFailed exists to record
+// that the interpretation did NOT happen, and calling it here would mark a job failed whose
+// interpretation is already stored and already visible to the reviewer.
+//
+// ORDERING IS THE CONTRACT: this is called only after save_document_interpretation returned an
+// id. Reversing the two would let a refused decision take the saved interpretation down with it.
+export async function applyInterpretationDecision(
+  admin: DecisionRpcClient,
+  jobId: string,
+  interpretationId: string,
+  actorId: string,
+): Promise<void> {
+  try {
+    // Signature read from the live catalogue, not from the migration text:
+    // apply_document_interpretation(p_job_id uuid, p_interpretation_id uuid,
+    // p_actor_id uuid DEFAULT NULL) returns jsonb, security definer, EXECUTE granted to
+    // service_role alone -- which is why it is reachable from `admin` and from nothing else.
+    const applied = await admin.rpc("apply_document_interpretation", {
+      p_job_id: jobId,
+      p_interpretation_id: interpretationId,
+      p_actor_id: actorId,
+    });
+    if (applied.error) {
+      console.error(
+        "apply_document_interpretation failed",
+        applied.error.message,
+      );
+    }
+  } catch (error) {
+    console.error(
+      "apply_document_interpretation failed",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
 async function existingInterpretation(
   admin: SupabaseClient,
   orgId: string,
@@ -566,6 +622,22 @@ export async function handler(req: Request): Promise<Response> {
       }
       throw new EdgeError("persistence_failed", 503);
     }
+
+    // The supplier price-list path is deliberately NOT offered to the decision layer. 0077 acts
+    // on documents still in the manager's inbox, and a supplier price list is entity_type
+    // 'supplier' before it ever reaches here -- supplierInterpretationContextAllowed demands
+    // exactly that -- so the call could only return already_decided/document_already_filed. It
+    // also has its own downstream (the price-submission bridge, 0048), which is where a price
+    // list is supposed to land.
+    if (!isSupplier) {
+      await applyInterpretationDecision(
+        admin,
+        job.id,
+        String(saved.data),
+        actorId,
+      );
+    }
+
     return json(cors, {
       interpretationId: String(saved.data),
       jobId: job.id,

@@ -1,4 +1,8 @@
-import { supplierInterpretationContextAllowed } from "./index.ts";
+import {
+  applyInterpretationDecision,
+  type DecisionRpcClient,
+  supplierInterpretationContextAllowed,
+} from "./index.ts";
 
 function assert(value: unknown): asserts value {
   if (!value) throw new Error("expected a truthy value");
@@ -157,4 +161,76 @@ Deno.test("supplier interpretation rejects a non-canonical storage path", () => 
     value.job,
     value.extraction,
   ));
+});
+
+// ===== Acting on the interpretation may never cost the interpretation =====
+//
+// The tenant has already paid for the tokens by the time this runs, and the row is saved and
+// immutable. apply_document_interpretation has legitimate ways to refuse -- a suspended tenant,
+// an unresolved autonomy policy, a document already filed -- and none of them are reasons to
+// unwind into the handler's catch, which calls markFailed and records that the interpretation
+// did not happen. So the helper must resolve for EVERY outcome, including a client that throws.
+
+const INTERPRETATION = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+
+function recordingClient(
+  outcome: () => { error: { message: string } | null },
+): { client: DecisionRpcClient; calls: Array<[string, Record<string, unknown>]> } {
+  const calls: Array<[string, Record<string, unknown>]> = [];
+  return {
+    calls,
+    client: {
+      rpc(fn: string, args: Record<string, unknown>) {
+        calls.push([fn, args]);
+        return Promise.resolve(outcome());
+      },
+    },
+  };
+}
+
+Deno.test("the decision is called by name with the saved interpretation and the actor", async () => {
+  const { client, calls } = recordingClient(() => ({ error: null }));
+  await applyInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
+  if (calls.length !== 1) throw new Error("expected exactly one rpc call");
+  const [name, args] = calls[0];
+  if (name !== "apply_document_interpretation") {
+    throw new Error(`unexpected rpc name: ${name}`);
+  }
+  // The live signature is (p_job_id uuid, p_interpretation_id uuid, p_actor_id uuid default
+  // null). A renamed argument fails as a 404 from PostgREST, not as a type error, so it is
+  // asserted here rather than trusted to the compiler.
+  if (
+    args.p_job_id !== JOB || args.p_interpretation_id !== INTERPRETATION ||
+    args.p_actor_id !== ACTOR
+  ) {
+    throw new Error(`unexpected rpc arguments: ${JSON.stringify(args)}`);
+  }
+  if (Object.keys(args).length !== 3) {
+    throw new Error(`unexpected extra rpc arguments: ${JSON.stringify(args)}`);
+  }
+});
+
+Deno.test("a refused decision resolves quietly and never unwinds into the failure path", async () => {
+  const { client } = recordingClient(() => ({
+    error: { message: "autonomy_threshold_missing" },
+  }));
+  // Resolving is the whole assertion: a throw here would reach the handler's catch, which calls
+  // markFailed on a job whose interpretation is already stored.
+  await applyInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
+});
+
+Deno.test("a client that throws outright still cannot lose the saved interpretation", async () => {
+  const throwing: DecisionRpcClient = {
+    rpc() {
+      throw new Error("connection reset");
+    },
+  };
+  await applyInterpretationDecision(throwing, JOB, INTERPRETATION, ACTOR);
+
+  const rejecting: DecisionRpcClient = {
+    rpc() {
+      return Promise.reject(new Error("aborted"));
+    },
+  };
+  await applyInterpretationDecision(rejecting, JOB, INTERPRETATION, ACTOR);
 });
