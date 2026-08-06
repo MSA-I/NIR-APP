@@ -372,6 +372,11 @@ export const INTERPRETATION_JSON_SCHEMA = {
 // core.test.ts asserts a BIJECTION between this list and 0077's call sites, in both directions,
 // by parsing the migration. A seventh consumed field, or a reordered alias list, fails there
 // instead of failing silently as a document that queues for review forever.
+//
+// WHAT NO TEST HERE CAN SHOW is that the model obeys any of this -- nothing in this repository
+// can run a real one. The only thing that will ever settle it is a field measurement, recorded
+// in full at the head of core.test.ts's key-drift section: once autonomy is switched on, compare
+// the rate of amounts_unreconciled filings between prompt_version v3 and v4.
 export const CANONICAL_FIELD_KEYS = [
   "invoice_number",
   "invoice_date",

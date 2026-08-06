@@ -501,6 +501,15 @@ test("a response from an unrelated model fails closed", async () => {
 // resolves to autonomy_enabled = false. The missing keys are real; the guard that would catch
 // them is not the one that fires.
 //
+// THE ONE TEST THAT WILL EVER SETTLE IT IS A FIELD MEASUREMENT, and it has to outlive this
+// branch, so it is written down here rather than left as an intention. Once autonomy is switched
+// on for any tenant: compare the rate of document_filings rows carrying
+// reason_code = 'amounts_unreconciled' between interpretations stored under prompt_version
+// 'interpret-document-v3' and 'interpret-document-v4'. Both columns already exist and both are
+// already populated on every row -- document_interpretations.prompt_version is why the version
+// ledger below is worth maintaining at all, and the filing carries the reason. If naming the keys
+// worked, that rate falls. If it did not, nothing in this file would ever have told us.
+//
 // What IS pinned is the half that is ours: the prompt names the keys the code reads, the code
 // reads the keys the prompt names, and neither list can move without the other failing here.
 // ==========================================================================================

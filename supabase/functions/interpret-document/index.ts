@@ -348,22 +348,36 @@ export async function applyInterpretationDecision(
       p_actor_id: actorId,
     }).abortSignal(AbortSignal.timeout(DECISION_TIMEOUT_MS));
     if (applied.error) {
+      // WITH THE IDS, and that is not tidiness. A failed decision leaves nothing in the database
+      // -- this line is its only trace -- and a trace that cannot name the document it was about
+      // cannot be acted on. The retry below exists to recover exactly this event; an operator
+      // reading `apply_document_interpretation failed <postgres message>` with no job and no
+      // interpretation has no way to tell WHICH document to re-open. Not a privacy boundary
+      // either: the success line already carries invoice_id and auto_action_id.
       console.error(
         "apply_document_interpretation failed",
+        jobId,
+        interpretationId,
         applied.error.message,
       );
       return;
     }
     // The verdict, and only the verdict: an outcome, a reason code and ids. Never a field value,
     // a supplier name or anything else off the document -- this line goes to a log the tenant
-    // does not own. With the switch in its shipped state (off for every tenant that exists) the
-    // steady-state line is `queued_for_review autonomy_disabled`, which is exactly what makes a
-    // line that ever reads `auto_applied` findable.
+    // does not own. Read as an ALLOWLIST of four named fields rather than by spreading `data`,
+    // so 0077's replay branch merging model, prompt_version and both confidences into its return
+    // cannot reach this line however that shape grows.
+    //
+    // With the switch in its shipped state (off for every tenant that exists) the steady-state
+    // line is `queued_for_review autonomy_disabled`, which is exactly what makes a line that ever
+    // reads `auto_applied` findable.
     const verdict = applied.data && typeof applied.data === "object"
       ? applied.data as Record<string, unknown>
       : {};
     console.log(
       "apply_document_interpretation",
+      jobId,
+      interpretationId,
       String(verdict.outcome ?? "unknown"),
       String(verdict.reason_code ?? ""),
       String(verdict.invoice_id ?? ""),
@@ -372,6 +386,8 @@ export async function applyInterpretationDecision(
   } catch (error) {
     console.error(
       "apply_document_interpretation failed",
+      jobId,
+      interpretationId,
       error instanceof Error ? error.message : String(error),
     );
   }
@@ -487,7 +503,26 @@ export async function saveAndDecideInterpretation(
       throw new EdgeError("invalid_job_state", 409);
     }
     const existingId = await options.findExisting();
-    if (existingId) return { interpretationId: existingId, idempotent: true };
+    if (existingId) {
+      // AN INTERPRETATION THAT EXISTS HAS NOT BEEN DECIDED ON. This branch is a save that
+      // COMMITTED and then reported a failure -- a transport error on the way back, or an error
+      // message matching none of the five conflicts above -- so the row is there and this call is
+      // the only one that will ever know about it. The client is handed a 200 and never comes
+      // back: the review screen computes its jobId from `extracted && !interpretation`, which is
+      // already false. Leaving it undecided here is the same permanent loss the replay path
+      // exists to prevent, reached by a narrower door, and the idempotency argument is identical
+      // -- 0077 keys on (org_id, interpretation_id) and returns the recorded decision rather than
+      // taking a second one.
+      await decideOnInterpretation(
+        admin,
+        isSupplier,
+        options.jobId,
+        existingId,
+        options.actorId,
+        options.apply,
+      );
+      return { interpretationId: existingId, idempotent: true };
+    }
     throw new EdgeError("persistence_failed", 503);
   }
   const interpretationId = String(saved.data);

@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js";
 import {
   type ApplyDecision,
   applyInterpretationDecision,
@@ -269,13 +270,41 @@ Deno.test("a successful decision reports its verdict rather than passing in sile
   } finally {
     console.log = original;
   }
-  // A call that just authored an invoice with no human behind it must be findable in the log.
+  // A call that just authored an invoice with no human behind it must be findable in the log,
+  // AND attributable: a verdict that cannot name the document it was about cannot be acted on.
   const reported = lines.join("\n");
-  if (
-    !reported.includes("auto_applied") ||
-    !reported.includes("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+  for (
+    const expected of [
+      "auto_applied",
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      JOB,
+      INTERPRETATION,
+    ]
   ) {
-    throw new Error(`the verdict was not reported: ${reported}`);
+    if (!reported.includes(expected)) {
+      throw new Error(`the verdict omitted ${expected}: ${reported}`);
+    }
+  }
+});
+
+Deno.test("a failed decision names the document it was about", async () => {
+  // This line is the ONLY trace a lost decision leaves -- nothing reaches the database. One that
+  // cannot be traced back to a job and an interpretation cannot be recovered from.
+  const { client } = recordingClient({
+    error: { message: "canceling statement due to statement timeout" },
+  });
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (...parts: unknown[]) =>
+    lines.push(parts.map(String).join(" "));
+  try {
+    await applyInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
+  } finally {
+    console.error = original;
+  }
+  const reported = lines.join("\n");
+  if (!reported.includes(JOB) || !reported.includes(INTERPRETATION)) {
+    throw new Error(`the failure was unattributable: ${reported}`);
   }
 });
 
@@ -304,6 +333,41 @@ Deno.test("a client that throws outright still cannot lose the saved interpretat
     },
   };
   await applyInterpretationDecision(rejecting, JOB, INTERPRETATION, ACTOR);
+});
+
+// The bound, against the REAL client rather than a stand-in for it. `.abortSignal()` is a
+// supabase-js contract, not ours, and the fakes above would keep passing if the client silently
+// dropped it. This needs no --allow-net and so does not loosen the gate: the client is built with
+// its own `global.fetch`, so the request never leaves the process and the assertion is made on
+// the RequestInit supabase-js actually produced.
+//
+// RESIDUAL, AND BENIGN: an abort stops the client, not necessarily the statement already running
+// in Postgres, so a timed-out decision may still commit server-side. 0077's collision guard plus
+// the replay path find it on the next call -- the same mechanism the recovery above relies on.
+Deno.test("the real client carries the bound into the request it issues", async () => {
+  const signals: Array<AbortSignal | null | undefined> = [];
+  const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    signals.push(init?.signal);
+    return new Response(JSON.stringify({ outcome: "queued_for_review" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+  const client = createClient("http://127.0.0.1:1", "not-a-real-key", {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+    global: { fetch: fetchImpl },
+  });
+  await applyInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
+  if (signals.length !== 1) {
+    throw new Error(`expected exactly one request, saw ${signals.length}`);
+  }
+  if (!(signals[0] instanceof AbortSignal)) {
+    throw new Error("supabase-js dropped the abort signal before the request");
+  }
 });
 
 // ===== The wiring itself, not only the parts =====
@@ -347,6 +411,54 @@ Deno.test("a supplier price list is never offered to the decision", async () => 
     actorId: ACTOR,
     args: { p_job_id: JOB },
     findExisting: () => Promise.resolve(null),
+    apply,
+  });
+  if (calls.length !== 0) {
+    throw new Error("a supplier price list reached the decision layer");
+  }
+});
+
+Deno.test("a save that failed but committed still reaches the decision", async () => {
+  // The narrow door into the same permanent loss the replay path exists to prevent: the save
+  // COMMITTED and reported a failure anyway (a transport error, or a message matching none of
+  // the known conflicts), so the row exists, the client is handed a 200, and nothing will ever
+  // ask again -- the review screen's trigger is already false.
+  const { client } = recordingClient({
+    data: null,
+    error: { message: "fetch failed" },
+  });
+  const { apply, calls } = recordingApply();
+  const persisted = await saveAndDecideInterpretation({
+    admin: client,
+    isSupplier: false,
+    jobId: JOB,
+    actorId: ACTOR,
+    args: { p_job_id: JOB },
+    findExisting: () => Promise.resolve(SECOND_INTERPRETATION),
+    apply,
+  });
+  if (!persisted.idempotent || persisted.interpretationId !== SECOND_INTERPRETATION) {
+    throw new Error(`unexpected recovery result: ${JSON.stringify(persisted)}`);
+  }
+  // The id offered must be the one that was FOUND, not the one that failed to come back.
+  if (calls.length !== 1 || calls[0][1] !== SECOND_INTERPRETATION) {
+    throw new Error(`the recovered interpretation was left undecided: ${JSON.stringify(calls)}`);
+  }
+});
+
+Deno.test("a supplier save that failed but committed still stays out of the decision", async () => {
+  const { client } = recordingClient({
+    data: null,
+    error: { message: "fetch failed" },
+  });
+  const { apply, calls } = recordingApply();
+  await saveAndDecideInterpretation({
+    admin: client,
+    isSupplier: true,
+    jobId: JOB,
+    actorId: ACTOR,
+    args: { p_job_id: JOB },
+    findExisting: () => Promise.resolve(SECOND_INTERPRETATION),
     apply,
   });
   if (calls.length !== 0) {
