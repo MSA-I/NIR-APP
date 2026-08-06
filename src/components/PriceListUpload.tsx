@@ -18,6 +18,7 @@ import { fetchAll } from '../lib/supabasePaging';
 import { todayISO } from '../lib/format';
 import type { Supplier } from '../lib/types';
 import { TusUploadCancelledError, TusUploadError, tusUploadToDocuments } from '../lib/tusUpload';
+import { SupplierSelectField, useQuickSupplier } from './QuickSupplierPicker';
 import {
   UploadCenter,
   claimActiveUploadTask,
@@ -195,6 +196,11 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
     return unwrap(await supabase.from('suppliers').select('id, name').is('deleted_at', null).order('name')) as Pick<Supplier, 'id' | 'name'>[];
   });
 
+  // The dialog that already creates new *products* on the fly stopped dead at a supplier it did
+  // not have. `picker.suppliers` is the fetched list plus anything created here, so the name below
+  // resolves the moment the row exists rather than after the next refetch.
+  const picker = useQuickSupplier(suppliers, setSupplierId);
+
   const accept = isStaff ? `${PRICE_DOCUMENT_ACCEPT},.xlsx,.xls,.csv` : PRICE_DOCUMENT_ACCEPT;
   const newRows = useMemo(() => (preview?.rows ?? []).filter((r) => !r.productId && !r.ambiguous), [preview]);
   const matchedRows = useMemo(() => (preview?.rows ?? []).filter((r) => r.productId), [preview]);
@@ -355,7 +361,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
     }
   }
 
-  const supplierName = suppliers?.find((s) => s.id === supplierId)?.name ?? supplier?.name;
+  const supplierName = picker.suppliers.find((s) => s.id === supplierId)?.name ?? supplier?.name;
 
   return (
     <Modal open onClose={onClose} title={supplier ? `העלאת מחירון — ${supplier.name}` : 'העלאת מחירון'}
@@ -431,13 +437,9 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
               : 'המקור נשמר כמסמך הספק שלך ומועבר למסך בדיקה. מחיר ייכתב רק לאחר אישור; שורה לא מזוהה ניתנת לשיוך למוצר קיים בלבד.'}
           </Note>
           {supplier ? null : suppliersError ? <ErrorNote message={suppliersError} /> : (
-            <label className="block">
-              <span className="label">ספק *</span>
-              <select className="input" value={supplierId} disabled={suppliersLoading || busy} onChange={(e) => setSupplierId(e.target.value)}>
-                <option value="">{suppliersLoading ? 'טוען ספקים…' : 'בחירת ספק'}</option>
-                {suppliers?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </label>
+            <SupplierSelectField picker={picker} id="price-upload-supplier" label="ספק *"
+              placeholder={suppliersLoading ? 'טוען ספקים…' : 'בחירת ספק'}
+              value={supplierId} disabled={suppliersLoading || busy} />
           )}
           <label className="block">
             <span className="label">קובץ מחירון *</span>

@@ -14,6 +14,7 @@ import { addCalendarDays, fmtMoneyExact, fmtDate, todayISO } from '../lib/format
 import type { PaymentRequest, PaymentRequestStatus, Supplier } from '../lib/types';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { paymentRequestCheckFingerprint } from '../lib/checkFingerprint';
+import { SupplierSelectField, useQuickSupplier } from '../components/QuickSupplierPicker';
 
 type Row = PaymentRequest & { supplier: { name: string }; approver: { full_name: string } | null };
 type PaymentInvoiceCandidate = {
@@ -201,6 +202,13 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
     fetchAll<Supplier>((from, to) => supabase.from('suppliers').select('*').is('deleted_at', null)
       .order('name').order('id').range(from, to)));
 
+  // Changing the supplier — by picking one or by creating one — invalidates the chosen invoices,
+  // which belong to the previous supplier. One callback, so neither route can forget it.
+  const supplierPicker = useQuickSupplier(suppliers, (nextSupplierId) => {
+    setSupplierId(nextSupplierId);
+    setChosen({});
+  });
+
   const { data: invoices, loading: invoicesLoading, error: invoicesError } = useQuery(async () => {
     if (!supplierId) return [];
     const inv = await fetchAll<Omit<PaymentInvoiceCandidate, 'balance' | 'allocationAmount'>>((from, to) => {
@@ -306,7 +314,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
 
   const checks = checked?.fingerprint === checkFingerprint ? checked.results : null;
   const hasCritical = checks?.some((c) => c.severity === 'critical') ?? false;
-  const supplierName = suppliers?.find((supplier) => supplier.id === supplierId)?.name ?? 'הספק הנבחר';
+  const supplierName = supplierPicker.suppliers.find((supplier) => supplier.id === supplierId)?.name ?? 'הספק הנבחר';
   const checksReady = checkFingerprint != null && checks != null && !checking && !checkError;
 
   async function save(toApproval: boolean) {
@@ -358,14 +366,9 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
       <div className="space-y-4">
         {suppliersError && <ErrorNote message={suppliersError} />}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="sm:col-span-2">
-            <label className="label" htmlFor="payment-request-supplier">ספק *</label>
-            <select id="payment-request-supplier" className="input" value={supplierId} disabled={suppliersLoading || !!suppliersError}
-              onChange={(e) => { setSupplierId(e.target.value); setChosen({}); }}>
-              <option value="">בחר ספק...</option>
-              {suppliers?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
+          <SupplierSelectField picker={supplierPicker} className="sm:col-span-2"
+            id="payment-request-supplier" label="ספק *" placeholder="בחר ספק..."
+            value={supplierId} disabled={suppliersLoading || !!suppliersError} />
           <div><label className="label" htmlFor="payment-request-due-date">תאריך יעד</label><input id="payment-request-due-date" type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
         </div>
 
