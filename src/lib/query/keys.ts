@@ -42,6 +42,12 @@ export const DOMAIN = {
   // in the same kebab style as `price-lists`.
   payments: 'payments',
   bank: 'bank-transactions',
+  // Wave 9: the control-room aggregates. Named after the screen rather than a table on purpose —
+  // one dashboard entry is composed of several independent per-metric reads (PLAN-10 §3), so
+  // there is no single table whose name would describe it. Sub-key it by role
+  // (`[DOMAIN.dashboard, 'payer']`): two roles asking the same question of different RLS
+  // projections must not share a cache entry.
+  dashboard: 'dashboard',
 } as const;
 
 export type Domain = (typeof DOMAIN)[keyof typeof DOMAIN];
