@@ -246,11 +246,16 @@ select pg_temp.p13_assert(
 -- table, so `set role service_role` + a plain INSERT stored a threshold BELOW the floor with
 -- no reason and no audit. A scan whose predicate is narrower than its claim is how that passed
 -- unnoticed. The claim is the writer, so the scan is every non-superuser role that could be one.
+-- TRUNCATE is in this list because it is NOT DELETE and fires no row trigger: review measured
+-- the whole configuration emptied with audit rows before = 1 and after = 1. The direction is
+-- safe -- every tenant becomes unconfigured, which resolves to off -- so it grants no
+-- authority, but a silent wipe of the table governing whether a model may write financial
+-- records should not be reachable when closing it costs one word.
 select pg_temp.p13_assert(
   not exists (
     select 1
     from (values ('anon'), ('authenticated'), ('service_role')) r(role_name)
-    cross join (values ('INSERT'), ('UPDATE'), ('DELETE')) p(privilege)
+    cross join (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p(privilege)
     where has_table_privilege(r.role_name, 'public.org_autonomy_policies'::regclass, p.privilege)
        or (p.privilege in ('INSERT', 'UPDATE')
            and has_any_column_privilege(
@@ -754,6 +759,28 @@ select pg_temp.p13_assert(
     where org_id = '13000000-0000-4000-8000-000000000002'),
   'P13 mutation proof: with the range CHECK dropped an impossible threshold is storable -- '
   || 'the constraint, not the command, is the second fence');
+
+-- ...and the ANSWER must refuse to act on the row the constraint would have refused. A
+-- threshold of 2 means "never" and a threshold of 0 means "always"; the second is the
+-- dangerous one, and a NULL check alone does NOT catch it, because 0 is not NULL. So the
+-- resolver carries the range as well as the null guard, and both doors are checked here.
+select pg_temp.p13_assert(
+  (select not autonomy_enabled
+     from private.autonomy_policy_for_org(
+       '13000000-0000-4000-8000-000000000002', 'document.interpretation')),
+  'P13 mutation proof: an out-of-range threshold must not produce an enabled answer');
+
+select pg_temp.p13_trusted();
+update public.org_autonomy_policies set min_confidence = 0
+where org_id = '13000000-0000-4000-8000-000000000002';
+
+select pg_temp.p13_assert(
+  (select not autonomy_enabled and min_confidence = 0
+     from private.autonomy_policy_for_org(
+       '13000000-0000-4000-8000-000000000002', 'document.interpretation'))
+  and pg_temp.p13_evaluate('23000000-0000-4000-8000-000000000002') = 'true|false|0.000|false',
+  'P13 mutation proof: a ZERO threshold must resolve to DISABLED on both doors -- this is the '
+  || 'apply-to-everything case, and the null guard alone would have let it through');
 
 rollback to savepoint p13_range_mutation;
 

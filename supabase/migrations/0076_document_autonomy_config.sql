@@ -128,6 +128,17 @@ create table private.autonomy_policy_definitions (
     constraint autonomy_definitions_baseline_off check (baseline_enabled = false),
   -- The documented floor. A tenant configuration may sit ABOVE it and never below (§3). This
   -- is the number OPEN-DECISIONS #109 calls a guess.
+  --
+  -- THE ASYMMETRY WORTH NAMING, now that baseline_enabled is locked off: this column is the
+  -- one remaining loosening lever in this table. The switch cannot be flipped on, but the
+  -- number can still be walked down to 0.001 by the same actor and the same UPDATE, and every
+  -- tenant floor moves with it. That is INTENDED, not an oversight -- #109 states that
+  -- lowering the floor is a deliberate out-of-band platform act, the escape hatch for the day
+  -- calibration finally runs. It is deliberately not constrained, because constraining it
+  -- would leave no way to act on a measurement. The protection it has is procedural, not
+  -- structural: #109 says it must not be lowered before the 50-document calibration has
+  -- actually run. A reader should know which of these two columns is a fence and which is a
+  -- documented promise.
   baseline_min_confidence numeric(4,3) not null default 0.900
     check (baseline_min_confidence > 0 and baseline_min_confidence <= 1),
   -- Off-only, the 0059:29-32 semantics: a raised kill switch forces autonomy OFF for every
@@ -203,7 +214,19 @@ grant select on table org_autonomy_policies to authenticated;
 -- postgres, which writes as postgres regardless of the caller's own grants. The future
 -- apply-interpretation command is likewise a definer and is unaffected. SELECT stays, because
 -- a trusted server reading its own tenant's configuration is legitimate.
-revoke insert, update, delete on table org_autonomy_policies from service_role;
+--
+-- TRUNCATE is in the list for a reason that is easy to miss: it is not DELETE and it fires NO
+-- ROW TRIGGER, so `truncate org_autonomy_policies` empties every tenant's configuration and
+-- audit_logs records NOTHING (measured in review: audit rows before = 1, after = 1). The
+-- direction is safe -- everyone becomes unconfigured, which resolves to OFF -- so it grants no
+-- authority. But a silent wipe of the table that governs whether a model may write financial
+-- records is not something to leave reachable when closing it costs one word.
+--
+-- This revoke makes org_autonomy_policies the ONLY public table in the schema without
+-- service_role CRUD, which contradicts a shipped assertion. That is resolved by naming this
+-- table as an explicit, reasoned exception in supabase/tests/p0_client_dml_acl.sql -- not by
+-- restoring the grant, which would reopen the bypass above.
+revoke insert, update, delete, truncate on table org_autonomy_policies from service_role;
 
 create trigger org_autonomy_policies_audit
   after insert or update or delete on org_autonomy_policies
@@ -362,15 +385,24 @@ begin
   -- `0.42 >= null` -> null coerces to 0 -> TRUE. That is auto-apply-everything, which is the
   -- precise outcome the threshold exists to prevent.
   --
+  -- The range is restated here for the SAME reason and by the same argument: if a later
+  -- migration drops org_autonomy_policies_confidence_range, `min_confidence = 0` becomes
+  -- storable and the answer would be `enabled=true, min=0.000` -- apply-to-everything, which a
+  -- NULL check alone does not catch because 0 is not NULL. An invariant worth restating once
+  -- is worth restating completely.
+  --
   -- Two fences for one invariant on purpose: if a later migration ever drops the baseline-off
-  -- constraint, the answer stays coherent instead of turning every unconfigured tenant on with
-  -- no threshold. p13 proves that layering by dropping the constraint and checking the answer.
+  -- constraint or the range CHECK, the answer stays coherent instead of turning every
+  -- unconfigured tenant on with no threshold. p13 proves both layerings by dropping the
+  -- constraint and checking the answer, then removing the guard and watching the unsafe state
+  -- reappear.
   return query
   select v_key,
          c.id is not null,
          not v_definition.kill_switch
            and coalesce(c.autonomy_enabled, v_definition.baseline_enabled)
-           and c.min_confidence is not null,
+           and c.min_confidence is not null
+           and c.min_confidence > 0 and c.min_confidence <= 1,
          c.min_confidence::numeric,
          v_definition.kill_switch
   from (select 1) probe
