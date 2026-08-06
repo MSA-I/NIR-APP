@@ -295,12 +295,18 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   }>(async () => {
     const suppliers = await fetchAll<SupplierOption>((from, to) => supabase.from('suppliers').select('id, name')
       .is('deleted_at', null).order('name').order('id').range(from, to));
-    // Read path only: nothing writes `entity_type='archive'` until 0075 teaches file_document the
-    // target, so the archive route returns an empty list today. That is the true state of the
-    // archive, and the empty state below says so rather than dressing it as a failure.
+    // The two views partition the register; they do not overlap. The requirement is that a document
+    // matching no category is *מועבר* to the archive — moved, not tagged — and a row appearing in
+    // both screens was never moved anywhere. Left overlapping, the working folder would refill with
+    // exactly the noise the archive exists to absorb, which is the feature failing at its purpose.
+    // This `neq` is that product decision, not a stray filter.
+    //
+    // Read path only either way: nothing writes 'archive' until 0075 teaches file_document the
+    // target, so the archive route lists nothing today. That is the true state of the archive, and
+    // the empty state below says so rather than dressing it as a failure.
     const docs = await fetchAll((from, to) => {
       const rows = supabase.from('documents').select('*, supplier:suppliers(id, name)').is('deleted_at', null);
-      return (archive ? rows.eq('entity_type', 'archive') : rows)
+      return (archive ? rows.eq('entity_type', 'archive') : rows.neq('entity_type', 'archive'))
         .order('created_at', { ascending: false }).order('id').range(from, to);
     }) as unknown as GalleryDocument[];
     return { docs, suppliers };
@@ -481,7 +487,11 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
               starts filing documents to the archive. Saying it twice would not make it truer. */}
           {!archive && <p className="mt-1 text-sm text-ink-muted">כל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.</p>}
         </div>
-        {canUpload && (
+        {/* No upload button on the archive. uploadDocument writes entity_type='inbox', so a file
+            sent from here would toast "הועלה וממתין לעיבוד" over a list that stays empty — the app
+            reporting a success the screen contradicts. There is no human path into the archive;
+            only apply_document_interpretation files a document there. */}
+        {canUpload && !archive && (
           <button type="button" className="btn-primary" onClick={() => setUploadOpen(true)}>
             <Upload size={16} /> העלאת מסמך
           </button>
