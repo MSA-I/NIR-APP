@@ -226,13 +226,33 @@ select pg_temp.p9_assert(
 -- bookkeeping for an actual hole. The remediation named in its own reason field is the real
 -- one: filter `documents` on auth_scopes() once documents carries a meaningful unit.
 --
+-- 0077 then added ONE more, and the pin moves to 58. Second accepted addition, same rule: by
+-- decision, not by drift. The latch below is what forced this edit -- 0077 landed, this line
+-- still read 57, and p9 went red until someone had to justify the row.
+--
+-- WHY IT IS NOT DRAINABLE EITHER, written here so the multi-unit wave judges it on the argument:
+-- public.apply_document_interpretation(uuid,uuid,uuid) is a definer whose body names `documents`,
+-- `invoices` and `purchase_orders`, all enforced. It cannot filter on auth_scopes() because it
+-- runs with NO user JWT at all -- the Edge Function invokes it with the service key, so
+-- auth_scopes() is empty and every scoped read would return nothing, silently switching the
+-- entire decision layer off while looking healthy. That is the same class of silent failure C1
+-- found in evaluate_autonomy_policy, which always answers "off" to the trusted server because
+-- auth_org() is NULL there. The tenant boundary is instead pinned EXPLICITLY by the
+-- interpretation's own org_id and by tenant-composite foreign keys on every row it writes. The
+-- remediation in its reason field is the real one: pass the acting unit in from the Edge
+-- Function once documents carries a meaningful unit_id (an inbox document is unit_id NULL by
+-- design, 0055:112).
+--
 -- The pin still moves only by an explicit edit here. A migration that adds an exemption and
 -- leaves this line alone fails, by design.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 57,
-  'the definer exemption registry must stay at 57 rows -- 59 minus the three 0073 drained, '
+  (select count(*) from private.scope_definer_exemptions) = 58,
+  'the definer exemption registry must stay at 58 rows -- 59 minus the three 0073 drained, '
   || 'plus the one 0075:464 added for rescue_document_from_archive (not drainable: invoker '
-  || 'would require granting UPDATE on document_filings to the browser); zero silent additions');
+  || 'would require granting UPDATE on document_filings to the browser), plus the one 0077 '
+  || 'added for apply_document_interpretation (not drainable: it runs with no user JWT, so '
+  || 'auth_scopes() is empty and a scoped read would silently disable the decision layer); '
+  || 'zero silent additions');
 
 select pg_temp.p9_assert(
   (select count(*) from private.scope_enforcement_violations()) = 0,

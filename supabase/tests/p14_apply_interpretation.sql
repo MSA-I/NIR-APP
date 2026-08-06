@@ -40,10 +40,23 @@
 --   (f) TENANT ISOLATION, asserted as a whole-tenant snapshot diff on tenant B rather than as a
 --       row count on one table.
 --
---   (g) MUTATION PROOFS. Strip the autonomy check out of the live function and assertion (a)
---       must fail -- proving the check is load-bearing and not decorative. Strip the null guard
---       out of the resolver and the refusal in (c) must be reachable. Both restore by savepoint
---       rollback (the p11/p13 idiom).
+--   (g) MUTATION PROOFS. Two, and the header used to describe them wrongly -- it claimed the
+--       autonomy proof strips the check out of the LIVE function body when the suite actually
+--       installs a minimal stand-in that writes without consulting the switch. Both are
+--       legitimate and they prove different things, so both are now named for what they are:
+--       (g1) replaces the resolver with one that answers enabled-with-no-threshold, so the
+--       command's INDEPENDENT refusal is the only thing left standing; (g2) replaces the command
+--       with a stand-in that writes unconditionally, landing an invoice for an unconfigured
+--       tenant. Both restore by savepoint rollback (the p11/p13 idiom). Stripping the arm out of
+--       the live body by anchored substitution is a separate manual check, run against this
+--       suite and reported, not carried here.
+--
+--   (h) EVERY STOP CONDITION HAS A SCENARIO. A first version of this file had 68 assertions and
+--       still let four mutations survive: stops 2, 3 and 4 disabled, `not_an_invoice` disabled,
+--       and a switched-off tenant archiving documents anyway while the file claimed "OFF MEANS
+--       ZERO -- including zero archiving". A count of assertions is not a net. The reason codes
+--       are enumerated against the function body below so a thirteenth cannot be added without
+--       a test.
 --
 -- ANCESTRY ANCHORS ride along, because this file's whole subject is a function that consumes
 -- other people's contracts:
@@ -418,15 +431,23 @@ select pg_temp.p14_assert(
   'the command must carry its A5 exemption row with a stated reason');
 
 -- ===== Fixtures =====
+-- Tenant B exists to be the ISOLATION WITNESS and is deliberately never applied to until the
+-- mutation proof at the very end -- so any change to its footprint is, by construction, leakage
+-- from tenant A. Tenant D is the second unconfigured tenant, for the scenarios that must apply
+-- somewhere switched-off without disturbing that witness. (An earlier version used tenant B for
+-- both and the isolation assertion went red for an entirely legitimate reason, which is the
+-- assertion doing its job.)
 insert into organizations (id, name, status) values
   ('14000000-0000-4000-8000-000000000001', 'P14 tenant A', 'active'),
   ('14000000-0000-4000-8000-000000000002', 'P14 tenant B', 'active'),
-  ('14000000-0000-4000-8000-000000000003', 'P14 suspended tenant', 'suspended');
+  ('14000000-0000-4000-8000-000000000003', 'P14 suspended tenant', 'suspended'),
+  ('14000000-0000-4000-8000-000000000004', 'P14 tenant D', 'active');
 
 insert into auth.users (id, email) values
   ('24000000-0000-4000-8000-000000000001', 'p14-owner-a@example.test'),
   ('24000000-0000-4000-8000-000000000002', 'p14-owner-b@example.test'),
   ('24000000-0000-4000-8000-000000000003', 'p14-owner-c@example.test'),
+  ('24000000-0000-4000-8000-000000000004', 'p14-owner-d@example.test'),
   ('24000000-0000-4000-8000-000000000010', 'p14-platform-op@example.test');
 
 insert into profiles (id, org_id, full_name, role) values
@@ -435,7 +456,9 @@ insert into profiles (id, org_id, full_name, role) values
   ('24000000-0000-4000-8000-000000000002', '14000000-0000-4000-8000-000000000002',
    'P14 Owner B', 'owner'),
   ('24000000-0000-4000-8000-000000000003', '14000000-0000-4000-8000-000000000003',
-   'P14 Owner C', 'owner');
+   'P14 Owner C', 'owner'),
+  ('24000000-0000-4000-8000-000000000004', '14000000-0000-4000-8000-000000000004',
+   'P14 Owner D', 'owner');
 
 insert into platform_admins (user_id, note) values
   ('24000000-0000-4000-8000-000000000010', 'P14 platform operator fixture');
@@ -446,7 +469,9 @@ insert into suppliers (id, org_id, name) values
   ('34000000-0000-4000-8000-000000000002', '14000000-0000-4000-8000-000000000002',
    'ספק בדיקה P14 ב'),
   ('34000000-0000-4000-8000-000000000003', '14000000-0000-4000-8000-000000000003',
-   'ספק בדיקה P14 ג');
+   'ספק בדיקה P14 ג'),
+  ('34000000-0000-4000-8000-000000000004', '14000000-0000-4000-8000-000000000004',
+   'ספק בדיקה P14 ד');
 
 -- The grant table above says a browser role cannot invoke the machine writer. A grant table is
 -- not a demonstration (the p13:260-262 lesson), so here is the call itself. A non-existent
@@ -952,6 +977,358 @@ select pg_temp.p14_assert(
   || 'time and price_history derives from it; a retroactive line rewrites history the manager '
   || 'has already been shown');
 
+-- ===== (h) THE STOPS THAT HAD NO SCENARIO =====
+-- A mutation sweep against the first version of this suite showed stops 2, 3 and 4 could each be
+-- deleted outright with every assertion still green. What follows is the net.
+
+-- --- Stop 2: no total. An invoice without an amount is not an invoice. ---
+select pg_temp.p14_seed(
+  20, '14000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000001', 0.99,
+    jsonb_build_array(
+      jsonb_build_object('key', 'invoice_number', 'value', 'P14-NO-TOTAL',
+        'confidence', 0.97, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'invoice_date', 'value', '07/04/2026',
+        'confidence', 0.95, 'evidence_block_ids', jsonb_build_array('block-1')))));
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000020') ->> 'reason_code' = 'total_missing',
+  'stop 2: a document with no total must queue BY NAME');
+
+-- A total the model transcribed as unparseable text is the same absence, not a zero.
+select pg_temp.p14_seed(
+  21, '14000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000001', 0.99,
+    jsonb_build_array(
+      jsonb_build_object('key', 'invoice_number', 'value', 'P14-BAD-TOTAL',
+        'confidence', 0.97, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'invoice_date', 'value', '07/04/2026',
+        'confidence', 0.95, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'total', 'value', 'לא ברור',
+        'confidence', 0.4, 'evidence_block_ids', jsonb_build_array('block-2')))));
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000021') ->> 'reason_code' = 'total_missing',
+  'stop 2: a non-numeric total is MISSING, never 0');
+
+-- --- m-1: the machine path must not be weaker than the human one on amounts ---
+-- create_invoice refuses negative parts (0023:1722-1725). before=-1000, vat=2180, total=1180
+-- reconciles perfectly and was measured auto-applying before this assertion existed.
+select pg_temp.p14_seed(
+  22, '14000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000001', 0.99,
+    jsonb_build_array(
+      jsonb_build_object('key', 'invoice_number', 'value', 'P14-NEGATIVE-PART',
+        'confidence', 0.97, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'invoice_date', 'value', '07/04/2026',
+        'confidence', 0.95, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'subtotal', 'value', -1000,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'vat_amount', 'value', 2180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'total', 'value', 1180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')))));
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000022') ->> 'reason_code'
+    = 'amounts_unreconciled',
+  'a negative component that happens to sum correctly must still be refused -- the machine path '
+  || 'must never be weaker than create_invoice on the check its own comment cites');
+
+-- --- Stop 3: the duplicate, and the invisible characters that used to walk through it ---
+-- THE CRITICAL DEFECT THIS SUITE MISSED. btrim(text) strips SPACES ONLY. Measured against a
+-- live invoice under the same number: a trailing RLM, a trailing TAB and a leading NBSP each
+-- produced auto_applied -- four live invoices under one human-readable number for one supplier,
+-- with no human in the loop, and invoices_org_live_duplicate_key_idx is a PLAIN index, so there
+-- is no database backstop. Every variant is exercised; none may be dropped as redundant,
+-- because each one is a different reason the old predicate failed.
+insert into public.invoices (
+  id, org_id, supplier_id, invoice_number, invoice_date, amount_before_vat, vat_amount,
+  total_amount)
+values ('b4000000-0000-4000-8000-000000000001', '14000000-0000-4000-8000-000000000001',
+        '34000000-0000-4000-8000-000000000001', 'PZ-DUP-1', date '2026-04-01', 1000, 180, 1180);
+
+create function pg_temp.p14_dup_variant(p_n integer, p_number text)
+returns text
+language plpgsql
+as $$
+declare
+  v_int uuid;
+begin
+  v_int := pg_temp.p14_seed(
+    p_n, '14000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001',
+    pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000001', 0.99,
+      jsonb_build_array(
+        jsonb_build_object('key', 'invoice_number', 'value', p_number,
+          'confidence', 0.97, 'evidence_block_ids', jsonb_build_array('block-1')),
+        jsonb_build_object('key', 'invoice_date', 'value', '08/04/2026',
+          'confidence', 0.95, 'evidence_block_ids', jsonb_build_array('block-1')),
+        jsonb_build_object('key', 'subtotal', 'value', 1000,
+          'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+        jsonb_build_object('key', 'vat_amount', 'value', 180,
+          'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+        jsonb_build_object('key', 'total', 'value', 1180,
+          'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')))));
+  return coalesce(pg_temp.p14_apply(v_int) ->> 'reason_code', 'NONE');
+end
+$$;
+
+select pg_temp.p14_assert(
+  pg_temp.p14_dup_variant(30, '  PZ-DUP-1 ') = 'duplicate_invoice_number',
+  'stop 3: plain surrounding spaces must be caught (this one always was)');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_dup_variant(31, 'PZ-DUP-1' || chr(8207)) = 'duplicate_invoice_number',
+  'stop 3: a trailing U+200F RIGHT-TO-LEFT MARK must be caught -- measured auto_applied before '
+  || 'the fix, in an RTL product where that character arrives constantly');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_dup_variant(32, 'PZ-DUP-1' || chr(9)) = 'duplicate_invoice_number',
+  'stop 3: a trailing TAB must be caught -- btrim strips spaces only');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_dup_variant(33, chr(160) || 'PZ-DUP-1') = 'duplicate_invoice_number',
+  'stop 3: a leading U+00A0 NO-BREAK SPACE must be caught');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_dup_variant(34, 'pz' || chr(8203) || '-dup-1') = 'duplicate_invoice_number',
+  'stop 3: a ZERO WIDTH SPACE in the MIDDLE, plus a case change, must be caught');
+
+select pg_temp.p14_assert(
+  (select count(*) = 1 from public.invoices
+    where org_id = '14000000-0000-4000-8000-000000000001'
+      and supplier_id = '34000000-0000-4000-8000-000000000001'
+      and private.document_text_key(invoice_number) = 'pz-dup-1'
+      and deleted_at is null),
+  'after five disguised retries there must still be exactly ONE live invoice under that number');
+
+-- THE INVISIBLE CHARACTER ON THE *STORED* SIDE, which is the half the five variants above do
+-- NOT reach. Once v_number is sanitized on the way in, every one of them collapses to a clean
+-- key before the comparison happens -- so they still pass against the OLD `lower(btrim(...))`
+-- predicate, and a mutation sweep proved exactly that: reverting the comparison alone left this
+-- suite green. The comparison fix earns its place here instead, on the case sanitizing the input
+-- can never help with: an invoice ALREADY IN THE LEDGER whose number carries an RLM -- which is
+-- what a human paste through create_invoice produces today, since the human path still compares
+-- with a bare trim (0023:1800-1804). A clean transcription of that same number must still be
+-- recognised as the duplicate it is.
+insert into public.invoices (
+  id, org_id, supplier_id, invoice_number, invoice_date, amount_before_vat, vat_amount,
+  total_amount)
+values ('b4000000-0000-4000-8000-000000000002', '14000000-0000-4000-8000-000000000001',
+        '34000000-0000-4000-8000-000000000001', 'PZ-HUMAN-7' || chr(8207),
+        date '2026-04-02', 1000, 180, 1180);
+
+select pg_temp.p14_assert(
+  pg_temp.p14_dup_variant(37, 'PZ-HUMAN-7') = 'duplicate_invoice_number',
+  'stop 3: a CLEAN transcription must match a STORED number that carries an invisible '
+  || 'character -- sanitizing the input cannot reach this, only normalising both sides can, '
+  || 'and this is the shape a human paste through create_invoice produces today');
+
+-- The stored number must also be clean, or the duplicate is invisible to search as well as to
+-- the comparison. Applied above the bar with a bidi-marked number that is NOT a duplicate.
+select pg_temp.p14_assert(
+  pg_temp.p14_dup_variant(35, 'PZ-CLEAN-9' || chr(8207)) = 'NONE',
+  'a non-duplicate with an invisible character must still auto-apply');
+
+select pg_temp.p14_assert(
+  (select invoice_number = 'PZ-CLEAN-9' from public.invoices
+    where org_id = '14000000-0000-4000-8000-000000000001'
+      and private.document_text_key(invoice_number) = 'pz-clean-9'),
+  'the STORED number must have the invisible character removed and its case preserved -- '
+  || 'otherwise the row exists but no human search will ever find it');
+
+-- --- Stop 4: money has already been allocated against this number ---
+insert into public.payments (id, org_id, supplier_id, amount, paid_date)
+values ('c4000000-0000-4000-8000-000000000001', '14000000-0000-4000-8000-000000000001',
+        '34000000-0000-4000-8000-000000000001', 500, current_date);
+insert into public.payment_allocations (org_id, payment_id, invoice_id, amount)
+values ('14000000-0000-4000-8000-000000000001', 'c4000000-0000-4000-8000-000000000001',
+        'b4000000-0000-4000-8000-000000000001', 500);
+
+select pg_temp.p14_assert(
+  pg_temp.p14_dup_variant(36, 'PZ-DUP-1') = 'payment_allocation_conflict',
+  'stop 4: once money is allocated against that number the refusal must name the ALLOCATION, '
+  || 'not merely the duplicate -- somebody has already acted on a balance this would move');
+
+-- --- not_an_invoice: a confident identification of something that is not a supplier charge ---
+select pg_temp.p14_seed(
+  40, '14000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_payload('delivery_note', 0.99, '34000000-0000-4000-8000-000000000001', 0.99));
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000040') ->> 'reason_code' = 'not_an_invoice',
+  'a delivery note above the bar must queue BY NAME -- inventing an invoice from a delivery '
+  || 'note is how a business pays for the same goods twice');
+
+select pg_temp.p14_assert(
+  (select count(*) = 0 from public.invoices
+    where org_id = '14000000-0000-4000-8000-000000000001'
+      and invoice_number like '%P14-1001%' and invoice_date = date '2026-04-03'
+      and id <> (select id from public.invoices
+                  where org_id = '14000000-0000-4000-8000-000000000001'
+                    and invoice_number = 'P14-1001' limit 1)),
+  'and no second invoice appeared from it');
+
+-- --- OFF MEANS ZERO INCLUDING ARCHIVING: the claim the file makes at 0077:552-554 ---
+-- Tenant D is unconfigured. A document it calls "other" must NOT be archived: archiving is a
+-- write to documents that takes the row out of the manager's inbox, and a tenant that never
+-- granted the authority does not get it for the outcomes that happen to be cheap.
+select pg_temp.p14_seed(
+  41, '14000000-0000-4000-8000-000000000004', '24000000-0000-4000-8000-000000000004',
+  pg_temp.p14_payload('other', 0.99, '34000000-0000-4000-8000-000000000004', 0.99));
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000041') ->> 'reason_code'
+    = 'autonomy_disabled',
+  'a switched-off tenant must not archive either -- the switch dominates the "other" arm');
+
+select pg_temp.p14_assert(
+  (select entity_type = 'inbox' from public.documents
+    where id = '44000000-0000-4000-8000-000000000041'),
+  'and the document must still be sitting in the inbox where the manager can see it');
+
+-- --- I-3: an order number too large for int4 must not abort the command ---
+select pg_temp.p14_seed(
+  42, '14000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000001', 0.99,
+    jsonb_build_array(
+      jsonb_build_object('key', 'invoice_number', 'value', 'P14-BIG-ORDER',
+        'confidence', 0.97, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'invoice_date', 'value', '09/04/2026',
+        'confidence', 0.95, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'order_number', 'value', 20260403001,
+        'confidence', 0.93, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'subtotal', 'value', 1000,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'vat_amount', 'value', 180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'total', 'value', 1180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')))));
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000042') ->> 'outcome' = 'auto_applied',
+  'a date-shaped order reference beyond int4 must NOT abort the command -- the cast raised '
+  || '22003 and created no invoice at all, contradicting the contract that an unresolvable '
+  || 'order number still leaves the invoice written');
+
+select pg_temp.p14_assert(
+  (pg_temp.p14_apply('74000000-0000-4000-8000-000000000042') -> 'order_id') = 'null'::jsonb,
+  'and it must simply not resolve to an order');
+
+-- --- m-3: an absurd invoice number is refused, never truncated ---
+select pg_temp.p14_seed(
+  43, '14000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000001', 0.99,
+    jsonb_build_array(
+      jsonb_build_object('key', 'invoice_number', 'value', repeat('9', 5000),
+        'confidence', 0.97, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'invoice_date', 'value', '09/04/2026',
+        'confidence', 0.95, 'evidence_block_ids', jsonb_build_array('block-1')),
+      jsonb_build_object('key', 'subtotal', 'value', 1000,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'vat_amount', 'value', 180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')),
+      jsonb_build_object('key', 'total', 'value', 1180,
+        'confidence', 0.96, 'evidence_block_ids', jsonb_build_array('block-2')))));
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000043') ->> 'reason_code'
+    = 'invoice_number_unreasonable',
+  'a 5000-character invoice number must be REFUSED, not truncated -- truncating would store a '
+  || 'different number than the document shows and then compare that invented number');
+
+select pg_temp.p14_assert(
+  not exists (select 1 from public.invoices where length(invoice_number) > 100),
+  'and nothing that long may have reached the ledger');
+
+-- --- I-5: the reversal fields cannot be born set, and cannot precede creation ---
+select pg_temp.p14_trusted();
+do $$
+begin
+  insert into public.document_auto_actions (
+    org_id, document_id, interpretation_id, outcome, invoice_id, decision,
+    reverted_at, reverted_reason, reverted_by)
+  values ('14000000-0000-4000-8000-000000000001', '44000000-0000-4000-8000-000000000006',
+          '74000000-0000-4000-8000-000000000106', 'auto_applied',
+          'b4000000-0000-4000-8000-000000000001', '{}'::jsonb,
+          now(), 'born reverted', '24000000-0000-4000-8000-000000000001');
+  raise exception 'P14 apply-interpretation assertion failed: a born-reverted auto-action was '
+    'stored -- it occupies no partial-unique slot, so the idempotency key silently stops keying';
+exception when sqlstate '22023' then
+  if sqlerrm not like '%document_auto_action_born_reverted%' then raise; end if;
+end
+$$;
+
+select pg_temp.p14_assert(
+  exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.document_auto_actions'::regclass
+      and conname = 'document_auto_actions_reversal_order'),
+  'B1 finding 3: a reversal must not be able to precede the row it reverses');
+
+select pg_temp.p14_assert(
+  (select tgtype::int & 4 = 4 from pg_trigger
+    where tgrelid = 'public.document_auto_actions'::regclass
+      and tgname = 'document_auto_actions_guard_columns_trg'),
+  'the column guard must fire on INSERT too -- BEFORE UPDATE OR DELETE alone never sees a row '
+  || 'that is born wrong');
+
+-- --- I-2: the replay escape must not reopen "a person already decided" ---
+-- The exact sequence, and every step of it is reachable today. Document 1 was QUEUED while
+-- tenant A was still unconfigured, which left an active filing carrying interpretation 001.
+-- Tenant A is switched on now. A person archives the document through file_document -- which
+-- writes NO filing row (B1 finding 1), so the filing from interpretation 001 is still the
+-- active one. Replaying interpretation 001 then has v_replay = true, and with `and not v_replay`
+-- on the guard below it skipped BOTH refusals and inserted the invoice. Nothing persisted only
+-- because documents_guard_columns happens to forbid archive -> invoice, so the command died on
+-- a raw unnamed 42501 and the caller retried forever. Widen that trigger -- and
+-- rescue_document_from_archive already exists -- and a replay silently overrules a person.
+select pg_temp.p14_become('24000000-0000-4000-8000-000000000001');
+select public.file_document('44000000-0000-4000-8000-000000000001', 'archive', null,
+  'P14: a person archived a document the system had queued');
+select pg_temp.p14_trusted();
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000001') ->> 'outcome' = 'already_decided',
+  'a replay must NOT overrule a person who archived the document after the system queued it');
+
+select pg_temp.p14_assert(
+  (select entity_type = 'archive' from public.documents
+    where id = '44000000-0000-4000-8000-000000000001')
+  and not exists (
+    select 1 from public.document_auto_actions
+    where document_id = '44000000-0000-4000-8000-000000000001'),
+  'and the document stays archived with no automatic write against it');
+
+-- --- EVERY reason code the function can emit must appear in this suite ---
+-- The net, made explicit. A thirteenth code added without a scenario fails here rather than
+-- passing silently, which is exactly how stops 2, 3 and 4 shipped with zero coverage.
+select pg_temp.p14_assert(
+  (select count(*) = 0 from (
+     select unnest(array[
+       'organization_inactive', 'autonomy_disabled', 'document_type_other',
+       'confidence_unknown', 'below_confidence_threshold', 'not_an_invoice',
+       'supplier_unidentified', 'invoice_identity_missing', 'invoice_number_unreasonable',
+       'total_missing', 'amounts_unreconciled', 'payment_allocation_conflict',
+       'duplicate_invoice_number']) as code
+   ) expected
+   where not exists (
+     select 1 from pg_proc
+     where oid = 'public.apply_document_interpretation(uuid,uuid,uuid)'::regprocedure
+       and prosrc like '%''' || expected.code || '''%')),
+  'every reason code this suite claims to cover must still exist in the function');
+
+select pg_temp.p14_assert(
+  (select count(*) = 13 from (
+     select distinct (regexp_matches(
+       regexp_replace(prosrc, '--[^\n]*', '', 'g'),
+       'v_reason_code := ''([a-z_]+)''', 'g'))[1] as code
+     from pg_proc
+     where oid = 'public.apply_document_interpretation(uuid,uuid,uuid)'::regprocedure
+   ) emitted),
+  'the function must emit exactly the 13 reason codes this suite exercises -- a fourteenth '
+  || 'added without a scenario fails HERE, which is how stops 2, 3 and 4 shipped uncovered');
+
 -- ===== (f) TENANT ISOLATION =====
 -- Tenant B was never configured and was never touched. Its whole financial footprint must be
 -- byte-identical to what it was before tenant A's six applications ran.
@@ -992,6 +1369,13 @@ select pg_temp.p14_assert(
 -- resolver. C1 finding 7 says C2 must refuse independently rather than trust that fence, and
 -- this is where that independence is proven: with the resolver's guard gone, the command must
 -- STILL refuse, by name, and write nothing.
+-- The footprint is captured HERE rather than asserted as an absolute count. An earlier version
+-- hard-coded "still the one invoice from the happy path"; every scenario added afterwards moved
+-- that number and the assertion began failing for a reason unrelated to what it tests. The
+-- claim is "the refusal wrote nothing", so measure exactly that.
+create temporary table p14_before_threshold_mutation as
+select pg_temp.p14_footprint('14000000-0000-4000-8000-000000000001') as a;
+
 savepoint p14_threshold_mutation;
 
 create or replace function private.autonomy_policy_for_org(
@@ -1026,13 +1410,13 @@ select pg_temp.p14_assert(
   || 'and never trusted to the resolver alone');
 
 select pg_temp.p14_assert(
-  (select count(*) = 2 from public.invoices
-    where org_id = '14000000-0000-4000-8000-000000000001' and deleted_at is null)
+  (select pg_temp.p14_footprint('14000000-0000-4000-8000-000000000001') = a
+     from p14_before_threshold_mutation)
   and not exists (
     select 1 from public.document_filings
     where document_id = '44000000-0000-4000-8000-000000000010'),
-  'the refusal must have written NOTHING -- not an invoice, and not even the filing row a '
-  || 'queued outcome would have left');
+  'the refusal must have written NOTHING -- not an invoice, not an exception, not an '
+  || 'auto-action, and not even the filing row a queued outcome would have left');
 
 rollback to savepoint p14_threshold_mutation;
 

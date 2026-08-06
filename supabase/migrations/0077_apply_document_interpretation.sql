@@ -136,6 +136,92 @@ $anchor$;
 -- a zero. The constitution's rule about dashes instead of zeros is a rule about dashboards; here
 -- it is a rule about whether an invoice gets written at all.
 
+-- ==========================================================================================
+-- THE INVISIBLE CHARACTERS. This is an RTL product, so this is a first-class hazard.
+--
+-- WHAT WENT WRONG BEFORE THIS EXISTED, stated plainly because the comment below it claims
+-- "paying twice is the worst damage this system can do" and that sentence was NOT true of the
+-- code beneath it. The duplicate stop compared `lower(btrim(...))` on both sides. btrim with one
+-- argument strips SPACES ONLY. Against a tenant enabled at 0.900 with a live invoice `pz-dup-1`
+-- already on file, four transcriptions of the same human-readable number were measured:
+--
+--     "  PZ-DUP-1 "            -> queued_for_review / duplicate_invoice_number   (caught)
+--     "PZ-DUP-1" + U+200F RLM  -> auto_applied                                   (NOT caught)
+--     "PZ-DUP-1" + TAB         -> auto_applied                                   (NOT caught)
+--     U+00A0 + "PZ-DUP-1"      -> auto_applied                                   (NOT caught)
+--
+-- Four live invoices under one number for one supplier, written with no human in the loop, and
+-- invoices_org_live_duplicate_key_idx is a PLAIN index -- there is no database backstop. Worse,
+-- the stored number kept the invisible character, so the duplicate was also unfindable by
+-- search. The file already knew this class of bug existed: interpretation_number below strips
+-- bidi marks from the AMOUNT. It did not strip them from the key that decides whether the
+-- business pays twice.
+--
+-- TWO functions, not one, because storing and comparing want different things:
+--
+--   SANITIZE is what gets STORED. It preserves case and legible content -- `PZ-DUP-1` stays
+--   `PZ-DUP-1` -- and only removes what cannot be seen. Lower-casing the stored number would
+--   destroy what the document actually says.
+--
+--   KEY is what gets COMPARED. Lower-cased with all whitespace removed, so `PZ DUP 1`,
+--   `pz-dup-1` and an RLM-suffixed twin all collide. Collisions here are the SAFE direction:
+--   a false match queues the document for a person, a missed match writes a second invoice.
+--
+-- Code points are named via chr(), NEVER embedded literally. A literal RLM in this file is
+-- invisible in every editor, and the first person to tidy the line would delete it unknowingly.
+-- Both groups below were MEASURED on this database rather than assumed:
+--
+--   Unicode SPACES -- NBSP(160), NNBSP(8239), MMSP(8287), ideographic(12288). Postgres `\s`
+--   DOES match all four here, so they are mapped to a plain space rather than deleted: that is
+--   what keeps a stored number findable by an ordinary search.
+--
+--   FORMATTING marks -- ZWSP/ZWNJ/ZWJ/LRM/RLM(8203-8207), bidi embeddings and overrides
+--   (8234-8238), isolates(8294-8297), BOM(65279). Postgres `\s` matches NONE of these:
+--   `regexp_replace(chr(8207), '\s', '', 'g')` returns the RLM unchanged. They are deleted
+--   outright -- they carry no width and no meaning inside an identifier.
+--
+-- PLACED IN `private` SO create_invoice CAN REACH IT. The human path still compares with a bare
+-- `trim` (0023:1800-1804) and carries the same exposure through a pasted invoice number; that is
+-- P1's contract and its own suite, not this task's to change, but the helper is deliberately
+-- where that fix can call it without moving anything.
+-- ==========================================================================================
+create or replace function private.document_text_sanitize(p_text text)
+returns text
+language sql
+immutable
+set search_path = public, pg_temp
+as $fn$
+  select nullif(
+    btrim(regexp_replace(
+      translate(
+        translate(p_text,
+          chr(160) || chr(8239) || chr(8287) || chr(12288),
+          '    '),
+        chr(8203) || chr(8204) || chr(8205) || chr(8206) || chr(8207)
+          || chr(8234) || chr(8235) || chr(8236) || chr(8237) || chr(8238)
+          || chr(8294) || chr(8295) || chr(8296) || chr(8297) || chr(65279),
+        ''),
+      '\s+', ' ', 'g')),
+    '')
+$fn$;
+
+create or replace function private.document_text_key(p_text text)
+returns text
+language sql
+immutable
+set search_path = public, pg_temp
+as $fn$
+  select nullif(
+    lower(regexp_replace(
+      coalesce(private.document_text_sanitize(p_text), ''), '\s', '', 'g')),
+    '')
+$fn$;
+
+revoke all on function private.document_text_sanitize(text)
+  from public, anon, authenticated, service_role;
+revoke all on function private.document_text_key(text)
+  from public, anon, authenticated, service_role;
+
 create or replace function private.interpretation_field(p_payload jsonb, p_keys text[])
 returns jsonb
 language sql
@@ -274,6 +360,12 @@ create table public.document_auto_actions (
   constraint document_auto_actions_filing_tenant_fk
     foreign key (org_id, filing_id)
     references public.document_filings(org_id, id) on delete restrict,
+  -- order_id was the one pointer with no key behind it, which also made the "every FK leads with
+  -- org_id" assertion in p14 pass vacuously for it. purchase_orders carries
+  -- p0_purchase_orders_org_id_id_key, so there was never a reason for the gap.
+  constraint document_auto_actions_order_tenant_fk
+    foreign key (org_id, order_id)
+    references public.purchase_orders(org_id, id) on delete restrict,
   -- A reversal is a reason plus a time, or neither -- and the actor comes with them. A
   -- reverted_at with no reason is the silent write this wave exists to prevent, so it cannot be
   -- represented at all (the document_filings_reversal_shape idiom).
@@ -285,6 +377,16 @@ create table public.document_auto_actions (
   -- An auto-applied row without the invoice it applied is a reversal handle that undoes nothing.
   constraint document_auto_actions_applied_shape check (
     outcome <> 'auto_applied' or invoice_id is not null
+  ),
+  -- B1 finding 3, which 0075 left open on document_filings and this table repeated verbatim:
+  -- there is no temporal bound on the reversal, and the guard trigger is BEFORE UPDATE OR
+  -- DELETE, not INSERT. Measured accepted before this constraint existed:
+  -- `created_at = now() + 400 days` with `reverted_at = now() - 900 days` -- a row reverted
+  -- nine hundred days before it was created. A row can also be born already reverted, which is
+  -- worse than untidy: it does not consume the partial unique slot it exists to hold, so the
+  -- idempotency key silently stops keying.
+  constraint document_auto_actions_reversal_order check (
+    reverted_at is null or reverted_at >= created_at
   )
 );
 
@@ -341,6 +443,18 @@ begin
   if tg_op = 'DELETE' then
     raise exception 'document_auto_action_immutable' using errcode = '42501';
   end if;
+  -- INSERT is guarded too, and that is the half B1 found missing. A row born already reverted
+  -- passes every UPDATE guard by never being updated, and -- because both unique indexes that
+  -- make this table an idempotency key are partial on `reverted_at is null` -- it occupies no
+  -- slot at all. The key would still be there and would simply stop keying.
+  if tg_op = 'INSERT' then
+    if new.reverted_at is not null
+       or new.reverted_reason is not null
+       or new.reverted_by is not null then
+      raise exception 'document_auto_action_born_reverted' using errcode = '22023';
+    end if;
+    return new;
+  end if;
   if new.id is distinct from old.id
      or new.org_id is distinct from old.org_id
      or new.document_id is distinct from old.document_id
@@ -363,7 +477,7 @@ revoke all on function public.document_auto_actions_guard_columns()
   from public, anon, authenticated, service_role;
 
 create trigger document_auto_actions_guard_columns_trg
-  before update or delete on public.document_auto_actions
+  before insert or update or delete on public.document_auto_actions
   for each row execute function public.document_auto_actions_guard_columns();
 
 -- ===== 3. The command =====
@@ -414,6 +528,7 @@ declare
   v_decision_conf   numeric;
   v_supplier_id     uuid;
   v_number          text;
+  v_number_key      text;
   v_date            date;
   v_total           numeric;
   v_before          numeric;
@@ -458,10 +573,29 @@ begin
   select * into v_policy
   from private.autonomy_policy_for_org(v_org, 'document.interpretation');
 
+  -- A resolver that returns NO ROWS leaves v_policy entirely NULL and does NOT raise -- `select
+  -- ... into` is silent about zero rows. Every test below would then run against a policy of
+  -- all-NULLs, and three-valued logic turns that into auto-apply (see the coalesce note below).
+  -- Fail closed and by name instead.
+  if not found then
+    raise exception 'autonomy_policy_unresolved' using errcode = 'P0002';
+  end if;
+
   -- C1 finding 7, refused independently of the resolver that also refuses it. Never 0, never a
   -- default: a caller comparing `confidence >= 0` auto-applies everything, and the whole point
   -- of the threshold is that it is a number somebody chose.
-  if v_policy.autonomy_enabled and v_policy.min_confidence is null then
+  --
+  -- THE coalesce IS THE POINT, not defensive noise. Written as a bare
+  -- `if v_policy.autonomy_enabled and v_policy.min_confidence is null`, a NULL autonomy_enabled
+  -- makes the whole condition NULL, plpgsql skips the branch, `not v_policy.autonomy_enabled` is
+  -- NULL so THAT branch is skipped too, and `0.99 < null` is NULL so the threshold test is
+  -- skipped as well -- and the chain falls all the way through to auto_applied for a tenant
+  -- nobody enabled, with no threshold ever compared. The switch failed OPEN, in the file whose
+  -- stated thesis is that it refuses independently of the resolver. This is the same hole review
+  -- already found once in 0076's baseline_enabled, wearing three-valued logic instead of a
+  -- missing constraint. Unknown means ENABLED here (so the threshold is demanded) and DISABLED
+  -- below (so nothing is written): both directions of unknown fail closed.
+  if coalesce(v_policy.autonomy_enabled, true) and v_policy.min_confidence is null then
     raise exception 'autonomy_threshold_missing' using errcode = '22023';
   end if;
 
@@ -480,11 +614,17 @@ begin
   if found then
     if v_existing_action.interpretation_id = p_interpretation_id then
       -- The same interpretation, replayed. Return what was decided; write nothing.
+      -- Same SHAPE as the first call, not merely the same outcome. A replay that omitted
+      -- order_id and filing_id made `result -> 'order_id'` SQL NULL on the second call and JSON
+      -- null on the first, so a caller comparing the two -- or a test asserting on either --
+      -- would read a difference that does not exist in the record.
       return v_existing_action.decision
         || jsonb_build_object(
              'outcome', v_existing_action.outcome,
              'invoice_id', v_existing_action.invoice_id,
              'exception_id', v_existing_action.exception_id,
+             'filing_id', v_existing_action.filing_id,
+             'order_id', v_existing_action.order_id,
              'auto_action_id', v_existing_action.id,
              'document_id', v_doc.id,
              'idempotent', true);
@@ -509,7 +649,19 @@ begin
 
   -- A document a person moved out of the inbox has been decided, whether or not that left a
   -- filing row behind. B1 finding 1: file_document archives WITHOUT writing one.
-  if v_doc.entity_type <> 'inbox' and not v_replay then
+  --
+  -- NO `and not v_replay` HERE, and that is a correction, not an omission. The replay escape is
+  -- only ever safe while the document is STILL IN THE INBOX. With it, this sequence reopened the
+  -- refusal completely: an unconfigured tenant queues the document (leaving an active filing from
+  -- this interpretation) -> a person archives it through file_document, which writes no filing
+  -- row at all -> an operator enables autonomy -> the same interpretation replays -> v_replay is
+  -- true, BOTH guards are skipped, and the invoice is inserted. Nothing persisted only because
+  -- documents_guard_columns happens to forbid archive -> invoice, so the command died on a raw
+  -- unnamed 42501 and the caller retried forever. If that transition is ever widened -- and
+  -- rescue_document_from_archive already exists -- a replay would silently overrule a person and
+  -- write a financial record. The escape stays on the filing-collision guard above, where the
+  -- document is by definition still unfiled.
+  if v_doc.entity_type <> 'inbox' then
     return jsonb_build_object(
       'outcome', 'already_decided', 'reason_code', 'document_already_filed',
       'document_id', v_doc.id, 'entity_type', v_doc.entity_type, 'idempotent', true);
@@ -526,9 +678,12 @@ begin
   end;
   v_supplier_id := v_i.suggested_supplier_id;
 
-  v_number := nullif(btrim(coalesce(
+  -- SANITIZED, not btrim'd. btrim strips spaces only, and an RLM survives it invisibly -- into
+  -- the stored number, and into both sides of the duplicate comparison below.
+  v_number := private.document_text_sanitize(
     private.interpretation_field(v_payload, array[
-      'invoice_number', 'document_number', 'מספר חשבונית', 'מספר מסמך']) #>> '{}', '')), '');
+      'invoice_number', 'document_number', 'מספר חשבונית', 'מספר מסמך']) #>> '{}');
+  v_number_key := private.document_text_key(v_number);
   v_date := private.interpretation_date(
     private.interpretation_field(v_payload, array[
       'invoice_date', 'document_date', 'date', 'תאריך חשבונית', 'תאריך המסמך', 'תאריך']));
@@ -548,7 +703,7 @@ begin
     -- The precedent is interpret-document/index.ts:356-361: a suspended tenant's pipeline does
     -- not run. A suspended tenant's machine writer must not either, switch or no switch.
     v_outcome := 'queued_for_review'; v_reason_code := 'organization_inactive';
-  elsif not v_policy.autonomy_enabled then
+  elsif not coalesce(v_policy.autonomy_enabled, false) then
     -- OFF MEANS ZERO -- including zero archiving. Moving a document to the archive is a write to
     -- documents and takes it out of the manager's inbox; a tenant that never granted the
     -- authority does not get it for the outcomes that happen to be cheap.
@@ -573,21 +728,33 @@ begin
     v_outcome := 'queued_for_review'; v_reason_code := 'supplier_unidentified';
   elsif v_number is null or v_date is null then
     v_outcome := 'queued_for_review'; v_reason_code := 'invoice_identity_missing';
+  elsif length(v_number) > 100 then
+    -- Not truncated -- REFUSED. Truncating would store a DIFFERENT number than the document
+    -- shows, silently, on a financial record, and would then compare that invented number
+    -- against the duplicate key. A number this long is a transcription failure, not an identity.
+    v_outcome := 'queued_for_review'; v_reason_code := 'invoice_number_unreasonable';
   elsif v_total is null or v_total < 0 then
     -- Stop 2. An invoice without an amount is not an invoice.
     v_outcome := 'queued_for_review'; v_reason_code := 'total_missing';
-  elsif v_before is null or v_vat is null
-        or round(v_before + v_vat, 2) <> round(v_total, 2) then
+  elsif v_before is null or v_vat is null or v_before < 0 or v_vat < 0
+        or round(v_before, 2) + round(v_vat, 2) <> round(v_total, 2) then
     -- The breakdown must come FROM THE DOCUMENT and must add up. create_invoice enforces exactly
     -- this for the human path (invoice_amounts_invalid), and the alternative here -- deriving
     -- the split from organizations.vat_rate when the model transcribed only a total -- would
     -- write a VAT figure the document never stated onto a record a tax authority may read.
     -- Storing 0/0/total instead is the same lie in a different column.
+    --
+    -- Negatives are refused explicitly: create_invoice does (0023:1722-1725) and the claim above
+    -- that it "enforces exactly this" was only true of the sum. `before=-1000, vat=2180,
+    -- total=1180` reconciles perfectly and was measured auto-applying, leaving the machine path
+    -- WEAKER than the human one on the very check this comment cites. Each part is rounded
+    -- BEFORE the comparison for the same reason: 1000.004 + 180.004 equals 1180.008, which
+    -- passed against a stated total of 1180.01 and then stored 1180.00.
     v_outcome := 'queued_for_review'; v_reason_code := 'amounts_unreconciled';
   elsif exists (
     select 1 from public.invoices i
     where i.org_id = v_org and i.supplier_id = v_supplier_id
-      and lower(btrim(i.invoice_number)) = lower(btrim(v_number))
+      and private.document_text_key(i.invoice_number) = v_number_key
       and i.deleted_at is null
       and exists (select 1 from public.payment_allocations pa where pa.invoice_id = i.id)
   ) then
@@ -598,11 +765,18 @@ begin
   elsif exists (
     select 1 from public.invoices i
     where i.org_id = v_org and i.supplier_id = v_supplier_id
-      and lower(btrim(i.invoice_number)) = lower(btrim(v_number))
+      and private.document_text_key(i.invoice_number) = v_number_key
       and i.deleted_at is null
   ) then
-    -- Stop 3, the 0053 definition exactly: org_id + supplier_id + lower(trim(invoice_number)) on
-    -- a live row. Paying twice is the worst damage this system can do.
+    -- Stop 3: the 0053 key -- org_id + supplier_id + the normalised number on a live row --
+    -- STRENGTHENED past `lower(trim(...))`, which an invisible character walks straight through.
+    -- Paying twice is the worst damage this system can do, and that sentence has to be true of
+    -- the code under it.
+    --
+    -- Not sargable against invoices_org_live_duplicate_key_idx, deliberately and cheaply: that
+    -- index is built on lower(trim(...)), the exact expression this stop exists to distrust.
+    -- The predicate still narrows on (org_id, supplier_id) through invoices_supplier_idx, and
+    -- this runs once per document rather than in any list path.
     v_outcome := 'queued_for_review'; v_reason_code := 'duplicate_invoice_number';
   else
     v_outcome := 'auto_applied'; v_reason_code := null;
@@ -689,7 +863,14 @@ begin
       private.interpretation_field(v_payload, array[
         'order_number', 'purchase_order_number', 'po_number', 'reference_order_number',
         'מספר הזמנה', 'הזמנה']));
-    if v_order_number is not null and v_order_number = trunc(v_order_number) then
+    -- Bounded to int4 BEFORE the cast. purchase_orders.number is an identity integer, and a
+    -- supplier printing a date-shaped reference like 20260403001 raised `22003: integer out of
+    -- range` from the cast itself -- aborting the entire command and creating NO invoice, which
+    -- directly contradicts the contract stated just above that an unresolvable number still
+    -- leaves the invoice written. An out-of-range number is simply not an order of ours.
+    if v_order_number is not null
+       and v_order_number = trunc(v_order_number)
+       and v_order_number between 1 and 2147483647 then
       select * into v_order
       from public.purchase_orders po
       where po.org_id = v_org
