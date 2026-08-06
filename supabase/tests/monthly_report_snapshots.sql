@@ -126,10 +126,25 @@ select pg_temp.snapshot_assert(
   'authenticated clients must be command-only delivery writers'
 );
 select pg_temp.snapshot_assert(
-  position('assert_recent_password_authentication' in pg_get_functiondef(
-    'public.create_monthly_report_snapshot(date,uuid)'::regprocedure
-  )) > 0,
-  'snapshot creation does not enforce fresh password authentication server-side'
+  (
+    length(pg_get_functiondef(
+      'public.create_monthly_report_snapshot(date,uuid)'::regprocedure
+    ))
+    - length(replace(pg_get_functiondef(
+      'public.create_monthly_report_snapshot(date,uuid)'::regprocedure
+    ), 'assert_recent_password_authentication', ''))
+  ) / length('assert_recent_password_authentication') >= 2
+  and position(
+    'assert_recent_password_authentication'
+    in substring(
+      pg_get_functiondef('public.create_monthly_report_snapshot(date,uuid)'::regprocedure)
+      from position(
+        'pg_advisory_xact_lock'
+        in pg_get_functiondef('public.create_monthly_report_snapshot(date,uuid)'::regprocedure)
+      )
+    )
+  ) > 0,
+  'snapshot creation must re-check fresh password authentication after the advisory wait'
 );
 select pg_temp.snapshot_assert(
   position('private.credit_request_legal_entity' in pg_get_functiondef(
@@ -147,10 +162,39 @@ select pg_temp.snapshot_assert(
   position('assert_recent_password_authentication' in pg_get_functiondef(
     'public.mark_monthly_report_snapshot_sent(uuid,text)'::regprocedure
   )) > 0
+    and position('into v_visible_unit' in lower(pg_get_functiondef(
+      'public.mark_monthly_report_snapshot_sent(uuid,text)'::regprocedure
+    ))) > 0
+    and position('public.auth_scopes()' in pg_get_functiondef(
+      'public.mark_monthly_report_snapshot_sent(uuid,text)'::regprocedure
+    )) > 0
+    and position('into v_visible_unit' in lower(pg_get_functiondef(
+      'public.mark_monthly_report_snapshot_sent(uuid,text)'::regprocedure
+    ))) < position('for update' in lower(pg_get_functiondef(
+      'public.mark_monthly_report_snapshot_sent(uuid,text)'::regprocedure
+    )))
     and position('from public.invoices' in lower(pg_get_functiondef(
       'public.mark_monthly_report_snapshot_sent(uuid,text)'::regprocedure
     ))) = 0,
-  'delivery command is not step-up protected or still reads live invoices'
+  'delivery command must pre-bind through auth_scopes before locking and remain step-up protected'
+);
+select pg_temp.snapshot_assert(
+  (
+    select position('auth.uid()' in after_lock) > 0
+       and position('auth_org()' in after_lock) > 0
+       and position('auth_role()' in after_lock) > 0
+       and position('assert_unit_in_scope' in after_lock) > 0
+       and position('assert_recent_password_authentication' in after_lock) > 0
+    from (
+      select substring(definition from position('for update' in definition)) as after_lock
+      from (
+        select lower(pg_get_functiondef(
+          'public.mark_monthly_report_snapshot_sent(uuid,text)'::regprocedure
+        )) as definition
+      ) source
+    ) locked
+  ),
+  'delivery command must re-check actor, tenant, role, scope and step-up after the row lock wait'
 );
 
 -- ===== Fixture: two tenants and two sibling legal entities in tenant A =====
@@ -350,6 +394,7 @@ begin
   v_snapshot := public.create_monthly_report_snapshot(
     '2026-08-01', 'b5740000-0000-0000-0000-000000000002'
   );
+  perform set_config('monthly_snapshot_test.snapshot2', v_snapshot.id::text, true);
   perform pg_temp.snapshot_assert(v_snapshot.version = 1, 'LE2 must have an independent version sequence');
   perform pg_temp.snapshot_assert((v_snapshot.totals ->> 'invoice_total')::numeric = 236, 'LE2 leaked or lost invoice data');
   perform pg_temp.snapshot_assert(
@@ -540,7 +585,25 @@ exception when others then
   if sqlerrm not like '%unit_out_of_scope%' then raise; end if;
 end
 $$;
+do $$
+begin
+  perform public.mark_monthly_report_snapshot_sent(
+    current_setting('monthly_snapshot_test.snapshot2')::uuid,
+    'sibling scope must stay unknown'
+  );
+  raise exception 'snapshot test failure: sibling-scope delivery was accepted';
+exception when no_data_found then
+  if sqlerrm not like '%monthly_report_snapshot_delivery_unknown%' then raise; end if;
+end
+$$;
 reset role;
+select pg_temp.snapshot_assert(
+  not exists (
+    select 1 from public.monthly_report_snapshot_deliveries
+    where snapshot_id = current_setting('monthly_snapshot_test.snapshot2')::uuid
+  ),
+  'sibling-scope delivery attempt left an immutable delivery fact'
+);
 
 -- ===== Unauthorized roles and tenant crossing =====
 select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000003');

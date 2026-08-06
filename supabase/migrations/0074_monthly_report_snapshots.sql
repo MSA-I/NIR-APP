@@ -244,6 +244,9 @@ begin
     raise exception 'monthly_report_snapshot_not_authorized' using errcode = '42501';
   end if;
   perform public.assert_unit_in_scope(p_unit_id);
+  -- The advisory wait can outlive both the five-minute AMR window and an administrator's
+  -- revocation. Re-run step-up at the serialization boundary before reading any report source.
+  perform public.assert_recent_password_authentication();
   v_created_at := clock_timestamp();
 
   -- Every source and every validation below belongs to ONE INSERT statement and therefore one
@@ -714,6 +717,7 @@ declare
   v_user uuid := auth.uid();
   v_role user_role := auth_role();
   v_reason text := nullif(btrim(p_reason), '');
+  v_visible_unit uuid;
   v_snapshot public.monthly_report_snapshots;
   v_delivery public.monthly_report_snapshot_deliveries;
   v_actor_name text;
@@ -725,15 +729,40 @@ begin
     raise exception 'monthly_report_snapshot_delivery_invalid' using errcode = '22023';
   end if;
 
+  -- Resolve identity through the caller's current legal-entity closure before taking any row
+  -- lock. The function owner bypasses table RLS, so this predicate is the explicit IDOR boundary:
+  -- an in-tenant sibling ID is indistinguishable from an unknown/cross-tenant ID and is never
+  -- read or locked first.
+  select snapshot.unit_id into v_visible_unit
+  from public.monthly_report_snapshots snapshot
+  where snapshot.org_id = v_org
+    and snapshot.id = p_snapshot_id
+    and snapshot.unit_id = any(public.auth_scopes());
+
+  if not found then
+    raise exception 'monthly_report_snapshot_delivery_unknown' using errcode = 'P0002';
+  end if;
+
   -- The immutable snapshot row is also the serialization lock. Two replays cannot create two
-  -- delivery/audit facts, and no live invoices are consulted by this command.
+  -- delivery/audit facts, and no live invoices are consulted by this command. Re-bind every
+  -- tenant/scope identity component while locking rather than trusting the pre-read alone.
   select * into v_snapshot
   from public.monthly_report_snapshots snapshot
-  where snapshot.org_id = v_org and snapshot.id = p_snapshot_id
+  where snapshot.org_id = v_org
+    and snapshot.unit_id = v_visible_unit
+    and snapshot.id = p_snapshot_id
   for update;
 
   if not found then
     raise exception 'monthly_report_snapshot_delivery_unknown' using errcode = 'P0002';
+  end if;
+
+  -- The row-lock wait may overlap profile, tenant or scope revocation, or may age the AMR past
+  -- the five-minute step-up window. Revalidate the complete authority tuple after the wait.
+  if auth.uid() is distinct from v_user
+     or auth_org() is distinct from v_org
+     or auth_role() not in ('owner', 'accountant') then
+    raise exception 'monthly_report_snapshot_delivery_not_authorized' using errcode = '42501';
   end if;
   perform public.assert_unit_in_scope(v_snapshot.unit_id);
   perform public.assert_recent_password_authentication();
