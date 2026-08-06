@@ -46,17 +46,33 @@ import type { Supplier } from '../lib/types';
  */
 export type QuickCreatedSupplier = Pick<Supplier, 'id' | 'name'>;
 
+/**
+ * The complete set of columns this surface writes — closed on purpose. No index signature and no
+ * optional members, so a caller-supplied `defaults`/`prefill` object cannot be widened into the
+ * payload without editing this type and the call site below, which is what the spec watches.
+ */
+export interface QuickSupplierColumns {
+  org_id: string;
+  name: string;
+  tax_id: string | null;
+}
+
+/**
+ * The only row this component may insert, as a pure function so the spec can drive it with
+ * arbitrary input instead of inferring the payload from whichever scenario a UI test happens to
+ * exercise — the hole that let a `{...defaults}` spread pass four green assertions in review.
+ */
+export function quickSupplierRow(orgId: string, name: string, taxId: string): QuickSupplierColumns {
+  return { org_id: orgId, name: name.trim(), tax_id: taxId.trim() || null };
+}
+
 /** The full supplier form's wording for the same mistake — not a second sentence for one meaning. */
 const NAME_REQUIRED = 'שם ספק הוא שדה חובה';
 
 /**
- * Mounted conditionally by the caller, like `SupplierForm` and `PriceListUploadModal` — mounting is
- * what resets the fields, and there is no half-open state to model. It nests safely inside another
- * dialog: `useDialogLayer` keeps a stack, so Escape and Tab belong to this layer until it closes.
- *
- * On success `onCreated` fires and closing is the caller's move (SupplierForm's `onSaved` contract).
- * On failure the dialog stays open with the typed values and a Hebrew reason, and `onCreated` never
- * fires — the caller is never told a supplier exists when it does not.
+ * Mounted conditionally by the caller, like `SupplierForm` and `PriceListUploadModal`: mounting is
+ * what resets the fields. It nests safely inside another dialog — `useDialogLayer` keeps a stack,
+ * so Escape and Tab belong to this layer until it closes.
  */
 export function QuickCreateSupplier({ onClose, onCreated }: {
   onClose: () => void;
@@ -68,12 +84,23 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
   const [taxId, setTaxId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /**
+   * The row exists; this form is spent. `suppliers` has NO unique constraint on `name`
+   * (`0001_init.sql:59-79`; the only unique is `(org_id, id)` in `0021:180`), so a second click
+   * before the caller closes would silently create the duplicate half of the #106 fraud pattern
+   * under a "הספק נוצר" toast. Disabling the controls is what prevents it.
+   *
+   * Deliberately not "leave `busy` true": `Modal` refuses to close while busy, which would trap a
+   * user in an uncloseable dialog if a caller ever forgot to unmount on `onCreated`. This blocks
+   * the second write without taking the exit away.
+   */
+  const [created, setCreated] = useState(false);
+  const spent = busy || created;
 
   async function save() {
-    const trimmedName = name.trim();
     // Validated here, before any request: a name of spaces is not the server's problem to explain,
     // and the sentence is the one the full supplier form already uses for the same mistake.
-    if (!trimmedName) { setError(NAME_REQUIRED); return; }
+    if (!name.trim()) { setError(NAME_REQUIRED); return; }
     // No org means no tenant to write into. `not_authorized` is the honest existing mapping —
     // and it keeps a null profile from becoming an unhandled TypeError mid-save.
     if (!profile?.org_id) { setError(toHebrewError(new Error('not_authorized'))); return; }
@@ -82,10 +109,14 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
     setError(null);
     try {
       const inserted = ok(await supabase.from('suppliers')
-        .insert({ org_id: profile.org_id, name: trimmedName, tax_id: taxId.trim() || null })
+        .insert(quickSupplierRow(profile.org_id, name, taxId))
         .select('id, name')
         .single());
-      const row = inserted.data as QuickCreatedSupplier;
+      const row = inserted.data as QuickCreatedSupplier | null;
+      // The one place the "never tell the caller a supplier exists when it does not" promise was a
+      // claim rather than a check: an insert that answers with no row is a failure, not a success.
+      if (!row?.id) throw new Error('supplier_insert_no_row');
+      setCreated(true);
       toast('הספק נוצר');
       onCreated(row);
     } catch (failure) {
@@ -97,7 +128,7 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
 
   return (
     <Modal open onClose={onClose} title="ספק חדש" busy={busy}
-      description="יצירה מהירה — שם וח.פ בלבד, כדי לא לעזוב את המסך. שאר פרטי הספק, כולל פרטי בנק, מתעדכנים במסך הספקים."
+      description="יצירה מהירה — שם וח.פ בלבד, כדי לא לעזוב את המסך. את שאר פרטי הספק משלימים במסך הספקים."
       statusMessage={busy ? 'יוצר את הספק' : undefined}>
       <div className="space-y-4">
         {error && <ErrorNote message={error} />}
@@ -105,20 +136,21 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
           <label className="label" htmlFor="quick-supplier-name">שם הספק *</label>
           {/* Only the field's own refusal marks the field invalid — a network or permission
               failure is not something wrong with what the user typed. */}
-          <input id="quick-supplier-name" className="input" value={name} disabled={busy}
+          <input id="quick-supplier-name" className="input" value={name} disabled={spent}
             aria-invalid={error === NAME_REQUIRED || undefined}
             onChange={(event) => setName(event.target.value)} />
         </div>
         <div>
           <label className="label" htmlFor="quick-supplier-tax-id">ח.פ / עוסק</label>
-          <input id="quick-supplier-tax-id" className="input" dir="ltr" value={taxId} disabled={busy}
+          <input id="quick-supplier-tax-id" className="input" dir="ltr" value={taxId} disabled={spent}
             onChange={(event) => setTaxId(event.target.value)} />
         </div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
+        {/* Cancel stays live after a create: the exit is never taken away. */}
         <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-        <button type="button" className="btn-primary" disabled={busy} onClick={() => void save()}>
-          {busy ? 'שומר…' : 'שמירה'}
+        <button type="button" className="btn-primary" disabled={spent} onClick={() => void save()}>
+          {created ? 'נוצר' : busy ? 'שומר…' : 'שמירה'}
         </button>
       </div>
     </Modal>

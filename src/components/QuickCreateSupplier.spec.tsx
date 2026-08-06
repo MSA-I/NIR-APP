@@ -25,7 +25,7 @@ vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({ profile: { id: 'user-1', org_id: 'org-test', role: 'office' } }),
 }));
 
-import { QuickCreateSupplier } from './QuickCreateSupplier';
+import { QuickCreateSupplier, quickSupplierRow } from './QuickCreateSupplier';
 // Vite's `?raw` rather than fs + a path: the repo lives under a Hebrew path with a space, and the
 // source text itself is what the boundary assertions below are about.
 import componentSource from './QuickCreateSupplier.tsx?raw';
@@ -76,6 +76,17 @@ async function renderDialog() {
 const nameField = () => screen.getByLabelText('שם הספק *');
 const saveButton = () => screen.getByRole('button', { name: 'שמירה' });
 
+/**
+ * Every form control in the dialog, queried from the DOM rather than by role.
+ *
+ * `getAllByRole('textbox')` was the hole review found: it cannot see a `type="password"` input
+ * (no implicit textbox role) and it misses anything a role query filters out. A field this
+ * component must not have does not become acceptable by being hard to query.
+ */
+const dialogControls = () => Array.from(
+  document.querySelectorAll<HTMLElement>('[role="dialog"] input, [role="dialog"] textarea, [role="dialog"] select'),
+);
+
 describe('QuickCreateSupplier — the shared door', () => {
   it('creates the supplier and hands the caller the row it can select immediately', async () => {
     const user = userEvent.setup();
@@ -104,6 +115,42 @@ describe('QuickCreateSupplier — the shared door', () => {
 
     await waitFor(() => expect(bodies).toHaveLength(1));
     expect(bodies[0]).toEqual({ org_id: 'org-test', name: 'ספק ללא ח.פ', tax_id: null });
+  });
+
+  it('cannot fire a second insert after a successful create', async () => {
+    const user = userEvent.setup();
+    const bodies = useInsertEndpoint(created);
+    const { onCreated } = await renderDialog();
+
+    await user.type(nameField(), 'ספק יחיד');
+    const button = saveButton();
+    await user.click(button);
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+
+    // Closing is the caller's move, so the form outlives the create by a beat. `suppliers` has no
+    // unique constraint on `name`, so a second click in that beat would silently create the
+    // duplicate half of the #106 fraud pattern under a "הספק נוצר" toast.
+    expect(button).toBeDisabled();
+    await user.click(button);
+    expect(bodies).toHaveLength(1);
+    expect(onCreated).toHaveBeenCalledTimes(1);
+    // The exit is never taken away, even though the form is spent.
+    expect(screen.getByRole('button', { name: 'ביטול' })).toBeEnabled();
+  });
+
+  it('treats an insert that answers with no row as a failure, not a success', async () => {
+    const user = userEvent.setup();
+    // PostgREST answered 2xx but returned nothing usable — the caller must not be told a supplier
+    // exists on the strength of a cast.
+    useInsertEndpoint(() => HttpResponse.json({}));
+    const { onCreated } = await renderDialog();
+
+    await user.type(nameField(), 'ספק ללא תשובה');
+    await user.click(saveButton());
+
+    expect(await screen.findByText('הפעולה נכשלה. אם הבעיה חוזרת — פנה לתמיכה.')).toBeInTheDocument();
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(saveButton()).toBeEnabled();
   });
 
   it('refuses a whitespace-only name before anything reaches the server', async () => {
@@ -168,13 +215,31 @@ describe('QuickCreateSupplier — the shared door', () => {
 });
 
 /**
- * The boundary, enforced structurally.
+ * The boundary, enforced structurally — and honest about where it still ends.
  *
  * DEBT-REGISTER §11 / OPEN-DECISIONS #106: `suppliers.bank_details` lost its UPDATE grant in
  * `0061:469` but kept INSERT deliberately, so a *new* supplier row can carry substituted bank
  * details with no step-up, no operator reason and no `security_event`. A bank field in a quick
- * create surface would spread that unresolved hole from one screen to four. These assertions
- * exist so a future editor "completing the form" fails a gate instead of shipping it.
+ * create surface would spread that unresolved hole from one screen to four.
+ *
+ * A first version of this block claimed three independent axes and had one. Review put five edits
+ * through it; three passed everything, including the plausible one — a `defaults` prop spread into
+ * the insert, which is exactly the "prefill from the OCR result" edit E2 might invite. The axes
+ * below are the ones that survived that attack:
+ *
+ *   1. source text, comments stripped — Latin `bank` AND Hebrew `בנק`, since the concept has two
+ *      spellings here and only one was being checked;
+ *   2. exactly one write in the file, pinned to the closed row builder at the call site — this is
+ *      what stops both a `{...defaults}` spread and a second fire-and-forget `.update()`;
+ *   3. the builder driven directly, so the column set is not inferred from whichever scenario a
+ *      UI test happens to drive;
+ *   4. the wire with EVERY rendered control filled first — a field behind a disclosure, or one
+ *      whose key is only attached when non-empty, now reaches the payload and is caught;
+ *   5. a control inventory queried from the DOM, not by role, so `type="password"` cannot hide.
+ *
+ * What this still does not catch: an editor who rewrites `quickSupplierRow` itself to accept and
+ * spread a caller-supplied object. Axis 2 makes that a deliberate, visible edit to this file
+ * rather than an accident — which is the most a test in this repo can honestly claim.
  */
 describe('bank_details must never appear in this component', () => {
   const source = componentSource;
@@ -183,8 +248,9 @@ describe('bank_details must never appear in this component', () => {
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
 
-  it('names no bank identifier anywhere outside a comment', () => {
+  it('names no bank identifier — Latin or Hebrew — outside a comment', () => {
     expect(code).not.toMatch(/bank/i);
+    expect(code).not.toMatch(/בנק/);
   });
 
   it('keeps the reason in the file, so the omission reads as a boundary and not an oversight', () => {
@@ -195,22 +261,36 @@ describe('bank_details must never appear in this component', () => {
     expect(source).toMatch(/DEBT-REGISTER/);
   });
 
-  it('renders exactly two fields — name and tax id, nothing else', async () => {
+  it('performs exactly one write, and it is the closed row builder', () => {
+    // A second `.update({[key]: …})` after the insert was one of the edits that passed review
+    // untouched. One write, and its argument pinned, is what closes that door.
+    expect(code.match(/\.(insert|update|upsert|delete|rpc)\(/g)).toEqual(['.insert(']);
+    expect(code).toMatch(/\.insert\(quickSupplierRow\(profile\.org_id, name, taxId\)\)/);
+  });
+
+  it('builds exactly three columns for any input, not just the one a UI test drives', () => {
+    expect(Object.keys(quickSupplierRow('org', 'name', 'tax')).sort()).toEqual(['name', 'org_id', 'tax_id']);
+    expect(quickSupplierRow('org-test', '  ACME  ', '   ')).toEqual({
+      org_id: 'org-test', name: 'ACME', tax_id: null,
+    });
+  });
+
+  it('renders exactly two controls, counting the ones a role query cannot see', async () => {
     await renderDialog();
-    const fields = screen.getAllByRole('textbox');
-    expect(fields).toHaveLength(2);
-    expect(fields.map((field) => field.getAttribute('id'))).toEqual([
+    expect(dialogControls().map((control) => control.id)).toEqual([
       'quick-supplier-name',
       'quick-supplier-tax-id',
     ]);
   });
 
-  it('puts exactly three columns on the wire — a fourth one cannot slip in', async () => {
+  it('puts exactly three columns on the wire with every rendered field filled', async () => {
     const user = userEvent.setup();
     const bodies = useInsertEndpoint(created);
     await renderDialog();
 
-    await user.type(nameField(), 'ספק בדיקה');
+    // Fill everything the dialog renders, not only the name: a key attached conditionally on a
+    // non-empty value is invisible to a test that leaves that value empty.
+    for (const control of dialogControls()) await user.type(control, 'x');
     await user.click(saveButton());
 
     await waitFor(() => expect(bodies).toHaveLength(1));
