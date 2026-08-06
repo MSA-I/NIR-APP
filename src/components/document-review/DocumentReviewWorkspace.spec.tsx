@@ -1,0 +1,186 @@
+// Task D2 — the confidence percentages leave the everyday review screens and land, verbatim, in
+// the "פרטים טכניים" disclosure. The owner's words: "אנחנו לא אמורים לראות את כל הprocess של ה-OCR
+// עם אחוזי תאימות וכו. המשתמשים הם לא מתכנתים והנתונים הללו רק מבלבלים עוד יותר."
+//
+// What is asserted here is the *placement*, which model.test.ts cannot see: that no percentage
+// reaches the two panels a reviewer actually reads, that every one of them is still present inside
+// a disclosure that starts closed, and that the supplier — the one value carried into a payee
+// field — says out loud what a middling grade obliges.
+
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
+import type { ReviewSnapshot } from './model';
+
+// The workspace signs a storage URL on mount. MSW is configured to fail on any unhandled request,
+// and this call is not what is under test, so the client is stubbed rather than described.
+vi.mock('../../lib/supabase', () => ({
+  supabase: {
+    storage: {
+      from: () => ({
+        createSignedUrl: async () => ({ data: { signedUrl: 'https://files.example.test/source' }, error: null }),
+      }),
+    },
+  },
+}));
+
+import { DocumentReviewWorkspace } from './DocumentReviewWorkspace';
+
+/** Distinct percentages on purpose: each one can be located and attributed on its own. */
+function snapshotWith(supplierConfidence: number | null): ReviewSnapshot {
+  return {
+    documentId: 'document',
+    stage: 'review',
+    document: {
+      id: 'document',
+      file_name: 'invoice.png',
+      mime_type: 'image/png',
+      storage_path: 'org/invoice.png',
+      document_kind: 'invoice',
+    },
+    job: {
+      id: 'job-1',
+      status: 'review',
+      last_error_message: null,
+    },
+    jobs: [],
+    extraction: {
+      id: 'extraction-1',
+      engine: 'openai',
+      model: 'gpt-4o-mini',
+      model_version: '2026-05',
+      input_checksum: 'etag:1111111111111111',
+      contract_version: '1',
+      payload: {
+        schema_version: '1',
+        document: { page_count: 1, detected_languages: ['heb'], plain_text: '', partial: false },
+        blocks: [
+          { id: 'block-1', page: 1, type: 'text', bbox: [0, 0.26, 1, 0.3], text: 'ספק בע״מ', confidence: 0.71 },
+        ],
+        tables: [],
+        marks: [
+          { id: 'mark-1', page: 1, kind: 'check', bbox: [0.1, 0.4, 0.2, 0.5], nearby_block_ids: [], confidence: 0.55, fingerprint: null },
+        ],
+      },
+    },
+    extractions: [],
+    interpretation: {
+      id: 'interpretation-1',
+      org_id: 'org',
+      document_id: 'document',
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      prompt_version: '3',
+      schema_version: '1',
+      suggested_supplier_id: 'supplier',
+      payload: {
+        schema_version: '1',
+        document_type: 'invoice',
+        document_type_confidence: 0.87,
+        supplier: { suggested_id: null, suggested_name: 'ספק בע״מ', confidence: supplierConfidence, evidence_block_ids: ['block-1'] },
+        fields: [{ key: 'invoice_number', value: 'INV-1042', confidence: 0.93, evidence_block_ids: ['block-1'] }],
+        line_items: [],
+        suggested_annotations: [],
+      },
+    },
+    interpretations: [],
+    annotations: [],
+    ruleApplications: [],
+    learningRules: [],
+    reviewCorrections: [],
+    typeReviewDecisions: [],
+    feedback: [],
+    exportTemplates: [],
+    exportTemplateVersions: [],
+    exports: [],
+    actorNames: new Map<string, string>(),
+  } as unknown as ReviewSnapshot;
+}
+
+const renderWorkspace = (supplierConfidence: number | null) => render(
+  <MemoryRouter>
+    <DocumentReviewWorkspace
+      snapshot={snapshotWith(supplierConfidence)}
+      role="owner"
+      actorId="actor"
+      onRefetch={async () => true}
+      initialPanel={null}
+    />
+  </MemoryRouter>,
+);
+
+const technicalDetails = () => screen.getByText('פרטים טכניים').closest('details') as HTMLDetailsElement;
+
+describe('confidence leaves the review screens and stays inside the disclosure', () => {
+  it('prints no percentage in the two panels a reviewer reads', () => {
+    renderWorkspace(0.62);
+
+    // The proposals panel and the source viewer are what the bookkeeper actually reads. Every
+    // confidence on them used to be "רמת ביטחון NN%". Neither the old wording nor the number may
+    // survive there — this is the assertion that fails if confidenceLabel regresses.
+    for (const testId of ['document-review-proposals', 'document-annotations-keyboard']) {
+      const panel = within(screen.getByTestId(testId));
+      expect(panel.queryByText(/רמת ביטחון/)).toBeNull();
+      // The fixture's block and mark confidences, by value: 0.71 and 0.55.
+      expect(panel.queryByText(/71%/)).toBeNull();
+      expect(panel.queryByText(/55%/)).toBeNull();
+    }
+    expect(within(screen.getByTestId('document-review-proposals')).queryByText(/\d+%/)).toBeNull();
+
+    // The judgement call, as a test rather than a paragraph: the percentages still visible in the
+    // source viewer are page coordinates, and only page coordinates. A coordinate is a measurement
+    // the reviewer can check against the document in front of them — and it is the sole thing
+    // telling two identical marks apart, and the locator screen readers get. A confidence score is
+    // a claim they cannot check against anything, which is why that one moved.
+    for (const node of within(screen.getByTestId('document-annotations-keyboard')).queryAllByText(/\d+%/)) {
+      expect(node.textContent).toMatch(/מיקום בעמוד|פרוס על פני כל העמוד/);
+    }
+
+    // The grade itself is present and verbal.
+    expect(within(screen.getByTestId('document-review-proposals')).getAllByText(/זוהה בבירור/).length).toBeGreaterThan(0);
+    expect(within(screen.getByTestId('document-annotations-keyboard')).getAllByText(/לא ודאי/).length).toBeGreaterThan(0);
+  });
+
+  it('keeps every number, closed by default, inside פרטים טכניים', () => {
+    renderWorkspace(0.62);
+    const details = technicalDetails();
+
+    // Collapsed: the reviewer who does not want the machine never meets it.
+    expect(details.open).toBe(false);
+
+    // Present, verbatim, and reachable in one click — document type, supplier, field, block, mark.
+    const disclosure = within(details);
+    expect(disclosure.getByText('87%')).toBeInTheDocument();
+    expect(disclosure.getByText('62%')).toBeInTheDocument();
+    expect(disclosure.getByText('93%')).toBeInTheDocument();
+    expect(disclosure.getByText('71%')).toBeInTheDocument();
+    expect(disclosure.getByText('55%')).toBeInTheDocument();
+    // Evidence identifiers travel with them, or the number cannot be traced back to anything.
+    expect(disclosure.getAllByText('block-1').length).toBeGreaterThan(0);
+    expect(disclosure.getByText('mark-1')).toBeInTheDocument();
+  });
+
+  it('shows — for a confidence the contract never carried, never a fabricated 0%', () => {
+    renderWorkspace(null);
+    const disclosure = within(technicalDetails());
+    expect(disclosure.getAllByText('—').length).toBeGreaterThan(0);
+    expect(disclosure.queryByText('0%')).toBeNull();
+  });
+});
+
+describe('the supplier match is graded like the rest and obliges more than the rest', () => {
+  it('states the check when the match is not clear', () => {
+    renderWorkspace(0.62);
+    expect(screen.getByText(/יש לאמת את שם הספק מול המסמך/)).toBeInTheDocument();
+  });
+
+  it('states it for an unknown match too — absence is the reason to check, not a pass', () => {
+    renderWorkspace(null);
+    expect(screen.getByText(/יש לאמת את שם הספק מול המסמך/)).toBeInTheDocument();
+  });
+
+  it('stays quiet when the supplier was read clearly', () => {
+    renderWorkspace(0.95);
+    expect(screen.queryByText(/יש לאמת את שם הספק מול המסמך/)).toBeNull();
+  });
+});

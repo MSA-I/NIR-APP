@@ -140,8 +140,69 @@ export function lineItemKeyLabel(key: string): string {
   return LINE_ITEM_KEY_LABELS[key.trim().toLowerCase()] ?? key;
 }
 
+/**
+ * The two cut points between "read clearly", "read partly" and "not certain".
+ *
+ * THESE ARE A PRODUCT JUDGEMENT, NOT A MEASUREMENT, and must not be described as calibrated.
+ * There is no labelled corpus in this repository: nothing here was fitted against verified values,
+ * so 0.9 and 0.7 are round numbers picked for how the three grades behave as language — the top
+ * grade rare enough that it still means something, the bottom grade loud enough to be acted on.
+ * The provider's own number is self-reported and is not a probability of being right.
+ *
+ * Whoever first measures provider confidence against human-verified values should move these and
+ * replace this paragraph with what they measured. Until then, treating them as evidence would be
+ * the same mistake as printing the percentage: a number that looks earned and is not.
+ */
+const CONFIDENCE_CLEAR = 0.9;
+const CONFIDENCE_PARTIAL = 0.7;
+
+/**
+ * How clearly the document was read, as words rather than a percentage.
+ *
+ * The percentage was removed from the everyday screens on the owner's instruction — the reviewers
+ * are a bookkeeper and a kitchen manager, and "רמת ביטחון 87%" asks them to do arithmetic on a
+ * number nobody calibrated instead of answering the only question they have: do I look at this one
+ * harder? It is **not deleted**: `confidencePercent` prints it verbatim inside the "פרטים טכניים"
+ * disclosure of the review workspace, one click away, for whoever is diagnosing an extraction.
+ *
+ * The wording is about *reading*, never about *correctness*: `זוהה בבירור` claims the characters
+ * came off the page cleanly, not that the value is the right one. Only the human approval step
+ * says that, and a provider's self-reported confidence never can.
+ */
 export function confidenceLabel(value: number | null | undefined): string {
-  return value == null ? 'רמת ביטחון לא ידועה' : `רמת ביטחון ${Math.round(value * 100)}%`;
+  // Non-finite is absence, not a low score: NaN falling through the comparisons would silently
+  // read as "לא ודאי", which is a claim about the document that nothing measured.
+  if (value == null || !Number.isFinite(value)) return 'רמת הזיהוי אינה ידועה';
+  if (value >= CONFIDENCE_CLEAR) return 'זוהה בבירור';
+  if (value >= CONFIDENCE_PARTIAL) return 'זוהה חלקית';
+  return 'לא ודאי';
+}
+
+/**
+ * The raw number, for the technical disclosure only — never for an everyday screen.
+ *
+ * Absent prints — and never 0% (CLAUDE.md: an absent metric shows —, because zero is itself a
+ * statement about the reading). A measured zero does print as 0%: something did measure it.
+ */
+export function confidencePercent(value: number | null | undefined): string {
+  return value == null || !Number.isFinite(value) ? '—' : `${Math.round(value * 100)}%`;
+}
+
+/**
+ * What to do when the supplier match is anything short of clear — or null when it is clear.
+ *
+ * The supplier is graded on the same scale as every other value but does not carry the same
+ * consequence, so it does not get the same silence. A misread date is corrected on the screen that
+ * uses it; a misread supplier is carried by `suggested_supplier_id` straight into the invoice
+ * draft's payee field, and from there into a payment request. That is the shape of the canonical
+ * invoice-fraud error, so a grade below "clearly" states the obligation instead of leaving the
+ * reviewer to infer it. Unknown is not permission to skip the check — it is the reason to run it.
+ */
+export function supplierMatchCaution(value: number | null | undefined): string | null {
+  if (value != null && Number.isFinite(value) && value >= CONFIDENCE_CLEAR) return null;
+  return value == null || !Number.isFinite(value)
+    ? 'לא ידוע באיזו ודאות זוהה הספק. יש לאמת את שם הספק מול המסמך לפני שמאשרים ממנו חשבונית או תשלום.'
+    : 'הספק לא זוהה בבירור. יש לאמת את שם הספק מול המסמך לפני שמאשרים ממנו חשבונית או תשלום.';
 }
 
 /**

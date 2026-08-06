@@ -7,7 +7,7 @@ import type {
   ReviewSnapshot,
 } from './model';
 // @ts-expect-error Node's type-stripping test runner requires the explicit TypeScript extension.
-import { bboxDescription, creditDraftFromInterpretation, deliveryNoteLines, invoiceDraftFromInterpretation, latestCorrections, matchDeliveryLineProduct, paymentConfirmationFacts, sameAmount, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, normalizeInvoiceDate, resolveExportTemplateWinner, resolvedText, ruleWhy } from './model.ts';
+import { bboxDescription, confidenceLabel, confidencePercent, creditDraftFromInterpretation, deliveryNoteLines, invoiceDraftFromInterpretation, latestCorrections, matchDeliveryLineProduct, paymentConfirmationFacts, sameAmount, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, normalizeInvoiceDate, resolveExportTemplateWinner, resolvedText, ruleWhy, supplierMatchCaution } from './model.ts';
 
 const correction = (revision: number, text: string): DocumentReviewCorrection => ({
   id: `correction-${revision}`,
@@ -57,6 +57,55 @@ test('location and rule explanations stay textual', () => {
     label: 'מאושר', active: true, created_by: 'user', created_at: '2026-07-29T00:00:00Z',
     disabled_at: null, disabled_by: null, disable_reason: null,
   }), /כלל אישי.*גרסה 3.*טביעת/);
+});
+
+test('confidence reaches the reviewer as words, never as a percentage', () => {
+  // The owner's complaint, as an executable rule: no digit and no percent sign may reach the
+  // everyday label. If someone reintroduces "רמת ביטחון 87%" this line is what fails.
+  for (const value of [1, 0.97, 0.9, 0.89, 0.7, 0.69, 0.42, 0]) {
+    assert.equal(/[0-9%]/.test(confidenceLabel(value)), false, `numeric leak at ${value}`);
+  }
+  // The thresholds themselves — pinned so that moving them is a deliberate edit with a test diff,
+  // not a silent drift. They are a product judgement (see model.ts); nothing here is calibrated.
+  assert.equal(confidenceLabel(0.97), 'זוהה בבירור');
+  assert.equal(confidenceLabel(0.9), 'זוהה בבירור');     // boundary is inclusive
+  assert.equal(confidenceLabel(0.89), 'זוהה חלקית');
+  assert.equal(confidenceLabel(0.7), 'זוהה חלקית');      // boundary is inclusive
+  assert.equal(confidenceLabel(0.69), 'לא ודאי');
+  // A measured zero is a real statement about the reading and keeps the lowest grade.
+  assert.equal(confidenceLabel(0), 'לא ודאי');
+});
+
+test('an absent confidence says it is unknown and never poses as the lowest grade', () => {
+  // CLAUDE.md: a metric with no data shows —, never 0. The verbal equivalent is that "unknown"
+  // must not read as "we checked and it was bad", which is a claim about the document.
+  for (const missing of [null, undefined, Number.NaN]) {
+    assert.equal(confidenceLabel(missing), 'רמת הזיהוי אינה ידועה');
+    assert.notEqual(confidenceLabel(missing), confidenceLabel(0));
+    assert.equal(confidencePercent(missing), '—');
+  }
+  // The number is moved, not deleted: the technical disclosure still prints it verbatim.
+  assert.equal(confidencePercent(0.87), '87%');
+  assert.equal(confidencePercent(0.865), '87%');
+  assert.equal(confidencePercent(1), '100%');
+  // A measured zero prints as 0%, because something did measure it. Only absence prints —.
+  assert.equal(confidencePercent(0), '0%');
+});
+
+test('a supplier match that is not clear carries an instruction, a field of the same grade does not', () => {
+  // A wrong date is corrected on the next screen; a wrong supplier prefills the payee of an
+  // invoice (the draft carries suggested_supplier_id straight into the form), so the same grade
+  // has to oblige more here than it does on an ordinary field.
+  assert.equal(supplierMatchCaution(0.97), null);
+  assert.equal(supplierMatchCaution(0.9), null);
+  assert.match(supplierMatchCaution(0.89) ?? '', /לאמת את שם הספק/);
+  assert.match(supplierMatchCaution(0.42) ?? '', /לאמת את שם הספק/);
+  // Unknown is not permission to skip the check; it is the reason to run it.
+  assert.match(supplierMatchCaution(null) ?? '', /לאמת את שם הספק/);
+  assert.match(supplierMatchCaution(undefined) ?? '', /לאמת את שם הספק/);
+  // The asymmetry itself: identical number, identical grade, different obligation.
+  assert.equal(confidenceLabel(0.8), 'זוהה חלקית');
+  assert.notEqual(supplierMatchCaution(0.8), null);
 });
 
 test('invoice draft reads what the model offered and guesses nothing else', () => {
