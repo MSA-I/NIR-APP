@@ -41,13 +41,22 @@ const OCR_REVIEW_DOCUMENT_ID = '97000000-0000-4000-8000-000000000004';
 const OCR_DELIVERY_DOCUMENT_ID = '97000000-0000-4000-8000-000000000005';
 const OCR_CREDIT_DOCUMENT_ID = '97000000-0000-4000-8000-000000000003';
 const OCR_PAYMENT_DOCUMENT_ID = '97000000-0000-4000-8000-000000000002';
+// [documentId, internal stage, what a person reads]. Task D1 collapsed seven pipeline stages into
+// four human states on the badge and kept the stages themselves on `data-stage`, so this fixture
+// now measures BOTH layers: the engineering state the database really holds, and the Hebrew a
+// kitchen manager acts on. Four of the six say "נקלט"/"נקרא" where they used to name a queue
+// position — that is the change, not a regression.
+//
+// The completed row reads "נקרא" and not "שויך" because the fixture files every document as
+// 'inbox' (prepare-browser-fixture.cjs:76): the job finished, nothing was filed. The filing column
+// on that same row says "לא משויך", and the two must not contradict each other.
 const OCR_STAGE_FIXTURES = [
-  ['97000000-0000-4000-8000-000000000001', 'טרם נשלח לעיבוד'],
-  ['97000000-0000-4000-8000-000000000002', 'ממתין לעיבוד'],
-  ['97000000-0000-4000-8000-000000000003', 'בעיבוד'],
-  ['97000000-0000-4000-8000-000000000004', 'דורש בדיקה'],
-  ['97000000-0000-4000-8000-000000000005', 'הושלם'],
-  ['97000000-0000-4000-8000-000000000006', 'נכשל'],
+  ['97000000-0000-4000-8000-000000000001', 'unprocessed', 'נקלט'],
+  ['97000000-0000-4000-8000-000000000002', 'queued', 'נקלט'],
+  ['97000000-0000-4000-8000-000000000003', 'processing', 'נקלט'],
+  ['97000000-0000-4000-8000-000000000004', 'review', 'בבדיקה'],
+  ['97000000-0000-4000-8000-000000000005', 'completed', 'נקרא'],
+  ['97000000-0000-4000-8000-000000000006', 'failed', 'לא נקרא'],
 ];
 
 const homes = {
@@ -1806,12 +1815,13 @@ async function documentOcrAcceptance(browser) {
     await settle(gallery);
     await gallery.locator('[data-testid="documents-page"]').waitFor({ timeout: 25_000 });
 
-    for (const [documentId, expectedLabel] of OCR_STAGE_FIXTURES) {
+    for (const [documentId, expectedStage, expectedLabel] of OCR_STAGE_FIXTURES) {
       const badge = gallery.locator(
         `[data-testid="document-processing-status"][data-document-id="${documentId}"]:visible`,
       );
       await badge.waitFor({ state: 'visible', timeout: 25_000 });
-      assert.equal((await badge.innerText()).trim(), expectedLabel, `${documentId}: unexpected OCR stage`);
+      assert.equal(await badge.getAttribute('data-stage'), expectedStage, `${documentId}: unexpected OCR stage`);
+      assert.equal((await badge.innerText()).trim(), expectedLabel, `${documentId}: unexpected status wording`);
     }
 
     const processingFilter = gallery.locator('[data-testid="documents-processing-filter"]');

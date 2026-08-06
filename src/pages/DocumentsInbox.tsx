@@ -22,9 +22,15 @@ import { runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
 import { fetchAll } from '../lib/supabasePaging';
 import {
   DOCUMENT_PROCESSING_CHANGED_EVENT,
-  DOCUMENT_PROCESSING_STAGE_META,
+  DOCUMENT_USER_STATE_FILTERS,
+  DOCUMENT_USER_STATE_META,
+  documentUserState,
+  documentUserStateDescription,
+  documentUserStateFromParam,
+  documentUserStateLabel,
   useDocumentProcessing,
   type DocumentProcessingStage,
+  type DocumentUserState,
 } from '../lib/useDocumentProcessing';
 
 type RefileTarget = 'invoice' | 'goods_receipt';
@@ -35,12 +41,17 @@ type InvoicePick = { id: string; invoice_number: string; invoice_date: string; s
 type ReceiptPick = { id: string; number: number; received_at: string; order: { supplier: { name: string } | null } | null };
 type RefileOption = { id: string; title: string; sub: string };
 
-const PROCESSING_FILTERS: Array<{ value: DocumentProcessingStage; label: string }> =
-  (Object.entries(DOCUMENT_PROCESSING_STAGE_META) as Array<
-    [DocumentProcessingStage, (typeof DOCUMENT_PROCESSING_STAGE_META)[DocumentProcessingStage]]
-  >).map(([value, { label }]) => ({ value, label }));
-
-function ProcessingBadge({ documentId, stage }: { documentId: string; stage: DocumentProcessingStage | null }) {
+/** The badge a person reads, over the stage the machine records.
+ *
+ *  `data-testid` and `data-document-id` are unchanged, and `data-stage` is ADDED carrying the raw
+ *  internal stage: check-browser-smoke.cjs keeps measuring real pipeline state while the text says
+ *  something a kitchen manager can act on. Exported for documentStage.spec.tsx, which asserts that
+ *  pairing directly — the gate contract is too easy to break silently from inside this file. */
+export function ProcessingBadge({ documentId, stage, doc }: {
+  documentId: string;
+  stage: DocumentProcessingStage | null;
+  doc?: Pick<DocumentRow, 'entity_type' | 'entity_id'> | null;
+}) {
   if (!stage) {
     return (
       <span data-testid="document-processing-status" data-document-id={documentId} className="badge-idle">
@@ -48,10 +59,11 @@ function ProcessingBadge({ documentId, stage }: { documentId: string; stage: Doc
       </span>
     );
   }
-  const meta = DOCUMENT_PROCESSING_STAGE_META[stage];
+  const meta = DOCUMENT_USER_STATE_META[documentUserState(stage)];
   return (
-    <span data-testid="document-processing-status" data-document-id={documentId} className={`badge-${meta.tone}`}>
-      {meta.label}
+    <span data-testid="document-processing-status" data-document-id={documentId} data-stage={stage}
+      className={`badge-${meta.tone}`} title={documentUserStateDescription(stage)}>
+      {documentUserStateLabel(stage, doc)}
     </span>
   );
 }
@@ -282,10 +294,12 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   // with it still attached would silently narrow a list whose only control for widening it
   // again is no longer on screen.
   const filing = !archive && (filingParam === 'linked' || filingParam === 'unfiled') ? filingParam : 'all';
-  const processingParam = params.get('processing');
-  const processingFilter = PROCESSING_FILTERS.some(({ value }) => value === processingParam)
-    ? processingParam as DocumentProcessingStage
-    : 'all';
+  // Old links, bookmarks and the Back button still carry one of the seven engineering stages here.
+  // Such a value resolves to the state that contains it — a superset of what it used to match — so
+  // it keeps filtering something meaningful instead of emptying the list with no explanation, and
+  // the select below then shows the reader which of the four is in force.
+  const processingFilter: DocumentUserState | 'all' =
+    documentUserStateFromParam(params.get('processing')) ?? 'all';
   const canFile = profile?.role === 'owner' || profile?.role === 'office';
   const canUpload = !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
   const canEnqueue = canUpload;
@@ -374,7 +388,9 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         && (!supplierId || (supplierId === 'none' ? !doc.supplier_id : doc.supplier_id === supplierId))
         && (!kind || doc.document_kind === kind)
         && (filing === 'all' || (filing === 'unfiled' ? isUnfiled(doc) : !isUnfiled(doc)))
-        && (processingFilter === 'all' || stage === processingFilter)
+        // A row whose processing state could not be read matches no state filter: it is unknown,
+        // not "נקלט". The banner above the table is what explains the gap.
+        && (processingFilter === 'all' || (stage !== null && documentUserState(stage) === processingFilter))
         && (!from || date >= from)
         && (!to || date <= to);
     });
@@ -515,12 +531,15 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       render: (doc) => <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>,
     },
     {
-      key: 'processing', header: 'עיבוד', mobileLabel: null, priority: 3,
-      sortValue: (doc) => processing.snapshots[doc.id]?.stage ?? 'unprocessed',
+      key: 'processing', header: 'מצב', mobileLabel: null, priority: 3,
+      // Sorted by the state on screen, not by the stage underneath: with four labels, sorting by
+      // the seven internal names would scatter identical-looking badges apart from each other.
+      sortValue: (doc) => documentUserState(processing.snapshots[doc.id]?.stage ?? 'unprocessed'),
       render: (doc) => (
         <ProcessingBadge
           documentId={doc.id}
           stage={processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed'}
+          doc={doc}
         />
       ),
     },
@@ -605,11 +624,14 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             </label>
           )}
           <label>
-            <span className="label">סטטוס עיבוד</span>
+            <span className="label">מצב המסמך</span>
             <select data-testid="documents-processing-filter" className="input" value={processingFilter}
               onChange={(event) => setProcessing(event.target.value)}>
               <option value="all">הכול</option>
-              {PROCESSING_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              {/* Four human states, not seven pipeline stages. Three of the four values are the
+                  tokens the URL already carried, so `?processing=review|completed|failed` keeps
+                  meaning exactly what it meant; the fourth absorbs the machine's four. */}
+              {DOCUMENT_USER_STATE_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
           <label>
@@ -654,7 +676,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           mobileTitle={(doc) => doc.file_name}
           mobileTrailing={(doc) => (
             <span className="flex flex-wrap justify-end gap-1">
-              <ProcessingBadge documentId={doc.id}
+              <ProcessingBadge documentId={doc.id} doc={doc}
                 stage={processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed'} />
               {!archive && (
                 <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>
