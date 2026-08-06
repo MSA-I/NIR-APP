@@ -326,8 +326,13 @@ select pg_temp.p3_assert(:'guarded_po_visible'::int = 2,
 -- emptying the grants is legitimate housekeeping, and a deactivated user holds no session
 -- that could be shown a false zero.
 savepoint last_grant_inactive;
-update profiles set active = false
-where id = '25000000-0000-0000-0000-000000000002';
+-- Through the real command, not a direct UPDATE: profiles_guard_privileged_columns() blocks
+-- direct writes to role/active/supplier_id (profile_access_rpc_required), which is itself the
+-- right answer -- so the sub-case also proves the guard composes with the actual
+-- deactivation path. Role is passed unchanged; only `active` moves.
+select manage_profile_access(
+  '25000000-0000-0000-0000-000000000002', 'owner', false, null,
+  'P3: deactivate before emptying the scope');
 select revoke_user_scope(
   '25000000-0000-0000-0000-000000000002',
   '16000000-0000-0000-0000-000000000003', 'P3: deactivated first, then emptied');
