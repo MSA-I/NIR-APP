@@ -293,6 +293,12 @@ async function roleAndViewportMatrix(browser) {
         report.viewports.push({ role, label, ...metrics, overflow });
         assert(overflow <= 1, `${role}/${label}: horizontal overflow ${overflow}px`);
       }
+      // login() waits for #main only; a dashboard still loading shows the skeleton,
+      // which renders no h1 by design. Wait for the heading like settle() does, so
+      // the audit measures the loaded page instead of racing the heaviest dashboard.
+      await page.locator('#main h1').first().waitFor({ state: 'visible', timeout: 25_000 }).catch((error) => {
+        throw new Error(`home:${role}: main heading did not become visible — ${error.message}`);
+      });
       await auditAccessibility(page, `home:${role}`);
     } finally {
       await closeContext(context);
