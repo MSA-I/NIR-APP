@@ -513,6 +513,69 @@ select pg_temp.p11_assert(
    where document_id = 'd1f00000-0000-4000-8000-0000000000c1'),
   'a supplied confidence must be stored as given');
 
+-- Confidence is a probability or it is nothing. Matches smart_document_confidence_valid
+-- (0046) exactly: null passes, anything outside 0..1 does not.
+create function pg_temp.p11_bad_confidence_rejected(p_value numeric)
+returns boolean
+language plpgsql
+as $$
+begin
+  begin
+    insert into public.document_filings (org_id, document_id, category, decided_by, confidence)
+    values ('d1f00000-0000-4000-8000-000000000001',
+            'd1f00000-0000-4000-8000-0000000000c2', 'other', 'system', p_value);
+    return false;
+  exception when check_violation then
+    return true;
+  end;
+end
+$$;
+
+savepoint p11_confidence_range;
+select pg_temp.p11_assert(
+  pg_temp.p11_bad_confidence_rejected(1.5) and pg_temp.p11_bad_confidence_rejected(-0.1),
+  'a confidence outside 0..1 must be refused -- it is a probability or it is nothing');
+rollback to savepoint p11_confidence_range;
+
+-- category carries the interpretation contract's vocabulary, spelled out at the table. C2's
+-- whole autonomy decision turns on this value, and a free-text column would accept
+-- 'delivery-note' for 'delivery_note' with nobody the wiser until a filing went wrong.
+savepoint p11_category_vocabulary;
+do $$
+begin
+  begin
+    insert into public.document_filings (org_id, document_id, category, decided_by)
+    values ('d1f00000-0000-4000-8000-000000000001',
+            'd1f00000-0000-4000-8000-0000000000c2', 'delivery-note', 'system');
+    raise exception 'P11 document filing assertion failed: category outside the interpretation contract vocabulary must be refused';
+  exception when check_violation then null;
+  end;
+end
+$$;
+rollback to savepoint p11_category_vocabulary;
+
+-- ...and every value the contract DOES define is accepted, so the copy cannot silently
+-- narrow the vocabulary it claims to mirror (0046:45-47).
+savepoint p11_category_accepts_contract;
+insert into public.document_filings (org_id, document_id, category, decided_by)
+select 'd1f00000-0000-4000-8000-000000000001',
+       'd1f00000-0000-4000-8000-0000000000c2', v, 'system'
+from unnest(array['invoice', 'delivery_note', 'credit_note', 'price_list', 'quote',
+                  'payment_confirmation', 'other']) v
+limit 1;
+select pg_temp.p11_assert(
+  not exists (
+    select 1
+    from unnest(array['invoice', 'delivery_note', 'credit_note', 'price_list', 'quote',
+                      'payment_confirmation', 'other']) v
+    where not exists (
+      select 1 from pg_constraint
+      where conrelid = 'public.document_filings'::regclass
+        and conname = 'document_filings_category_check'
+        and pg_get_constraintdef(oid) like '%''' || v || '''%')),
+  'the category vocabulary must contain every document_type the interpretation contract defines');
+rollback to savepoint p11_category_accepts_contract;
+
 -- A reversal is a time AND a reason, or neither -- enforced at the table, not only in the
 -- command. This is the fence that survives even a trusted-server writer with a bug: a
 -- reverted_at with no reason beside it is the silent write the constitution forbids, and it

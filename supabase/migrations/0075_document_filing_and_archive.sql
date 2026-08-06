@@ -189,10 +189,19 @@ create table public.document_filings (
   id uuid primary key default gen_random_uuid(),
   org_id uuid not null,
   document_id uuid not null,
-  -- A value from the interpretation contract's document_type (0046:45-47). Not an enum and not
-  -- a foreign key: the contract is validated where interpretations are written, and freezing a
-  -- second copy of the vocabulary here would make the two drift apart.
-  category text not null check (length(btrim(category)) between 1 and 100),
+  -- A value from the interpretation contract's document_type (0046:45-47), spelled out rather
+  -- than merely documented. Five CHECK constraints in the live catalogue already carry this
+  -- exact list (smart_document_interpretation_valid, document_learning_rules,
+  -- document_type_review_decisions x2, document_export_templates), so a sixth is the
+  -- convention, not new duplication -- and category is the field the whole autonomy decision
+  -- of C2 turns on. A free-text column would take 'delivery-note' for 'delivery_note' and no
+  -- one would find out until an automatic filing went to the wrong place.
+  category text not null check (
+    category in (
+      'invoice', 'delivery_note', 'credit_note', 'price_list', 'quote',
+      'payment_confirmation', 'other'
+    )
+  ),
   supplier_id uuid,
   interpretation_id uuid,
   -- null means UNKNOWN. It is never 0 when there is no datum -- zero confidence is a claim
