@@ -187,3 +187,74 @@ describe('פעולות השיוך בתפריט השורה', () => {
     expect(screen.getByText('שיוך לקבלת סחורה')).toBeInTheDocument();
   });
 });
+
+// 0075 gives the archive its own filing action. Its gate is `!canFile || !archive` — the exact
+// complement of the `!canFile || archive || !isUnfiled(doc)` above — so the two can never both
+// render, and neither can be absent from the screen it belongs to.
+describe('פעולות הארכיון', () => {
+  const openMenuFor = async (fileName: string) =>
+    userEvent.click(screen.getAllByRole('button', { name: `פעולות עבור מסמך ${fileName}` })[0]);
+
+  it('החזרה לטיפול והסרה מוצעות על מסמך בארכיון', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({ archive: true });
+    await screen.findAllByText(ARCHIVED);
+    await openMenuFor(ARCHIVED);
+    expect(screen.getByText('החזרה לטיפול')).toBeInTheDocument();
+    expect(screen.getByText('הסרה')).toBeInTheDocument();
+  });
+
+  // The control that makes the assertion above mean something: the same row shape in the folder
+  // does NOT get them, so `archive` is the only thing that can account for the difference.
+  it('אינן מוצעות על מסמך לא משויך בתיקייה', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({});
+    await screen.findAllByText(UNFILED);
+    await openMenuFor(UNFILED);
+    expect(screen.queryByText('החזרה לטיפול')).not.toBeInTheDocument();
+    expect(screen.queryByText('הסרה')).not.toBeInTheDocument();
+  });
+
+  // A reason is required because of WHICH ACTION was chosen, not because of a prop: rescue opens
+  // a dialog with the reason field, removal opens one without it. If these two ever converged on
+  // a shared modal, this pair is what fails.
+  it('החזרה לטיפול פותחת דיאלוג עם שדה סיבה, והסרה בלעדיו', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({ archive: true });
+    await screen.findAllByText(ARCHIVED);
+
+    await openMenuFor(ARCHIVED);
+    await userEvent.click(screen.getByText('החזרה לטיפול'));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('החזרת מסמך לטיפול');
+    expect(screen.getByLabelText(/סיבה/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'ביטול' }));
+
+    await openMenuFor(ARCHIVED);
+    await userEvent.click(screen.getByText('הסרה'));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('הסרת מסמך מהארכיון');
+    expect(screen.queryByLabelText(/סיבה/)).not.toBeInTheDocument();
+    // The file survives, and the dialog says so rather than letting "הסרה" read as destruction.
+    expect(screen.getByText(/הקובץ נשמר לביקורת/)).toBeInTheDocument();
+  });
+});
+
+// isUnfiled() reads every archived row as "לא משויך" — a false statement about a document that was
+// decided to have no target. Rather than teach it a third state and reopen decision #45, the
+// archive drops the column and its filter. (OPEN-DECISIONS #111.)
+describe('עמודת התיוק אינה נשאלת בארכיון', () => {
+  it('הארכיון אינו מציג תווית תיוק ואינו מציג את מסנן התיוק', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({ archive: true });
+    await screen.findAllByText(ARCHIVED);
+    expect(screen.queryAllByText('לא משויך')).toHaveLength(0);
+    expect(screen.queryByLabelText('סטטוס תיוק')).not.toBeInTheDocument();
+  });
+
+  it('תיקיית המסמכים כן מציגה את שניהם', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({});
+    await screen.findAllByText(UNFILED);
+    expect(screen.queryAllByText('לא משויך')).not.toHaveLength(0);
+    expect(screen.getByLabelText('סטטוס תיוק')).toBeInTheDocument();
+  });
+});

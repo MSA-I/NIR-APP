@@ -1015,6 +1015,7 @@ try {
     Reset-LocalDatabase
     Invoke-SqlTest "supabase\tests\document_learning.sql" "Document interpretation, learning and review mutations"
     Invoke-SqlTest "supabase\tests\document_export_templates.sql" "Document export scope, approval, precedence and immutable ledger"
+    Invoke-SqlTest "supabase\tests\p11_document_filing.sql" "Archive filing target, filing ledger, reasoned rescue and the storage read path"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"

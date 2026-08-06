@@ -247,7 +247,11 @@ export interface ExceptionRow {
 export type DocumentKind = 'invoice' | 'delivery_note' | 'credit' | 'quote' | 'price_list' | 'payment_confirmation' | 'other';
 export interface DocumentRow {
   id: string; org_id: string; entity_type: string;
-  entity_id: string | null; // null only while entity_type='inbox' — captured, not yet filed (0014)
+  // null for exactly two entity_types, and they mean opposite things: 'inbox' is *not yet*
+  // filed (0014), 'archive' is *decided to have no target* (0075). Every business entity_type
+  // still carries its id — documents_inbox_entity enforces that, and 0075 narrowed it to admit
+  // the archive rather than dropping it.
+  entity_id: string | null;
   storage_path: string; file_name: string; mime_type: string | null;
   document_kind: DocumentKind; supplier_id: string | null; document_date: string | null;
   uploaded_by: string | null; created_at: string;

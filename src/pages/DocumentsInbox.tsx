@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Archive, Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, Search, Upload, X } from 'lucide-react';
+import { Archive, Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, Search, Trash2, Undo2, Upload, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -56,6 +56,13 @@ function ProcessingBadge({ documentId, stage }: { documentId: string; stage: Doc
   );
 }
 
+/** Decision #45's contract, and it is a contract OF THE DOCUMENTS FOLDER: `inbox`/no target =
+ *  לא משויך, any business target = משויך. An archived row is null on entity_id and so reads as
+ *  unfiled here — which is wrong about it, because an archived document is not "not yet filed",
+ *  it is *decided to have no target*. Rather than teach this a third state and reopen #45 for
+ *  the sake of one screen, the archive view drops the filing column and its filter entirely
+ *  (see `columns` and the filter section). The two-value question is simply not asked where it
+ *  has no meaningful answer. */
 function isUnfiled(doc: DocumentRow) {
   return doc.entity_type === 'inbox' || doc.entity_id === null;
 }
@@ -270,7 +277,11 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const filingParam = params.get('filing');
-  const filing = filingParam === 'linked' || filingParam === 'unfiled' ? filingParam : 'all';
+  // The archive ignores the filing filter outright, not merely hides its control: `/inbox`
+  // redirects to `?filing=unfiled` and that param survives navigation, so an archive reached
+  // with it still attached would silently narrow a list whose only control for widening it
+  // again is no longer on screen.
+  const filing = !archive && (filingParam === 'linked' || filingParam === 'unfiled') ? filingParam : 'all';
   const processingParam = params.get('processing');
   const processingFilter = PROCESSING_FILTERS.some(({ value }) => value === processingParam)
     ? processingParam as DocumentProcessingStage
@@ -289,6 +300,10 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   const [refile, setRefile] = useState<{ doc: DocumentRow; target: RefileTarget } | null>(null);
   const [retryDoc, setRetryDoc] = useState<DocumentRow | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [rescueDoc, setRescueDoc] = useState<DocumentRow | null>(null);
+  const [rescuing, setRescuing] = useState(false);
+  const [deleteDoc, setDeleteDoc] = useState<DocumentRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const { data, loading, fetching, error, refetch } = useQuery<{
     docs: GalleryDocument[]; suppliers: SupplierOption[];
@@ -414,6 +429,51 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     }
   }
 
+  /** The archive's own filing action, and the reason is not optional. It is a separate RPC from
+   *  the two שיוך actions on purpose: file_document's guard takes only a row still in the inbox
+   *  (0019:167), and keeping rescue separate is what makes "a reason is required" structural —
+   *  a property of which action the person chose, not of a prop threaded into a shared modal. */
+  async function rescue(reason?: string) {
+    if (!rescueDoc || !reason) return;
+    setRescuing(true);
+    try {
+      ok(await supabase.rpc('rescue_document_from_archive', {
+        p_document_id: rescueDoc.id,
+        p_reason: reason,
+      }));
+      toast('המסמך הוחזר לתיקיית המסמכים');
+      setRescueDoc(null);
+      window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+      await refetch();
+    } catch (error) {
+      toast(toHebrewError(error), 'error');
+    } finally {
+      setRescuing(false);
+    }
+  }
+
+  /** Removal from the archive takes NO reason, by the owner's ruling (OPEN-DECISIONS #110), and
+   *  needs no new database mechanism: this is decision #28's existing soft delete — the row is
+   *  hidden, the stored file is kept for audit. Same statement AttachmentsPanel.tsx:142-144
+   *  issues, same policy (documents_soft_delete, owner/office). */
+  async function removeDoc() {
+    if (!deleteDoc) return;
+    setDeleting(true);
+    try {
+      ok(await supabase.from('documents').update({
+        deleted_at: new Date().toISOString(), deleted_by: profile?.id ?? null,
+      }).eq('id', deleteDoc.id));
+      toast('המסמך הוסר');
+      setDeleteDoc(null);
+      window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+      await refetch();
+    } catch (error) {
+      toast(toHebrewError(error), 'error');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function open(doc: DocumentRow) {
     const result = await openReservedPopup(async () => {
       const { data: url, error: openError } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300);
@@ -424,7 +484,10 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     if (result === 'error') toast('שגיאה בפתיחת הקובץ', 'error');
   }
 
-  const columns: Column<GalleryDocument>[] = [
+  // The filing column is a question about the documents folder and it has no answer on the
+  // archive: every row there reads "לא משויך" through isUnfiled(), which calls a deliberately
+  // filed document unfiled. Dropping the column is the honest move — see isUnfiled's note.
+  const columns: Column<GalleryDocument>[] = ([
     {
       key: 'file', header: 'מסמך', priority: 1, sortValue: (doc) => doc.file_name,
       render: (doc) => (
@@ -446,7 +509,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         </span>
       ),
     },
-    {
+    archive ? null : {
       key: 'filing', header: 'תיוק', mobileLabel: null, priority: 3, sortValue: (doc) => isUnfiled(doc) ? 0 : 1,
       render: (doc) => <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>,
     },
@@ -460,7 +523,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         />
       ),
     },
-  ];
+  ] as Array<Column<GalleryDocument> | null>).filter((column): column is Column<GalleryDocument> => column !== null);
 
   const hasFilters = !!(q || supplierId || kind || from || to || filing !== 'all' || processingFilter !== 'all');
 
@@ -524,14 +587,18 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
               {DOCUMENT_KIND_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <label>
-            <span className="label">סטטוס תיוק</span>
-            <select className="input" value={filing} onChange={(event) => setFiling(event.target.value)}>
-              <option value="all">הכול</option>
-              <option value="unfiled">לא משויכים</option>
-              <option value="linked">משויכים</option>
-            </select>
-          </label>
+          {/* Gone on the archive with its column: filtering by an answer that is the same wrong
+              answer for every row is not a filter, it is furniture. */}
+          {!archive && (
+            <label>
+              <span className="label">סטטוס תיוק</span>
+              <select className="input" value={filing} onChange={(event) => setFiling(event.target.value)}>
+                <option value="all">הכול</option>
+                <option value="unfiled">לא משויכים</option>
+                <option value="linked">משויכים</option>
+              </select>
+            </label>
+          )}
           <label>
             <span className="label">סטטוס עיבוד</span>
             <select data-testid="documents-processing-filter" className="input" value={processingFilter}
@@ -584,7 +651,9 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             <span className="flex flex-wrap justify-end gap-1">
               <ProcessingBadge documentId={doc.id}
                 stage={processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed'} />
-              <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>
+              {!archive && (
+                <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>
+              )}
             </span>
           )}
           rowActions={(doc) => {
@@ -604,6 +673,15 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
               // action that always errors is not an answer to it.
               { key: 'invoice', label: 'שיוך לחשבונית', icon: FileInput, hidden: !canFile || archive || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'invoice' }) },
               { key: 'receipt', label: 'שיוך לקבלת סחורה', icon: ReceiptText, hidden: !canFile || archive || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'goods_receipt' }) },
+              // The clean complement of the two gates above: `!canFile || !archive`, so the
+              // archive's filing action appears exactly where theirs do not. It is its own key
+              // and its own RPC — rescue_document_from_archive, not file_document, whose guard
+              // structurally refuses any non-inbox row (0019:167). The document returns to the
+              // folder as unfiled, where those two actions then work on it for real.
+              { key: 'rescue', label: 'החזרה לטיפול', icon: Undo2, hidden: !canFile || !archive, onSelect: () => setRescueDoc(doc) },
+              // Removal from the archive: no reason, by the owner's ruling (#110). Nothing new
+              // in the database — decision #28's soft delete, the stored file kept for audit.
+              { key: 'delete', label: 'הסרה', icon: Trash2, tone: 'danger', hidden: !canFile || !archive, onSelect: () => setDeleteDoc(doc) },
             ];
           }}
           emptyTitle={data?.docs.length ? 'לא נמצאו מסמכים לפי הסינון' : empty.title}
@@ -619,6 +697,22 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           : 'ניסיון חדש שומר את תוצאות העיבוד הקודמות ומוסיף ניסיון נפרד.'}
         confirmLabel={processing.snapshots[retryDoc?.id ?? '']?.stage === 'unprocessed' ? 'שליחה לתור' : 'החזרה לתור'}
         requireReason={processing.snapshots[retryDoc?.id ?? '']?.stage !== 'unprocessed'} busy={retrying} />
+
+      {/* requireReason, always. The reason travels to audit_logs through the RPC, and the
+          server refuses an empty one by name (reason_required) regardless of what the browser
+          sends — this dialog is the courtesy, not the enforcement. */}
+      <ConfirmDialog open={!!rescueDoc} onClose={() => setRescueDoc(null)} onConfirm={(reason) => void rescue(reason)}
+        title="החזרת מסמך לטיפול"
+        message={`המסמך "${rescueDoc?.file_name ?? ''}" יחזור לתיקיית המסמכים כלא משויך, ויהיה אפשר לשייך אותו לחשבונית או לקבלת סחורה.`}
+        confirmLabel="החזרה לטיפול" requireReason busy={rescuing} />
+
+      {/* No requireReason, deliberately: #110 rules that removal from the archive needs none.
+          The message says what actually happens to the bytes, because "הסרה" alone would read
+          as destruction and the file is kept. */}
+      <ConfirmDialog open={!!deleteDoc} onClose={() => setDeleteDoc(null)} onConfirm={() => void removeDoc()}
+        title="הסרת מסמך מהארכיון"
+        message={`המסמך "${deleteDoc?.file_name ?? ''}" יוסר מהרשימה. הקובץ נשמר לביקורת.`}
+        confirmLabel="הסרה" danger busy={deleting} />
 
     </div>
   );
