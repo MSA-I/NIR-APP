@@ -349,6 +349,25 @@ expired_reservations_with_stored_object as (
   where r.status = 'reserved'
     and r.expires_at <= now()
 ),
+-- ===== Wave 9 notification-preference & approval-policy checks (0068, 0070) =====
+-- The first is structurally impossible -- notification_preferences reaches profiles only
+-- through the composite (org_id, user_id) FK -- and is verified anyway, because a preference
+-- row bridging two tenants would decide, from inside one tenant, who the other tenant
+-- notifies. The second is the real anomaly wave 9 can produce: policy configuration keys are
+-- deliberately NOT FK-bound to the private definitions (0070 §2, the 0059:66-68 reasoning),
+-- so a definition that retires leaves an orphan configuration that no evaluator can explain.
+notification_preference_cross_tenant as (
+  select pref.id
+  from notification_preferences pref
+  join profiles p on p.id = pref.user_id
+  where p.org_id <> pref.org_id
+),
+approval_policy_config_without_definition as (
+  select c.id
+  from approval_policy_configurations c
+  where not exists (
+    select 1 from private.approval_policy_definitions d where d.policy_key = c.policy_key)
+),
 checks(check_name, rows_found, sample_ids) as (
   select 'duplicate_payment_executions', count(*),
     coalesce((select jsonb_agg(id) from (select id from duplicate_payment_executions limit 20) s), '[]'::jsonb)
@@ -470,6 +489,12 @@ checks(check_name, rows_found, sample_ids) as (
   union all select 'expired_reservations_with_stored_object', count(*),
     coalesce((select jsonb_agg(id) from (select id from expired_reservations_with_stored_object limit 20) s), '[]'::jsonb)
   from expired_reservations_with_stored_object
+  union all select 'notification_preference_cross_tenant', count(*),
+    coalesce((select jsonb_agg(id) from (select id from notification_preference_cross_tenant limit 20) s), '[]'::jsonb)
+  from notification_preference_cross_tenant
+  union all select 'approval_policy_config_without_definition', count(*),
+    coalesce((select jsonb_agg(id) from (select id from approval_policy_config_without_definition limit 20) s), '[]'::jsonb)
+  from approval_policy_config_without_definition
 )
 select check_name, rows_found, sample_ids
 from checks

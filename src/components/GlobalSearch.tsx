@@ -20,11 +20,23 @@ const PRODUCT_STATUS: Record<string, StatusMeta> = {
   inactive: { label: 'לא פעיל', tone: SUPPLIER_STATUS.inactive.tone },
 };
 
-// --- Per-role result gating ------------------------------------------------------------
-// RLS decides which ROWS exist; this table decides which result TYPES are reachable, because
-// the App.tsx route guards are stricter than RLS (e.g. RLS lets an accountant read products,
-// but /products is STAFF-only, so a product hit would just bounce them). Order matches spec 5.
-// payer/supplier have no reachable target at all → no search box (see canGlobalSearch).
+// --- Per-role display order (NO LONGER THE GATE) ---------------------------------------
+//
+// Until migration 0069 this table WAS the only thing stopping a payer or a supplier from
+// receiving supplier / product / payment hits — a security decision taken in the browser, over a
+// `global_search` that is granted to `authenticated` as a whole. **Since 0069 the reachable result
+// TYPES are decided on the server**, from `auth_role()`, mirroring the same App.tsx route guards
+// this table was read off (`supabase/migrations/0069_global_search_type_gate.sql`, and the
+// function comment there says so too). A payer or supplier now receives zero rows of any type,
+// and an unresolvable role fails closed.
+//
+// So what this map still is: the **display order and the group set** for the role in front of us —
+// `GROUP_ORDER` and the group headings need it, and the placeholder hint below is built from it.
+// The client-side `.filter()` in the search effect is kept as defence in depth because it costs
+// one pass over at most 30 rows; it is no longer the thing that makes the gate true, and it must
+// not be described as one. Nobody who could already see everything sees anything different.
+//
+// RLS still decides which ROWS exist. That never moved.
 const ALLOWED: Record<Role, EntityType[]> = {
   owner:      ['supplier', 'product', 'invoice', 'order', 'payment', 'credit'],
   office:     ['supplier', 'product', 'invoice', 'order', 'credit'],
@@ -34,7 +46,9 @@ const ALLOWED: Record<Role, EntityType[]> = {
   supplier:   [],
 };
 
-/** Whether to render a search box for this role at all. Layout uses it too. */
+/** Whether to render a search box for this role at all. Layout uses it too.
+ *  Unchanged by 0069 and still correct: payer/supplier get no box, and the server would now
+ *  return nothing even if one appeared. */
 export function canGlobalSearch(role: Role | undefined): boolean {
   return !!role && ALLOWED[role].length > 0;
 }
@@ -117,6 +131,8 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
       const { data, error } = await supabase.rpc('global_search', { q, per_type: 5 });
       if (seq !== seqRef.current) return; // superseded — drop this response
       if (error) { setHits(null); setSearchError('החיפוש נכשל — נסה שוב'); setLoading(false); return; }
+      // Defence in depth over at most 30 rows, not the gate: 0069 decides the reachable types
+      // server-side. See the ALLOWED comment above.
       const rows = ((data ?? []) as SearchHit[]).filter((h) => allowed.includes(h.entity));
       setHits(rows);
       setLoading(false);

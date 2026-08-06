@@ -68,6 +68,10 @@ select section, scope, item, value from (
     union all select 'webhook_subscriptions', count(*) from webhook_subscriptions where org_id = o.id
     union all select 'external_references',   count(*) from external_references   where org_id = o.id
     union all select 'integration_failures',  count(*) from integration_failures  where org_id = o.id
+    -- wave 9 (0068, 0070): per-member notification preferences and the approval-policy
+    -- configuration (which has no consumer -- PLAN-10 §1 -- and governs nothing today).
+    union all select 'notification_preferences', count(*) from notification_preferences where org_id = o.id
+    union all select 'approval_policy_configurations', count(*) from approval_policy_configurations where org_id = o.id
   ) t on true
   where t.rows > 0
 
@@ -220,6 +224,22 @@ select section, scope, item, value from (
     union all select 'integration_failures -> webhook_subscriptions', count(*)
       from integration_failures f join webhook_subscriptions w on w.id = f.subscription_id
       where w.org_id <> f.org_id
+    -- wave 9 (0068, 0070): a preference must belong to a member of its own tenant, and a
+    -- policy configuration must name a policy that exists. The first is structurally
+    -- impossible (the composite (org_id, user_id) FK); the second is deliberately NOT
+    -- FK-bound (0070 §2), so it is the wave's one real orphan class -- the same pair the
+    -- preflight report checks, asserted here against the demo fixture's real rows.
+    union all select 'notification_preferences -> profiles (member)', count(*)
+      from notification_preferences pref left join profiles p on p.id = pref.user_id
+      where p.id is null or p.org_id <> pref.org_id
+    union all select 'notification_preferences -> event catalog', count(*)
+      from notification_preferences pref
+      where not exists (select 1 from private.notification_event_definitions d
+                        where d.event_code = pref.event_code)
+    union all select 'approval_policy_configurations -> policy catalog', count(*)
+      from approval_policy_configurations c
+      where not exists (select 1 from private.approval_policy_definitions d
+                        where d.policy_key = c.policy_key)
   ) b
 
   union all

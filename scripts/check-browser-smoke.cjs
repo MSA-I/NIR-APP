@@ -1952,6 +1952,99 @@ async function documentOcrAcceptance(browser) {
   }
 }
 
+/* ===================== wave 9: the global-search type gate (0069) ===================== */
+
+// 'מאפ' matches two seeded suppliers ('מאפיית הלחם החם', 'מאפה זהב'), so an owner is guaranteed a
+// supplier hit and the fixture can prove the gate rather than an empty database.
+const SEARCH_TYPE_GATE_TERM = 'מאפ';
+// The three types a payer's routes cannot open: /suppliers, /products and /payments are all closed
+// to it, so a hit of these kinds should never have crossed the wire (handoff-09 §2).
+const PAYER_FORBIDDEN_TYPES = ['supplier', 'product', 'payment'];
+
+/**
+ * Lifts the PostgREST credentials the app itself is using out of a live request.
+ *
+ * Deliberately not reconstructed from env: the point is to call the RPC with **this session's own**
+ * JWT, exactly as the browser would. The predicate rejects the pre-login state, where supabase-js
+ * sends the anon key in both headers — an anon token would prove nothing about a payer.
+ */
+async function postgrestCredentials(page, navigate) {
+  const pending = page.waitForRequest((request) => {
+    if (!request.url().includes('/rest/v1/')) return false;
+    const headers = request.headers();
+    return !!headers.apikey && !!headers.authorization
+      && headers.authorization !== `Bearer ${headers.apikey}`;
+  }, { timeout: 25_000 });
+  await navigate();
+  const headers = (await pending).headers();
+  return { apikey: headers.apikey, authorization: headers.authorization };
+}
+
+async function globalSearchWith(credentials, term) {
+  const response = await fetch(`${apiURL}/rest/v1/rpc/global_search`, {
+    method: 'POST',
+    headers: { ...credentials, 'content-type': 'application/json' },
+    body: JSON.stringify({ q: term, per_type: 5 }),
+  });
+  assert(response.ok, `global_search answered HTTP ${response.status}`);
+  const rows = await response.json();
+  assert(Array.isArray(rows), 'global_search did not answer with a row set');
+  return rows;
+}
+
+/**
+ * The type gate of migration 0069, observed from outside the app.
+ *
+ * Until 0069 the only thing keeping supplier / product / payment hits away from a payer was
+ * `ALLOWED` in `src/components/GlobalSearch.tsx` — a table in the browser, over a function granted
+ * to `authenticated` as a whole. This scenario asserts the gate where it now lives: the same term,
+ * with a real session's own credentials, returns supplier hits for an owner and **nothing at all**
+ * for a payer. The client half is asserted too — a payer's shell renders no search surface — but it
+ * is no longer what makes the statement true.
+ */
+async function searchTypeGate(browser) {
+  const ownerContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1280, height: 800 } });
+  const ownerPage = await ownerContext.newPage();
+  captureConsole(ownerPage, 'search-type-gate:owner');
+  try {
+    await login(ownerPage, 'owner');
+    const credentials = await postgrestCredentials(ownerPage, () => ownerPage.goto(`${baseURL}/invoices`));
+    await settle(ownerPage);
+    const hits = await globalSearchWith(credentials, SEARCH_TYPE_GATE_TERM);
+    assert(hits.length > 0, `owner global_search returned nothing for «${SEARCH_TYPE_GATE_TERM}» — the fixture cannot prove the gate`);
+    assert(hits.some((hit) => hit.entity === 'supplier'),
+      `owner global_search returned no supplier hit for «${SEARCH_TYPE_GATE_TERM}»; got ${JSON.stringify([...new Set(hits.map((hit) => hit.entity))])}`);
+  } finally {
+    await closeContext(ownerContext);
+  }
+
+  const payerContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1280, height: 800 } });
+  const payerPage = await payerContext.newPage();
+  captureConsole(payerPage, 'search-type-gate:payer');
+  try {
+    await login(payerPage, 'payer');
+    await settle(payerPage);
+    assert.equal(await payerPage.getByRole('combobox', { name: 'חיפוש כללי' }).count(), 0,
+      'payer shell rendered a global search box');
+    await payerPage.setViewportSize({ width: 390, height: 844 });
+    await payerPage.waitForTimeout(100);
+    assert.equal(await payerPage.getByRole('button', { name: 'חיפוש', exact: true }).count(), 0,
+      'payer shell rendered the mobile search opener');
+
+    const credentials = await postgrestCredentials(payerPage, () => payerPage.goto(`${baseURL}/pay`));
+    await settle(payerPage);
+    const hits = await globalSearchWith(credentials, SEARCH_TYPE_GATE_TERM);
+    const types = [...new Set(hits.map((hit) => hit.entity))];
+    assert.deepEqual(types.filter((type) => PAYER_FORBIDDEN_TYPES.includes(type)), [],
+      `payer received forbidden result types: ${JSON.stringify(types)}`);
+    // The contract is stronger than "no forbidden type": a payer reaches no searchable screen at
+    // all, so the honest answer is an empty set of every type (handoff-09 §2, the role map).
+    assert.equal(hits.length, 0, `payer received ${hits.length} search rows; 0069 grants the payer no reachable type`);
+  } finally {
+    await closeContext(payerContext);
+  }
+}
+
 async function run(name, check) {
   if (process.env.QUALITY_ONLY && !name.includes(process.env.QUALITY_ONLY)) {
     const reason = `QUALITY_ONLY=${process.env.QUALITY_ONLY}`;
@@ -1996,6 +2089,7 @@ async function run(name, check) {
     await run('Push logout double failure', () => pushLogout(browser, 'double-failure', false, false));
     await run('Admin password and Clipboard state', () => adminState(browser));
     await run('OCR documents, review, status and export', () => documentOcrAcceptance(browser));
+    await run('global search type gate: payer receives no forbidden types', () => searchTypeGate(browser));
   } finally {
     await browser.close();
   }

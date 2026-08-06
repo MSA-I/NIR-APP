@@ -698,6 +698,31 @@ insert into external_references (id, org_id, provider, entity_type, internal_id,
 ('ff100000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',
  'demo-erp', 'supplier', 'aa000000-0000-4000-8000-000000000005', 'ERP-SUP-1001');
 
+-- ===== Wave 9: one notification preference + one approval policy configuration =====
+-- Both exist so the demo_verify arms added for the wave-9 tables exercise REAL rows instead of
+-- empty joins, and neither moves a number or changes what the demo delivers.
+--
+-- The preference is the office user muting PUSH for price increases while keeping the in-app
+-- record -- the exact shape OPEN-DECISIONS #39 protects, visible in the fixture rather than
+-- only in a test. It changes no on-screen figure: the bell still receives every event, and no
+-- Push provider is reachable from a demo database anyway. Written directly here (seed work,
+-- like every other row in this file) rather than through set_notification_preference, which is
+-- self-only by design and would need that user's JWT.
+insert into notification_preferences
+  (id, org_id, user_id, event_code, push_enabled, inapp_enabled)
+values ('fa900000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',
+        pg_temp.demo_user('office'), 'price_increase', false, true);
+
+-- The policy configuration has NO CONSUMER -- that is the wave-9 ruling (PLAN-10 §1, and the
+-- 0070 header says so out loud), so this row governs nothing and no demo screen reads it. It
+-- is a legitimate TIGHTENING over the seeded baseline of one approver: above 25,000 the
+-- configuration asks for two. Nothing enforces that today, and nothing in the demo behaves
+-- differently because the row exists.
+insert into approval_policy_configurations
+  (id, org_id, policy_key, threshold_amount, required_approvals, step_up_required)
+values ('fb900000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',
+        'payment_request.approval', 25000.00, 2, false);
+
 -- Note: the allocation audit rows used to need repairing here — payment_allocations and
 -- bank_allocations had no org_id column, so the audit trigger recorded them with no tenant.
 -- Migration 0009 gives both tables an org_id, so the trigger now attributes them correctly
