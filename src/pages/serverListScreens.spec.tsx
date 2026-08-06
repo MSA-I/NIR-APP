@@ -267,14 +267,66 @@ describe('the payer / without-order guard (1b handoff §3 — binding)', () => {
     expect(appSource).toMatch(/path="\/invoices" element=\{<Guard roles=\{READERS\}>/);
   });
 
-  it('keeps invoice_without_order out of every other screen', () => {
-    const pagesDir = join(srcDir, 'pages');
-    const offenders = readdirSync(pagesDir)
-      .filter((name) => name.endsWith('.tsx') && !name.includes('.spec.'))
-      .filter((name) => readFileSync(join(pagesDir, name), 'utf8')
-        .includes('invoice_without_order'));
+  /**
+   * Every source file under a directory, recursively, as slash-joined relative paths.
+   *
+   * Wave 10 (audit Finding 9): the previous scan was `readdirSync(pagesDir)` — one level, so
+   * it never descended into `src/pages/dashboards/`, where PayerDashboard lives, nor into
+   * `src/pages/neworder/`. A guard that cannot see the payer's own dashboard directory is not
+   * guarding the payer.
+   */
+  const sourceFilesUnder = (dir: string, extensions: string[]): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      if (entry.isDirectory()) {
+        return sourceFilesUnder(join(dir, entry.name), extensions)
+          .map((child) => `${entry.name}/${child}`);
+      }
+      const isSource = extensions.some((extension) => entry.name.endsWith(extension));
+      return isSource && !entry.name.includes('.spec.') && !entry.name.includes('.test.')
+        ? [entry.name]
+        : [];
+    });
+
+  const holdersOf = (dir: string, extensions: string[], needle: string): string[] =>
+    sourceFilesUnder(dir, extensions)
+      .filter((name) => readFileSync(join(dir, name), 'utf8').includes(needle))
+      .sort();
+
+  it('keeps invoice_without_order out of every other screen, at any depth', () => {
     // Exposing the predicate on a payer-reachable screen would show a payer a wrong count —
     // the failure class this whole wave exists to prevent.
-    expect(offenders).toEqual(['Invoices.tsx']);
+    expect(holdersOf(join(srcDir, 'pages'), ['.tsx'], 'invoice_without_order'))
+      .toEqual(['Invoices.tsx']);
+  });
+
+  /**
+   * The RPC arm, added in wave 10 (audit Finding 9). `p2_invoice_without_order_count()` is
+   * SECURITY INVOKER, granted to `authenticated`, and its `not exists (… invoice_order_links)`
+   * INVERTS under RLS: a payer sees zero link rows, so the negation is true for every invoice
+   * and the count returns every invoice the payer can see, labelled "N invoices with no linked
+   * purchase order". The screen predicate above was guarded well; the RPC was not, and the
+   * only thing keeping it honest is a client-side role constant — in a system whose entire
+   * thesis is server-side enforcement.
+   *
+   * These assertions do NOT claim the RPC is fixed. They pin the single control that exists,
+   * so that adding a second caller, or widening FINANCE to include payer, fails here instead
+   * of shipping a wrong number. The server-side fix is a scope decision, recorded in
+   * docs/DEBT-REGISTER.md.
+   */
+  it('keeps the invoice_without_order RPC to one caller, behind a payer-free guard', () => {
+    const libDir = join(srcDir, 'lib');
+    expect(holdersOf(libDir, ['.ts', '.tsx'], 'p2_invoice_without_order_count'))
+      .toEqual(['alerts.ts']);
+    // serverList.ts names the PostgREST computed field in prose only; that is the guarded
+    // screen path, not the RPC. Pinned so a future write there is a decision, not a drift.
+    expect(holdersOf(libDir, ['.ts', '.tsx'], 'invoice_without_order'))
+      .toEqual(['alerts.ts', 'serverList.ts']);
+
+    // alerts.ts is reachable only through /alerts, and /alerts is FINANCE-only.
+    const finance = /const FINANCE: Role\[\] = \[([^\]]*)\]/.exec(appSource);
+    expect(finance).not.toBeNull();
+    expect(finance![1]).not.toContain('payer');
+    expect(finance![1]).not.toContain('supplier');
+    expect(appSource).toMatch(/path="\/alerts" element=\{<Guard roles=\{FINANCE\}>/);
   });
 });
