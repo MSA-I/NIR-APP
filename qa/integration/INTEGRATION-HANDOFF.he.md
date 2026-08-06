@@ -1,76 +1,66 @@
 # מסירת אינטגרציית QA על קו Enterprise
 
-תאריך: 05.08.2026
+תאריך: 06.08.2026
 
-## מצב
+## מצב Git
 
-- ענף: `codex/qa-enterprise-integration-20260805`.
-- בסיס: `main` מקומי ב-`2ff1fb4a056e57dbab8639db840baf46f83fab31`.
-- הבסיס מכיל את גלי Enterprise ‏0–6 ואת migrations ‏`0053`–`0064`.
-- `origin/main` עדיין ב-`01ca87cf6a88163b61a040d33a54f46527ec0e68`; 50 קומיטי ה-Enterprise אינם קיימים ב-remote ref.
-- תשתית ה-QA, תיקון הקשר החשבונית, תיקון נוסח הסטטוס ומסך הקבלה לקריאה בלבד הועברו ידנית/ב-cherry-pick מבוקר.
-- קונפליקטי `package.json`, ‏`package-lock.json` ושני סקריפטי השער נפתרו סמנטית: נשמרו Vitest/TanStack/React-PDF והקשחות ה-Enterprise, ונוספו פקודות ותלויות QA והמנעול המשותף.
-- לא הורצו build, tests, SQL, RLS, Playwright, `quality` או `qa:full`.
+- ענף: `codex/qa-enterprise-integration-20260806`.
+- בסיס Enterprise מקומי עדכני: `main` ב-`eaab58235ec6b18a59233959850c1e0fc8c9784e`.
+- `origin/main` עדיין ב-`01ca87cf6a88163b61a040d33a54f46527ec0e68`; ‏`main` המקומי מקדים אותו ב-88 commits.
+- תשתית ה-QA ושני התיקונים הקטנים הועברו ב-19 commits אטומיים; עדכון הסגירה של Wave 9 מוזג ללא שכתוב היסטוריה.
+- תיקון חריגת הזיכוי משולב ב-`e916dec`; snapshot הדוח החודשי משולב ב-`20c2edd`.
+- לא הורצו בסשן האינטגרציה build, tests, SQL/RLS, Playwright, `quality` או `qa:full`.
 
-## Job Object ב-Windows
+## מה משולב
 
-ה-polling לפי CIM/PID הוחלף ב-`runCommand` ב-Windows ב-Job Object מקומי:
-
-- `CreateProcess` במצב suspended.
-- `AssignProcessToJobObject` לפני `ResumeThread`.
-- `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`.
-- timeout ו-descendant grace רגילים תחומים בזמן וחוזרים רק אחרי `ACTIVE_PROCESS_ZERO`.
-- spec וה-environment עוברים ב-stdin, לא ב-argv.
-- מסלול Unix נשאר process group.
-
-הקומיטים: `a15dbe12196b63362d6c9aa4c724e6b4085f6865`, ‏`ededa227ecf702cac274a2d002e40d1b69739a3a`. הפרוטוקול מקבל רק `JOB_EMPTY`; כשל Windows שאינו מאפשר להוכיח zero נכנס ל-containment hold מפורש ומשאיר את ה-mutex מוחזק. זהו המסלול הלא־תחום היחיד, במכוון, משום שחזרה ממנו הייתה משחררת את ה-stack לשימוש מקביל ללא הוכחת cleanup. סקירה בלתי־תלויה קבעה `PASS / READY_FOR_RUNTIME_VALIDATION` ליישום הסטטי. נוספו בדיקות ממוקדות אך הן לא הורצו. `startQaPreview` הוא מסלול spawn נפרד ולא שונה.
+1. תשתית QA רב-סוכנית, שמירת ראיות, redaction, mutex ו-cleanup.
+2. הקשר הזמנה/קבלה מאומת במסך יצירת חשבונית ותיקון הטקסט `העברה בוצעה`.
+3. Job Object ב-Windows: יצירת child מושהה, שיוך לפני resume, ‏`KILL_ON_JOB_CLOSE`, וחזרה רק לאחר `JOB_EMPTY`; כשל הוכחה משאיר containment hold.
+4. `0073_payment_credit_override.sql`: שיוך דרישת תשלום לישות משפטית, חישוב זיכויים פתוחים מסוקף, override מפורש עם סיבה, audit ו-replay idempotent, ללא קיזוז או שינוי סכומים.
+5. `0074_monthly_report_snapshots.sql`: גרסאות snapshot בלתי-משתנות לפי ארגון/ישות/חודש, RLS, נעילת allocation של גרסה, audit/event וייצוא XLSX מנתוני snapshot שמורים בלבד.
 
 ## migrations
 
 | טווח | מצב |
 |---|---|
-| `0053`–`0064` | קיימות בבסיס המקומי ונכללות בענף זה. |
-| `0065` | מוקצית ל-Wave 6b; טרם מומשה. |
-| `0066` | מוקצית ל-Wave 7; טרם מומשה. |
-| `0067` | מוקצית ל-Wave 8; טרם מומשה. |
-| `0068`–`0072` | מוקצות ל-Wave 9; טרם מומשו. |
-| `0073`–`0074` | שמורות לשני תיקוני ה-QA, אך אסורות לנחיתה לפני `0053`–`0072`. |
+| `0053`–`0070` | קיימות ב-`main` המקומי. |
+| `0071`–`0072` | מוקצות אך לא נוצלו במכוון ב-Wave 9. |
+| `0073` | משולבת בענף זה; בדיקת runtime טרם בוצעה. |
+| `0074` | משולבת בענף זה; בדיקת runtime טרם בוצעה. |
 
-אסור ליצור migrations ריקות כדי למלא את הפער ואסור להזיז את תיקוני ה-QA אל `0065`–`0066`.
+המספור תואם ל-`02-MIGRATION-ALLOCATION.md`: ‏`0073`–`0074` רשאיות לבוא אחרי `0070`; אין migrations ריקות ואין שינוי של היסטוריה שכבר הוחלה.
 
 ## הכרעות scope
 
-1. snapshot סופי לרו״ח הוא פר-`legal_entity`, כאשר `org_id` נשאר גבול הדייר.
-2. כל open credit חייב לקבל ייחוס מוכח לישות משפטית לפני הפעלת override מסוקף. legacy שלא ניתן לייחס חוסם migration/preflight; אין total ארגוני שיחשוף נתונים בין ישויות.
-3. ה-policy המאושר נשמר: override מפורש עם סיבה ו-audit, ללא קיזוז אוטומטי, ללא סגירת זיכוי וללא שינוי סכום הדרישה.
+- snapshot סופי לרו״ח הוא פר-`legal_entity`; ‏`org_id` נשאר גבול הדייר.
+- `credit_requests` נשארת ישות scope נגזרת ואינה מקבלת `unit_id`.
+- זיכוי פתוח נגזר מחשבונית או מקבלה→מחסן→ישות משפטית; ייחוס חסר או דו-משמעי נכשל סגור.
+- override דורש סיבה כתובה ונרשם בשרת; הוא אינו מקזז, סוגר או מקצה זיכוי ואינו משנה את סכום הדרישה.
 
-ההכרעות מתועדות ב-`docs/OPEN-DECISIONS.md` ‏#95–#96.
+ההכרעות מתועדות ב-`docs/OPEN-DECISIONS.md` ‏#106–#107.
 
-## תנאים ל-port של `0073`
+## ראיות קיימות בלבד
 
-- לקרוא את הגוף הסופי של `transition_payment_request` לאחר `0072`; לא להעתיק גוף ישן.
-- לקבוע `payment_requests.unit_id` ולדרוש שכל החשבוניות המשויכות שייכות לאותה ישות.
-- לקרוא `assert_unit_in_scope`, להסיר את exemption של הפונקציה ולסיים באפס הפרות A5.
-- לנעול ולחשב רק זיכויים מאותה ישות; זיכוי לא מסווג נכשל סגור.
-- לשמור audit/event יחידים ו-replay idempotent.
+- ראיות ה-QA וה-triage ההיסטוריות נשמרו תחת `qa/triage` ובתיקיית הריצה המקורית; הן מתייחסות לקומיטים הישנים שעליהם נוצרו.
+- Wave 9 תועד ב-`docs/PROGRESS.md` כ-PASS היסטורי לריצה `20260806-092150`: ‏42/42 preflight, ‏25/25 תרחישי דפדפן ו-build עם 232 בדיקות.
+- ל-Job Object ול-`0073`–`0074` קיימות סקירות ו/או בדיקות שנוספו, אך הן לא הורצו מול ענף האינטגרציה הזה.
+- לכן הראיות ההיסטוריות אינן מוכיחות שהשילוב מול `main` הנוכחי עבר.
 
-## תנאים ל-port של `0074`
+## שער עתידי
 
-- `monthly_report_snapshots.unit_id` הוא legal entity עם FK מרוכב ו-unique לפי entity/month/version.
-- רישום ב-`private.scope_registry`, רוכב A3, כיסוי A5 וזרועות A/B/C ב-`demo_verify.sql`.
-- audit ו-domain event באותה עסקה.
-- XLSX נבנה רק מה-snapshot השמור וכולל rows, totals, bank rows, metadata ו-hash, ללא נוסחאות.
-- `Reports.tsx` חייב לשמר `safeMonth` ו-`ReauthModal` ולהוסיף בורר legal entity מסונן-סקופ.
+`scripts/check-quality-gates.ps1` מחבר את בדיקות SQL של `0073`, ‏`0074` ואת בדיקת ה-concurrency של snapshots. בסשן בדיקות נפרד יש להריץ, לפי הסדר המוסכם:
+
+1. `npm.cmd ci`
+2. `npm.cmd run build`
+3. `npm.cmd run qa:typecheck`
+4. `npm.cmd run qa:test`
+5. `npm.cmd run quality`
+6. `npm.cmd run qa:full`
+
+אין להריץ `quality` ו-`qa:full` במקביל.
 
 ## Gate
 
-`BLOCKED / NOT_READY_FOR_PR`
+`READY_WITH_MANUAL_CHECKS`
 
-החסימות:
-
-1. migrations ‏`0065`–`0072` ותוכניות Waves 6b–9 טרם נחתו.
-2. אין עדיין סכימת scope סופית ל-`payment_requests`, ‏`credit_requests`, ‏`bank_imports` ו-`exceptions` שעליה ניתן לבנות את `0073`–`0074`.
-3. קו ה-Enterprise המקומי עדיין לא פורסם; PR לענף `origin/main` יציג גם את 50 הקומיטים האלה.
-4. לא קיימת הרצת validation עדכנית לענף זה.
-
-לכן לא בוצעו push, פתיחת PR, merge או סגירת Issues.
+הקוד משולב סטטית וללא conflicts, אך אין validation עדכני ל-`0073`–`0074` או לשילוב המלא. בנוסף, PR אל `origin/main` יכלול גם את 88 קומיטי ה-Enterprise שעדיין אינם ב-remote. לכן לא בוצעו push, פתיחת PR, merge או סגירת Issues.
