@@ -28,6 +28,7 @@ import {
   documentUserStateDescription,
   documentUserStateFromParam,
   documentUserStateLabel,
+  documentUserStateUrgency,
   useDocumentProcessing,
   type DocumentProcessingStage,
   type DocumentUserState,
@@ -61,10 +62,40 @@ export function ProcessingBadge({ documentId, stage, doc }: {
   }
   const meta = DOCUMENT_USER_STATE_META[documentUserState(stage)];
   return (
-    <span data-testid="document-processing-status" data-document-id={documentId} data-stage={stage}
-      className={`badge-${meta.tone}`} title={documentUserStateDescription(stage)}>
-      {documentUserStateLabel(stage, doc)}
-    </span>
+    <>
+      <span data-testid="document-processing-status" data-document-id={documentId} data-stage={stage}
+        className={`badge-${meta.tone}`} title={documentUserStateDescription(stage)}>
+        {documentUserStateLabel(stage, doc)}
+      </span>
+      {/* The sentence is not carried by `title` alone. A tooltip does not exist on touch — and the
+          OCR scenario drives this page at 390px — and screen readers treat it inconsistently, which
+          PRODUCT.md's WCAG 2.1 AA target does not allow for the only copy that distinguishes a
+          document nothing was ever sent for from one being read right now. Kept a SIBLING of the
+          badge, not a child, so the badge's own innerText stays the label alone — that is what
+          check-browser-smoke.cjs measures. `title` stays for the pointer. */}
+      <span className="sr-only">{documentUserStateDescription(stage)}</span>
+    </>
+  );
+}
+
+/** The state filter. Extracted so the RENDERED options can be asserted: pinning the exported array
+ *  is not the same as pinning the control, and a scenario that only calls `selectOption('failed')`
+ *  passes against both this list and the seven engineering stages it replaced. */
+export function ProcessingFilterSelect({ value, onChange }: {
+  value: DocumentUserState | 'all'; onChange: (value: string) => void;
+}) {
+  return (
+    <label>
+      <span className="label">מצב המסמך</span>
+      <select data-testid="documents-processing-filter" className="input" value={value}
+        onChange={(event) => onChange(event.target.value)}>
+        <option value="all">הכול</option>
+        {/* Four human states, not seven pipeline stages. Three of the four values are the tokens
+            the URL already carried, so `?processing=review|completed|failed` keeps meaning exactly
+            what it meant; the fourth absorbs the machine's four. */}
+        {DOCUMENT_USER_STATE_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </label>
   );
 }
 
@@ -532,9 +563,10 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     },
     {
       key: 'processing', header: 'מצב', mobileLabel: null, priority: 3,
-      // Sorted by the state on screen, not by the stage underneath: with four labels, sorting by
-      // the seven internal names would scatter identical-looking badges apart from each other.
-      sortValue: (doc) => documentUserState(processing.snapshots[doc.id]?.stage ?? 'unprocessed'),
+      // Sorted by the state on screen, not by the stage underneath — with four labels, the seven
+      // internal names would scatter identical-looking badges apart — and ranked by urgency rather
+      // than by name, so ascending puts what waits on a person at the top. See USER_STATE_URGENCY.
+      sortValue: (doc) => documentUserStateUrgency(processing.snapshots[doc.id]?.stage ?? 'unprocessed'),
       render: (doc) => (
         <ProcessingBadge
           documentId={doc.id}
@@ -623,17 +655,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
               </select>
             </label>
           )}
-          <label>
-            <span className="label">מצב המסמך</span>
-            <select data-testid="documents-processing-filter" className="input" value={processingFilter}
-              onChange={(event) => setProcessing(event.target.value)}>
-              <option value="all">הכול</option>
-              {/* Four human states, not seven pipeline stages. Three of the four values are the
-                  tokens the URL already carried, so `?processing=review|completed|failed` keeps
-                  meaning exactly what it meant; the fourth absorbs the machine's four. */}
-              {DOCUMENT_USER_STATE_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          </label>
+          <ProcessingFilterSelect value={processingFilter} onChange={setProcessing} />
           <label>
             <span className="label">מתאריך</span>
             <input type="date" className="input num" value={from} onChange={(event) => setFrom(event.target.value)} />

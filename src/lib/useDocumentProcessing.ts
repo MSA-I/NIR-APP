@@ -104,6 +104,23 @@ export function documentUserStateDescription(stage: DocumentProcessingStage): st
   return STAGE_USER_DESCRIPTION[stage];
 }
 
+/**
+ * Sort rank for the state column: what waits on a person first, what broke second, what the system
+ * is still doing third, what is finished last. Sorting on the state name gave
+ * שויך → לא נקרא → נקלט → בבדיקה — correct grouping, meaningless order. §12 asks a screen to answer
+ * "what needs treatment" within seconds of arriving, and a sort control is part of that answer.
+ */
+const USER_STATE_URGENCY: Record<DocumentUserState, number> = {
+  review: 0,
+  failed: 1,
+  intake: 2,
+  completed: 3,
+};
+
+export function documentUserStateUrgency(stage: DocumentProcessingStage): number {
+  return USER_STATE_URGENCY[documentUserState(stage)];
+}
+
 export const DOCUMENT_USER_STATE_FILTERS: ReadonlyArray<{ value: DocumentUserState; label: string }> =
   (Object.entries(DOCUMENT_USER_STATE_META) as Array<[DocumentUserState, { label: string }]>)
     .map(([value, { label }]) => ({ value, label }));
@@ -114,11 +131,17 @@ export const DOCUMENT_USER_STATE_FILTERS: ReadonlyArray<{ value: DocumentUserSta
  * and the honest reading of it is the state that CONTAINS that stage — a superset, so a link that
  * matched rows before never lands on an unexplained empty list. Anything unrecognised filters
  * nothing at all, exactly as it did before.
+ *
+ * `Object.hasOwn`, never `in`: `in` walks the prototype chain, so `?processing=toString` — and
+ * `constructor`, `valueOf`, `__proto__`, `hasOwnProperty`, `isPrototypeOf` — passed the guard and
+ * came back as if they were states. Measured live: the select fell back to displaying "הכול" over
+ * a list filtered to zero rows. A control that names a filter it is not applying is the one thing
+ * a filter must never do, and it is worse than the empty list itself.
  */
 export function documentUserStateFromParam(value: string | null): DocumentUserState | null {
   if (!value) return null;
-  if (value in DOCUMENT_USER_STATE_META) return value as DocumentUserState;
-  if (value in STAGE_USER_STATE) return STAGE_USER_STATE[value as DocumentProcessingStage];
+  if (Object.hasOwn(DOCUMENT_USER_STATE_META, value)) return value as DocumentUserState;
+  if (Object.hasOwn(STAGE_USER_STATE, value)) return STAGE_USER_STATE[value as DocumentProcessingStage];
   return null;
 }
 

@@ -24,10 +24,11 @@ import {
   documentUserStateDescription,
   documentUserStateFromParam,
   documentUserStateLabel,
+  documentUserStateUrgency,
   type DocumentProcessingStage,
   type DocumentUserState,
 } from './useDocumentProcessing';
-import { ProcessingBadge } from '../pages/DocumentsInbox';
+import { ProcessingBadge, ProcessingFilterSelect } from '../pages/DocumentsInbox';
 
 const STAGES = Object.keys(DOCUMENT_PROCESSING_STAGE_META) as DocumentProcessingStage[];
 
@@ -134,6 +135,39 @@ describe('הסינון מדבר באותם ארבעה מצבים', () => {
     expect(documentUserStateFromParam('')).toBeNull();
     expect(documentUserStateFromParam(null)).toBeNull();
   });
+
+  // `banana` נכשל נכון גם עם `in`, ולכן הבדיקה שמעליו החמיצה מחלקה שלמה: `in` מטפס על שרשרת
+  // הפרוטוטייפ, ולכן `?processing=toString` חזר כאילו היה מצב תקין — הבקרה הציגה "הכול" מעל
+  // רשימה מסוננת לאפס שורות. בקרה שמכריזה על מסנן שאינו מופעל היא בדיוק השקר שהמסך הזה נועד
+  // להפסיק.
+  it.each(['toString', 'constructor', 'hasOwnProperty', 'valueOf', '__proto__', 'isPrototypeOf'])(
+    'תכונת פרוטוטייפ (%s) אינה מצב, ואינה מסננת דבר',
+    (key) => { expect(documentUserStateFromParam(key)).toBeNull(); },
+  );
+
+  it('הבקרה עצמה מציגה ארבעה מצבים ועוד "הכול" — לא שבעה שלבים', () => {
+    // הטענה על המערך המיוצא אינה טענה על הבקרה: החלפת ה-JSX חזרה לשבעת השלבים לא הפילה דבר,
+    // ו-`selectOption('failed')` בשער הדפדפן עובר מול שתי הרשימות גם יחד.
+    render(<ProcessingFilterSelect value="all" onChange={() => {}} />);
+    const select = screen.getByTestId('documents-processing-filter');
+    const options = [...select.querySelectorAll('option')];
+    expect(options.map((option) => option.value)).toEqual(['all', 'intake', 'review', 'completed', 'failed']);
+    expect(options.map((option) => option.textContent)).toEqual(['הכול', 'נקלט', 'בבדיקה', 'שויך', 'לא נקרא']);
+  });
+});
+
+describe('סדר הדחיפות בעמודת המצב', () => {
+  // §12: המסך אמור לענות תוך שניות מה דורש טיפול. מיון לפי שם המצב נתן
+  // שויך → לא נקרא → נקלט → בבדיקה — קיבוץ נכון, דירוג חסר משמעות.
+  it('מה שממתין לאדם עולה ראשון, ומה שהסתיים אחרון', () => {
+    const ranked = [...STAGES].sort((a, b) => documentUserStateUrgency(a) - documentUserStateUrgency(b));
+    expect(ranked.map(documentUserState)).toEqual([
+      'review', 'failed', 'intake', 'intake', 'intake', 'intake', 'completed',
+    ]);
+    expect(documentUserStateUrgency('review')).toBeLessThan(documentUserStateUrgency('failed'));
+    expect(documentUserStateUrgency('failed')).toBeLessThan(documentUserStateUrgency('queued'));
+    expect(documentUserStateUrgency('queued')).toBeLessThan(documentUserStateUrgency('completed'));
+  });
 });
 
 describe('חוזה התג מול שער הדפדפן', () => {
@@ -144,6 +178,17 @@ describe('חוזה התג מול שער הדפדפן', () => {
     expect(badge.getAttribute('data-stage')).toBe(stage);
     expect(badge.textContent?.trim()).toBe(DOCUMENT_USER_STATE_META[documentUserState(stage)].label);
     expect(badge.className).toBe(`badge-${DOCUMENT_USER_STATE_META[documentUserState(stage)].tone}`);
+  });
+
+  it.each(STAGES)('%s — ההסבר נגיש גם בלי ריחוף, ומחוץ לטקסט התג', (stage) => {
+    const { container } = render(<ProcessingBadge documentId="doc-4" stage={stage} />);
+    const badge = screen.getByTestId('document-processing-status');
+    const description = documentUserStateDescription(stage);
+    expect(badge.getAttribute('title')).toBe(description);
+    // ולא ב-title בלבד: tooltip אינו קיים במגע, והתרחיש מריץ את הדף הזה ב-390px.
+    expect(container.querySelector('.sr-only')?.textContent).toBe(description);
+    // ומחוץ לתג — check-browser-smoke.cjs מודד את ה-innerText שלו מול תווית אחת.
+    expect(badge.textContent?.trim()).toBe(documentUserStateLabel(stage, null));
   });
 
   it('שורה שהעיבוד שלה הושלם ושויכה מספרת על היעד בתג עצמו', () => {

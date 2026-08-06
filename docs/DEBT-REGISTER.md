@@ -177,6 +177,16 @@
 | **איפה ההוכחה** | ‏`supabase/migrations/0077_apply_document_interpretation.sql` (בלוק ה-`insert into public.exceptions` וההנמקה מעליו) · ‏`supabase/tests/p14_apply_interpretation.sql` סעיף (l) — שלוש טענות: החריג נפתח עם `details.code='item_not_ordered'` ועם המק"ט; השורה שכן הוזמנה **אינה** מדווחת; והשורה בלי מזהה **מדולגת** (`jsonb_array_length(details->'items') = 1`) · ‏`src/lib/status.ts:127` (התווית) · ‏`0001_init.sql:18` (ה-enum). |
 | **הצעד הזול הבא** | **שתי מיגרציות, לא אחת** — כי הערך אינו שמיש בטרנזקציה שהוסיפה אותו: ‏(1) מיגרציה שכל תוכנה `alter type exception_type add value 'item_not_ordered';` ‏(2) מיגרציה עוקבת שמחליפה את הליטרל ב-0077 החי (**הזרקה לגוף החי בעוגני-אב, לא הצהרה-מחדש מהטקסט**). ובמקביל: שורה אחת ב-`src/lib/status.ts` (`item_not_ordered: 'פריט שלא הוזמן'`) ועדכון הטענה ב-p14 — **בקומיט אחד**, אחרת התווית והמדד ייפרדו. |
 
+## 18. ארבעה משטחים עדיין מציגים את שבעת שלבי ה-OCR — כולל המשטח שהתלונה נקבה בשמו
+
+| | |
+|---|---|
+| **מה** | משימה D1 קיפלה שבעה שלבי pipeline לארבעה מצבים אנושיים (נקלט · בבדיקה · שויך/נקרא · לא נקרא) **בתיקיית המסמכים בלבד** (`src/pages/DocumentsInbox.tsx`). **ארבעה משטחים אחרים ממשיכים להדפיס את התוויות ההנדסיות** לאותם משתמשים: ‏`src/components/AttachmentsPanel.tsx:226` (קבצים מצורפים לחשבונית/קבלה) · ‏`src/components/FileUpload.tsx:558` (רשימת הקבצים אחרי צירוף) · ‏`src/components/UploadCenter.tsx:544` (מגש ההעלאה) · ‏`src/components/document-review/DocumentReviewWorkspace.tsx:31` (מסך הבדיקה). התוצאה: אותו מסמך קורא **נקלט** בתיקייה ו**"ממתין לפירוש"** במסך שאליו התג עצמו מקשר, בקליק אחד. |
+| **למה זה חמור מ"חוסר עקביות"** | ‏(א) ‏**`UploadCenter` הוא המשטח שהבעלים תיאר מילולית** — *"כשאני מעלה מסמך אנחנו לא אמורים לראות את כל הprocess של ה-OCR"*. הוא נשאר בשפה הישנה. ‏(ב) ‏`DocumentReviewWorkspace` הוא **יעד הקישור** של התג החדש, כך שהסתירה מוצגת ברצף פעולה אחד ולא בשני מסכים מרוחקים. ‏(ג) שתי תוויות שונות לאותה עובדה מלמדות שאי אפשר לסמוך על אף אחת מהן. |
+| **למה נדחה** | ‏D1 הוקצתה לשני קבצים (`useDocumentProcessing.ts`, ‏`DocumentsInbox.tsx`) ולספק חדש, בזמן שסוכנים אחרים החזיקו `src/components/document-review/*` באותו גל. עריכת קבצים בבעלות סוכן אחר באמצע גל היא התנגשות מובטחת. **`DocumentReviewWorkspace` הוא גם המקרה היחיד שבו התווית ההנדסית אולי נכונה:** סוקר מול job תקוע צריך לדעת איזה שלב נעצר — וזו הכרעת מוצר פתוחה, לא החלה מכנית. |
+| **איפה ההוכחה** | ארבעת ה-file:line למעלה · ‏`src/lib/useDocumentProcessing.ts` (‏`DOCUMENT_USER_STATE_META`, ‏`documentUserState`) · ‏`src/lib/documentStage.spec.tsx` (‏36 בדיקות: המיפוי, חוזה ה-`data-stage`, וארבע האפשרויות של הבקרה) · אף שער אינו נשען על התוויות בארבעה המשטחים: ‏`data-document-processing-status` נקרא **רק** בתוך `AttachmentsPanel` ו-`FileUpload` עצמם, ולא ב-`scripts/` או ב-`qa/`. |
+| **הצעד הזול הבא** | שורה אחת בכל אחד משלושת המשטחים היומיומיים: ‏`DOCUMENT_USER_STATE_META[documentUserState(stage)]` במקום `DOCUMENT_PROCESSING_STAGE_META[stage]`. **‏`UploadCenter` דורש מחשבה ולא החלפה עיוורת** — ‏`displayMeta` שם **ממזג מצב העלאה עם מצב עיבוד**, ומוציא את `unprocessed` מהכלל בכוונה ("נרשם — העיבוד לא החל"), כלומר קיפול עיוור יבלע הבחנה אמיתית. ‏**`DocumentReviewWorkspace` דורש הכרעת בעלים תחילה** — האם מסך הסוקר מדבר בשפת המשתמש או בשפת ה-pipeline. |
+
 ---
 
 ## מה אין כאן
