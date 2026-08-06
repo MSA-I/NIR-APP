@@ -21,6 +21,53 @@ type FullInvoice = Invoice & {
   receipts: { receipt_id: string; goods_receipts: { id: string; number: number; received_at: string } }[];
 };
 
+/**
+ * The review actions this screen can offer, in reading order.
+ *
+ * This is **copy and order only** — which of them is legal from the current status is answered by
+ * `read_allowed_transitions('invoice_review', …)` (migration 0070), because the graph belongs to
+ * `set_invoice_review_status` and a second copy of it in the browser is a second answer. The reader
+ * returns an unordered set by contract, so the order lives here, next to the labels, in the same
+ * sequence as `INVOICE_REVIEW_STATUS` in `src/lib/status.ts`.
+ *
+ * OPEN-DECISIONS #105 — the one visible consequence of deleting the local matrix:
+ * **`approved` → `investigation` is now offered.** The server has allowed it since 0023 (any status
+ * other than `investigation` may move INTO investigation) and it is the right behaviour: finding a
+ * problem in an already-approved invoice is exactly when an investigation is needed. The browser was
+ * hiding a legal, reasoned, audited transition. Anything else that appears or disappears here is a
+ * bug, not this change.
+ */
+export const INVOICE_REVIEW_ACTIONS: { to: InvoiceReviewStatus; label: string }[] = [
+  { to: 'in_review', label: 'העברה לבדיקה' },
+  { to: 'pending_approval', label: 'העברה לאישור' },
+  { to: 'approved', label: 'אישור לתשלום' },
+  { to: 'investigation', label: 'סימון לבירור' },
+];
+
+/**
+ * Reads the status graph from the server.
+ *
+ * Returns `null` — never a guess — when the read fails: the caller disables the controls and says
+ * so. Inventing a fallback matrix here would recreate the very duplicate this replaces, and the
+ * duplicate is what drifted. `read_allowed_transitions` is SECURITY INVOKER and answers a question
+ * about the machine ("what would the command accept from here"), not about the caller; role
+ * authorisation stays inside `set_invoice_review_status`, where it is audited.
+ */
+export async function readAllowedInvoiceTransitions(
+  currentStatus: string,
+): Promise<InvoiceReviewStatus[] | null> {
+  const { data, error } = await supabase.rpc('read_allowed_transitions', {
+    p_entity_type: 'invoice_review',
+    p_current_status: currentStatus,
+  });
+  if (error) return null;
+  const rows = (data ?? []) as { next_status: string }[];
+  const known = new Set(rows.map((row) => row.next_status));
+  // Zero rows is a legitimate answer (a terminal status), and it is NOT the same value as a failed
+  // read: it yields an empty array, which hides the buttons instead of disabling them.
+  return INVOICE_REVIEW_ACTIONS.filter((action) => known.has(action.to)).map((action) => action.to);
+}
+
 export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -49,7 +96,12 @@ export default function InvoiceDetail() {
       : unwrap(await supabase.from('payment_allocations')
         .select('amount, payment:payments(id, number, paid_date, reference, amount)')
         .eq('invoice_id', id!)) as { amount: number; payment: { number: number; paid_date: string; reference: string | null } }[];
-    return { invoice, balance, allocations };
+    // Fetched with the invoice on purpose: the graph depends on the status this read just returned,
+    // so a separate query would need its own loading state and would blank or flicker the action
+    // row. `readAllowedInvoiceTransitions` resolves to null instead of throwing, so a failure of
+    // the graph read cannot take the invoice down with it.
+    const allowedTransitions = await readAllowedInvoiceTransitions(invoice.review_status);
+    return { invoice, balance, allocations, allowedTransitions };
   }, [id, isProcurementManager]);
 
   const inv = data?.invoice;
@@ -139,12 +191,13 @@ export default function InvoiceDetail() {
   if (error && !data) return <ErrorNote message={error} />;
   if (!inv || !data) return <ErrorNote message="חשבונית לא נמצאה" />;
 
-  const transitions: { from: InvoiceReviewStatus[]; to: InvoiceReviewStatus; label: string }[] = [
-    { from: ['received'], to: 'in_review', label: 'העברה לבדיקה' },
-    { from: ['in_review', 'investigation'], to: 'pending_approval', label: 'העברה לאישור' },
-    { from: ['pending_approval', 'in_review'], to: 'approved', label: 'אישור לתשלום' },
-    { from: ['received', 'in_review', 'pending_approval'], to: 'investigation', label: 'סימון לבירור' },
-  ];
+  // null = the graph could not be read. The controls are then rendered DISABLED rather than
+  // filtered by a guess: offering a transition the server may reject, or hiding one it would
+  // accept, are both worse than saying "not right now" out loud.
+  const graphUnavailable = data.allowedTransitions === null;
+  const transitions = graphUnavailable
+    ? INVOICE_REVIEW_ACTIONS
+    : INVOICE_REVIEW_ACTIONS.filter((action) => data.allowedTransitions!.includes(action.to));
 
   return (
     <div className="space-y-4 max-w-4xl">
@@ -159,8 +212,9 @@ export default function InvoiceDetail() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2 no-print">
-          {isOffice && transitions.filter((t) => t.from.includes(inv.review_status)).map((t) => (
-            <button key={t.to} className={t.to === 'investigation' ? 'btn-secondary text-alert-solid' : 'btn-primary'} disabled={busy}
+          {isOffice && transitions.map((t) => (
+            <button key={t.to} className={t.to === 'investigation' ? 'btn-secondary text-alert-solid' : 'btn-primary'}
+              disabled={busy || graphUnavailable}
               onClick={() => setReviewTarget(t.to)}>
               {t.to === 'approved' ? <CheckCircle2 size={15} /> : t.to === 'investigation' ? <SearchCheck size={15} /> : <Send size={15} />}
               {t.label}
@@ -174,6 +228,13 @@ export default function InvoiceDetail() {
           {canEdit && <button className="btn-secondary" onClick={() => setCreditOpen(true)}><RotateCcw size={15} /> דרישת זיכוי</button>}
         </div>
       </div>
+
+      {isOffice && graphUnavailable && (
+        <Note tone="alert" role="alert">
+          לא ניתן לקרוא כרגע מהשרת אילו מעברי סטטוס מותרים מהמצב הנוכחי, ולכן עדכון הסטטוס חסום.
+          רענן את המסך ונסה שוב.
+        </Note>
+      )}
 
       <ConfirmDialog open={reviewTarget !== null} onClose={() => setReviewTarget(null)}
         onConfirm={(reason) => reviewTarget && void setReviewStatus(reviewTarget, reason)}
