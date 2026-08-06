@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, Inbox } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -15,20 +15,32 @@ import { toHebrewError } from '../lib/errors';
 
 interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[] }
 
-// Navigation follows the three product work groups: רכש / כספים / בקרה.
+// Navigation follows the product work groups: מסמכים / רכש / כספים / בקרה, above them the
+// two ungrouped entry points a person actually opens the app with.
 //
-// New order is pinned first because it is the most frequent workflow. The control centre
-// remains the owner/office landing route, but lives in its natural control group.
 // Remaining items (מחירונים, דרישות תשלום, התאמות בנק, יומן ביקורת,
 //    הגדרות, and the focused /pay, /my-prices, /admin routes) are slotted by the
 //    obvious procurement/finance/control reading. /pay is shared by payer and accountant.
 //    None of it invents business meaning.
 //
-const NAV: { section: string; items: NavItem[] }[] = [
+export const NAV_SECTIONS: { section: string; items: NavItem[] }[] = [
   {
+    // מרכז הבקרה ראשון: הוא התשובה לסעיף 12 — מה דורש טיפול, עכשיו. הזמנה חדשה
+    // יורדת למקום שני; היא הפעולה התכופה, אבל לא זו שפותחים איתה את היום.
     section: '',
     items: [
+      { to: '/dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, roles: ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'] },
       { to: '/orders/new', label: 'הזמנה חדשה', icon: ShoppingCart, roles: ['owner', 'office', 'kitchen'] },
+    ],
+  },
+  {
+    // Documents leave כספים: a scanned page is not yet a financial fact. It is read and filed
+    // first, and only then becomes an invoice or a credit — so the queue that does that reading
+    // gets its own group instead of sitting among the ledgers it feeds.
+    section: 'מסמכים',
+    items: [
+      { to: '/documents', label: 'תיקיית המסמכים', icon: FolderOpen, roles: ['owner', 'office', 'kitchen'] },
+      { to: '/documents/archive', label: 'ארכיון', icon: Archive, roles: ['owner', 'office', 'kitchen'] },
     ],
   },
   {
@@ -47,7 +59,6 @@ const NAV: { section: string; items: NavItem[] }[] = [
     items: [
       { to: '/invoices', label: 'חשבוניות', icon: FileText, roles: ['owner', 'office', 'kitchen', 'accountant'] },
       { to: '/credits', label: 'זיכויים', icon: RotateCcw, roles: ['owner', 'office', 'kitchen', 'accountant'] },
-      { to: '/documents', label: 'גלריית מסמכים', icon: Inbox, roles: ['owner', 'office', 'kitchen'] },
       { to: '/payment-requests', label: 'דרישות תשלום', icon: Send, roles: ['owner', 'office'] },
       { to: '/payments', label: 'תשלומים', icon: CreditCard, roles: ['owner', 'accountant'] },
       { to: '/bank', label: 'התאמות בנק', icon: Landmark, roles: ['owner', 'accountant'] },
@@ -57,7 +68,6 @@ const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: 'בקרה',
     items: [
-      { to: '/dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, roles: ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'] },
       { to: '/alerts', label: 'התראות', icon: Bell, roles: ['owner', 'office'] },
       { to: '/exceptions', label: 'חריגים', icon: AlertTriangle, roles: ['owner', 'office', 'kitchen', 'accountant'] },
       { to: '/expenses', label: 'ריכוז הוצאות', icon: PieChart, roles: ['owner', 'accountant'] },
@@ -81,7 +91,7 @@ const PAGE_TITLE_PATTERNS: [RegExp, string][] = [
 ];
 
 function pageTitleFor(pathname: string): string {
-  const navTitle = NAV.flatMap((section) => section.items).find((item) => item.to === pathname)?.label;
+  const navTitle = NAV_SECTIONS.flatMap((section) => section.items).find((item) => item.to === pathname)?.label;
   return navTitle ?? PAGE_TITLE_PATTERNS.find(([pattern]) => pattern.test(pathname))?.[1] ?? APP_NAME;
 }
 
@@ -105,11 +115,11 @@ export default function Layout() {
   // the product name keeps the header honest — it is never another tenant's name.
   const orgName = org?.name ?? APP_NAME;
 
-  const roleSections = NAV.map((s) => ({ ...s, items: s.items.filter((i) => role && i.roles.includes(role)) }))
+  const roleSections = NAV_SECTIONS.map((s) => ({ ...s, items: s.items.filter((i) => role && i.roles.includes(role)) }))
     .filter((s) => s.items.length > 0);
 
   // Platform operators are a separate axis from tenant roles, so the console cannot ride
-  // NAV's `roles: Role[]` filter — appending a synthetic Role would misrepresent the
+  // NAV_SECTIONS' `roles: Role[]` filter — appending a synthetic Role would misrepresent the
   // user_role enum the RLS policies are built on. It is appended after the tenant sections
   // to keep the visual separation between "running this business" and "running the platform".
   const sections = isPlatformAdmin
