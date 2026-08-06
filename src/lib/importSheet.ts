@@ -188,8 +188,9 @@ export function cellNumber(row: SheetRow, column: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Key for matching names typed by hand across a spreadsheet and the database. */
-export const nameKey = (s: string) => s.replace(/["'״׳]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+// Re-exported, not defined here: this module statically imports xlsx + papaparse, and callers
+// that only need to compare two names should not pay for a spreadsheet parser. See ./nameKey.
+export { nameKey } from './nameKey';
 
 /* ---------- reporting ---------- */
 

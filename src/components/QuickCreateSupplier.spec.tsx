@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -48,6 +48,24 @@ function useInsertEndpoint(
 
 const created = (body: Record<string, unknown>) =>
   HttpResponse.json({ id: 'supplier-new', name: body.name });
+
+/**
+ * The duplicate-name lookup the dialog runs before every insert (owner decision: warn, never
+ * block). Registered empty for every test; a test that wants a collision registers its own, which
+ * `server.use` puts in front.
+ */
+function useSupplierLookup(rows: Array<Record<string, unknown>> = []) {
+  const lookups = { count: 0 };
+  server.use(http.get(SUPPLIERS_ENDPOINT, () => {
+    lookups.count += 1;
+    return HttpResponse.json(rows);
+  }));
+  return lookups;
+}
+
+const ACME = { id: 'sup-1', name: 'ACME בע״מ', tax_id: '514123456', status: 'active' };
+
+beforeEach(() => { useSupplierLookup(); });
 
 const postgrestError = (status: number, message: string, code: string) =>
   HttpResponse.json({ message, code, details: null, hint: null }, { status });
@@ -117,6 +135,56 @@ describe('QuickCreateSupplier — the shared door', () => {
     expect(bodies[0]).toEqual({ org_id: 'org-test', name: 'ספק ללא ח.פ', tax_id: null });
   });
 
+  it('warns on a name collision and creates nothing', async () => {
+    const user = userEvent.setup();
+    const bodies = useInsertEndpoint(created);
+    useSupplierLookup([ACME]);
+    const { onCreated } = await renderDialog();
+
+    // Different case and a straight quote: the match has to come from `nameKey` normalisation,
+    // not from string equality — the same helper Onboarding.tsx:759 uses.
+    await user.type(nameField(), 'acme בע"מ');
+    await user.click(saveButton());
+
+    expect(await screen.findByText('ספק בשם זה כבר קיים במערכת')).toBeInTheDocument();
+    // Which supplier it already has, not merely that it has one.
+    expect(screen.getByText('ACME בע״מ · ח.פ 514123456 · פעיל')).toBeInTheDocument();
+    expect(bodies).toHaveLength(0);
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'צור בכל זאת' })).toBeEnabled();
+  });
+
+  it('creates once the user proceeds deliberately past the warning', async () => {
+    const user = userEvent.setup();
+    const bodies = useInsertEndpoint(created);
+    useSupplierLookup([ACME]);
+    const { onCreated } = await renderDialog();
+
+    await user.type(nameField(), 'ACME בע״מ');
+    await user.click(saveButton());
+    await screen.findByText('ספק בשם זה כבר קיים במערכת');
+    // A warning, not a block: the second press is the deliberate one and it goes through.
+    await user.click(screen.getByRole('button', { name: 'צור בכל זאת' }));
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toEqual({ org_id: 'org-test', name: 'ACME בע״מ', tax_id: null });
+  });
+
+  it('says nothing and creates straight through when no name collides', async () => {
+    const user = userEvent.setup();
+    const bodies = useInsertEndpoint(created);
+    useSupplierLookup([ACME]);
+    const { onCreated } = await renderDialog();
+
+    await user.type(nameField(), 'ספק אחר לגמרי');
+    await user.click(saveButton());
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+    expect(bodies).toHaveLength(1);
+    expect(screen.queryByText('ספק בשם זה כבר קיים במערכת')).toBeNull();
+  });
+
   it('cannot fire a second insert after a successful create', async () => {
     const user = userEvent.setup();
     const bodies = useInsertEndpoint(created);
@@ -156,6 +224,7 @@ describe('QuickCreateSupplier — the shared door', () => {
   it('refuses a whitespace-only name before anything reaches the server', async () => {
     const user = userEvent.setup();
     const bodies = useInsertEndpoint(created);
+    const lookups = useSupplierLookup();
     const { onCreated } = await renderDialog();
 
     await user.type(nameField(), '   ');
@@ -164,6 +233,8 @@ describe('QuickCreateSupplier — the shared door', () => {
     expect(await screen.findByText('שם ספק הוא שדה חובה')).toBeInTheDocument();
     expect(nameField()).toHaveAttribute('aria-invalid', 'true');
     expect(bodies).toHaveLength(0);
+    // Not even the duplicate lookup: the trust boundary is before any request, not between two.
+    expect(lookups.count).toBe(0);
     expect(onCreated).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
@@ -231,15 +302,22 @@ describe('QuickCreateSupplier — the shared door', () => {
  *      spellings here and only one was being checked;
  *   2. exactly one write in the file, pinned to the closed row builder at the call site — this is
  *      what stops both a `{...defaults}` spread and a second fire-and-forget `.update()`;
- *   3. the builder driven directly, so the column set is not inferred from whichever scenario a
- *      UI test happens to drive;
- *   4. the wire with EVERY rendered control filled first — a field behind a disclosure, or one
- *      whose key is only attached when non-empty, now reaches the payload and is caught;
- *   5. a control inventory queried from the DOM, not by role, so `type="password"` cannot hide.
+ *   3. the builder driven directly — but only in its default state, so on its own this pins the
+ *      column set for a *pure* builder and would not see one that consults mutable module state;
+ *      axes 6 and 7 are what keep the builder pure;
+ *   4. the wire with EVERY rendered control filled first — a key attached only when its value is
+ *      non-empty now reaches the payload and is caught;
+ *   5. a control inventory queried from the DOM, not by role, so `type="password"` cannot hide;
+ *   6. the builder's one-line body pinned verbatim, which closes the whole "rewrite the builder
+ *      while the call site stays byte-identical" family — including a mutated module-level
+ *      `const` object, which axis 7 alone cannot see;
+ *   7. no module-level `let`/`var` anywhere in the file.
  *
- * What this still does not catch: an editor who rewrites `quickSupplierRow` itself to accept and
- * spread a caller-supplied object. Axis 2 makes that a deliberate, visible edit to this file
- * rather than an accident — which is the most a test in this repo can honestly claim.
+ * What this still does not catch, stated rather than papered over:
+ *   - a raw `fetch` that bypasses supabase-js: axis 2 counts supabase-js write methods, not writes;
+ *   - a field that only renders after a click, since axes 4 and 5 cannot inventory a control that
+ *     does not exist yet — that edit is caught by axes 1 and 2 instead, not by the render axes.
+ * Both need a deliberate, conspicuous edit to this file, which is the most a test here can claim.
  */
 describe('bank_details must never appear in this component', () => {
   const source = componentSource;
@@ -266,6 +344,23 @@ describe('bank_details must never appear in this component', () => {
     // untouched. One write, and its argument pinned, is what closes that door.
     expect(code.match(/\.(insert|update|upsert|delete|rpc)\(/g)).toEqual(['.insert(']);
     expect(code).toMatch(/\.insert\(quickSupplierRow\(profile\.org_id, name, taxId\)\)/);
+  });
+
+  it('pins the builder body, so it cannot be rewritten to answer differently in the app', () => {
+    // The `let` check below catches one shape of this; a module-level `const state = {}` mutated
+    // at runtime defeats it. Pinning the whole one-line body closes the family: any rewrite of the
+    // builder — reading module state, spreading a caller object, anything — fails here, while the
+    // call site stays byte-identical and axis 3 stays green.
+    expect(code).toMatch(
+      /export function quickSupplierRow\(orgId: string, name: string, taxId: string\): QuickSupplierColumns \{\s*return \{ org_id: orgId, name: name\.trim\(\), tax_id: taxId\.trim\(\) \|\| null \};\s*\}/,
+    );
+  });
+
+  it('holds no module-level mutable state for the builder to read', () => {
+    // Without this, `quickSupplierRow` can be rewritten to consult a module `let` and attach a
+    // fourth column in the app while the call site stays byte-identical and axis 3 — which only
+    // ever drives the default state — stays green.
+    expect(code).not.toMatch(/^(let|var) /m);
   });
 
   it('builds exactly three columns for any input, not just the one a UI test drives', () => {

@@ -36,7 +36,10 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { ok, toHebrewError } from '../lib/errors';
-import { ErrorNote, Modal, useToast } from './ui';
+import { fetchAll } from '../lib/supabasePaging';
+import { nameKey } from '../lib/nameKey';
+import { SUPPLIER_STATUS } from '../lib/status';
+import { ErrorNote, Modal, Note, useToast } from './ui';
 import type { Supplier } from '../lib/types';
 
 /**
@@ -69,6 +72,23 @@ export function quickSupplierRow(orgId: string, name: string, taxId: string): Qu
 /** The full supplier form's wording for the same mistake — not a second sentence for one meaning. */
 const NAME_REQUIRED = 'שם ספק הוא שדה חובה';
 
+/** Enough of the existing row to tell the user WHICH supplier it already has. */
+type ExistingSupplier = Pick<Supplier, 'id' | 'name' | 'tax_id' | 'status'>;
+
+/**
+ * Says what the duplicate is, not merely that one exists — a bare name is weak evidence when the
+ * name is the thing that collided. ח.פ is the identity claim; status is usually the reason the
+ * user could not find it (an inactive supplier is missing from most pickers). A missing ח.פ is
+ * stated rather than padded over: "no tax id recorded" is itself information.
+ */
+function describeExisting(row: ExistingSupplier) {
+  return [
+    row.name,
+    row.tax_id ? `ח.פ ${row.tax_id}` : 'ללא ח.פ רשום',
+    SUPPLIER_STATUS[row.status]?.label ?? row.status,
+  ].join(' · ');
+}
+
 /**
  * Mounted conditionally by the caller, like `SupplierForm` and `PriceListUploadModal`: mounting is
  * what resets the fields. It nests safely inside another dialog — `useDialogLayer` keeps a stack,
@@ -95,6 +115,13 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
    * the second write without taking the exit away.
    */
   const [created, setCreated] = useState(false);
+  /**
+   * The existing supplier whose name matches, once found. Owner decision: a name collision
+   * **warns, it does not block** — a real business does sometimes have two genuinely similar
+   * supplier names, and refusing would create a new dead end, which is the thing this component
+   * exists to remove. Set = the warning is on screen and the next press is the deliberate one.
+   */
+  const [duplicate, setDuplicate] = useState<ExistingSupplier | null>(null);
   const spent = busy || created;
 
   async function save() {
@@ -108,6 +135,19 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
     setBusy(true);
     setError(null);
     try {
+      // The duplicate half of the #106 fraud pattern is a duplicate supplier row; this is the
+      // cheap non-blocking guard on it, using the same `nameKey` and the same sentence as the
+      // sibling bulk path (`Onboarding.tsx:759`) rather than minting a second dialect. Skipped on
+      // the second press, which is the user proceeding deliberately. If the check itself fails we
+      // cannot say the name is free, so it throws and nothing is inserted — the same call
+      // `Suppliers.tsx:106` makes when its delete guard cannot prove what it needs.
+      if (!duplicate) {
+        const existing = await fetchAll<ExistingSupplier>((from, to) => supabase.from('suppliers')
+          .select('id, name, tax_id, status').is('deleted_at', null).order('id').range(from, to));
+        const key = nameKey(name);
+        const match = existing.find((row) => nameKey(row.name) === key);
+        if (match) { setDuplicate(match); return; }
+      }
       const inserted = ok(await supabase.from('suppliers')
         .insert(quickSupplierRow(profile.org_id, name, taxId))
         .select('id, name')
@@ -132,13 +172,21 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
       statusMessage={busy ? 'יוצר את הספק' : undefined}>
       <div className="space-y-4">
         {error && <ErrorNote message={error} />}
+        {duplicate && (
+          <Note tone="await" role="alert">
+            <div className="font-medium">ספק בשם זה כבר קיים במערכת</div>
+            <div className="mt-1 text-sm">{describeExisting(duplicate)}</div>
+          </Note>
+        )}
         <div>
           <label className="label" htmlFor="quick-supplier-name">שם הספק *</label>
           {/* Only the field's own refusal marks the field invalid — a network or permission
               failure is not something wrong with what the user typed. */}
           <input id="quick-supplier-name" className="input" value={name} disabled={spent}
             aria-invalid={error === NAME_REQUIRED || undefined}
-            onChange={(event) => setName(event.target.value)} />
+            /* Editing the name retires the warning, so the next press re-checks the new name
+               instead of waving through a collision the user never saw. */
+            onChange={(event) => { setName(event.target.value); setDuplicate(null); }} />
         </div>
         <div>
           <label className="label" htmlFor="quick-supplier-tax-id">ח.פ / עוסק</label>
@@ -150,7 +198,7 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
         {/* Cancel stays live after a create: the exit is never taken away. */}
         <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
         <button type="button" className="btn-primary" disabled={spent} onClick={() => void save()}>
-          {created ? 'נוצר' : busy ? 'שומר…' : 'שמירה'}
+          {created ? 'נוצר' : busy ? 'שומר…' : duplicate ? 'צור בכל זאת' : 'שמירה'}
         </button>
       </div>
     </Modal>
