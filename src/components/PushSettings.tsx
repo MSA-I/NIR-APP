@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
-import { BellRing } from 'lucide-react';
-import { useToast, Note } from './ui';
+import { BellRing, SlidersHorizontal } from 'lucide-react';
+import { useToast, Note, Skeleton } from './ui';
 import { getPushStatus, subscribePush, unsubscribePush, isIOS, isStandalone, type PushStatus } from '../lib/push';
+import { useQuery } from '../lib/useQuery';
+import { DOMAIN } from '../lib/query/keys';
+import { toHebrewError } from '../lib/errors';
+import {
+  NOTIFICATION_EVENT_LABELS,
+  readNotificationPreferences,
+  setNotificationPreference,
+  type NotificationPreference,
+} from '../lib/notifications';
 
 /* ---------- push notifications (per-device, not per-org) ---------- */
 
@@ -19,7 +28,28 @@ const PUSH_STATUS_LINE: Record<PushStatus, string> = {
   'not-subscribed': 'התראות כבויות במכשיר זה',
 };
 
+/**
+ * The notification card, in two parts that answer two different questions.
+ *
+ *   `PushDeviceCard`      — "does THIS browser buzz?"  (push_subscriptions, per device, 0015)
+ *   `NotificationMatrix`  — "which events reach me at all?" (notification_preferences, per member,
+ *                            migration 0068)
+ *
+ * They are deliberately separate cards: a member can be subscribed on their phone and still have
+ * muted Push for price increases, and one card conflating the two would make that state unreadable.
+ * Both render from the single `<PushSection />` that /alerts already places (FINANCE guard =
+ * owner+office = exactly the notification audience of 0068's `eligible` CTE).
+ */
 export function PushSection() {
+  return (
+    <>
+      <PushDeviceCard />
+      <NotificationMatrix />
+    </>
+  );
+}
+
+function PushDeviceCard() {
   const toast = useToast();
   const [status, setStatus] = useState<PushStatus | null>(null); // null = still checking
   const [busy, setBusy] = useState(false);
@@ -70,6 +100,138 @@ export function PushSection() {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ---------- per-event preferences (migration 0068) ---------- */
+
+type Channel = 'push' | 'inapp';
+
+const CHANNEL_LABEL: Record<Channel, string> = {
+  push: 'דחיפה למכשיר',
+  inapp: 'התראה במערכת',
+};
+
+/** The one line under each event, stating what the current pair of switches actually does. */
+function deliveryLine(preference: NotificationPreference): string {
+  if (!preference.inapp_enabled) return 'לא נרשמת בפעמון — ולכן גם לא נשלחת דחיפה למכשיר';
+  if (!preference.push_enabled) return 'מופיעה בפעמון ובמסך ההתראות; לא נשלחת דחיפה למכשיר';
+  return 'מופיעה בפעמון ובמסך ההתראות, ונשלחת גם כדחיפה למכשיר';
+}
+
+/**
+ * The preference matrix: one row per catalogued event code, two switches per row.
+ *
+ * **Opt-in is the default and this screen keeps it that way.** An absent row comes back from
+ * `read_notification_preferences()` as both flags `true` with `configured = false`, so it renders
+ * "on" and nothing is written until the member actually changes something. Opening this card must
+ * never turn into a write — that is what would make 0068 change an installation's behaviour by
+ * existing (handoff-09 §1).
+ *
+ * **Muting Push does not mute the bell.** `push_enabled = false` removes the Web Push leg and
+ * LEAVES the `notifications` row, because the unread badge of OPEN-DECISIONS #39 counts those rows.
+ * Muting the in-app notification is the one that removes the record — and Push travels with it,
+ * since Push rides on the row. The copy below says both out loud rather than leaving a member to
+ * discover which switch silences the audit trail.
+ */
+export function NotificationMatrix() {
+  const toast = useToast();
+  const { data, loading, error, refetch } = useQuery<NotificationPreference[]>(
+    () => readNotificationPreferences(),
+    [],
+    [DOMAIN.notifications, 'preferences'],
+  );
+  const [pending, setPending] = useState<string | null>(null);
+
+  async function change(preference: NotificationPreference, channel: Channel, next: boolean) {
+    setPending(preference.event_code);
+    try {
+      // Both columns travel on every write: the row holds both, so the untouched channel is sent
+      // back exactly as it is displayed rather than being defaulted a second time.
+      await setNotificationPreference(
+        preference.event_code,
+        channel === 'push' ? next : preference.push_enabled,
+        channel === 'inapp' ? next : preference.inapp_enabled,
+      );
+      await refetch();
+      toast('העדפת ההתראה נשמרה');
+    } catch (e) {
+      toast(toHebrewError(e), 'error');
+    } finally {
+      setPending(null);
+    }
+  }
+
+  return (
+    <div className="card card-pad space-y-4">
+      <div>
+        <h2 className="section-title flex items-center gap-2">
+          <SlidersHorizontal size={17} /> אילו התראות מגיעות אליי
+        </h2>
+        <p className="text-sm text-ink-muted mt-1">
+          ההגדרה היא שלך בלבד ותקפה בכל המכשירים. כברירת מחדל הכול פעיל.
+          <strong className="font-medium"> כיבוי הדחיפה מסיר רק את ההתראה למכשיר</strong> — ההתראה
+          ממשיכה להופיע בפעמון ובמסך ההתראות. כיבוי ההתראה במערכת הוא זה שמסיר את הרשומה עצמה, ואיתה
+          גם הדחיפה.
+        </p>
+      </div>
+
+      {/* The house skeleton idiom (ui.tsx:41-48): one spoken "טוען", not three narrated boxes. */}
+      {loading && (
+        <div className="space-y-3" role="status" aria-busy="true">
+          <span className="sr-only">טוען העדפות התראה</span>
+          <Skeleton className="h-12" />
+          <Skeleton className="h-12" />
+          <Skeleton className="h-12" />
+        </div>
+      )}
+
+      {error && <Note tone="alert" role="alert">{error}</Note>}
+
+      {data && (
+        <ul className="divide-y divide-line-soft">
+          {data.map((preference) => {
+            const copy = NOTIFICATION_EVENT_LABELS[preference.event_code];
+            const busy = pending === preference.event_code;
+            return (
+              <li key={preference.event_code} className="py-3 first:pt-0 last:pb-0">
+                <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-ink-body">
+                      {copy?.label ?? preference.event_code}
+                    </div>
+                    {copy && <div className="text-xs text-ink-muted mt-0.5">{copy.detail}</div>}
+                    <div className="text-xs text-ink-soft mt-1">{deliveryLine(preference)}</div>
+                    {!preference.configured && (
+                      <div className="text-xs text-ink-faint mt-0.5">ברירת המחדל — לא שינית כאן דבר</div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(['inapp', 'push'] as Channel[]).map((channel) => {
+                      const on = channel === 'push' ? preference.push_enabled : preference.inapp_enabled;
+                      return (
+                        <button
+                          key={channel}
+                          type="button"
+                          role="switch"
+                          aria-checked={on}
+                          aria-label={`${CHANNEL_LABEL[channel]} — ${copy?.label ?? preference.event_code}`}
+                          disabled={busy}
+                          className={on ? 'btn-secondary' : 'btn-ghost'}
+                          onClick={() => void change(preference, channel, !on)}
+                        >
+                          {CHANNEL_LABEL[channel]} · {on ? 'פעיל' : 'כבוי'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

@@ -117,6 +117,15 @@ const PATTERNS: [RegExp, string][] = [
   // claim about the business. The sentence says the list is unverified, not empty.
   [/count_unavailable/i,
     'לא ניתן לאמת כרגע את מספר הרשומות ברשימה. רענן את המסך ונסה שוב.'],
+  // Migration 0068 / handoff-09 §1.3. Ahead of the generic `not_authorized` line below on purpose:
+  // PATTERNS is scanned in order, and `notification_preference_not_authorized` would otherwise be
+  // answered by the generic sentence instead of by one that names the setting.
+  [/notification_preference_not_authorized/i,
+    'לא ניתן לעדכן את העדפות ההתראות כרגע. יש להתחבר מחדש ולנסות שוב.'],
+  [/notification_event_unknown/i,
+    'סוג ההתראה הזה אינו מוכר למערכת. רענן את הדף ונסה שוב.'],
+  [/notification_preference_invalid/i,
+    'העדפת ההתראה שנשלחה אינה תקינה.'],
   [/financial_command_rpc_required|invoice_soft_delete_rpc_required|supplier_soft_delete_rpc_required|product_active_rpc_required|purchase_order_cancel_rpc_required/i,
     'הנתונים השתנו דרך מסלול ישן שנחסם. רענן את האפליקציה ונסה שוב.'],
   [/fresh_authentication_required/i,
