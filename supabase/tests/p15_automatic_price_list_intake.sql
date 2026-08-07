@@ -35,11 +35,14 @@ returns jsonb language sql immutable as $$
   )
 $$;
 
-create function pg_temp.p15_payload(p_lines jsonb)
+create function pg_temp.p15_payload(
+  p_lines jsonb,
+  p_document_type text default 'price_list'
+)
 returns jsonb language sql immutable as $$
   select jsonb_build_object(
     'schema_version', '1',
-    'document_type', 'price_list',
+    'document_type', p_document_type,
     'document_type_confidence', 0.99,
     'supplier', jsonb_build_object(
       'suggested_id', '35000000-0000-4000-8000-000000000001',
@@ -73,7 +76,9 @@ $$;
 create function pg_temp.p15_seed(
   p_n integer,
   p_lines jsonb,
-  p_document_kind text default 'price_list'
+  p_document_kind text default 'price_list',
+  p_interpreted_type text default 'price_list',
+  p_registered_price_list boolean default false
 )
 returns uuid language plpgsql as $$
 declare
@@ -85,12 +90,15 @@ declare
   v_ext uuid := ('83000000-0000-4000-8000-' || lpad(p_n::text, 12, '0'))::uuid;
   v_int uuid := ('84000000-0000-4000-8000-' || lpad(p_n::text, 12, '0'))::uuid;
   v_etag text := md5(p_n::text) || md5(p_n::text);
+  v_object_id uuid;
+  v_object_updated_at timestamptz;
   v_path text := v_org::text || '/supplier/' || v_supplier::text || '/'
     || v_doc::text || '/prices-' || p_n || '.pdf';
 begin
   insert into storage.objects (bucket_id, name, owner, metadata)
   values ('documents', v_path, v_user,
-    jsonb_build_object('mimetype', 'application/pdf', 'size', 2048, 'eTag', v_etag));
+    jsonb_build_object('mimetype', 'application/pdf', 'size', 2048, 'eTag', v_etag))
+  returning id, updated_at into v_object_id, v_object_updated_at;
 
   insert into public.documents (
     id, org_id, entity_type, entity_id, supplier_id, storage_path,
@@ -115,13 +123,24 @@ begin
     'etag:' || v_etag, '1', pg_temp.p15_extraction_payload()
   );
 
+  if p_registered_price_list then
+    insert into public.supplier_price_document_upload_reservations (
+      document_id, org_id, actor_id, supplier_id, file_name, mime_type,
+      storage_path, status, object_id, object_updated_at, job_id, registered_at
+    ) values (
+      v_doc, v_org, v_user, v_supplier, 'prices-' || p_n || '.pdf',
+      'application/pdf', v_path, 'registered', v_object_id, v_object_updated_at,
+      v_job, now()
+    );
+  end if;
+
   insert into public.document_interpretations (
     id, org_id, job_id, extraction_id, document_id, interpreted_for_user_id,
     provider, model, prompt_version, schema_version, payload
   ) values (
     v_int, v_org, v_job, v_ext, v_doc, v_user,
     'openai', 'gpt-p15-fixture', 'interpret-document-v5', '1',
-    pg_temp.p15_payload(p_lines)
+    pg_temp.p15_payload(p_lines, p_interpreted_type)
   );
   return v_int;
 end
@@ -271,6 +290,29 @@ insert into public.org_autonomy_policies (
   org_id, policy_key, autonomy_enabled, min_confidence
 ) values (
   '15000000-0000-4000-8000-000000000001', 'price_list.intake', true, 0.900
+);
+
+-- The dedicated intake is the authoritative type context. A quote-like heading may not force
+-- manual type approval or block safe keyed rows after the user explicitly uploaded a price list.
+select pg_temp.p15_seed(6, jsonb_build_array(
+  pg_temp.p15_line(1, 'SUPPLIER-ONE', null, '10')
+), 'price_list', 'quote', true)::text as interpretation
+\gset trusted_
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+select public.apply_price_list_interpretation(
+  (select job_id from public.document_interpretations where id = :'trusted_interpretation'::uuid),
+  :'trusted_interpretation'::uuid, null
+)::text as result
+\gset trusted_
+reset role;
+select pg_temp.p15_assert(
+  :'trusted_result'::jsonb ->> 'outcome' = 'auto_applied'
+  and (select document_kind = 'price_list'
+       from public.documents where id = '81000000-0000-4000-8000-000000000006')
+  and (select current_price = 10
+       from public.supplier_products where id = '55000000-0000-4000-8000-000000000001'),
+  'a registered price-list upload still required the model to approve its document type'
 );
 
 -- Two products sharing the barcode are an ambiguity, never a first-row-wins match.

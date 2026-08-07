@@ -885,6 +885,7 @@ export async function handler(req: Request): Promise<Response> {
       context.extraction_payload,
       suppliers,
       rules,
+      storedKindIsPriceList ? "price_list" : null,
     );
     const startedAt = performance.now();
     const result = await createOpenAiProvider({ apiKey: providerKey })
@@ -893,7 +894,8 @@ export async function handler(req: Request): Promise<Response> {
     const persisted = await saveAndDecideInterpretation({
       admin,
       isSupplier,
-      isPriceList: result.interpretation.document_type === "price_list",
+      isPriceList: storedKindIsPriceList ||
+        result.interpretation.document_type === "price_list",
       jobId: job.id,
       actorId,
       args: {
