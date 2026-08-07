@@ -393,7 +393,7 @@ test("annotation labels above the database limit fail provider validation", asyn
   );
 });
 
-test("provider timeout retries once and then fails closed", async () => {
+test("provider timeout fails closed without duplicating the request", async () => {
   let attempts = 0;
   const fetchImpl = ((_input: RequestInfo | URL, init?: RequestInit) => {
     attempts += 1;
@@ -414,7 +414,7 @@ test("provider timeout retries once and then fails closed", async () => {
     }).interpret(payload()),
     (error) => errorCode(error) === "provider_timeout",
   );
-  assert.equal(attempts, 2);
+  assert.equal(attempts, 1);
 });
 
 test("429 honors Retry-After and never exceeds the configured attempt limit", async () => {

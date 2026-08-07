@@ -47,7 +47,9 @@ export const MAX_OUTPUT_TOKENS = 32_768;
 // Direct analogue of Anthropic's thinking:{type:"disabled"}. Raise to "minimal" only with a
 // matching MAX_OUTPUT_TOKENS increase -- reasoning tokens eat the same budget as the answer.
 export const REASONING_EFFORT = "none";
-export const PROVIDER_TIMEOUT_MS = 18_000;
+// A live 10KB / 3-block price list exceeded 18s twice. One 60s request avoids aborting a healthy
+// generation and avoids paying for a second request whose first server-side run may still finish.
+export const PROVIDER_TIMEOUT_MS = 60_000;
 export const PROVIDER_MAX_ATTEMPTS = 2;
 export const MAX_PROVIDER_PAYLOAD_BYTES = 384 * 1024;
 
@@ -856,14 +858,13 @@ export function createOpenAiProvider(
           });
         } catch {
           clearTimeout(timer);
+          const timedOut = controller.signal.aborted;
           lastError = new InterpretationError(
-            controller.signal.aborted
-              ? "provider_timeout"
-              : "provider_unavailable",
-            controller.signal.aborted ? 504 : 503,
+            timedOut ? "provider_timeout" : "provider_unavailable",
+            timedOut ? 504 : 503,
             true,
           );
-          if (attempt < maxAttempts) {
+          if (!timedOut && attempt < maxAttempts) {
             await sleep(250 * attempt);
             continue;
           }
