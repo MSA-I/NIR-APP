@@ -2062,6 +2062,476 @@ async function searchTypeGate(browser) {
   }
 }
 
+/* ============ wave 11: the menu, the supplier door, and the words the machine is given ============ */
+
+/**
+ * The sidebar as it is painted: groups in render order, links in render order.
+ *
+ * Reads each link's OWN text nodes rather than its `textContent`, because `/documents` carries the
+ * unfiled-count pill inside the same `<a>` (Layout.tsx:228-230). `textContent` would read
+ * "תיקיית המסמכים6" and the assertions below would silently become claims about the fixture's queue
+ * depth instead of claims about the menu.
+ *
+ * A group is `<div>[optional header]<div>links…</div></div>`, so the first child is the header only
+ * when it holds no link — that is how the ungrouped first section is told apart from a named one.
+ */
+function readSidebar(nav) {
+  return nav.evaluate((node) => [...node.children].map((group) => {
+    const first = group.firstElementChild;
+    return {
+      section: first && !first.querySelector('a') ? (first.textContent || '').trim() : '',
+      items: [...group.querySelectorAll('a')].map((link) => ({
+        label: [...link.childNodes].filter((child) => child.nodeType === 3)
+          .map((child) => child.textContent).join('').trim(),
+        path: new URL(link.href).pathname,
+        current: link.getAttribute('aria-current'),
+      })),
+    };
+  }));
+}
+
+/**
+ * A1 and A2, measured on the rendered menu instead of on the literal that produces it.
+ *
+ * Both claims had only ever been checked at module level: `layout.spec.ts` reads `NAV_SECTIONS`,
+ * `layoutActiveState.spec.tsx` renders in jsdom. Neither can answer the question A2 actually turns
+ * on — whether React Router marks one item or two as the current page on `/documents/archive` —
+ * because that is a routing decision resolved against a real URL, and because the consequence
+ * (`Layout.tsx:150` aims the drawer's opening focus at `[aria-current="page"]`) is a focus fact
+ * only a browser has. So the route is loaded for real, and the sidebar is read as a person sees it.
+ */
+async function navigationOrderAndActiveState(browser) {
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  captureConsole(page, 'navigation-order');
+  try {
+    await login(page, 'owner');
+    await page.goto(`${baseURL}/documents/archive`);
+    await settle(page);
+    await page.getByRole('heading', { name: 'ארכיון מסמכים' }).waitFor({ timeout: 25_000 });
+
+    const sidebar = page.locator('aside:visible').locator('nav');
+    await sidebar.first().waitFor();
+    assert.equal(await sidebar.count(), 1, 'the desktop shell rendered more than one visible sidebar nav');
+    const groups = await readSidebar(sidebar);
+    const links = groups.flatMap((group) => group.items);
+
+    // FIRST, not merely present. The control centre is section 12's answer to "what needs me now",
+    // and a link that is somewhere in the menu is not the same claim as the one the plan made.
+    assert.deepEqual(
+      { label: links[0] && links[0].label, path: links[0] && links[0].path },
+      { label: 'מרכז הבקרה', path: '/dashboard' },
+      `the first sidebar link is not the control centre: ${JSON.stringify(links.slice(0, 2))}`,
+    );
+    assert.equal(groups[0].section, '', 'the control centre was pushed under a group header');
+
+    // The מסמכים group exists, holds both document routes in order, and sits ahead of the ledgers
+    // it feeds. Asserting the whole header list rather than "contains מסמכים" is what makes a
+    // reordering visible instead of a group merely surviving somewhere.
+    const sections = groups.map((group) => group.section);
+    assert.deepEqual(sections, ['', 'מסמכים', 'רכש', 'כספים', 'בקרה'],
+      `wrong sidebar groups or group order: ${JSON.stringify(sections)}`);
+    assert.deepEqual(groups[1].items.map((item) => `${item.label} · ${item.path}`),
+      ['תיקיית המסמכים · /documents', 'ארכיון · /documents/archive'],
+      `wrong contents for the מסמכים group: ${JSON.stringify(groups[1].items)}`);
+
+    // A2. `end` on /documents is the whole fix, and this is the assertion jsdom could not settle:
+    // exactly ONE element in the document claims to be the page the user is on.
+    assert.deepEqual(links.filter((item) => item.current === 'page').map((item) => item.path),
+      ['/documents/archive'],
+      `wrong active navigation item on /documents/archive: ${JSON.stringify(links.filter((item) => item.current))}`);
+    assert.equal(await page.locator('[aria-current="page"]').count(), 1,
+      'more than one element on /documents/archive claims to be the current page');
+
+    await auditAccessibility(page, 'documents-archive/1440');
+    await page.screenshot({ path: path.join(outDir, 'navigation-archive-1440.png') });
+    report.screenshots.push('navigation-archive-1440.png');
+
+    // The drawer renders the same tree at phone width, and it is where two current items would do
+    // visible harm: useDialogLayer's initialFocus queries for exactly this attribute, so a second
+    // match would open the menu on the wrong link.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(100);
+    await page.getByRole('button', { name: 'פתיחת תפריט' }).click();
+    const drawer = page.getByRole('dialog', { name: 'תפריט ראשי' });
+    await drawer.waitFor();
+    const drawerGroups = await readSidebar(drawer.locator('nav'));
+    const drawerLinks = drawerGroups.flatMap((group) => group.items);
+    assert.equal(drawerLinks[0] && drawerLinks[0].label, 'מרכז הבקרה',
+      `the drawer does not open on the control centre either: ${JSON.stringify(drawerLinks.slice(0, 2))}`);
+    assert.deepEqual(drawerGroups.map((group) => group.section), ['', 'מסמכים', 'רכש', 'כספים', 'בקרה'],
+      'the drawer renders different groups than the desktop sidebar');
+    assert.equal(await drawer.locator('[aria-current="page"]').count(), 1,
+      'the drawer marks more than one item as the current page');
+    // Waited for rather than sampled: initialFocus lands after the layer mounts, and a race here
+    // would be a flake in the check rather than a fault in the shell.
+    await page.waitForFunction(() => {
+      const active = document.activeElement;
+      return !!active && active.getAttribute('aria-current') === 'page';
+    }, null, { timeout: 5_000 }).catch(() => { throw new Error('the drawer did not open with the current page focused'); });
+    assert.equal(await page.evaluate(() => new URL(document.activeElement.href).pathname), '/documents/archive',
+      'the drawer opened focused on the wrong navigation item');
+    await page.screenshot({ path: path.join(outDir, 'navigation-drawer-390.png') });
+    report.screenshots.push('navigation-drawer-390.png');
+  } finally {
+    await closeContext(context);
+  }
+}
+
+/**
+ * The one row these scenarios add to the live database.
+ *
+ * Timestamped rather than fixed: `QuickCreateSupplier` warns on a duplicate name, so a fixed name
+ * left behind by a crashed run would put the NEXT run on the warning path and fail it for a reason
+ * that has nothing to do with the claim.
+ */
+const QUICK_SUPPLIER_NAME = `ספק מחירון בדיקת שער ${Date.now().toString(36)}`;
+
+/**
+ * Removes it the way the app itself removes a supplier — `deleted_at`, never DELETE (CLAUDE.md's
+ * soft-delete rule) — so the browser gate leaves the database as it found it. Runs as service_role,
+ * whose token carries no `sub`; `p0_supplier_soft_delete_guard` admits a null `auth.uid()` and
+ * refuses only a signed-in user bypassing `soft_delete_supplier`.
+ */
+async function retireQuickSupplier() {
+  const query = `name=eq.${encodeURIComponent(QUICK_SUPPLIER_NAME)}&deleted_at=is.null`;
+  const response = await fetch(`${apiURL}/rest/v1/suppliers?${query}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: serviceRoleKey,
+      authorization: `Bearer ${serviceRoleKey}`,
+      'content-type': 'application/json',
+      prefer: 'return=representation',
+    },
+    body: JSON.stringify({ deleted_at: new Date().toISOString() }),
+  });
+  assert(response.ok, `retiring the scenario's supplier failed with HTTP ${response.status}`);
+}
+
+/**
+ * E2's claim, on the screen the owner named: a price list arrives from a supplier who is not in the
+ * system yet.
+ *
+ * Driven from `/prices` and not from `/suppliers` deliberately — the supplier card's own
+ * `ספק חדש` button and this dialog's would both answer `getByRole('button', { name: /ספק חדש/ })`,
+ * and the scenario at :700 already owns that name on that screen.
+ *
+ * The supplier is really inserted, because the dead end being removed was a real INSERT the user
+ * had to leave the task to perform; a mocked one would prove only that a dialog opens. The row is
+ * retired in `finally`, and this scenario is registered last so nothing downstream sees it.
+ */
+async function priceListSupplierDoor(browser) {
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  captureConsole(page, 'price-list-supplier-door');
+  try {
+    await login(page, 'owner');
+    await page.goto(`${baseURL}/prices`);
+    await settle(page);
+
+    await page.getByRole('button', { name: 'העלאת מחירון', exact: true }).click();
+    const upload = page.getByRole('dialog', { name: 'העלאת מחירון' });
+    await upload.waitFor();
+    const select = upload.locator('#price-upload-supplier');
+    await select.waitFor();
+    // The door is not offered while the list is still loading (the field is disabled, and
+    // SupplierSelectField refuses to announce an affordance that cannot be used), so the whole
+    // scenario starts from the loaded state rather than racing it.
+    await page.waitForFunction(() => {
+      const node = document.querySelector('#price-upload-supplier');
+      return !!node && !node.disabled && node.options.length > 1;
+    }, null, { timeout: 25_000 });
+
+    const before = (await select.locator('option').allTextContents()).map((label) => label.trim());
+    assert.equal(before.includes(QUICK_SUPPLIER_NAME), false,
+      'the fixture already contains the supplier this scenario creates');
+    // Said, not merely placed: the button is announced as part of the field, which is the half of
+    // E2 that adjacency alone cannot deliver.
+    await upload.getByRole('group', { name: 'ספק — בחירה או יצירה' }).waitFor();
+
+    await upload.getByRole('button', { name: 'ספק חדש' }).click();
+    const quick = page.getByRole('dialog', { name: 'ספק חדש' });
+    await quick.waitFor();
+    // Layered, not replaced. Two dialogs is the whole point: the half-filled upload is still there.
+    assert.equal(await page.getByRole('dialog').count(), 2,
+      'creating a supplier replaced the price-list dialog instead of layering over it');
+    assert(await upload.isVisible(), 'the price-list dialog closed behind the supplier form');
+    assert.equal(await quick.locator('#quick-supplier-bank-details, [name="bank_details"]').count(), 0,
+      'the quick supplier form grew a bank-details field (DEBT-REGISTER §11, OPEN-DECISIONS #106)');
+
+    await quick.locator('#quick-supplier-name').fill(QUICK_SUPPLIER_NAME);
+    await quick.locator('#quick-supplier-tax-id').fill('515151515');
+    await quick.getByRole('button', { name: 'שמירה' }).click();
+    await quick.waitFor({ state: 'hidden', timeout: 20_000 });
+
+    // Nothing navigated, and the dialog the user was working in is still the one on screen.
+    assert.equal(new URL(page.url()).pathname, '/prices',
+      'creating a supplier navigated away from the price list');
+    assert(await upload.isVisible(), 'the price-list dialog did not survive the supplier creation');
+
+    // Selected by VALUE and by what the control actually shows — a select holding an id it cannot
+    // render is the exact failure `mergeCreatedSuppliers` exists to prevent.
+    await page.waitForFunction((name) => {
+      const node = document.querySelector('#price-upload-supplier');
+      if (!node || node.selectedIndex < 0) return false;
+      return (node.options[node.selectedIndex].textContent || '').trim() === name;
+    }, QUICK_SUPPLIER_NAME, { timeout: 20_000 })
+      .catch(() => { throw new Error('the new supplier was not selected in the price-list dialog'); });
+    const selectedId = await select.inputValue();
+    assert.match(selectedId, /^[0-9a-f-]{36}$/i, `the selected supplier is not a row id: ${selectedId}`);
+    const after = (await select.locator('option').allTextContents()).map((label) => label.trim());
+    assert.equal(after.filter((label) => label === QUICK_SUPPLIER_NAME).length, 1,
+      'the created supplier appears more than once in the list');
+
+    await page.screenshot({ path: path.join(outDir, 'price-list-quick-supplier-1440.png') });
+    report.screenshots.push('price-list-quick-supplier-1440.png');
+  } finally {
+    try {
+      await retireQuickSupplier();
+    } finally {
+      await closeContext(context);
+    }
+  }
+}
+
+/** The four states a person may read, plus the three that `completed` resolves to once the row
+ *  actually landed somewhere (`documentUserStateLabel`). Nothing else may appear on the badge. */
+const DOCUMENT_HUMAN_STATE_LABELS = [
+  'נקלט', 'בבדיקה', 'שויך', 'לא נקרא', 'נקרא', 'שויך לחשבונית', 'שויך לקבלת סחורה',
+];
+
+/** The seven engineering labels D1 took off the badge — `DOCUMENT_PROCESSING_STAGE_META`. They are
+ *  still correct English-side vocabulary and still shown to whoever opens פרטים טכניים; what they
+ *  may not be is what a kitchen manager reads on the documents folder. */
+const DOCUMENT_ENGINEERING_LABELS = [
+  'טרם נשלח לעיבוד', 'ממתין לעיבוד', 'בעיבוד', 'ממתין לפירוש', 'דורש בדיקה', 'הושלם', 'נכשל',
+];
+
+/**
+ * D1 and D2 as one claim, because they are one: the machine's own vocabulary — its queue position
+ * and its self-reported number — is not what the everyday screens say.
+ *
+ * Three things are asserted that no unit test can:
+ *
+ *  1. The *rendered* state filter offers four human states. Pinning the exported array is not the
+ *     same as pinning the control, and a check that only calls `selectOption('failed')` passes
+ *     against both this list and the seven it replaced.
+ *  2. Every badge on the loaded page reads one of the seven permitted words. This is the assertion
+ *     that fails the moment `documentUserStateLabel` is reverted.
+ *  3. The proposals panel prints no percentage, and the number is one click away and no closer.
+ *
+ * Deliberately NOT scanned: the raw stage tokens over the page text. Five of the six fixture
+ * documents are named `ocr-0N-<stage>.png` (`prepare-browser-fixture.cjs:17-23`), so the words
+ * `queued`, `processing`, `review`, `completed` and `failed` are legitimately on screen as FILE
+ * NAMES. The tokens are pinned where they belong instead — on `data-stage`, by the OCR scenario,
+ * which asserts the stage and the label of every fixture row as a pair.
+ *
+ * `textContent`, not `innerText`: the state descriptions ride as `sr-only` siblings of the badge
+ * (DocumentsInbox.tsx:111), and a scan that cannot see them would let jargon hide there.
+ */
+async function documentVocabulary(browser) {
+  const context = await browser.newContext({
+    locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 1440, height: 900 },
+  });
+  const page = await context.newPage();
+  captureConsole(page, 'document-vocabulary');
+  try {
+    await login(page, 'owner');
+    await page.goto(`${baseURL}/documents`);
+    await settle(page);
+    await page.locator('[data-testid="documents-page"]').waitFor({ timeout: 25_000 });
+    for (const [documentId] of OCR_STAGE_FIXTURES) {
+      await page.locator(`[data-testid="document-processing-status"][data-document-id="${documentId}"]:visible`)
+        .waitFor({ state: 'visible', timeout: 25_000 });
+    }
+
+    const filterOptions = (await page.locator('[data-testid="documents-processing-filter"] option').allTextContents())
+      .map((label) => label.trim());
+    assert.deepEqual(filterOptions, ['הכול', 'נקלט', 'בבדיקה', 'שויך', 'לא נקרא'],
+      `the state filter still offers the machine's stages: ${JSON.stringify(filterOptions)}`);
+
+    const badges = (await page.locator('[data-testid="document-processing-status"]:visible').allInnerTexts())
+      .map((label) => label.trim());
+    assert(badges.length >= OCR_STAGE_FIXTURES.length,
+      `only ${badges.length} status badges rendered; the gallery did not finish loading`);
+    for (const badge of badges) {
+      assert(DOCUMENT_HUMAN_STATE_LABELS.includes(badge),
+        `a document status badge reads «${badge}», which is not one of the states a person can act on`);
+    }
+
+    const gallery = await page.locator('#main').evaluate((node) => node.textContent || '');
+    for (const label of DOCUMENT_ENGINEERING_LABELS) {
+      assert.equal(gallery.includes(label), false,
+        `the documents folder still shows the pipeline label «${label}»`);
+    }
+    // The precondition, stated so the percentage scan below cannot quietly become vacuous or
+    // spuriously fail: a filing the MACHINE performed does name its confidence, on purpose
+    // (FilingBadge / autoActionDescription), and has its own scenario. This fixture contains none.
+    assert.equal(await page.getByText('שויך אוטומטית').count(), 0,
+      'the fixture now contains an auto-applied document; this scenario measures the reading vocabulary only');
+    assert.equal(/\d\s*%/.test(gallery), false,
+      `the documents folder prints a confidence percentage: ${(gallery.match(/.{0,24}\d\s*%.{0,12}/) || [])[0]}`);
+
+    await page.goto(`${baseURL}/documents/${OCR_REVIEW_DOCUMENT_ID}/review`);
+    await settle(page);
+    await page.locator('[data-testid="document-review-page"]').waitFor({ timeout: 25_000 });
+    const proposals = page.locator('[data-testid="document-review-proposals"]');
+    await proposals.waitFor({ timeout: 25_000 });
+    const proposalText = await proposals.evaluate((node) => node.textContent || '');
+    assert.equal(/\d\s*%/.test(proposalText), false,
+      `the proposals panel still prints a confidence percentage: ${(proposalText.match(/.{0,24}\d\s*%.{0,12}/) || [])[0]}`);
+    assert.equal(proposalText.includes('רמת ביטחון'), false,
+      'the proposals panel still uses the old confidence wording');
+    assert(proposalText.includes('זוהה בבירור'),
+      'the proposals panel stopped grading the reading in words as well as dropping the number');
+
+    // 0.95 is the fixture's supplier confidence and nothing else on the page rounds to it — the
+    // bbox descriptions in the source viewer are the other percentages here, and none is 95.
+    const technical = page.locator('details:has(summary:text-is("פרטים טכניים"))');
+    await technical.waitFor();
+    assert.equal(await technical.evaluate((node) => node.open), false,
+      'the technical disclosure is open before anyone asked for it');
+    const closedPage = await page.locator('#main').evaluate((node) => node.textContent || '');
+    assert.equal(closedPage.includes('95%'), false,
+      'the raw confidence is on the review screen while the disclosure is shut');
+
+    await technical.locator('summary').click();
+    await page.waitForFunction(() => {
+      const node = [...document.querySelectorAll('details')]
+        .find((element) => (element.querySelector('summary') || {}).textContent === 'פרטים טכניים');
+      return !!node && node.open;
+    }, null, { timeout: 10_000 });
+    const opened = await technical.evaluate((node) => node.textContent || '');
+    assert(opened.includes('95%'),
+      'the supplier confidence is not reachable inside פרטים טכניים in one click');
+    await page.screenshot({ path: path.join(outDir, 'document-technical-disclosure-1440.png'), fullPage: true });
+    report.screenshots.push('document-technical-disclosure-1440.png');
+  } finally {
+    await closeContext(context);
+  }
+}
+
+// The completed fixture row: filed as 'inbox' like every other document the fixture registers, so
+// without an auto-action beside it the filing column reads לא משויך. That is what makes it the
+// honest row to hang a machine filing on — the badge has to be the thing that changes.
+const AUTO_ACTION_DOCUMENT_ID = OCR_STAGE_FIXTURES[4][0];
+const AUTO_ACTION_DOCUMENT_FILE = 'ocr-05-completed.png';
+const AUTO_ACTION_ID = '97500000-0000-4000-8000-000000000001';
+const AUTO_ACTION_INVOICE_ID = '97600000-0000-4000-8000-000000000001';
+const AUTO_ACTION_REASON = 'בדיקת שער: החשבונית שנוצרה אוטומטית שויכה למסמך הלא נכון';
+
+/**
+ * C5, and the first surface in this application that names what the machine did on its own.
+ *
+ * `document_auto_actions` is answered from a route rather than from the database because no
+ * fixture writes one: an auto-applied row requires a real interpretation, a real invoice and the
+ * autonomy flag on, and seeding that would mean a browser scenario manufacturing a financial
+ * record. What is under test here is the SCREEN — that a machine-authored filing is
+ * distinguishable from a colleague's, that it says at what confidence it acted, that the undo is
+ * offered, that it cannot be confirmed without a reason, that the reason reaches the server, and
+ * that the row stops claiming to be filed afterwards. The server's own refusals (role, second
+ * reversal, allocated money) are `p14_apply_interpretation.sql`'s subject, not a browser's.
+ *
+ * What the mock cannot make true, said out loud: the document row itself is still `entity_type =
+ * 'inbox'` in the database, so the two manual שיוך actions stay on the menu beside the undo. In a
+ * real auto-application the filing would have moved the row and they would be gone. Nothing below
+ * asserts the shape of that menu — only that the undo is IN it.
+ */
+async function machineFiledDocument(browser) {
+  const context = await browser.newContext({
+    locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 1440, height: 900 },
+  });
+  let reverted = false;
+  const revertCalls = [];
+  await context.route('**/rest/v1/document_auto_actions?**', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: reverted ? [] : [{
+      id: AUTO_ACTION_ID,
+      document_id: AUTO_ACTION_DOCUMENT_ID,
+      invoice_id: AUTO_ACTION_INVOICE_ID,
+      decision: { decision_confidence: 0.94 },
+    }],
+  }));
+  await context.route('**/rest/v1/rpc/revert_document_auto_action', (route) => {
+    revertCalls.push(route.request().postDataJSON());
+    reverted = true;
+    return route.fulfill({ status: 200, headers: jsonHeaders, json: { reverted: true } });
+  });
+  const page = await context.newPage();
+  captureConsole(page, 'document-auto-action');
+  try {
+    await login(page, 'owner');
+    await page.goto(`${baseURL}/documents`);
+    await settle(page);
+    await page.locator('[data-testid="documents-page"]').waitFor({ timeout: 25_000 });
+
+    const badge = page.locator('span:text-is("שויך אוטומטית"):visible');
+    await badge.first().waitFor({ timeout: 25_000 });
+    assert.equal(await badge.count(), 1,
+      'the machine-filing badge is not on exactly one row');
+    const gallery = await page.locator('#main').evaluate((node) => node.textContent || '');
+    // Not `title` alone: a tooltip does not exist on touch, and this is the only copy separating a
+    // record a model wrote from one a colleague typed.
+    assert(gallery.includes('ללא אישור אדם'),
+      'the machine-filed row never says that no person approved it');
+    assert(gallery.includes('ברמת ביטחון 94%'),
+      'the machine-filed row does not name the confidence the machine acted on');
+    await page.screenshot({ path: path.join(outDir, 'document-auto-filed-1440.png'), fullPage: true });
+    report.screenshots.push('document-auto-filed-1440.png');
+
+    // Scoped to the desktop table: DataTable renders a card layer and a table layer, and only one
+    // of the two is displayed at any width.
+    const actionsLabel = `פעולות עבור מסמך ${AUTO_ACTION_DOCUMENT_FILE}`;
+    const actions = page.locator('table').getByRole('button', { name: actionsLabel });
+    assert.equal(await actions.count(), 1, `the row actions for ${AUTO_ACTION_DOCUMENT_FILE} are not unique`);
+    await actions.click();
+    const menu = page.getByRole('menu', { name: actionsLabel });
+    await menu.waitFor();
+    const undo = menu.getByRole('menuitem', { name: 'ביטול השיוך האוטומטי' });
+    assert.equal(await undo.count(), 1, 'the machine-filed row offers no way to undo what the machine did');
+    await undo.click();
+
+    const dialog = page.getByRole('dialog', { name: 'ביטול השיוך האוטומטי' });
+    await dialog.waitFor();
+    const dialogText = await dialog.evaluate((node) => node.textContent || '');
+    // The four things the dialog owes a person before it offers the button: what the machine did,
+    // at what confidence, what the undo changes, and what survives it.
+    for (const sentence of ['ללא אישור אדם', 'ברמת ביטחון 94%', 'הרשומה נשמרת לביקורת', 'יומן הביקורת']) {
+      assert(dialogText.includes(sentence), `the reversal dialog does not say «${sentence}»`);
+    }
+    const confirm = dialog.getByRole('button', { name: 'ביטול השיוך', exact: true });
+    assert(await confirm.isDisabled(), 'a machine-authored invoice can be reversed without a stated reason');
+    await dialog.getByRole('textbox', { name: /סיבה/ }).fill(AUTO_ACTION_REASON);
+    await confirm.click();
+    await dialog.waitFor({ state: 'hidden', timeout: 20_000 });
+
+    assert.equal(revertCalls.length, 1,
+      `revert_document_auto_action was called ${revertCalls.length} times for one reversal`);
+    assert.equal(revertCalls[0].p_action_id, AUTO_ACTION_ID, 'the reversal named a different auto-action row');
+    assert.equal(revertCalls[0].p_reason, AUTO_ACTION_REASON,
+      `the operator's reason did not reach the server verbatim: ${JSON.stringify(revertCalls[0].p_reason)}`);
+
+    // One reversal changes two things a person is looking at, and refreshing one and not the other
+    // would leave the screen contradicting itself.
+    await page.waitForFunction(() => {
+      const main = document.querySelector('#main');
+      return !!main && !(main.textContent || '').includes('שויך אוטומטית');
+    }, null, { timeout: 20_000 })
+      .catch(() => { throw new Error('the machine-filing badge survived its own reversal'); });
+    // Scoped to THAT row, not to the page: every other fixture document already reads לא משויך,
+    // so a page-wide check would pass without the reversed row having changed at all.
+    const reversedRow = page.locator('table tbody tr').filter({ hasText: AUTO_ACTION_DOCUMENT_FILE });
+    assert.equal(await reversedRow.count(), 1, `the reversed document is not on exactly one table row`);
+    const rowText = await reversedRow.evaluate((node) => node.textContent || '');
+    assert(rowText.includes('לא משויך'), `the reversed document did not return to the folder as unfiled: ${rowText}`);
+    assert.equal(/ברמת ביטחון \d/.test(await page.locator('#main').evaluate((node) => node.textContent || '')), false,
+      'a confidence is still printed for a decision that was reverted');
+  } finally {
+    await closeContext(context);
+  }
+}
+
 async function run(name, check) {
   if (process.env.QUALITY_ONLY && !name.includes(process.env.QUALITY_ONLY)) {
     const reason = `QUALITY_ONLY=${process.env.QUALITY_ONLY}`;
@@ -2107,6 +2577,12 @@ async function run(name, check) {
     await run('Admin password and Clipboard state', () => adminState(browser));
     await run('OCR documents, review, status and export', () => documentOcrAcceptance(browser));
     await run('global search type gate: payer receives no forbidden types', () => searchTypeGate(browser));
+    await run('navigation opens on the control centre and the archive is current alone', () => navigationOrderAndActiveState(browser));
+    await run('documents speak human states and keep the numbers behind the disclosure', () => documentVocabulary(browser));
+    await run('a machine-filed document names its author and can be undone', () => machineFiledDocument(browser));
+    // Registered last on purpose: it is the only scenario that inserts a row into the live
+    // database, and running it after everything else keeps that row out of every other check.
+    await run('a supplier is created inside the price-list dialog', () => priceListSupplierDoor(browser));
   } finally {
     await browser.close();
   }
