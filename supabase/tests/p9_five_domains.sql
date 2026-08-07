@@ -1,4 +1,4 @@
--- P9 harness for 0068-0070 (wave 9, PLAN-10 §2). Run only against an isolated local database
+﻿-- P9 harness for 0068-0070 (wave 9, PLAN-10 ֲ§2). Run only against an isolated local database
 -- with every migration applied. The transaction is rolled back.
 --
 -- What it proves:
@@ -243,15 +243,27 @@ select pg_temp.p9_assert(
 -- Function once documents carries a meaningful unit_id (an inbox document is unit_id NULL by
 -- design, 0055:112).
 --
+-- The third addition, 0077's revert_document_auto_action(uuid,text), is the undo half of the
+-- same decision layer and is not drainable for the mirror-image reason: an invoker version
+-- would need UPDATE on document_auto_actions, document_filings AND invoices.deleted_at granted
+-- to `authenticated`, which lets a direct PostgREST PATCH revert a machine-written financial
+-- record with no reason and no soft-delete guard -- emptying the mandatory-reason contract the
+-- command exists to enforce. Same remediation as its two siblings: pass the acting unit in once
+-- documents carries a meaningful unit_id.
+--
 -- The pin still moves only by an explicit edit here. A migration that adds an exemption and
--- leaves this line alone fails, by design.
+-- leaves this line alone fails, by design -- which it has now done on four consecutive waves,
+-- always at the end of a twenty-minute gate rather than in seconds. See the check:* script that
+-- asserts a migration touching scope_definer_exemptions also touches this file.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 58,
-  'the definer exemption registry must stay at 58 rows -- 59 minus the three 0073 drained, '
+  (select count(*) from private.scope_definer_exemptions) = 59,
+  'the definer exemption registry must stay at 59 rows -- 59 minus the three 0073 drained, '
   || 'plus the one 0075:464 added for rescue_document_from_archive (not drainable: invoker '
   || 'would require granting UPDATE on document_filings to the browser), plus the one 0077 '
   || 'added for apply_document_interpretation (not drainable: it runs with no user JWT, so '
-  || 'auth_scopes() is empty and a scoped read would silently disable the decision layer); '
+  || 'auth_scopes() is empty and a scoped read would silently disable the decision layer), '
+  || 'plus the one 0077 added for revert_document_auto_action (not drainable: invoker would '
+  || 'let a direct PATCH undo a machine-written financial record with no reason); '
   || 'zero silent additions');
 
 select pg_temp.p9_assert(
@@ -325,7 +337,7 @@ insert into categories (id, org_id, name) values
 
 insert into products (id, org_id, category_id, name, unit) values
   ('59000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
-   '49000000-0000-4000-8000-000000000001', 'P9SEARCH Product', 'ק"ג');
+   '49000000-0000-4000-8000-000000000001', 'P9SEARCH Product', '׳§"׳’');
 
 -- One approved charge, so the accountant branch has a row it may legally see and so the
 -- payment-request approval preconditions of 0031:887-917 are satisfiable.
@@ -342,7 +354,7 @@ insert into purchase_orders (id, org_id, supplier_id, status, created_by) values
 
 insert into payments (id, org_id, supplier_id, amount, paid_date, method, reference) values
   ('89000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
-   '39000000-0000-4000-8000-000000000001', 250, current_date, 'העברה בנקאית', 'P9SEARCH-REF');
+   '39000000-0000-4000-8000-000000000001', 250, current_date, '׳”׳¢׳‘׳¨׳” ׳‘׳ ׳§׳׳™׳×', 'P9SEARCH-REF');
 
 insert into credit_requests (id, org_id, supplier_id, invoice_id, reason, amount, status) values
   ('99000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
