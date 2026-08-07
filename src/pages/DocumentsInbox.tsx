@@ -825,7 +825,9 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             return [
               { key: 'review', label: 'בדיקת מסמך', icon: FileSearch, hidden: !snapshot?.job, onSelect: () => review(doc) },
               { key: 'enqueue', label: 'שליחה לעיבוד', icon: RefreshCw, hidden: !canEnqueue || snapshot?.stage !== 'unprocessed', onSelect: () => setRetryDoc(doc) },
-              { key: 'retry', label: 'עיבוד מחדש', icon: RefreshCw, hidden: !canRetry || snapshot?.stage !== 'failed', onSelect: () => setRetryDoc(doc) },
+              { key: 'retry', label: 'עיבוד מחדש', icon: RefreshCw,
+                hidden: !canRetry || !snapshot || !['failed', 'review', 'completed'].includes(snapshot.stage),
+                onSelect: () => setRetryDoc(doc) },
               { key: 'export', label: 'ייצוא', icon: FileDown, hidden: snapshot?.stage !== 'review' && snapshot?.stage !== 'completed', onSelect: () => review(doc, 'export') },
               { key: 'view', label: 'צפייה במקור', icon: Eye, onSelect: () => void open(doc) },
               // Not offered on the archive, for the same reason the upload button is not. isUnfiled
