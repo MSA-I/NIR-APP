@@ -446,7 +446,7 @@ export function PriceListReviewConfirmation({
         </span>
       </div>
 
-      <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+      <dl className="mt-4 grid gap-3 sm:grid-cols-3">
         <div className="rounded-lg bg-surface-sunken p-3">
           <dt className="text-sm font-medium text-ink-soft">הספק שהוצע בפירוש</dt>
           <dd className="mt-1 break-words text-ink-body">{currentInterpretation.payload.supplier.suggested_name || 'לא זוהה'}</dd>
@@ -454,6 +454,10 @@ export function PriceListReviewConfirmation({
         <div className="rounded-lg bg-surface-sunken p-3">
           <dt className="text-sm font-medium text-ink-soft">מספר שורות שזוהו</dt>
           <dd className="num mt-1 text-ink-body">{lineItems.length}</dd>
+        </div>
+        <div className="rounded-lg bg-surface-sunken p-3">
+          <dt className="text-sm font-medium text-ink-soft">עמודים שנקראו</dt>
+          <dd className="num mt-1 text-ink-body">{snapshot.extraction?.payload.document.page_count ?? '—'}</dd>
         </div>
       </dl>
 
@@ -555,24 +559,29 @@ export function PriceListReviewConfirmation({
                   <span className="text-xs text-ink-muted">שורת מקור <span className="num">{item.source_row ?? '—'}</span></span>
                 </div>
               </div>
-              <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-                {Object.entries(item.values).map(([key, value]) => (
-                  <div key={key} className="min-w-0 rounded-lg bg-surface-sunken p-2">
-                    <dt className="text-xs font-medium text-ink-muted">{key}</dt>
-                    <dd className="mt-1 break-words text-sm text-ink-body">{valueText(value)}</dd>
-                  </div>
-                ))}
-              </dl>
+              <details className="mt-3 rounded-lg border border-line bg-surface-sunken">
+                <summary className="flex min-h-11 cursor-pointer items-center px-3 py-2.5 font-medium text-action">
+                  פרטים נוספים
+                </summary>
+                <div className="border-t border-line bg-surface p-3">
+                  <dl className="grid gap-2 sm:grid-cols-2">
+                    {Object.entries(item.values).map(([key, value]) => (
+                      <div key={key} className="min-w-0 rounded-lg bg-surface-sunken p-2">
+                        <dt className="text-xs font-medium text-ink-muted">{key}</dt>
+                        <dd className="mt-1 break-words text-sm text-ink-body">{valueText(value)}</dd>
+                      </div>
+                    ))}
+                  </dl>
 
-              {autoLine?.reason_code && (
-                <Note tone="await" className="mt-3">
-                  {FILING_REASON_LABELS[autoLine.reason_code]
-                    ?? 'השורה ממתינה לבדיקה ידנית.'}
-                </Note>
-              )}
+                  {autoLine?.reason_code && (
+                    <Note tone="await" className="mt-3">
+                      {FILING_REASON_LABELS[autoLine.reason_code]
+                        ?? 'השורה ממתינה לבדיקה ידנית.'}
+                    </Note>
+                  )}
 
-              {showControls && (
-                <div className="mt-3 border-t border-line pt-3">
+                  {showControls && (
+                    <div className="mt-3 border-t border-line pt-3">
                   <label className="flex min-h-11 items-center gap-3 font-medium text-ink-body">
                     <input type="checkbox" className="size-5" checked={draft.approved} onChange={(event) => updateDraft(index, { approved: event.target.checked })} disabled={busy} />
                     אני מאשר שורה זו לקליטה
@@ -625,8 +634,10 @@ export function PriceListReviewConfirmation({
                     <input type="checkbox" className="size-5" checked={draft.available} onChange={(event) => updateDraft(index, { available: event.target.checked })} disabled={!draft.approved || busy} />
                     המוצר זמין אצל הספק
                   </label>
+                    </div>
+                  )}
                 </div>
-              )}
+              </details>
             </article>
           );
         })}

@@ -282,6 +282,52 @@ test("dedicated price-list intake reaches the model as trusted server context", 
     expected_document_type: "price_list",
   });
   assert.match(SYSTEM_PROMPT, /heading says quote, offer, or price proposal/);
+  assert.match(SYSTEM_PROMPT, /every distinct product row on every page/);
+});
+
+test("trusted price-list intake retries an unnumbered sample instead of storing it as complete", async () => {
+  const priceList = (
+    sourceRows: Array<number | null>,
+  ): InterpretationContract => ({
+    ...validInterpretation(),
+    document_type: "price_list",
+    line_items: sourceRows.map((sourceRow, index) => ({
+      source_row: sourceRow,
+      values: {
+        sku: `SKU-${index + 1}`,
+        product_name: `Product ${index + 1}`,
+        unit_price: index + 1,
+      },
+      evidence_block_ids: ["block-1"],
+    })),
+  });
+  const responses = [priceList([null, null]), priceList([1, 2, 3])];
+  let calls = 0;
+  const fetchImpl = (async () => {
+    const interpretation = responses[Math.min(calls, responses.length - 1)];
+    calls += 1;
+    return jsonResponse(providerResponse(outputText(
+      JSON.stringify(providerWireInterpretation(interpretation)),
+    )));
+  }) as typeof fetch;
+
+  const result = await createOpenAiProvider({
+    apiKey: "test-key",
+    fetchImpl,
+    sleep: async () => {},
+    maxAttempts: 2,
+  }).interpret(buildProviderPayload(
+    extraction("three page price list"),
+    [{ id: SUPPLIER_ID, name: "ספק בדיקה", status: "active" }],
+    [],
+    "price_list",
+  ));
+
+  assert.equal(calls, 2);
+  assert.deepEqual(
+    result.interpretation.line_items.map((row) => row.source_row),
+    [1, 2, 3],
+  );
 });
 
 test("prompt injection remains inert JSON data under the fixed system instruction", async () => {
@@ -711,6 +757,8 @@ const PROMPT_DIGESTS: Record<string, string> = {
     "0f424552f283af62ea85b96e8981cb5d25d1418a2c42a1ccd1917fc6ee3191e1",
   "interpret-document-v7":
     "b49fb69f270a3e6839c9016400b7e6fbc2e63472383c0f6ed75c780e2bf82f82",
+  "interpret-document-v8":
+    "551030c7c567787518c55e23f668cc4775fead3f190baf8beea3196f97eab571",
 };
 
 // CRLF is folded before hashing, and the reason is a checkout hazard rather than tidiness: this
