@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, Inbox } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -13,28 +13,45 @@ import { pendingOfflineWork } from '../lib/offlineQueue';
 import type { Role } from '../lib/types';
 import { toHebrewError } from '../lib/errors';
 
-interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[] }
+// `end` switches off NavLink's default prefix matching, and belongs on every path that is a
+// parent of another path in this menu. Without it /documents and /documents/archive are both
+// active on the archive page: two elements carrying aria-current="page", which is wrong for a
+// screen reader and picks the wrong target for the drawer's initialFocus below, since that
+// queries for exactly that attribute. It is not free — /documents stops highlighting while a
+// document is open at /documents/:documentId/review, so the sidebar shows nothing selected on
+// that screen. One unlit item on a detail page is the smaller harm of the two.
+export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[]; end?: boolean }
+export interface NavSection { section: string; items: NavItem[] }
 
-// Navigation follows the three product work groups: רכש / כספים / בקרה.
-//
-// New order is pinned first because it is the most frequent workflow. The control centre
-// remains the owner/office landing route, but lives in its natural control group.
-// Remaining items (מחירונים, דרישות תשלום, התאמות בנק, יומן ביקורת,
-//    הגדרות, and the focused /pay, /my-prices, /admin routes) are slotted by the
-//    obvious procurement/finance/control reading. /pay is shared by payer and accountant.
-//    None of it invents business meaning.
-//
-const NAV: { section: string; items: NavItem[] }[] = [
+// Four work groups — מסמכים / רכש / כספים / בקרה — under two ungrouped links that need no
+// header to explain them. The less self-evident items (מחירונים, דרישות תשלום, התאמות בנק,
+// יומן ביקורת, הגדרות, and the focused /pay, /my-prices, /admin routes) sit where the plain
+// procurement/finance/control reading puts them, and /pay is shared by payer and accountant.
+// None of it invents business meaning.
+export const NAV_SECTIONS: NavSection[] = [
   {
+    // מרכז הבקרה ראשון: הוא התשובה לסעיף 12 — מה דורש טיפול, עכשיו. הזמנה חדשה אחריו,
+    // כי היא הפעולה התכופה ביותר אבל לא זו שפותחים איתה את היום.
     section: '',
     items: [
+      { to: '/dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, roles: ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'] },
       { to: '/orders/new', label: 'הזמנה חדשה', icon: ShoppingCart, roles: ['owner', 'office', 'kitchen'] },
+    ],
+  },
+  {
+    // Documents stand apart from כספים because a scanned page is not yet a financial fact: it is
+    // read and filed first, and only then becomes an invoice or a credit. The queue that does the
+    // reading belongs beside the ledgers it feeds, not inside them.
+    section: 'מסמכים',
+    items: [
+      { to: '/documents', label: 'תיקיית המסמכים', icon: FolderOpen, roles: ['owner', 'office', 'kitchen'], end: true },
+      { to: '/documents/archive', label: 'ארכיון', icon: Archive, roles: ['owner', 'office', 'kitchen'] },
     ],
   },
   {
     section: 'רכש',
     items: [
-      { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office', 'kitchen'] },
+      { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office', 'kitchen'], end: true },
       { to: '/receiving', label: 'קבלת סחורה', icon: PackageCheck, roles: ['owner', 'office', 'kitchen'] },
       { to: '/suppliers', label: 'ספקים', icon: Truck, roles: ['owner', 'office', 'kitchen'] },
       { to: '/products', label: 'מוצרים', icon: Package, roles: ['owner', 'office', 'kitchen'] },
@@ -47,7 +64,6 @@ const NAV: { section: string; items: NavItem[] }[] = [
     items: [
       { to: '/invoices', label: 'חשבוניות', icon: FileText, roles: ['owner', 'office', 'kitchen', 'accountant'] },
       { to: '/credits', label: 'זיכויים', icon: RotateCcw, roles: ['owner', 'office', 'kitchen', 'accountant'] },
-      { to: '/documents', label: 'גלריית מסמכים', icon: Inbox, roles: ['owner', 'office', 'kitchen'] },
       { to: '/payment-requests', label: 'דרישות תשלום', icon: Send, roles: ['owner', 'office'] },
       { to: '/payments', label: 'תשלומים', icon: CreditCard, roles: ['owner', 'accountant'] },
       { to: '/bank', label: 'התאמות בנק', icon: Landmark, roles: ['owner', 'accountant'] },
@@ -57,7 +73,6 @@ const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: 'בקרה',
     items: [
-      { to: '/dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, roles: ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'] },
       { to: '/alerts', label: 'התראות', icon: Bell, roles: ['owner', 'office'] },
       { to: '/exceptions', label: 'חריגים', icon: AlertTriangle, roles: ['owner', 'office', 'kitchen', 'accountant'] },
       { to: '/expenses', label: 'ריכוז הוצאות', icon: PieChart, roles: ['owner', 'accountant'] },
@@ -68,6 +83,41 @@ const NAV: { section: string; items: NavItem[] }[] = [
     ],
   },
 ];
+
+// What the sidebar actually renders, derived rather than declared: NAV_SECTIONS is the menu on
+// paper, this is the menu a given person sees. Kept pure and exported so the order and the role
+// filtering can be asserted without mounting the shell — the literal alone cannot prove either.
+//
+// Platform operators are a separate axis from tenant roles, so the console cannot ride
+// NAV_SECTIONS' `roles: Role[]` filter — appending a synthetic Role would misrepresent the
+// user_role enum the RLS policies are built on. It is appended after the tenant sections
+// to keep the visual separation between "running this business" and "running the platform".
+export function sectionsForRole(role: Role | undefined, isPlatformAdmin: boolean): NavSection[] {
+  const roleSections = NAV_SECTIONS
+    .map((s) => ({ ...s, items: s.items.filter((i) => role && i.roles.includes(role)) }))
+    .filter((s) => s.items.length > 0);
+  return isPlatformAdmin
+    ? [...roleSections, { section: 'פלטפורמה', items: [{ to: '/admin', label: 'ניהול לקוחות', icon: Building2, roles: [] as Role[] }] }]
+    : roleSections;
+}
+
+/**
+ * Whether the sidebar's group headers earn their space — exported so the rule can be asserted
+ * against `sectionsForRole` output rather than inferred from a mounted shell.
+ *
+ * Group headers only pay for themselves once there is more than one item to organise. supplier and
+ * payer each see a single grouped link, and a "רכש" header over a vendor's own price list reads as
+ * if they were doing the buying.
+ *
+ * G1, finding 12 (companion): the count is over the NAMED sections only. It used to count every
+ * item, and once /dashboard was added for all roles (NAV_SECTIONS:37) — it lives in the unnamed
+ * leading section and so never had a header to suppress — supplier and payer crossed the threshold
+ * and started seeing exactly the "רכש"/"כספים" headers the rule exists to prevent. The premise
+ * expired; the intent did not.
+ */
+export function showNavHeaders(sections: readonly NavSection[]): boolean {
+  return sections.filter((s) => s.section).reduce((n, s) => n + s.items.length, 0) > 1;
+}
 
 const PAGE_TITLE_PATTERNS: [RegExp, string][] = [
   [/^\/suppliers\/[^/]+$/, 'כרטיס ספק'],
@@ -81,7 +131,7 @@ const PAGE_TITLE_PATTERNS: [RegExp, string][] = [
 ];
 
 function pageTitleFor(pathname: string): string {
-  const navTitle = NAV.flatMap((section) => section.items).find((item) => item.to === pathname)?.label;
+  const navTitle = NAV_SECTIONS.flatMap((section) => section.items).find((item) => item.to === pathname)?.label;
   return navTitle ?? PAGE_TITLE_PATTERNS.find(([pattern]) => pattern.test(pathname))?.[1] ?? APP_NAME;
 }
 
@@ -105,21 +155,9 @@ export default function Layout() {
   // the product name keeps the header honest — it is never another tenant's name.
   const orgName = org?.name ?? APP_NAME;
 
-  const roleSections = NAV.map((s) => ({ ...s, items: s.items.filter((i) => role && i.roles.includes(role)) }))
-    .filter((s) => s.items.length > 0);
+  const sections = sectionsForRole(role, isPlatformAdmin);
 
-  // Platform operators are a separate axis from tenant roles, so the console cannot ride
-  // NAV's `roles: Role[]` filter — appending a synthetic Role would misrepresent the
-  // user_role enum the RLS policies are built on. It is appended after the tenant sections
-  // to keep the visual separation between "running this business" and "running the platform".
-  const sections = isPlatformAdmin
-    ? [...roleSections, { section: 'פלטפורמה', items: [{ to: '/admin', label: 'ניהול לקוחות', icon: Building2, roles: [] as Role[] }] }]
-    : roleSections;
-
-  // Group headers only earn their space once there is more than one item to organise. supplier
-  // and payer each see a single link, and a "רכש" header over a vendor's own price list reads
-  // as if they were doing the buying. Below the threshold the header is noise, so drop it.
-  const showHeaders = sections.reduce((n, s) => n + s.items.length, 0) > 1;
+  const showHeaders = showNavHeaders(sections);
 
   const { panelRef: drawerRef, requestClose: closeMobileMenu } = useDialogLayer<HTMLElement>({
     open: mobileOpen,
@@ -197,7 +235,7 @@ export default function Layout() {
             {showHeaders && s.section && <div className="px-3 pb-1 text-[11px] font-semibold text-shell-heading">{s.section}</div>}
             <div className="space-y-0.5">
               {s.items.map((item) => (
-                <NavLink key={item.to} to={item.to} className={linkCls} onClick={() => { if (mobileOpen) closeMobileMenu(); }} end={item.to === '/orders'}>
+                <NavLink key={item.to} to={item.to} className={linkCls} onClick={() => { if (mobileOpen) closeMobileMenu(); }} end={item.end}>
                   <item.icon size={17} />
                   {item.label}
                   {/* TaskLine's count-pill anatomy at the item's logical end; both the desktop

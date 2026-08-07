@@ -386,6 +386,17 @@ approval_policy_config_without_definition as (
   where not exists (
     select 1 from private.approval_policy_definitions d where d.policy_key = c.policy_key)
 ),
+-- 0076 deliberately carries no FK from the configuration to the private definition (the
+-- 0059:66-68 reasoning), so an orphan must surface HERE. It matters more for autonomy than for
+-- the other two: an orphaned row is a tenant whose autonomy setting resolves against a
+-- definition that no longer exists -- and the resolver would fall through to its own
+-- 'autonomy_policy_unknown', which a caller must never meet in production.
+autonomy_policy_config_without_definition as (
+  select c.id
+  from org_autonomy_policies c
+  where not exists (
+    select 1 from private.autonomy_policy_definitions d where d.policy_key = c.policy_key)
+),
 checks(check_name, rows_found, sample_ids) as (
   select 'duplicate_payment_executions', count(*),
     coalesce((select jsonb_agg(id) from (select id from duplicate_payment_executions limit 20) s), '[]'::jsonb)
@@ -516,6 +527,9 @@ checks(check_name, rows_found, sample_ids) as (
   union all select 'approval_policy_config_without_definition', count(*),
     coalesce((select jsonb_agg(id) from (select id from approval_policy_config_without_definition limit 20) s), '[]'::jsonb)
   from approval_policy_config_without_definition
+  union all select 'autonomy_policy_config_without_definition', count(*),
+    coalesce((select jsonb_agg(id) from (select id from autonomy_policy_config_without_definition limit 20) s), '[]'::jsonb)
+  from autonomy_policy_config_without_definition
 )
 select check_name, rows_found, sample_ids
 from checks

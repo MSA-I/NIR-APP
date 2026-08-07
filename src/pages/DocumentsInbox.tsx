@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Eye, FileDown, FileInput, Files, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, Search, Upload, X } from 'lucide-react';
+import { Archive, Bot, Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, RotateCcw, Search, Trash2, Undo2, Upload, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -19,28 +19,75 @@ import {
 } from '../components/FileUpload';
 import { openReservedPopup } from '../lib/popup';
 import { runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
-import { fetchAll } from '../lib/supabasePaging';
+import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import {
   DOCUMENT_PROCESSING_CHANGED_EVENT,
-  DOCUMENT_PROCESSING_STAGE_META,
+  DOCUMENT_USER_STATE_FILTERS,
+  DOCUMENT_USER_STATE_META,
+  documentUserState,
+  documentUserStateDescription,
+  documentUserStateFromParam,
+  documentUserStateLabel,
+  documentUserStateUrgency,
   useDocumentProcessing,
   type DocumentProcessingStage,
+  type DocumentUserState,
 } from '../lib/useDocumentProcessing';
 
 type RefileTarget = 'invoice' | 'goods_receipt';
 type SupplierOption = { id: string; name: string };
 type GalleryDocument = DocumentRow & { supplier: SupplierOption | null };
 
+/** One row of `document_auto_actions` (0077): a financial record a machine wrote with no human.
+ *
+ *  This type, and the badge and action built on it, are the FIRST place in `src/` that names what
+ *  the automation did. Until now nothing in the browser referenced `document_auto_actions`,
+ *  `document_filings` or `auto_applied` at all — an invoice the model authored was indistinguishable
+ *  on screen from one a colleague typed, which makes supervising the automation impossible in the
+ *  literal sense: there was nothing to look at.
+ *
+ *  Only the live rows are read (`reverted_at is null`). A reverted decision is history, and its
+ *  document is back in the queue looking like any other unfiled document — which is the truth. */
+type AutoActionRow = {
+  id: string;
+  document_id: string;
+  invoice_id: string | null;
+  decision: { decision_confidence?: number | string | null } | null;
+};
+
+/** The confidence the machine acted on, as a percentage a person can read.
+ *
+ *  NULL means UNKNOWN and says so. It is never rendered as 0% — the constitution's rule about
+ *  dashes instead of zeros, applied where it matters most: "the system was 0% sure and created
+ *  this invoice anyway" is a sentence about the software that would not be true. `decision` is
+ *  jsonb, so the number can arrive as a JSON number or a numeric-as-string; both are accepted and
+ *  anything else is unknown rather than NaN%. */
+function autoActionConfidence(action: AutoActionRow): string {
+  const raw = action.decision?.decision_confidence;
+  const value = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+  if (!Number.isFinite(value)) return 'לא ידועה';
+  return `${Math.round(value * 100)}%`;
+}
+
+function autoActionDescription(action: AutoActionRow): string {
+  return `החשבונית נוצרה אוטומטית על ידי המערכת מתוך המסמך הזה, ללא אישור אדם, ברמת ביטחון ${autoActionConfidence(action)}.`;
+}
+
 type InvoicePick = { id: string; invoice_number: string; invoice_date: string; supplier: { name: string } | null };
 type ReceiptPick = { id: string; number: number; received_at: string; order: { supplier: { name: string } | null } | null };
 type RefileOption = { id: string; title: string; sub: string };
 
-const PROCESSING_FILTERS: Array<{ value: DocumentProcessingStage; label: string }> =
-  (Object.entries(DOCUMENT_PROCESSING_STAGE_META) as Array<
-    [DocumentProcessingStage, (typeof DOCUMENT_PROCESSING_STAGE_META)[DocumentProcessingStage]]
-  >).map(([value, { label }]) => ({ value, label }));
-
-function ProcessingBadge({ documentId, stage }: { documentId: string; stage: DocumentProcessingStage | null }) {
+/** The badge a person reads, over the stage the machine records.
+ *
+ *  `data-testid` and `data-document-id` are unchanged, and `data-stage` is ADDED carrying the raw
+ *  internal stage: check-browser-smoke.cjs keeps measuring real pipeline state while the text says
+ *  something a kitchen manager can act on. Exported for documentStage.spec.tsx, which asserts that
+ *  pairing directly — the gate contract is too easy to break silently from inside this file. */
+export function ProcessingBadge({ documentId, stage, doc }: {
+  documentId: string;
+  stage: DocumentProcessingStage | null;
+  doc?: Pick<DocumentRow, 'entity_type' | 'entity_id'> | null;
+}) {
   if (!stage) {
     return (
       <span data-testid="document-processing-status" data-document-id={documentId} className="badge-idle">
@@ -48,16 +95,78 @@ function ProcessingBadge({ documentId, stage }: { documentId: string; stage: Doc
       </span>
     );
   }
-  const meta = DOCUMENT_PROCESSING_STAGE_META[stage];
+  const meta = DOCUMENT_USER_STATE_META[documentUserState(stage)];
   return (
-    <span data-testid="document-processing-status" data-document-id={documentId} className={`badge-${meta.tone}`}>
-      {meta.label}
-    </span>
+    <>
+      <span data-testid="document-processing-status" data-document-id={documentId} data-stage={stage}
+        className={`badge-${meta.tone}`} title={documentUserStateDescription(stage)}>
+        {documentUserStateLabel(stage, doc)}
+      </span>
+      {/* The sentence is not carried by `title` alone. A tooltip does not exist on touch — and the
+          OCR scenario drives this page at 390px — and screen readers treat it inconsistently, which
+          PRODUCT.md's WCAG 2.1 AA target does not allow for the only copy that distinguishes a
+          document nothing was ever sent for from one being read right now. Kept a SIBLING of the
+          badge, not a child, so the badge's own innerText stays the label alone — that is what
+          check-browser-smoke.cjs measures. `title` stays for the pointer. */}
+      <span className="sr-only">{documentUserStateDescription(stage)}</span>
+    </>
   );
 }
 
+/** The state filter. Extracted so the RENDERED options can be asserted: pinning the exported array
+ *  is not the same as pinning the control, and a scenario that only calls `selectOption('failed')`
+ *  passes against both this list and the seven engineering stages it replaced. */
+export function ProcessingFilterSelect({ value, onChange }: {
+  value: DocumentUserState | 'all'; onChange: (value: string) => void;
+}) {
+  return (
+    <label>
+      <span className="label">מצב המסמך</span>
+      <select data-testid="documents-processing-filter" className="input" value={value}
+        onChange={(event) => onChange(event.target.value)}>
+        <option value="all">הכול</option>
+        {/* Four human states, not seven pipeline stages. Three of the four values are the tokens
+            the URL already carried, so `?processing=review|completed|failed` keeps meaning exactly
+            what it meant; the fourth absorbs the machine's four. */}
+        {DOCUMENT_USER_STATE_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </label>
+  );
+}
+
+/** Decision #45's contract, and it is a contract OF THE DOCUMENTS FOLDER: `inbox`/no target =
+ *  לא משויך, any business target = משויך. An archived row is null on entity_id and so reads as
+ *  unfiled here — which is wrong about it, because an archived document is not "not yet filed",
+ *  it is *decided to have no target*. Rather than teach this a third state and reopen #45 for
+ *  the sake of one screen, the archive view drops the filing column and its filter entirely
+ *  (see `columns` and the filter section). The two-value question is simply not asked where it
+ *  has no meaningful answer. */
 function isUnfiled(doc: DocumentRow) {
   return doc.entity_type === 'inbox' || doc.entity_id === null;
+}
+
+/** The filing answer, and — when a machine gave it — who gave it.
+ *
+ *  "משויך" is true of a machine-authored filing and it is not ENOUGH: a person who cannot tell an
+ *  invoice the model wrote from one their colleague typed cannot supervise the automation, and the
+ *  owner's decision to let a model create financial records was granted on the understanding that
+ *  it stays supervisable. So the badge names the author, and the sentence naming the confidence
+ *  rides along as a SIBLING rather than as `title` alone — a tooltip does not exist on touch and
+ *  screen readers treat it inconsistently, which PRODUCT.md's WCAG 2.1 AA target does not allow
+ *  for the only copy that distinguishes a machine's work from a person's. Same pairing, and same
+ *  reason, as ProcessingBadge above. */
+function FilingBadge({ doc, action }: { doc: DocumentRow; action: AutoActionRow | null }) {
+  if (action) {
+    return (
+      <>
+        <span className="badge-info inline-flex items-center gap-1" title={autoActionDescription(action)}>
+          <Bot size={13} aria-hidden="true" /> שויך אוטומטית
+        </span>
+        <span className="sr-only">{autoActionDescription(action)}</span>
+      </>
+    );
+  }
+  return <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>;
 }
 
 /** Re-filing changes only the document's owner record. Metadata selected at upload remains
@@ -259,19 +368,28 @@ function UploadModal({ suppliers, onClose, onDone }: {
   );
 }
 
-/** `/documents` — one register for every active document. `/inbox` redirects here with
- *  `filing=unfiled`, so capture and archive are two views of the same source of truth. */
-export default function DocumentsGallery() {
+/** One register for every active document, served at two routes. `/documents` is all of it, and
+ *  `/inbox` redirects here with `filing=unfiled` — capture and register are two views of one
+ *  source of truth. `/documents/archive` sets `archive` and narrows the same query to
+ *  `entity_type='archive'`: the documents interpretation could not place, which no one files by
+ *  hand. One component either way, so "what is a document row" has a single answer. */
+export default function DocumentsGallery({ archive = false }: { archive?: boolean }) {
   const { profile } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const filingParam = params.get('filing');
-  const filing = filingParam === 'linked' || filingParam === 'unfiled' ? filingParam : 'all';
-  const processingParam = params.get('processing');
-  const processingFilter = PROCESSING_FILTERS.some(({ value }) => value === processingParam)
-    ? processingParam as DocumentProcessingStage
-    : 'all';
+  // The archive ignores the filing filter outright, not merely hides its control: `/inbox`
+  // redirects to `?filing=unfiled` and that param survives navigation, so an archive reached
+  // with it still attached would silently narrow a list whose only control for widening it
+  // again is no longer on screen.
+  const filing = !archive && (filingParam === 'linked' || filingParam === 'unfiled') ? filingParam : 'all';
+  // Old links, bookmarks and the Back button still carry one of the seven engineering stages here.
+  // Such a value resolves to the state that contains it — a superset of what it used to match — so
+  // it keeps filtering something meaningful instead of emptying the list with no explanation, and
+  // the select below then shows the reader which of the four is in force.
+  const processingFilter: DocumentUserState | 'all' =
+    documentUserStateFromParam(params.get('processing')) ?? 'all';
   const canFile = profile?.role === 'owner' || profile?.role === 'office';
   const canUpload = !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
   const canEnqueue = canUpload;
@@ -286,18 +404,60 @@ export default function DocumentsGallery() {
   const [refile, setRefile] = useState<{ doc: DocumentRow; target: RefileTarget } | null>(null);
   const [retryDoc, setRetryDoc] = useState<DocumentRow | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [rescueDoc, setRescueDoc] = useState<DocumentRow | null>(null);
+  const [rescuing, setRescuing] = useState(false);
+  const [deleteDoc, setDeleteDoc] = useState<DocumentRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [revertDoc, setRevertDoc] = useState<DocumentRow | null>(null);
+  const [reverting, setReverting] = useState(false);
 
   const { data, loading, fetching, error, refetch } = useQuery<{
     docs: GalleryDocument[]; suppliers: SupplierOption[];
   }>(async () => {
     const suppliers = await fetchAll<SupplierOption>((from, to) => supabase.from('suppliers').select('id, name')
       .is('deleted_at', null).order('name').order('id').range(from, to));
-    const docs = await fetchAll((from, to) => supabase.from('documents').select('*, supplier:suppliers(id, name)')
-      .is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to)) as unknown as GalleryDocument[];
+    // The two views partition the register; they do not overlap. The requirement is that a document
+    // matching no category is *מועבר* to the archive — moved, not tagged — and a row appearing in
+    // both screens was never moved anywhere. Left overlapping, the working folder would refill with
+    // exactly the noise the archive exists to absorb, which is the feature failing at its purpose.
+    // This `neq` is that product decision, not a stray filter. It is also safe to express it with:
+    // documents.entity_type is NOT NULL (0001_init.sql:363), so no row can fall out of both halves
+    // the way a nullable column would, and nothing needs a defensive `.or(...)` around it.
+    //
+    // Since 0075, file_document accepts ('archive', null), so this route can list rows. Nothing
+    // fills it automatically yet — the interpretation layer that will (task C2) is not written —
+    // so in practice the archive is still empty for most tenants, and the empty state below says
+    // which emptiness that is rather than dressing it as a failure.
+    const docs = await fetchAll((from, to) => {
+      const rows = supabase.from('documents').select('*, supplier:suppliers(id, name)').is('deleted_at', null);
+      return (archive ? rows.eq('entity_type', 'archive') : rows.neq('entity_type', 'archive'))
+        .order('created_at', { ascending: false }).order('id').range(from, to);
+    }) as unknown as GalleryDocument[];
     return { docs, suppliers };
-  }, []);
+  }, [archive]);
   const documentIds = useMemo(() => data?.docs.map((doc) => doc.id) ?? [], [data]);
   const processing = useDocumentProcessing(documentIds);
+
+  /** The autonomy ledger, read in its OWN query rather than joined into the list above, and the
+   *  separation is a product decision: a document register that refuses to render because the
+   *  autonomy ledger is unreadable would be the tail wagging the dog. If this read fails the rows
+   *  still list, the badge simply is not there and the reversal is not offered — which is the
+   *  honest degradation, because offering an undo we cannot describe would be worse than none.
+   *  Keyed on a joined string, the `useDocumentProcessing` idiom, so a re-render with an
+   *  identical id list does not re-fetch. */
+  const documentIdsKey = documentIds.join(',');
+  const { data: autoActions, refetch: refetchAutoActions } = useQuery<Record<string, AutoActionRow>>(
+    async () => {
+      if (!documentIds.length) return {};
+      const rows = await fetchInChunks(documentIds, (chunk) => fetchAll<AutoActionRow>((from, to) => supabase
+        .from('document_auto_actions').select('id, document_id, invoice_id, decision')
+        .in('document_id', chunk).is('reverted_at', null)
+        .order('created_at', { ascending: false }).order('id').range(from, to)));
+      return Object.fromEntries(rows.map((row) => [row.document_id, row]));
+    },
+    [documentIdsKey],
+  );
+  const autoActionFor = (doc: DocumentRow): AutoActionRow | null => autoActions?.[doc.id] ?? null;
 
   // A job that has been extracted goes no further on its own: interpretation has to be asked for,
   // and until it is the document sits in the list looking like work is in progress when none is.
@@ -341,7 +501,9 @@ export default function DocumentsGallery() {
         && (!supplierId || (supplierId === 'none' ? !doc.supplier_id : doc.supplier_id === supplierId))
         && (!kind || doc.document_kind === kind)
         && (filing === 'all' || (filing === 'unfiled' ? isUnfiled(doc) : !isUnfiled(doc)))
-        && (processingFilter === 'all' || stage === processingFilter)
+        // A row whose processing state could not be read matches no state filter: it is unknown,
+        // not "נקלט". The banner above the table is what explains the gap.
+        && (processingFilter === 'all' || (stage !== null && documentUserState(stage) === processingFilter))
         && (!from || date >= from)
         && (!to || date <= to);
     });
@@ -397,6 +559,84 @@ export default function DocumentsGallery() {
     }
   }
 
+  /** The archive's own filing action, and the reason is not optional. It is a separate RPC from
+   *  the two שיוך actions on purpose: file_document's guard takes only a row still in the inbox
+   *  (0019:167), and keeping rescue separate is what makes "a reason is required" structural —
+   *  a property of which action the person chose, not of a prop threaded into a shared modal. */
+  async function rescue(reason?: string) {
+    if (!rescueDoc || !reason) return;
+    setRescuing(true);
+    try {
+      ok(await supabase.rpc('rescue_document_from_archive', {
+        p_document_id: rescueDoc.id,
+        p_reason: reason,
+      }));
+      toast('המסמך הוחזר לתיקיית המסמכים');
+      setRescueDoc(null);
+      window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+      await refetch();
+    } catch (error) {
+      toast(toHebrewError(error), 'error');
+    } finally {
+      setRescuing(false);
+    }
+  }
+
+  /** Undoing what the machine did, in one action, with a mandatory reason.
+   *
+   *  The server is the enforcement: `revert_document_auto_action` refuses an empty or
+   *  whitespace-only reason by name (`reason_required`), refuses anyone who is not owner/office,
+   *  refuses a second reversal (`auto_action_already_reverted`), and refuses outright when money
+   *  has been allocated against the invoice — that last one arrives as
+   *  `invoice_has_financial_references` from the live `soft_delete_invoice`, and `toHebrewError`
+   *  already names it. The dialog is the courtesy, never the fence.
+   *
+   *  `refetch` AND `refetchAutoActions`, because one reversal changes two things a person is
+   *  looking at: the row goes back to לא משויך, and the "שויך אוטומטית" badge must disappear.
+   *  Refreshing one and not the other would leave the screen contradicting itself. */
+  async function revertAutoAction(reason?: string) {
+    const action = revertDoc ? autoActionFor(revertDoc) : null;
+    if (!action || !reason) return;
+    setReverting(true);
+    try {
+      ok(await supabase.rpc('revert_document_auto_action', {
+        p_action_id: action.id,
+        p_reason: reason,
+      }));
+      toast('השיוך האוטומטי בוטל והמסמך חזר לתיקיית המסמכים');
+      setRevertDoc(null);
+      window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+      window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
+      await Promise.all([refetch(), refetchAutoActions()]);
+    } catch (error) {
+      toast(toHebrewError(error), 'error');
+    } finally {
+      setReverting(false);
+    }
+  }
+
+  /** Removal from the archive takes NO reason, by the owner's ruling (OPEN-DECISIONS #110), and
+   *  needs no new database mechanism: this is decision #28's existing soft delete — the row is
+   *  hidden, the stored file is kept for audit. Same statement AttachmentsPanel.tsx:142-144
+   *  issues, same policy (documents_soft_delete, owner/office). */
+  async function removeDoc() {
+    if (!deleteDoc) return;
+    setDeleting(true);
+    try {
+      ok(await supabase.from('documents').update({
+        deleted_at: new Date().toISOString(), deleted_by: profile?.id ?? null,
+      }).eq('id', deleteDoc.id));
+      toast('המסמך הוסר');
+      setDeleteDoc(null);
+      window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+      await refetch();
+    } catch (error) {
+      toast(toHebrewError(error), 'error');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function open(doc: DocumentRow) {
     const result = await openReservedPopup(async () => {
       const { data: url, error: openError } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300);
@@ -407,7 +647,10 @@ export default function DocumentsGallery() {
     if (result === 'error') toast('שגיאה בפתיחת הקובץ', 'error');
   }
 
-  const columns: Column<GalleryDocument>[] = [
+  // The filing column is a question about the documents folder and it has no answer on the
+  // archive: every row there reads "לא משויך" through isUnfiled(), which calls a deliberately
+  // filed document unfiled. Dropping the column is the honest move — see isUnfiled's note.
+  const columns: Column<GalleryDocument>[] = ([
     {
       key: 'file', header: 'מסמך', priority: 1, sortValue: (doc) => doc.file_name,
       render: (doc) => (
@@ -429,32 +672,63 @@ export default function DocumentsGallery() {
         </span>
       ),
     },
-    {
+    archive ? null : {
       key: 'filing', header: 'תיוק', mobileLabel: null, priority: 3, sortValue: (doc) => isUnfiled(doc) ? 0 : 1,
-      render: (doc) => <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>,
+      render: (doc) => <FilingBadge doc={doc} action={autoActionFor(doc)} />,
     },
     {
-      key: 'processing', header: 'עיבוד', mobileLabel: null, priority: 3,
-      sortValue: (doc) => processing.snapshots[doc.id]?.stage ?? 'unprocessed',
+      key: 'processing', header: 'מצב', mobileLabel: null, priority: 3,
+      // Sorted by the state on screen, not by the stage underneath — with four labels, the seven
+      // internal names would scatter identical-looking badges apart — and ranked by urgency rather
+      // than by name, so ascending puts what waits on a person at the top. See USER_STATE_URGENCY.
+      sortValue: (doc) => documentUserStateUrgency(processing.snapshots[doc.id]?.stage ?? 'unprocessed'),
       render: (doc) => (
         <ProcessingBadge
           documentId={doc.id}
           stage={processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed'}
+          doc={doc}
         />
       ),
     },
-  ];
+  ] as Array<Column<GalleryDocument> | null>).filter((column): column is Column<GalleryDocument> => column !== null);
 
   const hasFilters = !!(q || supplierId || kind || from || to || filing !== 'all' || processingFilter !== 'all');
+  const revertAction = revertDoc ? autoActionFor(revertDoc) : null;
+
+  // Heading and icon track the nav label, because pageTitleFor derives the tab title from the
+  // sidebar item and a different word would put two names on one screen. `ארכיון מסמכים` qualifies
+  // the nav item's bare `ארכיון`, which can afford to be short because it sits under the מסמכים
+  // group header; the page has no header above it. One name, one of them qualified.
+  const HeadingIcon = archive ? Archive : FolderOpen;
+  // Two ways to be empty, and they are different facts: a filter that matched nothing, and a
+  // register with nothing in it. Only the second differs between the two routes. Neither may
+  // stand in for a failed read (gate B30) — a failed first load renders ErrorNote instead of the
+  // table, and a failed refetch keeps its own ErrorNote above whatever rows survived.
+  const empty = archive
+    ? { title: 'אין מסמכים בארכיון', subtitle: 'מסמכים שהמערכת לא הצליחה לשייך לאף קטגוריה יופיעו כאן' }
+    : { title: 'אין מסמכים במערכת', subtitle: 'מסמך חדש יופיע כאן מיד לאחר צילום או העלאה' };
 
   return (
     <div className="space-y-4" data-testid="documents-page">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="page-title flex items-center gap-2"><Files size={22} /> גלריית מסמכים</h1>
-          <p className="mt-1 text-sm text-ink-muted">כל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.</p>
+          <h1 className="page-title flex items-center gap-2">
+            <HeadingIcon size={22} /> {archive ? 'ארכיון מסמכים' : 'תיקיית המסמכים'}
+          </h1>
+          {/* No standfirst on the archive. "הכול במקום אחד" is false there, and what is true of it
+              is the empty state's sentence — which is what the page shows anyway until something
+              starts filing documents to the archive. Saying it twice would not make it truer. */}
+          {!archive && <p className="mt-1 text-sm text-ink-muted">כל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.</p>}
         </div>
-        {canUpload && (
+        {/* No upload button on the archive. uploadDocument writes entity_type='inbox', so a file
+            sent from here would toast "הועלה וממתין לעיבוד" over a list that stays empty — the app
+            reporting a success the screen contradicts. What the archive has no path for is
+            CAPTURE: documents_insert does not admit 'archive', so no browser upload can land
+            here. Filing an *existing* document here is a different thing and is possible since
+            0075 — file_document accepts ('archive', null) for owner/office, with a reason and an
+            audit row — it simply has no control on this screen, because the intended filer is
+            the interpretation layer (task C2, not yet written). */}
+        {canUpload && !archive && (
           <button type="button" className="btn-primary" onClick={() => setUploadOpen(true)}>
             <Upload size={16} /> העלאת מסמך
           </button>
@@ -485,22 +759,19 @@ export default function DocumentsGallery() {
               {DOCUMENT_KIND_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <label>
-            <span className="label">סטטוס תיוק</span>
-            <select className="input" value={filing} onChange={(event) => setFiling(event.target.value)}>
-              <option value="all">הכול</option>
-              <option value="unfiled">לא משויכים</option>
-              <option value="linked">משויכים</option>
-            </select>
-          </label>
-          <label>
-            <span className="label">סטטוס עיבוד</span>
-            <select data-testid="documents-processing-filter" className="input" value={processingFilter}
-              onChange={(event) => setProcessing(event.target.value)}>
-              <option value="all">הכול</option>
-              {PROCESSING_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          </label>
+          {/* Gone on the archive with its column: filtering by an answer that is the same wrong
+              answer for every row is not a filter, it is furniture. */}
+          {!archive && (
+            <label>
+              <span className="label">סטטוס תיוק</span>
+              <select className="input" value={filing} onChange={(event) => setFiling(event.target.value)}>
+                <option value="all">הכול</option>
+                <option value="unfiled">לא משויכים</option>
+                <option value="linked">משויכים</option>
+              </select>
+            </label>
+          )}
+          <ProcessingFilterSelect value={processingFilter} onChange={setProcessing} />
           <label>
             <span className="label">מתאריך</span>
             <input type="date" className="input num" value={from} onChange={(event) => setFrom(event.target.value)} />
@@ -543,25 +814,50 @@ export default function DocumentsGallery() {
           mobileTitle={(doc) => doc.file_name}
           mobileTrailing={(doc) => (
             <span className="flex flex-wrap justify-end gap-1">
-              <ProcessingBadge documentId={doc.id}
+              <ProcessingBadge documentId={doc.id} doc={doc}
                 stage={processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed'} />
-              <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>
+              {!archive && <FilingBadge doc={doc} action={autoActionFor(doc)} />}
             </span>
           )}
           rowActions={(doc) => {
             const snapshot = processing.snapshots[doc.id];
+            const autoAction = autoActionFor(doc);
             return [
               { key: 'review', label: 'בדיקת מסמך', icon: FileSearch, hidden: !snapshot?.job, onSelect: () => review(doc) },
               { key: 'enqueue', label: 'שליחה לעיבוד', icon: RefreshCw, hidden: !canEnqueue || snapshot?.stage !== 'unprocessed', onSelect: () => setRetryDoc(doc) },
               { key: 'retry', label: 'עיבוד מחדש', icon: RefreshCw, hidden: !canRetry || snapshot?.stage !== 'failed', onSelect: () => setRetryDoc(doc) },
               { key: 'export', label: 'ייצוא', icon: FileDown, hidden: snapshot?.stage !== 'review' && snapshot?.stage !== 'completed', onSelect: () => review(doc, 'export') },
               { key: 'view', label: 'צפייה במקור', icon: Eye, onSelect: () => void open(doc) },
-              { key: 'invoice', label: 'שיוך לחשבונית', icon: FileInput, hidden: !canFile || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'invoice' }) },
-              { key: 'receipt', label: 'שיוך לקבלת סחורה', icon: ReceiptText, hidden: !canFile || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'goods_receipt' }) },
+              // Not offered on the archive, for the same reason the upload button is not. isUnfiled
+              // reads an archived row as unfiled (entity_id is null), so both would render — and
+              // file_document's guard takes only a row still in the inbox (0019:167), so either
+              // would raise document_already_filed, i.e. "המסמך כבר שויך ליעד עסקי" about a document
+              // sitting here precisely because it could not be assigned to any target. Whether a
+              // person may rescue a document from the archive is a real and open question; an
+              // action that always errors is not an answer to it.
+              { key: 'invoice', label: 'שיוך לחשבונית', icon: FileInput, hidden: !canFile || archive || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'invoice' }) },
+              { key: 'receipt', label: 'שיוך לקבלת סחורה', icon: ReceiptText, hidden: !canFile || archive || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'goods_receipt' }) },
+              // The clean complement of the two gates above: `!canFile || !archive`, so the
+              // archive's filing action appears exactly where theirs do not. It is its own key
+              // and its own RPC — rescue_document_from_archive, not file_document, whose guard
+              // structurally refuses any non-inbox row (0019:167). The document returns to the
+              // folder as unfiled, where those two actions then work on it for real.
+              { key: 'rescue', label: 'החזרה לטיפול', icon: Undo2, hidden: !canFile || !archive, onSelect: () => setRescueDoc(doc) },
+              // The undo for a decision no human made. Gated on the AUTO-ACTION EXISTING, not on
+              // the document being filed: "this row has an invoice" and "a machine wrote that
+              // invoice" are different facts, and only the second one is reversible here — a
+              // colleague's invoice is undone from the invoice screen, by its own command. The
+              // role gate matches the server's (owner/office, the authority every comparable
+              // reversal in this codebase uses); the server refuses regardless of what this hides.
+              { key: 'revert-auto', label: 'ביטול השיוך האוטומטי', icon: RotateCcw, tone: 'danger',
+                hidden: !canFile || !autoAction, onSelect: () => setRevertDoc(doc) },
+              // Removal from the archive: no reason, by the owner's ruling (#110). Nothing new
+              // in the database — decision #28's soft delete, the stored file kept for audit.
+              { key: 'delete', label: 'הסרה', icon: Trash2, tone: 'danger', hidden: !canFile || !archive, onSelect: () => setDeleteDoc(doc) },
             ];
           }}
-          emptyTitle={data?.docs.length ? 'לא נמצאו מסמכים לפי הסינון' : 'אין מסמכים במערכת'}
-          emptySubtitle={data?.docs.length ? 'שנו או נקו את המסננים כדי לראות מסמכים נוספים' : 'מסמך חדש יופיע כאן מיד לאחר צילום או העלאה'} />
+          emptyTitle={data?.docs.length ? 'לא נמצאו מסמכים לפי הסינון' : empty.title}
+          emptySubtitle={data?.docs.length ? 'שנו או נקו את המסננים כדי לראות מסמכים נוספים' : empty.subtitle} />
       )}
 
       {uploadOpen && <UploadModal suppliers={data?.suppliers ?? []} onClose={() => setUploadOpen(false)} onDone={refetch} />}
@@ -573,6 +869,33 @@ export default function DocumentsGallery() {
           : 'ניסיון חדש שומר את תוצאות העיבוד הקודמות ומוסיף ניסיון נפרד.'}
         confirmLabel={processing.snapshots[retryDoc?.id ?? '']?.stage === 'unprocessed' ? 'שליחה לתור' : 'החזרה לתור'}
         requireReason={processing.snapshots[retryDoc?.id ?? '']?.stage !== 'unprocessed'} busy={retrying} />
+
+      {/* requireReason, always. The reason travels to audit_logs through the RPC, and the
+          server refuses an empty one by name (reason_required) regardless of what the browser
+          sends — this dialog is the courtesy, not the enforcement. */}
+      <ConfirmDialog open={!!rescueDoc} onClose={() => setRescueDoc(null)} onConfirm={(reason) => void rescue(reason)}
+        title="החזרת מסמך לטיפול"
+        message={`המסמך "${rescueDoc?.file_name ?? ''}" יחזור לתיקיית המסמכים כלא משויך, ויהיה אפשר לשייך אותו לחשבונית או לקבלת סחורה.`}
+        confirmLabel="החזרה לטיפול" requireReason busy={rescuing} />
+
+      {/* The one dialog in this app that undoes a financial record nobody authorised by hand, so it
+          says all four things before it offers the button: WHAT the machine did, at what
+          CONFIDENCE, what the undo will change, and what survives it. `requireReason` is not a
+          courtesy here either — the reason lands in audit_logs as the only human sentence attached
+          to the whole episode, and the server refuses an empty one by name regardless. */}
+      <ConfirmDialog open={!!revertDoc} onClose={() => setRevertDoc(null)}
+        onConfirm={(reason) => void revertAutoAction(reason)}
+        title="ביטול השיוך האוטומטי"
+        message={`המסמך "${revertDoc?.file_name ?? ''}" שויך אוטומטית לחשבונית שהמערכת יצרה בעצמה, ללא אישור אדם, ברמת ביטחון ${revertAction ? autoActionConfidence(revertAction) : 'לא ידועה'}. הביטול יסיר את החשבונית (הרשומה נשמרת לביקורת), יחזיר את המסמך לתיקייה כלא משויך, ויסגור חריגה שנפתחה בעקבות השיוך — לא מפני שהפער נבדק. רישום היצירה ורישום הביטול נשמרים שניהם ביומן הביקורת.`}
+        confirmLabel="ביטול השיוך" danger requireReason busy={reverting} />
+
+      {/* No requireReason, deliberately: #110 rules that removal from the archive needs none.
+          The message says what actually happens to the bytes, because "הסרה" alone would read
+          as destruction and the file is kept. */}
+      <ConfirmDialog open={!!deleteDoc} onClose={() => setDeleteDoc(null)} onConfirm={() => void removeDoc()}
+        title="הסרת מסמך מהארכיון"
+        message={`המסמך "${deleteDoc?.file_name ?? ''}" יוסר מהרשימה. הקובץ נשמר לביקורת.`}
+        confirmLabel="הסרה" danger busy={deleting} />
 
     </div>
   );

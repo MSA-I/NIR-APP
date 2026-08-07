@@ -21,9 +21,17 @@ export type DocumentProcessingStage =
   | 'completed'
   | 'failed';
 
+export type DocumentStageTone = 'idle' | 'await' | 'info' | 'done' | 'alert';
+
+/**
+ * The ENGINEERING labels. They stay, because the seven stages stay: the database contract, the
+ * SQL suites and the browser scenarios all measure them, and a reviewer standing in front of a
+ * stuck job needs to know *which* step stopped. What changed is who reads them — see
+ * DOCUMENT_USER_STATE_META below for what a kitchen manager sees on the documents folder.
+ */
 export const DOCUMENT_PROCESSING_STAGE_META: Record<
   DocumentProcessingStage,
-  { label: string; tone: 'idle' | 'await' | 'info' | 'done' | 'alert' }
+  { label: string; tone: DocumentStageTone }
 > = {
   unprocessed: { label: 'טרם נשלח לעיבוד', tone: 'idle' },
   queued: { label: 'ממתין לעיבוד', tone: 'await' },
@@ -36,6 +44,132 @@ export const DOCUMENT_PROCESSING_STAGE_META: Record<
   completed: { label: 'הושלם', tone: 'done' },
   failed: { label: 'נכשל', tone: 'alert' },
 };
+
+/**
+ * What a person sees. The users are a kitchen manager, an office clerk and a business owner: they
+ * do not know what "חילוץ" is, what "פירוש" is, or why a document would be "ממתין לפירוש". Seven
+ * pipeline stages on a status badge described the machine's internal position in a queue — which
+ * is information about us, not about their document.
+ *
+ * Four states, and each answers the only question the reader actually has: is anything required
+ * of me? נקלט — no, wait. בבדיקה — yes, look at it. שויך — no, it landed. לא נקרא — yes, file it
+ * by hand.
+ *
+ * The seven stages are NOT replaced. They keep flowing through `DocumentProcessingSnapshot.stage`,
+ * through `data-stage` on the badge, and through every suite that measures them.
+ */
+export type DocumentUserState = 'intake' | 'review' | 'completed' | 'failed';
+
+export const DOCUMENT_USER_STATE_META: Record<
+  DocumentUserState,
+  { label: string; tone: DocumentStageTone }
+> = {
+  intake: { label: 'נקלט', tone: 'info' },
+  review: { label: 'בבדיקה', tone: 'await' },
+  completed: { label: 'שויך', tone: 'done' },
+  failed: { label: 'לא נקרא', tone: 'alert' },
+};
+
+const STAGE_USER_STATE: Record<DocumentProcessingStage, DocumentUserState> = {
+  unprocessed: 'intake',
+  queued: 'intake',
+  processing: 'intake',
+  extracted: 'intake',
+  review: 'review',
+  completed: 'completed',
+  failed: 'failed',
+};
+
+/**
+ * One sentence per stage rather than per state, for one reason: `unprocessed` means nothing was
+ * ever sent to be read. It shares the "נקלט" label honestly — the document IS in the system — but
+ * "המערכת קוראת את המסמך" would be a claim about work that is not running. A status badge may
+ * simplify; it may not say something untrue.
+ */
+const STAGE_USER_DESCRIPTION: Record<DocumentProcessingStage, string> = {
+  unprocessed: 'המסמך נשמר במערכת וטרם נשלח לקריאה',
+  queued: 'המערכת קוראת את המסמך',
+  processing: 'המערכת קוראת את המסמך',
+  extracted: 'המערכת קוראת את המסמך',
+  review: 'ממתין לאישורך',
+  completed: 'המערכת סיימה לקרוא את המסמך',
+  failed: 'לא הצלחנו לקרוא את המסמך. אפשר לשייך ידנית.',
+};
+
+export function documentUserState(stage: DocumentProcessingStage): DocumentUserState {
+  return STAGE_USER_STATE[stage];
+}
+
+export function documentUserStateDescription(stage: DocumentProcessingStage): string {
+  return STAGE_USER_DESCRIPTION[stage];
+}
+
+/**
+ * Sort rank for the state column: what waits on a person first, what broke second, what the system
+ * is still doing third, what is finished last. Sorting on the state name gave
+ * שויך → לא נקרא → נקלט → בבדיקה — correct grouping, meaningless order. §12 asks a screen to answer
+ * "what needs treatment" within seconds of arriving, and a sort control is part of that answer.
+ */
+const USER_STATE_URGENCY: Record<DocumentUserState, number> = {
+  review: 0,
+  failed: 1,
+  intake: 2,
+  completed: 3,
+};
+
+export function documentUserStateUrgency(stage: DocumentProcessingStage): number {
+  return USER_STATE_URGENCY[documentUserState(stage)];
+}
+
+export const DOCUMENT_USER_STATE_FILTERS: ReadonlyArray<{ value: DocumentUserState; label: string }> =
+  (Object.entries(DOCUMENT_USER_STATE_META) as Array<[DocumentUserState, { label: string }]>)
+    .map(([value, { label }]) => ({ value, label }));
+
+/**
+ * The `processing` query parameter survives navigation, and it used to carry one of the seven
+ * engineering stages. An old link, a bookmark or a Back button still holds `?processing=extracted`,
+ * and the honest reading of it is the state that CONTAINS that stage — a superset, so a link that
+ * matched rows before never lands on an unexplained empty list. Anything unrecognised filters
+ * nothing at all, exactly as it did before.
+ *
+ * `Object.hasOwn`, never `in`: `in` walks the prototype chain, so `?processing=toString` — and
+ * `constructor`, `valueOf`, `__proto__`, `hasOwnProperty`, `isPrototypeOf` — passed the guard and
+ * came back as if they were states. Measured live: the select fell back to displaying "הכול" over
+ * a list filtered to zero rows. A control that names a filter it is not applying is the one thing
+ * a filter must never do, and it is worse than the empty list itself.
+ */
+export function documentUserStateFromParam(value: string | null): DocumentUserState | null {
+  if (!value) return null;
+  if (Object.hasOwn(DOCUMENT_USER_STATE_META, value)) return value as DocumentUserState;
+  if (Object.hasOwn(STAGE_USER_STATE, value)) return STAGE_USER_STATE[value as DocumentProcessingStage];
+  return null;
+}
+
+/**
+ * `completed` is a fact about the JOB, not about the filing — today the only path to it is a
+ * confirmed price list (0048:1744), which leaves the document sitting in the inbox. So the badge
+ * names the destination when the row has one, and refuses the word "שויך" when it does not: the
+ * filing column on the same row would be saying "לא משויך" beside it, and a screen that
+ * contradicts itself teaches people to distrust all of it.
+ *
+ * Naming the destination costs nothing here — `entity_type` is already on the row. Naming the
+ * document AT the destination ("חשבונית 1042") would cost a second, polymorphic lookup:
+ * `entity_id` has no foreign key, so PostgREST cannot embed it, and it would take one extra query
+ * per target table on every gallery load. Not worth a more specific word.
+ */
+export function documentUserStateLabel(
+  stage: DocumentProcessingStage,
+  doc?: Pick<DocumentRow, 'entity_type' | 'entity_id'> | null,
+): string {
+  const state = documentUserState(stage);
+  if (state !== 'completed' || !doc) return DOCUMENT_USER_STATE_META[state].label;
+  // 'inbox' is not-yet-filed and 'archive' is decided-to-have-no-target (types.ts:250). Neither
+  // is a destination, and both carry a null entity_id.
+  if (doc.entity_id === null || doc.entity_type === 'inbox' || doc.entity_type === 'archive') return 'נקרא';
+  if (doc.entity_type === 'invoice') return 'שויך לחשבונית';
+  if (doc.entity_type === 'goods_receipt') return 'שויך לקבלת סחורה';
+  return DOCUMENT_USER_STATE_META.completed.label;
+}
 
 export type InterpretationContract = {
   schema_version: '1';

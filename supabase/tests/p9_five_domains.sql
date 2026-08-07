@@ -1,4 +1,4 @@
--- P9 harness for 0068-0070 (wave 9, PLAN-10 §2). Run only against an isolated local database
+﻿-- P9 harness for 0068-0070 (wave 9, PLAN-10 ֲ§2). Run only against an isolated local database
 -- with every migration applied. The transaction is rolled back.
 --
 -- What it proves:
@@ -211,10 +211,60 @@ select pg_temp.p9_assert(
 -- Wave 9 added zero exemptions (the registry stood at 59 through it); 0073 then
 -- DRAINED three -- create_payment_request, transition_payment_request and
 -- payment_request_financial_check_signals gained real scope checks and left the
--- registry. The pin moves down, never up: additions still fail here by design.
+-- registry, taking the pin to 56.
+--
+-- 0075:464 then added ONE, and the pin moves to 57. This is the only addition the campaign has
+-- accepted, and it was accepted by decision rather than by drift -- the latch below is what
+-- forced that conversation, which is its whole purpose.
+--
+-- WHY IT IS NOT DRAINABLE, so the multi-unit enablement wave does not have to rediscover it:
+-- public.rescue_document_from_archive(uuid,text) is a definer whose body names `documents`, an
+-- enforced table. Making it INVOKER would require granting UPDATE on document_filings to
+-- authenticated -- and B1's review demonstrated by probe that a browser could then PATCH
+-- reverted_at straight through PostgREST with no reason, defeating the mandatory-reason
+-- contract the owner's ruling established (#110). Draining this row would trade a line of
+-- bookkeeping for an actual hole. The remediation named in its own reason field is the real
+-- one: filter `documents` on auth_scopes() once documents carries a meaningful unit.
+--
+-- 0077 then added ONE more, and the pin moves to 58. Second accepted addition, same rule: by
+-- decision, not by drift. The latch below is what forced this edit -- 0077 landed, this line
+-- still read 57, and p9 went red until someone had to justify the row.
+--
+-- WHY IT IS NOT DRAINABLE EITHER, written here so the multi-unit wave judges it on the argument:
+-- public.apply_document_interpretation(uuid,uuid,uuid) is a definer whose body names `documents`,
+-- `invoices` and `purchase_orders`, all enforced. It cannot filter on auth_scopes() because it
+-- runs with NO user JWT at all -- the Edge Function invokes it with the service key, so
+-- auth_scopes() is empty and every scoped read would return nothing, silently switching the
+-- entire decision layer off while looking healthy. That is the same class of silent failure C1
+-- found in evaluate_autonomy_policy, which always answers "off" to the trusted server because
+-- auth_org() is NULL there. The tenant boundary is instead pinned EXPLICITLY by the
+-- interpretation's own org_id and by tenant-composite foreign keys on every row it writes. The
+-- remediation in its reason field is the real one: pass the acting unit in from the Edge
+-- Function once documents carries a meaningful unit_id (an inbox document is unit_id NULL by
+-- design, 0055:112).
+--
+-- The third addition, 0077's revert_document_auto_action(uuid,text), is the undo half of the
+-- same decision layer and is not drainable for the mirror-image reason: an invoker version
+-- would need UPDATE on document_auto_actions, document_filings AND invoices.deleted_at granted
+-- to `authenticated`, which lets a direct PostgREST PATCH revert a machine-written financial
+-- record with no reason and no soft-delete guard -- emptying the mandatory-reason contract the
+-- command exists to enforce. Same remediation as its two siblings: pass the acting unit in once
+-- documents carries a meaningful unit_id.
+--
+-- The pin still moves only by an explicit edit here. A migration that adds an exemption and
+-- leaves this line alone fails, by design -- which it has now done on four consecutive waves,
+-- always at the end of a twenty-minute gate rather than in seconds. See the check:* script that
+-- asserts a migration touching scope_definer_exemptions also touches this file.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 56,
-  'the definer exemption registry must stay at 56 rows -- 59 minus the three 0073 drained; zero additions allowed');
+  (select count(*) from private.scope_definer_exemptions) = 59,
+  'the definer exemption registry must stay at 59 rows -- 59 minus the three 0073 drained, '
+  || 'plus the one 0075:464 added for rescue_document_from_archive (not drainable: invoker '
+  || 'would require granting UPDATE on document_filings to the browser), plus the one 0077 '
+  || 'added for apply_document_interpretation (not drainable: it runs with no user JWT, so '
+  || 'auth_scopes() is empty and a scoped read would silently disable the decision layer), '
+  || 'plus the one 0077 added for revert_document_auto_action (not drainable: invoker would '
+  || 'let a direct PATCH undo a machine-written financial record with no reason); '
+  || 'zero silent additions');
 
 select pg_temp.p9_assert(
   (select count(*) from private.scope_enforcement_violations()) = 0,
@@ -287,7 +337,7 @@ insert into categories (id, org_id, name) values
 
 insert into products (id, org_id, category_id, name, unit) values
   ('59000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
-   '49000000-0000-4000-8000-000000000001', 'P9SEARCH Product', 'ק"ג');
+   '49000000-0000-4000-8000-000000000001', 'P9SEARCH Product', '׳§"׳’');
 
 -- One approved charge, so the accountant branch has a row it may legally see and so the
 -- payment-request approval preconditions of 0031:887-917 are satisfiable.
@@ -304,7 +354,7 @@ insert into purchase_orders (id, org_id, supplier_id, status, created_by) values
 
 insert into payments (id, org_id, supplier_id, amount, paid_date, method, reference) values
   ('89000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
-   '39000000-0000-4000-8000-000000000001', 250, current_date, 'העברה בנקאית', 'P9SEARCH-REF');
+   '39000000-0000-4000-8000-000000000001', 250, current_date, '׳”׳¢׳‘׳¨׳” ׳‘׳ ׳§׳׳™׳×', 'P9SEARCH-REF');
 
 insert into credit_requests (id, org_id, supplier_id, invoice_id, reason, amount, status) values
   ('99000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',

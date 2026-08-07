@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { Plus, Minus, PackageCheck, Save, CheckCircle2, FileText, Camera, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -664,7 +664,9 @@ export function ReceiveOrder() {
   };
 
   return (
-    <div className="max-w-xl mx-auto space-y-3 pb-28">
+    // Reserves both fixed bars on a phone (contextual taskbar + the global capture bar G1 kept
+    // here), and only the taskbar from 64rem up, where the action bar is `lg:hidden`.
+    <div className="max-w-xl mx-auto space-y-3 pb-52 lg:pb-28">
       <div>
         <h1 className="page-title flex items-center gap-2"><PackageCheck size={22} /> קבלת סחורה</h1>
         <div className="text-sm text-ink-muted mt-1">{order.supplier.name} · <span className="num">הזמנה #{order.number}</span></div>
@@ -694,6 +696,20 @@ export function ReceiveOrder() {
           {scan && scan.kind !== 'match' && (
             <span className="text-xs text-ink-muted">
               קוד אחרון שנסרק: <span className="num">{scan.code}</span> — לא נבחרה שורה.
+              {/* G1, finding 6. An unrecognised code ended here, with no suggestion — while the
+                  price-list review screen offers "יצירת מוצר חדש מהשורה" on every unmatched row
+                  (PriceListReviewConfirmation.tsx:533) and RLS lets `kitchen` add a product
+                  (0022:131-132). So this was a missing door, not a fence. The link is the step;
+                  quick-create in place depends on finding 5 and is not worth it alone. The second
+                  half is the honest limit: a product created now is still not on THIS order, so
+                  the receipt cannot take it either. */}
+              {scan.kind === 'none' && (
+                <>
+                  {' '}הקוד אינו מוכר בשורות ההזמנה. אם המוצר חסר בקטלוג אפשר להוסיף אותו במסך{' '}
+                  <Link className="link" to="/products">מוצרים</Link>{' '}— אך מוצר שנוסף עכשיו עדיין אינו חלק מההזמנה הזו,
+                  ולכן לא ניתן לקלוט אותו בקבלה הנוכחית.
+                </>
+              )}
             </span>
           )}
         </div>
@@ -714,9 +730,22 @@ export function ReceiveOrder() {
                   הכמויות מולאו מתעודת המשלוח עבור <span className="num">{data.delivered.matchedQty.size}</span> פריטים.
                   שאר השורות נשארו בכמות שהוזמנה. בדוק מול הסחורה שהגיעה בפועל לפני שמירה.
                 </div>}
+            {/* G1, finding 5. This paragraph named the problem and stopped there — it was the only
+                prose in the app that admits an unordered item arrived, with no action attached.
+                What follows is the next step, and deliberately NOT a button: a receipt is saved
+                against the order's own lines (`order.items.map` below, and `save_goods_receipt`
+                rejects any row count other than the order's), and there is no command in the
+                product that opens an exception by hand — `exceptions` has no INSERT grant for the
+                browser at all (0036:83 grants UPDATE only), and `open_bank_transaction_exception`
+                is bank-bound and owner/accountant. Promising "פתיחת חריג" here would have built the
+                exact thing this task removes. See OPEN-DECISIONS #116. */}
             {data.delivered.unmatched.length > 0 && (
               <div>
                 שורות בתעודה שלא זוהו במחירון הספק ולכן לא מולאו: {data.delivered.unmatched.join(', ')}.
+                <span className="block mt-1">
+                  פריט שהגיע ואינו בהזמנה אינו יכול להתווסף לקבלה הזו — הקבלה נשמרת מול שורות ההזמנה בלבד.
+                  יש לרשום את הפער בהערה של שורה קרובה ולעדכן את מנהל הרכש; אין כרגע פעולה במסך שפותחת חריג לפריט שלא הוזמן.
+                </span>
               </div>
             )}
           </div>
@@ -784,8 +813,13 @@ export function ReceiveOrder() {
       {/* sticky action bar */}
       <div className="phone-taskbar fixed inset-x-0 lg:ms-60 bg-surface border-t border-line p-3 flex gap-2 z-30">
         {busy && <span className="sr-only" role="status" aria-live="polite">שומר את הקבלה</span>}
+        {/* Rewritten with finding 7: the camera is no longer suppressed on this route, so "צילום
+            החשבונית יתאפשר מיד לאחר סיום הקבלה" became false the moment the FAB kept its capture
+            action. What is still true is the narrower claim — the shot taken now lands in the
+            documents folder unattached, and it is the completion screen that ties it to THIS
+            receipt. Saying only that keeps the sentence honest in both directions. */}
         <div className="hidden sm:flex items-center text-xs text-ink-muted me-auto ps-2">
-          <Camera size={14} className="me-1" /> צילום החשבונית יתאפשר מיד לאחר סיום הקבלה
+          <Camera size={14} className="me-1" /> אפשר לצלם עכשיו — הצילום נשמר בתיקיית המסמכים; צירופו לקבלה זו מיד לאחר סיומה
         </div>
         <button className="btn-secondary flex-1 sm:flex-none" disabled={busy || !receiptKey} onClick={() => void save(false)}>
           <Save size={15} /> שמירת ביניים

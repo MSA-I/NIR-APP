@@ -155,8 +155,29 @@ function ExecuteModal({ pr, mode, onClose, onDone }: { pr: Row; mode: PayerQueue
       <div className="space-y-4">
         <div className="rounded-lg bg-surface-sunken border border-line px-4 py-3">
           <div className="flex items-center gap-2 text-sm font-medium text-ink-mid mb-1"><Landmark size={15} /> פרטי חשבון להעברה</div>
-          <div className="text-sm text-ink-body text-start" dir="ltr">{pr.supplier.bank_details ?? 'לא הוזנו פרטי בנק — יש לברר מול המשרד'}</div>
+          <div className="text-sm text-ink-body text-start" dir="ltr">{pr.supplier.bank_details ?? 'לא הוזנו פרטי בנק'}</div>
         </div>
+
+        {/* G1, finding 11. `payer` reaches two screens in the whole product (/dashboard and /pay),
+            has no search and no FAB, and cannot open /suppliers or /exceptions — so a missing or
+            wrong bank account had one static string and no channel at all. What could not be built
+            here: the audit's suggested "open an exception" button. `exceptions` has no INSERT grant
+            for the browser (0036:83 grants UPDATE only) and its policy names owner/office/kitchen
+            (0022:346) — `payer` is in neither list, so that button would have failed on click,
+            which is the very defect this task removes. Recorded instead as OPEN-DECISIONS #116.
+            The sentence that IS true is the one that matters most: the button below records a
+            transfer, it does not perform one. */}
+        {!pr.supplier.bank_details && (
+          <Note tone="alert">
+            <span>
+              לא הוזנו פרטי בנק לספק זה, ולכן לא ניתן לבצע את ההעברה. יש לפנות לבעלים או למנהל הרכש כדי שיזינו את הפרטים
+              בכרטיס הספק. אין במסך זה דרך לדווח על כך.
+            </span>
+          </Note>
+        )}
+        <p className="text-xs text-ink-muted">
+          הכפתור בתחתית המסך <b>מתעד</b> העברה שכבר בוצעה בבנק — הוא אינו מבצע אותה. אין ללחוץ עליו לפני שההעברה נעשתה בפועל.
+        </p>
 
         <dl className="text-sm space-y-1.5">
           <div className="flex justify-between"><dt className="text-ink-muted">סכום מאושר</dt><dd className="font-bold num">{fmtMoneyExact(pr.amount)}</dd></div>

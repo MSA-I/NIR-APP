@@ -46,12 +46,25 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
       setRetryFiles(failed);
       const summary = mergeDocumentUploadSummary(previousSummary, files, result);
       setUploadSummary(summary.failed.length ? summary : null);
+      /**
+       * G1, finding 16. "צילמתי את החשבונית וזהו" — and "וזהו" was wrong, silently.
+       *
+       * The camera drops the file into the inbox with no entity (`uploadDocument(..., 'inbox',
+       * null, ...)`) and this component contains no `navigate`, so the user stays exactly where
+       * they were. Somebody must still open /documents → בדיקת מסמך → /invoices/new?document=
+       * before `create_invoice` ever runs, and the automation that would close that loop is off by
+       * default for every tenant (DEBT-REGISTER §16). The old toast said "ממתין לעיבוד", which
+       * describes a queue rather than a person, and it was the only thing the user was told before
+       * it faded. Naming the place is a word, not architecture — the toast cannot carry a link.
+       */
       if (summary.failed.length) {
         const detail = failures[0] ? ` ${failures[0].message}` : '';
         const retryHint = failed.length ? ' לחיצה נוספת תנסה רק את הכשלים הזמניים.' : '';
-        toast(`${summary.succeeded.length} הועלו וממתינים לעיבוד, ${summary.failed.length} לא הושלמו.${detail}${retryHint}`, 'error');
+        toast(`${summary.succeeded.length} הועלו וממתינים לבדיקה בתיקיית המסמכים, ${summary.failed.length} לא הושלמו.${detail}${retryHint}`, 'error');
       } else {
-        toast(summary.succeeded.length > 1 ? `${summary.succeeded.length} קבצים הועלו וממתינים לעיבוד` : 'הועלה וממתין לעיבוד');
+        toast(summary.succeeded.length > 1
+          ? `${summary.succeeded.length} קבצים הועלו וממתינים לבדיקה בתיקיית המסמכים`
+          : 'המסמך הועלה וממתין לבדיקה בתיקיית המסמכים');
       }
       if (result.succeeded.length + registered > 0) {
         window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));

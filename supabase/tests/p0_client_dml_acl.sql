@@ -17,11 +17,43 @@ $$;
 
 -- ===== Static browser-write and trusted-server CRUD contract =====
 
+-- The trusted server holds full CRUD on every public table -- with exactly ONE named
+-- exception, listed here rather than pattern-matched so that the next table to drop the grant
+-- has to make its own case in this file instead of being absorbed silently.
+--
+-- org_autonomy_policies (0076) governs whether the system may write a financial record with no
+-- human approval. Its only legitimate writer is platform_set_autonomy_policy, a SECURITY
+-- DEFINER owned by postgres, which writes AS postgres regardless of the caller's own grants --
+-- so the service_role grant buys that table nothing. What it cost was measurable: review ran
+-- `set role service_role` and a plain INSERT stored min_confidence = 0.050, BELOW the
+-- documented 0.900 floor, with zero reasoned audit rows. The tighten-only law and the
+-- mandatory reason both live inside the command body, so a writer that skips the command
+-- skips both. TRUNCATE is revoked with the rest because it fires no row trigger and would
+-- empty every tenant's configuration without leaving an audit row.
+--
+-- The opposite assertion -- that this table exposes NO DML to any non-superuser role -- lives
+-- in supabase/tests/p13_document_autonomy_config.sql:249-259. The two suites are deliberate
+-- mirrors: land on either one and the other is one grep away.
+create function pg_temp.p0_service_role_write_exceptions()
+returns table (table_name text, why text)
+language sql
+immutable
+as $$
+  select * from (values (
+    'org_autonomy_policies'::text,
+    'autonomy configuration (0076): the only legitimate writer is a SECURITY DEFINER owned by '
+    || 'postgres, so the grant buys nothing and costs a bypass of the tighten-only floor and '
+    || 'the mandatory reason'::text
+  )) as exceptions(table_name, why)
+$$;
+
 select pg_temp.p0_acl_assert(
   not exists (
     select 1
     from pg_catalog.pg_tables table_info
     where table_info.schemaname = 'public'
+      and table_info.tablename not in (
+        select exceptions.table_name from pg_temp.p0_service_role_write_exceptions() exceptions)
       and (
         not has_table_privilege(
           'service_role', format('%I.%I', table_info.schemaname, table_info.tablename), 'SELECT'
@@ -38,6 +70,44 @@ select pg_temp.p0_acl_assert(
       )
   ),
   'service_role is missing full CRUD on a public server table'
+);
+
+-- The latch, in the spirit of p9_five_domains.sql's exemption-count pin: the exception list
+-- stays at exactly one entry. An agent that revokes the grant on a second table must edit THIS
+-- line and argue for it, rather than appending a row and watching the suite stay green.
+select pg_temp.p0_acl_assert(
+  (select count(*) from pg_temp.p0_service_role_write_exceptions()) = 1,
+  'the service_role write-exception list must stay at exactly one table (org_autonomy_policies '
+  || '-- 0076); a second exception is a decision, not an append'
+);
+
+-- The exception must be EXERCISED, not merely declared. A listed table that still holds the
+-- grant would be a rubber stamp: the main assertion would skip it, and a restored grant would
+-- go unnoticed forever. This is the same defect class review found in p13 -- a predicate that
+-- does not check what its sentence claims.
+select pg_temp.p0_acl_assert(
+  not exists (
+    select 1
+    from pg_temp.p0_service_role_write_exceptions() exceptions
+    cross join (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) privileges(privilege)
+    where has_table_privilege(
+      'service_role', format('public.%I', exceptions.table_name), privileges.privilege)
+  ),
+  'a table listed as a service_role write exception still holds write privileges -- the '
+  || 'exception is hiding a grant instead of documenting its absence'
+);
+
+-- SELECT deliberately survives on the exception: a trusted server reading the configuration
+-- that governs it is legitimate, and revoking it would push a future reader toward re-deriving
+-- the answer from parts.
+select pg_temp.p0_acl_assert(
+  not exists (
+    select 1
+    from pg_temp.p0_service_role_write_exceptions() exceptions
+    where not has_table_privilege(
+      'service_role', format('public.%I', exceptions.table_name), 'SELECT')
+  ),
+  'a service_role write exception must keep SELECT -- only its write path is closed'
 );
 
 select pg_temp.p0_acl_assert(

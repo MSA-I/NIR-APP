@@ -56,8 +56,14 @@ const PATTERNS: [RegExp, string][] = [
     'הייבוא בוטל: לפחות אחת מתנועות הבנק כבר קיימת במערכת.'],
   [/bank_import_invalid_rows|bank_import_invalid/i,
     'הייבוא בוטל: הקובץ כולל שורה לא תקינה או פרטי קובץ חסרים.'],
+  // G1, finding 5: the old text said "רענן ובדוק את השורות", and a refresh cannot help with any of
+  // the conditions this code actually covers. `save_goods_receipt` (0023:1505-1525) raises it when
+  // the row count differs from the order's, when a row names an item that is not on the order, when
+  // a quantity exceeds what remains, or when the status and the quantity disagree — the common
+  // real-world cause being an item that arrived and was never ordered. Naming the constraint is the
+  // only advice that leads anywhere, since a receipt cannot carry a line the order does not have.
   [/receipt_qty_exceeds_order/i,
-    'כמות בקבלה אינה תואמת לכמות שנותרה בהזמנה. רענן ובדוק את השורות.'],
+    'הקבלה אינה תואמת לשורות ההזמנה. ניתן לקלוט רק את פריטי ההזמנה, בכמות שנותרה ובסטטוס התואם לה — פריט שלא הוזמן אינו יכול להתווסף לקבלה.'],
   // Split apart in wave 8: the offline queue can hit either of these while a device was
   // disconnected, and the conflict screen asks a different question for each — "another draft
   // exists for this order" is not "this receipt is already closed".
@@ -157,8 +163,28 @@ const PATTERNS: [RegExp, string][] = [
     'המסמך כבר שויך ליעד עסקי.'],
   [/document_target_unknown/i,
     'יעד התיוק אינו זמין עוד. יש לבחור יעד אחר.'],
+  // The archive screen's most likely real race: two clerks, one rescues the document, the
+  // other's list is stale. Both refusals name exactly what happened, so the second person is
+  // told the truth instead of getting the generic fallback.
+  [/document_not_in_archive/i,
+    'המסמך כבר אינו בארכיון. ייתכן שהוחזר לטיפול בחלון אחר.'],
+  [/document_unknown/i,
+    'המסמך אינו זמין עוד. ייתכן שהוסר בחלון אחר.'],
+  // 0077 section 4b. Reversal is a ONE-WAY DOOR, and its likeliest real failure is not an attack —
+  // it is two clerks looking at one list, the second a few seconds behind. Both refusals say what
+  // actually happened instead of the generic fallback, and `auto_action_unknown` deliberately does
+  // not distinguish "another tenant's" from "does not exist": that distinction is the leak.
+  [/auto_action_already_reverted|document_auto_action_immutable/i,
+    'השיוך האוטומטי כבר בוטל. רענן את המסך כדי לראות את המצב העדכני.'],
+  [/auto_action_unknown/i,
+    'השיוך האוטומטי אינו זמין עוד. רענן את המסך.'],
   [/reason_required/i,
     'יש להזין סיבה לביצוע הפעולה.'],
+  // Its own sentence rather than an arm of reason_required: telling someone who just wrote 1001
+  // characters that they must enter a reason is a worse answer than the raw constraint name it
+  // replaces. Ahead of nothing in particular — it collides with no other pattern.
+  [/reason_too_long/i,
+    'הסיבה ארוכה מדי. יש לקצר אותה ל-1000 תווים לכל היותר.'],
   [/row-level security|permission denied|insufficient privilege/i,
     'אין לך הרשאה לבצע את הפעולה הזו.'],
   [/duplicate key value|already exists/i,

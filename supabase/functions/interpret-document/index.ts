@@ -273,6 +273,270 @@ async function markFailed(
   }
 }
 
+// The narrowest shape these helpers need, rather than SupabaseClient, so a test can hand them a
+// client that fails in each of the ways below without constructing a real one.
+//
+// `data` is declared because the decision RETURNS its verdict -- the outcome, the reason code,
+// and the ids of anything it wrote. An interface that admitted only `error` made a call that may
+// have just authored an invoice log NOTHING on success, which is the one event in this file most
+// worth being able to find afterwards.
+export interface RpcResult {
+  data?: unknown;
+  error: { message: string } | null;
+}
+
+// supabase-js carries the abort signal on the builder rather than in an options bag, so the
+// shape has to admit `.abortSignal()` instead of a `{ signal }` argument.
+export interface RpcBuilder extends PromiseLike<RpcResult> {
+  abortSignal(signal: AbortSignal): PromiseLike<RpcResult>;
+}
+
+export interface DecisionRpcClient {
+  rpc(fn: string, args: Record<string, unknown>): RpcBuilder;
+}
+
+export type ApplyDecision = (
+  admin: DecisionRpcClient,
+  jobId: string,
+  interpretationId: string,
+  actorId: string,
+) => Promise<void>;
+
+// A BOUND ON A CALL THAT NOTHING ELSE BOUNDS. Measured on this database rather than assumed:
+// `authenticator` carries statement_timeout=8s AND lock_timeout=8s, `authenticated` 8s, `anon`
+// 3s -- and `service_role` carries no rolconfig at all. Neither supabase-js nor Deno's fetch
+// supplies a default either, so without this the call is unbounded in the one role that has no
+// server-side ceiling. apply_document_interpretation takes `for update` on documents, so a lock
+// wait behind another writer has nothing to stop it, and it would hold a 200 for an
+// interpretation that is already saved and already paid for.
+//
+// Eight seconds is not a guess: it is the ceiling the tenant-facing role already runs under, and
+// the trusted server should not be less bounded than the tenant it acts for.
+const DECISION_TIMEOUT_MS = 8_000;
+
+// ===== Acting on a saved interpretation is a separate decision, and a failed decision =====
+// ===== may not cost the interpretation.                                               =====
+//
+// By the time this runs the interpretation row exists, is immutable, and the tenant has already
+// paid for the tokens that produced it. apply_document_interpretation (0077) is the command that
+// may turn it into a financial record without a human, and it has many legitimate ways to refuse
+// -- a suspended tenant, an unresolved autonomy policy, a document somebody already filed. None
+// of those are reasons to lose an interpretation, so this function RESOLVES for every outcome:
+// a Postgres error, a transport failure folded into `error`, an abort, or a client that throws.
+//
+// It reports the way every other non-fatal failure in this file does -- console.error with no
+// response change -- because markFailed is the opposite behaviour: markFailed exists to record
+// that the interpretation did NOT happen, and calling it here would mark a job failed whose
+// interpretation is already stored and already visible to the reviewer.
+//
+// ORDERING IS THE CONTRACT: this is called only after an interpretation id exists. Reversing the
+// two would let a refused decision take the saved interpretation down with it.
+export async function applyInterpretationDecision(
+  admin: DecisionRpcClient,
+  jobId: string,
+  interpretationId: string,
+  actorId: string,
+): Promise<void> {
+  try {
+    // Signature read from the live catalogue, not from the migration text:
+    // apply_document_interpretation(p_job_id uuid, p_interpretation_id uuid,
+    // p_actor_id uuid DEFAULT NULL) returns jsonb, security definer, EXECUTE granted to
+    // service_role alone -- which is why it is reachable from `admin` and from nothing else.
+    const applied = await admin.rpc("apply_document_interpretation", {
+      p_job_id: jobId,
+      p_interpretation_id: interpretationId,
+      p_actor_id: actorId,
+    }).abortSignal(AbortSignal.timeout(DECISION_TIMEOUT_MS));
+    if (applied.error) {
+      // WITH THE IDS, and that is not tidiness. A failed decision leaves nothing in the database
+      // -- this line is its only trace -- and a trace that cannot name the document it was about
+      // cannot be acted on. The retry below exists to recover exactly this event; an operator
+      // reading `apply_document_interpretation failed <postgres message>` with no job and no
+      // interpretation has no way to tell WHICH document to re-open. Not a privacy boundary
+      // either: the success line already carries invoice_id and auto_action_id.
+      console.error(
+        "apply_document_interpretation failed",
+        jobId,
+        interpretationId,
+        applied.error.message,
+      );
+      return;
+    }
+    // The verdict, and only the verdict: an outcome, a reason code and ids. Never a field value,
+    // a supplier name or anything else off the document -- this line goes to a log the tenant
+    // does not own. Read as an ALLOWLIST of four named fields rather than by spreading `data`,
+    // so 0077's replay branch merging model, prompt_version and both confidences into its return
+    // cannot reach this line however that shape grows.
+    //
+    // With the switch in its shipped state (off for every tenant that exists) the steady-state
+    // line is `queued_for_review autonomy_disabled`, which is exactly what makes a line that ever
+    // reads `auto_applied` findable.
+    const verdict = applied.data && typeof applied.data === "object"
+      ? applied.data as Record<string, unknown>
+      : {};
+    console.log(
+      "apply_document_interpretation",
+      jobId,
+      interpretationId,
+      String(verdict.outcome ?? "unknown"),
+      String(verdict.reason_code ?? ""),
+      String(verdict.invoice_id ?? ""),
+      String(verdict.auto_action_id ?? ""),
+    );
+  } catch (error) {
+    console.error(
+      "apply_document_interpretation failed",
+      jobId,
+      interpretationId,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+// The supplier gate, in ONE place both call sites share rather than duplicated at each.
+//
+// The supplier price-list path is deliberately NOT offered to the decision layer. 0077 acts on
+// documents still in the manager's inbox, and a supplier price list is entity_type 'supplier'
+// before it ever reaches here -- supplierInterpretationContextAllowed demands exactly that -- so
+// the call could only return already_decided/document_already_filed. It also has its own
+// downstream (the price-submission bridge, 0048), which is where a price list is meant to land.
+export async function decideOnInterpretation(
+  admin: DecisionRpcClient,
+  isSupplier: boolean,
+  jobId: string,
+  interpretationId: string,
+  actorId: string,
+  apply: ApplyDecision = applyInterpretationDecision,
+): Promise<void> {
+  if (isSupplier) return;
+  await apply(admin, jobId, interpretationId, actorId);
+}
+
+export interface ResumeInterpretationOptions {
+  admin: DecisionRpcClient;
+  isSupplier: boolean;
+  jobId: string;
+  actorId: string;
+  context: { already_interpreted: boolean; interpretation_id?: string };
+  apply?: ApplyDecision;
+}
+
+// ===== A REPLAY RE-OFFERS THE DECISION, and that is the only retry this feature has. =====
+//
+// A failed decision leaves NOTHING BEHIND in the database. Not a filing row, not a job marker,
+// not an outbox entry -- the only trace is a console.error in a function log nobody reads. And
+// there is no product path that would come back for it: DocumentReview computes its jobId from
+// `status === 'extracted' && !snapshot.interpretation`, DocumentsInbox re-requests only jobs
+// still at 'extracted', and save_document_interpretation has already moved the job to 'review'.
+// So once the interpretation exists, the auto-trigger and the retry button are both null and the
+// decision is lost permanently.
+//
+// It is not a rare event either: any transient PostgREST hiccup does it, and so does any lock
+// wait on documents, which 0077 takes `for update`.
+//
+// Re-offering it on the replay path is safe, and 0077 was built for exactly this -- its own
+// comments name "C4's fire-and-forget call ran again after a timeout" as a case it handles.
+// Traced through both live outcomes: after auto_applied, the same-interpretation guard returns
+// the recorded decision and writes nothing; after queued_for_review, v_replay is set, the
+// existing filing is reused, and the replay escape is documented as deliberately safe while the
+// document is still in the inbox -- which it is, because the guard immediately below refuses any
+// document whose entity_type has moved on.
+export async function resumeExistingInterpretation(
+  options: ResumeInterpretationOptions,
+): Promise<string | null> {
+  const { context } = options;
+  if (!context.already_interpreted || !context.interpretation_id) return null;
+  await decideOnInterpretation(
+    options.admin,
+    options.isSupplier,
+    options.jobId,
+    context.interpretation_id,
+    options.actorId,
+    options.apply,
+  );
+  return context.interpretation_id;
+}
+
+export interface SaveAndDecideOptions {
+  admin: DecisionRpcClient;
+  isSupplier: boolean;
+  jobId: string;
+  actorId: string;
+  args: Record<string, unknown>;
+  findExisting: () => Promise<string | null>;
+  apply?: ApplyDecision;
+}
+
+// Persistence and the decision that follows it, extracted from the handler so that the WIRING is
+// pinned and not merely the parts. The handler itself cannot be driven under the gate's
+// permission-free `deno test` -- it reads Deno.env before anything else -- so a decision call
+// left inside it is a feature a refactor can delete with every gate still green. That is the
+// same silent-failure shape core.test.ts guards one layer up, and it deserves the same treatment.
+export async function saveAndDecideInterpretation(
+  options: SaveAndDecideOptions,
+): Promise<{ interpretationId: string; idempotent: boolean }> {
+  const { admin, isSupplier } = options;
+  const saved = await admin.rpc(
+    isSupplier
+      ? "save_supplier_price_interpretation"
+      : "save_document_interpretation",
+    options.args,
+  );
+  if (saved.error || !saved.data) {
+    if (saved.error?.message.includes("document_interpretation_conflict")) {
+      throw new EdgeError("interpretation_conflict", 409);
+    }
+    if (
+      saved.error?.message.includes("document_interpretation_attempt_mismatch")
+    ) {
+      throw new EdgeError("interpretation_in_progress", 409);
+    }
+    if (
+      saved.error?.message.includes("document_interpretation_actor_mismatch")
+    ) {
+      throw new EdgeError("interpretation_in_progress", 409);
+    }
+    if (saved.error?.message.includes("document_interpretation_actor_invalid")) {
+      throw new EdgeError("not_authorized", 403);
+    }
+    if (saved.error?.message.includes("document_source_changed")) {
+      throw new EdgeError("invalid_job_state", 409);
+    }
+    const existingId = await options.findExisting();
+    if (existingId) {
+      // AN INTERPRETATION THAT EXISTS HAS NOT BEEN DECIDED ON. This branch is a save that
+      // COMMITTED and then reported a failure -- a transport error on the way back, or an error
+      // message matching none of the five conflicts above -- so the row is there and this call is
+      // the only one that will ever know about it. The client is handed a 200 and never comes
+      // back: the review screen computes its jobId from `extracted && !interpretation`, which is
+      // already false. Leaving it undecided here is the same permanent loss the replay path
+      // exists to prevent, reached by a narrower door, and the idempotency argument is identical
+      // -- 0077 keys on (org_id, interpretation_id) and returns the recorded decision rather than
+      // taking a second one.
+      await decideOnInterpretation(
+        admin,
+        isSupplier,
+        options.jobId,
+        existingId,
+        options.actorId,
+        options.apply,
+      );
+      return { interpretationId: existingId, idempotent: true };
+    }
+    throw new EdgeError("persistence_failed", 503);
+  }
+  const interpretationId = String(saved.data);
+  await decideOnInterpretation(
+    admin,
+    isSupplier,
+    options.jobId,
+    interpretationId,
+    options.actorId,
+    options.apply,
+  );
+  return { interpretationId, idempotent: false };
+}
+
 async function existingInterpretation(
   admin: SupabaseClient,
   orgId: string,
@@ -420,9 +684,16 @@ export async function handler(req: Request): Promise<Response> {
   );
   if (beginResult.error) return fail(cors, pgError(beginResult.error.message));
   const context = beginResult.data as BeginContext;
-  if (context.already_interpreted && context.interpretation_id) {
+  const replayed = await resumeExistingInterpretation({
+    admin,
+    isSupplier,
+    jobId: job.id,
+    actorId,
+    context,
+  });
+  if (replayed) {
     return json(cors, {
-      interpretationId: context.interpretation_id,
+      interpretationId: replayed,
       jobId: job.id,
       status: "review",
       idempotent: true,
@@ -512,62 +783,42 @@ export async function handler(req: Request): Promise<Response> {
     const result = await createOpenAiProvider({ apiKey: providerKey })
       .interpret(providerPayload);
     const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
-    const saved = await admin.rpc(
-      isSupplier
-        ? "save_supplier_price_interpretation"
-        : "save_document_interpretation",
-      {
-      p_job_id: job.id,
-      p_extraction_id: extraction.id,
-      p_actor_id: actorId,
-      p_interpretation_started_at: interpretationStartedAt,
-      p_provider: PROVIDER,
-      // The dated snapshot the provider actually used, not the alias we requested.
-      p_model: result.model,
-      p_prompt_version: PROMPT_VERSION,
-      p_schema_version: SCHEMA_VERSION,
-      p_payload: result.interpretation,
-      p_usage: {
-        ...result.usage,
-        provider_request_id: result.provider_request_id,
-        input_truncation: providerPayload.truncation,
+    const persisted = await saveAndDecideInterpretation({
+      admin,
+      isSupplier,
+      jobId: job.id,
+      actorId,
+      args: {
+        p_job_id: job.id,
+        p_extraction_id: extraction.id,
+        p_actor_id: actorId,
+        p_interpretation_started_at: interpretationStartedAt,
+        p_provider: PROVIDER,
+        // The dated snapshot the provider actually used, not the alias we requested.
+        p_model: result.model,
+        p_prompt_version: PROMPT_VERSION,
+        p_schema_version: SCHEMA_VERSION,
+        p_payload: result.interpretation,
+        p_usage: {
+          ...result.usage,
+          provider_request_id: result.provider_request_id,
+          input_truncation: providerPayload.truncation,
+        },
+        p_duration_ms: durationMs,
       },
-      p_duration_ms: durationMs,
-      },
-    );
-    if (saved.error || !saved.data) {
-      if (saved.error?.message.includes("document_interpretation_conflict")) {
-        throw new EdgeError("interpretation_conflict", 409);
-      }
-      if (saved.error?.message.includes("document_interpretation_attempt_mismatch")) {
-        throw new EdgeError("interpretation_in_progress", 409);
-      }
-      if (saved.error?.message.includes("document_interpretation_actor_mismatch")) {
-        throw new EdgeError("interpretation_in_progress", 409);
-      }
-      if (saved.error?.message.includes("document_interpretation_actor_invalid")) {
-        throw new EdgeError("not_authorized", 403);
-      }
-      if (saved.error?.message.includes("document_source_changed")) {
-        throw new EdgeError("invalid_job_state", 409);
-      }
-      const existingId = await existingInterpretation(
-        admin,
-        context.org_id,
-        job.id,
-      );
-      if (existingId) {
-        return json(cors, {
-          interpretationId: existingId,
-          jobId: job.id,
-          status: "review",
-          idempotent: true,
-        }, 200);
-      }
-      throw new EdgeError("persistence_failed", 503);
+      findExisting: () => existingInterpretation(admin, context.org_id, job.id),
+    });
+    if (persisted.idempotent) {
+      return json(cors, {
+        interpretationId: persisted.interpretationId,
+        jobId: job.id,
+        status: "review",
+        idempotent: true,
+      }, 200);
     }
+
     return json(cors, {
-      interpretationId: String(saved.data),
+      interpretationId: persisted.interpretationId,
       jobId: job.id,
       status: "review",
       schemaVersion: SCHEMA_VERSION,

@@ -16,7 +16,8 @@ import { ShieldCheck, X } from 'lucide-react';
 import { toHebrewError } from '../lib/errors';
 import { TusUploadCancelledError } from '../lib/tusUpload';
 import {
-  DOCUMENT_PROCESSING_STAGE_META,
+  DOCUMENT_USER_STATE_META,
+  documentUserState,
   useDocumentProcessing,
   type DocumentProcessingStage,
 } from '../lib/useDocumentProcessing';
@@ -539,9 +540,20 @@ const UPLOAD_STATE_META: Record<UploadCenterStatus, StatusMeta> = {
   canceled: { label: 'בוטל', tone: 'idle' },
 };
 
+/**
+ * G1, finding 20 — and here the audit's own premise was corrected, so only ONE branch moved.
+ *
+ * This function merges two different facts: how far the UPLOAD got, and how far the READING got.
+ * `unprocessed` is excluded from the processing branch on purpose, because on an upload surface
+ * "registered but nothing was ever sent to be read" is the one distinction that matters, and
+ * `documentUserState('unprocessed')` is `intake` — the same "נקלט" a queued document gets. Folding
+ * the whole function into the human states would erase that. So the human vocabulary replaces the
+ * pipeline labels only where a job actually exists; `נרשם` and `נרשם — העיבוד לא החל` are
+ * untouched, and they are what UploadCenter.spec.tsx:251 pins.
+ */
 function displayMeta(entry: UploadCenterEntry, stage: DocumentProcessingStage | null): StatusMeta {
   if (entry.status === 'registered') {
-    if (stage && stage !== 'unprocessed') return DOCUMENT_PROCESSING_STAGE_META[stage];
+    if (stage && stage !== 'unprocessed') return DOCUMENT_USER_STATE_META[documentUserState(stage)];
     if (entry.error) return { label: 'נרשם — העיבוד לא החל', tone: 'await' };
     return UPLOAD_STATE_META.registered;
   }

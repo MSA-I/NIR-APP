@@ -15,6 +15,7 @@ import { invoiceCheckFingerprint } from '../lib/checkFingerprint';
 import { invoiceDraftFromInterpretation } from '../components/document-review/model';
 import type { InterpretationContract } from '../lib/useDocumentProcessing';
 import { PO_STATUS } from '../lib/status';
+import { SupplierSelectField, useQuickSupplier } from '../components/QuickSupplierPicker';
 import {
   isUuid,
   resolveInvoiceLinkedContext,
@@ -145,6 +146,9 @@ export default function InvoiceNew() {
 
   const vatRate = (org?.vat_rate ?? 18) / 100;
   const set = (k: string, v: string) => setF((s) => ({ ...s, [k]: v }));
+
+  // A supplier the list does not have used to mean abandoning a half-filled invoice for /suppliers.
+  const supplierPicker = useQuickSupplier(suppliers, (supplierId) => set('supplier_id', supplierId));
 
   // auto-complete VAT math from whichever field the user fills
   function onBeforeVat(v: string) {
@@ -313,13 +317,11 @@ export default function InvoiceNew() {
 
       <div className="card card-pad grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <label className="label" htmlFor="invoice-new-supplier">ספק *</label>
-          <select id="invoice-new-supplier" className="input" value={effectiveSupplierId}
-            disabled={!!linkedContext} aria-describedby={linkedContext ? 'invoice-linked-supplier-help' : undefined}
-            onChange={(e) => set('supplier_id', e.target.value)}>
-            <option value="">בחר ספק...</option>
-            {suppliers?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          {/* `disabled` when the invoice is linked covers the create button too: a supplier the
+              linked order already decided is not one the user may add to here. */}
+          <SupplierSelectField picker={supplierPicker} id="invoice-new-supplier" label="ספק *"
+            placeholder="בחר ספק..." value={effectiveSupplierId} disabled={!!linkedContext}
+            describedBy={linkedContext ? 'invoice-linked-supplier-help' : undefined} />
           {linkedContext && <div id="invoice-linked-supplier-help" className="mt-1 text-xs text-ink-muted">הספק נקבע לפי הרשומות המקושרות ואינו ניתן לשינוי כאן.</div>}
         </div>
         <div><label className="label" htmlFor="invoice-new-number">מספר חשבונית *</label><input id="invoice-new-number" className="input num" dir="ltr" value={f.invoice_number} onChange={(e) => set('invoice_number', e.target.value)} /></div>

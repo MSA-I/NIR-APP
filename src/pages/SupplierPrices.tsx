@@ -66,6 +66,17 @@ const monthLabel = (value: string) => new Intl.DateTimeFormat('he-IL', {
   month: 'long', year: 'numeric', timeZone: 'UTC',
 }).format(new Date(`${value.slice(0, 7)}-01T00:00:00Z`));
 
+/**
+ * The same label, for places that read a value the user can still empty — G1, finding 18.
+ *
+ * `<input type="month">` has a native clear affordance, and browsers without the picker fall back
+ * to free text, so `targetMonth` can legitimately be '' or '07/2026'. `monthLabel` would build an
+ * Invalid Date from either and `Intl.format` throws on it — acceptable while the value only
+ * rendered inside a receipt that exists after a successful submission, not acceptable on a button
+ * that is rendered while the field is being edited.
+ */
+const monthLabelOrNull = (value: string) => (/^\d{4}-\d{2}/.test(value) ? monthLabel(value) : null);
+
 /** Supplier agent portal — RLS is the boundary; this page never receives another supplier id. */
 export default function SupplierPrices() {
   const { profile } = useAuth();
@@ -228,6 +239,16 @@ function RejectionDetails({ rejections }: { rejections: SupplierPriceRejection[]
         ))}
       </ul>
       {rejections.length > shown.length && <p className="mt-2 text-ink-muted">ועוד <span className="num">{rejections.length - shown.length}</span> שורות.</p>}
+      {/* G1, finding 12. The rejection text itself is precise — "המוצר אינו קיים בקטלוג הפעיל; לא
+          נוצר מוצר חדש" (0048:1545-1552) — and that was the whole problem: an accurate statement
+          with no step after it. A `supplier` account reaches one screen, has no search and no FAB,
+          and cannot open /products or /exceptions, so there was nowhere to go and nothing to press.
+          Naming who decides is the only true next step; the product has no "request this product"
+          action, and inventing a channel that does not exist would repeat the defect. */}
+      <p className="mt-2 text-xs text-ink-muted">
+        מוצר שאינו בקטלוג של הלקוח אינו נוצר אוטומטית מהמחירון. כדי להוסיף אותו יש לפנות ישירות למנהל הרכש אצל הלקוח —
+        במערכת אין פעולה ששולחת בקשה כזו.
+      </p>
     </details>
   );
 }
@@ -443,7 +464,17 @@ function ImportModal({ orgId, supplierId, products, onClose, onDone }: {
           </div>
           <div className="flex justify-end gap-2">
             <button className="btn-secondary" disabled={busy} onClick={() => setPrepared(null)}>בחירת קובץ אחר</button>
-            <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>{busy ? 'קולט...' : 'אישור והגשה'}</button>
+            {/* G1, finding 18. The submission is immutable in the schema (0032:32) and the UI has
+                no withdraw — the only correction is another submission — yet the target month was
+                confirmed nowhere before the click and only echoed back afterwards (:413). The
+                button now says which month it is about to submit for. The DEFAULT month stays the
+                current one: moving it to next month is a business decision about how this supplier
+                works, recorded as OPEN-DECISIONS #118 rather than guessed here. */}
+            <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>
+              {busy ? 'קולט...' : monthLabelOrNull(targetMonth)
+                ? `אישור והגשה — ${monthLabelOrNull(targetMonth)}`
+                : 'אישור והגשה'}
+            </button>
           </div>
         </div>
       ) : (

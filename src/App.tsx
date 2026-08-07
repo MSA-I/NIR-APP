@@ -242,6 +242,10 @@ export default function App() {
         <Route path="/invoices/new" element={<Guard roles={STAFF}><InvoiceNew /></Guard>} />
         <Route path="/invoices/:id" element={<Guard roles={READERS}><InvoiceDetail /></Guard>} />
         <Route path="/documents" element={<Guard roles={STAFF}><DocumentsGallery /></Guard>} />
+        {/* The same register, narrowed to what the interpretation layer could not place. A second
+            component would be a second answer to "what is a document row", so the gallery takes a
+            prop instead and this route is the only thing that turns it on. */}
+        <Route path="/documents/archive" element={<Guard roles={STAFF}><DocumentsGallery archive /></Guard>} />
         <Route path="/documents/:documentId/review" element={<Guard roles={DOCUMENT_REVIEWERS}><DocumentReview /></Guard>} />
         <Route path="/inbox" element={<Navigate to="/documents?filing=unfiled" replace />} />
 

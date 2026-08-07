@@ -326,9 +326,29 @@ body {
 .speed-dial-trigger-icon { transition: rotate 180ms ease-out; }
 .speed-dial-trigger[aria-expanded="true"] .speed-dial-trigger-icon { rotate: 45deg; }
 
+/**
+ * The contextual save bar, stacked ABOVE the global quick-action bar.
+ *
+ * G1, finding 7 kept the capture action on /receiving/:orderId, so for the first time both bars are
+ * fixed to the bottom edge of the same screen — and the global bar is `z-40` to this one's `z-30`,
+ * which without an offset would have drawn the camera straight over "סיום קבלה". Losing the camera
+ * at the truck was the defect; covering the save button would have been a worse one.
+ *
+ * The clearance is `.mobile-overlay-stack`'s, verbatim and for the same reason: the raised capture
+ * puck protrudes 1.25rem above the bar, so bar-height alone would leave it overlapping this bar's
+ * lower edge. `.mobile-action-bar` is `lg:hidden`, so from 64rem up there is nothing to clear and
+ * the taskbar returns to the bottom edge with its own safe-area padding.
+ */
 .phone-taskbar {
-  inset-block-end: 0;
-  padding-block-end: calc(0.75rem + env(safe-area-inset-bottom));
+  inset-block-end: calc(var(--mobile-action-bar-size) + env(safe-area-inset-bottom) + 2rem);
+  padding-block-end: 0.75rem;
+}
+
+@media (min-width: 64rem) {
+  .phone-taskbar {
+    inset-block-end: 0;
+    padding-block-end: calc(0.75rem + env(safe-area-inset-bottom));
+  }
 }
 
 .mobile-overlay-stack {

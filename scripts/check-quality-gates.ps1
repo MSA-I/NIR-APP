@@ -402,17 +402,17 @@ function Invoke-SqlTest([string]$RelativePath, [string]$Label, [string]$Database
 function Invoke-Preflight {
   $containerPath = "/var/lib/postgresql/p4-p1_preflight.sql"
   Copy-SqlToDatabase "supabase\tests\p1_preflight.sql" $containerPath
-  Write-Gate "P1 preflight (43 anomaly checks)"
+  Write-Gate "P1 preflight (44 anomaly checks)"
   # Kept as a plain capture (the rows are parsed, not streamed), but the classification
   # material is now handed to Assert-ExitCode instead of falling to the catch-all.
   $output = @(& docker exec -e PGPASSWORD=postgres $dbContainer psql -qAt -F "|" -U postgres -d postgres -v ON_ERROR_STOP=1 -f $containerPath)
   Assert-ExitCode "P1 preflight" $output
   $rows = @($output | Where-Object { $_ -match '^([^|]+)\|([0-9]+)\|' })
-  if ($rows.Count -ne 43) { throw "P1 preflight returned $($rows.Count) result rows instead of 43." }
+  if ($rows.Count -ne 44) { throw "P1 preflight returned $($rows.Count) result rows instead of 44." }
   $bad = @($rows | Where-Object { [int](($_ -split '\|')[1]) -ne 0 })
   $rows | ForEach-Object { Write-Output $_ }
   if ($bad.Count) { throw "P1 preflight found local fixture anomalies: $($bad -join '; ')" }
-  Write-Output "P1 preflight passed: 43/43 checks returned rows_found=0."
+  Write-Output "P1 preflight passed: 44/44 checks returned rows_found=0."
 }
 
 function Assert-PowerShellSyntax {
@@ -1015,6 +1015,9 @@ try {
     Reset-LocalDatabase
     Invoke-SqlTest "supabase\tests\document_learning.sql" "Document interpretation, learning and review mutations"
     Invoke-SqlTest "supabase\tests\document_export_templates.sql" "Document export scope, approval, precedence and immutable ledger"
+    Invoke-SqlTest "supabase\tests\p11_document_filing.sql" "Archive filing target, filing ledger, reasoned rescue and the storage read path"
+    Invoke-SqlTest "supabase\tests\p13_document_autonomy_config.sql" "Autonomy default-off, the reasoned platform write path and the uncalibrated threshold floor"
+    Invoke-SqlTest "supabase\tests\p14_apply_interpretation.sql" "Machine-written invoices: the switch, min(type,supplier) confidence, idempotency and the untouched order"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"

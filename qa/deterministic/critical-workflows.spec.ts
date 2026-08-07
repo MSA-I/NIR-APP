@@ -284,8 +284,12 @@ test.describe.serial('critical cross-role workflow', () => {
         workflow.supplierTargetMonth ??= await month.inputValue();
         await dialog.getByLabel('סיבת ההגשה *', { exact: true }).fill(`QA ${readyState.runId} monthly price list`);
         evidence.record(replay ? 'replay-price-list' : 'submit-price-list', path.basename(workbook));
+        // G1, finding 18: the button now names the month it is about to submit for
+        // ("אישור והגשה — אוגוסט 2026"), because the submission is immutable and there is no
+        // withdraw. Anchored at the start rather than loosened to a substring, so a button whose
+        // label merely CONTAINS these words still fails.
         const mutation = await captureMutation(page, '/functions/v1/submit-price-list', () =>
-          dialog.getByRole('button', { name: 'אישור והגשה', exact: true }).click());
+          dialog.getByRole('button', { name: /^אישור והגשה/ }).click());
         await expect(dialog.getByRole('status')).toContainText('נקלטו');
         if (replay) await expect(dialog.getByText(/זהו ניסיון חוזר/)).toBeVisible();
         await dialog.getByRole('button', { name: 'סיום', exact: true }).click();

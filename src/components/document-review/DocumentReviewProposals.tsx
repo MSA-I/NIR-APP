@@ -24,6 +24,7 @@ import {
   sameAmount,
   resolvedText,
   ruleWhy,
+  supplierMatchCaution,
   type ReviewSnapshot,
 } from './model';
 
@@ -49,6 +50,20 @@ function annotationTarget(snapshot: ReviewSnapshot, annotation: DocumentAnnotati
   }
   const mark = snapshot.extraction?.payload.marks.find(({ id }) => id === annotation.target_id);
   return mark ? `${MARK_KIND_LABELS[mark.kind]} בעמוד ${mark.page}` : `סימון ${annotation.target_id}`;
+}
+
+/**
+ * Which mark a learning rule fired on, as a locator a person can find on the page.
+ *
+ * The raw `target_id` used to be printed here ("הופעל על סימון 7f3a…"), which named nothing the
+ * reviewer could act on — the same argument the mark overlays already make about uuids. The id is
+ * not lost: it is a row in the extraction table of "פרטים טכניים" at the top of the workspace.
+ * The fallback says plainly that the mark is not in the extraction on screen rather than inventing
+ * a location, because a rule application can outlive the extraction revision it fired against.
+ */
+function ruleApplicationTarget(snapshot: ReviewSnapshot, targetId: string): string {
+  const mark = snapshot.extraction?.payload.marks.find(({ id }) => id === targetId);
+  return mark ? `${MARK_KIND_LABELS[mark.kind]} בעמוד ${mark.page}` : 'סימון שאינו מופיע בחילוץ הנוכחי';
 }
 
 function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
@@ -589,6 +604,8 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
 
   if (!interpretation) return null;
 
+  const supplierCaution = supplierMatchCaution(interpretation.payload.supplier.confidence);
+
   return (
     <section className="space-y-4" data-testid="document-review-proposals" aria-labelledby="document-proposals-title">
       <div className="card card-pad">
@@ -611,6 +628,15 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
           <dd className="mt-1 break-words text-ink-body">{interpretation.payload.supplier.suggested_name || 'לא זוהה'}</dd>
           <dd className="mt-1 text-xs text-ink-muted">{confidenceLabel(interpretation.payload.supplier.confidence)}</dd>
         </dl>
+        {/* The supplier is the one value on this card whose grade is not the whole message: it is
+            carried into the invoice draft as the payee, so anything short of "clearly" states the
+            check out loud instead of leaving the reviewer to infer it from a word. */}
+        {supplierCaution && (
+          <Note tone="await" className="mt-3" role="status">
+            <ShieldAlert className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
+            <span>{supplierCaution}</span>
+          </Note>
+        )}
       </div>
 
       <TypeReviewControls snapshot={snapshot} canDecide={!isSupplier} onRefetch={onRefetch} />
@@ -733,7 +759,7 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <h4 className="break-words font-semibold text-ink-body">{rule ? `${rule.label} (${rule.tag_key})` : `כלל ${application.rule_id}`}</h4>
-                      <p className="mt-1 text-sm text-ink-soft">הופעל על סימון {application.target_id}; {confidenceLabel(application.confidence)}</p>
+                      <p className="mt-1 text-sm text-ink-soft">הופעל על {ruleApplicationTarget(snapshot, application.target_id)}; {confidenceLabel(application.confidence)}</p>
                       <p className="mt-1 text-sm text-ink-muted"><strong>למה הופעל:</strong> {ruleWhy(rule)}</p>
                     </div>
                     <span className="badge-done">כלל v{application.rule_version}</span>
