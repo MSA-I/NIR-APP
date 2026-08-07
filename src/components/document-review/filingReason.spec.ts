@@ -59,7 +59,7 @@ describe('every stop the ladder can reach has a sentence', () => {
 describe('what the reviewer is told', () => {
   it('names the stop the owner actually hit', () => {
     const text = filingReason(snapshotWith([filing({ reason_code: 'not_an_invoice' })]));
-    expect(text).toContain('חשבוניות בלבד');
+    expect(text).toContain('אין עדיין פקודת כתיבה אוטומטית בטוחה');
   });
 
   it('says nothing when the machine wrote the record — a null code is not a stop', () => {

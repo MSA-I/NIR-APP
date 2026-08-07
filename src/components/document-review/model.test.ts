@@ -7,7 +7,7 @@ import type {
   ReviewSnapshot,
 } from './model';
 // @ts-expect-error Node's type-stripping test runner requires the explicit TypeScript extension.
-import { bboxDescription, confidenceLabel, confidencePercent, creditDraftFromInterpretation, deliveryNoteLines, invoiceDraftFromInterpretation, latestCorrections, matchDeliveryLineProduct, paymentConfirmationFacts, sameAmount, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, normalizeInvoiceDate, resolveExportTemplateWinner, resolvedText, ruleWhy, supplierMatchCaution } from './model.ts';
+import { bboxDescription, confidenceLabel, confidencePercent, creditDraftFromInterpretation, deliveryNoteLines, documentRoutingSummary, invoiceDraftFromInterpretation, latestCorrections, matchDeliveryLineProduct, paymentConfirmationFacts, sameAmount, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, normalizeInvoiceDate, resolveExportTemplateWinner, resolvedText, ruleWhy, supplierMatchCaution } from './model.ts';
 
 const correction = (revision: number, text: string): DocumentReviewCorrection => ({
   id: `correction-${revision}`,
@@ -28,6 +28,25 @@ const correction = (revision: number, text: string): DocumentReviewCorrection =>
   actor_id: 'actor',
   reason: 'בדיקה',
   created_at: '2026-07-29T00:00:00Z',
+});
+
+test('routing summary names only a destination proven by the document row', () => {
+  const base = {
+    interpretation: { payload: { document_type: 'invoice', line_items: [{ values: {} }] } },
+    document: { entity_type: 'inbox', entity_id: null },
+  } as unknown as ReviewSnapshot;
+  assert.deepEqual(documentRoutingSummary(base), {
+    completed: false,
+    headline: 'המסמך נקרא, אך עדיין לא נכתבה רשומה ביעד',
+    destination: 'חשבוניות',
+    lineSummary: 'שורת פריט אחת נשמרה בפירוש המסמך.',
+    path: null,
+    actionLabel: null,
+  });
+  assert.equal(documentRoutingSummary({
+    ...base,
+    document: { entity_type: 'invoice', entity_id: 'invoice-1' },
+  } as unknown as ReviewSnapshot).path, '/invoices/invoice-1');
 });
 
 test('review overlays keep immutable evidence and select the newest fenced revision', () => {

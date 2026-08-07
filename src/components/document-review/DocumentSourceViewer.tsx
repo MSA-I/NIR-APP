@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { ExternalLink, FileText } from 'lucide-react';
+import { ExternalLink, FileText, Loader2 } from 'lucide-react';
 import { Note } from '../ui';
 
 // Lazy on purpose: pdf.js is ~1MB of rendering engine that image documents never need. The
@@ -33,9 +33,11 @@ interface DocumentSourceViewerProps {
   mimeType: string | null;
   sourceUrl: string | null;
   sourceError: string | null;
+  openingSource: boolean;
   pageCount: number;
   page: number;
   onPageChange: (page: number) => void;
+  onOpenSource: () => void;
 }
 
 export function DocumentSourceViewer({
@@ -43,9 +45,11 @@ export function DocumentSourceViewer({
   mimeType,
   sourceUrl,
   sourceError,
+  openingSource,
   pageCount,
   page,
   onPageChange,
+  onOpenSource,
 }: DocumentSourceViewerProps) {
   const isImage = mimeType?.startsWith('image/') ?? false;
   const isPdf = mimeType === 'application/pdf';
@@ -74,11 +78,12 @@ export function DocumentSourceViewer({
               </select>
             </label>
           )}
-          {sourceUrl && (
-            <a className="btn-secondary" href={sourceUrl} target="_blank" rel="noreferrer">
-              <ExternalLink size={17} aria-hidden="true" /> פתיחת המקור
-            </a>
-          )}
+          <button type="button" className="btn-secondary" disabled={openingSource} onClick={onOpenSource}>
+            {openingSource
+              ? <Loader2 className="animate-spin" size={17} aria-hidden="true" />
+              : <ExternalLink size={17} aria-hidden="true" />}
+            {openingSource ? 'פותח…' : 'פתיחת המקור'}
+          </button>
         </div>
       </div>
 

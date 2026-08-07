@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Cpu, FileCheck2, ScanText } from 'lucide-react';
 import type { Role } from '../../lib/types';
 import { supabase } from '../../lib/supabase';
+import { openReservedPopup } from '../../lib/popup';
 import { DOCUMENT_PROCESSING_STAGE_META } from '../../lib/useDocumentProcessing';
-import { Note } from '../ui';
+import { Note, useToast } from '../ui';
 import { DocumentExportPreview } from './DocumentExportPreview';
 import { DocumentReviewProposals } from './DocumentReviewProposals';
 import { DocumentSourceViewer } from './DocumentSourceViewer';
@@ -28,7 +29,9 @@ interface DocumentReviewWorkspaceProps {
 export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, initialPanel }: DocumentReviewWorkspaceProps) {
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
+  const [openingSource, setOpeningSource] = useState(false);
   const [page, setPage] = useState(1);
+  const toast = useToast();
   /**
    * The technical disclosure builds its rows only once someone opens it.
    *
@@ -142,6 +145,22 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
     });
     return () => { cancelled = true; };
   }, [snapshot.document?.storage_path]);
+
+  async function openSource() {
+    const storagePath = snapshot.document?.storage_path;
+    if (!storagePath) return;
+    setOpeningSource(true);
+    const result = await openReservedPopup(async () => {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(storagePath, 300);
+      if (error || !data?.signedUrl) throw error ?? new Error('signed URL missing');
+      return data.signedUrl;
+    });
+    setOpeningSource(false);
+    if (result === 'blocked') toast('הדפדפן חסם את פתיחת המסמך. יש לאפשר חלונות קופצים ולנסות שוב.', 'error');
+    if (result === 'error') toast('לא ניתן ליצור קישור מאובטח חדש למסמך. יש לנסות שוב.', 'error');
+  }
 
   useEffect(() => {
     if (!extraction) return;
@@ -321,9 +340,11 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
               mimeType={snapshot.document.mime_type}
               sourceUrl={sourceUrl}
               sourceError={sourceError}
+              openingSource={openingSource}
               pageCount={extraction.document.page_count}
               page={page}
               onPageChange={setPage}
+              onOpenSource={() => void openSource()}
             />
           </div>
 

@@ -582,7 +582,7 @@ export const FILING_REASON_LABELS: Record<string, string> = {
     'רמת הזיהוי נמוכה מהסף שהוגדר לארגון, ולכן ההכרעה נשארה אצלך.',
   // The one the owner actually hit, and the one most likely to look like a bug.
   not_an_invoice:
-    'המערכת יוצרת חשבוניות בלבד. זהו מסמך מסוג אחר, ולכן הוא ממתין להכרעה שלך — גם בזיהוי מלא.',
+    'לסוג המסמך הזה אין עדיין פקודת כתיבה אוטומטית בטוחה ליעד העסקי, ולכן הוא ממתין להשלמה — גם בזיהוי מלא.',
   not_a_price_list:
     'המסמך אינו מחירון, ולכן לא בוצע עדכון מחירים אוטומטי.',
   supplier_unidentified:
@@ -633,6 +633,63 @@ export function filingReason(snapshot: ReviewSnapshot): string | null {
     // An arm added to the ladder without a sentence here must not print a bare enum at a
     // bookkeeper. It says the honest minimum instead.
     ?? 'המערכת עצרה ולא יצרה רשומה. ההכרעה אצלך.';
+}
+
+export type DocumentRoutingSummary = {
+  completed: boolean;
+  headline: string;
+  destination: string;
+  lineSummary: string;
+  path: string | null;
+  actionLabel: string | null;
+};
+
+/** Describes only writes the authoritative document row proves happened. */
+export function documentRoutingSummary(snapshot: ReviewSnapshot): DocumentRoutingSummary {
+  const doc = snapshot.document;
+  const payload = snapshot.interpretation?.payload;
+  const lineCount = payload?.line_items.length ?? 0;
+  const lineSummary = lineCount === 0
+    ? 'לא זוהו במסמך שורות פריט.'
+    : `${lineCount === 1 ? 'שורת פריט אחת' : `${lineCount} שורות פריט`} נשמר${lineCount === 1 ? 'ה' : 'ו'} בפירוש המסמך${doc?.entity_type === 'goods_receipt' ? ' ובקבלת הסחורה' : ''}.`;
+
+  if (!doc || !payload) {
+    return { completed: false, headline: 'עדיין אין תוצאת שיוך', destination: 'ממתין לפירוש המסמך', lineSummary, path: null, actionLabel: null };
+  }
+
+  if (doc.entity_type === 'invoice' && doc.entity_id) {
+    return { completed: true, headline: 'נוצרה חשבונית והיא שויכה למסמך', destination: 'חשבוניות', lineSummary, path: `/invoices/${doc.entity_id}`, actionLabel: 'פתיחת החשבונית' };
+  }
+  if (doc.entity_type === 'goods_receipt' && doc.entity_id) {
+    return { completed: true, headline: 'המסמך שויך לקבלת סחורה', destination: 'קבלות סחורה', lineSummary, path: `/receipts/${doc.entity_id}`, actionLabel: 'פתיחת קבלת הסחורה' };
+  }
+  if (doc.entity_type === 'payment' && doc.entity_id) {
+    return { completed: true, headline: 'המסמך שויך לתשלום קיים', destination: 'תשלומים', lineSummary, path: '/payments', actionLabel: 'פתיחת התשלומים' };
+  }
+  if (doc.entity_type === 'supplier' && doc.entity_id) {
+    return { completed: true, headline: 'המסמך שויך לכרטיס הספק', destination: 'ספקים', lineSummary, path: `/suppliers/${doc.entity_id}`, actionLabel: 'פתיחת הספק' };
+  }
+  if (doc.entity_type === 'archive') {
+    return { completed: true, headline: 'המסמך סווג והועבר לארכיון', destination: 'ארכיון המסמכים', lineSummary, path: '/documents/archive', actionLabel: 'פתיחת הארכיון' };
+  }
+
+  const destination = ({
+    invoice: 'חשבוניות',
+    delivery_note: 'קבלות סחורה',
+    credit_note: 'זיכויים',
+    price_list: 'מוצרים ומחירים',
+    quote: 'מסמכי ספק',
+    payment_confirmation: 'תשלומים',
+    other: 'ארכיון המסמכים',
+  } as const)[payload.document_type];
+  return {
+    completed: false,
+    headline: 'המסמך נקרא, אך עדיין לא נכתבה רשומה ביעד',
+    destination,
+    lineSummary,
+    path: null,
+    actionLabel: null,
+  };
 }
 
 export function actorName(snapshot: ReviewSnapshot, actorId: string): string {

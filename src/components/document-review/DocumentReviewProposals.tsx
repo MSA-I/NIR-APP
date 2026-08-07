@@ -14,6 +14,7 @@ import {
   actorName,
   confidenceLabel,
   creditDraftFromInterpretation,
+  documentRoutingSummary,
   fieldKeyLabel,
   filingReason,
   latestCorrections,
@@ -559,6 +560,7 @@ function RuleControls({ rule, role, onRefetch }: {
 }
 
 export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentReviewProposalsProps) {
+  const navigate = useNavigate();
   const interpretation = snapshot.interpretation;
   const isSupplier = role === 'supplier';
   const ruleById = useMemo(() => new Map(snapshot.learningRules.map((rule) => [rule.id, rule])), [snapshot.learningRules]);
@@ -577,9 +579,34 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
 
   const supplierCaution = supplierMatchCaution(interpretation.payload.supplier.confidence);
   const machineReason = filingReason(snapshot);
+  const routing = documentRoutingSummary(snapshot);
 
   return (
     <section className="space-y-4" data-testid="document-review-proposals" aria-labelledby="document-proposals-title">
+      <div className="card card-pad" data-testid="document-routing-result">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="section-title">מה עודכן ולאן</h2>
+            <p className="mt-1 text-sm font-medium text-ink-body">{routing.headline}</p>
+          </div>
+          <span className={routing.completed ? 'badge-done' : 'badge-await'}>{routing.completed ? 'שויך' : 'דורש השלמה'}</span>
+        </div>
+        <dl className="mt-3 grid gap-2 rounded-lg bg-surface-sunken p-3 text-sm sm:grid-cols-2">
+          <div><dt className="text-xs text-ink-muted">סוג שזוהה</dt><dd className="mt-1 font-medium text-ink-body">{DOCUMENT_TYPE_LABELS[interpretation.payload.document_type]}</dd></div>
+          <div><dt className="text-xs text-ink-muted">יעד במערכת</dt><dd className="mt-1 font-medium text-ink-body">{routing.destination}</dd></div>
+        </dl>
+        <p className="mt-3 text-sm text-ink-soft">{routing.lineSummary}</p>
+        {machineReason && (
+          <Note tone="info" className="mt-3" role="status" data-testid="filing-reason">
+            <Info className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
+            <span><strong>למה לא נכתב ליעד:</strong> {machineReason}</span>
+          </Note>
+        )}
+        {routing.path && routing.actionLabel && (
+          <button type="button" className="btn-secondary mt-3" onClick={() => navigate(routing.path!)}>{routing.actionLabel}</button>
+        )}
+      </div>
+
       <div className="card card-pad">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -588,17 +615,6 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
           </div>
           <span className="badge-info">פירוש אוטומטי</span>
         </div>
-        {/* Why the machine did not act, when it looked at this document and chose not to.
-            Before 0079 the screen said "ממתין להכרעה" and stopped, and the reason existed only in
-            a plpgsql local and an Edge Function log line — the owner had to ask, and the answer
-            took a query against production. A document that is waiting is not the same as a
-            document nobody looked at, and the difference is the whole point of section 12. */}
-        {machineReason && (
-          <Note tone="info" className="mt-3" role="status" data-testid="filing-reason">
-            <Info className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
-            <span><strong>המערכת לא יצרה רשומה אוטומטית.</strong> {machineReason}</span>
-          </Note>
-        )}
         {/* Provider, model, prompt and schema versions used to sit here as a second card of equal
             weight. They are provenance, not a decision the reviewer makes; they now live in the
             "פרטים טכניים" disclosure at the top of the workspace. */}

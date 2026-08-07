@@ -34,16 +34,22 @@ import { DocumentSourceViewer } from './DocumentSourceViewer';
 /** The same wiring DocumentReviewWorkspace provides: picker state in, picker state back out. */
 function Harness({ mimeType, pageCount = 2 }: { mimeType: string; pageCount?: number }) {
   const [page, setPage] = useState(1);
+  const [opened, setOpened] = useState(false);
   return (
-    <DocumentSourceViewer
-      fileName={mimeType === 'application/pdf' ? 'invoice.pdf' : 'invoice.png'}
-      mimeType={mimeType}
-      sourceUrl="https://files.example.test/source"
-      sourceError={null}
-      pageCount={pageCount}
-      page={page}
-      onPageChange={setPage}
-    />
+    <>
+      <DocumentSourceViewer
+        fileName={mimeType === 'application/pdf' ? 'invoice.pdf' : 'invoice.png'}
+        mimeType={mimeType}
+        sourceUrl="https://files.example.test/preview"
+        sourceError={null}
+        openingSource={false}
+        pageCount={pageCount}
+        page={page}
+        onPageChange={setPage}
+        onOpenSource={() => setOpened(true)}
+      />
+      {opened && <span>fresh source requested</span>}
+    </>
   );
 }
 
@@ -92,10 +98,11 @@ describe('reading a document that has more than one page', () => {
     expect(screen.queryByLabelText('עמוד')).toBeNull();
   });
 
-  it('keeps the viewer testid and the escape hatch to the original file', async () => {
+  it('requests a fresh source URL when the original file is opened', async () => {
     render(<Harness mimeType="application/pdf" />);
     await screen.findByTestId('pdf-page');
     expect(screen.getByTestId('document-source-viewer')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /פתיחת המקור/ })).toHaveAttribute('href', 'https://files.example.test/source');
+    await userEvent.click(screen.getByRole('button', { name: /פתיחת המקור/ }));
+    expect(screen.getByText('fresh source requested')).toBeInTheDocument();
   });
 });
