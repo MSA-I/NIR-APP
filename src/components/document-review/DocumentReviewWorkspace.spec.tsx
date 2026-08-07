@@ -132,38 +132,29 @@ describe('confidence leaves the review screens and stays inside the disclosure',
   it('prints no percentage in the two panels a reviewer reads', () => {
     renderWorkspace(0.62);
 
-    // The proposals panel and the source viewer are what the bookkeeper actually reads. Every
-    // confidence on them used to be "רמת ביטחון NN%". Neither the old wording nor the number may
-    // survive there — this is the assertion that fails if confidenceLabel regresses.
-    for (const testId of ['document-review-proposals', 'document-annotations-keyboard']) {
-      const panel = within(screen.getByTestId(testId));
-      expect(panel.queryByText(/רמת ביטחון/)).toBeNull();
-      // The fixture's block and mark confidences, by value: 0.71 and 0.55.
-      expect(panel.queryByText(/71%/)).toBeNull();
-      expect(panel.queryByText(/55%/)).toBeNull();
-    }
-    expect(within(screen.getByTestId('document-review-proposals')).queryByText(/\d+%/)).toBeNull();
+    // The proposals panel is what the bookkeeper actually reads. Every confidence on it used to be
+    // "רמת ביטחון NN%". Neither the old wording nor the number may survive there — this is the
+    // assertion that fails if confidenceLabel regresses.
+    const proposals = within(screen.getByTestId('document-review-proposals'));
+    expect(proposals.queryByText(/רמת ביטחון/)).toBeNull();
+    // The fixture's block and mark confidences, by value: 0.71 and 0.55.
+    expect(proposals.queryByText(/71%/)).toBeNull();
+    expect(proposals.queryByText(/55%/)).toBeNull();
+    expect(proposals.queryByText(/\d+%/)).toBeNull();
 
-    // The judgement call, as a test rather than a paragraph: the percentages still visible in the
-    // source viewer are page coordinates, and only page coordinates. A coordinate is a measurement
-    // the reviewer can check against the document in front of them — and it is the sole thing
-    // telling two identical marks apart, and the locator screen readers get. A confidence score is
-    // a claim they cannot check against anything, which is why that one moved.
-    //
-    // Split on the separator before matching. The grade and the location share one <span>
-    // (DocumentSourceViewer.tsx:250,279), so testing the element's whole textContent would let any
-    // new percentage hide behind the "מיקום בעמוד" already in it — verified: an injected
-    // "התאמה 42%" left this suite green until the assertion was made per segment.
-    for (const node of within(screen.getByTestId('document-annotations-keyboard')).queryAllByText(/\d+%/)) {
-      for (const segment of (node.textContent ?? '').split(' · ')) {
-        if (!segment.includes('%')) continue;
-        expect(segment).toMatch(/מיקום בעמוד|פרוס על פני כל העמוד/);
-      }
-    }
+    // The source viewer went further than losing its percentages: it lost the whole extraction.
+    // An earlier round let page coordinates stay, on the argument that a coordinate is a
+    // measurement the reviewer can check. The owner overruled it looking at the screen — "בפירוש
+    // אין צורך לראות את הקווים הכחולים הללו" — so the surface now carries no engine output at all,
+    // and the blunt assertion is the one that matches the rule.
+    const viewer = within(screen.getByTestId('document-source-viewer'));
+    expect(viewer.queryByText(/\d+%/)).toBeNull();
+    expect(viewer.queryByText(/מיקום בעמוד|פרוס על פני כל העמוד/)).toBeNull();
+    expect(viewer.queryByText(/זוהה בבירור|לא ודאי|רמת הזיהוי אינה ידועה/)).toBeNull();
+    expect(screen.queryByTestId('document-annotations-keyboard')).toBeNull();
 
-    // The grade itself is present and verbal.
-    expect(within(screen.getByTestId('document-review-proposals')).getAllByText(/זוהה בבירור/).length).toBeGreaterThan(0);
-    expect(within(screen.getByTestId('document-annotations-keyboard')).getAllByText(/לא ודאי/).length).toBeGreaterThan(0);
+    // The grade itself is present and verbal, where the decision is actually made.
+    expect(proposals.getAllByText(/זוהה בבירור/).length).toBeGreaterThan(0);
   });
 
   it('keeps every number, closed by default, inside פרטים טכניים', async () => {

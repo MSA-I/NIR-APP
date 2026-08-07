@@ -1898,7 +1898,13 @@ async function documentOcrAcceptance(browser) {
     await review.locator('[data-testid="document-review-page"]').waitFor({ timeout: 25_000 });
     await review.locator('[data-testid="document-source-viewer"]').waitFor();
     await review.locator('[data-testid="document-review-proposals"]').waitFor();
-    await review.locator('[data-testid="document-annotations-keyboard"]').waitFor();
+    // The per-block keyboard list, the bbox overlay and the grades left this screen with the
+    // owner's second pass over it ("בפירוש אין צורך לראות את הקווים הכחולים הללו"). Asserted as an
+    // absence, in a real browser, because that is the claim now: the viewer shows the document.
+    await review.locator('[data-testid="document-annotations-keyboard"]').waitFor({ state: 'detached' });
+    if (await review.locator('[data-testid="document-source-viewer"]').getByText(/מיקום בעמוד/).count()) {
+      throw new Error('document review source viewer still prints extraction coordinates');
+    }
     const exportPreview = review.locator('[data-testid="document-export-preview"]');
     await exportPreview.waitFor();
     await auditAccessibility(review, 'ocr-review/1440');

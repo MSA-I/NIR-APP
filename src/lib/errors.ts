@@ -178,6 +178,17 @@ const PATTERNS: [RegExp, string][] = [
     'השיוך האוטומטי כבר בוטל. רענן את המסך כדי לראות את המצב העדכני.'],
   [/auto_action_unknown/i,
     'השיוך האוטומטי אינו זמין עוד. רענן את המסך.'],
+  // 0076. The autonomy command refuses by name rather than by constraint, so each refusal can be
+  // answered with the rule that was broken. `autonomy_policy_reason_required` is deliberately NOT
+  // here: it contains `reason_required`, and the generic sentence below is already the right one.
+  [/autonomy_policy_not_tightening/i,
+    'הסף שהוזן נמוך מרצפת המערכת. דייר רשאי לדרוש ביטחון גבוה יותר, לעולם לא נמוך יותר.'],
+  [/autonomy_policy_invalid/i,
+    'סף הביטחון חייב להיות מספר גדול מ-0 ועד 1, ויש לבחור ארגון ומצב.'],
+  [/autonomy_policy_unknown/i,
+    'מדיניות האוטונומיה המבוקשת אינה קיימת במערכת.'],
+  [/not_platform_admin/i,
+    'הפעולה הזו פתוחה למנהלי פלטפורמה בלבד.'],
   [/reason_required/i,
     'יש להזין סיבה לביצוע הפעולה.'],
   // Its own sentence rather than an arm of reason_required: telling someone who just wrote 1001
