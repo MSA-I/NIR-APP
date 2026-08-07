@@ -1483,6 +1483,14 @@ alter table public.document_filings add constraint document_filings_reversal_sha
 -- textarea would be silently flattened onto one line in audit_logs. This is the same storage-vs-
 -- comparison split section 1 of this file already makes for invoice numbers: the sanitizer answers
 -- "is there anything here at all", `btrim` answers "what did the person actually write".
+-- TWO substitutions, because making the siblings agree on WHAT they refuse while leaving them
+-- disagreeing on HOW would have been half a fix. Both shape constraints now cap the reason at
+-- 1000 characters, so without the second one a 1001-character rescue reason passes the command,
+-- soft-deletes nothing, and dies on a raw `document_filings_reversal_shape` -- atomic, but the
+-- person is shown a constraint name while the same input on the reversal command comes back as
+-- `reason_too_long`, which src/lib/errors.ts translates. Same argument as the reversal's own
+-- length fence: ConfirmDialog caps the textarea at 1000, and this is the fence for every other
+-- caller.
 do $c5rescue$
 declare
   v_def text := replace(
@@ -1492,12 +1500,31 @@ declare
     when private.document_text_sanitize(p_reason) is null then null
     else btrim(p_reason)
   end;$new$, e'\r', '');
+  -- Anchored on the reason guard EXACTLY as 0075:380-382 wrote it, and the length raise is added
+  -- AFTER it rather than inside it. That ordering is not cosmetic: p11:988-997's mutation proof
+  -- anchors on this same three-line block and deletes it wholesale, so folding a second condition
+  -- into it would break a live suite's mutation. Appended, the block p11 looks for is untouched.
+  v_guard_anchor text := replace($ga$  if v_reason is null then
+    raise exception 'reason_required' using errcode = '22023';
+  end if;$ga$, e'\r', '');
+  v_guard_new text := replace($gn$  if v_reason is null then
+    raise exception 'reason_required' using errcode = '22023';
+  end if;
+  if length(v_reason) > 1000 then
+    raise exception 'reason_too_long' using errcode = '22023';
+  end if;$gn$, e'\r', '');
 begin
   if position(v_anchor in v_def) = 0 then
     raise exception '0077: rescue_document_from_archive no longer declares v_reason the way '
       '0075:371 left it -- re-read the live definition before editing.';
   end if;
-  execute replace(v_def, v_anchor, v_new);
+  if position(v_guard_anchor in v_def) = 0 then
+    raise exception '0077: rescue_document_from_archive no longer raises reason_required the way '
+      '0075:380-382 left it -- re-read the live definition before editing.';
+  end if;
+  v_def := replace(v_def, v_anchor, v_new);
+  v_def := replace(v_def, v_guard_anchor, v_guard_new);
+  execute v_def;
   if not (select prosecdef from pg_proc
           where oid = 'public.rescue_document_from_archive(uuid,text)'::regprocedure) then
     raise exception '0077: rescue_document_from_archive lost SECURITY DEFINER in the replay.';

@@ -2319,6 +2319,92 @@ select pg_temp.p14_assert(
   'a reverted document is back in a PERSON''S hands -- the manual filing actions must still work '
   || 'on it, or the undo would have traded one unusable state for another');
 
+-- ----- The two siblings must refuse the same things the same WAY -----
+-- 0077 section 4b made rescue_document_from_archive agree with the reversal on WHAT it refuses.
+-- Agreeing on HOW is the other half: both shape constraints cap the reason at 1000, so without a
+-- length fence in the command a 1001-character rescue reason dies on a raw
+-- `document_filings_reversal_shape` while the identical input on the reversal comes back as
+-- `reason_too_long` -- one of them translatable by src/lib/errors.ts and one of them not.
+-- Doc 13 is in the archive as of the assertion above, so this is a real rescue target.
+select pg_temp.p14_assert(
+  pg_temp.p14_error(
+    '24000000-0000-4000-8000-000000000001',
+    format($q$select public.rescue_document_from_archive(
+        '44000000-0000-4000-8000-000000000013', %L)$q$, repeat('א', 1001))
+  ) = 'reason_too_long',
+  'rescue must refuse an over-long reason by the SAME name the reversal uses -- the block that '
+  || 'made the siblings agree on what they refuse must not leave them disagreeing on how');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_error(
+    '24000000-0000-4000-8000-000000000001',
+    format($q$select public.rescue_document_from_archive(
+        '44000000-0000-4000-8000-000000000013', %L)$q$, chr(8207))
+  ) = 'reason_required',
+  'and an RLM-only rescue reason by name too -- measured completing a rescue before 0077 4b');
+
+-- The document stays archived, and the filing ledger is untouched: exactly the one system filing
+-- the reversal already reverted, and no second row. (file_document writes no filing at all --
+-- B1 finding 1 -- so archiving doc 13 above added none, and a refused rescue must add none either.)
+select pg_temp.p14_assert(
+  (select entity_type = 'archive' from public.documents
+    where id = '44000000-0000-4000-8000-000000000013')
+  and (select count(*) = 1 from public.document_filings
+        where document_id = '44000000-0000-4000-8000-000000000013'),
+  'and both refused rescues must have moved nothing and written nothing');
+
+-- THE INJECTION MUST NOT BREAK p11'S OWN MUTATION PROOF. p11:988-997 anchors on rescue's reason
+-- guard as three contiguous lines and deletes it wholesale; 0077 appends the length fence AFTER
+-- that block rather than folding a second condition into it, precisely so the anchor survives.
+-- Asserted here because p11 cannot see what 0077 did to the function it tests.
+select pg_temp.p14_assert(
+  (select position(replace($ga$  if v_reason is null then
+    raise exception 'reason_required' using errcode = '22023';
+  end if;$ga$, e'\r', '') in replace(prosrc, e'\r', '')) > 0
+     from pg_proc
+    where oid = 'public.rescue_document_from_archive(uuid,text)'::regprocedure),
+  'p11''s mutation anchor -- rescue''s reason guard as three contiguous lines -- must survive '
+  || '0077''s injection, or a sibling suite''s mutation proof stops running with no signal');
+
+-- And a real reason still rescues, so none of the above turned the command into a wall.
+select pg_temp.p14_become('24000000-0000-4000-8000-000000000001');
+select public.rescue_document_from_archive(
+  '44000000-0000-4000-8000-000000000013', e'נבדק ידנית:\nהמסמך שייך לספק אחר');
+select set_config('role', 'none', true);
+
+select pg_temp.p14_assert(
+  (select entity_type = 'inbox' and entity_id is null from public.documents
+    where id = '44000000-0000-4000-8000-000000000013'),
+  'a rescue with a real reason must still work');
+
+-- The multi-line justification is stored AS TYPED. This is the one place the sanitizer is
+-- deliberately not what gets stored: it collapses whitespace runs, so `v_reason := sanitize(...)`
+-- would have silently flattened two lines into one inside the audit trail.
+--
+-- Read from audit_logs rather than from document_filings, and that is the correct target rather
+-- than a workaround: doc 13's only filing was already reverted by the reversal above, so this
+-- rescue had nothing to revert -- which 0075:406-407 calls a legitimate rescue, not an error.
+-- The audit row is where the sentence actually lands, and it is the record the reason contract
+-- exists to fill.
+select pg_temp.p14_assert(
+  exists (
+    select 1 from audit_logs
+    where entity_type = 'documents'
+      and entity_id = '44000000-0000-4000-8000-000000000013'
+      and action = 'document_rescued_from_archive'
+      and reason = e'נבדק ידנית:\nהמסמך שייך לספק אחר'),
+  'a two-line reason must reach audit_logs with its newline intact -- the sanitizer answers "is '
+  || 'there anything here", btrim answers "what did the person write", and only the second is '
+  || 'stored');
+
+select pg_temp.p14_assert(
+  (select position(e'\n' in reason) = 12 from audit_logs
+    where entity_type = 'documents'
+      and entity_id = '44000000-0000-4000-8000-000000000013'
+      and action = 'document_rescued_from_archive'),
+  'and the newline must be at the character the person put it at -- asserted positionally, '
+  || 'because a collapsed reason would still contain both sentences and still read plausibly');
+
 -- ----- Defect (a): the job stage actually advances -----
 -- save_document_interpretation leaves the job at 'review' and STAGE_USER_STATE maps review ->
 -- review, so before this fix the register said "בבדיקה / ממתין לאישורך" over a document whose
