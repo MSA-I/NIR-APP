@@ -1976,6 +1976,13 @@ insert into profiles (id, org_id, full_name, role) values
   ('24000000-0000-4000-8000-000000000070', '14000000-0000-4000-8000-000000000001',
    'P14 Kitchen A', 'kitchen');
 
+-- `= 'not_authorized'`, NOT `like '%not_authorized%'`. C5's review mutated the role gate out of
+-- the command and this assertion STILL PASSED: the call fell through to soft_delete_invoice, which
+-- refuses kitchen with `invoice_soft_delete_not_authorized` -- and that string contains
+-- `not_authorized`. The assertion was measuring a DOWNSTREAM refusal, which matters beyond
+-- hygiene: soft_delete_invoice is skipped entirely when invoice_id is null, so on the day a
+-- second outcome is added that writes no invoice, kitchen would revert the document, the filing
+-- and the exception with nothing refusing at all.
 select pg_temp.p14_assert(
   pg_temp.p14_error(
     '24000000-0000-4000-8000-000000000070',
@@ -1983,9 +1990,134 @@ select pg_temp.p14_assert(
         (select id from public.document_auto_actions
           where document_id = '44000000-0000-4000-8000-000000000006'),
         'P14: kitchen attempting a financial reversal')$$
-  ) like '%not_authorized%',
-  'kitchen may READ what the machine did and may not undo it -- same authority as every '
-  || 'comparable reversal in this codebase');
+  ) = 'not_authorized',
+  'kitchen may READ what the machine did and may not undo it -- and the refusal must be THIS '
+  || 'command''s own, not soft_delete_invoice''s further down the call');
+
+-- The same gate, proven to run BEFORE anything is read: a nonexistent action id must still come
+-- back not_authorized rather than auto_action_unknown. Order is the contract (0075:377-382) --
+-- a caller with no authority must not be able to probe which action ids exist.
+select pg_temp.p14_assert(
+  pg_temp.p14_error(
+    '24000000-0000-4000-8000-000000000070',
+    $$select public.revert_document_auto_action(
+        '00000000-0000-4000-8000-000000000000', 'P14: kitchen probing for row existence')$$
+  ) = 'not_authorized',
+  'the role gate must precede the row read, or a refused caller learns which ids exist');
+
+-- ----- The reason must have a VISIBLE character in it -----
+-- C5's review measured each of these completing a full reversal: the invoice soft-deleted, the
+-- filing reverted, the exception dismissed, and an audit_logs row whose only human justification
+-- was a character with no visual form. One-argument btrim strips SPACES ONLY. This is the defect
+-- class C2 spent four rounds closing on invoice numbers, in the command that undoes what C2 guards.
+do $$
+declare
+  v_cases text[][] := array[
+    array[e'\t\n\r', 'tab, newline and carriage return'],
+    array[chr(8207), 'a single U+200F RIGHT-TO-LEFT MARK'],
+    array[chr(160),  'a single U+00A0 NO-BREAK SPACE'],
+    array[chr(8203), 'a single U+200B ZERO WIDTH SPACE'],
+    array[chr(65279), 'a single U+FEFF BYTE ORDER MARK']];
+  v_case text[];
+  v_message text;
+  v_failures text := '';
+begin
+  foreach v_case slice 1 in array v_cases loop
+    v_message := pg_temp.p14_error(
+      '24000000-0000-4000-8000-000000000001',
+      format($q$select public.revert_document_auto_action(
+          (select id from public.document_auto_actions
+            where document_id = '44000000-0000-4000-8000-000000000006'), %L)$q$, v_case[1]));
+    if v_message is distinct from 'reason_required' then
+      v_failures := v_failures || format(' [%s -> %s]', v_case[2], coalesce(v_message, 'ACCEPTED'));
+    end if;
+  end loop;
+  if v_failures <> '' then
+    raise exception 'P14 apply-interpretation assertion failed: a reason with no visible '
+      'character must be refused as reason_required -- an audit row whose justification is an '
+      'invisible character is a reasonless reversal wearing a reason.%', v_failures;
+  end if;
+end
+$$;
+
+select pg_temp.p14_assert(
+  (select reverted_at is null from public.document_auto_actions
+    where document_id = '44000000-0000-4000-8000-000000000006')
+  and (select deleted_at is null from public.invoices where invoice_number = 'P14-1001'),
+  'and none of the five invisible reasons may have deleted anything');
+
+-- A REAL reason survives intact, including its interior spacing. The sanitizer answers "is there
+-- anything here"; it is deliberately NOT what gets stored, because it collapses whitespace runs
+-- and would flatten a two-line justification typed into the reason field.
+select pg_temp.p14_assert(
+  private.document_text_sanitize(' הספק שגוי ') is not null
+  and btrim(e'שורה ראשונה\nשורה שנייה') = e'שורה ראשונה\nשורה שנייה',
+  'a reason a person actually wrote must pass the emptiness test and must be stored as typed');
+
+-- Length: its own name, not an arm of reason_required, and not a raw constraint name either.
+select pg_temp.p14_assert(
+  pg_temp.p14_error(
+    '24000000-0000-4000-8000-000000000001',
+    format($q$select public.revert_document_auto_action(
+        (select id from public.document_auto_actions
+          where document_id = '44000000-0000-4000-8000-000000000006'), %L)$q$, repeat('א', 1001))
+  ) = 'reason_too_long',
+  'a 1001-character reason must be refused by NAME before the invoice is touched -- both shape '
+  || 'constraints cap it at 1000, and dying there would show the person a constraint name');
+
+-- ----- The schema is the backstop, and it moved too -----
+-- Both *_reversal_shape constraints carried the identical one-argument btrim, so the ledgers
+-- accepted what the commands now refuse. Probed directly, as the trusted server, so it is the
+-- CONSTRAINT answering and not a command guard.
+do $$
+declare
+  v_msg text;
+  v_failures text := '';
+begin
+  begin
+    update public.document_filings
+    set reverted_at = now(), reverted_reason = chr(8207)
+    where document_id = '44000000-0000-4000-8000-000000000006' and reverted_at is null;
+    v_failures := v_failures || ' document_filings accepted an RLM-only reason;';
+  exception when others then
+    v_msg := sqlerrm;
+    if v_msg not like '%document_filings_reversal_shape%' then
+      v_failures := v_failures || ' document_filings raised the wrong error: ' || v_msg || ';';
+    end if;
+  end;
+  begin
+    update public.document_auto_actions
+    set reverted_at = now(), reverted_by = '24000000-0000-4000-8000-000000000001',
+        reverted_reason = e'\t'
+    where document_id = '44000000-0000-4000-8000-000000000006' and reverted_at is null;
+    v_failures := v_failures || ' document_auto_actions accepted a tab-only reason;';
+  exception when others then
+    v_msg := sqlerrm;
+    if v_msg not like '%document_auto_actions_reversal_shape%' then
+      v_failures := v_failures || ' document_auto_actions raised the wrong error: ' || v_msg || ';';
+    end if;
+  end;
+  if v_failures <> '' then
+    raise exception 'P14 apply-interpretation assertion failed: the reversal ledgers must refuse '
+      'a reason with no visible character even when the command is bypassed --%', v_failures;
+  end if;
+end
+$$;
+
+-- The sibling command has the same hole and the same author's contract, so 0077 closes it too --
+-- by anchored substitution into the LIVE body, without editing 0075. Without this, the ledger
+-- would refuse what rescue still happily sent it.
+select pg_temp.p14_assert(
+  (select regexp_replace(prosrc, '--[^\n]*', '', 'g') ~ 'document_text_sanitize'
+     from pg_proc
+    where oid = 'public.rescue_document_from_archive(uuid,text)'::regprocedure),
+  'rescue_document_from_archive must test emptiness with the sanitizer too -- one-argument btrim '
+  || 'let an RLM-only reason through there as well');
+
+select pg_temp.p14_assert(
+  (select prosecdef from pg_proc
+    where oid = 'public.rescue_document_from_archive(uuid,text)'::regprocedure),
+  'and it must not have lost SECURITY DEFINER in that replay');
 
 -- ----- The reversal itself, on the document that carries an ORDER LINK and an EXCEPTION -----
 -- Document 13 is the richest auto-action in the suite: invoice, order link, and an open
@@ -2123,6 +2255,69 @@ select pg_temp.p14_assert(
     where document_id = '44000000-0000-4000-8000-000000000013'
       and reverted_reason like '%בטעות%'),
   'and the second attempt must not have rewritten the first reason');
+
+-- ----- (7) THE MACHINE DOES NOT GET A SECOND VOTE -----
+-- C5's review found this and it is the sharpest finding in the task, because C5 CREATED it.
+-- Reversal frees all three refusals in apply_document_interpretation at once -- the auto-action
+-- lookup and the filing lookup both filter `reverted_at is null`, and the document goes back to
+-- 'inbox' -- while the duplicate stop filters `deleted_at is null` and so does not see the
+-- soft-deleted invoice either. Measured before the guard existed: outcome auto_applied, two
+-- auto-action rows, one live machine invoice, and the person's undo silently gone.
+insert into public.document_processing_jobs (id, org_id, document_id, requested_by, status,
+                                             input_checksum)
+values ('54000000-0000-4000-8000-000000000113', '14000000-0000-4000-8000-000000000001',
+        '44000000-0000-4000-8000-000000000013', '24000000-0000-4000-8000-000000000001',
+        'review', 'etag:' || lpad(to_hex(113), 32, 'c'));
+insert into public.document_extractions (id, org_id, job_id, document_id, engine, model,
+                                         model_version, input_checksum, contract_version, payload)
+values ('64000000-0000-4000-8000-000000000113', '14000000-0000-4000-8000-000000000001',
+        '54000000-0000-4000-8000-000000000113', '44000000-0000-4000-8000-000000000013',
+        'fixture', 'fixture-ocr', '1.0.0', 'etag:' || lpad(to_hex(113), 32, 'c'), '1',
+        pg_temp.p14_extraction_payload());
+insert into public.document_interpretations (id, org_id, job_id, extraction_id, document_id,
+                                             interpreted_for_user_id, provider, model,
+                                             prompt_version, schema_version, payload)
+values ('74000000-0000-4000-8000-000000000113', '14000000-0000-4000-8000-000000000001',
+        '54000000-0000-4000-8000-000000000113', '64000000-0000-4000-8000-000000000113',
+        '44000000-0000-4000-8000-000000000013', '24000000-0000-4000-8000-000000000001',
+        'openai', 'gpt-p14-fixture', 'interpret-document-v1', '1',
+        pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000001', 0.99));
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000113') ->> 'outcome' = 'already_decided',
+  'a document whose machine decision a PERSON reversed has been decided -- re-running '
+  || 'interpretation on it must not write a second invoice');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000113') ->> 'reason_code'
+    = 'auto_action_reverted_by_human',
+  'and the refusal must NAME the human who overruled the machine, not merely decline -- an undo '
+  || 'the machine can quietly undo is not an undo');
+
+select pg_temp.p14_assert(
+  (select count(*) = 1 from public.document_auto_actions
+    where org_id = '14000000-0000-4000-8000-000000000001'
+      and document_id = '44000000-0000-4000-8000-000000000013')
+  and (select count(*) = 0 from public.invoices
+        where invoice_number = 'P14-WITH-ORDER' and deleted_at is null)
+  and (select entity_type = 'inbox' from public.documents
+        where id = '44000000-0000-4000-8000-000000000013'),
+  'one auto-action, ZERO live machine invoices for that number, and the document still in the '
+  || 'inbox where the person put it');
+
+-- The complement, so the guard is not merely "refuse everything after a reversal": the manual
+-- filing actions still work on the rescued document. Reverting returns it to the queue; it does
+-- not put it beyond human reach.
+select pg_temp.p14_become('24000000-0000-4000-8000-000000000001');
+select public.file_document('44000000-0000-4000-8000-000000000013', 'archive', null,
+  'P14: a person files the reverted document by hand');
+select set_config('role', 'none', true);
+
+select pg_temp.p14_assert(
+  (select entity_type = 'archive' from public.documents
+    where id = '44000000-0000-4000-8000-000000000013'),
+  'a reverted document is back in a PERSON''S hands -- the manual filing actions must still work '
+  || 'on it, or the undo would have traded one unusable state for another');
 
 -- ----- Defect (a): the job stage actually advances -----
 -- save_document_interpretation leaves the job at 'review' and STAGE_USER_STATE maps review ->
@@ -2400,6 +2595,69 @@ select pg_temp.p14_assert(
       and invoice_id = (select id from public.invoices
                          where invoice_number = 'P14-MUTANT-EXC')),
   'P14 C5 mutation proof: with the block restored the same reversal closes the exception again');
+
+-- --- (o4) The sanitizer is what turns an invisible reason into a NAMED refusal ---
+-- Restores the one-argument btrim C5's review found, and shows both halves of the layering: the
+-- reversal is still refused -- the ledger constraint now catches it -- but by a raw constraint
+-- name instead of by `reason_required`, and only after soft_delete_invoice has already run and
+-- been rolled back with the rest. Two fences, and this proves which one does which.
+savepoint p14_c5_reason_mutation;
+do $$
+declare
+  v_def text := replace(
+    pg_get_functiondef('public.revert_document_auto_action(uuid,text)'::regprocedure), e'\r', '');
+  v_anchor text := replace($san$  v_reason text := case
+    when private.document_text_sanitize(p_reason) is null then null
+    else btrim(p_reason)
+  end;$san$, e'\r', '');
+  v_naked text := replace($old$  v_reason text := nullif(btrim(p_reason), '');$old$, e'\r', '');
+begin
+  if position(v_anchor in v_def) = 0 then
+    raise exception 'P14 mutation proof cannot run: the reason declaration is not where 0077 '
+      'section 4c left it in revert_document_auto_action';
+  end if;
+  execute replace(v_def, v_anchor, v_naked);
+end
+$$;
+
+select pg_temp.p14_assert(
+  pg_temp.p14_error(
+    '24000000-0000-4000-8000-000000000001',
+    format($q$select public.revert_document_auto_action(
+        (select id from public.document_auto_actions
+          where document_id = '44000000-0000-4000-8000-000000000006'), %L)$q$, chr(8207))
+  ) not like '%reason_required%',
+  'P14 C5 mutation proof: with one-argument btrim restored, an RLM-only reason stops being '
+  || 'refused by name -- btrim strips SPACES ONLY, which is the whole defect');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_error(
+    '24000000-0000-4000-8000-000000000001',
+    format($q$select public.revert_document_auto_action(
+        (select id from public.document_auto_actions
+          where document_id = '44000000-0000-4000-8000-000000000006'), %L)$q$, chr(8207))
+  ) like '%reversal_shape%',
+  'P14 C5 mutation proof: and what refuses instead is the ledger constraint -- the reason is '
+  || 'fenced TWICE, and the command guard is what makes the refusal a translatable name rather '
+  || 'than a constraint the browser cannot explain');
+
+select pg_temp.p14_assert(
+  (select reverted_at is null from public.document_auto_actions
+    where document_id = '44000000-0000-4000-8000-000000000006')
+  and (select deleted_at is null from public.invoices where invoice_number = 'P14-1001'),
+  'P14 C5 mutation proof: and the aborted call leaves the invoice alive -- soft_delete_invoice '
+  || 'ran before the constraint fired, and the transaction took it back');
+
+rollback to savepoint p14_c5_reason_mutation;
+
+select pg_temp.p14_assert(
+  pg_temp.p14_error(
+    '24000000-0000-4000-8000-000000000001',
+    format($q$select public.revert_document_auto_action(
+        (select id from public.document_auto_actions
+          where document_id = '44000000-0000-4000-8000-000000000006'), %L)$q$, chr(8207))
+  ) = 'reason_required',
+  'P14 C5 mutation proof: with the sanitizer restored, the same call is refused by name again');
 
 -- ----- Tenant B, one last time -----
 -- Six applications and a reversal later, the isolation witness must still be byte-identical.

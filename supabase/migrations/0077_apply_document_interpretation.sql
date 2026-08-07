@@ -557,10 +557,35 @@ create table public.document_auto_actions (
   -- A reversal is a reason plus a time, or neither -- and the actor comes with them. A
   -- reverted_at with no reason is the silent write this wave exists to prevent, so it cannot be
   -- represented at all (the document_filings_reversal_shape idiom).
+  --
+  -- `~ '[[:graph:]]'`, NOT `length(btrim(...)) >= 1`. C5's review measured the hole: one-argument
+  -- btrim strips SPACES ONLY, so a reason of E'\t\n\r', of a single U+200F RLM, or of U+00A0 NBSP
+  -- passed this constraint and landed in audit_logs as the sole human justification for undoing a
+  -- machine-written invoice. `[[:graph:]]` asks a PROPERTY -- is there a character here with any
+  -- visual form at all -- and refuses all four.
+  --
+  -- WHY NOT private.document_text_sanitize, WHICH IS RIGHT THERE AND IS COMPLETE. Measured, not
+  -- assumed: a CHECK expression is evaluated as the CURRENT user, and service_role holds neither
+  -- USAGE on schema `private` nor EXECUTE on that function (both verified false). An insert by the
+  -- trusted server would die with `permission denied for function document_text_sanitize` -- and
+  -- p11:1001-1004 inserts into document_filings AS service_role, so the "obvious" fix breaks a
+  -- live suite and the trusted-server write path with it. Granting service_role into `private`
+  -- would demolish the exact property header note 1 relies on. So the schema gets the property and
+  -- the COMMAND gets the complete test: revert_document_auto_action runs as postgres, calls the
+  -- sanitizer, and refuses by name.
+  --
+  -- THE RESIDUAL IS NAMED: Postgres reports graph=true for U+3164 HANGUL FILLER and U+FE0F
+  -- VARIATION SELECTOR-16 though neither has a visual form (0077:249-254 measured this), so a
+  -- reason made ONLY of those would satisfy this constraint. It cannot reach the table through
+  -- either reasoned command, because both sanitize first. It is a backstop that is strictly
+  -- better than what it replaces, not a claim of completeness.
   constraint document_auto_actions_reversal_shape check (
     (reverted_at is null and reverted_reason is null and reverted_by is null)
     or (reverted_at is not null and reverted_by is not null
-        and length(btrim(coalesce(reverted_reason, ''))) between 1 and 1000)
+        -- coalesce is load-bearing: a CHECK is satisfied by TRUE *or NULL*, and `null ~ x` is
+        -- NULL, so without it a reverted row with a NULL reason would pass the whole constraint.
+        and coalesce(reverted_reason, '') ~ '[[:graph:]]'
+        and length(coalesce(reverted_reason, '')) <= 1000)
   ),
   -- An auto-applied row without the invoice it applied is a reversal handle that undoes nothing.
   constraint document_auto_actions_applied_shape check (
@@ -605,6 +630,18 @@ alter table public.document_auto_actions force row level security;
 -- Same readership as document_filings (0075): the people who work the document register. No
 -- scope rider -- documents is cross-scope and its children inherit tenant and scope through the
 -- composite key (ADR-0004 section 4), which is why this table has no unit_id.
+--
+-- ACCOUNTANT IS DELIBERATELY NOT HERE, and C5's review was right to ask -- the rationale it
+-- challenged ("same readership as document_filings") really does copy a policy about who decided
+-- a filing onto a table about a machine writing money. The answer is not the rationale, it is a
+-- measurement: `/documents` and `/documents/archive` are both guarded by STAFF in App.tsx:244,248,
+-- and STAFF is ['owner','office','kitchen'] (App.tsx:102). An accountant cannot open the register
+-- at all, so the row this policy would let them read has no screen to appear on -- and the
+-- `שויך אוטומטית` badge they would supposedly be missing is on a page they cannot reach. Granting
+-- a read that no view consumes would be a widened policy justified by a UI claim that is false.
+-- If the accountant's screens ever need to distinguish a machine-authored invoice -- a real
+-- question for the reporting path, and a better one than this table answers -- the honest fix is
+-- on the INVOICE, which is what those screens actually list, not a documents-register ledger.
 create policy document_auto_actions_select on public.document_auto_actions
   for select to authenticated using (
     org_id = auth_org() and auth_role() in ('owner', 'office', 'kitchen')
@@ -822,6 +859,37 @@ begin
     return jsonb_build_object(
       'outcome', 'already_decided', 'reason_code', 'auto_action_exists',
       'document_id', v_doc.id, 'auto_action_id', v_existing_action.id, 'idempotent', true);
+  end if;
+
+  -- A HUMAN HAS ALREADY OVERRULED A MACHINE DECISION ON THIS DOCUMENT. The machine does not get
+  -- a second vote.
+  --
+  -- THIS GUARD EXISTS BECAUSE SECTION 4 CREATED THE HOLE IT CLOSES, and that is worth stating
+  -- plainly rather than presenting the guard as foresight. Before C5 nothing anywhere could set
+  -- reverted_at, so the partial unique index document_auto_actions_one_live_per_document was in
+  -- practice a permanent slot: once a document had an automatic write, it had one forever. The
+  -- reversal is what frees the slot -- and it frees ALL THREE refusals above and below at once:
+  -- the auto-action lookup filters `reverted_at is null`, the filing lookup filters
+  -- `reverted_at is null`, and the document goes back to 'inbox'. The duplicate stop is no help
+  -- either, because it filters `i.deleted_at is null` and the reverted invoice is soft-deleted.
+  --
+  -- Measured before this block existed: revert a document, run a second job on it, and the
+  -- outcome was auto_applied -- two auto-action rows, one live machine invoice, and the person's
+  -- undo silently gone. Not reachable from the browser today (DocumentsInbox only asks for
+  -- interpretation while a job is 'extracted', and a reverted document's job is 'completed'), but
+  -- the idempotency rationale at 0077:587-589 names "a person re-ran interpretation on a document
+  -- that already produced an invoice" as the realistic shape, and this is exactly the defence
+  -- that stopped working. An undo the machine can quietly undo is not an undo.
+  --
+  -- The check is `exists`, not a lookup into v_existing_action: a reverted row is by definition
+  -- not the one the query above selected, and there may be several over a document's life.
+  if exists (
+    select 1 from public.document_auto_actions
+    where org_id = v_org and document_id = v_doc.id and reverted_at is not null
+  ) then
+    return jsonb_build_object(
+      'outcome', 'already_decided', 'reason_code', 'auto_action_reverted_by_human',
+      'document_id', v_doc.id, 'idempotent', true);
   end if;
 
   select * into v_existing_filing
@@ -1361,7 +1429,83 @@ $c5guard$;
 -- preserves the OID, so documents_guard_columns_trg keeps firing the replaced body, and
 -- recreating it would silently drop any WHEN clause or UPDATE OF list a later migration adds.
 
--- ----- 4b. The command -----
+-- ----- 4b. The reason contract, closed at the schema and in the SIBLING command -----
+--
+-- C5's review measured a reversal completing with a reason of E'\t\n\r', of one RLM, and of one
+-- NBSP -- each soft-deleting an invoice and writing an audit row whose only human justification is
+-- a character nobody can see. This is the defect class C2 spent four review rounds closing on
+-- invoice numbers, reappearing in the command that undoes what C2 guards.
+--
+-- BOTH SHAPE CONSTRAINTS MOVE, not just this task's. document_filings_reversal_shape is 0075's and
+-- carries the identical one-argument btrim, so leaving it would mean the ledger still accepted
+-- what the command now refuses. Read from the LIVE catalogue and asserted before replacement --
+-- a constraint is re-stated by definition when it is altered, so the anti-revert discipline is to
+-- prove the live text is what this block believes before dropping it.
+do $c5reason$
+declare
+  v_def text;
+begin
+  select pg_get_constraintdef(oid) into v_def
+  from pg_constraint
+  where conrelid = 'public.document_filings'::regclass
+    and conname = 'document_filings_reversal_shape';
+  if v_def is null then
+    raise exception '0077: document_filings_reversal_shape is missing (0075 section 4).';
+  end if;
+  if v_def !~ 'btrim' then
+    raise exception '0077: document_filings_reversal_shape no longer carries the one-argument '
+      'btrim this block exists to replace -- re-read the live definition before editing. Live: %',
+      v_def;
+  end if;
+end
+$c5reason$;
+
+alter table public.document_filings drop constraint document_filings_reversal_shape;
+alter table public.document_filings add constraint document_filings_reversal_shape check (
+  (reverted_at is null and reverted_reason is null)
+  or (reverted_at is not null
+      -- The property, and the coalesce that keeps it from passing on NULL. See the long note on
+      -- document_auto_actions_reversal_shape for why this is NOT private.document_text_sanitize:
+      -- a CHECK runs as the CURRENT user and service_role -- which inserts into THIS table in
+      -- p11:1001-1004 -- holds neither USAGE on schema `private` nor EXECUTE on that function.
+      and coalesce(reverted_reason, '') ~ '[[:graph:]]'
+      and length(coalesce(reverted_reason, '')) <= 1000)
+);
+
+-- And rescue_document_from_archive itself, which has the same hole and is the same author's
+-- contract. Patched by anchored substitution into the LIVE body -- 0075's file is not edited.
+-- It is a definer owned by postgres, so unlike a CHECK constraint it CAN reach the sanitizer.
+--
+-- THE EMPTINESS TEST AND THE STORED TEXT ARE SEPARATED, and that is the one place this diverges
+-- from the review's one-liner. `v_reason := private.document_text_sanitize(p_reason)` would refuse
+-- the right things but would also STORE the sanitized string -- and that function collapses every
+-- whitespace run to a single space, so a two-line justification a person typed into the reason
+-- textarea would be silently flattened onto one line in audit_logs. This is the same storage-vs-
+-- comparison split section 1 of this file already makes for invoice numbers: the sanitizer answers
+-- "is there anything here at all", `btrim` answers "what did the person actually write".
+do $c5rescue$
+declare
+  v_def text := replace(
+    pg_get_functiondef('public.rescue_document_from_archive(uuid,text)'::regprocedure), e'\r', '');
+  v_anchor text := replace($old$  v_reason text := nullif(btrim(p_reason), '');$old$, e'\r', '');
+  v_new text := replace($new$  v_reason text := case
+    when private.document_text_sanitize(p_reason) is null then null
+    else btrim(p_reason)
+  end;$new$, e'\r', '');
+begin
+  if position(v_anchor in v_def) = 0 then
+    raise exception '0077: rescue_document_from_archive no longer declares v_reason the way '
+      '0075:371 left it -- re-read the live definition before editing.';
+  end if;
+  execute replace(v_def, v_anchor, v_new);
+  if not (select prosecdef from pg_proc
+          where oid = 'public.rescue_document_from_archive(uuid,text)'::regprocedure) then
+    raise exception '0077: rescue_document_from_archive lost SECURITY DEFINER in the replay.';
+  end if;
+end
+$c5rescue$;
+
+-- ----- 4c. The command -----
 create function public.revert_document_auto_action(
   p_action_id uuid,
   p_reason text
@@ -1375,7 +1519,18 @@ declare
   v_org uuid := auth_org();
   v_user uuid := auth.uid();
   v_role user_role := auth_role();
-  v_reason text := nullif(btrim(p_reason), '');
+  -- THE EMPTINESS TEST IS THE SANITIZER; THE STORED TEXT IS THE PERSON'S OWN. One-argument btrim
+  -- -- what this line used to be, and what rescue_document_from_archive was written with -- strips
+  -- SPACES ONLY: E'\t\n\r', a single RLM and a single NBSP each walked through it and completed a
+  -- full reversal, leaving an audit row whose sole human justification was a character with no
+  -- visual form. private.document_text_sanitize is the allowlist-grade answer to "is there
+  -- anything here", already in this file for exactly this class of hazard. It is NOT what gets
+  -- stored: it collapses whitespace runs, which would flatten a two-line justification typed into
+  -- the reason field. Section 1's storage-vs-comparison split, applied to a reason.
+  v_reason text := case
+    when private.document_text_sanitize(p_reason) is null then null
+    else btrim(p_reason)
+  end;
   v_action public.document_auto_actions;
   v_document public.documents;
   v_invoice_result jsonb;
@@ -1389,13 +1544,21 @@ begin
   if v_org is null or v_user is null or v_role not in ('owner', 'office') then
     raise exception 'not_authorized' using errcode = '42501';
   end if;
-  -- BY NAME, on empty AND on whitespace. `btrim` here is the same one-argument btrim rescue uses
-  -- and it is correct for THIS purpose: a reason made only of an RLM is a reason a human wrote
-  -- and can read back, unlike an invoice number, where invisible characters decide whether the
-  -- business pays twice. The narrow strip is a deliberate difference from document_text_key
-  -- above, not an oversight of it.
+  -- BY NAME, on empty, on whitespace, and on anything with no visual form at all -- see the
+  -- declaration above for what that used to let through.
   if v_reason is null then
     raise exception 'reason_required' using errcode = '22023';
+  end if;
+  -- Its own name, not an arm of reason_required. Both shape constraints cap the reason at 1000
+  -- characters, so without this a 1001-character justification passes here, passes
+  -- soft_delete_invoice, deletes the invoice, and then dies on a raw
+  -- `document_filings_reversal_shape` -- atomic, so nothing is half-done, but the person is shown
+  -- a constraint name. Folding it into reason_required would answer that person with "יש להזין
+  -- סיבה" about a reason they just wrote 1001 characters of, which is a worse sentence than the
+  -- constraint name it replaces. ConfirmDialog already caps the textarea at 1000; this is the
+  -- fence for every other caller.
+  if length(v_reason) > 1000 then
+    raise exception 'reason_too_long' using errcode = '22023';
   end if;
 
   select * into v_action
@@ -1503,12 +1666,15 @@ begin
     returning id into v_exception_id;
   end if;
 
-  -- (5) THE HANDLE ITSELF, closed for good.
+  -- (5) THE HANDLE ITSELF, closed for good. `org_id = v_org` is redundant against the row lock
+  -- above -- which already matched on it -- and is spelled out anyway, so that every write in this
+  -- function is visibly tenant-scoped and a reader does not have to reconstruct the argument for
+  -- the one that is not.
   update document_auto_actions
   set reverted_at = now(),
       reverted_by = v_user,
       reverted_reason = v_reason
-  where id = v_action.id;
+  where id = v_action.id and org_id = v_org;
 
   -- THE SECOND EVENT. user_id is the PERSON here, and that asymmetry against section 3's null
   -- actor is the whole point: a reader of audit_logs can tell the machine's write from the

@@ -174,6 +174,11 @@ const PATTERNS: [RegExp, string][] = [
     'השיוך האוטומטי אינו זמין עוד. רענן את המסך.'],
   [/reason_required/i,
     'יש להזין סיבה לביצוע הפעולה.'],
+  // Its own sentence rather than an arm of reason_required: telling someone who just wrote 1001
+  // characters that they must enter a reason is a worse answer than the raw constraint name it
+  // replaces. Ahead of nothing in particular — it collides with no other pattern.
+  [/reason_too_long/i,
+    'הסיבה ארוכה מדי. יש לקצר אותה ל-1000 תווים לכל היותר.'],
   [/row-level security|permission denied|insufficient privilege/i,
     'אין לך הרשאה לבצע את הפעולה הזו.'],
   [/duplicate key value|already exists/i,
