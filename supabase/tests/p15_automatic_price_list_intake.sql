@@ -137,6 +137,57 @@ values (
   '35000000-0000-4000-8000-000000000001',
   '15000000-0000-4000-8000-000000000001', 'P15 supplier'
 );
+
+insert into storage.objects (bucket_id, name, owner, metadata)
+values (
+  'documents',
+  '15000000-0000-4000-8000-000000000001/supplier/35000000-0000-4000-8000-000000000001/81000000-0000-4000-8000-000000000900/dispatch.pdf',
+  '25000000-0000-4000-8000-000000000001',
+  jsonb_build_object('mimetype', 'application/pdf', 'size', 2048, 'eTag', repeat('9', 64))
+);
+insert into public.documents (
+  id, org_id, entity_type, entity_id, supplier_id, storage_path,
+  file_name, mime_type, document_kind, uploaded_by
+) values (
+  '81000000-0000-4000-8000-000000000900',
+  '15000000-0000-4000-8000-000000000001', 'supplier',
+  '35000000-0000-4000-8000-000000000001', '35000000-0000-4000-8000-000000000001',
+  '15000000-0000-4000-8000-000000000001/supplier/35000000-0000-4000-8000-000000000001/81000000-0000-4000-8000-000000000900/dispatch.pdf',
+  'dispatch.pdf', 'application/pdf', 'price_list',
+  '25000000-0000-4000-8000-000000000001'
+);
+insert into public.document_processing_jobs (
+  id, org_id, document_id, requested_by, status, input_checksum
+) values (
+  '82000000-0000-4000-8000-000000000900',
+  '15000000-0000-4000-8000-000000000001',
+  '81000000-0000-4000-8000-000000000900',
+  '25000000-0000-4000-8000-000000000001', 'extracted', 'etag:' || repeat('9', 64)
+);
+insert into public.document_extractions (
+  id, org_id, job_id, document_id, engine, model, model_version,
+  input_checksum, contract_version, payload
+) values (
+  '83000000-0000-4000-8000-000000000900',
+  '15000000-0000-4000-8000-000000000001',
+  '82000000-0000-4000-8000-000000000900',
+  '81000000-0000-4000-8000-000000000900', 'fixture', 'fixture-ocr', '1',
+  'etag:' || repeat('9', 64), '1', pg_temp.p15_extraction_payload()
+);
+create temporary table p15_claimed as
+select job_id from private.claim_document_interpretation_jobs(1, 20);
+select pg_temp.p15_assert(
+  (select array_agg(job_id) from p15_claimed)
+    = array['82000000-0000-4000-8000-000000000900'::uuid],
+  'eligible automatic interpretation job was not claimed exactly once'
+);
+select pg_temp.p15_assert(
+  exists (
+    select 1 from private.document_interpretation_dispatches
+    where job_id = '82000000-0000-4000-8000-000000000900'
+  ),
+  'claim did not persist its dispatch ledger row'
+);
 insert into public.products (id, org_id, name, unit, sku, barcode) values
   ('45000000-0000-4000-8000-000000000001', '15000000-0000-4000-8000-000000000001', 'P15 one', 'unit', 'PRODUCT-ONE', '729000000001'),
   ('45000000-0000-4000-8000-000000000002', '15000000-0000-4000-8000-000000000001', 'P15 two', 'unit', 'PRODUCT-TWO', '729000000002'),
