@@ -42,23 +42,35 @@
 Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **Tailwind v4 CSS-first** · recharts · lucide-react
 
 - `npm run dev` — פורט **5199**
-- `npm run build` = `tsc --noEmit` + שבעת סקריפטי ה-`check:*` + `vitest run` (‏`npm run test`) + `vite build` — **השער האוטומטי היחיד.**
-  ‏`check:review` מריץ `node --test` על `src/components/document-review/model.test.ts` (16 בדיקות).
+- `npm run build` = `tsc --noEmit` + **שמונת** סקריפטי ה-`check:*` + `vitest run` (‏`npm run test`) + `vite build` — **השער האוטומטי היחיד.**
+  שמונה, לא שבעה: ‏`check:exemptions` נוסף בגל 11. הרשימה מ-`package.json` היא
+  ‏`alerts · dashboard · orders · split · p2 · review · tokens · exemptions`.
+  ‏`check:review` מריץ `node --test` על `src/components/document-review/model.test.ts` — ‏**21** בדיקות
+  (‏`ℹ pass 21` בפלט; היה רשום כאן 16, והתיישן כשגל 11 הוסיף חמש).
   ‏`check:tokens` אוכף את חוק הטוקנים של `DESIGN.md` — אפס מחלקות פלטה גולמיות ואפס הקסים ב-`.tsx`.
+  ‏`check:exemptions` מצמיד את רשם חריגי ה-`SECURITY DEFINER`: הוא סופר **מטקסט המיגרציות** כמה
+  חריגים נוספו ונוקזו מעל זרע `0057` (‏59) ודורש שההצמדה ב-`p9_five_domains.sql` תסכים. זו אותה
+  טענה שכבר קיימת ב-p9 — במילישניות, במקום בדקה התשע-עשרה של שער בן עשרים דקות. **ארבעה גלים
+  רצופים גילו אותה שם.**
+  ‏`npm run test` — ‏**350** בדיקות ב-**31** קבצים.
   **אין ESLint ואין Prettier** בריפו, למרות הערות `eslint-disable` שנשארו ב-`src/lib/useQuery.ts`.
-- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **26**
-  סוויטות SQL (‏`check-quality-gates.ps1` — עשרים ושש קריאות `Invoke-SqlTest` על `supabase/tests/`),
-  ‏**preflight עם 44 זרועות** (`Invoke-Preflight`, ‏`p1_preflight.sql`), ‏`npm audit --audit-level=high`,
-  חוזי Deno, ו-**29 תרחישי דפדפן** (`check-browser-smoke.cjs` — עשרים ותשע קריאות `run(...)`,
-  נספרו בגל 11; ארבעה נוספו שם: ניווט, יצירת ספק מתוך דיאלוג המחירון, שפת מצבי המסמך, וביטול
-  שיוך אוטומטי). מספר טענות P0 מדווח בזמן ריצה
-  (‏266 בריצה שתועדה) — הוא אינו ליטרל בקוד. **המספרים האלה נמדדו בגל 10; קודם לכן כתוב היה כאן
-  ‏13 ו-22, וזה היה שגוי** — סוויטה שלא רשומה כאן עדיין רצה, ומי שקורא את הקובץ הזה היה מסיק
-  שבע סוויטות לא קיימות. **המספר סטה שוב ותוקן במדידה ב-B1:** ‏20 היה נכון בגל 10, ואז מיזוג ה-QA
-  הוסיף ארבע (‏`payment_credit_override`, ‏`monthly_report_snapshots` ושתי סוויטות ה-concurrency
-  שלהן) בלי לעדכן את השורה הזאת, ו-`p11_document_filing` היא החמישית. ‏`p13_document_autonomy_config`
-  (‏C1) היא השישית, ונספרה שוב במדידה: ‏26. **סופרים לפני שכותבים**
-  (`Invoke-SqlTest .supabase.tests` ב-`check-quality-gates.ps1`), לא מעתיקים את המספר הקודם.
+- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **27**
+  סוויטות SQL, ‏**preflight עם 44 זרועות**, ‏`npm audit --audit-level=high`, חוזי Deno,
+  ו-**29 תרחישי דפדפן**. מספר טענות P0 מדווח בזמן ריצה (‏266 בריצה שתועדה) — הוא אינו ליטרל בקוד.
+
+  **איך נספר כל מספר כאן — כדי שהבא יספור ולא יעתיק:**
+  - **27 סוויטות** = קריאות `Invoke-SqlTest` ב-`check-quality-gates.ps1` שהארגומנט הראשון שלהן הוא
+    `supabase\tests\…`. בקובץ יש **30** מופעים של המחרוזת: אחד הוא הגדרת הפונקציה, ושניים טוענים
+    fixtures (‏`supabase\demo\demo_seed.sql`, ‏`scripts\fixtures\ocr\browser-fixture.sql`).
+    ב-`supabase/tests/` יש **28** קבצי `.sql`; ההפרש הוא `p1_preflight.sql`, שרץ דרך `Invoke-Preflight`.
+  - **44 זרועות preflight** = ‏`select '<שם>'` ב-`p1_preflight.sql` (‏1 + ‏43 `union all select '`),
+    ו-`Invoke-Preflight` **זורק** אם לא חזרו בדיוק 44 שורות.
+  - **29 תרחישים** = קריאות `run(` ב-`check-browser-smoke.cjs`; ‏`p4-browser-report.json` של הריצה
+    האחרונה מדווח `passed: 29, skipped: 0, failures: 0`.
+
+  **היסטוריית הסטייה, כי היא חזרה ארבע פעמים:** ‏13 → 20 → 26 → **27** לסוויטות; ‏22 → 25 → **29**
+  לתרחישים; ‏16 → **21** ל-`check:review`; ‏שבעה → **שמונה** לסקריפטי ה-`check:*`. בכל פעם הקובץ
+  הזה — שכל סוכן קורא **ראשון** — שלח את הקורא לספור פחות ממה שקיים. **סופרים לפני שכותבים.**
   **ריצה אחת בכל רגע במכונה.** **אין CI** — `.github/` אינו קיים; זו ריצה ידנית.
 - מיגרציות: `scripts/db-query.ps1` (Windows) / `scripts/db-query.sh` (Linux/Mac) — שניהם רצים מול
   **הפרויקט המרוחק** דרך Management API (`-SqlFile` + `-ProjectRef` חובה). ריצה מקומית של סוויטה או
