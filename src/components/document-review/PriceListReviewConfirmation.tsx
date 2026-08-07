@@ -438,10 +438,12 @@ export function PriceListReviewConfirmation({
     <section className="card card-pad min-w-0" aria-labelledby="price-list-review-title" data-testid="price-list-review-confirmation">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id="price-list-review-title" className="section-title">אישור מחירון מפירוש המסמך</h2>
-          <p className="mt-1 text-sm text-ink-muted">בקליטה אוטומטית, שורה עם שם ומק״ט או ברקוד יכולה ליצור מוצר חדש. שורה שלא הוכרעה נשארת כאן לאישור מפורש.</p>
+          <h2 id="price-list-review-title" className="section-title">תוצאות העלאת המחירון האחרונה</h2>
+          <p className="mt-1 text-sm text-ink-muted">המערכת קולטת אוטומטית שורות בטוחות ויוצרת מוצר חדש כשיש שם ומק״ט או ברקוד. רק חריגים נשארים לבדיקה.</p>
         </div>
-        <span className={receipt ? 'badge-done' : 'badge-await'}>{receipt ? 'נקלט' : 'ממתין לאישור'}</span>
+        <span className={receipt || autoDecision?.submission_id ? 'badge-done' : autoDecision ? 'badge-await' : 'badge-info'}>
+          {receipt || autoDecision?.submission_id ? 'המחירון עודכן' : autoDecision ? 'נדרשת בדיקה' : 'הקליטה בעיבוד'}
+        </span>
       </div>
 
       <dl className="mt-4 grid gap-3 sm:grid-cols-2">

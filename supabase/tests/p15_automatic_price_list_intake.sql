@@ -70,7 +70,11 @@ create function pg_temp.p15_line(
   )
 $$;
 
-create function pg_temp.p15_seed(p_n integer, p_lines jsonb)
+create function pg_temp.p15_seed(
+  p_n integer,
+  p_lines jsonb,
+  p_document_kind text default 'price_list'
+)
 returns uuid language plpgsql as $$
 declare
   v_org constant uuid := '15000000-0000-4000-8000-000000000001';
@@ -93,7 +97,7 @@ begin
     file_name, mime_type, document_kind, uploaded_by
   ) values (
     v_doc, v_org, 'supplier', v_supplier, v_supplier, v_path,
-    'prices-' || p_n || '.pdf', 'application/pdf', 'price_list', v_user
+    'prices-' || p_n || '.pdf', 'application/pdf', p_document_kind, v_user
   );
 
   insert into public.document_processing_jobs (
@@ -136,6 +140,24 @@ insert into public.suppliers (id, org_id, name)
 values (
   '35000000-0000-4000-8000-000000000001',
   '15000000-0000-4000-8000-000000000001', 'P15 supplier'
+);
+
+select pg_temp.p15_seed(5, jsonb_build_array(
+  pg_temp.p15_line(1, 'AUTO-KIND-1', null, '12.50', 'Automatically classified product')
+), 'other') as auto_kind_interpretation \gset
+
+select pg_temp.p15_assert(
+  (select document_kind = 'price_list'
+   from public.documents where id = '81000000-0000-4000-8000-000000000005'),
+  'the stored interpretation did not become the document filing type automatically'
+);
+select pg_temp.p15_assert(
+  exists (
+    select 1 from public.audit_logs
+    where entity_id = '81000000-0000-4000-8000-000000000005'
+      and action = 'document_kind_classified_automatically'
+  ),
+  'automatic document classification was not audited'
 );
 
 insert into storage.objects (bucket_id, name, owner, metadata)

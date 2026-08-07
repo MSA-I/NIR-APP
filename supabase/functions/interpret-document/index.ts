@@ -763,7 +763,7 @@ export async function handler(req: Request): Promise<Response> {
   if (!extraction) return fail(cors, new EdgeError("extraction_unknown", 404));
 
   const isSupplier = profile.role === "supplier";
-  const isPriceList = document.document_kind === "price_list";
+  const storedKindIsPriceList = document.document_kind === "price_list";
   if (isSupplier) {
     if (
       !supplierInterpretationContextAllowed(
@@ -793,7 +793,7 @@ export async function handler(req: Request): Promise<Response> {
   const replayed = await resumeExistingInterpretation({
     admin,
     isSupplier,
-    isPriceList,
+    isPriceList: storedKindIsPriceList,
     jobId: job.id,
     actorId,
     context,
@@ -893,7 +893,7 @@ export async function handler(req: Request): Promise<Response> {
     const persisted = await saveAndDecideInterpretation({
       admin,
       isSupplier,
-      isPriceList,
+      isPriceList: result.interpretation.document_type === "price_list",
       jobId: job.id,
       actorId,
       args: {

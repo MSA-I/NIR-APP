@@ -534,6 +534,10 @@ test("the handler still routes both interpretation paths through the decision", 
         `gets deleted by a refactor with the gate green.`,
     );
   }
+  assert.ok(
+    body.includes('isPriceList: result.interpretation.document_type === "price_list"'),
+    "a newly detected price list is routed by the stored interpretation, not the upload-time kind",
+  );
 });
 
 // Every `private.interpretation_field(<payload>, array[...])` call in 0077 -- one per value the

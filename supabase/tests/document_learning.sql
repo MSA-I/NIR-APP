@@ -979,19 +979,21 @@ select document_learning_test.assert(
          order by revision desc limit 1)
     and (select count(*) = 4
          from public.audit_logs where action = 'document_type_review_decided')
-    -- Until 0051 this asserted the document stayed 'other' after an approved 'invoice' decision:
-    -- the confirmed classification sat in the ledger while the gallery kept filtering on the guess
-    -- made at upload time. Recognising the document is the point of running OCR over it, so the
-    -- approval now reaches documents.document_kind and the assertion follows the new contract.
+    -- 0084 files the interpreted type immediately. The review row below is evidence/correction
+    -- only, so agreeing with the automatic type does not write the document a second time.
     and (select document_kind = 'invoice'
          from public.documents where id = '46000000-0000-4000-8000-000000000001')
     and (select count(*) = 1
          from public.audit_logs
-         where action = 'document_kind_synced_from_review'
+         where action = 'document_kind_classified_automatically'
            and entity_id = '46000000-0000-4000-8000-000000000001'
            and old_values ->> 'document_kind' = 'other'
            and new_values ->> 'document_kind' = 'invoice')
-    -- Unchanged: only a rejection was attempted here, and a rejection must never reclassify.
+    and (select count(*) = 0
+         from public.audit_logs
+         where action = 'document_kind_synced_from_review'
+           and entity_id = '46000000-0000-4000-8000-000000000001')
+    -- Already uploaded as a price list, so the same automatic classification is a no-op.
     and (select document_kind = 'price_list'
          from public.documents where id = '46000000-0000-4000-8000-000000000010')
     and (select count(*) = 0
@@ -1959,8 +1961,8 @@ select document_learning_test.assert(
   'required reasoned audit events are incomplete'
 );
 
--- Annotation-only, with exactly one named exception: migration 0051 lets an approved human
--- document-type decision reclassify documents.document_kind. The exception is kept narrow on
+-- Annotation-only, with exactly one named exception: the automatic classification (0084) or a
+-- later human correction (0051) may reclassify documents.document_kind. The exception stays narrow on
 -- purpose -- `- 'document_kind'` strips that one key and nothing else, so any other column on any
 -- business row (and every supplier column, which has no such key) is still compared byte-for-byte.
 select document_learning_test.assert(
@@ -1976,25 +1978,29 @@ select document_learning_test.assert(
     ) current on true
     where current.value - 'document_kind' is distinct from snapshot.value - 'document_kind'
   )
-    -- The exception is not a free pass: a document may only have been reclassified if a person
-    -- approved a type for it with a reason. The model's own suggestion never reaches this column.
+    -- The exception is not a free pass: every change needs either the automatic interpretation
+    -- audit or an append-only human correction with a reason.
     and not exists (
       select 1
       from document_learning_business_snapshot snapshot
       join public.documents d on snapshot.kind = 'document' and d.id = snapshot.id
       where d.document_kind is distinct from snapshot.value ->> 'document_kind'
         and not exists (
+          select 1 from public.audit_logs a
+          where a.org_id = d.org_id and a.entity_id = d.id
+            and a.action = 'document_kind_classified_automatically'
+            and nullif(trim(a.reason), '') is not null
+        )
+        and not exists (
           select 1 from public.document_type_review_decisions r
-          where r.org_id = d.org_id
-            and r.document_id = d.id
-            and r.decision = 'approved'
-            and r.approved_document_type is not null
+          where r.org_id = d.org_id and r.document_id = d.id
+            and r.decision = 'approved' and r.approved_document_type is not null
             and nullif(trim(r.reason), '') is not null
         )
     )
     and not exists (
       select 1 from public.audit_logs
-      where action = 'document_kind_synced_from_review'
+      where action in ('document_kind_classified_automatically', 'document_kind_synced_from_review')
         and nullif(trim(reason), '') is null
     )
     and not exists (

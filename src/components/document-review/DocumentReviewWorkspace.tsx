@@ -42,6 +42,7 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
    * this only decides when its contents come into existence.
    */
   const [technicalOpen, setTechnicalOpen] = useState(false);
+  const isPriceList = snapshot.interpretation?.payload.document_type === 'price_list';
   const extraction = snapshot.extraction?.payload ?? null;
   const stageMeta = DOCUMENT_PROCESSING_STAGE_META[snapshot.stage];
 
@@ -314,22 +315,24 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
 
       {extraction && (
         <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(24rem,0.92fr)]">
-          <DocumentSourceViewer
-            fileName={snapshot.document.file_name}
-            mimeType={snapshot.document.mime_type}
-            sourceUrl={sourceUrl}
-            sourceError={sourceError}
-            pageCount={extraction.document.page_count}
-            page={page}
-            onPageChange={setPage}
-          />
+          <div className={isPriceList ? 'order-2 min-w-0 xl:order-1' : 'min-w-0'}>
+            <DocumentSourceViewer
+              fileName={snapshot.document.file_name}
+              mimeType={snapshot.document.mime_type}
+              sourceUrl={sourceUrl}
+              sourceError={sourceError}
+              pageCount={extraction.document.page_count}
+              page={page}
+              onPageChange={setPage}
+            />
+          </div>
 
-          <div className="min-w-0 space-y-5">
-            {snapshot.interpretation && <DocumentReviewProposals snapshot={snapshot} role={role} onRefetch={onRefetch} />}
-            {snapshot.document.document_kind === 'price_list'
-              && snapshot.interpretation?.payload.document_type === 'price_list'
-              && <PriceListReviewConfirmation snapshot={snapshot} role={role} actorId={actorId} onRefetch={onRefetch} />}
-            {snapshot.interpretation && role !== 'supplier' && <DocumentExportPreview snapshot={snapshot} actorId={actorId} autoFocus={initialPanel === 'export'} />}
+          <div className={`min-w-0 space-y-5 ${isPriceList ? 'order-1 xl:order-2' : ''}`}>
+            {isPriceList
+              ? <PriceListReviewConfirmation snapshot={snapshot} role={role} actorId={actorId} onRefetch={onRefetch} />
+              : snapshot.interpretation && <DocumentReviewProposals snapshot={snapshot} role={role} onRefetch={onRefetch} />}
+            {snapshot.interpretation && !isPriceList && role !== 'supplier'
+              && <DocumentExportPreview snapshot={snapshot} actorId={actorId} autoFocus={initialPanel === 'export'} />}
           </div>
         </div>
       )}

@@ -74,8 +74,8 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
 }) {
   const toast = useToast();
   const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState<'approved' | 'rejected' | null>(null);
-  // Starts on the model's suggestion, so approving without touching it means what it always meant.
+  const [busy, setBusy] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
   const [chosenType, setChosenType] = useState<InterpretationContract['document_type'] | null>(null);
   const interpretation = snapshot.interpretation;
   const extraction = snapshot.extraction;
@@ -89,51 +89,42 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
 
   const currentInterpretation = interpretation;
   const currentExtraction = extraction;
-  const suggestedLabel = DOCUMENT_TYPE_LABELS[currentInterpretation.payload.document_type];
-  const decisionLabel = latest?.decision === 'approved'
-    ? `אושר: ${DOCUMENT_TYPE_LABELS[latest.approved_document_type ?? latest.suggested_document_type]}`
-    : latest?.decision === 'rejected'
-      ? 'ההצעה נדחתה; אין סוג מאושר'
-      : 'טרם התקבלה הכרעה';
-  const decisionBadgeLabel = latest?.decision === 'approved'
-    ? 'מאושר'
-    : latest?.decision === 'rejected'
-      ? 'נדחה'
-      : 'ממתין להכרעה';
-  const selectedType = chosenType ?? currentInterpretation.payload.document_type;
-  const isCorrection = selectedType !== currentInterpretation.payload.document_type;
-  // Approving the same type twice is what the database calls document_type_review_unchanged, so
-  // the button rests only on that -- an already-approved document can still be corrected.
-  const alreadyApproved = latest?.decision === 'approved' && latest.approved_document_type === selectedType;
+  const automaticType = currentInterpretation.payload.document_type;
+  const effectiveType = latest?.decision === 'approved' && latest.approved_document_type
+    ? latest.approved_document_type
+    : automaticType;
+  const selectedType = chosenType ?? effectiveType;
+  const manuallyCorrected = effectiveType !== automaticType;
 
-  async function decide(decision: 'approved' | 'rejected') {
-    if (!reason.trim()) {
-      toast('יש להזין סיבה להכרעת סוג המסמך.', 'error');
+  async function saveCorrection() {
+    if (selectedType === effectiveType) {
+      toast('יש לבחור סוג מסמך שונה.', 'error');
       return;
     }
-    setBusy(decision);
+    if (!reason.trim()) {
+      toast('יש להזין סיבה לתיקון סוג המסמך.', 'error');
+      return;
+    }
+    setBusy(true);
     try {
       const result = await supabase.rpc('review_document_type', {
         p_interpretation_id: currentInterpretation.id,
-        p_decision: decision,
-        p_expected_suggested_document_type: currentInterpretation.payload.document_type,
+        p_decision: 'approved',
+        p_expected_suggested_document_type: automaticType,
         p_reason: reason.trim(),
         p_expected_input_checksum: currentExtraction.input_checksum,
         p_expected_contract_version: currentExtraction.contract_version,
         p_expected_revision: latest?.revision ?? 0,
-        // Only sent on an approval: the server rejects a rejection that also names a type.
-        p_approved_document_type: decision === 'approved' ? selectedType : null,
+        p_approved_document_type: selectedType,
       });
       if (result.error) throw new Error(result.error.message);
       const refreshed = await onRefetch();
-      const success = decision === 'rejected'
-        ? 'הצעת סוג המסמך נדחתה'
-        : isCorrection
-          ? `המסמך סווג כ${DOCUMENT_TYPE_LABELS[selectedType]} לפי הכרעתך, במקום ההצעה האוטומטית`
-          : 'סוג המסמך אושר ונשמר בנפרד מההצעה האוטומטית';
+      const success = `סוג המסמך תוקן ל${DOCUMENT_TYPE_LABELS[selectedType]}`;
       if (refreshed) toast(success);
       else toast(`${success}, אך רענון המסך נכשל. יש לרענן ידנית לפני פעולה נוספת.`, 'error');
       setReason('');
+      setChosenType(null);
+      setCorrecting(false);
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error);
       if (/document_type_review_(revision_conflict|context_changed)|document_review_status_invalid/i.test(raw)) {
@@ -143,7 +134,7 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
         toast(toHebrewError(error), 'error');
       }
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   }
 
@@ -151,25 +142,16 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
     <div className="card card-pad" aria-labelledby="document-type-review-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 id="document-type-review-title" className="section-title">הכרעת סוג המסמך</h3>
-          <p className="mt-1 text-sm text-ink-muted">הכרעה נשמרת בלדג׳ר נפרד; ההצעה האוטומטית אינה משתנה.</p>
+          <h3 id="document-type-review-title" className="section-title">סוג המסמך</h3>
+          <p className="mt-1 text-sm text-ink-muted">המערכת מסווגת את המסמך אוטומטית. אין צורך באישור ידני.</p>
         </div>
-        <span className={latest?.decision === 'approved' ? 'badge-done' : latest?.decision === 'rejected' ? 'badge-alert' : 'badge-await'}>
-          {decisionBadgeLabel}
-        </span>
+        <span className={manuallyCorrected ? 'badge-info' : 'badge-done'}>{manuallyCorrected ? 'תוקן ידנית' : 'סווג אוטומטית'}</span>
       </div>
 
-      <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-lg bg-surface-sunken p-3">
-          <dt className="text-sm font-medium text-ink-soft">הצעה אוטומטית</dt>
-          <dd className="mt-1 text-ink-body">{suggestedLabel}</dd>
-          <dd className="mt-1 text-xs text-ink-muted">{confidenceLabel(currentInterpretation.payload.document_type_confidence)}</dd>
-        </div>
-        <div className="rounded-lg bg-surface-sunken p-3" aria-live="polite">
-          <dt className="text-sm font-medium text-ink-soft">הכרעה אחרונה</dt>
-          <dd className="mt-1 text-ink-body">{decisionLabel}</dd>
-          <dd className="mt-1 text-xs text-ink-muted">גרסה <span className="num">{latest?.revision ?? 0}</span></dd>
-        </div>
+      <dl className="mt-4 rounded-lg bg-surface-sunken p-3" aria-live="polite">
+        <dt className="text-sm font-medium text-ink-soft">הסיווג הפעיל</dt>
+        <dd className="mt-1 text-ink-body">{DOCUMENT_TYPE_LABELS[effectiveType]}</dd>
+        <dd className="mt-1 text-xs text-ink-muted">זיהוי אוטומטי: {confidenceLabel(currentInterpretation.payload.document_type_confidence)}</dd>
       </dl>
 
       {latest && (
@@ -178,57 +160,45 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
         </p>
       )}
 
-      {canMutate ? (
+      {canMutate && correcting ? (
         <form className="mt-4 border-t border-line pt-4" onSubmit={(event) => event.preventDefault()}>
           <label className="block">
-            <span className="label">סוג המסמך שייקבע</span>
+            <span className="label">סוג המסמך הנכון</span>
             <select
               className="input"
               value={selectedType}
-              disabled={!!busy}
+              disabled={busy}
               onChange={(event) => setChosenType(event.target.value as InterpretationContract['document_type'])}
             >
               {(Object.keys(DOCUMENT_TYPE_LABELS) as InterpretationContract['document_type'][]).map((type) => (
                 <option key={type} value={type}>
-                  {DOCUMENT_TYPE_LABELS[type]}{type === currentInterpretation.payload.document_type ? ' — ההצעה האוטומטית' : ''}
+                  {DOCUMENT_TYPE_LABELS[type]}{type === effectiveType ? ' — הסיווג הנוכחי' : ''}
                 </option>
               ))}
             </select>
           </label>
-          {isCorrection && (
-            <p className="mt-1 text-xs text-ink-muted">
-              ההצעה האוטומטית ({suggestedLabel}) נשמרת כפי שהיא; ההכרעה שלך נרשמת לצידה וקובעת את הסיווג בגלריה.
-            </p>
-          )}
           <label className="mt-3 block">
-            <span className="label">סיבת ההכרעה</span>
-            <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={!!busy} />
+            <span className="label">סיבת התיקון</span>
+            <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} />
           </label>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className="btn-primary" disabled={!!busy || alreadyApproved} onClick={() => void decide('approved')}>
-              {busy === 'approved' ? <Loader2 className="animate-spin" size={17} aria-hidden="true" /> : <Check size={17} aria-hidden="true" />} {isCorrection ? 'קביעת הסוג שבחרת' : 'אישור הסוג המוצע'}
+            <button type="button" className="btn-primary" disabled={busy || selectedType === effectiveType} onClick={() => void saveCorrection()}>
+              {busy && <Loader2 className="animate-spin" size={17} aria-hidden="true" />} שמירת התיקון
             </button>
-            <button type="button" className="btn-danger" disabled={!!busy || latest?.decision === 'rejected'} onClick={() => void decide('rejected')}>
-              {busy === 'rejected' ? <Loader2 className="animate-spin" size={17} aria-hidden="true" /> : <X size={17} aria-hidden="true" />} דחיית ההצעה
+            <button type="button" className="btn-secondary" disabled={busy} onClick={() => { setCorrecting(false); setChosenType(null); setReason(''); }}>
+              ביטול
             </button>
           </div>
         </form>
-      ) : (
-        <Note tone="idle" className="mt-4">
-          {canDecide
-            ? 'אפשר להכריע את סוג המסמך רק כאשר המשימה במצב „דורש בדיקה”.'
-            : 'הכרעת סוג המסמך מוצגת לקריאה בלבד בחשבון ספק.'}
-        </Note>
-      )}
+      ) : canMutate ? (
+        <div className="mt-3 flex justify-end">
+          <button type="button" className="btn-secondary" onClick={() => setCorrecting(true)}>הסיווג שגוי? תיקון סוג</button>
+        </div>
+      ) : null}
 
-      {/* Every draft below opens an existing screen, prefilled -- never a second way to create the
-          record. Each keeps that screen's checks, its mandatory reason and its audited RPC, so
-          nothing the model read becomes a business record without a person confirming it where
-          they would have typed it by hand. What the document cannot say -- which order a delivery
-          note belongs to, why a credit is owed -- stays a field they fill, not a value we invent. */}
-      {canDecide && latest?.decision === 'approved' && (
+      {canDecide && (
         <DocumentDraftAction
-          documentType={latest.approved_document_type}
+          documentType={effectiveType}
           documentId={currentInterpretation.document_id}
           interpretation={currentInterpretation}
         />
@@ -613,15 +583,11 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
       <div className="card card-pad">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 id="document-proposals-title" className="section-title">פירוש מוצע</h2>
-            <p className="mt-1 text-sm text-ink-muted">הערכים הבאים הופקו אוטומטית ואינם עובדות מאושרות.</p>
+            <h2 id="document-proposals-title" className="section-title">פירוש המסמך</h2>
+            <p className="mt-1 text-sm text-ink-muted">השדות הופקו אוטומטית ומוצגים להשוואה מול המקור.</p>
           </div>
-          <span className="badge-await">הצעה אוטומטית</span>
+          <span className="badge-info">פירוש אוטומטי</span>
         </div>
-        <Note tone="await" className="mt-4">
-          <ShieldAlert className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
-          <span>סוג המסמך המוצע הוא <strong>{DOCUMENT_TYPE_LABELS[interpretation.payload.document_type]}</strong> ({confidenceLabel(interpretation.payload.document_type_confidence)}). זו הצעה בלתי משתנה; הכרעה אנושית, אם קיימת, נשמרת בנפרד.</span>
-        </Note>
         {/* Why the machine did not act, when it looked at this document and chose not to.
             Before 0079 the screen said "ממתין להכרעה" and stopped, and the reason existed only in
             a plpgsql local and an Edge Function log line — the owner had to ask, and the answer
@@ -723,11 +689,11 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
         )}
       </div>
 
-      <div className="card card-pad">
-        <h3 className="section-title">הערות והחלטות</h3>
-        <p className="mt-1 text-sm text-ink-muted">המקור מצוין בכל רשומה; רק משוב מפורש משנה את מצב ההצעה.</p>
-        <div className="mt-4 space-y-3">
-          {snapshot.annotations.length === 0 && <p className="text-sm text-ink-muted">לא נשמרו הערות למסמך.</p>}
+      {snapshot.annotations.length > 0 && (
+        <div className="card card-pad">
+          <h3 className="section-title">הערות והחלטות</h3>
+          <p className="mt-1 text-sm text-ink-muted">המקור מצוין בכל רשומה; רק משוב מפורש משנה את מצב ההצעה.</p>
+          <div className="mt-4 space-y-3">
           {snapshot.annotations.map((annotation) => {
             const feedback = feedbackByAnnotation.get(annotation.id);
             return (
@@ -756,15 +722,15 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
               </article>
             );
           })}
+          </div>
         </div>
-      </div>
+      )}
 
-      {!isSupplier && (
+      {!isSupplier && snapshot.ruleApplications.length > 0 && (
         <div className="card card-pad">
           <h3 className="section-title">כללים שהופעלו</h3>
           <p className="mt-1 text-sm text-ink-muted">כל יישום מקושר לגרסה המדויקת של הכלל ולסימון שעליו פעל.</p>
           <div className="mt-4 space-y-3">
-            {snapshot.ruleApplications.length === 0 && <p className="text-sm text-ink-muted">לא הופעל כלל נלמד במסמך הזה.</p>}
             {snapshot.ruleApplications.map((application) => {
               const rule = ruleById.get(application.rule_id);
               return (

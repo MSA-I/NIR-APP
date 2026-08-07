@@ -1899,6 +1899,9 @@ async function documentOcrAcceptance(browser) {
     await review.locator('[data-testid="document-review-page"]').waitFor({ timeout: 25_000 });
     await review.locator('[data-testid="document-source-viewer"]').waitFor();
     await review.locator('[data-testid="document-review-proposals"]').waitFor();
+    assert.equal(await review.getByRole('button', { name: 'אישור הסוג המוצע' }).count(), 0,
+      'document review still requires manual type approval');
+    await review.getByText('המערכת מסווגת את המסמך אוטומטית. אין צורך באישור ידני.').waitFor();
     // The per-block keyboard list, the bbox overlay and the grades left this screen with the
     // owner's second pass over it ("בפירוש אין צורך לראות את הקווים הכחולים הללו"). Asserted as an
     // absence, in a real browser, because that is the claim now: the viewer shows the document.
@@ -2037,6 +2040,12 @@ async function automaticPriceListAcceptance(browser) {
     const panel = page.locator('[data-testid="price-list-review-confirmation"]');
     await panel.waitFor({ timeout: 25_000 });
     await panel.getByRole('heading', { name: 'קבלת קליטת מחירון' }).waitFor({ timeout: 25_000 });
+    assert.equal(await page.locator('[data-testid="document-review-proposals"]').count(), 0,
+      'the generic interpretation panels still precede the price-list result');
+    assert.equal(await page.locator('[data-testid="document-export-preview"]').count(), 0,
+      'the unrelated export panel is still shown for a price list');
+    assert.equal(await page.getByRole('heading', { name: /הערות והחלטות|כללים שהופעלו/ }).count(), 0,
+      'empty technical review cards are still shown for a price list');
     const body = await panel.innerText();
     assert.match(body, /2 שורות נקלטו/, 'automatic price-list receipt did not report two accepted rows');
     assert.match(body, /1 שורות ממתינות/, 'automatic price-list receipt did not report one waiting row');
@@ -2051,6 +2060,12 @@ async function automaticPriceListAcceptance(browser) {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(250);
+    const [mobileResultBox, mobileSourceBox] = await Promise.all([
+      panel.boundingBox(),
+      page.locator('[data-testid="document-source-viewer"]').boundingBox(),
+    ]);
+    assert(mobileResultBox && mobileSourceBox && mobileResultBox.y < mobileSourceBox.y,
+      'the original document still appears before the latest price-list result on mobile');
     await auditAccessibility(page, 'ocr-price-list/390');
     await page.screenshot({ path: path.join(outDir, 'ocr-price-list-partial-390.png'), fullPage: true });
     report.screenshots.push('ocr-price-list-partial-390.png');

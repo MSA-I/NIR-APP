@@ -56,6 +56,8 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
     }
   }
 
+  if (!selected) return null;
+
   return (
     <section
       ref={sectionRef}
@@ -72,10 +74,7 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
         <FileSpreadsheet className="text-action" size={24} aria-hidden="true" />
       </div>
 
-      {!selected ? (
-        <Note tone="idle" className="mt-4">אין תבנית ייצוא פעילה וזמינה למסמך הזה.</Note>
-      ) : (
-        <>
+      <>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="min-w-0">
               <span className="label">התבנית שנבחרה לפי הקדימות המאושרת</span>
@@ -124,8 +123,7 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
               {result.rows.length > 100 && <p className="mt-2 text-sm text-ink-muted">מוצגות <span className="num">100</span> מתוך <span className="num">{result.rows.length}</span> שורות בתצוגה המקדימה בלבד.</p>}
             </div>
           )}
-        </>
-      )}
+      </>
     </section>
   );
 }

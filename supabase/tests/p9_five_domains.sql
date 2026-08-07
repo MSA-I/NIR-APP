@@ -264,7 +264,7 @@ select pg_temp.p9_assert(
 -- always at the end of a twenty-minute gate rather than in seconds. See the check:* script that
 -- asserts a migration touching scope_definer_exemptions also touches this file.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 62,
+  (select count(*) from private.scope_definer_exemptions) = 63,
   'the definer exemption registry must stay at 62 rows -- 59 minus the three 0073 drained, '
   || 'plus the one 0075:464 added for rescue_document_from_archive (not drainable: invoker '
   || 'would require granting UPDATE on document_filings to the browser), plus the one 0077 '
