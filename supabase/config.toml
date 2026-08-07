@@ -62,8 +62,9 @@ inspector_port = 55483
 [functions.document-processing]
 verify_jwt = false
 
+# Browser JWTs are validated inside the handler; cron uses a separate narrow shared secret.
 [functions.interpret-document]
-verify_jwt = true
+verify_jwt = false
 
 [functions.submit-price-list]
 verify_jwt = true

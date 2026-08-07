@@ -5,8 +5,8 @@ import type { Role } from '../../lib/types';
 import { toHebrewError } from '../../lib/errors';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../auth/AuthContext';
-import { Note } from '../ui';
-import type { ReviewSnapshot } from './model';
+import { ConfirmDialog, Note } from '../ui';
+import { FILING_REASON_LABELS, type ReviewSnapshot } from './model';
 
 interface PriceListReviewConfirmationProps {
   snapshot: ReviewSnapshot;
@@ -145,13 +145,15 @@ export function PriceListReviewConfirmation({
 }: PriceListReviewConfirmationProps) {
   const interpretation = snapshot.interpretation;
   const lineItems = interpretation?.payload.line_items ?? [];
+  const autoDecision = snapshot.priceListDecision;
+  const autoLines = new Map(snapshot.priceListLines.map((line) => [line.line_index, line]));
   const ownsDocument = Boolean(
     snapshot.document
     && snapshot.document.uploaded_by === actorId
     && (role === 'owner' || role === 'office' || role === 'supplier'),
   );
   const { profile } = useAuth();
-  // Product creation is a staff act (products RLS); the supplier role matches existing items only.
+  // Manual recovery stays a staff act; the trusted automatic command may create a keyed product.
   const staffCanCreate = role === 'owner' || role === 'office';
   const [drafts, setDrafts] = useState(() => emptyDrafts(lineItems.length));
   const [newProductFor, setNewProductFor] = useState<number | null>(null);
@@ -175,10 +177,13 @@ export function PriceListReviewConfirmation({
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [recoveryRevision, setRecoveryRevision] = useState(0);
+  const [revertOpen, setRevertOpen] = useState(false);
+  const [revertBusy, setRevertBusy] = useState(false);
   const payloadMatchesCurrent = attemptedPayload?.documentId === snapshot.documentId
     && attemptedPayload.interpretationId === interpretation?.id;
   const canStart = ownsDocument
     && snapshot.job?.status === 'review'
+    && !autoDecision?.submission_id
     && !attemptedPayload
     && !receipt;
   const canReplay = ownsDocument
@@ -249,7 +254,9 @@ export function PriceListReviewConfirmation({
 
   useEffect(() => {
     let cancelled = false;
-    if (!interpretation || !ownsDocument || snapshot.job?.status !== 'completed' || receipt) {
+    if (!interpretation || !ownsDocument
+        || (snapshot.job?.status !== 'completed' && !autoDecision?.submission_id)
+        || receipt) {
       return () => { cancelled = true; };
     }
     setRecoveryLoading(true);
@@ -264,7 +271,14 @@ export function PriceListReviewConfirmation({
       if (!cancelled) setRecoveryLoading(false);
     });
     return () => { cancelled = true; };
-  }, [interpretation?.id, ownsDocument, receipt, recoveryRevision, snapshot.job?.status]);
+  }, [
+    autoDecision?.submission_id,
+    interpretation?.id,
+    ownsDocument,
+    receipt,
+    recoveryRevision,
+    snapshot.job?.status,
+  ]);
 
   if (!interpretation) return null;
   const currentInterpretation = interpretation;
@@ -316,6 +330,23 @@ export function PriceListReviewConfirmation({
     } catch {
       return 'failed';
     }
+  }
+
+  async function revertAutoIntake(reason: string) {
+    if (!autoDecision) return;
+    setRevertBusy(true);
+    setError(null);
+    const result = await supabase.rpc('revert_price_list_auto_action', {
+      p_decision_id: autoDecision.id,
+      p_reason: reason.trim(),
+    });
+    setRevertBusy(false);
+    if (result.error) {
+      setError(toHebrewError(result.error.message));
+      return;
+    }
+    setRevertOpen(false);
+    await onRefetch();
   }
 
   async function submitPayload(payload: ConfirmPayload) {
@@ -408,7 +439,7 @@ export function PriceListReviewConfirmation({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="price-list-review-title" className="section-title">אישור מחירון מפירוש המסמך</h2>
-          <p className="mt-1 text-sm text-ink-muted">כל שורה דורשת בחירה מפורשת במוצר ובמחיר. האישור עצמו לעולם אינו יוצר מוצרים — מוצר חדש נוצר רק בפעולה מפורשת שלך משורת המסמך.</p>
+          <p className="mt-1 text-sm text-ink-muted">בקליטה אוטומטית, שורה עם שם ומק״ט או ברקוד יכולה ליצור מוצר חדש. שורה שלא הוכרעה נשארת כאן לאישור מפורש.</p>
         </div>
         <span className={receipt ? 'badge-done' : 'badge-await'}>{receipt ? 'נקלט' : 'ממתין לאישור'}</span>
       </div>
@@ -423,6 +454,43 @@ export function PriceListReviewConfirmation({
           <dd className="num mt-1 text-ink-body">{lineItems.length}</dd>
         </div>
       </dl>
+
+      {autoDecision && (
+        <div className="mt-4 rounded-lg border border-line bg-surface-sunken p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-semibold text-ink-body">תוצאת הקליטה האוטומטית</h3>
+            <span className={autoDecision.reverted_at
+              ? 'badge-idle'
+              : autoDecision.submission_id ? 'badge-done' : 'badge-await'}>
+              {autoDecision.reverted_at
+                ? 'בוטלה'
+                : autoDecision.outcome === 'auto_applied'
+                  ? 'נקלט במלואו'
+                  : autoDecision.outcome === 'partially_applied'
+                    ? 'נקלט חלקית'
+                    : 'ממתין לבדיקה'}
+            </span>
+          </div>
+          <p className="mt-2 text-sm text-ink-body">
+            <span className="num">{autoDecision.accepted_count}</span> שורות נקלטו ·{' '}
+            <span className="num">{autoDecision.waiting_count}</span> שורות ממתינות ·{' '}
+            <span className="num">{autoDecision.created_product_count}</span> מוצרים חדשים נוצרו
+          </p>
+          {autoDecision.reason_code && FILING_REASON_LABELS[autoDecision.reason_code] && (
+            <p className="mt-2 text-sm text-ink-muted">
+              {FILING_REASON_LABELS[autoDecision.reason_code]}
+            </p>
+          )}
+          {!autoDecision.reverted_at && autoDecision.submission_id
+            && (role === 'owner' || role === 'office') && (
+            <div className="mt-3 flex justify-end">
+              <button type="button" className="btn-danger" onClick={() => setRevertOpen(true)}>
+                ביטול הקליטה האוטומטית
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {recoveryLoading && !receipt && (
         <Note tone="info" role="status" className="mt-4">
@@ -469,11 +537,21 @@ export function PriceListReviewConfirmation({
         {lineItems.length === 0 && <p className="text-sm text-ink-muted">לא זוהו שורות מחיר לאישור.</p>}
         {lineItems.map((item, index) => {
           const draft = drafts[index] ?? emptyDrafts(1)[0];
+          const autoLine = autoLines.get(index);
           return (
             <article key={`${item.source_row ?? 'none'}-${index}`} className="rounded-lg border border-line bg-surface p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold text-ink-body">שורה <span className="num">{index + 1}</span></h3>
-                <span className="text-xs text-ink-muted">שורת מקור <span className="num">{item.source_row ?? '—'}</span></span>
+                <div className="flex items-center gap-2">
+                  {autoLine && (
+                    <span className={autoLine.outcome === 'applied' ? 'badge-done' : 'badge-await'}>
+                      {autoLine.outcome === 'applied'
+                        ? autoLine.product_created ? 'מוצר חדש נוצר ונקלט' : 'נקלטה אוטומטית'
+                        : 'ממתינה'}
+                    </span>
+                  )}
+                  <span className="text-xs text-ink-muted">שורת מקור <span className="num">{item.source_row ?? '—'}</span></span>
+                </div>
               </div>
               <dl className="mt-3 grid gap-2 sm:grid-cols-2">
                 {Object.entries(item.values).map(([key, value]) => (
@@ -483,6 +561,13 @@ export function PriceListReviewConfirmation({
                   </div>
                 ))}
               </dl>
+
+              {autoLine?.reason_code && (
+                <Note tone="await" className="mt-3">
+                  {FILING_REASON_LABELS[autoLine.reason_code]
+                    ?? 'השורה ממתינה לבדיקה ידנית.'}
+                </Note>
+              )}
 
               {showControls && (
                 <div className="mt-3 border-t border-line pt-3">
@@ -587,6 +672,18 @@ export function PriceListReviewConfirmation({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={revertOpen}
+        busy={revertBusy}
+        danger
+        requireReason
+        title="ביטול קליטת המחירון האוטומטית"
+        message="המחירים יוחזרו בפעולת פיצוי מתועדת. אם מחיר השתנה מאז הקליטה, הביטול ייחסם כדי לא לדרוס שינוי מאוחר."
+        confirmLabel="ביטול הקליטה"
+        onClose={() => setRevertOpen(false)}
+        onConfirm={(reason) => void revertAutoIntake(reason ?? '')}
+      />
     </section>
   );
 }

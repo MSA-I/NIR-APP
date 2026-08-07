@@ -30,6 +30,7 @@ $functionsEnvPath = Join-Path $repoRoot "supabase\functions\.env"
 $functionsEnvCreated = $false
 $ocrWorkerToken = "quality-$([guid]::NewGuid().ToString('N'))"
 $pushFunctionSecret = "quality-$([guid]::NewGuid().ToString('N'))"
+$interpretCronSecret = "quality-$([guid]::NewGuid().ToString('N'))"
 $cleanupPhase = $false
 $credentialSeed = $null
 $ocrBrowserFixtureCleanupRequired = $false
@@ -609,11 +610,12 @@ function Test-AbandonedFunctionsEnvironment([string]$Path) {
     $separator = $line.IndexOf("=")
     if ($separator -gt 0) { $values[$line.Substring(0, $separator)] = $line.Substring($separator + 1) }
   }
-  return ($values.Count -eq 7 -and
+  return ($values.Count -eq 8 -and
     $values["OPENAI_API_KEY"] -eq "local-provider-mock-not-sent" -and
     $values["APP_BASE_URL"] -eq "http://127.0.0.1:5199" -and
     $values["VAPID_SUBJECT"] -eq "mailto:quality-local@example.test" -and
     $values["OCR_WORKER_TOKEN"] -match '^quality-[0-9a-f]{32}$' -and
+    $values["INTERPRET_DOCUMENT_CRON_SECRET"] -match '^quality-[0-9a-f]{32}$' -and
     $values["PUSH_FN_SECRET"] -match '^quality-[0-9a-f]{32}$')
 }
 
@@ -636,6 +638,7 @@ function New-LocalFunctionsEnvironment {
   $vapidKeys = New-LocalVapidKeys
   $lines = @(
     "OCR_WORKER_TOKEN=$ocrWorkerToken",
+    "INTERPRET_DOCUMENT_CRON_SECRET=$interpretCronSecret",
     "OPENAI_API_KEY=local-provider-mock-not-sent",
     "APP_BASE_URL=http://127.0.0.1:5199",
     "PUSH_FN_SECRET=$pushFunctionSecret",
@@ -835,11 +838,14 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\migrations\0050_document_type_review_decisions.sql",
     "supabase\migrations\0051_document_kind_follows_review.sql",
     "supabase\migrations\0052_document_type_correction.sql",
+    "supabase\migrations\0080_server_price_submission_actor.sql",
+    "supabase\migrations\0081_automatic_interpretation_and_price_list_intake.sql",
     "supabase\tests\smart_document_processing.sql",
     "supabase\tests\document_learning.sql",
     "supabase\tests\document_export_templates.sql",
     "supabase\tests\p1_price_submissions.sql",
     "supabase\tests\p1_price_submissions_concurrency.sql",
+    "supabase\tests\p15_automatic_price_list_intake.sql",
     "supabase\functions\document-processing\index.ts",
     "supabase\functions\interpret-document\index.ts",
     "supabase\functions\interpret-document\core.test.ts",
@@ -859,7 +865,7 @@ function Assert-OcrPrerequisites([string]$Config) {
   }
   $functionJwt = @{
     "document-processing" = "false"
-    "interpret-document" = "true"
+    "interpret-document" = "false"
     "submit-price-list" = "true"
     "send-push" = "false"
     "outbox-worker" = "false"
@@ -1018,6 +1024,7 @@ try {
     Invoke-SqlTest "supabase\tests\p11_document_filing.sql" "Archive filing target, filing ledger, reasoned rescue and the storage read path"
     Invoke-SqlTest "supabase\tests\p13_document_autonomy_config.sql" "Autonomy default-off, the reasoned platform write path and the uncalibrated threshold floor"
     Invoke-SqlTest "supabase\tests\p14_apply_interpretation.sql" "Machine-written invoices: the switch, min(type,supplier) confidence, idempotency and the untouched order"
+    Invoke-SqlTest "supabase\tests\p15_automatic_price_list_intake.sql" "Automatic price lists: default-off, ambiguity, partial intake, idempotency and reasoned reversal"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"

@@ -45,5 +45,8 @@ describe('the autonomy switch is reachable from הגדרות, and only by someon
     expect(panel).toMatch(/לא כוילה|לא כויל/);
     // The reason is structural, not optional: the command refuses without one.
     expect(panel).toContain('requireReason');
+    expect(panel).toContain("key: 'document.interpretation'");
+    expect(panel).toContain("key: 'price_list.intake'");
+    expect(panel).toContain('autonomy-policy-');
   });
 });

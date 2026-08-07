@@ -1,28 +1,26 @@
 import { useId, useState } from 'react';
-import { BrainCircuit, Loader2 } from 'lucide-react';
+import { BrainCircuit, ListChecks, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
 import { ConfirmDialog, ErrorNote, Note, useToast } from './ui';
 
-/**
- * The only caller of `platform_set_autonomy_policy` (0076).
- *
- * Until this panel existed the command had none: the switch that decides whether a model may
- * write a financial record without a human could be moved only by hand-written SQL against the
- * database. That is not a safeguard, it is an absence — the reasoned, audited path existed and
- * nothing could reach it, which left the only *practical* route a direct write that skips the
- * reason and the audit row entirely.
- *
- * SCOPE, stated because the screen must not imply more than it can do: the command accepts any
- * `p_org_id`, but `org_autonomy_policies` is readable only through `org_id = auth_org()`
- * (0076:200-201) and `evaluate_autonomy_policy` resolves through `auth_org()` too. So a platform
- * operator can *read* only their own organization's rule. Rather than render a toggle that cannot
- * show its own state for other tenants — a control that claims a fact it has not got — this panel
- * is deliberately scoped to the operating organization and says so. Configuring a different
- * tenant needs a reader RPC that does not exist yet (DEBT-REGISTER §22).
- */
-const POLICY_KEY = 'document.interpretation';
+const POLICIES = [
+  {
+    key: 'document.interpretation',
+    title: 'יצירת חשבוניות אוטומטית',
+    description: 'מעל הסף, חשבונית מזוהה נוצרת ומקושרת בלי אישור אדם.',
+    warning: 'כל מסמך ממשיך להיקרא ולהתפרש גם כשהמתג כבוי; רק הכתיבה הכספית נעצרת.',
+    icon: BrainCircuit,
+  },
+  {
+    key: 'price_list.intake',
+    title: 'קליטת מחירונים אוטומטית',
+    description: 'מעל הסף, שורות עם מק״ט או ברקוד חד־משמעיים נקלטות; השאר ממתינות.',
+    warning: 'שם מוצר לעולם אינו מפתח התאמה ומוצר חדש לעולם אינו נוצר אוטומטית.',
+    icon: ListChecks,
+  },
+] as const;
 
 interface AutonomyPolicy {
   policy_key: string;
@@ -32,116 +30,91 @@ interface AutonomyPolicy {
   kill_switch: boolean;
 }
 
-export function AutonomyPolicyPanel({ orgId, orgName }: { orgId: string; orgName: string }) {
+function PolicyCard({
+  policy,
+  definition,
+  orgId,
+  refetch,
+}: {
+  policy: AutonomyPolicy;
+  definition: typeof POLICIES[number];
+  orgId: string;
+  refetch: () => Promise<unknown>;
+}) {
   const toast = useToast();
   const thresholdId = useId();
+  const [threshold, setThreshold] = useState('');
   const [pendingEnable, setPendingEnable] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
-
-  const { data, loading, error, refetch } = useQuery(async () => {
-    const rows = unwrap(await supabase.rpc('evaluate_autonomy_policy', { p_policy_key: POLICY_KEY })) as AutonomyPolicy[];
-    return rows[0] ?? null;
-  });
-
-  // The stored threshold when there is one; otherwise the field starts at the documented floor
-  // rather than empty, because an empty number input submits NaN and the command answers that
-  // with `autonomy_policy_invalid` — a refusal the operator did not earn.
-  const [threshold, setThreshold] = useState<string>('');
-  const effectiveThreshold = threshold || (data?.min_confidence != null ? String(data.min_confidence) : '0.900');
+  const effectiveThreshold = threshold || String(policy.min_confidence ?? '0.900');
+  const Icon = definition.icon;
 
   async function apply(enable: boolean, reason: string) {
     setBusy(true);
-    const res = await supabase.rpc('platform_set_autonomy_policy', {
+    const result = await supabase.rpc('platform_set_autonomy_policy', {
       p_org_id: orgId,
-      p_policy_key: POLICY_KEY,
+      p_policy_key: definition.key,
       p_autonomy_enabled: enable,
       p_min_confidence: Number(effectiveThreshold),
       p_reason: reason.trim(),
     });
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (result.error) {
+      toast(toHebrewError(result.error.message), 'error');
+      return;
+    }
     setPendingEnable(null);
-    toast(enable ? 'האוטונומיה הופעלה — הפעולה נרשמה ביומן הביקורת' : 'האוטונומיה כובתה');
+    toast(enable ? 'המדיניות הופעלה ונרשמה ביומן הביקורת' : 'המדיניות כובתה');
     void refetch();
   }
 
-  if (loading) return <div className="card card-pad text-sm text-ink-muted">טוען את מדיניות האוטונומיה…</div>;
-  if (error) return <ErrorNote message={error} />;
-  if (!data) return <ErrorNote message="מדיניות האוטונומיה אינה זמינה." />;
-
-  const on = data.autonomy_enabled;
-
   return (
-    <section className="card card-pad space-y-4" data-testid="autonomy-policy-panel">
+    <article className="card card-pad space-y-4" data-testid={`autonomy-policy-${definition.key}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="section-title flex items-center gap-2">
-            <BrainCircuit size={18} aria-hidden="true" /> אוטונומיית מסמכים
-          </h2>
-          <p className="mt-1 text-sm text-ink-muted">{orgName}</p>
-        </div>
-        <span className={on ? 'badge-alert' : 'badge-idle'}>{on ? 'מופעלת' : 'כבויה'}</span>
+        <h3 className="section-title flex items-center gap-2">
+          <Icon size={18} aria-hidden="true" /> {definition.title}
+        </h3>
+        <span className={policy.autonomy_enabled ? 'badge-alert' : 'badge-idle'}>
+          {policy.autonomy_enabled ? 'מופעלת' : 'כבויה'}
+        </span>
       </div>
 
-      <p className="text-sm text-ink-body">
-        כשהמתג <strong>כבוי</strong>, המערכת קוראת את המסמך, מפרשת אותו ומציגה הצעה — <strong>ואדם מכריע</strong>.
-        כשהוא <strong>מופעל</strong>, מעל סף הביטחון היא יוצרת את החשבונית בעצמה, מקשרת ספק והזמנה, וכותבת
-        את השיוך — <strong>בלי אישור אדם</strong>.
-      </p>
-
-      {/* The number that permits a machine to write money is a documented guess, and the screen
-          that moves it is the one place that must not let a reader assume otherwise. */}
-      <Note tone={on ? 'await' : 'info'}>
-        סף הביטחון <span className="num">0.900</span> הוא <strong>ברירת מחדל מתועדת שלא כוילה</strong> מול מסמכים
-        אמיתיים (OPEN-DECISIONS ‏#109). הוא חל גם על זיהוי סוג המסמך וגם על התאמת הספק. אפשר רק להחמיר אותו,
-        לעולם לא להקל.
+      <p className="text-sm text-ink-body">{definition.description}</p>
+      <Note tone={policy.autonomy_enabled ? 'await' : 'info'}>
+        סף <span className="num">0.900</span> הוא ברירת מחדל שלא כוילה מול 50 מסמכים אמיתיים.
+        אפשר רק להחמיר אותו. {definition.warning}
       </Note>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label className="label" htmlFor={thresholdId}>סף ביטחון מזערי</label>
-          <input
-            id={thresholdId}
-            className="input num"
-            type="number"
-            min="0.9"
-            max="1"
-            step="0.005"
-            dir="ltr"
-            value={effectiveThreshold}
-            onChange={(event) => setThreshold(event.target.value)}
-          />
-        </div>
-        <dl className="grid content-end gap-1 text-sm">
-          <div className="flex justify-between gap-2">
-            <dt className="text-ink-muted">הוגדר לארגון</dt>
-            <dd className="text-ink-body">{data.configured ? 'כן' : 'לא — פועל לפי ברירת המחדל'}</dd>
-          </div>
-          <div className="flex justify-between gap-2">
-            <dt className="text-ink-muted">סף פעיל</dt>
-            <dd className="num text-ink-body">{data.min_confidence ?? '—'}</dd>
-          </div>
-        </dl>
-      </div>
+      <label>
+        <span className="label">סף ביטחון מזערי</span>
+        <input
+          id={thresholdId}
+          className="input num"
+          type="number"
+          min="0.9"
+          max="1"
+          step="0.005"
+          dir="ltr"
+          value={effectiveThreshold}
+          onChange={(event) => setThreshold(event.target.value)}
+        />
+      </label>
 
-      {data.kill_switch && (
+      {policy.kill_switch && (
         <Note tone="alert" role="alert">
-          מתג החירום הכללי פעיל: האוטונומיה מושבתת בכל הדיירים, ושינוי כאן לא ידליק אותה.
+          מתג החירום הכללי פעיל; שינוי כאן לא יפעיל את המדיניות.
         </Note>
       )}
 
-      <div className="flex flex-wrap justify-end gap-2">
-        {on && (
-          <button className="btn-secondary" disabled={busy} onClick={() => setPendingEnable(false)}>
-            כיבוי האוטונומיה
-          </button>
-        )}
-        {!on && (
-          <button className="btn-danger flex items-center gap-1.5" disabled={busy || data.kill_switch} onClick={() => setPendingEnable(true)}>
-            {busy ? <Loader2 className="animate-spin" size={17} aria-hidden="true" /> : null}
-            הפעלת האוטונומיה
-          </button>
-        )}
+      <div className="flex justify-end">
+        <button
+          className={policy.autonomy_enabled ? 'btn-secondary' : 'btn-danger'}
+          disabled={busy || (!policy.autonomy_enabled && policy.kill_switch)}
+          onClick={() => setPendingEnable(!policy.autonomy_enabled)}
+        >
+          {busy && <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" />}
+          {policy.autonomy_enabled ? 'כיבוי' : 'הפעלה'}
+        </button>
       </div>
 
       <ConfirmDialog
@@ -149,16 +122,52 @@ export function AutonomyPolicyPanel({ orgId, orgName }: { orgId: string; orgName
         busy={busy}
         danger={pendingEnable === true}
         requireReason
-        title={pendingEnable ? 'הפעלת כתיבה אוטומטית של רשומות כספיות' : 'כיבוי האוטונומיה'}
-        message={
-          pendingEnable
-            ? `מרגע האישור, מסמך שהמערכת מזהה בביטחון של ${effectiveThreshold} ומעלה ייצור חשבונית חיה בלי שאדם יאשר אותה. הסף לא כויל מול מסמכים אמיתיים. כל פעולה אוטומטית ניתנת לביטול מנומק, ונרשמת ביומן הביקורת.`
-            : 'המערכת תמשיך לקרוא ולהציע, ואדם יכריע בכל מסמך. רשומות שכבר נוצרו אוטומטית אינן מבוטלות בפעולה הזו.'
-        }
+        title={pendingEnable ? `הפעלת ${definition.title}` : `כיבוי ${definition.title}`}
+        message={pendingEnable
+          ? `מעל סף ${effectiveThreshold} המערכת תפעל בלי אישור אדם. הסף טרם כויל; כל פעולה נרשמת וניתנת לביטול מנומק.`
+          : 'המערכת תמשיך לקרוא ולהציע, אך לא תכתוב פעולה חדשה. פעולות קודמות אינן מתבטלות.'}
         confirmLabel={pendingEnable ? 'הפעלה' : 'כיבוי'}
         onClose={() => setPendingEnable(null)}
-        onConfirm={(reason) => { if (pendingEnable !== null) void apply(pendingEnable, reason ?? ''); }}
+        onConfirm={(reason) => {
+          if (pendingEnable !== null) void apply(pendingEnable, reason ?? '');
+        }}
       />
+    </article>
+  );
+}
+
+export function AutonomyPolicyPanel({ orgId, orgName }: { orgId: string; orgName: string }) {
+  const { data, loading, error, refetch } = useQuery(async () => {
+    const rows = await Promise.all(POLICIES.map(async ({ key }) => {
+      const result = await supabase.rpc('evaluate_autonomy_policy', { p_policy_key: key });
+      return (unwrap(result) as AutonomyPolicy[])[0] ?? null;
+    }));
+    return rows;
+  });
+
+  if (loading) return <div className="card card-pad text-sm text-ink-muted">טוען את מדיניות האוטונומיה…</div>;
+  if (error) return <ErrorNote message={error} />;
+  if (!data || data.some((policy) => !policy)) {
+    return <ErrorNote message="מדיניות האוטונומיה אינה זמינה." />;
+  }
+
+  return (
+    <section className="space-y-4" data-testid="autonomy-policy-panel">
+      <div>
+        <h2 className="section-title">אוטונומיית מסמכים</h2>
+        <p className="mt-1 text-sm text-ink-muted">{orgName}</p>
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {POLICIES.map((definition, index) => (
+          <PolicyCard
+            key={definition.key}
+            policy={data[index]!}
+            definition={definition}
+            orgId={orgId}
+            refetch={refetch}
+          />
+        ))}
+      </div>
     </section>
   );
 }

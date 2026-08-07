@@ -349,6 +349,46 @@ export interface DocumentFiling {
   reason_code: string | null;
 }
 
+export interface PriceListInterpretationDecision {
+  id: string;
+  org_id: string;
+  document_id: string;
+  job_id: string;
+  interpretation_id: string;
+  actor_id: string;
+  supplier_id: string | null;
+  submission_id: string | null;
+  outcome: 'queued_for_review' | 'partially_applied' | 'auto_applied';
+  reason_code: string | null;
+  decision_confidence: number | null;
+  accepted_count: number;
+  waiting_count: number;
+  created_product_count: number;
+  created_at: string;
+  reverted_at: string | null;
+  reverted_by: string | null;
+  reverted_reason: string | null;
+}
+
+export interface PriceListInterpretationLine {
+  id: string;
+  org_id: string;
+  decision_id: string;
+  document_id: string;
+  interpretation_id: string;
+  line_index: number;
+  source_row: number | null;
+  outcome: 'applied' | 'waiting';
+  reason_code: string | null;
+  product_id: string | null;
+  supplier_product_id: string | null;
+  sku: string | null;
+  barcode: string | null;
+  unit_price: number | null;
+  product_created: boolean;
+  created_at: string;
+}
+
 export interface DocumentFeedback {
   id: string;
   org_id: string;
@@ -424,6 +464,8 @@ export interface DocumentProcessingSnapshot {
   reviewCorrections: DocumentReviewCorrection[];
   typeReviewDecisions: DocumentTypeReviewDecision[];
   filings: DocumentFiling[];
+  priceListDecision: PriceListInterpretationDecision | null;
+  priceListLines: PriceListInterpretationLine[];
   feedback: DocumentFeedback[];
   exportTemplates: DocumentExportTemplateRow[];
   exportTemplateVersions: DocumentExportTemplateVersion[];
@@ -464,6 +506,8 @@ function createSnapshot(documentId: string): DocumentProcessingSnapshot {
     reviewCorrections: [],
     typeReviewDecisions: [],
     filings: [],
+    priceListDecision: null,
+    priceListLines: [],
     feedback: [],
     exportTemplates: [],
     exportTemplateVersions: [],
@@ -603,14 +647,20 @@ async function loadProcessing(
 
   const currentInterpretationIds = Object.values(snapshots)
     .flatMap((snapshot) => snapshot.interpretation ? [snapshot.interpretation.id] : []);
-  const [annotations, ruleApplications, reviewCorrections, typeReviewDecisions, filings, feedback,
-    exports, exportTemplates] = await Promise.all([
+  const [annotations, ruleApplications, reviewCorrections, typeReviewDecisions, filings,
+    priceListDecisions, priceListLines, feedback, exports, exportTemplates] = await Promise.all([
     fetchByColumnIds<DocumentAnnotation>('document_annotations', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentRuleApplication>('document_rule_applications', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentReviewCorrection>('document_review_corrections', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentTypeReviewDecision>('document_type_review_decisions', 'interpretation_id', currentInterpretationIds),
     // decided_at, not created_at — the table has no created_at, and ordering by one 400s.
     fetchByColumnIds<DocumentFiling>('document_filings', 'interpretation_id', currentInterpretationIds, 'decided_at'),
+    fetchByColumnIds<PriceListInterpretationDecision>(
+      'price_list_interpretation_decisions', 'interpretation_id', currentInterpretationIds,
+    ),
+    fetchByColumnIds<PriceListInterpretationLine>(
+      'price_list_interpretation_lines', 'interpretation_id', currentInterpretationIds,
+    ),
     fetchByColumnIds<DocumentFeedback>('document_feedback', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentExportRow>('document_exports', 'interpretation_id', currentInterpretationIds),
     fetchAll<DocumentExportTemplateRow>((from, to) => supabase
@@ -653,6 +703,18 @@ async function loadProcessing(
   for (const filing of filings) {
     const snapshot = snapshots[filing.document_id];
     if (snapshot?.interpretation?.id === filing.interpretation_id) snapshot.filings.push(filing);
+  }
+  for (const decision of priceListDecisions) {
+    const snapshot = snapshots[decision.document_id];
+    if (snapshot?.interpretation?.id === decision.interpretation_id) {
+      snapshot.priceListDecision ??= decision;
+    }
+  }
+  for (const line of priceListLines) {
+    const snapshot = snapshots[line.document_id];
+    if (snapshot?.interpretation?.id === line.interpretation_id) {
+      snapshot.priceListLines.push(line);
+    }
   }
   const annotationById = new Map(annotations.map((annotation) => [annotation.id, annotation]));
   for (const item of feedback) {

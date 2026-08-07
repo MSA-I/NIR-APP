@@ -41,6 +41,7 @@ const OCR_REVIEW_DOCUMENT_ID = '97000000-0000-4000-8000-000000000004';
 const OCR_DELIVERY_DOCUMENT_ID = '97000000-0000-4000-8000-000000000005';
 const OCR_CREDIT_DOCUMENT_ID = '97000000-0000-4000-8000-000000000003';
 const OCR_PAYMENT_DOCUMENT_ID = '97000000-0000-4000-8000-000000000002';
+const OCR_PRICE_LIST_DOCUMENT_ID = '97000000-0000-4000-8000-000000000007';
 // [documentId, internal stage, what a person reads]. Task D1 collapsed seven pipeline stages into
 // four human states on the badge and kept the stages themselves on `data-stage`, so this fixture
 // now measures BOTH layers: the engineering state the database really holds, and the Hebrew a
@@ -2022,6 +2023,42 @@ async function documentOcrAcceptance(browser) {
   }
 }
 
+async function automaticPriceListAcceptance(browser) {
+  const context = await browser.newContext({
+    locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 1440, height: 1000 },
+  });
+  const page = await context.newPage();
+  captureConsole(page, 'ocr-price-list-automatic');
+  try {
+    await login(page, 'owner');
+    await page.goto(`${baseURL}/documents/${OCR_PRICE_LIST_DOCUMENT_ID}/review`);
+    await settle(page);
+
+    const panel = page.locator('[data-testid="price-list-review-confirmation"]');
+    await panel.waitFor({ timeout: 25_000 });
+    await panel.getByRole('heading', { name: 'קבלת קליטת מחירון' }).waitFor({ timeout: 25_000 });
+    const body = await panel.innerText();
+    assert.match(body, /2 שורות נקלטו/, 'automatic price-list receipt did not report two accepted rows');
+    assert.match(body, /1 שורות ממתינות/, 'automatic price-list receipt did not report one waiting row');
+    assert.match(body, /1 מוצרים חדשים נוצרו/, 'automatic price-list receipt did not report the created product');
+    assert.match(body, /נקלטה אוטומטית/, 'the existing product row was not marked as automatically applied');
+    assert.match(body, /מוצר חדש נוצר ונקלט/, 'the keyed new product row was not marked as created');
+    assert.match(body, /לא נמצא מק״ט או ברקוד/, 'the unkeyed row did not explain why it is waiting');
+
+    await auditAccessibility(page, 'ocr-price-list/1440');
+    await page.screenshot({ path: path.join(outDir, 'ocr-price-list-partial-1440.png'), fullPage: true });
+    report.screenshots.push('ocr-price-list-partial-1440.png');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(250);
+    await auditAccessibility(page, 'ocr-price-list/390');
+    await page.screenshot({ path: path.join(outDir, 'ocr-price-list-partial-390.png'), fullPage: true });
+    report.screenshots.push('ocr-price-list-partial-390.png');
+  } finally {
+    await closeContext(context);
+  }
+}
+
 /* ===================== wave 9: the global-search type gate (0069) ===================== */
 
 // 'מאפ' matches two seeded suppliers ('מאפיית הלחם החם', 'מאפה זהב'), so an owner is guaranteed a
@@ -2638,6 +2675,7 @@ async function run(name, check) {
     await run('Push logout double failure', () => pushLogout(browser, 'double-failure', false, false));
     await run('Admin password and Clipboard state', () => adminState(browser));
     await run('OCR documents, review, status and export', () => documentOcrAcceptance(browser));
+    await run('automatic price list creates keyed products and leaves unsafe rows for review', () => automaticPriceListAcceptance(browser));
     await run('global search type gate: payer receives no forbidden types', () => searchTypeGate(browser));
     await run('navigation opens on the control centre and the archive is current alone', () => navigationOrderAndActiveState(browser));
     await run('documents speak human states and keep the numbers behind the disclosure', () => documentVocabulary(browser));

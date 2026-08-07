@@ -1,4 +1,4 @@
--- Disposable local acceptance fixture. The caller has already uploaded the six source
+-- Disposable local acceptance fixture. The caller has already uploaded the seven source
 -- objects and registered their documents through prepare-browser-fixture.cjs.
 \set ON_ERROR_STOP on
 
@@ -87,6 +87,54 @@ returns jsonb language sql immutable as $$
   )
 $$;
 
+create function pg_temp.ocr_price_list_payload()
+returns jsonb language sql immutable as $$
+  select jsonb_build_object(
+    'schema_version', '1',
+    'document_type', 'price_list',
+    'document_type_confidence', 0.99,
+    'supplier', jsonb_build_object(
+      'suggested_id', 'aa000000-0000-4000-8000-000000000008',
+      'suggested_name', 'משקאות אור בע״מ',
+      'confidence', 0.99,
+      'evidence_block_ids', jsonb_build_array('block-heading')
+    ),
+    'fields', '[]'::jsonb,
+    'line_items', jsonb_build_array(
+      jsonb_build_object(
+        'source_row', 1,
+        'values', jsonb_build_object(
+          'sku', 'OCR-BROWSER-EXISTING-20260807',
+          'product_name', 'מוצר קיים לבדיקת מחירון',
+          'unit', 'אריזה',
+          'unit_price', 12.50
+        ),
+        'evidence_block_ids', jsonb_build_array('block-total')
+      ),
+      jsonb_build_object(
+        'source_row', 2,
+        'values', jsonb_build_object(
+          'sku', 'OCR-BROWSER-NEW-20260807',
+          'barcode', '7290999000077',
+          'product_name', 'מיץ תפוזים חדש מהמחירון',
+          'unit', 'אריזה',
+          'unit_price', 18.75
+        ),
+        'evidence_block_ids', jsonb_build_array('block-total')
+      ),
+      jsonb_build_object(
+        'source_row', 3,
+        'values', jsonb_build_object(
+          'product_name', 'מוצר בלי מק״ט או ברקוד',
+          'unit_price', 7.00
+        ),
+        'evidence_block_ids', jsonb_build_array('block-total')
+      )
+    ),
+    'suggested_annotations', '[]'::jsonb
+  )
+$$;
+
 -- Six truthful stages: no job, queued, leased (displayed as processing), review,
 -- completed and failed.
 insert into public.document_processing_jobs (
@@ -136,6 +184,16 @@ select
   'fixture_ocr_timeout', 'חריגת זמן מקומית שנזרעה לבדיקת מצב כשל'
 from public.documents d where d.id = '97000000-0000-4000-8000-000000000006';
 
+insert into public.document_processing_jobs (
+  id, org_id, document_id, requested_by, status, input_checksum,
+  interpretation_actor_id, interpretation_started_at
+)
+select
+  '97100000-0000-4000-8000-000000000007', d.org_id, d.id, :'ocr_owner_id',
+  'review', public.smart_document_source_checksum(d.org_id, d.storage_path, d.mime_type, d.uploaded_by),
+  :'ocr_owner_id', now()
+from public.documents d where d.id = '97000000-0000-4000-8000-000000000007';
+
 insert into public.document_extractions (
   id, org_id, job_id, document_id, engine, model, model_version,
   input_checksum, contract_version, payload, duration_ms, resource_metadata
@@ -173,6 +231,67 @@ values
     'openai-fixture', 'gpt-local-contract-fixture', 'ocr-acceptance-v1', '1',
     pg_temp.ocr_interpretation_payload(), jsonb_build_object('fixture', true), 302
   );
+
+-- One real partial price-list decision: update an existing product, create one keyed product,
+-- and leave the unkeyed row waiting. This is intentionally outside the six gallery stage fixtures.
+insert into public.products (id, org_id, name, unit, sku)
+values (
+  '97700000-0000-4000-8000-000000000001',
+  '11111111-1111-4111-8111-111111111111',
+  'מוצר קיים לבדיקת מחירון', 'אריזה', 'OCR-BROWSER-PRODUCT-20260807'
+);
+
+insert into public.supplier_products (
+  id, org_id, supplier_id, product_id, current_price,
+  price_effective_date, available, supplier_sku
+) values (
+  '97800000-0000-4000-8000-000000000001',
+  '11111111-1111-4111-8111-111111111111',
+  'aa000000-0000-4000-8000-000000000008',
+  '97700000-0000-4000-8000-000000000001',
+  10, current_date - 30, true, 'OCR-BROWSER-EXISTING-20260807'
+);
+
+insert into public.document_extractions (
+  id, org_id, job_id, document_id, engine, model, model_version,
+  input_checksum, contract_version, payload, duration_ms, resource_metadata
+)
+select
+  '97200000-0000-4000-8000-000000000007'::uuid, j.org_id, j.id, j.document_id,
+  'private-fixture', 'ocr-acceptance-hebrew', '1.0.0', j.input_checksum, j.contract_version,
+  pg_temp.ocr_extraction_payload('מחירון ספק עם מוצר חדש'), 811,
+  jsonb_build_object('fixture', true, 'source', 'local-storage')
+from public.document_processing_jobs j where j.id = '97100000-0000-4000-8000-000000000007';
+
+insert into public.document_interpretations (
+  id, org_id, job_id, extraction_id, document_id, interpreted_for_user_id,
+  provider, model, prompt_version, schema_version, payload, usage, duration_ms
+)
+values (
+  '97300000-0000-4000-8000-000000000007', '11111111-1111-4111-8111-111111111111',
+  '97100000-0000-4000-8000-000000000007', '97200000-0000-4000-8000-000000000007',
+  '97000000-0000-4000-8000-000000000007', :'ocr_owner_id',
+  'openai-fixture', 'gpt-local-contract-fixture', 'interpret-document-v6', '1',
+  pg_temp.ocr_price_list_payload(), jsonb_build_object('fixture', true), 304
+);
+
+insert into public.org_autonomy_policies (
+  org_id, policy_key, autonomy_enabled, min_confidence
+) values (
+  '11111111-1111-4111-8111-111111111111', 'price_list.intake', true, 0.900
+)
+on conflict (org_id, policy_key) do update
+set autonomy_enabled = excluded.autonomy_enabled,
+    min_confidence = excluded.min_confidence;
+
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+select public.apply_price_list_interpretation(
+  '97100000-0000-4000-8000-000000000007',
+  '97300000-0000-4000-8000-000000000007',
+  null
+);
+reset role;
 
 -- An approved type decision on the review document. Without one the review screen never reaches
 -- the state where a classified invoice can be drafted, so the draft path would go unexercised.
@@ -351,6 +470,7 @@ do $$
 declare
   v_stage_count integer;
   v_column_count integer;
+  v_price_decision record;
 begin
   select count(*) into v_stage_count
   from (
@@ -379,6 +499,29 @@ begin
   end if;
   if v_column_count <> 3 then
     raise exception 'OCR browser fixture export does not contain three columns';
+  end if;
+
+  select outcome, accepted_count, waiting_count, created_product_count
+    into v_price_decision
+  from public.price_list_interpretation_decisions
+  where interpretation_id = '97300000-0000-4000-8000-000000000007';
+  if v_price_decision.outcome is distinct from 'partially_applied'
+     or v_price_decision.accepted_count is distinct from 2
+     or v_price_decision.waiting_count is distinct from 1
+     or v_price_decision.created_product_count is distinct from 1 then
+    raise exception 'OCR browser price-list fixture did not produce the expected 2/1/1 partial decision';
+  end if;
+  if not exists (
+    select 1 from public.products p
+    join public.supplier_products sp
+      on sp.org_id = p.org_id and sp.product_id = p.id
+    where p.org_id = '11111111-1111-4111-8111-111111111111'
+      and p.sku = 'OCR-BROWSER-NEW-20260807'
+      and p.name = 'מיץ תפוזים חדש מהמחירון'
+      and sp.supplier_id = 'aa000000-0000-4000-8000-000000000008'
+      and sp.current_price = 18.75
+  ) then
+    raise exception 'OCR browser price-list fixture did not create the keyed product and supplier price';
   end if;
 end
 $$;

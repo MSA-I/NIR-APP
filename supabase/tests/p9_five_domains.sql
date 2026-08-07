@@ -251,19 +251,28 @@ select pg_temp.p9_assert(
 -- command exists to enforce. Same remediation as its two siblings: pass the acting unit in once
 -- documents carries a meaningful unit_id.
 --
+-- 0080 adds the ungranted nine-argument price writer overload. It cannot be INVOKER because its
+-- sole purpose is to let the trusted command reuse the unchanged JWT-bound 0048 writer; it first
+-- proves that actor, document, job, interpretation and prepared intake are one tenant chain.
+-- 0081 adds two more: the ungranted cron claimant (returns only job ids from explicit immutable
+-- tenant chains), and apply_price_list_interpretation, which runs with the service key and thus
+-- has the same empty-auth_scopes constraint as 0077. Its tenant comes from tenant-composite
+-- document/interpretation keys before it may create a product or write a price.
+--
 -- The pin still moves only by an explicit edit here. A migration that adds an exemption and
 -- leaves this line alone fails, by design -- which it has now done on four consecutive waves,
 -- always at the end of a twenty-minute gate rather than in seconds. See the check:* script that
 -- asserts a migration touching scope_definer_exemptions also touches this file.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 59,
-  'the definer exemption registry must stay at 59 rows -- 59 minus the three 0073 drained, '
+  (select count(*) from private.scope_definer_exemptions) = 62,
+  'the definer exemption registry must stay at 62 rows -- 59 minus the three 0073 drained, '
   || 'plus the one 0075:464 added for rescue_document_from_archive (not drainable: invoker '
   || 'would require granting UPDATE on document_filings to the browser), plus the one 0077 '
   || 'added for apply_document_interpretation (not drainable: it runs with no user JWT, so '
   || 'auth_scopes() is empty and a scoped read would silently disable the decision layer), '
   || 'plus the one 0077 added for revert_document_auto_action (not drainable: invoker would '
-  || 'let a direct PATCH undo a machine-written financial record with no reason); '
+  || 'let a direct PATCH undo a machine-written financial record with no reason), plus the '
+  || 'three 0080/0081 trusted internal paths whose tenant is pinned by immutable composite keys; '
   || 'zero silent additions');
 
 select pg_temp.p9_assert(

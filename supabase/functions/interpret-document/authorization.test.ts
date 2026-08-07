@@ -1,7 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import {
   type ApplyDecision,
+  automaticInterpretationContextAllowed,
   applyInterpretationDecision,
+  applyPriceListInterpretationDecision,
   type DecisionRpcClient,
   resumeExistingInterpretation,
   type RpcBuilder,
@@ -370,6 +372,44 @@ Deno.test("the real client carries the bound into the request it issues", async 
   }
 });
 
+Deno.test("automatic interpretation derives one actor from the exact job and document chain", () => {
+  const value = context();
+  assert(automaticInterpretationContextAllowed(value.job, value.document));
+
+  value.job.requested_by = "99999999-9999-4999-8999-999999999999";
+  assertFalse(automaticInterpretationContextAllowed(value.job, value.document));
+});
+
+Deno.test("a price list reaches its separate bounded command", async () => {
+  const { client, calls, signals } = recordingClient({
+    data: {
+      outcome: "partially_applied",
+      accepted_count: 2,
+      waiting_count: 1,
+    },
+    error: null,
+  });
+  await applyPriceListInterpretationDecision(
+    client,
+    JOB,
+    INTERPRETATION,
+    ACTOR,
+  );
+  if (calls.length !== 1 || calls[0][0] !== "apply_price_list_interpretation") {
+    throw new Error(`unexpected price-list rpc calls: ${JSON.stringify(calls)}`);
+  }
+  const args = calls[0][1];
+  if (
+    args.p_job_id !== JOB || args.p_interpretation_id !== INTERPRETATION ||
+    args.p_actor_id !== ACTOR || Object.keys(args).length !== 3
+  ) {
+    throw new Error(`unexpected price-list rpc arguments: ${JSON.stringify(args)}`);
+  }
+  if (signals.length !== 1 || !(signals[0] instanceof AbortSignal)) {
+    throw new Error("the price-list decision was issued without an abort signal");
+  }
+});
+
 // ===== The wiring itself, not only the parts =====
 //
 // Every test above passes with the decision disconnected from the pipeline entirely. The handler
@@ -383,6 +423,7 @@ Deno.test("a saved interpretation is offered to the decision exactly once", asyn
   const persisted = await saveAndDecideInterpretation({
     admin: client,
     isSupplier: false,
+    isPriceList: false,
     jobId: JOB,
     actorId: ACTOR,
     args: { p_job_id: JOB },
@@ -401,20 +442,21 @@ Deno.test("a saved interpretation is offered to the decision exactly once", asyn
   }
 });
 
-Deno.test("a supplier price list is never offered to the decision", async () => {
+Deno.test("a supplier price list is offered to the price-list decision", async () => {
   const { client } = recordingClient({ data: INTERPRETATION, error: null });
   const { apply, calls } = recordingApply();
   await saveAndDecideInterpretation({
     admin: client,
     isSupplier: true,
+    isPriceList: true,
     jobId: JOB,
     actorId: ACTOR,
     args: { p_job_id: JOB },
     findExisting: () => Promise.resolve(null),
     apply,
   });
-  if (calls.length !== 0) {
-    throw new Error("a supplier price list reached the decision layer");
+  if (calls.length !== 1) {
+    throw new Error("a supplier price list did not reach the decision layer");
   }
 });
 
@@ -431,6 +473,7 @@ Deno.test("a save that failed but committed still reaches the decision", async (
   const persisted = await saveAndDecideInterpretation({
     admin: client,
     isSupplier: false,
+    isPriceList: false,
     jobId: JOB,
     actorId: ACTOR,
     args: { p_job_id: JOB },
@@ -446,7 +489,7 @@ Deno.test("a save that failed but committed still reaches the decision", async (
   }
 });
 
-Deno.test("a supplier save that failed but committed still stays out of the decision", async () => {
+Deno.test("a supplier save that failed but committed still reaches the price-list decision", async () => {
   const { client } = recordingClient({
     data: null,
     error: { message: "fetch failed" },
@@ -455,14 +498,15 @@ Deno.test("a supplier save that failed but committed still stays out of the deci
   await saveAndDecideInterpretation({
     admin: client,
     isSupplier: true,
+    isPriceList: true,
     jobId: JOB,
     actorId: ACTOR,
     args: { p_job_id: JOB },
     findExisting: () => Promise.resolve(SECOND_INTERPRETATION),
     apply,
   });
-  if (calls.length !== 0) {
-    throw new Error("a supplier price list reached the decision layer");
+  if (calls.length !== 1 || calls[0][1] !== SECOND_INTERPRETATION) {
+    throw new Error("a supplier price list did not reach the decision layer");
   }
 });
 
@@ -477,6 +521,7 @@ Deno.test("an interpretation that failed to save is never offered to the decisio
     await saveAndDecideInterpretation({
       admin: client,
       isSupplier: false,
+      isPriceList: false,
       jobId: JOB,
       actorId: ACTOR,
       args: { p_job_id: JOB },
@@ -498,6 +543,7 @@ Deno.test("a replay re-offers the decision, because nothing else ever will", asy
   const replayed = await resumeExistingInterpretation({
     admin: client,
     isSupplier: false,
+    isPriceList: false,
     jobId: JOB,
     actorId: ACTOR,
     context: {
@@ -516,20 +562,21 @@ Deno.test("a replay re-offers the decision, because nothing else ever will", asy
   }
 });
 
-Deno.test("a replay of a supplier price list stays out of the decision layer", async () => {
+Deno.test("a replay of a supplier price list re-offers the price-list decision", async () => {
   const { client } = recordingClient({ data: null, error: null });
   const { apply, calls } = recordingApply();
   const replayed = await resumeExistingInterpretation({
     admin: client,
     isSupplier: true,
+    isPriceList: true,
     jobId: JOB,
     actorId: ACTOR,
     context: { already_interpreted: true, interpretation_id: INTERPRETATION },
     apply,
   });
   if (replayed !== INTERPRETATION) throw new Error("the replay lost the id");
-  if (calls.length !== 0) {
-    throw new Error("a supplier replay reached the decision layer");
+  if (calls.length !== 1) {
+    throw new Error("a supplier replay did not reach the decision layer");
   }
 });
 
@@ -539,6 +586,7 @@ Deno.test("a first run is not a replay and decides nothing before the interpreta
   const replayed = await resumeExistingInterpretation({
     admin: client,
     isSupplier: false,
+    isPriceList: false,
     jobId: JOB,
     actorId: ACTOR,
     context: { already_interpreted: false },

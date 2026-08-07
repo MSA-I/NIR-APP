@@ -112,6 +112,7 @@ const LINE_ITEM_KEY_LABELS: Record<string, string> = {
   item_code: 'מק״ט',
   catalog_number: 'מק״ט',
   barcode: 'ברקוד',
+  product_name: 'שם מוצר',
   description: 'תיאור',
   name: 'תיאור',
   quantity: 'כמות',
@@ -582,6 +583,8 @@ export const FILING_REASON_LABELS: Record<string, string> = {
   // The one the owner actually hit, and the one most likely to look like a bug.
   not_an_invoice:
     'המערכת יוצרת חשבוניות בלבד. זהו מסמך מסוג אחר, ולכן הוא ממתין להכרעה שלך — גם בזיהוי מלא.',
+  not_a_price_list:
+    'המסמך אינו מחירון, ולכן לא בוצע עדכון מחירים אוטומטי.',
   supplier_unidentified:
     'הספק לא הותאם לספק קיים במערכת, ואין למה לשייך את הסכום. אפשר לבחור ספק או ליצור אחד חדש.',
   invoice_identity_missing:
@@ -598,6 +601,12 @@ export const FILING_REASON_LABELS: Record<string, string> = {
     'קיימת התנגשות בהקצאת תשלום, ולכן הפעולה נעצרה לבדיקה.',
   duplicate_invoice_number:
     'כבר קיימת חשבונית עם אותו מספר לאותו ספק. המערכת עצרה כדי שלא תיווצר כפילות.',
+  line_product_unmatched:
+    'לא נמצא מק״ט או ברקוד שמאפשר לזהות או ליצור את המוצר בבטחה, ולכן השורה ממתינה.',
+  line_product_ambiguous:
+    'המק״ט או הברקוד מתאימים ליותר ממוצר אחד. המערכת לא ניחשה והשורה ממתינה.',
+  line_price_unreadable:
+    'לא נקרא מחיר יחידה חיובי ותקין, ולכן השורה ממתינה לבדיקה.',
   already_decided:
     'למסמך הזה כבר יש הכרעה, ולכן האוטומציה לא פעלה שוב.',
 };

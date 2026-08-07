@@ -184,7 +184,7 @@ function corsFor(req: Request): Record<string, string> {
       ? origin
       : (allowed[0] ?? ""),
     "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, x-correlation-id",
+      "authorization, x-client-info, apikey, content-type, x-correlation-id, x-interpret-cron-secret",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     Vary: "Origin",
   };
@@ -393,28 +393,79 @@ export async function applyInterpretationDecision(
   }
 }
 
-// The supplier gate, in ONE place both call sites share rather than duplicated at each.
-//
-// The supplier price-list path is deliberately NOT offered to the decision layer. 0077 acts on
-// documents still in the manager's inbox, and a supplier price list is entity_type 'supplier'
-// before it ever reaches here -- supplierInterpretationContextAllowed demands exactly that -- so
-// the call could only return already_decided/document_already_filed. It also has its own
-// downstream (the price-submission bridge, 0048), which is where a price list is meant to land.
-export async function decideOnInterpretation(
+export function automaticInterpretationContextAllowed(
+  job: JobRow,
+  document: DocumentRow,
+): boolean {
+  return document.deleted_at === null && job.org_id === document.org_id &&
+    job.document_id === document.id && job.requested_by === document.uploaded_by;
+}
+
+export async function applyPriceListInterpretationDecision(
   admin: DecisionRpcClient,
-  isSupplier: boolean,
   jobId: string,
   interpretationId: string,
   actorId: string,
-  apply: ApplyDecision = applyInterpretationDecision,
 ): Promise<void> {
-  if (isSupplier) return;
-  await apply(admin, jobId, interpretationId, actorId);
+  try {
+    const applied = await admin.rpc("apply_price_list_interpretation", {
+      p_job_id: jobId,
+      p_interpretation_id: interpretationId,
+      p_actor_id: actorId,
+    }).abortSignal(AbortSignal.timeout(DECISION_TIMEOUT_MS));
+    if (applied.error) {
+      console.error(
+        "apply_price_list_interpretation failed",
+        jobId,
+        interpretationId,
+        applied.error.message,
+      );
+      return;
+    }
+    const verdict = applied.data && typeof applied.data === "object"
+      ? applied.data as Record<string, unknown>
+      : {};
+    console.log(
+      "apply_price_list_interpretation",
+      jobId,
+      interpretationId,
+      String(verdict.outcome ?? "unknown"),
+      String(verdict.reason_code ?? ""),
+      String(verdict.submission_id ?? ""),
+      String(verdict.accepted_count ?? ""),
+      String(verdict.waiting_count ?? ""),
+    );
+  } catch (error) {
+    console.error(
+      "apply_price_list_interpretation failed",
+      jobId,
+      interpretationId,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+// Route by the document's business kind, never by the uploader's role. A manager-uploaded price
+// list and a supplier-uploaded price list must reach the same financial command.
+export async function decideOnInterpretation(
+  admin: DecisionRpcClient,
+  isPriceList: boolean,
+  jobId: string,
+  interpretationId: string,
+  actorId: string,
+  apply?: ApplyDecision,
+): Promise<void> {
+  await (apply ?? (
+    isPriceList
+      ? applyPriceListInterpretationDecision
+      : applyInterpretationDecision
+  ))(admin, jobId, interpretationId, actorId);
 }
 
 export interface ResumeInterpretationOptions {
   admin: DecisionRpcClient;
   isSupplier: boolean;
+  isPriceList: boolean;
   jobId: string;
   actorId: string;
   context: { already_interpreted: boolean; interpretation_id?: string };
@@ -448,7 +499,7 @@ export async function resumeExistingInterpretation(
   if (!context.already_interpreted || !context.interpretation_id) return null;
   await decideOnInterpretation(
     options.admin,
-    options.isSupplier,
+    options.isPriceList,
     options.jobId,
     context.interpretation_id,
     options.actorId,
@@ -460,6 +511,7 @@ export async function resumeExistingInterpretation(
 export interface SaveAndDecideOptions {
   admin: DecisionRpcClient;
   isSupplier: boolean;
+  isPriceList: boolean;
   jobId: string;
   actorId: string;
   args: Record<string, unknown>;
@@ -515,7 +567,7 @@ export async function saveAndDecideInterpretation(
       // taking a second one.
       await decideOnInterpretation(
         admin,
-        isSupplier,
+        options.isPriceList,
         options.jobId,
         existingId,
         options.actorId,
@@ -528,7 +580,7 @@ export async function saveAndDecideInterpretation(
   const interpretationId = String(saved.data);
   await decideOnInterpretation(
     admin,
-    isSupplier,
+    options.isPriceList,
     options.jobId,
     interpretationId,
     options.actorId,
@@ -558,27 +610,40 @@ export async function handler(req: Request): Promise<Response> {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const providerKey = Deno.env.get("OPENAI_API_KEY");
+  const cronSecret = Deno.env.get("INTERPRET_DOCUMENT_CRON_SECRET");
   if (!url || !anonKey || !serviceKey || !providerKey) {
     return fail(cors, new EdgeError("service_unavailable", 500));
   }
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return fail(cors, new EdgeError("unauthenticated", 401));
-  }
-
-  const caller = createClient(url, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-    auth: { persistSession: false },
-  });
   const admin = createClient(url, serviceKey, {
     auth: { persistSession: false },
   });
-  const userResult = await caller.auth.getUser();
-  if (userResult.error || !userResult.data.user) {
-    return fail(cors, new EdgeError("unauthenticated", 401));
+
+  const cronHeader = req.headers.get("x-interpret-cron-secret");
+  const serviceMode = cronHeader !== null;
+  let actorId: string | null = null;
+  let job: JobRow | null = null;
+  let document: DocumentRow | null = null;
+
+  if (serviceMode) {
+    if (!cronSecret || cronHeader !== cronSecret) {
+      return fail(cors, new EdgeError("unauthenticated", 401));
+    }
+  } else {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return fail(cors, new EdgeError("unauthenticated", 401));
+    }
+    const caller = createClient(url, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    });
+    const userResult = await caller.auth.getUser();
+    if (userResult.error || !userResult.data.user) {
+      return fail(cors, new EdgeError("unauthenticated", 401));
+    }
+    actorId = userResult.data.user.id;
   }
-  const actorId = userResult.data.user.id;
 
   let body: InterpretRequest;
   try {
@@ -596,6 +661,36 @@ export async function handler(req: Request): Promise<Response> {
   ) {
     return fail(cors, new EdgeError("invalid_request", 400));
   }
+
+  if (serviceMode) {
+    const jobResult = await admin.from("document_processing_jobs")
+      .select(
+        "id,org_id,document_id,status,requested_by,input_checksum,contract_version",
+      )
+      .eq("id", jobId).maybeSingle();
+    if (jobResult.error) {
+      return fail(cors, new EdgeError("service_unavailable", 503));
+    }
+    job = jobResult.data as JobRow | null;
+    if (!job) return fail(cors, new EdgeError("job_unknown", 404));
+
+    const documentResult = await admin.from("documents").select(
+      "id,org_id,entity_type,entity_id,supplier_id,document_kind,uploaded_by,storage_path,deleted_at",
+    ).eq("id", job.document_id).eq("org_id", job.org_id).maybeSingle();
+    if (documentResult.error) {
+      return fail(cors, new EdgeError("service_unavailable", 503));
+    }
+    document = documentResult.data as DocumentRow | null;
+    if (!document || document.deleted_at !== null) {
+      return fail(cors, new EdgeError("invalid_job_state", 409));
+    }
+    actorId = document.uploaded_by;
+    if (!automaticInterpretationContextAllowed(job, document)) {
+      return fail(cors, new EdgeError("not_authorized", 403));
+    }
+  }
+
+  if (!actorId) return fail(cors, new EdgeError("unauthenticated", 401));
 
   const profileResult = await admin.from("profiles").select(
     "org_id,role,active,supplier_id",
@@ -624,17 +719,35 @@ export async function handler(req: Request): Promise<Response> {
     return fail(cors, new EdgeError("not_authorized", 403));
   }
 
-  const jobResult = await admin.from("document_processing_jobs")
-    .select(
-      "id,org_id,document_id,status,requested_by,input_checksum,contract_version",
-    ).eq("id", jobId)
-    .eq("org_id", profile.org_id).maybeSingle();
-  if (jobResult.error) {
-    return fail(cors, new EdgeError("service_unavailable", 503));
+  if (!job) {
+    const jobResult = await admin.from("document_processing_jobs")
+      .select(
+        "id,org_id,document_id,status,requested_by,input_checksum,contract_version",
+      ).eq("id", jobId)
+      .eq("org_id", profile.org_id).maybeSingle();
+    if (jobResult.error) {
+      return fail(cors, new EdgeError("service_unavailable", 503));
+    }
+    job = jobResult.data as JobRow | null;
   }
-  const job = jobResult.data as JobRow | null;
   if (!job) return fail(cors, new EdgeError("job_unknown", 404));
+  if (job.org_id !== profile.org_id) {
+    return fail(cors, new EdgeError("not_authorized", 403));
+  }
   if (!["extracted", "interpreting", "review"].includes(job.status)) {
+    return fail(cors, new EdgeError("invalid_job_state", 409));
+  }
+
+  if (!document) {
+    const documentResult = await admin.from("documents").select(
+      "id,org_id,entity_type,entity_id,supplier_id,document_kind,uploaded_by,storage_path,deleted_at",
+    ).eq("id", job.document_id).eq("org_id", profile.org_id).maybeSingle();
+    if (documentResult.error) {
+      return fail(cors, new EdgeError("service_unavailable", 503));
+    }
+    document = documentResult.data as DocumentRow | null;
+  }
+  if (!document || document.deleted_at !== null) {
     return fail(cors, new EdgeError("invalid_job_state", 409));
   }
 
@@ -650,16 +763,9 @@ export async function handler(req: Request): Promise<Response> {
   if (!extraction) return fail(cors, new EdgeError("extraction_unknown", 404));
 
   const isSupplier = profile.role === "supplier";
+  const isPriceList = document.document_kind === "price_list";
   if (isSupplier) {
-    const documentResult = await admin.from("documents").select(
-      "id,org_id,entity_type,entity_id,supplier_id,document_kind,uploaded_by,storage_path,deleted_at",
-    ).eq("id", job.document_id).eq("org_id", profile.org_id).maybeSingle();
-    if (documentResult.error) {
-      return fail(cors, new EdgeError("service_unavailable", 503));
-    }
-    const document = documentResult.data as DocumentRow | null;
     if (
-      !document ||
       !supplierInterpretationContextAllowed(
         actorId,
         profile,
@@ -687,6 +793,7 @@ export async function handler(req: Request): Promise<Response> {
   const replayed = await resumeExistingInterpretation({
     admin,
     isSupplier,
+    isPriceList,
     jobId: job.id,
     actorId,
     context,
@@ -786,6 +893,7 @@ export async function handler(req: Request): Promise<Response> {
     const persisted = await saveAndDecideInterpretation({
       admin,
       isSupplier,
+      isPriceList,
       jobId: job.id,
       actorId,
       args: {

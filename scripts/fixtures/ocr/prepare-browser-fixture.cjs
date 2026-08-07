@@ -14,6 +14,7 @@ const apiUrl = process.env.OCR_ACCEPTANCE_API_URL.replace(/\/+$/, '');
 if (apiUrl !== 'http://127.0.0.1:55431') throw new Error(`Refusing non-local Supabase URL: ${apiUrl}`);
 
 const ORG_ID = '11111111-1111-4111-8111-111111111111';
+const SUPPLIER_ID = 'aa000000-0000-4000-8000-000000000008';
 const documents = [
   ['97000000-0000-4000-8000-000000000001', 'ocr-01-unprocessed.png'],
   ['97000000-0000-4000-8000-000000000002', 'ocr-02-queued.png'],
@@ -21,10 +22,11 @@ const documents = [
   ['97000000-0000-4000-8000-000000000004', 'ocr-04-review.png'],
   ['97000000-0000-4000-8000-000000000005', 'ocr-05-completed.png'],
   ['97000000-0000-4000-8000-000000000006', 'ocr-06-failed.png'],
-].map(([id, fileName]) => ({
+  ['97000000-0000-4000-8000-000000000007', 'ocr-07-price-list.png', `${ORG_ID}/supplier/${SUPPLIER_ID}/97000000-0000-4000-8000-000000000007/ocr-07-price-list.png`],
+].map(([id, fileName, canonicalPath]) => ({
   id,
   fileName,
-  storagePath: `${ORG_ID}/ocr-acceptance/${id}/${fileName}`,
+  storagePath: canonicalPath ?? `${ORG_ID}/ocr-acceptance/${id}/${fileName}`,
 }));
 
 const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
@@ -70,22 +72,27 @@ async function prepare() {
     ));
   }
 
-  ok('insert OCR browser documents', await service.from('documents').insert(documents.map((document) => ({
-    id: document.id,
-    org_id: ORG_ID,
-    entity_type: 'inbox',
-    entity_id: null,
-    storage_path: document.storagePath,
-    file_name: document.fileName,
-    mime_type: 'image/png',
-    document_kind: ['97000000-0000-4000-8000-000000000004', '97000000-0000-4000-8000-000000000005'].includes(document.id)
-      ? 'invoice'
-      : 'other',
-    supplier_id: document.id.endsWith('0004') || document.id.endsWith('0005')
-      ? 'aa000000-0000-4000-8000-000000000008'
-      : null,
-    uploaded_by: ownerId,
-  }))));
+  ok('insert OCR browser documents', await service.from('documents').insert(documents.map((document) => {
+    const isPriceList = document.id.endsWith('0007');
+    return {
+      id: document.id,
+      org_id: ORG_ID,
+      entity_type: isPriceList ? 'supplier' : 'inbox',
+      entity_id: isPriceList ? SUPPLIER_ID : null,
+      storage_path: document.storagePath,
+      file_name: document.fileName,
+      mime_type: 'image/png',
+      document_kind: isPriceList
+        ? 'price_list'
+        : ['97000000-0000-4000-8000-000000000004', '97000000-0000-4000-8000-000000000005'].includes(document.id)
+          ? 'invoice'
+          : 'other',
+      supplier_id: isPriceList || document.id.endsWith('0004') || document.id.endsWith('0005')
+        ? SUPPLIER_ID
+        : null,
+      uploaded_by: ownerId,
+    };
+  })));
 
   const visible = ok('verify OCR documents through owner RLS', await owner.from('documents')
     .select('id').in('id', documents.map(({ id }) => id)));

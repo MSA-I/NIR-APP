@@ -18,7 +18,9 @@ function ladderCodes(): string[] {
   const codes = new Set<string>();
   for (const file of readdirSync(migrationsDir).filter((f) => f.endsWith('.sql'))) {
     const sql = readFileSync(join(migrationsDir, file), 'utf8');
-    for (const match of sql.matchAll(/v_reason_code\s*:=\s*'([a-z_]+)'/g)) codes.add(match[1]);
+    for (const match of sql.matchAll(/v_(?:line_)?reason_code\s*:=\s*'([a-z_]+)'/g)) {
+      codes.add(match[1]);
+    }
   }
   return [...codes].sort();
 }
