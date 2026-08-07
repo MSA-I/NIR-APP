@@ -12,6 +12,6 @@ describe('automatic document review UX', () => {
     expect(proposals).not.toContain('אישור הסוג המוצע');
     expect(proposals).not.toContain('דחיית ההצעה');
     expect(workspace).toContain("const isPriceList = snapshot.interpretation?.payload.document_type === 'price_list'");
-    expect(workspace).toContain('isPriceList\n              ? <PriceListReviewConfirmation');
+    expect(workspace).toMatch(/isPriceList\r?\n\s+\? <PriceListReviewConfirmation/);
   });
 });
