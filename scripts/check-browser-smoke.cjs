@@ -2395,11 +2395,20 @@ async function documentVocabulary(browser) {
     assert.equal(closedPage.includes('95%'), false,
       'the raw confidence is on the review screen while the disclosure is shut');
 
+    // Wait for the NUMBER, not for the `open` attribute. `open` flips synchronously — it is the
+    // browser's own toggle — while the rows are built by React one render after `onToggle` fires
+    // (DocumentReviewWorkspace.tsx:221,261 render them lazily so a long price list does not
+    // re-diff thousands of hidden rows on every interaction). Waiting on `open` reads the gap
+    // between the two and reports a defect that is not there; waiting on the content asserts the
+    // claim the scenario is actually making. A number that never arrives still fails, on timeout.
+    // The first gate run to include this scenario failed exactly here, which is the difference
+    // between jsdom — where testing-library wraps every click in act() and flushes React — and a
+    // real browser, which does not.
     await technical.locator('summary').click();
     await page.waitForFunction(() => {
       const node = [...document.querySelectorAll('details')]
         .find((element) => (element.querySelector('summary') || {}).textContent === 'פרטים טכניים');
-      return !!node && node.open;
+      return !!node && node.open && (node.textContent || '').includes('95%');
     }, null, { timeout: 10_000 });
     const opened = await technical.evaluate((node) => node.textContent || '');
     assert(opened.includes('95%'),
