@@ -12,6 +12,11 @@ begin
 end
 $$;
 
+select pg_temp.p15_assert(
+  private.dispatch_document_interpretations() = array[]::bigint[],
+  'unconfigured automatic dispatch did not fail closed'
+);
+
 create function pg_temp.p15_extraction_payload()
 returns jsonb language sql immutable as $$
   select jsonb_build_object(

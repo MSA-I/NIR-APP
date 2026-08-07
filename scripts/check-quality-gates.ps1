@@ -840,6 +840,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\migrations\0052_document_type_correction.sql",
     "supabase\migrations\0080_server_price_submission_actor.sql",
     "supabase\migrations\0081_automatic_interpretation_and_price_list_intake.sql",
+    "supabase\migrations\0082_fix_document_interpretation_dispatch.sql",
     "supabase\tests\smart_document_processing.sql",
     "supabase\tests\document_learning.sql",
     "supabase\tests\document_export_templates.sql",
