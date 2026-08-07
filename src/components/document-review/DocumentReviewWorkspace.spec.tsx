@@ -96,6 +96,7 @@ function snapshotWith(supplierConfidence: number | null): ReviewSnapshot {
     learningRules: [],
     reviewCorrections: [],
     typeReviewDecisions: [],
+    filings: [],
     feedback: [],
     exportTemplates: [],
     exportTemplateVersions: [],

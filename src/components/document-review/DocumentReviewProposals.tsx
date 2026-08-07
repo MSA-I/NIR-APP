@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
-import { Check, FilePlus2, Loader2, RotateCcw, ShieldAlert, X } from 'lucide-react';
+import { Check, FilePlus2, Info, Loader2, RotateCcw, ShieldAlert, X } from 'lucide-react';
 import type { Role } from '../../lib/types';
 import { toHebrewError } from '../../lib/errors';
 import { fmtDateTime } from '../../lib/format';
@@ -15,6 +15,7 @@ import {
   confidenceLabel,
   creditDraftFromInterpretation,
   fieldKeyLabel,
+  filingReason,
   latestCorrections,
   latestFeedbackByAnnotation,
   latestTypeReviewDecision,
@@ -605,6 +606,7 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
   if (!interpretation) return null;
 
   const supplierCaution = supplierMatchCaution(interpretation.payload.supplier.confidence);
+  const machineReason = filingReason(snapshot);
 
   return (
     <section className="space-y-4" data-testid="document-review-proposals" aria-labelledby="document-proposals-title">
@@ -620,6 +622,17 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
           <ShieldAlert className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
           <span>סוג המסמך המוצע הוא <strong>{DOCUMENT_TYPE_LABELS[interpretation.payload.document_type]}</strong> ({confidenceLabel(interpretation.payload.document_type_confidence)}). זו הצעה בלתי משתנה; הכרעה אנושית, אם קיימת, נשמרת בנפרד.</span>
         </Note>
+        {/* Why the machine did not act, when it looked at this document and chose not to.
+            Before 0079 the screen said "ממתין להכרעה" and stopped, and the reason existed only in
+            a plpgsql local and an Edge Function log line — the owner had to ask, and the answer
+            took a query against production. A document that is waiting is not the same as a
+            document nobody looked at, and the difference is the whole point of section 12. */}
+        {machineReason && (
+          <Note tone="info" className="mt-3" role="status" data-testid="filing-reason">
+            <Info className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
+            <span><strong>המערכת לא יצרה רשומה אוטומטית.</strong> {machineReason}</span>
+          </Note>
+        )}
         {/* Provider, model, prompt and schema versions used to sit here as a second card of equal
             weight. They are provenance, not a decision the reviewer makes; they now live in the
             "פרטים טכניים" disclosure at the top of the workspace. */}

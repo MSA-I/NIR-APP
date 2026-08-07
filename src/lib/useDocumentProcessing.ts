@@ -326,6 +326,29 @@ export interface DocumentTypeReviewDecision {
   created_at: string;
 }
 
+/**
+ * One row per filing decision (0075), including the ones the machine made and declined to act on.
+ *
+ * `reason_code` (0079) is which arm of apply_document_interpretation's ladder decided it. It is
+ * NULL on an `auto_applied` row — nothing stopped it — and NULL on any row written before the
+ * column existed. Those two are not the same fact, and the screen must not merge them: a filing
+ * that has an invoice attached was applied; one that does not and has no code predates the column.
+ */
+export interface DocumentFiling {
+  id: string;
+  org_id: string;
+  document_id: string;
+  category: InterpretationContract['document_type'];
+  supplier_id: string | null;
+  interpretation_id: string | null;
+  confidence: number | null;
+  decided_by: 'system' | 'human';
+  decided_at: string;
+  reverted_at: string | null;
+  reverted_reason: string | null;
+  reason_code: string | null;
+}
+
 export interface DocumentFeedback {
   id: string;
   org_id: string;
@@ -400,6 +423,7 @@ export interface DocumentProcessingSnapshot {
   learningRules: DocumentLearningRule[];
   reviewCorrections: DocumentReviewCorrection[];
   typeReviewDecisions: DocumentTypeReviewDecision[];
+  filings: DocumentFiling[];
   feedback: DocumentFeedback[];
   exportTemplates: DocumentExportTemplateRow[];
   exportTemplateVersions: DocumentExportTemplateVersion[];
@@ -439,6 +463,7 @@ function createSnapshot(documentId: string): DocumentProcessingSnapshot {
     learningRules: [],
     reviewCorrections: [],
     typeReviewDecisions: [],
+    filings: [],
     feedback: [],
     exportTemplates: [],
     exportTemplateVersions: [],
@@ -564,12 +589,13 @@ async function loadProcessing(
 
   const currentInterpretationIds = Object.values(snapshots)
     .flatMap((snapshot) => snapshot.interpretation ? [snapshot.interpretation.id] : []);
-  const [annotations, ruleApplications, reviewCorrections, typeReviewDecisions, feedback,
+  const [annotations, ruleApplications, reviewCorrections, typeReviewDecisions, filings, feedback,
     exports, exportTemplates] = await Promise.all([
     fetchByColumnIds<DocumentAnnotation>('document_annotations', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentRuleApplication>('document_rule_applications', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentReviewCorrection>('document_review_corrections', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentTypeReviewDecision>('document_type_review_decisions', 'interpretation_id', currentInterpretationIds),
+    fetchByColumnIds<DocumentFiling>('document_filings', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentFeedback>('document_feedback', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentExportRow>('document_exports', 'interpretation_id', currentInterpretationIds),
     fetchAll<DocumentExportTemplateRow>((from, to) => supabase
@@ -608,6 +634,10 @@ async function loadProcessing(
   for (const decision of typeReviewDecisions) {
     const snapshot = snapshots[decision.document_id];
     if (snapshot?.interpretation?.id === decision.interpretation_id) snapshot.typeReviewDecisions.push(decision);
+  }
+  for (const filing of filings) {
+    const snapshot = snapshots[filing.document_id];
+    if (snapshot?.interpretation?.id === filing.interpretation_id) snapshot.filings.push(filing);
   }
   const annotationById = new Map(annotations.map((annotation) => [annotation.id, annotation]));
   for (const item of feedback) {

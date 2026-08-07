@@ -557,6 +557,75 @@ export function correctionKey(
  * (a supplier account cannot see tenant staff) or no longer exists. Never renders the raw uuid:
  * an identifier tells a kitchen manager or bookkeeper nothing, and — is the truthful "unknown".
  */
+/**
+ * Why the automation stopped, in the language of the business rather than of the ladder.
+ *
+ * Every key is an arm of `apply_document_interpretation` (0077); the code reaches the client on
+ * `document_filings.reason_code` (0079). Before that column existed the answer lived only in a
+ * plpgsql local and an Edge Function console line, and finding out why one document was waiting
+ * cost a query against production — which is the whole reason this map is here.
+ *
+ * Each sentence says what happened AND what the person can do, because "not_an_invoice" alone
+ * reads like a fault when it is the system working correctly.
+ */
+export const FILING_REASON_LABELS: Record<string, string> = {
+  autonomy_disabled:
+    'האוטומציה כבויה, ולכן כל מסמך ממתין להכרעת אדם. אפשר להדליק אותה בהגדרות.',
+  organization_inactive:
+    'הארגון אינו פעיל, ולכן המערכת אינה כותבת רשומות. יש לפנות לתמיכה.',
+  document_type_other:
+    'לא זוהה סוג מסמך מוכר, ולכן המסמך הועבר לארכיון. אפשר לחלץ אותו משם עם סיבה.',
+  confidence_unknown:
+    'המערכת לא החזירה רמת זיהוי, ולכן לא פעלה לבד. יש לבדוק את ההצעה מול המסמך.',
+  below_confidence_threshold:
+    'רמת הזיהוי נמוכה מהסף שהוגדר לארגון, ולכן ההכרעה נשארה אצלך.',
+  // The one the owner actually hit, and the one most likely to look like a bug.
+  not_an_invoice:
+    'המערכת יוצרת חשבוניות בלבד. זהו מסמך מסוג אחר, ולכן הוא ממתין להכרעה שלך — גם בזיהוי מלא.',
+  supplier_unidentified:
+    'הספק לא הותאם לספק קיים במערכת, ואין למה לשייך את הסכום. אפשר לבחור ספק או ליצור אחד חדש.',
+  invoice_identity_missing:
+    'חסרים מספר חשבונית או תאריך, ולכן לא ניתן ליצור רשומה כספית.',
+  invoice_number_unrepresentable:
+    'מספר החשבונית מכיל תווים שהמערכת אינה יכולה להשוות מולם, ולכן היא לא יצרה רשומה.',
+  invoice_number_unreasonable:
+    'מספר החשבונית ארוך מדי מכדי להיות מספר אמיתי — ככל הנראה שגיאת קריאה.',
+  total_missing:
+    'לא נקרא סכום מהמסמך, וחשבונית בלי סכום אינה חשבונית.',
+  amounts_unreconciled:
+    'הסכום לפני מע״מ, המע״מ והסה״כ אינם מסתכמים זה לזה. יש להשוות מול המסמך.',
+  payment_allocation_conflict:
+    'קיימת התנגשות בהקצאת תשלום, ולכן הפעולה נעצרה לבדיקה.',
+  duplicate_invoice_number:
+    'כבר קיימת חשבונית עם אותו מספר לאותו ספק. המערכת עצרה כדי שלא תיווצר כפילות.',
+  already_decided:
+    'למסמך הזה כבר יש הכרעה, ולכן האוטומציה לא פעלה שוב.',
+};
+
+/**
+ * The reason the newest machine filing gives, or null when there is nothing to say.
+ *
+ * Null covers two DIFFERENT facts and deliberately says neither: a filing with no code that
+ * carries an invoice was applied — nothing stopped it — and a filing with no code that predates
+ * 0079 has a reason nobody recorded. Guessing between them on screen would be a claim about the
+ * past that the data does not support.
+ */
+export function filingReason(snapshot: ReviewSnapshot): string | null {
+  // `?? []` is not defensive noise — it was earned. The first version read `snapshot.filings`
+  // directly and took the whole review screen down with "Cannot read properties of undefined"
+  // wherever a snapshot predated the field. An explanatory sentence going missing is a small
+  // loss; a bookkeeper meeting a blank page instead of an invoice under review is not.
+  const machineFilings = (snapshot.filings ?? [])
+    .filter((filing) => filing.decided_by === 'system' && !filing.reverted_at)
+    .sort((a, b) => b.decided_at.localeCompare(a.decided_at));
+  const code = machineFilings[0]?.reason_code;
+  if (!code) return null;
+  return FILING_REASON_LABELS[code]
+    // An arm added to the ladder without a sentence here must not print a bare enum at a
+    // bookkeeper. It says the honest minimum instead.
+    ?? 'המערכת עצרה ולא יצרה רשומה. ההכרעה אצלך.';
+}
+
 export function actorName(snapshot: ReviewSnapshot, actorId: string): string {
   return snapshot.actorNames.get(actorId) ?? '—';
 }
