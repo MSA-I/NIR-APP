@@ -472,17 +472,31 @@ function createSnapshot(documentId: string): DocumentProcessingSnapshot {
   };
 }
 
+/**
+ * `orderColumn` exists because assuming `created_at` broke the review screen in production.
+ *
+ * Every table this helper had been pointed at happened to have a `created_at`, so the column name
+ * was baked in. `document_filings` does not have one — its timestamp is `decided_at`, because a
+ * filing records WHEN SOMEONE DECIDED, not when a row appeared. PostgREST answers an order-by on a
+ * column that does not exist with 400, `fetchAll` throws, and the throw takes the whole snapshot
+ * load down: the screen rendered nothing but "הפעולה נכשלה".
+ *
+ * The lesson is the parameter. A default that is right for six tables and silently wrong for the
+ * seventh is not a default, it is a trap — and this one could only fire against real PostgREST,
+ * which is why the unit suite stayed green.
+ */
 async function fetchByColumnIds<T>(
   table: string,
   column: string,
   ids: readonly string[],
+  orderColumn = 'created_at',
 ): Promise<T[]> {
   if (!ids.length) return [];
   return fetchInChunks(ids, (chunk) => fetchAll<T>((from, to) => supabase
     .from(table)
     .select(ALL_COLUMNS)
     .in(column, chunk)
-    .order('created_at', { ascending: false })
+    .order(orderColumn, { ascending: false })
     .order('id', { ascending: false })
     .range(from, to)));
 }
@@ -595,7 +609,8 @@ async function loadProcessing(
     fetchByColumnIds<DocumentRuleApplication>('document_rule_applications', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentReviewCorrection>('document_review_corrections', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentTypeReviewDecision>('document_type_review_decisions', 'interpretation_id', currentInterpretationIds),
-    fetchByColumnIds<DocumentFiling>('document_filings', 'interpretation_id', currentInterpretationIds),
+    // decided_at, not created_at — the table has no created_at, and ordering by one 400s.
+    fetchByColumnIds<DocumentFiling>('document_filings', 'interpretation_id', currentInterpretationIds, 'decided_at'),
     fetchByColumnIds<DocumentFeedback>('document_feedback', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentExportRow>('document_exports', 'interpretation_id', currentInterpretationIds),
     fetchAll<DocumentExportTemplateRow>((from, to) => supabase
