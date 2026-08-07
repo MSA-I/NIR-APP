@@ -4,8 +4,6 @@ import { Building2, ShieldCheck, Plus, Copy, KeyRound } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { DataTable, StatusBadge, ConfirmDialog, Modal, useToast, ErrorNote, SkeletonTable, type Column } from '../components/ui';
-import { AutonomyPolicyPanel } from '../components/AutonomyPolicyPanel';
-import { useAuth } from '../auth/AuthContext';
 import { fmtDate, fmtNum, todayISO } from '../lib/format';
 import { ORG_STATUS } from '../lib/status';
 import { provisionOrg, resetUserPassword, generatePassword, type PlatformOrg, type ProvisionResult } from '../lib/platform';
@@ -32,7 +30,6 @@ const emptyForm = (): NewOrgForm => ({
 
 export default function Admin() {
   const toast = useToast();
-  const { org } = useAuth();
   const [creating, setCreating] = useState(false);
   const [handover, setHandover] = useState<{ email: string; password: string; result: ProvisionResult } | null>(null);
   const [pending, setPending] = useState<{ org: PlatformOrg; action: 'suspend' | 'reactivate' } | null>(null);
@@ -120,10 +117,6 @@ export default function Admin() {
   return (
     <div className="space-y-4">
       <h1 className="page-title flex items-center gap-2"><ShieldCheck size={22} /> ניהול פלטפורמה</h1>
-
-      {/* Scoped to the operating organization on purpose — the policy row is readable only through
-          auth_org(), so this is the one tenant whose state the screen can actually show. */}
-      {org && <AutonomyPolicyPanel orgId={org.id} orgName={org.name} />}
 
       <DataTable
         rows={data.orgs}

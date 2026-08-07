@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { PageLoader, useToast, ErrorNote, DataTable, StatusBadge, ConfirmDialog, Modal, type Column } from '../components/ui';
+import { AutonomyPolicyPanel } from '../components/AutonomyPolicyPanel';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVITATION_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime } from '../lib/format';
@@ -16,7 +17,7 @@ import {
 import type { Profile, Role } from '../lib/types';
 
 export default function Settings() {
-  const { profile, org, roleLabels } = useAuth();
+  const { profile, org, roleLabels, isPlatformAdmin } = useAuth();
   const toast = useToast();
   const [vatRate, setVatRate] = useState(org?.vat_rate?.toString() ?? '18');
   const [matchDays, setMatchDays] = useState(org?.settings?.bank_match_days?.toString() ?? '7');
@@ -215,6 +216,13 @@ export default function Settings() {
         </div>
         <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>שמירה</button></div>
       </div>
+
+      {/* The autonomy switch lives here because this is where the owner looked for it. It is
+          rendered only for a platform admin, and that gate is not decoration: the command behind
+          it (platform_set_autonomy_policy, 0076:270-272) raises `not_platform_admin` for anyone
+          else. An owner without the grant would meet a control that refuses on submit — the exact
+          shape of screen DEAD-ENDS-AUDIT.md was written about. Absent beats broken. */}
+      {isPlatformAdmin && org && <AutonomyPolicyPanel orgId={org.id} orgName={org.name} />}
 
       <div className="card card-pad space-y-4">
         <div>
