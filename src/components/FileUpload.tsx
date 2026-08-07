@@ -15,7 +15,7 @@ import {
   type UploadBatchSummary,
 } from '../lib/uploadBatch';
 import { fetchAll } from '../lib/supabasePaging';
-import { DOCUMENT_PROCESSING_STAGE_META, useDocumentProcessing } from '../lib/useDocumentProcessing';
+import { DOCUMENT_USER_STATE_META, documentUserState, useDocumentProcessing } from '../lib/useDocumentProcessing';
 import { TusUploadCancelledError, TusUploadError, tusUploadToDocuments } from '../lib/tusUpload';
 import {
   UploadCenter,
@@ -552,10 +552,12 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
                 <FileText size={15} className="shrink-0 text-ink-faint" />
                 <button className="link min-w-32 flex-1 truncate text-start" onClick={() => void open(d)}>{d.file_name}</button>
                 <span className="hidden text-xs text-ink-muted sm:inline">{documentKindLabel(d.document_kind)}</span>
+                {/* G1, finding 20 — same badge, same four human states as the documents folder.
+                    The raw stage stays on `data-document-processing-status`. */}
                 {canReview && (
                   <span data-document-processing-status={stage ?? 'loading'}>
                     {stage
-                      ? <StatusBadge meta={DOCUMENT_PROCESSING_STAGE_META[stage]} />
+                      ? <StatusBadge meta={DOCUMENT_USER_STATE_META[documentUserState(stage)]} />
                       : <><Skeleton className="h-6 w-24" /><span className="sr-only">סטטוס העיבוד נטען</span></>}
                   </span>
                 )}

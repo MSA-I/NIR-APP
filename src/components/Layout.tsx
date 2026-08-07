@@ -101,6 +101,24 @@ export function sectionsForRole(role: Role | undefined, isPlatformAdmin: boolean
     : roleSections;
 }
 
+/**
+ * Whether the sidebar's group headers earn their space — exported so the rule can be asserted
+ * against `sectionsForRole` output rather than inferred from a mounted shell.
+ *
+ * Group headers only pay for themselves once there is more than one item to organise. supplier and
+ * payer each see a single grouped link, and a "רכש" header over a vendor's own price list reads as
+ * if they were doing the buying.
+ *
+ * G1, finding 12 (companion): the count is over the NAMED sections only. It used to count every
+ * item, and once /dashboard was added for all roles (NAV_SECTIONS:37) — it lives in the unnamed
+ * leading section and so never had a header to suppress — supplier and payer crossed the threshold
+ * and started seeing exactly the "רכש"/"כספים" headers the rule exists to prevent. The premise
+ * expired; the intent did not.
+ */
+export function showNavHeaders(sections: readonly NavSection[]): boolean {
+  return sections.filter((s) => s.section).reduce((n, s) => n + s.items.length, 0) > 1;
+}
+
 const PAGE_TITLE_PATTERNS: [RegExp, string][] = [
   [/^\/suppliers\/[^/]+$/, 'כרטיס ספק'],
   [/^\/orders\/[^/]+$/, 'פרטי הזמנה'],
@@ -139,10 +157,7 @@ export default function Layout() {
 
   const sections = sectionsForRole(role, isPlatformAdmin);
 
-  // Group headers only earn their space once there is more than one item to organise. supplier
-  // and payer each see a single link, and a "רכש" header over a vendor's own price list reads
-  // as if they were doing the buying. Below the threshold the header is noise, so drop it.
-  const showHeaders = sections.reduce((n, s) => n + s.items.length, 0) > 1;
+  const showHeaders = showNavHeaders(sections);
 
   const { panelRef: drawerRef, requestClose: closeMobileMenu } = useDialogLayer<HTMLElement>({
     open: mobileOpen,

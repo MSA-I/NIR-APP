@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart,
   Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -146,11 +147,20 @@ export type CategorySlice = { name: string; total: number };
 
 /** Donut + center total + HTML legend. Generalizes the owner category-mix chart; run `slices` through
  *  topCategoriesWithOther first. `total` drives the center + percentages; total<=0 → emptyMessage. */
-export function CategoryDonut({ slices, total, ariaLabel, emptyMessage }: {
+/**
+ * `hrefFor` — G1, finding 13. Optional, and the legend is where it lands rather than the SVG arcs:
+ * the arcs carry `rootTabIndex={-1}` and no text, so a link on them would be reachable by mouse
+ * only, while the legend row already names the slice and its share. Returning `null` leaves that
+ * row plain — the aggregated "אחר" slice is not a destination, because there is no one thing to
+ * open. Callers that pass nothing keep exactly the markup they had.
+ */
+export function CategoryDonut({ slices, total, ariaLabel, emptyMessage, hrefFor, hrefLabel }: {
   slices: CategorySlice[];
   total: number;
   ariaLabel: string;
   emptyMessage: string;
+  hrefFor?: (slice: CategorySlice) => string | null;
+  hrefLabel?: (slice: CategorySlice) => string;
 }) {
   const t = chartTheme();
   if (total <= 0) {
@@ -180,16 +190,36 @@ export function CategoryDonut({ slices, total, ariaLabel, emptyMessage }: {
         )}
       </ChartViewport>
       <ul className="min-w-0 flex-1 space-y-1.5 text-xs">
-        {slices.map((slice, index) => (
-          <li key={slice.name} className="flex items-center gap-2">
+        {slices.map((slice, index) => {
+          const href = hrefFor?.(slice) ?? null;
+          const swatch = (
             <span className="size-2 shrink-0 rounded-full" aria-hidden="true"
               style={{ backgroundColor: slice.name === 'אחר' ? t.bars[4] : t.bars[index % 4] }} />
-            <span className="min-w-0 flex-1 break-words text-ink-mid sm:truncate">{slice.name}</span>
+          );
+          const figures = (
             <span className="shrink-0 text-ink-muted" title={fmtMoneyExact(slice.total)}>
               <span className="num">{moneyShort(slice.total)}</span> · <span className="num">{Math.round((slice.total / total) * 100)}%</span>
             </span>
-          </li>
-        ))}
+          );
+          return (
+            <li key={slice.name}>
+              {href ? (
+                <Link to={href} aria-label={hrefLabel?.(slice) ?? slice.name}
+                  className="flex min-h-11 items-center gap-2 rounded-lg px-1 hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+                  {swatch}
+                  <span className="min-w-0 flex-1 break-words text-action sm:truncate">{slice.name}</span>
+                  {figures}
+                </Link>
+              ) : (
+                <div className="flex items-center gap-2 px-1">
+                  {swatch}
+                  <span className="min-w-0 flex-1 break-words text-ink-mid sm:truncate">{slice.name}</span>
+                  {figures}
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

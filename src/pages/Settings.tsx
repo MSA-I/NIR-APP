@@ -219,8 +219,19 @@ export default function Settings() {
       <div className="card card-pad space-y-4">
         <div>
           <h2 className="section-title flex items-center gap-2"><KeyRound size={17} /> החלפת הסיסמה שלך</h2>
+          {/* G1, finding 2. The old sentence sent the owner to "מסך הניהול" — /admin, which sits
+              behind PlatformGuard (App.tsx:94-100) and which an organisation owner structurally
+              cannot open. Login.tsx offers no "שכחתי סיסמה" either, so the instruction named the
+              one door in the product its reader is guaranteed not to have. What replaces it is the
+              route that actually exists today (OPEN-DECISIONS #12/#18: the operator issues the
+              password out of band). Whether an org owner should be able to reset an employee's
+              password is a security decision, recorded as OPEN-DECISIONS #114 — not invented here. */}
           <p className="text-sm text-ink-muted mt-1">
-            הסיסמה מוחלפת מיד ותידרש בכניסה הבאה. לעובד ששכח סיסמה — הנפק לו סיסמה חדשה ממסך הניהול.
+            הסיסמה מוחלפת מיד ותידרש בכניסה הבאה. השדות כאן משנים את הסיסמה שלך בלבד.
+          </p>
+          <p className="text-sm text-ink-muted mt-1">
+            אין במוצר איפוס סיסמה לעובד אחר, ובמסך הכניסה אין ״שכחתי סיסמה״. עובד ששכח סיסמה — יש לפנות למפעיל המערכת,
+            שמנפיק סיסמה חדשה ומוסר אותה בערוץ מאובטח.
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 sm:items-end">
@@ -279,6 +290,14 @@ export default function Settings() {
           <h2 className="section-title flex items-center gap-2"><MailPlus size={17} /> הזמנת עובד</h2>
           <p className="text-sm text-ink-muted mt-1">
             נשלח מייל עם קישור אישי להגדרת שם וסיסמה. הקישור תקף 7 ימים.
+          </p>
+          {/* G1, finding 2 (companion). `supplier` is absent from INVITABLE_ROLES and from the
+              role-change action, and until now nothing said where a vendor account IS set up. The
+              rule is not a UI preference: a supplier profile needs a `supplier_id` this route
+              cannot supply, and the DB CHECK refuses it (OPEN-DECISIONS #17). */}
+          <p className="text-sm text-ink-muted mt-1">
+            רשימת התפקידים כאן היא עובדי הארגון בלבד. חשבון סוכן ספק אינו נפתח מכאן — הוא מחייב שיוך לספק מסוים,
+            והקמתו נעשית ע״י מפעיל המערכת.
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_11rem_auto] gap-3 sm:items-end">

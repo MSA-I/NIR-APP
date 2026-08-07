@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toHebrewError } from "../lib/errors";
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
-import { Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle, Pencil, Copy, Plus } from 'lucide-react';
+import { Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle, Pencil, Copy, Plus, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -314,6 +314,16 @@ export function OrderDetail() {
           )}
           {canWrite && ['sent', 'confirmed', 'partial'].includes(order.status) && (
             <button className="btn-primary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={15} /> קבלת סחורה</button>
+          )}
+          {/* G1, finding 14 — the same URL Receiving.tsx:638 builds, from the order this time.
+              An invoice can only be linked to an order through these parameters (InvoiceNew.tsx
+              reads them and offers no picker), and the link existed on exactly one transient
+              screen. Offered from the moment the order has left the building; a cancelled order is
+              excluded because there is nothing to be invoiced for. */}
+          {canWrite && !['draft', 'cancelled'].includes(order.status) && (
+            <button className="btn-secondary" onClick={() => navigate(`/invoices/new?supplier=${order.supplier.id}&order=${order.id}`)}>
+              <FileText size={15} /> הזנת חשבונית להזמנה זו
+            </button>
           )}
           <button className="btn-secondary" onClick={() => window.print()}><Printer size={15} /> הדפסה</button>
           {canWrite && !['received', 'cancelled'].includes(order.status) && (

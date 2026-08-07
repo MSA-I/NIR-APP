@@ -18,7 +18,7 @@ import {
 import { openReservedPopup } from '../lib/popup';
 import { runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
-import { DOCUMENT_PROCESSING_STAGE_META, useDocumentProcessing } from '../lib/useDocumentProcessing';
+import { DOCUMENT_USER_STATE_META, documentUserState, useDocumentProcessing } from '../lib/useDocumentProcessing';
 
 export interface LinkedReceipt {
   id: string;
@@ -220,10 +220,16 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-muted">
                     <span className="font-medium text-ink-soft">{source}</span>
                     <span>{sourceDate ? fmtDate(sourceDate) : fmtDateTime(doc.created_at)}</span>
+                    {/* G1, finding 20 (DEBT-REGISTER §18). One document, two vocabularies, one
+                        click apart: "נקלט" in the documents folder and "ממתין לפירוש" here, on the
+                        panel the tag links to. The four human states are the answer to the only
+                        question this reader has — is anything required of me — and the seven
+                        engineering stages keep flowing through `data-document-processing-status`
+                        below, unchanged, for the scenarios and for whoever debugs a stuck job. */}
                     {canReview && (
                       <span data-document-processing-status={stage ?? 'loading'}>
                         {stage
-                          ? <StatusBadge meta={DOCUMENT_PROCESSING_STAGE_META[stage]} />
+                          ? <StatusBadge meta={DOCUMENT_USER_STATE_META[documentUserState(stage)]} />
                           : <><Skeleton className="h-6 w-24" /><span className="sr-only">סטטוס העיבוד נטען</span></>}
                       </span>
                     )}

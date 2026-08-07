@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router';
+import { FileText } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { EmptyState, ErrorNote, PageLoader, StatusBadge } from '../components/ui';
+import { EmptyState, ErrorNote, Note, PageLoader, StatusBadge } from '../components/ui';
 import { fmtDate, fmtNum } from '../lib/format';
 import { isUuid } from '../lib/invoiceLinkedContext';
 import { PO_STATUS, RECEIPT_LINE_STATUS, RECEIPT_STATUS } from '../lib/status';
@@ -80,6 +81,15 @@ export default function ReceiptDetail() {
   }
 
   const { receipt, order, supplier, lines } = data;
+  /**
+   * G1, finding 9. This screen never said the word "זיכוי", and it is where somebody stands after
+   * marking goods damaged. The automatic credit fires on missing/partial only (0023:1619,:1638),
+   * so a damaged line produced nothing and said nothing — while /credits told the reader that
+   * credits "open from the receiving screen". The sentence appears only when such a line exists,
+   * and it states the route that works today. Whether damaged goods should open a credit
+   * automatically stays a business decision (OPEN-DECISIONS #49).
+   */
+  const unsettledLines = lines.filter((line) => line.status === 'damaged' || line.status === 'returned');
   return (
     <div className="max-w-3xl space-y-4" data-testid="receipt-detail">
       <header>
@@ -90,6 +100,20 @@ export default function ReceiptDetail() {
           <StatusBadge meta={RECEIPT_STATUS[receipt.status]} />
         </div>
         <p className="mt-1 text-sm text-ink-muted">{supplier.name} · התקבלה ב-{fmtDate(receipt.received_at)}</p>
+        {/* G1, finding 14. The only link in the app that creates an invoice already tied to its
+            order and receipt lived on the screen shown right after a receipt is completed
+            (Receiving.tsx:638) — leave it and it never comes back for that receipt. The invoice
+            form has no order/receipt picker; it reads both from the URL only (InvoiceNew.tsx:34-35).
+            The consequence is not merely inconvenience: with no link `linkedOrderIds` is empty and
+            the whole three-way match block never runs (checks.ts:66-87), which reads exactly like
+            "everything checks out". Same URL string, second entry point — no new logic. */}
+        {canOpenOrder && (
+          <div className="mt-3">
+            <Link className="btn-secondary inline-flex" to={`/invoices/new?supplier=${supplier.id}&order=${order.id}&receipt=${receipt.id}`}>
+              <FileText size={15} aria-hidden="true" /> הזנת חשבונית לקבלה זו
+            </Link>
+          </div>
+        )}
       </header>
 
       <section className="card card-pad" aria-labelledby="receipt-details-title">
@@ -118,6 +142,16 @@ export default function ReceiptDetail() {
           </div>
         </dl>
         {receipt.notes && <div className="mt-3 rounded-lg bg-surface-sunken px-3 py-2 text-sm text-ink-soft">הערות: {receipt.notes}</div>}
+        {unsettledLines.length > 0 && (
+          <div className="mt-3">
+            <Note tone="await">
+              <span>
+                <span className="num">{unsettledLines.length}</span> פריטים סומנו כפגומים או שהוחזרו. עבורם לא נפתחה דרישת זיכוי אוטומטית —
+                זיכוי אוטומטי נפתח לחוסר בכמות בלבד. דרישת זיכוי עליהם נפתחת מתוך החשבונית של הספק, לאחר שתיקלט למערכת.
+              </span>
+            </Note>
+          </div>
+        )}
       </section>
 
       <section className="card overflow-hidden" aria-labelledby="receipt-lines-title">

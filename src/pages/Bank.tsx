@@ -13,6 +13,7 @@ import { fmtMoneyExact, fmtDate, fmtDateTime, addCalendarDays } from '../lib/for
 import { toHebrewError } from '../lib/errors';
 import type { BankTransaction, BankImport } from '../lib/types';
 import { useParamState } from '../lib/useParamState';
+import { SupplierSelectField, useQuickSupplier } from '../components/QuickSupplierPicker';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import {
   SUPPLIER_SEARCH_NARROWED,
@@ -600,6 +601,23 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
     }
   }
 
+  /**
+   * The fourth screen the shared picker was written for (QuickSupplierPicker.tsx:24) — G1, finding 10.
+   *
+   * A bank charge from a party that is not yet a supplier row left an `accountant` with two exits,
+   * both of them statements they did not mean: "לא רלוונטית (לא ספק)", or an exception and a wait.
+   * `/suppliers` is closed to that role (App.tsx:228), so there was no third door anywhere.
+   *
+   * The field is mounted **after** finding 4 gave it an `else` branch, and that order is the whole
+   * point: `canCreate` here is owner/office (QuickSupplierPicker.tsx:131), so the accountant gets
+   * the select with no button — which, before finding 4, was precisely the silence this change
+   * exists to remove. Owner gets the door; accountant gets a sentence naming who to ask.
+   */
+  const supplierPicker = useQuickSupplier(data?.suppliers, (nextSupplierId) => {
+    setSupplierId(nextSupplierId);
+    setChosenInvoices({});
+  });
+
   const chosenSum = Object.values(chosenInvoices).reduce((s, v) => s + v, 0);
   const supplierName = data?.suppliers.find((supplier) => supplier.id === supplierId)?.name ?? 'הספק הנבחר';
   const transactionLabel = `תנועת הבנק מיום ${fmtDate(tx.tx_date)} בסכום ${fmtMoneyExact(tx.amount)}`;
@@ -616,13 +634,11 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
         </div>
 
         <div className="flex items-end gap-2">
-          <div className="flex-1">
-            <label className="label" htmlFor="bank-match-supplier">ספק</label>
-            <select id="bank-match-supplier" className="input" disabled={loading} value={supplierId} onChange={(e) => { setSupplierId(e.target.value); setChosenInvoices({}); }}>
-              <option value="">לא מזוהה</option>
-              {data?.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
+          {/* id and placeholder are unchanged on purpose — `#bank-match-supplier` and the
+              "לא מזוהה" option are what the existing scenarios and the empty value mean here. */}
+          <SupplierSelectField picker={supplierPicker} className="flex-1"
+            id="bank-match-supplier" label="ספק" placeholder="לא מזוהה"
+            value={supplierId} disabled={loading} />
           {supplierId !== (tx.supplier_id ?? '') && <button className="btn-secondary" disabled={busy || loading} onClick={() => void assignSupplier()}>שיוך ספק</button>}
         </div>
         <div><label className="label" htmlFor="bank-action-reason">סיבת הפעולה *</label><input id="bank-action-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>

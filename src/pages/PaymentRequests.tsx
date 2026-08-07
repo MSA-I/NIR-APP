@@ -406,7 +406,18 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
                   );
                 })}
               </div>
-            ) : <div className="text-sm text-ink-muted border border-dashed rounded-lg px-3 py-4 text-center">אין חשבוניות פתוחות לספק זה — ניתן לשמור דרישה ללא חשבונית (תסומן כחריג בהתאמות)</div>}
+            ) : (
+              /* G1, finding 1. This box used to read "ניתן לשמור דרישה ללא חשבונית", and that was
+                 false in three layers: `amount` is derived only from the ticked invoices (:284),
+                 both save buttons are hard-disabled on `amount <= 0` (:427-428), and the RPC would
+                 refuse with `allocation_invalid` (0023:528) even if they were not. A financial
+                 screen may not promise a route it blocks — PRODUCT.md:62, "אמת מעל נוחות".
+                 Whether an advance to a supplier SHOULD be possible is a business question and
+                 stays one: OPEN-DECISIONS #113. This sentence only stops the lie. */
+              <div className="text-sm text-ink-muted border border-dashed rounded-lg px-3 py-4 text-center">
+                אין חשבוניות פתוחות לספק זה. דרישת תשלום חייבת להיקשר לחשבונית קיימת, ולכן לא ניתן לשמור דרישה לספק זה כרגע.
+              </div>
+            )}
           </fieldset>
         )}
 

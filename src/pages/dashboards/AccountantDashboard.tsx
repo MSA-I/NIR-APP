@@ -113,9 +113,22 @@ export default function AccountantDashboard() {
             ariaLabel={`תשלומים לפי חודש: ${data.monthly.map((p) => `${p.key} ${p.label || 'אין תשלומים'}`).join(', ')}`}
             emptyMessage="אין תשלומים לתקופה" />
         </ChartCard>
+        {/* G1, finding 13. "כמה אני חייב לספק הזה?" ended here for an accountant: four labels in a
+            pie and nothing to click. The permission was never the problem — `p0_supplier_balance_rows()`
+            names the accountant explicitly (0022:453,:465-466) — the client simply had no door,
+            since /suppliers and /suppliers/:id are STAFF-only and the global search excludes
+            suppliers for this role. Each named slice now opens the invoice list searched for that
+            supplier, which is a screen the accountant already has. Opening /suppliers/:id to the
+            role would be a role-contract change (PRODUCT.md:23-30) and is left as
+            OPEN-DECISIONS #117. "אחר" gets no link: it is several suppliers summed, so there is no
+            single thing to open, and a link that lands on a wrong filter is worse than none. */}
         <ChartCard title="יתרות פתוחות לפי ספק" subtitle="ארבעת הספקים עם היתרה הגבוהה וכל היתר">
           <CategoryDonut slices={data.supplierSlices} total={data.supplierTotal}
             ariaLabel={`יתרות פתוחות לפי ספק, סה״כ ${fmtMoney(data.supplierTotal)}`}
+            hrefFor={(slice) => (slice.name === 'אחר' || slice.name === '—'
+              ? null
+              : `/invoices?q=${encodeURIComponent(slice.name)}&pay=open`)}
+            hrefLabel={(slice) => `חשבוניות פתוחות של ${slice.name}`}
             emptyMessage="אין יתרות פתוחות" />
         </ChartCard>
         <ChartCard title="תשלומים מול חיובי בנק" subtitle="שמונה השבועות האחרונים" className="lg:col-span-2">

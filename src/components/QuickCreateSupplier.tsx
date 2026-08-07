@@ -77,9 +77,15 @@ type ExistingSupplier = Pick<Supplier, 'id' | 'name' | 'tax_id' | 'status'>;
 
 /**
  * Says what the duplicate is, not merely that one exists — a bare name is weak evidence when the
- * name is the thing that collided. ח.פ is the identity claim; status is usually the reason the
- * user could not find it (an inactive supplier is missing from most pickers). A missing ח.פ is
- * stated rather than padded over: "no tax id recorded" is itself information.
+ * name is the thing that collided. ח.פ is the identity claim; status is shown because it is a real
+ * property of the row the user is about to duplicate. A missing ח.פ is stated rather than padded
+ * over: "no tax id recorded" is itself information.
+ *
+ * **Corrected in G1 (finding 3).** This comment used to say an inactive supplier "is missing from
+ * most pickers", offering that as the reason the user could not find it. The code says the
+ * opposite: `/orders/new` is the ONLY picker that filters on `status` (NewOrder.tsx:206); the other
+ * nine filter on `deleted_at` alone, so an inactive supplier is present in almost all of them. A
+ * wrong comment on a shared component is worse than none — the next agent reads it as the contract.
  */
 function describeExisting(row: ExistingSupplier) {
   return [

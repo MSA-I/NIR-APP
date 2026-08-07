@@ -56,6 +56,7 @@ vi.mock('../auth/AuthContext', () => ({ useAuth: () => auth.current }));
 import {
   SupplierSelectField,
   QUICK_CREATE_SUPPLIER_HINT,
+  SUPPLIER_FIELD_NO_CREATE_HINT,
   SUPPLIER_FIELD_QUICK_CREATE_HINT,
   mergeCreatedSuppliers,
   useQuickSupplier,
@@ -216,17 +217,42 @@ describe('SupplierSelectField — the affordance next to the select', () => {
     expect(await screen.findByRole('dialog', { name: 'ספק חדש' })).toBeInTheDocument();
   });
 
-  it('goes dark for a role that may not create a supplier, exactly as the suppliers screen does', () => {
+  it('offers no button to a role that may not create a supplier — and says who can, instead of nothing', () => {
     auth.current.profile.role = 'kitchen';
     render(wrap(<Harness fetched={[]} />));
 
     expect(screen.getByLabelText('ספק *')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'ספק חדש' })).toBeNull();
-    // And says nothing about creation either. A group named "בחירה או יצירה" around a lone select
-    // tells a screen-reader kitchen user to hunt for an affordance that was never rendered — a
-    // dead end manufactured by the accessibility layer, in the change that exists to remove them.
+    // Still no group named "בחירה או יצירה" around a lone select: that would send a screen-reader
+    // kitchen user hunting for an affordance that was never rendered — a dead end manufactured by
+    // the accessibility layer.
     expect(screen.queryByRole('group')).toBeNull();
-    expect(screen.getByLabelText('ספק *')).not.toHaveAccessibleDescription();
+
+    /**
+     * G1, finding 4. This assertion used to read `.not.toHaveAccessibleDescription()`, i.e. it
+     * PINNED the silence: a required "ספק *" field, no button, and not one word about why. The
+     * fence is right — RLS forbids `kitchen` from inserting a supplier — but `kitchen` may file the
+     * invoice this field belongs to, so the person is mid-task with one part closed to them. The
+     * sentence is the field's own, so every screen that mounts the field inherits it, and it names
+     * who to ask rather than announcing a verdict.
+     */
+    expect(screen.getByText(SUPPLIER_FIELD_NO_CREATE_HINT)).toBeInTheDocument();
+    expect(screen.getByLabelText('ספק *')).toHaveAccessibleDescription(SUPPLIER_FIELD_NO_CREATE_HINT);
+  });
+
+  it('does not tell a permitted user to ask somebody else merely because the field is locked', () => {
+    render(wrap(
+      <SupplierSelectField
+        picker={{
+          suppliers: [], canCreate: true, dialogOpen: false,
+          openDialog: () => {}, closeDialog: () => {}, select: () => {}, acceptCreated: () => {},
+        }}
+        id="locked-supplier" label="ספק *" placeholder="בחר ספק..." value="" disabled />,
+    ));
+
+    // `disabled && canCreate` is /invoices/new with a linked order: the button is visible and grey,
+    // and this user MAY create suppliers — just not here. "בקש ממנהל המשרד" would be false.
+    expect(screen.queryByText(SUPPLIER_FIELD_NO_CREATE_HINT)).toBeNull();
   });
 
   it('disables the button with the select — a field you may not change is not a field you may add to', () => {
@@ -385,13 +411,22 @@ describe('InvoiceNew — the same door', () => {
     expect(screen.getByRole('option', { name: NEW_ROW.name })).toBeInTheDocument();
   });
 
-  it('shows no create button to a kitchen user, who may reach this page but may not add a supplier', async () => {
+  /**
+   * The screen the owner's complaint actually describes — G1, finding 4.
+   *
+   * The audit corrected the premise handed to it: `kitchen` never reaches the dialog on /products
+   * or /prices (the upload button itself is gated there, and /prices already says so in words).
+   * /invoices/new is the one place `kitchen` gets IN, sees a required supplier field, and finds no
+   * way to add one. That is where the sentence has to appear.
+   */
+  it('tells a kitchen user who can add a supplier, on the one screen where they get stuck', async () => {
     auth.current.profile.role = 'kitchen';
     useSupplierTable();
     render(wrap(<InvoiceNew />, '/invoices/new'));
 
     await screen.findByRole('option', { name: EXISTING.name });
     expect(screen.queryByRole('button', { name: 'ספק חדש' })).toBeNull();
+    expect(screen.getByText(SUPPLIER_FIELD_NO_CREATE_HINT)).toBeInTheDocument();
   });
 });
 

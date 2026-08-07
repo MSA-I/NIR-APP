@@ -46,6 +46,17 @@ export default function Reports() {
     snapshot: MonthlyReportSnapshot;
     reason: string;
   } | null>(null);
+  /**
+   * G1, finding 17. Closing the month is one real action, and what happens when it is BLOCKED was
+   * a toast: it named no transaction, carried no link, and disappeared. The recovering link
+   * already existed on this very page — the "תנועות בנק ללא התאמה" tile points at
+   * `/bank?month=…&status=attention` (:402) — and nothing connected the two. So the message stays
+   * on screen until the next attempt, and when the blocker is the bank it carries that link and
+   * the count that is already computed here. It is also the far end of finding 10: the transaction
+   * the accountant could not attribute is the one standing in front of the month close, and
+   * neither screen used to mention the other.
+   */
+  const [snapshotBlock, setSnapshotBlock] = useState<{ message: string; bank: boolean } | null>(null);
 
   // Browsers without a native month picker fall back to free text, so a value like "07/2026" can
   // land in state. One sanitized value drives the query, the headings, the filename and the
@@ -171,6 +182,7 @@ export default function Reports() {
     const selectedUnitId = lockedReports?.selectedUnitId;
     if (!canManageExport || !selectedUnitId || lockedReportsFetching || lockedReportsError) return;
     setBusy(true);
+    setSnapshotBlock(null);
     try {
       const snapshot = unwrap(await supabase.rpc('create_monthly_report_snapshot', {
         p_month: `${safeMonth}-01`,
@@ -180,7 +192,14 @@ export default function Reports() {
       toast(`דוח סופי נעול גרסה ${snapshot.version} נוצר בהצלחה`);
       void refetchLockedReports();
     } catch (e) {
-      toast(toSnapshotHebrewError(e), 'error');
+      const message = toSnapshotHebrewError(e);
+      // The toast stays for the immediate, announced feedback; the Note is what survives it.
+      toast(message, 'error');
+      setSnapshotBlock({
+        message,
+        bank: /monthly_report_snapshot_unattributed_bank_transactions/i
+          .test(e instanceof Error ? e.message : String(e)),
+      });
     } finally {
       setBusy(false);
     }
@@ -341,6 +360,23 @@ export default function Reports() {
               </div>
             </div>
 
+            {snapshotBlock && (
+              <div className="mt-4">
+                <Note tone="alert" role="alert">
+                  <span>
+                    {snapshotBlock.message}
+                    {snapshotBlock.bank && (
+                      <span className="block mt-1">
+                        <Link className="link" to={`/bank?month=${safeMonth}&status=attention`}>
+                          פתיחת {totals.unmatchedBank} תנועות הבנק שדורשות התאמה בחודש זה
+                        </Link>
+                        {' '}— תנועה שלא שויכה לספק חוסמת את סגירת החודש.
+                      </span>
+                    )}
+                  </span>
+                </Note>
+              </div>
+            )}
             {lockedReportsError && <div className="mt-4"><ErrorNote message={lockedReportsError} /></div>}
             {!lockedReportsError && !lockedReportsLoading && !lockedReports?.legalEntities.length && (
               <div className="mt-4"><Note tone="await">לא נמצאה ישות משפטית מורשית להפקת דוח סופי.</Note></div>

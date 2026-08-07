@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { toHebrewError } from '../lib/errors';
-import { Plus, Pencil, Copy, Power, Upload } from 'lucide-react';
+import { Plus, Pencil, Copy, Power, Upload, History } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -19,6 +19,7 @@ interface ProductRow extends Product {
 export default function Products() {
   const { profile } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [editing, setEditing] = useState<Product | null | 'new'>(null);
   const [clone, setClone] = useState<Product | null>(null); // "שכפול": prefill without an id
@@ -107,7 +108,12 @@ export default function Products() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="page-title">מוצרים</h1>
         <div className="flex flex-wrap gap-2">
-          {canUploadPrices && <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={16} /> העלאת מחירון ספק</button>}
+          {/* The same fence /prices already explains in words (PriceLists.tsx:108). Here the button
+              simply vanished for kitchen, so the identical situation had two different answers on
+              two screens — one a sentence, one silence. Same wording, so it reads as one rule. */}
+          {canUploadPrices
+            ? <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={16} /> העלאת מחירון ספק</button>
+            : <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמשרד בלבד.</span>}
           {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> מוצר חדש</button>}
         </div>
       </div>
@@ -117,6 +123,13 @@ export default function Products() {
         rowLabel={(r) => `מוצר ${r.name}`}
         onRowClick={canWrite ? (r) => setEditing(r) : undefined}
         rowActions={canWrite ? (r) => [
+          /* G1, finding 19. "האם המחיר של המוצר הזה עלה?" is answered well — a history model with
+             a chart — and it lived only at /prices. The screen named after the question had no
+             link to it, and `?product=` was already implemented there (PriceLists.tsx:40,:68) with
+             exactly one emitter in the entire codebase (Dashboard.tsx:752). Worse, a global search
+             hit on a product lands on /products?id= (GlobalSearch.tsx:72), i.e. the one screen
+             with no way onward. Both ends of the wire existed; this is the emitter. */
+          { key: 'prices', label: 'מחירים והיסטוריה', icon: History, onSelect: () => navigate(`/prices?product=${r.id}`) },
           { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setEditing(r) },
           { key: 'duplicate', label: 'שכפול', icon: Copy, onSelect: () => setClone({ ...r, name: `${r.name} (עותק)` }) },
           { key: 'toggle', label: r.active ? 'השבתה' : 'הפעלה', icon: Power, onSelect: () => setToggleTarget(r) },

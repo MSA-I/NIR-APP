@@ -47,6 +47,23 @@ export const SUPPLIER_FIELD_QUICK_CREATE_HINT = 'אין ספק מתאים ברש
 export const QUICK_CREATE_SUPPLIER_HINT = 'הספק החדש ייווצר וייבחר מיד בשדה זה';
 
 /**
+ * What the field says to somebody who may NOT create a supplier — G1, finding 4.
+ *
+ * Until now `picker.canCreate === false` rendered nothing at all: a `kitchen` user on
+ * /invoices/new saw a required "ספק *" select, no create button, and not one word about why. The
+ * fence is correct (RLS forbids `kitchen` from inserting a supplier — 0022:112-113), and `kitchen`
+ * is otherwise allowed to file the invoice (`create_invoice`, 0023:1717) — so the person is in the
+ * middle of a legitimate task with exactly one part of it closed to them. Silence turns that into a
+ * wall; a sentence turns it into a next step, and it must live HERE rather than as a per-screen
+ * notice, because it is the field that is stuck and every screen that mounts the field inherits it.
+ *
+ * Phrased as "who to ask", never as "you are not allowed": the reader needs the next action, not a
+ * verdict. Mirrors PriceLists.tsx:108, the one screen that already said something.
+ */
+export const SUPPLIER_FIELD_NO_CREATE_HINT =
+  'אין ספק מתאים ברשימה? הוספת ספק חדש שמורה לבעלים ולמנהל המשרד — יש לבקש מהם להוסיף אותו.';
+
+/**
  * The fetched list, plus anything created here that the fetch has not caught up with yet.
  *
  * Matched on `id`: once a later fetch carries the row, the server's copy wins and the local one
@@ -162,6 +179,7 @@ export function SupplierSelectField({
 }) {
   const fieldHintId = `${id}-quick-create-field-hint`;
   const buttonHintId = `${id}-quick-create-hint`;
+  const noCreateHintId = `${id}-no-create-hint`;
   /**
    * Whether creation is actually on offer here and now — not merely permitted.
    *
@@ -179,7 +197,17 @@ export function SupplierSelectField({
    * So: no button on offer, no group and no hints. Nothing here says a door exists unless one does.
    */
   const offered = picker.canCreate && !disabled;
-  const selectDescribedBy = [describedBy, offered ? fieldHintId : null].filter(Boolean).join(' ');
+  /**
+   * The other branch, and it is deliberately NOT `!offered`.
+   *
+   * `disabled` with `canCreate` (a linked order on /invoices/new) already explains itself: the
+   * button is on screen and greyed, and telling that user to "ask the office" would be wrong —
+   * they may create suppliers, just not here and now. The sentence belongs only where the door is
+   * missing rather than shut, which is exactly `canCreate === false`.
+   */
+  const noCreate = !picker.canCreate;
+  const selectDescribedBy = [describedBy, offered ? fieldHintId : null, noCreate ? noCreateHintId : null]
+    .filter(Boolean).join(' ');
   const grouping = offered
     ? { role: 'group', 'aria-label': `${label.replace(/\s*\*\s*$/, '')} — בחירה או יצירה` }
     : {};
@@ -205,6 +233,14 @@ export function SupplierSelectField({
           <span id={fieldHintId} className="sr-only">{SUPPLIER_FIELD_QUICK_CREATE_HINT}</span>
           <span id={buttonHintId} className="sr-only">{QUICK_CREATE_SUPPLIER_HINT}</span>
         </>
+      )}
+      {/* Visible, not sr-only: the sighted `kitchen` user is the one who was staring at a select
+          with no button and no explanation. It is also the select's description, so the same words
+          reach a screen reader instead of a second, differently-worded announcement. */}
+      {noCreate && (
+        <p id={noCreateHintId} className="mt-1 text-xs text-ink-muted">
+          {SUPPLIER_FIELD_NO_CREATE_HINT}
+        </p>
       )}
       {picker.dialogOpen && (
         <QuickCreateSupplier onClose={picker.closeDialog} onCreated={picker.acceptCreated} />

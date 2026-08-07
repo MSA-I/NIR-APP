@@ -272,6 +272,54 @@ async function assertMobileSpeedDialHidden(page, scope) {
     `${scope}: hidden desktop speed-dial remains in the accessibility tree`);
 }
 
+/**
+ * The three long-form routes keep the camera and lose everything else — G1, finding 7.
+ *
+ * This assertion replaces `mobile-action-bar count === 0`, which pinned the wrong half of the rule.
+ * Suppressing NAVIGATION on /orders/new, /invoices/new and /receiving/:orderId is right: one stray
+ * tap would discard a half-filled form. Suppressing the bar ENTIRELY also took the camera, and
+ * /receiving/:orderId is the single worst place in the product to lose it — the kitchen manager is
+ * at the truck holding the goods in one hand and the invoice in the other, and the screen itself
+ * used to admit the camera was gone. Capture cannot cost anybody their form: `QuickCapture`
+ * uploads into the inbox and contains no `navigate`.
+ *
+ * Stated as an exact list rather than "contains capture", so a future change that quietly puts a
+ * navigating action back on a form route still fails here.
+ */
+async function assertOnlyCaptureAction(page, scope) {
+  const keys = await page.locator('.mobile-action-bar .mobile-action')
+    .evaluateAll((nodes) => nodes.map((node) => node.dataset.quickActionKey));
+  assert.deepEqual(keys, ['capture'], `${scope}: the suppressed route offers ${JSON.stringify(keys)}, not the camera alone`);
+  assert.equal(await page.locator('.mobile-action-bar a').count(), 0,
+    `${scope}: a navigating action survived on a long-form route`);
+  await assertMobileSpeedDialHidden(page, scope);
+
+  /**
+   * The half of finding 7 that only a browser can answer.
+   *
+   * /receiving/:orderId already carries a fixed contextual taskbar ("שמירת ביניים" / "סיום קבלה")
+   * at `z-30`, and the action bar is `z-40` — so keeping the camera here put two fixed bars on the
+   * same bottom edge, with the newer one on top. `.phone-taskbar` is offset above it in index.css;
+   * this measures that the offset actually holds, because a camera that covers the save button is
+   * a worse dead end than the missing camera it replaced.
+   */
+  const taskbar = page.locator('.phone-taskbar');
+  if (await taskbar.count()) {
+    const boxes = await page.evaluate(() => {
+      const rect = (selector) => {
+        const node = document.querySelector(selector);
+        if (!node) return null;
+        const { top, bottom } = node.getBoundingClientRect();
+        return { top, bottom };
+      };
+      return { bar: rect('.mobile-action-bar'), taskbar: rect('.phone-taskbar') };
+    });
+    assert(boxes.bar && boxes.taskbar, `${scope}: expected both the action bar and the contextual taskbar`);
+    assert(boxes.taskbar.bottom <= boxes.bar.top + 1,
+      `${scope}: the quick-action bar overlaps the contextual taskbar (taskbar bottom ${boxes.taskbar.bottom}, bar top ${boxes.bar.top})`);
+  }
+}
+
 async function roleAndViewportMatrix(browser) {
   const viewports = [
     ['320', 320, 720], ['360', 360, 800], ['390', 390, 844], ['430', 430, 932],
@@ -419,14 +467,12 @@ async function quickActionsContract(browser) {
           await page.setViewportSize({ width: 390, height: 844 });
           await page.goto(`${baseURL}${route}`);
           await settle(page);
-          assert.equal(await page.locator('.mobile-action-bar').count(), 0, `${route}: mobile action bar must be hidden`);
-          await assertMobileSpeedDialHidden(page, route);
+          await assertOnlyCaptureAction(page, route);
         }
 
         await page.goto(`${baseURL}/receiving/f0000000-0000-4000-8000-000000000011`);
         await settle(page);
-        assert.equal(await page.locator('.mobile-action-bar').count(), 0, 'receiving detail mobile action bar must be hidden');
-        await assertMobileSpeedDialHidden(page, 'receiving detail');
+        await assertOnlyCaptureAction(page, 'receiving detail');
         assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail lost its contextual phone taskbar');
       }
     } finally {
@@ -810,8 +856,9 @@ async function receivingAccessibility(browser) {
     await page.getByText('ספק בדיקת נגישות').first().click();
     await page.waitForURL((url) => url.pathname === '/receiving/p4-ui-order');
     await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור מוצר בדיקת נגישות' }).waitFor();
-    assert.equal(await page.locator('.mobile-action-bar').count(), 0, 'receiving detail mobile action bar must be hidden');
-    await assertMobileSpeedDialHidden(page, 'receiving detail accessibility');
+    // G1, finding 7: kitchen keeps the camera here and nothing else — this is the exact person and
+    // the exact screen the change exists for.
+    await assertOnlyCaptureAction(page, 'receiving detail accessibility');
     assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail lost its contextual phone taskbar');
     assert.equal(await page.getByText('סיבת השמירה / ההשלמה').count(), 0, 'routine receiving must not ask for a reason');
     await page.getByRole('button', { name: 'מלא עבור מוצר בדיקת נגישות' }).waitFor();

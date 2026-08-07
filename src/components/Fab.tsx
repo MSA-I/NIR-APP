@@ -9,10 +9,21 @@ import { useQuickCapture } from './QuickCapture';
 const FAB_SUPPRESSED_PATHS = ['/orders/new', '/invoices/new', '/receiving/:orderId'] as const;
 const QUICK_ACTIONS_MENU_ID = 'global-quick-actions';
 
+/**
+ * G1, finding 7 — a filter where there used to be `[]`.
+ *
+ * The three suppressed paths are long forms a stray navigation would destroy, so hiding the
+ * *navigating* actions is right. Hiding the whole bar also took the camera away, and the worst
+ * place to lose it is `/receiving/:orderId`: the kitchen manager is standing at the truck holding
+ * both the goods and the invoice, and that screen admitted it in prose — "צילום החשבונית יתאפשר
+ * מיד לאחר סיום הקבלה" (Receiving.tsx:788). Capture navigates nowhere: `QuickCapture` uploads into
+ * the inbox and contains no `navigate`, so it cannot cost the user the form they are filling.
+ */
 export function quickActionsForPath(role: Role | undefined, pathname: string) {
+  const actions = quickActionsFor(role);
   return FAB_SUPPRESSED_PATHS.some((path) => matchPath(path, pathname) != null)
-    ? []
-    : quickActionsFor(role);
+    ? actions.filter((action) => action.kind === 'capture')
+    : actions;
 }
 
 export default function Fab() {

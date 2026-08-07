@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
-import { Plus, AlertTriangle, AlertOctagon, Info, Pencil, Copy, Share2, Printer, Trash2 } from 'lucide-react';
+import { Plus, AlertTriangle, AlertOctagon, Info, Eye, Copy, Share2, Printer, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toHebrewError } from '../lib/errors';
 import { useQuery } from '../lib/useQuery';
@@ -31,8 +31,32 @@ import {
 export type InvoiceRow = Invoice & {
   supplier: { name: string };
   order_links: { order_id: string }[];
+  /** G1, finding 8: read only so "שכפול כטיוטה" can carry the receipt link forward. */
+  receipt_links: { receipt_id: string }[];
   balance?: number;
 };
+
+/**
+ * The duplicate-as-draft URL — G1, finding 8.
+ *
+ * There is no RPC that edits an invoice's amount, so for owner/office the real correction path is
+ * soft-delete plus "שכפול כטיוטה". That duplicate used to arrive at `/invoices/new?from=` carrying
+ * amounts, supplier and notes but NOT the order and receipt links, because `InvoiceNew` reads those
+ * from URL parameters only (:34-35) and nothing was putting them there. The fix therefore silently
+ * severed an invoice from its order — and with `linkedOrderIds` empty the three-way match block
+ * never runs at all (`checks.ts:66-87`), which on screen is indistinguishable from "all clear".
+ *
+ * One link each is all the form accepts, and one is all any invoice has today; taking `[0]` is a
+ * statement about the URL contract, not a guess about the data.
+ */
+export function duplicateInvoiceHref(row: Pick<InvoiceRow, 'id' | 'order_links' | 'receipt_links'>): string {
+  const params = new URLSearchParams({ from: row.id });
+  const orderId = row.order_links?.[0]?.order_id;
+  const receiptId = row.receipt_links?.[0]?.receipt_id;
+  if (orderId) params.set('order', orderId);
+  if (receiptId) params.set('receipt', receiptId);
+  return `/invoices/new?${params.toString()}`;
+}
 
 /** Shared renderer for automatic-check results. */
 export function CheckList({ checks }: { checks: CheckResult[] }) {
@@ -143,7 +167,7 @@ export function InvoicesList() {
 
       const result = await fetchServerList<InvoiceRow>(supabase, {
         table: 'invoices',
-        select: '*, supplier:suppliers(name), order_links:invoice_order_links(order_id)',
+        select: '*, supplier:suppliers(name), order_links:invoice_order_links(order_id), receipt_links:invoice_receipt_links(receipt_id)',
         predicates,
         sort: uiSort
           ? [{ column: SORT_COLUMN[uiSort[0].column], ascending: uiSort[0].ascending }]
@@ -266,8 +290,11 @@ export function InvoicesList() {
         mobileTitle={(r) => <><span dir="ltr" className="num">{r.invoice_number}</span> · {r.supplier.name}</>}
         mobileTrailing={(r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} />}
         rowActions={(r) => [
-          { key: 'edit', label: 'עריכה', icon: Pencil, hidden: !canCreate, onSelect: () => navigate(`/invoices/${r.id}`) },
-          { key: 'duplicate', label: 'שכפול כטיוטה', icon: Copy, hidden: !canCreate, onSelect: () => navigate(`/invoices/new?from=${r.id}`) },
+          // "עריכה" was a false affordance: there is no invoice-edit command anywhere in the
+          // system, and the row action navigated to a detail screen whose amount is plain text
+          // (InvoiceDetail.tsx:248-249). "פתיחה" is the same navigation under its real name.
+          { key: 'edit', label: 'פתיחה', icon: Eye, hidden: !canCreate, onSelect: () => navigate(`/invoices/${r.id}`) },
+          { key: 'duplicate', label: 'שכפול כטיוטה', icon: Copy, hidden: !canCreate, onSelect: () => navigate(duplicateInvoiceHref(r)) },
           { key: 'share', label: 'שליחה', icon: Share2, hidden: !canShare(), onSelect: () => void shareInvoice(r, r.supplier.name) },
           { key: 'print', label: 'הדפסה', icon: Printer, onSelect: () => navigate(`/invoices/${r.id}?print=1`) },
           { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', hidden: !isOffice, onSelect: () => setDeleteTarget(r) },

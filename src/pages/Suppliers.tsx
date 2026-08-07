@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
-import { Plus, Phone, Mail, MapPin, Clock, Truck, Star, TrendingUp, TrendingDown, Pencil, Trash2, Upload } from 'lucide-react';
+import { Plus, Phone, Mail, MapPin, Clock, Truck, Star, TrendingUp, TrendingDown, Pencil, Trash2, Upload, Landmark } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
@@ -187,7 +187,19 @@ export function SuppliersList() {
 }
 
 // Exported for the wave-4 bank-details spec; the app itself reaches it only through this file.
-export function SupplierForm({ supplier, onClose, onSaved }: { supplier: SupplierRow | null; onClose: () => void; onSaved: () => void }) {
+export function SupplierForm({ supplier, onClose, onSaved, focus }: {
+  supplier: SupplierRow | null;
+  onClose: () => void;
+  onSaved: () => void;
+  /**
+   * G1, finding 15. The secure bank-details path (reason + fresh password + audit, 0061:471-490)
+   * had no entrance except /suppliers → find → עריכה → scroll — five clicks and two dialogs from
+   * the dashboard, and every existing link to /suppliers/:id lands on the read-only card. With
+   * `?edit=bank` the card can open this form directly; focusing the field is what makes that
+   * "directly" true rather than merely "the right modal is up".
+   */
+  focus?: 'bank';
+}) {
   const { profile } = useAuth();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -212,6 +224,17 @@ export function SupplierForm({ supplier, onClose, onSaved }: { supplier: Supplie
   });
 
   const set = (k: string, v: unknown) => setF((s) => ({ ...s, [k]: v }));
+
+  const bankFieldRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focus !== 'bank') return;
+    // After the modal has taken its own initial focus, otherwise the dialog wins the race.
+    const frame = requestAnimationFrame(() => {
+      bankFieldRef.current?.focus();
+      bankFieldRef.current?.scrollIntoView({ block: 'center' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focus]);
 
   async function save() {
     if (!f.name.trim()) { toast('שם ספק הוא שדה חובה', 'error'); return; }
@@ -302,12 +325,26 @@ export function SupplierForm({ supplier, onClose, onSaved }: { supplier: Supplie
         <div><label className="label" htmlFor="supplier-cutoff">שעת סגירת הזמנות</label><input id="supplier-cutoff" type="time" className="input" value={f.cutoff_time} onChange={(e) => set('cutoff_time', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-minimum">מינימום הזמנה (₪)</label><input id="supplier-minimum" type="number" className="input num" value={f.min_order_amount} onChange={(e) => set('min_order_amount', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-payment-terms">תנאי תשלום</label><input id="supplier-payment-terms" className="input" placeholder="שוטף + 30" value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} /></div>
-        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-details">פרטי בנק (מוצג למבצע ההעברות)</label><input id="supplier-bank-details" className="input" value={f.bank_details} onChange={(e) => set('bank_details', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-details">פרטי בנק (מוצג למבצע ההעברות)</label><input id="supplier-bank-details" ref={bankFieldRef} className="input" value={f.bank_details} onChange={(e) => set('bank_details', e.target.value)} /></div>
         <div>
           <label className="label" htmlFor="supplier-status">סטטוס</label>
-          <select id="supplier-status" className="input" value={f.status} onChange={(e) => set('status', e.target.value)}>
+          <select id="supplier-status" className="input" value={f.status} onChange={(e) => set('status', e.target.value)}
+            aria-describedby="supplier-status-hint">
             {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
+          {/* G1, finding 3. The selector reads as "stop using this supplier", and exactly one
+              screen honours that reading: /orders/new filters `.in('status', ['active','problematic'])`
+              (NewOrder.tsx:206). Nine other supplier pickers filter on `deleted_at` alone, so an
+              "inactive" supplier keeps appearing in invoice intake, payment requests, price-list
+              upload, bank matching and the documents folder. The sentence states what the control
+              does TODAY rather than what its label suggests. Narrowing those nine is deliberately
+              NOT done here: what `inactive` MEANS is a business decision (OPEN-DECISIONS #115), and
+              filtering first would block receiving an invoice from a supplier deactivated
+              yesterday — a real and common event. */}
+          <p id="supplier-status-hint" className="mt-1 text-xs text-ink-muted">
+            ״לא פעיל״ מסתיר את הספק בהזמנה חדשה בלבד. במסכי קליטת חשבונית, דרישת תשלום, העלאת מחירון והתאמות בנק
+            הוא ימשיך להופיע, כדי שניתן יהיה לסגור מולו חשבון פתוח.
+          </p>
         </div>
         <fieldset>
           <legend className="label">דירוג ספק</legend>
@@ -350,6 +387,17 @@ export function SupplierCard() {
   const [tab, setTab] = useState<'orders' | 'invoices' | 'payments' | 'credits' | 'prices'>('orders');
   const [editing, setEditing] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  /**
+   * G1, finding 15 — `?edit=bank` opens the edit form on the bank field.
+   *
+   * "ספק הודיע שהחליף מספר חשבון" is a real, recurring, security-sensitive task whose only route
+   * was /suppliers → search → עריכה → scroll. The parameter is consumed once and stripped, so a
+   * refresh or a Back does not re-open the modal — the same discipline OrderDetail's `?print=1`
+   * already uses. Kept as a URL rather than local state precisely so the address is shareable and
+   * the other screens that link to this card have something to point at when they need to.
+   */
+  const [editParam, setEditParam] = useParamState('edit');
+  const [editFocus, setEditFocus] = useState<'bank' | undefined>(undefined);
 
   const { data, loading, error, refetch } = useQuery(async () => {
     const supplier = unwrap(await supabase.from('suppliers').select('*').eq('id', id!).single()) as SupplierRow;
@@ -390,6 +438,14 @@ export function SupplierCard() {
   }, [id]);
 
   const canWrite = profile?.role === 'owner' || profile?.role === 'office';
+
+  useEffect(() => {
+    if (editParam !== 'bank') return;
+    // Read-only staff never get the form; stripping the param regardless keeps a stale link from
+    // sitting in the address bar claiming an edit is in progress.
+    if (canWrite) { setEditing(true); setEditFocus('bank'); }
+    setEditParam('');
+  }, [editParam, canWrite, setEditParam]);
 
   const tabs = useMemo(() => ([
     { key: 'orders' as const, label: `הזמנות (${data?.orders.length ?? 0})` },
@@ -451,6 +507,12 @@ export function SupplierCard() {
         {canWrite && (
           <div className="flex flex-wrap gap-2">
             <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={15} /> העלאת מחירון</button>
+            {/* Named, not buried: "החליף מספר חשבון" is the task, and it used to be four steps
+                inside a form of twenty fields. Navigates rather than calling setEditing directly,
+                so the address is the one another screen can link to. */}
+            <button className="btn-secondary" onClick={() => navigate(`/suppliers/${s.id}?edit=bank`)}>
+              <Landmark size={15} /> עדכון פרטי בנק
+            </button>
             <button className="btn-secondary" onClick={() => setEditing(true)}>עריכה</button>
           </div>
         )}
@@ -518,7 +580,11 @@ export function SupplierCard() {
         </div>
       )}
 
-      {editing && <SupplierForm supplier={s} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); void refetch(); }} />}
+      {editing && (
+        <SupplierForm supplier={s} focus={editFocus}
+          onClose={() => { setEditing(false); setEditFocus(undefined); }}
+          onSaved={() => { setEditing(false); setEditFocus(undefined); void refetch(); }} />
+      )}
       {uploadOpen && (
         <PriceListUploadModal supplier={{ id: s.id, name: s.name }}
           onClose={() => setUploadOpen(false)} onImported={() => void refetch()} />

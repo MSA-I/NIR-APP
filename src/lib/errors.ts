@@ -56,8 +56,14 @@ const PATTERNS: [RegExp, string][] = [
     'הייבוא בוטל: לפחות אחת מתנועות הבנק כבר קיימת במערכת.'],
   [/bank_import_invalid_rows|bank_import_invalid/i,
     'הייבוא בוטל: הקובץ כולל שורה לא תקינה או פרטי קובץ חסרים.'],
+  // G1, finding 5: the old text said "רענן ובדוק את השורות", and a refresh cannot help with any of
+  // the conditions this code actually covers. `save_goods_receipt` (0023:1505-1525) raises it when
+  // the row count differs from the order's, when a row names an item that is not on the order, when
+  // a quantity exceeds what remains, or when the status and the quantity disagree — the common
+  // real-world cause being an item that arrived and was never ordered. Naming the constraint is the
+  // only advice that leads anywhere, since a receipt cannot carry a line the order does not have.
   [/receipt_qty_exceeds_order/i,
-    'כמות בקבלה אינה תואמת לכמות שנותרה בהזמנה. רענן ובדוק את השורות.'],
+    'הקבלה אינה תואמת לשורות ההזמנה. ניתן לקלוט רק את פריטי ההזמנה, בכמות שנותרה ובסטטוס התואם לה — פריט שלא הוזמן אינו יכול להתווסף לקבלה.'],
   // Split apart in wave 8: the offline queue can hit either of these while a device was
   // disconnected, and the conflict screen asks a different question for each — "another draft
   // exists for this order" is not "this receipt is already closed".
