@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { Plus, Phone, Mail, MapPin, Clock, Truck, Star, TrendingUp, TrendingDown, Pencil, Trash2, Upload, Landmark } from 'lucide-react';
@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, PageLoader, useToast, Modal, ErrorNote, ConfirmDialog, type Column } from '../components/ui';
+import { Breadcrumbs, DataTable, StatusBadge, useToast, Modal, ErrorNote, ConfirmDialog, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, type Column } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { PriceListUploadModal, SUBMISSION_STATUS, submissionMonthLabel } from '../components/PriceListUpload';
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
@@ -142,15 +142,14 @@ export function SuppliersList() {
     { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} /> },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable cols={7} />;
   if (error) return <ErrorNote message={error} />;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="page-title">ספקים</h1>
-        {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> ספק חדש</button>}
-      </div>
+      <PageHeader title="ספקים"
+        meta={`${data?.length ?? 0} ספקים · ${(data ?? []).filter((supplier) => (supplier.open_balance ?? 0) > 0).length} עם יתרה פתוחה`}
+        actions={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> ספק חדש</button>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.contact_name ?? '').toLowerCase().includes(q) || (r.tax_id ?? '').toLowerCase().includes(q)}
         searchLabel="חיפוש בספקים"
@@ -164,13 +163,17 @@ export function SuppliersList() {
           { key: 'price-list', label: 'העלאת מחירון', icon: Upload, onSelect: () => setPriceUploadFor(r) },
           { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', onSelect: () => void requestDelete(r) },
         ] : undefined}
+        activeFilters={balanceFilter === 'open' ? 1 : 0}
+        onClearFilters={() => setBalanceFilter('')}
         toolbar={
           <select className="input w-auto!" aria-label="סינון ספקים לפי יתרה פתוחה" value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)}>
             <option value="">כל הספקים</option>
             <option value="open">עם יתרה פתוחה</option>
           </select>
-        } />
-      {balanceFilter === 'open' && rows.length === 0 && <p className="text-sm text-ink-muted">אין ספקים עם יתרה פתוחה.</p>}
+        }
+        emptyTitle="עדיין אין ספקים"
+        emptySubtitle="הוסף את הספק הראשון כדי להתחיל לנהל רכש, מחירים ויתרות"
+        emptyAction={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> ספק חדש</button>} />
       {editing && <SupplierForm supplier={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refetch(); }} />}
       {priceUploadFor && (
         <PriceListUploadModal supplier={{ id: priceUploadFor.id, name: priceUploadFor.name }}
@@ -455,7 +458,19 @@ export function SupplierCard() {
     { key: 'prices' as const, label: `מחירים (${data?.prices.length ?? 0})` },
   ]), [data]);
 
-  if (loading) return <PageLoader />;
+  function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    let next = index;
+    if (event.key === 'ArrowLeft') next = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowRight') next = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    setTab(tabs[next].key);
+    requestAnimationFrame(() => document.getElementById(`supplier-tab-${tabs[next].key}`)?.focus());
+  }
+
+  if (loading) return <RecordSkeleton />;
   if (error || !data) return <ErrorNote message={error ?? 'ספק לא נמצא'} />;
   const s = data.supplier;
   const m = data.metrics;
@@ -483,30 +498,25 @@ export function SupplierCard() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="page-title flex flex-wrap items-center gap-x-3 gap-y-1">
-            {s.name}
-            <StatusBadge meta={SUPPLIER_STATUS[s.status]} />
-            <span className="inline-flex items-center gap-2">
+      <RecordHeader
+        breadcrumbs={<Breadcrumbs items={[{ label: 'ספקים', to: '/suppliers' }, { label: s.name }]} />}
+        title={s.name}
+        status={<><StatusBadge meta={SUPPLIER_STATUS[s.status]} /><span className="inline-flex items-center gap-2">
               <RatingStars value={s.rating} />
               {s.rating != null && s.rating_updated_at && (
                 <span className="text-xs font-normal text-ink-muted" title={s.rating_note ?? undefined}>עודכן {fmtDate(s.rating_updated_at)}</span>
               )}
-            </span>
-          </h1>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-ink-muted">
+            </span></>}
+        meta={<>
             {s.contact_name && <span>{s.contact_name}</span>}
             {s.phone && <span className="flex items-center gap-1"><Phone size={13} /><span dir="ltr">{s.phone}</span></span>}
             {s.email && <span className="flex items-center gap-1"><Mail size={13} /><span dir="ltr">{s.email}</span></span>}
             {s.address && <span className="flex items-center gap-1"><MapPin size={13} />{s.address}</span>}
             {s.delivery_days.length > 0 && <span className="flex items-center gap-1"><Truck size={13} />ימי אספקה {fmtDays(s.delivery_days)}</span>}
             {s.cutoff_time && <span className="flex items-center gap-1"><Clock size={13} />סגירת הזמנות {s.cutoff_time.slice(0, 5)}</span>}
-          </div>
-        </div>
-        {canWrite && (
-          <div className="flex flex-wrap gap-2">
-            <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={15} /> העלאת מחירון</button>
+          </>}
+        primaryAction={canWrite && <button className="btn-primary" onClick={() => setUploadOpen(true)}><Upload size={15} /> העלאת מחירון</button>}
+        secondaryActions={canWrite && <>
             {/* Named, not buried: "החליף מספר חשבון" is the task, and it used to be four steps
                 inside a form of twenty fields. Navigates rather than calling setEditing directly,
                 so the address is the one another screen can link to. */}
@@ -514,9 +524,7 @@ export function SupplierCard() {
               <Landmark size={15} /> עדכון פרטי בנק
             </button>
             <button className="btn-secondary" onClick={() => setEditing(true)}>עריכה</button>
-          </div>
-        )}
-      </div>
+          </>} />
 
       <Scorecard items={scoreItems} />
 
@@ -524,8 +532,9 @@ export function SupplierCard() {
 
       <div role="tablist" aria-label={`מידע עבור ${s.name}`} className="flex gap-1 border-b border-line no-print overflow-x-auto">
         {tabs.map((t) => (
-          <button key={t.key} id={`supplier-tab-${t.key}`} role="tab" aria-selected={tab === t.key} aria-controls={`supplier-panel-${t.key}`} onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm whitespace-nowrap border-b-2 -mb-px ${tab === t.key ? 'border-action-solid text-action font-medium' : 'border-transparent text-ink-muted hover:text-ink-mid'}`}>
+          <button key={t.key} id={`supplier-tab-${t.key}`} role="tab" aria-selected={tab === t.key} aria-controls={`supplier-panel-${t.key}`}
+            tabIndex={tab === t.key ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, tabs.indexOf(t))} onClick={() => setTab(t.key)}
+            className={`min-h-11 px-4 py-2 text-sm whitespace-nowrap border-b-2 -mb-px ${tab === t.key ? 'border-action-solid text-action font-medium' : 'border-transparent text-ink-muted hover:text-ink-mid'}`}>
             {t.label}
           </button>
         ))}

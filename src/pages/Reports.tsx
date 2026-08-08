@@ -4,7 +4,7 @@ import { FileSpreadsheet, Printer, Send, CheckCircle2, LockKeyhole, Download } f
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { StatusBadge, useToast, ConfirmDialog, ErrorNote, SkeletonCards, Note, Modal } from '../components/ui';
+import { StatusBadge, useToast, ConfirmDialog, ErrorNote, PageHeader, SkeletonCards, Note, Modal } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
 import { currentMonthISO, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange } from '../lib/format';
@@ -259,22 +259,16 @@ export default function Reports() {
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
       {fetching && data && <Note tone="idle">הדוח מתעדכן. הייצוא והסימון מושבתים עד להשלמת הרענון.</Note>}
-      <div className="flex flex-wrap items-center justify-between gap-3 no-print">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="page-title">דוח חודשי לרואת חשבון</h1>
-            <span className="badge-idle">דוח חי</span>
-          </div>
-          <p className="mt-1 text-xs text-ink-muted">הנתונים הושלמו {fmtDateTime(data.generatedAt)} ואינם snapshot טרנזקציוני.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader className="no-print"
+        title={<span className="flex flex-wrap items-center gap-2">דוח חודשי לרואת חשבון <span className="badge-idle">דוח חי</span></span>}
+        meta={`הנתונים הושלמו ${fmtDateTime(data.generatedAt)} ואינם snapshot טרנזקציוני.`}
+        actions={<div className="flex flex-wrap items-center gap-2">
           <label className="sr-only" htmlFor="monthly-report-month">חודש הדוח</label>
           {/* The native clear affordance emits '' — keep the previous month instead of a broken query. */}
           <input id="monthly-report-month" type="month" className="input w-auto!" value={month} onChange={(e) => { if (e.target.value) setMonth(e.target.value); }} />
           <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הורדת הדוח כקובץ Excel'} onClick={exportExcel}><FileSpreadsheet size={15} /> ייצוא Excel</button>
           <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הדפסת הדוח או שמירה כ-PDF'} onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
-        </div>
-      </div>
+        </div>} />
 
       <ConfirmDialog open={sendSnapshot !== null} onClose={() => setSendSnapshot(null)}
         onConfirm={(reason) => {

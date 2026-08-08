@@ -189,8 +189,8 @@ export default function PayerDashboard() {
           </span>
         </Note>
       )}
-      <Scorecard items={data.kpis} />
       <AttentionZone items={data.attention} />
+      <Scorecard items={data.kpis} />
       <div className="grid gap-5 lg:grid-cols-2">
         <ChartCard title="העברות שבוצעו לפי חודש" subtitle="סך ההעברות שביצעת בארבעת החודשים האחרונים">
           <SpendBarChart points={data.monthly}

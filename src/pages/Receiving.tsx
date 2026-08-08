@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { Plus, Minus, PackageCheck, Save, CheckCircle2, FileText, Camera, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { PageLoader, useToast, StatusBadge, EmptyState, ErrorNote, SkeletonList, Note } from '../components/ui';
+import { Breadcrumbs, useToast, StatusBadge, EmptyState, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonList, Note } from '../components/ui';
 import { DocumentList } from '../components/FileUpload';
 import { deliveryNoteLines, matchDeliveryLineProduct } from '../components/document-review/model';
 import BarcodeScanControl, { type BarcodeScanResult } from '../components/BarcodeScanner';
@@ -215,7 +215,7 @@ export function ReceivingList() {
 
   return (
     <div className="space-y-4 max-w-2xl">
-      <h1 className="page-title">קבלת סחורה</h1>
+      <PageHeader title="קבלת סחורה" meta={`${orders.length} הזמנות ממתינות · ${attention.length} דורשות פעולה`} />
       <OfflineQueueStatus />
       {data?.fromDevice && (
         <Note tone={data.stale ? 'alert' : 'await'}>
@@ -621,7 +621,7 @@ export function ReceiveOrder() {
     }
   }
 
-  if (loading) return <PageLoader />;
+  if (loading) return <RecordSkeleton />;
   if (error || !order) return <ErrorNote message={error ?? 'הזמנה לא נמצאה'} />;
 
   /* completion screen: attach invoice photo + optional invoice creation */
@@ -668,8 +668,11 @@ export function ReceiveOrder() {
     // here), and only the taskbar from 64rem up, where the action bar is `lg:hidden`.
     <div className="max-w-xl mx-auto space-y-3 pb-52 lg:pb-28">
       <div>
-        <h1 className="page-title flex items-center gap-2"><PackageCheck size={22} /> קבלת סחורה</h1>
-        <div className="text-sm text-ink-muted mt-1">{order.supplier.name} · <span className="num">הזמנה #{order.number}</span></div>
+        <RecordHeader
+          breadcrumbs={<Breadcrumbs items={[{ label: 'קבלת סחורה', to: '/receiving' }, { label: `הזמנה #${order.number}` }]} />}
+          title={<span className="flex items-center gap-2"><PackageCheck size={22} /> קבלת סחורה</span>}
+          status={<StatusBadge meta={PO_STATUS[order.status]} />}
+          meta={<><span>{order.supplier.name}</span><span className="num">הזמנה #{order.number}</span><span className="num">{progress.done} מתוך {progress.total} פריטים עודכנו</span></>} />
         {data?.draft && <div className="mt-1 text-xs text-await-fg">נטענה טיוטת קבלה שנשמרה קודם</div>}
         {localDraftPending && <div className="mt-1 text-xs font-medium text-alert-fg" data-testid="receiving-local-draft">טיוטה מקומית — נשמרה במכשיר וטרם סונכרנה</div>}
         {receiptKey && !receiptKey.persisted && (

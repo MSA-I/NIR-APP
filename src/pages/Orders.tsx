@@ -6,7 +6,7 @@ import { Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle, Penc
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, PageLoader, useToast, ConfirmDialog, Modal, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
+import { Breadcrumbs, DataTable, StatusBadge, useToast, ConfirmDialog, LifecycleStrip, Modal, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, Note, type Column } from '../components/ui';
 import { PO_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, todayISO } from '../lib/format';
 import { sendOrderWhatsApp, orderWhatsAppLink } from '../lib/share';
@@ -26,6 +26,27 @@ type DraftListRow = {
   editor_step: number;
   items: { qty: number; unit_price: number | null; product: { name: string } }[];
 };
+
+export type OrderPrimaryActionKey = 'ready' | 'sent' | 'whatsapp' | 'confirm' | 'receive';
+
+export function orderPrimaryAction(status: PoStatus, hasWhatsApp: boolean): OrderPrimaryActionKey | null {
+  if (status === 'draft') return 'ready';
+  if (status === 'ready') return hasWhatsApp ? 'whatsapp' : 'sent';
+  if (status === 'sent') return 'confirm';
+  if (status === 'confirmed' || status === 'partial') return 'receive';
+  return null;
+}
+
+export function orderLifecycle(status: PoStatus, wasSent: boolean, wasConfirmed: boolean) {
+  return [
+    ...(status === 'draft' ? [{ key: 'draft', label: 'טיוטה' }] : []),
+    ...(status === 'ready' ? [{ key: 'ready', label: 'מוכנה' }] : []),
+    ...(wasSent || status === 'sent' ? [{ key: 'sent', label: 'נשלחה' }] : []),
+    ...(wasConfirmed || status === 'confirmed' || status === 'partial' ? [{ key: 'confirmed', label: 'אושרה' }] : []),
+    ...(status === 'partial' ? [{ key: 'partial', label: 'התקבלה חלקית' }] : []),
+    ...(status === 'received' ? [{ key: 'received', label: 'התקבלה' }] : []),
+  ];
+}
 
 export function OrdersList() {
   const navigate = useNavigate();
@@ -115,12 +136,11 @@ export function OrdersList() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="page-title">הזמנות רכש</h1>
-        {canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={15} /> טיוטה חדשה</button>}
-      </div>
+      <PageHeader title="הזמנות רכש"
+        meta={`${rows.length} הזמנות בתצוגה · ${data?.orders.length ?? 0} בסך הכול`}
+        actions={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={15} /> טיוטה חדשה</button>} />
 
-      {canWrite && (
+      {canWrite && !!data?.drafts.length && (
         <section aria-labelledby="my-drafts-title" className="border-y border-line-strong bg-surface">
           <div className="flex items-center justify-between gap-2 border-b border-line-soft px-3 py-3 sm:px-4">
             <div><h2 id="my-drafts-title" className="section-title">הטיוטות שלי</h2><p className="mt-0.5 text-xs text-ink-muted">המשך בדיוק מהמקום שבו הפסקת</p></div>
@@ -168,6 +188,8 @@ export function OrdersList() {
             onSelect: () => setCancelTarget(r),
           },
         ]}
+        activeFilters={statusFilter === 'all' ? 0 : 1}
+        onClearFilters={() => setStatusFilter('all')}
         toolbar={
           <select className="input w-auto!" aria-label="סינון הזמנות רכש לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="open">הזמנות פתוחות</option>
@@ -175,7 +197,8 @@ export function OrdersList() {
             {Object.entries(PO_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
         }
-        emptyTitle="אין הזמנות" emptySubtitle="צור הזמנה חדשה ממסך ״הזמנה חדשה״" />
+        emptyTitle="עדיין אין הזמנות רכש" emptySubtitle="אפשר ליצור טיוטה חדשה כדי להתחיל את תהליך הרכש"
+        emptyAction={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={15} /> טיוטה חדשה</button>} />
 
       <ConfirmDialog open={!!cancelTarget} onClose={() => setCancelTarget(null)}
         onConfirm={(reason) => void cancelOrder(reason)}
@@ -274,46 +297,50 @@ export function OrderDetail() {
     if (res.statusChanged) { toast('הסטטוס עודכן'); void refetch(); }
   }
 
-  if (loading) return <PageLoader />;
+  if (loading) return <RecordSkeleton />;
   if (error || !order) return <ErrorNote message={error ?? 'הזמנה לא נמצאה'} />;
 
   const total = order.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
   const underMin = order.supplier.min_order_amount != null && total < order.supplier.min_order_amount;
 
-  const transitions: { from: PoStatus[]; to: PoStatus; label: string; reason: string; icon: typeof Send }[] = [
-    { from: ['draft'], to: 'ready', label: 'סימון כמוכנה', reason: 'סימון הזמנה כמוכנה', icon: CheckCircle2 },
-    { from: ['ready'], to: 'sent', label: 'סימון כנשלחה לספק', reason: 'שליחת הזמנה לספק', icon: Send },
-  ];
   const waLink = orderWhatsAppLink(order, orgName);
+  const primaryKey = canWrite ? orderPrimaryAction(order.status, !!waLink) : null;
+  const nextAction = primaryKey === 'ready' ? 'סימון ההזמנה כמוכנה'
+    : primaryKey === 'sent' ? 'סימון ההזמנה כנשלחה לספק'
+      : primaryKey === 'whatsapp' ? 'שליחת ההזמנה לספק'
+        : primaryKey === 'confirm' ? 'תיעוד אישור הספק'
+          : primaryKey === 'receive' ? 'קבלת הסחורה' : undefined;
+  const primaryAction = primaryKey === 'ready' ? (
+    <button className="btn-primary" disabled={busy} onClick={() => void setStatus('ready', 'סימון הזמנה כמוכנה')}><CheckCircle2 size={15} /> סימון כמוכנה</button>
+  ) : primaryKey === 'sent' ? (
+    <button className="btn-primary" disabled={busy} onClick={() => void setStatus('sent', 'שליחת הזמנה לספק')}><Send size={15} /> סימון כנשלחה לספק</button>
+  ) : primaryKey === 'whatsapp' ? (
+    <button className="btn-primary" disabled={busy} onClick={() => void sendWhatsApp()}><MessageCircle size={15} /> שליחה ב-WhatsApp</button>
+  ) : primaryKey === 'confirm' ? (
+    <button className="btn-primary" disabled={busy} onClick={() => setSupplierConfirmOpen(true)}><CheckCircle2 size={15} /> הספק אישר</button>
+  ) : primaryKey === 'receive' ? (
+    <button className="btn-primary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={15} /> קבלת סחורה</button>
+  ) : null;
+  // Only observed/current stages are included. Purchase orders are normally created as `ready`,
+  // and a fully received order did not necessarily pass through `confirmed` or `partial`, so
+  // rendering the whole theoretical graph as complete
+  // would invent history the record does not carry.
+  const lifecycleSteps = orderLifecycle(order.status, !!order.sent_at, !!order.confirmed_at);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3 no-print">
-        <div>
-          <h1 className="page-title flex items-center gap-3"><span className="num">הזמנה #{order.number}</span> <StatusBadge meta={PO_STATUS[order.status]} /></h1>
-          <div className="text-sm text-ink-muted mt-1">
-            {order.supplier.name} · נוצרה {fmtDateTime(order.created_at)}
-            {order.sent_at && <> · נשלחה {fmtDateTime(order.sent_at)}</>}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {canWrite && transitions.filter((t) => t.from.includes(order.status)).map((t) => (
-            <button key={t.to} className="btn-primary" disabled={busy} onClick={() => void setStatus(t.to, t.reason)}>
-              <t.icon size={15} /> {t.label}
-            </button>
-          ))}
-          {canWrite && waLink && ['draft', 'ready', 'sent'].includes(order.status) && (
-            <button className="btn text-white bg-done-solid hover:bg-done-on-soft" disabled={busy} onClick={() => void sendWhatsApp()}>
-              <MessageCircle size={15} /> שליחה ב-WhatsApp
-            </button>
+      <RecordHeader className="no-print"
+        breadcrumbs={<Breadcrumbs items={[{ label: 'הזמנות', to: '/orders' }, { label: `#${order.number}` }]} />}
+        title={<span className="num">הזמנה #{order.number}</span>}
+        status={<StatusBadge meta={PO_STATUS[order.status]} />}
+        meta={<><span>{order.supplier.name}</span><span className="num font-semibold text-ink-body">{fmtMoneyExact(total)}</span><span>נוצרה {fmtDateTime(order.created_at)}</span>{order.sent_at && <span>נשלחה {fmtDateTime(order.sent_at)}</span>}</>}
+        primaryAction={primaryAction}
+        secondaryActions={<>
+          {canWrite && ['draft', 'sent'].includes(order.status) && waLink && primaryKey !== 'whatsapp' && (
+            <button className="btn-secondary" disabled={busy} onClick={() => void sendWhatsApp()}><MessageCircle size={15} /> {order.status === 'sent' ? 'שליחה חוזרת ב-WhatsApp' : 'שליחה ב-WhatsApp'}</button>
           )}
           {canWrite && order.status === 'sent' && (
-            <button className="btn-primary" disabled={busy} onClick={() => setSupplierConfirmOpen(true)}>
-              <CheckCircle2 size={15} /> הספק אישר
-            </button>
-          )}
-          {canWrite && ['sent', 'confirmed', 'partial'].includes(order.status) && (
-            <button className="btn-primary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={15} /> קבלת סחורה</button>
+            <button className="btn-secondary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={15} /> קבלת סחורה</button>
           )}
           {/* G1, finding 14 — the same URL Receiving.tsx:638 builds, from the order this time.
               An invoice can only be linked to an order through these parameters (InvoiceNew.tsx
@@ -329,8 +356,8 @@ export function OrderDetail() {
           {canWrite && !['received', 'cancelled'].includes(order.status) && (
             <button className="btn-ghost text-alert-solid" onClick={() => setConfirm({ status: 'cancelled', label: 'ביטול הזמנה' })}><XCircle size={15} /> ביטול</button>
           )}
-        </div>
-      </div>
+        </>}
+        lifecycle={order.status === 'cancelled' ? undefined : <LifecycleStrip steps={lifecycleSteps} current={order.status} nextAction={nextAction} />} />
 
       {order.confirmed_at && (
         <Note tone="done" className="no-print">
@@ -354,7 +381,19 @@ export function OrderDetail() {
           <h2 className="text-xl font-bold">{`הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`}</h2>
           <div className="text-sm mt-1">ספק: {order.supplier.name} · תאריך: {fmtDate(order.created_at)} {order.expected_date && `· אספקה מבוקשת: ${fmtDate(order.expected_date)}`}</div>
         </div>
-        <div className="overflow-x-auto print:overflow-visible">
+        <ul className="divide-y divide-line-soft md:hidden print:hidden" aria-label="פריטי ההזמנה">
+          {order.items.map((item) => (
+            <li key={item.id} className="py-3 first:pt-0 last:pb-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0"><div className="font-medium text-ink-body">{item.product.name}</div><div className="mt-1 text-xs text-ink-muted">{item.qty} {item.product.unit} × <span className="num">₪{item.unit_price.toFixed(2)}</span></div></div>
+                <span className="num shrink-0 font-semibold">{fmtMoneyExact(item.qty * item.unit_price)}</span>
+              </div>
+              {order.status !== 'draft' && <div className="mt-2 text-xs text-ink-muted">התקבל: <span className={`num ${item.received_qty >= item.qty ? 'text-done-fg' : item.received_qty > 0 ? 'text-await-fg' : ''}`}>{item.received_qty}</span> מתוך <span className="num">{item.qty}</span></div>}
+            </li>
+          ))}
+          <li className="flex items-center justify-between pt-3 font-bold"><span>סה״כ להזמנה</span><span className="num">{fmtMoneyExact(total)}</span></li>
+        </ul>
+        <div className="hidden overflow-x-auto md:block print:block print:overflow-visible">
         <table className="w-full">
           <thead className="bg-surface-sunken border-b border-line-soft">
             <tr>

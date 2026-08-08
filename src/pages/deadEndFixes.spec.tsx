@@ -125,8 +125,9 @@ describe('finding 12 — no group header over a single grouped link', () => {
   it('shows no headers to supplier or payer, the two roles the rule was written for', () => {
     for (const role of ['supplier', 'payer'] as const) {
       const sections = sectionsForRole(role, false);
-      // Both have exactly one item outside the unnamed leading section (/my-prices, /pay).
-      expect(sections.filter((s) => s.section).flatMap((s) => s.items)).toHaveLength(1);
+      // Both roles now keep both daily destinations in the unnamed section, with no decorative
+      // group label above a menu that does not need grouping.
+      expect(sections.filter((s) => s.section).flatMap((s) => s.items)).toHaveLength(0);
       expect(showNavHeaders(sections)).toBe(false);
     }
   });

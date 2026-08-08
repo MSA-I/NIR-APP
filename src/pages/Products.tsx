@@ -5,7 +5,7 @@ import { Plus, Pencil, Copy, Power, Upload, History } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, Modal, useToast, ErrorNote, SkeletonTable, ConfirmDialog, type Column } from '../components/ui';
+import { DataTable, Modal, useToast, ErrorNote, PageHeader, SkeletonTable, ConfirmDialog, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
 import { useCategories } from './Suppliers';
 import type { Product } from '../lib/types';
@@ -105,9 +105,8 @@ export default function Products() {
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="page-title">מוצרים</h1>
-        <div className="flex flex-wrap gap-2">
+      <PageHeader title="מוצרים" meta={`${rows.length} מוצרים בתצוגה`}
+        actions={<>
           {/* The same fence /prices already explains in words (PriceLists.tsx:108). Here the button
               simply vanished for kitchen, so the identical situation had two different answers on
               two screens — one a sentence, one silence. Same wording, so it reads as one rule. */}
@@ -115,8 +114,7 @@ export default function Products() {
             ? <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={16} /> העלאת מחירון ספק</button>
             : <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמשרד בלבד.</span>}
           {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> מוצר חדש</button>}
-        </div>
-      </div>
+        </>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.sku ?? '').toLowerCase().includes(q)}
         searchLabel="חיפוש במוצרים"

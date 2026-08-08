@@ -5,7 +5,7 @@ import { TrendingUp, TrendingDown, Upload, History, Pencil, X, FileCheck2 } from
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, Modal, useToast, ErrorNote, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, Modal, useToast, ErrorNote, PageHeader, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
 import { fmtDate, todayISO } from '../lib/format';
@@ -73,11 +73,11 @@ export default function PriceLists() {
   const changePct = (r: Row) => r.previous_price ? ((r.current_price - r.previous_price) / r.previous_price) * 100 : 0;
 
   const columns: Column<Row>[] = [
-    { key: 'product', header: 'מוצר', sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-ink">{r.product.name}</span> },
-    { key: 'supplier', header: 'ספק', sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
-    { key: 'unit', header: 'יח׳', render: (r) => r.product.unit },
+    { key: 'product', header: 'מוצר', priority: 3, sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-ink">{r.product.name}</span> },
+    { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
+    { key: 'unit', header: 'יח׳', priority: 3, render: (r) => r.product.unit },
     { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">₪{r.current_price.toFixed(2)}</span> },
-    { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => (r.previous_price != null ? `₪${r.previous_price.toFixed(2)}` : '—') },
+    { key: 'prev', header: 'מחיר קודם', priority: 3, className: 'num', render: (r) => (r.previous_price != null ? `₪${r.previous_price.toFixed(2)}` : '—') },
     {
       key: 'change', header: 'שינוי', sortValue: changePct,
       render: (r) => {
@@ -88,8 +88,8 @@ export default function PriceLists() {
           : <span className="inline-flex items-center gap-1 text-trend-down-fg font-medium"><TrendingDown size={14} />‎{pct.toFixed(1)}%</span>;
       },
     },
-    { key: 'date', header: 'בתוקף מ־', sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
-    { key: 'avail', header: 'זמינות', render: (r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} /> },
+    { key: 'date', header: 'בתוקף מ־', priority: 2, sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
+    { key: 'avail', header: 'זמינות', priority: 3, render: (r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} /> },
   ];
 
   if (loading) return <SkeletonTable cols={5} />;
@@ -97,25 +97,28 @@ export default function PriceLists() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="page-title">מחירונים</h1>
-        {canWrite ? (
+      <PageHeader title="מחירונים"
+        meta={`${data?.length ?? 0} מחירי ספקים · ${(data ?? []).filter((row) => row.previous_price != null && row.current_price > row.previous_price).length} התייקרויות`}
+        actions={canWrite ? (
           <div className="flex flex-wrap gap-2">
             <button className="btn-secondary" onClick={() => setImportOpen(true)}><Upload size={15} /> ייבוא רב־ספקים מ־Excel</button>
             <button className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={15} /> העלאת מחירון</button>
           </div>
         ) : (
           <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמשרד בלבד.</span>
-        )}
-      </div>
+        )} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q) || r.supplier.name.toLowerCase().includes(q)}
         searchLabel="חיפוש במחירונים"
         rowLabel={(r) => `${r.product.name} אצל ${r.supplier.name}`}
+        mobileTitle={(r) => <>{r.product.name} · {r.supplier.name}</>}
+        mobileTrailing={(r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} />}
         rowActions={(r) => [
           { key: 'history', label: 'היסטוריית מחירים', icon: History, onSelect: () => setHistoryFor(r) },
           { key: 'edit', label: 'עדכון מחיר', icon: Pencil, hidden: !canWrite, onSelect: () => setEditFor(r) },
         ]}
+        activeFilters={[supplierFilter, productFilter, onlyIncreases ? '1' : ''].filter(Boolean).length}
+        onClearFilters={() => { setSupplierFilter(''); setProductFilter(''); setIncreasesStr(''); }}
         toolbar={
           <>
             {productFilter && (
@@ -132,7 +135,10 @@ export default function PriceLists() {
               רק התייקרויות
             </label>
           </>
-        } />
+        }
+        emptyTitle="עדיין אין מחירי ספקים"
+        emptySubtitle="העלה מחירון ראשון כדי להתחיל להשוות מחירים ושינויים"
+        emptyAction={canWrite && <button className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={15} /> העלאת מחירון</button>} />
 
       {canWrite && (
         <section className="card p-4" aria-labelledby="price-submissions-heading">

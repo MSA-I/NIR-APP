@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router';
 import { FileText } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { EmptyState, ErrorNote, Note, PageLoader, StatusBadge } from '../components/ui';
+import { Breadcrumbs, EmptyState, ErrorNote, Note, RecordHeader, RecordSkeleton, StatusBadge } from '../components/ui';
 import { fmtDate, fmtNum } from '../lib/format';
 import { isUuid } from '../lib/invoiceLinkedContext';
 import { PO_STATUS, RECEIPT_LINE_STATUS, RECEIPT_STATUS } from '../lib/status';
@@ -75,7 +75,7 @@ export default function ReceiptDetail() {
     }
   }, [receiptId, orgId]);
 
-  if (loading) return <PageLoader />;
+  if (loading) return <RecordSkeleton />;
   if (!data) {
     return <div className="max-w-2xl" data-testid="receipt-detail-unavailable"><ErrorNote message={UNAVAILABLE_MESSAGE} /></div>;
   }
@@ -92,29 +92,18 @@ export default function ReceiptDetail() {
   const unsettledLines = lines.filter((line) => line.status === 'damaged' || line.status === 'returned');
   return (
     <div className="max-w-3xl space-y-4" data-testid="receipt-detail">
-      <header>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="page-title" data-testid="receipt-detail-number">
-            <span className="num">קבלה #{receipt.number}</span>
-          </h1>
-          <StatusBadge meta={RECEIPT_STATUS[receipt.status]} />
-        </div>
-        <p className="mt-1 text-sm text-ink-muted">{supplier.name} · התקבלה ב-{fmtDate(receipt.received_at)}</p>
-        {/* G1, finding 14. The only link in the app that creates an invoice already tied to its
-            order and receipt lived on the screen shown right after a receipt is completed
-            (Receiving.tsx:638) — leave it and it never comes back for that receipt. The invoice
-            form has no order/receipt picker; it reads both from the URL only (InvoiceNew.tsx:34-35).
-            The consequence is not merely inconvenience: with no link `linkedOrderIds` is empty and
-            the whole three-way match block never runs (checks.ts:66-87), which reads exactly like
-            "everything checks out". Same URL string, second entry point — no new logic. */}
-        {canOpenOrder && (
-          <div className="mt-3">
-            <Link className="btn-secondary inline-flex" to={`/invoices/new?supplier=${supplier.id}&order=${order.id}&receipt=${receipt.id}`}>
-              <FileText size={15} aria-hidden="true" /> הזנת חשבונית לקבלה זו
-            </Link>
-          </div>
-        )}
-      </header>
+      {/* G1, finding 14. This is the durable second entrance to the linked invoice form; it keeps
+          the order and receipt context that drives three-way matching. */}
+      <RecordHeader
+        breadcrumbs={<Breadcrumbs items={[{ label: 'קבלת סחורה', to: '/receiving' }, { label: `קבלה #${receipt.number}` }]} />}
+        title={<span className="num" data-testid="receipt-detail-number">קבלה #{receipt.number}</span>}
+        status={<StatusBadge meta={RECEIPT_STATUS[receipt.status]} />}
+        meta={`${supplier.name} · התקבלה ב-${fmtDate(receipt.received_at)}`}
+        primaryAction={canOpenOrder && (
+          <Link className="btn-primary inline-flex" to={`/invoices/new?supplier=${supplier.id}&order=${order.id}&receipt=${receipt.id}`}>
+            <FileText size={15} aria-hidden="true" /> הזנת חשבונית לקבלה זו
+          </Link>
+        )} />
 
       <section className="card card-pad" aria-labelledby="receipt-details-title">
         <h2 id="receipt-details-title" className="section-title">פרטי הקבלה</h2>

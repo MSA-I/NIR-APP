@@ -6,7 +6,7 @@ import { Plus, Loader2, Send, CheckCircle2, ShieldAlert, XCircle, Pencil } from 
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ConfirmDialog, ErrorNote, Note, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ConfirmDialog, ErrorNote, Note, PageHeader, SkeletonTable, type Column } from '../components/ui';
 import { CheckList } from './Invoices';
 import { runPaymentRequestChecks, type CheckResult } from '../lib/checks';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
@@ -114,13 +114,11 @@ export default function PaymentRequests() {
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="page-title">דרישות תשלום</h1>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader title="דרישות תשלום" meta={`${rows.length} דרישות בתצוגה`}
+        actions={<>
           {isOwner && <Link className="btn-secondary" to="/pay/emergency"><ShieldAlert size={16} /> מסלול חירום לביצוע</Link>}
           {isOffice && <button className="btn-primary" onClick={() => setManualCreateOpen(true)}><Plus size={16} /> דרישה חדשה</button>}
-        </div>
-      </div>
+        </>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || String(r.number).includes(q)}
         searchLabel="חיפוש בדרישות תשלום"

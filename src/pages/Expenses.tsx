@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { useParamState } from '../lib/useParamState';
-import { DataTable, EmptyState, ErrorNote, Modal, Note, SkeletonCards, StatusBadge, useToast, type Column } from '../components/ui';
+import { DataTable, EmptyState, ErrorNote, Modal, Note, PageHeader, SkeletonCards, StatusBadge, useToast, type Column } from '../components/ui';
 import { INVOICE_PAYMENT_STATUS } from '../lib/status';
 import { toHebrewError } from '../lib/errors';
 import {
@@ -231,13 +231,12 @@ export default function Expenses() {
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
-      <div className="flex flex-wrap items-center justify-between gap-3 no-print">
-        <h1 className="page-title">ריכוז הוצאות</h1>
+      <PageHeader className="no-print" title="ריכוז הוצאות" actions={
         <div className="flex flex-wrap items-center gap-2">
           <button className="btn-secondary" onClick={exportExcel} disabled={!hasInvoices || fetching || !!error || data.invalidRange} title={excelBlockedReason ?? 'הורדת הריכוז כקובץ Excel'}><FileSpreadsheet size={15} /> ייצוא Excel</button>
           <button className="btn-secondary" disabled={fetching || !!error || data.invalidRange} onClick={() => window.print()} title={rangeBlockedReason ?? 'הדפסת הריכוז או שמירה כ-PDF'}><Printer size={15} /> הדפסה / PDF</button>
         </div>
-      </div>
+      } />
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-line-soft bg-surface px-3 py-3 no-print sm:px-4">
         <div className="flex flex-wrap items-center gap-1" role="group" aria-label="טווחי תאריכים מהירים">

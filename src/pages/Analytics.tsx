@@ -1,7 +1,7 @@
 import { Star } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { PageLoader, ErrorNote, DataTable, type Column } from '../components/ui';
+import { ErrorNote, DataTable, PageHeader, SkeletonTable, type Column } from '../components/ui';
 import { fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreTone } from '../components/supplier-metrics';
 import { fmtMoney, fmtNum } from '../lib/format';
 
@@ -39,7 +39,7 @@ export default function Analytics() {
       .filter((s) => s.status !== 'pending')
       .map((s) => ({ id: s.id, name: s.name, rating: s.rating, m: byId.get(s.id) ?? null }));
   });
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable cols={7} />;
   if (error) return <ErrorNote message={error} />;
   const rows = data ?? [];
 
@@ -64,12 +64,8 @@ export default function Analytics() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="page-title">ביצועי ספקים</h1>
-        <p className="mt-0.5 text-xs text-ink-muted">
-          דירוג, זמני אספקה, עמידה בזמנים ושינויי מחיר לכל הספקים במקום אחד. עמידה בזמנים דורשת 5 קבלות לפחות לספק, אחרת "—".
-        </p>
-      </div>
+      <PageHeader title="ביצועי ספקים"
+        meta={`${rows.length} ספקים · עמידה בזמנים מוצגת לאחר 5 קבלות לפחות לספק`} />
       <DataTable
         rows={rows}
         columns={columns}

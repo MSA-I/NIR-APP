@@ -5,7 +5,7 @@ import { Loader2, Send, CheckCircle2, RotateCcw, SearchCheck } from 'lucide-reac
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageLoader, useToast, StatusBadge, Modal, ConfirmDialog, ErrorNote, Note } from '../components/ui';
+import { Breadcrumbs, useToast, StatusBadge, LifecycleStrip, Modal, ConfirmDialog, ErrorNote, Note, RecordHeader, RecordSkeleton } from '../components/ui';
 import { InvoiceAttachments } from '../components/AttachmentsPanel';
 import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
@@ -43,6 +43,32 @@ export const INVOICE_REVIEW_ACTIONS: { to: InvoiceReviewStatus; label: string }[
   { to: 'approved', label: 'אישור לתשלום' },
   { to: 'investigation', label: 'סימון לבירור' },
 ];
+
+export type InvoicePrimaryAction = InvoiceReviewStatus | 'payment-request';
+
+export function invoicePrimaryAction(
+  transitions: readonly { to: InvoiceReviewStatus }[],
+  reviewStatus: InvoiceReviewStatus,
+  paymentStatus: string,
+): InvoicePrimaryAction | null {
+  if (reviewStatus === 'approved' && paymentStatus !== 'paid') return 'payment-request';
+  return transitions.find((action) => action.to !== 'investigation')?.to ?? null;
+}
+
+export function invoiceLifecycle(status: InvoiceReviewStatus) {
+  if (status === 'received' || status === 'in_review') return [
+    { key: 'received', label: 'התקבלה' },
+    { key: 'in_review', label: 'בבדיקה' },
+    { key: 'pending_approval', label: 'ממתינה לאישור' },
+    { key: 'approved', label: 'מאושרת' },
+  ];
+  if (status === 'pending_approval') return [
+    { key: 'pending_approval', label: 'ממתינה לאישור' },
+    { key: 'approved', label: 'מאושרת' },
+  ];
+  if (status === 'approved') return [{ key: 'approved', label: 'מאושרת' }];
+  return [];
+}
 
 /**
  * Reads the status graph from the server.
@@ -187,7 +213,7 @@ export default function InvoiceDetail() {
     void refetch();
   }
 
-  if (loading) return <PageLoader />;
+  if (loading) return <RecordSkeleton />;
   if (error && !data) return <ErrorNote message={error} />;
   if (!inv || !data) return <ErrorNote message="חשבונית לא נמצאה" />;
 
@@ -198,36 +224,38 @@ export default function InvoiceDetail() {
   const transitions = graphUnavailable
     ? INVOICE_REVIEW_ACTIONS
     : INVOICE_REVIEW_ACTIONS.filter((action) => data.allowedTransitions!.includes(action.to));
+  const primaryKey = graphUnavailable ? null : invoicePrimaryAction(transitions, inv.review_status, inv.payment_status);
+  const primaryTransition = transitions.find((action) => action.to === primaryKey);
+  const primaryAction = !isOffice ? null : primaryKey === 'payment-request' ? (
+    <button className="btn-primary" onClick={() => navigate(`/payment-requests?new=${inv.id}`)}><Send size={15} /> יצירת דרישת תשלום</button>
+  ) : primaryTransition ? (
+    <button className="btn-primary" disabled={busy} onClick={() => setReviewTarget(primaryTransition.to)}>
+      {primaryTransition.to === 'approved' ? <CheckCircle2 size={15} /> : <Send size={15} />}{primaryTransition.label}
+    </button>
+  ) : null;
+  const nextAction = primaryKey === 'payment-request' ? 'יצירת דרישת תשלום'
+    : primaryTransition?.label;
+  const lifecycleSteps = invoiceLifecycle(inv.review_status);
 
   return (
     <div className="space-y-4 max-w-4xl">
       {error && <ErrorNote message={error} />}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="page-title">חשבונית {inv.invoice_number} — {inv.supplier.name}</h1>
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            <StatusBadge meta={INVOICE_REVIEW_STATUS[inv.review_status]} />
-            <StatusBadge meta={INVOICE_PAYMENT_STATUS[inv.payment_status]} />
-            {!isProcurementManager && <StatusBadge meta={INVOICE_EXPORT_STATUS[inv.export_status]} />}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2 no-print">
-          {isOffice && transitions.map((t) => (
-            <button key={t.to} className={t.to === 'investigation' ? 'btn-secondary text-alert-solid' : 'btn-primary'}
-              disabled={busy || graphUnavailable}
-              onClick={() => setReviewTarget(t.to)}>
-              {t.to === 'approved' ? <CheckCircle2 size={15} /> : t.to === 'investigation' ? <SearchCheck size={15} /> : <Send size={15} />}
-              {t.label}
+      <RecordHeader className="no-print"
+        breadcrumbs={<Breadcrumbs items={[{ label: 'חשבוניות', to: '/invoices' }, { label: inv.invoice_number }]} />}
+        title={<>חשבונית <span dir="ltr" className="num">{inv.invoice_number}</span> — {inv.supplier.name}</>}
+        status={<StatusBadge meta={INVOICE_REVIEW_STATUS[inv.review_status]} />}
+        meta={<><span className="num font-semibold text-ink-body">{fmtMoneyExact(inv.total_amount)}</span><StatusBadge meta={INVOICE_PAYMENT_STATUS[inv.payment_status]} />{!isProcurementManager && <StatusBadge meta={INVOICE_EXPORT_STATUS[inv.export_status]} />}</>}
+        primaryAction={primaryAction}
+        secondaryActions={<>
+          {isOffice && transitions.filter((transition) => transition.to !== primaryKey).map((transition) => (
+            <button key={transition.to} className="btn-secondary" disabled={busy || graphUnavailable}
+              onClick={() => setReviewTarget(transition.to)}>
+              {transition.to === 'investigation' ? <SearchCheck size={15} /> : transition.to === 'approved' ? <CheckCircle2 size={15} /> : <Send size={15} />}{transition.label}
             </button>
           ))}
-          {isOffice && inv.review_status === 'approved' && inv.payment_status !== 'paid' && (
-            <button className="btn-primary" onClick={() => navigate(`/payment-requests?new=${inv.id}`)}>
-              <Send size={15} /> יצירת דרישת תשלום
-            </button>
-          )}
           {canEdit && <button className="btn-secondary" onClick={() => setCreditOpen(true)}><RotateCcw size={15} /> דרישת זיכוי</button>}
-        </div>
-      </div>
+        </>}
+        lifecycle={lifecycleSteps.length ? <LifecycleStrip steps={lifecycleSteps} current={inv.review_status} nextAction={nextAction} /> : undefined} />
 
       {isOffice && graphUnavailable && (
         <Note tone="alert" role="alert">
@@ -244,8 +272,8 @@ export default function InvoiceDetail() {
 
       {/* print-area on the money + details cards: shadows/borders drop in print so the sheet
           stays a clean invoice document (same convention as the Orders print sheet). */}
-      <div className={`grid gap-3 ${isProcurementManager ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
-        <div className="card card-pad print-area"><div className="text-xs text-ink-muted">סה״כ חשבונית</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(inv.total_amount)}</div>
+      <div className={`card grid overflow-hidden ${isProcurementManager ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-4'}`}>
+        <div className="p-4 print-area"><div className="text-xs text-ink-muted">סה״כ חשבונית</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(inv.total_amount)}</div>
           <div className="text-xs text-ink-muted mt-0.5">לפני מע״מ {fmtMoneyExact(inv.amount_before_vat)} + מע״מ {fmtMoneyExact(inv.vat_amount)}</div></div>
         {!isProcurementManager && (
           <>
@@ -253,10 +281,10 @@ export default function InvoiceDetail() {
                 different claim from "₪0.00 paid". fmtMoneyExact(null) renders — so the tile stays honest.
                 The balance tile below keeps its ?? total_amount fallback: an invoice with no ledger row
                 genuinely owes its full amount, which is a derivation, not an invented figure. */}
-            <div className="card card-pad print-area"><div className="text-xs text-ink-muted">שולם</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.paid_amount ?? null)}</div></div>
+            <div className="border-s border-line-soft p-4 print-area"><div className="text-xs text-ink-muted">שולם</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.paid_amount ?? null)}</div></div>
             {/* credited = already offset, a settled claim like "paid" — done, not the retired violet (audit 2026-07-21) */}
-            <div className="card card-pad print-area"><div className="text-xs text-ink-muted">זוכה</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.credited_amount ?? null)}</div></div>
-            <div className="card card-pad print-area"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`text-lg font-bold num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
+            <div className="border-t border-line-soft p-4 print-area sm:border-s sm:border-t-0"><div className="text-xs text-ink-muted">זוכה</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.credited_amount ?? null)}</div></div>
+            <div className="border-s border-t border-line-soft p-4 print-area sm:border-t-0"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`text-lg font-bold num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
           </>
         )}
       </div>

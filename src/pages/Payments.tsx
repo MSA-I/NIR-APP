@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
 import { useParamState } from '../lib/useParamState';
-import { DataTable, ErrorNote, SkeletonTable, useToast, type ServerColumn } from '../components/ui';
+import { DataTable, ErrorNote, PageHeader, SkeletonTable, useToast, type ServerColumn } from '../components/ui';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import type { Payment } from '../lib/types';
 import {
@@ -139,7 +139,8 @@ export default function Payments() {
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
-      <h1 className="page-title flex items-center gap-2"><CreditCard size={22} /> תשלומים</h1>
+      <PageHeader title={<span className="flex items-center gap-2"><CreditCard size={22} /> תשלומים</span>}
+        meta={`${data.total} תשלומים שנרשמו${activeFilters ? ' · תצוגה מסוננת' : ''}`} />
       <DataTable rows={data.rows} columns={columns}
         error={error}
         server={{
@@ -169,7 +170,7 @@ export default function Payments() {
             ) : null}
           </>
         }
-        emptyTitle="לא נרשמו תשלומים" />
+        emptyTitle="טרם בוצעו תשלומים" emptySubtitle="תשלומים שבוצעו יופיעו כאן כיומן כספי." />
     </div>
   );
 }

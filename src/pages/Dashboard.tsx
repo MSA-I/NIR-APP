@@ -3,7 +3,7 @@ import { type ReactNode } from 'react';
 import { Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RotateCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
-import { Skeleton, StatusBadge, Note, AttentionZone, TaskLine, type AttentionItem } from '../components/ui';
+import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, TaskLine, type AttentionItem } from '../components/ui';
 import { EXCEPTION_TYPE, PO_STATUS, SEVERITY } from '../lib/status';
 import {
   addCalendarDays, BUSINESS_TIME_ZONE, dateStartInstant, daysInCalendarMonth,
@@ -603,12 +603,13 @@ export default function Dashboard() {
   const categoriesAria = data ? `הוצאות לפי קטגוריה: ${categoryTotal > 0
     ? data.categories.map((category) => `${category.name} ${fmtMoneyExact(category.total)}, ${Math.round((category.total / categoryTotal) * 100)} אחוז`).join(', ')
     : categoryEmptyMessage}` : '';
+  const actionKinds = data?.attention.filter((item) => item.count != null && item.count > 0 && (item.tone === 'alert' || item.tone === 'await')).length ?? 0;
 
   return (
     <div className="dashboard-depth space-y-5">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <h1 className="page-title min-w-0">מרכז הבקרה</h1>
-        <div className="flex items-center gap-2 text-xs text-ink-muted">
+      <PageHeader title="מרכז הבקרה"
+        meta={actionKinds > 0 ? `יש היום ${actionKinds} סוגי טיפול שדורשים תשומת לב` : 'אין משימות דחופות כרגע'}
+        actions={<div className="flex items-center gap-2 text-xs text-ink-muted">
           <span aria-live="polite" aria-atomic="true">
             {data?.fetchedAt && (
               <span key={data.fetchedAt.getTime()} className="freshness-settle">
@@ -620,8 +621,7 @@ export default function Dashboard() {
             aria-label="רענון נתוני מרכז הבקרה" title="רענון">
             <RotateCw size={15} className={fetching ? 'animate-spin' : ''} />
           </button>
-        </div>
-      </div>
+        </div>} />
 
       {/* Truth-reporting (CLAUDE.md): a failed load/refetch shows an inline note WITH retry and keeps
           whatever data we still hold on screen — it never blanks the sections that did load. */}
@@ -634,9 +634,9 @@ export default function Dashboard() {
 
       {data && (
         <div className="dash-enter space-y-5">
-          <DeliveriesCard today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount} />
-
           <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול" />
+
+          <DeliveriesCard today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount} />
 
           <div className="card grid grid-cols-1 sm:grid-cols-3">
             <BandStat title="יתרת חשבוניות פתוחות" value={data.money.openBalance} tone="await" to="/invoices?pay=unpaid"

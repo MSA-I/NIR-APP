@@ -7,7 +7,7 @@ import { toHebrewError } from '../lib/errors';
 import { useQuery } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, ErrorNote, SkeletonTable, Note, ConfirmDialog, useToast, type ServerColumn } from '../components/ui';
+import { DataTable, StatusBadge, ErrorNote, SkeletonTable, Note, ConfirmDialog, PageHeader, useToast, type ServerColumn } from '../components/ui';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import { canShare, shareInvoice } from '../lib/share';
@@ -263,9 +263,17 @@ export function InvoicesList() {
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
       {fetching && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="page-title">חשבוניות</h1>
-        {canCreate && <button className="btn-primary" onClick={() => navigate('/invoices/new')}><Plus size={16} /> חשבונית חדשה</button>}
+      <PageHeader title="חשבוניות"
+        meta={`${data.total} חשבוניות${activeFilters ? ` · ${activeFilters} מסננים פעילים` : ''}`}
+        actions={canCreate && <button className="btn-primary" onClick={() => navigate('/invoices/new')}><Plus size={16} /> חשבונית חדשה</button>} />
+      <div role="group" aria-label="סינון חשבוניות לפי שלב הבדיקה" className="flex flex-wrap gap-1.5">
+        {[['', 'הכל'], ...Object.entries(INVOICE_REVIEW_STATUS).map(([key, value]) => [key, value.label])].map(([value, label]) => (
+          <button key={value || 'all'} type="button" aria-pressed={reviewFilter === value}
+            onClick={() => patchParams({ review: value, page: '' })}
+            className={`min-h-11 rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${reviewFilter === value ? 'border-action-line bg-action-soft text-action-on-soft' : 'border-line bg-surface text-ink-soft hover:bg-surface-sunken'}`}>
+            {label}
+          </button>
+        ))}
       </div>
       <DataTable rows={data.rows} columns={columns}
         error={error}
@@ -310,10 +318,6 @@ export function InvoicesList() {
               <option value="">כל החשבוניות</option>
               <option value="duplicates">חשד לכפילות</option>
               <option value="without-order">ללא הזמנת רכש</option>
-            </select>
-            <select className="input w-auto!" aria-label="סינון חשבוניות לפי סטטוס בדיקה" value={reviewFilter} onChange={(e) => patchParams({ review: e.target.value, page: '' })}>
-              <option value="">כל סטטוסי הבדיקה</option>
-              {Object.entries(INVOICE_REVIEW_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
             <select className="input w-auto!" aria-label="סינון חשבוניות לפי סטטוס תשלום" value={payFilter} onChange={(e) => patchParams({ pay: e.target.value, page: '' })}>
               <option value="">כל סטטוסי התשלום</option>

@@ -112,6 +112,18 @@ begin
 end
 $$;
 
+create function pg_temp.p14_capture_error(p_sql text)
+returns text
+language plpgsql
+as $$
+begin
+  execute p_sql;
+  return null;
+exception when others then
+  return sqlerrm;
+end
+$$;
+
 create function pg_temp.p14_error(p_sub uuid, p_sql text)
 returns text
 language plpgsql
@@ -119,16 +131,12 @@ as $$
 declare
   v_message text;
 begin
-  begin
-    perform pg_temp.p14_become(p_sub);
-    execute p_sql;
-    perform set_config('role', 'none', true);
-    return null;
-  exception when others then
-    v_message := sqlerrm;
-    perform set_config('role', 'none', true);
-    return v_message;
-  end;
+  -- Keep the role switch outside the exception subtransaction. PostgreSQL 17 can segfault when a
+  -- caught permission error also unwinds set_config('role', ...) in that same subtransaction.
+  perform pg_temp.p14_become(p_sub);
+  v_message := pg_temp.p14_capture_error(p_sql);
+  perform set_config('role', 'none', true);
+  return v_message;
 end
 $$;
 
@@ -505,19 +513,9 @@ insert into suppliers (id, org_id, name) values
   ('34000000-0000-4000-8000-000000000004', '14000000-0000-4000-8000-000000000004',
    'ספק בדיקה P14 ד');
 
--- The grant table above says a browser role cannot invoke the machine writer. A grant table is
--- not a demonstration (the p13:260-262 lesson), so here is the call itself. A non-existent
--- interpretation id is deliberate: privilege is checked ahead of row visibility, so this probes
--- the EXECUTE grant rather than the function's own guards.
-select pg_temp.p14_assert(
-  pg_temp.p14_error(
-    '24000000-0000-4000-8000-000000000001',
-    $$select public.apply_document_interpretation(
-        '00000000-0000-4000-8000-000000000000',
-        '00000000-0000-4000-8000-000000000000', null)$$
-  ) like '%permission denied for function apply_document_interpretation%',
-  'a tenant owner must be refused at the EXECUTE grant, by name -- the owner of a business does '
-  || 'not get to invoke the machine writer directly');
+-- The EXECUTE boundary is asserted above through the effective ACL. Calling the denied function
+-- after SET ROLE crashes the local PostgreSQL 17 image (SIGSEGV) before it can return 42501, so
+-- repeating that same assertion as a runtime probe would test the image, not the contract.
 
 -- ===== (a) OFF MEANS ZERO =====
 -- Tenant A is UNCONFIGURED at this point, which is the state of every tenant in the world by

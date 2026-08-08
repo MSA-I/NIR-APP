@@ -125,10 +125,160 @@ export function SkeletonList({ rows = 5, title = true }: { rows?: number; title?
   );
 }
 
-export function EmptyState({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
+/** Mirrors a record page: identity, facts/actions, then the main content surface. */
+export function RecordSkeleton() {
+  return (
+    <SkeletonRegion>
+      <div className="space-y-3">
+        <Skeleton className="h-3 w-28" />
+        <div className="flex flex-wrap items-center gap-3">
+          <Skeleton className="h-7 w-56" />
+          <Skeleton className="h-5 w-20 rounded-full" />
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-20" />
+        </div>
+      </div>
+      <div className="card card-pad space-y-4">
+        <Skeleton className="h-5 w-36" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-5/6" />
+        <Skeleton className="h-4 w-2/3" />
+      </div>
+    </SkeletonRegion>
+  );
+}
+
+export interface BreadcrumbItem {
+  label: string;
+  to?: string;
+}
+
+export function Breadcrumbs({ items }: { items: readonly BreadcrumbItem[] }) {
+  return (
+    <nav aria-label="פירורי לחם" className="text-xs text-ink-muted">
+      <ol className="flex min-w-0 items-center gap-1.5">
+        {items.map((item, index) => {
+          const current = index === items.length - 1;
+          return (
+            <li key={`${item.label}-${index}`} className="flex min-w-0 items-center gap-1.5">
+              {item.to && !current ? (
+                <Link to={item.to} className="rounded-sm hover:text-ink-body hover:underline focus-visible:outline-2 focus-visible:outline-focus">
+                  {item.label}
+                </Link>
+              ) : (
+                <span aria-current={current ? 'page' : undefined} className={current ? 'truncate text-ink-soft' : undefined}>
+                  {item.label}
+                </span>
+              )}
+              {!current && <ChevronLeft size={13} aria-hidden="true" className="shrink-0 text-ink-ghost" />}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+export function PageHeader({ title, meta, breadcrumbs, actions, className = '' }: {
+  title: ReactNode;
+  meta?: ReactNode;
+  breadcrumbs?: ReactNode;
+  actions?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <header className={`flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between ${className}`}>
+      <div className="min-w-0 space-y-1">
+        {breadcrumbs}
+        <h1 className="page-title break-words">{title}</h1>
+        {meta && <div className="text-sm text-ink-muted">{meta}</div>}
+      </div>
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+    </header>
+  );
+}
+
+export function RecordHeader({ title, status, meta, breadcrumbs, primaryAction, secondaryActions, lifecycle, className = '' }: {
+  title: ReactNode;
+  status?: ReactNode;
+  meta?: ReactNode;
+  breadcrumbs?: ReactNode;
+  primaryAction?: ReactNode;
+  secondaryActions?: ReactNode;
+  lifecycle?: ReactNode;
+  className?: string;
+}) {
+  const hasActions = primaryAction || secondaryActions;
+  return (
+    <header className={`space-y-4 ${className}`}>
+      {breadcrumbs}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+            <h1 className="page-title break-words">{title}</h1>
+            {status}
+          </div>
+          {meta && <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-muted">{meta}</div>}
+        </div>
+        {hasActions && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {primaryAction}
+            {secondaryActions}
+          </div>
+        )}
+      </div>
+      {lifecycle}
+    </header>
+  );
+}
+
+export interface LifecycleStep {
+  key: string;
+  label: string;
+}
+
+export function LifecycleStrip({ steps, current, nextAction }: {
+  steps: readonly LifecycleStep[];
+  current: string;
+  nextAction?: ReactNode;
+}) {
+  const currentIndex = steps.findIndex((step) => step.key === current);
+  return (
+    <div className="rounded-xl border border-line-soft bg-surface-sunken px-3 py-3">
+      <ol aria-label="שלבי התהליך" className="flex min-w-0 items-center overflow-x-auto pb-1">
+        {steps.map((step, index) => {
+          const isCurrent = index === currentIndex;
+          const isComplete = currentIndex >= 0 && index < currentIndex;
+          return (
+            <li key={step.key} aria-current={isCurrent ? 'step' : undefined} className="flex min-w-fit flex-1 items-center">
+              <span className={`flex items-center gap-1.5 text-xs font-medium ${isCurrent ? 'text-info-fg' : isComplete ? 'text-done-fg' : 'text-ink-muted'}`}>
+                <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${isCurrent ? 'border-info-line bg-info-soft' : isComplete ? 'border-done-line bg-done-soft' : 'border-line-strong bg-surface'}`} aria-hidden="true">
+                  {isComplete ? <Check size={12} /> : index + 1}
+                </span>
+                {step.label}
+                {isCurrent && <span className="sr-only"> — השלב הנוכחי</span>}
+              </span>
+              {index < steps.length - 1 && <ChevronLeft size={14} className="mx-2 shrink-0 text-ink-ghost" aria-hidden="true" />}
+            </li>
+          );
+        })}
+      </ol>
+      {nextAction && (
+        <div className="mt-2 border-t border-line-soft pt-2 text-sm text-ink-body">
+          <span className="font-semibold">הפעולה הבאה:</span> {nextAction}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function EmptyState({ title, subtitle, action, icon }: { title: string; subtitle?: string; action?: ReactNode; icon?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <Inbox size={36} className="text-ink-ghost mb-3" />
+      <span aria-hidden="true" className="mb-3 text-ink-ghost">{icon ?? <Inbox size={36} />}</span>
       <div className="text-ink-soft font-medium">{title}</div>
       {subtitle && <div className="text-sm text-ink-muted mt-1">{subtitle}</div>}
       {action && <div className="mt-4">{action}</div>}
@@ -161,16 +311,19 @@ export function KpiCard({ title, value, sub, tone = 'idle', onClick }: {
   // done/await/alert/info/idle — one component, two languages for the same five meanings. The class
   // each maps to is unchanged; await-fg also lifts the small value off the contrast raw amber-600 failed.
   const toneCls = { idle: 'text-ink', done: 'text-done-fg', await: 'text-await-fg', alert: 'text-alert-fg', info: 'text-info-fg' }[tone];
-  return (
-    <button onClick={onClick} disabled={!onClick}
-      className="card card-pad text-start w-full card-link-hover disabled:hover:border-line disabled:hover:shadow-sm cursor-pointer disabled:cursor-default">
+  const className = `card card-pad text-start w-full ${onClick ? 'card-link-hover cursor-pointer' : ''}`;
+  const content = (
+    <>
       <div className="text-xs font-medium text-ink-muted">{title}</div>
       {/* .num already aligns to the logical end (text-align: end, unlayered → wins); the physical
           textAlign:right + dead text-start it replaces broke the RTL rule (audit round 2). */}
       <div className={`text-xl font-bold mt-1 num ${toneCls}`} dir="ltr">{value}</div>
       {sub && <div className="text-xs text-ink-muted mt-1">{sub}</div>}
-    </button>
+    </>
   );
+  return onClick
+    ? <button type="button" onClick={onClick} className={className}>{content}</button>
+    : <div className={className}>{content}</div>;
 }
 
 /* ---------- AttentionZone — dashboard "requires attention today" ---------- */
@@ -615,6 +768,8 @@ interface DataTableCommonProps<T> {
   searchLabel?: string;
   emptyTitle?: string;
   emptySubtitle?: string;
+  emptyAction?: ReactNode;
+  emptyIcon?: ReactNode;
   toolbar?: ReactNode;
   /** 'cards' (default) stacks rows below md; reserve 'scroll' for true matrix previews.
       Search/filter/sort/pagination are shared. */
@@ -768,6 +923,7 @@ function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
     if (top + ph > window.innerHeight - 8 && rect.top - ph - 4 >= 8) top = rect.top - ph - 4;
     top = Math.min(Math.max(top, 8), window.innerHeight - ph - 8);
     setPos({ top, left });
+    panel.querySelector<HTMLElement>('input:not(:disabled)')?.focus();
   }, [open]);
 
   useEffect(() => {
@@ -808,7 +964,7 @@ function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
         <Columns3 size={15} aria-hidden="true" /> עמודות
       </button>
       {open && createPortal(
-        <div ref={panelRef}
+        <div ref={panelRef} role="dialog" aria-label="בחירת עמודות" tabIndex={-1}
           style={{ position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, visibility: pos ? 'visible' : 'hidden' }}
           className="z-50 min-w-44 max-w-64 max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain border border-line bg-surface p-2 shadow-menu">
           <ColumnChecklist options={options} />
@@ -832,7 +988,7 @@ function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
 export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
   const {
     rows, columns, onRowClick, searchLabel = 'חיפוש בטבלה',
-    emptyTitle = 'אין נתונים להצגה', emptySubtitle, toolbar, mobile = 'cards',
+    emptyTitle = 'אין נתונים להצגה', emptySubtitle, emptyAction, emptyIcon, toolbar, mobile = 'cards',
     mobileTitle, mobileTrailing, rowActions, rowLabel,
     error = null, activeFilters = 0, onClearFilters, columnPicker,
   } = props;
@@ -1019,7 +1175,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
       <EmptyState title="אין תוצאות לסינון הנוכחי" subtitle="שנה את הסינון או נקה אותו כדי לראות רשומות"
         action={<button type="button" className="btn-secondary" onClick={clearFilters}>נקה סינון</button>} />
     ) : (
-      <EmptyState title={emptyTitle} subtitle={emptySubtitle} />
+      <EmptyState title={emptyTitle} subtitle={emptySubtitle} action={emptyAction} icon={emptyIcon} />
     )
   ) : (
     <>

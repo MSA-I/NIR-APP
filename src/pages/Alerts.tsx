@@ -6,7 +6,7 @@ import { useParamState } from '../lib/useParamState';
 import { buildSummary, type Summary } from '../lib/summary';
 import type { AlertSeverity } from '../lib/alerts';
 import { fmtDateTime } from '../lib/format';
-import { SkeletonCards, ErrorNote, Note } from '../components/ui';
+import { SkeletonCards, ErrorNote, Note, PageHeader } from '../components/ui';
 import { PushSection } from '../components/PushSettings';
 import { useAuth } from '../auth/AuthContext';
 import { markAllNotificationsRead } from '../lib/notifications';
@@ -47,18 +47,14 @@ export default function Alerts() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="page-title">התראות</h1>
-          <p className="text-xs text-ink-muted mt-0.5">
+      <PageHeader title="התראות" meta={
+          <span>
             נבדק {fmtDateTime(data.generatedAt)}{fetching ? ' · מתעדכן כעת' : ''}
-          </p>
-        </div>
-        <button className="btn-secondary" onClick={() => void refetch()} disabled={fetching}>
+          </span>
+        } actions={<button className="btn-secondary" onClick={() => void refetch()} disabled={fetching}>
           <RefreshCw size={15} className={fetching ? 'animate-spin' : ''} />
           רענון
-        </button>
-      </div>
+        </button>} />
 
       {(error || !data.complete) && (
         <Note tone="alert">

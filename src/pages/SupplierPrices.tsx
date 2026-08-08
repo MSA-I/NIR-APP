@@ -4,7 +4,7 @@ import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, Modal, useToast, ErrorNote, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, Modal, useToast, ErrorNote, PageHeader, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
 import { cellText, matchColumn, nameKey, readSheet } from '../lib/importSheet';
 import { fmtDate, todayISO } from '../lib/format';
@@ -145,17 +145,13 @@ export default function SupplierPrices() {
 
   return (
     <div className="space-y-4 max-w-4xl">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="page-title flex items-center gap-2"><Tags size={22} /> המחירון שלי</h1>
-          <div className="text-sm text-ink-muted mt-1">{`${data.supplier.name} — עדכון מחירים וזמינות עבור ${data.organizationName}`}</div>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      <PageHeader title={<span className="flex items-center gap-2"><Tags size={22} /> המחירון שלי</span>}
+        meta={`${data.supplier.name} — עדכון מחירים וזמינות עבור ${data.organizationName}`}
+        actions={<div className="flex flex-wrap gap-2">
           <button className="btn-secondary" onClick={downloadTemplate}><Download size={15} /> הורדת תבנית</button>
           <button className="btn-secondary" onClick={() => setDocumentOpen(true)}><Upload size={15} /> PDF, תמונה או Word</button>
           <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> הגשת מחירון חודשי</button>
-        </div>
-      </div>
+        </div>} />
 
       <Note tone="info">
         התבנית כוללת מזהה מוצר ושם קנוני. כל הגשה נשמרת לפי חודש וגרסה; שורה לא מוכרת תידחה בלי ליצור מוצר חדש ובלי לעצור שורות תקינות.

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { toHebrewError } from "../lib/errors";
-import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, KeyRound } from 'lucide-react';
+import { Link } from 'react-router';
+import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, KeyRound, ClipboardCheck } from 'lucide-react';
 import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageLoader, useToast, ErrorNote, DataTable, StatusBadge, ConfirmDialog, Modal, type Column } from '../components/ui';
+import { PageHeader, SkeletonCards, useToast, ErrorNote, DataTable, StatusBadge, ConfirmDialog, Modal, type Column } from '../components/ui';
 import { AutonomyPolicyPanel } from '../components/AutonomyPolicyPanel';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVITATION_STATUS } from '../lib/status';
@@ -200,12 +201,14 @@ export default function Settings() {
     },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonCards count={3} cols={3} title />;
   if (error) return <ErrorNote message={error} />;
 
   return (
     <div className="space-y-5 max-w-3xl">
-      <h1 className="page-title flex items-center gap-2"><SettingsIcon size={22} /> הגדרות מערכת</h1>
+      <PageHeader title={<span className="flex items-center gap-2"><SettingsIcon size={22} /> הגדרות מערכת</span>}
+        meta="עסק, אבטחה, צוות ומדיניות עבודה"
+        actions={<Link className="btn-secondary" to="/onboarding"><ClipboardCheck size={16} /> רשימת הקמה</Link>} />
 
       <div className="card card-pad space-y-4">
         <h2 className="section-title">הגדרות עסק</h2>

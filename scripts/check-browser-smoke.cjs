@@ -189,7 +189,7 @@ async function auditAccessibility(page, scope) {
       .filter(visible).filter((element) => !accessibleName(element)).map(selector);
     const ids = [...document.querySelectorAll('[id]')].map((element) => element.id);
     const duplicateIds = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
-    const main = document.querySelector('#main');
+    const main = document.querySelector('#main, main');
     return {
       lang: document.documentElement.lang,
       dir: document.documentElement.dir,
@@ -333,11 +333,10 @@ async function roleAndViewportMatrix(browser) {
     try {
       await login(page, role);
       assert.equal(new URL(page.url()).pathname, expectedHome, `${role}: wrong home route`);
-      const hasMobileActions = ['owner', 'office', 'kitchen', 'accountant'].includes(role);
-      assert.equal(await page.getByRole('group', { name: 'פעולות מהירות' }).count(), hasMobileActions ? 1 : 0,
-        `${role}: wrong mobile action group visibility`);
-      assert.equal(await page.locator('.mobile-action-bar').count(), hasMobileActions ? 1 : 0,
-        `${role}: wrong mobile action bar visibility`);
+      assert.equal(await page.getByRole('navigation', { name: 'ניווט ראשי בנייד' }).count(), 1,
+        `${role}: mobile navigation is missing`);
+      assert.equal(await page.locator('.mobile-action-bar').count(), 1,
+        `${role}: mobile navigation bar is missing`);
       await assertMobileSpeedDialHidden(page, `${role}/390`);
       for (const [label, width, height] of viewports) {
         await page.setViewportSize({ width, height });
@@ -384,16 +383,18 @@ async function roleAndViewportMatrix(browser) {
 
 async function quickActionsContract(browser) {
   const roleLabels = {
-    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
-    office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
-    kitchen: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
-    accountant: ['מרכז הבקרה', 'חשבוניות', 'תשלומים'],
+    owner: ['בית', 'חשבוניות', 'צילום מסמך', 'הזמנות', 'עוד'],
+    office: ['בית', 'הזמנות', 'צילום מסמך', 'חשבוניות', 'עוד'],
+    kitchen: ['בית', 'קבלה', 'צילום מסמך', 'מסמכים', 'עוד'],
+    accountant: ['בית', 'חשבוניות', 'לביצוע', 'בנק', 'עוד'],
+    payer: ['בית', 'לביצוע'],
   };
   const roleTargets = {
-    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
-    office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
-    kitchen: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
-    accountant: ['/dashboard', '/invoices', '/pay'],
+    owner: ['/dashboard', '/invoices', null, '/orders', null],
+    office: ['/dashboard', '/orders', null, '/invoices', null],
+    kitchen: ['/dashboard', '/receiving', null, '/documents', null],
+    accountant: ['/dashboard', '/invoices', '/pay', '/bank', null],
+    payer: ['/dashboard', '/pay'],
   };
 
   for (const [role, expectedLabels] of Object.entries(roleLabels)) {
@@ -402,12 +403,12 @@ async function quickActionsContract(browser) {
     captureConsole(page, `mobile-action-bar:${role}`);
     try {
       await login(page, role);
-      const group = page.getByRole('group', { name: 'פעולות מהירות' });
-      await group.waitFor();
+      const navigation = page.getByRole('navigation', { name: 'ניווט ראשי בנייד' });
+      await navigation.waitFor();
       const bar = page.locator('.mobile-action-bar');
       assert.equal(await bar.count(), 1, `${role}: mobile action bar is not unique`);
-      assert(await bar.evaluate((node) => node === document.querySelector('[role="group"][aria-label="פעולות מהירות"]')),
-        `${role}: .mobile-action-bar is not the named role=group`);
+      assert(await bar.evaluate((node) => node === document.querySelector('nav[aria-label="ניווט ראשי בנייד"]')),
+        `${role}: .mobile-action-bar is not the named navigation`);
       await assertMobileSpeedDialHidden(page, `${role}/390`);
       const items = bar.locator('.mobile-action');
       assert.deepEqual((await items.allTextContents()).map((label) => label.trim()), expectedLabels,
@@ -425,7 +426,7 @@ async function quickActionsContract(browser) {
         report.screenshots.push('mobile-action-bar-390.png');
 
         const chooser = page.waitForEvent('filechooser');
-        await group.getByRole('button', { name: 'צילום מסמך' }).click();
+        await navigation.getByRole('button', { name: 'צילום מסמך' }).click();
         await chooser;
 
         for (const [width, height] of [[320, 720], [360, 800], [390, 844], [430, 932], [768, 1024]]) {
@@ -481,19 +482,6 @@ async function quickActionsContract(browser) {
     }
   }
 
-  for (const role of ['payer']) {
-    const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
-    const page = await context.newPage();
-    try {
-      await login(page, role);
-      assert.equal(await page.getByRole('group', { name: 'פעולות מהירות' }).count(), 0, `${role}: mobile action group must be absent`);
-      assert.equal(await page.locator('.mobile-action-bar').count(), 0, `${role}: mobile action bar must be absent`);
-      await assertMobileSpeedDialHidden(page, `${role}/390`);
-    } finally {
-      await closeContext(context);
-    }
-  }
-
   const supplierContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
   await supplierContext.route('**/rest/v1/profiles?**', async (route) => {
     const response = await route.fetch();
@@ -519,8 +507,11 @@ async function quickActionsContract(browser) {
     await supplierPage.getByRole('button', { name: 'התחברות' }).click();
     await supplierPage.waitForFunction(() => location.pathname === '/dashboard', null, { timeout: 25_000 });
     await settle(supplierPage);
-    assert.equal(await supplierPage.getByRole('group', { name: 'פעולות מהירות' }).count(), 0, 'supplier: mobile action group must be absent');
-    assert.equal(await supplierPage.locator('.mobile-action-bar').count(), 0, 'supplier: mobile action bar must be absent');
+    const supplierNavigation = supplierPage.getByRole('navigation', { name: 'ניווט ראשי בנייד' });
+    assert.equal(await supplierNavigation.count(), 1, 'supplier: mobile navigation is missing');
+    assert.deepEqual((await supplierNavigation.locator('.mobile-action').allTextContents()).map((label) => label.trim()), ['בית', 'המחירון שלי'],
+      'supplier: wrong mobile navigation labels or order');
+    assert.equal(await supplierPage.locator('.mobile-action-bar').count(), 1, 'supplier: mobile navigation bar is missing');
     await assertMobileSpeedDialHidden(supplierPage, 'supplier/390');
   } finally {
     await closeContext(supplierContext);
@@ -551,7 +542,9 @@ async function quickActionsContract(browser) {
     const menu = desktopPage.getByRole('menu', { name: 'פעולות מהירות' });
     await menu.waitFor();
     const items = menu.getByRole('menuitem');
-    assert.deepEqual((await items.allTextContents()).map((label) => label.trim()), roleLabels.owner,
+    const desktopLabels = ['הזמנה חדשה', 'צילום מסמך', 'חשבונית חדשה'];
+    const desktopTargets = ['/orders/new?fresh=1', null, '/invoices/new'];
+    assert.deepEqual((await items.allTextContents()).map((label) => label.trim()), desktopLabels,
       'desktop speed-dial labels or order changed');
     const targets = await items.evaluateAll((nodes) => nodes.map((node) => {
       const href = node.getAttribute('href');
@@ -559,7 +552,7 @@ async function quickActionsContract(browser) {
       const url = new URL(href, window.location.origin);
       return `${url.pathname}${url.search}`;
     }));
-    assert.deepEqual(targets, roleTargets.owner, 'desktop speed-dial destinations or order changed');
+    assert.deepEqual(targets, desktopTargets, 'desktop speed-dial destinations or order changed');
     assert(await items.first().evaluate((node) => document.activeElement === node), 'desktop speed-dial first action did not receive focus');
     await desktopPage.keyboard.press('ArrowDown');
     assert(await items.nth(1).evaluate((node) => document.activeElement === node), 'ArrowDown did not advance in desktop speed-dial');
@@ -595,8 +588,8 @@ async function quickActionsContract(browser) {
     await desktopPage.waitForTimeout(100);
     assert.equal(await desktopPage.locator('#global-quick-actions').count(), 0,
       'desktop speed-dial state survived the switch to the mobile action bar');
-    assert(await desktopPage.locator('.mobile-action[data-quick-action-key="order"]').evaluate((node) => document.activeElement === node),
-      'focus did not move from the desktop menuitem to the matching mobile action');
+    assert(await desktopPage.locator('.mobile-action-bar').evaluate((node) => node.contains(document.activeElement)),
+      'focus did not move from the desktop menu into the mobile navigation');
     await desktopPage.setViewportSize({ width: 1440, height: 900 });
     await desktopPage.waitForTimeout(100);
     assert.equal(await trigger.getAttribute('aria-expanded'), 'false',
@@ -613,10 +606,11 @@ async function quickActionsContract(browser) {
     await settle(desktopPage);
     const receivingTrigger = desktopPage.locator('.speed-dial-trigger');
     await receivingTrigger.click();
-    await desktopPage.getByRole('menuitem', { name: 'מרכז הבקרה' }).click();
-    await desktopPage.waitForURL((url) => url.pathname === '/dashboard');
+    await desktopPage.getByRole('menuitem', { name: 'הזמנה חדשה' }).click();
+    await desktopPage.waitForURL((url) => url.pathname === '/orders/new');
     assert.equal(await desktopPage.getByRole('menu').count(), 0, 'desktop speed-dial stayed open after link navigation');
-    assert.equal(await receivingTrigger.getAttribute('aria-expanded'), 'false', 'desktop link navigation did not reset expanded state');
+    await desktopPage.locator('.speed-dial-trigger').waitFor({ state: 'detached' });
+    assert.equal(await desktopPage.locator('.speed-dial-trigger').count(), 0, 'desktop speed-dial remained on a focus route');
   } finally {
     await closeContext(desktop);
   }
@@ -714,8 +708,8 @@ async function dashboardAndDialogs(browser) {
     await settle(page);
     const dataHeadings = page.locator('#main .dash-enter h2');
     await dataHeadings.first().waitFor();
-    assert((await dataHeadings.first().innerText()).includes('אספקות היום ומחר'), 'dashboard does not begin with the deliveries card');
-    assert((await dataHeadings.nth(1).innerText()).includes('דורש טיפול'), 'attention zone is not second, after the deliveries card');
+    assert((await dataHeadings.first().innerText()).includes('דורש טיפול'), 'dashboard does not begin with the attention briefing');
+    assert((await dataHeadings.nth(1).innerText()).includes('אספקות היום ומחר'), 'deliveries are not second, after the attention briefing');
     assert.equal(await page.locator('.speed-dial-trigger').count(), 1, 'dashboard desktop speed-dial missing');
     const contrast = await assertKeyContrast(page);
     await page.screenshot({ path: path.join(outDir, 'dashboard-1440.png'), fullPage: true });
@@ -758,6 +752,57 @@ async function dashboardAndDialogs(browser) {
     assert(await supplierButton.evaluate((node) => document.activeElement === node), 'supplier dialog did not restore focus');
 
     report.accessibility.push({ scope: 'key-contrast', samples: contrast });
+  } finally {
+    await closeContext(context);
+  }
+}
+
+async function goldenScreens(browser) {
+  const loginContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
+  const loginPage = await loginContext.newPage();
+  captureConsole(loginPage, 'golden:login');
+  try {
+    await loginPage.goto(`${baseURL}/login`);
+    await loginPage.getByRole('heading', { name: 'SupplyFlow' }).waitFor();
+    for (const [label, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844]]) {
+      await loginPage.setViewportSize({ width, height });
+      await auditAccessibility(loginPage, `golden:login:${label}`);
+      const fileName = `golden-01-login-${label}.png`;
+      await loginPage.screenshot({ path: path.join(outDir, fileName) });
+      report.screenshots.push(fileName);
+    }
+  } finally {
+    await closeContext(loginContext);
+  }
+
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  captureConsole(page, 'golden:product');
+  const screens = [
+    ['02-dashboard', '/dashboard'],
+    ['03-suppliers', '/suppliers'],
+    ['04-supplier-detail', '/suppliers/aa000000-0000-4000-8000-000000000001'],
+    ['05-orders', '/orders'],
+    ['06-order-detail', '/orders/f0000000-0000-4000-8000-000000000011'],
+    ['07-receiving', '/receiving'],
+    ['08-invoices', '/invoices'],
+    ['09-invoice-detail', '/invoices/f4000000-0000-4000-8000-000000000010'],
+    ['10-documents', '/documents'],
+  ];
+  try {
+    await login(page, 'owner');
+    for (const [slug, route] of screens) {
+      for (const [label, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844]]) {
+        await page.setViewportSize({ width, height });
+        await page.goto(`${baseURL}${route}`);
+        await settle(page);
+        await page.waitForFunction(() => !document.querySelector('#main .animate-pulse'), null, { timeout: 25_000 });
+        await auditAccessibility(page, `golden:${slug}:${label}`);
+        const fileName = `golden-${slug}-${label}.png`;
+        await page.screenshot({ path: path.join(outDir, fileName) });
+        report.screenshots.push(fileName);
+      }
+    }
   } finally {
     await closeContext(context);
   }
@@ -1022,6 +1067,11 @@ async function offlineReceiving(browser) {
     assert.equal(queued.queue.length, 1, 'the receipt was not queued on the device');
     assert.equal(queued.queue[0].receiptId, persistedKey,
       'the queued payload does not carry the key persisted at draft creation');
+    const toast = page.locator('.mobile-toast-offset [role]').first();
+    await toast.waitFor();
+    const [toastBox, taskbarBox] = await Promise.all([toast.boundingBox(), page.locator('.phone-taskbar').boundingBox()]);
+    assert(toastBox && taskbarBox && toastBox.y + toastBox.height <= taskbarBox.y,
+      `offline feedback covers receiving actions: toast=${JSON.stringify(toastBox)} taskbar=${JSON.stringify(taskbarBox)}`);
     await page.screenshot({ path: path.join(outDir, 'receiving-offline-390.png'), fullPage: true });
     report.screenshots.push('receiving-offline-390.png');
 
@@ -1161,20 +1211,36 @@ async function orderSupplierComparison(browser) {
   const page = await context.newPage();
   captureConsole(page, 'order-split-journey', [/finalize_purchase_request_draft/, /draft_price_changed/]);
   const product = 'לחמניות המבורגר (ארגז 48)';
+  const ownerAuth = await fetch(`${apiURL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { apikey: serviceRoleKey, 'content-type': 'application/json' },
+    body: JSON.stringify(credentials('owner')),
+  });
+  assert(ownerAuth.ok, `quality owner authentication failed with HTTP ${ownerAuth.status}`);
+  const ownerToken = (await ownerAuth.json()).access_token;
+  const offerResponse = await fetch(`${apiURL}/rest/v1/supplier_products?select=id,price_effective_date,available&supplier_id=eq.aa000000-0000-4000-8000-000000000004&product_id=eq.bb000000-0000-4000-8000-000000000009`, {
+    headers: { apikey: serviceRoleKey, authorization: `Bearer ${serviceRoleKey}` },
+  });
+  assert(offerResponse.ok, `quality supplier offer lookup failed with HTTP ${offerResponse.status}`);
+  const [offer] = await offerResponse.json();
+  assert(offer, 'quality supplier offer lookup did not match the seeded offer');
   const qualitySupplierPrice = async (price) => {
-    const response = await fetch(`${apiURL}/rest/v1/supplier_products?supplier_id=eq.aa000000-0000-4000-8000-000000000004&product_id=eq.bb000000-0000-4000-8000-000000000009`, {
-      method: 'PATCH',
+    const response = await fetch(`${apiURL}/rest/v1/rpc/set_supplier_product_price`, {
+      method: 'POST',
       headers: {
         apikey: serviceRoleKey,
-        authorization: `Bearer ${serviceRoleKey}`,
+        authorization: `Bearer ${ownerToken}`,
         'content-type': 'application/json',
-        prefer: 'return=representation',
       },
-      body: JSON.stringify({ current_price: price }),
+      body: JSON.stringify({
+        p_supplier_product_id: offer.id,
+        p_price: price,
+        p_effective_date: offer.price_effective_date,
+        p_available: offer.available,
+        p_reason: 'בדיקת איכות אוטומטית של שינוי מחיר בטיוטה',
+      }),
     });
-    assert(response.ok, `quality price update failed with HTTP ${response.status}`);
-    const rows = await response.json();
-    assert.equal(rows.length, 1, 'quality price update did not match the seeded supplier offer');
+    assert(response.ok, `quality price update failed with HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
   };
   const waitForDraftSave = () => page.waitForResponse((response) =>
     response.request().method() === 'POST'
@@ -2206,8 +2272,7 @@ function readSidebar(nav) {
     return {
       section: first && !first.querySelector('a') ? (first.textContent || '').trim() : '',
       items: [...group.querySelectorAll('a')].map((link) => ({
-        label: [...link.childNodes].filter((child) => child.nodeType === 3)
-          .map((child) => child.textContent).join('').trim(),
+        label: (link.querySelector('span')?.textContent || '').trim(),
         path: new URL(link.href).pathname,
         current: link.getAttribute('aria-current'),
       })),
@@ -2250,31 +2315,27 @@ async function navigationOrderAndActiveState(browser) {
     );
     assert.equal(groups[0].section, '', 'the control centre was pushed under a group header');
 
-    // The מסמכים group exists, holds both document routes in order, and sits ahead of the ledgers
-    // it feeds. Asserting the whole header list rather than "contains מסמכים" is what makes a
-    // reordering visible instead of a group merely surviving somewhere.
+    // Daily work stays visible. Management and control remain available without making all of
+    // their modules compete with the daily routes.
     const sections = groups.map((group) => group.section);
-    assert.deepEqual(sections, ['', 'מסמכים', 'רכש', 'כספים', 'בקרה'],
+    assert.deepEqual(sections, ['', 'ניהול', 'בקרה'],
       `wrong sidebar groups or group order: ${JSON.stringify(sections)}`);
-    assert.deepEqual(groups[1].items.map((item) => `${item.label} · ${item.path}`),
-      ['תיקיית המסמכים · /documents', 'ארכיון · /documents/archive'],
-      `wrong contents for the מסמכים group: ${JSON.stringify(groups[1].items)}`);
-
-    // A2. `end` on /documents is the whole fix, and this is the assertion jsdom could not settle:
-    // exactly ONE element in the document claims to be the page the user is on.
-    assert.deepEqual(links.filter((item) => item.current === 'page').map((item) => item.path),
-      ['/documents/archive'],
-      `wrong active navigation item on /documents/archive: ${JSON.stringify(links.filter((item) => item.current))}`);
-    assert.equal(await page.locator('[aria-current="page"]').count(), 1,
-      'more than one element on /documents/archive claims to be the current page');
+    assert.deepEqual(groups[0].items.map((item) => item.path),
+      ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
+      `wrong owner daily navigation: ${JSON.stringify(groups[0].items)}`);
+    assert.equal(links.some((item) => item.path === '/documents/archive'), false,
+      'the low-frequency archive still competes in the main navigation');
+    assert.equal(await sidebar.locator('details[open]').count(), 0,
+      'a low-frequency navigation group opened without containing the current route');
+    assert.equal(links.filter((item) => item.current === 'page').length, 0,
+      'the archive incorrectly marked a different sidebar destination as current');
 
     await auditAccessibility(page, 'documents-archive/1440');
     await page.screenshot({ path: path.join(outDir, 'navigation-archive-1440.png') });
     report.screenshots.push('navigation-archive-1440.png');
 
-    // The drawer renders the same tree at phone width, and it is where two current items would do
-    // visible harm: useDialogLayer's initialFocus queries for exactly this attribute, so a second
-    // match would open the menu on the wrong link.
+    // The mobile drawer removes destinations already present in the bottom navigation, while
+    // keeping the same progressive-disclosure groups for the remaining routes.
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(100);
     await page.getByRole('button', { name: 'פתיחת תפריט' }).click();
@@ -2282,20 +2343,16 @@ async function navigationOrderAndActiveState(browser) {
     await drawer.waitFor();
     const drawerGroups = await readSidebar(drawer.locator('nav'));
     const drawerLinks = drawerGroups.flatMap((group) => group.items);
-    assert.equal(drawerLinks[0] && drawerLinks[0].label, 'מרכז הבקרה',
-      `the drawer does not open on the control centre either: ${JSON.stringify(drawerLinks.slice(0, 2))}`);
-    assert.deepEqual(drawerGroups.map((group) => group.section), ['', 'מסמכים', 'רכש', 'כספים', 'בקרה'],
-      'the drawer renders different groups than the desktop sidebar');
-    assert.equal(await drawer.locator('[aria-current="page"]').count(), 1,
-      'the drawer marks more than one item as the current page');
-    // Waited for rather than sampled: initialFocus lands after the layer mounts, and a race here
-    // would be a flake in the check rather than a fault in the shell.
+    assert.deepEqual(drawerGroups.map((group) => group.section), ['', 'ניהול', 'בקרה'],
+      'the drawer renders different progressive-disclosure groups than the desktop sidebar');
+    assert.deepEqual(drawerGroups[0].items.map((item) => item.path), ['/receiving', '/documents', '/suppliers'],
+      `the drawer duplicated bottom navigation destinations: ${JSON.stringify(drawerLinks)}`);
+    assert.equal(await drawer.locator('[aria-current="page"]').count(), 0,
+      'the archive incorrectly marked a different drawer destination as current');
     await page.waitForFunction(() => {
       const active = document.activeElement;
-      return !!active && active.getAttribute('aria-current') === 'page';
-    }, null, { timeout: 5_000 }).catch(() => { throw new Error('the drawer did not open with the current page focused'); });
-    assert.equal(await page.evaluate(() => new URL(document.activeElement.href).pathname), '/documents/archive',
-      'the drawer opened focused on the wrong navigation item');
+      return !!active && active.getAttribute('aria-label') === 'סגירת תפריט';
+    }, null, { timeout: 5_000 }).catch(() => { throw new Error('the drawer did not open on its safe close action'); });
     await page.screenshot({ path: path.join(outDir, 'navigation-drawer-390.png') });
     report.screenshots.push('navigation-drawer-390.png');
   } finally {
@@ -2691,6 +2748,7 @@ async function run(name, check) {
     await run('mobile action bar and desktop speed-dial contract', () => quickActionsContract(browser));
     await run('overlay stacking and breakpoint reset', () => overlayStacking(browser));
     await run('dashboard, quick actions and dialogs', () => dashboardAndDialogs(browser));
+    await run('golden screen visual baseline', () => goldenScreens(browser));
     await run('DataTable, ActionMenu, route focus and mobile search', () => tableKeyboardAndSearch(browser));
     await run('receiving contextual names and accessibility', () => receivingAccessibility(browser));
     await run('offline receiving queues once and keeps its key', () => offlineReceiving(browser));

@@ -6,7 +6,7 @@ import { useParamState } from '../lib/useParamState';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, type Column } from '../components/ui';
 import { CREDIT_REASON, CREDIT_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import type { CreditRequest, CreditStatus } from '../lib/types';
@@ -66,11 +66,8 @@ export default function Credits() {
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="page-title flex items-center gap-2"><RotateCcw size={22} /> זיכויים</h1>
-        {/* open credits are open work (house idiom: "an open balance is open work") — await, not the retired violet (audit 2026-07-21) */}
-        <div className="text-sm text-ink-muted">סה״כ זיכויים פתוחים: <b className="num text-await-fg">{fmtMoneyExact(openSum)}</b></div>
-      </div>
+      <PageHeader title={<span className="flex items-center gap-2"><RotateCcw size={22} /> זיכויים</span>}
+        meta={<>סה״כ זיכויים פתוחים: <b className="num text-await-fg">{fmtMoneyExact(openSum)}</b></>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.notes ?? '').toLowerCase().includes(q)}
         searchLabel="חיפוש בדרישות זיכוי"
