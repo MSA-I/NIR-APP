@@ -2050,28 +2050,36 @@ async function automaticPriceListAcceptance(browser) {
     assert.match(body, /2 שורות נקלטו/, 'automatic price-list receipt did not report two accepted rows');
     assert.match(body, /1 שורות ממתינות/, 'automatic price-list receipt did not report one waiting row');
     assert.match(body, /1 מוצרים חדשים נוצרו/, 'automatic price-list receipt did not report the created product');
-    assert.match(body, /נקלטה אוטומטית/, 'the existing product row was not marked as automatically applied');
-    assert.match(body, /מוצר חדש נוצר ונקלט/, 'the keyed new product row was not marked as created');
-    const rowDetails = panel.locator('article details');
-    assert.equal(await rowDetails.count(), 3, 'each price-list row needs one details disclosure');
-    assert(await rowDetails.evaluateAll((nodes) => nodes.every((node) => !node.open)),
-      'price-list row contents were not collapsed by default');
+    const detailsToggle = panel.locator('[data-testid="price-list-details-toggle"]');
+    assert.equal(await detailsToggle.getAttribute('aria-expanded'), 'false',
+      'the global price-list details control was not collapsed by default');
+    assert.equal(await panel.locator('#price-list-line-details article').count(), 0,
+      'price-list rows were visible before the global details control was opened');
 
     await auditAccessibility(page, 'ocr-price-list/1440');
     await page.screenshot({ path: path.join(outDir, 'ocr-price-list-collapsed-1440.png'), fullPage: true });
     report.screenshots.push('ocr-price-list-collapsed-1440.png');
 
+    await detailsToggle.click();
+    assert.equal(await detailsToggle.getAttribute('aria-expanded'), 'true',
+      'the global price-list details control did not open all rows');
+    assert.equal(await panel.locator('#price-list-line-details article').count(), 3,
+      'the global price-list details control did not reveal every row');
+    const expandedBody = await panel.innerText();
+    assert.match(expandedBody, /נקלטה אוטומטית/, 'the existing product row was not marked as automatically applied');
+    assert.match(expandedBody, /מוצר חדש נוצר ונקלט/, 'the keyed new product row was not marked as created');
     const waitingRow = panel.locator('article').filter({ hasText: 'ממתינה' });
     assert.equal(await waitingRow.count(), 1, 'the waiting price-list row is not uniquely identifiable');
-    await waitingRow.getByText('פרטים נוספים', { exact: true }).click();
     assert.match(await waitingRow.innerText(), /לא נמצא מק״ט או ברקוד/,
-      'the unkeyed row did not explain why it is waiting after opening details');
-    await page.screenshot({ path: path.join(outDir, 'ocr-price-list-partial-1440.png'), fullPage: true });
-    report.screenshots.push('ocr-price-list-partial-1440.png');
+      'the unkeyed row did not explain why it is waiting after opening all details');
+    await page.screenshot({ path: path.join(outDir, 'ocr-price-list-expanded-1440.png'), fullPage: true });
+    report.screenshots.push('ocr-price-list-expanded-1440.png');
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(250);
-    await waitingRow.getByText('פרטים נוספים', { exact: true }).click();
+    await detailsToggle.click();
+    assert.equal(await panel.locator('#price-list-line-details article').count(), 0,
+      'the global price-list details control did not collapse every row on mobile');
     const [mobileResultBox, mobileSourceBox] = await Promise.all([
       panel.boundingBox(),
       page.locator('[data-testid="document-source-viewer"]').boundingBox(),
@@ -2079,8 +2087,8 @@ async function automaticPriceListAcceptance(browser) {
     assert(mobileResultBox && mobileSourceBox && mobileResultBox.y < mobileSourceBox.y,
       'the original document still appears before the latest price-list result on mobile');
     await auditAccessibility(page, 'ocr-price-list/390');
-    await page.screenshot({ path: path.join(outDir, 'ocr-price-list-partial-390.png'), fullPage: true });
-    report.screenshots.push('ocr-price-list-partial-390.png');
+    await page.screenshot({ path: path.join(outDir, 'ocr-price-list-collapsed-390.png'), fullPage: true });
+    report.screenshots.push('ocr-price-list-collapsed-390.png');
   } finally {
     await closeContext(context);
   }

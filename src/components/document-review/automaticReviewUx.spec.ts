@@ -7,6 +7,7 @@ const proposals = readFileSync(join(reviewDir, 'DocumentReviewProposals.tsx'), '
 const workspace = readFileSync(join(reviewDir, 'DocumentReviewWorkspace.tsx'), 'utf8');
 const priceListReview = readFileSync(join(reviewDir, 'PriceListReviewConfirmation.tsx'), 'utf8');
 const documentsInbox = readFileSync(join(process.cwd(), 'src', 'pages', 'DocumentsInbox.tsx'), 'utf8');
+const reprocessMigration = readFileSync(join(process.cwd(), 'supabase', 'migrations', '0085_reprocess_reviewed_document.sql'), 'utf8');
 
 describe('automatic document review UX', () => {
   it('does not ask for type approval and puts price-list results before generic review panels', () => {
@@ -17,13 +18,19 @@ describe('automatic document review UX', () => {
     expect(workspace).toMatch(/isPriceList\r?\n\s+\? <PriceListReviewConfirmation/);
   });
 
-  it('keeps price-list row contents closed until the reviewer asks for more details', () => {
-    expect(priceListReview).toMatch(/<details[^>]*>[\s\S]*?<summary[^>]*>\s*פרטים נוספים\s*<\/summary>[\s\S]*?Object\.entries\(item\.values\)/);
-    expect(priceListReview).not.toMatch(/<details[^>]*\sopen(?:\s|=|>)/);
+  it('opens every price-list row from one summary-level details control', () => {
+    expect(priceListReview).toContain('data-testid="price-list-details-toggle"');
+    expect(priceListReview).toContain('aria-controls="price-list-line-details"');
+    expect(priceListReview).toMatch(/detailsOpen && lineItems\.length > 0[\s\S]*?Object\.entries\(item\.values\)/);
+    expect(priceListReview).not.toContain('<details');
   });
 
   it('allows a completed price list to be reprocessed without deleting its previous result', () => {
     expect(documentsInbox).toContain("['failed', 'review', 'completed'].includes(snapshot.stage)");
     expect(documentsInbox).toContain('ניסיון חדש שומר את תוצאות העיבוד הקודמות');
+    expect(documentsInbox).toContain("p_reason: 'עיבוד מחדש ביוזמת המשתמש ממסך המסמכים'");
+    expect(documentsInbox).not.toContain("requireReason={processing.snapshots[retryDoc?.id ?? '']?.stage !== 'unprocessed'}");
+    expect(reprocessMigration).toContain("j.status in ('queued', 'leased', 'extracted', 'interpreting')");
+    expect(reprocessMigration).not.toMatch(/j\.status in \([^)]*'review'/);
   });
 });

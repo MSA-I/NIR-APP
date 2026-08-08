@@ -696,7 +696,7 @@ select smart_document_processing_test.assert(
   'out-of-range bounding box was accepted'
 );
 
--- Complete the first lifecycle so an explicit reasoned reprocess can create a new job.
+-- Put the first lifecycle in review: review is a terminal result and may be reprocessed.
 select (to_regprocedure('public.begin_document_interpretation(uuid,uuid,uuid)') is not null) as available
 \gset smart_learning_
 \if :smart_learning_available
@@ -728,21 +728,6 @@ update public.document_processing_jobs
 set status = 'review'
 where id = :'smart_first_job_id'::uuid;
 \endif
-update public.document_processing_jobs
-set status = 'completed'
-where id = :'smart_first_job_id'::uuid;
-
-do $$
-begin
-  update public.document_processing_jobs
-  set status = 'queued'
-  where document_id = '45000000-0000-4000-8000-000000000001'
-    and status = 'completed';
-  raise exception 'expected terminal job transition rejection';
-exception when sqlstate '23514' then null;
-end
-$$;
-
 begin;
 select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -759,8 +744,33 @@ select public.reprocess_document(
   'המשתמש ביקש חילוץ חוזר'
 ) as job_id
 \gset smart_reprocess_
+do $$
+begin
+  perform public.reprocess_document(
+    '45000000-0000-4000-8000-000000000001',
+    'ניסיון כפול בזמן שהמשימה כבר בתור'
+  );
+  raise exception 'expected document_processing_active';
+exception when sqlstate '55000' then null;
+end
+$$;
 reset role;
 commit;
+
+update public.document_processing_jobs
+set status = 'completed'
+where id = :'smart_first_job_id'::uuid;
+
+do $$
+begin
+  update public.document_processing_jobs
+  set status = 'queued'
+  where document_id = '45000000-0000-4000-8000-000000000001'
+    and status = 'completed';
+  raise exception 'expected terminal job transition rejection';
+exception when sqlstate '23514' then null;
+end
+$$;
 
 select smart_document_processing_test.assert(
   :'smart_reprocess_job_id'::uuid <> :'smart_first_job_id'::uuid

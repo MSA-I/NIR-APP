@@ -179,6 +179,7 @@ export function PriceListReviewConfirmation({
   const [recoveryRevision, setRecoveryRevision] = useState(0);
   const [revertOpen, setRevertOpen] = useState(false);
   const [revertBusy, setRevertBusy] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const payloadMatchesCurrent = attemptedPayload?.documentId === snapshot.documentId
     && attemptedPayload.interpretationId === interpretation?.id;
   const canStart = ownsDocument
@@ -201,6 +202,7 @@ export function PriceListReviewConfirmation({
     setRecoveryLoading(false);
     setTargetMonth('');
     setReason('');
+    setDetailsOpen(false);
   }, [interpretation?.id, lineItems.length]);
 
   useEffect(() => {
@@ -433,6 +435,13 @@ export function PriceListReviewConfirmation({
 
   const showControls = canStart;
   const returnPath = role === 'supplier' ? '/my-prices' : '/prices';
+  const detailsToggle = lineItems.length > 0 && (
+    <button type="button" className="btn-secondary" data-testid="price-list-details-toggle"
+      aria-expanded={detailsOpen} aria-controls="price-list-line-details"
+      onClick={() => setDetailsOpen((open) => !open)}>
+      {detailsOpen ? 'הסתר פרטים' : 'פרטים נוספים'}
+    </button>
+  );
 
   return (
     <section className="card card-pad min-w-0" aria-labelledby="price-list-review-title" data-testid="price-list-review-confirmation">
@@ -487,15 +496,20 @@ export function PriceListReviewConfirmation({
               {FILING_REASON_LABELS[autoDecision.reason_code]}
             </p>
           )}
-          {!autoDecision.reverted_at && autoDecision.submission_id
-            && (role === 'owner' || role === 'office') && (
-            <div className="mt-3 flex justify-end">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            {detailsToggle}
+            {!autoDecision.reverted_at && autoDecision.submission_id
+              && (role === 'owner' || role === 'office') && (
               <button type="button" className="btn-danger" onClick={() => setRevertOpen(true)}>
                 ביטול הקליטה האוטומטית
               </button>
-            </div>
-          )}
+              )}
+          </div>
         </div>
+      )}
+
+      {!autoDecision && detailsToggle && (
+        <div className="mt-4 flex justify-start">{detailsToggle}</div>
       )}
 
       {recoveryLoading && !receipt && (
@@ -539,8 +553,9 @@ export function PriceListReviewConfirmation({
         <Note tone="alert" className="mt-4">אין מוצרים קיימים זמינים להתאמה, ולכן לא ניתן לאשר שורות.</Note>
       )}
 
-      <div className="mt-4 space-y-3">
-        {lineItems.length === 0 && <p className="text-sm text-ink-muted">לא זוהו שורות מחיר לאישור.</p>}
+      {lineItems.length === 0 && <p className="mt-4 text-sm text-ink-muted">לא זוהו שורות מחיר לאישור.</p>}
+      {detailsOpen && lineItems.length > 0 && (
+      <div id="price-list-line-details" className="mt-4 space-y-3">
         {lineItems.map((item, index) => {
           const draft = drafts[index] ?? emptyDrafts(1)[0];
           const autoLine = autoLines.get(index);
@@ -559,11 +574,7 @@ export function PriceListReviewConfirmation({
                   <span className="text-xs text-ink-muted">שורת מקור <span className="num">{item.source_row ?? '—'}</span></span>
                 </div>
               </div>
-              <details className="mt-3 rounded-lg border border-line bg-surface-sunken">
-                <summary className="flex min-h-11 cursor-pointer items-center px-3 py-2.5 font-medium text-action">
-                  פרטים נוספים
-                </summary>
-                <div className="border-t border-line bg-surface p-3">
+              <div className="mt-3 rounded-lg border border-line bg-surface p-3">
                   <dl className="grid gap-2 sm:grid-cols-2">
                     {Object.entries(item.values).map(([key, value]) => (
                       <div key={key} className="min-w-0 rounded-lg bg-surface-sunken p-2">
@@ -636,12 +647,12 @@ export function PriceListReviewConfirmation({
                   </label>
                     </div>
                   )}
-                </div>
-              </details>
+              </div>
             </article>
           );
         })}
       </div>
+      )}
 
       {showControls && lineItems.length > 0 && (
         <div className="mt-4 border-t border-line pt-4">

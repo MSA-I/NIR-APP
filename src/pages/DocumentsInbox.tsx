@@ -540,15 +540,17 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     navigate(`/documents/${encodeURIComponent(doc.id)}/review${query}`);
   }
 
-  async function retry(reason?: string) {
+  async function retry() {
     if (!retryDoc) return;
     const wasUnprocessed = processing.snapshots[retryDoc.id]?.stage === 'unprocessed';
-    if (!wasUnprocessed && !reason) return;
     setRetrying(true);
     try {
       ok(wasUnprocessed
         ? await supabase.rpc('enqueue_document_processing', { p_document_id: retryDoc.id })
-        : await supabase.rpc('reprocess_document', { p_document_id: retryDoc.id, p_reason: reason }));
+        : await supabase.rpc('reprocess_document', {
+          p_document_id: retryDoc.id,
+          p_reason: 'עיבוד מחדש ביוזמת המשתמש ממסך המסמכים',
+        }));
       toast(wasUnprocessed ? 'המסמך נשלח לתור העיבוד' : 'המסמך הוחזר לתור העיבוד');
       setRetryDoc(null);
       window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
@@ -864,13 +866,13 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
 
       {uploadOpen && <UploadModal suppliers={data?.suppliers ?? []} onClose={() => setUploadOpen(false)} onDone={refetch} />}
       {refile && <RefileModal doc={refile.doc} target={refile.target} onClose={() => setRefile(null)} onDone={refetch} />}
-      <ConfirmDialog open={!!retryDoc} onClose={() => setRetryDoc(null)} onConfirm={(reason) => void retry(reason)}
+      <ConfirmDialog open={!!retryDoc} onClose={() => setRetryDoc(null)} onConfirm={() => void retry()}
         title={processing.snapshots[retryDoc?.id ?? '']?.stage === 'unprocessed' ? 'שליחת המסמך לעיבוד' : 'עיבוד המסמך מחדש'}
         message={processing.snapshots[retryDoc?.id ?? '']?.stage === 'unprocessed'
           ? 'המסמך השמור יישלח כעת לתור העיבוד.'
           : 'ניסיון חדש שומר את תוצאות העיבוד הקודמות ומוסיף ניסיון נפרד.'}
         confirmLabel={processing.snapshots[retryDoc?.id ?? '']?.stage === 'unprocessed' ? 'שליחה לתור' : 'החזרה לתור'}
-        requireReason={processing.snapshots[retryDoc?.id ?? '']?.stage !== 'unprocessed'} busy={retrying} />
+        busy={retrying} />
 
       {/* requireReason, always. The reason travels to audit_logs through the RPC, and the
           server refuses an empty one by name (reason_required) regardless of what the browser

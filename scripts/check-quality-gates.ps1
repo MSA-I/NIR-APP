@@ -843,6 +843,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\migrations\0082_fix_document_interpretation_dispatch.sql",
     "supabase\migrations\0083_fix_document_interpretation_claim.sql",
     "supabase\migrations\0084_automatic_document_classification.sql",
+    "supabase\migrations\0085_reprocess_reviewed_document.sql",
     "supabase\tests\smart_document_processing.sql",
     "supabase\tests\document_learning.sql",
     "supabase\tests\document_export_templates.sql",
