@@ -42,3 +42,9 @@ jobs:
 
       - name: The gate — tsc + eight check:* + vitest + vite build
         run: npm run build
+        # The browser client intentionally fails at module load when its public Vite
+        # configuration is absent. CI does not deploy this bundle, so use explicit,
+        # non-secret placeholders; production values never belong in GitHub logs.
+        env:
+          VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-public-anon-placeholder
