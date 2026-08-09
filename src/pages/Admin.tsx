@@ -1,11 +1,11 @@
 import { useEffect, useId, useState } from 'react';
 import { toHebrewError } from "../lib/errors";
-import { Building2, ShieldCheck, Plus, Copy, KeyRound } from 'lucide-react';
+import { Building2, ShieldCheck, Plus, Copy, KeyRound, MessageSquare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { DataTable, StatusBadge, ConfirmDialog, Modal, useToast, ErrorNote, SkeletonTable, type Column } from '../components/ui';
-import { fmtDate, fmtNum, todayISO } from '../lib/format';
-import { ORG_STATUS } from '../lib/status';
+import { DataTable, StatusBadge, ConfirmDialog, Modal, useToast, ErrorNote, SkeletonTable, SkeletonList, type Column } from '../components/ui';
+import { fmtDate, fmtDateTime, fmtNum, todayISO } from '../lib/format';
+import { ORG_STATUS, ROLE_LABEL } from '../lib/status';
 import { provisionOrg, resetUserPassword, generatePassword, type PlatformOrg, type ProvisionResult } from '../lib/platform';
 
 interface NewOrgForm {
@@ -139,6 +139,8 @@ export default function Admin() {
         }
       />
 
+      <FeedbackNotes />
+
       <NewOrgModal open={creating} busy={busy} onClose={() => setCreating(false)} onSubmit={submitNewOrg} />
       <ResetPasswordModal open={resetting} busy={busy} onClose={() => setResetting(false)} onSubmit={submitReset} />
 
@@ -192,6 +194,104 @@ export default function Admin() {
         onConfirm={(reason) => { if (pending) void applyStatus(pending.org, pending.action, reason); }}
       />
     </div>
+  );
+}
+
+/**
+ * Design-partner feedback (0090). The Discord message is the alert; this is the ledger — where a
+ * note is still findable a week later, and where a note whose send failed is visible at all.
+ *
+ * Read across tenants by `feedback_notes_platform_select`, the RLS mirror of org_platform_select.
+ * Bounded at 200 rows rather than paginated: the volume is one design partner's notes, and an
+ * unbounded select that quietly grows is the kind of thing this repo measures later and regrets.
+ */
+interface FeedbackNoteRow {
+  id: string;
+  created_at: string;
+  note: string;
+  route: string;
+  role: string;
+  viewport_width: number | null;
+  app_release: string | null;
+  sent_at: string | null;
+  send_error: string | null;
+  organizations: { name: string } | null;
+}
+
+function FeedbackNotes() {
+  const { data, loading, error } = useQuery(async () => unwrap(await supabase
+    .from('feedback_notes')
+    .select('id, created_at, note, route, role, viewport_width, app_release, sent_at, send_error, organizations(name)')
+    .order('created_at', { ascending: false })
+    .limit(200)) as unknown as FeedbackNoteRow[]);
+
+  const columns: Column<FeedbackNoteRow>[] = [
+    {
+      key: 'note',
+      header: 'ההערה',
+      priority: 1,
+      mobileLabel: null,
+      render: (r) => <span className="whitespace-pre-wrap text-ink-body">{r.note}</span>,
+    },
+    {
+      key: 'org',
+      header: 'ארגון',
+      render: (r) => r.organizations?.name ?? '—',
+    },
+    {
+      key: 'who',
+      header: 'תפקיד',
+      // The vendor's own screen, so the frozen defaults are the right vocabulary here — a tenant's
+      // renamed role would say nothing to the reader of this table (status.ts:163-168).
+      render: (r) => ROLE_LABEL[r.role] ?? r.role,
+    },
+    {
+      key: 'route',
+      header: 'מסך',
+      render: (r) => <span dir="ltr" className="num">{r.route}</span>,
+    },
+    {
+      key: 'device',
+      header: 'מכשיר',
+      priority: 3,
+      render: (r) => (
+        <span className="text-xs text-ink-muted">
+          {r.viewport_width ? <span className="num">{r.viewport_width}px</span> : '—'}
+          {r.app_release ? <> · <span dir="ltr" className="num">{r.app_release}</span></> : null}
+        </span>
+      ),
+    },
+    {
+      key: 'sent',
+      header: 'שליחה',
+      mobileLabel: null,
+      // send_error is shown, not summarised: "לא נשלח" without the reason sends the reader to the
+      // function logs for something the row already knows.
+      render: (r) => (r.sent_at
+        ? <span className="badge-done">נשלח</span>
+        : <span className="badge-alert" title={r.send_error ?? undefined}>לא נשלח</span>),
+    },
+    {
+      key: 'when',
+      header: 'מתי',
+      render: (r) => fmtDateTime(r.created_at),
+    },
+  ];
+
+  if (loading) return <SkeletonList rows={3} />;
+  if (error) return <ErrorNote message={error} />;
+
+  return (
+    <section className="space-y-2">
+      <h2 className="section-title flex items-center gap-2"><MessageSquare size={18} /> הערות מלקוחות</h2>
+      <DataTable
+        rows={data ?? []}
+        columns={columns}
+        rowLabel={(r) => `הערה מ-${r.organizations?.name ?? 'ארגון לא מזוהה'}`}
+        emptyTitle="אין הערות"
+        emptySubtitle="כפתור ההערות מופיע רק בארגון שהדגל feedback.notes דלוק בו"
+      />
+    </section>
   );
 }
 

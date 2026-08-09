@@ -7,7 +7,10 @@ import { APP_NAME } from '../lib/branding';
 import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
 import Fab from './Fab';
 import NotificationBell from './NotificationBell';
+import FeedbackButton from './FeedbackButton';
 import { ConfirmDialog, useDialogLayer, useToast } from './ui';
+import { useFeatureFlags } from '../lib/flags';
+import { FEEDBACK_FLAG } from '../lib/feedback';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
 import { pendingOfflineWork } from '../lib/offlineQueue';
 import type { Role } from '../lib/types';
@@ -180,6 +183,9 @@ export default function Layout() {
   const role = profile?.role;
   // Section 5: payer/supplier get no search box — their routes are dead ends for it.
   const canSearch = canGlobalSearch(role);
+  // Read here only to decide whether the desktop header exists at all; FeedbackButton gates
+  // itself on the same flag, fail-closed. The flag governs UI, never permission (0059's flag law).
+  const feedbackOn = useFeatureFlags().isEnabled(FEEDBACK_FLAG);
   // Unfiled-documents pill (0014): counted only for staff who can act on that queue. The
   // Only procurement staff can act on the gallery queue. A known count > 0 is required,
   // so null (loading) and 0 never fabricate an all-clear or workload.
@@ -336,6 +342,7 @@ export default function Layout() {
         </div>
         <div className="flex items-center gap-1">
           <NotificationBell onShell />
+          <FeedbackButton onShell />
           {canSearch && (
             <button className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
               aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={21} /></button>
@@ -356,10 +363,14 @@ export default function Layout() {
       {/* Global search — desktop. Injected above <main>: the headerless desktop area is empty
           today (plan §2), and lg:ms-60 lines it up beside the fixed w-60 sidebar. z-30 keeps it
           below the sidebar (z-40); sticky works because the min-h-screen wrapper has no overflow. */}
-      {canSearch && (
+      {/* The header exists when it has something to hold. Until package 0 that was the search box
+          alone, which left payer and supplier — the two roles with the most blocked tasks in
+          DEAD-ENDS-AUDIT — with no desktop slot to report from. */}
+      {(canSearch || feedbackOn) && (
         <header className="hidden lg:flex sticky top-0 z-30 lg:ms-60 h-14 items-center gap-3 border-b border-line bg-surface px-6 no-print">
-          <GlobalSearch />
+          {canSearch && <GlobalSearch />}
           <NotificationBell />
+          <FeedbackButton />
         </header>
       )}
       {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring. */}

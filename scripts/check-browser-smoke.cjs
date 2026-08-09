@@ -3007,6 +3007,72 @@ async function passwordRecovery(browser) {
   }
 }
 
+/**
+ * Package 0 — the design partner's feedback note.
+ *
+ * What is routed: the flag (the barcode idiom at :1157) and the Edge Function. What is NOT routed
+ * is the INSERT — it goes to the real PostgREST, so this is the only place where 0090's column
+ * grants and RLS are exercised from an actual browser session.
+ *
+ * The FAILURE path is the one asserted end to end, on purpose. Discord delivery cannot be proved
+ * from a network-isolated gate, and a scenario that mocked the send and then asserted "נשלח" would
+ * be asserting its own mock. What is provable here is the pair that matters: the row lands in the
+ * database, and the screen tells the truth about a send that did not happen.
+ */
+async function feedbackNoteChannel(browser) {
+  const context = await browser.newContext({
+    locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 },
+  });
+  try {
+    await context.route('**/rest/v1/rpc/resolve_feature_flags', (route) =>
+      route.fulfill({ status: 200, headers: jsonHeaders, json: [{ flag_key: 'feedback.notes', state: true }] }));
+    await context.route('**/functions/v1/send-feedback', (route) => route.fulfill({
+      status: 502,
+      headers: jsonHeaders,
+      json: { error: { code: 'delivery_failed', message: 'ההערה נשמרה, אך השליחה נכשלה' } },
+    }));
+
+    const page = await context.newPage();
+    captureConsole(page, 'feedback-note');
+    await login(page, 'owner');
+    await page.goto(`${baseURL}/dashboard`);
+    await settle(page);
+
+    const trigger = page.getByRole('button', { name: 'שליחת הערה' });
+    await trigger.waitFor();
+    const box = await trigger.boundingBox();
+    assert(box && box.width >= 44 && box.height >= 44,
+      `the feedback trigger is ${box && Math.round(box.width)}x${box && Math.round(box.height)}, below the 44px touch floor`);
+
+    await trigger.click();
+    // Unique per run: the lookup below must find this note and not a previous run's.
+    const note = `בדיקת שער ${Date.now()}`;
+    await page.getByLabel('ההערה').fill(note);
+    await page.screenshot({ path: path.join(outDir, 'feedback-note-390.png') });
+    report.screenshots.push('feedback-note-390.png');
+    await page.getByRole('button', { name: 'שליחה' }).click();
+
+    await page.getByText('ההערה נשמרה, אך השליחה נכשלה').waitFor();
+    assert.equal(await page.getByText(/ההערה נשלחה/).count(), 0,
+      'the screen claimed a delivery that failed');
+
+    // The row is the record. It must exist exactly once, name the screen it was written from, and
+    // carry no delivery stamp — the browser holds no grant that could have written one.
+    const stored = await fetch(
+      `${apiURL}/rest/v1/feedback_notes?select=note,route,role,sent_at,send_error&note=eq.${encodeURIComponent(note)}`,
+      { headers: { apikey: serviceRoleKey, authorization: `Bearer ${serviceRoleKey}` } },
+    );
+    assert(stored.ok, `feedback note lookup failed with HTTP ${stored.status}`);
+    const rows = await stored.json();
+    assert.equal(rows.length, 1, `the note was stored ${rows.length} times, expected exactly once`);
+    assert.equal(rows[0].route, '/dashboard',
+      `the stored note names ${rows[0].route}, not the screen it was written from`);
+    assert.equal(rows[0].sent_at, null, 'a send that failed left sent_at set');
+  } finally {
+    await closeContext(context);
+  }
+}
+
 async function run(name, check) {
   if (process.env.QUALITY_ONLY && !name.includes(process.env.QUALITY_ONLY)) {
     const reason = `QUALITY_ONLY=${process.env.QUALITY_ONLY}`;
@@ -3066,6 +3132,8 @@ async function run(name, check) {
     // Registered last on purpose: it is the only scenario that inserts a row into the live
     // database, and running it after everything else keeps that row out of every other check.
     await run('a supplier is created inside the price-list dialog', () => priceListSupplierDoor(browser));
+    // Also writes a live row, for the same reason and with the same placement.
+    await run('a feedback note is stored and a failed send says so', () => feedbackNoteChannel(browser));
   } finally {
     await browser.close();
   }

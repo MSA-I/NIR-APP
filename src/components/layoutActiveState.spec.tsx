@@ -11,7 +11,8 @@ import { MemoryRouter, Route, Routes } from 'react-router';
  * /documents/archive marked both /documents and /documents/archive as the current page.
  *
  * The shell is mocked down to its navigation. The session, the unfiled-documents pill and the
- * three ornaments (search, bell, FAB) are not what is under test, and each would reach the network.
+ * four ornaments (search, bell, FAB, feedback) are not what is under test, and each would reach the
+ * network — as does the flag lookup that decides whether the desktop header exists at all.
  */
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
@@ -26,6 +27,8 @@ vi.mock('../lib/useInboxCount', () => ({ useInboxCount: () => null }));
 vi.mock('./GlobalSearch', () => ({ default: () => null, canGlobalSearch: () => false }));
 vi.mock('./Fab', () => ({ default: () => null }));
 vi.mock('./NotificationBell', () => ({ default: () => null }));
+vi.mock('./FeedbackButton', () => ({ default: () => null }));
+vi.mock('../lib/flags', () => ({ useFeatureFlags: () => ({ isEnabled: () => false }) }));
 
 import Layout from './Layout';
 import { ToastProvider } from './ui';
