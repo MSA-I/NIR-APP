@@ -206,6 +206,11 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
         );
       })()}
       {data?.length ? (
+        /* The one raw <table> in the app that had no scroll wrapper. `.th`/`.td` carry
+           whitespace-nowrap globally (index.css), so a table without a wrapper widens the
+           document instead of scrolling inside itself — two short columns were the only reason
+           this had not shown up yet. */
+        <div className="overflow-x-auto">
         <table className="w-full">
           <thead><tr><th className="th">תאריך</th><th className="th">מחיר</th></tr></thead>
           <tbody className="divide-y divide-line-soft">
@@ -214,6 +219,7 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
             ))}
           </tbody>
         </table>
+        </div>
       ) : <div className="text-sm text-ink-muted py-4 text-center">אין רשומות היסטוריה</div>}
     </Modal>
   );
