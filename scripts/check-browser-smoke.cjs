@@ -2734,6 +2734,41 @@ async function machineFiledDocument(browser) {
 }
 
 /**
+ * Package 5 (#101 / DEBT-REGISTER §2, closed 09.08.2026) — an offline reload keeps the app.
+ *
+ * The one scenario that runs WITHOUT serviceWorkers:'block', because the worker IS the thing
+ * under test: load /login, wait until the worker CONTROLS the page (activation implies the
+ * precache warm-up finished — install() chains addAll before skipWaiting), cut the network,
+ * reload, and the login shell must still render from cache. Data endpoints are deliberately
+ * uncached, so the expected offline noise is network failures — never a blank page.
+ */
+async function offlineShellReload(browser) {
+  const context = await browser.newContext({ locale: 'he-IL', viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  captureConsole(page, 'offline-shell-reload', [
+    /ERR_INTERNET_DISCONNECTED/, /ERR_NAME_NOT_RESOLVED/, /ERR_FAILED/, /ERR_CONNECTION/,
+    /Failed to fetch/, /NetworkError/, /net::/, /TypeError: Failed/,
+  ]);
+  try {
+    await page.goto(`${baseURL}/login`);
+    await page.waitForFunction(
+      () => 'serviceWorker' in navigator && !!navigator.serviceWorker.controller,
+      null, { timeout: 30_000 },
+    ).catch(() => { throw new Error('the service worker never took control — precache cannot be proven'); });
+
+    await context.setOffline(true);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('#email').waitFor({ state: 'visible', timeout: 20_000 });
+    await page.locator('#password').waitFor({ state: 'visible', timeout: 5_000 });
+    await page.screenshot({ path: path.join(outDir, 'offline-shell-390.png') });
+    report.screenshots.push('offline-shell-390.png');
+    await context.setOffline(false);
+  } finally {
+    await closeContext(context);
+  }
+}
+
+/**
  * Package 2 (decisions #49 + #116, 09.08.2026) — the receiving screen's two new affordances,
  * asserted per role, with the same route-mock shape receivingAccessibility uses.
  *
@@ -2990,6 +3025,7 @@ async function run(name, check) {
     await run('documents speak human states and keep the numbers behind the disclosure', () => documentVocabulary(browser));
     await run('a machine-filed document names its author and can be undone', () => machineFiledDocument(browser));
     await run('receiving speaks the #49/#116 decisions per role', () => receivingDecisionsContract(browser));
+    await run('an offline reload keeps the app shell', () => offlineShellReload(browser));
     // Late on purpose: it rotates the kitchen password against the live GoTrue and restores it
     // in `finally` — running it after the scenarios that log in as kitchen keeps a mid-scenario
     // crash from cascading into theirs.

@@ -12,9 +12,10 @@ import { createAppQueryClient } from './lib/query/client';
 // Before anything renders, so a crash during the first paint is still reported.
 initObservability();
 
-// Web Push delivery target only — public/sw.js does no offline caching (financial
-// data must stay live). Registration failure is not an app failure: the UI works
-// identically without it, so errors are swallowed on purpose.
+// Web Push delivery + app-shell cache (#101, closed 09.08.2026) — public/sw.js precaches
+// the static shell so an offline reload still brings the app up, and NEVER caches API
+// responses (financial data stays live). Registration failure is not an app failure: the
+// UI works identically without it, so errors are swallowed on purpose.
 if ('serviceWorker' in navigator) {
   let controlled = !!navigator.serviceWorker.controller;
   let updateAnnounced = false;

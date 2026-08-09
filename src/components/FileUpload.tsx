@@ -17,6 +17,9 @@ import {
 import { fetchAll } from '../lib/supabasePaging';
 import { DOCUMENT_USER_STATE_META, documentUserState, useDocumentProcessing } from '../lib/useDocumentProcessing';
 import { TusUploadCancelledError, TusUploadError, tusUploadToDocuments } from '../lib/tusUpload';
+import { flushPendingPhotos, stashPendingPhoto } from '../lib/pendingPhotos';
+import { deletePendingPhoto, listPendingPhotos } from '../lib/offlineDb';
+import { offlineQueue } from '../lib/offlineQueue';
 import {
   UploadCenter,
   claimActiveUploadTask,
@@ -332,6 +335,33 @@ async function entityMetadata(entityType: string, entityId: string, documentKind
   return { documentKind };
 }
 
+let pendingPhotoFlushInFlight = false;
+
+/**
+ * Send every photo stashed while offline (§4, closed 09.08.2026). Wired in this module
+ * because it owns uploadDocument — the flush must take the exact path a live capture takes
+ * (same storage layout, same registration, same processing enqueue). Concurrency-guarded:
+ * the offline strip mounts per screen and 'online' can fire in bursts.
+ */
+export async function flushPendingPhotosNow(orgId: string): Promise<{ uploaded: number; remaining: number }> {
+  if (pendingPhotoFlushInFlight) return { uploaded: 0, remaining: 0 };
+  pendingPhotoFlushInFlight = true;
+  try {
+    const result = await flushPendingPhotos({
+      list: listPendingPhotos,
+      remove: deletePendingPhoto,
+      upload: (photo) => uploadDocument(
+        orgId, photo.entityType, photo.entityId,
+        new File([photo.blob], photo.fileName, { type: photo.blob.type || 'image/jpeg' }),
+      ),
+    });
+    if (result.uploaded > 0) await offlineQueue.refresh();
+    return result;
+  } finally {
+    pendingPhotoFlushInFlight = false;
+  }
+}
+
 export function DocumentList({ entityType, entityId, canUpload = true, capture }: {
   entityType: string; entityId: string; canUpload?: boolean; capture?: boolean;
 }) {
@@ -379,6 +409,18 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
 
   async function uploadFiles(files: File[], previousSummary: UploadBatchSummary | null = null) {
     if (!files.length || !profile) return;
+    // §4 (closed 09.08.2026): a capture with no network is stashed, not failed. The photo
+    // lands in the pending_photos store the queue strip already counts, and the flush below
+    // sends it when the connection returns. Checked here, before the batch machinery, so the
+    // user hears "נשמר במכשיר" instead of a retry screen for a send that cannot succeed.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      for (const file of files) await stashPendingPhoto(entityType, entityId, file);
+      await offlineQueue.refresh();
+      toast(files.length === 1
+        ? 'אין חיבור — הצילום נשמר במכשיר ויועלה אוטומטית כשיחזור החיבור'
+        : `אין חיבור — ${files.length} צילומים נשמרו במכשיר ויועלו אוטומטית כשיחזור החיבור`);
+      return;
+    }
     setBusy(true);
     busyRef.current = true;
     try {

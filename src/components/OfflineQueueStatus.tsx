@@ -1,6 +1,9 @@
+import { useEffect } from 'react';
 import { CloudOff, RefreshCw } from 'lucide-react';
 import { fmtDateTime } from '../lib/format';
 import { useOfflineQueue, offlineQueue } from '../lib/offlineQueue';
+import { useAuth } from '../auth/AuthContext';
+import { flushPendingPhotosNow } from './FileUpload';
 
 /**
  * The offline status strip for the receiving path (`OFFLINE-SYNC-DESIGN.md` §6).
@@ -19,6 +22,19 @@ import { useOfflineQueue, offlineQueue } from '../lib/offlineQueue';
  */
 export default function OfflineQueueStatus() {
   const queue = useOfflineQueue();
+  const { profile } = useAuth();
+
+  // §4 (closed 09.08.2026): photos stashed offline are flushed from the same surface that
+  // counts them — on mount (the user may have reconnected before returning here) and on
+  // every 'online'. flushPendingPhotosNow is concurrency-guarded, so bursts are harmless.
+  const orgId = profile?.org_id ?? null;
+  useEffect(() => {
+    if (!orgId) return;
+    const attempt = () => { void flushPendingPhotosNow(orgId).catch(() => { /* next 'online' retries */ }); };
+    attempt();
+    window.addEventListener('online', attempt);
+    return () => window.removeEventListener('online', attempt);
+  }, [orgId]);
   const failures = queue.actions.filter((action) => action.reason && action.state !== 'pending');
   const nothingToSay = queue.online
     && queue.storageAvailable
