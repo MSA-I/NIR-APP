@@ -39,12 +39,15 @@ type ErrorCode =
   | 'unauthenticated' | 'not_owner' | 'invalid_request' | 'invalid_email'
   | 'already_member' | 'role_not_invitable' | 'invitation_unknown'
   | 'invitation_accepted' | 'invitation_revoked' | 'invite_cooldown'
-  | 'invite_daily_limit' | 'email_failed' | 'misconfigured';
+  | 'invite_daily_limit' | 'email_failed' | 'misconfigured'
+  | 'supplier_invitation_requires_supplier' | 'supplier_outside_organization';
 
 interface InviteRequest {
   action: 'create' | 'resend';
   email?: string;
   role?: string;
+  /** Required exactly when role === 'supplier'; the DB constraint refuses any other shape. */
+  supplierId?: string;
   invitationId?: string;
 }
 
@@ -63,6 +66,7 @@ const ROLE_LABEL: Record<string, string> = {
   office: 'מנהל רכש',
   payer: 'מבצע העברות',
   accountant: 'הנהלת חשבונות',
+  supplier: 'ספק',
 };
 
 /** Hebrew message per error code -- the UI shows these verbatim. */
@@ -80,6 +84,8 @@ const MESSAGE: Record<ErrorCode, string> = {
   invite_daily_limit: 'מכסת ההזמנות היומית הושגה. נסה שוב מחר.',
   email_failed: 'ההזמנה נוצרה אך שליחת המייל נכשלה — נסה "שליחה מחדש"',
   misconfigured: 'שירות המיילים אינו מוגדר בסביבה זו',
+  supplier_invitation_requires_supplier: 'להזמנת סוכן ספק יש לבחור ספק מהרשימה',
+  supplier_outside_organization: 'הספק שנבחר אינו קיים בעסק או שהוסר',
 };
 
 function fail(cors: Record<string, string>, code: ErrorCode, status: number) {
@@ -102,6 +108,7 @@ function codeFromPgError(message: string): ErrorCode {
     'not_owner', 'invalid_email', 'already_member', 'role_not_invitable',
     'invitation_unknown', 'invitation_accepted', 'invitation_revoked',
     'invite_cooldown', 'invite_daily_limit',
+    'supplier_invitation_requires_supplier', 'supplier_outside_organization',
   ];
   return known.find((c) => message.includes(c)) ?? 'invalid_request';
 }
@@ -187,11 +194,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (body.action === 'create') {
     if (typeof body.email !== 'string' || typeof body.role !== 'string') return fail(cors, 'invalid_request', 400);
     if (!(body.role in ROLE_LABEL)) return fail(cors, 'role_not_invitable', 400);
+    // Fast fail only — the DB constraint (invitations_supplier_role_check, 0025) is the boundary.
+    if (body.role === 'supplier' && (typeof body.supplierId !== 'string' || !body.supplierId)) {
+      return fail(cors, 'supplier_invitation_requires_supplier', 400);
+    }
+    if (body.role !== 'supplier' && body.supplierId != null) return fail(cors, 'invalid_request', 400);
 
-    const { data, error } = await supabase.rpc('create_invitation', {
-      p_email: body.email,
-      p_role: body.role,
-    });
+    const { data, error } = await supabase.rpc(
+      'create_invitation',
+      body.role === 'supplier'
+        ? { p_email: body.email, p_role: body.role, p_supplier_id: body.supplierId }
+        : { p_email: body.email, p_role: body.role },
+    );
     if (error) {
       const code = codeFromPgError(error.message);
       return fail(cors, code, code === 'invite_cooldown' || code === 'invite_daily_limit' ? 429 : 403);

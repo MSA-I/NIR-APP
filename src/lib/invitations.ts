@@ -6,9 +6,16 @@
 import { supabase } from './supabase';
 import type { Invitation, InvitationStatus, Role } from './types';
 
-/** Roles an owner may invite. `supplier` is excluded — a supplier agent profile needs a
- *  supplier_id (migration 0004) that this flow has no way to supply, and the DB refuses it. */
-export const INVITABLE_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant'];
+/** Roles an owner may invite. `supplier` joined on 08.08.2026 (OPEN-DECISIONS #17): the DB
+ *  path has existed since 0025 — invitations.supplier_id plus the 3-arg create_invitation
+ *  overload — and a supplier invitation must carry the supplier it binds to. */
+export const INVITABLE_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'];
+
+/** Roles the role-change dialog may assign. `supplier` is deliberately absent: turning an
+ *  existing employee into a supplier agent would need a supplier_id that
+ *  manage_profile_access refuses to invent — a supplier account starts as a supplier
+ *  invitation, never as a role change. */
+export const ASSIGNABLE_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant'];
 
 // Invitation / InvitationStatus live in ./types with the rest of the schema mirror.
 export type { Invitation, InvitationStatus };
@@ -59,8 +66,12 @@ async function callSendInvite(
   return { error: null, result: data as InviteResult };
 }
 
-export const sendInvite = (email: string, role: Role) =>
-  callSendInvite({ action: 'create', email, role });
+/** `supplierId` is required exactly when `role === 'supplier'` — the Edge Function and the
+ *  DB (invitations_supplier_role_check) both refuse any other combination. */
+export const sendInvite = (email: string, role: Role, supplierId?: string) =>
+  callSendInvite(
+    supplierId ? { action: 'create', email, role, supplierId } : { action: 'create', email, role },
+  );
 
 export const resendInvite = (invitationId: string) =>
   callSendInvite({ action: 'resend', invitationId });

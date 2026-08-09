@@ -2733,6 +2733,104 @@ async function machineFiledDocument(browser) {
   }
 }
 
+/**
+ * Package 1 (OPEN-DECISIONS #114) — the password-recovery path, end to end minus the mailbox.
+ *
+ * Part 1 proves the app's half of /forgot-password: the form reaches /auth/v1/recover with the
+ * typed address and a redirect_to aimed at /reset-password. That response is stubbed, because the
+ * isolated stack has no mailbox — GoTrue's half is proven in part 2, which follows a REAL
+ * recovery link: GoTrue itself mints it (admin generate_link — the same token the email would
+ * carry), the browser lands on /reset-password exactly as a mail client would, sets a new
+ * password through the form, and the new password must then open the app from a cold login.
+ * The kitchen password is restored through the admin API in `finally`, so later scenarios keep
+ * their credentials no matter where this one stops.
+ */
+async function passwordRecovery(browser) {
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block' });
+  const page = await context.newPage();
+  captureConsole(page, 'password-recovery');
+  const account = credentials('kitchen');
+  const newPassword = `P4!${passwordSeed}-kitchen-changed-9`;
+  const adminHeaders = {
+    apikey: serviceRoleKey,
+    authorization: `Bearer ${serviceRoleKey}`,
+    'content-type': 'application/json',
+  };
+  let userId = null;
+  let passwordChanged = false;
+  try {
+    // ---- part 1: the form's half of the contract
+    let recover = null;
+    await page.route('**/auth/v1/recover*', async (route) => {
+      recover = { url: route.request().url(), body: JSON.parse(route.request().postData() || '{}') };
+      await route.fulfill({ status: 200, headers: jsonHeaders, body: '{}' });
+    });
+    await page.goto(`${baseURL}/login`);
+    await page.getByRole('link', { name: 'שכחתי סיסמה' }).click();
+    await page.waitForFunction(() => location.pathname === '/forgot-password', null, { timeout: 15_000 });
+    await page.locator('#email').fill(account.email);
+    await page.getByRole('button', { name: 'שליחת קישור איפוס' }).click();
+    await page.getByText('אם הכתובת רשומה במערכת').waitFor({ timeout: 10_000 });
+    assert(recover, 'no /auth/v1/recover request was issued');
+    assert.equal(recover.body.email, account.email, 'recover did not carry the typed address');
+    assert((recover.url + JSON.stringify(recover.body)).includes('reset-password'),
+      'recover did not aim its redirect at /reset-password');
+    await page.unroute('**/auth/v1/recover*');
+
+    // ---- part 2: a real GoTrue recovery link, followed like a mail client would
+    const linkRes = await fetch(`${apiURL}/auth/v1/admin/generate_link`, {
+      method: 'POST', headers: adminHeaders,
+      body: JSON.stringify({ type: 'recovery', email: account.email, redirect_to: `${baseURL}/reset-password` }),
+    });
+    assert.equal(linkRes.status, 200, `admin generate_link answered HTTP ${linkRes.status}`);
+    const link = await linkRes.json();
+    const actionLink = link.action_link || (link.properties && link.properties.action_link);
+    userId = link.id || (link.user && link.user.id) || null;
+    assert(actionLink, 'generate_link returned no action_link');
+    assert(userId, 'generate_link did not name the user id (needed to restore the password)');
+    assert(actionLink.includes(encodeURIComponent(`${baseURL}/reset-password`)),
+      'GoTrue did not accept the preview redirect_to — check additional_redirect_urls in supabase/config.toml');
+
+    await page.goto(actionLink);
+    await page.waitForFunction(() => location.pathname === '/reset-password', null, { timeout: 15_000 });
+    await page.locator('#reset-password-new').fill(newPassword);
+    await page.locator('#reset-password-confirm').fill(newPassword);
+    await page.getByRole('button', { name: 'החלפת סיסמה' }).click();
+    await page.getByText('הסיסמה הוחלפה').waitFor({ timeout: 15_000 });
+    passwordChanged = true;
+    await page.getByRole('button', { name: 'מעבר למערכת' }).click();
+    await page.waitForFunction((expected) => location.pathname === expected, homes.kitchen, { timeout: 25_000 });
+    await page.locator('#main').waitFor({ state: 'visible', timeout: 25_000 });
+    await page.screenshot({ path: path.join(outDir, 'password-recovery-done.png') });
+    report.screenshots.push('password-recovery-done.png');
+
+    // The credential itself, from a cold login — not merely the recovery session.
+    const coldContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block' });
+    const coldPage = await coldContext.newPage();
+    captureConsole(coldPage, 'password-recovery-cold-login');
+    try {
+      await coldPage.goto(`${baseURL}/login`);
+      await coldPage.locator('#email').fill(account.email);
+      await coldPage.locator('#password').fill(newPassword);
+      await coldPage.getByRole('button', { name: 'התחברות' }).click();
+      await coldPage.waitForFunction((expected) => location.pathname === expected, homes.kitchen, { timeout: 25_000 });
+    } finally {
+      await closeContext(coldContext);
+    }
+  } finally {
+    // Restore no matter where the scenario stopped: later scenarios log in as kitchen.
+    if (userId && passwordChanged) {
+      const restore = await fetch(`${apiURL}/auth/v1/admin/users/${userId}`, {
+        method: 'PUT', headers: adminHeaders, body: JSON.stringify({ password: account.password }),
+      });
+      if (restore.status !== 200) {
+        report.failures.push({ name: 'password recovery cleanup', message: `password restore answered HTTP ${restore.status}` });
+      }
+    }
+    await closeContext(context);
+  }
+}
+
 async function run(name, check) {
   if (process.env.QUALITY_ONLY && !name.includes(process.env.QUALITY_ONLY)) {
     const reason = `QUALITY_ONLY=${process.env.QUALITY_ONLY}`;
@@ -2783,6 +2881,10 @@ async function run(name, check) {
     await run('navigation opens on the control centre and the archive is current alone', () => navigationOrderAndActiveState(browser));
     await run('documents speak human states and keep the numbers behind the disclosure', () => documentVocabulary(browser));
     await run('a machine-filed document names its author and can be undone', () => machineFiledDocument(browser));
+    // Late on purpose: it rotates the kitchen password against the live GoTrue and restores it
+    // in `finally` — running it after the scenarios that log in as kitchen keeps a mid-scenario
+    // crash from cascading into theirs.
+    await run('forgotten password recovers by mail link and the new password signs in', () => passwordRecovery(browser));
     // Registered last on purpose: it is the only scenario that inserts a row into the live
     // database, and running it after everything else keeps that row out of every other check.
     await run('a supplier is created inside the price-list dialog', () => priceListSupplierDoor(browser));

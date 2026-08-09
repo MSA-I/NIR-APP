@@ -12,6 +12,8 @@ import type { Role } from './lib/types';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import AcceptInvite from './pages/AcceptInvite';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 // Lazy: every screen behind the Layout loads its own chunk on demand, so a supplier hitting
 // /my-prices or a payment executor hitting /pay never downloads Dashboard/Reports (and recharts) up front.
@@ -193,7 +195,10 @@ export default function App() {
   // invitation is joining fresh — the accept flow creates a NEW user — and may arrive with a
   // leftover session, a deleted account, or a suspended org. Short-circuiting them to
   // AccountUnavailable would trap an invitee on a screen that has nothing to do with them.
-  const isPublic = pathname === '/accept-invite' || pathname === '/login';
+  // /reset-password is public for the mirror reason: the recovery link ARRIVES with a session
+  // (GoTrue minted it from the token), and the page must render before the profile resolves.
+  const isPublic = pathname === '/accept-invite' || pathname === '/login'
+    || pathname === '/forgot-password' || pathname === '/reset-password';
 
   // An operator with no tenant profile is legitimate — send them to the console, not to
   // the unavailable screen.
@@ -216,6 +221,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/accept-invite" element={<AcceptInvite />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={session || loading ? <Layout /> : <Navigate to="/login" replace />}>
         {/* One Suspense boundary for every lazy page, nested under the Layout so the shell
             (nav, requires-attention strip) stays mounted and only the content area shows

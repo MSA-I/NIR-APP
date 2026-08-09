@@ -12,7 +12,7 @@ import { ReauthModal } from '../components/ReauthModal';
 import { INVITATION_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime } from '../lib/format';
 import {
-  INVITABLE_ROLES, INVITATION_COLUMNS, invitationStatusOf,
+  ASSIGNABLE_ROLES, INVITABLE_ROLES, INVITATION_COLUMNS, invitationStatusOf,
   sendInvite, resendInvite, revokeInvite, type Invitation,
 } from '../lib/invitations';
 import type { Profile, Role } from '../lib/types';
@@ -27,6 +27,7 @@ export default function Settings() {
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<Role>('office');
+  const [inviteSupplierId, setInviteSupplierId] = useState('');
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [resendTarget, setResendTarget] = useState<Invitation | null>(null);
@@ -52,6 +53,11 @@ export default function Settings() {
 
   const { data: invitations, refetch: refetchInvites } = useQuery<Invitation[]>(async () =>
     unwrap(await supabase.from('invitations').select(INVITATION_COLUMNS).order('created_at', { ascending: false })));
+
+  // For the supplier-agent invitation (OPEN-DECISIONS #17): the invitation must bind to an
+  // existing, non-deleted supplier. Owner-only screen, so the read is unrestricted anyway.
+  const { data: suppliers } = useQuery<{ id: string; name: string }[]>(async () =>
+    unwrap(await supabase.from('suppliers').select('id, name').is('deleted_at', null).order('name')));
 
   async function saveOrg() {
     setBusy(true);
@@ -126,13 +132,20 @@ export default function Settings() {
 
   async function onInvite() {
     setInviteError(null);
+    if (inviteRole === 'supplier' && !inviteSupplierId) {
+      setInviteError('להזמנת סוכן ספק יש לבחור ספק מהרשימה.');
+      return;
+    }
     setInviting(true);
-    const { error: err, result } = await sendInvite(inviteEmail.trim(), inviteRole);
+    const { error: err, result } = await sendInvite(
+      inviteEmail.trim(), inviteRole, inviteRole === 'supplier' ? inviteSupplierId : undefined,
+    );
     setInviting(false);
     if (err) { setInviteError(err); return; }
 
     toast(`ההזמנה נשלחה אל ${result?.email ?? inviteEmail.trim()}`);
     setInviteEmail('');
+    setInviteSupplierId('');
     void refetchInvites();
   }
 
@@ -230,19 +243,17 @@ export default function Settings() {
       <div className="card card-pad space-y-4">
         <div>
           <h2 className="section-title flex items-center gap-2"><KeyRound size={17} /> החלפת הסיסמה שלך</h2>
-          {/* G1, finding 2. The old sentence sent the owner to "מסך הניהול" — /admin, which sits
-              behind PlatformGuard (App.tsx:94-100) and which an organisation owner structurally
-              cannot open. Login.tsx offers no "שכחתי סיסמה" either, so the instruction named the
-              one door in the product its reader is guaranteed not to have. What replaces it is the
-              route that actually exists today (OPEN-DECISIONS #12/#18: the operator issues the
-              password out of band). Whether an org owner should be able to reset an employee's
-              password is a security decision, recorded as OPEN-DECISIONS #114 — not invented here. */}
+          {/* OPEN-DECISIONS #114, decided 08.08.2026: employees recover their own password via
+              "שכחתי סיסמה" on the login screen (ForgotPassword → ResetPassword). An org owner
+              still cannot reset another user's password — that stays closed by decision, and the
+              operator valve (admin-provision reset_password) remains the fallback when mail
+              delivery fails. */}
           <p className="text-sm text-ink-muted mt-1">
             הסיסמה מוחלפת מיד ותידרש בכניסה הבאה. השדות כאן משנים את הסיסמה שלך בלבד.
           </p>
           <p className="text-sm text-ink-muted mt-1">
-            אין במוצר איפוס סיסמה לעובד אחר, ובמסך הכניסה אין ״שכחתי סיסמה״. עובד ששכח סיסמה — יש לפנות למפעיל המערכת,
-            שמנפיק סיסמה חדשה ומוסר אותה בערוץ מאובטח.
+            עובד ששכח סיסמה מאפס אותה בעצמו: ״שכחתי סיסמה״ במסך הכניסה שולח קישור איפוס לכתובת המייל שלו.
+            אם המייל אינו מגיע — מפעיל המערכת מנפיק סיסמה חדשה ומוסר אותה בערוץ מאובטח.
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 sm:items-end">
@@ -302,13 +313,14 @@ export default function Settings() {
           <p className="text-sm text-ink-muted mt-1">
             נשלח מייל עם קישור אישי להגדרת שם וסיסמה. הקישור תקף 7 ימים.
           </p>
-          {/* G1, finding 2 (companion). `supplier` is absent from INVITABLE_ROLES and from the
-              role-change action, and until now nothing said where a vendor account IS set up. The
-              rule is not a UI preference: a supplier profile needs a `supplier_id` this route
-              cannot supply, and the DB CHECK refuses it (OPEN-DECISIONS #17). */}
+          {/* OPEN-DECISIONS #17, decided 08.08.2026: supplier agents ARE invited from here. The
+              DB path existed since 0025 (invitations.supplier_id + the 3-arg create_invitation);
+              what was missing was this picker and the Edge Function forwarding. The binding is
+              mandatory — invitations_supplier_role_check refuses a supplier invitation without
+              a supplier, and the agent will see that supplier's price list alone. */}
           <p className="text-sm text-ink-muted mt-1">
-            רשימת התפקידים כאן היא עובדי הארגון בלבד. חשבון סוכן ספק אינו נפתח מכאן — הוא מחייב שיוך לספק מסוים,
-            והקמתו נעשית ע״י מפעיל המערכת.
+            הזמנת סוכן ספק מחייבת שיוך לספק קיים — בחרו תפקיד ״ספק״ ואת הספק מהרשימה.
+            הסוכן יקבל גישה למחירון של אותו ספק בלבד.
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_11rem_auto] gap-3 sm:items-end">
@@ -319,7 +331,8 @@ export default function Settings() {
           </div>
           <div>
             <label className="label" htmlFor="inviteRole">תפקיד</label>
-            <select id="inviteRole" className="input" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as Role)}>
+            <select id="inviteRole" className="input" value={inviteRole}
+              onChange={(e) => { setInviteRole(e.target.value as Role); setInviteError(null); }}>
               {INVITABLE_ROLES.map((r) => <option key={r} value={r}>{roleLabels[r]}</option>)}
             </select>
           </div>
@@ -327,6 +340,19 @@ export default function Settings() {
             {inviting ? 'שולח…' : 'שליחת הזמנה'}
           </button>
         </div>
+        {inviteRole === 'supplier' && (
+          <div>
+            <label className="label" htmlFor="inviteSupplier">שיוך לספק</label>
+            <select id="inviteSupplier" className="input" value={inviteSupplierId}
+              onChange={(e) => { setInviteSupplierId(e.target.value); setInviteError(null); }}>
+              <option value="">בחירת ספק…</option>
+              {(suppliers ?? []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <p className="text-xs text-ink-muted mt-1">
+              סוכן הספק יראה ויעדכן אך ורק את המחירון של הספק שנבחר כאן.
+            </p>
+          </div>
+        )}
         {inviteError && <ErrorNote message={inviteError} />}
       </div>
 
@@ -368,9 +394,12 @@ export default function Settings() {
         <div className="space-y-4">
           <div>
             <label className="label" htmlFor="role-change-select">תפקיד חדש</label>
+            {/* ASSIGNABLE_ROLES, not INVITABLE_ROLES: an existing employee cannot become a
+                supplier agent here — that would need a supplier_id this dialog has no way to
+                supply. A supplier account starts as a supplier invitation. */}
             <select id="role-change-select" className="input" value={nextRole}
               onChange={(e) => setNextRole(e.target.value as Role)}>
-              {INVITABLE_ROLES.map((r) => <option key={r} value={r}>{roleLabels[r] ?? r}</option>)}
+              {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{roleLabels[r] ?? r}</option>)}
             </select>
           </div>
           <div>

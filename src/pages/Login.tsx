@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router';
+import { Link, Navigate, useNavigate } from 'react-router';
 import { Eye, EyeOff, Loader2, Lock } from 'lucide-react';
 import { useAuth, homeFor } from '../auth/AuthContext';
 import { APP_NAME } from '../lib/branding';
@@ -63,6 +63,11 @@ export default function Login() {
             {busy ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Lock size={15} aria-hidden="true" />}
             {busy ? 'מתחבר…' : 'התחברות'}
           </button>
+          <div className="text-center">
+            <Link to="/forgot-password" className="text-sm text-ink-muted hover:text-ink underline underline-offset-2">
+              שכחתי סיסמה
+            </Link>
+          </div>
         </form>
       </div>
     </main>
