@@ -362,7 +362,7 @@ export default function Layout() {
 
       {/* Global search — desktop. Injected above <main>: the headerless desktop area is empty
           today (plan §2), and lg:ms-60 lines it up beside the fixed w-60 sidebar. z-30 keeps it
-          below the sidebar (z-40); sticky works because the min-h-screen wrapper has no overflow. */}
+          below the sidebar (z-40); sticky works because the min-h-dvh wrapper has no overflow. */}
       {/* The header exists when it has something to hold. Until package 0 that was the search box
           alone, which left payer and supplier — the two roles with the most blocked tasks in
           DEAD-ENDS-AUDIT — with no desktop slot to report from. */}
