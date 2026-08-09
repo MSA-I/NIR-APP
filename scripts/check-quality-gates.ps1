@@ -511,20 +511,20 @@ function Find-PlaywrightCore {
 }
 
 function Get-QualityPreviewPort {
-  # Auth redirect URLs are exact in the isolated GoTrue stack. Keep a small documented range
-  # so the gate can coexist with `npm run dev` on 5199 without accepting arbitrary redirects.
-  foreach ($port in 5199..5208) {
-    $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $port)
-    try {
-      $listener.Start()
-      return $port
-    }
-    catch { }
-    finally {
-      $listener.Stop()
-    }
+  # The real recovery link must exactly match the local Auth allow-list. Refuse an occupied
+  # canonical port instead of silently testing a redirect GoTrue will replace with site_url.
+  $port = 5199
+  $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $port)
+  try {
+    $listener.Start()
   }
-  Stop-WithInfrastructureBlock "preview_port_unavailable" "No allow-listed quality preview port is free (5199-5208)."
+  catch {
+    Stop-WithInfrastructureBlock "preview_port_unavailable" "The allow-listed quality preview port 5199 is already in use."
+  }
+  finally {
+    $listener.Stop()
+  }
+  return $port
 }
 
 function Start-PreviewServer {
