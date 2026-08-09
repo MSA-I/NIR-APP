@@ -1,6 +1,8 @@
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router';
 import { Component, lazy, Suspense, useState, type ReactNode } from 'react';
 import { useAuth, homeFor } from './auth/AuthContext';
+import { isTrialExpired } from './lib/trial';
+import { fmtDate } from './lib/format';
 import { PageLoader, useToast } from './components/ui';
 import { toHebrewError } from './lib/errors';
 import { reportError } from './lib/observability';
@@ -154,6 +156,41 @@ function AccountUnavailable() {
   );
 }
 
+/**
+ * OPEN-DECISIONS #15, decided 09.08.2026 (owner): SOFT block on trial expiry. The screen
+ * tells the truth and stops the app; the data is untouched, RLS is unchanged, `suspended`
+ * remains the hard tool. A platform operator is deliberately never routed here — /admin is
+ * where the trial gets extended.
+ */
+function TrialExpired({ endedAt }: { endedAt: string | null }) {
+  const { signOut } = useAuth();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+
+  async function handleSignOut() {
+    setBusy(true);
+    const result = await signOut();
+    setBusy(false);
+    if (result.error) toast(toHebrewError(result.error), 'error');
+    else if (result.pushWarning) toast(result.pushWarning, 'error');
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="card card-pad max-w-md text-center">
+        <h1 className="page-title">תקופת הניסיון הסתיימה</h1>
+        <p className="text-ink-soft mt-2">
+          תקופת הניסיון של העסק הסתיימה{endedAt ? ` ב-${fmtDate(endedAt)}` : ''}. הנתונים שמורים
+          במלואם — הגישה תיפתח מחדש עם הסדרת ההמשך מול מפעיל השירות.
+        </p>
+        <button className="btn-secondary mt-5" disabled={busy} onClick={() => void handleSignOut()}>
+          {busy ? 'מתנתק…' : 'התנתקות'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function BootstrapUnavailable() {
   const { bootstrapError, retryBootstrap, signOut } = useAuth();
   const toast = useToast();
@@ -189,7 +226,7 @@ function BootstrapUnavailable() {
 }
 
 export default function App() {
-  const { session, profile, loading, bootstrapError, isPlatformAdmin } = useAuth();
+  const { session, profile, loading, bootstrapError, isPlatformAdmin, org } = useAuth();
   const { pathname } = useLocation();
 
   // The public routes must render regardless of a broken session. Someone accepting an
@@ -218,6 +255,12 @@ export default function App() {
   }
   if (!isPublic && session && !loading && !profile && bootstrapError) return <BootstrapUnavailable />;
   if (!isPublic && session && !loading && !profile) return <AccountUnavailable />;
+
+  // #15 (soft block): an expired trial stops at a truthful screen. Never for the platform
+  // operator — /admin is where the trial is extended, and blocking the fixer fixes nothing.
+  if (!isPublic && session && !loading && profile && !isPlatformAdmin && isTrialExpired(org)) {
+    return <TrialExpired endedAt={org?.trial_ends_at ?? null} />;
+  }
 
   return (
     <Routes>
