@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-table';
 import type { StatusMeta, Tone } from '../lib/status';
 import type { ServerSort } from '../lib/serverList';
-import { fmtMoney } from '../lib/format';
+import { fmtMoneyRounded } from '../lib/format';
 import { ActionMenu, type ActionMenuItem } from './ActionMenu';
 
 /* ---------- StatusBadge ---------- */
@@ -357,7 +357,7 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
           {item.hint && <span className="ms-2 text-xs text-ink-muted max-sm:block max-sm:ms-0 max-sm:mt-0.5">{item.hint}</span>}
         </span>
         {item.amount != null && item.amount > 0 && (
-          <span className={`num text-sm ${muted ? 'font-medium text-ink-soft' : 'font-semibold text-ink-mid'}`}>{fmtMoney(item.amount)}</span>
+          <span className={`num text-sm ${muted ? 'font-medium text-ink-soft' : 'font-semibold text-ink-mid'}`}>{fmtMoneyRounded(item.amount)}</span>
         )}
         <ChevronLeft size={16} className="text-ink-ghost shrink-0" aria-hidden="true" />
       </Link>
@@ -408,7 +408,7 @@ export function AttentionZone({ items, totalLabel }: { items: AttentionItem[]; t
         <h2 className="section-title flex items-center gap-2"><Bell size={18} className="text-await-fg" aria-hidden="true" /> דורש טיפול היום</h2>
         <span className="text-xs text-ink-muted">
           {actionRows.length} סוגי טיפול
-          {actionTotal > 0 && <> · {totalLabel ? <>{totalLabel} </> : null}<span className="num">{fmtMoney(actionTotal)}</span></>}
+          {actionTotal > 0 && <> · {totalLabel ? <>{totalLabel} </> : null}<span className="num">{fmtMoneyRounded(actionTotal)}</span></>}
         </span>
       </div>
 

@@ -7,7 +7,7 @@ import { server } from '../test/msw/server';
 import { SUPABASE_URL } from '../test/msw/handlers';
 import { createAppQueryClient } from '../lib/query/client';
 import { OrgScopeProvider } from '../lib/query/orgScope';
-import { addCalendarDays, fmtMoney, todayISO } from '../lib/format';
+import { addCalendarDays, fmtMoneyExact, todayISO } from '../lib/format';
 
 /** Real supabase-js against the MSW base URL — the wire behaviour stays real. */
 vi.mock('../lib/supabase', async () => {
@@ -115,7 +115,7 @@ describe('PayerDashboard — six settled metrics, no fabricated zero (PLAN-10 §
     renderDashboard();
     await ready();
 
-    await waitFor(() => expect(tile('סה״כ ממתין לביצוע')).toBe(fmtMoney(PENDING_TOTAL)));
+    await waitFor(() => expect(tile('סה״כ ממתין לביצוע')).toBe(fmtMoneyExact(PENDING_TOTAL)));
     // The counts are HEAD reads — one per decision, plus the server sum. No row body pays for them.
     expect(requests.filter((entry) => entry.startsWith('HEAD'))).toEqual([
       `HEAD payment_requests lt.${TODAY}`,
@@ -124,9 +124,9 @@ describe('PayerDashboard — six settled metrics, no fabricated zero (PLAN-10 §
     ]);
     expect(requests).toContain('RPC p2_active_payment_request_total');
 
-    expect(tile('באיחור')).toBe(fmtMoney(100));
-    expect(tile('לביצוע היום')).toBe(fmtMoney(200));
-    expect(tile('בוצע החודש')).toBe(fmtMoney(500));
+    expect(tile('באיחור')).toBe(fmtMoneyExact(100));
+    expect(tile('לביצוע היום')).toBe(fmtMoneyExact(200));
+    expect(tile('בוצע החודש')).toBe(fmtMoneyExact(500));
     expect(attentionCount('תשלומים באיחור')).toBe('1');
     expect(attentionCount('תשלומים לביצוע היום')).toBe('1');
     expect(attentionCount('ממתינים לביצוע העברה')).toBe(String(queueRows.length));
@@ -148,8 +148,8 @@ describe('PayerDashboard — six settled metrics, no fabricated zero (PLAN-10 §
     // Everything measured by another call survives: the decision counts, the sum, the month.
     expect(attentionCount('תשלומים באיחור')).toBe('1');
     expect(attentionCount('תשלומים לביצוע היום')).toBe('1');
-    expect(tile('סה״כ ממתין לביצוע')).toBe(fmtMoney(PENDING_TOTAL));
-    expect(tile('בוצע החודש')).toBe(fmtMoney(500));
+    expect(tile('סה״כ ממתין לביצוע')).toBe(fmtMoneyExact(PENDING_TOTAL));
+    expect(tile('בוצע החודש')).toBe(fmtMoneyExact(500));
     // An empty chart must not claim "no transfers waiting" when the truth is "not loaded".
     expect(screen.getByText('לא ניתן לטעון את סכומי ההמתנה')).toBeInTheDocument();
     expect(screen.queryByText('אין העברות ממתינות')).toBeNull();
@@ -162,8 +162,8 @@ describe('PayerDashboard — six settled metrics, no fabricated zero (PLAN-10 §
 
     await waitFor(() => expect(partialNote()).toContain('סך ההעברות הממתינות'));
     expect(tile('סה״כ ממתין לביצוע')).toBe('—');
-    expect(tile('באיחור')).toBe(fmtMoney(100));
-    expect(tile('לביצוע היום')).toBe(fmtMoney(200));
+    expect(tile('באיחור')).toBe(fmtMoneyExact(100));
+    expect(tile('לביצוע היום')).toBe(fmtMoneyExact(200));
     expect(attentionCount('ממתינים לביצוע העברה')).toBe(String(queueRows.length));
   });
 
@@ -180,7 +180,7 @@ describe('PayerDashboard — six settled metrics, no fabricated zero (PLAN-10 §
     // The clear phrasing belongs to a measured zero only; it must not appear for an unknown.
     expect(screen.queryByText('אין תשלומים באיחור')).toBeNull();
     // The amounts came from a different read and are still on screen.
-    expect(tile('באיחור')).toBe(fmtMoney(100));
+    expect(tile('באיחור')).toBe(fmtMoneyExact(100));
   });
 
   it('keeps the waiting queue when the executed-payment read fails', async () => {
@@ -190,7 +190,7 @@ describe('PayerDashboard — six settled metrics, no fabricated zero (PLAN-10 §
 
     await waitFor(() => expect(partialNote()).toContain('ההעברות שבוצעו'));
     expect(tile('בוצע החודש')).toBe('—');
-    expect(tile('סה״כ ממתין לביצוע')).toBe(fmtMoney(PENDING_TOTAL));
+    expect(tile('סה״כ ממתין לביצוע')).toBe(fmtMoneyExact(PENDING_TOTAL));
     expect(screen.getByText('לא ניתן לטעון את ההעברות שבוצעו')).toBeInTheDocument();
     expect(screen.queryByText('לא בוצעו העברות בתקופה')).toBeNull();
   });

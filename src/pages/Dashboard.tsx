@@ -7,7 +7,7 @@ import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, TaskLine, type 
 import { EXCEPTION_TYPE, PO_STATUS, SEVERITY } from '../lib/status';
 import {
   addCalendarDays, BUSINESS_TIME_ZONE, dateStartInstant, daysInCalendarMonth,
-  fmtMoney, fmtMoneyExact, fmtMonth, localDateKey, shiftCalendarMonth, startOfCalendarWeek,
+  fmtMoneyExact, fmtMoneyRounded, fmtMonth, localDateKey, shiftCalendarMonth, startOfCalendarWeek,
   todayISO as businessTodayISO,
 } from '../lib/format';
 import { chartTheme } from '../lib/theme';
@@ -18,7 +18,9 @@ import { fetchAll } from '../lib/supabasePaging';
 // audit round 2: glance values are whole-shekel by convention — the three money-strip tiles round to
 // whole ₪ so they read consistently at a glance (₪8,131 not ₪14,842.6). Tables elsewhere keep exact
 // amounts; format.ts is untouched. null stays null → "—", never a fake rounded 0 (CLAUDE.md:37).
-const glanceMoney = (v: number | null) => fmtMoney(v == null ? null : Math.round(v));
+// The rounding moved into the formatter (format.ts): a glance surface is a shape decision, not
+// something each call site re-derives. The alias stays because it names the surface.
+const glanceMoney = fmtMoneyRounded;
 // "עודכן ב-HH:MM" freshness stamp — the screen promises real-time, so it says when it last read.
 const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TIME_ZONE });
 
@@ -549,7 +551,7 @@ export default function Dashboard() {
       { key: 'pay-today', label: 'תשלומים לביצוע היום', count: paymentsDueToday, tone: 'await', to: '/payment-requests?due=today', hint: paymentsDueToday == null ? 'לא הוגדרו תאריכי יעד' : undefined, clearLabel: 'אין תשלומים להיום' },
       { key: 'exceptions', label: 'חריגים פתוחים', count: exceptions.length, tone: 'alert', to: '/exceptions?status=open', hint: highExceptions ? `${highExceptions} בחומרה גבוהה` : undefined, clearLabel: 'אין חריגים פתוחים' },
       { key: 'credits', label: 'זיכויים פתוחים', count: credits.length, amount: openCreditsSum, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
-      { key: 'commitments', label: 'התחייבויות רכש פתוחות', count: openPos.length, amount: committedSum, tone: 'idle', to: '/orders?status=open', hint: remainingSum > 0 ? `נותר לקבלה ${fmtMoney(remainingSum)}` : undefined, clearLabel: 'אין התחייבויות פתוחות' },
+      { key: 'commitments', label: 'התחייבויות רכש פתוחות', count: openPos.length, amount: committedSum, tone: 'idle', to: '/orders?status=open', hint: remainingSum > 0 ? `נותר לקבלה ${fmtMoneyRounded(remainingSum)}` : undefined, clearLabel: 'אין התחייבויות פתוחות' },
       { key: 'late-delivery', label: 'הזמנות באיחור באספקה', count: lateDeliveries, tone: 'alert', to: '/receiving', clearLabel: 'אין הזמנות באיחור' },
       { key: 'awaiting-confirmation', label: 'הזמנות ממתינות לאישור ספק', count: awaitingConfirmation, tone: 'await', to: '/orders?status=sent', clearLabel: 'כל ההזמנות אושרו' },
       { key: 'price-increases', label: 'ספקים שהעלו מחירים (30 יום)', count: priceIncreaseSuppliers, tone: 'await', to: '/prices?increases=1', clearLabel: 'אין שינויי מחירים' },
@@ -647,7 +649,7 @@ export default function Dashboard() {
               spark={data.paidWeekly} sparkLabel="מגמת תשלומים לספקים בשמונה השבועות האחרונים" />
             <BandStat title="נרכש החודש" value={data.money.purchasedMonth} to="/orders?status=all"
               icon={ShoppingCart} context="מתחילת החודש" delta={data.money.purchasedDelta}
-              aux={data.savings != null ? `חיסכון משוער ${fmtMoney(data.savings)}${data.savingsPct != null ? ` · ${data.savingsPct.toFixed(0)}%` : ''}` : undefined}
+              aux={data.savings != null ? `חיסכון משוער ${fmtMoneyRounded(data.savings)}${data.savingsPct != null ? ` · ${data.savingsPct.toFixed(0)}%` : ''}` : undefined}
               spark={data.weekly} sparkLabel="מגמת רכש בשמונה השבועות האחרונים" />
           </div>
 
@@ -755,7 +757,7 @@ export default function Dashboard() {
                           <span className="ms-2 text-xs text-ink-muted">{price.supplier.name}</span>
                         </span>
                         <span className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 sm:justify-start">
-                          <span className="text-xs text-ink-muted">מ־<span className="num">₪{price.previous_price!.toFixed(2)}</span> ל־<span className="num">₪{price.current_price.toFixed(2)}</span></span>
+                          <span className="text-xs text-ink-muted">מ־<span className="num">{fmtMoneyExact(price.previous_price)}</span> ל־<span className="num">{fmtMoneyExact(price.current_price)}</span></span>
                           <span className="inline-flex items-center gap-1 font-medium text-alert-fg num" dir="ltr">
                             <TrendingUp size={13} className="text-trend-up-fg" />+{price.pct.toFixed(1)}%
                           </span>

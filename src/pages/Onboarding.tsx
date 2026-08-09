@@ -13,7 +13,7 @@ import {
   readSheet, autoMapColumns, mapRows, cellText, cellNumber, skipRow, nameKey, groupSkipped,
   type FieldSpec, type MapResult, type SheetData, type SheetRow,
 } from '../lib/importSheet';
-import { todayISO } from '../lib/format';
+import { fmtMoneyExact, todayISO } from '../lib/format';
 import type { Category } from '../lib/types';
 
 /* ================= step model ================= */
@@ -1013,7 +1013,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
     { key: 'unit', header: 'יח׳', render: (r) => r.unit },
     { key: 'sku', header: 'מק״ט', render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
     { key: 'supplier', header: 'ספק', render: (r) => r.supplier || '—' },
-    { key: 'price', header: 'מחיר', className: 'num', render: (r) => (r.price != null ? `₪${r.price.toFixed(2)}` : '—') },
+    { key: 'price', header: 'מחיר', className: 'num', render: (r) => fmtMoneyExact(r.price) },
     {
       key: 'note', header: 'הערה',
       render: (r) => {

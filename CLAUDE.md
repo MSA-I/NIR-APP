@@ -42,9 +42,12 @@
 Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **Tailwind v4 CSS-first** · recharts · lucide-react
 
 - `npm run dev` — פורט **5199**
-- `npm run build` = `tsc --noEmit` + **שמונת** סקריפטי ה-`check:*` + `vitest run` (‏`npm run test`) + `vite build` — **השער האוטומטי היחיד.**
-  שמונה, לא שבעה: ‏`check:exemptions` נוסף בגל 11. הרשימה מ-`package.json` היא
-  ‏`alerts · dashboard · orders · split · p2 · review · tokens · exemptions`.
+- `npm run build` = `tsc --noEmit` + **תשעת** סקריפטי ה-`check:*` + `vitest run` (‏`npm run test`) + `vite build` — **השער האוטומטי היחיד.**
+  תשעה, לא שמונה: ‏`check:exemptions` נוסף בגל 11 ו-`check:money` בחבילה 1 של קמפיין המוכנות.
+  הרשימה מ-`package.json` היא
+  ‏`alerts · dashboard · orders · split · p2 · review · tokens · money · exemptions`.
+  ‏`check:money` אוכף מקור אמת אחד לצורת הכסף — אפס `₪` מודבק לערך מוזרק, אפס `toLocaleString(`
+  ואפס פורמטר מטבע שני מחוץ ל-`src/lib/format.ts`. הוא נבדק במוטציה: הפרה מושתלת מפילה אותו.
   ‏`check:review` מריץ `node --test` על `src/components/document-review/model.test.ts` — ‏**22** בדיקות
   (‏`ℹ tests 22` בפלט; היה רשום כאן 16, התיישן ל-21 בגל 11, והתיישן שוב ל-22 בגלי 08.08 —
   נמדד מחדש 09.08.2026 בריצת השער של חבילה 2).
@@ -73,11 +76,11 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
 
   **היסטוריית הסטייה, כי היא חזרה שש פעמים:** ‏13 → 20 → 26 → **27** לסוויטות; ‏22 → 25 → 29 → 30 →
   33 → (‏34 — **עבר בלי שהקובץ עודכן**) → **35** לתרחישים; ‏40 → **45** לקובצי ה-`.spec`
-  (‏גם כאן ההפרש נמצא ולא נרשם); ‏16 → 21 → **22** ל-`check:review`; ‏שבעה → **שמונה** לסקריפטי
-  ה-`check:*`. בכל פעם הקובץ הזה — שכל סוכן קורא **ראשון** — שלח את הקורא לספור פחות ממה שקיים.
+  (‏גם כאן ההפרש נמצא ולא נרשם); ‏16 → 21 → **22** ל-`check:review`; ‏שבעה → שמונה → **תשעה**
+  לסקריפטי ה-`check:*`. בכל פעם הקובץ הזה — שכל סוכן קורא **ראשון** — שלח את הקורא לספור פחות ממה שקיים.
   **סופרים לפני שכותבים.**
   **ריצה אחת בכל רגע במכונה.** **יש CI מינימלי מאז 09.08.2026** — ‏`.github/workflows/build.yml`
-  מריץ את `npm run build` המלא (‏tsc + שמונת ה-`check:*` + ‏vitest + ‏vite build) על Linux בכל
+  מריץ את `npm run build` המלא (‏tsc + תשעת ה-`check:*` + ‏vitest + ‏vite build) על Linux בכל
   push/PR ל-`main`. **מה שה-CI לא מכסה, במפורש:** ‏`npm run quality` נשאר ריצה ידנית על מכונה זו —
   ‏Docker, ‏27 סוויטות SQL, ‏preflight, חוזי Deno ו-35 תרחישי הדפדפן אינם רצים ב-CI. הגנת ענף
   (‏required status) היא הגדרת GitHub של הבעלים — לא בוצעה אוטומטית.

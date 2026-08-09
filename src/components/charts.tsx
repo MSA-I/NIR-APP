@@ -5,7 +5,7 @@ import {
   Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { chartTheme } from '../lib/theme';
-import { fmtMoneyExact } from '../lib/format';
+import { fmtMoneyCompact, fmtMoneyExact, fmtMoneyRounded } from '../lib/format';
 import type { DashboardWeeklyPoint } from '../lib/dashboardSeries';
 
 /**
@@ -17,10 +17,11 @@ import type { DashboardWeeklyPoint } from '../lib/dashboardSeries';
  * Colors always come from chartTheme() (resolved CSS-var strings) — never hex/palette literals (DESIGN).
  */
 
-// whole-₪ label for bars; compact "₪8.1k" for dense axes/centers.
-export const money = (v: number) => `₪${Math.round(v).toLocaleString('he-IL')}`;
-export const moneyShort = (v: number) =>
-  (Math.abs(v) >= 1000 ? `₪${(v / 1000).toLocaleString('he-IL', { maximumFractionDigits: 1 })}k` : `₪${Math.round(v)}`);
+// Whole-shekel label for bars; compact for dense axes and donut centres. Both go through
+// src/lib/format.ts — they used to hand-build the symbol as a prefix with a bare toLocaleString,
+// which put the currency mark on the wrong side of the figure from every table in the app.
+export const money = (v: number) => fmtMoneyRounded(v);
+export const moneyShort = (v: number) => (Math.abs(v) >= 1000 ? fmtMoneyCompact(v) : fmtMoneyRounded(v));
 
 export function useReducedMotion() {
   const [reduced, setReduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);

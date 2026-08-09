@@ -8,7 +8,7 @@ import { Scorecard, type ScoreItem } from '../../components/supplier-metrics';
 import { CategoryDonut, ComparisonLineChart, SpendBarChart, money, type LinePoint } from '../../components/charts';
 import { chartTheme } from '../../lib/theme';
 import { topCategoriesWithOther } from '../../lib/dashboardSeries';
-import { fmtMonth, fmtMoney, fmtNum, monthlyBuckets, shiftCalendarMonth, todayISO, weeklyBuckets } from '../../lib/format';
+import { fmtMonth, fmtMoneyRounded, fmtNum, monthlyBuckets, shiftCalendarMonth, todayISO, weeklyBuckets } from '../../lib/format';
 import { DashboardFrame, ChartCard } from './parts';
 
 type Payment = { amount: number; paid_date: string };
@@ -57,10 +57,10 @@ export default function AccountantDashboard() {
     const notSent = invoices.filter((i) => i.export_status === 'not_sent' && i.review_status === 'approved').length;
 
     const kpis: ScoreItem[] = [
-      { label: 'שולם החודש', value: fmtMoney(paidMonth) },
-      { label: 'יתרת חשבוניות פתוחות', value: fmtMoney(openInvoiceBalance), tone: openInvoiceBalance ? 'await' : 'idle' },
+      { label: 'שולם החודש', value: fmtMoneyRounded(paidMonth) },
+      { label: 'יתרת חשבוניות פתוחות', value: fmtMoneyRounded(openInvoiceBalance), tone: openInvoiceBalance ? 'await' : 'idle' },
       { label: 'תנועות בנק לא מותאמות', value: fmtNum(unmatchedBank), tone: unmatchedBank ? 'await' : 'idle' },
-      { label: 'זיכויים פתוחים', value: fmtNum(openCreditRows.length), sub: openCreditsSum != null ? fmtMoney(openCreditsSum) : undefined },
+      { label: 'זיכויים פתוחים', value: fmtNum(openCreditRows.length), sub: openCreditsSum != null ? fmtMoneyRounded(openCreditsSum) : undefined },
       { label: 'ממתין להעברה לרו״ח', value: fmtNum(notSent), tone: notSent ? 'await' : 'idle' },
     ];
 
@@ -124,7 +124,7 @@ export default function AccountantDashboard() {
             single thing to open, and a link that lands on a wrong filter is worse than none. */}
         <ChartCard title="יתרות פתוחות לפי ספק" subtitle="ארבעת הספקים עם היתרה הגבוהה וכל היתר">
           <CategoryDonut slices={data.supplierSlices} total={data.supplierTotal}
-            ariaLabel={`יתרות פתוחות לפי ספק, סה״כ ${fmtMoney(data.supplierTotal)}`}
+            ariaLabel={`יתרות פתוחות לפי ספק, סה״כ ${fmtMoneyRounded(data.supplierTotal)}`}
             hrefFor={(slice) => (slice.name === 'אחר' || slice.name === '—'
               ? null
               : `/invoices?q=${encodeURIComponent(slice.name)}&pay=open`)}

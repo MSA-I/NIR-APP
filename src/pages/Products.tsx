@@ -7,6 +7,7 @@ import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, PageHeader, SkeletonTable, ConfirmDialog, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
+import { fmtMoneyExact } from '../lib/format';
 import { useCategories } from './Suppliers';
 import type { Product } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
@@ -94,7 +95,7 @@ export default function Products() {
     { key: 'suppliers', header: 'ספקים', className: 'num', sortValue: (r) => r.supplierCount ?? 0, render: (r) => r.supplierCount ?? 0 },
     {
       key: 'best', header: 'מחיר מיטבי', className: 'num', sortValue: (r) => r.bestPrice ?? 0,
-      render: (r) => (r.bestPrice != null ? `₪${r.bestPrice.toFixed(2)}` : '—'),
+      render: (r) => fmtMoneyExact(r.bestPrice),
     },
   ];
 

@@ -7,7 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, PageHeader, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
 import { cellText, matchColumn, nameKey, readSheet } from '../lib/importSheet';
-import { fmtDate, todayISO } from '../lib/format';
+import { fmtDate, fmtMoneyExact, todayISO } from '../lib/format';
 import { PRODUCT_AVAILABILITY } from '../lib/status';
 import type {
   Product,
@@ -115,8 +115,8 @@ export default function SupplierPrices() {
   const columns: Column<Row>[] = [
     { key: 'product', header: 'מוצר', sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-ink">{r.product.name}</span> },
     { key: 'unit', header: 'יח׳', priority: 3, render: (r) => r.product.unit },
-    { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">₪{r.current_price.toFixed(2)}</span> },
-    { key: 'prev', header: 'מחיר קודם', className: 'num', priority: 3, render: (r) => (r.previous_price != null ? `₪${r.previous_price.toFixed(2)}` : '—') },
+    { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
+    { key: 'prev', header: 'מחיר קודם', className: 'num', priority: 3, render: (r) => fmtMoneyExact(r.previous_price) },
     { key: 'date', header: 'בתוקף מ־', priority: 3, sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
     { key: 'avail', header: 'זמינות', render: (r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} /> },
   ];

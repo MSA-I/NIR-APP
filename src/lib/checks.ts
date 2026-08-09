@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { unwrap } from './useQuery';
-import { addCalendarDays, fmtDate } from './format';
+import { addCalendarDays, fmtDate, fmtMoneyExact } from './format';
 import { fetchAll, fetchInChunks } from './supabasePaging';
 
 export type CheckSeverity = 'info' | 'warning' | 'critical';
@@ -36,7 +36,7 @@ export async function runInvoiceChecks(inv: {
     results.push({
       code: 'duplicate_number',
       severity: 'critical',
-      message: `קיימת חשבונית עם אותו מספר לאותו ספק (מ־${fmtDate(d.invoice_date)}, ₪${d.total_amount.toLocaleString()}${d.payment_status === 'paid' ? ', שולמה' : ''})`,
+      message: `קיימת חשבונית עם אותו מספר לאותו ספק (מ־${fmtDate(d.invoice_date)}, ${fmtMoneyExact(d.total_amount)}${d.payment_status === 'paid' ? ', שולמה' : ''})`,
     });
   }
 
@@ -74,14 +74,14 @@ export async function runInvoiceChecks(inv: {
       results.push({
         code: 'order_mismatch',
         severity: 'warning',
-        message: `סכום החשבונית (₪${inv.total_amount.toLocaleString()}) שונה מסכום ההזמנה (₪${orderTotal.toLocaleString()}) — פער של ₪${Math.abs(inv.total_amount - orderTotal).toLocaleString()}`,
+        message: `סכום החשבונית (${fmtMoneyExact(inv.total_amount)}) שונה מסכום ההזמנה (${fmtMoneyExact(orderTotal)}) — פער של ${fmtMoneyExact(Math.abs(inv.total_amount - orderTotal))}`,
       });
     }
     if (Math.abs(receivedTotal - inv.total_amount) > AMOUNT_TOLERANCE && Math.abs(receivedTotal - orderTotal) > AMOUNT_TOLERANCE) {
       results.push({
         code: 'receipt_mismatch',
         severity: 'warning',
-        message: `שווי הסחורה שהתקבלה בפועל (₪${receivedTotal.toLocaleString()}) שונה מסכום החשבונית — ייתכן שנדרש זיכוי`,
+        message: `שווי הסחורה שהתקבלה בפועל (${fmtMoneyExact(receivedTotal)}) שונה מסכום החשבונית — ייתכן שנדרש זיכוי`,
       });
     }
   }
@@ -122,7 +122,7 @@ export async function runInvoiceChecks(inv: {
     results.push({
       code: 'open_credit',
       severity: 'info',
-      message: `לספק זה ${credits.length} זיכויים פתוחים בסך ₪${sum.toLocaleString()} — כדאי לקזז לפני תשלום`,
+      message: `לספק זה ${credits.length} זיכויים פתוחים בסך ${fmtMoneyExact(sum)} — כדאי לקזז לפני תשלום`,
     });
   }
 
@@ -203,7 +203,7 @@ export async function runPaymentRequestChecks(pr: {
       code: 'open_credit',
       severity: 'warning',
       amount: financial.open_credit_total,
-      message: `זיכויים פתוחים בסך ₪${financial.open_credit_total.toLocaleString()} טרם קוזזו מהדרישה`,
+      message: `זיכויים פתוחים בסך ${fmtMoneyExact(financial.open_credit_total)} טרם קוזזו מהדרישה`,
     });
   }
 

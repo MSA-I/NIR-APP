@@ -1,6 +1,7 @@
 import { Check, Minus, Plus, Search, ShoppingCart, X } from 'lucide-react';
 import type { NextOrderItem } from '../../lib/nextOrderItems';
 import type { Category, Product, SupplierProduct } from '../../lib/types';
+import { fmtMoneyExact } from '../../lib/format';
 
 interface ProductCartItem {
   product: Product;
@@ -77,7 +78,7 @@ export default function ProductStep({ products, categories, offersByProduct, car
                 onClick={() => { if (!carted) onAdd(product); }}>
                 <span className={`grid size-6 shrink-0 place-items-center border ${carted ? 'border-done-line bg-done-soft text-done-fg' : 'border-line text-transparent'}`} aria-hidden="true"><Check size={14} /></span>
                 <span className="min-w-0 flex-1"><span className="block break-words text-sm font-medium text-ink-body sm:truncate">{product.name}</span><span className="text-xs text-ink-muted">{product.unit}</span></span>
-                <span className={`shrink-0 text-xs text-ink-muted ${offers.length ? 'num' : ''}`}>{offers.length ? `₪${offers[0].current_price.toFixed(2)}` : 'אין ספק'}</span>
+                <span className={`shrink-0 text-xs text-ink-muted ${offers.length ? 'num' : ''}`}>{offers.length ? fmtMoneyExact(offers[0].current_price) : 'אין ספק'}</span>
               </button>
               {carted && (
                 <div className="me-3 flex shrink-0 items-center border border-line-strong bg-surface sm:me-4" role="group" aria-label={`כמות ${product.name}`}>

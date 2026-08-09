@@ -1,14 +1,41 @@
 export const BUSINESS_TIME_ZONE = 'Asia/Jerusalem';
 
-const ils = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 2, minimumFractionDigits: 0 });
+/**
+ * Two money shapes, and deliberately no third.
+ *
+ * There used to be a `fmtMoney` with `minimumFractionDigits: 0, maximumFractionDigits: 2` — a
+ * formatter whose OUTPUT SHAPE depended on the value. Inside one column it produced `0 ₪`,
+ * `780 ₪` and `1,650.6 ₪`, and `1,650.6 ₪` is not a figure an accountant accepts. Call sites had
+ * started compensating for it: `fmtMoney(Math.round(v))` appeared in Dashboard and Expenses, which
+ * is the shape of a formatter nobody trusted. It is gone, and every one of its call sites now
+ * chooses in the open.
+ *
+ * `fmtMoneyExact` — ledgers, tables, record detail and anything about money being moved. Always
+ *   two decimals, so a column of figures aligns and agorot are never silently dropped.
+ * `fmtMoneyRounded` — glance surfaces only: KPI tiles, chart axes, the dashboard money band.
+ *   Always zero decimals. A headline that reads `18,420 ₪` is honest about being a headline.
+ *
+ * Both are stable: the shape follows the SURFACE, never the value.
+ */
+const ilsRounded = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 });
 const ilsExact = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', minimumFractionDigits: 2 });
+/** Compact currency for chart axes, where a full figure per tick would not fit. */
+const ilsCompact = new Intl.NumberFormat('he-IL', {
+  style: 'currency', currency: 'ILS', notation: 'compact', maximumFractionDigits: 1,
+});
+/**
+ * Quantities and counts, NOT money — and it keeps variable decimals on purpose. `3` invoices must
+ * not render as `3.00`, and `2.5` kg must not render as `3`. The money rule above does not
+ * transfer here, and an earlier draft of this change that applied it to `fmtNum` was wrong.
+ */
 const num = new Intl.NumberFormat('he-IL', { maximumFractionDigits: 2 });
 const dateFmt = new Intl.DateTimeFormat('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: BUSINESS_TIME_ZONE });
 const dateTimeFmt = new Intl.DateTimeFormat('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TIME_ZONE });
 const monthFmt = new Intl.DateTimeFormat('he-IL', { month: 'long', year: 'numeric', timeZone: BUSINESS_TIME_ZONE });
 
-export const fmtMoney = (v: number | null | undefined) => (v == null ? '—' : ils.format(v));
 export const fmtMoneyExact = (v: number | null | undefined) => (v == null ? '—' : ilsExact.format(v));
+export const fmtMoneyRounded = (v: number | null | undefined) => (v == null ? '—' : ilsRounded.format(v));
+export const fmtMoneyCompact = (v: number | null | undefined) => (v == null ? '—' : ilsCompact.format(v));
 export const fmtNum = (v: number | null | undefined) => (v == null ? '—' : num.format(v));
 export const fmtDate = (v: string | Date | null | undefined) => (v ? dateFmt.format(new Date(v)) : '—');
 export const fmtDateTime = (v: string | Date | null | undefined) => (v ? dateTimeFmt.format(new Date(v)) : '—');

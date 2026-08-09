@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { ErrorNote, DataTable, PageHeader, SkeletonTable, type Column } from '../components/ui';
 import { fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreTone } from '../components/supplier-metrics';
-import { fmtMoney, fmtNum } from '../lib/format';
+import { fmtMoneyExact, fmtNum } from '../lib/format';
 
 /**
  * Supplier-performance KPI page (plan §2.2). The same per-supplier metrics that live on each
@@ -59,7 +59,7 @@ export default function Analytics() {
     { key: 'exceptions', header: 'חריגים פתוחים', className: 'num', sortValue: (r) => r.m?.open_exceptions ?? 0,
       render: (r) => fmtNum(r.m?.open_exceptions ?? null) },
     { key: 'credits', header: 'זיכויים פתוחים', className: 'num', sortValue: (r) => r.m?.open_credits_amount ?? 0,
-      render: (r) => r.m?.open_credits_amount ? fmtMoney(r.m.open_credits_amount) : '—' },
+      render: (r) => r.m?.open_credits_amount ? fmtMoneyExact(r.m.open_credits_amount) : '—' },
   ];
 
   return (
