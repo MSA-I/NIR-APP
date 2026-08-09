@@ -11,7 +11,9 @@
 
 **גל 11 (07.08.2026) — ‏מוזג ל-`main` ‏(`865dfd4`) ו**נפרס לפרודקשן ב-07.08 בבוקר**.** ‏`0075`–`0077`
 הוחלו על הפרויקט המרוחק, ‏`interpret-document` עלתה לגרסה 3, וה-frontend חי. מתג האוטונומיה
-נשלח **כבוי לכל דייר**, והדלקתו היא **החלטת בעלים ולא שלב פריסה** — ‏**היא לא בוצעה.**
+נשלח **כבוי לכל דייר**, ולא הודלק כחלק מפריסת הגל. ב־preflight של 09.08 נמצאה מדיניות
+`document.interpretation` פעילה לדייר אחד בסף `0.900`, עם audit מ־07.08; הבעלים הורה במפורש
+לשמר את המצב הפעיל ולהמשיך בפריסה, ולכן המדיניות לא שונתה.
 ראה "פריסת גל 11 לפרודקשן" מטה, ואת הרשומה שאחריה.
 
 ---
@@ -48,20 +50,39 @@ console/page/server ואפס overflow במסכים שנבדקו. הרצה רצו
 לחוב ניטור ביצועים. לא הוחלו מיגרציות ולא בוצעו כתיבות עסקיות בפריסה או באימות.
 ---
 
-## קמפיין "מוצר מוגמר" — מצב סגירה (09.08.2026): כל 7 החבילות קומוטו; פריסה ממתינה לתיאום
+## קמפיין "מוצר מוגמר" — פרוס ומאומת אוטומטית (09.08.2026); אימות תפקידים חי נשאר לבעלים
 
-**‏11 קומיטים מקומיים על `main`, טרם נדחפו.** ‏build ירוק על ה-SHA הסופי (‏400 בדיקות ב-40
-קבצים). ריצת ה-quality הראשונה תפסה כשל אמיתי אחד (טענת audit שרצה כ-office מול מדיניות קריאה
-צרה — תוקן, הסוויטה עברה מול ה-stack החי); ריצת ה-quality על ה-SHA הסופי **טרם הושלמה**: סוכן
-אחר (Codex, ‏worktree נפרד) מחזיק את ה-mutex המשותף, והכרעת הבעלים — **מחכים שיסיים**, ואז
-‏fetch/rebase מעל מה שינחת ב-`main`, ‏quality מלא על התוצאה המשולבת, ורק אז פריסה.
+**Git ושער מלא:** ‏11 קומיטי הקמפיין שולבו מעל חמשת קומיטי ה־UI/mobile שהסתיימו ב־`dfba418`,
+ונוספו שלושה תיקוני שער ממוקדים ל־offline recovery ולחוזה reset-password. ‏SHA הקוד המשולב
+`1ab585181ef29d732131244a8d1dfbdbaed569b3` נדחף ל־`main`. ‏`npm.cmd run quality` רץ על clone
+נקי של ה־SHA והסתיים `PASS / all_gates_passed`, ללא דילוגים: ‏44/44 קובצי Vitest ו־422/422
+בדיקות, ‏269 assertions של P0, ‏46 חוזי Deno ו־6 חוזי outbox; מסע הדפדפן עבר 34/34 תרחישים,
+42 בדיקות viewport, ‏48 בדיקות נגישות, ‏62 screenshots, אפס failures ואפס console errors. ראיות:
+`C:\Users\art1\.codex\visualizations\2026\08\09\20260809-134919-p4-quality-gates`. ‏build ייצור
+מפורש נוסף עבר עם אותם 422 טסטים; PWA precache כולל 73 entries ‏(2492.05 KiB), ‏`git diff --check`
+עבר וה־clone נשאר נקי.
 
-**נוהל הפריסה מוכן (לא הופעל):** גיבוי JSON-פר-טבלה בדפוס wave-11 → החלת `0086`–`0089` אחת-אחת
-+ ‏bookkeeping ב-`schema_migrations` → ‏postflight על כל טענה נושאת-משקל (enum, ‏grants, גוף
-`save_goods_receipt`, רשם 59, ‏violations ריק) → פריסת `send-invite` → הוספת
-`{origin}/reset-password` ל-redirect allow-list של Auth → ‏push (מפעיל את ה-CI החדש) →
-‏`wrangler pages deploy dist --project-name supplyflow --branch main` → אימות SHA-256 ↔ האתר →
-‏smoke חי. **אימות שלושת התפקידים:** ‏`docs/LIVE-ROLES-CHECKLIST.md` — להרצת הבעלים (‏§26).
+**ייצור:** לפני שינוי נשמר גיבוי JSON-פר-טבלה מאומת ב־
+`D:\משה פרוייקטים\פיתוח אתרים\NIR-APP-DOCS\backups\20260809-141952-pre-finished-product-0086-0089`:
+‏126 טבלאות, ‏18,790 שורות, ‏0 failures ו־manifest SHA-256
+`57c890d49d1f8ca75e53bec90f60ce5d0d8ff7d0cd90c76f99796d3741dacb3`. ‏`0086`–`0089`
+הוחלו אחת־אחת; כל שורת ledger אומתה מול SHA הקובץ, ואחרי כל שלב עבר postflight. המצב הסופי:
+ראש `0089`, ארבע מיגרציות הקמפיין, רשם scope ‏63, ‏0 violations, ‏enum/grants/גוף
+`save_goods_receipt`/RPC החריגה/חוזה הבנק/חוזה ההסכמה תקינים. מדיניות `document.interpretation`
+נשמרה פעילה לדייר אחד לפי הוראת הבעלים ולא שונתה. ‏`send-invite` נפרסה כגרסה 13 במצב `ACTIVE`;
+`https://supplyflow-baq.pages.dev/reset-password` נוסף ואומת ב־Auth redirect allow-list.
+
+**שחרור וראיות חיות ללא התחברות:** ‏Cloudflare Pages נפרסה ידנית ל־
+`https://7f97db38.supplyflow-baq.pages.dev` ול־`https://supplyflow-baq.pages.dev`. כל 77 הקבצים
+הניתנים להגשה תאמו SHA-256 ל־build בשתי הכתובות (77/77 + 77/77; ‏`_redirects` אומת בפריסה אך
+אינו קובץ ציבורי). smoke אנונימי עבר ב־390 וב־1440 על `/`, ‏`/login`, ‏`/forgot-password`,
+`/reset-password`, ‏`/terms`, ‏`/privacy`: ‏12/12 מסכים, RTL, אפס overflow/errors, ובנוסף
+offline shell עבר; ‏13 screenshots ודוח נשמרו ב־
+`C:\Users\art1\.codex\visualizations\2026\08\09\019fe5db-23d5-7593-809e-6b28c73101b4\production-smoke-1ab5851`.
+
+**פתוח לבעלים בלבד:** אימות kitchen, ‏payer ו־supplier בייצור לא בוצע ע״י הסוכן ואינו מסומן
+כמושלם. יש להריץ ולדווח תוצאות לפי `docs/LIVE-ROLES-CHECKLIST.md` (‏§26); אין להשתמש בסיסמאות
+או להחליף את הסעיף על סמך smoke אנונימי.
 
 ---
 
