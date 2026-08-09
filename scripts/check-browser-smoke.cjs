@@ -2734,6 +2734,114 @@ async function machineFiledDocument(browser) {
 }
 
 /**
+ * Package 2 (decisions #49 + #116, 08.08.2026) — the receiving screen's two new affordances,
+ * asserted per role, with the same route-mock shape receivingAccessibility uses.
+ *
+ * Three parts: (A) kitchen with a delivery note sees the unordered-item guidance and NO
+ * exception button — the command is owner/office, and a control that refuses on submit is the
+ * screen-shape DEAD-ENDS-AUDIT exists to prevent; (B) kitchen completing a receipt with a
+ * damaged line sends p_open_credits=true and the damaged status in the payload — the DB half
+ * (the credit rows themselves) is proven in p1_financial_commands.sql against the real
+ * function; (C) office gets the button, and confirming the reasoned dialog posts
+ * open_manual_exception with item_not_ordered and the typed reason, verbatim.
+ */
+async function receivingDecisionsContract(browser) {
+  const order = {
+    id: 'p4-d2-order', org_id: 'p4-ui-org', supplier_id: 'p4-d2-supplier', number: 9002,
+    status: 'confirmed', order_date: '2026-08-01', expected_date: '2026-08-03', total_amount: 120,
+    created_at: '2026-08-01T08:00:00Z',
+    notes: null, supplier: { id: 'p4-d2-supplier', name: 'ספק בדיקת החלטות' },
+    items: [{
+      id: 'p4-d2-item', org_id: 'p4-ui-org', order_id: 'p4-d2-order', product_id: 'p4-d2-product',
+      qty: 10, received_qty: 2, unit_price: 12,
+      product: { name: 'מוצר בדיקת החלטות', unit: 'יחידה', sku: null, barcode: null },
+    }],
+  };
+  const interpretation = {
+    payload: { line_items: [{ source_row: 3, values: { description: 'ארגז שלא הוזמן', quantity: 3 } }] },
+    suggested_supplier_id: null,
+  };
+  const routeOrder = (context) => Promise.all([
+    context.route('**/rest/v1/purchase_orders?**', (route) => {
+      const url = new URL(route.request().url());
+      const detail = (url.searchParams.get('id') || '') === 'eq.p4-d2-order';
+      return route.fulfill({ status: 200, headers: jsonHeaders, json: detail ? order : [order] });
+    }),
+    context.route('**/rest/v1/goods_receipts?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: null })),
+    context.route('**/rest/v1/document_interpretations?**', (route) =>
+      route.fulfill({ status: 200, headers: jsonHeaders, json: interpretation })),
+    context.route('**/rest/v1/supplier_products?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] })),
+  ]);
+
+  // (A) + (B) — kitchen
+  const kitchenContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+  const kitchenPage = await kitchenContext.newPage();
+  captureConsole(kitchenPage, 'receiving-decisions-kitchen');
+  const savePayloads = [];
+  try {
+    await login(kitchenPage, 'kitchen');
+    await routeOrder(kitchenContext);
+    await kitchenContext.route('**/rest/v1/rpc/save_goods_receipt', (route) => {
+      savePayloads.push(route.request().postDataJSON());
+      return route.fulfill({ status: 200, headers: jsonHeaders, json: { receipt_id: 'a0000000-0000-4000-8000-000000000002' } });
+    });
+
+    await kitchenPage.goto(`${baseURL}/receiving/p4-d2-order?document=p4-d2-doc`);
+    await settle(kitchenPage);
+    await kitchenPage.getByText('שורות בתעודה שלא זוהו במחירון הספק').waitFor();
+    await kitchenPage.getByText('פתיחת חריג לבירור זמינה למנהל ולמנהל הרכש בלבד').waitFor();
+    assert.equal(await kitchenPage.getByRole('button', { name: 'פתיחת חריג לבירור', exact: true }).count(), 0,
+      'kitchen was offered an exception button the server would refuse');
+    await kitchenPage.getByText('פתיחת דרישות זיכוי אוטומטית לחוסרים, לפריטים פגומים ולהחזרות').waitFor();
+
+    // (B) — no document param: the same flow receivingAccessibility proves, plus the damaged line.
+    await kitchenPage.goto(`${baseURL}/receiving/p4-d2-order`);
+    await settle(kitchenPage);
+    await kitchenPage.getByRole('button', { name: 'פגום עבור מוצר בדיקת החלטות' }).click();
+    await kitchenPage.getByRole('button', { name: /סיום קבלה/ }).click();
+    await kitchenPage.getByRole('heading', { name: 'הקבלה נשמרה!' }).waitFor();
+    const completion = savePayloads.find((p) => p.p_complete === true);
+    assert(completion, 'no completing save_goods_receipt call was captured');
+    assert.equal(completion.p_open_credits, true, 'the damaged receipt did not ask for automatic credits');
+    assert(completion.p_lines.some((line) => line.status === 'damaged'),
+      'the damaged line did not reach the payload as damaged');
+  } finally {
+    await closeContext(kitchenContext);
+  }
+
+  // (C) — office
+  const officeContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block' });
+  const officePage = await officeContext.newPage();
+  captureConsole(officePage, 'receiving-decisions-office');
+  const exceptionCalls = [];
+  try {
+    await login(officePage, 'office');
+    await routeOrder(officeContext);
+    await officeContext.route('**/rest/v1/rpc/open_manual_exception', (route) => {
+      exceptionCalls.push(route.request().postDataJSON());
+      return route.fulfill({ status: 200, headers: jsonHeaders, json: { exception_id: 'e0000000-0000-4000-8000-000000000001', idempotent: false } });
+    });
+
+    await officePage.goto(`${baseURL}/receiving/p4-d2-order?document=p4-d2-doc`);
+    await settle(officePage);
+    await officePage.getByRole('button', { name: 'פתיחת חריג לבירור', exact: true }).click();
+    const dialog = officePage.locator('[role="dialog"]');
+    await dialog.waitFor();
+    await dialog.locator('textarea').fill('הגיע ארגז שלא הוזמן — נדרש בירור מול הספק');
+    await dialog.getByRole('button', { name: 'פתיחת חריג', exact: true }).click();
+    await officePage.getByText('החריג נפתח ויופיע במסך החריגים').waitFor({ timeout: 10_000 });
+    assert.equal(exceptionCalls.length, 1, `open_manual_exception was called ${exceptionCalls.length} times`);
+    assert.equal(exceptionCalls[0].p_type, 'item_not_ordered', 'the manual exception did not use the honest type');
+    assert.equal(exceptionCalls[0].p_entity_type, 'purchase_orders', 'the manual exception named the wrong entity type');
+    assert.equal(exceptionCalls[0].p_entity_id, 'p4-d2-order', 'the manual exception named the wrong entity');
+    assert.equal(exceptionCalls[0].p_reason, 'הגיע ארגז שלא הוזמן — נדרש בירור מול הספק',
+      'the operator reason did not reach the server verbatim');
+  } finally {
+    await closeContext(officeContext);
+  }
+}
+
+/**
  * Package 1 (OPEN-DECISIONS #114) — the password-recovery path, end to end minus the mailbox.
  *
  * Part 1 proves the app's half of /forgot-password: the form reaches /auth/v1/recover with the
@@ -2881,6 +2989,7 @@ async function run(name, check) {
     await run('navigation opens on the control centre and the archive is current alone', () => navigationOrderAndActiveState(browser));
     await run('documents speak human states and keep the numbers behind the disclosure', () => documentVocabulary(browser));
     await run('a machine-filed document names its author and can be undone', () => machineFiledDocument(browser));
+    await run('receiving speaks the #49/#116 decisions per role', () => receivingDecisionsContract(browser));
     // Late on purpose: it rotates the kitchen password against the live GoTrue and restores it
     // in `finally` — running it after the scenarios that log in as kitchen keeps a mid-scenario
     // crash from cascading into theirs.

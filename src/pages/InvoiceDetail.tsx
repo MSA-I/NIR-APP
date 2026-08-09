@@ -257,6 +257,18 @@ export default function InvoiceDetail() {
         </>}
         lifecycle={lifecycleSteps.length ? <LifecycleStrip steps={lifecycleSteps} current={inv.review_status} nextAction={nextAction} /> : undefined} />
 
+      {/* Finding 8 / decision ח (08.08.2026): kitchen may CREATE an invoice (0023) but cannot
+          amend or soft-delete one in any status (0034: owner/office only) — and until now the
+          screen said nothing, so the person who typed the wrong amount had no next step. The
+          decision was a reporting channel, not an edit path: the sentence names who can fix it
+          and how, instead of offering a control the server would refuse. */}
+      {profile?.role === 'kitchen' && (
+        <p className="text-sm text-ink-muted no-print">
+          טעות בסכום או בפרטי החשבונית? חשבונית אינה ניתנת לעריכה. יש לעדכן את מנהל הרכש —
+          הוא יכול למחוק אותה (מחיקה רכה) וליצור אותה מחדש כטיוטה עם הקישורים להזמנה ולקבלה.
+        </p>
+      )}
+
       {isOffice && graphUnavailable && (
         <Note tone="alert" role="alert">
           לא ניתן לקרוא כרגע מהשרת אילו מעברי סטטוס מותרים מהמצב הנוכחי, ולכן עדכון הסטטוס חסום.

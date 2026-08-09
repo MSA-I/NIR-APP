@@ -85,14 +85,12 @@ export default function Credits() {
             <input type="month" className="input w-auto!" aria-label="סינון דרישות זיכוי לפי חודש" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} />
           </>
         }
-        /* G1, finding 9. The old subtitle sent the reader to "מסך קבלת סחורה", where the checkbox
-           is limited in its own words to missing quantities and the server only fires on
-           `status in ('missing','partial')` (0023:1619,:1638) — so for the commonest case, damaged
-           goods, this screen pointed at a screen that cannot open a credit. Both routes are now
-           named for what they actually do. Extending the automation to damaged items is a business
-           decision that Receiving.tsx:783 already declares open (OPEN-DECISIONS #49). */
+        /* #49, decided 08.08.2026 (package 2): damaged and returned lines joined the receipt
+           automation (0087), under the same checkbox the shortage credit uses. What still goes
+           through the invoice is everything the receipt cannot know — wrong price, duplicate
+           charge — so the subtitle names both routes for what they actually do. */
         emptyTitle="אין זיכויים"
-        emptySubtitle="זיכוי על חוסר בכמות נפתח אוטומטית בקבלת הסחורה. בכל מקרה אחר — פגום, הוחזר או מחיר שגוי — דרישת הזיכוי נפתחת מתוך החשבונית של הספק." />
+        emptySubtitle="זיכוי על חוסר בכמות, על פריט פגום ועל החזרה נפתח אוטומטית בקבלת הסחורה (כשתיבת הזיכויים מסומנת). בכל מקרה אחר — למשל מחיר שגוי — דרישת הזיכוי נפתחת מתוך החשבונית של הספק." />
 
       {selected && (
         <CreditDetail credit={selected} onClose={() => setSelected(null)}

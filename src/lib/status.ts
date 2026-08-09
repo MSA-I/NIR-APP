@@ -125,6 +125,10 @@ export const EXCEPTION_TYPE: Record<string, string> = {
   unmatched_bank: 'תנועת בנק לא מותאמת',
   credit_not_deducted: 'זיכוי שלא קוזז',
   receipt_mismatch: 'פער קבלה מול חשבונית',
+  // 0086 added the enum value §17 planned. The automatic path (0077) still files under
+  // receipt_mismatch with details.code='item_not_ordered' — that injection is §17's
+  // remaining step; the manual command (0087) uses the honest type from day one.
+  item_not_ordered: 'פריט שלא הוזמן',
 };
 
 export const EXCEPTION_STATUS: Record<string, StatusMeta> = {

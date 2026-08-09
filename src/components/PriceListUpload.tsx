@@ -193,7 +193,11 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
 
   const { data: suppliers, loading: suppliersLoading, error: suppliersError } = useQuery(async () => {
     if (supplier) return [supplier];
-    return unwrap(await supabase.from('suppliers').select('id, name').is('deleted_at', null).order('name')) as Pick<Supplier, 'id' | 'name'>[];
+    // #115 (decided 08.08.2026): inactive = "לא להזמין ממנו יותר", and a price list is the start
+    // of new procurement — so this picker filters like /orders/new does (NewOrder.tsx). Money
+    // screens deliberately do not.
+    return unwrap(await supabase.from('suppliers').select('id, name')
+      .is('deleted_at', null).in('status', ['active', 'problematic']).order('name')) as Pick<Supplier, 'id' | 'name'>[];
   });
 
   // The dialog that already creates new *products* on the fly stopped dead at a supplier it did
