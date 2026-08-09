@@ -53,7 +53,7 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   חריגים נוספו ונוקזו מעל זרע `0057` (‏59) ודורש שההצמדה ב-`p9_five_domains.sql` תסכים. זו אותה
   טענה שכבר קיימת ב-p9 — במילישניות, במקום בדקה התשע-עשרה של שער בן עשרים דקות. **ארבעה גלים
   רצופים גילו אותה שם.**
-  ‏`npm run test` — ‏**393** בדיקות ב-**38** קבצים (נספר מפלט `vitest run`, ‏09.08.2026, אחרי חבילה 5).
+  ‏`npm run test` — ‏**396** בדיקות ב-**39** קבצים (נספר מפלט `vitest run`, ‏09.08.2026, אחרי חבילה 7).
   **אין ESLint ואין Prettier** בריפו, למרות הערות `eslint-disable` שנשארו ב-`src/lib/useQuery.ts`.
 - `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **27**
   סוויטות SQL, ‏**preflight עם 44 זרועות**, ‏`npm audit --audit-level=high`, חוזי Deno,

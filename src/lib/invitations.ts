@@ -105,11 +105,15 @@ export async function lookupInvitation(token: string): Promise<InvitationLookup>
   return data as InvitationLookup;
 }
 
-export async function acceptInvitation(token: string, fullName: string, phone: string) {
+/** `termsVersion` is not decoration: 0089 closed the consent-free signature, and the server
+ *  stamps the consented version into audit_logs in the same transaction that creates the
+ *  profile. */
+export async function acceptInvitation(token: string, fullName: string, phone: string, termsVersion: string) {
   const { data, error } = await supabase.rpc('accept_invitation', {
     p_token: token,
     p_full_name: fullName,
     p_phone: phone || null,
+    p_terms_version: termsVersion,
   });
   if (error) throw new Error(error.message);
   return data as { org_id: string; role: Role };
@@ -126,6 +130,7 @@ export const ACCEPT_ERROR: Record<string, string> = {
   org_suspended: 'חשבון העסק מושהה. יש לפנות לעסק שהזמין אותך.',
   full_name_required: 'יש להזין שם מלא.',
   not_authenticated: 'ההתחברות נכשלה. נסה שוב.',
+  terms_consent_required: 'להשלמת ההצטרפות יש לאשר את תנאי השימוש ומדיניות הפרטיות.',
 };
 
 export function acceptErrorMessage(raw: string): string {

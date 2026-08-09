@@ -178,6 +178,11 @@ select pg_temp.p0_acl_assert(
   not has_column_privilege('authenticated', 'public.organizations', 'status', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.suppliers', 'org_id', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.suppliers', 'deleted_at', 'UPDATE')
+  -- 0089: joining without consenting to a named terms version must be impossible from the
+  -- browser — the 3-arg accept_invitation lost its grant; only the consent-taking 4-arg
+  -- overload remains callable.
+  and not has_function_privilege('authenticated', 'public.accept_invitation(text, text, text)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.accept_invitation(text, text, text, text)', 'EXECUTE')
   -- Bank details are payment-diversion surface in BOTH directions now: 0061 revoked the
   -- UPDATE column grant, and 0088 (#106, decided 09.08.2026) revoked INSERT too — a fresh
   -- supplier row with substituted details is the same fraud with one extra step. The only

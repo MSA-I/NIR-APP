@@ -69,6 +69,11 @@ export default function Login() {
             </Link>
           </div>
         </form>
+        <div className="mt-4 text-center text-xs text-shell-ink-dim space-x-3">
+          <Link to="/terms" className="hover:underline">תנאי שימוש</Link>
+          <span aria-hidden>·</span>
+          <Link to="/privacy" className="hover:underline">מדיניות פרטיות</Link>
+        </div>
       </div>
     </main>
   );
