@@ -275,7 +275,19 @@ export default function Layout() {
     );
   });
 
-  const sidebar = (displaySections: readonly NavSection[], navLabel: string) => (
+  /**
+   * `expandGroups` — the desktop sidebar shows every group open (owner decision 09.08.2026).
+   *
+   * The groups were born collapsed in the UX-polish campaign, on the reasoning that "ניהול" and
+   * "בקרה" are rare destinations and progressive disclosure keeps the daily list short. On a phone
+   * that still holds: the drawer is a temporary overlay competing with the content behind it, and
+   * it keeps the disclosure. On a desktop the sidebar is a permanent 240px column with room to
+   * spare — hiding six destinations behind two chevrons costs a click and buys nothing.
+   *
+   * Note this renders them through the EXISTING non-collapsible branch rather than forcing
+   * `<details open>`: an always-open disclosure is a control that lies about being a control.
+   */
+  const sidebar = (displaySections: readonly NavSection[], navLabel: string, expandGroups = false) => (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 border-b border-shell-ink/10 px-4 py-4 pe-12 lg:pe-4">
         <img src="/icons/icon-192.png" alt="" width="40" height="40" className="size-10 shrink-0 rounded-lg ring-1 ring-shell-ink/15" />
@@ -286,7 +298,7 @@ export default function Layout() {
       </div>
       <nav aria-label={navLabel} className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
         {displaySections.map((s, i) => (
-          s.collapsible ? (
+          s.collapsible && !expandGroups ? (
             <details key={`${s.section}-${location.pathname}`} className="group" open={s.items.some((item) => isRouteFamilyActive(location.pathname, item.to)) || undefined}>
               <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-3 text-xs font-semibold text-shell-heading hover:bg-shell-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
                 {s.section}<ChevronDown size={15} aria-hidden="true" className="transition-transform group-open:rotate-180" />
@@ -324,7 +336,7 @@ export default function Layout() {
         דלג לתוכן
       </a>
       {/* Desktop sidebar */}
-      <aside className="hidden lg:block fixed inset-y-0 start-0 w-60 bg-shell border-e border-shell-ink/10 z-40 no-print">{sidebar(sections, 'ניווט ראשי')}</aside>
+      <aside className="hidden lg:block fixed inset-y-0 start-0 w-60 bg-shell border-e border-shell-ink/10 z-40 no-print">{sidebar(sections, 'ניווט ראשי', true)}</aside>
 
       {/* Mobile top bar */}
       <header className="phone-safe-header lg:hidden sticky top-0 z-40 bg-shell text-shell-ink border-b border-shell-ink/10 flex min-w-0 items-center no-print">
