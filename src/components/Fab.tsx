@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { quickActionsFor } from '../lib/quickActions';
 import type { Role } from '../lib/types';
 import { useQuickCapture } from './QuickCapture';
+import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/trial';
 
 const FAB_SUPPRESSED_PATHS = ['/orders/new', '/invoices/new', '/receiving/:orderId'] as const;
 const QUICK_ACTIONS_MENU_ID = 'global-quick-actions';
@@ -27,7 +28,7 @@ export function quickActionsForPath(role: Role | undefined, pathname: string) {
 }
 
 export default function Fab() {
-  const { profile } = useAuth();
+  const { profile, organizationAccess = ACTIVE_ORGANIZATION_ACCESS } = useAuth();
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -108,7 +109,7 @@ export default function Fab() {
   }, [open]);
 
   const actions = quickActionsForPath(profile?.role, pathname);
-  if (!actions.length) return null;
+  if (!organizationAccess.canWrite || !actions.length) return null;
 
   const itemClass =
     'speed-dial-item flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface ps-4 pe-3 py-2.5 ' +

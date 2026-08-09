@@ -24,9 +24,10 @@ interface DocumentReviewWorkspaceProps {
   actorId: string;
   onRefetch: () => Promise<boolean>;
   initialPanel: string | null;
+  readOnly?: boolean;
 }
 
-export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, initialPanel }: DocumentReviewWorkspaceProps) {
+export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, initialPanel, readOnly = false }: DocumentReviewWorkspaceProps) {
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [openingSource, setOpeningSource] = useState(false);
@@ -349,10 +350,12 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
           </div>
 
           <div className={`min-w-0 space-y-5 ${isPriceList ? 'order-1 xl:order-2' : ''}`}>
-            {isPriceList
+            {readOnly ? (
+              <Note tone="idle">המסמך ותוצאות העיבוד זמינים לצפייה. פעולות בדיקה ועדכון אינן זמינות במצב קריאה בלבד.</Note>
+            ) : isPriceList
               ? <PriceListReviewConfirmation snapshot={snapshot} role={role} actorId={actorId} onRefetch={onRefetch} />
               : snapshot.interpretation && <DocumentReviewProposals snapshot={snapshot} role={role} onRefetch={onRefetch} />}
-            {snapshot.interpretation && !isPriceList && role !== 'supplier'
+            {!readOnly && snapshot.interpretation && !isPriceList && role !== 'supplier'
               && <DocumentExportPreview snapshot={snapshot} actorId={actorId} autoFocus={initialPanel === 'export'} />}
           </div>
         </div>

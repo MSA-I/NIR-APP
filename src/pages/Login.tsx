@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { Loader2, Lock } from 'lucide-react';
 import { useAuth, homeFor } from '../auth/AuthContext';
 import { APP_NAME } from '../lib/branding';
@@ -7,6 +7,7 @@ import { APP_NAME } from '../lib/branding';
 export default function Login() {
   const { signIn, session, profile, loading } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +38,7 @@ export default function Login() {
           <p className="text-shell-ink-dim mt-1 text-sm">מערכת ניהול רכש, חשבוניות ותשלומים</p>
         </div>
         <form onSubmit={(e) => void onSubmit(e)} className="card card-pad space-y-4">
+          {params.get('reset') === 'success' && <p role="status" className="text-sm text-done-fg">הסיסמה הוחלפה וכל החיבורים נותקו. אפשר להתחבר מחדש.</p>}
           <div>
             <label className="label" htmlFor="email">אימייל</label>
             <input id="email" type="email" className="input" dir="ltr" autoComplete="username"
@@ -52,6 +54,7 @@ export default function Login() {
             {busy ? <Loader2 size={16} className="animate-spin" /> : <Lock size={15} />}
             התחברות
           </button>
+          <Link className="link block text-center text-sm" to="/forgot-password">שכחתי סיסמה</Link>
         </form>
       </div>
     </div>

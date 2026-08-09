@@ -31,6 +31,14 @@
 
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
+import { organizationWriteAllowed } from '../_shared/organization-access.ts';
+import {
+  releaseOrganizationEgress,
+  reserveOrganizationEgress,
+  type ServiceRpc,
+  type ServiceRpcResult,
+} from '../_shared/organization-egress.ts';
+import { runReservedEgress } from '../_shared/reserved-egress.ts';
 
 /* ---------- thresholds mirrored from src/lib/alerts.ts ----------
  * scanPaymentsDueSoon (alerts.ts:150) is the on-screen twin of the cron scan below.
@@ -39,7 +47,7 @@ import webpush from 'npm:web-push@3.6.7';
  * no shared module). If one side changes, change the other in the same commit. */
 const DUE_SOON_DAYS = 7;
 const PR_ACTIVE = ['draft', 'pending_approval', 'approved', 'sent_for_execution'];
-const NOTIFIABLE_ORG_STATUSES = ['trial', 'active'];
+const PUSH_PROVIDER_TIMEOUT_MS = 10_000;
 
 /** MIRROR, NOT AUTHORITY. The audience is decided in ONE place: the `eligible` CTE of
  *  enqueue_notification_delivery (supabase/migrations/0024_p2_data_reliability.sql:96-102,
@@ -83,6 +91,11 @@ interface SendCounts {
   removed: number;
 }
 
+interface NotificationAttemptRow {
+  id: string;
+  push_attempts: number;
+}
+
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -110,10 +123,16 @@ function businessDate(n = 0): string {
 }
 
 async function organizationCanNotify(admin: SupabaseClient, orgId: string): Promise<boolean> {
-  const { data, error } = await admin.from('organizations').select('id')
-    .eq('id', orgId).in('status', NOTIFIABLE_ORG_STATUSES).maybeSingle();
-  if (error) throw new Error(error.message);
-  return !!data;
+  const { data, error } = await admin.rpc('service_organization_access_mode', {
+    p_org_id: orgId,
+  });
+  if (error) throw new Error('organization_access_unavailable');
+  return organizationWriteAllowed(data ? { access_mode: String(data) } : null);
+}
+
+function serviceRpc(admin: SupabaseClient): ServiceRpc {
+  return (name, args) =>
+    admin.rpc(name, args) as unknown as PromiseLike<ServiceRpcResult>;
 }
 
 async function enqueueNotification(
@@ -129,6 +148,9 @@ async function enqueueNotification(
     dedupeKey: string;
   },
 ): Promise<PendingNotification[]> {
+  if (!await organizationCanNotify(admin, values.orgId)) {
+    throw new Error('organization_unavailable');
+  }
   const { data, error } = await admin.rpc('enqueue_notification_delivery', {
     p_org_id: values.orgId,
     p_event_code: values.eventCode,
@@ -170,6 +192,9 @@ async function claimStandingEventAndNotify(
     targetUrl: string;
   },
 ): Promise<PendingNotification[]> {
+  if (!await organizationCanNotify(admin, values.orgId)) {
+    throw new Error('organization_unavailable');
+  }
   const { data, error } = await admin.rpc('claim_notification_event_and_notify', {
     p_org_id: values.orgId,
     p_event_code: values.eventCode,
@@ -190,6 +215,9 @@ async function closeStandingEvent(
   entityKeys: string[],
 ): Promise<void> {
   if (!entityKeys.length) return;
+  if (!await organizationCanNotify(admin, orgId)) {
+    throw new Error('organization_unavailable');
+  }
   const { error } = await admin.from('notification_event_states')
     .update({ active: false, updated_at: new Date().toISOString() })
     .eq('org_id', orgId).eq('event_code', eventCode).in('entity_key', entityKeys);
@@ -215,6 +243,7 @@ async function sendToSubs(
       await webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
         message,
+        { timeout: PUSH_PROVIDER_TIMEOUT_MS },
       );
       counts.sent++;
     } catch (e) {
@@ -222,10 +251,16 @@ async function sendToSubs(
       if (status === 404 || status === 410) {
         const del = await admin.from('push_subscriptions').delete().eq('id', sub.id);
         if (del.error) console.error('failed to remove dead subscription', sub.id, del.error.message);
-        counts.removed++;
+        else counts.removed++;
       } else {
         // Endpoint host is enough for diagnosis; the full endpoint is a capability URL.
-        console.error('push send failed', status ?? 'no-status', new URL(sub.endpoint).host);
+        let host = 'invalid_endpoint';
+        try {
+          host = new URL(sub.endpoint).host;
+        } catch {
+          // The invalid marker is intentionally not the capability URL.
+        }
+        console.error('push send failed', status ?? 'no-status', host);
         counts.failed++;
       }
     }
@@ -237,22 +272,53 @@ async function sendToSubs(
 async function recordPushResult(
   admin: SupabaseClient,
   rows: PendingNotification[],
-  delivered: boolean,
+  outcome: 'delivered' | 'partial' | 'no_delivery' | 'failed',
   error: string | null,
 ): Promise<void> {
   await Promise.all(rows.map(async (row) => {
-    const { error: writeError } = await admin.rpc('record_notification_push_result', {
+    const { error: writeError } = await admin.rpc('record_notification_push_delivery_outcome', {
       p_notification_id: row.notification_id,
-      p_delivered: delivered,
+      p_outcome: outcome,
       p_error: error,
     });
     if (writeError) throw new Error(writeError.message);
   }));
 }
 
+async function pushAttemptCorrelation(
+  admin: SupabaseClient,
+  orgId: string,
+  rows: PendingNotification[],
+): Promise<string> {
+  const ids = rows.map((row) => row.notification_id).sort();
+  const { data, error } = await admin.from('notifications')
+    .select('id, push_attempts')
+    .eq('org_id', orgId)
+    .in('id', ids);
+  if (error) throw new Error(error.message);
+  const attempts = new Map(
+    ((data ?? []) as NotificationAttemptRow[]).map((row) => [row.id, row.push_attempts]),
+  );
+  if (attempts.size !== ids.length || ids.some((id) => !attempts.has(id))) {
+    throw new Error('notification_attempt_state_incomplete');
+  }
+
+  const seed = `${orgId}:${ids.map((id) => `${id}:${attempts.get(id)}`).join(',')}`;
+  const digest = new Uint8Array(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed)),
+  ).slice(0, 16);
+  digest[6] = (digest[6] & 0x0f) | 0x50;
+  digest[8] = (digest[8] & 0x3f) | 0x80;
+  const hex = [...digest].map((value) => value.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${
+    hex.slice(20)
+  }`;
+}
+
 /** Sends at most one Push payload per user for this invocation. Notification rows are the
- * durable outbox: successful/no-subscription deliveries are completed, while provider
- * failures stay pending and are returned again when the same event is retried. */
+ * durable outbox. A partial delivery is terminal because at least one endpoint accepted it;
+ * its failure count remains in the egress evidence. A zero-success failure stays pending and
+ * its incremented attempt counter produces a distinct, deterministic reservation on retry. */
 async function deliverQueuedNotifications(
   admin: SupabaseClient,
   orgId: string,
@@ -269,21 +335,107 @@ async function deliverQueuedNotifications(
     byUser.set(row.user_id, current);
   }
   const subs = await subscriptionsForUsers(admin, orgId, [...byUser.keys()]);
+  const rpc = serviceRpc(admin);
 
   const results = await Promise.all([...byUser.entries()].map(async ([userId, userRows]) => {
-    const result = await sendToSubs(
-      admin,
-      subs.filter((sub) => sub.user_id === userId),
-      payloadFor(userRows),
-    );
-    const delivered = result.failed === 0;
-    await recordPushResult(
-      admin,
-      userRows,
-      delivered,
-      delivered ? null : `${result.failed}_push_delivery_failures`,
-    );
-    return result;
+    const correlationId = await pushAttemptCorrelation(admin, orgId, userRows);
+    const reservation = await reserveOrganizationEgress(rpc, {
+      orgId,
+      kind: 'push_notification',
+      correlationId,
+      ttlSeconds: 30,
+    });
+    if (!reservation.lease) {
+      if (reservation.settledOutcome === 'delivered') {
+        return { sent: 0, failed: 0, removed: 0 };
+      }
+      if (reservation.settledOutcome) {
+        throw new Error(`push_egress_settled_${reservation.settledOutcome}`);
+      }
+      throw new Error('organization_unavailable');
+    }
+    if (reservation.lease.idempotent) {
+      throw new Error('push_egress_attempt_in_progress');
+    }
+    const lease = reservation.lease;
+
+    return await runReservedEgress({
+      reserve: () => Promise.resolve(lease),
+      perform: () =>
+        sendToSubs(
+          admin,
+          subs.filter((sub) => sub.user_id === userId),
+          payloadFor(userRows),
+        ),
+      settle: async (activeLease, attempt) => {
+        if (!attempt.ok) {
+          try {
+            await recordPushResult(admin, userRows, 'failed', 'push_provider_attempt_failed');
+          } catch (error) {
+            await releaseOrganizationEgress(rpc, activeLease, {
+              outcome: 'ambiguous',
+              evidenceCode: 'push_result_ambiguous',
+            });
+            throw error;
+          }
+          await releaseOrganizationEgress(rpc, activeLease, {
+            outcome: 'failed',
+            evidenceCode: 'push_provider_attempt_failed',
+          });
+          return;
+        }
+
+        const result = attempt.result;
+        const pushOutcome = result.sent > 0 && result.failed > 0
+          ? 'partial'
+          : result.sent > 0
+          ? 'delivered'
+          : result.failed > 0
+          ? 'failed'
+          : 'no_delivery';
+        const delivered = pushOutcome === 'delivered' || pushOutcome === 'partial';
+        const errorCode = result.failed > 0
+          ? `${result.failed}_push_delivery_failures`
+          : null;
+        try {
+          await recordPushResult(admin, userRows, pushOutcome, errorCode);
+        } catch (error) {
+          await releaseOrganizationEgress(rpc, activeLease, {
+            outcome: 'ambiguous',
+            evidenceCode: 'push_result_ambiguous',
+            evidence: {
+              notification_ids: userRows.map((row) => row.notification_id),
+              sent: result.sent,
+              failed: result.failed,
+              removed: result.removed,
+              push_outcome: pushOutcome,
+            },
+          });
+          throw error;
+        }
+
+        const evidenceCode = result.sent > 0 && result.failed > 0
+          ? `push_partial_delivery_${result.failed}_failures`
+          : result.sent > 0
+          ? 'push_delivered'
+          : result.removed > 0
+          ? 'push_endpoints_removed'
+          : result.failed > 0
+          ? 'push_failed'
+          : 'push_no_subscription';
+        await releaseOrganizationEgress(rpc, activeLease, {
+          outcome: delivered ? 'delivered' : 'failed',
+          evidenceCode,
+          evidence: {
+            notification_ids: userRows.map((row) => row.notification_id),
+            sent: result.sent,
+            failed: result.failed,
+            removed: result.removed,
+            push_outcome: pushOutcome,
+          },
+        });
+      },
+    });
   }));
 
   for (const result of results) {
@@ -338,7 +490,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       : `${count} מחירים עודכנו כלפי מעלה במחירון`;
     try {
       if (!await organizationCanNotify(admin, body.org_id)) {
-        return json({ ok: true, notifications: 0, results: { sent: 0, failed: 0, removed: 0 } }, 200);
+        return fail('org_unavailable', 'organization is not writable', 409);
       }
       const pending = await enqueueNotification(admin, {
         orgId: body.org_id,
@@ -358,7 +510,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
       return json({ ok: true, notifications: pending.filter((row) => row.created).length, results }, 200);
     } catch (e) {
-      return fail('query_failed', e instanceof Error ? e.message : 'notification write failed', 500);
+      const message = e instanceof Error ? e.message : 'notification write failed';
+      return fail(message === 'organization_unavailable' ? 'org_unavailable' : 'query_failed', message,
+        message === 'organization_unavailable' ? 409 : 500);
     }
   }
 
@@ -370,7 +524,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
     try {
       if (!await organizationCanNotify(admin, body.org_id)) {
-        return json({ ok: true, notifications: 0 }, 200);
+        return fail('org_unavailable', 'organization is not writable', 409);
       }
       if (!body.payload.active) {
         await closeStandingEvent(admin, body.org_id, 'duplicate_invoice', [body.payload.entity_key]);
@@ -396,7 +550,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
       return json({ ok: true, notifications: pending.filter((row) => row.created).length, results }, 200);
     } catch (e) {
-      return fail('query_failed', e instanceof Error ? e.message : 'notification write failed', 500);
+      const message = e instanceof Error ? e.message : 'notification write failed';
+      return fail(message === 'organization_unavailable' ? 'org_unavailable' : 'query_failed', message,
+        message === 'organization_unavailable' ? 409 : 500);
     }
   }
 
@@ -409,9 +565,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // per-recipient decision belongs to enqueue_notification_delivery, which applies it.
     const { data: orgRows, error: orgErr } = await admin
       .from('profiles')
-      .select('org_id, organization:organizations!profiles_org_id_fkey!inner(status)')
-      .eq('active', true).in('role', ALERT_ROLES)
-      .in('organization.status', NOTIFIABLE_ORG_STATUSES);
+      .select('org_id')
+      .eq('active', true).in('role', ALERT_ROLES);
     if (orgErr) return fail('query_failed', orgErr.message, 500);
 
     const orgIds = [...new Set((orgRows ?? []).map((r) => r.org_id as string))];
@@ -419,6 +574,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const totals: SendCounts = { sent: 0, failed: 0, removed: 0 };
 
     for (const orgId of orgIds) {
+      try {
+        if (!await organizationCanNotify(admin, orgId)) continue;
+      } catch (e) {
+        return fail('query_failed', e instanceof Error ? e.message : 'organization access failed', 500);
+      }
       // Same standing condition as alerts.ts scanPaymentsDueSoon: a due_date exists,
       // it is within DUE_SOON_DAYS (or already past — no lower bound, on purpose),
       // and the request still represents money owed (PR_ACTIVE).

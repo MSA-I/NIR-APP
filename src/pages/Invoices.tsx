@@ -27,8 +27,9 @@ import {
   type ServerPredicate,
   type ServerSort,
 } from '../lib/serverList';
+import { financialSupplierMap } from '../lib/financialSuppliers';
 
-export type InvoiceRow = Invoice & {
+export type InvoiceRow = Omit<Invoice, 'supplier'> & {
   supplier: { name: string };
   order_links: { order_id: string }[];
   /** G1, finding 8: read only so "שכפול כטיוטה" can carry the receipt link forward. */
@@ -96,7 +97,7 @@ const DEFAULT_SORT: readonly ServerSort[] = [{ column: 'invoice_date', ascending
 
 export function InvoicesList() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const [, setParams] = useSearchParams();
   const [reviewFilter] = useParamState('review');
@@ -110,7 +111,7 @@ export function InvoicesList() {
   const [deleteTarget, setDeleteTarget] = useState<InvoiceRow | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
   const isProcurementManager = profile?.role === 'office';
-  const canCreate = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canCreate = organizationAccess.canWrite && profile && ['owner', 'office', 'kitchen'].includes(profile.role);
   const isOffice = profile && ['owner', 'office'].includes(profile.role);
   const canViewExport = profile?.role !== 'office';
 
@@ -167,7 +168,7 @@ export function InvoicesList() {
 
       const result = await fetchServerList<InvoiceRow>(supabase, {
         table: 'invoices',
-        select: '*, supplier:suppliers(name), order_links:invoice_order_links(order_id), receipt_links:invoice_receipt_links(receipt_id)',
+        select: '*, order_links:invoice_order_links(order_id), receipt_links:invoice_receipt_links(receipt_id)',
         predicates,
         sort: uiSort
           ? [{ column: SORT_COLUMN[uiSort[0].column], ascending: uiSort[0].ascending }]
@@ -178,7 +179,11 @@ export function InvoicesList() {
 
       // Balance is display-only (its sort was dropped — no server expression), so it is fetched
       // for this page's rows alone instead of the whole-table pull the screen used to make.
-      let rows = result.rows;
+      const suppliers = await financialSupplierMap(result.rows.map((row) => row.supplier_id));
+      let rows = result.rows.map((row) => ({
+        ...row,
+        supplier: { name: suppliers.get(row.supplier_id)?.name ?? '—' },
+      }));
       if (!isProcurementManager && rows.length > 0) {
         const balances = await supabase.from('invoice_balances')
           .select('invoice_id, balance')

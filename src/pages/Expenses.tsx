@@ -14,14 +14,13 @@ import {
 } from '../lib/format';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { useAuth } from '../auth/AuthContext';
+import { financialSupplierMap } from '../lib/financialSuppliers';
 
 type InvoiceRow = {
   id: string; invoice_number: string; invoice_date: string; total_amount: number;
   payment_status: string; supplier_id: string; supplier: { name: string } | null;
 };
-type RawInvoiceRow = Omit<InvoiceRow, 'supplier'> & {
-  supplier: { name: string } | { name: string }[] | null;
-};
+type RawInvoiceRow = Omit<InvoiceRow, 'supplier'>;
 type RawOrderItem = {
   qty: number;
   unit_price: number;
@@ -106,7 +105,7 @@ export default function Expenses() {
     const end = addCalendarDays(to, 1);
     const [rawInvoices, categories] = await Promise.all([
       fetchAll<RawInvoiceRow>((fromRow, toRow) => supabase.from('invoices')
-        .select('id, invoice_number, invoice_date, total_amount, payment_status, supplier_id, supplier:suppliers(name)')
+        .select('id, invoice_number, invoice_date, total_amount, payment_status, supplier_id')
         .gte('invoice_date', from).lt('invoice_date', end)
         .is('deleted_at', null)
         .order('invoice_date', { ascending: false }).order('id').range(fromRow, toRow)),
@@ -115,9 +114,10 @@ export default function Expenses() {
           .select('id, name').order('name').order('id').range(fromRow, toRow))
         : Promise.resolve([] as { id: string; name: string }[]),
     ]);
+    const suppliers = await financialSupplierMap(rawInvoices.map((invoice) => invoice.supplier_id));
     const invoices: InvoiceRow[] = rawInvoices.map((invoice) => ({
       ...invoice,
-      supplier: Array.isArray(invoice.supplier) ? invoice.supplier[0] ?? null : invoice.supplier,
+      supplier: { name: suppliers.get(invoice.supplier_id)?.name ?? '—' },
     }));
     const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
 

@@ -5,6 +5,7 @@ import { PageLoader, useToast } from './components/ui';
 import { toHebrewError } from './lib/errors';
 import { reportError } from './lib/observability';
 import type { Role } from './lib/types';
+import { ACTIVE_ORGANIZATION_ACCESS } from './lib/trial';
 
 // Eager: the auth shell that must paint before (or regardless of) a resolved session.
 // Layout is the persistent chrome around every tenant screen; Login/AcceptInvite are the
@@ -12,6 +13,8 @@ import type { Role } from './lib/types';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import AcceptInvite from './pages/AcceptInvite';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 // Lazy: every screen behind the Layout loads its own chunk on demand, so a supplier hitting
 // /my-prices or a payment executor hitting /pay never downloads Dashboard/Reports (and recharts) up front.
@@ -20,7 +23,9 @@ const RoleDashboard = lazy(() => import('./pages/RoleDashboard'));
 const Alerts = lazy(() => import('./pages/Alerts'));
 const SuppliersList = lazy(() => import('./pages/Suppliers').then((m) => ({ default: m.SuppliersList })));
 const SupplierCard = lazy(() => import('./pages/Suppliers').then((m) => ({ default: m.SupplierCard })));
+const FinancialSupplier = lazy(() => import('./pages/FinancialSupplier'));
 const Products = lazy(() => import('./pages/Products'));
+const Inventory = lazy(() => import('./pages/Inventory'));
 const PriceLists = lazy(() => import('./pages/PriceLists'));
 const NewOrder = lazy(() => import('./pages/neworder/NewOrder'));
 const OrdersList = lazy(() => import('./pages/Orders').then((m) => ({ default: m.OrdersList })));
@@ -41,6 +46,7 @@ const Reports = lazy(() => import('./pages/Reports'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const Expenses = lazy(() => import('./pages/Expenses'));
 const DocumentsGallery = lazy(() => import('./pages/DocumentsInbox'));
+const DocumentOperations = lazy(() => import('./pages/DocumentOperations'));
 const DocumentReview = lazy(() => import('./pages/DocumentReview'));
 const AuditLogPage = lazy(() => import('./pages/AuditLog'));
 const Settings = lazy(() => import('./pages/Settings'));
@@ -77,12 +83,29 @@ function LazyPageBoundary({ children }: { children: ReactNode }) {
   return <LazyRouteErrorBoundary key={pathname}>{children}</LazyRouteErrorBoundary>;
 }
 
-function Guard({ roles, children }: { roles: Role[]; children: ReactNode }) {
-  const { session, profile, loading } = useAuth();
+function Guard({ roles, children, write = false }: { roles: Role[]; children: ReactNode; write?: boolean }) {
+  const { session, profile, loading, organizationAccess = ACTIVE_ORGANIZATION_ACCESS } = useAuth();
   if (loading) return <PageLoader />;
   if (!session || !profile) return <Navigate to="/login" replace />;
   if (!roles.includes(profile.role)) return <Navigate to={homeFor(profile.role)} replace />;
+  if (write && !organizationAccess.canWrite) return <ReadOnlyUnavailable />;
   return <>{children}</>;
+}
+
+function ReadOnlyUnavailable() {
+  const { organizationAccess = ACTIVE_ORGANIZATION_ACCESS } = useAuth();
+  const offboarding = organizationAccess.mode === 'offboarding';
+  return (
+    <div role="alert" className="card card-pad mx-auto max-w-xl text-center">
+      <h1 className="page-title">המערכת במצב קריאה בלבד</h1>
+      <p className="mt-2 text-sm text-ink-soft">
+        {offboarding
+          ? 'הארגון נמצא בתהליך סיום שירות ולכן המערכת במצב קריאה בלבד. המידע הקיים נשמר וזמין לצפייה ולייצוא עד להשלמת התהליך.'
+          : 'תקופת הניסיון הסתיימה. המערכת נמצאת כעת במצב קריאה בלבד. כל המידע הקיים נשמר וזמין לצפייה ולייצוא. להפעלת המערכת מחדש יש לפנות למנהל השירות.'}
+      </p>
+      <a className="btn-secondary mt-5" href="/dashboard">חזרה למרכז הבקרה</a>
+    </div>
+  );
 }
 
 /**
@@ -185,15 +208,32 @@ function BootstrapUnavailable() {
   );
 }
 
+function OfflineReceivingOnly() {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="card card-pad max-w-md text-center">
+        <h1 className="page-title">העבודה הלא־מקוונת מוגבלת לקבלת סחורה</h1>
+        <p className="mt-2 text-ink-soft">
+          זהות המשתמש והארגון נטענו מהאימות האחרון במכשיר. עד חזרת הרשת אפשר לפתוח רק משימות קבלה שכבר נשמרו כאן; הרשאות ושינויים בשרת יאומתו מחדש לפני סנכרון.
+        </p>
+        <a className="btn-primary mt-5" href="/receiving">מעבר לקבלת סחורה</a>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  const { session, profile, loading, bootstrapError, isPlatformAdmin } = useAuth();
+  const { session, profile, loading, bootstrapError, offlineBootstrap, isPlatformAdmin } = useAuth();
   const { pathname } = useLocation();
 
   // The public routes must render regardless of a broken session. Someone accepting an
   // invitation is joining fresh — the accept flow creates a NEW user — and may arrive with a
   // leftover session, a deleted account, or a suspended org. Short-circuiting them to
   // AccountUnavailable would trap an invitee on a screen that has nothing to do with them.
-  const isPublic = pathname === '/accept-invite' || pathname === '/login';
+  const isPublic = ['/accept-invite', '/login', '/forgot-password', '/reset-password'].includes(pathname);
+  const isOfflineReceivingRoute = pathname === '/receiving' || pathname.startsWith('/receiving/');
+
+  if (!isPublic && offlineBootstrap && !isOfflineReceivingRoute) return <OfflineReceivingOnly />;
 
   // An operator with no tenant profile is legitimate — send them to the console, not to
   // the unavailable screen.
@@ -216,6 +256,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/accept-invite" element={<AcceptInvite />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={session || loading ? <Layout /> : <Navigate to="/login" replace />}>
         {/* One Suspense boundary for every lazy page, nested under the Layout so the shell
             (nav, requires-attention strip) stays mounted and only the content area shows
@@ -227,21 +269,24 @@ export default function App() {
 
         <Route path="/suppliers" element={<Guard roles={STAFF}><SuppliersList /></Guard>} />
         <Route path="/suppliers/:id" element={<Guard roles={STAFF}><SupplierCard /></Guard>} />
+        <Route path="/finance/suppliers/:id" element={<Guard roles={['owner', 'accountant']}><FinancialSupplier /></Guard>} />
         <Route path="/products" element={<Guard roles={STAFF}><Products /></Guard>} />
+        <Route path="/inventory" element={<Guard roles={STAFF}><Inventory /></Guard>} />
         <Route path="/prices" element={<Guard roles={STAFF}><PriceLists /></Guard>} />
 
-        <Route path="/orders/new" element={<Guard roles={STAFF}><NewOrder /></Guard>} />
+        <Route path="/orders/new" element={<Guard roles={STAFF} write><NewOrder /></Guard>} />
         <Route path="/orders" element={<Guard roles={STAFF}><OrdersList /></Guard>} />
         <Route path="/orders/:id" element={<Guard roles={STAFF}><OrderDetail /></Guard>} />
 
         <Route path="/receiving" element={<Guard roles={STAFF}><ReceivingList /></Guard>} />
-        <Route path="/receiving/:orderId" element={<Guard roles={STAFF}><ReceiveOrder /></Guard>} />
+        <Route path="/receiving/:orderId" element={<Guard roles={STAFF} write><ReceiveOrder /></Guard>} />
         <Route path="/receipts/:receiptId" element={<Guard roles={STAFF}><ReceiptDetail /></Guard>} />
 
         <Route path="/invoices" element={<Guard roles={READERS}><InvoicesList /></Guard>} />
-        <Route path="/invoices/new" element={<Guard roles={STAFF}><InvoiceNew /></Guard>} />
+        <Route path="/invoices/new" element={<Guard roles={STAFF} write><InvoiceNew /></Guard>} />
         <Route path="/invoices/:id" element={<Guard roles={READERS}><InvoiceDetail /></Guard>} />
         <Route path="/documents" element={<Guard roles={STAFF}><DocumentsGallery /></Guard>} />
+        <Route path="/documents/operations" element={<Guard roles={['owner']}><DocumentOperations /></Guard>} />
         {/* The same register, narrowed to what the interpretation layer could not place. A second
             component would be a second answer to "what is a document row", so the gallery takes a
             prop instead and this route is the only thing that turns it on. */}
@@ -252,20 +297,20 @@ export default function App() {
         <Route path="/credits" element={<Guard roles={READERS}><Credits /></Guard>} />
         <Route path="/payment-requests" element={<Guard roles={FINANCE}><PaymentRequests /></Guard>} />
         <Route path="/payments" element={<Guard roles={['owner', 'accountant']}><Payments /></Guard>} />
-        <Route path="/pay/emergency" element={<Guard roles={['owner']}><PayerQueue mode="emergency" /></Guard>} />
-        <Route path="/pay" element={<Guard roles={['payer', 'accountant']}><PayerQueue /></Guard>} />
+        <Route path="/pay/emergency" element={<Guard roles={['owner']} write><PayerQueue mode="emergency" /></Guard>} />
+        <Route path="/pay" element={<Guard roles={['payer', 'accountant']} write><PayerQueue /></Guard>} />
 
         <Route path="/bank" element={<Guard roles={['owner', 'accountant']}><Bank /></Guard>} />
         <Route path="/exceptions" element={<Guard roles={READERS}><Exceptions /></Guard>} />
         <Route path="/alerts" element={<Guard roles={FINANCE}><Alerts /></Guard>} />
         <Route path="/expenses" element={<Guard roles={['owner', 'accountant']}><Expenses /></Guard>} />
         <Route path="/reports" element={<Guard roles={['owner', 'accountant']}><Reports /></Guard>} />
-        <Route path="/analytics" element={<Guard roles={['owner', 'office', 'accountant']}><Analytics /></Guard>} />
+        <Route path="/analytics" element={<Guard roles={['owner', 'office']}><Analytics /></Guard>} />
         <Route path="/audit" element={<Guard roles={['owner', 'accountant']}><AuditLogPage /></Guard>} />
         <Route path="/settings" element={<Guard roles={['owner']}><Settings /></Guard>} />
         <Route path="/my-prices" element={<Guard roles={['supplier']}><SupplierPrices /></Guard>} />
 
-        <Route path="/onboarding" element={<Guard roles={['owner']}><Onboarding /></Guard>} />
+        <Route path="/onboarding" element={<Guard roles={['owner']} write><Onboarding /></Guard>} />
         <Route path="/admin" element={<PlatformGuard><Admin /></PlatformGuard>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />

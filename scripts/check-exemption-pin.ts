@@ -30,9 +30,107 @@ const p9Path = fileURLToPath(new URL('../supabase/tests/p9_five_domains.sql', im
  */
 const SEED_0057 = 59;
 
-/** An explicit row: `insert into private.scope_definer_exemptions (...) values ( 'sig'::... */
+const LEGACY_SCOPE_REASSERT_OMISSIONS = new Set([
+  '0067_barcode_lookup_index.sql',
+  '0080_server_price_submission_actor.sql',
+  '0082_fix_document_interpretation_dispatch.sql',
+  '0083_fix_document_interpretation_claim.sql',
+  '0084_automatic_document_classification.sql',
+  '0085_reprocess_reviewed_document.sql',
+]);
+
+const SCOPE_REASSERTION = /into\s+([a-z_][a-z0-9_]*)\s+from\s+private\.scope_enforcement_violations\s*\(\s*\)\s*;\s*if\s+\1\s+is\s+not\s+null\s+then\s+raise\s+exception/i;
+
+function executableSql(source: string, includeDoBodies: boolean): string {
+  let out = '';
+  let i = 0;
+  let state: 'code' | 'line' | 'block' | 'single' | 'escapeSingle' | 'double' = 'code';
+  let blockDepth = 0;
+  while (i < source.length) {
+    const char = source[i];
+    const pair = source.slice(i, i + 2);
+    if (state === 'line') {
+      if (char === '\n' || char === '\r') { out += char; state = 'code'; }
+      i += 1;
+      continue;
+    }
+    if (state === 'block') {
+      if (pair === '/*') { blockDepth += 1; i += 2; }
+      else if (pair === '*/') {
+        blockDepth -= 1;
+        i += 2;
+        if (blockDepth === 0) state = 'code';
+      } else i += 1;
+      continue;
+    }
+    if (state === 'escapeSingle') {
+      if (char === '\\') i = Math.min(i + 2, source.length);
+      else if (pair === "''") i += 2;
+      else { i += 1; if (char === "'") state = 'code'; }
+      continue;
+    }
+    if (state === 'single') {
+      if (pair === "''") i += 2;
+      else { i += 1; if (char === "'") state = 'code'; }
+      continue;
+    }
+    if (state === 'double') {
+      if (pair === '""') i += 2;
+      else { i += 1; if (char === '"') state = 'code'; }
+      continue;
+    }
+
+    if (pair === '--') { out += ' '; state = 'line'; i += 2; continue; }
+    if (pair === '/*') { out += ' '; state = 'block'; blockDepth = 1; i += 2; continue; }
+    if (char === "'") {
+      out += ' ';
+      const escapeString = i > 0 && source[i - 1]?.toLowerCase() === 'e'
+        && (i === 1 || !/[A-Za-z0-9_$]/.test(source[i - 2] ?? ''));
+      state = escapeString ? 'escapeSingle' : 'single';
+      i += 1;
+      continue;
+    }
+    if (char === '"') { out += ' '; state = 'double'; i += 1; continue; }
+    if (char === '$') {
+      const tag = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(source.slice(i))?.[0];
+      if (tag) {
+        const close = source.indexOf(tag, i + tag.length);
+        if (close < 0) return out;
+        if (includeDoBodies && /\bdo\s*$/i.test(out.slice(-64))) {
+          out += ` ${executableSql(source.slice(i + tag.length, close), false)} `;
+        } else out += ' ';
+        i = close + tag.length;
+        continue;
+      }
+    }
+    out += char;
+    i += 1;
+  }
+  return out;
+}
+
+const migrationExecutableSql = (source: string) => executableSql(source, true);
+
+const parserSelfChecks: Array<[string, boolean]> = [
+  ["do $$ begin select string_agg(detail, ',') into v_errors from private.scope_enforcement_violations(); if v_errors is not null then raise exception 'blocked'; end if; end $$;", true],
+  ["select 'from private.scope_enforcement_violations(';", false],
+  ['select $text$from private.scope_enforcement_violations($text$;', false],
+  ['/* outer /* nested */ from private.scope_enforcement_violations( */ select 1;', false],
+  ['-- from private.scope_enforcement_violations(\nselect 1;', false],
+  ["do $$ begin perform '\\', 'from private.scope_enforcement_violations('; end $$;", false],
+  ["do $$ begin perform '\\'; select string_agg(detail, ',') into v_errors from private.scope_enforcement_violations(); if v_errors is not null then raise exception 'blocked'; end if; end $$;", true],
+];
+const parserFailures = parserSelfChecks.flatMap(([sql, expected], index) => {
+  const parsed = migrationExecutableSql(sql);
+  return SCOPE_REASSERTION.test(parsed) === expected ? [] : [`${index}: ${JSON.stringify(parsed)}`];
+});
+if (parserFailures.length) {
+  throw new Error(`check:exemptions internal SQL lexer self-check failed at case(s): ${parserFailures.join(', ')}`);
+}
+
+/** One complete explicit INSERT statement; strings/comments are removed before matching. */
 const EXPLICIT_INSERT =
-  /insert\s+into\s+private\.scope_definer_exemptions\b[\s\S]*?values\s*\(/gi;
+  /insert\s+into\s+private\.scope_definer_exemptions\b([\s\S]*?);/gi;
 
 /** A drain: `delete from private.scope_definer_exemptions ... in ( sig, sig, sig )` */
 const EXPLICIT_DELETE =
@@ -40,17 +138,37 @@ const EXPLICIT_DELETE =
 
 interface Ledger { file: string; added: number; drained: number }
 
-const ledger: Ledger[] = [];
+function insertedValueRows(statementBody: string): number {
+  const valuesAt = /\bvalues\b/i.exec(statementBody);
+  if (!valuesAt) throw new Error('scope exemption INSERT must use explicit VALUES rows');
+  const values = statementBody.slice(valuesAt.index + valuesAt[0].length);
+  let depth = 0;
+  let rows = 0;
+  for (const char of values) {
+    if (char === '(') {
+      if (depth === 0) rows += 1;
+      depth += 1;
+    } else if (char === ')') {
+      depth -= 1;
+      if (depth < 0) throw new Error('unbalanced scope exemption INSERT');
+    }
+  }
+  if (depth !== 0 || rows === 0) throw new Error('invalid scope exemption VALUES rows');
+  return rows;
+}
 
-for (const name of readdirSync(migrationsDir).sort()) {
-  if (!name.endsWith('.sql')) continue;
+const ledger: Ledger[] = [];
+const migrationNames = readdirSync(migrationsDir).filter((name) => name.endsWith('.sql')).sort();
+
+for (const name of migrationNames) {
   // 0057 defines and seeds the table; its seed is the baseline, not a delta.
   if (name.startsWith('0057_')) continue;
 
-  const sql = readFileSync(join(migrationsDir, name), 'utf8');
+  const sql = migrationExecutableSql(readFileSync(join(migrationsDir, name), 'utf8'));
   if (!/private\.scope_definer_exemptions/i.test(sql)) continue;
 
-  const added = [...sql.matchAll(EXPLICIT_INSERT)].length;
+  const added = [...sql.matchAll(EXPLICIT_INSERT)]
+    .reduce((count, match) => count + insertedValueRows(match[1] ?? ''), 0);
 
   // Each drained signature is one `to_regprocedure('…')` inside the delete's IN list. Counting
   // the statement would say "one" for a delete that removes three, which is exactly what 0073 does.
@@ -60,6 +178,32 @@ for (const name of readdirSync(migrationsDir).sort()) {
   }
 
   if (added || drained) ledger.push({ file: name, added, drained });
+}
+
+const missingScopeReassertion: string[] = [];
+let scopeReassertionCount = 0;
+
+for (const name of migrationNames) {
+  const version = Number(/^([0-9]{4})_/.exec(name)?.[1]);
+  if (!Number.isFinite(version) || version <= 57 || LEGACY_SCOPE_REASSERT_OMISSIONS.has(name)) continue;
+  const sql = migrationExecutableSql(readFileSync(join(migrationsDir, name), 'utf8'));
+  if (!SCOPE_REASSERTION.test(sql)) missingScopeReassertion.push(name);
+  else scopeReassertionCount += 1;
+}
+
+const staleLegacyOmissions = [...LEGACY_SCOPE_REASSERT_OMISSIONS]
+  .filter((name) => !migrationNames.includes(name));
+if (missingScopeReassertion.length || staleLegacyOmissions.length) {
+  const missing = missingScopeReassertion.map((name) => `    ${name}`).join('\n');
+  const stale = staleLegacyOmissions.map((name) => `    ${name}`).join('\n');
+  console.error(
+    'check:exemptions FAILED -- every migration after 0057 must re-run private.scope_enforcement_violations().\n\n'
+    + (missing ? `  Missing re-assertion:\n${missing}\n\n` : '')
+    + (stale ? `  Stale legacy omission entries:\n${stale}\n\n` : '')
+    + '  Do not add a new exception. Add the standard assertion block so new tables, policies,\n'
+    + '  triggers, and SECURITY DEFINER functions cannot land beyond the A1/A3/A5 gate.',
+  );
+  process.exit(1);
 }
 
 const added = ledger.reduce((n, e) => n + e.added, 0);
@@ -100,6 +244,8 @@ if (pinnedCount !== expected) {
 }
 
 console.log(
-  `check:exemptions passed: pin ${pinnedCount} matches ${ledger.length} migration(s) `
+  `check:exemptions passed: ${scopeReassertionCount} post-0057 migration(s) re-assert A1/A3/A5 `
+  + `(${LEGACY_SCOPE_REASSERT_OMISSIONS.size} pinned historical omissions); pin ${pinnedCount} `
+  + `matches ${ledger.length} migration(s) `
   + `(+${added} / -${drained} over 0057's seed of ${SEED_0057}).`,
 );

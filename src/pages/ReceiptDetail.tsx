@@ -2,6 +2,8 @@ import { Link, useParams } from 'react-router';
 import { FileText } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { EmptyState, ErrorNote, Note, PageLoader, StatusBadge } from '../components/ui';
+import { DocumentList } from '../components/FileUpload';
+import OfflineQueueStatus from '../components/OfflineQueueStatus';
 import { fmtDate, fmtNum } from '../lib/format';
 import { isUuid } from '../lib/invoiceLinkedContext';
 import { PO_STATUS, RECEIPT_LINE_STATUS, RECEIPT_STATUS } from '../lib/status';
@@ -152,6 +154,15 @@ export default function ReceiptDetail() {
             </Note>
           </div>
         )}
+      </section>
+
+      <section className="card card-pad space-y-3" aria-labelledby="receipt-documents-title">
+        <div>
+          <h2 id="receipt-documents-title" className="section-title">מסמכי הקבלה</h2>
+          <p className="mt-1 text-sm text-ink-muted">אפשר לצלם גם ללא חיבור; הקובץ נשמר במכשיר ונשלח כשהרשת חוזרת.</p>
+        </div>
+        <OfflineQueueStatus />
+        <DocumentList entityType="goods_receipt" entityId={receipt.id} capture />
       </section>
 
       <section className="card overflow-hidden" aria-labelledby="receipt-lines-title">

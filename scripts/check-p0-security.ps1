@@ -480,11 +480,46 @@ try {
   $invoiceA = New-Id
   $invoiceAUnapproved = New-Id
   $invoiceB = New-Id
-  Add-ServiceRow "invoices" @{ id = $invoiceA; org_id = $orgA; supplier_id = $supplierA; invoice_number = "P0-A"; invoice_date = "2026-07-01"; received_by = $accounts.officeA.Id; amount_before_vat = 100; total_amount = 100; review_status = "approved" } $serviceKey | Out-Null
+  Add-ServiceRow "invoices" @{ id = $invoiceA; org_id = $orgA; supplier_id = $supplierA; invoice_number = "P0-A"; invoice_date = "2026-07-01"; received_by = $accounts.officeA.Id; amount_before_vat = 100; total_amount = 100; review_status = "in_review" } $serviceKey | Out-Null
   Add-ServiceRow "invoices" @{ id = $invoiceAUnapproved; org_id = $orgA; supplier_id = $supplierA; invoice_number = "P0-A-UNAPPROVED"; invoice_date = "2026-07-02"; received_by = $accounts.officeA.Id; amount_before_vat = 40; total_amount = 40; review_status = "in_review" } $serviceKey | Out-Null
-  Add-ServiceRow "invoices" @{ id = $invoiceB; org_id = $orgB; supplier_id = $supplierB; invoice_number = "P0-B"; invoice_date = "2026-07-01"; received_by = $accounts.ownerB.Id; amount_before_vat = 200; total_amount = 200; review_status = "approved" } $serviceKey | Out-Null
+  Add-ServiceRow "invoices" @{ id = $invoiceB; org_id = $orgB; supplier_id = $supplierB; invoice_number = "P0-B"; invoice_date = "2026-07-01"; received_by = $accounts.ownerB.Id; amount_before_vat = 200; total_amount = 200; review_status = "in_review" } $serviceKey | Out-Null
   Add-ServiceRow "invoice_order_links" @{ org_id = $orgA; invoice_id = $invoiceA; order_id = $orderA } $serviceKey | Out-Null
   Add-ServiceRow "invoice_receipt_links" @{ org_id = $orgA; invoice_id = $invoiceA; receipt_id = $receiptA } $serviceKey | Out-Null
+
+  # Approved fixture rows must cross the same server-authoritative 3-way boundary as production.
+  # Tenant A deliberately has no line evidence, so its owner uses the real reasoned, step-up
+  # override command. Tenant B has no linked order and proves that the explicit no-order route can
+  # still be approved without pretending that a three-way comparison succeeded.
+  Sign-InTestUser $accounts.ownerA $anonKey
+  $response = Invoke-Rest -Method Post -Resource "rpc/get_invoice_three_way_match" `
+    -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{ p_invoice_id = $invoiceA }
+  Assert-Status $response @(200) "owner reads persisted three-way assessment before fixture override"
+  $assessmentHash = [string]$response.Json.assessment_hash
+  Assert-True (-not [string]::IsNullOrWhiteSpace($assessmentHash)) "three-way assessment exposes a stable hash"
+  $response = Invoke-Rest -Method Post -Resource "rpc/override_invoice_three_way_match" `
+    -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{
+      p_invoice_id = $invoiceA
+      p_assessment_hash = $assessmentHash
+      p_idempotency_key = (New-Id)
+      p_reason = "P0 fixture exercises the audited owner override boundary"
+    }
+  Assert-Status $response @(200) "owner step-up override for fixture invoice"
+  $response = Invoke-Rest -Method Post -Resource "rpc/set_invoice_review_status" `
+    -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{
+      p_invoice_id = $invoiceA
+      p_status = "approved"
+      p_reason = "P0 fixture approval after current three-way override"
+    }
+  Assert-Status $response @(200) "owner approves fixture invoice after current override"
+
+  Sign-InTestUser $accounts.ownerB $anonKey
+  $response = Invoke-Rest -Method Post -Resource "rpc/set_invoice_review_status" `
+    -ApiKey $anonKey -Token $accounts.ownerB.Token -Body @{
+      p_invoice_id = $invoiceB
+      p_status = "approved"
+      p_reason = "P0 fixture no-order invoice approval"
+    }
+  Assert-Status $response @(200) "owner approves explicit no-order fixture invoice"
 
   $paymentRequestA = New-Id
   $paymentRequestB = New-Id
@@ -514,6 +549,22 @@ try {
   Add-ServiceRow "audit_logs" @{ org_id = $orgA; user_id = $accounts.ownerA.Id; action = "persona_fixture"; entity_type = "suppliers"; entity_id = $supplierA; reason = "P0 persona matrix" } $serviceKey | Out-Null
 
   foreach ($account in $accounts.Values) { Sign-InTestUser $account $anonKey }
+
+  # The machine invoice writer is service-role only. Probe the real browser/API boundary rather
+  # than issuing a denied EXECUTE through local psql: the current local Supabase PostgreSQL image
+  # has a generic SIGSEGV on direct public-function ACL denial. PostgREST must omit/refuse the RPC;
+  # a business-level `job_not_found` response would prove the owner reached the command and fails
+  # the second assertion below.
+  $response = Invoke-Rest -Method Post -Resource "rpc/apply_document_interpretation" `
+    -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{
+      p_job_id = "00000000-0000-4000-8000-000000000000"
+      p_interpretation_id = "00000000-0000-4000-8000-000000000000"
+      p_actor_id = $null
+    }
+  Assert-Blocked $response "owner cannot invoke the service-only machine invoice writer"
+  Assert-True (
+    $response.Content -match 'PGRST202|permission denied for function apply_document_interpretation'
+  ) "machine invoice writer is refused at the API/EXECUTE boundary, before business guards"
 
   # One real API policy per tenant role, plus a second tenant and a platform operator.
   $rows = Get-Rows "suppliers?select=id,org_id" $accounts.ownerA $anonKey "owner tenant read"

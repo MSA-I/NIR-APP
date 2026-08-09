@@ -6,9 +6,10 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
+import { SupplierOrders, type SupplierPortalOrder } from '../components/SupplierOrders';
 import { cellText, matchColumn, nameKey, readSheet } from '../lib/importSheet';
 import { fmtDate, todayISO } from '../lib/format';
-import { PRODUCT_AVAILABILITY } from '../lib/status';
+import { canStartSupplierCommerce, PRODUCT_AVAILABILITY } from '../lib/status';
 import type {
   Product,
   SupplierPriceRejection,
@@ -27,6 +28,7 @@ interface SupplierPortalContext {
   organization_name: string;
   supplier: { id: string; name: string };
   prices: PortalPrice[];
+  orders: SupplierPortalOrder[];
 }
 
 interface SubmissionRow {
@@ -79,7 +81,7 @@ const monthLabelOrNull = (value: string) => (/^\d{4}-\d{2}/.test(value) ? monthL
 
 /** Supplier agent portal — RLS is the boundary; this page never receives another supplier id. */
 export default function SupplierPrices() {
-  const { profile } = useAuth();
+  const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const [editFor, setEditFor] = useState<Row | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -87,13 +89,14 @@ export default function SupplierPrices() {
 
   const { data, loading, error, refetch } = useQuery(async () => {
     const supplierId = profile!.supplier_id!;
-    const [portalResult, submissionsResult] = await Promise.all([
+    const [portalResult, submissionsResult, supplierStatusResult] = await Promise.all([
       supabase.rpc('supplier_portal_context'),
       supabase.from('supplier_price_submissions').select('*')
         .eq('supplier_id', supplierId)
         .order('target_month', { ascending: false })
         .order('revision', { ascending: false })
         .limit(24),
+      supabase.from('suppliers').select('status').eq('id', supplierId).single(),
     ]);
     const portal = unwrap(portalResult) as SupplierPortalContext;
     const rows = portal.prices.map<Row>((price) => ({
@@ -106,9 +109,11 @@ export default function SupplierPrices() {
     return {
       organizationName: portal.organization_name,
       supplier: portal.supplier,
+      supplierStatus: unwrap(supplierStatusResult).status as string,
       rows,
       products: rows.map<CatalogProduct>(({ product }) => product),
       submissions: unwrap(submissionsResult) as SupplierPriceSubmission[],
+      orders: portal.orders,
     };
   });
 
@@ -123,6 +128,8 @@ export default function SupplierPrices() {
 
   if (loading) return <SkeletonTable cols={5} />;
   if (error || !data) return <ErrorNote message={error ?? 'שגיאה'} />;
+  const supplierCommerceAllowed = canStartSupplierCommerce(data.supplierStatus);
+  const commerceAllowed = organizationAccess.canWrite && supplierCommerceAllowed;
 
   function downloadTemplate() {
     const csvCell = (value: string) => {
@@ -147,36 +154,42 @@ export default function SupplierPrices() {
     <div className="space-y-4 max-w-4xl">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="page-title flex items-center gap-2"><Tags size={22} /> המחירון שלי</h1>
-          <div className="text-sm text-ink-muted mt-1">{`${data.supplier.name} — עדכון מחירים וזמינות עבור ${data.organizationName}`}</div>
+          <h1 className="page-title flex items-center gap-2"><Tags size={22} /> פורטל הספק</h1>
+          <div className="text-sm text-ink-muted mt-1">{`${data.supplier.name} — הזמנות ומחירון עבור ${data.organizationName}`}</div>
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="btn-secondary" onClick={downloadTemplate}><Download size={15} /> הורדת תבנית</button>
-          <button className="btn-secondary" onClick={() => setDocumentOpen(true)}><Upload size={15} /> PDF, תמונה או Word</button>
-          <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> הגשת מחירון חודשי</button>
+          {commerceAllowed && <button className="btn-secondary" onClick={() => setDocumentOpen(true)}><Upload size={15} /> PDF, תמונה או Word</button>}
+          {commerceAllowed && <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> הגשת מחירון חודשי</button>}
         </div>
       </div>
+
+      {organizationAccess.canWrite && !supplierCommerceAllowed && <Note tone="alert">הספק לא פעיל לפעילות מסחרית חדשה. המחירון והיסטוריית ההגשות נשארים זמינים לצפייה.</Note>}
 
       <Note tone="info">
         התבנית כוללת מזהה מוצר ושם קנוני. כל הגשה נשמרת לפי חודש וגרסה; שורה לא מוכרת תידחה בלי ליצור מוצר חדש ובלי לעצור שורות תקינות.
       </Note>
 
+      <SupplierOrders orders={data.orders} canWrite={organizationAccess.canWrite}
+        onChanged={() => void refetch()} />
+
+      <h2 className="section-title">המחירון שלי</h2>
       <DataTable rows={data.rows} columns={columns} searchable
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q)}
         searchLabel="חיפוש במחירון שלי"
         rowLabel={(r) => `מוצר ${r.product.name}`}
         rowActions={(r) => [
-          { key: 'edit', label: 'עדכון מחיר וזמינות', icon: Pencil, onSelect: () => setEditFor(r) },
+          { key: 'edit', label: 'עדכון מחיר וזמינות', icon: Pencil, hidden: !commerceAllowed, onSelect: () => setEditFor(r) },
         ]}
         emptyTitle="אין מוצרים במחירון" emptySubtitle="הגש קובץ מחירון כדי להתחיל" />
 
       <SubmissionHistory submissions={data.submissions} />
 
-      {editFor && (
+      {commerceAllowed && editFor && (
         <EditModal row={editFor} onClose={() => setEditFor(null)}
           onSaved={() => { setEditFor(null); toast('עודכן בהצלחה'); void refetch(); }} />
       )}
-      {importOpen && (
+      {commerceAllowed && importOpen && (
         <ImportModal
           orgId={profile!.org_id}
           supplierId={profile!.supplier_id!}
@@ -185,7 +198,7 @@ export default function SupplierPrices() {
           onDone={() => { setImportOpen(false); void refetch(); }}
         />
       )}
-      {documentOpen && (
+      {commerceAllowed && documentOpen && (
         <PriceListUploadModal supplier={data.supplier} onClose={() => setDocumentOpen(false)} />
       )}
     </div>

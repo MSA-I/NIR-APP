@@ -14,11 +14,13 @@ vi.mock('./supabase', () => ({
 
 import {
   createOfflineQueue,
+  isPermanentQueueFailure,
   isTransportFailure,
   receiptAuditReason,
   receiptConflictCode,
   type OfflineQueueDeps,
 } from './offlineQueue';
+import { OfflineStorageError } from './offlineDb';
 import type {
   OfflineQueuedAction, OfflineQueueStore, OfflineReceiptDraft, SaveGoodsReceiptPayload,
 } from './offlineDb';
@@ -26,6 +28,7 @@ import type {
 function memoryStore(seed: Omit<OfflineQueuedAction, 'id'>[] = []) {
   const queue = new Map<number, OfflineQueuedAction>();
   const drafts = new Map<string, OfflineReceiptDraft>();
+  const openOrders = new Set<string>();
   let nextId = 1;
   let photos = 0;
   let lastSync: number | null = null;
@@ -45,9 +48,12 @@ function memoryStore(seed: Omit<OfflineQueuedAction, 'id'>[] = []) {
     setLastSuccessfulSyncAt: async (at) => { lastSync = at; },
     getReceiptDraft: async (orderId) => drafts.get(orderId) ?? null,
     putReceiptDraft: async (draft) => { drafts.set(draft.orderId, draft); },
+    deleteReceiptDraft: async (orderId) => { drafts.delete(orderId); },
+    deleteOpenOrder: async (orderId) => { openOrders.delete(orderId); },
   };
   return {
-    store, queue, drafts,
+    store, queue, drafts, openOrders,
+    addOpenOrder: (orderId: string) => { openOrders.add(orderId); },
     setPhotos: (count: number) => { photos = count; },
     lastSync: () => lastSync,
   };
@@ -65,6 +71,8 @@ const payload = (receiptId: string, orderId = 'order-1'): SaveGoodsReceiptPayloa
 
 const queued = (receiptId: string, orderId = 'order-1'): Omit<OfflineQueuedAction, 'id'> => ({
   kind: 'save_goods_receipt',
+  orgId: 'org-1',
+  actorUserId: 'user-1',
   idempotencyKey: receiptId,
   orderId,
   orderLabel: `ספק · הזמנה #${orderId}`,
@@ -82,7 +90,8 @@ function build(overrides: Partial<OfflineQueueDeps> & { store: OfflineQueueStore
   const deps: OfflineQueueDeps = {
     store: overrides.store,
     send: overrides.send ?? (async () => ({ receipt_id: 'server-receipt' })),
-    hasUsableSession: overrides.hasUsableSession ?? (async () => true),
+    getUsableActorId: overrides.getUsableActorId ?? (async () => 'user-1'),
+    resolveScope: overrides.resolveScope ?? (async () => ({ orgId: 'org-1', actorUserId: 'user-1' })),
     isOnline: overrides.isOnline ?? (() => true),
     now: overrides.now ?? (() => 5_000),
     storageAvailable: overrides.storageAvailable ?? (() => true),
@@ -119,6 +128,12 @@ describe('failure classification', () => {
     expect(isTransportFailure(new Error('net::ERR_INTERNET_DISCONNECTED'))).toBe(true);
     expect(isTransportFailure(new Error('receipt_qty_exceeds_order'))).toBe(false);
   });
+
+  it('recognises permanent authorization failures without classifying ordinary server errors', () => {
+    expect(isPermanentQueueFailure(new Error('not_authorized'))).toBe(true);
+    expect(isPermanentQueueFailure({ code: '42501', message: 'permission denied' })).toBe(true);
+    expect(isPermanentQueueFailure(new Error('upstream temporarily unavailable'))).toBe(false);
+  });
 });
 
 describe('submitting a receipt', () => {
@@ -137,11 +152,26 @@ describe('submitting a receipt', () => {
     expect(queue.getSnapshot().pendingActions).toBe(1);
   });
 
+  it('reports an explicit failure when IndexedDB refuses the queue write', async () => {
+    const memory = memoryStore();
+    memory.store.enqueueAction = async () => {
+      throw new OfflineStorageError('האחסון המקומי אינו זמין.');
+    };
+    const queue = build({ store: memory.store, isOnline: () => false });
+
+    const outcome = await queue.submitReceipt({
+      orderId: 'order-1', orderLabel: 'ספק', payload: payload('receipt-1'), observedAt: 1_000,
+    });
+
+    expect(outcome).toEqual({ kind: 'rejected', message: 'האחסון המקומי אינו זמין.' });
+    expect(queue.getSnapshot().pendingActions).toBe(0);
+  });
+
   it('keeps the draft and sends nothing when the session has expired', async () => {
     // OFFLINE-SYNC-DESIGN §7: a queued action never travels with stale credentials.
     const memory = memoryStore();
     const send = vi.fn();
-    const queue = build({ store: memory.store, send, hasUsableSession: async () => false });
+    const queue = build({ store: memory.store, send, getUsableActorId: async () => null });
 
     const outcome = await queue.submitReceipt({
       orderId: 'order-1', orderLabel: 'ספק', payload: payload('receipt-1'), observedAt: 1_000,
@@ -191,6 +221,20 @@ describe('submitting a receipt', () => {
       orderId: 'order-1', orderLabel: 'ספק', payload: payload('receipt-1'), observedAt: 2_000,
     });
     expect(queue.getSnapshot().pendingActions).toBe(1);
+  });
+
+  it('never downgrades a queued completion back to a draft after a reload', async () => {
+    const memory = memoryStore([queued('receipt-1')]);
+    const queue = build({ store: memory.store, isOnline: () => false });
+    await queue.submitReceipt({
+      orderId: 'order-1',
+      orderLabel: 'ספק',
+      payload: { ...payload('receipt-1'), p_complete: false, p_reason: 'שמירת טיוטה' },
+      observedAt: 2_000,
+    });
+    const [action] = memory.queue.values();
+    expect(action.payload.p_complete).toBe(true);
+    expect(action.observedAt).toBe(1_000);
   });
 });
 
@@ -266,20 +310,70 @@ describe('syncing the queue', () => {
     expect(queue.getSnapshot().pendingActions).toBe(1);
   });
 
+  it('does not retry a permanent authorization or scope rejection forever', async () => {
+    const memory = memoryStore([queued('receipt-1')]);
+    const send = vi.fn(async () => { throw new Error('not_authorized'); });
+    const queue = build({ store: memory.store, send });
+
+    await queue.sync();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(queue.getSnapshot().actions[0].state).toBe('needs_attention');
+
+    await queue.sync();
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('checks the actor again before every send and quarantines work after an account switch', async () => {
+    const memory = memoryStore([queued('receipt-1', 'order-1'), queued('receipt-2', 'order-2')]);
+    const actors = ['user-1', 'user-1', 'user-2'];
+    const send = vi.fn(async (sendPayload: SaveGoodsReceiptPayload) => ({
+      receipt_id: sendPayload.p_receipt_id,
+    }));
+    const queue = build({
+      store: memory.store,
+      send,
+      getUsableActorId: async () => actors.shift() ?? 'user-2',
+      resolveScope: async () => ({ orgId: 'org-1', actorUserId: actors.length === 0 ? 'user-2' : 'user-1' }),
+    });
+
+    await queue.sync();
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ p_receipt_id: 'receipt-1' }));
+    expect(queue.getSnapshot().actions[0]).toEqual(expect.objectContaining({
+      idempotencyKey: 'receipt-2',
+      state: 'pending',
+    }));
+    expect(queue.getSnapshot().sessionExpired).toBe(true);
+  });
+
+  it('never sends an unassigned v1 action', async () => {
+    const legacy = { ...queued('receipt-v1'), orgId: undefined, actorUserId: undefined };
+    const memory = memoryStore([legacy]);
+    const send = vi.fn();
+    const queue = build({ store: memory.store, send });
+
+    await queue.sync();
+
+    expect(send).not.toHaveBeenCalled();
+    expect(queue.getSnapshot().actions[0].state).toBe('pending');
+  });
+
   it('sends nothing at all while offline or without a session', async () => {
     const memory = memoryStore([queued('receipt-1')]);
     const send = vi.fn();
     const offline = build({ store: memory.store, send, isOnline: () => false });
     await offline.sync();
-    const stale = build({ store: memory.store, send, hasUsableSession: async () => false });
+    const stale = build({ store: memory.store, send, getUsableActorId: async () => null });
     const snapshot = await stale.sync();
     expect(send).not.toHaveBeenCalled();
     expect(snapshot.sessionExpired).toBe(true);
     expect(snapshot.pendingActions).toBe(1);
   });
 
-  it('marks the local draft synced once the server accepts it', async () => {
+  it('removes a completed local draft once the server accepts it', async () => {
     const memory = memoryStore([queued('receipt-1')]);
+    memory.addOpenOrder('order-1');
     await memory.store.putReceiptDraft({
       orderId: 'order-1', receiptId: 'receipt-1', keySource: 'device',
       lines: [], openCredits: true, notes: null,
@@ -287,8 +381,8 @@ describe('syncing the queue', () => {
     });
     const queue = build({ store: memory.store, now: () => 8_000 });
     await queue.sync();
-    expect(memory.drafts.get('order-1')?.syncedAt).toBe(8_000);
-    expect(memory.drafts.get('order-1')?.completed).toBe(true);
+    expect(memory.drafts.has('order-1')).toBe(false);
+    expect(memory.openOrders.has('order-1')).toBe(false);
   });
 
   it('stamps a queued action with both clocks when it finally goes out', async () => {

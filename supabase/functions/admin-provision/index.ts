@@ -39,7 +39,6 @@ interface ProvisionRequest {
   owner_name: string;
   owner_password: string;
   vat_rate?: number;
-  trial_ends_at?: string | null;
   /** Baseline categories for the new tenant. See DEFAULT_CATEGORIES. */
   categories?: string[];
 }
@@ -48,18 +47,6 @@ interface ProvisionResult {
   org_id: string;
   owner_user_id: string;
   categories_created: number;
-}
-
-/**
- * Issuing a new password also needs `service_role`, and the authorization it needs is exactly the
- * platform-admin check this function already performs. A second function would mean a second
- * service_role authorization surface to keep correct forever, so it lives here behind an action
- * field instead. Absent `action`, the request is a provision as before.
- */
-interface ResetPasswordRequest {
-  action: 'reset_password';
-  email: string;
-  new_password: string;
 }
 
 /**
@@ -104,10 +91,6 @@ function validate(body: Partial<ProvisionRequest>): string | null {
     }
   }
 
-  if (body.trial_ends_at != null && Number.isNaN(Date.parse(body.trial_ends_at))) {
-    return 'תאריך סיום תקופת ניסיון אינו תקין';
-  }
-
   if (body.categories !== undefined) {
     if (!Array.isArray(body.categories) || body.categories.some((c) => typeof c !== 'string')) {
       return 'רשימת הקטגוריות אינה תקינה';
@@ -147,54 +130,6 @@ async function rollback(
   return leftovers;
 }
 
-/**
- * `profiles` carries no email — it exists only in auth.users — and supabase-js exposes no
- * lookup-by-email, so this pages the admin list. Correct at this scale and bounded on purpose;
- * if the platform ever holds more users than PAGE_LIMIT * PER_PAGE the operator gets a clear
- * "not found" rather than a silent miss, which is the failure to notice.
- */
-async function findUserIdByEmail(admin: SupabaseClient, email: string): Promise<string | null> {
-  const PER_PAGE = 1000;
-  const PAGE_LIMIT = 5;
-  for (let page = 1; page <= PAGE_LIMIT; page += 1) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: PER_PAGE });
-    if (error) throw new Error(error.message);
-    const match = data.users.find((u) => u.email?.toLowerCase() === email);
-    if (match) return match.id;
-    if (data.users.length < PER_PAGE) return null;
-  }
-  return null;
-}
-
-async function resetPassword(
-  admin: SupabaseClient,
-  body: Partial<ResetPasswordRequest>,
-): Promise<Response> {
-  const email = body.email?.trim().toLowerCase();
-  const password = body.new_password ?? '';
-  if (!email || !email.includes('@')) {
-    return fail('invalid_request', 'כתובת האימייל חסרה או אינה תקינה', 400);
-  }
-  if (password.length < MIN_PASSWORD_LENGTH) {
-    return fail('invalid_request', `הסיסמה חייבת להכיל לפחות ${MIN_PASSWORD_LENGTH} תווים`, 400);
-  }
-
-  let userId: string | null;
-  try {
-    userId = await findUserIdByEmail(admin, email);
-  } catch (lookupError) {
-    return fail('provision_failed', 'חיפוש המשתמש נכשל', 500, String(lookupError));
-  }
-  if (!userId) return fail('invalid_request', 'לא נמצא משתמש עם הכתובת הזו', 404);
-
-  const { data, error } = await admin.auth.admin.updateUserById(userId, { password });
-  if (error || !data.user) {
-    return fail('provision_failed', 'איפוס הסיסמה נכשל', 500, error?.message);
-  }
-  // The password is never echoed back; the caller generated it and shows it once.
-  return json({ user_id: data.user.id, email: data.user.email ?? null }, 200);
-}
-
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
   if (req.method !== 'POST') return fail('method_not_allowed', 'POST בלבד', 405);
@@ -229,15 +164,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (!adminRow) return fail('forbidden', 'הפעולה מותרת למנהלי פלטפורמה בלבד', 403);
 
   // ===== 3. Payload =====
-  let body: Partial<ProvisionRequest> & Partial<ResetPasswordRequest>;
+  let body: Partial<ProvisionRequest>;
   try {
-    body = (await req.json()) as Partial<ProvisionRequest> & Partial<ResetPasswordRequest>;
+    body = (await req.json()) as Partial<ProvisionRequest>;
   } catch {
     return fail('invalid_request', 'גוף הבקשה אינו JSON תקין', 400);
   }
-
-  // Branches only after the platform-admin check above, so the reset path inherits it whole.
-  if (body.action === 'reset_password') return await resetPassword(admin, body);
 
   const problem = validate(body);
   if (problem) return fail('invalid_request', problem, 400);
@@ -253,14 +185,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   try {
     // ===== 4. Organization =====
-    // status defaults to 'trial' (0006). trial_ends_at is recorded only if the operator set
-    // one — trial length is an open business question, not something to invent here.
+    // status defaults to 'trial'. Migration 0094 applies the canonical 30-day end when the
+    // operator does not provide an explicit date.
     const orgInsert = await admin
       .from('organizations')
       .insert({
         name,
         ...(body.vat_rate !== undefined ? { vat_rate: body.vat_rate } : {}),
-        ...(body.trial_ends_at ? { trial_ends_at: body.trial_ends_at } : {}),
       })
       .select('id')
       .single();

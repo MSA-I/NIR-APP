@@ -7,6 +7,13 @@ import { OrgScopeProvider } from '../lib/query/orgScope';
 import { resolveRoleLabels } from '../lib/status';
 import { cleanupPushBeforeSignOut } from '../lib/push';
 import { toHebrewError } from '../lib/errors';
+import { getRememberedOfflineBootstrap, rememberOfflineBootstrap } from '../lib/offlineDb';
+import {
+  organizationAccessFromServer,
+  READ_ONLY_ORGANIZATION_ACCESS,
+  type OrganizationAccess,
+  type OrganizationAccessStateRow,
+} from '../lib/trial';
 
 export interface SignOutResult {
   error: string | null;
@@ -19,6 +26,8 @@ interface AuthState {
   org: Organization | null;
   loading: boolean;
   bootstrapError: string | null;
+  offlineBootstrap: boolean;
+  organizationAccess: OrganizationAccess;
   /**
    * Platform operator, a separate axis from `profile.role` — an operator administers
    * tenants, a role administers within one. Checked against `platform_admins`, whose
@@ -34,6 +43,7 @@ interface AuthState {
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<SignOutResult>;
   retryBootstrap: () => void;
+  refreshOrganizationAccess: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState>(null as unknown as AuthState);
@@ -45,7 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [offlineBootstrap, setOfflineBootstrap] = useState(false);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
+  const [access, setAccess] = useState<OrganizationAccess>(READ_ONLY_ORGANIZATION_ACCESS);
   const sessionUserId = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
@@ -56,6 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null);
         setOrg(null);
         setIsPlatformAdmin(false);
+        setOfflineBootstrap(false);
+        setAccess(READ_ONLY_ORGANIZATION_ACCESS);
         setBootstrapError(null);
         setLoading(!!next);
       }
@@ -70,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!session) { setProfile(null); setOrg(null); setIsPlatformAdmin(false); return; }
+    if (!session) { setProfile(null); setOrg(null); setIsPlatformAdmin(false); setOfflineBootstrap(false); return; }
     let cancelled = false;
     (async () => {
       try {
@@ -88,6 +102,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               await supabase.from('organizations').select('*').eq('id', p.org_id).maybeSingle(),
             ) as Organization | null)
           : null;
+        const accessRows = p && o
+          ? (unwrap(await supabase.rpc('organization_access_state')) as OrganizationAccessStateRow[])
+          : [];
+        if (p && o && accessRows.length !== 1) {
+          throw new Error('organization_access_state_unavailable');
+        }
+        const serverAccess = organizationAccessFromServer(accessRows[0]);
         // Deliberately not gated on `p`: an operator with no tenant profile is valid.
         const admin = unwrap(
           await supabase.from('platform_admins').select('user_id').eq('user_id', session.user.id).maybeSingle(),
@@ -96,15 +117,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(p);
           setOrg(o);
           setIsPlatformAdmin(!!admin);
+          setOfflineBootstrap(false);
+          setAccess(serverAccess);
           setBootstrapError(null);
+          if (p && o) {
+            try {
+              await rememberOfflineBootstrap({
+                actorUserId: session.user.id,
+                orgId: p.org_id,
+                profile: p,
+                organization: o,
+                organizationAccess: serverAccess,
+                cachedAt: Date.now(),
+              });
+            } catch {
+              // Online bootstrap remains authoritative even when this device cannot cache it.
+            }
+          }
         }
       } catch (error) {
         // Never leave the app spinning on a failed bootstrap.
         if (!cancelled) {
-          setProfile(null);
-          setOrg(null);
-          setIsPlatformAdmin(false);
-          setBootstrapError(toHebrewError(error));
+          const expiresAt = (session.expires_at ?? 0) * 1000;
+          const canUseDeviceContext = typeof navigator !== 'undefined'
+            && navigator.onLine === false && expiresAt > Date.now();
+          let cached = null;
+          if (canUseDeviceContext) {
+            try {
+              cached = await getRememberedOfflineBootstrap(session.user.id);
+            } catch {
+              // The unavailable cache is reported through the normal bootstrap failure below.
+            }
+          }
+          if (cached) {
+            setProfile(cached.profile);
+            setOrg(cached.organization);
+            setIsPlatformAdmin(false);
+            setOfflineBootstrap(true);
+            setAccess(organizationAccessFromServer(
+              cached.organizationAccess
+                ? {
+                    access_mode: cached.organizationAccess.mode,
+                    grace_days_remaining: cached.organizationAccess.graceDaysRemaining,
+                  }
+                : null,
+            ));
+            setBootstrapError(null);
+          } else {
+            setProfile(null);
+            setOrg(null);
+            setIsPlatformAdmin(false);
+            setOfflineBootstrap(false);
+            setAccess(READ_ONLY_ORGANIZATION_ACCESS);
+            setBootstrapError(toHebrewError(error));
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -114,6 +180,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session, bootstrapAttempt]);
 
   const roleLabels = useMemo(() => resolveRoleLabels(org?.settings), [org?.settings]);
+
+  async function refreshOrganizationAccess() {
+    if (!session || !profile || !org || offlineBootstrap) return;
+    const result = await supabase.rpc('organization_access_state');
+    if (result.error) throw result.error;
+    const rows = result.data as OrganizationAccessStateRow[] | null;
+    if (rows?.length !== 1) throw new Error('organization_access_state_unavailable');
+    setAccess(organizationAccessFromServer(rows[0]));
+  }
+
+  // Open tabs re-read the canonical server clock instead of crossing trial/grace boundaries with
+  // Date.now from a potentially skewed device. The database still rejects every stale write; this
+  // poll keeps the controls/countdown aligned without pretending an offline response exists.
+  useEffect(() => {
+    if (!session || !profile || !org || offlineBootstrap) return;
+    const refreshAccess = async () => {
+      try {
+        await refreshOrganizationAccess();
+      } catch {
+        // A stale visual state is safer than guessing; the next poll retries and the DB remains
+        // the write boundary throughout.
+      }
+    };
+    const timer = window.setInterval(() => void refreshAccess(), 60_000);
+    return () => { window.clearInterval(timer); };
+  }, [session, profile, org, offlineBootstrap]);
 
   async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -134,7 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, profile, org, loading, bootstrapError, isPlatformAdmin, roleLabels, signIn, signOut, retryBootstrap }}>
+    <AuthContext.Provider value={{ session, profile, org, loading, bootstrapError, offlineBootstrap, organizationAccess: access, isPlatformAdmin, roleLabels, signIn, signOut, retryBootstrap, refreshOrganizationAccess }}>
       {/* Every cache key opens with this value. It is deliberately `org?.id ?? null` and not the
           profile's org_id: a suspended organisation makes auth_org() return null server-side, and
           the cache root must move with it so rows read under the live tenant are not served after

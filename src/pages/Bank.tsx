@@ -15,6 +15,7 @@ import type { BankTransaction, BankImport } from '../lib/types';
 import { useParamState } from '../lib/useParamState';
 import { SupplierSelectField, useQuickSupplier } from '../components/QuickSupplierPicker';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
+import { financialSupplierMap, readFinancialSuppliers } from '../lib/financialSuppliers';
 import {
   SUPPLIER_SEARCH_NARROWED,
   fetchServerList,
@@ -30,7 +31,7 @@ import {
   type ServerSort,
 } from '../lib/serverList';
 
-type TxRow = BankTransaction & { supplier: { name: string } | null };
+type TxRow = Omit<BankTransaction, 'supplier'> & { supplier: { name: string } | null };
 
 async function sha256(data: ArrayBuffer | string): Promise<string> {
   const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data);
@@ -63,7 +64,7 @@ const SORT_COLUMN: Record<string, string> = { date: 'tx_date' };
 const DEFAULT_SORT: readonly ServerSort[] = [{ column: 'tx_date', ascending: false }];
 
 export default function Bank() {
-  const { profile, org } = useAuth();
+  const { profile, org, organizationAccess } = useAuth();
   const toast = useToast();
   const [, setParams] = useSearchParams();
   const [statusFilter] = useParamState('status');
@@ -75,7 +76,7 @@ export default function Bank() {
   const [importOpen, setImportOpen] = useState(false);
   const [selected, setSelected] = useState<TxRow | null>(null);
   const autoOpenedId = useRef<string | null>(null);
-  const canOperateBank = !!profile && ['owner', 'accountant'].includes(profile.role);
+  const canOperateBank = organizationAccess.canWrite && !!profile && ['owner', 'accountant'].includes(profile.role);
 
   /** One atomic URL write — see the note in Invoices.tsx: sequential functional setParams calls
       in the same handler read the same stale snapshot and clobber each other. */
@@ -117,7 +118,7 @@ export default function Bank() {
       }
       const result = await fetchServerList<TxRow>(supabase, {
         table: 'bank_transactions',
-        select: '*, supplier:suppliers!p0_bt_supplier_tenant_fk(name)',
+        select: '*',
         predicates,
         sort: uiSort
           ? [{ column: SORT_COLUMN[uiSort[0].column], ascending: uiSort[0].ascending }]
@@ -125,7 +126,15 @@ export default function Bank() {
         page,
         pageSize: PAGE_SIZE,
       });
-      return { ...result, narrowed };
+      const suppliers = await financialSupplierMap(result.rows.flatMap((row) => row.supplier_id ? [row.supplier_id] : []));
+      return {
+        ...result,
+        rows: result.rows.map((row) => ({
+          ...row,
+          supplier: row.supplier_id ? { name: suppliers.get(row.supplier_id)?.name ?? '—' } : null,
+        })),
+        narrowed,
+      };
     },
     [],
     [DOMAIN.bank, 'list', { id: idFilter, status: statusFilter, month: monthFilter, q: searchTerm, sort: sortParam, page }],
@@ -330,7 +339,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
     if (!reason.trim()) { toast('נדרשת סיבה לייבוא תדפיס הבנק', 'error'); return; }
     setBusy(true);
     try {
-      const suppliers = unwrap(await supabase.from('suppliers').select('id, name').is('deleted_at', null)) as { id: string; name: string }[];
+      const suppliers = await readFinancialSuppliers();
       const invalidRows: number[] = [];
       const normalized = await Promise.all(rawRows.map(async (raw, index) => {
         const date = parseDate(String(raw[map.date] ?? ''));
@@ -443,8 +452,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   const [directPaymentId] = useState(() => crypto.randomUUID());
 
   const { data, loading, error, refetch } = useQuery(async () => {
-    const suppliers = await fetchAll<{ id: string; name: string }>((from, to) => supabase.from('suppliers').select('id, name')
-      .is('deleted_at', null).order('name').order('id').range(from, to));
+    const suppliers = await readFinancialSuppliers();
     if (!supplierId) return { suppliers, candidates: [] as Candidate[], openInvoices: [] };
 
     const fromDate = addCalendarDays(tx.tx_date, -days);

@@ -52,6 +52,56 @@ export interface ResolvedDelivery {
   headers: Record<string, string>;
 }
 
+/** Webhooks are an outbound trust boundary. Reject obvious local/private targets before fetch;
+ * production egress policy remains the second line of defence against DNS rebinding. */
+export function isAllowedWebhookUrl(value: string, allowedHosts: ReadonlySet<string>): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')) return false;
+
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return false;
+  // Managed external integrations use DNS names. Reject every literal IP representation,
+  // including IPv4-mapped IPv6, rather than maintaining a bypass-prone address parser here.
+  if (host.includes(':') || /^[0-9.]+$/.test(host)) return false;
+  return allowedHosts.has(host);
+}
+
+export interface DeliveryOutcome { ok: boolean; code?: number; error?: string }
+
+export async function deliverWebhook(
+  resolved: ResolvedDelivery,
+  allowedHosts: ReadonlySet<string>,
+  fetcher: typeof fetch = fetch,
+): Promise<DeliveryOutcome> {
+  if (!isAllowedWebhookUrl(resolved.url, allowedHosts)) {
+    return { ok: false, error: 'target_url_rejected' };
+  }
+  try {
+    const response = await fetcher(resolved.url, {
+      method: 'POST',
+      headers: resolved.headers,
+      body: resolved.body,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (response.status >= 300 && response.status < 400) {
+      return { ok: false, code: response.status, error: 'target_redirect_rejected' };
+    }
+    if (response.ok) return { ok: true, code: response.status };
+    return { ok: false, code: response.status, error: `target_status_${response.status}` };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message.slice(0, 500) : 'delivery_failed',
+    };
+  }
+}
+
 /** The exact string the database signed: body, a literal dot, the timestamp. */
 export function signedPayload(body: string, timestamp: string): string {
   return `${body}.${timestamp}`;

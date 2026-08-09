@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildDeliveryHeaders,
+  deliverWebhook,
+  isAllowedWebhookUrl,
   type ClaimedRow,
   resolveTarget,
   signedPayload,
@@ -122,4 +124,43 @@ test("a receiver following the handoff recipe verifies the signature", async () 
     signedPayload(resolved.body, resolved.headers["x-supplyflow-timestamp"]),
   );
   assert.equal(presented, recomputed);
+});
+
+test("webhook targets require public HTTPS without credentials or custom ports", () => {
+  const allowed = new Set(["hooks.example.com", "fdocs.example.com"]);
+  assert.equal(isAllowedWebhookUrl("https://hooks.example.com/supplyflow", allowed), true);
+  assert.equal(isAllowedWebhookUrl("https://fdocs.example.com/supplyflow", allowed), true);
+  for (const rejected of [
+    "http://hooks.example.com/supplyflow",
+    "https://user:pass@hooks.example.com/supplyflow",
+    "https://hooks.example.com:8443/supplyflow",
+    "https://localhost/supplyflow",
+    "https://api.internal.local/supplyflow",
+    "https://127.0.0.1/supplyflow",
+    "https://10.0.0.1/supplyflow",
+    "https://172.16.0.1/supplyflow",
+    "https://192.168.1.1/supplyflow",
+    "https://169.254.169.254/latest/meta-data",
+    "https://[::1]/supplyflow",
+    "https://[::]/supplyflow",
+    "https://[::ffff:127.0.0.1]/supplyflow",
+    "https://unlisted.example.com/supplyflow",
+    "not a url",
+  ]) assert.equal(isAllowedWebhookUrl(rejected, allowed), false, rejected);
+});
+
+test("delivery never follows redirects and reports them as failures", async () => {
+  let calls = 0;
+  const outcome = await deliverWebhook(
+    resolveTarget(claimedRow())!,
+    new Set(["receiver.example.test"]),
+    async (_input, init) => {
+      calls += 1;
+      assert.equal(init?.redirect, "manual");
+      assert.ok(init?.signal);
+      return new Response(null, { status: 302, headers: { Location: "https://127.0.0.1/" } });
+    },
+  );
+  assert.equal(calls, 1);
+  assert.deepEqual(outcome, { ok: false, code: 302, error: "target_redirect_rejected" });
 });

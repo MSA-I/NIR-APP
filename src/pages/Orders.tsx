@@ -29,13 +29,13 @@ type DraftListRow = {
 
 export function OrdersList() {
   const navigate = useNavigate();
-  const { profile, org } = useAuth();
+  const { profile, org, organizationAccess } = useAuth();
   const toast = useToast();
   const [statusFilter, setStatusFilter] = useParamState('status', 'open');
   const [cancelTarget, setCancelTarget] = useState<OrderRow | null>(null);
   const [draftCancelTarget, setDraftCancelTarget] = useState<DraftListRow | null>(null);
   const [busy, setBusy] = useState(false);
-  const canWrite = !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canWrite = organizationAccess.canWrite && !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
 
   const { data, loading, error, refetch } = useQuery(async () => {
     const [orders, drafts] = await Promise.all([
@@ -197,7 +197,7 @@ type FullOrder = PurchaseOrder & {
 export function OrderDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { profile, org } = useAuth();
+  const { profile, org, organizationAccess } = useAuth();
   // The order sheet and the WhatsApp message both leave the building — they must carry
   // the buying organization's own name, never the vendor's or another tenant's.
   const orgName = org?.name ?? '';
@@ -226,7 +226,7 @@ export function OrderDetail() {
     setParams(next, { replace: true });
   }, [params, order, setParams]);
 
-  const canWrite = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canWrite = organizationAccess.canWrite && profile && ['owner', 'office', 'kitchen'].includes(profile.role);
 
   async function setStatus(
     status: PoStatus,

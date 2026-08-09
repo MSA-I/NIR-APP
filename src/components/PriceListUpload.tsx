@@ -16,6 +16,7 @@ import { Modal, Note, ErrorNote, useToast } from './ui';
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow, nameKey, groupSkipped } from '../lib/importSheet';
 import { fetchAll } from '../lib/supabasePaging';
 import { todayISO } from '../lib/format';
+import { canStartSupplierCommerce, NEW_COMMERCE_SUPPLIER_STATUSES } from '../lib/status';
 import type { Supplier } from '../lib/types';
 import { TusUploadCancelledError, TusUploadError, tusUploadToDocuments } from '../lib/tusUpload';
 import { SupplierSelectField, useQuickSupplier } from './QuickSupplierPicker';
@@ -177,8 +178,9 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
 }) {
   const navigate = useNavigate();
   const toast = useToast();
-  const { profile } = useAuth();
-  const isStaff = profile?.role === 'owner' || profile?.role === 'office';
+  const { profile, organizationAccess } = useAuth();
+  const isStaff = (organizationAccess?.canWrite ?? true)
+    && (profile?.role === 'owner' || profile?.role === 'office');
   const orgId = profile?.org_id ?? '';
 
   const [supplierId, setSupplierId] = useState(supplier?.id ?? '');
@@ -192,8 +194,16 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: suppliers, loading: suppliersLoading, error: suppliersError } = useQuery(async () => {
-    if (supplier) return [supplier];
-    return unwrap(await supabase.from('suppliers').select('id, name').is('deleted_at', null).order('name')) as Pick<Supplier, 'id' | 'name'>[];
+    if (supplier) {
+      const row = unwrap(await supabase.from('suppliers').select('id, name, status')
+        .eq('id', supplier.id).is('deleted_at', null).single()) as Pick<Supplier, 'id' | 'name' | 'status'>;
+      if (!canStartSupplierCommerce(row.status)) {
+        throw new PriceDocumentError('הספק לא פעיל לפעילות מסחרית חדשה. מחירון חדש לא ייקלט.');
+      }
+      return [row];
+    }
+    return unwrap(await supabase.from('suppliers').select('id, name').is('deleted_at', null)
+      .in('status', NEW_COMMERCE_SUPPLIER_STATUSES).order('name')) as Pick<Supplier, 'id' | 'name'>[];
   });
 
   // The dialog that already creates new *products* on the fly stopped dead at a supplier it did
@@ -436,7 +446,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
               ? 'קובץ Excel/CSV נקלט מיד לאחר תצוגה מקדימה; PDF, תמונה או Word עוברים זיהוי אוטומטי ומסך בדיקה. כשמדיניות הקליטה מופעלת, שורה לא מותאמת עם שם ומק״ט או ברקוד יכולה ליצור מוצר חדש; אחרת היא ממתינה לאישור.'
               : 'המקור נשמר כמסמך הספק שלך ומועבר למסך בדיקה. כשמדיניות הקליטה מופעלת, שורה לא מותאמת עם שם ומק״ט או ברקוד יכולה ליצור מוצר חדש; אחרת צוות הלקוח מכריע בה.'}
           </Note>
-          {supplier ? null : suppliersError ? <ErrorNote message={suppliersError} /> : (
+          {suppliersError ? <ErrorNote message={suppliersError} /> : supplier ? null : (
             <SupplierSelectField picker={picker} id="price-upload-supplier" label="ספק *"
               placeholder={suppliersLoading ? 'טוען ספקים…' : 'בחירת ספק'}
               value={supplierId} disabled={suppliersLoading || busy} />

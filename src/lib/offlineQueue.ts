@@ -4,8 +4,13 @@ import { unwrap } from './useQuery';
 import { toHebrewError } from './errors';
 import { BUSINESS_TIME_ZONE } from './format';
 import {
+  configureOfflineScopeResolver,
+  getRememberedOfflineScope,
   indexedDbQueueStore,
   isOfflineStorageAvailable,
+  OfflineStorageError,
+  rememberOfflineScope,
+  type OfflineScope,
   type OfflineQueueStore,
   type OfflineQueuedAction,
   type SaveGoodsReceiptPayload,
@@ -28,9 +33,8 @@ import {
  *    (:97-98). Sending business writes with stale credentials is how a queue turns into a
  *    permission bypass, and RLS is not weakened for convenience.
  *
- * There is **no service worker involved**: this is plain JS plus IndexedDB. App-shell precaching is
- * a separate, deliberately deferred decision (OPEN-DECISIONS #101), and its absence is stated out
- * loud rather than papered over: a reload while offline loses the shell; the queue survives it.
+ * The queue itself is plain JS plus IndexedDB. The service worker caches only the static app shell;
+ * no API response or business data is cached, and every queued write still crosses the live RPC.
  */
 
 /* ============================ conflict codes ============================ */
@@ -64,6 +68,24 @@ const NETWORK_PATTERN =
 export function isTransportFailure(error: unknown): boolean {
   const raw = error instanceof Error ? error.message : String(error ?? '');
   return NETWORK_PATTERN.test(raw);
+}
+
+const PERMANENT_SCOPE_PATTERN =
+  /not_authorized|organization_not_active|profile_inactive|permission denied|row-level security|invalid jwt|jwt expired|PGRST301|42501|\b401\b|\b403\b/i;
+
+/** Authorization/scope failures need intervention; retrying them on every reconnect cannot help. */
+export function isPermanentQueueFailure(error: unknown): boolean {
+  const raw = error instanceof Error ? error.message : String(error ?? '');
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code ?? '')
+    : '';
+  return PERMANENT_SCOPE_PATTERN.test(`${code} ${raw}`);
+}
+
+function localStorageMessage(error: unknown): string {
+  return error instanceof OfflineStorageError
+    ? error.message
+    : 'לא ניתן לשמור את הקבלה במכשיר. הפעולה לא הוכנסה לתור.';
 }
 
 /* ============================ the audited reason (#100) ============================ */
@@ -150,7 +172,10 @@ export interface SubmitReceiptInput {
 export interface OfflineQueueDeps {
   store: OfflineQueueStore;
   send: (payload: SaveGoodsReceiptPayload) => Promise<{ receipt_id: string }>;
-  hasUsableSession: () => Promise<boolean>;
+  /** A fresh check; called immediately before every network write. */
+  getUsableActorId: () => Promise<string | null>;
+  /** Scope for local persistence. May come from the actor's remembered offline binding. */
+  resolveScope: () => Promise<OfflineScope | null>;
   isOnline: () => boolean;
   now: () => number;
   storageAvailable: () => boolean;
@@ -198,26 +223,43 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
   });
 
   async function refresh(): Promise<OfflineQueueSnapshot> {
-    const [actions, pendingUploads, lastSuccessfulSyncAt] = await Promise.all([
-      deps.store.listQueuedActions(),
-      deps.store.countPendingPhotos(),
-      deps.store.getLastSuccessfulSyncAt(),
-    ]);
-    snapshot = {
-      pendingActions: actions.length,
-      pendingUploads,
-      lastSuccessfulSyncAt,
-      syncing,
-      online: deps.isOnline(),
-      sessionExpired,
-      storageAvailable: deps.storageAvailable(),
-      actions: actions.map(view),
-    };
+    try {
+      const [actions, pendingUploads, lastSuccessfulSyncAt] = await Promise.all([
+        deps.store.listQueuedActions(),
+        deps.store.countPendingPhotos(),
+        deps.store.getLastSuccessfulSyncAt(),
+      ]);
+      snapshot = {
+        pendingActions: actions.length,
+        pendingUploads,
+        lastSuccessfulSyncAt,
+        syncing,
+        online: deps.isOnline(),
+        sessionExpired,
+        storageAvailable: deps.storageAvailable(),
+        actions: actions.map(view),
+      };
+    } catch (error) {
+      console.error('[supplyflow] failed to read offline queue', error);
+      // Keep the last known counts. Zero would be a fabricated claim that no local work exists.
+      snapshot = {
+        ...snapshot,
+        syncing,
+        online: deps.isOnline(),
+        sessionExpired,
+        storageAvailable: false,
+      };
+    }
     emit();
     return snapshot;
   }
 
   async function markDraftSynced(action: OfflineQueuedAction, at: number) {
+    if (action.payload.p_complete) {
+      await deps.store.deleteReceiptDraft(action.orderId);
+      await deps.store.deleteOpenOrder(action.orderId);
+      return;
+    }
     const draft = await deps.store.getReceiptDraft(action.orderId);
     if (!draft || draft.receiptId !== action.idempotencyKey) return;
     await deps.store.putReceiptDraft({
@@ -229,10 +271,15 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
   }
 
   async function enqueue(input: SubmitReceiptInput, reason: string): Promise<void> {
+    const scope = await deps.resolveScope();
+    if (!scope) {
+      throw new OfflineStorageError('לא ניתן לזהות את הארגון והמשתמש עבור השמירה המקומית.');
+    }
     const existing = (await deps.store.listQueuedActions())
       .find((action) => action.idempotencyKey === input.payload.p_receipt_id);
     const now = deps.now();
     if (existing) {
+      if (existing.payload.p_complete && !input.payload.p_complete) return;
       // One receipt, one queue entry: the newest local state for this key replaces the older one.
       // Two entries under one key would send the same receipt twice and invite the server's own
       // idempotency comparison to reject the second as a conflict.
@@ -250,6 +297,8 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
     }
     await deps.store.enqueueAction({
       kind: 'save_goods_receipt',
+      orgId: scope.orgId,
+      actorUserId: scope.actorUserId,
       idempotencyKey: input.payload.p_receipt_id,
       orderId: input.orderId,
       orderLabel: input.orderLabel,
@@ -267,15 +316,27 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
   async function submitReceipt(input: SubmitReceiptInput): Promise<SubmitReceiptOutcome> {
     if (!deps.isOnline()) {
       const reason = 'אין חיבור לרשת. הקבלה נשמרה במכשיר ותישלח כשהחיבור יחזור.';
-      await enqueue(input, reason);
+      try {
+        await enqueue(input, reason);
+      } catch (error) {
+        await refresh();
+        return { kind: 'rejected', message: localStorageMessage(error) };
+      }
       await refresh();
       return { kind: 'queued', reason };
     }
-    if (!(await deps.hasUsableSession())) {
+    const actorUserId = await deps.getUsableActorId();
+    const scope = await deps.resolveScope();
+    if (!actorUserId || !scope || actorUserId !== scope.actorUserId) {
       // The draft is kept and NOTHING is sent: stale credentials never carry a business write.
       sessionExpired = true;
       const reason = 'פג תוקף החיבור. הקבלה נשמרה במכשיר ותישלח לאחר התחברות מחדש.';
-      await enqueue(input, reason);
+      try {
+        await enqueue(input, reason);
+      } catch (error) {
+        await refresh();
+        return { kind: 'rejected', message: localStorageMessage(error) };
+      }
       await refresh();
       return { kind: 'queued', reason };
     }
@@ -319,7 +380,12 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
       }
       if (isTransportFailure(error)) {
         const reason = 'השליחה נכשלה בגלל תקלת רשת. הקבלה נשמרה במכשיר ותישלח בניסיון הבא.';
-        await enqueue(input, reason);
+        try {
+          await enqueue(input, reason);
+        } catch (storageError) {
+          await refresh();
+          return { kind: 'rejected', message: localStorageMessage(storageError) };
+        }
         await refresh();
         return { kind: 'queued', reason };
       }
@@ -331,7 +397,7 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
   async function sync(): Promise<OfflineQueueSnapshot> {
     if (syncing) return snapshot;
     if (!deps.isOnline()) return refresh();
-    if (!(await deps.hasUsableSession())) {
+    if (!(await deps.getUsableActorId())) {
       sessionExpired = true;
       return refresh();
     }
@@ -343,9 +409,30 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
       for (const action of actions) {
         // A conflict is a pending human decision, not a transport problem. Re-sending it would
         // just re-collect the same rejection and bury the decision under attempt counters.
-        if (action.state === 'conflict' || action.id == null) continue;
+        if (action.state === 'conflict' || action.state === 'needs_attention' || action.id == null) continue;
         const sentAt = deps.now();
         try {
+          // Do not rely on the actor checked at the start of the batch. A sign-out/sign-in can
+          // happen between two actions, so identity and scope are rechecked immediately before
+          // every RPC invocation.
+          const actorUserId = await deps.getUsableActorId();
+          const scope = await deps.resolveScope();
+          if (!actorUserId || !scope) {
+            sessionExpired = true;
+            break;
+          }
+          if (
+            !action.actorUserId
+            || !action.orgId
+            || actorUserId !== action.actorUserId
+            || scope.actorUserId !== action.actorUserId
+            || scope.orgId !== action.orgId
+          ) {
+            // Do not mutate another actor's record either. It stays bound to its owner and becomes
+            // visible again only when that same owner signs in.
+            sessionExpired = true;
+            break;
+          }
           await deps.send({
             ...action.payload,
             p_reason: receiptAuditReason(action.payload.p_reason, action.observedAt, sentAt),
@@ -357,12 +444,13 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
           // Continue after failure (the runUploadBatch rule): every remaining action still gets
           // its turn, and each keeps its own reason so a retry targets only what failed.
           const conflict = receiptConflictCode(error);
+          const permanentFailure = isPermanentQueueFailure(error);
           await deps.store.putQueuedAction({
             ...action,
             attempts: action.attempts + 1,
-            state: conflict ? 'conflict' : 'failed',
+            state: conflict ? 'conflict' : permanentFailure ? 'needs_attention' : 'failed',
             lastError: toHebrewError(error),
-            lastErrorCode: conflict,
+            lastErrorCode: conflict ?? (permanentFailure ? 'permanent_scope_rejection' : null),
             lastAttemptAt: sentAt,
           });
         }
@@ -411,21 +499,67 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
 
 /* ============================ the app's instance ============================ */
 
-async function hasUsableSession(): Promise<boolean> {
+async function getUsableActorId(): Promise<string | null> {
   try {
     const { data, error } = await supabase.auth.getSession();
-    if (error || !data.session) return false;
+    if (error || !data.session) return null;
     const expiresAt = data.session.expires_at ? data.session.expires_at * 1000 : null;
-    return expiresAt === null || expiresAt > Date.now();
+    return expiresAt === null || expiresAt > Date.now() ? data.session.user.id : null;
   } catch {
-    return false;
+    return null;
   }
 }
+
+let serverVerifiedScope: OfflineScope | null = null;
+
+async function resolveProductionScope(): Promise<OfflineScope | null> {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    const actorUserId = data.session?.user.id ?? null;
+    if (error || !actorUserId) return null;
+    if (serverVerifiedScope?.actorUserId === actorUserId) return serverVerifiedScope;
+
+    let remembered: OfflineScope | null = null;
+    try {
+      remembered = await getRememberedOfflineScope(actorUserId);
+    } catch {
+      // The profile can still provide the scope. The actual write will report an IndexedDB failure.
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return remembered;
+
+    const profileResult = await supabase
+      .from('profiles')
+      .select('org_id')
+      .eq('id', actorUserId)
+      .maybeSingle();
+    const orgId = profileResult.data?.org_id;
+    if (!profileResult.error && orgId) {
+      const scope = { actorUserId, orgId };
+      serverVerifiedScope = scope;
+      try {
+        await rememberOfflineScope(scope);
+      } catch {
+        // Do not mask the authenticated scope; a subsequent local write will fail explicitly.
+      }
+      return scope;
+    }
+
+    // Remembered scope is only a local ownership binding. It cannot authorize a send: the live
+    // actor check above and the server-side RPC scope still decide whether a write is permitted.
+    return remembered;
+  } catch {
+    return null;
+  }
+}
+
+configureOfflineScopeResolver(resolveProductionScope);
 
 export const offlineQueue = createOfflineQueue({
   store: indexedDbQueueStore,
   send: async (payload) => unwrap(await supabase.rpc('save_goods_receipt', payload)) as { receipt_id: string },
-  hasUsableSession,
+  getUsableActorId,
+  resolveScope: resolveProductionScope,
   isOnline: () => typeof navigator === 'undefined' || navigator.onLine !== false,
   now: () => Date.now(),
   storageAvailable: isOfflineStorageAvailable,

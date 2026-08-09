@@ -2,7 +2,10 @@
 
 ## תמצית
 
-SPA ב-React 19 + TypeScript (Vite) מול Supabase כ-backend יחיד: PostgreSQL עם Row-Level Security לכל טבלה, Supabase Auth (אימייל+סיסמה), ו-Storage פרטי למסמכים. אין שרת ביניים — כללי האבטחה נאכפים ב-DB (RLS + פונקציות SECURITY DEFINER), והלוגיקה העסקית (בדיקות כפילות, פיצול הזמנות, הצעות התאמת בנק) ממומשת בשכבת `src/lib` בצד הלקוח מעל שאילתות מוגנות-RLS.
+SPA ב-React 19 + TypeScript (Vite) מול Supabase כ-backend יחיד: PostgreSQL עם Row-Level Security,
+Supabase Auth, ‏Storage פרטי ו־Edge Functions תחומות. בפעולות כספיות הלקוח מחשב preview ותצוגה בלבד;
+פקודות כסף, אישור 3-way, lifecycle, idempotency, audit וגבולות דייר/יחידה נאכפים ב־DB.
+‏`service_role` נשאר רק בשרת.
 
 **חריגה מכוונת מ"אין שרת ביניים" (שלב 2, אירועי Push וקליטת קבצים לא־מהימנים).** פעולות מערכת שחוצות RLS מחזיקות את
 מפתח ה־`service_role` רק ב־Supabase Edge Functions — לעולם לא בדפדפן. `admin-provision` ו־
@@ -48,8 +51,12 @@ supabase/
                            0038 qualification למדיניות Storage · 0039 שחזור CRUD ל-service_role
                            0040 מצב מסירת התראות server-only · 0041 מעברי סטטוס הזמנה מנומקים
                            0042 ACL פרופיל · 0043 פיצול הזמנה · 0044 פריטים להזמנה הבאה
-                           0045 חוזה עיבוד מסמכים, תור ו-Storage
-  functions/               admin-provision · send-invite · send-push · submit-price-list — service_role נשאר בשרת
+                           0045–0085 עיבוד/פרשנות מסמכים, review, אוטונומיה וקליטת מחירון
+                           0086–0089 reprocess, rollback, calibration, shadow והקשחת scope
+                           0090–0097 גבול ספק פיננסי, מיתוג, 3-way, dashboard, trial, portal, מלאי ו־offboarding/export
+  functions/               admin-provision · send-invite · send-push · submit-price-list
+                           interpret-document · outbox-worker · upload-organization-logo · tenant-export
+                           service_role נשאר בשרת בלבד
   seed.sql                 seed ניטרלי לדייר חדש (ארגון + קטגוריות)
   demo/                    חבילת הדמו כדייר נפרד + reset + audit בידוד
 scripts/                   כלי admin + בדיקות P0–P4 למסד מקומי, Edge runtime ולוגיקה בדפדפן
@@ -61,15 +68,16 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 |---|---|---|
 | `/login` | התחברות | כולם |
 | `/dashboard` | מרכז הבקרה (KPI + גרפים + משימות) | `owner`, `office` |
-| `/suppliers`, `/suppliers/:id` | ספקים + כרטיס ספק | `owner`, `office`, `kitchen`; ל־`accountant` הקשר ספק חשבונאי מינימלי |
+| `/suppliers`, `/suppliers/:id` | ספקים + כרטיס רכש | `owner`, `office`, `kitchen`; `accountant` אינו מקבל את כרטיס הרכש |
 | `/products` | מוצרים | `owner`, `office`, `kitchen` |
 | `/prices` | מחירונים + היסטוריה + ייבוא Excel | `owner`, `office`, `kitchen` |
-| `/my-prices` | מחירון עצמי + הגשה חודשית וקבלות | `supplier` של הספק שלו בלבד |
+| `/my-prices` | מחירון/הגשה חודשית, מסמכים, הזמנות שהונפקו ואישור קבלת הזמנה | `supplier` של הספק שלו בלבד |
 | `/orders/new` | הזמנה מרוכזת ← השוואת ספקים ← פיצול | `owner`, `office`, `kitchen` |
 | `/orders`, `/orders/:id` | הזמנות + תצוגת הדפסה | קוראים |
 | `/receiving`, `/receiving/:orderId` | קבלת סחורה (מובייל) | `owner`, `office`, `kitchen` |
 | `/invoices`, `/invoices/new`, `/invoices/:id` | חשבוניות + בדיקות אוטומטיות; יצירה מקושרת מציגה מראש הקשר הזמנה/קבלה אנושי שנקרא תחת RLS ושולחת ל־`create_invoice` רק מזהים שנפתרו ואומתו | קוראים / כותבים |
 | `/documents` | גלריית מסמכים + סינון + שיוך לחשבונית/קבלת סחורה | `owner`, `office`, `kitchen`; ל־`accountant` מסמכי חשבונית מאושרת/תשלום בלבד |
+| `/documents/operations` | מרכז תפעול, ניסיונות, כשל, reprocess, calibration ו־drift | `owner` |
 | `/inbox` | הפניה ל־`/documents?filing=unfiled` | משתמשים מורשים |
 | `/credits` | זיכויים | קוראים |
 | `/payment-requests` | דרישות תשלום + אישורים | `owner`, `office`; ל־`accountant`/`payer` מאושרות בלבד |
@@ -80,6 +88,9 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 | `/alerts` | מרכז התראות חי + סימון התראות פעמון כנקראו | `owner`, `office` |
 | `/expenses` | ריכוז הוצאות לפי ספק + פירוט קטגוריות משני | `owner`, `accountant` |
 | `/reports` | דוח חודשי חי + גרסאות snapshot סופיות ונעולות לפי ישות משפטית | `owner`, `accountant` |
+| `/finance/suppliers/:id` | כרטיס ספק פיננסי מצומצם ללא קטלוג/מחירון/דירוג רכש | `owner`, `accountant` |
+| `/inventory` | יתרה מדודה, תנועות והצעות רכש read-only | `owner`, `office`, `kitchen` |
+| `/forgot-password`, `/reset-password` | שחזור עצמי דרך המייל המאומת | משתמש Auth |
 | `/audit` | יומן ביקורת | `owner`, `accountant` |
 | `/settings` | משתמשים + הגדרות עסק | `owner` |
 | `/admin` | lifecycle של ארגונים | מפעיל פלטפורמה בלבד |
@@ -89,7 +100,7 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 | ישות/פעולה | `owner` מנהל/בעלים | `office` מנהל רכש | `accountant` הנהלת חשבונות | `payer` | `kitchen` | `supplier` |
 |---|---|---|---|---|---|---|
 | ספקים, מוצרים, מחירונים | צפייה/ניהול | צפייה/ניהול | ספק בלבד, ללא קטלוג/מחירון | ספק בדרישה מאושרת | ללא שינוי | קטלוג + מחירון של עצמו בלבד |
-| הזמנות וקבלות | צפייה/ניהול | צפייה/יצירה/שינוי | רק הזמנה/קבלה המקושרת לחשבונית מאושרת | — | ללא שינוי | — |
+| הזמנות וקבלות | צפייה/ניהול | צפייה/יצירה/שינוי | רק הזמנה/קבלה המקושרת לחשבונית מאושרת | — | ללא שינוי | הזמנות שהונפקו לאותו ספק; אישור `sent→confirmed` בלבד |
 | חשבוניות | צפייה/יצירה/אישור | צפייה/יצירה/אישור | צפייה במאושרות בלבד | מקושרות לדרישה מאושרת | ללא שינוי | — |
 | זיכויים | צפייה ומעברי סטטוס | צפייה בסטטוס בהקשר רכש בלבד | צפייה ומעברי סטטוס חשבונאיים | — | ללא שינוי | — |
 | דרישות תשלום | צפייה/יצירה/אישור | צפייה/יצירה/אישור | מאושרות בלבד | מאושרות בלבד | — | — |
@@ -105,9 +116,10 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 - `profiles.id`, ‏`profiles.org_id` ועמודות הזהות הדיירית אינן ניתנות לשינוי דרך JWT. משתמש
   משנה בעצמו רק שם/טלפון; owner משנה `role`/`active`/`supplier_id` של חבר בארגונו דרך
   `manage_profile_access`, עם סיבה ו־audit באותה טרנזקציה.
-- owner משנה רק `organizations.name`/`vat_rate`/`settings`. ‏`status` ו־`trial_ends_at`
-  משתנים רק דרך `set_organization_lifecycle` בידי platform admin, עם נעילה וסיבה. השעיית
-  ארגון מאפסת בפועל את `auth_org()` לכל חבריו, וגם `send-push` מסנן ארגון מושעה במפורש.
+- owner משנה רק שדות ארגון שהחוזה מתיר. ‏`status` ו־`trial_ends_at` משתנים רק דרך
+  `set_organization_lifecycle` בידי platform admin, עם step-up, נעילה וסיבה. Trial הוא 30 יום,
+  אחריו 7 ימי Grace מלאים ואז read-only; Reactivation מחזיר ל־`active`. השעיה נשארת מסלול מנהלי
+  נפרד שמאפס בפועל את `auth_org()` לחברי הארגון.
 - כל קשר עסקי דיירי נאכף באמצעות `org_id` ו־FK מורכב אל `(org_id,id)` או guard פולימורפי
   מפורש. שבע טבלאות ילד/קישור שלא נשאו דייר קיבלו `org_id`; ‏`audit_logs.user_id` הוא החריג
   המתועד, מפני שפעולת platform יכולה להירשם בדייר שהמפעיל אינו חבר בו.
@@ -159,15 +171,16 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 - **יתרות מחושבות, לא מאוחסנות:** יתרת חשבונית = סה״כ − הקצאות תשלום − זיכויים (offset/closed); יתרת ספק נגזרת ממנה. `invoices.payment_status` מרוענן ע״י RPC בטוח (`refresh_invoice_payment_status`). **המשטח הוא פונקציות ולא views** — `p0_invoice_balance_rows()` ו־`p0_supplier_balance_rows()` (`0022:397,440`); ראה חוזה אבטחת P0 לעיל.
 - **snapshot מחירים:** `purchase_order_items.unit_price` נקבע ברגע ההזמנה; `price_history` שומר כל שינוי.
 - **הגשת מחירון היא ledger immutable:** ‏`supplier_price_submissions` שומר חודש, revision,
-  checksum, נתיב קובץ, סטטוס ומוני נקלט/נדחה/ללא־שינוי. תיקון אינו דורס קבלה קודמת, ומוצר
-  לא מוכר לעולם אינו יוצר רשומת `products` מתוך שם שהעלה ספק.
+  checksum, נתיב קובץ, סטטוס ומוני נקלט/נדחה/ללא־שינוי. תיקון אינו דורס קבלה קודמת. intake
+  אוטומטי רשאי ליצור מוצר רק כאשר יש שם **וגם** מק״ט או ברקוד חזק; שם לבדו לעולם אינו זהות התאמה.
 - **טיוטת הזמנה היא אישית ועמידה:** `purchase_requests.created_by` קובע בעלות; RPC אטומי מחליף את
   פריטי הטיוטה, ובסיום נועל אותה, מאמת מחיר נוכחי ויוצר את כל הזמנות הספק או אף אחת.
 - **מסמך ותוכן עסקי הם שני צירים:** `documents.entity_type/entity_id` קובעים תיוק, ואילו
   `document_kind/supplier_id/document_date` מאפשרים גלריה וסינון בלי לנחש את סוגו של מסמך היסטורי.
 - **מקור, חילוץ ואמת עסקית הם שלושה צירים:** `documents` שומר את המקור; תור העיבוד מנהל
-  עבודה ו-retry; ‏`document_extractions` שומר ראיית חילוץ immutable. פלט OCR או parser הוא
-  הצעה בלבד ואינו מעדכן חשבונית, קבלה, זיכוי, מחיר או יתרה.
+  עבודה ו-retry; ‏`document_extractions` שומר ראיית חילוץ immutable. פלט OCR/parser נשאר ראיה
+  בלתי־משתנה. mutation אוטומטי מותר רק דרך מדיניות מפורשת ופקודת שרת ייעודית עם ledger, סף,
+  idempotency וביטול; יתרה ותשלום אינם נכתבים ישירות מפלט מודל.
 - **מחיקה רכה בלבד** לרשומות כספיות (`deleted_at` / סטטוס בוטל).
 - **ביקורת server-authored:** טריגרי DB על כל היישויות הרגישות גוזרים old/new, משתמש ודייר
   מן המוטציה. פעולות פקודה אטומיות כותבות סיבה באותו RPC; הדפדפן אינו רשאי להוסיף שורת audit.
@@ -184,9 +197,59 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
   הסלמת warning→critical ומחזור חדש לאחר פתרון. מ־`0024` ה־claim ויצירת שורות הנמענים הם
   עסקה אחת; שורת notification היא outbox עמיד, וכשל Push משאיר `push_sent_at` ריק לניסיון חוזר.
 
-## חוזה עיבוד מסמכים חכם — תשתית בלבד
+## חוזים שנוספו בקמפיין 09.08.2026
 
-מיגרציה `0045_smart_document_processing.sql` מוסיפה את `document_processing_jobs` ואת
+### התאמת חשבונית תלת־צדדית
+
+`0092` שומרת ראיית שורות חשבונית immutable ומקשרת שורה במפורש לפריטי הזמנה/קבלה. זיהוי מוצר
+מעדיף מזהה מוצר, מק״ט ספק/מוצר וברקוד; שם אינו סמכות. חשבונית יכולה להיקשר למספר הזמנות, אך שתי
+התאמות אפשריות אינן נפתרות לפי סדר. המרות אוטומטיות מוגבלות ל־g↔kg ול־ml↔liter; אריזה דורשת יחס
+מוצר מאושר. יחידה שלמה דורשת התאמה מלאה, משקל/נפח מאפשרים ±2%, מחיר עד 1% הוא warning, שיעור
+מע״מ חייב להתאים, ועיגול מוגבל ל־₪0.05 לשורה/₪1 לחשבונית. החשבון והאחוז נשמרים גם בתוך tolerance.
+
+`get_invoice_three_way_match` מחזירה assessment שרתי עם reasons וחומרה. אישור חשבונית נחסם
+בממצאים שהכרעת #125 מגדירה. כל אישור נועל טרנזקציונית את מרחב ארגון+ספק ושומר snapshot immutable
+של ה-assessment; בדיקת overbilling מצטברת קוראת snapshots קודמים ולא זהות מוצר חיה שניתנת לעריכה.
+כך שני אישורים מקבילים אינם יכולים לעבור יחד מעל הכמות שהתקבלה. רק owner עם password AMR טרי
+וסיבה יכול ליצור override immutable; כפילות חשבונית ודאית אינה ניתנת לעקיפה. office רשאי לתקן
+ראיית שורה/שיוך אך לא לעקוף חסימה. match set מפורש מחליף רק שורות שהוזכרו בו ושומר התאמה
+דטרמיניסטית של שורות אחרות.
+
+### Dashboard read model
+
+`management_dashboard_snapshot(date)` הוא `SECURITY INVOKER` ושומר tenant/RLS. `unmatched` ו־
+`suggested` נפרדים; חשבוניות ודרישות תשלום ממתינות נפרדות; overdue נגזר רק מ־payment request פעילה
+עם `due_date`. אם קיימת דרישה פעילה כלשהי ללא `due_date`, הכיסוי חלקי וכל משפחת מדדי האיחור
+מוחזרת `null`, ולכן הלקוח מציג `—` והסבר ולא אפס חלקי. תור פעיל ריק שנקרא בהצלחה הוא מדידה מלאה
+ומחזיר אפס אמיתי; כשל קריאה נשאר `null`.
+
+### Offline, SaaS, ספקים ומלאי
+
+- Service Worker שומר app shell ונכסים סטטיים בלבד; API/נתונים פיננסיים אינם נשמרים. טיוטת קבלה,
+  מפתח idempotency ותמונה נשמרים ב־IndexedDB; קונפליקט עוצר לאדם והצלחה אינה מוצגת לפני RPC.
+- `0094` אוכפת Trial ‏30+7 ואז read-only ב־DB/Storage/Edge/UI. צפייה וייצוא נשארים; mutation/upload
+  נחסמים. הלקוח צורך ומרענן `organization_access_state` מן השרת ואינו מכריע פקיעה משעון המכשיר.
+  `suspended` הוא מצב נפרד. אין pricing plan שמוסתר בקוד.
+- `0087` חוסמת פעילות מסחרית חדשה עם ספק inactive ומשאירה היסטוריה וסגירה פיננסית. `0090` חושפת
+  ל־accountant projection פיננסי נפרד. `0095` מחזירה לספק רק הזמנות שהונפקו עבור `auth_supplier()`
+  ומאפשרת רק `sent→confirmed`, ללא שינוי תאריך אספקה.
+- `0096` הוא read model על ledger המלאי. בלי ספירה פיזית יתרה וצפי הם unknown; הצעת reorder ומחיר
+  ספק הן read-only ואינן יוצרות הזמנה.
+- `0097` מוסיפה בקשת offboarding שמחילה read-only מיידי, ביטול owner עד 30 יום, הפעלה מחדש בידי
+  Platform Admin עד 120 יום, ו־export מלא עמיד בדפי CSV/JSON ומסמכי מקור. חלקים נכתבים לאחסון
+  פרטי עם hash ו־manifest; broker מנפיק קישור בר־ביטול ל־7 ימים ומאמת אותו מחדש בכל הורדה.
+  אין purge אוטומטי: retention ו־legal hold נשארים fail-closed עד executor ציות ייעודי.
+
+### אינטגרציות ואבטחת scope
+
+Domain events ו־transactional outbox שומרים את העסקה בלתי־תלויה ביעד, עם correlation,
+idempotency, HMAC, retries ו־dead-letter. **Live Integration Proof הוא DEFERRED** עד יעד ו־credentials
+מפורשים. `0088` מחליפה marker טקסטואלי ב־lexer של SQL, קריאה executable ו־body hash; רשם החריגים
+נשאר גלוי וריקונו נשאר עבודה פונקציה־פונקציה.
+
+## חוזה עיבוד מסמכים ואוטומציה — מצב נוכחי
+
+מיגרציה `0045_smart_document_processing.sql` יצרה את `document_processing_jobs` ואת
 `document_extractions` לצד רשם המקור הקיים. לכל שורה `org_id`, קשרים דייריים מורכבים ו-RLS;
 תוצאה שנשמרה אינה נערכת או נמחקת. עיבוד חוזר יוצר job חדש ושומר את הראיות הקודמות.
 
@@ -204,9 +267,16 @@ Storage; אובייקט בלי `eTag` אינו נכנס לתור.
 100 עמודי PDF, ‏5,000 שורות spreadsheet, ‏2 מיליון תווי טקסט ו-100MB לאחר decompression.
 קובץ מוצפן, פגום או לא נתמך נכשל בקוד מפורש ללא fallback שקט.
 
-החוזה הזה אינו טוען שמנוע OCR פרטי, parser, פרשנות Claude, מסך review או bridge למחירון
-כבר מומשו. אלה צרכנים מאוחרים של התור; בפרט, מחיר מאושר ממשיך להיכתב רק דרך
-`submit_supplier_price_list`.
+**הערת היסטוריה:** ב־`0045` מנוע החילוץ, הפרשנות, review וה־bridge למחירון עוד לא היו קיימים.
+מאז נמסרו `extract-document`/`interpret-document`, ראיות חילוץ ופירוש immutable, מסך review,
+סיווג אוטומטי וקליטת מחירון פר־שורה דרך פקודת המחיר הסמכותית. `0086` מוסיפה reprocess מנומק
+ו־rollback לפעולה אוטומטית; `0089` מוסיפה Shadow predictions, החלטות אדם בגרסאות, calibration
+metrics, drift read models ומרכז תפעול. שינוי fingerprint מבני לא־מוכר מעביר ל־Shadow; מדדי drift
+מספריים נשמרים אך אינם מפעילים threshold אוטומטי.
+
+Shadow Mode קורא את אותה ראיית פירוש ומחשב `apply_existing_price`/`create_product`/`review`/
+`rejected_by_policy`, אך אינו קורא לכותב קטלוג או מחיר. שינוי סף נשאר פעולה אנושית מפורשת לאחר
+corpus; המערכת אינה "לומדת" או משנה policy מעצמה.
 
 מיגרציה `0049_document_review_mutations.sql` מוסיפה שכבת review בלבד מעל הראיות הבלתי־משתנות.
 `add_document_annotation` ממחזרת את `document_annotations` ל־annotation חד־פעמי ואישי;
@@ -228,8 +298,8 @@ suggested supplier/fields נשארים display-only עד שיוגדר עבורם
 ## גבול פקודות פיננסי P1 — ממומש מקומית
 
 > מיגרציות P0 הן `0020`–`0022`, מיגרציית P1 היא `0023`, וכולן משולבות בענף P2 המקומי.
-> מסלול שדרוג מ־`0019`, התקנה נקייה ומטריצת שני דיירים נבדקו לאחר השילוב. הן עדיין לא
-> הוחלו במסד החי ולא נפרסו.
+> מסלול שדרוג מ־`0019`, התקנה נקייה ומטריצת שני דיירים נבדקו לאחר השילוב. הערת ה־"לא נפרסו"
+> המקורית הייתה snapshot היסטורי ונמחקה; מצב הפריסה הנוכחי נרשם רק ב־`CURRENT-STATE.md` ובדוח שחרור.
 
 כל שינוי כספי בתחום P1 עובר דרך RPC אחד. הלקוח רשאי לחשב preview, אך אינו קובע `org_id`,
 משתמש מבצע, מאשר, יתרה, סטטוס נגזר או audit. ‏`p1_financial_command_guard` משתמש בסמן
@@ -328,9 +398,9 @@ snapshot מומצא ב־retry אלא נכשל ב־`month_export_legacy_snapshot_
        │
 קבלת סחורה בנייד: מלא/חלקי/חסר/פגום/הוחזר + צילום ─► עדכון סטטוס הזמנה
        │                                              └─► דרישות זיכוי אוטומטיות
-חשבונית ─► קישור הזמנה+קבלה ─► בדיקות: כפילות מספר/סכום, פער מול הזמנה,
-       │                        פער מול קבלה, דרישה קיימת, התאמת בנק, שולמה, זיכוי פתוח
-       │                        └─► קריטי: "דורשת בירור"+חריג  או  עקיפה מנומקת (ביקורת)
+חשבונית + שורות immutable ─► קישור למספר הזמנות וקבלות ─► true 3-way שורה־מול־שורה
+       │                        כמות/יחידה/מחיר/מע״מ/אריתמטיקה/כפילות/קבלה בפועל
+       │                        └─► warning  או  חסימת אישור; owner override עם step-up+סיבה+audit
 דרישת תשלום ─► בדיקות טרום-אישור ─► אישור ─► העברה לגורם המבצע
        │
 ביצוע העברה (מסך ממוקד: פרטי בנק, סכום, אסמכתא, אישור העברה)

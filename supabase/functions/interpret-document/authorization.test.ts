@@ -4,6 +4,7 @@ import {
   automaticInterpretationContextAllowed,
   applyInterpretationDecision,
   applyPriceListInterpretationDecision,
+  decideOnInterpretation,
   type DecisionRpcClient,
   resumeExistingInterpretation,
   type RpcBuilder,
@@ -395,7 +396,7 @@ Deno.test("a price list reaches its separate bounded command", async () => {
     INTERPRETATION,
     ACTOR,
   );
-  if (calls.length !== 1 || calls[0][0] !== "apply_price_list_interpretation") {
+  if (calls.length !== 1 || calls[0][0] !== "apply_eligible_price_list_interpretation") {
     throw new Error(`unexpected price-list rpc calls: ${JSON.stringify(calls)}`);
   }
   const args = calls[0][1];
@@ -407,6 +408,42 @@ Deno.test("a price list reaches its separate bounded command", async () => {
   }
   if (signals.length !== 1 || !(signals[0] instanceof AbortSignal)) {
     throw new Error("the price-list decision was issued without an abort signal");
+  }
+});
+
+Deno.test("a price list records shadow evidence before the live command", async () => {
+  const { client, calls, signals } = recordingClient({
+    data: { predicted_outcome: "would_apply", shadow_run_id: INTERPRETATION },
+    error: null,
+  });
+  await decideOnInterpretation(client, true, JOB, INTERPRETATION, ACTOR);
+  if (
+    calls.length !== 2 || calls[0][0] !== "run_price_list_shadow" ||
+    calls[1][0] !== "apply_eligible_price_list_interpretation"
+  ) {
+    throw new Error(`shadow/live ordering changed: ${JSON.stringify(calls)}`);
+  }
+  for (const [, args] of calls) {
+    if (
+      args.p_job_id !== JOB || args.p_interpretation_id !== INTERPRETATION ||
+      args.p_actor_id !== ACTOR || Object.keys(args).length !== 3
+    ) {
+      throw new Error(`unexpected price-list arguments: ${JSON.stringify(args)}`);
+    }
+  }
+  if (signals.length !== 2 || signals.some((signal) => !(signal instanceof AbortSignal))) {
+    throw new Error("shadow and live price-list commands must both be bounded");
+  }
+});
+
+Deno.test("shadow measurement failure blocks the live price-list command", async () => {
+  const { client, calls } = recordingClient({
+    data: null,
+    error: { message: "shadow unavailable" },
+  });
+  await decideOnInterpretation(client, true, JOB, INTERPRETATION, ACTOR);
+  if (calls.map(([name]) => name).join(",") !== "run_price_list_shadow") {
+    throw new Error(`shadow failure reached the live command: ${JSON.stringify(calls)}`);
   }
 });
 

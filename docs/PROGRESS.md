@@ -3,6 +3,36 @@
 > מסמך העברה בין סוכנים. **בסוף כל שלב מעדכנים אותו** לפני שעוברים לשלב הבא.
 > הסוכן הבא קורא את זה ראשון, ואז את `ARCHITECTURE.md` ו-`OPEN-DECISIONS.md`.
 
+## מצב נוכחי — קמפיין שיפור ייצור 09.08.2026
+
+**המסמך הזה הוא יומן append-only. כל סעיף מתוארך בהמשך הוא snapshot היסטורי ואינו גובר על
+הסעיף הזה או על `CURRENT-STATE.md`.** בפרט, משפטים ישנים כגון "Trial אינו נאכף", "אין app-shell
+offline", "אין כותב ל־pending_photos", "אין שורות חשבונית" או "מלאי מתקדם עתידי" הוחלפו בקוד
+הקמפיין ואינם מתארים עוד את הענף הנוכחי.
+
+**נמסר בקוד, טרם אושר לשחרור:**
+
+- `0086`–`0089`: reprocess מנומק, התאמה חזקה למחירון, rollback, calibration corpus, Shadow Mode,
+  structural drift ומרכז תפעול מסמכים. אין thresholds מספריים מומצאים ל־drift.
+- `0090`–`0091`: כרטיס ספק פיננסי בגבול שרת, מיתוג דייר בטוח ו־recovery עצמי.
+- `0092`: שורות חשבונית immutable ו־true 3-way match עם המרות/סבילויות/חסימות/override לפי
+  `OPEN-DECISIONS` #124–#125.
+- `0093`: management dashboard snapshot לפי סמנטיקת `unmatched`/`suggested`, אישורים נפרדים ו־
+  overdue רק עם `due_date`; unknown נשאר `—`.
+- `0094`: Trial ‏30 יום + 7 ימי Grace ואז read-only, עם platform-admin step-up וסיבה.
+- `0095`: פורטל ספק צר להזמנות שהונפקו ואישור `sent→confirmed` לאותו `supplier_id` בלבד.
+- `0096`: inventory read model מדוד והצעות read-only; בלי ספירה אין יתרה מומצאת.
+- Offline: app shell סטטי בלבד, טיוטה/תור/קונפליקט ב־IndexedDB ותמונות offline עם resume.
+- Platform: outbox/signing/retry/dead-letter נשמרו. הוכחת צד ג׳ חיה **DEFERRED בהחלטת בעלים** עד
+  יעד ו־credentials מפורשים ואינה blocker לשאר הקמפיין.
+
+**שערי שחרור:** `npm run build`, ‏`npm run quality`, reset/DB tests, browser/mobile/RTL/accessibility,
+Release Reviewer, commit/push, migrations/Edge/frontend production ואימות חי — כולם **PENDING**.
+אין להסיק מקיום המיגרציות או מהסעיף הזה שהן הוחלו בייצור. התוצאות ו־SHA יירשמו רק ב־
+`IMPROVEMENT-CAMPAIGN-2026-08.md` לאחר ביצוע בפועל.
+
+---
+
 **כיוון המוצר (נקבע 20.07.2026):** SupplyFlow עוברת ממערכת ללקוח יחיד ל**מוצר SaaS רב-דיירי** — מופע אחד, בסיס נתונים אחד, הפרדה בין לקוחות ב-RLS לפי `org_id`. התוכנית המלאה: `docs/SupplyFlow-SaaS-Plan.html`.
 
 **קמפיין יסודות Enterprise (04.08–06.08.2026) — ‏הושלם, מוזג, ‏**פרוס בפרודקשן**.** כל 14 הגלים

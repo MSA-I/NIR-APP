@@ -12,7 +12,7 @@ export interface StatusMeta { label: string; tone: Tone }
 const m = (label: string, tone: Tone): StatusMeta => ({ label, tone });
 
 export const ORG_STATUS: Record<string, StatusMeta> = {
-  trial: m('תקופת ניסיון', 'info'),      // §5: not a task for anyone — trial_ends_at is not enforced (OPEN-DECISIONS #15)
+  trial: m('תקופת ניסיון', 'info'),
   active: m('פעיל', 'done'),
   suspended: m('מושהה', 'alert'),
 };
@@ -30,6 +30,13 @@ export const SUPPLIER_STATUS: Record<string, StatusMeta> = {
   problematic: m('בעייתי', 'alert'),
   pending: m('ממתין לאישור', 'await'),
 };
+
+/** Inactive/pending suppliers stay visible for history and finance, but cannot start commerce. */
+export const NEW_COMMERCE_SUPPLIER_STATUSES = ['active', 'problematic'] as const;
+
+export function canStartSupplierCommerce(status: string): boolean {
+  return (NEW_COMMERCE_SUPPLIER_STATUSES as readonly string[]).includes(status);
+}
 
 export const PO_STATUS: Record<string, StatusMeta> = {
   draft: m('טיוטה', 'idle'),

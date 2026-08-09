@@ -386,12 +386,80 @@ rollback to savepoint mutation_a1;
 savepoint mutation_a5;
 create function public.p3_rogue_definer() returns bigint
 language sql stable security definer
-as 'select count(*) from public.invoices';
+as $function$
+  -- Fake enforcement markers must not satisfy A5: auth_scopes().
+  /* A block comment containing assert_unit_in_scope(null) is not enforcement either. */
+  select count(*) from public.invoices
+$function$;
 select pg_temp.p3_assert(
   exists (select 1 from private.scope_enforcement_violations()
           where assertion = 'A5' and detail like '%p3_rogue_definer%'),
-  'A5 must catch a new definer touching a scoped table with neither marker nor exemption');
+  'A5 must catch a scoped definer whose only enforcement markers are comments');
 rollback to savepoint mutation_a5;
+
+savepoint mutation_a5_string;
+create function public.p3_rogue_definer_string() returns bigint
+language sql stable security definer
+as $function$
+  select count(*) from public.invoices where 'auth_scopes()' is not null
+$function$;
+select pg_temp.p3_assert(
+  exists (select 1 from private.scope_enforcement_violations()
+          where assertion = 'A5' and detail like '%p3_rogue_definer_string%'),
+  'A5 must not accept an enforcement marker inside a string literal');
+rollback to savepoint mutation_a5_string;
+
+savepoint mutation_a5_standard_string_backslash;
+create function public.p3_rogue_definer_standard_string_backslash() returns bigint
+language sql stable security definer
+as $function$
+  select count(*) from public.invoices where '\' is distinct from 'auth_scopes()'
+$function$;
+select pg_temp.p3_assert(
+  exists (select 1 from private.scope_enforcement_violations()
+          where assertion = 'A5' and detail like '%p3_rogue_definer_standard_string_backslash%'),
+  'A5 must treat backslash as ordinary text in a standard-conforming string');
+rollback to savepoint mutation_a5_standard_string_backslash;
+
+savepoint mutation_a5_escape_string;
+create function public.p3_rogue_definer_escape_string() returns bigint
+language sql stable security definer
+as $function$
+  select count(*) from public.invoices where E'\'auth_scopes()' is not null
+$function$;
+select pg_temp.p3_assert(
+  exists (select 1 from private.scope_enforcement_violations()
+          where assertion = 'A5' and detail like '%p3_rogue_definer_escape_string%'),
+  'A5 must keep an escaped quote inside an E string and reject its fake marker');
+rollback to savepoint mutation_a5_escape_string;
+
+savepoint mutation_a5_nested_comment;
+create function public.p3_rogue_definer_nested_comment() returns bigint
+language sql stable security definer
+as $function$
+  /* outer comment /* auth_scopes() */ assert_unit_in_scope(null) */
+  select count(*) from public.invoices
+$function$;
+select pg_temp.p3_assert(
+  exists (select 1 from private.scope_enforcement_violations()
+          where assertion = 'A5' and detail like '%p3_rogue_definer_nested_comment%'),
+  'A5 must remove a nested block comment before looking for enforcement calls');
+rollback to savepoint mutation_a5_nested_comment;
+
+savepoint mutation_a5_executable_noop;
+create function public.p3_rogue_definer_executable_noop() returns bigint
+language plpgsql stable security definer
+as $function$
+begin
+  perform public.auth_scopes();
+  return (select count(*) from public.invoices);
+end
+$function$;
+select pg_temp.p3_assert(
+  exists (select 1 from private.scope_enforcement_violations()
+          where assertion = 'A5' and detail like '%p3_rogue_definer_executable_noop%'),
+  'A5 must reject an executable scope call that has no reviewed enforcement registration');
+rollback to savepoint mutation_a5_executable_noop;
 
 -- ===== (f) The exemption latch =====
 -- Tenant A holds two legal entities and two branches; the registry 0057 seeded is

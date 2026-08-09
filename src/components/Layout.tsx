@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, Warehouse } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -12,6 +12,8 @@ import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orde
 import { pendingOfflineWork } from '../lib/offlineQueue';
 import type { Role } from '../lib/types';
 import { toHebrewError } from '../lib/errors';
+import { supabase } from '../lib/supabase';
+import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/trial';
 
 // `end` switches off NavLink's default prefix matching, and belongs on every path that is a
 // parent of another path in this menu. Without it /documents and /documents/archive are both
@@ -45,6 +47,7 @@ export const NAV_SECTIONS: NavSection[] = [
     section: 'מסמכים',
     items: [
       { to: '/documents', label: 'תיקיית המסמכים', icon: FolderOpen, roles: ['owner', 'office', 'kitchen'], end: true },
+      { to: '/documents/operations', label: 'תפעול מסמכים', icon: Activity, roles: ['owner'] },
       { to: '/documents/archive', label: 'ארכיון', icon: Archive, roles: ['owner', 'office', 'kitchen'] },
     ],
   },
@@ -53,10 +56,11 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office', 'kitchen'], end: true },
       { to: '/receiving', label: 'קבלת סחורה', icon: PackageCheck, roles: ['owner', 'office', 'kitchen'] },
+      { to: '/inventory', label: 'מלאי', icon: Warehouse, roles: ['owner', 'office', 'kitchen'] },
       { to: '/suppliers', label: 'ספקים', icon: Truck, roles: ['owner', 'office', 'kitchen'] },
       { to: '/products', label: 'מוצרים', icon: Package, roles: ['owner', 'office', 'kitchen'] },
       { to: '/prices', label: 'מחירונים', icon: Tags, roles: ['owner', 'office', 'kitchen'] },
-      { to: '/my-prices', label: 'המחירון שלי', icon: Tags, roles: ['supplier'] },
+      { to: '/my-prices', label: 'פורטל הספק', icon: Tags, roles: ['supplier'] },
     ],
   },
   {
@@ -77,7 +81,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/exceptions', label: 'חריגים', icon: AlertTriangle, roles: ['owner', 'office', 'kitchen', 'accountant'] },
       { to: '/expenses', label: 'ריכוז הוצאות', icon: PieChart, roles: ['owner', 'accountant'] },
       { to: '/reports', label: 'דוח לרו״ח', icon: BarChart3, roles: ['owner', 'accountant'] },
-      { to: '/analytics', label: 'ביצועי ספקים', icon: Activity, roles: ['owner', 'office', 'accountant'] },
+      { to: '/analytics', label: 'ביצועי ספקים', icon: Activity, roles: ['owner', 'office'] },
       { to: '/audit', label: 'יומן ביקורת', icon: ScrollText, roles: ['owner', 'accountant'] },
       { to: '/settings', label: 'הגדרות', icon: Settings, roles: ['owner'] },
     ],
@@ -92,9 +96,12 @@ export const NAV_SECTIONS: NavSection[] = [
 // NAV_SECTIONS' `roles: Role[]` filter — appending a synthetic Role would misrepresent the
 // user_role enum the RLS policies are built on. It is appended after the tenant sections
 // to keep the visual separation between "running this business" and "running the platform".
-export function sectionsForRole(role: Role | undefined, isPlatformAdmin: boolean): NavSection[] {
+export function sectionsForRole(role: Role | undefined, isPlatformAdmin: boolean, canWrite = true): NavSection[] {
   const roleSections = NAV_SECTIONS
-    .map((s) => ({ ...s, items: s.items.filter((i) => role && i.roles.includes(role)) }))
+    .map((s) => ({
+      ...s,
+      items: s.items.filter((i) => role && i.roles.includes(role) && (canWrite || i.to !== '/orders/new')),
+    }))
     .filter((s) => s.items.length > 0);
   return isPlatformAdmin
     ? [...roleSections, { section: 'פלטפורמה', items: [{ to: '/admin', label: 'ניהול לקוחות', icon: Building2, roles: [] as Role[] }] }]
@@ -136,7 +143,7 @@ function pageTitleFor(pathname: string): string {
 }
 
 export default function Layout() {
-  const { profile, org, roleLabels, isPlatformAdmin, signOut } = useAuth();
+  const { profile, org, roleLabels, isPlatformAdmin, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, signOut } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const location = useLocation();
@@ -154,8 +161,11 @@ export default function Layout() {
   // Layout also renders during the initial load, before `org` arrives. Falling back to
   // the product name keeps the header honest — it is never another tenant's name.
   const orgName = org?.name ?? APP_NAME;
+  const orgLogoUrl = org?.logo_path
+    ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
+    : null;
 
-  const sections = sectionsForRole(role, isPlatformAdmin);
+  const sections = sectionsForRole(role, isPlatformAdmin, organizationAccess.canWrite);
 
   const showHeaders = showNavHeaders(sections);
 
@@ -226,8 +236,13 @@ export default function Layout() {
   const sidebar = (
     <div className="flex flex-col h-full">
       <div className="px-4 py-5 border-b border-shell-ink/10">
-        <div className="text-lg font-bold text-shell-ink truncate" title={orgName}>{orgName}</div>
-        <div className="text-xs text-shell-ink-dim">ניהול רכש ותשלומים</div>
+        <div className="flex items-center gap-2.5">
+          {orgLogoUrl && <img src={orgLogoUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg bg-white object-contain p-1" />}
+          <div className="min-w-0">
+            <div className="text-lg font-bold text-shell-ink truncate" title={orgName}>{orgName}</div>
+            <div className="text-xs text-shell-ink-dim">ניהול רכש ותשלומים</div>
+          </div>
+        </div>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
         {sections.map((s, i) => (
@@ -306,6 +321,21 @@ export default function Layout() {
           <GlobalSearch />
           <NotificationBell />
         </header>
+      )}
+      {organizationAccess.mode === 'grace' && (
+        <div role="status" className="no-print border-b border-await-line bg-await-wash px-4 py-3 text-sm text-await-fg lg:ms-60 lg:px-6">
+          תקופת הניסיון הסתיימה. נותרו <span className="num font-semibold">{organizationAccess.graceDaysRemaining}</span> ימים להמשך שימוש מלא במערכת. לאחר מכן המערכת תעבור למצב קריאה בלבד והמידע שלך יישאר זמין לצפייה ולייצוא.
+        </div>
+      )}
+      {organizationAccess.mode === 'read_only' && (
+        <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:ms-60 lg:px-6">
+          תקופת הניסיון הסתיימה. המערכת נמצאת כעת במצב קריאה בלבד. כל המידע הקיים נשמר וזמין לצפייה ולייצוא. להפעלת המערכת מחדש יש לפנות למנהל השירות.
+        </div>
+      )}
+      {organizationAccess.mode === 'offboarding' && (
+        <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:ms-60 lg:px-6">
+          הארגון נמצא בתהליך סיום שירות והמערכת במצב קריאה בלבד. המידע נשמר וזמין לצפייה ולייצוא. בעל הארגון יכול לבטל את הבקשה בתוך 30 ימים ממועד הגשתה.
+        </div>
       )}
       {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring. */}
       <main id="main" tabIndex={-1}

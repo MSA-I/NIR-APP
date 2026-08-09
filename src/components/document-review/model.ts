@@ -127,6 +127,7 @@ const LINE_ITEM_KEY_LABELS: Record<string, string> = {
   line_amount: 'סה״כ לשורה',
   amount: 'סה״כ לשורה',
   discount: 'הנחה',
+  discount_amount: 'סכום הנחה',
   vat_rate: 'שיעור מע״מ',
   notes: 'הערות',
 };

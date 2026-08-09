@@ -10,9 +10,19 @@ import {
   InterpretationError,
   type LearningRuleSummary,
   PROMPT_VERSION,
+  PROVIDER_EGRESS_TTL_SECONDS,
   SCHEMA_VERSION,
   type SupplierCandidate,
 } from "./core.ts";
+import { organizationWriteAllowed } from "../_shared/organization-access.ts";
+import {
+  getOrganizationEgressEvidence,
+  releaseOrganizationEgress,
+  reserveOrganizationEgress,
+  type ServiceRpc,
+  type ServiceRpcResult,
+} from "../_shared/organization-egress.ts";
+import { runReservedEgress } from "../_shared/reserved-egress.ts";
 
 const PROVIDER = "openai";
 const UUID =
@@ -54,7 +64,8 @@ const MESSAGE: Record<EdgeErrorCode, string> = {
   provider_rate_limited: "שירות הפירוש עמוס כרגע. נסה שוב מאוחר יותר.",
   provider_unavailable: "שירות הפירוש אינו זמין כרגע. נסה שוב מאוחר יותר.",
   provider_rejected: "שירות הפירוש דחה את הבקשה.",
-  provider_output_truncated: "המסמך מורכב מדי לפירוש בבת אחת. נסה שוב על קטע קטן יותר.",
+  provider_output_truncated:
+    "המסמך מורכב מדי לפירוש בבת אחת. נסה שוב על קטע קטן יותר.",
   provider_invalid_output: "שירות הפירוש החזיר תוצאה שאינה ניתנת לאימות.",
   interpretation_conflict: "נשמר כבר פירוש אחר למשימה הזו.",
   persistence_failed: "שמירת פירוש המסמך נכשלה.",
@@ -242,8 +253,28 @@ function pgError(message: string): EdgeError {
   return new EdgeError("service_unavailable", 503);
 }
 
+async function organizationWriteAccessError(
+  admin: SupabaseClient,
+  orgId: string,
+): Promise<EdgeError | null> {
+  const result = await admin.rpc("service_organization_access_mode", {
+    p_org_id: orgId,
+  });
+  if (result.error) return new EdgeError("service_unavailable", 503);
+  return organizationWriteAllowed(
+      result.data ? { access_mode: String(result.data) } : null,
+    )
+    ? null
+    : new EdgeError("not_authorized", 403);
+}
+
 function providerError(error: InterpretationError): EdgeError {
   return new EdgeError(error.code, error.status);
+}
+
+function serviceRpc(admin: SupabaseClient): ServiceRpc {
+  return (name, args) =>
+    admin.rpc(name, args) as unknown as PromiseLike<ServiceRpcResult>;
 }
 
 async function markFailed(
@@ -260,12 +291,12 @@ async function markFailed(
       ? "fail_supplier_price_interpretation"
       : "fail_document_interpretation",
     {
-    p_job_id: jobId,
-    p_extraction_id: extractionId,
-    p_actor_id: actorId,
-    p_interpretation_started_at: interpretationStartedAt,
-    p_error_code: code,
-    p_error_message: null,
+      p_job_id: jobId,
+      p_extraction_id: extractionId,
+      p_actor_id: actorId,
+      p_interpretation_started_at: interpretationStartedAt,
+      p_error_code: code,
+      p_error_message: null,
     },
   );
   if (failed.error) {
@@ -398,7 +429,8 @@ export function automaticInterpretationContextAllowed(
   document: DocumentRow,
 ): boolean {
   return document.deleted_at === null && job.org_id === document.org_id &&
-    job.document_id === document.id && job.requested_by === document.uploaded_by;
+    job.document_id === document.id &&
+    job.requested_by === document.uploaded_by;
 }
 
 export async function applyPriceListInterpretationDecision(
@@ -408,14 +440,17 @@ export async function applyPriceListInterpretationDecision(
   actorId: string,
 ): Promise<void> {
   try {
-    const applied = await admin.rpc("apply_price_list_interpretation", {
-      p_job_id: jobId,
-      p_interpretation_id: interpretationId,
-      p_actor_id: actorId,
-    }).abortSignal(AbortSignal.timeout(DECISION_TIMEOUT_MS));
+    const applied = await admin.rpc(
+      "apply_eligible_price_list_interpretation",
+      {
+        p_job_id: jobId,
+        p_interpretation_id: interpretationId,
+        p_actor_id: actorId,
+      },
+    ).abortSignal(AbortSignal.timeout(DECISION_TIMEOUT_MS));
     if (applied.error) {
       console.error(
-        "apply_price_list_interpretation failed",
+        "apply_eligible_price_list_interpretation failed",
         jobId,
         interpretationId,
         applied.error.message,
@@ -426,7 +461,7 @@ export async function applyPriceListInterpretationDecision(
       ? applied.data as Record<string, unknown>
       : {};
     console.log(
-      "apply_price_list_interpretation",
+      "apply_eligible_price_list_interpretation",
       jobId,
       interpretationId,
       String(verdict.outcome ?? "unknown"),
@@ -437,12 +472,75 @@ export async function applyPriceListInterpretationDecision(
     );
   } catch (error) {
     console.error(
-      "apply_price_list_interpretation failed",
+      "apply_eligible_price_list_interpretation failed",
       jobId,
       interpretationId,
       error instanceof Error ? error.message : String(error),
     );
   }
+}
+
+// Capture the immutable prediction before the eligible price-list command can change catalog or
+// prices. Missing evidence fails closed: the interpretation remains available for human review.
+export async function recordPriceListShadow(
+  admin: DecisionRpcClient,
+  jobId: string,
+  interpretationId: string,
+  actorId: string,
+): Promise<boolean> {
+  try {
+    const measured = await admin.rpc("run_price_list_shadow", {
+      p_job_id: jobId,
+      p_interpretation_id: interpretationId,
+      p_actor_id: actorId,
+    }).abortSignal(AbortSignal.timeout(DECISION_TIMEOUT_MS));
+    if (measured.error) {
+      console.error(
+        "run_price_list_shadow failed",
+        jobId,
+        interpretationId,
+        measured.error.message,
+      );
+      return false;
+    }
+    const verdict = measured.data && typeof measured.data === "object"
+      ? measured.data as Record<string, unknown>
+      : {};
+    console.log(
+      "run_price_list_shadow",
+      jobId,
+      interpretationId,
+      String(verdict.predicted_outcome ?? "unknown"),
+      String(verdict.reason_code ?? ""),
+      String(verdict.shadow_run_id ?? ""),
+    );
+    return true;
+  } catch (error) {
+    console.error(
+      "run_price_list_shadow failed",
+      jobId,
+      interpretationId,
+      error instanceof Error ? error.message : String(error),
+    );
+    return false;
+  }
+}
+
+export async function processPriceListInterpretationDecision(
+  admin: DecisionRpcClient,
+  jobId: string,
+  interpretationId: string,
+  actorId: string,
+): Promise<void> {
+  if (!(await recordPriceListShadow(admin, jobId, interpretationId, actorId))) {
+    return;
+  }
+  await applyPriceListInterpretationDecision(
+    admin,
+    jobId,
+    interpretationId,
+    actorId,
+  );
 }
 
 // Route by the document's business kind, never by the uploader's role. A manager-uploaded price
@@ -457,7 +555,7 @@ export async function decideOnInterpretation(
 ): Promise<void> {
   await (apply ?? (
     isPriceList
-      ? applyPriceListInterpretationDecision
+      ? processPriceListInterpretationDecision
       : applyInterpretationDecision
   ))(admin, jobId, interpretationId, actorId);
 }
@@ -548,7 +646,9 @@ export async function saveAndDecideInterpretation(
     ) {
       throw new EdgeError("interpretation_in_progress", 409);
     }
-    if (saved.error?.message.includes("document_interpretation_actor_invalid")) {
+    if (
+      saved.error?.message.includes("document_interpretation_actor_invalid")
+    ) {
       throw new EdgeError("not_authorized", 403);
     }
     if (saved.error?.message.includes("document_source_changed")) {
@@ -597,6 +697,101 @@ async function existingInterpretation(
   const existing = await admin.from("document_interpretations").select("id")
     .eq("org_id", orgId).eq("job_id", jobId).maybeSingle();
   return existing.error || !existing.data ? null : String(existing.data.id);
+}
+
+interface EgressRecoveryResult {
+  interpretation_id: string;
+  job_id: string;
+  evidence_lease_id: string;
+  evidence_sha256: string;
+  provider_result_sha256: string;
+  idempotent: boolean;
+  recovered_from_failed: boolean;
+}
+
+function egressRecoveryResult(value: unknown): value is EgressRecoveryResult {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  return UUID.test(String(row.interpretation_id ?? "")) &&
+    UUID.test(String(row.job_id ?? "")) &&
+    UUID.test(String(row.evidence_lease_id ?? "")) &&
+    /^[0-9a-f]{64}$/i.test(String(row.evidence_sha256 ?? "")) &&
+    /^[0-9a-f]{64}$/i.test(String(row.provider_result_sha256 ?? "")) &&
+    typeof row.idempotent === "boolean" &&
+    typeof row.recovered_from_failed === "boolean";
+}
+
+async function recoverInterpretationFromEgress(
+  admin: SupabaseClient,
+  values: {
+    jobId: string;
+    extractionId: string;
+    actorId: string;
+    evidenceLeaseId: string;
+    evidenceSha256: string;
+    isPriceList: boolean;
+  },
+): Promise<EgressRecoveryResult> {
+  const recovered = await admin.rpc(
+    "service_recover_document_interpretation_from_egress",
+    {
+      p_job_id: values.jobId,
+      p_extraction_id: values.extractionId,
+      p_actor_id: values.actorId,
+      p_evidence_lease_id: values.evidenceLeaseId,
+      p_evidence_sha256: values.evidenceSha256,
+    },
+  ).abortSignal(AbortSignal.timeout(DECISION_TIMEOUT_MS));
+  if (recovered.error || !egressRecoveryResult(recovered.data)) {
+    if (recovered.error) throw pgError(recovered.error.message);
+    throw new EdgeError("persistence_failed", 503);
+  }
+  await decideOnInterpretation(
+    admin,
+    values.isPriceList,
+    values.jobId,
+    recovered.data.interpretation_id,
+    values.actorId,
+  );
+  return recovered.data;
+}
+
+async function recoverStoredProviderEvidence(
+  admin: SupabaseClient,
+  rpc: ServiceRpc,
+  values: {
+    orgId: string;
+    jobId: string;
+    extractionId: string;
+    actorId: string;
+    isPriceList: boolean;
+  },
+): Promise<EgressRecoveryResult | null> {
+  const stored = await getOrganizationEgressEvidence(rpc, {
+    orgId: values.orgId,
+    kind: "document_interpretation",
+    correlationId: values.jobId,
+  });
+  if (!stored) return null;
+  const interpretation = stored.evidence.interpretation;
+  if (
+    !interpretation || typeof interpretation !== "object" ||
+    Array.isArray(interpretation)
+  ) {
+    // A settled provider failure is terminal for this correlation. Never pay for or risk a
+    // second non-idempotent interpretation merely because its evidence is not recoverable.
+    throw new EdgeError("provider_unavailable", 503);
+  }
+  return recoverInterpretationFromEgress(admin, {
+    jobId: values.jobId,
+    extractionId: values.extractionId,
+    actorId: values.actorId,
+    evidenceLeaseId: stored.lease_id,
+    evidenceSha256: stored.evidence_sha256,
+    isPriceList: values.isPriceList ||
+      (interpretation as Record<string, unknown>).document_type ===
+        "price_list",
+  });
 }
 
 export async function handler(req: Request): Promise<Response> {
@@ -707,17 +902,11 @@ export async function handler(req: Request): Promise<Response> {
     return fail(cors, new EdgeError("not_authorized", 403));
   }
 
-  const orgResult = await admin.from("organizations").select("id,status")
-    .eq("id", profile.org_id).maybeSingle();
-  if (orgResult.error) {
-    return fail(cors, new EdgeError("service_unavailable", 503));
-  }
-  if (
-    !orgResult.data ||
-    !["trial", "active"].includes(String(orgResult.data.status))
-  ) {
-    return fail(cors, new EdgeError("not_authorized", 403));
-  }
+  const initialAccessError = await organizationWriteAccessError(
+    admin,
+    profile.org_id,
+  );
+  if (initialAccessError) return fail(cors, initialAccessError);
 
   if (!job) {
     const jobResult = await admin.from("document_processing_jobs")
@@ -734,7 +923,7 @@ export async function handler(req: Request): Promise<Response> {
   if (job.org_id !== profile.org_id) {
     return fail(cors, new EdgeError("not_authorized", 403));
   }
-  if (!["extracted", "interpreting", "review"].includes(job.status)) {
+  if (!["extracted", "interpreting", "review", "failed"].includes(job.status)) {
     return fail(cors, new EdgeError("invalid_job_state", 409));
   }
 
@@ -778,14 +967,45 @@ export async function handler(req: Request): Promise<Response> {
     }
   }
 
+  const rpc = serviceRpc(admin);
+  try {
+    const recovered = await recoverStoredProviderEvidence(admin, rpc, {
+      orgId: profile.org_id,
+      jobId: job.id,
+      extractionId: extraction.id,
+      actorId,
+      isPriceList: storedKindIsPriceList,
+    });
+    if (recovered) {
+      return json(cors, {
+        interpretationId: recovered.interpretation_id,
+        jobId: job.id,
+        status: "review",
+        idempotent: recovered.idempotent,
+        recoveredFromEvidence: true,
+        recoveredFromFailed: recovered.recovered_from_failed,
+      }, 200);
+    }
+  } catch (error) {
+    return fail(
+      cors,
+      error instanceof EdgeError
+        ? error
+        : new EdgeError("service_unavailable", 503),
+    );
+  }
+  if (job.status === "failed") {
+    return fail(cors, new EdgeError("invalid_job_state", 409));
+  }
+
   const beginResult = await admin.rpc(
     isSupplier
       ? "begin_supplier_price_interpretation"
       : "begin_document_interpretation",
     {
-    p_job_id: job.id,
-    p_extraction_id: extraction.id,
-    p_actor_id: actorId,
+      p_job_id: job.id,
+      p_extraction_id: extraction.id,
+      p_actor_id: actorId,
     },
   );
   if (beginResult.error) return fail(cors, pgError(beginResult.error.message));
@@ -813,7 +1033,9 @@ export async function handler(req: Request): Promise<Response> {
     typeof interpretationStartedAt !== "string" || !interpretationStartedAt ||
     context.extraction_contract_version !== "1" || !context.extraction_payload
   ) {
-    if (typeof interpretationStartedAt === "string" && interpretationStartedAt) {
+    if (
+      typeof interpretationStartedAt === "string" && interpretationStartedAt
+    ) {
       await markFailed(
         admin,
         job.id,
@@ -827,19 +1049,20 @@ export async function handler(req: Request): Promise<Response> {
     return fail(cors, new EdgeError("unsupported_extraction_contract", 409));
   }
 
+  let providerPayload: ReturnType<typeof buildProviderPayload>;
   try {
     let suppliersQuery = admin.from("suppliers").select("id,name,status").eq(
       "org_id",
       context.org_id,
     ).is("deleted_at", null).order("name").limit(101);
     let rulesQuery = admin.from("document_learning_rules")
-        .select(
-          "id,user_id,document_type,supplier_id,mark_kind,mark_fingerprint,tag_key,label,version",
-        )
-        .eq("org_id", context.org_id).eq("active", true)
-        .or(`user_id.is.null,user_id.eq.${actorId}`).order("version", {
-          ascending: false,
-        }).limit(201);
+      .select(
+        "id,user_id,document_type,supplier_id,mark_kind,mark_fingerprint,tag_key,label,version",
+      )
+      .eq("org_id", context.org_id).eq("active", true)
+      .or(`user_id.is.null,user_id.eq.${actorId}`).order("version", {
+        ascending: false,
+      }).limit(201);
     if (isSupplier && profile.supplier_id) {
       suppliersQuery = suppliersQuery.eq("id", profile.supplier_id);
       rulesQuery = rulesQuery.or(
@@ -881,46 +1104,200 @@ export async function handler(req: Request): Promise<Response> {
         tag_key: rule.tag_key,
         tag_label: rule.label,
       }));
-    const providerPayload = buildProviderPayload(
+    providerPayload = buildProviderPayload(
       context.extraction_payload,
       suppliers,
       rules,
       storedKindIsPriceList ? "price_list" : null,
     );
-    const startedAt = performance.now();
-    const result = await createOpenAiProvider({ apiKey: providerKey })
-      .interpret(providerPayload);
-    const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
-    const persisted = await saveAndDecideInterpretation({
+  } catch (error) {
+    const edgeError = error instanceof EdgeError
+      ? error
+      : new EdgeError("service_unavailable", 503);
+    await markFailed(
       admin,
+      job.id,
+      extraction.id,
+      actorId,
+      interpretationStartedAt,
+      edgeError.code,
       isSupplier,
+    );
+    return fail(cors, edgeError);
+  }
+
+  // Reserve immediately before the bounded provider call. Unbounded context reads must never
+  // consume the lease and then allow provider egress after its fencing window has expired.
+  let reservation;
+  try {
+    reservation = await reserveOrganizationEgress(rpc, {
+      orgId: profile.org_id,
+      kind: "document_interpretation",
+      correlationId: job.id,
+      ttlSeconds: PROVIDER_EGRESS_TTL_SECONDS,
+    });
+  } catch {
+    return fail(cors, new EdgeError("service_unavailable", 503));
+  }
+  if (!reservation.lease) {
+    const existingId = await existingInterpretation(
+      admin,
+      profile.org_id,
+      job.id,
+    );
+    if (existingId) {
+      await decideOnInterpretation(
+        admin,
+        storedKindIsPriceList,
+        job.id,
+        existingId,
+        actorId,
+      );
+      return json(cors, {
+        interpretationId: existingId,
+        jobId: job.id,
+        status: "review",
+        idempotent: true,
+      }, 200);
+    }
+    if (reservation.settledOutcome) {
+      try {
+        const recovered = await recoverStoredProviderEvidence(admin, rpc, {
+          orgId: profile.org_id,
+          jobId: job.id,
+          extractionId: extraction.id,
+          actorId,
+          isPriceList: storedKindIsPriceList,
+        });
+        if (recovered) {
+          return json(cors, {
+            interpretationId: recovered.interpretation_id,
+            jobId: job.id,
+            status: "review",
+            idempotent: recovered.idempotent,
+            recoveredFromEvidence: true,
+            recoveredFromFailed: recovered.recovered_from_failed,
+          }, 200);
+        }
+      } catch (error) {
+        // Evidence remains immutable and retrievable; retrying the provider would be unsafe.
+        return fail(
+          cors,
+          error instanceof EdgeError
+            ? error
+            : new EdgeError("service_unavailable", 503),
+        );
+      }
+    }
+    return fail(
+      cors,
+      new EdgeError(
+        reservation.settledOutcome ? "provider_unavailable" : "not_authorized",
+        reservation.settledOutcome ? 503 : 403,
+      ),
+    );
+  }
+  const egressLease = reservation.lease;
+  if (egressLease.idempotent) {
+    return fail(cors, new EdgeError("interpretation_in_progress", 409));
+  }
+
+  let egressSettled = false;
+  let evidenceSha256: string | null = null;
+  try {
+    const providerAttempt = await runReservedEgress({
+      reserve: () => Promise.resolve(egressLease),
+      perform: async () => {
+        const startedAt = performance.now();
+        const result = await createOpenAiProvider({ apiKey: providerKey })
+          .interpret(providerPayload);
+        const durationMs = Math.max(
+          0,
+          Math.round(performance.now() - startedAt),
+        );
+        const providerEvidence: Record<string, unknown> = {
+          job_id: job.id,
+          extraction_id: extraction.id,
+          actor_id: actorId,
+          interpretation_started_at: interpretationStartedAt,
+          provider: PROVIDER,
+          model: result.model,
+          prompt_version: PROMPT_VERSION,
+          schema_version: SCHEMA_VERSION,
+          provider_request_id: result.provider_request_id,
+          usage: result.usage,
+          duration_ms: durationMs,
+          input_truncation: providerPayload.truncation,
+          interpretation: result.interpretation,
+        };
+        return {
+          result,
+          durationMs,
+          providerEvidence,
+        };
+      },
+      settle: async (lease, outcome) => {
+        if (!outcome.ok) {
+          const edgeError = outcome.error instanceof InterpretationError
+            ? providerError(outcome.error)
+            : outcome.error instanceof EdgeError
+            ? outcome.error
+            : new EdgeError("provider_unavailable", 503);
+          await releaseOrganizationEgress(rpc, lease, {
+            outcome: "failed",
+            evidenceCode: edgeError.code,
+            evidence: {
+              job_id: job.id,
+              extraction_id: extraction.id,
+              error_code: edgeError.code,
+            },
+          });
+          egressSettled = true;
+          try {
+            await markFailed(
+              admin,
+              job.id,
+              extraction.id,
+              actorId,
+              interpretationStartedAt,
+              edgeError.code,
+              isSupplier,
+            );
+          } catch {
+            // The provider outcome is already immutable. A lifecycle flip may intentionally
+            // reject this secondary job-state mutation; it must never undo evidence settlement.
+            console.error("interpret-document failure state update skipped");
+          }
+          return;
+        }
+        const settlement = await releaseOrganizationEgress(rpc, lease, {
+          outcome: "delivered",
+          evidenceCode: "interpretation_provider_result_recorded",
+          evidence: outcome.result.providerEvidence,
+        });
+        evidenceSha256 = settlement.evidence_sha256;
+        egressSettled = true;
+      },
+    });
+    const result = providerAttempt.result;
+    if (!evidenceSha256) {
+      throw new EdgeError("persistence_failed", 503);
+    }
+    // Recovery is the only post-provider write path. Postgres binds the immutable evidence lease,
+    // canonical evidence hash, job, actor, extraction and attempt in one transaction; the Edge
+    // function never reserializes JSONB or trusts its own copy as authority.
+    const persisted = await recoverInterpretationFromEgress(admin, {
+      jobId: job.id,
+      extractionId: extraction.id,
+      actorId,
+      evidenceLeaseId: egressLease.lease_id,
+      evidenceSha256,
       isPriceList: storedKindIsPriceList ||
         result.interpretation.document_type === "price_list",
-      jobId: job.id,
-      actorId,
-      args: {
-        p_job_id: job.id,
-        p_extraction_id: extraction.id,
-        p_actor_id: actorId,
-        p_interpretation_started_at: interpretationStartedAt,
-        p_provider: PROVIDER,
-        // The dated snapshot the provider actually used, not the alias we requested.
-        p_model: result.model,
-        p_prompt_version: PROMPT_VERSION,
-        p_schema_version: SCHEMA_VERSION,
-        p_payload: result.interpretation,
-        p_usage: {
-          ...result.usage,
-          provider_request_id: result.provider_request_id,
-          input_truncation: providerPayload.truncation,
-        },
-        p_duration_ms: durationMs,
-      },
-      findExisting: () => existingInterpretation(admin, context.org_id, job.id),
     });
     if (persisted.idempotent) {
       return json(cors, {
-        interpretationId: persisted.interpretationId,
+        interpretationId: persisted.interpretation_id,
         jobId: job.id,
         status: "review",
         idempotent: true,
@@ -928,7 +1305,7 @@ export async function handler(req: Request): Promise<Response> {
     }
 
     return json(cors, {
-      interpretationId: persisted.interpretationId,
+      interpretationId: persisted.interpretation_id,
       jobId: job.id,
       status: "review",
       schemaVersion: SCHEMA_VERSION,
@@ -942,15 +1319,30 @@ export async function handler(req: Request): Promise<Response> {
       : error instanceof EdgeError
       ? error
       : new EdgeError("service_unavailable", 503);
-    await markFailed(
-      admin,
-      job.id,
-      extraction.id,
-      actorId,
-      interpretationStartedAt,
-      edgeError.code,
-      isSupplier,
-    );
+    if (!egressSettled) {
+      try {
+        await releaseOrganizationEgress(rpc, egressLease, {
+          outcome: "failed",
+          evidenceCode: edgeError.code,
+        });
+        egressSettled = true;
+      } catch {
+        console.error("interpret-document egress settlement failed");
+      }
+      try {
+        await markFailed(
+          admin,
+          job.id,
+          extraction.id,
+          actorId,
+          interpretationStartedAt,
+          edgeError.code,
+          isSupplier,
+        );
+      } catch {
+        console.error("interpret-document failure state update skipped");
+      }
+    }
     console.error("interpret-document failed", edgeError.code);
     return fail(cors, edgeError);
   }

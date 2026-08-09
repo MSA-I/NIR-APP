@@ -114,23 +114,13 @@ Last verified: **2026-08-06**, against the resolved tree in `node_modules`.
 
 ---
 
-## Planned additions — licenses to verify at install time
+## App-shell caching — no additional package
 
-These are named in the enterprise foundation plan. **The entries below are intentions, not
-verifications.** Each must be checked against its resolved `node_modules/<pkg>/package.json` and
-moved into the tables above before the wave that installs it is considered complete, and each must
-pass the gate's `npm audit --audit-level=high` step.
-
-| Package | Target version | Wave | Expected license | Purpose |
-|---|---|---|---|---|
-| `workbox-*` | latest stable | a later wave | MIT | App-shell caching only — never API responses |
-
-**`workbox-*` was NOT installed by wave 8.** App-shell precaching is deferred on purpose
-(OPEN-DECISIONS #101): the sync queue is plain JS plus IndexedDB and needs no service worker, while
-precaching would rewrite `public/sw.js` and put the `controllerchange` contract behind four gate
-scenarios at risk. The declared consequence: **a reload while offline loses the app shell.** The
-queue survives it. `idb` and the two `@zxing` packages were installed and moved into the tables
-above.
+The current app shell is cached by the repository-owned `public/sw.js`, using the browser Cache API.
+It caches only navigation/hashed static assets and explicitly excludes Supabase REST, Functions,
+Storage and authentication responses. `workbox-*` was not installed and is no longer a planned
+dependency for the implemented contract. The IndexedDB queue continues to use the installed `idb`
+package documented above.
 
 **Version constraints that are decisions, not preferences:**
 

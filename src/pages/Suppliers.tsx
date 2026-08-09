@@ -10,7 +10,7 @@ import { DataTable, StatusBadge, PageLoader, useToast, Modal, ErrorNote, Confirm
 import { ReauthModal } from '../components/ReauthModal';
 import { PriceListUploadModal, SUBMISSION_STATUS, submissionMonthLabel } from '../components/PriceListUpload';
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
-import { SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
+import { canStartSupplierCommerce, SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
 import { fmtMoney, fmtMoneyExact, fmtNum, fmtDate, fmtDays } from '../lib/format';
 import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission } from '../lib/types';
 
@@ -56,7 +56,7 @@ function RiskCell({ m }: { m?: SupplierMetrics }) {
 
 export function SuppliersList() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const [editing, setEditing] = useState<SupplierRow | null | 'new'>(null);
   const [priceUploadFor, setPriceUploadFor] = useState<SupplierWithBalance | null>(null);
@@ -84,11 +84,15 @@ export function SuppliersList() {
     }));
   });
 
-  const canWrite = profile?.role === 'owner' || profile?.role === 'office';
+  const canWrite = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
 
   // ?balance=open from the dashboard "ספקים עם יתרה פתוחה" card.
   const [balanceFilter, setBalanceFilter] = useParamState('balance');
-  const rows = useMemo(() => (data ?? []).filter((r) => balanceFilter !== 'open' || (r.open_balance ?? 0) > 0), [data, balanceFilter]);
+  const [statusFilter, setStatusFilter] = useParamState('status');
+  const rows = useMemo(() => (data ?? []).filter((r) =>
+    (balanceFilter !== 'open' || (r.open_balance ?? 0) > 0)
+    && (!statusFilter || r.status === statusFilter)
+  ), [data, balanceFilter, statusFilter]);
 
   // Delete guard (adversarial review round): a soft-deleted supplier vanishes from the lists
   // while money is still owed to them or goods are still on their way — the open balance and
@@ -161,14 +165,22 @@ export function SuppliersList() {
         mobileTrailing={(r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} />}
         rowActions={canWrite ? (r) => [
           { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setEditing(r) },
-          { key: 'price-list', label: 'העלאת מחירון', icon: Upload, onSelect: () => setPriceUploadFor(r) },
+          ...(canStartSupplierCommerce(r.status) ? [
+            { key: 'price-list', label: 'העלאת מחירון', icon: Upload, onSelect: () => setPriceUploadFor(r) },
+          ] : []),
           { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', onSelect: () => void requestDelete(r) },
         ] : undefined}
         toolbar={
-          <select className="input w-auto!" aria-label="סינון ספקים לפי יתרה פתוחה" value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)}>
-            <option value="">כל הספקים</option>
-            <option value="open">עם יתרה פתוחה</option>
-          </select>
+          <div className="flex flex-wrap gap-2">
+            <select className="input w-auto!" aria-label="סינון ספקים לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">כל הסטטוסים</option>
+              {Object.entries(SUPPLIER_STATUS).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}
+            </select>
+            <select className="input w-auto!" aria-label="סינון ספקים לפי יתרה פתוחה" value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)}>
+              <option value="">כל היתרות</option>
+              <option value="open">עם יתרה פתוחה</option>
+            </select>
+          </div>
         } />
       {balanceFilter === 'open' && rows.length === 0 && <p className="text-sm text-ink-muted">אין ספקים עם יתרה פתוחה.</p>}
       {editing && <SupplierForm supplier={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refetch(); }} />}
@@ -332,18 +344,8 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
             aria-describedby="supplier-status-hint">
             {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
-          {/* G1, finding 3. The selector reads as "stop using this supplier", and exactly one
-              screen honours that reading: /orders/new filters `.in('status', ['active','problematic'])`
-              (NewOrder.tsx:206). Nine other supplier pickers filter on `deleted_at` alone, so an
-              "inactive" supplier keeps appearing in invoice intake, payment requests, price-list
-              upload, bank matching and the documents folder. The sentence states what the control
-              does TODAY rather than what its label suggests. Narrowing those nine is deliberately
-              NOT done here: what `inactive` MEANS is a business decision (OPEN-DECISIONS #115), and
-              filtering first would block receiving an invoice from a supplier deactivated
-              yesterday — a real and common event. */}
           <p id="supplier-status-hint" className="mt-1 text-xs text-ink-muted">
-            ״לא פעיל״ מסתיר את הספק בהזמנה חדשה בלבד. במסכי קליטת חשבונית, דרישת תשלום, העלאת מחירון והתאמות בנק
-            הוא ימשיך להופיע, כדי שניתן יהיה לסגור מולו חשבון פתוח.
+            ״לא פעיל״ חוסם הזמנות ומחירונים חדשים. חשבוניות, זיכויים, תשלומים, התאמות בנק, מסמכים והיסטוריה נשארים זמינים לסגירה כספית.
           </p>
         </div>
         <fieldset>
@@ -383,7 +385,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
 export function SupplierCard() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, organizationAccess } = useAuth();
   const [tab, setTab] = useState<'orders' | 'invoices' | 'payments' | 'credits' | 'prices'>('orders');
   const [editing, setEditing] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -437,7 +439,7 @@ export function SupplierCard() {
     };
   }, [id]);
 
-  const canWrite = profile?.role === 'owner' || profile?.role === 'office';
+  const canWrite = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
 
   useEffect(() => {
     if (editParam !== 'bank') return;
@@ -506,7 +508,7 @@ export function SupplierCard() {
         </div>
         {canWrite && (
           <div className="flex flex-wrap gap-2">
-            <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={15} /> העלאת מחירון</button>
+            {canStartSupplierCommerce(s.status) && <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={15} /> העלאת מחירון</button>}
             {/* Named, not buried: "החליף מספר חשבון" is the task, and it used to be four steps
                 inside a form of twenty fields. Navigates rather than calling setEditing directly,
                 so the address is the one another screen can link to. */}

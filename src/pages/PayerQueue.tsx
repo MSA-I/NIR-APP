@@ -10,27 +10,35 @@ import { fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import type { PaymentRequest } from '../lib/types';
 import { useAuth } from '../auth/AuthContext';
+import { financialSupplierMap } from '../lib/financialSuppliers';
 
 /**
  * Focused execution view for payment executors (payer and accountant roles).
  * Shows ONLY approved payment requests + the details needed to perform a transfer.
  */
-type Row = PaymentRequest & {
+type Row = Omit<PaymentRequest, 'supplier'> & {
   supplier: { id: string; name: string; bank_details: string | null };
   invoices: { invoice_id: string; amount_allocated: number; invoice: { invoice_number: string } | null }[];
   approver: { full_name: string } | null;
 };
+type RawRow = Omit<Row, 'supplier'>;
 
 type PayerQueueMode = 'regular' | 'emergency';
 
 export default function PayerQueue({ mode = 'regular' }: { mode?: PayerQueueMode }) {
   const [selected, setSelected] = useState<Row | null>(null);
 
-  const { data, loading, error, refetch } = useQuery(async () =>
-    unwrap(await supabase.from('payment_requests')
-      .select('*, supplier:suppliers(id, name, bank_details), invoices:payment_request_invoices(invoice_id, amount_allocated, invoice:invoices(invoice_number)), approver:profiles!p0_pr_approved_actor_tenant_fk(full_name)')
+  const { data, loading, error, refetch } = useQuery(async () => {
+    const rows = unwrap(await supabase.from('payment_requests')
+      .select('*, invoices:payment_request_invoices(invoice_id, amount_allocated, invoice:invoices(invoice_number)), approver:profiles!p0_pr_approved_actor_tenant_fk(full_name)')
       .in('status', ['approved', 'sent_for_execution', 'executed', 'matched'])
-      .order('due_date', { ascending: true, nullsFirst: false })) as Promise<Row[]>);
+      .order('due_date', { ascending: true, nullsFirst: false })) as RawRow[];
+    const suppliers = await financialSupplierMap(rows.map((row) => row.supplier_id));
+    return rows.map<Row>((row) => ({
+      ...row,
+      supplier: suppliers.get(row.supplier_id) ?? { id: row.supplier_id, name: '—', bank_details: null },
+    }));
+  });
 
   if (loading) return <SkeletonList />;
   if (error) return <ErrorNote message={error} />;

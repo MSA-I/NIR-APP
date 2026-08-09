@@ -25,6 +25,7 @@ vi.mock('../auth/AuthContext', () => ({
     org: { id: 'org-test', settings: {} },
     session: authState.session,
     roleLabels: {},
+    organizationAccess: { mode: 'active', canWrite: true },
   }),
 }));
 

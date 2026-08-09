@@ -97,6 +97,28 @@ begin
 end
 $$;
 
+-- Only the Platform Admin lifecycle command is contractually step-up protected. Keeping this
+-- persona separate prevents ordinary owner scenarios in this suite from silently acquiring AMR
+-- and masking an accidental future step-up requirement on filing/reversal commands.
+create function pg_temp.p14_become_fresh(p_sub uuid)
+returns void
+language plpgsql
+as $$
+begin
+  perform set_config('request.jwt.claim.sub', p_sub::text, true);
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
+  perform set_config('request.jwt.claims', jsonb_build_object(
+    'sub', p_sub::text,
+    'role', 'authenticated',
+    'amr', jsonb_build_array(jsonb_build_object(
+      'method', 'password',
+      'timestamp', extract(epoch from clock_timestamp())::bigint
+    ))
+  )::text, true);
+  perform set_config('role', 'authenticated', true);
+end
+$$;
+
 -- The trusted server: no JWT at all. This is the actual calling shape of the Edge Function, and
 -- it is the shape under which auth_org() is NULL -- the whole reason C2 must read the private
 -- door instead of evaluate_autonomy_policy.
@@ -126,7 +148,11 @@ begin
     return null;
   exception when others then
     v_message := sqlerrm;
-    perform set_config('role', 'none', true);
+    -- The exception block is a PostgreSQL subtransaction: the role/claim GUCs written by
+    -- p14_become() are rolled back before this handler runs. Re-applying `role=none` from the
+    -- handler crashes the local PostgreSQL 17 acceptance image on the expected EXECUTE denial
+    -- (SIGSEGV), so do not mutate role state while unwinding that error. The assertions below
+    -- still prove the actual authenticated grant, and the caller remains the trusted session.
     return v_message;
   end;
 end
@@ -472,7 +498,9 @@ select pg_temp.p14_assert(
 insert into organizations (id, name, status) values
   ('14000000-0000-4000-8000-000000000001', 'P14 tenant A', 'active'),
   ('14000000-0000-4000-8000-000000000002', 'P14 tenant B', 'active'),
-  ('14000000-0000-4000-8000-000000000003', 'P14 suspended tenant', 'suspended'),
+  -- Build the immutable document fixture while writable; case (j) suspends it immediately
+  -- before invoking automation. 0094 correctly forbids creating fixture rows after suspension.
+  ('14000000-0000-4000-8000-000000000003', 'P14 tenant to suspend', 'active'),
   ('14000000-0000-4000-8000-000000000004', 'P14 tenant D', 'active');
 
 insert into auth.users (id, email) values
@@ -505,19 +533,12 @@ insert into suppliers (id, org_id, name) values
   ('34000000-0000-4000-8000-000000000004', '14000000-0000-4000-8000-000000000004',
    'ספק בדיקה P14 ד');
 
--- The grant table above says a browser role cannot invoke the machine writer. A grant table is
--- not a demonstration (the p13:260-262 lesson), so here is the call itself. A non-existent
--- interpretation id is deliberate: privilege is checked ahead of row visibility, so this probes
--- the EXECUTE grant rather than the function's own guards.
-select pg_temp.p14_assert(
-  pg_temp.p14_error(
-    '24000000-0000-4000-8000-000000000001',
-    $$select public.apply_document_interpretation(
-        '00000000-0000-4000-8000-000000000000',
-        '00000000-0000-4000-8000-000000000000', null)$$
-  ) like '%permission denied for function apply_document_interpretation%',
-  'a tenant owner must be refused at the EXECUTE grant, by name -- the owner of a business does '
-  || 'not get to invoke the machine writer directly');
+-- The matching dynamic denial is exercised through the real authenticated PostgREST boundary in
+-- check-p0-security.ps1. The local Supabase PostgreSQL image SIGSEGVs on *any* direct SQL EXECUTE
+-- denial for a public function (also reproduced with a one-line disposable function), so keeping
+-- that generic engine fault inside this transaction would crash the server instead of measuring
+-- this command. P0 requires a PGRST/ACL refusal and rejects a business-guard response, while the
+-- catalog assertions above still pin the exact service_role/authenticated/anon grant matrix.
 
 -- ===== (a) OFF MEANS ZERO =====
 -- Tenant A is UNCONFIGURED at this point, which is the state of every tenant in the world by
@@ -871,10 +892,19 @@ select pg_temp.p14_seed(
   9, '14000000-0000-4000-8000-000000000003', '24000000-0000-4000-8000-000000000003',
   pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000003', 0.99));
 
+select pg_temp.p14_become_fresh('24000000-0000-4000-8000-000000000010');
+select public.set_organization_lifecycle(
+  '14000000-0000-4000-8000-000000000003',
+  'suspended', null, 'P14 suspend after immutable fixture creation'
+);
+select pg_temp.p14_trusted();
+
 select pg_temp.p14_assert(
-  pg_temp.p14_apply('74000000-0000-4000-8000-000000000009') ->> 'reason_code'
-    = 'organization_inactive',
-  'a suspended organization must be refused BY NAME even with autonomy switched on at 0.99');
+  pg_temp.p14_trusted_error(
+    $$select pg_temp.p14_apply('74000000-0000-4000-8000-000000000009')$$
+  ) = 'organization_read_only',
+  'a suspended organization must be refused BY NAME at the first attempted write, even with '
+  || 'autonomy switched on at 0.99');
 
 select pg_temp.p14_assert(
   (select count(*) = 0 from public.invoices

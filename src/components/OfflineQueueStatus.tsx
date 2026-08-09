@@ -1,6 +1,9 @@
+import { useEffect, useRef, useState } from 'react';
 import { CloudOff, RefreshCw } from 'lucide-react';
 import { fmtDateTime } from '../lib/format';
 import { useOfflineQueue, offlineQueue } from '../lib/offlineQueue';
+import { syncPendingDocumentPhotos } from './FileUpload';
+import { listPendingPhotos } from '../lib/offlineDb';
 
 /**
  * The offline status strip for the receiving path (`OFFLINE-SYNC-DESIGN.md` §6).
@@ -19,6 +22,51 @@ import { useOfflineQueue, offlineQueue } from '../lib/offlineQueue';
  */
 export default function OfflineQueueStatus() {
   const queue = useOfflineQueue();
+  const lastAutoAttempt = useRef('');
+  const [photoProblems, setPhotoProblems] = useState<{ id: number; fileName: string; reason: string; attempts: number }[]>([]);
+
+  async function refreshPhotoProblems() {
+    try {
+      const photos = await listPendingPhotos();
+      setPhotoProblems(photos.flatMap((photo) => (
+        photo.id != null && photo.lastError
+          ? [{ id: photo.id, fileName: photo.fileName, reason: photo.lastError, attempts: photo.attempts ?? 0 }]
+          : []
+      )));
+    } catch {
+      // Keep the last known problem list; an empty array would falsely claim recovery.
+    }
+  }
+
+  useEffect(() => {
+    if (queue.pendingUploads === 0) {
+      setPhotoProblems([]);
+      return;
+    }
+    void refreshPhotoProblems();
+  }, [queue.pendingUploads]);
+
+  async function syncPhotos(includeNeedsAttention = false) {
+    await syncPendingDocumentPhotos(includeNeedsAttention);
+    await refreshPhotoProblems();
+  }
+
+  useEffect(() => {
+    if (!queue.online || queue.sessionExpired) {
+      lastAutoAttempt.current = '';
+      return;
+    }
+    if (queue.pendingActions === 0 && queue.pendingUploads === 0) return;
+    const key = [queue.pendingActions, queue.pendingUploads, queue.lastSuccessfulSyncAt].join(':');
+    if (lastAutoAttempt.current === key) return;
+    lastAutoAttempt.current = key;
+    void offlineQueue.sync().then(() => syncPhotos());
+  }, [queue.online, queue.pendingActions, queue.pendingUploads, queue.sessionExpired, queue.lastSuccessfulSyncAt]);
+
+  async function syncAll() {
+    await offlineQueue.sync();
+    await syncPhotos(true);
+  }
   const failures = queue.actions.filter((action) => action.reason && action.state !== 'pending');
   const nothingToSay = queue.online
     && queue.storageAvailable
@@ -52,7 +100,7 @@ export default function OfflineQueueStatus() {
         {queue.syncing && <span className="text-ink-soft">מסנכרן…</span>}
         <button type="button" className="btn-ghost ms-auto min-h-11 text-xs"
           disabled={queue.syncing || !queue.online}
-          onClick={() => void offlineQueue.sync()}>
+          onClick={() => void syncAll()}>
           <RefreshCw size={13} /> ניסיון סנכרון עכשיו
         </button>
       </div>
@@ -80,8 +128,17 @@ export default function OfflineQueueStatus() {
       )}
       {!queue.online && (
         <p className="mt-1.5 text-ink-soft">
-          מסכים אחרים דורשים רשת. טעינה מחדש של האפליקציה במצב לא-מקוון לא תעלה — הנתונים שנשמרו במכשיר ימתינו ויישלחו בפתיחה הבאה.
+          מסכים אחרים דורשים רשת. קונכיית האפליקציה תישאר זמינה, אך נתונים עסקיים שלא נשמרו במסלול הקבלה לא יוצגו מהמטמון.
         </p>
+      )}
+      {photoProblems.length > 0 && (
+        <ul className="mt-1.5 space-y-1">
+          {photoProblems.map((photo) => (
+            <li key={photo.id} className="text-alert-fg">
+              {photo.fileName}: {photo.reason}{photo.attempts > 0 && <> <span className="num">(ניסיונות: {photo.attempts})</span></>}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

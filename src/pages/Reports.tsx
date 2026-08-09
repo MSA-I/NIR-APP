@@ -12,6 +12,7 @@ import { toHebrewError } from '../lib/errors';
 import { fetchAll } from '../lib/supabasePaging';
 import { buildLockedMonthlyWorkbook, buildMonthlyWorkbook, type MonthlyReportLabels, type MonthlyReportSnapshot } from '../lib/monthlyReport';
 import * as XLSX from 'xlsx';
+import { financialSupplierMap } from '../lib/financialSuppliers';
 
 function toSnapshotHebrewError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
@@ -31,7 +32,10 @@ function toSnapshotHebrewError(error: unknown): string {
 }
 
 export default function Reports() {
-  const { profile, org } = useAuth();
+  const { profile, org, organizationAccess } = useAuth();
+  const orgLogoUrl = org?.logo_path
+    ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
+    : null;
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [month, setMonth] = useState(currentMonthISO());
@@ -63,6 +67,7 @@ export default function Reports() {
   // mark-sent command — what is shown is always what is exported, and no date math ever throws.
   const safeMonth = /^\d{4}-\d{2}$/.test(month) ? month : currentMonthISO();
   const canManageExport = !!profile && ['owner', 'accountant'].includes(profile.role);
+  const canMutateExport = canManageExport && organizationAccess.canWrite;
   const requestedUnitId = searchParams.get('unit');
 
   const reportLabels: MonthlyReportLabels = {
@@ -76,24 +81,34 @@ export default function Reports() {
   const { data, loading, fetching, error } = useQuery(async () => {
     const { start, end } = monthRange(safeMonth);
     const instants = monthInstantRange(safeMonth);
-    const [invoices, payments, credits, exceptions, bank] = await Promise.all([
-      fetchAll((from, to) => supabase.from('invoices').select('*, supplier:suppliers(name)')
+    const [rawInvoices, rawPayments, rawCredits, rawExceptions, bank] = await Promise.all([
+      fetchAll((from, to) => supabase.from('invoices').select('*')
         .gte('invoice_date', start).lt('invoice_date', end).is('deleted_at', null)
         .order('invoice_date').order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('payments').select('*, supplier:suppliers(name)')
+      fetchAll((from, to) => supabase.from('payments').select('*')
         .gte('paid_date', start).lt('paid_date', end).order('paid_date').order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('credit_requests').select('*, supplier:suppliers(name)')
+      fetchAll((from, to) => supabase.from('credit_requests').select('*')
         .gte('created_at', instants.start).lt('created_at', instants.end).order('created_at').order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('exceptions').select('*, supplier:suppliers(name)')
+      fetchAll((from, to) => supabase.from('exceptions').select('*')
         .in('status', ['open', 'in_progress']).order('created_at').order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('bank_transactions').select('id, status')
         .gte('tx_date', start).lt('tx_date', end).order('tx_date').order('id').range(from, to)),
     ]);
+    type SupplierLinked = { supplier_id: string | null };
+    const linkedRows = [...rawInvoices, ...rawPayments, ...rawCredits, ...rawExceptions] as unknown as SupplierLinked[];
+    const suppliers = await financialSupplierMap(linkedRows.flatMap((row) => row.supplier_id ? [row.supplier_id] : []));
+    const supplier = (supplierId: string | null) => ({
+      name: supplierId ? suppliers.get(supplierId)?.name ?? '—' : '—',
+    });
     return {
-      invoices: invoices as ({ id: string; invoice_number: string; invoice_date: string; total_amount: number; amount_before_vat: number; vat_amount: number; review_status: string; payment_status: string; export_status: string; supplier: { name: string } })[],
-      payments: payments as ({ id: string; number: number; paid_date: string; amount: number; method: string | null; reference: string | null; supplier: { name: string } })[],
-      credits: credits as ({ id: string; number: number; reason: string; amount: number; status: string; supplier: { name: string } })[],
-      exceptions: exceptions as ({ id: string; type: string; title: string; supplier: { name: string } | null })[],
+      invoices: (rawInvoices as unknown as (SupplierLinked & { id: string; invoice_number: string; invoice_date: string; total_amount: number; amount_before_vat: number; vat_amount: number; review_status: string; payment_status: string; export_status: string })[])
+        .map((row) => ({ ...row, supplier: supplier(row.supplier_id) })),
+      payments: (rawPayments as unknown as (SupplierLinked & { id: string; number: number; paid_date: string; amount: number; method: string | null; reference: string | null })[])
+        .map((row) => ({ ...row, supplier: supplier(row.supplier_id) })),
+      credits: (rawCredits as unknown as (SupplierLinked & { id: string; number: number; reason: string; amount: number; status: string })[])
+        .map((row) => ({ ...row, supplier: supplier(row.supplier_id) })),
+      exceptions: (rawExceptions as unknown as (SupplierLinked & { id: string; type: string; title: string })[])
+        .map((row) => ({ ...row, supplier: row.supplier_id ? supplier(row.supplier_id) : null })),
       bank: bank as { id: string; status: string }[],
       generatedAt: new Date(),
     };
@@ -180,7 +195,7 @@ export default function Reports() {
 
   async function createSnapshot() {
     const selectedUnitId = lockedReports?.selectedUnitId;
-    if (!canManageExport || !selectedUnitId || lockedReportsFetching || lockedReportsError) return;
+    if (!canMutateExport || !selectedUnitId || lockedReportsFetching || lockedReportsError) return;
     setBusy(true);
     setSnapshotBlock(null);
     try {
@@ -206,7 +221,7 @@ export default function Reports() {
   }
 
   async function markSent(snapshot: MonthlyReportSnapshot, reason: string) {
-    if (!profile || lockedReportsFetching || lockedReportsError) return;
+    if (!canMutateExport || lockedReportsFetching || lockedReportsError) return;
     setBusy(true);
     try {
       unwrap(await supabase.rpc('mark_monthly_report_snapshot_sent', {
@@ -232,7 +247,8 @@ export default function Reports() {
     vat: data.invoices.reduce((s, i) => s + i.vat_amount, 0),
     paid: data.payments.reduce((s, p) => s + p.amount, 0),
     unpaidCount: data.invoices.filter((i) => i.payment_status !== 'paid').length,
-    unmatchedBank: data.bank.filter((b) => b.status === 'unmatched' || b.status === 'suggested').length,
+    unmatchedBank: data.bank.filter((b) => b.status === 'unmatched').length,
+    suggestedBank: data.bank.filter((b) => b.status === 'suggested').length,
   };
 
   // payments grouped by supplier
@@ -352,11 +368,13 @@ export default function Reports() {
                     {(lockedReports?.legalEntities ?? []).map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}
                   </select>
                 </div>
-                <button type="button" className="btn-primary self-end" disabled={busy || !!snapshotBlockedReason}
-                  title={snapshotBlockedReason ?? 'יצירת גרסה סופית נעולה'}
-                  onClick={() => { setSnapshotPreviewAt(new Date()); setSnapshotOpen(true); }}>
-                  <LockKeyhole size={15} /> יצירת דוח סופי לרו״ח
-                </button>
+                {canMutateExport && (
+                  <button type="button" className="btn-primary self-end" disabled={busy || !!snapshotBlockedReason}
+                    title={snapshotBlockedReason ?? 'יצירת גרסה סופית נעולה'}
+                    onClick={() => { setSnapshotPreviewAt(new Date()); setSnapshotOpen(true); }}>
+                    <LockKeyhole size={15} /> יצירת דוח סופי לרו״ח
+                  </button>
+                )}
               </div>
             </div>
 
@@ -367,9 +385,14 @@ export default function Reports() {
                     {snapshotBlock.message}
                     {snapshotBlock.bank && (
                       <span className="block mt-1">
-                        <Link className="link" to={`/bank?month=${safeMonth}&status=attention`}>
-                          פתיחת {totals.unmatchedBank} תנועות הבנק שדורשות התאמה בחודש זה
+                        <Link className="link" to={`/bank?month=${safeMonth}&status=unmatched`}>
+                          פתיחת {totals.unmatchedBank} תנועות הבנק ללא התאמה בחודש זה
                         </Link>
+                        {totals.suggestedBank > 0 && (
+                          <> · <Link className="link" to={`/bank?month=${safeMonth}&status=suggested`}>
+                            {totals.suggestedBank} התאמות שממתינות לאישור
+                          </Link></>
+                        )}
                         {' '}— תנועה שלא שויכה לספק חוסמת את סגירת החודש.
                       </span>
                     )}
@@ -404,7 +427,7 @@ export default function Reports() {
                         })()}
                       </div>
                       <div className="flex flex-wrap gap-2 self-start sm:self-auto">
-                        {!lockedReports.deliveries.some((item) => item.snapshot_id === snapshot.id) && (
+                        {canMutateExport && !lockedReports.deliveries.some((item) => item.snapshot_id === snapshot.id) && (
                           <button type="button" className="btn-primary" disabled={busy} onClick={() => setSendSnapshot(snapshot)}>
                             <Send size={15} /> סימון כהועבר לרו״ח
                           </button>
@@ -425,6 +448,7 @@ export default function Reports() {
       <div className="print-area monthly-report space-y-4">
         <div className="hidden print:block">
           {/* Printed header handed to the accountant — carries the tenant's own name. */}
+          {orgLogoUrl && <img data-testid="monthly-report-logo" src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
           <h2 className="text-xl font-bold">{`${org?.name ? `${org.name} — ` : ''}דוח חודשי ${fmtMonth(`${safeMonth}-01`)}`}</h2>
           <p className="text-xs">נוצר {fmtDateTime(data.generatedAt)}</p>
         </div>
@@ -435,7 +459,8 @@ export default function Reports() {
           <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.vat)}</div></Link>
           <Link className={metricLinkClass} to={`/payments?month=${safeMonth}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(totals.paid)}</div></Link>
           <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`text-lg font-bold num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Link>
-          <Link className={metricLinkClass} to={`/bank?month=${safeMonth}&status=attention`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`text-lg font-bold num ${totals.unmatchedBank ? 'text-alert-solid' : ''}`}>{totals.unmatchedBank}</div></Link>
+          <Link className={metricLinkClass} to={`/bank?month=${safeMonth}&status=unmatched`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`text-lg font-bold num ${totals.unmatchedBank ? 'text-alert-solid' : ''}`}>{totals.unmatchedBank}</div></Link>
+          <Link className={metricLinkClass} to={`/bank?month=${safeMonth}&status=suggested`}><div className="text-xs text-ink-muted">התאמות שממתינות לאישור</div><div className={`text-lg font-bold num ${totals.suggestedBank ? 'text-await-fg' : ''}`}>{totals.suggestedBank}</div></Link>
           <Link className={metricLinkClass} to={`/credits?month=${safeMonth}&status=all`}><div className="text-xs text-ink-muted">זיכויים בחודש</div><div className="text-lg font-bold num">{data.credits.length}</div></Link>
           <Link className={metricLinkClass} to="/exceptions?status=open"><div className="text-xs text-ink-muted">חריגים פתוחים</div><div className={`text-lg font-bold num ${data.exceptions.length ? 'text-await-fg' : ''}`}>{data.exceptions.length}</div></Link>
         </div>

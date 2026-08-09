@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 import uuid
 import zipfile
 import zlib
@@ -666,12 +667,21 @@ def _retry_and_cleanup_check(scratch: Path) -> None:
 
 def _gateway_e2e_check(scratch: Path) -> dict[str, Any]:
     token = "synthetic-worker-token-000000000000"
+    org_id = "99999999-9999-4999-8999-999999999999"
     success_job = "11111111-1111-4111-8111-111111111111"
     failure_job = "22222222-2222-4222-8222-222222222222"
+    retry_job = "33333333-3333-4333-8333-333333333333"
+    attempt_by_job = {
+        success_job: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        failure_job: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        retry_job: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    }
     state: dict[str, Any] = {
         "claims": [
             {
                 "job_id": success_job,
+                "processing_attempt_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "processing_attempt_started_at": "2099-01-01T00:00:00Z",
                 "document_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                 "mime_type": "text/plain",
                 "file_name": "synthetic.txt",
@@ -683,6 +693,8 @@ def _gateway_e2e_check(scratch: Path) -> dict[str, Any]:
             },
             {
                 "job_id": failure_job,
+                "processing_attempt_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "processing_attempt_started_at": "2099-01-01T00:00:00Z",
                 "document_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                 "mime_type": "text/plain",
                 "file_name": "invalid.txt",
@@ -692,10 +704,27 @@ def _gateway_e2e_check(scratch: Path) -> dict[str, Any]:
                 "attempt_count": 3,
                 "download_path": "/storage/failure",
             },
+            {
+                "job_id": retry_job,
+                "processing_attempt_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                "processing_attempt_started_at": "2099-01-01T00:00:00Z",
+                "document_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                "mime_type": "text/plain",
+                "file_name": "unavailable.txt",
+                "input_checksum": "etag:33333333333333333333333333333333",
+                "contract_version": "1",
+                "lease_until": "2099-01-01T00:00:00Z",
+                "attempt_count": 1,
+                "download_path": "/storage/retry-failure",
+            },
         ],
         "download_attempts": 0,
+        "download_acknowledged": [],
         "complete": [],
+        "complete_attempts": 0,
         "fail": [],
+        "failure_reporting": False,
+        "heartbeat_during_fail": False,
         "errors": [],
     }
 
@@ -726,6 +755,9 @@ def _gateway_e2e_check(scratch: Path) -> dict[str, Any]:
                     return
             elif self.path == "/storage/failure":
                 body = b"\xff\xfe\xfa"
+            elif self.path == "/storage/retry-failure":
+                self.send_json(503, {"ok": False})
+                return
             else:
                 self.send_json(404, {"ok": False})
                 return
@@ -755,28 +787,102 @@ def _gateway_e2e_check(scratch: Path) -> dict[str, Any]:
                     job = dict(job)
                     job["download_url"] = f"http://127.0.0.1:{self.server.server_port}{job.pop('download_path')}"
                     job["download_expires_in"] = 120
+                    job["download_lease_id"] = str(uuid.uuid5(uuid.NAMESPACE_URL, job["job_id"] + ":lease"))
+                    job["download_lease_token"] = str(uuid.uuid5(uuid.NAMESPACE_URL, job["job_id"] + ":token"))
                 self.send_json(200, {"ok": True, "data": job})
+                return
+            if action == "ack_download":
+                if (
+                    request.get("job_id") not in {success_job, failure_job}
+                    or request.get("lease_owner") != "self-check-worker"
+                    or request.get("lease_seconds") != 120
+                ):
+                    state["errors"].append("invalid_download_ack")
+                state["download_acknowledged"].append(request.get("job_id"))
+                self.send_json(200, {"ok": True, "data": {
+                    "job_id": request.get("job_id"),
+                    "org_id": org_id,
+                    "processing_attempt_id": attempt_by_job[request["job_id"]],
+                    "egress_lease_id": request.get("download_lease_id"),
+                    "acknowledged_at": "2099-01-01T00:00:00Z",
+                    "job_lease_until": "2099-01-01T00:02:00Z",
+                    "egress_expires_at": "2099-01-01T00:02:00Z",
+                    "idempotent": False,
+                }})
                 return
             if action == "complete":
                 try:
                     validate_extraction(request["payload"])
-                    if request.get("job_id") != success_job:
+                    if (
+                        request.get("job_id") != success_job
+                        or request.get("processing_attempt_id") != attempt_by_job[success_job]
+                    ):
                         raise AssertionError
                 except Exception:
                     state["errors"].append("invalid_complete")
                     self.send_json(400, {"ok": False, "error": {"code": "invalid_request", "message": "Invalid request"}})
                     return
+                state["complete_attempts"] += 1
+                if state["complete_attempts"] == 1:
+                    self.send_json(503, {
+                        "ok": False,
+                        "error": {
+                            "code": "service_unavailable",
+                            "message": "Evidence recorded; apply response was lost",
+                        },
+                    })
+                    return
                 state["complete"].append(request["job_id"])
-                self.send_json(200, {"ok": True, "data": {"extraction_id": str(uuid.UUID(int=3))}})
+                self.send_json(200, {"ok": True, "data": {
+                    "job_id": success_job,
+                    "processing_attempt_id": attempt_by_job[success_job],
+                    "egress_lease_id": request.get("download_lease_id"),
+                    "extraction_id": str(uuid.UUID(int=3)),
+                    "evidence_sha256": "a" * 64,
+                    "payload_sha256": "c" * 64,
+                    "business_applied": True,
+                    "access_mode": "active",
+                    "idempotent": False,
+                }})
                 return
             if action == "fail":
-                if request.get("job_id") != failure_job or request.get("error_code") != "invalid_utf8":
+                expected = {
+                    failure_job: ("invalid_utf8", False, "failed"),
+                    retry_job: ("download_failed", True, "queued"),
+                }.get(request.get("job_id"))
+                if expected is None or (request.get("error_code"), request.get("retryable")) != expected[:2]:
                     state["errors"].append("invalid_fail")
                 state["fail"].append(request.get("job_id"))
-                self.send_json(200, {"ok": True, "data": {"job_id": request.get("job_id")}})
+                if expected is None:
+                    self.send_json(400, {"ok": False})
+                    return
+                if request.get("job_id") == failure_job:
+                    state["failure_reporting"] = True
+                    time.sleep(1.2)
+                    state["failure_reporting"] = False
+                self.send_json(200, {"ok": True, "data": {
+                    "job_id": request.get("job_id"),
+                    "processing_attempt_id": attempt_by_job[request["job_id"]],
+                    "egress_lease_id": request.get("download_lease_id"),
+                    "evidence_sha256": "b" * 64,
+                    "job_status": expected[2],
+                    "retryable": expected[1],
+                    "business_applied": True,
+                    "access_mode": "active",
+                    "idempotent": False,
+                }})
                 return
             if action == "heartbeat":
-                self.send_json(200, {"ok": True, "data": {"lease_until": "2099-01-01T00:00:00Z"}})
+                if state["failure_reporting"] and request.get("job_id") == failure_job:
+                    state["heartbeat_during_fail"] = True
+                self.send_json(200, {"ok": True, "data": {
+                    "job_id": request.get("job_id"),
+                    "processing_attempt_id": attempt_by_job[request["job_id"]],
+                    "egress_lease_id": request.get("download_lease_id"),
+                    "acknowledged_at": "2099-01-01T00:00:00Z",
+                    "job_lease_until": "2099-01-01T00:02:00Z",
+                    "egress_expires_at": "2099-01-01T00:02:00Z",
+                }})
                 return
             self.send_json(400, {"ok": False, "error": {"code": "invalid_request", "message": "Invalid request"}})
 
@@ -792,7 +898,7 @@ def _gateway_e2e_check(scratch: Path) -> dict[str, Any]:
         worker_id="self-check-worker",
         adapter_name="disabled",
         lease_seconds=120,
-        heartbeat_seconds=30,
+        heartbeat_seconds=1,
         poll_seconds=1,
         max_backoff_seconds=1,
         request_timeout_seconds=5,
@@ -811,13 +917,26 @@ def _gateway_e2e_check(scratch: Path) -> dict[str, Any]:
         client = GatewayClient(base_url, token, timeout_seconds=5)
         assert process_one(client, config) is True
         assert process_one(client, config) is True
+        assert process_one(client, config) is True
         assert process_one(client, config) is False
         assert state["download_attempts"] == 2
+        assert state["download_acknowledged"] == [success_job, failure_job]
         assert state["complete"] == [success_job]
-        assert state["fail"] == [failure_job]
+        assert state["complete_attempts"] == 2
+        assert state["fail"] == [failure_job, retry_job]
+        assert state["heartbeat_during_fail"] is True
         assert state["errors"] == []
         assert not list(temp_root.glob("job-*"))
-        return {"token_rejection": "passed", "download_retry": "passed", "complete": "passed", "fail": "passed"}
+        return {
+            "token_rejection": "passed",
+            "download_retry": "passed",
+            "download_ack_before_ocr": "passed",
+            "complete_receipt": "passed",
+            "complete_recovery_retry": "passed",
+            "failure_receipt": "passed",
+            "heartbeat_through_failure_receipt": "passed",
+            "retry_requeue": "passed",
+        }
     finally:
         server.shutdown()
         server.server_close()

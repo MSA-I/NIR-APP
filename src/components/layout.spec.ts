@@ -25,7 +25,7 @@ describe('סדר הניווט', () => {
 
   it('קיימת קבוצת מסמכים ייעודית', () => {
     const documents = sectionsForRole('owner', false).find((s) => s.section === 'מסמכים');
-    expect(documents?.items.map((i) => i.to)).toEqual(['/documents', '/documents/archive']);
+    expect(documents?.items.map((i) => i.to)).toEqual(['/documents', '/documents/operations', '/documents/archive']);
   });
 
   // The same group through the filter that decides who sees it: a supplier has no business in

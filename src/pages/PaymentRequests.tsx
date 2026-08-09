@@ -11,12 +11,14 @@ import { CheckList } from './Invoices';
 import { runPaymentRequestChecks, type CheckResult } from '../lib/checks';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
 import { addCalendarDays, fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
-import type { PaymentRequest, PaymentRequestStatus, Supplier } from '../lib/types';
+import type { PaymentRequest, PaymentRequestStatus } from '../lib/types';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { paymentRequestCheckFingerprint } from '../lib/checkFingerprint';
-import { SupplierSelectField, useQuickSupplier } from '../components/QuickSupplierPicker';
+import { SupplierSelectField, useQuickSupplier, type SupplierOption } from '../components/QuickSupplierPicker';
+import { financialSupplierMap, readFinancialSuppliers } from '../lib/financialSuppliers';
 
-type Row = PaymentRequest & { supplier: { name: string }; approver: { full_name: string } | null };
+type Row = Omit<PaymentRequest, 'supplier'> & { supplier: { name: string }; approver: { full_name: string } | null };
+type RawRow = Omit<Row, 'supplier'>;
 type PaymentInvoiceCandidate = {
   id: string;
   invoice_number: string;
@@ -30,14 +32,14 @@ type PaymentInvoiceCandidate = {
 
 export default function PaymentRequests() {
   const [params, setParams] = useSearchParams();
-  const { profile } = useAuth();
+  const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const [statusFilter, setStatusFilter] = useParamState('status', 'active');
   const [dueFilter, setDueFilter] = useParamState('due');
   const [manualCreateOpen, setManualCreateOpen] = useState(false);
   const presetInvoiceId = params.get('new');
   const idFilter = params.get('id');
-  const createOpen = manualCreateOpen || !!presetInvoiceId;
+  const createOpen = organizationAccess.canWrite && (manualCreateOpen || !!presetInvoiceId);
   const [selected, setSelected] = useState<Row | null>(null);
   const autoOpenedId = useRef<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Row | null>(null);
@@ -52,10 +54,16 @@ export default function PaymentRequests() {
     }, { replace: true });
   }
 
-  const { data, loading, fetching, error, refetch } = useQuery(async () =>
-    fetchAll<Row>((from, to) => supabase.from('payment_requests')
-      .select('*, supplier:suppliers(name), approver:profiles!p0_pr_approved_actor_tenant_fk(full_name)')
-      .order('created_at', { ascending: false }).order('id').range(from, to)));
+  const { data, loading, fetching, error, refetch } = useQuery(async () => {
+    const rows = await fetchAll<RawRow>((from, to) => supabase.from('payment_requests')
+      .select('*, approver:profiles!p0_pr_approved_actor_tenant_fk(full_name)')
+      .order('created_at', { ascending: false }).order('id').range(from, to));
+    const suppliers = await financialSupplierMap(rows.map((row) => row.supplier_id));
+    return rows.map<Row>((row) => ({
+      ...row,
+      supplier: { name: suppliers.get(row.supplier_id)?.name ?? '—' },
+    }));
+  });
 
   useEffect(() => {
     if (!idFilter || !data || autoOpenedId.current === idFilter) return;
@@ -77,8 +85,8 @@ export default function PaymentRequests() {
     return statusOk && dueOk;
   });
 
-  const isOffice = !!profile && ['owner', 'office'].includes(profile.role);
-  const isOwner = profile?.role === 'owner';
+  const isOffice = organizationAccess.canWrite && !!profile && ['owner', 'office'].includes(profile.role);
+  const isOwner = organizationAccess.canWrite && profile?.role === 'owner';
 
   // Mirrors the detail modal's cancel flow: status → cancelled, reason recorded in audit_logs.
   // Terminal statuses (cancelled/executed/matched — same set the detail modal treats as final)
@@ -198,9 +206,8 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
   const [busy, setBusy] = useState(false);
   const isOwner = profile?.role === 'owner';
 
-  const { data: suppliers, loading: suppliersLoading, error: suppliersError } = useQuery<Supplier[]>(async () =>
-    fetchAll<Supplier>((from, to) => supabase.from('suppliers').select('*').is('deleted_at', null)
-      .order('name').order('id').range(from, to)));
+  const { data: suppliers, loading: suppliersLoading, error: suppliersError } = useQuery<SupplierOption[]>(async () =>
+    (await readFinancialSuppliers()).sort((a, b) => a.name.localeCompare(b.name, 'he')));
 
   // Changing the supplier — by picking one or by creating one — invalidates the chosen invoices,
   // which belong to the previous supplier. One callback, so neither route can forget it.

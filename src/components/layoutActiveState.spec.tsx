@@ -19,6 +19,7 @@ vi.mock('../auth/AuthContext', () => ({
     org: { name: 'ארגון בדיקה' },
     roleLabels: { owner: 'בעלים' },
     isPlatformAdmin: false,
+    organizationAccess: { mode: 'active', canWrite: true },
     signOut: async () => ({ error: null }),
   }),
 }));
@@ -49,6 +50,7 @@ function renderAt(path: string) {
           <Route element={<Layout />}>
             <Route path="/dashboard" element={null} />
             <Route path="/documents" element={null} />
+            <Route path="/documents/operations" element={null} />
             <Route path="/documents/archive" element={null} />
             <Route path="/documents/:documentId/review" element={null} />
             <Route path="/orders" element={null} />
@@ -68,7 +70,7 @@ const currentLabels = () =>
 // comment in Layout.tsx — and it is asserted as "at most one" rather than "exactly none" so that a
 // later fix lighting the parent without duplicating the claim reads as an improvement this suite
 // allows, not a failure it reports.
-const PATHS = ['/dashboard', '/documents', '/documents/archive', '/documents/abc/review', '/orders', '/orders/new'];
+const PATHS = ['/dashboard', '/documents', '/documents/operations', '/documents/archive', '/documents/abc/review', '/orders', '/orders/new'];
 
 describe('סימון הפריט הנוכחי בתפריט', () => {
   // aria-current="page" is a claim about where the user is, and two of them is a contradiction —
