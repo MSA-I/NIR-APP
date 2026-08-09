@@ -264,15 +264,21 @@ select pg_temp.p9_assert(
 -- always at the end of a twenty-minute gate rather than in seconds. See the check:* script that
 -- asserts a migration touching scope_definer_exemptions also touches this file.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 63,
-  'the definer exemption registry must stay at 62 rows -- 59 minus the three 0073 drained, '
+  (select count(*) from private.scope_definer_exemptions) = 66,
+  'the definer exemption registry must stay at 66 rows -- 59 minus the three 0073 drained, '
   || 'plus the one 0075:464 added for rescue_document_from_archive (not drainable: invoker '
   || 'would require granting UPDATE on document_filings to the browser), plus the one 0077 '
   || 'added for apply_document_interpretation (not drainable: it runs with no user JWT, so '
   || 'auth_scopes() is empty and a scoped read would silently disable the decision layer), '
   || 'plus the one 0077 added for revert_document_auto_action (not drainable: invoker would '
   || 'let a direct PATCH undo a machine-written financial record with no reason), plus the '
-  || 'three 0080/0081 trusted internal paths whose tenant is pinned by immutable composite keys; '
+  || 'three 0080/0081 trusted internal paths whose tenant is pinned by immutable composite keys, '
+  || 'plus the one 0084 added for sync_document_kind_from_interpretation (not drainable: the '
+  || 'trigger fires on a row whose org is pinned by the interpretation FK), plus the three 0090 '
+  || 'added for automatic delivery-note receiving -- resolve_delivery_note_order (internal-only, '
+  || 'no role holds EXECUTE), apply_delivery_note_interpretation (same empty-auth_scopes '
+  || 'constraint as 0077) and revert_delivery_note_receipt (invoker cannot delete a '
+  || 'goods_receipts row, because 0023:167-168 revoked that from authenticated); '
   || 'zero silent additions');
 
 select pg_temp.p9_assert(

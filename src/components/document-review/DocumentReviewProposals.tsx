@@ -217,6 +217,9 @@ const DRAFT_ACTIONS: Partial<Record<
     label: 'יצירת טיוטת חשבונית מהמסמך',
   },
   delivery_note: {
+    // Deliberately does not promise the order is chosen for you. When the automatic path resolved
+    // it, the document is already filed to its draft receipt and this panel is not what the
+    // reviewer sees; when it did not, the honest sentence is the manual one.
     blurb: 'המסמך מסווג כתעודת משלוח. אפשר לקלוט ממנו סחורה — הכמויות ימולאו מהתעודה, ואת ההזמנה בוחרים ידנית.',
     label: 'קליטת סחורה מתעודת המשלוח',
   },

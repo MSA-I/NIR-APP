@@ -2,8 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 import {
   type ApplyDecision,
   automaticInterpretationContextAllowed,
+  applyDeliveryNoteInterpretationDecision,
   applyInterpretationDecision,
   applyPriceListInterpretationDecision,
+  decideOnInterpretation,
   type DecisionRpcClient,
   resumeExistingInterpretation,
   type RpcBuilder,
@@ -407,6 +409,100 @@ Deno.test("a price list reaches its separate bounded command", async () => {
   }
   if (signals.length !== 1 || !(signals[0] instanceof AbortSignal)) {
     throw new Error("the price-list decision was issued without an abort signal");
+  }
+});
+
+Deno.test("a delivery note reaches its own bounded command, and no other", async () => {
+  const { client, calls, signals } = recordingClient({
+    data: {
+      outcome: "draft_created",
+      receipt_id: "77777777-7777-4777-8777-777777777777",
+      order_matched_by: "by_items",
+      matched_count: 3,
+      waiting_count: 1,
+    },
+    error: null,
+  });
+  await applyDeliveryNoteInterpretationDecision(
+    client,
+    JOB,
+    INTERPRETATION,
+    ACTOR,
+  );
+  if (
+    calls.length !== 1 ||
+    calls[0][0] !== "apply_delivery_note_interpretation"
+  ) {
+    throw new Error(
+      `unexpected delivery-note rpc calls: ${JSON.stringify(calls)}`,
+    );
+  }
+  const args = calls[0][1];
+  if (
+    args.p_job_id !== JOB || args.p_interpretation_id !== INTERPRETATION ||
+    args.p_actor_id !== ACTOR || Object.keys(args).length !== 3
+  ) {
+    throw new Error(
+      `unexpected delivery-note rpc arguments: ${JSON.stringify(args)}`,
+    );
+  }
+  if (signals.length !== 1 || !(signals[0] instanceof AbortSignal)) {
+    throw new Error("the delivery-note decision was issued without an abort signal");
+  }
+});
+
+// The router, on the one input that decides which financial command a document reaches. A
+// delivery note routed to 0077 gets `not_an_invoice` and nothing happens -- the exact production
+// behaviour of 09.08.2026 that this wave exists to fix -- so a regression here is invisible
+// except as "the feature quietly stopped working".
+Deno.test("the router sends each kind to its own command and defaults to the invoice ladder", async () => {
+  const seen: string[] = [];
+  const spy = (name: string) => (
+    _admin: Parameters<typeof applyInterpretationDecision>[0],
+    _jobId: string,
+    _interpretationId: string,
+    _actorId: string,
+  ) => {
+    seen.push(name);
+    return Promise.resolve();
+  };
+  const { client } = recordingClient({ data: {}, error: null });
+
+  await decideOnInterpretation(client, true, JOB, INTERPRETATION, ACTOR, spy("price_list"), true);
+  await decideOnInterpretation(client, false, JOB, INTERPRETATION, ACTOR, spy("delivery"), true);
+  await decideOnInterpretation(client, false, JOB, INTERPRETATION, ACTOR, spy("invoice"), false);
+  if (seen.join(",") !== "price_list,delivery,invoice") {
+    throw new Error(`the injected decision was not honoured: ${seen.join(",")}`);
+  }
+
+  // And without an injected decision, the real routing table.
+  const routed: string[] = [];
+  const record = (label: string) => {
+    const { client: c, calls } = recordingClient({ data: {}, error: null });
+    return { client: c, read: () => routed.push(`${label}:${calls[0]?.[0] ?? "none"}`) };
+  };
+  const priceList = record("price_list");
+  await decideOnInterpretation(
+    priceList.client, true, JOB, INTERPRETATION, ACTOR, undefined, false,
+  );
+  priceList.read();
+  const delivery = record("delivery");
+  await decideOnInterpretation(
+    delivery.client, false, JOB, INTERPRETATION, ACTOR, undefined, true,
+  );
+  delivery.read();
+  const invoice = record("invoice");
+  await decideOnInterpretation(
+    invoice.client, false, JOB, INTERPRETATION, ACTOR, undefined, false,
+  );
+  invoice.read();
+  const expected = [
+    "price_list:apply_price_list_interpretation",
+    "delivery:apply_delivery_note_interpretation",
+    "invoice:apply_document_interpretation",
+  ].join(",");
+  if (routed.join(",") !== expected) {
+    throw new Error(`routing table changed: ${routed.join(",")}`);
   }
 });
 

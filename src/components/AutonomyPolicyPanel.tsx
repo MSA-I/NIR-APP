@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { BrainCircuit, ListChecks, Loader2 } from 'lucide-react';
+import { BrainCircuit, ListChecks, Loader2, PackageCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
@@ -19,6 +19,13 @@ const POLICIES = [
     description: 'מעל הסף, שורות עם מק״ט או ברקוד חד־משמעיים נקלטות; השאר ממתינות.',
     warning: 'שם מוצר לעולם אינו מפתח התאמה. שורה שלא הותאמה יוצרת מוצר חדש רק כשיש בה שם וגם מק״ט או ברקוד; אחרת היא ממתינה.',
     icon: ListChecks,
+  },
+  {
+    key: 'delivery_note.receiving',
+    title: 'טיוטת קבלת סחורה אוטומטית',
+    description: 'מעל הסף, תעודת משלוח פותחת טיוטת קליטה מקושרת להזמנה, עם הכמויות שנקראו.',
+    warning: 'הטיוטה אינה מזיזה מלאי, אינה מעדכנת כמויות שהתקבלו ואינה פותחת בקשות זיכוי — אדם עדיין משלים אותה. כשאין מספר הזמנה מודפס, ההזמנה נבחרת לפי הפריטים שסופקו, ורק אם נותרה אפשרות אחת.',
+    icon: PackageCheck,
   },
 ] as const;
 

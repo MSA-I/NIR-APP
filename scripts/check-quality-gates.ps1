@@ -924,6 +924,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\tests\p1_price_submissions.sql",
     "supabase\tests\p1_price_submissions_concurrency.sql",
     "supabase\tests\p15_automatic_price_list_intake.sql",
+    "supabase\tests\p16_automatic_delivery_note_receiving.sql",
     "supabase\functions\document-processing\index.ts",
     "supabase\functions\interpret-document\index.ts",
     "supabase\functions\interpret-document\core.test.ts",
@@ -1103,6 +1104,7 @@ try {
     Invoke-SqlTest "supabase\tests\p13_document_autonomy_config.sql" "Autonomy default-off, the reasoned platform write path and the uncalibrated threshold floor"
     Invoke-SqlTest "supabase\tests\p14_apply_interpretation.sql" "Machine-written invoices: the switch, min(type,supplier) confidence, idempotency and the untouched order"
     Invoke-SqlTest "supabase\tests\p15_automatic_price_list_intake.sql" "Automatic price lists: default-off, ambiguity, partial intake, idempotency and reasoned reversal"
+    Invoke-SqlTest "supabase\tests\p16_automatic_delivery_note_receiving.sql" "Automatic delivery notes: draft-only receipts, three-tier order resolution, and a financial footprint that never moves"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"
