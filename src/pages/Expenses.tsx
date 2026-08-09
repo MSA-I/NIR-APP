@@ -289,7 +289,7 @@ export default function Expenses() {
           <>
             <section className="space-y-2">
               <h2 className="section-title">הוצאות לפי ספק</h2>
-              <div className="divide-y divide-line-soft border-y border-line-strong bg-surface md:hidden">
+              <div className="divide-y divide-line-soft border-y border-line-strong bg-surface lg:hidden">
                 {data.bySupplier.map((supplier) => (
                   <button key={supplier.id} type="button" onClick={() => setDrill(supplier)}
                     className="flex min-h-16 w-full items-center gap-3 px-3 py-2.5 text-start hover:bg-surface-sunken active:bg-action-wash/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus">
@@ -305,7 +305,7 @@ export default function Expenses() {
                   </button>
                 ))}
               </div>
-              <div className="hidden md:block">
+              <div className="hidden lg:block">
                 <DataTable rows={data.bySupplier} columns={columns} mobile="scroll"
                   rowLabel={(r) => `הוצאות עבור ${r.name}`}
                   onRowClick={(r) => setDrill(r)} emptyTitle="אין חשבוניות בטווח" />

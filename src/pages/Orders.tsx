@@ -381,7 +381,7 @@ export function OrderDetail() {
           <h2 className="text-xl font-bold">{`הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`}</h2>
           <div className="text-sm mt-1">ספק: {order.supplier.name} · תאריך: {fmtDate(order.created_at)} {order.expected_date && `· אספקה מבוקשת: ${fmtDate(order.expected_date)}`}</div>
         </div>
-        <ul className="divide-y divide-line-soft md:hidden print:hidden" aria-label="פריטי ההזמנה">
+        <ul className="divide-y divide-line-soft lg:hidden print:hidden" aria-label="פריטי ההזמנה">
           {order.items.map((item) => (
             <li key={item.id} className="py-3 first:pt-0 last:pb-0">
               <div className="flex items-start justify-between gap-3">
@@ -393,7 +393,7 @@ export function OrderDetail() {
           ))}
           <li className="flex items-center justify-between pt-3 font-bold"><span>סה״כ להזמנה</span><span className="num">{fmtMoneyExact(total)}</span></li>
         </ul>
-        <div className="hidden overflow-x-auto md:block print:block print:overflow-visible">
+        <div className="hidden overflow-x-auto lg:block print:block print:overflow-visible">
         <table className="w-full">
           <thead className="bg-surface-sunken border-b border-line-soft">
             <tr>

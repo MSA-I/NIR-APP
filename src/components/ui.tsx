@@ -846,7 +846,7 @@ function readHiddenColumns(storageKey: string | undefined, validKeys: readonly s
 
 /**
  * The enterprise toolbar needs to know which of its two layouts is live. The table body itself
- * keeps both DOM branches mounted and CSS-hidden (`md:hidden` / `hidden md:block` — the browser
+ * keeps both DOM branches mounted and CSS-hidden (`lg:hidden` / `hidden lg:block` — the browser
  * gate measures `:visible` on that model and it must not change), but the toolbar cannot do the
  * same: rendering the screen's `toolbar` slot twice would duplicate every id inside it (gate B6).
  * Defaults to desktop where matchMedia is unavailable (jsdom).
@@ -1180,7 +1180,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
   ) : (
     <>
           {mobile === 'cards' && (
-            <ul className="md:hidden divide-y divide-line-soft">
+            <ul className="lg:hidden divide-y divide-line-soft">
               {pageRows.map((row) => {
                 const title = mobileTitle ? mobileTitle(row) : visibleColumns[0]?.render(row);
                 const details = visibleColumns.filter((c, i) => (c.priority ?? 2) <= 2 && !(i === 0 && !mobileTitle));
@@ -1238,7 +1238,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
               })}
             </ul>
           )}
-          <div className={mobile === 'cards' ? 'overflow-x-auto hidden md:block' : 'overflow-x-auto'}>
+          <div className={mobile === 'cards' ? 'overflow-x-auto hidden lg:block' : 'overflow-x-auto'}>
             <table className="w-full">
               <thead className="bg-surface-sunken border-b border-line-soft">
                 <tr>

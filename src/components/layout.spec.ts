@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { NAV_SECTIONS, drawerSectionsForRole, footerItemsForRole, sectionsForRole } from './Layout';
-import { desktopQuickActionsFor, isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
+import { isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
 import type { Role } from '../lib/types';
 
 const ALL_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'];
@@ -78,10 +78,9 @@ describe('סרגל הפעולות המהירות במובייל', () => {
     }
   });
 
-  it('משאיר את ה-speed dial בדסקטופ עם פקודות בלבד', () => {
-    expect(desktopQuickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'capture', 'invoice']);
-    expect(desktopQuickActionsFor('accountant')).toEqual([]);
-  });
+  // The desktop speed-dial test that used to sit here went with the speed-dial itself (owner
+  // decision 09.08.2026). Nothing replaced it: the test above already pins the phone list per role,
+  // and a second assertion of the same fact is not coverage.
 });
 
 describe('התאמת משפחת מסלול', () => {

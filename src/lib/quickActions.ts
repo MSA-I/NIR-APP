@@ -10,8 +10,8 @@ export interface QuickAction {
   to?: string;
 }
 
-// Mobile keeps the original role-aware quick-action bar. The desktop speed-dial filters this list
-// to commands only so restoring the phone surface does not undo the desktop hierarchy.
+// The role-aware quick-action bar, phone only since the desktop speed-dial was removed
+// (09.08.2026). Order is canonical and is asserted in layout.spec.ts.
 const QUICK_ACTIONS: readonly QuickAction[] = [
   { key: 'order', label: 'הזמנה חדשה', icon: ShoppingCart, kind: 'link', to: '/orders/new?fresh=1', roles: ['owner', 'office', 'kitchen'] },
   { key: 'dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, kind: 'link', to: '/dashboard', roles: ['owner', 'office', 'kitchen', 'accountant'] },
@@ -28,9 +28,8 @@ export function quickActionsFor(role: Role | null | undefined): QuickAction[] {
   return role ? QUICK_ACTIONS.filter((action) => action.roles.includes(role)) : [];
 }
 
-export function desktopQuickActionsFor(role: Role | null | undefined): QuickAction[] {
-  return quickActionsFor(role).filter((action) => ['order', 'capture', 'invoice'].includes(action.key));
-}
+// desktopQuickActionsFor was removed with the desktop speed-dial (owner decision 09.08.2026).
+// Quick actions are a phone surface now; on a desktop every page carries its own primary action.
 
 export function isFocusPath(pathname: string): boolean {
   return FOCUS_PATHS.some((path) => path.includes(':')

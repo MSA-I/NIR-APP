@@ -526,126 +526,32 @@ async function quickActionsContract(browser) {
     await closeContext(supplierContext);
   }
 
-  const desktop = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1024, height: 768 } });
+  // The desktop speed-dial was removed (owner decision 09.08.2026). What stood here was ~120 lines
+  // asserting a trigger, a roving-focus menu, a focus hand-off between two surfaces and a
+  // reduced-motion companion — all of it protecting code that no longer exists. The contract that
+  // replaced it is one claim in both directions: on a desktop there is no quick-action surface at
+  // all, in the DOM or in the accessibility tree, and no layout shifted when it left.
+  const desktop = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
   const desktopPage = await desktop.newPage();
-  captureConsole(desktopPage, 'desktop-speed-dial');
+  captureConsole(desktopPage, 'desktop-no-speed-dial');
   try {
     await login(desktopPage, 'owner');
     for (const [width, height] of [[1024, 768], [1440, 900]]) {
       await desktopPage.setViewportSize({ width, height });
       await desktopPage.waitForTimeout(100);
-      assert.equal(await desktopPage.locator('.mobile-action-bar:visible').count(), 0, `mobile action bar visible at ${width}px`);
-      const trigger = desktopPage.locator('.speed-dial-trigger');
-      assert.equal(await trigger.count(), 1, `desktop speed-dial missing at ${width}px`);
-      assert(await trigger.isVisible(), `desktop speed-dial hidden at ${width}px`);
+      assert.equal(await desktopPage.locator('.mobile-action-bar:visible').count(), 0,
+        `mobile action bar visible at ${width}px`);
+      assert.equal(await desktopPage.locator('.speed-dial-trigger').count(), 0,
+        `desktop speed-dial is still in the DOM at ${width}px`);
+      assert.equal(await desktopPage.getByRole('button', { name: 'פתיחת פעולות מהירות' }).count(), 0,
+        `desktop quick-actions trigger is still in the accessibility tree at ${width}px`);
       const overflow = await desktopPage.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-      assert(overflow <= 1, `desktop-speed-dial/${width}: horizontal overflow ${overflow}px`);
+      assert(overflow <= 1, `desktop/${width}: horizontal overflow ${overflow}px`);
     }
-
-    const trigger = desktopPage.locator('.speed-dial-trigger');
-    assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'desktop speed-dial starts expanded');
-    await trigger.click();
-    assert.equal(await trigger.getAttribute('aria-expanded'), 'true', 'desktop speed-dial did not expose expanded state');
-    assert.equal(await trigger.getAttribute('aria-label'), 'סגירת פעולות מהירות', 'desktop speed-dial does not expose its close action');
-    assert.equal(await trigger.getAttribute('aria-controls'), 'global-quick-actions', 'desktop speed-dial does not identify its menu');
-    const menu = desktopPage.getByRole('menu', { name: 'פעולות מהירות' });
-    await menu.waitFor();
-    const items = menu.getByRole('menuitem');
-    const desktopLabels = ['הזמנה חדשה', 'צילום מסמך', 'חשבונית חדשה'];
-    const desktopTargets = ['/orders/new?fresh=1', null, '/invoices/new'];
-    assert.deepEqual((await items.allTextContents()).map((label) => label.trim()), desktopLabels,
-      'desktop speed-dial labels or order changed');
-    const targets = await items.evaluateAll((nodes) => nodes.map((node) => {
-      const href = node.getAttribute('href');
-      if (!href) return null;
-      const url = new URL(href, window.location.origin);
-      return `${url.pathname}${url.search}`;
-    }));
-    assert.deepEqual(targets, desktopTargets, 'desktop speed-dial destinations or order changed');
-    assert(await items.first().evaluate((node) => document.activeElement === node), 'desktop speed-dial first action did not receive focus');
-    await desktopPage.keyboard.press('ArrowDown');
-    assert(await items.nth(1).evaluate((node) => document.activeElement === node), 'ArrowDown did not advance in desktop speed-dial');
-    await desktopPage.keyboard.press('ArrowUp');
-    assert(await items.first().evaluate((node) => document.activeElement === node), 'ArrowUp did not move back in desktop speed-dial');
-    await desktopPage.keyboard.press('End');
-    assert(await items.last().evaluate((node) => document.activeElement === node), 'End did not focus the last desktop speed-dial action');
-    await desktopPage.keyboard.press('Home');
-    assert(await items.first().evaluate((node) => document.activeElement === node), 'Home did not focus the first desktop speed-dial action');
-    const sizes = await items.evaluateAll((nodes) => nodes.map((node) => {
-      const rect = node.getBoundingClientRect();
-      return { width: rect.width, height: rect.height };
-    }));
-    assert(sizes.every(({ width, height }) => width + 0.01 >= 44 && height + 0.01 >= 44), `desktop speed-dial target below 44px: ${JSON.stringify(sizes)}`);
-    const textLayout = await items.evaluateAll((nodes) => nodes.map((node) => ({
-      whiteSpace: getComputedStyle(node).whiteSpace,
-      scrollWidth: node.scrollWidth,
-      clientWidth: node.clientWidth,
-    })));
-    assert(textLayout.every(({ whiteSpace, scrollWidth, clientWidth }) => whiteSpace === 'nowrap' && scrollWidth <= clientWidth + 1),
-      `desktop speed-dial label wraps or overflows: ${JSON.stringify(textLayout)}`);
-    await desktopPage.screenshot({ path: path.join(outDir, 'desktop-speed-dial-open-1440.png') });
-    report.screenshots.push('desktop-speed-dial-open-1440.png');
-    await desktopPage.keyboard.press('Escape');
-    await menu.waitFor({ state: 'hidden' });
-    assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'Escape did not collapse desktop speed-dial');
-    assert.equal(await trigger.getAttribute('aria-label'), 'פתיחת פעולות מהירות', 'Escape did not restore desktop speed-dial action name');
-    assert(await trigger.evaluate((node) => document.activeElement === node), 'Escape did not restore desktop speed-dial trigger focus');
-
-    await trigger.click();
-    await menu.waitFor();
-    await desktopPage.setViewportSize({ width: 390, height: 844 });
-    await desktopPage.waitForTimeout(100);
-    assert.equal(await desktopPage.locator('#global-quick-actions').count(), 0,
-      'desktop speed-dial state survived the switch to the mobile action bar');
-    assert(await desktopPage.locator('.mobile-action[data-quick-action-key="order"]').evaluate((node) => document.activeElement === node),
-      'focus did not move from the desktop menuitem to the matching mobile action');
-    await desktopPage.setViewportSize({ width: 1440, height: 900 });
-    await desktopPage.waitForTimeout(100);
-    assert.equal(await trigger.getAttribute('aria-expanded'), 'false',
-      'desktop speed-dial reopened after a mobile breakpoint round-trip');
-    assert(await trigger.evaluate((node) => document.activeElement === node),
-      'focus did not move from the mobile action bar to the desktop trigger');
-
-    await trigger.click();
-    await desktopPage.locator('#main h1').first().click();
-    await menu.waitFor({ state: 'hidden' });
-    assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'outside press did not collapse desktop speed-dial');
-
-    await desktopPage.goto(`${baseURL}/receiving`);
-    await settle(desktopPage);
-    const receivingTrigger = desktopPage.locator('.speed-dial-trigger');
-    await receivingTrigger.click();
-    await desktopPage.getByRole('menuitem', { name: 'הזמנה חדשה' }).click();
-    await desktopPage.waitForURL((url) => url.pathname === '/orders/new');
-    assert.equal(await desktopPage.getByRole('menu').count(), 0, 'desktop speed-dial stayed open after link navigation');
-    await desktopPage.locator('.speed-dial-trigger').waitFor({ state: 'detached' });
-    assert.equal(await desktopPage.locator('.speed-dial-trigger').count(), 0, 'desktop speed-dial remained on a focus route');
+    await desktopPage.screenshot({ path: path.join(outDir, 'desktop-no-speed-dial-1440.png') });
+    report.screenshots.push('desktop-no-speed-dial-1440.png');
   } finally {
     await closeContext(desktop);
-  }
-
-  const reduced = await browser.newContext({
-    locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 1024, height: 768 },
-  });
-  const page = await reduced.newPage();
-  captureConsole(page, 'desktop-speed-dial:reduced-motion');
-  try {
-    await login(page, 'owner');
-    await page.getByRole('button', { name: 'פתיחת פעולות מהירות' }).click();
-    const moving = page.locator('[role="menuitem"], button[aria-expanded="true"] svg');
-    const motion = await moving.evaluateAll((nodes) => nodes.map((node) => {
-      const style = getComputedStyle(node);
-      return { animationDuration: style.animationDuration, transitionDuration: style.transitionDuration, transitionProperty: style.transitionProperty };
-    }));
-    const milliseconds = (value) => Math.max(...value.split(',').map((part) => {
-      const duration = Number.parseFloat(part) || 0;
-      return part.trim().endsWith('ms') ? duration : duration * 1000;
-    }));
-    assert(motion.every((entry) => milliseconds(entry.animationDuration) <= 20
-      && (!/(transform|translate|rotate|scale)/.test(entry.transitionProperty) || milliseconds(entry.transitionDuration) <= 20)),
-    `reduced-motion leaves desktop speed-dial movement enabled: ${JSON.stringify(motion)}`);
-  } finally {
-    await closeContext(reduced);
   }
 }
 
@@ -664,8 +570,8 @@ async function overlayStacking(browser) {
     return {
       noticeBar: area(notice, rect('.mobile-action-bar')),
       noticeToast: area(notice, rect('[data-p4-toast-viewport]')),
-      noticeFab: area(notice, rect('.speed-dial-trigger')),
-      noticeMenu: area(notice, rect('.speed-dial-menu')),
+      // noticeFab / noticeMenu went with the desktop speed-dial (09.08.2026). On a desktop the PWA
+      // notice now has nothing to collide with in that corner.
     };
   });
   try {
@@ -698,10 +604,12 @@ async function overlayStacking(browser) {
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForTimeout(100);
-    assert.equal((await overlapAreas()).noticeFab, 0, 'PWA update notice overlaps the desktop speed-dial');
-    await page.locator('.speed-dial-trigger').click();
-    await page.locator('.speed-dial-menu').waitFor();
-    assert.equal((await overlapAreas()).noticeMenu, 0, 'PWA update notice overlaps the open desktop speed-dial menu');
+    // The desktop half of this scenario used to prove the PWA notice cleared the speed-dial and its
+    // open menu. With that surface gone, what is left worth asserting is that the notice is still
+    // reachable on a desktop and did not follow the FAB out of the layout.
+    await page.locator('.phone-update-notice').waitFor();
+    assert(await page.locator('.phone-update-notice').isVisible(),
+      'PWA update notice disappeared on desktop after the speed-dial was removed');
   } finally {
     await closeContext(context);
   }
@@ -719,7 +627,8 @@ async function dashboardAndDialogs(browser) {
     await dataHeadings.first().waitFor();
     assert((await dataHeadings.first().innerText()).includes('דורש טיפול'), 'dashboard does not begin with the attention briefing');
     assert((await dataHeadings.nth(1).innerText()).includes('אספקות היום ומחר'), 'deliveries are not second, after the attention briefing');
-    assert.equal(await page.locator('.speed-dial-trigger').count(), 1, 'dashboard desktop speed-dial missing');
+    assert.equal(await page.locator('.speed-dial-trigger').count(), 0,
+      'the dashboard still renders a desktop speed-dial — it was removed 09.08.2026');
     const contrast = await assertKeyContrast(page);
     await page.screenshot({ path: path.join(outDir, 'dashboard-1440.png'), fullPage: true });
     report.screenshots.push('dashboard-1440.png');
@@ -3095,7 +3004,7 @@ async function run(name, check) {
   try {
     await run('role and viewport matrix', () => roleAndViewportMatrix(browser));
     await run('supplier portal uses the RLS-safe projection', () => supplierPortalProjection(browser));
-    await run('mobile action bar and desktop speed-dial contract', () => quickActionsContract(browser));
+    await run('mobile action bar, and no quick-action surface on desktop', () => quickActionsContract(browser));
     await run('overlay stacking and breakpoint reset', () => overlayStacking(browser));
     await run('dashboard, quick actions and dialogs', () => dashboardAndDialogs(browser));
     await run('golden screen visual baseline', () => goldenScreens(browser));
