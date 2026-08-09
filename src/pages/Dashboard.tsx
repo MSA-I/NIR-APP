@@ -141,10 +141,11 @@ type DeliveryOrder = {
 // detail: supplier · order number · status · expected products. purchase_orders has no
 // delivery-hour column, so no time is shown or invented. Orders with a NULL expected_date are
 // excluded from the counts and reported honestly as one quiet hint line instead.
-function DeliveriesCard({ today, tomorrow, noDateCount }: {
+function DeliveriesCard({ today, tomorrow, noDateCount, className = '' }: {
   today: DeliveryOrder[];
   tomorrow: DeliveryOrder[];
   noDateCount: number;
+  className?: string;
 }) {
   const distinctSuppliers = (rows: DeliveryOrder[]) => new Set(rows.map((o) => o.supplier_id)).size;
   const groups = [
@@ -181,7 +182,7 @@ function DeliveriesCard({ today, tomorrow, noDateCount }: {
   }
 
   return (
-    <section className="card overflow-hidden">
+    <section className={`card overflow-hidden ${className}`}>
       <div className="px-4 py-4 sm:px-5">
         <h2 className="section-title">אספקות היום ומחר</h2>
         <p className="mt-0.5 text-xs text-ink-muted">ספקים שאמורים לספק סחורה; פירוט ההזמנות בלחיצה</p>
@@ -634,13 +635,23 @@ export default function Dashboard() {
         </Note>
       )}
 
+      {/* flex, not space-y: `order` below only moves flex/grid children, and margins cannot be
+          reordered at all. Each zone declares its own entrance step for both viewports — see the
+          `--dash-step` rules in index.css — because below lg the money band moves to the top and
+          DOM position stops describing what the eye sees. */}
       {data && (
-        <div className="dash-enter space-y-5">
-          <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול" />
+        <div className="dash-enter flex flex-col gap-5">
+          <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול"
+            className="[--dash-step-mobile:1] [--dash-step:0]" />
 
-          <DeliveriesCard today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount} />
+          <DeliveriesCard today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount}
+            className="[--dash-step-mobile:2] [--dash-step:1]" />
 
-          <div className="card grid grid-cols-1 sm:grid-cols-3">
+          {/* Section 12 on a phone: the manager opens the app and sees a figure. The band used to
+              sit below two cards, so the first fold at 390 held no money at all. It is FIRST on
+              screen below lg and third from lg up, where all three zones fit the fold anyway.
+              DOM order is unchanged on purpose — the quality gate pins the heading order. */}
+          <div className="card grid grid-cols-1 sm:grid-cols-3 order-first lg:order-none [--dash-step-mobile:0] [--dash-step:2]">
             <BandStat title="יתרת חשבוניות פתוחות" value={data.money.openBalance} tone="await" to="/invoices?pay=unpaid"
               icon={ReceiptText} context="נכון לעכשיו"
               aux={data.money.openBalance == null ? 'אין נתונים זמינים' : `${data.money.openInvoiceCount} חשבוניות פתוחות`} />
@@ -653,7 +664,7 @@ export default function Dashboard() {
               spark={data.weekly} sparkLabel="מגמת רכש בשמונה השבועות האחרונים" />
           </div>
 
-          <section className="card overflow-hidden">
+          <section className="card overflow-hidden [--dash-step-mobile:3] [--dash-step:3]">
             <div className="px-4 py-4 sm:px-5">
               <h2 className="section-title">מגמות</h2>
               <p className="mt-0.5 text-xs text-ink-muted">רכש, תשלומים ותמהיל הוצאות במבט אחד</p>
@@ -701,7 +712,7 @@ export default function Dashboard() {
             </div>
           </section>
 
-          <section className="card overflow-hidden">
+          <section className="card overflow-hidden [--dash-step-mobile:4] [--dash-step:4]">
             <div className="px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
               <h2 className="section-title">תמונת מצב תפעולית</h2>
               <p className="mt-0.5 text-xs text-ink-muted">הפירוט זמין לפי צורך; הפעולות הדחופות נשארות למעלה.</p>

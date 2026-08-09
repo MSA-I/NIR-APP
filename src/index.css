@@ -394,11 +394,18 @@ body {
 /* Five decision regions settle once when real data replaces the skeleton. Manual refetch keeps
    this subtree mounted, so the sequence cannot replay or distract during operational use. */
 @keyframes dash-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
-.dash-enter > * { animation: dash-enter 0.35s ease-out both; }
-.dash-enter > :nth-child(2) { animation-delay: 60ms; }
-.dash-enter > :nth-child(3) { animation-delay: 120ms; }
-.dash-enter > :nth-child(4) { animation-delay: 180ms; }
-.dash-enter > :nth-child(5) { animation-delay: 240ms; }
+/* Each zone declares its own step, in Dashboard.tsx, rather than inheriting one from :nth-child.
+   Reason: below lg the money band is pulled to the top with `order`, so DOM position and screen
+   position disagree there — under :nth-child the first card on screen would have settled 120ms
+   after the card beneath it. A zone that forgets to declare a step gets 0ms, which is visible in
+   review but harmless in production. The 60ms step is the one DESIGN.md names. */
+.dash-enter > * {
+  animation: dash-enter 0.35s ease-out both;
+  animation-delay: calc(var(--dash-step-mobile, 0) * 60ms);
+}
+@media (min-width: 64rem) {
+  .dash-enter > * { animation-delay: calc(var(--dash-step, 0) * 60ms); }
+}
 
 @keyframes freshness-settle { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 .freshness-settle { animation: freshness-settle 0.18s ease-out both; }

@@ -387,7 +387,13 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
  * obligations (money we owe), so a bare figure is apples+oranges. The caller — which knows what
  * the mix means — may pass a short qualifier (e.g. "חשיפה"); we render it, we never invent it.
  */
-export function AttentionZone({ items, totalLabel }: { items: AttentionItem[]; totalLabel?: string }) {
+export function AttentionZone({ items, totalLabel, className = '' }: {
+  items: AttentionItem[];
+  totalLabel?: string;
+  /** Caller-supplied classes on the card root. The owner dashboard uses it to declare this zone's
+   *  entrance step, which differs between phone and desktop since the money band moves. */
+  className?: string;
+}) {
   const clear = items.filter((i) => i.count === 0);
   const unknownRows = items.filter((i) => i.count == null);
   // Rank the active rows by tone severity; the original index is the tiebreaker, so same-tone
@@ -403,7 +409,7 @@ export function AttentionZone({ items, totalLabel }: { items: AttentionItem[]; t
   const actionTotal = actionRows.reduce((s, i) => s + (i.amount ?? 0), 0);
 
   return (
-    <section className="card card-pad">
+    <section className={`card card-pad ${className}`}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="section-title flex items-center gap-2"><Bell size={18} className="text-await-fg" aria-hidden="true" /> דורש טיפול היום</h2>
         <span className="text-xs text-ink-muted">
