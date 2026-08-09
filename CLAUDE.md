@@ -72,7 +72,11 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   **היסטוריית הסטייה, כי היא חזרה חמש פעמים:** ‏13 → 20 → 26 → **27** לסוויטות; ‏22 → 25 → 29 → 30 →
   **33** לתרחישים; ‏16 → 21 → **22** ל-`check:review`; ‏שבעה → **שמונה** לסקריפטי ה-`check:*`. בכל פעם הקובץ
   הזה — שכל סוכן קורא **ראשון** — שלח את הקורא לספור פחות ממה שקיים. **סופרים לפני שכותבים.**
-  **ריצה אחת בכל רגע במכונה.** **אין CI** — `.github/` אינו קיים; זו ריצה ידנית.
+  **ריצה אחת בכל רגע במכונה.** **יש CI מינימלי מאז 09.08.2026** — ‏`.github/workflows/build.yml`
+  מריץ את `npm run build` המלא (‏tsc + שמונת ה-`check:*` + ‏vitest + ‏vite build) על Linux בכל
+  push/PR ל-`main`. **מה שה-CI לא מכסה, במפורש:** ‏`npm run quality` נשאר ריצה ידנית על מכונה זו —
+  ‏Docker, ‏27 סוויטות SQL, ‏preflight, חוזי Deno ו-33 תרחישי הדפדפן אינם רצים ב-CI. הגנת ענף
+  (‏required status) היא הגדרת GitHub של הבעלים — לא בוצעה אוטומטית.
 - מיגרציות: `scripts/db-query.ps1` (Windows) / `scripts/db-query.sh` (Linux/Mac) — שניהם רצים מול
   **הפרויקט המרוחק** דרך Management API (`-SqlFile` + `-ProjectRef` חובה). ריצה מקומית של סוויטה או
   מיגרציה היא `docker exec … psql` על `supabase_db_supplyflow-p0`, הדפוס של `Invoke-SqlTest`.

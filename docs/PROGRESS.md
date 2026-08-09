@@ -48,6 +48,19 @@ console/page/server ואפס overflow במסכים שנבדקו. הרצה רצו
 לחוב ניטור ביצועים. לא הוחלו מיגרציות ולא בוצעו כתיבות עסקיות בפריסה או באימות.
 ---
 
+## חבילה 6 — CI מינימלי (09.08.2026) — הקובץ בריפו; מופעל בפוש הבא
+
+**‏`.github/workflows/build.yml`:** ‏`npm run build` המלא על Linux (‏Node 24 — הסקריפטים מריצים
+TS ישירות) בכל push/PR ל-`main`; ‏npm cache מטפל גם ב-tarball של xlsx מה-CDN (נעול ב-integrity
+בלוק). ‏`npm run quality` **לא** הועבר — ‏Docker/SQL/Deno/דפדפן נשארים ריצה ידנית מתועדת.
+‏`CLAUDE.md` עודכן ("אין CI" הוסר; נכתב במפורש מה מכוסה ומה לא).
+
+**מה עוד לא קרה, בכוונה:** הריפו לא נדחף ל-GitHub בסשן הזה — ‏Cloudflare Pages נפרס מ-`main`,
+ולכן push הוא אירוע פריסה ששייך לסוף הקמפיין, אחרי `npm run quality`. לכן שני סעיפי קבלה
+ממתינים לפוש: הוכחת "PR שבור נכשל" והגנת הענף (required status — הגדרת GitHub של הבעלים).
+
+---
+
 ## חבילה 5 — אמינות מובייל: precache + צילום offline (09.08.2026) — build ירוק; האימות החי נשאר לבעלים
 
 **‏precache (#101, ‏§2 נסגר):** ‏`vite-plugin-pwa` ב-`injectManifest` על `public/sw.js` הקיים —
