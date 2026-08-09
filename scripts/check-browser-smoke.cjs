@@ -2964,7 +2964,7 @@ async function passwordRecovery(browser) {
     userId = link.id || (link.user && link.user.id) || null;
     assert(actionLink, 'generate_link returned no action_link');
     assert(userId, 'generate_link did not name the user id (needed to restore the password)');
-    assert(actionLink.includes(encodeURIComponent(`${baseURL}/reset-password`)),
+    assert.equal(new URL(actionLink).searchParams.get('redirect_to'), `${baseURL}/reset-password`,
       'GoTrue did not accept the preview redirect_to — check additional_redirect_urls in supabase/config.toml');
 
     await page.goto(actionLink);
