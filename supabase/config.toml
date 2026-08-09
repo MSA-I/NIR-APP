@@ -39,14 +39,22 @@ file_size_limit = "50MiB"
 [auth]
 enabled = true
 site_url = "http://127.0.0.1:5199"
-# The wildcard-port entry exists for the quality gate: its vite preview binds a free port per
-# run, and the password-recovery scenario follows a real GoTrue action_link whose redirect_to
-# must be allow-listed or GoTrue silently falls back to site_url. Production needs the mirror
-# entry ({origin}/reset-password) in the remote project's Auth URL configuration (#114).
+# The quality gate chooses the first free port from the exact range below. Local GoTrue treats
+# redirect ports as exact even though hosted preview-host globs are supported, so a wildcard port
+# silently falls back to site_url. Production needs the mirror ({origin}/reset-password) in the
+# remote project's Auth URL configuration (#114).
 additional_redirect_urls = [
   "http://127.0.0.1:5199",
   "http://127.0.0.1:5199/reset-password",
-  "http://127.0.0.1:*/reset-password",
+  "http://127.0.0.1:5200/reset-password",
+  "http://127.0.0.1:5201/reset-password",
+  "http://127.0.0.1:5202/reset-password",
+  "http://127.0.0.1:5203/reset-password",
+  "http://127.0.0.1:5204/reset-password",
+  "http://127.0.0.1:5205/reset-password",
+  "http://127.0.0.1:5206/reset-password",
+  "http://127.0.0.1:5207/reset-password",
+  "http://127.0.0.1:5208/reset-password",
 ]
 jwt_expiry = 3600
 enable_signup = true

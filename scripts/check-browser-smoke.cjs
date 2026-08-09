@@ -2737,10 +2737,11 @@ async function machineFiledDocument(browser) {
  * Package 5 (#101 / DEBT-REGISTER §2, closed 09.08.2026) — an offline reload keeps the app.
  *
  * The one scenario that runs WITHOUT serviceWorkers:'block', because the worker IS the thing
- * under test: load /login, wait until the worker CONTROLS the page (activation implies the
- * precache warm-up finished — install() chains addAll before skipWaiting), cut the network,
- * reload, and the login shell must still render from cache. Data endpoints are deliberately
- * uncached, so the expected offline noise is network failures — never a blank page.
+ * under test: load /login, wait until the worker CONTROLS the page, prove every same-origin
+ * resource named by the cached HTML is present, cut the page target's network through CDP, then
+ * reload. Page-target emulation matters: Playwright's BrowserContext-wide offline switch bypasses
+ * Service Worker fetch dispatch in system Chromium and would test the harness rather than the PWA.
+ * Data endpoints remain uncached, so expected offline noise is network failures — never a blank page.
  */
 async function offlineShellReload(browser) {
   const context = await browser.newContext({ locale: 'he-IL', viewport: { width: 390, height: 844 } });
@@ -2756,13 +2757,45 @@ async function offlineShellReload(browser) {
       null, { timeout: 30_000 },
     ).catch(() => { throw new Error('the service worker never took control — precache cannot be proven'); });
 
-    await context.setOffline(true);
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.locator('#email').waitFor({ state: 'visible', timeout: 20_000 });
-    await page.locator('#password').waitFor({ state: 'visible', timeout: 5_000 });
-    await page.screenshot({ path: path.join(outDir, 'offline-shell-390.png') });
-    report.screenshots.push('offline-shell-390.png');
-    await context.setOffline(false);
+    const cacheProof = await page.evaluate(async () => {
+      const cacheName = (await caches.keys()).find((name) => name.startsWith('supplyflow-shell-'));
+      if (!cacheName) return { cacheName: null, missing: ['index.html'] };
+      const cache = await caches.open(cacheName);
+      const index = await cache.match('/index.html');
+      if (!index) return { cacheName, missing: ['index.html'] };
+      const document = new DOMParser().parseFromString(await index.text(), 'text/html');
+      const paths = [...document.querySelectorAll('script[src], link[href]')]
+        .map((element) => element.getAttribute('src') || element.getAttribute('href'))
+        .filter(Boolean)
+        .map((value) => new URL(value, location.origin))
+        .filter((url) => url.origin === location.origin)
+        .map((url) => url.pathname);
+      const missing = [];
+      for (const resourcePath of [...new Set(paths)]) {
+        if (!(await cache.match(resourcePath))) missing.push(resourcePath);
+      }
+      return { cacheName, missing };
+    });
+    assert(cacheProof.cacheName, 'the activated worker created no versioned shell cache');
+    assert.deepEqual(cacheProof.missing, [], `the cached HTML depends on uncached shell resources: ${cacheProof.missing.join(', ')}`);
+
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Network.enable');
+    try {
+      await cdp.send('Network.emulateNetworkConditions', {
+        offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0,
+      });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.locator('#email').waitFor({ state: 'visible', timeout: 20_000 });
+      await page.locator('#password').waitFor({ state: 'visible', timeout: 5_000 });
+      await page.screenshot({ path: path.join(outDir, 'offline-shell-390.png') });
+      report.screenshots.push('offline-shell-390.png');
+    } finally {
+      await cdp.send('Network.emulateNetworkConditions', {
+        offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1,
+      }).catch(() => {});
+      await cdp.detach().catch(() => {});
+    }
   } finally {
     await closeContext(context);
   }

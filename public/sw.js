@@ -29,8 +29,9 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(PRECACHE.map((url) => new Request(url, { cache: 'reload' }))))
-      .catch(() => { /* a failed warm-up must not block install — push still matters */ })
-      // Take over immediately, exactly as before — this is what keeps the
+      // A partial shell must never take control: rejecting install leaves the previous worker
+      // (and its push delivery) active, and the browser retries this deploy on the next load.
+      // Take over immediately after the complete warm-up — this is what keeps the
       // controllerchange update contract in src/main.tsx alive.
       .then(() => self.skipWaiting()),
   );

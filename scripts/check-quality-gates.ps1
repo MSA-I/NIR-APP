@@ -510,19 +510,25 @@ function Find-PlaywrightCore {
   throw "The existing Playwright runtime was not found. No fallback test is reported as passed."
 }
 
-function Get-FreeTcpPort {
-  $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
-  try {
-    $listener.Start()
-    return ([Net.IPEndPoint]$listener.LocalEndpoint).Port
+function Get-QualityPreviewPort {
+  # Auth redirect URLs are exact in the isolated GoTrue stack. Keep a small documented range
+  # so the gate can coexist with `npm run dev` on 5199 without accepting arbitrary redirects.
+  foreach ($port in 5199..5208) {
+    $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $port)
+    try {
+      $listener.Start()
+      return $port
+    }
+    catch { }
+    finally {
+      $listener.Stop()
+    }
   }
-  finally {
-    $listener.Stop()
-  }
+  Stop-WithInfrastructureBlock "preview_port_unavailable" "No allow-listed quality preview port is free (5199-5208)."
 }
 
 function Start-PreviewServer {
-  $script:previewPort = Get-FreeTcpPort
+  $script:previewPort = Get-QualityPreviewPort
   $script:previewStdout = [IO.Path]::GetTempFileName()
   $script:previewStderr = [IO.Path]::GetTempFileName()
   $script:previewProcess = Start-Process -FilePath (Get-Command node).Source `

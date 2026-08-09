@@ -20,12 +20,12 @@ export default defineConfig({
       injectRegister: false,
       manifest: false,
       injectManifest: {
-        // The shell and the everyday chunks. The three giant online-only stacks are left
-        // out of the PRECACHE (a fresh deploy should not push ~1.4MB of charts/PDF/XLSX to
-        // every phone); once loaded online they are runtime-cached by the worker, so a
-        // previously visited screen still opens offline.
-        globPatterns: ['**/*.{js,css,html,svg,woff2}'],
-        globIgnores: ['**/assets/recharts-*.js', '**/assets/PdfSourceView-*.js', '**/assets/xlsx-*.js'],
+        // The shell, its HTML-declared resources and the everyday chunks. `recharts` is a
+        // dependency of the entry chunk after Rollup's shared-chunk extraction, so excluding it
+        // produces a cached HTML document that still cannot boot offline. Only the two genuinely
+        // online-only document stacks stay out; once loaded they join the runtime cache below.
+        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest,woff2}'],
+        globIgnores: ['**/assets/PdfSourceView-*.js', '**/assets/xlsx-*.js'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
       // The dev server serves public/sw.js verbatim (self.__WB_MANIFEST undefined → the
