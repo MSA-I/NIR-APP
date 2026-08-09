@@ -34,6 +34,48 @@ $interpretCronSecret = "quality-$([guid]::NewGuid().ToString('N'))"
 $cleanupPhase = $false
 $credentialSeed = $null
 $ocrBrowserFixtureCleanupRequired = $false
+# Every stage that runs through Invoke-GateStage records its wall time here. Without it a
+# twenty-minute run leaves no evidence of WHERE the twenty minutes went, so every attempt to
+# make the gate faster is a guess.
+$stageTimings = @()
+
+# ===== This gate runs on CI now. Local runs are opt-in. =====
+# Between 23.07 and 09.08.2026 this script ran 415 times on the owner's machine and took 24.0
+# hours of it. 160 of those runs died without writing one artifact and only 80 reached PASS —
+# the losses were almost entirely environmental (a bound port, the dev server holding a DB
+# connection into a deadlock, a second agent holding the QA mutex), none of which can happen
+# on a runner that starts empty. `.github/workflows/quality-gate.yml` does this work now.
+#
+# The refusal is deliberately at the very top: it must cost milliseconds, not the four minutes
+# a doomed run used to burn before anyone learned it was doomed.
+if (-not $env:CI -and -not $env:SUPPLYFLOW_ALLOW_LOCAL_QUALITY) {
+  # A LITERAL here-string (@'...'@). The message contains $env: and command names, and an
+  # expandable @"..."@ ate them: the backtick in `npm became an escape and printed "pm".
+  # Written straight to stderr rather than through Write-Error, because under
+  # $ErrorActionPreference = "Stop" a Write-Error terminates the script with exit 1 and never
+  # reaches the `exit 3` that tells "refused" apart from "ran and failed".
+  [Console]::Error.WriteLine(@'
+
+The heavy quality gate runs on CI, not on this machine.
+
+  Open a PR, push to main, or trigger it directly:
+      gh workflow run quality-gate.yml
+      gh run watch
+
+  Evidence (screenshots, the PDF and the browser report) is uploaded as the
+  "browser-evidence" artifact on the browser job.
+
+If you genuinely need a local run -- debugging a failure CI already reported, or working on
+this script itself -- opt in explicitly for that one command:
+
+      $env:SUPPLYFLOW_ALLOW_LOCAL_QUALITY = '1'; npm run quality
+
+Before you do: stop "npm run dev" (it holds port 5199 and a writing DB connection) and make
+sure no other agent is mid-run, or this will fail on infrastructure rather than on the code.
+
+'@)
+  exit 3
+}
 
 function Enter-QaMutex {
   $mutex = [System.Threading.Mutex]::new($false, $qaMutexName)
@@ -163,6 +205,7 @@ function Invoke-GateStage {
   $collected = New-Object System.Collections.ArrayList
   $stageExit = 0
   $previousPreference = $ErrorActionPreference
+  $stopwatch = [Diagnostics.Stopwatch]::StartNew()
   try {
     $ErrorActionPreference = "Continue"
     & $Command 2>&1 | ForEach-Object {
@@ -174,8 +217,33 @@ function Invoke-GateStage {
   }
   finally {
     $ErrorActionPreference = $previousPreference
+    # Recorded in `finally` so a failing stage still reports the time it burned before failing.
+    $stopwatch.Stop()
+    $seconds = [math]::Round($stopwatch.Elapsed.TotalSeconds, 1)
+    $script:stageTimings += [pscustomobject]@{ Label = $Label; Seconds = $seconds }
+    # The per-stage line is for the human watching a long run. The ~30 `docker cp` stages take
+    # well under a second each and would bury it, so only stages worth optimising announce.
+    if ($seconds -ge 5) { Write-Output ("-- $Label took {0:F1}s" -f $seconds) }
   }
   Assert-ExitCode $Label $collected.ToArray() -ExitCode $stageExit -InfrastructureReason $InfrastructureReason
+}
+
+# Printed from the outermost `finally`, so a run that fails halfway still shows what it spent
+# getting there.
+function Write-StageTimings {
+  if (-not $script:stageTimings.Count) { return }
+  $total = ($script:stageTimings | Measure-Object -Property Seconds -Sum).Sum
+  # A run that fails before any stage takes a measurable second must not die dividing by zero
+  # inside the cleanup path and hide the real failure. The guard belongs to the share
+  # arithmetic only -- the printed total stays the measured one, or this table would report a
+  # second that nothing spent.
+  $divisor = if ($total -gt 0) { $total } else { 1 }
+  Write-Output ""
+  Write-Output "== Stage timings (slowest first)"
+  foreach ($stage in ($script:stageTimings | Sort-Object Seconds -Descending)) {
+    Write-Output ("{0,8:F1}s {1,6:P1}  {2}" -f $stage.Seconds, ($stage.Seconds / $divisor), $stage.Label)
+  }
+  Write-Output ("{0,8:F1}s         TOTAL measured across {1} stages" -f $total, $script:stageTimings.Count)
 }
 
 function Invoke-DependencyAudit {
@@ -1205,6 +1273,7 @@ finally {
     }
   }
   finally {
+    Write-StageTimings
     if ($repoLocationPushed) {
       Pop-Location
       $repoLocationPushed = $false

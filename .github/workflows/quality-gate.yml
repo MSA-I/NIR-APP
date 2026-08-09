@@ -1,0 +1,265 @@
+# The heavy gate — `npm run quality` — on CI instead of on one Windows machine.
+#
+# WHY THIS EXISTS. Between 23.07 and 09.08.2026 the gate ran 415 times on the owner's laptop
+# and consumed 24.0 hours of it. 160 of those runs (39%) died without writing a single
+# artifact, and only 80 (19%) reached PASS; on 09.08 alone, 149 of 180 runs died at zero.
+# Almost none of that was a product regression: the failures were a port already bound, the
+# dev server holding a DB connection into `deadlock detected (SQLSTATE 40P01)`, a second agent
+# holding the QA mutex. Every one of those disappears on a runner that starts empty.
+#
+# WHAT IT COVERS. The same work the PowerShell gate does, from the same sources — the SQL
+# suite list is PARSED OUT of check-quality-gates.ps1 at run time by scripts/ci-sql-suites.mjs,
+# never copied, so CI and the manual gate cannot disagree about which suites run, in what
+# order, or under which role. Six waves of numeric drift in this repo came from a second copy
+# of a list; there is no second copy here.
+#
+# WHAT IT DOES NOT COVER, stated so nobody reads a green tick as more than it is:
+#   * check-p0-security.ps1 and check-p0-upgrade.ps1 (862 + 88 lines of Windows PowerShell,
+#     invoked as child processes) — these still run only in the manual gate.
+#   * The P1B and OCR Edge smokes (Invoke-PriceListEdgeSmoke / Invoke-OcrEdgeSmoke).
+#   * The P4 integrated journey (check-p4-integrated-journey.cjs).
+# Those need the same Windows-coupled helpers and are the next thing to port.
+#
+# The three jobs are independent and run in parallel: wall time is the slowest one, not
+# the sum, which is already a large win over the strictly sequential local gate.
+
+name: quality-gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Must match supabase/config.toml — the gate refuses any project that is not this one.
+  SUPABASE_PROJECT_ID: supplyflow-p0
+  LOCAL_API_URL: http://127.0.0.1:55431
+  # Pinned to the version the manual gate runs with, so a CLI release cannot silently change
+  # migration behaviour between the two.
+  SUPABASE_CLI_VERSION: 2.98.2
+
+jobs:
+  # ---------------------------------------------------------------- contracts (no database)
+  contracts:
+    name: Deno contracts + OCR worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Interpret-document prompt, provider-failure and authorization contracts
+        run: |
+          set -euo pipefail
+          npx --yes deno test \
+            --config supabase/functions/interpret-document/deno.json \
+            supabase/functions/interpret-document/core.test.ts \
+            supabase/functions/interpret-document/authorization.test.ts 2>&1 | tee deno-interpret.log
+          # The gate does not accept a run that asserted nothing, or that skipped a case.
+          grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-interpret.log \
+            || { echo 'No completed test reported.'; exit 1; }
+          ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-interpret.log \
+            || { echo 'Ignored or skipped cases are not acceptable in this gate.'; exit 1; }
+
+      - name: Outbox-worker delivery, header and signature contracts
+        run: |
+          set -euo pipefail
+          npx --yes deno test \
+            --config supabase/functions/outbox-worker/deno.json \
+            supabase/functions/outbox-worker/*.test.ts 2>&1 | tee deno-outbox.log
+          grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-outbox.log \
+            || { echo 'No completed test reported.'; exit 1; }
+          ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-outbox.log \
+            || { echo 'Ignored or skipped cases are not acceptable in this gate.'; exit 1; }
+
+      - name: OCR worker Compose validation
+        run: docker compose -f docker-compose.ocr.yml config --quiet
+
+      - name: OCR worker image build
+        run: docker build --pull=false -t supplyflow-ocr-worker:acceptance worker/ocr
+
+      - name: OCR worker no-GPU / no-model self-check
+        run: docker run --rm --network none --entrypoint python supplyflow-ocr-worker:acceptance /app/self_check.py
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+
+  # ------------------------------------------------------------------- 28 SQL suites + preflight
+  sql:
+    name: 28 SQL suites + 44-arm preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Write the local Edge environment
+        run: node scripts/ci-local-env.mjs write-functions-env
+
+      - name: Start the isolated local stack (runs all migrations + seed)
+        run: supabase start
+
+      - name: Sanity — the gate's container is the one we will talk to
+        run: docker ps --format '{{.Names}}' | grep -qx "supabase_db_${SUPABASE_PROJECT_ID}"
+
+      - name: The suites, in the order check-quality-gates.ps1 declares them
+        run: node scripts/ci-sql-suites.mjs
+
+      - name: Stop the stack
+        if: always()
+        run: supabase stop --no-backup || true
+
+  # --------------------------------------------------------------------- 34 browser scenarios
+  browser:
+    name: 34 browser, keyboard, print and a11y scenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Write the local Edge environment
+        run: node scripts/ci-local-env.mjs write-functions-env
+
+      - name: Start the isolated local stack
+        run: supabase start
+
+      - name: Export the stack's keys for the build and the fixtures
+        run: |
+          set -euo pipefail
+          # `supabase status -o env` also prints a "Stopped services: [...]" line and a CLI
+          # update notice. Only real KEY=value lines may reach $GITHUB_ENV — anything else
+          # corrupts the file for every later step.
+          supabase status -o env | sed 's/"//g' | grep -E '^[A-Z][A-Z0-9_]*=' > stack.env
+          test -s stack.env
+          # Per-run keys for an ephemeral local stack, but masked anyway: a log is forever.
+          while IFS='=' read -r key value; do
+            case "$key" in *KEY|*SECRET|JWT_SECRET) [ -n "$value" ] && echo "::add-mask::$value" ;; esac
+            echo "$key=$value" >> "$GITHUB_ENV"
+          done < stack.env
+          grep -c . stack.env | xargs -I{} echo 'Exported {} stack variables.'
+          rm -f stack.env
+
+      - name: Build the bundle the scenarios will actually exercise
+        run: npx vite build
+        env:
+          VITE_SUPABASE_URL: ${{ env.API_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ env.ANON_KEY }}
+
+      - name: Demo Auth users, seeded and verified
+        run: |
+          set -euo pipefail
+          SEED="$(node -e 'process.stdout.write(require("crypto").randomUUID().replace(/-/g,""))')"
+          echo "::add-mask::$SEED"
+          echo "QUALITY_PASSWORD_SEED=$SEED" >> "$GITHUB_ENV"
+          node scripts/ci-local-env.mjs write-demo-manifest "$SEED" "$RUNNER_TEMP/demo-users.json"
+          pwsh -NoProfile -File scripts/create-users.ps1 \
+            -ProjectUrl "$LOCAL_API_URL" -CredentialsPath "$RUNNER_TEMP/demo-users.json"
+          node scripts/ci-sql-suites.mjs --file supabase/demo/demo_seed.sql
+        env:
+          SUPABASE_SERVICE_KEY: ${{ env.SERVICE_ROLE_KEY }}
+
+      - name: Verify the fixture has no cross-tenant rows
+        run: |
+          set -euo pipefail
+          docker cp supabase/demo/demo_verify.sql "supabase_db_${SUPABASE_PROJECT_ID}:/tmp/demo_verify.sql"
+          docker exec -e PGPASSWORD=postgres "supabase_db_${SUPABASE_PROJECT_ID}" \
+            psql -qAt -F '|' -U postgres -d postgres -v ON_ERROR_STOP=1 -f /tmp/demo_verify.sql > verify.out
+          cat verify.out
+          rows=$(grep -cE '^[BC]\.' verify.out || true)
+          [ "$rows" -gt 0 ] || { echo 'Demo verification returned no integrity rows.'; exit 1; }
+          bad=$(awk -F'|' '/^[BC]\./ && $NF != 0' verify.out || true)
+          [ -z "$bad" ] || { echo "Demo fixture contains cross-tenant rows: $bad"; exit 1; }
+          echo "Demo fixture verification passed: $rows tenant-integrity checks returned 0."
+
+      - name: OCR browser Storage fixture
+        run: |
+          set -euo pipefail
+          node scripts/fixtures/ocr/prepare-browser-fixture.cjs
+          node scripts/ci-sql-suites.mjs --file scripts/fixtures/ocr/browser-fixture.sql
+        env:
+          OCR_ACCEPTANCE_API_URL: ${{ env.API_URL }}
+          OCR_ACCEPTANCE_ANON_KEY: ${{ env.ANON_KEY }}
+          OCR_ACCEPTANCE_SERVICE_ROLE_KEY: ${{ env.SERVICE_ROLE_KEY }}
+          OCR_ACCEPTANCE_PASSWORD_SEED: ${{ env.QUALITY_PASSWORD_SEED }}
+
+      - name: Locate a Chromium the scenarios can drive
+        run: |
+          set -euo pipefail
+          # playwright-core ships no browser by design (the local gate drives installed Chrome
+          # or Edge). Prefer whatever the runner image already has; install only if it does not.
+          for candidate in /usr/bin/google-chrome /usr/bin/google-chrome-stable /usr/bin/chromium-browser /usr/bin/chromium; do
+            if [ -x "$candidate" ]; then
+              echo "QUALITY_BROWSER_PATH=$candidate" >> "$GITHUB_ENV"
+              "$candidate" --version
+              exit 0
+            fi
+          done
+          npx --yes playwright install --with-deps chromium
+          resolved="$(node -e 'process.stdout.write(require("playwright-core").chromium.executablePath())')"
+          test -x "$resolved"
+          echo "QUALITY_BROWSER_PATH=$resolved" >> "$GITHUB_ENV"
+          "$resolved" --version
+
+      - name: Serve the built bundle on the allow-listed port
+        run: |
+          set -euo pipefail
+          # 5199 is not a preference: it is the redirect GoTrue is configured to accept, so a
+          # different port would silently test a redirect the real Auth would replace.
+          npx vite preview --host 127.0.0.1 --port 5199 --strictPort &
+          for _ in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:5199/login >/dev/null 2>&1 && exit 0
+            sleep 1
+          done
+          echo 'vite preview never served /login'; exit 1
+
+      - name: The 34 scenarios
+        run: node scripts/check-browser-smoke.cjs
+        env:
+          QUALITY_BASE_URL: http://127.0.0.1:5199
+          QUALITY_API_URL: ${{ env.API_URL }}
+          QUALITY_SERVICE_ROLE_KEY: ${{ env.SERVICE_ROLE_KEY }}
+          QUALITY_ARTIFACT_DIR: ${{ runner.temp }}/browser-evidence
+          QUALITY_PASSWORD_SEED: ${{ env.QUALITY_PASSWORD_SEED }}
+          QUALITY_BROWSER_PATH: ${{ env.QUALITY_BROWSER_PATH }}
+          PLAYWRIGHT_CORE_PATH: ${{ github.workspace }}/node_modules/playwright-core
+          QUALITY_REQUIRE_ALL: '1'
+
+      - name: Keep the evidence — screenshots, the PDF and the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-evidence
+          path: ${{ runner.temp }}/browser-evidence
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop the stack
+        if: always()
+        run: supabase stop --no-backup || true

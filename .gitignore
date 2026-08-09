@@ -18,3 +18,7 @@ supabase/.branches/
 .qa-runs/
 playwright-report/
 test-results/
+
+# Per-run gate secrets handed between CI steps by scripts/ci-local-env.mjs. Throwaway values
+# for an ephemeral local stack, but they are secrets in shape and must never be committed.
+.ci-gate-secrets.json
