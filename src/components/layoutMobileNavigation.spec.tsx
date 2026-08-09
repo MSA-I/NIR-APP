@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 
 const state = vi.hoisted(() => ({ role: 'owner' as 'owner' | 'kitchen' | 'payer' }));
@@ -19,43 +19,33 @@ beforeAll(() => {
   })) as unknown as typeof window.matchMedia;
 });
 
-function renderAt(path: string, onOpenMenu = vi.fn()) {
-  render(<MemoryRouter initialEntries={[path]}><Fab onOpenMenu={onOpenMenu} /></MemoryRouter>);
-  return onOpenMenu;
+function renderAt(path: string) {
+  render(<MemoryRouter initialEntries={[path]}><Fab /></MemoryRouter>);
 }
 
-describe('ניווט תחתון', () => {
-  it('מסמן את משפחת הרשומה הפעילה', () => {
+describe('סרגל פעולות מהירות תחתון', () => {
+  it('מחזיר לבעלים את חמש הפעולות המקוריות בלי להפוך אותן לניווט', () => {
     state.role = 'owner';
     renderAt('/orders/order-1');
-    const nav = screen.getByRole('navigation', { name: 'ניווט ראשי בנייד' });
-    expect(nav.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
-    expect(screen.getByRole('link', { name: 'הזמנות' })).toHaveAttribute('aria-current', 'page');
-  });
-
-  it('מסמן עוד במסך שאינו יעד יומי ופותח את המגירה', () => {
-    state.role = 'owner';
-    const onOpenMenu = renderAt('/suppliers/supplier-1');
-    const more = screen.getByRole('button', { name: 'עוד — האזור הנוכחי' });
-    expect(more).not.toHaveAttribute('aria-current');
-    expect(more).toHaveAttribute('data-active', 'true');
-    fireEvent.click(more);
-    expect(onOpenMenu).toHaveBeenCalledOnce();
+    const group = screen.getByRole('group', { name: 'פעולות מהירות' });
+    expect([...group.querySelectorAll('.mobile-action')].map((item) => item.textContent)).toEqual([
+      'הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה',
+    ]);
+    expect(screen.queryByRole('navigation', { name: 'ניווט ראשי בנייד' })).toBeNull();
   });
 
   it('שומר focus mode עם צילום בלבד', () => {
     state.role = 'kitchen';
     renderAt('/receiving/order-1');
     expect(screen.queryByRole('navigation', { name: 'ניווט ראשי בנייד' })).toBeNull();
-    expect(screen.getByRole('group', { name: 'פעולות במסך' }).querySelectorAll('.mobile-action')).toHaveLength(1);
+    expect(screen.getByRole('group', { name: 'פעולות מהירות' }).querySelectorAll('.mobile-action')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'צילום מסמך' })).toBeInTheDocument();
   });
 
-  it('אינו מנפח תפקיד payer', () => {
+  it('אינו מציג סרגל לתפקיד payer', () => {
     state.role = 'payer';
     renderAt('/pay');
-    const nav = screen.getByRole('navigation', { name: 'ניווט ראשי בנייד' });
-    expect(nav.querySelectorAll('a')).toHaveLength(2);
-    expect(screen.queryByRole('button', { name: /עוד/ })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'פעולות מהירות' })).toBeNull();
+    expect(document.querySelector('.mobile-action-bar')).toBeNull();
   });
 });

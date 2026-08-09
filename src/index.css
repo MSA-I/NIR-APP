@@ -261,22 +261,6 @@ body {
   text-align: center;
 }
 
-.mobile-action:is([aria-current="page"], [data-active="true"]) {
-  background: var(--color-action-wash);
-  color: var(--color-action);
-  font-weight: 600;
-}
-
-.mobile-action:is([aria-current="page"], [data-active="true"])::before {
-  content: "";
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline: 28%;
-  block-size: 2px;
-  border-radius: 9999px;
-  background: var(--color-action);
-}
-
 /* ponytail: raised capture puck — a circle overlapping the bar's top edge, so its upper half
    reads as a dome and gives the most-used action a much larger tap target. */
 .mobile-action-raised {

@@ -109,13 +109,13 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
     await waitFor(() => expect(document.title).toBe('פרטי הזמנה — ארגון בדיקה · SupplyFlow'));
   });
 
-  it('המגירה מרנדרת רק יעדים שאינם כבר בסרגל התחתון', () => {
+  it('המגירה מרנדרת שוב את כל יעדי הניווט כי הסרגל התחתון מכיל פעולות', () => {
     renderAt('/suppliers/abc');
     fireEvent.click(screen.getByRole('button', { name: 'פתיחת תפריט' }));
     const drawer = screen.getByRole('dialog', { name: 'תפריט ראשי' });
-    expect(within(drawer).queryByRole('link', { name: 'מרכז הבקרה' })).toBeNull();
-    expect(within(drawer).queryByRole('link', { name: 'הזמנות' })).toBeNull();
-    expect(within(drawer).queryByRole('link', { name: 'חשבוניות' })).toBeNull();
+    expect(within(drawer).getByRole('link', { name: 'מרכז הבקרה' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'הזמנות' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'חשבוניות' })).toBeInTheDocument();
     expect(within(drawer).getByRole('link', { name: 'ספקים' })).toHaveAttribute('aria-current', 'page');
     expect(within(drawer).getByRole('link', { name: 'קבלת סחורה' })).toBeInTheDocument();
     expect(within(drawer).getByRole('link', { name: 'הגדרות' })).toBeInTheDocument();

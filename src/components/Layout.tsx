@@ -12,7 +12,7 @@ import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orde
 import { pendingOfflineWork } from '../lib/offlineQueue';
 import type { Role } from '../lib/types';
 import { toHebrewError } from '../lib/errors';
-import { isRouteFamilyActive, mobileNavigationFor } from '../lib/quickActions';
+import { isRouteFamilyActive } from '../lib/quickActions';
 
 export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[] }
 export interface NavSection { section: string; items: NavItem[]; collapsible?: boolean }
@@ -129,10 +129,7 @@ export function footerItemsForRole(role: Role | undefined): NavItem[] {
 }
 
 export function drawerSectionsForRole(role: Role | undefined, isPlatformAdmin: boolean): NavSection[] {
-  const mobilePaths = new Set(mobileNavigationFor(role).flatMap((item) => item.to ?? []));
-  return sectionsForRole(role, isPlatformAdmin)
-    .map((section) => ({ ...section, items: section.items.filter((item) => !mobilePaths.has(item.to)) }))
-    .filter((section) => section.items.length > 0);
+  return sectionsForRole(role, isPlatformAdmin);
 }
 
 /**
@@ -378,7 +375,7 @@ export default function Layout() {
 
       {/* Role-aware quick actions — direct mobile bar and desktop speed dial. The component
           self-gates by role and focused route; Layout never wraps public pages. */}
-      <Fab menuOpen={mobileOpen} onOpenMenu={() => setMobileOpen(true)} />
+      <Fab />
 
       {/* Unsynced receiving work + logout. The counts are named rather than summarised: "2 פעולות"
           and "1 העלאה" are different work, and a person deciding whether to sign out on a phone

@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { NAV_SECTIONS, drawerSectionsForRole, footerItemsForRole, sectionsForRole } from './Layout';
-import {
-  isRouteFamilyActive, mobileNavigationFor, mobileNavigationForPath, quickActionsFor,
-} from '../lib/quickActions';
+import { desktopQuickActionsFor, isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
 import type { Role } from '../lib/types';
 
 const ALL_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'];
@@ -64,36 +62,25 @@ describe('מעטפת הניווט', () => {
   });
 });
 
-describe('ניווט מובייל תפקידי', () => {
-  const targets = (role: Role) => mobileNavigationFor(role).map((item) => item.to ?? item.kind);
+describe('סרגל הפעולות המהירות במובייל', () => {
+  it('מחזיר את הפעולות והסדר המקוריים לפי תפקיד', () => {
+    expect(quickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'invoice']);
+    expect(quickActionsFor('office').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'invoice']);
+    expect(quickActionsFor('kitchen').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'invoice']);
+    expect(quickActionsFor('accountant').map((item) => item.key)).toEqual(['dashboard', 'invoices', 'pay']);
+    expect(quickActionsFor('payer')).toEqual([]);
+    expect(quickActionsFor('supplier')).toEqual([]);
+  });
 
-  it('מפריד ניווט מצילום ומעוד בלי יעד כפול', () => {
-    expect(targets('owner')).toEqual(['/dashboard', '/invoices', 'capture', '/orders', 'more']);
-    expect(targets('office')).toEqual(['/dashboard', '/orders', 'capture', '/invoices', 'more']);
-    expect(targets('kitchen')).toEqual(['/dashboard', '/receiving', 'capture', '/documents', 'more']);
-    expect(targets('accountant')).toEqual(['/dashboard', '/invoices', '/pay', '/bank', 'more']);
+  it('מחזיר את כל יעדי הניווט הרגילים למגירה', () => {
     for (const role of ALL_ROLES) {
-      const destinations = mobileNavigationFor(role).flatMap((item) => item.to ?? []);
-      expect(destinations).toHaveLength(new Set(destinations).size);
+      expect(drawerSectionsForRole(role, false)).toEqual(sectionsForRole(role, false));
     }
   });
 
-  it('המגירה היא משלים של הסרגל התחתון, לא עותק שלו', () => {
-    for (const role of ALL_ROLES) {
-      const bottom = new Set(mobileNavigationFor(role).flatMap((item) => item.to ?? []));
-      const drawer = drawerSectionsForRole(role, false).flatMap((section) => section.items.map((item) => item.to));
-      expect(drawer.filter((path) => bottom.has(path))).toEqual([]);
-    }
-  });
-
-  it('במסלול עבודה ממוקד נשאר רק צילום למי שמורשה', () => {
-    expect(mobileNavigationForPath('kitchen', '/receiving/order-1').map((item) => item.kind)).toEqual(['capture']);
-    expect(mobileNavigationForPath('accountant', '/invoices/new')).toEqual([]);
-  });
-
-  it('ה-speed dial בדסקטופ מכיל פקודות בלבד', () => {
-    expect(quickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'capture', 'invoice']);
-    expect(quickActionsFor('accountant')).toEqual([]);
+  it('משאיר את ה-speed dial בדסקטופ עם פקודות בלבד', () => {
+    expect(desktopQuickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'capture', 'invoice']);
+    expect(desktopQuickActionsFor('accountant')).toEqual([]);
   });
 });
 

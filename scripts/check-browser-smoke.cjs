@@ -333,10 +333,11 @@ async function roleAndViewportMatrix(browser) {
     try {
       await login(page, role);
       assert.equal(new URL(page.url()).pathname, expectedHome, `${role}: wrong home route`);
-      assert.equal(await page.getByRole('navigation', { name: 'ניווט ראשי בנייד' }).count(), 1,
-        `${role}: mobile navigation is missing`);
-      assert.equal(await page.locator('.mobile-action-bar').count(), 1,
-        `${role}: mobile navigation bar is missing`);
+      const hasMobileActions = ['owner', 'office', 'kitchen', 'accountant'].includes(role);
+      assert.equal(await page.getByRole('group', { name: 'פעולות מהירות' }).count(), hasMobileActions ? 1 : 0,
+        `${role}: wrong mobile action group visibility`);
+      assert.equal(await page.locator('.mobile-action-bar').count(), hasMobileActions ? 1 : 0,
+        `${role}: wrong mobile action bar visibility`);
       await assertMobileSpeedDialHidden(page, `${role}/390`);
       for (const [label, width, height] of viewports) {
         await page.setViewportSize({ width, height });
@@ -383,18 +384,16 @@ async function roleAndViewportMatrix(browser) {
 
 async function quickActionsContract(browser) {
   const roleLabels = {
-    owner: ['בית', 'חשבוניות', 'צילום מסמך', 'הזמנות', 'עוד'],
-    office: ['בית', 'הזמנות', 'צילום מסמך', 'חשבוניות', 'עוד'],
-    kitchen: ['בית', 'קבלה', 'צילום מסמך', 'מסמכים', 'עוד'],
-    accountant: ['בית', 'חשבוניות', 'לביצוע', 'בנק', 'עוד'],
-    payer: ['בית', 'לביצוע'],
+    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+    office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+    kitchen: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+    accountant: ['מרכז הבקרה', 'חשבוניות', 'תשלומים'],
   };
   const roleTargets = {
-    owner: ['/dashboard', '/invoices', null, '/orders', null],
-    office: ['/dashboard', '/orders', null, '/invoices', null],
-    kitchen: ['/dashboard', '/receiving', null, '/documents', null],
-    accountant: ['/dashboard', '/invoices', '/pay', '/bank', null],
-    payer: ['/dashboard', '/pay'],
+    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
+    office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
+    kitchen: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
+    accountant: ['/dashboard', '/invoices', '/pay'],
   };
 
   for (const [role, expectedLabels] of Object.entries(roleLabels)) {
@@ -403,12 +402,12 @@ async function quickActionsContract(browser) {
     captureConsole(page, `mobile-action-bar:${role}`);
     try {
       await login(page, role);
-      const navigation = page.getByRole('navigation', { name: 'ניווט ראשי בנייד' });
-      await navigation.waitFor();
+      const group = page.getByRole('group', { name: 'פעולות מהירות' });
+      await group.waitFor();
       const bar = page.locator('.mobile-action-bar');
       assert.equal(await bar.count(), 1, `${role}: mobile action bar is not unique`);
-      assert(await bar.evaluate((node) => node === document.querySelector('nav[aria-label="ניווט ראשי בנייד"]')),
-        `${role}: .mobile-action-bar is not the named navigation`);
+      assert(await bar.evaluate((node) => node === document.querySelector('[role="group"][aria-label="פעולות מהירות"]')),
+        `${role}: .mobile-action-bar is not the named role=group`);
       await assertMobileSpeedDialHidden(page, `${role}/390`);
       const items = bar.locator('.mobile-action');
       assert.deepEqual((await items.allTextContents()).map((label) => label.trim()), expectedLabels,
@@ -426,7 +425,7 @@ async function quickActionsContract(browser) {
         report.screenshots.push('mobile-action-bar-390.png');
 
         const chooser = page.waitForEvent('filechooser');
-        await navigation.getByRole('button', { name: 'צילום מסמך' }).click();
+        await group.getByRole('button', { name: 'צילום מסמך' }).click();
         await chooser;
 
         for (const [width, height] of [[320, 720], [360, 800], [390, 844], [430, 932], [768, 1024]]) {
@@ -482,6 +481,19 @@ async function quickActionsContract(browser) {
     }
   }
 
+  for (const role of ['payer']) {
+    const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    try {
+      await login(page, role);
+      assert.equal(await page.getByRole('group', { name: 'פעולות מהירות' }).count(), 0, `${role}: mobile action group must be absent`);
+      assert.equal(await page.locator('.mobile-action-bar').count(), 0, `${role}: mobile action bar must be absent`);
+      await assertMobileSpeedDialHidden(page, `${role}/390`);
+    } finally {
+      await closeContext(context);
+    }
+  }
+
   const supplierContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
   await supplierContext.route('**/rest/v1/profiles?**', async (route) => {
     const response = await route.fetch();
@@ -507,11 +519,8 @@ async function quickActionsContract(browser) {
     await supplierPage.getByRole('button', { name: 'התחברות' }).click();
     await supplierPage.waitForFunction(() => location.pathname === '/dashboard', null, { timeout: 25_000 });
     await settle(supplierPage);
-    const supplierNavigation = supplierPage.getByRole('navigation', { name: 'ניווט ראשי בנייד' });
-    assert.equal(await supplierNavigation.count(), 1, 'supplier: mobile navigation is missing');
-    assert.deepEqual((await supplierNavigation.locator('.mobile-action').allTextContents()).map((label) => label.trim()), ['בית', 'המחירון שלי'],
-      'supplier: wrong mobile navigation labels or order');
-    assert.equal(await supplierPage.locator('.mobile-action-bar').count(), 1, 'supplier: mobile navigation bar is missing');
+    assert.equal(await supplierPage.getByRole('group', { name: 'פעולות מהירות' }).count(), 0, 'supplier: mobile action group must be absent');
+    assert.equal(await supplierPage.locator('.mobile-action-bar').count(), 0, 'supplier: mobile action bar must be absent');
     await assertMobileSpeedDialHidden(supplierPage, 'supplier/390');
   } finally {
     await closeContext(supplierContext);
@@ -588,8 +597,8 @@ async function quickActionsContract(browser) {
     await desktopPage.waitForTimeout(100);
     assert.equal(await desktopPage.locator('#global-quick-actions').count(), 0,
       'desktop speed-dial state survived the switch to the mobile action bar');
-    assert(await desktopPage.locator('.mobile-action-bar').evaluate((node) => node.contains(document.activeElement)),
-      'focus did not move from the desktop menu into the mobile navigation');
+    assert(await desktopPage.locator('.mobile-action[data-quick-action-key="order"]').evaluate((node) => document.activeElement === node),
+      'focus did not move from the desktop menuitem to the matching mobile action');
     await desktopPage.setViewportSize({ width: 1440, height: 900 });
     await desktopPage.waitForTimeout(100);
     assert.equal(await trigger.getAttribute('aria-expanded'), 'false',
