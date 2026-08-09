@@ -90,7 +90,10 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-const errMsg = (e: unknown) => (e instanceof Error ? e.message : 'אירעה שגיאה בלתי צפויה');
+// Was `e instanceof Error ? e.message : 'אירעה שגיאה בלתי צפויה'` — which put the raw message on the
+// reachable branch and the Hebrew on the one a Supabase error never takes. Every caller below
+// (:424, :540, :562, and the two spliced into Hebrew sentences) inherited that.
+const errMsg = toHebrewError;
 
 /* ================= page ================= */
 

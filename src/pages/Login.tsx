@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router';
 import { Eye, EyeOff, Loader2, Lock } from 'lucide-react';
 import { useAuth, homeFor } from '../auth/AuthContext';
+import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
 
 export default function Login() {
@@ -22,7 +23,11 @@ export default function Login() {
     const err = await signIn(email.trim(), password);
     setBusy(false);
     if (err) {
-      setError(err === 'Invalid login credentials' ? 'אימייל או סיסמה שגויים' : err);
+      // One string used to be translated by hand and everything else passed through raw, so the
+      // FIRST screen a customer meets could answer in English: "Email not confirmed", "Email logins
+      // are disabled", "Failed to fetch". toHebrewError already maps all of those (errors.ts:211-220)
+      // and falls back to Hebrew for anything it does not recognise — it was simply never called.
+      setError(toHebrewError(err));
     } else {
       navigate('/', replaceOpts);
     }

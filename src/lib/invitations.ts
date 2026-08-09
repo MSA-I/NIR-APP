@@ -4,6 +4,7 @@
 // types.ts only because that file belongs to another workstream; fold it in when convenient.
 
 import { supabase } from './supabase';
+import { toHebrewError } from './errors';
 import type { Invitation, InvitationStatus, Role } from './types';
 
 /** Roles an owner may invite. `supplier` joined on 09.08.2026 (OPEN-DECISIONS #17): the DB
@@ -58,7 +59,10 @@ async function callSendInvite(
         if (parsed?.error?.message) return { error: parsed.error.message, result: null };
       } catch { /* fall through to the generic message */ }
     }
-    return { error: error.message, result: null };
+    // Reached only when the Edge body could not be parsed, i.e. a transport failure — always a
+    // machine string, never one of the function's own Hebrew messages (those return above). The
+    // owner used to see "Failed to fetch" in a toast.
+    return { error: toHebrewError(error), result: null };
   }
 
   const failed = (data as { error?: InviteError } | null)?.error;
@@ -81,7 +85,8 @@ export async function revokeInvite(invitationId: string, reason: string): Promis
     p_id: invitationId,
     p_reason: reason,
   });
-  return error ? error.message : null;
+  // Raw Postgres otherwise — the owner cancelling an invitation is not the audience for it.
+  return error ? toHebrewError(error) : null;
 }
 
 /* ---------- Invitee side (public, no session yet) ---------- */
@@ -135,5 +140,7 @@ export const ACCEPT_ERROR: Record<string, string> = {
 
 export function acceptErrorMessage(raw: string): string {
   const key = Object.keys(ACCEPT_ERROR).find((k) => raw.includes(k));
-  return key ? ACCEPT_ERROR[key] : raw;
+  // An unmapped code used to reach the invitee as raw Postgres, on the screen where they set their
+  // password for the first time. toHebrewError ends in a Hebrew fallback instead.
+  return key ? ACCEPT_ERROR[key] : toHebrewError(raw);
 }
