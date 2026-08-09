@@ -60,21 +60,22 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   ה-FAB הדסקטופי; ‏426 לפניה — בדיקת ה-speed-dial הוסרה עם המשטח). **הערך שהיה רשום כאן, ‏400 ב-40,
   התיישן ב-4 קבצים לפני שנגעתי בקובץ** — ראה הערת הסטייה למטה.
   **אין ESLint ואין Prettier** בריפו, למרות הערות `eslint-disable` שנשארו ב-`src/lib/useQuery.ts`.
-- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **27**
+- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **28**
   סוויטות SQL, ‏**preflight עם 44 זרועות**, ‏`npm audit --audit-level=high`, חוזי Deno,
   ו-**35 תרחישי דפדפן**. מספר טענות P0 מדווח בזמן ריצה (‏266 בריצה שתועדה) — הוא אינו ליטרל בקוד.
 
   **איך נספר כל מספר כאן — כדי שהבא יספור ולא יעתיק:**
-  - **27 סוויטות** = קריאות `Invoke-SqlTest` ב-`check-quality-gates.ps1` שהארגומנט הראשון שלהן הוא
-    `supabase\tests\…`. בקובץ יש **30** מופעים של המחרוזת: אחד הוא הגדרת הפונקציה, ושניים טוענים
+  - **28 סוויטות** = קריאות `Invoke-SqlTest` ב-`check-quality-gates.ps1` שהארגומנט הראשון שלהן הוא
+    `supabase\tests\…`. בקובץ יש **31** מופעים של המחרוזת: אחד הוא הגדרת הפונקציה, ושניים טוענים
     fixtures (‏`supabase\demo\demo_seed.sql`, ‏`scripts\fixtures\ocr\browser-fixture.sql`).
-    ב-`supabase/tests/` יש **28** קבצי `.sql`; ההפרש הוא `p1_preflight.sql`, שרץ דרך `Invoke-Preflight`.
+    ב-`supabase/tests/` יש **29** קבצי `.sql`; ההפרש הוא `p1_preflight.sql`, שרץ דרך `Invoke-Preflight`.
   - **44 זרועות preflight** = ‏`select '<שם>'` ב-`p1_preflight.sql` (‏1 + ‏43 `union all select '`),
     ו-`Invoke-Preflight` **זורק** אם לא חזרו בדיוק 44 שורות.
   - **35 תרחישים** = קריאות `await run(` ב-`check-browser-smoke.cjs` (‏35 נכון ל-09.08.2026, אחרי
     ערוץ ההערות של חבילה 0; ‏`run(` לבדו תופס גם את הגדרת הפונקציה).
 
-  **היסטוריית הסטייה, כי היא חזרה שש פעמים:** ‏13 → 20 → 26 → **27** לסוויטות; ‏22 → 25 → 29 → 30 →
+  **היסטוריית הסטייה, כי היא חזרה שבע פעמים:** ‏13 → 20 → 26 → 27 → (‏**28 — עבר בלי שהקובץ עודכן**,
+  נמדד מחדש 09.08.2026 אחרי rebase מעל `4d8216d`) לסוויטות; ‏22 → 25 → 29 → 30 →
   33 → (‏34 — **עבר בלי שהקובץ עודכן**) → **35** לתרחישים; ‏40 → **45** לקובצי ה-`.spec`
   (‏גם כאן ההפרש נמצא ולא נרשם); ‏16 → 21 → **22** ל-`check:review`; ‏שבעה → שמונה → **תשעה**
   לסקריפטי ה-`check:*`. בכל פעם הקובץ הזה — שכל סוכן קורא **ראשון** — שלח את הקורא לספור פחות ממה שקיים.
@@ -82,8 +83,15 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   **ריצה אחת בכל רגע במכונה.** **יש CI מינימלי מאז 09.08.2026** — ‏`.github/workflows/build.yml`
   מריץ את `npm run build` המלא (‏tsc + תשעת ה-`check:*` + ‏vitest + ‏vite build) על Linux בכל
   push/PR ל-`main`. **מה שה-CI לא מכסה, במפורש:** ‏`npm run quality` נשאר ריצה ידנית על מכונה זו —
-  ‏Docker, ‏27 סוויטות SQL, ‏preflight, חוזי Deno ו-35 תרחישי הדפדפן אינם רצים ב-CI. הגנת ענף
+  ‏Docker, ‏28 סוויטות SQL, ‏preflight, חוזי Deno ו-35 תרחישי הדפדפן אינם רצים ב-CI. הגנת ענף
   (‏required status) היא הגדרת GitHub של הבעלים — לא בוצעה אוטומטית.
+
+  **מגיע בענף מקביל, ואינו בענף הזה:** הסוכן המקביל בונה כרגע `.github/workflows/quality-gate.yml`
+  שמעביר את השער הכבד ל-CI, ומוסיף ל-`check-quality-gates.ps1` **סירוב לרוץ מקומית** (יציאה בקוד
+  ‏**3**, אלא אם `$env:SUPPLYFLOW_ALLOW_LOCAL_QUALITY = '1'`), וכן `check:counts`. **בענף הזה זה עדיין
+  לא קיים** — ולכן התיאור למעלה נכון לקוד שבו. במיזוג: סקריפטי ה-`check:*` יהיו **עשרה**
+  (‏`money` מכאן + ‏`counts` משם), והרשימה והמספר המילולי בשורות 45–48 חייבים להתעדכן יחד —
+  ‏`check:counts` מצמיד בדיוק את זה ויפיל את ה-build אחרת.
 - מיגרציות: `scripts/db-query.ps1` (Windows) / `scripts/db-query.sh` (Linux/Mac) — שניהם רצים מול
   **הפרויקט המרוחק** דרך Management API (`-SqlFile` + `-ProjectRef` חובה). ריצה מקומית של סוויטה או
   מיגרציה היא `docker exec … psql` על `supabase_db_supplyflow-p0`, הדפוס של `Invoke-SqlTest`.
