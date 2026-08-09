@@ -94,9 +94,9 @@ jobs:
       - name: Dependency audit
         run: npm audit --audit-level=high
 
-  # ------------------------------------------------------------------- 28 SQL suites + preflight
+  # ------------------------------------------------------------------- 29 SQL suites + preflight
   sql:
-    name: 28 SQL suites + 44-arm preflight
+    name: 29 SQL suites + 44-arm preflight
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

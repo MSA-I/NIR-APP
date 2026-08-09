@@ -586,4 +586,55 @@ select pg_temp.p16_assert(
   'the command can now complete a receipt without a human'
 );
 
+-- ===== 13. The sixth guard leg is load-bearing, proved by removing it =====
+-- Same idiom as p14's C5 mutation proof (p14:2477-2518). Without 0090's goods_receipt -> inbox
+-- leg the reversal deletes the draft and THEN dies at documents_guard_columns, leaving a document
+-- filed to a receipt that no longer exists. This is the failure the leg exists to prevent, and it
+-- is worth proving rather than asserting.
+savepoint p16_guard_mutation;
+do $$
+declare
+  v_def text := replace(
+    pg_get_functiondef('public.documents_guard_columns()'::regprocedure), e'\r', '');
+  v_leg text := replace($leg$
+                or (old.entity_type = 'goods_receipt'
+                    and new.entity_type = 'inbox'
+                    and new.entity_id is null);$leg$, e'\r', '');
+begin
+  if position(v_leg in v_def) = 0 then
+    raise exception 'P16 mutation proof cannot run: the goods_receipt -> inbox leg is not where '
+      '0090 section 4b left it in documents_guard_columns';
+  end if;
+  -- The terminator on a line of its own, for the reason p14:2492-2495 records: a bare ';' would
+  -- land inside the leg's comment block and be swallowed by `--`.
+  execute replace(v_def, v_leg, e'\n                ;');
+end
+$$;
+
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+do $$
+begin
+  perform public.revert_delivery_note_receipt(
+    (select id from public.delivery_note_interpretation_decisions
+      where interpretation_id = '94000000-0000-4000-8000-000000000004'),
+    'P16 mutation: reverting with the sixth guard leg removed');
+  raise exception 'expected the guard to refuse';
+exception when sqlstate '42501' then
+  if sqlerrm not like '%only metadata, soft-delete fields, or inbox filing%' then raise; end if;
+end
+$$;
+reset role;
+
+select pg_temp.p16_assert(
+  (select reverted_at is null from public.delivery_note_interpretation_decisions
+    where interpretation_id = '94000000-0000-4000-8000-000000000004')
+  and (select count(*) = 1 from public.goods_receipts
+        where id = (:'number_result'::jsonb ->> 'receipt_id')::uuid),
+  'P16 guard mutation proof: the aborted reversal must leave NOTHING half-done -- the draft is '
+  || 'still there and the decision is still live, one transaction or none'
+);
+rollback to savepoint p16_guard_mutation;
+
 rollback;
