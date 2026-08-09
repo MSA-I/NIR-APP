@@ -223,7 +223,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   // UPDATE column grant in 0061; changing it goes through `update_supplier_bank_details`
   // (step-up + mandatory reason + audit). `bankStep` holds the new value while the reason
   // dialog is up; `bankReauth` holds the confirmed reason while ReauthModal decides.
-  const [bankStep, setBankStep] = useState<{ nextBank: string | null } | null>(null);
+  const [bankStep, setBankStep] = useState<{ nextBank: string | null; supplierId: string } | null>(null);
   const [bankReauth, setBankReauth] = useState<string | null>(null);
   const [bankBusy, setBankBusy] = useState(false);
 
@@ -257,9 +257,10 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
     setBusy(true);
     const newRating = f.rating || null; // 0 (cleared) → null; DB checks 1..5
     const ratingChanged = newRating !== (supplier?.rating ?? null);
-    // bank_details is deliberately absent from this row: on UPDATE the column has no direct
-    // grant any more, and sending it unchanged would fail the whole save. It rides the INSERT
-    // (whose grant kept it), and on change it goes through the dedicated RPC below.
+    // bank_details is deliberately absent from this row in BOTH directions now: 0061 revoked
+    // the UPDATE column grant, and 0088 (#106, decided 09.08.2026) revoked INSERT too — so a
+    // non-empty value entered while creating goes through the same reasoned step-up RPC a
+    // change does. Sending the column on either write would fail the whole save.
     const row = {
       name: f.name.trim(), tax_id: f.tax_id || null, contact_name: f.contact_name || null,
       phone: f.phone || null, whatsapp: f.whatsapp || null, email: f.email || null, address: f.address || null,
@@ -276,23 +277,32 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
       const res = await supabase.from('suppliers').update(row).eq('id', supplier.id);
       setBusy(false);
       if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-      if (bankChanged) { setBankStep({ nextBank }); return; }
+      if (bankChanged) { setBankStep({ nextBank, supplierId: supplier.id }); return; }
       toast('הספק עודכן');
       onSaved();
     } else {
-      const res = await supabase.from('suppliers').insert({ ...row, bank_details: f.bank_details || null, org_id: profile!.org_id });
+      const res = await supabase.from('suppliers')
+        .insert({ ...row, org_id: profile!.org_id }).select('id').single();
       setBusy(false);
       if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+      const nextBank = f.bank_details || null;
+      if (nextBank) {
+        // #106: the row exists bank-less; the details now take the same reasoned step-up
+        // path a change to an existing supplier takes.
+        toast('הספק נוצר — פרטי הבנק דורשים אימות וסיבה');
+        setBankStep({ nextBank, supplierId: (res.data as { id: string }).id });
+        return;
+      }
       toast('הספק נוצר');
       onSaved();
     }
   }
 
   async function saveBankDetails(reason: string) {
-    if (!supplier || !bankStep) return;
+    if (!bankStep) return;
     setBankBusy(true);
     const res = await supabase.rpc('update_supplier_bank_details', {
-      p_supplier_id: supplier.id,
+      p_supplier_id: bankStep.supplierId,
       p_bank_details: bankStep.nextBank,
       p_reason: reason.trim(),
     });

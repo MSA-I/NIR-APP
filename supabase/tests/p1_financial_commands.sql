@@ -650,6 +650,27 @@ select pg_temp.p1_assert(
   'the manual exception must audit exactly once, reason and all'
 );
 
+-- #106 (decided 09.08.2026, package 4): bank details never ride a plain INSERT. Both
+-- directions, functionally: the column write is refused, the bank-less creation succeeds.
+reset role;
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+do $$
+begin
+  insert into suppliers (org_id, name, bank_details)
+  values ('10000000-0000-0000-0000-000000000001', 'ספק עם בנק ישיר', 'בנק 12 · 345');
+  raise exception 'a plain INSERT carried bank_details past the 0088 revoke';
+exception when insufficient_privilege then
+  null; -- 42501: the column revoke holds
+end
+$$;
+insert into suppliers (org_id, name)
+values ('10000000-0000-0000-0000-000000000001', 'ספק בלי בנק ביצירה');
+select pg_temp.p1_assert(
+  (select bank_details is null from suppliers where name = 'ספק בלי בנק ביצירה'),
+  'creation without bank details must succeed and stay bank-less'
+);
+
 -- Prices: current row + history are inseparable; batch validation is all-or-nothing.
 reset role;
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);

@@ -126,6 +126,45 @@ describe('SupplierForm — the dedicated bank-details flow (PLAN-04 §3.2)', () 
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
   });
 
+  it('creation routes non-empty bank details through the reasoned RPC, never the INSERT (#106)', async () => {
+    const user = userEvent.setup();
+    const inserts: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(`${SUPABASE_URL}/rest/v1/suppliers`, async ({ request }) => {
+        inserts.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json({ id: 'sup-new' }, { status: 201 });
+      }),
+    );
+    const rpcBodies = trackBankRpc();
+    const onSaved = vi.fn();
+    render(
+      <ToastProvider>
+        <SupplierForm supplier={null} onClose={vi.fn()} onSaved={onSaved} />
+      </ToastProvider>,
+    );
+
+    await user.type(screen.getByLabelText('שם הספק *'), 'ספק חדש עם בנק');
+    await user.type(bankField(), 'בנק 10 · סניף 800 · חשבון 123');
+    await user.click(saveButton());
+
+    // The INSERT itself must be bank-less — 0088 revoked the column grant (#106, option 2).
+    await waitFor(() => expect(inserts).toHaveLength(1));
+    expect(Object.keys(inserts[0])).not.toContain('bank_details');
+
+    // The same reasoned step an existing supplier's change takes, now for the fresh row.
+    await screen.findByRole('heading', { name: 'עדכון פרטי בנק' });
+    await user.type(screen.getByLabelText('סיבה (חובה — נרשם ביומן הביקורת)'), 'הקמת ספק עם פרטי בנק');
+    await user.click(screen.getByRole('button', { name: 'אישור העדכון' }));
+
+    await waitFor(() => expect(rpcBodies).toHaveLength(1));
+    expect(rpcBodies[0]).toEqual({
+      p_supplier_id: 'sup-new',
+      p_bank_details: 'בנק 10 · סניף 800 · חשבון 123',
+      p_reason: 'הקמת ספק עם פרטי בנק',
+    });
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+  });
+
   it('prompts for a password inside the flow when the session is stale', async () => {
     authState.session = sessionWithAge(10 * 60);
     const user = userEvent.setup();
