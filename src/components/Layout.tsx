@@ -84,7 +84,10 @@ export const NAV_SECTIONS: NavSection[] = [
       // setup wizard was built to be RE-OPENED — it reads live counts on every mount so it shows
       // true completion state rather than a remembered claim (Onboarding.tsx:32-45) — and the one
       // thing missing was a door. It belongs to the owner, beside /settings, not in daily work.
-      { to: '/onboarding', label: 'אשף ההקמה', icon: ListChecks, roles: ['owner'] },
+      // „הקמת המערכת”, matching PAGE_TITLE_PATTERNS' existing entry for this route rather than
+      // inventing a second name for it — pageTitleFor prefers the nav label, so a different word
+      // here would have quietly changed the browser tab title too.
+      { to: '/onboarding', label: 'הקמת המערכת', icon: ListChecks, roles: ['owner'] },
     ],
   },
 ];
