@@ -642,6 +642,10 @@ select pg_temp.p1_assert(
      'item_not_ordered', 'ניסיון חוזר')->>'idempotent')::boolean,
   'a second manual exception on the same open entity+type must be idempotent'
 );
+-- As postgres, not as office: the audit ledger's read policy is deliberately narrower than
+-- the actor set that writes to it, and this assertion is about what was RECORDED, not about
+-- who may read it.
+reset role;
 select pg_temp.p1_assert(
   (select count(*) = 1 from audit_logs
    where action = 'manual_exception_opened'
@@ -649,6 +653,8 @@ select pg_temp.p1_assert(
      and entity_id = '70000000-0000-0000-0000-000000000001'),
   'the manual exception must audit exactly once, reason and all'
 );
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000002', true);
+set local role authenticated;
 
 -- #106 (decided 09.08.2026, package 4): bank details never ride a plain INSERT. Both
 -- directions, functionally: the column write is refused, the bank-less creation succeeds.
