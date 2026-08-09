@@ -15,6 +15,7 @@ import Login from './pages/Login';
 import AcceptInvite from './pages/AcceptInvite';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import { TermsOfService, PrivacyPolicy } from './pages/Legal';
 
 // Lazy: every screen behind the Layout loads its own chunk on demand, so a supplier hitting
 // /my-prices or a payment executor hitting /pay never downloads Dashboard/Reports (and recharts) up front.
@@ -230,7 +231,10 @@ export default function App() {
   // invitation is joining fresh — the accept flow creates a NEW user — and may arrive with a
   // leftover session, a deleted account, or a suspended org. Short-circuiting them to
   // AccountUnavailable would trap an invitee on a screen that has nothing to do with them.
-  const isPublic = ['/accept-invite', '/login', '/forgot-password', '/reset-password'].includes(pathname);
+  // Recovery links arrive with an Auth session before the tenant profile resolves. Legal pages
+  // must remain public as well.
+  const isPublic = ['/accept-invite', '/login', '/forgot-password', '/reset-password', '/terms', '/privacy']
+    .includes(pathname);
   const isOfflineReceivingRoute = pathname === '/receiving' || pathname.startsWith('/receiving/');
 
   if (!isPublic && offlineBootstrap && !isOfflineReceivingRoute) return <OfflineReceivingOnly />;
@@ -258,6 +262,8 @@ export default function App() {
       <Route path="/accept-invite" element={<AcceptInvite />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/terms" element={<TermsOfService />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route element={session || loading ? <Layout /> : <Navigate to="/login" replace />}>
         {/* One Suspense boundary for every lazy page, nested under the Layout so the shell
             (nav, requires-attention strip) stays mounted and only the content area shows

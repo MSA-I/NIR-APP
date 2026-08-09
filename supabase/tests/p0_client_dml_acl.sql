@@ -48,27 +48,27 @@ as $$
     ),
     (
       'price_list_shadow_runs'::text,
-      'immutable automation evidence (0089): writes require the bounded shadow RPC and its '
+      'immutable automation evidence (0103): writes require the bounded shadow RPC and its '
       || 'document/job/interpretation chain; direct service DML could forge or erase evidence'::text
     ),
     (
       'price_list_shadow_lines'::text,
-      'immutable line evidence (0089): writes are owned by the same bounded shadow RPC; direct '
+      'immutable line evidence (0103): writes are owned by the same bounded shadow RPC; direct '
       || 'service DML could change the prediction later compared with a human decision'::text
     ),
     (
       'price_list_calibration_reviews'::text,
-      'human calibration evidence (0089): only the authenticated reviewed command may append a '
+      'human calibration evidence (0103): only the authenticated reviewed command may append a '
       || 'reasoned revision; service DML could impersonate a reviewer'::text
     ),
     (
       'price_list_empty_run_reviews'::text,
-      'human empty-run evidence (0089): only the authenticated reviewed command may append a '
+      'human empty-run evidence (0103): only the authenticated reviewed command may append a '
       || 'reasoned revision; service DML could impersonate a reviewer'::text
     ),
     (
       'price_list_automation_scope_decisions'::text,
-      'platform eligibility evidence (0089): only the step-up, reasoned platform command may '
+      'platform eligibility evidence (0103): only the step-up, reasoned platform command may '
       || 'append a decision; service DML would bypass corpus and audit checks'::text
     )
   ) as exceptions(table_name, why)
@@ -206,8 +206,6 @@ select pg_temp.p0_acl_assert(
   and has_table_privilege('authenticated', 'public.categories', 'DELETE')
   and has_column_privilege('authenticated', 'public.suppliers', 'name', 'INSERT')
   and has_column_privilege('authenticated', 'public.suppliers', 'name', 'UPDATE')
-  -- 0061: entering bank details while CREATING a supplier stays a plain form write ...
-  and has_column_privilege('authenticated', 'public.suppliers', 'bank_details', 'INSERT')
   and has_column_privilege('authenticated', 'public.products', 'active', 'INSERT')
   and has_column_privilege('authenticated', 'public.products', 'name', 'UPDATE')
   and has_column_privilege('authenticated', 'public.exceptions', 'status', 'UPDATE')
@@ -221,10 +219,18 @@ select pg_temp.p0_acl_assert(
   not has_column_privilege('authenticated', 'public.organizations', 'status', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.suppliers', 'org_id', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.suppliers', 'deleted_at', 'UPDATE')
-  -- ... but CHANGING an existing supplier's bank details is payment-diversion surface:
-  -- 0061 revoked the UPDATE column grant; the only path is update_supplier_bank_details
-  -- (owner/office + step-up + reason + audit).
+  -- 0089: joining without consenting to a named terms version must be impossible from the
+  -- browser — the 3-arg accept_invitation lost its grant; only the consent-taking 4-arg
+  -- overload remains callable.
+  and not has_function_privilege('authenticated', 'public.accept_invitation(text, text, text)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.accept_invitation(text, text, text, text)', 'EXECUTE')
+  -- Bank details are payment-diversion surface in BOTH directions now: 0061 revoked the
+  -- UPDATE column grant, and 0088 (#106, decided 09.08.2026) revoked INSERT too — a fresh
+  -- supplier row with substituted details is the same fraud with one extra step. The only
+  -- path, creation included, is update_supplier_bank_details (owner/office + step-up +
+  -- reason + audit).
   and not has_column_privilege('authenticated', 'public.suppliers', 'bank_details', 'UPDATE')
+  and not has_column_privilege('authenticated', 'public.suppliers', 'bank_details', 'INSERT')
   and not has_column_privilege('authenticated', 'public.products', 'org_id', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.products', 'active', 'UPDATE')
   and not has_any_column_privilege('authenticated', 'public.purchase_requests', 'INSERT')

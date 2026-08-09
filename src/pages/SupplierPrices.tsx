@@ -4,7 +4,7 @@ import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, Modal, useToast, ErrorNote, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, Modal, useToast, ErrorNote, PageHeader, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
 import { SupplierOrders, type SupplierPortalOrder } from '../components/SupplierOrders';
 import { cellText, matchColumn, nameKey, readSheet } from '../lib/importSheet';
@@ -152,17 +152,13 @@ export default function SupplierPrices() {
 
   return (
     <div className="space-y-4 max-w-4xl">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="page-title flex items-center gap-2"><Tags size={22} /> פורטל הספק</h1>
-          <div className="text-sm text-ink-muted mt-1">{`${data.supplier.name} — הזמנות ומחירון עבור ${data.organizationName}`}</div>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      <PageHeader title={<span className="flex items-center gap-2"><Tags size={22} /> המחירון שלי</span>}
+        meta={`${data.supplier.name} — הזמנות, מחירים וזמינות עבור ${data.organizationName}`}
+        actions={<div className="flex flex-wrap gap-2">
           <button className="btn-secondary" onClick={downloadTemplate}><Download size={15} /> הורדת תבנית</button>
           {commerceAllowed && <button className="btn-secondary" onClick={() => setDocumentOpen(true)}><Upload size={15} /> PDF, תמונה או Word</button>}
           {commerceAllowed && <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> הגשת מחירון חודשי</button>}
-        </div>
-      </div>
+        </div>} />
 
       {organizationAccess.canWrite && !supplierCommerceAllowed && <Note tone="alert">הספק לא פעיל לפעילות מסחרית חדשה. המחירון והיסטוריית ההגשות נשארים זמינים לצפייה.</Note>}
 

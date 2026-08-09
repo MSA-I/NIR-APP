@@ -3,7 +3,8 @@
 **תאריך טיוטה:** 09.08.2026
 **ענף:** `codex/improvement-campaign-20260808`
 **סטטוס:** מימוש מקומי בביקורת; שער מלא, commit, push ופריסה הם `PENDING`.
-**מקור אמת:** קוד ומיגרציות `0086`–`0097`. מסמך זה אינו הופך פעולה שלא הורצה להצלחה.
+**מקור אמת:** קוד ומיגרציות `0100`–`0111`, לאחר מיזוג `origin/main` שכבר כלל את `0086`–`0089`.
+מסמך זה אינו הופך פעולה שלא הורצה להצלחה.
 
 ## 1. תקציר מנהלים
 
@@ -25,7 +26,7 @@ match אמיתי, snapshot שרתי לדשבורד, קבלת סחורה offline 
 - תיעוד offline עדיין תיאר app shell ותמונות כעתיד אף שהקמפיין חיווט אותם.
 - בדיקות חשבונית ותיקות היו בעיקר ברמת כותרת/סכום; לא הייתה ראיית שורות סמכותית מלאה.
 - דשבורדים ביצעו קריאות רבות והיו סתירות סביב `unmatched`, ‏`suggested` ו־unknown מול zero.
-- `trial_ends_at` היה מידע לפני `0094`; לא היה read-only אוטומטי לאחר grace.
+- `trial_ends_at` היה מידע לפני `0108`; לא היה read-only אוטומטי לאחר grace.
 - רשם SECURITY DEFINER היה קיים, אך marker של scope היה ניתן לסיפוק במחרוזת שאינה קוד מבצע.
 - המסמכים ההיסטוריים היו עשירים אך ערבבו Current State, החלטה היסטורית וחוב פתוח.
 - בתחילת הביקורת נמצאו GitHub Issues #2 ו־#3. שניהם כבר תוקנו ב־`origin/main`; הקוד והמבחנים
@@ -81,18 +82,18 @@ match אמיתי, snapshot שרתי לדשבורד, קבלת סחורה offline 
 
 | מיגרציה | שינוי מרכזי |
 |---|---|
-| `0086` | reprocess מנומק, matching מחירון לפי מזהים חזקים, rollback אוטומציה |
-| `0087` | trigger שחוסם פעילות מסחרית חדשה עם ספק inactive |
-| `0088` | SQL lexer ל־scope marker ורשם body-hash/proof |
-| `0089` | shadow/calibration ledgers, corpus queue, drift ו־document operations read models |
-| `0090` | `read_financial_supplier` וגבול role/tenant פיננסי |
-| `0091` | מיתוג ארגוני ו־Storage policy לוגו דיירי |
-| `0092` | invoice line evidence/matches/overrides, assessment ו־approval guard |
-| `0093` | `management_dashboard_snapshot(date)` |
-| `0094` | Trial ‏30+7, access mode, write guards ו־Storage write latch |
-| `0095` | supplier portal projection והרחבת transition PO לספק שלו בלבד |
-| `0096` | `inventory_intelligence` read model |
-| `0097` | offboarding lifecycle, durable export parts/manifest, revocable delivery, egress leases ו־worker fencing |
+| `0100` | reprocess מנומק, matching מחירון לפי מזהים חזקים, rollback אוטומציה |
+| `0101` | trigger שחוסם פעילות מסחרית חדשה עם ספק inactive |
+| `0102` | SQL lexer ל־scope marker ורשם body-hash/proof |
+| `0103` | shadow/calibration ledgers, corpus queue, drift ו־document operations read models |
+| `0104` | `read_financial_supplier` וגבול role/tenant פיננסי |
+| `0105` | מיתוג ארגוני ו־Storage policy לוגו דיירי |
+| `0106` | invoice line evidence/matches/overrides, assessment ו־approval guard |
+| `0107` | `management_dashboard_snapshot(date)` |
+| `0108` | Trial ‏30+7, access mode, write guards ו־Storage write latch |
+| `0109` | supplier portal projection והרחבת transition PO לספק שלו בלבד |
+| `0110` | `inventory_intelligence` read model |
+| `0111` | offboarding lifecycle, durable export parts/manifest, revocable delivery, egress leases ו־worker fencing |
 
 כל המיגרציות הן forward-only. היסטוריית מיגרציות קיימת לא שוכתבה. החלה בייצור: `PENDING`.
 
@@ -105,7 +106,7 @@ match אמיתי, snapshot שרתי לדשבורד, קבלת סחורה offline 
 - Storage write policies בודקות `organization_write_allowed()`; SELECT נשאר זמין ב־read-only.
 - Edge Functions מבצעות access preflight לפני Storage/provider/service mutation.
 - owner override ל־3-way ו־platform lifecycle דורשים password AMR טרי, סיבה ו־audit/security event.
-- `0088` דוחה marker ב־comment/literal ומחייב hash של גוף פונקציה שנבדק.
+- `0102` דוחה marker ב־comment/literal ומחייב hash של גוף פונקציה שנבדק.
 - `service_role` אינו בדפדפן.
 
 ## 8. שינויים באוטומציית מסמכים
@@ -238,8 +239,8 @@ ERP, מערכת הנהלת חשבונות, בנק, endpoint, tenant או account
 ## 19. רצף מיגרציות לייצור
 
 1. preflight: backup, migration ledger, secrets/config, current SHA ו־dry-run.
-2. להחיל בסדר עולה בלבד: `0086` → `0087` → `0088` → `0089` → `0090` → `0091` → `0092` →
-   `0093` → `0094` → `0095` → `0096` → `0097`.
+2. לוודא ש־`0086`–`0089` של `origin/main` כבר הוחלו, ואז להחיל בסדר עולה בלבד: `0100` → `0101` →
+   `0102` → `0103` → `0104` → `0105` → `0106` → `0107` → `0108` → `0109` → `0110` → `0111`.
 3. להריץ postflight assertions, RLS/tenant tests וספירות invariants.
 4. לפרוס Edge Functions ששונו ורק אחר כך frontend שקורא את ה־RPC החדשים.
 5. לא לכתוב מחדש migration שהוחלה ולא למלא את `0072`.

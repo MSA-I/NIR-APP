@@ -1,4 +1,4 @@
--- 0088 -- A5 must recognize executable scope enforcement, not marker text hidden in
+-- 0102 -- A5 must recognize executable scope enforcement, not marker text hidden in
 -- line or block comments. Keep the existing table-touch and exemption contract.
 
 do $guard$
@@ -14,7 +14,7 @@ begin
     and p.pronargs = 0;
 
   if v_source is null then
-    raise exception '0088 requires private.scope_enforcement_violations() from migration 0057';
+    raise exception '0102 requires private.scope_enforcement_violations() from migration 0057';
   end if;
 
   -- Preserve statement content, including whitespace inside literals. Only transport
@@ -23,7 +23,7 @@ begin
        replace(replace(v_source, chr(13) || chr(10), chr(10)), chr(13), chr(10)),
        chr(9) || chr(10) || chr(13) || chr(32)
      )) <> '28ed254d7c81faa09f87a8172974ec11' then
-    raise exception '0088 ancestry guard failed: unexpected A5 marker implementation';
+    raise exception '0102 ancestry guard failed: unexpected A5 marker implementation';
   end if;
 end
 $guard$;
@@ -210,6 +210,11 @@ insert into private.scope_definer_enforcements (
     '0074 locks the snapshot row and asserts its persisted unit before changing sent state.'
   ),
   (
+    'open_manual_exception(text,uuid,exception_type,text)',
+    '6f1d9039b9dfeeada46c9ab981e281b0', 'assert_unit',
+    '0087 locks the exact purchase order or invoice, derives its persisted unit and asserts that unit before inserting the reasoned exception.'
+  ),
+  (
     'p0_invoice_balance_rows()',
     '2ea54924b75ef99057fbac0f167e699d', 'filtered_read',
     '0057 filters every invoice row to unit_id null or unit_id present in auth_scopes().'
@@ -359,7 +364,7 @@ begin
   from private.scope_enforcement_violations();
 
   if v_violations is not null then
-    raise exception e'0088 scope enforcement assertions failed:\n%', v_violations;
+    raise exception e'0102 scope enforcement assertions failed:\n%', v_violations;
   end if;
 end
 $$;

@@ -52,8 +52,8 @@ supabase/
                            0040 מצב מסירת התראות server-only · 0041 מעברי סטטוס הזמנה מנומקים
                            0042 ACL פרופיל · 0043 פיצול הזמנה · 0044 פריטים להזמנה הבאה
                            0045–0085 עיבוד/פרשנות מסמכים, review, אוטונומיה וקליטת מחירון
-                           0086–0089 reprocess, rollback, calibration, shadow והקשחת scope
-                           0090–0097 גבול ספק פיננסי, מיתוג, 3-way, dashboard, trial, portal, מלאי ו־offboarding/export
+                           0100–0103 reprocess, rollback, calibration, shadow והקשחת scope
+                           0104–0111 גבול ספק פיננסי, מיתוג, 3-way, dashboard, trial, portal, מלאי ו־offboarding/export
   functions/               admin-provision · send-invite · send-push · submit-price-list
                            interpret-document · outbox-worker · upload-organization-logo · tenant-export
                            service_role נשאר בשרת בלבד
@@ -201,7 +201,7 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 
 ### התאמת חשבונית תלת־צדדית
 
-`0092` שומרת ראיית שורות חשבונית immutable ומקשרת שורה במפורש לפריטי הזמנה/קבלה. זיהוי מוצר
+`0106` שומרת ראיית שורות חשבונית immutable ומקשרת שורה במפורש לפריטי הזמנה/קבלה. זיהוי מוצר
 מעדיף מזהה מוצר, מק״ט ספק/מוצר וברקוד; שם אינו סמכות. חשבונית יכולה להיקשר למספר הזמנות, אך שתי
 התאמות אפשריות אינן נפתרות לפי סדר. המרות אוטומטיות מוגבלות ל־g↔kg ול־ml↔liter; אריזה דורשת יחס
 מוצר מאושר. יחידה שלמה דורשת התאמה מלאה, משקל/נפח מאפשרים ±2%, מחיר עד 1% הוא warning, שיעור
@@ -227,15 +227,15 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 
 - Service Worker שומר app shell ונכסים סטטיים בלבד; API/נתונים פיננסיים אינם נשמרים. טיוטת קבלה,
   מפתח idempotency ותמונה נשמרים ב־IndexedDB; קונפליקט עוצר לאדם והצלחה אינה מוצגת לפני RPC.
-- `0094` אוכפת Trial ‏30+7 ואז read-only ב־DB/Storage/Edge/UI. צפייה וייצוא נשארים; mutation/upload
+- `0108` אוכפת Trial ‏30+7 ואז read-only ב־DB/Storage/Edge/UI. צפייה וייצוא נשארים; mutation/upload
   נחסמים. הלקוח צורך ומרענן `organization_access_state` מן השרת ואינו מכריע פקיעה משעון המכשיר.
   `suspended` הוא מצב נפרד. אין pricing plan שמוסתר בקוד.
-- `0087` חוסמת פעילות מסחרית חדשה עם ספק inactive ומשאירה היסטוריה וסגירה פיננסית. `0090` חושפת
-  ל־accountant projection פיננסי נפרד. `0095` מחזירה לספק רק הזמנות שהונפקו עבור `auth_supplier()`
+- `0101` חוסמת פעילות מסחרית חדשה עם ספק inactive ומשאירה היסטוריה וסגירה פיננסית. `0104` חושפת
+  ל־accountant projection פיננסי נפרד. `0109` מחזירה לספק רק הזמנות שהונפקו עבור `auth_supplier()`
   ומאפשרת רק `sent→confirmed`, ללא שינוי תאריך אספקה.
-- `0096` הוא read model על ledger המלאי. בלי ספירה פיזית יתרה וצפי הם unknown; הצעת reorder ומחיר
+- `0110` הוא read model על ledger המלאי. בלי ספירה פיזית יתרה וצפי הם unknown; הצעת reorder ומחיר
   ספק הן read-only ואינן יוצרות הזמנה.
-- `0097` מוסיפה בקשת offboarding שמחילה read-only מיידי, ביטול owner עד 30 יום, הפעלה מחדש בידי
+- `0111` מוסיפה בקשת offboarding שמחילה read-only מיידי, ביטול owner עד 30 יום, הפעלה מחדש בידי
   Platform Admin עד 120 יום, ו־export מלא עמיד בדפי CSV/JSON ומסמכי מקור. חלקים נכתבים לאחסון
   פרטי עם hash ו־manifest; broker מנפיק קישור בר־ביטול ל־7 ימים ומאמת אותו מחדש בכל הורדה.
   אין purge אוטומטי: retention ו־legal hold נשארים fail-closed עד executor ציות ייעודי.
@@ -244,7 +244,7 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 
 Domain events ו־transactional outbox שומרים את העסקה בלתי־תלויה ביעד, עם correlation,
 idempotency, HMAC, retries ו־dead-letter. **Live Integration Proof הוא DEFERRED** עד יעד ו־credentials
-מפורשים. `0088` מחליפה marker טקסטואלי ב־lexer של SQL, קריאה executable ו־body hash; רשם החריגים
+מפורשים. `0102` מחליפה marker טקסטואלי ב־lexer של SQL, קריאה executable ו־body hash; רשם החריגים
 נשאר גלוי וריקונו נשאר עבודה פונקציה־פונקציה.
 
 ## חוזה עיבוד מסמכים ואוטומציה — מצב נוכחי
@@ -269,8 +269,8 @@ Storage; אובייקט בלי `eTag` אינו נכנס לתור.
 
 **הערת היסטוריה:** ב־`0045` מנוע החילוץ, הפרשנות, review וה־bridge למחירון עוד לא היו קיימים.
 מאז נמסרו `extract-document`/`interpret-document`, ראיות חילוץ ופירוש immutable, מסך review,
-סיווג אוטומטי וקליטת מחירון פר־שורה דרך פקודת המחיר הסמכותית. `0086` מוסיפה reprocess מנומק
-ו־rollback לפעולה אוטומטית; `0089` מוסיפה Shadow predictions, החלטות אדם בגרסאות, calibration
+סיווג אוטומטי וקליטת מחירון פר־שורה דרך פקודת המחיר הסמכותית. `0100` מוסיפה reprocess מנומק
+ו־rollback לפעולה אוטומטית; `0103` מוסיפה Shadow predictions, החלטות אדם בגרסאות, calibration
 metrics, drift read models ומרכז תפעול. שינוי fingerprint מבני לא־מוכר מעביר ל־Shadow; מדדי drift
 מספריים נשמרים אך אינם מפעילים threshold אוטומטי.
 

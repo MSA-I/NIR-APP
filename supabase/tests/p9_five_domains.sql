@@ -259,7 +259,7 @@ select pg_temp.p9_assert(
 -- has the same empty-auth_scopes constraint as 0077. Its tenant comes from tenant-composite
 -- document/interpretation keys before it may create a product or write a price.
 --
--- 0089 adds FOUR. run_price_list_shadow is service_role-only, so auth_scopes() is empty.
+-- 0103 adds FOUR. run_price_list_shadow is service_role-only, so auth_scopes() is empty.
 -- Its actor is the immutable uploader and its tenant is pinned through interpretation, document,
 -- job, extraction, actor and supplier composite keys. It reads the document/catalog context and
 -- writes only immutable shadow evidence -- no catalog, price, submission or financial table.
@@ -280,13 +280,13 @@ select pg_temp.p9_assert(
 -- its composite keys bind the run/document/interpretation/reviewer to auth_org(), its trigger GUC
 -- exposes no direct INSERT grant, and it writes one immutable verdict plus mandatory-reason audit.
 --
--- 0094 adds ONE row-local trigger guard. private.organization_row_write_guard() cannot be INVOKER:
+-- 0108 adds ONE row-local trigger guard. private.organization_row_write_guard() cannot be INVOKER:
 -- it must stop writes made through service_role and existing SECURITY DEFINER commands even when
 -- that actor has no browser SELECT/EXECUTE grant on the private lifecycle helper. It examines only
 -- the firing row's OLD/NEW org_id and cannot select or return a sibling unit row. Its purpose is to
 -- close a cross-command lifecycle bypass, not to widen scope.
 --
--- 0097 adds THREE service-only export workers. service_claim_organization_export initializes a
+-- 0111 adds THREE service-only export workers. service_claim_organization_export initializes a
 -- reviewed, A6-pinned tenant snapshot for a locked offboarding request; the new bounded snapshot
 -- worker copies at most 50 rows/~1MiB (or one explicitly capped oversized record), verifies the
 -- reviewed schema and relation fingerprint, and advances private durable cursors atomically. No
@@ -298,7 +298,7 @@ select pg_temp.p9_assert(
 -- the same live generation/token, every durable artifact and its Storage evidence before it may
 -- mark the one request ready and append audit evidence. INVOKER would require exposing the private
 -- snapshot/part ledger and tenant-exports bucket to browser roles, defeating the delivery boundary.
--- 0097 retains the existing complete_document_processing_job exemption as a temporary audited
+-- 0111 retains the existing complete_document_processing_job exemption as a temporary audited
 -- expand-compatible bridge for the deployed legacy Edge worker. It also adds the exact
 -- evidence-consuming completion signature, one evidence-only OCR recorder, one OCR extraction
 -- recovery command and one interpretation-evidence recovery command. These cannot be
@@ -323,9 +323,9 @@ select pg_temp.p9_assert(
   || 'plus the one 0077 added for revert_document_auto_action (not drainable: invoker would '
   || 'let a direct PATCH undo a machine-written financial record with no reason), plus the '
   || 'three 0080/0081 trusted internal paths whose tenant is pinned by immutable composite keys, '
-  || 'plus the four 0089 measured-automation paths documented above, plus the one 0094 '
+  || 'plus the four 0103 measured-automation paths documented above, plus the one 0108 '
   || 'row-local lifecycle guard that must cover service-role and definer writes, plus the two '
-  || '0097 service-only claim/bounded-snapshot/finalizer paths whose browser ACL is intentionally empty, '
+  || '0111 service-only claim/bounded-snapshot/finalizer paths whose browser ACL is intentionally empty, '
   || 'plus four exact OCR evidence paths: recorder, evidence-consuming completion, extraction '
   || 'recovery and interpretation recovery, while the legacy completion bridge remains during '
   || 'the DB-first Edge rollout; '
@@ -868,7 +868,7 @@ begin
       ) into v_reader;
 
       if p_entity = 'invoice_review' then
-        -- 0092 snapshots every approved transition with a non-null approving actor. The probe's
+        -- 0106 snapshots every approved transition with a non-null approving actor. The probe's
         -- direct reset is fixture setup, so emulate the audited command writer instead of creating
         -- an impossible anonymous approval snapshot.
         perform pg_temp.p9_claims('29000000-0000-4000-8000-000000000001');

@@ -10,10 +10,8 @@ export interface QuickAction {
   to?: string;
 }
 
-// Each role sees only the actions it is allowed to perform. The bar is only worthwhile for
-// roles with several day-to-day actions: procurement (owner/office/kitchen) and accountant.
-// payer and supplier each live on a single screen, so quickActionsFor returns nothing for them
-// and Fab renders no bar — we don't force a bar where there is little to do.
+// Mobile keeps the original role-aware quick-action bar. The desktop speed-dial filters this list
+// to commands only so restoring the phone surface does not undo the desktop hierarchy.
 const QUICK_ACTIONS: readonly QuickAction[] = [
   { key: 'order', label: 'הזמנה חדשה', icon: ShoppingCart, kind: 'link', to: '/orders/new?fresh=1', roles: ['owner', 'office', 'kitchen'] },
   { key: 'dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, kind: 'link', to: '/dashboard', roles: ['owner', 'office', 'kitchen', 'accountant'] },
@@ -24,6 +22,30 @@ const QUICK_ACTIONS: readonly QuickAction[] = [
   { key: 'pay', label: 'תשלומים', icon: CreditCard, kind: 'link', to: '/pay', roles: ['accountant'] },
 ];
 
+const FOCUS_PATHS = ['/orders/new', '/invoices/new', '/receiving/:orderId'] as const;
+
 export function quickActionsFor(role: Role | null | undefined): QuickAction[] {
   return role ? QUICK_ACTIONS.filter((action) => action.roles.includes(role)) : [];
+}
+
+export function desktopQuickActionsFor(role: Role | null | undefined): QuickAction[] {
+  return quickActionsFor(role).filter((action) => ['order', 'capture', 'invoice'].includes(action.key));
+}
+
+export function isFocusPath(pathname: string): boolean {
+  return FOCUS_PATHS.some((path) => path.includes(':')
+    ? pathname.startsWith(`${path.slice(0, path.indexOf('/:'))}/`)
+    : pathname === path);
+}
+
+/** One route-family rule shared by the desktop sidebar and mobile drawer. */
+export function isRouteFamilyActive(pathname: string, to: string): boolean {
+  if (to === '/documents') {
+    return pathname === to || /^\/documents\/[^/]+\/review$/.test(pathname);
+  }
+  if (to === '/documents/archive') return pathname === to;
+  if (['/orders', '/receiving', '/invoices', '/suppliers'].includes(to)) {
+    return pathname === to || pathname.startsWith(`${to}/`);
+  }
+  return pathname === to;
 }

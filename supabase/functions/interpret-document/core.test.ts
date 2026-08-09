@@ -29,7 +29,7 @@ import {
 import migrationSql from "../../migrations/0077_apply_document_interpretation.sql" with {
   type: "text",
 };
-import invoiceMatchMigrationSql from "../../migrations/0092_invoice_line_three_way_match.sql" with {
+import invoiceMatchMigrationSql from "../../migrations/0106_invoice_line_three_way_match.sql" with {
   type: "text",
 };
 import reviewModelSource from "../../../src/components/document-review/model.ts" with {
@@ -735,7 +735,7 @@ test("the complete provider retry envelope stays inside the database lease with 
   );
 });
 
-test("every invoice line key consumed by 0092 is named by the interpretation contract", () => {
+test("every invoice line key consumed by 0106 is named by the interpretation contract", () => {
   const start = invoiceMatchMigrationSql.indexOf(
     "create or replace function public.capture_applied_invoice_line_evidence()",
   );
@@ -745,7 +745,7 @@ test("every invoice line key consumed by 0092 is named by the interpretation con
   );
   assert.ok(
     start >= 0 && end > start,
-    "0092 invoice capture function was not found",
+    "0106 invoice capture function was not found",
   );
   const capture = invoiceMatchMigrationSql.slice(start, end);
   const consumed = [
@@ -757,7 +757,7 @@ test("every invoice line key consumed by 0092 is named by the interpretation con
   assert.deepEqual(
     consumed,
     [...CANONICAL_LINE_ITEM_KEYS].sort(),
-    "0092 and the prompt disagree on the exact invoice line evidence keys",
+    "0106 and the prompt disagree on the exact invoice line evidence keys",
   );
 });
 

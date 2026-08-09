@@ -1,5 +1,5 @@
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, Warehouse } from 'lucide-react';
+import { Link, Outlet, useNavigate, useLocation } from 'react-router';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, Warehouse } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -14,16 +14,10 @@ import type { Role } from '../lib/types';
 import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/trial';
+import { isRouteFamilyActive } from '../lib/quickActions';
 
-// `end` switches off NavLink's default prefix matching, and belongs on every path that is a
-// parent of another path in this menu. Without it /documents and /documents/archive are both
-// active on the archive page: two elements carrying aria-current="page", which is wrong for a
-// screen reader and picks the wrong target for the drawer's initialFocus below, since that
-// queries for exactly that attribute. It is not free — /documents stops highlighting while a
-// document is open at /documents/:documentId/review, so the sidebar shows nothing selected on
-// that screen. One unlit item on a detail page is the smaller harm of the two.
-export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[]; end?: boolean }
-export interface NavSection { section: string; items: NavItem[] }
+export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[] }
+export interface NavSection { section: string; items: NavItem[]; collapsible?: boolean }
 
 // Four work groups — מסמכים / רכש / כספים / בקרה — under two ungrouped links that need no
 // header to explain them. The less self-evident items (מחירונים, דרישות תשלום, התאמות בנק,
@@ -46,15 +40,15 @@ export const NAV_SECTIONS: NavSection[] = [
     // reading belongs beside the ledgers it feeds, not inside them.
     section: 'מסמכים',
     items: [
-      { to: '/documents', label: 'תיקיית המסמכים', icon: FolderOpen, roles: ['owner', 'office', 'kitchen'], end: true },
       { to: '/documents/operations', label: 'תפעול מסמכים', icon: Activity, roles: ['owner'] },
+      { to: '/documents', label: 'תיקיית המסמכים', icon: FolderOpen, roles: ['owner', 'office', 'kitchen'] },
       { to: '/documents/archive', label: 'ארכיון', icon: Archive, roles: ['owner', 'office', 'kitchen'] },
     ],
   },
   {
     section: 'רכש',
     items: [
-      { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office', 'kitchen'], end: true },
+      { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office', 'kitchen'] },
       { to: '/receiving', label: 'קבלת סחורה', icon: PackageCheck, roles: ['owner', 'office', 'kitchen'] },
       { to: '/inventory', label: 'מלאי', icon: Warehouse, roles: ['owner', 'office', 'kitchen'] },
       { to: '/suppliers', label: 'ספקים', icon: Truck, roles: ['owner', 'office', 'kitchen'] },
@@ -88,24 +82,58 @@ export const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-// What the sidebar actually renders, derived rather than declared: NAV_SECTIONS is the menu on
-// paper, this is the menu a given person sees. Kept pure and exported so the order and the role
-// filtering can be asserted without mounting the shell — the literal alone cannot prove either.
-//
-// Platform operators are a separate axis from tenant roles, so the console cannot ride
-// NAV_SECTIONS' `roles: Role[]` filter — appending a synthetic Role would misrepresent the
-// user_role enum the RLS policies are built on. It is appended after the tenant sections
-// to keep the visual separation between "running this business" and "running the platform".
-export function sectionsForRole(role: Role | undefined, isPlatformAdmin: boolean, canWrite = true): NavSection[] {
-  const roleSections = NAV_SECTIONS
-    .map((s) => ({
-      ...s,
-      items: s.items.filter((i) => role && i.roles.includes(role) && (canWrite || i.to !== '/orders/new')),
-    }))
-    .filter((s) => s.items.length > 0);
-  return isPlatformAdmin
-    ? [...roleSections, { section: 'פלטפורמה', items: [{ to: '/admin', label: 'ניהול לקוחות', icon: Building2, roles: [] as Role[] }] }]
-    : roleSections;
+const DAILY_PATHS: Record<Role, readonly string[]> = {
+  owner: ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
+  office: ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
+  kitchen: ['/dashboard', '/orders', '/receiving', '/documents', '/suppliers'],
+  accountant: ['/dashboard', '/invoices', '/pay', '/payments', '/bank'],
+  payer: ['/dashboard', '/pay'],
+  supplier: ['/dashboard', '/my-prices'],
+};
+
+const MANAGEMENT_PATHS: Partial<Record<Role, readonly string[]>> = {
+  owner: ['/inventory', '/products', '/prices', '/credits', '/payment-requests', '/payments', '/bank'],
+  office: ['/inventory', '/products', '/prices', '/credits', '/payment-requests'],
+  kitchen: ['/inventory', '/products', '/prices', '/invoices', '/credits'],
+  accountant: ['/credits'],
+};
+
+const CONTROL_PATHS: Partial<Record<Role, readonly string[]>> = {
+  owner: ['/documents/operations', '/exceptions', '/expenses', '/reports', '/analytics', '/audit'],
+  office: ['/exceptions', '/analytics'],
+  kitchen: ['/exceptions'],
+  accountant: ['/exceptions', '/expenses', '/reports', '/audit'],
+};
+
+function catalogItem(path: string, role: Role): NavItem | null {
+  const item = NAV_SECTIONS.flatMap((section) => section.items).find((candidate) => candidate.to === path);
+  return item?.roles.includes(role) ? item : null;
+}
+
+function itemsFor(role: Role, paths: readonly string[]): NavItem[] {
+  return paths.map((path) => catalogItem(path, role)).filter((item): item is NavItem => item !== null);
+}
+
+// NAV_SECTIONS remains the complete permission-aware route catalogue. This function is the calmer
+// presentation: daily work is visible; management and control are progressively disclosed. New
+// order, alerts and archive keep their routes and page titles but enter through their contextual
+// surfaces instead of competing with modules in the sidebar.
+export function sectionsForRole(role: Role | undefined, isPlatformAdmin: boolean): NavSection[] {
+  const roleSections: NavSection[] = role ? [
+    { section: '', items: itemsFor(role, DAILY_PATHS[role]) },
+    { section: 'ניהול', items: itemsFor(role, MANAGEMENT_PATHS[role] ?? []), collapsible: true },
+    { section: 'בקרה', items: itemsFor(role, CONTROL_PATHS[role] ?? []), collapsible: true },
+  ].filter((section) => section.items.length > 0) : [];
+  const platform = { section: 'פלטפורמה', collapsible: !!role, items: [{ to: '/admin', label: 'ניהול לקוחות', icon: Building2, roles: [] as Role[] }] };
+  return isPlatformAdmin ? [...roleSections, platform] : roleSections;
+}
+
+export function footerItemsForRole(role: Role | undefined): NavItem[] {
+  return role === 'owner' ? itemsFor(role, ['/settings']) : [];
+}
+
+export function drawerSectionsForRole(role: Role | undefined, isPlatformAdmin: boolean): NavSection[] {
+  return sectionsForRole(role, isPlatformAdmin);
 }
 
 /**
@@ -133,11 +161,13 @@ const PAGE_TITLE_PATTERNS: [RegExp, string][] = [
   [/^\/receipts\/[^/]+$/, 'פרטי קבלה'],
   [/^\/invoices\/new$/, 'חשבונית חדשה'],
   [/^\/invoices\/[^/]+$/, 'פרטי חשבונית'],
+  [/^\/documents\/[^/]+\/review$/, 'בדיקת מסמך'],
+  [/^\/pay\/emergency$/, 'תשלום חירום'],
   [/^\/onboarding$/, 'הקמת המערכת'],
   [/^\/admin$/, 'ניהול פלטפורמה'],
 ];
 
-function pageTitleFor(pathname: string): string {
+export function pageTitleFor(pathname: string): string {
   const navTitle = NAV_SECTIONS.flatMap((section) => section.items).find((item) => item.to === pathname)?.label;
   return navTitle ?? PAGE_TITLE_PATTERNS.find(([pattern]) => pattern.test(pathname))?.[1] ?? APP_NAME;
 }
@@ -158,16 +188,15 @@ export default function Layout() {
   // Only procurement staff can act on the gallery queue. A known count > 0 is required,
   // so null (loading) and 0 never fabricate an all-clear or workload.
   const inboxCount = useInboxCount(!!role && (['owner', 'office', 'kitchen'] as Role[]).includes(role));
-  // Layout also renders during the initial load, before `org` arrives. Falling back to
-  // the product name keeps the header honest — it is never another tenant's name.
-  const orgName = org?.name ?? APP_NAME;
+  const orgName = org?.name ?? '';
   const orgLogoUrl = org?.logo_path
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
     : null;
+  const currentTitle = pageTitleFor(location.pathname);
 
-  const sections = sectionsForRole(role, isPlatformAdmin, organizationAccess.canWrite);
-
-  const showHeaders = showNavHeaders(sections);
+  const sections = sectionsForRole(role, isPlatformAdmin);
+  const drawerSections = drawerSectionsForRole(role, isPlatformAdmin);
+  const footerItems = footerItemsForRole(role);
 
   const { panelRef: drawerRef, requestClose: closeMobileMenu } = useDialogLayer<HTMLElement>({
     open: mobileOpen,
@@ -190,10 +219,10 @@ export default function Layout() {
   // Route changes announce themselves through the tab title and move keyboard focus past the
   // persistent navigation shell. Query-only filter changes keep focus where the user left it.
   useEffect(() => {
-    document.title = `${pageTitleFor(location.pathname)} — ${orgName}`;
+    document.title = `${currentTitle} — ${orgName ? `${orgName} · ` : ''}${APP_NAME}`;
     const frame = requestAnimationFrame(() => document.getElementById('main')?.focus({ preventScroll: true }));
     return () => cancelAnimationFrame(frame);
-  }, [location.pathname, orgName]);
+  }, [location.pathname, currentTitle, orgName]);
 
   // Layout is the single owner of authenticated route titles. Restore the neutral title
   // only when leaving the authenticated shell, never when tenant data finishes loading.
@@ -228,48 +257,61 @@ export default function Layout() {
     if (result.pushWarning) toast(result.pushWarning, 'error');
   }
 
-  const linkCls = ({ isActive }: { isActive: boolean }) =>
+  const linkCls = (isActive: boolean) =>
     `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
       isActive ? 'bg-shell-ink text-shell font-medium' : 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
     }`;
 
-  const sidebar = (
+  const navLinks = (items: readonly NavItem[]) => items.map((item) => {
+    const active = isRouteFamilyActive(location.pathname, item.to);
+    return (
+      <Link key={item.to} to={item.to} className={linkCls(active)} aria-current={active ? 'page' : undefined}
+        onClick={() => { if (mobileOpen) closeMobileMenu(); }}>
+        <item.icon size={17} aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+        {item.to === '/documents' && inboxCount != null && inboxCount > 0 && (
+          <span className="badge num bg-action-soft text-action-on-soft ms-auto">{inboxCount}</span>
+        )}
+      </Link>
+    );
+  });
+
+  const sidebar = (displaySections: readonly NavSection[], navLabel: string) => (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-5 border-b border-shell-ink/10">
-        <div className="flex items-center gap-2.5">
-          {orgLogoUrl && <img src={orgLogoUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg bg-white object-contain p-1" />}
-          <div className="min-w-0">
-            <div className="text-lg font-bold text-shell-ink truncate" title={orgName}>{orgName}</div>
-            <div className="text-xs text-shell-ink-dim">ניהול רכש ותשלומים</div>
-          </div>
+      <div className="flex items-center gap-3 border-b border-shell-ink/10 px-4 py-4 pe-12 lg:pe-4">
+        <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="40" height="40"
+          className="size-10 shrink-0 rounded-lg bg-white object-contain p-0.5 ring-1 ring-shell-ink/15" />
+        <div className="min-w-0">
+          <div className="text-base font-bold text-shell-ink">{APP_NAME}</div>
+          <div className="truncate text-xs text-shell-ink-dim" title={orgName || undefined}>{orgName || 'ניהול רכש ותשלומים'}</div>
         </div>
       </div>
-      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
-        {sections.map((s, i) => (
-          <div key={i}>
-            {showHeaders && s.section && <div className="px-3 pb-1 text-[11px] font-semibold text-shell-heading">{s.section}</div>}
-            <div className="space-y-0.5">
-              {s.items.map((item) => (
-                <NavLink key={item.to} to={item.to} className={linkCls} onClick={() => { if (mobileOpen) closeMobileMenu(); }} end={item.end}>
-                  <item.icon size={17} />
-                  {item.label}
-                  {/* TaskLine's count-pill anatomy at the item's logical end; both the desktop
-                      sidebar and the mobile drawer render this same `sidebar` tree. */}
-                  {item.to === '/documents' && inboxCount != null && inboxCount > 0 && (
-                    <span className="badge num bg-action-soft text-action-on-soft ms-auto">{inboxCount}</span>
-                  )}
-                </NavLink>
-              ))}
+      <nav aria-label={navLabel} className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+        {displaySections.map((s, i) => (
+          s.collapsible ? (
+            <details key={`${s.section}-${location.pathname}`} className="group" open={s.items.some((item) => isRouteFamilyActive(location.pathname, item.to)) || undefined}>
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-3 text-xs font-semibold text-shell-heading hover:bg-shell-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
+                {s.section}<ChevronDown size={15} aria-hidden="true" className="transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="mt-0.5 space-y-0.5">{navLinks(s.items)}</div>
+            </details>
+          ) : (
+            <div key={s.section || i}>
+              {s.section && <div className="px-3 pb-1 text-[11px] font-semibold text-shell-heading">{s.section}</div>}
+              <div className="space-y-0.5">{navLinks(s.items)}</div>
             </div>
-          </div>
+          )
         ))}
       </nav>
-      <div className="px-4 py-3 border-t border-shell-ink/10">
+      <div className="border-t border-shell-ink/10 px-3 py-3">
+        {footerItems.length > 0 && <div className="mb-2 space-y-0.5">{navLinks(footerItems)}</div>}
+        <div className="px-1">
         <div className="text-sm text-shell-ink font-medium">{profile?.full_name}</div>
         <div className="text-xs text-shell-ink-dim mb-2">{role ? roleLabels[role] : ''}</div>
         <button className="flex min-h-11 items-center gap-1.5 rounded-lg text-xs text-shell-ink-dim hover:text-shell-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => void handleSignOut()}>
           <LogOut size={13} /> התנתקות
         </button>
+        </div>
       </div>
     </div>
   );
@@ -284,7 +326,7 @@ export default function Layout() {
         דלג לתוכן
       </a>
       {/* Desktop sidebar */}
-      <aside className="hidden lg:block fixed inset-y-0 start-0 w-60 bg-shell border-e border-shell-ink/10 z-40 no-print">{sidebar}</aside>
+      <aside className="hidden lg:block fixed inset-y-0 start-0 w-60 bg-shell border-e border-shell-ink/10 z-40 no-print">{sidebar(sections, 'ניווט ראשי')}</aside>
 
       {/* Mobile top bar */}
       <header className="phone-safe-header lg:hidden sticky top-0 z-40 bg-shell text-shell-ink border-b border-shell-ink/10 flex min-w-0 items-center no-print">
@@ -293,7 +335,14 @@ export default function Layout() {
           onClick={() => setMobileOpen(true)} aria-label="פתיחת תפריט" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
           <Menu size={22} />
         </button>
-        <div className="flex min-h-11 min-w-0 flex-1 items-center px-2 font-bold" title={orgName}>{orgName}</div>
+        <div className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2">
+          <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="28" height="28"
+            className="size-7 shrink-0 rounded-md bg-white object-contain p-px ring-1 ring-shell-ink/15" />
+          <div className="min-w-0 leading-tight">
+            <div className="truncate text-sm font-semibold" title={currentTitle}>{currentTitle}</div>
+            <div className="truncate text-[11px] text-shell-ink-dim" title={orgName || APP_NAME}>{APP_NAME}{orgName ? ` · ${orgName}` : ''}</div>
+          </div>
+        </div>
         <div className="flex items-center gap-1">
           <NotificationBell onShell />
           {canSearch && (
@@ -308,7 +357,7 @@ export default function Layout() {
           <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label="תפריט ראשי"
             tabIndex={-1} className="phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-shell border-e border-shell-ink/10 focus:outline-none" onClick={(e) => e.stopPropagation()}>
             <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 rounded-lg text-shell-ink-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={20} /></button>
-            {sidebar}
+            {sidebar(drawerSections, 'יעדים נוספים')}
           </aside>
         </div>
       )}

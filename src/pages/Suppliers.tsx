@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { Plus, Phone, Mail, MapPin, Clock, Truck, Star, TrendingUp, TrendingDown, Pencil, Trash2, Upload, Landmark } from 'lucide-react';
@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, PageLoader, useToast, Modal, ErrorNote, ConfirmDialog, type Column } from '../components/ui';
+import { Breadcrumbs, DataTable, StatusBadge, useToast, Modal, ErrorNote, ConfirmDialog, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, type Column } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { PriceListUploadModal, SUBMISSION_STATUS, submissionMonthLabel } from '../components/PriceListUpload';
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
@@ -146,15 +146,14 @@ export function SuppliersList() {
     { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} /> },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable cols={7} />;
   if (error) return <ErrorNote message={error} />;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="page-title">ספקים</h1>
-        {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> ספק חדש</button>}
-      </div>
+      <PageHeader title="ספקים"
+        meta={`${data?.length ?? 0} ספקים · ${(data ?? []).filter((supplier) => (supplier.open_balance ?? 0) > 0).length} עם יתרה פתוחה`}
+        actions={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> ספק חדש</button>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.contact_name ?? '').toLowerCase().includes(q) || (r.tax_id ?? '').toLowerCase().includes(q)}
         searchLabel="חיפוש בספקים"
@@ -170,18 +169,23 @@ export function SuppliersList() {
           ] : []),
           { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', onSelect: () => void requestDelete(r) },
         ] : undefined}
+        activeFilters={(balanceFilter === 'open' ? 1 : 0) + (statusFilter ? 1 : 0)}
+        onClearFilters={() => { setBalanceFilter(''); setStatusFilter(''); }}
         toolbar={
-          <div className="flex flex-wrap gap-2">
-            <select className="input w-auto!" aria-label="סינון ספקים לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">כל הסטטוסים</option>
-              {Object.entries(SUPPLIER_STATUS).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}
-            </select>
+          <>
             <select className="input w-auto!" aria-label="סינון ספקים לפי יתרה פתוחה" value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)}>
-              <option value="">כל היתרות</option>
+              <option value="">כל הספקים</option>
               <option value="open">עם יתרה פתוחה</option>
             </select>
-          </div>
-        } />
+            <select className="input w-auto!" aria-label="סינון ספקים לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">כל הסטטוסים</option>
+              {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+          </>
+        }
+        emptyTitle="עדיין אין ספקים"
+        emptySubtitle="הוסף את הספק הראשון כדי להתחיל לנהל רכש, מחירים ויתרות"
+        emptyAction={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> ספק חדש</button>} />
       {balanceFilter === 'open' && rows.length === 0 && <p className="text-sm text-ink-muted">אין ספקים עם יתרה פתוחה.</p>}
       {editing && <SupplierForm supplier={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refetch(); }} />}
       {priceUploadFor && (
@@ -219,7 +223,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   // UPDATE column grant in 0061; changing it goes through `update_supplier_bank_details`
   // (step-up + mandatory reason + audit). `bankStep` holds the new value while the reason
   // dialog is up; `bankReauth` holds the confirmed reason while ReauthModal decides.
-  const [bankStep, setBankStep] = useState<{ nextBank: string | null } | null>(null);
+  const [bankStep, setBankStep] = useState<{ nextBank: string | null; supplierId: string } | null>(null);
   const [bankReauth, setBankReauth] = useState<string | null>(null);
   const [bankBusy, setBankBusy] = useState(false);
 
@@ -253,9 +257,10 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
     setBusy(true);
     const newRating = f.rating || null; // 0 (cleared) → null; DB checks 1..5
     const ratingChanged = newRating !== (supplier?.rating ?? null);
-    // bank_details is deliberately absent from this row: on UPDATE the column has no direct
-    // grant any more, and sending it unchanged would fail the whole save. It rides the INSERT
-    // (whose grant kept it), and on change it goes through the dedicated RPC below.
+    // bank_details is deliberately absent from this row in BOTH directions now: 0061 revoked
+    // the UPDATE column grant, and 0088 (#106, decided 09.08.2026) revoked INSERT too — so a
+    // non-empty value entered while creating goes through the same reasoned step-up RPC a
+    // change does. Sending the column on either write would fail the whole save.
     const row = {
       name: f.name.trim(), tax_id: f.tax_id || null, contact_name: f.contact_name || null,
       phone: f.phone || null, whatsapp: f.whatsapp || null, email: f.email || null, address: f.address || null,
@@ -272,23 +277,32 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
       const res = await supabase.from('suppliers').update(row).eq('id', supplier.id);
       setBusy(false);
       if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-      if (bankChanged) { setBankStep({ nextBank }); return; }
+      if (bankChanged) { setBankStep({ nextBank, supplierId: supplier.id }); return; }
       toast('הספק עודכן');
       onSaved();
     } else {
-      const res = await supabase.from('suppliers').insert({ ...row, bank_details: f.bank_details || null, org_id: profile!.org_id });
+      const res = await supabase.from('suppliers')
+        .insert({ ...row, org_id: profile!.org_id }).select('id').single();
       setBusy(false);
       if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+      const nextBank = f.bank_details || null;
+      if (nextBank) {
+        // #106: the row exists bank-less; the details now take the same reasoned step-up
+        // path a change to an existing supplier takes.
+        toast('הספק נוצר — פרטי הבנק דורשים אימות וסיבה');
+        setBankStep({ nextBank, supplierId: (res.data as { id: string }).id });
+        return;
+      }
       toast('הספק נוצר');
       onSaved();
     }
   }
 
   async function saveBankDetails(reason: string) {
-    if (!supplier || !bankStep) return;
+    if (!bankStep) return;
     setBankBusy(true);
     const res = await supabase.rpc('update_supplier_bank_details', {
-      p_supplier_id: supplier.id,
+      p_supplier_id: bankStep.supplierId,
       p_bank_details: bankStep.nextBank,
       p_reason: reason.trim(),
     });
@@ -344,8 +358,15 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
             aria-describedby="supplier-status-hint">
             {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
+          {/* OPEN-DECISIONS #115, decided 09.08.2026 (owner delegated): `inactive` means
+              "לא להזמין ממנו יותר" — the procurement doors close (new order, price-list upload),
+              the money doors stay open so an open account can still be settled. Deliberately NOT
+              filtered: invoice intake, payment requests, bank matching, documents, analytics —
+              an invoice from a supplier deactivated yesterday is the commonest event after
+              deactivation, and blocking it would manufacture the dead end #115 warned about. */}
           <p id="supplier-status-hint" className="mt-1 text-xs text-ink-muted">
-            ״לא פעיל״ חוסם הזמנות ומחירונים חדשים. חשבוניות, זיכויים, תשלומים, התאמות בנק, מסמכים והיסטוריה נשארים זמינים לסגירה כספית.
+            ״לא פעיל״ = לא מזמינים ממנו יותר: הספק מוסתר בהזמנה חדשה ובהעלאת מחירון. בקליטת חשבונית,
+            בדרישת תשלום ובהתאמות בנק הוא ממשיך להופיע, כדי שניתן יהיה לסגור מולו חשבון פתוח.
           </p>
         </div>
         <fieldset>
@@ -457,7 +478,19 @@ export function SupplierCard() {
     { key: 'prices' as const, label: `מחירים (${data?.prices.length ?? 0})` },
   ]), [data]);
 
-  if (loading) return <PageLoader />;
+  function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    let next = index;
+    if (event.key === 'ArrowLeft') next = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowRight') next = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    setTab(tabs[next].key);
+    requestAnimationFrame(() => document.getElementById(`supplier-tab-${tabs[next].key}`)?.focus());
+  }
+
+  if (loading) return <RecordSkeleton />;
   if (error || !data) return <ErrorNote message={error ?? 'ספק לא נמצא'} />;
   const s = data.supplier;
   const m = data.metrics;
@@ -485,30 +518,27 @@ export function SupplierCard() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="page-title flex flex-wrap items-center gap-x-3 gap-y-1">
-            {s.name}
-            <StatusBadge meta={SUPPLIER_STATUS[s.status]} />
-            <span className="inline-flex items-center gap-2">
+      <RecordHeader
+        breadcrumbs={<Breadcrumbs items={[{ label: 'ספקים', to: '/suppliers' }, { label: s.name }]} />}
+        title={s.name}
+        status={<><StatusBadge meta={SUPPLIER_STATUS[s.status]} /><span className="inline-flex items-center gap-2">
               <RatingStars value={s.rating} />
               {s.rating != null && s.rating_updated_at && (
                 <span className="text-xs font-normal text-ink-muted" title={s.rating_note ?? undefined}>עודכן {fmtDate(s.rating_updated_at)}</span>
               )}
-            </span>
-          </h1>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-ink-muted">
+            </span></>}
+        meta={<>
             {s.contact_name && <span>{s.contact_name}</span>}
             {s.phone && <span className="flex items-center gap-1"><Phone size={13} /><span dir="ltr">{s.phone}</span></span>}
             {s.email && <span className="flex items-center gap-1"><Mail size={13} /><span dir="ltr">{s.email}</span></span>}
             {s.address && <span className="flex items-center gap-1"><MapPin size={13} />{s.address}</span>}
             {s.delivery_days.length > 0 && <span className="flex items-center gap-1"><Truck size={13} />ימי אספקה {fmtDays(s.delivery_days)}</span>}
             {s.cutoff_time && <span className="flex items-center gap-1"><Clock size={13} />סגירת הזמנות {s.cutoff_time.slice(0, 5)}</span>}
-          </div>
-        </div>
-        {canWrite && (
-          <div className="flex flex-wrap gap-2">
-            {canStartSupplierCommerce(s.status) && <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={15} /> העלאת מחירון</button>}
+          </>}
+        primaryAction={canWrite && canStartSupplierCommerce(s.status)
+          ? <button className="btn-primary" onClick={() => setUploadOpen(true)}><Upload size={15} /> העלאת מחירון</button>
+          : null}
+        secondaryActions={canWrite && <>
             {/* Named, not buried: "החליף מספר חשבון" is the task, and it used to be four steps
                 inside a form of twenty fields. Navigates rather than calling setEditing directly,
                 so the address is the one another screen can link to. */}
@@ -516,9 +546,7 @@ export function SupplierCard() {
               <Landmark size={15} /> עדכון פרטי בנק
             </button>
             <button className="btn-secondary" onClick={() => setEditing(true)}>עריכה</button>
-          </div>
-        )}
-      </div>
+          </>} />
 
       <Scorecard items={scoreItems} />
 
@@ -526,8 +554,9 @@ export function SupplierCard() {
 
       <div role="tablist" aria-label={`מידע עבור ${s.name}`} className="flex gap-1 border-b border-line no-print overflow-x-auto">
         {tabs.map((t) => (
-          <button key={t.key} id={`supplier-tab-${t.key}`} role="tab" aria-selected={tab === t.key} aria-controls={`supplier-panel-${t.key}`} onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm whitespace-nowrap border-b-2 -mb-px ${tab === t.key ? 'border-action-solid text-action font-medium' : 'border-transparent text-ink-muted hover:text-ink-mid'}`}>
+          <button key={t.key} id={`supplier-tab-${t.key}`} role="tab" aria-selected={tab === t.key} aria-controls={`supplier-panel-${t.key}`}
+            tabIndex={tab === t.key ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, tabs.indexOf(t))} onClick={() => setTab(t.key)}
+            className={`min-h-11 px-4 py-2 text-sm whitespace-nowrap border-b-2 -mb-px ${tab === t.key ? 'border-action-solid text-action font-medium' : 'border-transparent text-ink-muted hover:text-ink-mid'}`}>
             {t.label}
           </button>
         ))}

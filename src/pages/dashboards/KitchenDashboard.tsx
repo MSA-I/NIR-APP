@@ -130,8 +130,8 @@ export default function KitchenDashboard() {
       <Link to="/orders/new" className="btn-primary"><ShoppingCart size={16} /> הזמנה חדשה</Link>
       <Link to="/receiving" className="btn-secondary"><PackageCheck size={16} /> קבלת סחורה</Link>
     </>}>
-      <Scorecard items={data.kpis} />
       <AttentionZone items={data.attention} />
+      <Scorecard items={data.kpis} />
       <div className="grid gap-5 lg:grid-cols-2">
         <ChartCard title="רכש לפי חודש" subtitle="שווי ההזמנות שנפתחו בארבעת החודשים האחרונים">
           <SpendBarChart points={data.monthly}

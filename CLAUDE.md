@@ -45,18 +45,19 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
 - `npm run build` = `tsc --noEmit` + **שמונת** סקריפטי ה-`check:*` + `vitest run` (‏`npm run test`) + `vite build` — **השער האוטומטי היחיד.**
   שמונה, לא שבעה: ‏`check:exemptions` נוסף בגל 11. הרשימה מ-`package.json` היא
   ‏`alerts · dashboard · orders · split · p2 · review · tokens · exemptions`.
-  ‏`check:review` מריץ `node --test` על `src/components/document-review/model.test.ts` — ‏**21** בדיקות
-  (‏`ℹ pass 21` בפלט; היה רשום כאן 16, והתיישן כשגל 11 הוסיף חמש).
+  ‏`check:review` מריץ `node --test` על `src/components/document-review/model.test.ts` — ‏**22** בדיקות
+  (‏`ℹ tests 22` בפלט; היה רשום כאן 16, התיישן ל-21 בגל 11, והתיישן שוב ל-22 בגלי 08.08 —
+  נמדד מחדש 09.08.2026 בריצת השער של חבילה 2).
   ‏`check:tokens` אוכף את חוק הטוקנים של `DESIGN.md` — אפס מחלקות פלטה גולמיות ואפס הקסים ב-`.tsx`.
   ‏`check:exemptions` מצמיד את רשם חריגי ה-`SECURITY DEFINER`: הוא סופר **מטקסט המיגרציות** כמה
   חריגים נוספו ונוקזו מעל זרע `0057` (‏59) ודורש שההצמדה ב-`p9_five_domains.sql` תסכים. זו אותה
   טענה שכבר קיימת ב-p9 — במילישניות, במקום בדקה התשע-עשרה של שער בן עשרים דקות. **ארבעה גלים
   רצופים גילו אותה שם.**
-  ‏`npm run test` — ‏**350** בדיקות ב-**31** קבצים.
+  ‏`npm run test` — ‏**400** בדיקות ב-**40** קבצים (נספר מפלט `vitest run`, ‏09.08.2026, אחרי חסימת ה-trial).
   **אין ESLint ואין Prettier** בריפו, למרות הערות `eslint-disable` שנשארו ב-`src/lib/useQuery.ts`.
 - `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **27**
   סוויטות SQL, ‏**preflight עם 44 זרועות**, ‏`npm audit --audit-level=high`, חוזי Deno,
-  ו-**29 תרחישי דפדפן**. מספר טענות P0 מדווח בזמן ריצה (‏266 בריצה שתועדה) — הוא אינו ליטרל בקוד.
+  ו-**33 תרחישי דפדפן**. מספר טענות P0 מדווח בזמן ריצה (‏266 בריצה שתועדה) — הוא אינו ליטרל בקוד.
 
   **איך נספר כל מספר כאן — כדי שהבא יספור ולא יעתיק:**
   - **27 סוויטות** = קריאות `Invoke-SqlTest` ב-`check-quality-gates.ps1` שהארגומנט הראשון שלהן הוא
@@ -65,13 +66,17 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
     ב-`supabase/tests/` יש **28** קבצי `.sql`; ההפרש הוא `p1_preflight.sql`, שרץ דרך `Invoke-Preflight`.
   - **44 זרועות preflight** = ‏`select '<שם>'` ב-`p1_preflight.sql` (‏1 + ‏43 `union all select '`),
     ו-`Invoke-Preflight` **זורק** אם לא חזרו בדיוק 44 שורות.
-  - **29 תרחישים** = קריאות `run(` ב-`check-browser-smoke.cjs`; ‏`p4-browser-report.json` של הריצה
-    האחרונה מדווח `passed: 29, skipped: 0, failures: 0`.
+  - **33 תרחישים** = קריאות `await run(` ב-`check-browser-smoke.cjs` (‏33 נכון ל-09.08.2026, אחרי
+    חבילות 1/2/5 של קמפיין "מוצר מוגמר"; ‏`run(` לבדו תופס גם את הגדרת הפונקציה).
 
-  **היסטוריית הסטייה, כי היא חזרה ארבע פעמים:** ‏13 → 20 → 26 → **27** לסוויטות; ‏22 → 25 → **29**
-  לתרחישים; ‏16 → **21** ל-`check:review`; ‏שבעה → **שמונה** לסקריפטי ה-`check:*`. בכל פעם הקובץ
+  **היסטוריית הסטייה, כי היא חזרה חמש פעמים:** ‏13 → 20 → 26 → **27** לסוויטות; ‏22 → 25 → 29 → 30 →
+  **33** לתרחישים; ‏16 → 21 → **22** ל-`check:review`; ‏שבעה → **שמונה** לסקריפטי ה-`check:*`. בכל פעם הקובץ
   הזה — שכל סוכן קורא **ראשון** — שלח את הקורא לספור פחות ממה שקיים. **סופרים לפני שכותבים.**
-  **ריצה אחת בכל רגע במכונה.** **אין CI** — `.github/` אינו קיים; זו ריצה ידנית.
+  **ריצה אחת בכל רגע במכונה.** **יש CI מינימלי מאז 09.08.2026** — ‏`.github/workflows/build.yml`
+  מריץ את `npm run build` המלא (‏tsc + שמונת ה-`check:*` + ‏vitest + ‏vite build) על Linux בכל
+  push/PR ל-`main`. **מה שה-CI לא מכסה, במפורש:** ‏`npm run quality` נשאר ריצה ידנית על מכונה זו —
+  ‏Docker, ‏27 סוויטות SQL, ‏preflight, חוזי Deno ו-33 תרחישי הדפדפן אינם רצים ב-CI. הגנת ענף
+  (‏required status) היא הגדרת GitHub של הבעלים — לא בוצעה אוטומטית.
 - מיגרציות: `scripts/db-query.ps1` (Windows) / `scripts/db-query.sh` (Linux/Mac) — שניהם רצים מול
   **הפרויקט המרוחק** דרך Management API (`-SqlFile` + `-ProjectRef` חובה). ריצה מקומית של סוויטה או
   מיגרציה היא `docker exec … psql` על `supabase_db_supplyflow-p0`, הדפוס של `Invoke-SqlTest`.

@@ -1,4 +1,4 @@
--- 0090 -- Financial supplier projections replace the accountant's historical raw-table grant.
+-- 0104 -- Financial supplier projections replace the accountant's historical raw-table grant.
 -- PostgreSQL RLS cannot mask columns, so the raw policy denies accountant and this server view
 -- exposes only accounting identity/payment fields. Historical suppliers remain visible.
 
@@ -62,7 +62,7 @@ begin
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0090 scope assertions failed:\n%', v_violations;
+    raise exception e'0104 scope assertions failed:\n%', v_violations;
   end if;
 end
 $$;

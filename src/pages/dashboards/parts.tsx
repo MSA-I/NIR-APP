@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { PageHeader } from '../../components/ui';
 
 /**
  * Shared frame for the per-role control rooms. Mirrors the owner dashboard's page shell (title +
@@ -7,10 +8,7 @@ import type { ReactNode } from 'react';
 export function DashboardFrame({ title, actions, children }: { title: string; actions?: ReactNode; children: ReactNode }) {
   return (
     <div className="dashboard-depth space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="page-title">{title}</h1>
-        {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
-      </div>
+      <PageHeader title={title} actions={actions} />
       {children}
     </div>
   );

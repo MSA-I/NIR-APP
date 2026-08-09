@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { Link, matchPath, useLocation } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { Loader2, Plus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { quickActionsFor } from '../lib/quickActions';
+import { desktopQuickActionsFor, isFocusPath, quickActionsFor } from '../lib/quickActions';
 import type { Role } from '../lib/types';
 import { useQuickCapture } from './QuickCapture';
 import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/trial';
 
-const FAB_SUPPRESSED_PATHS = ['/orders/new', '/invoices/new', '/receiving/:orderId'] as const;
 const QUICK_ACTIONS_MENU_ID = 'global-quick-actions';
 
 /**
@@ -22,7 +21,7 @@ const QUICK_ACTIONS_MENU_ID = 'global-quick-actions';
  */
 export function quickActionsForPath(role: Role | undefined, pathname: string) {
   const actions = quickActionsFor(role);
-  return FAB_SUPPRESSED_PATHS.some((path) => matchPath(path, pathname) != null)
+  return isFocusPath(pathname)
     ? actions.filter((action) => action.kind === 'capture')
     : actions;
 }
@@ -66,10 +65,10 @@ export default function Fab() {
         if (desktop.matches && rememberedFocus?.surface === 'mobile') {
           triggerRef.current?.focus();
         } else if (!desktop.matches && rememberedFocus?.surface === 'desktop') {
-          const matchingAction = rememberedFocus.actionKey
+          const matchingAction = (rememberedFocus.actionKey
             ? Array.from(document.querySelectorAll<HTMLElement>('.mobile-action'))
               .find((action) => action.dataset.quickActionKey === rememberedFocus.actionKey) ?? null
-            : document.querySelector<HTMLElement>('.mobile-action');
+            : null) ?? document.querySelector<HTMLElement>('.mobile-action');
           (matchingAction ?? document.getElementById('main'))?.focus();
         }
       });
@@ -108,8 +107,10 @@ export default function Fab() {
     };
   }, [open]);
 
-  const actions = quickActionsForPath(profile?.role, pathname);
-  if (!organizationAccess.canWrite || !actions.length) return null;
+  const mobileActions = quickActionsForPath(profile?.role, pathname);
+  const actions = isFocusPath(pathname) ? [] : desktopQuickActionsFor(profile?.role);
+  if (!organizationAccess.canWrite) return null;
+  if (!actions.length && !mobileActions.length) return null;
 
   const itemClass =
     'speed-dial-item flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface ps-4 pe-3 py-2.5 ' +
@@ -123,9 +124,9 @@ export default function Fab() {
 
   return (
     <>
-      <div role="group" aria-label="פעולות מהירות"
+      {mobileActions.length > 0 && <div role="group" aria-label="פעולות מהירות"
         className="mobile-action-bar fixed z-40 flex border-t border-line bg-surface shadow-menu no-print lg:hidden">
-        {actions.map(({ key, label, icon: Icon, kind, to }) => {
+        {mobileActions.map(({ key, label, icon: Icon, kind, to }) => {
           const content = (
             <>
               <Icon size={20} className="shrink-0 text-action" aria-hidden="true" />
@@ -140,7 +141,7 @@ export default function Fab() {
               onClick={openCapture}>
               <span className="mobile-action-puck" aria-hidden="true">
                 {busy
-                  ? <Loader2 size={26} className="animate-spin" aria-hidden="true" />
+                  ? <Loader2 size={26} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
                   : <Icon size={26} aria-hidden="true" />}
               </span>
               <span className="mobile-action-label">{label}</span>
@@ -149,9 +150,9 @@ export default function Fab() {
             <Link key={key} to={to!} className={mobileItemClass} data-quick-action-key={key}>{content}</Link>
           );
         })}
-      </div>
+      </div>}
 
-      <div ref={rootRef} className="phone-fab fixed z-40 hidden no-print lg:block">
+      {actions.length > 0 && <div ref={rootRef} className="phone-fab fixed z-40 hidden no-print lg:block">
         <button ref={triggerRef} type="button" aria-expanded={open} aria-haspopup="menu"
           aria-controls={open ? QUICK_ACTIONS_MENU_ID : undefined}
           aria-label={open ? 'סגירת פעולות מהירות' : 'פתיחת פעולות מהירות'}
@@ -186,7 +187,7 @@ export default function Fab() {
             })}
           </div>
         )}
-      </div>
+      </div>}
       {element}
     </>
   );

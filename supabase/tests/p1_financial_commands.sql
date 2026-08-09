@@ -546,12 +546,16 @@ select pg_temp.p1_assert(
   (select received_qty = 0 from purchase_order_items where id = '71000000-0000-0000-0000-000000000002'),
   'returned quantity was counted as usable delivery'
 );
+-- #49 (decided 09.08.2026): the returned line now opens its own credit at the snapshot
+-- price (5 × 20 = 100) beside the shortage credit ((10 − 6) × 10 = 40).
 select pg_temp.p1_assert(
-  (select count(*) = 1 and min(reason) = 'missing' and min(amount) = 40
+  (select count(*) = 2
+      and count(*) filter (where reason = 'missing'  and amount = 40)  = 1
+      and count(*) filter (where reason = 'returned' and amount = 100) = 1
    from credit_requests where receipt_item_id in (
      select id from goods_receipt_items where receipt_id = '72000000-0000-0000-0000-000000000001'
    )),
-  'receipt must create one shortage credit and no returned credit'
+  'receipt must credit both the shortage and the returned line'
 );
 select pg_temp.p1_assert(
   (save_goods_receipt(
@@ -583,6 +587,95 @@ exception when sqlstate 'P0001' then
   if sqlerrm not like '%receipt_idempotency_conflict%' then raise; end if;
 end
 $$;
+
+-- Manual exceptions (#116, decided 09.08.2026): owner/office only, reasoned, entity-bound,
+-- idempotent per (entity, type) while one is still open.
+reset role;
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000003', true);
+set local role authenticated;
+do $$
+begin
+  perform open_manual_exception('purchase_orders', '70000000-0000-0000-0000-000000000001',
+    'item_not_ordered', 'פריט שלא הוזמן הגיע');
+  raise exception 'kitchen must not open a manual exception';
+exception when sqlstate '42501' then
+  if sqlerrm not like '%not_authorized%' then raise; end if;
+end
+$$;
+reset role;
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000002', true);
+set local role authenticated;
+do $$
+begin
+  perform open_manual_exception('purchase_orders', '70000000-0000-0000-0000-000000000001',
+    'item_not_ordered', '   ');
+  raise exception 'a manual exception without a reason must be refused';
+exception when sqlstate '22023' then
+  if sqlerrm not like '%reason_required%' then raise; end if;
+end
+$$;
+do $$
+begin
+  perform open_manual_exception('profiles', '70000000-0000-0000-0000-000000000001',
+    'item_not_ordered', 'סיבה');
+  raise exception 'a manual exception on an unsupported entity must be refused';
+exception when sqlstate '22023' then
+  if sqlerrm not like '%manual_exception_entity_invalid%' then raise; end if;
+end
+$$;
+select pg_temp.p1_assert(
+  (open_manual_exception('purchase_orders', '70000000-0000-0000-0000-000000000001',
+     'item_not_ordered', 'הגיעו שני ארגזים שלא הוזמנו')->>'idempotent')::boolean = false,
+  'office must open a manual exception on an order'
+);
+select pg_temp.p1_assert(
+  (select count(*) = 1 from exceptions
+   where type = 'item_not_ordered'
+     and details->>'entity_type' = 'purchase_orders'
+     and details->>'entity_id' = '70000000-0000-0000-0000-000000000001'
+     and details->>'reason' = 'הגיעו שני ארגזים שלא הוזמנו'
+     and supplier_id is not null and assigned_role = 'office' and status = 'open'),
+  'the manual exception must carry its entity, reason and derived supplier'
+);
+select pg_temp.p1_assert(
+  (open_manual_exception('purchase_orders', '70000000-0000-0000-0000-000000000001',
+     'item_not_ordered', 'ניסיון חוזר')->>'idempotent')::boolean,
+  'a second manual exception on the same open entity+type must be idempotent'
+);
+-- As postgres, not as office: the audit ledger's read policy is deliberately narrower than
+-- the actor set that writes to it, and this assertion is about what was RECORDED, not about
+-- who may read it.
+reset role;
+select pg_temp.p1_assert(
+  (select count(*) = 1 from audit_logs
+   where action = 'manual_exception_opened'
+     and entity_type = 'purchase_orders'
+     and entity_id = '70000000-0000-0000-0000-000000000001'),
+  'the manual exception must audit exactly once, reason and all'
+);
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000002', true);
+set local role authenticated;
+
+-- #106 (decided 09.08.2026, package 4): bank details never ride a plain INSERT. Both
+-- directions, functionally: the column write is refused, the bank-less creation succeeds.
+reset role;
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+do $$
+begin
+  insert into suppliers (org_id, name, bank_details)
+  values ('10000000-0000-0000-0000-000000000001', 'ספק עם בנק ישיר', 'בנק 12 · 345');
+  raise exception 'a plain INSERT carried bank_details past the 0088 revoke';
+exception when insufficient_privilege then
+  null; -- 42501: the column revoke holds
+end
+$$;
+insert into suppliers (org_id, name)
+values ('10000000-0000-0000-0000-000000000001', 'ספק בלי בנק ביצירה');
+select pg_temp.p1_assert(
+  (select bank_details is null from suppliers where name = 'ספק בלי בנק ביצירה'),
+  'creation without bank details must succeed and stay bank-less'
+);
 
 -- Prices: current row + history are inseparable; batch validation is all-or-nothing.
 reset role;

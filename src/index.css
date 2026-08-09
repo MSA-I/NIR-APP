@@ -356,6 +356,14 @@ body {
   inset-block-end: calc(var(--mobile-action-bar-size) + env(safe-area-inset-bottom) + 2rem);
 }
 
+/* A receiving detail also owns a fixed task bar above mobile navigation. Keep transient feedback
+   above that task bar so it never blocks Save or Finish while the user is standing at delivery. */
+@media (max-width: 63.999rem) {
+  body:has(.phone-taskbar) .mobile-overlay-stack {
+    inset-block-end: calc(var(--mobile-action-bar-size) + env(safe-area-inset-bottom) + 7.25rem);
+  }
+}
+
 .phone-update-notice {
   inline-size: 100%;
 }

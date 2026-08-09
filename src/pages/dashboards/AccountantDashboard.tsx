@@ -113,8 +113,8 @@ export default function AccountantDashboard() {
       <Link to="/pay" className="btn-primary"><Banknote size={16} /> תשלומים</Link>
       <Link to="/invoices" className="btn-secondary"><ReceiptText size={16} /> חשבוניות</Link>
     </>}>
-      <Scorecard items={data.kpis} />
       <AttentionZone items={data.attention} />
+      <Scorecard items={data.kpis} />
       <div className="grid gap-5 lg:grid-cols-2">
         <ChartCard title="תשלומים לפי חודש" subtitle="סך התשלומים לספקים בארבעת החודשים האחרונים">
           <SpendBarChart points={data.monthly}

@@ -178,7 +178,7 @@ begin
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0093 scope assertions failed:\n%', v_violations;
+    raise exception e'0107 scope assertions failed:\n%', v_violations;
   end if;
 end
 $$;

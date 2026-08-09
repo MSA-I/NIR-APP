@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
-import { Archive, Bot, Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, RotateCcw, Search, Trash2, Undo2, Upload, X } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router';
+import { Archive, Bot, ChevronDown, Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, RotateCcw, Search, Trash2, Undo2, Upload, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { INBOX_CHANGED_EVENT } from '../components/QuickCapture';
-import { ConfirmDialog, DataTable, ErrorNote, Modal, Note, SkeletonTable, useToast, type Column } from '../components/ui';
+import { ConfirmDialog, DataTable, ErrorNote, Modal, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
 import { ok, toHebrewError } from '../lib/errors';
 import { fmtDate, fmtDateTime, todayISO } from '../lib/format';
 import type { DocumentKind, DocumentRow } from '../lib/types';
@@ -696,6 +696,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   ] as Array<Column<GalleryDocument> | null>).filter((column): column is Column<GalleryDocument> => column !== null);
 
   const hasFilters = !!(q || supplierId || kind || from || to || filing !== 'all' || processingFilter !== 'all');
+  const advancedFilterCount = [supplierId, kind, from, to, !archive && filing !== 'all' ? filing : ''].filter(Boolean).length;
   const revertAction = revertDoc ? autoActionFor(revertDoc) : null;
 
   // Heading and icon track the nav label, because pageTitleFor derives the tab title from the
@@ -713,17 +714,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
 
   return (
     <div className="space-y-4" data-testid="documents-page">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="page-title flex items-center gap-2">
-            <HeadingIcon size={22} /> {archive ? 'ארכיון מסמכים' : 'תיקיית המסמכים'}
-          </h1>
-          {/* No standfirst on the archive. "הכול במקום אחד" is false there, and what is true of it
-              is the empty state's sentence — which is what the page shows anyway until something
-              starts filing documents to the archive. Saying it twice would not make it truer. */}
-          {!archive && <p className="mt-1 text-sm text-ink-muted">כל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.</p>}
-        </div>
-        {/* No upload button on the archive. uploadDocument writes entity_type='inbox', so a file
+      {/* No upload button on the archive. uploadDocument writes entity_type='inbox', so a file
             sent from here would toast "הועלה וממתין לעיבוד" over a list that stays empty — the app
             reporting a success the screen contradicts. What the archive has no path for is
             CAPTURE: documents_insert does not admit 'archive', so no browser upload can land
@@ -731,64 +722,67 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             0075 — file_document accepts ('archive', null) for owner/office, with a reason and an
             audit row — it simply has no control on this screen, because the intended filer is
             the interpretation layer (task C2, not yet written). */}
-        {canUpload && !archive && (
-          <button type="button" className="btn-primary" onClick={() => setUploadOpen(true)}>
-            <Upload size={16} /> העלאת מסמך
-          </button>
-        )}
-      </div>
+      <PageHeader title={<span className="flex items-center gap-2"><HeadingIcon size={22} /> {archive ? 'ארכיון מסמכים' : 'תיקיית המסמכים'}</span>}
+        meta={!archive ? 'כל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.' : undefined}
+        actions={<>
+          {canUpload && !archive && (
+            <button type="button" className="btn-primary" onClick={() => setUploadOpen(true)}>
+              <Upload size={16} /> העלאת מסמך
+            </button>
+          )}
+          <Link className="btn-secondary" to={archive ? '/documents' : '/documents/archive'}>
+            {archive ? <FolderOpen size={16} /> : <Archive size={16} />}{archive ? 'חזרה לתיקיית המסמכים' : 'ארכיון'}
+          </Link>
+        </>} />
 
       <section aria-label="סינון מסמכים" className="border-y border-line-soft bg-surface px-3 py-3 sm:px-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="lg:col-span-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <label>
             <span className="label">שם קובץ</span>
             <span className="relative block">
               <Search size={15} className="absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint" aria-hidden="true" />
               <input type="search" className="input ps-9!" value={q} onChange={(event) => setQ(event.target.value)} placeholder="חיפוש מסמך..." />
             </span>
           </label>
-          <label>
-            <span className="label">ספק</span>
-            <select className="input" value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
-              <option value="">כל הספקים</option>
-              <option value="none">ללא ספק</option>
-              {data?.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
-            </select>
-          </label>
-          <label>
-            <span className="label">סוג מסמך</span>
-            <select className="input" value={kind} onChange={(event) => setKind(event.target.value)}>
-              <option value="">כל הסוגים</option>
-              {DOCUMENT_KIND_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          </label>
-          {/* Gone on the archive with its column: filtering by an answer that is the same wrong
-              answer for every row is not a filter, it is furniture. */}
-          {!archive && (
+          <ProcessingFilterSelect value={processingFilter} onChange={setProcessing} />
+        </div>
+        <details className="group mt-3 border-t border-line-soft pt-2">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm font-medium text-action hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+            מסננים נוספים
+            {advancedFilterCount > 0 && <span className="badge badge-info num">{advancedFilterCount}</span>}
+            <ChevronDown size={16} className="ms-auto transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          <div className="grid grid-cols-1 gap-3 pt-3 sm:grid-cols-2 lg:grid-cols-4">
             <label>
-              <span className="label">סטטוס תיוק</span>
-              <select className="input" value={filing} onChange={(event) => setFiling(event.target.value)}>
-                <option value="all">הכול</option>
-                <option value="unfiled">לא משויכים</option>
-                <option value="linked">משויכים</option>
+              <span className="label">ספק</span>
+              <select className="input" value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
+                <option value="">כל הספקים</option>
+                <option value="none">ללא ספק</option>
+                {data?.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
               </select>
             </label>
-          )}
-          <ProcessingFilterSelect value={processingFilter} onChange={setProcessing} />
-          <label>
-            <span className="label">מתאריך</span>
-            <input type="date" className="input num" value={from} onChange={(event) => setFrom(event.target.value)} />
-          </label>
-          <label>
-            <span className="label">עד תאריך</span>
-            <input type="date" className="input num" value={to} onChange={(event) => setTo(event.target.value)} />
-          </label>
-          <div className="flex items-end">
-            <button type="button" className="btn-ghost min-h-11" disabled={!hasFilters} onClick={resetFilters}>
-              <X size={15} /> ניקוי מסננים
-            </button>
+            <label>
+              <span className="label">סוג מסמך</span>
+              <select className="input" value={kind} onChange={(event) => setKind(event.target.value)}>
+                <option value="">כל הסוגים</option>
+                {DOCUMENT_KIND_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            {!archive && (
+              <label>
+                <span className="label">סטטוס תיוק</span>
+                <select className="input" value={filing} onChange={(event) => setFiling(event.target.value)}>
+                  <option value="all">הכול</option>
+                  <option value="unfiled">לא משויכים</option>
+                  <option value="linked">משויכים</option>
+                </select>
+              </label>
+            )}
+            <label><span className="label">מתאריך</span><input type="date" className="input num" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
+            <label><span className="label">עד תאריך</span><input type="date" className="input num" value={to} onChange={(event) => setTo(event.target.value)} /></label>
+            <div className="flex items-end"><button type="button" className="btn-ghost min-h-11" disabled={!hasFilters} onClick={resetFilters}><X size={15} /> ניקוי מסננים</button></div>
           </div>
-        </div>
+        </details>
         {!loading && data && (
           <div className="mt-2 text-xs text-ink-muted" aria-live="polite">
             מציג <span className="num">{filtered.length}</span> מתוך <span className="num">{data.docs.length}</span> מסמכים

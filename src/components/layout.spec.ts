@@ -1,63 +1,102 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_SECTIONS, sectionsForRole } from './Layout';
+import { NAV_SECTIONS, drawerSectionsForRole, footerItemsForRole, sectionsForRole } from './Layout';
+import { desktopQuickActionsFor, isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
 import type { Role } from '../lib/types';
 
-// The literal is not the menu. Between NAV_SECTIONS and the rendered sidebar sit a role filter,
-// an empty-group filter and the platform-admin append — so the ordering claims are asserted on
-// `sectionsForRole`, the value the shell actually maps over.
 const ALL_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'];
-
 const pathsFor = (role: Role | undefined, isPlatformAdmin = false) =>
-  sectionsForRole(role, isPlatformAdmin).flatMap((s) => s.items).map((i) => i.to);
+  sectionsForRole(role, isPlatformAdmin).flatMap((section) => section.items).map((item) => item.to);
 
-describe('סדר הניווט', () => {
-  // Section 12: the manager must see what needs attention within seconds of arriving. That is
-  // true of every role or it is not true — a role whose first link is anything else opens the
-  // day on a task list instead of a situation.
+describe('מעטפת הניווט', () => {
   it('מרכז הבקרה הוא הפריט הראשון בכל תפקיד', () => {
-    const firstPerRole = Object.fromEntries(ALL_ROLES.map((role) => [role, pathsFor(role)[0]]));
-    expect(firstPerRole).toEqual(Object.fromEntries(ALL_ROLES.map((role) => [role, '/dashboard'])));
+    expect(Object.fromEntries(ALL_ROLES.map((role) => [role, pathsFor(role)[0]])))
+      .toEqual(Object.fromEntries(ALL_ROLES.map((role) => [role, '/dashboard'])));
   });
 
-  it('הזמנה חדשה שנייה — התכופה ביותר, לא הראשונה', () => {
-    expect(pathsFor('owner')[1]).toBe('/orders/new');
+  it('העבודה היומית גלויה ומוגבלת, והאזורים הנדירים מתקפלים', () => {
+    const owner = sectionsForRole('owner', false);
+    expect(owner[0].items.map((item) => item.to)).toEqual([
+      '/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers',
+    ]);
+    expect(owner[0].items).toHaveLength(6);
+    expect(owner.slice(1).map((section) => [section.section, section.collapsible])).toEqual([
+      ['ניהול', true], ['בקרה', true],
+    ]);
   });
 
-  it('קיימת קבוצת מסמכים ייעודית', () => {
-    const documents = sectionsForRole('owner', false).find((s) => s.section === 'מסמכים');
-    expect(documents?.items.map((i) => i.to)).toEqual(['/documents', '/documents/operations', '/documents/archive']);
+  it('פעולות ויעדים הקשריים אינם מתחרים בתפריט', () => {
+    const visible = new Set(pathsFor('owner'));
+    expect(visible.has('/orders/new')).toBe(false);
+    expect(visible.has('/documents/archive')).toBe(false);
+    expect(visible.has('/alerts')).toBe(false);
+    expect(visible.has('/documents/operations')).toBe(true);
+    expect(visible.has('/inventory')).toBe(true);
+    expect(footerItemsForRole('owner').map((item) => item.to)).toEqual(['/settings']);
   });
 
-  // The same group through the filter that decides who sees it: a supplier has no business in
-  // the filing queue, and an empty group must disappear rather than render a bare header.
-  it('ספק אינו רואה את קבוצת המסמכים', () => {
-    expect(sectionsForRole('supplier', false).map((s) => s.section)).not.toContain('מסמכים');
+  it('תפקידים ממוקדים נשארים עם שני יעדים בלבד', () => {
     expect(pathsFor('supplier')).toEqual(['/dashboard', '/my-prices']);
+    expect(pathsFor('payer')).toEqual(['/dashboard', '/pay']);
+    expect(footerItemsForRole('supplier')).toEqual([]);
   });
 
-  it('מדור הפלטפורמה נוסף אחרון, ורק למנהל פלטפורמה', () => {
+  it('מדור הפלטפורמה נוסף אחרון ורק למנהל פלטפורמה', () => {
     expect(sectionsForRole('owner', true).at(-1)?.section).toBe('פלטפורמה');
-    expect(sectionsForRole(undefined, true).map((s) => s.section)).toEqual(['פלטפורמה']);
-    expect(sectionsForRole('owner', false).map((s) => s.section)).not.toContain('פלטפורמה');
+    expect(sectionsForRole(undefined, true).map((section) => section.section)).toEqual(['פלטפורמה']);
+    expect(sectionsForRole('owner', false).map((section) => section.section)).not.toContain('פלטפורמה');
   });
 
-  // Every route reachable from the menu is one item. A duplicate splits the active state across
-  // two links and makes pageTitleFor's first-match lookup depend on declaration order.
-  it('כל מסלול מופיע פעם אחת בלבד בתפריט', () => {
-    const paths = NAV_SECTIONS.flatMap((s) => s.items).map((i) => i.to);
+  it('קטלוג המסלולים נשאר מלא וללא כפילויות', () => {
+    const paths = NAV_SECTIONS.flatMap((section) => section.items).map((item) => item.to);
     expect(paths).toHaveLength(new Set(paths).size);
+    expect(paths).toEqual(expect.arrayContaining([
+      '/orders/new', '/documents/operations', '/documents/archive', '/inventory', '/alerts', '/settings',
+    ]));
   });
 
-  // NavLink prefix-matches unless told otherwise, so a menu path that is a parent of another menu
-  // path stays lit on the child's page: two elements answering to aria-current="page", which
-  // misreads to a screen reader and hands the mobile drawer's initialFocus the wrong link. The
-  // parents are derived rather than named, so whoever adds the next nested entry is held to the
-  // same rule. Matching on `${to}/` and not startsWith(to) is what React Router does — it matches
-  // whole segments, and a bare prefix would call /pay the parent of /payment-requests.
-  it('כל מסלול שהוא אב של מסלול אחר בתפריט מסומן end', () => {
-    const items = NAV_SECTIONS.flatMap((s) => s.items);
-    const parents = items.filter((item) => items.some((other) => other.to.startsWith(`${item.to}/`)));
-    expect(parents.map((i) => i.to)).not.toEqual([]); // or the rule below passes with nothing to check
-    expect(parents.filter((item) => !item.end).map((i) => i.to)).toEqual([]);
+  it('כל מסלול מורשה מוצג או מוחרג במכוון ל-surface הקשרי', () => {
+    const contextual = new Set(['/orders/new', '/documents/archive', '/alerts']);
+    for (const role of ALL_ROLES) {
+      const allowed = NAV_SECTIONS.flatMap((section) => section.items)
+        .filter((item) => item.roles.includes(role)).map((item) => item.to);
+      const surfaced = new Set([...pathsFor(role), ...footerItemsForRole(role).map((item) => item.to)]);
+      expect(allowed.filter((path) => !surfaced.has(path))).toEqual(allowed.filter((path) => contextual.has(path)));
+    }
+    expect(pathsFor('accountant')).toContain('/credits');
+  });
+});
+
+describe('סרגל הפעולות המהירות במובייל', () => {
+  it('מחזיר את הפעולות והסדר המקוריים לפי תפקיד', () => {
+    expect(quickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'invoice']);
+    expect(quickActionsFor('office').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'invoice']);
+    expect(quickActionsFor('kitchen').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'invoice']);
+    expect(quickActionsFor('accountant').map((item) => item.key)).toEqual(['dashboard', 'invoices', 'pay']);
+    expect(quickActionsFor('payer')).toEqual([]);
+    expect(quickActionsFor('supplier')).toEqual([]);
+  });
+
+  it('מחזיר את כל יעדי הניווט הרגילים למגירה', () => {
+    for (const role of ALL_ROLES) {
+      expect(drawerSectionsForRole(role, false)).toEqual(sectionsForRole(role, false));
+    }
+  });
+
+  it('משאיר את ה-speed dial בדסקטופ עם פקודות בלבד', () => {
+    expect(desktopQuickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'capture', 'invoice']);
+    expect(desktopQuickActionsFor('accountant')).toEqual([]);
+  });
+});
+
+describe('התאמת משפחת מסלול', () => {
+  it('מדליק פרטי רשומה בלי לבלוע מסלול אח', () => {
+    expect(isRouteFamilyActive('/orders/42', '/orders')).toBe(true);
+    expect(isRouteFamilyActive('/invoices/42', '/invoices')).toBe(true);
+    expect(isRouteFamilyActive('/suppliers/42', '/suppliers')).toBe(true);
+    expect(isRouteFamilyActive('/receiving/42', '/receiving')).toBe(true);
+    expect(isRouteFamilyActive('/documents/42/review', '/documents')).toBe(true);
+    expect(isRouteFamilyActive('/documents/archive', '/documents')).toBe(false);
+    expect(isRouteFamilyActive('/documents/archive', '/documents/archive')).toBe(true);
+    expect(isRouteFamilyActive('/payment-requests', '/pay')).toBe(false);
   });
 });

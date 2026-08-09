@@ -45,7 +45,7 @@ export const MODEL_ID = "gpt-5.6-terra";
 // v8: price lists must return every row on every page, in one numbered sequence. A live three-page
 // list was twice reduced to 15 unnumbered examples even though the same extraction contains 74.
 //
-// v9: invoice rows name the complete source-evidence contract consumed by 0092's immutable
+// v9: invoice rows name the complete source-evidence contract consumed by 0106's immutable
 // three-way-match intake. Values remain optional when the document does not state them, and the
 // model must preserve printed units rather than infer packaging conversions.
 export const PROMPT_VERSION = "interpret-document-v9";

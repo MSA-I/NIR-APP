@@ -1,4 +1,4 @@
--- 0096 -- Read-only inventory intelligence from measured stock, recorded consumption and open POs.
+-- 0110 -- Read-only inventory intelligence from measured stock, recorded consumption and open POs.
 -- Suggestions never mutate procurement. A missing count or missing consumption evidence stays NULL.
 
 create view public.inventory_intelligence
@@ -151,7 +151,7 @@ begin
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0096 scope assertions failed:\n%', v_violations;
+    raise exception e'0110 scope assertions failed:\n%', v_violations;
   end if;
 end
 $$;

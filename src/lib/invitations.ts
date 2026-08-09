@@ -6,9 +6,16 @@
 import { supabase } from './supabase';
 import type { Invitation, InvitationStatus, Role } from './types';
 
-/** Roles an owner may invite. `supplier` is excluded — a supplier agent profile needs a
- *  supplier_id (migration 0004) that this flow has no way to supply, and the DB refuses it. */
-export const INVITABLE_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant'];
+/** Roles an owner may invite. `supplier` joined on 09.08.2026 (OPEN-DECISIONS #17): the DB
+ *  path has existed since 0025 — invitations.supplier_id plus the 3-arg create_invitation
+ *  overload — and a supplier invitation must carry the supplier it binds to. */
+export const INVITABLE_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'];
+
+/** Roles the role-change dialog may assign. `supplier` is deliberately absent: turning an
+ *  existing employee into a supplier agent would need a supplier_id that
+ *  manage_profile_access refuses to invent — a supplier account starts as a supplier
+ *  invitation, never as a role change. */
+export const ASSIGNABLE_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant'];
 
 // Invitation / InvitationStatus live in ./types with the rest of the schema mirror.
 export type { Invitation, InvitationStatus };
@@ -59,8 +66,12 @@ async function callSendInvite(
   return { error: null, result: data as InviteResult };
 }
 
-export const sendInvite = (email: string, role: Role) =>
-  callSendInvite({ action: 'create', email, role });
+/** `supplierId` is required exactly when `role === 'supplier'` — the Edge Function and the
+ *  DB (invitations_supplier_role_check) both refuse any other combination. */
+export const sendInvite = (email: string, role: Role, supplierId?: string) =>
+  callSendInvite(
+    supplierId ? { action: 'create', email, role, supplierId } : { action: 'create', email, role },
+  );
 
 export const resendInvite = (invitationId: string) =>
   callSendInvite({ action: 'resend', invitationId });
@@ -94,11 +105,15 @@ export async function lookupInvitation(token: string): Promise<InvitationLookup>
   return data as InvitationLookup;
 }
 
-export async function acceptInvitation(token: string, fullName: string, phone: string) {
+/** `termsVersion` is not decoration: 0089 closed the consent-free signature, and the server
+ *  stamps the consented version into audit_logs in the same transaction that creates the
+ *  profile. */
+export async function acceptInvitation(token: string, fullName: string, phone: string, termsVersion: string) {
   const { data, error } = await supabase.rpc('accept_invitation', {
     p_token: token,
     p_full_name: fullName,
     p_phone: phone || null,
+    p_terms_version: termsVersion,
   });
   if (error) throw new Error(error.message);
   return data as { org_id: string; role: Role };
@@ -115,6 +130,7 @@ export const ACCEPT_ERROR: Record<string, string> = {
   org_suspended: 'חשבון העסק מושהה. יש לפנות לעסק שהזמין אותך.',
   full_name_required: 'יש להזין שם מלא.',
   not_authenticated: 'ההתחברות נכשלה. נסה שוב.',
+  terms_consent_required: 'להשלמת ההצטרפות יש לאשר את תנאי השימוש ומדיניות הפרטיות.',
 };
 
 export function acceptErrorMessage(raw: string): string {

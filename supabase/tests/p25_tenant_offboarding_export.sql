@@ -218,11 +218,20 @@ select pg_temp.p25_assert(
   ),
   'an OCR attempt/evidence RPC has an unsafe execution grant');
 select pg_temp.p25_assert(
-  to_regprocedure('public.heartbeat_document_processing_job(uuid,text,integer)') is null
-  and to_regprocedure('public.complete_document_processing_job(uuid,text,text,text,text,text,text,jsonb,integer,jsonb)') is null
+  to_regprocedure('public.heartbeat_document_processing_job(uuid,text,integer)') is not null
+  and to_regprocedure('public.complete_document_processing_job(uuid,text,text,text,text,text,text,jsonb,integer,jsonb)') is not null
   and to_regprocedure('public.complete_document_processing_job(uuid,text,uuid,uuid,text,text,text,text,text,jsonb,integer,jsonb)') is null
-  and to_regprocedure('public.fail_document_processing_job(uuid,text,text,text)') is null,
-  'a pre-egress-binding OCR worker signature remains callable');
+  and to_regprocedure('public.fail_document_processing_job(uuid,text,text,text)') is not null
+  and position('document_processing_legacy_contract_forbidden' in pg_get_functiondef(
+    'public.heartbeat_document_processing_job(uuid,text,integer)'::regprocedure
+  )) > 0
+  and position('document_processing_legacy_contract_forbidden' in pg_get_functiondef(
+    'public.complete_document_processing_job(uuid,text,text,text,text,text,text,jsonb,integer,jsonb)'::regprocedure
+  )) > 0
+  and position('document_processing_legacy_contract_forbidden' in pg_get_functiondef(
+    'public.fail_document_processing_job(uuid,text,text,text)'::regprocedure
+  )) > 0,
+  'the temporary DB-first Edge bridge is missing or can downgrade an egress-bound OCR attempt');
 select pg_temp.p25_assert(
   not has_table_privilege('public', 'public.webhook_subscriptions', 'SELECT')
   and not has_table_privilege('anon', 'public.webhook_subscriptions', 'SELECT')

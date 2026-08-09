@@ -28,9 +28,8 @@ const MODES = new Set<OrganizationAccessMode>([
 ]);
 
 /**
- * Converts the database's canonical lifecycle projection into UI state. There is deliberately no
- * Date.now calculation here: trial/grace boundaries are financial-access facts evaluated by the
- * database clock. Invalid or missing evidence fails closed instead of guessing from the device.
+ * Converts the database's canonical lifecycle projection into UI state. Trial and grace
+ * boundaries use the database clock; invalid or missing evidence fails closed.
  */
 export function organizationAccessFromServer(
   row: OrganizationAccessStateRow | null | undefined,

@@ -140,8 +140,10 @@ describe('DataTable — client mode', () => {
   });
 
   it('shows plain no-data only when nothing is filtered', () => {
-    render(<DataTable rows={[]} columns={clientColumns} emptyTitle="אין נתונים להצגה" />);
+    render(<DataTable rows={[]} columns={clientColumns} emptyTitle="אין נתונים להצגה"
+      emptyAction={<button type="button">הוספה</button>} />);
     expect(screen.getByText('אין נתונים להצגה')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'הוספה' })).toBeInTheDocument();
     expect(screen.queryByText('אין תוצאות לסינון הנוכחי')).not.toBeInTheDocument();
   });
 
@@ -257,7 +259,9 @@ describe('DataTable — column picker (OPEN-DECISIONS #80)', () => {
       <DataTable rows={makeRows(3)} columns={clientColumns} columnPicker="spec-screen" />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'עמודות' }));
+    expect(screen.getByRole('dialog', { name: 'בחירת עמודות' })).toBeInTheDocument();
     const checkbox = screen.getByRole('checkbox', { name: 'סכום' });
+    expect(screen.getByRole('checkbox', { name: 'שם' })).toHaveFocus();
     expect(checkbox).toBeChecked();
     fireEvent.click(checkbox);
 

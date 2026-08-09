@@ -12,16 +12,16 @@ offline", "אין כותב ל־pending_photos", "אין שורות חשבוני�
 
 **נמסר בקוד, טרם אושר לשחרור:**
 
-- `0086`–`0089`: reprocess מנומק, התאמה חזקה למחירון, rollback, calibration corpus, Shadow Mode,
+- `0100`–`0103`: reprocess מנומק, התאמה חזקה למחירון, rollback, calibration corpus, Shadow Mode,
   structural drift ומרכז תפעול מסמכים. אין thresholds מספריים מומצאים ל־drift.
-- `0090`–`0091`: כרטיס ספק פיננסי בגבול שרת, מיתוג דייר בטוח ו־recovery עצמי.
-- `0092`: שורות חשבונית immutable ו־true 3-way match עם המרות/סבילויות/חסימות/override לפי
+- `0104`–`0105`: כרטיס ספק פיננסי בגבול שרת, מיתוג דייר בטוח ו־recovery עצמי.
+- `0106`: שורות חשבונית immutable ו־true 3-way match עם המרות/סבילויות/חסימות/override לפי
   `OPEN-DECISIONS` #124–#125.
-- `0093`: management dashboard snapshot לפי סמנטיקת `unmatched`/`suggested`, אישורים נפרדים ו־
+- `0107`: management dashboard snapshot לפי סמנטיקת `unmatched`/`suggested`, אישורים נפרדים ו־
   overdue רק עם `due_date`; unknown נשאר `—`.
-- `0094`: Trial ‏30 יום + 7 ימי Grace ואז read-only, עם platform-admin step-up וסיבה.
-- `0095`: פורטל ספק צר להזמנות שהונפקו ואישור `sent→confirmed` לאותו `supplier_id` בלבד.
-- `0096`: inventory read model מדוד והצעות read-only; בלי ספירה אין יתרה מומצאת.
+- `0108`: Trial ‏30 יום + 7 ימי Grace ואז read-only, עם platform-admin step-up וסיבה.
+- `0109`: פורטל ספק צר להזמנות שהונפקו ואישור `sent→confirmed` לאותו `supplier_id` בלבד.
+- `0110`: inventory read model מדוד והצעות read-only; בלי ספירה אין יתרה מומצאת.
 - Offline: app shell סטטי בלבד, טיוטה/תור/קונפליקט ב־IndexedDB ותמונות offline עם resume.
 - Platform: outbox/signing/retry/dead-letter נשמרו. הוכחת צד ג׳ חיה **DEFERRED בהחלטת בעלים** עד
   יעד ו־credentials מפורשים ואינה blocker לשאר הקמפיין.
@@ -41,8 +41,225 @@ Release Reviewer, commit/push, migrations/Edge/frontend production ואימות 
 
 **גל 11 (07.08.2026) — ‏מוזג ל-`main` ‏(`865dfd4`) ו**נפרס לפרודקשן ב-07.08 בבוקר**.** ‏`0075`–`0077`
 הוחלו על הפרויקט המרוחק, ‏`interpret-document` עלתה לגרסה 3, וה-frontend חי. מתג האוטונומיה
-נשלח **כבוי לכל דייר**, והדלקתו היא **החלטת בעלים ולא שלב פריסה** — ‏**היא לא בוצעה.**
+נשלח **כבוי לכל דייר**, ולא הודלק כחלק מפריסת הגל. ב־preflight של 09.08 נמצאה מדיניות
+`document.interpretation` פעילה לדייר אחד בסף `0.900`, עם audit מ־07.08; הבעלים הורה במפורש
+לשמר את המצב הפעיל ולהמשיך בפריסה, ולכן המדיניות לא שונתה.
 ראה "פריסת גל 11 לפרודקשן" מטה, ואת הרשומה שאחריה.
+
+---
+
+## קמפיין ליטוש UX/UI מסחרי — פרוס ומאומת בייצור (08.08.2026)
+
+**מטרה:** לאחד את המעטפת, היררכיית הפעולות ומסכי הליבה למוצר B2B רגוע ומכוון־החלטה, בלי שינוי
+התנהגות עסקית. הקמפיין מתועד במלואו ב־`docs/UX-UI-POLISH-CAMPAIGN-2026-08.md`.
+
+**מומש:** ניווט יומי תפקידי עם „ניהול/בקרה” ב־progressive disclosure; סרגל מובייל תפקידי ופעולת
+צילום; הפרדת מותג SupplyFlow מזהות הדייר; `PageHeader`, ‏`RecordHeader`, ‏`Breadcrumbs`,
+`LifecycleStrip` ו־`RecordSkeleton`; היררכיית פעולה יחידה בהזמנה/חשבונית; Dashboard שמתחיל ב„דורש
+טיפול”; כותרות, מצבי ריק וטעינה במסכי הליבה; Login מלוטש; וסט Golden Screens של עשרה מסכים
+בדסקטופ ובמובייל.
+
+**ביקורת עצמאית:** אישרה את שפת „חדר בקרה שקט”, ה־IA, הדשבורד, המסמכים וקבלת הסחורה. היא חסמה
+שחרור על race בהסתרת speed-dial ועל toast שכיסה את בר הקבלה; שני הממצאים תוקנו ונוספו להם assertions.
+
+**אימות ושחרור הושלמו:** `npm.cmd run build` עבר עם 39 קובצי Vitest ו־405/405
+בדיקות. `npm.cmd run quality` עבר ב־826.7 שניות וחתם `PASS / quality / all_gates_passed`: מסע
+הדפדפן עבר 31/31 תרחישים, 0 skipped, ‏48 בדיקות נגישות, ‏60 screenshots ו־0 שגיאות console.
+20 ה־Golden Screens נשמרו ב־`docs/visual-qa/ux-ui-polish-2026-08/` ואומתו ב־SHA-256 מול ארטיפקט
+הריצה `20260808-152638-p4-quality-gates`. Final Product Reviewer עצמאי אישר את המוצר לשחרור מבחינת
+UX. Release Reviewer אישר שאין חוסמי P0, מיגרציות, סודות או שינויי הרשאה/כספים; בעקבות ביקורתו
+הוחזרה שליחה חוזרת ב־WhatsApp להזמנה שנשלחה כפעולה משנית. חשבונית ללא גרף מעברים נשארת fail-closed
+ואינה מציעה פעולה פיננסית על סמך ניחוש.
+
+**ייצור:** קומיט האפליקציה `74b565c90de15ee5e51cfc719481aee3f570cb8a` נדחף ל־`main`, נבנה מחדש
+עם סביבת הייצור ונפרס ל־Cloudflare Pages: `https://supplyflow-baq.pages.dev` ו־
+`https://bf0c36b1.supplyflow-baq.pages.dev`. כל 78 נכסי ה־build תאמו ב־SHA-256 בשתי הכתובות.
+אימות חי מחובר עבר על 28 מסכים/מצבים ב־390/768/1024/1440, עם 27 screenshots, אפס שגיאות
+console/page/server ואפס overflow במסכים שנבדקו. הרצה רצופה נוספת חשפה `statement timeout` רגעי
+ב־Supabase; בדיקות המשך נקיות של Documents ושל Dashboard + Suppliers עברו ללא שגיאות, והנושא נשאר
+לחוב ניטור ביצועים. לא הוחלו מיגרציות ולא בוצעו כתיבות עסקיות בפריסה או באימות.
+---
+
+## קמפיין "מוצר מוגמר" — פרוס ומאומת אוטומטית (09.08.2026); אימות תפקידים חי נשאר לבעלים
+
+**Git ושער מלא:** ‏11 קומיטי הקמפיין שולבו מעל חמשת קומיטי ה־UI/mobile שהסתיימו ב־`dfba418`,
+ונוספו שלושה תיקוני שער ממוקדים ל־offline recovery ולחוזה reset-password. ‏SHA הקוד המשולב
+`1ab585181ef29d732131244a8d1dfbdbaed569b3` נדחף ל־`main`. ‏`npm.cmd run quality` רץ על clone
+נקי של ה־SHA והסתיים `PASS / all_gates_passed`, ללא דילוגים: ‏44/44 קובצי Vitest ו־422/422
+בדיקות, ‏269 assertions של P0, ‏46 חוזי Deno ו־6 חוזי outbox; מסע הדפדפן עבר 34/34 תרחישים,
+42 בדיקות viewport, ‏48 בדיקות נגישות, ‏62 screenshots, אפס failures ואפס console errors. ראיות:
+`C:\Users\art1\.codex\visualizations\2026\08\09\20260809-134919-p4-quality-gates`. ‏build ייצור
+מפורש נוסף עבר עם אותם 422 טסטים; PWA precache כולל 73 entries ‏(2492.05 KiB), ‏`git diff --check`
+עבר וה־clone נשאר נקי. ריצת GitHub הראשונה חשפה שה־workflow לא סיפק את שני משתני ה־Vite
+הפומביים; ‏`48baaa6` הוסיף placeholders לא־סודיים ל־CI בלבד. ‏`build-gate` ריצה
+`31311705692` הסתיימה `success` על GitHub עם אותו `npm run build` מלא.
+
+**ייצור:** לפני שינוי נשמר גיבוי JSON-פר-טבלה מאומת ב־
+`D:\משה פרוייקטים\פיתוח אתרים\NIR-APP-DOCS\backups\20260809-141952-pre-finished-product-0086-0089`:
+‏126 טבלאות, ‏18,790 שורות, ‏0 failures ו־manifest SHA-256
+`57c890d49d1f8ca75e53bec90f60ce5d0d8ff7d0cd90c76f99796d3741dacb3`. ‏`0086`–`0089`
+הוחלו אחת־אחת; כל שורת ledger אומתה מול SHA הקובץ, ואחרי כל שלב עבר postflight. המצב הסופי:
+ראש `0089`, ארבע מיגרציות הקמפיין, רשם scope ‏63, ‏0 violations, ‏enum/grants/גוף
+`save_goods_receipt`/RPC החריגה/חוזה הבנק/חוזה ההסכמה תקינים. מדיניות `document.interpretation`
+נשמרה פעילה לדייר אחד לפי הוראת הבעלים ולא שונתה. ‏`send-invite` נפרסה כגרסה 13 במצב `ACTIVE`;
+`https://supplyflow-baq.pages.dev/reset-password` נוסף ואומת ב־Auth redirect allow-list.
+
+**שחרור וראיות חיות ללא התחברות:** ‏Cloudflare Pages נפרסה ידנית ל־
+`https://7f97db38.supplyflow-baq.pages.dev` ול־`https://supplyflow-baq.pages.dev`. כל 77 הקבצים
+הניתנים להגשה תאמו SHA-256 ל־build בשתי הכתובות (77/77 + 77/77; ‏`_redirects` אומת בפריסה אך
+אינו קובץ ציבורי). smoke אנונימי עבר ב־390 וב־1440 על `/`, ‏`/login`, ‏`/forgot-password`,
+`/reset-password`, ‏`/terms`, ‏`/privacy`: ‏12/12 מסכים, RTL, אפס overflow/errors, ובנוסף
+offline shell עבר; ‏13 screenshots ודוח נשמרו ב־
+`C:\Users\art1\.codex\visualizations\2026\08\09\019fe5db-23d5-7593-809e-6b28c73101b4\production-smoke-1ab5851`.
+
+**פתוח לבעלים בלבד:** אימות kitchen, ‏payer ו־supplier בייצור לא בוצע ע״י הסוכן ואינו מסומן
+כמושלם. יש להריץ ולדווח תוצאות לפי `docs/LIVE-ROLES-CHECKLIST.md` (‏§26); אין להשתמש בסיסמאות
+או להחליף את הסעיף על סמך smoke אנונימי.
+
+---
+
+## חבילה 7 — תנאי שימוש, פרטיות והסכמה בשרת (09.08.2026)
+
+**‏#132 (פורסם במקור כ־#124 ומוספר מחדש לאחר merge):** ‏`/terms` + ‏`/privacy` נוסחו ע"י הסוכן (הכרעת בעלים) במבנה תיקון 13, עם מעבדי
+המשנה **האמיתיים** של המערכת; ‏placeholder לזהות המפעילה מוצהר. **ההסכמה היא תנאי-שרת:** ‏`0089`
+עוטף את `accept_invitation` החי (קריאה, לא הצהרה-מחדש), דורש `p_terms_version`, מטביע את הגרסה
+ב-`audit_logs` באותה טרנזקציה, וסוגר את ה-grant של החתימה הישנה; ‏checkbox חובה ב-`/accept-invite`
+וקישורים במסך הכניסה. ‏`p0_client_dml_acl` מצמיד את שני ה-grants; ‏`legal.spec.tsx` מצמיד את
+הגרסה, את סעיף כנות-האוטומציה ואת שמות המעבדים.
+
+**המשך היסטורי (09.08 אחה"צ):** באותו שלב #15 הוטמע כחסימת UI מלאה. הכרעת הבעלים המאוחרת
+בקמפיין השיפור גוברת עליה: Trial של 30 יום, Grace של 7 ימים ולאחריהם read-only שרתי שמותיר
+צפייה וייצוא. `TrialExpired` הוסר; ‏`suspended` נשאר מסלול נפרד. **גבייה נשארת מחוץ להכרעה.**
+
+---
+
+## חבילה 6 — CI מינימלי (09.08.2026) — פעיל ומאומת ב־GitHub
+
+**‏`.github/workflows/build.yml`:** ‏`npm run build` המלא על Linux (‏Node 24 — הסקריפטים מריצים
+TS ישירות) בכל push/PR ל-`main`; ‏npm cache מטפל גם ב-tarball של xlsx מה-CDN (נעול ב-integrity
+בלוק). ‏`npm run quality` **לא** הועבר — ‏Docker/SQL/Deno/דפדפן נשארים ריצה ידנית מתועדת.
+‏`CLAUDE.md` עודכן ("אין CI" הוסר; נכתב במפורש מה מכוסה ומה לא).
+
+**אימות חי:** הפוש הראשון הפעיל את ה־workflow וחשף כשל תצורה אמיתי: שלושה suites שטוענים את
+Supabase client נעצרו כי ל־runner לא היו `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`; ‏41 suites
+ו־378 בדיקות כבר עברו. ‏`48baaa6` הוסיף לערך ה־build placeholders ציבוריים, לא־סודיים ולא־נפרסים,
+והריצה `31311705692` הסתיימה `success` עם ‏44/44 קבצים ו־422/422 בדיקות. ‏quality המלא נשאר ידני
+כמתוכנן. הגנת ענף כ־required status היא עדיין הגדרת GitHub של הבעלים ולא שונתה בפריסה הזו.
+
+---
+
+## חבילה 5 — אמינות מובייל: precache + צילום offline (09.08.2026) — build ירוק; האימות החי נשאר לבעלים
+
+**‏precache (#101, ‏§2 נסגר):** ‏`vite-plugin-pwa` ב-`injectManifest` על `public/sw.js` הקיים —
+**בלי workbox**: הפלאגין רק ממלא `self.__WB_MANIFEST`; לוגיקת ה-cache כתובה ביד (~50 שורות
+קריאות). קונכייה בלבד: ‏`isApiRequest` מסרב ל-`/rest/`,`/auth/`,`/storage/`,`/functions/`,`/realtime/`
+לפני כל cache; ניווט network-first עם נפילה ל-`index.html` השמור; נכסים hashed — ‏cache-first עם
+השלמה בזמן ריצה (שלושת הענקים recharts/pdf/xlsx מוחרגים מה-precache ונשמרים אחרי ביקור מקוון).
+שם ה-cache נגזר מ-revision של index.html — פריסה חדשה מפילה את הישן בשלמותו. ‏push ו-`controllerchange`
+נשמרו כלשונם; ‏devOptions כבוי — ‏dev מתנהג בדיוק כמו קודם. **תרחיש שער חדש** (‏33 `await run(`):
+‏reload לא-מקוון אמיתי חייב להעלות את מסך הכניסה מה-cache.
+
+**צילום offline (‏§4 נסגר):** קודם `handoff/08` אומר את האמת, ואז הכותב — ‏`DocumentList.uploadFiles`
+מאחסן ל-`pending_photos` כשאין רשת; המונה הקיים סופר; ‏`flushPendingPhotosNow` שולח דרך
+`uploadDocument` האמיתי ב-mount/'online' (מחיקה רק אחרי שההעלאה חזרה); ‏3 בדיקות לוגיקה חדשות.
+
+**מה לא בוצע, בקול (‏§26 חדש):** האימות החי של kitchen/payer/supplier בפרודקשן — דורש חשבונות
+אמיתיים של הדייר שאין (ואסור שיהיו) לסוכן. שער הדפדפן מכסה את שלושתם ב-390px מול stack חי
+מקומי; ההרצה בפרודקשן היא של הבעלים, פרוטוקול מוכן ב-§26.
+
+**דרישת פריסה:** ‏`npm install` (תלות dev חדשה: ‏vite-plugin-pwa) לפני build במכונת הפריסה.
+
+---
+
+## חבילה 3 — סף האוטונומיה נמדד לראשונה ואושרר (09.08.2026) — 0.900 נשאר, עכשיו עם מדידה מאחוריו
+
+**הכרעת הבעלים: קורפוס מהאינטרנט.** סוכן אסף 25 מסמכים עבריים (‏manifest עם מקור+SHA-256);
+‏harness חדש (`scripts/calibration/run-calibration.ts`) מריץ אותם דרך **`core.ts` של ה-Edge
+Function עצמו** — אותו מודל (‏gpt-5.6-terra), אותו פרומפט (‏v8), אותה סכימה; ‏pdf.js במקום ה-OCR
+(‏7 סריקות דולגו בקול). ‏10 מסמכים שופטו ידנית (השופט: הסוכן — מוצהר).
+
+**התוצאה:** ‏0.900 בתוך הרצועה הבטוחה הנמדדת [0.85, 0.95]. ‏FP יחיד — דוח מחירים ממשלתי שפורש
+כמחירון ב-0.90/0.80 — **נחסם ברצפה הנוכחית והיה נכתב ב-0.80**; ‏0.99 מפיל חשבונית נכונה בלי
+רווח. שער הסוג (רק invoice/price_list נכתבים) עצר 4 מכרזים/הודעות בביטחון גבוה. דוח מלא עם כל
+הסייגים (‏N=10, הנחת העברה מוצהרת, התאמת מחירונים לא נמדדה): ‏`docs/calibration/2026-08-09-internet-corpus.md`.
+
+**הדוח הקבוע של §19** (‏`scripts/calibration/filing-reason-report.sql`) רץ מול פרודקשן: ‏v8 —
+‏3 ‏`not_an_invoice`; זנב לא-נמדד של פירושים בלי filing נספר בכל ריצה. ‏§16/§24 עודכנו; ‏#109
+מאושרר. **חבילות 3–4 רצו במקביל בגלל המתנת האיסוף — הקומיטים נפרדים.**
+
+---
+
+## חבילה 4 — פרצת פרטי הבנק ביצירת ספק נסגרה (09.08.2026) — build ירוק; quality ופריסה בסוף הקמפיין
+
+**‏#106 הוכרע (בעלים, אפשרות ב) ומומש חזק מהניסוח:** ‏`0088` מבטל את grant ה-INSERT על
+`suppliers.bank_details` — המקבילה המדויקת של `0061` ל-UPDATE — כך שהאכיפה בסכימה ולא בלקוח.
+יצירת ספק כותבת שורה בלי בנק; ערך לא-ריק עובר מיד את `update_supplier_bank_details` (‏step-up +
+סיבה + ‏audit), עם ה-id הטרי. ‏`QuickCreateSupplier` לא נגוע (הטענה המבנית שלו בעינה). ‏`DEBT-REGISTER`
+§11 נסגר. **טענות:** ‏`p0_client_dml_acl.sql` עודכן לשני הכיוונים; ‏`p1_financial_commands.sql` מוכיח
+מוטציה פונקציונלית; ‏`supplierBankDetails.spec.tsx` קיבל בדיקת מסלול-יצירה (‏INSERT נקי → ‏RPC עם
+הסיבה). ‏(חבילה 3 רצה במקביל — הקורפוס נאסף ע"י סוכן; היא תיסגר בקומיט נפרד משלה.)
+
+---
+
+## חבילה 2 — משימות התפעול החסומות נפתחו (09.08.2026, אחה"צ) — build ירוק; quality ופריסה בסוף הקמפיין
+
+**שתי מיגרציות:** ‏`0086` מוסיפה את ערך ה-enum ‏`item_not_ordered` **לבדו** (מלכודת ה"ערך לא שמיש
+באותה טרנזקציה" של §17, שנמדדה); ‏`0087` עושה שני דברים: ‏(א) **הזרקה לגוף החי** של
+`save_goods_receipt` (עוגנים שנבדקים "בדיוק פעם אחת", דפוס 0078/0079) — ‏`damaged`/`returned`
+פותחים דרישת זיכוי אוטומטית תחת אותה תיבת `p_open_credits`, במלוא הכמות במחיר ה-snapshot (‏#49,
+הוכרע); ‏(ב) פקודה חדשה `open_manual_exception(entity_type, entity_id, type, reason)` — ‏owner/office
+בלבד (‏#116, הוכרע), ‏`assert_unit_in_scope` בגוף (A5 בסמן — רשם החריגים נשאר **59**), אידמפוטנטית,
+מבוקרת עם סיבה. לדפדפן עדיין אין INSERT על `exceptions`.
+
+**מה עוד נסגר:** ‏#115 (הוסמך והוכרע: ‏inactive = "לא להזמין ממנו יותר") — סינון סטטוס בהעלאת
+מחירון, מסנן סטטוס חדש ברשימת הספקים, טקסט עזר מדויק; ממצא 8 חצי-kitchen — משפט ערוץ-דיווח
+ב-`InvoiceDetail`; ממצא 11 — נשאר חסום **בהכרעה** (payer לא קיבל את הפקודה) וה-Note נשאר; מצב-הריק
+של `/credits` ותווית התיבה בקבלה אומרים את האמת החדשה. ‏**G1 כבר סגר קודם** את ממצאים 4, 8 (חצי
+office), 10, 12 ואת `errors.ts` — אומת מול הקוד, לא בוצע מחדש.
+
+**אימות:** ‏`npm run build` יציאה 0 — ‏**389 בדיקות ב-37 קבצים** (חדש: `package2Decisions.spec.tsx` —
+תווית `item_not_ordered` + מסנן ה-status של בורר המחירונים ברמת ה-wire). ‏`p1_financial_commands.sql`
+עודכן: אותה קבלה מולידה זיכוי חוסר (40) **וגם** זיכוי החזרה (100); ‏open_manual_exception — ‏office
+פותח, ‏kitchen נדחה, סיבה חובה, ישות לא נתמכת נדחית, אידמפוטנטי, ‏audit פעם אחת. **תרחיש דפדפן חדש**
+(‏32 `await run(`): ‏kitchen רואה הנחיה ולא כפתור; ‏payload ההשלמה נושא damaged + ‏p_open_credits;
+‏office פותח חריג דרך דיאלוג הסיבה והסיבה מגיעה מילולית. **הסוויטות והתרחישים ירוצו בריצת ה-quality
+בסוף הקמפיין.** ‏`DEAD-ENDS-AUDIT` עודכן: ‏3→ישיר · 5→ישיר/סיבוב · 8→סיבוב · 9→ישיר · 11→חסום-בהכרעה.
+
+---
+
+## חבילה 1 — ניהול משתמשים נסגר בתוך המוצר (09.08.2026, צהריים) — build ירוק; quality ופריסה בסוף הקמפיין
+
+**קמפיין "מוצר מוגמר" (נכתב 08.08.2026, מבוצע 09.08.2026):** שבע חבילות לפי פרומפט הבעלים. הכרעות שלב 0 נרשמו
+ב-`OPEN-DECISIONS.md` לפני קוד: ‏#114 (איפוס עצמי במייל), ‏#17 (ספק מוזמן), ‏#116 (חריג ידני —
+owner+office בלבד), זיכוי פגומים אוטומטי מהקבלה, ‏#115 (הוסמך: inactive = "לא להזמין"), ממצא 8
+(ערוץ דיווח בלבד), ‏#106 (אפשרות 2), קורפוס כיול מהאינטרנט, ניסוח משפטי עצמי.
+
+**מה נבנה בחבילה 1:**
+- **"שכחתי סיסמה" בשירות עצמי (#114):** קישור ב-`Login.tsx` → ‏`/forgot-password`
+  (‏`resetPasswordForEmail` עם redirect ל-`/reset-password`) → הגדרת סיסמה תחת סשן ה-recovery
+  (‏`/reset-password`, שלושה מצבים כנים: טופס/קישור-מת/המתנה תחומה-בזמן). התשובה במסך זהה לכתובת
+  רשומה ולא-רשומה (מסך כניסה אינו מדריך חברים); כשל rate-limit נאמר בקול ולא מוסתר כ"נשלח".
+  שני הראוטים public ב-`App.tsx` — קישור recovery מגיע עם סשן, והדף חייב לרנדר לפני שהפרופיל נטען.
+- **הזמנת סוכן ספק (#17):** שכבת ה-DB קיימת **מאז `0025`** (‏`invitations.supplier_id`, ‏overload
+  ‏`create_invitation(text,user_role,uuid)`, אילוץ `invitations_supplier_role_check`) — ומעולם לא
+  חוברה; ההערה ב-`invitations.ts` המשיכה לצטט CHECK שהוחלף. חובר: בורר ספק חובה בטופס ההזמנה
+  (‏`Settings.tsx`), ‏`send-invite` מעביר `p_supplier_id` וממפה את שתי השגיאות החדשות לעברית,
+  ותווית "ספק" במייל. **שינוי-תפקיד ל-supplier נשאר חסום במכוון** (‏`ASSIGNABLE_ROLES` נפרד) —
+  הוא היה דורש `supplier_id` ש-`manage_profile_access` לא ממציא. **אפס מיגרציות בחבילה.**
+
+**אימות:** ‏`npm run build` יציאה 0 — ‏tsc, שמונת ה-`check:*`, ‏**387 בדיקות ב-36 קבצים**
+(‏`passwordRecovery.spec.tsx` החדש: חוזה ה-wire של שני הדפים מול MSW — ‏recover עם הכתובת
+וה-redirect, משפט אנטי-מנייה, ‏rate-limit כן, קישור מת בלי סשן, סיסמה קצרה לא מגיעה לרשת,
+‏PUT ‏`/auth/v1/user` עם הסיסמה — ורשימות התפקידים של #17). **תרחיש דפדפן חדש** (‏31 קריאות
+`await run(`): טופס השכחה → ‏action_link אמיתי מ-GoTrue ‏(admin generate_link, אותו טוקן שהמייל
+היה נושא) → ‏`/reset-password` → סיסמה חדשה → **כניסה קרה עם הסיסמה החדשה** → שחזור הסיסמה
+ב-`finally`. ‏`supabase/config.toml` קיבל wildcard-port ב-allow-list כי ה-preview של השער נקשר
+לפורט חופשי. **התרחיש טרם רץ — ריצת ה-quality המלאה מתוכננת בסוף הקמפיין, לפני פריסה.**
+
+**דרישות פריסה שנרשמו (לא בוצעו):** ‏(1) ‏Auth → URL Configuration בפרויקט המרוחק חייב את
+`https://supplyflow-baq.pages.dev/reset-password` ב-redirect allow-list — בלעדיו קישור האיפוס
+נופל חזרה ל-site_url. ‏(2) פריסת `send-invite` המעודכנת. ‏(3) מגבלת המסירה בלי דומיין —
+‏`DEBT-REGISTER.md` §25.
 
 ---
 

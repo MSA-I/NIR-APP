@@ -23,7 +23,9 @@ Add-Type -AssemblyName System.Net.Http
 $apiUrl = "http://127.0.0.1:55431"
 $expectedProjectId = "supplyflow-p0"
 $qaMutexName = "Local\SupplyFlow-supplyflow-p0-qa"
+$dbContainer = "supabase_db_supplyflow-p0"
 $kongContainer = "supabase_kong_supplyflow-p0"
+$restContainer = "supabase_rest_supplyflow-p0"
 $script:Passed = 0
 $script:HttpClient = [System.Net.Http.HttpClient]::new()
 
@@ -69,27 +71,62 @@ function Stop-Infrastructure([string]$Reason, [string]$Message) {
 }
 
 function Reset-TestDatabase {
-  & supabase db reset
-  if ($LASTEXITCODE -ne 0) { Stop-Infrastructure "local_database_reset_failed" "supabase db reset failed." }
+  $script:databaseResetExit = -1
+  $runReset = {
+    $previousPreference = $ErrorActionPreference
+    try {
+      $ErrorActionPreference = "Continue"
+      & supabase db reset
+      $script:databaseResetExit = $LASTEXITCODE
+    }
+    finally {
+      $ErrorActionPreference = $previousPreference
+    }
+  }
+  & $runReset
+  if ($script:databaseResetExit -ne 0) {
+    # The CLI can time out while the replacement PostgreSQL container is still starting. Once the
+    # isolated database is healthy, one repeat is safe and avoids turning that Docker race into a
+    # false product failure. A migration failure does not make the database healthy and still fails.
+    $databaseReady = $false
+    for ($attempt = 0; $attempt -lt 90; $attempt++) {
+      $previousPreference = $ErrorActionPreference
+      try {
+        $ErrorActionPreference = "Continue"
+        $health = (& docker inspect --format "{{.State.Health.Status}}" $dbContainer 2>$null | Select-Object -First 1)
+        $inspectExit = $LASTEXITCODE
+      }
+      finally {
+        $ErrorActionPreference = $previousPreference
+      }
+      if ($inspectExit -eq 0 -and $health -eq "healthy") { $databaseReady = $true; break }
+      Start-Sleep -Seconds 2
+    }
+    if ($databaseReady) {
+      Write-Host "Retrying isolated database reset after PostgreSQL became healthy."
+      & $runReset
+    }
+  }
+  if ($script:databaseResetExit -ne 0) { Stop-Infrastructure "local_database_reset_failed" "supabase db reset failed." }
 
-  # `supabase db reset` restarts the auth container, which comes back on a NEW address on the
-  # Docker network. Kong caches the resolved upstream, so every request to /auth/v1/* keeps
-  # returning 502 -- indefinitely, not transiently. Measured 2026-08-04: 90 seconds of polling
-  # stayed at auth=502 while `docker inspect` reported the auth container running AND healthy,
-  # and `wget http://supabase_auth_supplyflow-p0:9999/health` from inside the Kong container
-  # returned 200 with GoTrue v2.193.1. Restarting Kong alone recovered it in about five seconds.
-  # This is the same class of staleness that check-quality-gates.ps1 already handles for
-  # PostgREST's connection pool (Restart-LocalPostgrest); the auth path was never covered.
+  # `supabase db reset` replaces the database and auth containers. Restart both consumers that
+  # cache the old endpoints/state: PostgREST otherwise may serve its pre-reset schema cache, and
+  # Kong may keep forwarding Auth to the retired container address.
   $previousPreference = $ErrorActionPreference
   try {
     $ErrorActionPreference = "Continue"
+    & docker restart $restContainer | Out-Null
+    $restRestartExit = $LASTEXITCODE
     & docker restart $kongContainer | Out-Null
-    $restartExit = $LASTEXITCODE
+    $kongRestartExit = $LASTEXITCODE
   }
   finally {
     $ErrorActionPreference = $previousPreference
   }
-  if ($restartExit -ne 0) {
+  if ($restRestartExit -ne 0) {
+    Stop-Infrastructure "local_postgrest_restart_failed" "Unable to restart isolated PostgREST after database reset; its schema cache may describe the pre-reset database."
+  }
+  if ($kongRestartExit -ne 0) {
     Stop-Infrastructure "local_kong_restart_failed" "Unable to restart the isolated Kong gateway after database reset; /auth/v1 would stay 502."
   }
 }

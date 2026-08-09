@@ -301,8 +301,8 @@ insert into storage.objects (bucket_id, name, owner, metadata) values
   ('documents', '15000000-0000-4000-8000-000000000001/smart-doc/deleted.pdf', '25000000-0000-4000-8000-000000000001', jsonb_build_object('mimetype', 'application/pdf', 'size', 100, 'eTag', repeat('f', 64))),
   ('documents', '15000000-0000-4000-8000-000000000002/smart-doc/tenant-b.pdf', '25000000-0000-4000-8000-000000000005', jsonb_build_object('mimetype', 'application/pdf', 'size', 100, 'eTag', repeat('d', 64))),
   ('documents', '15000000-0000-4000-8000-000000000003/smart-doc/suspended.pdf', '25000000-0000-4000-8000-000000000006', jsonb_build_object('mimetype', 'application/pdf', 'size', 100, 'eTag', repeat('e', 64))),
-  ('documents', '15000000-0000-4000-8000-000000000001/smart-doc/legacy-complete.pdf', '25000000-0000-4000-8000-000000000001', jsonb_build_object('mimetype', 'application/pdf', 'size', 100, 'eTag', repeat('1', 64))),
-  ('documents', '15000000-0000-4000-8000-000000000001/smart-doc/legacy-inflight.pdf', '25000000-0000-4000-8000-000000000001', jsonb_build_object('mimetype', 'application/pdf', 'size', 100, 'eTag', repeat('2', 64)));
+  ('documents', '15000000-0000-4000-8000-000000000002/smart-doc/legacy-complete.pdf', '25000000-0000-4000-8000-000000000005', jsonb_build_object('mimetype', 'application/pdf', 'size', 100, 'eTag', repeat('1', 64))),
+  ('documents', '15000000-0000-4000-8000-000000000002/smart-doc/legacy-inflight.pdf', '25000000-0000-4000-8000-000000000005', jsonb_build_object('mimetype', 'application/pdf', 'size', 100, 'eTag', repeat('2', 64)));
 
 insert into public.documents (
   id, org_id, entity_type, entity_id, storage_path, file_name, mime_type,
@@ -316,8 +316,8 @@ insert into public.documents (
   ('45000000-0000-4000-8000-000000000006', '15000000-0000-4000-8000-000000000001', 'inbox', null, '15000000-0000-4000-8000-000000000001/smart-doc/deleted.pdf', 'deleted.pdf', 'application/pdf', 'other', '25000000-0000-4000-8000-000000000001'),
   ('45000000-0000-4000-8000-000000000005', '15000000-0000-4000-8000-000000000002', 'inbox', null, '15000000-0000-4000-8000-000000000002/smart-doc/tenant-b.pdf', 'tenant-b.pdf', 'application/pdf', 'other', '25000000-0000-4000-8000-000000000005'),
   ('45000000-0000-4000-8000-000000000007', '15000000-0000-4000-8000-000000000003', 'inbox', null, '15000000-0000-4000-8000-000000000003/smart-doc/suspended.pdf', 'suspended.pdf', 'application/pdf', 'other', '25000000-0000-4000-8000-000000000006'),
-  ('45000000-0000-4000-8000-000000000009', '15000000-0000-4000-8000-000000000001', 'inbox', null, '15000000-0000-4000-8000-000000000001/smart-doc/legacy-complete.pdf', 'legacy-complete.pdf', 'application/pdf', 'other', '25000000-0000-4000-8000-000000000001'),
-  ('45000000-0000-4000-8000-000000000010', '15000000-0000-4000-8000-000000000001', 'inbox', null, '15000000-0000-4000-8000-000000000001/smart-doc/legacy-inflight.pdf', 'legacy-inflight.pdf', 'application/pdf', 'other', '25000000-0000-4000-8000-000000000001');
+  ('45000000-0000-4000-8000-000000000009', '15000000-0000-4000-8000-000000000002', 'inbox', null, '15000000-0000-4000-8000-000000000002/smart-doc/legacy-complete.pdf', 'legacy-complete.pdf', 'application/pdf', 'other', '25000000-0000-4000-8000-000000000005'),
+  ('45000000-0000-4000-8000-000000000010', '15000000-0000-4000-8000-000000000002', 'inbox', null, '15000000-0000-4000-8000-000000000002/smart-doc/legacy-inflight.pdf', 'legacy-inflight.pdf', 'application/pdf', 'other', '25000000-0000-4000-8000-000000000005');
 
 insert into public.document_processing_jobs (
   id, org_id, document_id, requested_by, input_checksum, created_at, updated_at
@@ -365,17 +365,17 @@ insert into public.document_processing_jobs (
 ) values
   (
     '55000000-0000-4000-8000-000000000009',
-    '15000000-0000-4000-8000-000000000001',
+    '15000000-0000-4000-8000-000000000002',
     '45000000-0000-4000-8000-000000000009',
-    '25000000-0000-4000-8000-000000000001',
+    '25000000-0000-4000-8000-000000000005',
     'leased', 'etag:' || repeat('1', 64), 1, 'worker-legacy', now() + interval '10 minutes',
     '65000000-0000-4000-8000-000000000009', now(), now(), now()
   ),
   (
     '55000000-0000-4000-8000-000000000010',
-    '15000000-0000-4000-8000-000000000001',
+    '15000000-0000-4000-8000-000000000002',
     '45000000-0000-4000-8000-000000000010',
-    '25000000-0000-4000-8000-000000000001',
+    '25000000-0000-4000-8000-000000000005',
     'leased', 'etag:' || repeat('2', 64), 1, 'worker-inflight', now() + interval '10 minutes',
     null, null, now(), now()
   );
@@ -602,7 +602,9 @@ begin;
 select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000005', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
-select count(*) as visible_jobs from public.document_processing_jobs
+select count(*) as visible_jobs
+from public.document_processing_jobs
+where org_id = '15000000-0000-4000-8000-000000000001'
 \gset smart_tenant_b_
 reset role;
 commit;
@@ -1026,7 +1028,9 @@ begin;
 select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000005', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
-select count(*) as visible_extractions from public.document_extractions
+select count(*) as visible_extractions
+from public.document_extractions
+where org_id = '15000000-0000-4000-8000-000000000001'
 \gset smart_tenant_b_extraction_
 reset role;
 commit;

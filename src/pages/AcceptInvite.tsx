@@ -10,6 +10,7 @@ import {
   lookupInvitation, acceptInvitation, acceptErrorMessage,
   type InvitationLookup,
 } from '../lib/invitations';
+import { TERMS_VERSION } from './Legal';
 
 /** Public route — the invitee has no account and no session when they land here. */
 export default function AcceptInvite() {
@@ -27,6 +28,9 @@ export default function AcceptInvite() {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmEmailSent, setConfirmEmailSent] = useState(false);
+  // Package 7: consent is a server precondition (0089) — the checkbox is the human act,
+  // the RPC refusal is the enforcement, and the audit row is the record.
+  const [consent, setConsent] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,7 +79,7 @@ export default function AcceptInvite() {
       // so confirming and re-opening the same link completes the flow.
       if (!auth?.session) { setConfirmEmailSent(true); return; }
 
-      const { role } = await acceptInvitation(token, fullName.trim(), phone.trim());
+      const { role } = await acceptInvitation(token, fullName.trim(), phone.trim(), TERMS_VERSION);
 
       // Full reload: AuthContext loads the profile once per session change, and this session
       // was established a moment before the profile existed.
@@ -154,9 +158,18 @@ export default function AcceptInvite() {
             value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </div>
 
+        <label className="flex items-start gap-2 text-sm text-ink-mid">
+          <input type="checkbox" className="rounded mt-0.5" checked={consent}
+            onChange={(e) => setConsent(e.target.checked)} />
+          <span>
+            קראתי ואני מסכים/ה ל<Link className="link" to="/terms" target="_blank">תנאי השימוש</Link>{' '}
+            ול<Link className="link" to="/privacy" target="_blank">מדיניות הפרטיות</Link> (גרסה {TERMS_VERSION}).
+          </span>
+        </label>
+
         {formError && <div role="alert" className="text-sm text-alert-solid">{formError}</div>}
 
-        <button type="submit" className="btn-primary w-full" disabled={busy}>
+        <button type="submit" className="btn-primary w-full" disabled={busy || !consent}>
           {busy ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={15} />}
           השלמת ההצטרפות
         </button>
@@ -177,8 +190,10 @@ function Shell({ children }: { children: ReactNode }) {
     <div className="min-h-screen flex items-center justify-center bg-shell p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
+          <img src="/icons/icon-192.png" alt="" width="52" height="52"
+            className="mx-auto mb-3 size-13 rounded-xl shadow-menu" />
           <h1 className="text-3xl font-bold text-white">{APP_NAME}</h1>
-          <p className="text-shell-ink-dim mt-1 text-sm">מערכת ניהול רכש, חשבוניות ותשלומים</p>
+          <p className="text-shell-ink-soft mt-1 text-sm">רכש, חשבוניות ותשלומים במקום אחד</p>
         </div>
         {children}
       </div>

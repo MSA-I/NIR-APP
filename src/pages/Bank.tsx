@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, Note, type ServerColumn } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, Note, type ServerColumn } from '../components/ui';
 import { BANK_TX_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, addCalendarDays } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
@@ -185,10 +185,9 @@ export default function Bank() {
       {error && <ErrorNote message={error} />}
       {imports.error && <ErrorNote message={imports.error} />}
       {fetching && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="page-title flex items-center gap-2"><Landmark size={22} /> התאמות בנק</h1>
-        {canOperateBank && <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> ייבוא תדפיס בנק</button>}
-      </div>
+      <PageHeader title={<span className="flex items-center gap-2"><Landmark size={22} /> התאמות בנק</span>}
+        meta={`${data.total} תנועות${activeFilters ? ` · ${activeFilters} מסננים פעילים` : ''}`}
+        actions={canOperateBank && <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> ייבוא תדפיס בנק</button>} />
 
       {imports.data?.length ? (
         <div className="text-xs text-ink-muted">

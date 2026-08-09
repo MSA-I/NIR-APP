@@ -510,19 +510,25 @@ function Find-PlaywrightCore {
   throw "The existing Playwright runtime was not found. No fallback test is reported as passed."
 }
 
-function Get-FreeTcpPort {
-  $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+function Get-QualityPreviewPort {
+  # The real recovery link must exactly match the local Auth allow-list. Refuse an occupied
+  # canonical port instead of silently testing a redirect GoTrue will replace with site_url.
+  $port = 5199
+  $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $port)
   try {
     $listener.Start()
-    return ([Net.IPEndPoint]$listener.LocalEndpoint).Port
+  }
+  catch {
+    Stop-WithInfrastructureBlock "preview_port_unavailable" "The allow-listed quality preview port 5199 is already in use."
   }
   finally {
     $listener.Stop()
   }
+  return $port
 }
 
 function Start-PreviewServer {
-  $script:previewPort = Get-FreeTcpPort
+  $script:previewPort = Get-QualityPreviewPort
   $script:previewStdout = [IO.Path]::GetTempFileName()
   $script:previewStderr = [IO.Path]::GetTempFileName()
   $script:previewProcess = Start-Process -FilePath (Get-Command node).Source `
@@ -892,18 +898,18 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\migrations\0083_fix_document_interpretation_claim.sql",
     "supabase\migrations\0084_automatic_document_classification.sql",
     "supabase\migrations\0085_reprocess_reviewed_document.sql",
-    "supabase\migrations\0086_document_reprocess_and_price_list_safety.sql",
-    "supabase\migrations\0087_inactive_supplier_commerce_guards.sql",
-    "supabase\migrations\0088_harden_scope_enforcement_source_markers.sql",
-    "supabase\migrations\0089_document_automation_calibration_shadow_operations.sql",
-    "supabase\migrations\0090_financial_supplier_read_boundary.sql",
-    "supabase\migrations\0091_organization_branding.sql",
-    "supabase\migrations\0092_invoice_line_three_way_match.sql",
-    "supabase\migrations\0093_management_dashboard_snapshot.sql",
-    "supabase\migrations\0094_trial_grace_read_only_enforcement.sql",
-    "supabase\migrations\0095_supplier_purchase_order_portal.sql",
-    "supabase\migrations\0096_inventory_intelligence_read_model.sql",
-    "supabase\migrations\0097_tenant_offboarding_export.sql",
+    "supabase\migrations\0100_document_reprocess_and_price_list_safety.sql",
+    "supabase\migrations\0101_inactive_supplier_commerce_guards.sql",
+    "supabase\migrations\0102_harden_scope_enforcement_source_markers.sql",
+    "supabase\migrations\0103_document_automation_calibration_shadow_operations.sql",
+    "supabase\migrations\0104_financial_supplier_read_boundary.sql",
+    "supabase\migrations\0105_organization_branding.sql",
+    "supabase\migrations\0106_invoice_line_three_way_match.sql",
+    "supabase\migrations\0107_management_dashboard_snapshot.sql",
+    "supabase\migrations\0108_trial_grace_read_only_enforcement.sql",
+    "supabase\migrations\0109_supplier_purchase_order_portal.sql",
+    "supabase\migrations\0110_inventory_intelligence_read_model.sql",
+    "supabase\migrations\0111_tenant_offboarding_export.sql",
     "supabase\tests\smart_document_processing.sql",
     "supabase\tests\document_learning.sql",
     "supabase\tests\document_export_templates.sql",

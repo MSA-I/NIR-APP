@@ -1,4 +1,4 @@
--- 0086 -- Preserve the document interpretation actor chain across manager-requested reprocessing,
+-- 0100 -- Preserve the document interpretation actor chain across manager-requested reprocessing,
 -- make price-list reversal retries safe, and reject conflicting catalog identifiers.
 
 -- requested_by is the document-processing/interpretation actor. The operator who asked for the
@@ -382,14 +382,14 @@ begin
        'private.match_price_list_line(uuid,uuid,text,text)',
        'EXECUTE'
      ) then
-    raise exception '0086 refused: service role can call the private matcher directly';
+    raise exception '0100 refused: service role can call the private matcher directly';
   end if;
 
   select string_agg(assertion || ' -- ' || detail, e'\n' order by assertion, detail)
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0086 scope assertions failed:\n%', v_violations;
+    raise exception e'0100 scope assertions failed:\n%', v_violations;
   end if;
 end
 $$;

@@ -40,6 +40,39 @@ function Copy-And-RunSql([string]$Path) {
   if ($LASTEXITCODE -ne 0) { throw "running $resolved failed." }
 }
 
+function Restore-HeadDatabase {
+  & supabase db reset
+  if ($LASTEXITCODE -eq 0) { return }
+
+  # The CLI can return while Docker is still replacing PostgreSQL. A restore issued in that
+  # window fails with "removal ... already in progress" even though the migrations passed.
+  # Wait for that same isolated container to become healthy, then retry the restore once.
+  $databaseReady = $false
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $deadline = (Get-Date).AddSeconds(180)
+    do {
+      $state = (& docker inspect $container --format "{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}" 2>$null)
+      if ($LASTEXITCODE -eq 0 -and $state -match '^running/(healthy|none)$') {
+        $databaseReady = $true
+        break
+      }
+      Start-Sleep -Seconds 2
+    } while ((Get-Date) -lt $deadline)
+  }
+  finally {
+    $ErrorActionPreference = $previousPreference
+  }
+
+  if ($databaseReady) {
+    Write-Host "Retrying HEAD database restore after PostgreSQL became healthy."
+    & supabase db reset
+    if ($LASTEXITCODE -eq 0) { return }
+  }
+  Stop-Infrastructure "local_database_reset_failed" "restoring local database failed."
+}
+
 try {
   # The two `supabase db reset` invocations are environment plumbing, so their failures are
   # infrastructure; `supabase migration up` exercises the migrations under test, so its
@@ -51,6 +84,5 @@ try {
   Copy-And-RunSql (Join-Path $PSScriptRoot "p0-upgrade-verify.sql")
 }
 finally {
-  & supabase db reset
-  if ($LASTEXITCODE -ne 0) { Stop-Infrastructure "local_database_reset_failed" "restoring local database failed." }
+  Restore-HeadDatabase
 }

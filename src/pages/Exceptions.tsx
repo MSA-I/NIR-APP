@@ -6,7 +6,7 @@ import { AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, Note, type Column } from '../components/ui';
 import { EXCEPTION_TYPE, EXCEPTION_STATUS, SEVERITY } from '../lib/status';
 import { fmtDate, fmtMoneyExact } from '../lib/format';
 import { logAction } from '../lib/audit';
@@ -110,7 +110,8 @@ export default function Exceptions() {
 
   return (
     <div className="space-y-4">
-      <h1 className="page-title flex items-center gap-2"><AlertTriangle size={22} className="text-await-solid" /> חריגים</h1>
+      <PageHeader title={<span className="flex items-center gap-2"><AlertTriangle size={22} className="text-await-solid" /> חריגים</span>}
+        meta={`${rows.length} חריגים בתצוגה`} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.title.toLowerCase().includes(q) || (r.supplier?.name ?? '').toLowerCase().includes(q)}
         searchLabel="חיפוש בחריגים"
@@ -137,7 +138,7 @@ export default function Exceptions() {
             </select>
           </>
         }
-        emptyTitle="אין חריגים 🎉" emptySubtitle="חריגים נפתחים אוטומטית מבדיקות חשבוניות, תשלומים והתאמות בנק" />
+        emptyTitle="אין חריגים שדורשים טיפול" emptySubtitle="חריגים נפתחים אוטומטית מבדיקות חשבוניות, תשלומים והתאמות בנק." />
 
       {selected && (
         <ExceptionDetail row={selected} canWrite={canWrite} canOpenProcurement={profile?.role !== 'accountant'}

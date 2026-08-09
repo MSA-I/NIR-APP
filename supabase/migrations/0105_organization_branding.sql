@@ -1,4 +1,4 @@
--- 0091 -- Safe tenant branding: the existing organization name plus one constrained logo.
+-- 0105 -- Safe tenant branding: the existing organization name plus one constrained logo.
 -- Logos are intentionally public brand assets; only the tenant owner may write versioned paths.
 
 alter table public.organizations
@@ -22,14 +22,14 @@ begin
   from pg_catalog.pg_proc p
   where p.oid = 'public.organizations_guard_lifecycle()'::regprocedure;
   if md5(v_body) <> '13885309d3247b6255cb8764da50c3f4' then
-    raise exception '0091 ancestry guard failed: organizations_guard_lifecycle changed';
+    raise exception '0105 ancestry guard failed: organizations_guard_lifecycle changed';
   end if;
 
   select p.prosrc into v_body
   from pg_catalog.pg_proc p
   where p.oid = 'private.audit_organizations_change()'::regprocedure;
   if md5(v_body) <> 'a2b56c4a209013b56e87190206b711a8' then
-    raise exception '0091 ancestry guard failed: audit_organizations_change changed';
+    raise exception '0105 ancestry guard failed: audit_organizations_change changed';
   end if;
 end
 $$;
@@ -164,7 +164,7 @@ begin
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0091 scope assertions failed:\n%', v_violations;
+    raise exception e'0105 scope assertions failed:\n%', v_violations;
   end if;
 end
 $$;

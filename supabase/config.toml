@@ -39,7 +39,12 @@ file_size_limit = "50MiB"
 [auth]
 enabled = true
 site_url = "http://127.0.0.1:5199"
-additional_redirect_urls = ["http://127.0.0.1:5199"]
+# The quality preview uses the canonical local port 5199. Local GoTrue treats redirect ports as
+# exact, and the pinned CLI loads only the first entry here, so keep this list deliberately singular.
+# Production needs the mirror ({origin}/reset-password) in the remote Auth URL configuration (#114).
+additional_redirect_urls = [
+  "http://127.0.0.1:5199/reset-password",
+]
 jwt_expiry = 3600
 enable_signup = true
 enable_anonymous_sign_ins = false

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 
 /**
@@ -55,6 +55,16 @@ function renderAt(path: string) {
             <Route path="/documents/:documentId/review" element={null} />
             <Route path="/orders" element={null} />
             <Route path="/orders/new" element={null} />
+            <Route path="/orders/:id" element={null} />
+            <Route path="/receiving" element={null} />
+            <Route path="/receiving/:id" element={null} />
+            <Route path="/invoices" element={null} />
+            <Route path="/invoices/:id" element={null} />
+            <Route path="/suppliers" element={null} />
+            <Route path="/suppliers/:id" element={null} />
+            <Route path="/payments" element={null} />
+            <Route path="/alerts" element={null} />
+            <Route path="/settings" element={null} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -65,29 +75,51 @@ function renderAt(path: string) {
 const currentLabels = () =>
   Array.from(document.querySelectorAll('[aria-current="page"]')).map((el) => el.textContent?.trim());
 
-// Both nested pairs in the menu, plus a detail route under one of them. /documents/:id/review is
-// here for the price `end` buys: it now marks nothing at all. That is accepted — see the NavItem
-// comment in Layout.tsx — and it is asserted as "at most one" rather than "exactly none" so that a
-// later fix lighting the parent without duplicating the claim reads as an improvement this suite
-// allows, not a failure it reports.
-const PATHS = ['/dashboard', '/documents', '/documents/operations', '/documents/archive', '/documents/abc/review', '/orders', '/orders/new'];
+const PATHS = [
+  '/dashboard', '/documents', '/documents/operations', '/documents/abc/review', '/orders', '/orders/new', '/orders/abc',
+  '/receiving/abc', '/invoices/abc', '/suppliers/abc', '/payments', '/settings',
+];
 
 describe('סימון הפריט הנוכחי בתפריט', () => {
   // aria-current="page" is a claim about where the user is, and two of them is a contradiction —
   // announced twice by a screen reader, and the first match wins the mobile drawer's initialFocus,
   // which queries for exactly this attribute.
-  it.each(PATHS)('%s מסמן פריט אחד לכל היותר', (path) => {
+  it.each(PATHS)('%s מסמן בדיוק פריט אחד', (path) => {
     renderAt(path);
-    expect(currentLabels().length).toBeLessThanOrEqual(1);
+    expect(currentLabels()).toHaveLength(1);
   });
 
-  it('בארכיון מסומן הארכיון, ולא תיקיית המסמכים שמעליו', () => {
+  it('הארכיון אינו מדליק בטעות את תיקיית המסמכים', () => {
     renderAt('/documents/archive');
-    expect(currentLabels()).toEqual(['ארכיון']);
+    expect(currentLabels()).toEqual([]);
   });
 
   it('בתיקיית המסמכים מסומנת תיקיית המסמכים', () => {
     renderAt('/documents');
     expect(currentLabels()).toEqual(['תיקיית המסמכים']);
+  });
+
+  it('יעד בקרה נדיר פותח את הקבוצה ומסומן בתוכה', () => {
+    renderAt('/payments');
+    const current = document.querySelector('[aria-current="page"]');
+    expect(current?.textContent?.trim()).toBe('תשלומים');
+    expect(current?.closest('details')?.open).toBe(true);
+  });
+
+  it('כותרת הדפדפן מפרידה מסך, דייר ומוצר', async () => {
+    renderAt('/orders/abc');
+    await waitFor(() => expect(document.title).toBe('פרטי הזמנה — ארגון בדיקה · SupplyFlow'));
+  });
+
+  it('המגירה מרנדרת שוב את כל יעדי הניווט כי הסרגל התחתון מכיל פעולות', () => {
+    renderAt('/suppliers/abc');
+    fireEvent.click(screen.getByRole('button', { name: 'פתיחת תפריט' }));
+    const drawer = screen.getByRole('dialog', { name: 'תפריט ראשי' });
+    expect(within(drawer).getByRole('link', { name: 'מרכז הבקרה' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'הזמנות' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'חשבוניות' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'ספקים' })).toHaveAttribute('aria-current', 'page');
+    expect(within(drawer).getByRole('link', { name: 'קבלת סחורה' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'הגדרות' })).toBeInTheDocument();
   });
 });

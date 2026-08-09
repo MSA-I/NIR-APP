@@ -1,4 +1,4 @@
--- 0094 -- Trial lifecycle: 30 days, 7 days grace, then tenant-wide read-only.
+-- 0108 -- Trial lifecycle: 30 days, 7 days grace, then tenant-wide read-only.
 -- Read access remains tenant-scoped through auth_org(); writes fail at the row boundary even
 -- through SECURITY DEFINER/service_role paths. Platform lifecycle recovery remains reasoned.
 
@@ -9,13 +9,13 @@ begin
   select p.prosrc into v_body from pg_catalog.pg_proc p
   where p.oid = 'public.auth_org()'::regprocedure;
   if md5(v_body) <> '006e580399a7e4aa486e8e2e02918de6' then
-    raise exception '0094 ancestry guard failed: auth_org changed';
+    raise exception '0108 ancestry guard failed: auth_org changed';
   end if;
 
   select p.prosrc into v_body from pg_catalog.pg_proc p
   where p.oid = 'public.set_organization_lifecycle(uuid,public.org_status,timestamptz,text)'::regprocedure;
   if md5(v_body) <> '58811364a1681913beeddfb1f99b6af3' then
-    raise exception '0094 ancestry guard failed: set_organization_lifecycle changed';
+    raise exception '0108 ancestry guard failed: set_organization_lifecycle changed';
   end if;
 end
 $$;
@@ -427,7 +427,7 @@ begin
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0094 scope assertions failed:\n%', v_violations;
+    raise exception e'0108 scope assertions failed:\n%', v_violations;
   end if;
 end
 $$;

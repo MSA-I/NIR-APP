@@ -185,7 +185,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   try {
     // ===== 4. Organization =====
-    // status defaults to 'trial'. Migration 0094 applies the canonical 30-day end when the
+    // status defaults to 'trial'. Migration 0108 applies the canonical 30-day end when the
     // operator does not provide an explicit date.
     const orgInsert = await admin
       .from('organizations')

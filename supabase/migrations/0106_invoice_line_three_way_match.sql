@@ -1,4 +1,4 @@
--- 0092 -- Immutable invoice-line evidence and server-authoritative three-way matching.
+-- 0106 -- Immutable invoice-line evidence and server-authoritative three-way matching.
 --
 -- The order schema had no historical unit snapshot. New purchase-order items receive one here;
 -- legacy NULL snapshots remain explicit review work rather than being backfilled from today's
@@ -1976,7 +1976,7 @@ is 'SECURITY DEFINER: narrow read projection over private assessment helpers. Ac
 comment on function private.capture_invoice_three_way_approval_snapshot()
 is 'SECURITY INVOKER trigger: appends the exact immutable three-way assessment used at each approval. Prior approved quantities are read only from these snapshots, never from mutable live SKU/barcode mappings.';
 
--- 0088 requires every definer that touches a scoped financial table to pin its reviewed live
+-- 0102 requires every definer that touches a scoped financial table to pin its reviewed live
 -- body. These registrations are migration-time hashes of the exact declarations above; any
 -- later CREATE OR REPLACE without a deliberate reviewed ledger update fails A5.
 insert into private.scope_definer_enforcements (
@@ -1986,19 +1986,19 @@ select reviewed.function_signature, md5(proc.prosrc), 'filtered_read', reviewed.
 from (values
   (
     'record_invoice_line_evidence(uuid,uuid,uuid,text,uuid,uuid,uuid,jsonb,text)',
-    '0092 locks the exact invoice; browser actors are filtered by tenant and null-or-auth_scopes unit, while service ingestion requires an exact tenant document/interpretation/actor chain.'
+    '0106 locks the exact invoice; browser actors are filtered by tenant and null-or-auth_scopes unit, while service ingestion requires an exact tenant document/interpretation/actor chain.'
   ),
   (
     'record_invoice_line_matches(uuid,uuid,uuid,uuid,jsonb,text)',
-    '0092 locks the exact tenant invoice through a null-or-auth_scopes unit predicate before validating every explicit allocation against linked supplier purchase orders.'
+    '0106 locks the exact tenant invoice through a null-or-auth_scopes unit predicate before validating every explicit allocation against linked supplier purchase orders.'
   ),
   (
     'override_invoice_three_way_match(uuid,text,uuid,text)',
-    '0092 locks the exact tenant invoice through a null-or-auth_scopes unit predicate and rechecks owner identity, scope and fresh password after serialization.'
+    '0106 locks the exact tenant invoice through a null-or-auth_scopes unit predicate and rechecks owner identity, scope and fresh password after serialization.'
   ),
   (
     'get_invoice_three_way_match(uuid)',
-    '0092 exposes private assessment helpers only after filtering the exact invoice by auth_org, role and the canonical null-or-auth_scopes legal-unit predicate.'
+    '0106 exposes private assessment helpers only after filtering the exact invoice by auth_org, role and the canonical null-or-auth_scopes legal-unit predicate.'
   )
 ) as reviewed(function_signature, scope_proof)
 join pg_catalog.pg_proc proc
@@ -2012,7 +2012,7 @@ begin
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0092 scope assertions failed:\n%', v_violations;
+    raise exception e'0106 scope assertions failed:\n%', v_violations;
   end if;
 end
 $$;

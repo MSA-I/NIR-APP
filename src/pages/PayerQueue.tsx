@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Landmark, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { useToast, StatusBadge, Modal, EmptyState, ErrorNote, SkeletonList, Note } from '../components/ui';
+import { useToast, StatusBadge, Modal, EmptyState, ErrorNote, PageHeader, SkeletonList, Note } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { DocumentList } from '../components/FileUpload';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
@@ -48,7 +48,8 @@ export default function PayerQueue({ mode = 'regular' }: { mode?: PayerQueueMode
 
   return (
     <div className="space-y-5 max-w-2xl">
-      <h1 className="page-title">{mode === 'emergency' ? 'מסלול חירום לביצוע תשלום' : 'תשלומים לביצוע'}</h1>
+      <PageHeader title={mode === 'emergency' ? 'מסלול חירום לביצוע תשלום' : 'תשלומים לביצוע'}
+        meta={`${pending.length} העברות ממתינות לביצוע`} />
 
       {mode === 'emergency' && (
         <Note tone="alert">מסלול זה מיועד לבעלים בלבד. כל ביצוע דורש אימות סיסמה טרי, סיבה מפורשת ונרשם ביומן הביקורת כפעולת חירום נפרדת.</Note>

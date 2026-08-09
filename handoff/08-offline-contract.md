@@ -112,21 +112,31 @@ the only way forward.
 Hebrew mappings live in `src/lib/errors.ts`; `receipt_draft_conflict` and
 `receipt_already_completed` were split apart there this wave because they ask different questions.
 
-## 5. What the precache wave must add
+## 5. What the precache wave must add — ✅ landed 09.08.2026 (package 5), with two deviations to know about
 
-1. **Install `workbox-*`** (still listed under planned additions in `THIRD_PARTY_NOTICES.md`) and
-   move it into the verified table with a license read from `node_modules`.
-2. **Rewrite `public/sw.js` without losing three things:** its verbatim header (quoted in five
-   places, including ADR-0006 and this document), the push handlers (four gate scenarios), and the
-   `controllerchange` contract in `src/main.tsx:19-28` that `pwaUpdate` asserts ("the open tab is
-   not erased"). `injectManifest` rather than `generateSW`, for exactly that reason.
-3. **Cache the app shell only.** `/rest/v1`, `/auth/v1` and `/functions/v1` responses must never
-   enter any cache — that rule is older than this wave and survives it.
-4. **Then, and only then, replace the tab-close step of the offline gate scenario with a real
-   offline `page.reload()`** and delete the deferral note in `OFFLINE-SYNC-DESIGN.md` §9. Until that
-   scenario passes, the honest statement stays: a reload while offline loses the shell.
-5. **Do not touch the queue to do it.** The queue owes nothing to a service worker; if precaching
-   requires changing `offlineQueue.ts`, something has gone wrong in the design.
+1. ~~Install `workbox-*`~~ — **deviation: no workbox runtime at all.** `vite-plugin-pwa` in
+   `injectManifest` mode only fills `self.__WB_MANIFEST` at build time; the cache logic in
+   `public/sw.js` is ~50 hand-readable lines. One devDependency instead of a runtime family.
+2. `public/sw.js` was rewritten keeping the push handlers verbatim and the `controllerchange`
+   contract intact (install still ends in `skipWaiting`, activate in `clients.claim`).
+   **Deviation: the verbatim header changed** — it used to declare "Web Push delivery only",
+   and keeping a header that denies the cache below it would have been the worse lie. Documents
+   quoting the old header describe the pre-package-5 worker.
+3. **The app shell only, enforced in code:** `isApiRequest()` refuses `/rest/`, `/auth/`,
+   `/storage/`, `/functions/`, `/realtime/` before any cache logic runs. Data is never cached.
+4. The gate scenario `an offline reload keeps the app shell` does the real offline
+   `page.reload()` (check-browser-smoke.cjs).
+5. `offlineQueue.ts` was not touched. ✅
+
+### pending_photos — the store has a writer now (DEBT-REGISTER §4, closed 09.08.2026)
+
+Until package 5 this store existed with **zero writers** — `putPendingPhoto` had no caller and
+a photo taken offline simply failed. Now: `DocumentList.uploadFiles` stashes captures when
+`navigator.onLine === false` (`src/components/FileUpload.tsx`), the queue strip's existing
+`pendingUploads` counter counts them, and `flushPendingPhotosNow` (same file) re-sends them
+through the REAL `uploadDocument` path on mount / `'online'` — logic proven in
+`src/lib/pendingPhotos.spec.ts`. Deleting from the device happens only after the upload
+resolved: losing bytes is worse than uploading twice.
 
 ## 6. Barcode (#102)
 

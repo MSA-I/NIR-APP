@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ScrollText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { DataTable, Modal, ErrorNote, SkeletonTable, Note, type Column } from '../components/ui';
+import { DataTable, Modal, ErrorNote, PageHeader, SkeletonTable, Note, type Column } from '../components/ui';
 import { fmtDateTime } from '../lib/format';
 import type { AuditLog as AuditRow } from '../lib/types';
 
@@ -56,7 +56,8 @@ export default function AuditLogPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="page-title flex items-center gap-2"><ScrollText size={22} /> יומן ביקורת</h1>
+      <PageHeader title={<span className="flex items-center gap-2"><ScrollText size={22} /> יומן ביקורת</span>}
+        meta={`${rows.length} פעולות בתצוגה`} />
       <DataTable rows={rows} columns={columns} pageSize={25} searchable
         searchFn={(r, q) => r.action.includes(q) || (r.reason ?? '').toLowerCase().includes(q) || (r.profile?.full_name ?? '').includes(q)}
         searchLabel="חיפוש ביומן הביקורת"

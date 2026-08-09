@@ -134,6 +134,18 @@ begin
 end
 $$;
 
+create function pg_temp.p14_capture_error(p_sql text)
+returns text
+language plpgsql
+as $$
+begin
+  execute p_sql;
+  return null;
+exception when others then
+  return sqlerrm;
+end
+$$;
+
 create function pg_temp.p14_error(p_sub uuid, p_sql text)
 returns text
 language plpgsql
@@ -141,20 +153,12 @@ as $$
 declare
   v_message text;
 begin
-  begin
-    perform pg_temp.p14_become(p_sub);
-    execute p_sql;
-    perform set_config('role', 'none', true);
-    return null;
-  exception when others then
-    v_message := sqlerrm;
-    -- The exception block is a PostgreSQL subtransaction: the role/claim GUCs written by
-    -- p14_become() are rolled back before this handler runs. Re-applying `role=none` from the
-    -- handler crashes the local PostgreSQL 17 acceptance image on the expected EXECUTE denial
-    -- (SIGSEGV), so do not mutate role state while unwinding that error. The assertions below
-    -- still prove the actual authenticated grant, and the caller remains the trusted session.
-    return v_message;
-  end;
+  -- Keep the role switch outside the exception subtransaction. PostgreSQL 17 can segfault when a
+  -- caught permission error also unwinds set_config('role', ...) in that same subtransaction.
+  perform pg_temp.p14_become(p_sub);
+  v_message := pg_temp.p14_capture_error(p_sql);
+  perform set_config('role', 'none', true);
+  return v_message;
 end
 $$;
 
@@ -499,7 +503,7 @@ insert into organizations (id, name, status) values
   ('14000000-0000-4000-8000-000000000001', 'P14 tenant A', 'active'),
   ('14000000-0000-4000-8000-000000000002', 'P14 tenant B', 'active'),
   -- Build the immutable document fixture while writable; case (j) suspends it immediately
-  -- before invoking automation. 0094 correctly forbids creating fixture rows after suspension.
+  -- before invoking automation. 0108 correctly forbids creating fixture rows after suspension.
   ('14000000-0000-4000-8000-000000000003', 'P14 tenant to suspend', 'active'),
   ('14000000-0000-4000-8000-000000000004', 'P14 tenant D', 'active');
 

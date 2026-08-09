@@ -1,0 +1,50 @@
+# Package 6 (09.08.2026) — the minimal CI: the same `npm run build` gate the constitution
+# calls "השער האוטומטי היחיד", on Linux, for every push/PR to main. Until now the gate ran
+# only by hand on one Windows machine; this does not replace `npm run quality` (Docker +
+# PowerShell + 27 SQL suites + 33 browser scenarios), which stays a manual, documented run.
+#
+# What this covers: tsc --noEmit, the eight check:* scripts, vitest (jsdom), vite build
+# (including the PWA sw injection). What it deliberately does NOT cover: anything needing
+# Docker, a live Supabase, Deno, or a browser.
+#
+# The xlsx dependency installs from cdn.sheetjs.com (a tarball URL in package.json, pinned
+# by integrity hash in package-lock.json). setup-node's npm cache keeps the tarball out of
+# most runs; if the CDN ever blocks CI, fix at the INSTALL level (cache/vendor the tarball)
+# — never by swapping the package version without an owner decision.
+name: build-gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 24: the check:* scripts execute TypeScript directly (native type stripping),
+      # exactly like the local gate.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install (npm ci — lockfile is the contract)
+        run: npm ci
+
+      - name: The gate — tsc + eight check:* + vitest + vite build
+        run: npm run build
+        # The browser client intentionally fails at module load when its public Vite
+        # configuration is absent. CI does not deploy this bundle, so use explicit,
+        # non-secret placeholders; production values never belong in GitHub logs.
+        env:
+          VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-public-anon-placeholder

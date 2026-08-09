@@ -1,4 +1,4 @@
--- 0097 -- Tenant offboarding, full export evidence and conservative retention boundaries.
+-- 0111 -- Tenant offboarding, full export evidence and conservative retention boundaries.
 --
 -- Product contract (owner decision, 2026-08-09):
 --   * owner requests offboarding with fresh authentication; no free-text reason is required;
@@ -19,14 +19,14 @@ begin
   from pg_catalog.pg_proc p
   where p.oid = 'private.organization_access_mode(uuid)'::regprocedure;
   if md5(v_body) <> '01804c827bebb9e42af4bc6494fb84b8' then
-    raise exception '0097 ancestry guard failed: organization_access_mode changed';
+    raise exception '0111 ancestry guard failed: organization_access_mode changed';
   end if;
 
   select p.prosrc into v_body
   from pg_catalog.pg_proc p
   where p.oid = 'private.organization_row_write_guard()'::regprocedure;
   if md5(v_body) <> '9411a628caa7fb69998255dfdb41260c' then
-    raise exception '0097 ancestry guard failed: organization_row_write_guard changed';
+    raise exception '0111 ancestry guard failed: organization_row_write_guard changed';
   end if;
 end
 $guard$;
@@ -2218,7 +2218,7 @@ $$;
 revoke all on function private.claim_document_interpretation_jobs(integer, integer)
   from public, anon, authenticated, service_role;
 
--- 0094's table-wide latch also protects offboarding. Its exception is a transaction-local org
+-- 0108's table-wide latch also protects offboarding. Its exception is a transaction-local org
 -- marker that only an owner command, a platform-admin command or a service-role export command
 -- can make effective. Merely setting the GUC as an ordinary member does not bypass read-only.
 create or replace function private.organization_row_write_guard()
@@ -4444,6 +4444,166 @@ comment on function public.service_claim_organization_export(uuid, uuid) is
   'Service-role-only export lease and exact tenant dataset manifest for the tenant-export Edge Function.';
 
 -- ===== OCR attempt-bound signed-download egress =====
+-- 0045 intended a 25 MiB extraction ceiling, but pg_column_size(jsonb) includes binary JSONB
+-- container overhead. The evidence boundary below hashes and limits canonical UTF-8 JSON, so an
+-- exact 25 MiB canonical payload was rejected by the earlier shape validator before it reached
+-- that boundary. Keep every structural rule and align only the byte unit with the evidence
+-- contract. The ancestry pin makes this forward replacement fail closed if 0045 changes.
+do $guard$
+declare
+  v_hash text;
+begin
+  select md5(procedure.prosrc)
+  into v_hash
+  from pg_catalog.pg_proc procedure
+  join pg_catalog.pg_namespace namespace on namespace.oid = procedure.pronamespace
+  where namespace.nspname = 'public'
+    and procedure.oid = 'public.smart_document_extraction_valid(jsonb,text)'::regprocedure;
+  if v_hash is distinct from '77fc0b0db2550dc2bdf37e7d6b514448' then
+    raise exception '0111 ancestry guard failed: smart_document_extraction_valid changed';
+  end if;
+end
+$guard$;
+
+create or replace function public.smart_document_extraction_valid(
+  p_payload jsonb,
+  p_contract_version text
+)
+returns boolean
+language plpgsql
+immutable
+set search_path = public, pg_temp
+as $$
+declare
+  v_document jsonb;
+  v_item jsonb;
+  v_row jsonb;
+  v_cell jsonb;
+  v_total_rows integer := 0;
+begin
+  if p_payload is null
+     or jsonb_typeof(p_payload) is distinct from 'object'
+     or not (p_payload ?& array['schema_version', 'document', 'blocks', 'tables', 'marks'])
+     or p_contract_version is distinct from '1'
+     or jsonb_typeof(p_payload -> 'schema_version') is distinct from 'string'
+     or (p_payload ->> 'schema_version') is distinct from p_contract_version
+     or jsonb_typeof(p_payload -> 'document') <> 'object'
+     or jsonb_typeof(p_payload -> 'blocks') <> 'array'
+     or jsonb_typeof(p_payload -> 'tables') <> 'array'
+     or jsonb_typeof(p_payload -> 'marks') <> 'array'
+     or octet_length(p_payload::text) > 26214400 then
+    return false;
+  end if;
+
+  v_document := p_payload -> 'document';
+  if not (v_document ?& array['page_count', 'detected_languages', 'plain_text', 'partial'])
+     or jsonb_typeof(v_document -> 'page_count') <> 'number'
+     or (v_document ->> 'page_count')::numeric < 1
+     or (v_document ->> 'page_count')::numeric <> trunc((v_document ->> 'page_count')::numeric)
+     or (v_document ->> 'page_count')::numeric > 100
+     or jsonb_typeof(v_document -> 'detected_languages') <> 'array'
+     or exists (
+       select 1 from jsonb_array_elements(v_document -> 'detected_languages') language
+       where jsonb_typeof(language) <> 'string'
+     )
+     or jsonb_typeof(v_document -> 'plain_text') <> 'string'
+     or length(v_document ->> 'plain_text') > 2000000
+     or jsonb_typeof(v_document -> 'partial') <> 'boolean' then
+    return false;
+  end if;
+
+  for v_item in select value from jsonb_array_elements(p_payload -> 'blocks')
+  loop
+    if jsonb_typeof(v_item) <> 'object'
+       or not (v_item ?& array['id', 'page', 'type', 'bbox', 'text', 'confidence'])
+       or jsonb_typeof(v_item -> 'id') <> 'string'
+       or length(v_item ->> 'id') = 0
+       or jsonb_typeof(v_item -> 'page') <> 'number'
+       or (v_item ->> 'page')::numeric < 1
+       or (v_item ->> 'page')::numeric <> trunc((v_item ->> 'page')::numeric)
+       or (v_item ->> 'page')::numeric > (v_document ->> 'page_count')::numeric
+       or jsonb_typeof(v_item -> 'type') is distinct from 'string'
+       or v_item ->> 'type' not in ('text', 'heading', 'table', 'image', 'handwriting')
+       or not public.smart_document_bbox_valid(v_item -> 'bbox')
+       or jsonb_typeof(v_item -> 'text') <> 'string'
+       or not public.smart_document_confidence_valid(v_item -> 'confidence') then
+      return false;
+    end if;
+  end loop;
+
+  for v_item in select value from jsonb_array_elements(p_payload -> 'tables')
+  loop
+    if jsonb_typeof(v_item) <> 'object'
+       or not (v_item ?& array['id', 'page', 'bbox', 'rows'])
+       or jsonb_typeof(v_item -> 'id') <> 'string'
+       or length(v_item ->> 'id') = 0
+       or jsonb_typeof(v_item -> 'page') <> 'number'
+       or (v_item ->> 'page')::numeric < 1
+       or (v_item ->> 'page')::numeric <> trunc((v_item ->> 'page')::numeric)
+       or (v_item ->> 'page')::numeric > (v_document ->> 'page_count')::numeric
+       or not public.smart_document_bbox_valid(v_item -> 'bbox')
+       or jsonb_typeof(v_item -> 'rows') <> 'array'
+       or jsonb_array_length(v_item -> 'rows') > 5000 then
+      return false;
+    end if;
+    v_total_rows := v_total_rows + jsonb_array_length(v_item -> 'rows');
+    if v_total_rows > 5000 then
+      return false;
+    end if;
+    for v_row in select value from jsonb_array_elements(v_item -> 'rows')
+    loop
+      if jsonb_typeof(v_row) <> 'array' then
+        return false;
+      end if;
+      for v_cell in select value from jsonb_array_elements(v_row)
+      loop
+        if jsonb_typeof(v_cell) <> 'object'
+           or not (v_cell ?& array['text', 'bbox'])
+           or jsonb_typeof(v_cell -> 'text') <> 'string'
+           or not (
+             jsonb_typeof(v_cell -> 'bbox') = 'null'
+             or public.smart_document_bbox_valid(v_cell -> 'bbox')
+           ) then
+          return false;
+        end if;
+      end loop;
+    end loop;
+  end loop;
+
+  for v_item in select value from jsonb_array_elements(p_payload -> 'marks')
+  loop
+    if jsonb_typeof(v_item) <> 'object'
+       or not (v_item ?& array[
+         'id', 'page', 'kind', 'bbox', 'nearby_block_ids', 'confidence', 'fingerprint'
+       ])
+       or jsonb_typeof(v_item -> 'id') <> 'string'
+       or length(v_item ->> 'id') = 0
+       or jsonb_typeof(v_item -> 'page') <> 'number'
+       or (v_item ->> 'page')::numeric < 1
+       or (v_item ->> 'page')::numeric <> trunc((v_item ->> 'page')::numeric)
+       or (v_item ->> 'page')::numeric > (v_document ->> 'page_count')::numeric
+       or jsonb_typeof(v_item -> 'kind') is distinct from 'string'
+       or v_item ->> 'kind' not in ('circle', 'check', 'cross', 'underline', 'star', 'custom', 'unknown')
+       or not public.smart_document_bbox_valid(v_item -> 'bbox')
+       or jsonb_typeof(v_item -> 'nearby_block_ids') <> 'array'
+       or exists (
+         select 1 from jsonb_array_elements(v_item -> 'nearby_block_ids') block_id
+         where jsonb_typeof(block_id) <> 'string'
+       )
+       or not public.smart_document_confidence_valid(v_item -> 'confidence')
+       or not (jsonb_typeof(v_item -> 'fingerprint') in ('string', 'null')) then
+      return false;
+    end if;
+  end loop;
+
+  return true;
+exception when others then
+  return false;
+end
+$$;
+revoke all on function public.smart_document_extraction_valid(jsonb, text)
+  from public, anon, authenticated, service_role;
+
 -- A job may be claimed more than once. The egress correlation is therefore a fresh UUID per
 -- claim, never the durable job id. This prevents a late worker from settling or completing a
 -- newer attempt and lets an explicitly retryable failure close one lease before requeueing.
@@ -5982,7 +6142,7 @@ values
 
 -- Cross-wave ACL reconciliation. 0025 deliberately moved supplier agents onto the narrow
 -- supplier_portal_context() projection because public.suppliers also contains internal notes and
--- bank details. 0090 rebuilt this policy for the accountant projection and accidentally restored
+-- bank details. 0104 rebuilt this policy for the accountant projection and accidentally restored
 -- the older direct supplier branch. Keep procurement staff and the existing payer obligation read,
 -- while supplier agents continue through the explicit portal projection only.
 drop policy if exists suppliers_select on public.suppliers;
@@ -6023,13 +6183,13 @@ begin
      or v_supplier_policy ~* 'auth_role\(\).*''supplier'''
      or position('auth_supplier()' in v_supplier_policy) > 0 then
     raise exception
-      '0097 supplier raw-row assertion failed: supplier agents must use supplier_portal_context()';
+      '0111 supplier raw-row assertion failed: supplier agents must use supplier_portal_context()';
   end if;
   select string_agg(assertion || ' -- ' || detail, e'\n' order by assertion, detail)
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0097 scope assertions failed:\n%', v_violations;
+    raise exception e'0111 scope assertions failed:\n%', v_violations;
   end if;
 end
 $$;

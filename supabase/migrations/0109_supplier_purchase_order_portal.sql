@@ -121,7 +121,7 @@ select
   'supplier_portal_context()',
   md5(p.prosrc),
   'filtered_read',
-  '0095 binds the actor to auth_org and auth_supplier, then filters every issued purchase order to null-or-auth_scopes unit before returning the narrow supplier projection.'
+  '0109 binds the actor to auth_org and auth_supplier, then filters every issued purchase order to null-or-auth_scopes unit before returning the narrow supplier projection.'
 from pg_catalog.pg_proc p
 where p.oid = 'public.supplier_portal_context()'::regprocedure
 on conflict (function_signature) do update
@@ -288,7 +288,7 @@ begin
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0095 scope assertions failed:\n%', v_violations;
+    raise exception e'0109 scope assertions failed:\n%', v_violations;
   end if;
 end
 $$;

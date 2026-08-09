@@ -4,7 +4,7 @@ import { Loader2, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageLoader, useToast, ConfirmDialog, ErrorNote, Note, StatusBadge } from '../components/ui';
+import { Breadcrumbs, PageHeader, RecordSkeleton, useToast, ConfirmDialog, ErrorNote, Note, StatusBadge } from '../components/ui';
 import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
 import { fmtDate, todayISO } from '../lib/format';
@@ -253,12 +253,12 @@ export default function InvoiceNew() {
     }
   }
 
-  if (loading || linksLoading) return <PageLoader />;
+  if (loading || linksLoading) return <RecordSkeleton />;
   if (error) return <ErrorNote message={error} />;
 
   return (
     <div className="max-w-2xl space-y-4">
-      <h1 className="page-title">חשבונית חדשה</h1>
+      <PageHeader title="חשבונית חדשה" breadcrumbs={<Breadcrumbs items={[{ label: 'חשבוניות', to: '/invoices' }, { label: 'חשבונית חדשה' }]} />} />
       {linkedContext && (
         <section className="note-info space-y-3" aria-labelledby="invoice-linked-context-title" data-testid="invoice-linked-context">
           <div>

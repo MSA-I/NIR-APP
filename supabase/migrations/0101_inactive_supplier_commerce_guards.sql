@@ -1,4 +1,4 @@
--- 0087 -- Inactive or pending suppliers remain readable for history and financial closing, but
+-- 0101 -- Inactive or pending suppliers remain readable for history and financial closing, but
 -- cannot be used to start a purchase order or a new price-list/catalog mutation.
 
 create or replace function private.guard_new_supplier_commerce()
@@ -70,7 +70,7 @@ begin
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0087 scope assertions failed:\n%', v_violations;
+    raise exception e'0101 scope assertions failed:\n%', v_violations;
   end if;
 end
 $$;

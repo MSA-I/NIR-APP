@@ -1,4 +1,4 @@
--- 0089 -- Measured price-list automation: immutable shadow predictions, human calibration
+-- 0103 -- Measured price-list automation: immutable shadow predictions, human calibration
 -- evidence, drift read models, and document-pipeline operational read models.
 --
 -- This migration deliberately does not change either autonomy switch or confidence threshold.
@@ -2396,21 +2396,21 @@ begin
        'public.run_price_list_shadow(uuid,uuid,uuid)',
        'EXECUTE'
      ) then
-    raise exception '0089 refused: browser can execute shadow evaluation';
+    raise exception '0103 refused: browser can execute shadow evaluation';
   end if;
   if has_function_privilege(
        'service_role',
        'public.apply_price_list_interpretation(uuid,uuid,uuid)',
        'EXECUTE'
      ) then
-    raise exception '0089 refused: service role can bypass scope eligibility';
+    raise exception '0103 refused: service role can bypass scope eligibility';
   end if;
   if has_function_privilege(
        'service_role',
        'public.record_price_list_calibration_review(uuid,uuid,text,text[],text,uuid,numeric,text)',
        'EXECUTE'
      ) then
-    raise exception '0089 refused: service role can author human calibration evidence';
+    raise exception '0103 refused: service role can author human calibration evidence';
   end if;
   if position(
        'assert_recent_password_authentication'
@@ -2418,21 +2418,21 @@ begin
          'public.platform_set_price_list_automation_scope(uuid,uuid,text,uuid,text)'::regprocedure
        )
      ) = 0 then
-    raise exception '0089 refused: platform automation eligibility lacks step-up enforcement';
+    raise exception '0103 refused: platform automation eligibility lacks step-up enforcement';
   end if;
   if has_table_privilege('service_role', 'public.price_list_shadow_runs', 'INSERT')
      or has_table_privilege('service_role', 'public.price_list_shadow_lines', 'INSERT')
      or has_table_privilege('service_role', 'public.price_list_calibration_reviews', 'INSERT')
      or has_table_privilege('service_role', 'public.price_list_empty_run_reviews', 'INSERT')
      or has_table_privilege('service_role', 'public.price_list_automation_scope_decisions', 'INSERT') then
-    raise exception '0089 refused: service role can bypass the ledger RPC boundaries';
+    raise exception '0103 refused: service role can bypass the ledger RPC boundaries';
   end if;
 
   select string_agg(assertion || ' -- ' || detail, e'\n' order by assertion, detail)
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0089 scope assertions failed:\n%', v_violations;
+    raise exception e'0103 scope assertions failed:\n%', v_violations;
   end if;
 end
 $$;

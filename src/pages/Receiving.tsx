@@ -3,7 +3,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { Plus, Minus, PackageCheck, Save, CheckCircle2, FileText, Camera, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { PageLoader, useToast, StatusBadge, EmptyState, ErrorNote, SkeletonList, Note } from '../components/ui';
+import { Breadcrumbs, useToast, StatusBadge, EmptyState, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonList, Note, ConfirmDialog } from '../components/ui';
+import { useAuth } from '../auth/AuthContext';
 import { DocumentList } from '../components/FileUpload';
 import { deliveryNoteLines, matchDeliveryLineProduct } from '../components/document-review/model';
 import BarcodeScanControl, { type BarcodeScanResult } from '../components/BarcodeScanner';
@@ -216,7 +217,7 @@ export function ReceivingList() {
 
   return (
     <div className="space-y-4 max-w-2xl">
-      <h1 className="page-title">קבלת סחורה</h1>
+      <PageHeader title="קבלת סחורה" meta={`${orders.length} הזמנות ממתינות · ${attention.length} דורשות פעולה`} />
       <OfflineQueueStatus />
       {data?.fromDevice && (
         <Note tone={data.stale ? 'alert' : 'await'}>
@@ -306,8 +307,14 @@ export function ReceiveOrder() {
   const documentId = params.get('document');
   const navigate = useNavigate();
   const toast = useToast();
+  const { profile } = useAuth();
   const [lines, setLines] = useState<Record<string, LineState>>({});
   const [openCredits, setOpenCredits] = useState(true);
+  // #116 (decided 09.08.2026): a manual exception is an owner/office command. kitchen — the
+  // role that actually stands at the truck — reports to them; the sentence below says so.
+  const canOpenException = !!profile && ['owner', 'office'].includes(profile.role);
+  const [exceptionOpen, setExceptionOpen] = useState(false);
+  const [exceptionBusy, setExceptionBusy] = useState(false);
   /**
    * The receipt's idempotency key, read from (or minted into) the device store — never derived at
    * send time. `Receiving.tsx` used to send `draft.id ?? newReceiptId`, which tied the key to
@@ -667,7 +674,7 @@ export function ReceiveOrder() {
     }
   }
 
-  if (loading) return <PageLoader />;
+  if (loading) return <RecordSkeleton />;
   if (error || !order) return <ErrorNote message={error ?? 'הזמנה לא נמצאה'} />;
 
   /* completion screen: attach invoice photo + optional invoice creation */
@@ -718,8 +725,11 @@ export function ReceiveOrder() {
     // here), and only the taskbar from 64rem up, where the action bar is `lg:hidden`.
     <div className="max-w-xl mx-auto space-y-3 pb-52 lg:pb-28">
       <div>
-        <h1 className="page-title flex items-center gap-2"><PackageCheck size={22} /> קבלת סחורה</h1>
-        <div className="text-sm text-ink-muted mt-1">{order.supplier.name} · <span className="num">הזמנה #{order.number}</span></div>
+        <RecordHeader
+          breadcrumbs={<Breadcrumbs items={[{ label: 'קבלת סחורה', to: '/receiving' }, { label: `הזמנה #${order.number}` }]} />}
+          title={<span className="flex items-center gap-2"><PackageCheck size={22} /> קבלת סחורה</span>}
+          status={<StatusBadge meta={PO_STATUS[order.status]} />}
+          meta={<><span>{order.supplier.name}</span><span className="num">הזמנה #{order.number}</span><span className="num">{progress.done} מתוך {progress.total} פריטים עודכנו</span></>} />
         {data?.draft && <div className="mt-1 text-xs text-await-fg">נטענה טיוטת קבלה שנשמרה קודם</div>}
         {localDraftPending && <div className="mt-1 text-xs font-medium text-alert-fg" data-testid="receiving-local-draft">טיוטה מקומית — נשמרה במכשיר וטרם סונכרנה</div>}
         {receiptKey && !receiptKey.persisted && (
@@ -797,22 +807,25 @@ export function ReceiveOrder() {
                   הכמויות מולאו מתעודת המשלוח עבור <span className="num">{data.delivered.matchedQty.size}</span> פריטים.
                   שאר השורות נשארו בכמות שהוזמנה. בדוק מול הסחורה שהגיעה בפועל לפני שמירה.
                 </div>}
-            {/* G1, finding 5. This paragraph named the problem and stopped there — it was the only
-                prose in the app that admits an unordered item arrived, with no action attached.
-                What follows is the next step, and deliberately NOT a button: a receipt is saved
-                against the order's own lines (`order.items.map` below, and `save_goods_receipt`
-                rejects any row count other than the order's), and there is no command in the
-                product that opens an exception by hand — `exceptions` has no INSERT grant for the
-                browser at all (0036:83 grants UPDATE only), and `open_bank_transaction_exception`
-                is bank-bound and owner/accountant. Promising "פתיחת חריג" here would have built the
-                exact thing this task removes. See OPEN-DECISIONS #116. */}
+            {/* #116, decided 09.08.2026 — G1 left this paragraph action-less because no manual
+                exception command existed and promising one would have lied. The command exists
+                now (open_manual_exception, 0087), owner/office only: they get the button, and
+                kitchen — the role actually standing at the truck — gets the true next step
+                (report to them) instead of a control that would refuse on submit. */}
             {data.delivered.unmatched.length > 0 && (
               <div>
                 שורות בתעודה שלא זוהו במחירון הספק ולכן לא מולאו: {data.delivered.unmatched.join(', ')}.
                 <span className="block mt-1">
                   פריט שהגיע ואינו בהזמנה אינו יכול להתווסף לקבלה הזו — הקבלה נשמרת מול שורות ההזמנה בלבד.
-                  יש לרשום את הפער בהערה של שורה קרובה ולעדכן את מנהל הרכש; אין כרגע פעולה במסך שפותחת חריג לפריט שלא הוזמן.
+                  {canOpenException
+                    ? ' אפשר לפתוח חריג לבירור — הוא יופיע במסך החריגים בשיוך למנהל הרכש.'
+                    : ' יש לרשום את הפער בהערה של שורה קרובה ולעדכן את מנהל הרכש — פתיחת חריג לבירור זמינה למנהל ולמנהל הרכש בלבד.'}
                 </span>
+                {canOpenException && (
+                  <button className="btn-secondary mt-2" onClick={() => setExceptionOpen(true)}>
+                    פתיחת חריג לבירור
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -874,9 +887,11 @@ export function ReceiveOrder() {
 
       <label className="flex items-center gap-2 text-sm text-ink-mid px-1">
         <input type="checkbox" className="rounded" checked={openCredits} onChange={(e) => setOpenCredits(e.target.checked)} />
-        פתיחת דרישות זיכוי אוטומטית לחוסרי כמות בלבד
+        פתיחת דרישות זיכוי אוטומטית לחוסרים, לפריטים פגומים ולהחזרות
       </label>
-      <p className="px-1 text-xs text-ink-muted">פריטים פגומים או שהוחזרו אינם נספרים כאספקה תקינה, והטיפול הכספי בהם נשאר ידני עד להכרעה עסקית.</p>
+      {/* #49, decided 09.08.2026: damaged/returned joined the same automation (0087). The
+          credit is the full unusable quantity at the order's snapshot price. */}
+      <p className="px-1 text-xs text-ink-muted">פריט פגום או שהוחזר אינו נספר כאספקה תקינה; כשהתיבה מסומנת נפתחת עליו דרישת זיכוי אוטומטית לפי מחיר ההזמנה.</p>
       {/* sticky action bar */}
       <div className="phone-taskbar fixed inset-x-0 lg:ms-60 bg-surface border-t border-line p-3 flex gap-2 z-30">
         {busy && <span className="sr-only" role="status" aria-live="polite">שומר את הקבלה</span>}
@@ -899,8 +914,30 @@ export function ReceiveOrder() {
       <ReceiptConflictDialog conflict={conflict} busy={busy}
         onClose={() => setConflict(null)}
         onResolve={(resolution) => void resolveConflict(resolution)} />
+
+      <ConfirmDialog open={exceptionOpen} onClose={() => setExceptionOpen(false)}
+        onConfirm={(reason) => void openManualException(reason ?? '')}
+        title="פתיחת חריג לבירור"
+        message={`ייפתח חריג "פריט שלא הוזמן" על הזמנה #${order?.number ?? ''}. הוא יופיע במסך החריגים בשיוך למנהל הרכש.`}
+        confirmLabel="פתיחת חריג" requireReason busy={exceptionBusy} />
     </div>
   );
+
+  async function openManualException(reason: string) {
+    setExceptionBusy(true);
+    const res = await supabase.rpc('open_manual_exception', {
+      p_entity_type: 'purchase_orders',
+      p_entity_id: orderId,
+      p_type: 'item_not_ordered',
+      p_reason: reason,
+    });
+    setExceptionBusy(false);
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    setExceptionOpen(false);
+    toast((res.data as { idempotent?: boolean } | null)?.idempotent
+      ? 'כבר קיים חריג פתוח על ההזמנה הזו — לא נפתח חריג כפול'
+      : 'החריג נפתח ויופיע במסך החריגים');
+  }
 }
 
 /** The exact `p_lines` array the RPC takes, from the screen's line state. */

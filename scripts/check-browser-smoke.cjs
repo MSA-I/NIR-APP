@@ -189,7 +189,7 @@ async function auditAccessibility(page, scope) {
       .filter(visible).filter((element) => !accessibleName(element)).map(selector);
     const ids = [...document.querySelectorAll('[id]')].map((element) => element.id);
     const duplicateIds = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
-    const main = document.querySelector('#main');
+    const main = document.querySelector('#main, main');
     return {
       lang: document.documentElement.lang,
       dir: document.documentElement.dir,
@@ -551,7 +551,9 @@ async function quickActionsContract(browser) {
     const menu = desktopPage.getByRole('menu', { name: 'פעולות מהירות' });
     await menu.waitFor();
     const items = menu.getByRole('menuitem');
-    assert.deepEqual((await items.allTextContents()).map((label) => label.trim()), roleLabels.owner,
+    const desktopLabels = ['הזמנה חדשה', 'צילום מסמך', 'חשבונית חדשה'];
+    const desktopTargets = ['/orders/new?fresh=1', null, '/invoices/new'];
+    assert.deepEqual((await items.allTextContents()).map((label) => label.trim()), desktopLabels,
       'desktop speed-dial labels or order changed');
     const targets = await items.evaluateAll((nodes) => nodes.map((node) => {
       const href = node.getAttribute('href');
@@ -559,7 +561,7 @@ async function quickActionsContract(browser) {
       const url = new URL(href, window.location.origin);
       return `${url.pathname}${url.search}`;
     }));
-    assert.deepEqual(targets, roleTargets.owner, 'desktop speed-dial destinations or order changed');
+    assert.deepEqual(targets, desktopTargets, 'desktop speed-dial destinations or order changed');
     assert(await items.first().evaluate((node) => document.activeElement === node), 'desktop speed-dial first action did not receive focus');
     await desktopPage.keyboard.press('ArrowDown');
     assert(await items.nth(1).evaluate((node) => document.activeElement === node), 'ArrowDown did not advance in desktop speed-dial');
@@ -613,10 +615,11 @@ async function quickActionsContract(browser) {
     await settle(desktopPage);
     const receivingTrigger = desktopPage.locator('.speed-dial-trigger');
     await receivingTrigger.click();
-    await desktopPage.getByRole('menuitem', { name: 'מרכז הבקרה' }).click();
-    await desktopPage.waitForURL((url) => url.pathname === '/dashboard');
+    await desktopPage.getByRole('menuitem', { name: 'הזמנה חדשה' }).click();
+    await desktopPage.waitForURL((url) => url.pathname === '/orders/new');
     assert.equal(await desktopPage.getByRole('menu').count(), 0, 'desktop speed-dial stayed open after link navigation');
-    assert.equal(await receivingTrigger.getAttribute('aria-expanded'), 'false', 'desktop link navigation did not reset expanded state');
+    await desktopPage.locator('.speed-dial-trigger').waitFor({ state: 'detached' });
+    assert.equal(await desktopPage.locator('.speed-dial-trigger').count(), 0, 'desktop speed-dial remained on a focus route');
   } finally {
     await closeContext(desktop);
   }
@@ -714,8 +717,8 @@ async function dashboardAndDialogs(browser) {
     await settle(page);
     const dataHeadings = page.locator('#main .dash-enter h2');
     await dataHeadings.first().waitFor();
-    assert((await dataHeadings.first().innerText()).includes('אספקות היום ומחר'), 'dashboard does not begin with the deliveries card');
-    assert((await dataHeadings.nth(1).innerText()).includes('דורש טיפול'), 'attention zone is not second, after the deliveries card');
+    assert((await dataHeadings.first().innerText()).includes('דורש טיפול'), 'dashboard does not begin with the attention briefing');
+    assert((await dataHeadings.nth(1).innerText()).includes('אספקות היום ומחר'), 'deliveries are not second, after the attention briefing');
     assert.equal(await page.locator('.speed-dial-trigger').count(), 1, 'dashboard desktop speed-dial missing');
     const contrast = await assertKeyContrast(page);
     await page.screenshot({ path: path.join(outDir, 'dashboard-1440.png'), fullPage: true });
@@ -758,6 +761,57 @@ async function dashboardAndDialogs(browser) {
     assert(await supplierButton.evaluate((node) => document.activeElement === node), 'supplier dialog did not restore focus');
 
     report.accessibility.push({ scope: 'key-contrast', samples: contrast });
+  } finally {
+    await closeContext(context);
+  }
+}
+
+async function goldenScreens(browser) {
+  const loginContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
+  const loginPage = await loginContext.newPage();
+  captureConsole(loginPage, 'golden:login');
+  try {
+    await loginPage.goto(`${baseURL}/login`);
+    await loginPage.getByRole('heading', { name: 'SupplyFlow' }).waitFor();
+    for (const [label, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844]]) {
+      await loginPage.setViewportSize({ width, height });
+      await auditAccessibility(loginPage, `golden:login:${label}`);
+      const fileName = `golden-01-login-${label}.png`;
+      await loginPage.screenshot({ path: path.join(outDir, fileName) });
+      report.screenshots.push(fileName);
+    }
+  } finally {
+    await closeContext(loginContext);
+  }
+
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  captureConsole(page, 'golden:product');
+  const screens = [
+    ['02-dashboard', '/dashboard'],
+    ['03-suppliers', '/suppliers'],
+    ['04-supplier-detail', '/suppliers/aa000000-0000-4000-8000-000000000001'],
+    ['05-orders', '/orders'],
+    ['06-order-detail', '/orders/f0000000-0000-4000-8000-000000000011'],
+    ['07-receiving', '/receiving'],
+    ['08-invoices', '/invoices'],
+    ['09-invoice-detail', '/invoices/f4000000-0000-4000-8000-000000000010'],
+    ['10-documents', '/documents'],
+  ];
+  try {
+    await login(page, 'owner');
+    for (const [slug, route] of screens) {
+      for (const [label, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844]]) {
+        await page.setViewportSize({ width, height });
+        await page.goto(`${baseURL}${route}`);
+        await settle(page);
+        await page.waitForFunction(() => !document.querySelector('#main .animate-pulse'), null, { timeout: 25_000 });
+        await auditAccessibility(page, `golden:${slug}:${label}`);
+        const fileName = `golden-${slug}-${label}.png`;
+        await page.screenshot({ path: path.join(outDir, fileName) });
+        report.screenshots.push(fileName);
+      }
+    }
   } finally {
     await closeContext(context);
   }
@@ -1022,6 +1076,11 @@ async function offlineReceiving(browser) {
     assert.equal(queued.queue.length, 1, 'the receipt was not queued on the device');
     assert.equal(queued.queue[0].receiptId, persistedKey,
       'the queued payload does not carry the key persisted at draft creation');
+    const toast = page.locator('.mobile-toast-offset [role]').first();
+    await toast.waitFor();
+    const [toastBox, taskbarBox] = await Promise.all([toast.boundingBox(), page.locator('.phone-taskbar').boundingBox()]);
+    assert(toastBox && taskbarBox && toastBox.y + toastBox.height <= taskbarBox.y,
+      `offline feedback covers receiving actions: toast=${JSON.stringify(toastBox)} taskbar=${JSON.stringify(taskbarBox)}`);
     await page.screenshot({ path: path.join(outDir, 'receiving-offline-390.png'), fullPage: true });
     report.screenshots.push('receiving-offline-390.png');
 
@@ -1161,20 +1220,36 @@ async function orderSupplierComparison(browser) {
   const page = await context.newPage();
   captureConsole(page, 'order-split-journey', [/finalize_purchase_request_draft/, /draft_price_changed/]);
   const product = 'לחמניות המבורגר (ארגז 48)';
+  const ownerAuth = await fetch(`${apiURL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { apikey: serviceRoleKey, 'content-type': 'application/json' },
+    body: JSON.stringify(credentials('owner')),
+  });
+  assert(ownerAuth.ok, `quality owner authentication failed with HTTP ${ownerAuth.status}`);
+  const ownerToken = (await ownerAuth.json()).access_token;
+  const offerResponse = await fetch(`${apiURL}/rest/v1/supplier_products?select=id,price_effective_date,available&supplier_id=eq.aa000000-0000-4000-8000-000000000004&product_id=eq.bb000000-0000-4000-8000-000000000009`, {
+    headers: { apikey: serviceRoleKey, authorization: `Bearer ${serviceRoleKey}` },
+  });
+  assert(offerResponse.ok, `quality supplier offer lookup failed with HTTP ${offerResponse.status}`);
+  const [offer] = await offerResponse.json();
+  assert(offer, 'quality supplier offer lookup did not match the seeded offer');
   const qualitySupplierPrice = async (price) => {
-    const response = await fetch(`${apiURL}/rest/v1/supplier_products?supplier_id=eq.aa000000-0000-4000-8000-000000000004&product_id=eq.bb000000-0000-4000-8000-000000000009`, {
-      method: 'PATCH',
+    const response = await fetch(`${apiURL}/rest/v1/rpc/set_supplier_product_price`, {
+      method: 'POST',
       headers: {
         apikey: serviceRoleKey,
-        authorization: `Bearer ${serviceRoleKey}`,
+        authorization: `Bearer ${ownerToken}`,
         'content-type': 'application/json',
-        prefer: 'return=representation',
       },
-      body: JSON.stringify({ current_price: price }),
+      body: JSON.stringify({
+        p_supplier_product_id: offer.id,
+        p_price: price,
+        p_effective_date: offer.price_effective_date,
+        p_available: offer.available,
+        p_reason: 'בדיקת איכות אוטומטית של שינוי מחיר בטיוטה',
+      }),
     });
-    assert(response.ok, `quality price update failed with HTTP ${response.status}`);
-    const rows = await response.json();
-    assert.equal(rows.length, 1, 'quality price update did not match the seeded supplier offer');
+    assert(response.ok, `quality price update failed with HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
   };
   const waitForDraftSave = () => page.waitForResponse((response) =>
     response.request().method() === 'POST'
@@ -2206,8 +2281,7 @@ function readSidebar(nav) {
     return {
       section: first && !first.querySelector('a') ? (first.textContent || '').trim() : '',
       items: [...group.querySelectorAll('a')].map((link) => ({
-        label: [...link.childNodes].filter((child) => child.nodeType === 3)
-          .map((child) => child.textContent).join('').trim(),
+        label: (link.querySelector('span')?.textContent || '').trim(),
         path: new URL(link.href).pathname,
         current: link.getAttribute('aria-current'),
       })),
@@ -2250,31 +2324,27 @@ async function navigationOrderAndActiveState(browser) {
     );
     assert.equal(groups[0].section, '', 'the control centre was pushed under a group header');
 
-    // The מסמכים group exists, holds both document routes in order, and sits ahead of the ledgers
-    // it feeds. Asserting the whole header list rather than "contains מסמכים" is what makes a
-    // reordering visible instead of a group merely surviving somewhere.
+    // Daily work stays visible. Management and control remain available without making all of
+    // their modules compete with the daily routes.
     const sections = groups.map((group) => group.section);
-    assert.deepEqual(sections, ['', 'מסמכים', 'רכש', 'כספים', 'בקרה'],
+    assert.deepEqual(sections, ['', 'ניהול', 'בקרה'],
       `wrong sidebar groups or group order: ${JSON.stringify(sections)}`);
-    assert.deepEqual(groups[1].items.map((item) => `${item.label} · ${item.path}`),
-      ['תיקיית המסמכים · /documents', 'ארכיון · /documents/archive'],
-      `wrong contents for the מסמכים group: ${JSON.stringify(groups[1].items)}`);
-
-    // A2. `end` on /documents is the whole fix, and this is the assertion jsdom could not settle:
-    // exactly ONE element in the document claims to be the page the user is on.
-    assert.deepEqual(links.filter((item) => item.current === 'page').map((item) => item.path),
-      ['/documents/archive'],
-      `wrong active navigation item on /documents/archive: ${JSON.stringify(links.filter((item) => item.current))}`);
-    assert.equal(await page.locator('[aria-current="page"]').count(), 1,
-      'more than one element on /documents/archive claims to be the current page');
+    assert.deepEqual(groups[0].items.map((item) => item.path),
+      ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
+      `wrong owner daily navigation: ${JSON.stringify(groups[0].items)}`);
+    assert.equal(links.some((item) => item.path === '/documents/archive'), false,
+      'the low-frequency archive still competes in the main navigation');
+    assert.equal(await sidebar.locator('details[open]').count(), 0,
+      'a low-frequency navigation group opened without containing the current route');
+    assert.equal(links.filter((item) => item.current === 'page').length, 0,
+      'the archive incorrectly marked a different sidebar destination as current');
 
     await auditAccessibility(page, 'documents-archive/1440');
     await page.screenshot({ path: path.join(outDir, 'navigation-archive-1440.png') });
     report.screenshots.push('navigation-archive-1440.png');
 
-    // The drawer renders the same tree at phone width, and it is where two current items would do
-    // visible harm: useDialogLayer's initialFocus queries for exactly this attribute, so a second
-    // match would open the menu on the wrong link.
+    // The restored mobile action bar is a shortcut surface, not the navigation contract. Keep
+    // every authorised destination in the drawer so the hamburger remains complete on its own.
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(100);
     await page.getByRole('button', { name: 'פתיחת תפריט' }).click();
@@ -2282,20 +2352,17 @@ async function navigationOrderAndActiveState(browser) {
     await drawer.waitFor();
     const drawerGroups = await readSidebar(drawer.locator('nav'));
     const drawerLinks = drawerGroups.flatMap((group) => group.items);
-    assert.equal(drawerLinks[0] && drawerLinks[0].label, 'מרכז הבקרה',
-      `the drawer does not open on the control centre either: ${JSON.stringify(drawerLinks.slice(0, 2))}`);
-    assert.deepEqual(drawerGroups.map((group) => group.section), ['', 'מסמכים', 'רכש', 'כספים', 'בקרה'],
-      'the drawer renders different groups than the desktop sidebar');
-    assert.equal(await drawer.locator('[aria-current="page"]').count(), 1,
-      'the drawer marks more than one item as the current page');
-    // Waited for rather than sampled: initialFocus lands after the layer mounts, and a race here
-    // would be a flake in the check rather than a fault in the shell.
+    assert.deepEqual(drawerGroups.map((group) => group.section), ['', 'ניהול', 'בקרה'],
+      'the drawer renders different progressive-disclosure groups than the desktop sidebar');
+    assert.deepEqual(drawerGroups[0].items.map((item) => item.path),
+      ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
+      `the drawer omitted an authorised daily destination: ${JSON.stringify(drawerLinks)}`);
+    assert.equal(await drawer.locator('[aria-current="page"]').count(), 0,
+      'the archive incorrectly marked a different drawer destination as current');
     await page.waitForFunction(() => {
       const active = document.activeElement;
-      return !!active && active.getAttribute('aria-current') === 'page';
-    }, null, { timeout: 5_000 }).catch(() => { throw new Error('the drawer did not open with the current page focused'); });
-    assert.equal(await page.evaluate(() => new URL(document.activeElement.href).pathname), '/documents/archive',
-      'the drawer opened focused on the wrong navigation item');
+      return !!active && active.getAttribute('aria-label') === 'סגירת תפריט';
+    }, null, { timeout: 5_000 }).catch(() => { throw new Error('the drawer did not open on its safe close action'); });
     await page.screenshot({ path: path.join(outDir, 'navigation-drawer-390.png') });
     report.screenshots.push('navigation-drawer-390.png');
   } finally {
@@ -2666,6 +2733,280 @@ async function machineFiledDocument(browser) {
   }
 }
 
+/**
+ * Package 5 (#101 / DEBT-REGISTER §2, closed 09.08.2026) — an offline reload keeps the app.
+ *
+ * The one scenario that runs WITHOUT serviceWorkers:'block', because the worker IS the thing
+ * under test: load /login, wait until the worker CONTROLS the page, prove every same-origin
+ * resource named by the cached HTML is present, cut the page target's network through CDP, then
+ * reload. Page-target emulation matters: Playwright's BrowserContext-wide offline switch bypasses
+ * Service Worker fetch dispatch in system Chromium and would test the harness rather than the PWA.
+ * Data endpoints remain uncached, so expected offline noise is network failures — never a blank page.
+ */
+async function offlineShellReload(browser) {
+  const context = await browser.newContext({ locale: 'he-IL', viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  captureConsole(page, 'offline-shell-reload', [
+    /ERR_INTERNET_DISCONNECTED/, /ERR_NAME_NOT_RESOLVED/, /ERR_FAILED/, /ERR_CONNECTION/,
+    /Failed to fetch/, /NetworkError/, /net::/, /TypeError: Failed/,
+  ]);
+  try {
+    await page.goto(`${baseURL}/login`);
+    await page.waitForFunction(
+      () => 'serviceWorker' in navigator && !!navigator.serviceWorker.controller,
+      null, { timeout: 30_000 },
+    ).catch(() => { throw new Error('the service worker never took control — precache cannot be proven'); });
+
+    const cacheProof = await page.evaluate(async () => {
+      const cacheName = (await caches.keys()).find((name) => name.startsWith('supplyflow-shell-'));
+      if (!cacheName) return { cacheName: null, missing: ['index.html'] };
+      const cache = await caches.open(cacheName);
+      const index = await cache.match('/index.html');
+      if (!index) return { cacheName, missing: ['index.html'] };
+      const document = new DOMParser().parseFromString(await index.text(), 'text/html');
+      const paths = [...document.querySelectorAll('script[src], link[href]')]
+        .map((element) => element.getAttribute('src') || element.getAttribute('href'))
+        .filter(Boolean)
+        .map((value) => new URL(value, location.origin))
+        .filter((url) => url.origin === location.origin)
+        .map((url) => url.pathname);
+      const missing = [];
+      for (const resourcePath of [...new Set(paths)]) {
+        if (!(await cache.match(resourcePath))) missing.push(resourcePath);
+      }
+      return { cacheName, missing };
+    });
+    assert(cacheProof.cacheName, 'the activated worker created no versioned shell cache');
+    assert.deepEqual(cacheProof.missing, [], `the cached HTML depends on uncached shell resources: ${cacheProof.missing.join(', ')}`);
+
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Network.enable');
+    try {
+      await cdp.send('Network.emulateNetworkConditions', {
+        offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0,
+      });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.locator('#email').waitFor({ state: 'visible', timeout: 20_000 });
+      await page.locator('#password').waitFor({ state: 'visible', timeout: 5_000 });
+      await page.screenshot({ path: path.join(outDir, 'offline-shell-390.png') });
+      report.screenshots.push('offline-shell-390.png');
+    } finally {
+      await cdp.send('Network.emulateNetworkConditions', {
+        offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1,
+      }).catch(() => {});
+      await cdp.detach().catch(() => {});
+    }
+  } finally {
+    await closeContext(context);
+  }
+}
+
+/**
+ * Package 2 (decisions #49 + #116, 09.08.2026) — the receiving screen's two new affordances,
+ * asserted per role, with the same route-mock shape receivingAccessibility uses.
+ *
+ * Three parts: (A) kitchen with a delivery note sees the unordered-item guidance and NO
+ * exception button — the command is owner/office, and a control that refuses on submit is the
+ * screen-shape DEAD-ENDS-AUDIT exists to prevent; (B) kitchen completing a receipt with a
+ * damaged line sends p_open_credits=true and the damaged status in the payload — the DB half
+ * (the credit rows themselves) is proven in p1_financial_commands.sql against the real
+ * function; (C) office gets the button, and confirming the reasoned dialog posts
+ * open_manual_exception with item_not_ordered and the typed reason, verbatim.
+ */
+async function receivingDecisionsContract(browser) {
+  const order = {
+    id: 'p4-d2-order', org_id: 'p4-ui-org', supplier_id: 'p4-d2-supplier', number: 9002,
+    status: 'confirmed', order_date: '2026-08-01', expected_date: '2026-08-03', total_amount: 120,
+    created_at: '2026-08-01T08:00:00Z',
+    notes: null, supplier: { id: 'p4-d2-supplier', name: 'ספק בדיקת החלטות' },
+    items: [{
+      id: 'p4-d2-item', org_id: 'p4-ui-org', order_id: 'p4-d2-order', product_id: 'p4-d2-product',
+      qty: 10, received_qty: 2, unit_price: 12,
+      product: { name: 'מוצר בדיקת החלטות', unit: 'יחידה', sku: null, barcode: null },
+    }],
+  };
+  const interpretation = {
+    payload: { line_items: [{ source_row: 3, values: { description: 'ארגז שלא הוזמן', quantity: 3 } }] },
+    suggested_supplier_id: null,
+  };
+  const routeOrder = (context) => Promise.all([
+    context.route('**/rest/v1/purchase_orders?**', (route) => {
+      const url = new URL(route.request().url());
+      const detail = (url.searchParams.get('id') || '') === 'eq.p4-d2-order';
+      return route.fulfill({ status: 200, headers: jsonHeaders, json: detail ? order : [order] });
+    }),
+    context.route('**/rest/v1/goods_receipts?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: null })),
+    context.route('**/rest/v1/document_interpretations?**', (route) =>
+      route.fulfill({ status: 200, headers: jsonHeaders, json: interpretation })),
+    context.route('**/rest/v1/supplier_products?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] })),
+  ]);
+
+  // (A) + (B) — kitchen
+  const kitchenContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+  const kitchenPage = await kitchenContext.newPage();
+  captureConsole(kitchenPage, 'receiving-decisions-kitchen');
+  const savePayloads = [];
+  try {
+    await login(kitchenPage, 'kitchen');
+    await routeOrder(kitchenContext);
+    await kitchenContext.route('**/rest/v1/rpc/save_goods_receipt', (route) => {
+      savePayloads.push(route.request().postDataJSON());
+      return route.fulfill({ status: 200, headers: jsonHeaders, json: { receipt_id: 'a0000000-0000-4000-8000-000000000002' } });
+    });
+
+    await kitchenPage.goto(`${baseURL}/receiving/p4-d2-order?document=p4-d2-doc`);
+    await settle(kitchenPage);
+    await kitchenPage.getByText('שורות בתעודה שלא זוהו במחירון הספק').waitFor();
+    await kitchenPage.getByText('פתיחת חריג לבירור זמינה למנהל ולמנהל הרכש בלבד').waitFor();
+    assert.equal(await kitchenPage.getByRole('button', { name: 'פתיחת חריג לבירור', exact: true }).count(), 0,
+      'kitchen was offered an exception button the server would refuse');
+    await kitchenPage.getByText('פתיחת דרישות זיכוי אוטומטית לחוסרים, לפריטים פגומים ולהחזרות').waitFor();
+
+    // (B) — no document param: the same flow receivingAccessibility proves, plus the damaged line.
+    await kitchenPage.goto(`${baseURL}/receiving/p4-d2-order`);
+    await settle(kitchenPage);
+    await kitchenPage.getByRole('button', { name: 'פגום עבור מוצר בדיקת החלטות' }).click();
+    await kitchenPage.getByRole('button', { name: /סיום קבלה/ }).click();
+    await kitchenPage.getByRole('heading', { name: 'הקבלה נשמרה!' }).waitFor();
+    const completion = savePayloads.find((p) => p.p_complete === true);
+    assert(completion, 'no completing save_goods_receipt call was captured');
+    assert.equal(completion.p_open_credits, true, 'the damaged receipt did not ask for automatic credits');
+    assert(completion.p_lines.some((line) => line.status === 'damaged'),
+      'the damaged line did not reach the payload as damaged');
+  } finally {
+    await closeContext(kitchenContext);
+  }
+
+  // (C) — office
+  const officeContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block' });
+  const officePage = await officeContext.newPage();
+  captureConsole(officePage, 'receiving-decisions-office');
+  const exceptionCalls = [];
+  try {
+    await login(officePage, 'office');
+    await routeOrder(officeContext);
+    await officeContext.route('**/rest/v1/rpc/open_manual_exception', (route) => {
+      exceptionCalls.push(route.request().postDataJSON());
+      return route.fulfill({ status: 200, headers: jsonHeaders, json: { exception_id: 'e0000000-0000-4000-8000-000000000001', idempotent: false } });
+    });
+
+    await officePage.goto(`${baseURL}/receiving/p4-d2-order?document=p4-d2-doc`);
+    await settle(officePage);
+    await officePage.getByRole('button', { name: 'פתיחת חריג לבירור', exact: true }).click();
+    const dialog = officePage.locator('[role="dialog"]');
+    await dialog.waitFor();
+    await dialog.locator('textarea').fill('הגיע ארגז שלא הוזמן — נדרש בירור מול הספק');
+    await dialog.getByRole('button', { name: 'פתיחת חריג', exact: true }).click();
+    await officePage.getByText('החריג נפתח ויופיע במסך החריגים').waitFor({ timeout: 10_000 });
+    assert.equal(exceptionCalls.length, 1, `open_manual_exception was called ${exceptionCalls.length} times`);
+    assert.equal(exceptionCalls[0].p_type, 'item_not_ordered', 'the manual exception did not use the honest type');
+    assert.equal(exceptionCalls[0].p_entity_type, 'purchase_orders', 'the manual exception named the wrong entity type');
+    assert.equal(exceptionCalls[0].p_entity_id, 'p4-d2-order', 'the manual exception named the wrong entity');
+    assert.equal(exceptionCalls[0].p_reason, 'הגיע ארגז שלא הוזמן — נדרש בירור מול הספק',
+      'the operator reason did not reach the server verbatim');
+  } finally {
+    await closeContext(officeContext);
+  }
+}
+
+/**
+ * Package 1 (OPEN-DECISIONS #114) — the password-recovery path, end to end minus the mailbox.
+ *
+ * Part 1 proves the app's half of /forgot-password: the form reaches /auth/v1/recover with the
+ * typed address and a redirect_to aimed at /reset-password. That response is stubbed, because the
+ * isolated stack has no mailbox — GoTrue's half is proven in part 2, which follows a REAL
+ * recovery link: GoTrue itself mints it (admin generate_link — the same token the email would
+ * carry), the browser lands on /reset-password exactly as a mail client would, sets a new
+ * password through the form, and the new password must then open the app from a cold login.
+ * The kitchen password is restored through the admin API in `finally`, so later scenarios keep
+ * their credentials no matter where this one stops.
+ */
+async function passwordRecovery(browser) {
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block' });
+  const page = await context.newPage();
+  captureConsole(page, 'password-recovery');
+  const account = credentials('kitchen');
+  const newPassword = `P4!${passwordSeed}-kitchen-changed-9`;
+  const adminHeaders = {
+    apikey: serviceRoleKey,
+    authorization: `Bearer ${serviceRoleKey}`,
+    'content-type': 'application/json',
+  };
+  let userId = null;
+  let passwordChanged = false;
+  try {
+    // ---- part 1: the form's half of the contract
+    let recover = null;
+    await page.route('**/auth/v1/recover*', async (route) => {
+      recover = { url: route.request().url(), body: JSON.parse(route.request().postData() || '{}') };
+      await route.fulfill({ status: 200, headers: jsonHeaders, body: '{}' });
+    });
+    await page.goto(`${baseURL}/login`);
+    await page.getByRole('link', { name: 'שכחתי סיסמה' }).click();
+    await page.waitForFunction(() => location.pathname === '/forgot-password', null, { timeout: 15_000 });
+    await page.locator('#email').fill(account.email);
+    await page.getByRole('button', { name: 'שליחת קישור איפוס' }).click();
+    await page.getByText('אם הכתובת רשומה במערכת').waitFor({ timeout: 10_000 });
+    assert(recover, 'no /auth/v1/recover request was issued');
+    assert.equal(recover.body.email, account.email, 'recover did not carry the typed address');
+    assert((recover.url + JSON.stringify(recover.body)).includes('reset-password'),
+      'recover did not aim its redirect at /reset-password');
+    await page.unroute('**/auth/v1/recover*');
+
+    // ---- part 2: a real GoTrue recovery link, followed like a mail client would
+    const linkRes = await fetch(`${apiURL}/auth/v1/admin/generate_link`, {
+      method: 'POST', headers: adminHeaders,
+      body: JSON.stringify({ type: 'recovery', email: account.email, redirect_to: `${baseURL}/reset-password` }),
+    });
+    assert.equal(linkRes.status, 200, `admin generate_link answered HTTP ${linkRes.status}`);
+    const link = await linkRes.json();
+    const actionLink = link.action_link || (link.properties && link.properties.action_link);
+    userId = link.id || (link.user && link.user.id) || null;
+    assert(actionLink, 'generate_link returned no action_link');
+    assert(userId, 'generate_link did not name the user id (needed to restore the password)');
+    assert.equal(new URL(actionLink).searchParams.get('redirect_to'), `${baseURL}/reset-password`,
+      'GoTrue did not accept the preview redirect_to — check additional_redirect_urls in supabase/config.toml');
+
+    await page.goto(actionLink);
+    await page.waitForFunction(() => location.pathname === '/reset-password', null, { timeout: 15_000 });
+    await page.locator('#reset-password-new').fill(newPassword);
+    await page.locator('#reset-password-confirm').fill(newPassword);
+    await page.getByRole('button', { name: 'החלפת סיסמה' }).click();
+    await page.getByText('הסיסמה הוחלפה').waitFor({ timeout: 15_000 });
+    passwordChanged = true;
+    await page.getByRole('button', { name: 'מעבר למערכת' }).click();
+    await page.waitForFunction((expected) => location.pathname === expected, homes.kitchen, { timeout: 25_000 });
+    await page.locator('#main').waitFor({ state: 'visible', timeout: 25_000 });
+    await page.screenshot({ path: path.join(outDir, 'password-recovery-done.png') });
+    report.screenshots.push('password-recovery-done.png');
+
+    // The credential itself, from a cold login — not merely the recovery session.
+    const coldContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block' });
+    const coldPage = await coldContext.newPage();
+    captureConsole(coldPage, 'password-recovery-cold-login');
+    try {
+      await coldPage.goto(`${baseURL}/login`);
+      await coldPage.locator('#email').fill(account.email);
+      await coldPage.locator('#password').fill(newPassword);
+      await coldPage.getByRole('button', { name: 'התחברות' }).click();
+      await coldPage.waitForFunction((expected) => location.pathname === expected, homes.kitchen, { timeout: 25_000 });
+    } finally {
+      await closeContext(coldContext);
+    }
+  } finally {
+    // Restore no matter where the scenario stopped: later scenarios log in as kitchen.
+    if (userId && passwordChanged) {
+      const restore = await fetch(`${apiURL}/auth/v1/admin/users/${userId}`, {
+        method: 'PUT', headers: adminHeaders, body: JSON.stringify({ password: account.password }),
+      });
+      if (restore.status !== 200) {
+        report.failures.push({ name: 'password recovery cleanup', message: `password restore answered HTTP ${restore.status}` });
+      }
+    }
+    await closeContext(context);
+  }
+}
+
 async function run(name, check) {
   if (process.env.QUALITY_ONLY && !name.includes(process.env.QUALITY_ONLY)) {
     const reason = `QUALITY_ONLY=${process.env.QUALITY_ONLY}`;
@@ -2691,6 +3032,7 @@ async function run(name, check) {
     await run('mobile action bar and desktop speed-dial contract', () => quickActionsContract(browser));
     await run('overlay stacking and breakpoint reset', () => overlayStacking(browser));
     await run('dashboard, quick actions and dialogs', () => dashboardAndDialogs(browser));
+    await run('golden screen visual baseline', () => goldenScreens(browser));
     await run('DataTable, ActionMenu, route focus and mobile search', () => tableKeyboardAndSearch(browser));
     await run('receiving contextual names and accessibility', () => receivingAccessibility(browser));
     await run('offline receiving queues once and keeps its key', () => offlineReceiving(browser));
@@ -2715,6 +3057,12 @@ async function run(name, check) {
     await run('navigation opens on the control centre and the archive is current alone', () => navigationOrderAndActiveState(browser));
     await run('documents speak human states and keep the numbers behind the disclosure', () => documentVocabulary(browser));
     await run('a machine-filed document names its author and can be undone', () => machineFiledDocument(browser));
+    await run('receiving speaks the #49/#116 decisions per role', () => receivingDecisionsContract(browser));
+    await run('an offline reload keeps the app shell', () => offlineShellReload(browser));
+    // Late on purpose: it rotates the kitchen password against the live GoTrue and restores it
+    // in `finally` — running it after the scenarios that log in as kitchen keeps a mid-scenario
+    // crash from cascading into theirs.
+    await run('forgotten password recovers by mail link and the new password signs in', () => passwordRecovery(browser));
     // Registered last on purpose: it is the only scenario that inserts a row into the live
     // database, and running it after everything else keeps that row out of every other check.
     await run('a supplier is created inside the price-list dialog', () => priceListSupplierDoor(browser));

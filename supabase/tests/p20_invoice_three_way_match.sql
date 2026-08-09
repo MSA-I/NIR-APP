@@ -1,5 +1,5 @@
 -- P20 -- Immutable invoice evidence, true PO/receipt/invoice matching and approval guard.
--- Runs against a freshly reset disposable local database after migration 0092.
+-- Runs against a freshly reset disposable local database after migration 0106.
 \set ON_ERROR_STOP on
 
 begin;
