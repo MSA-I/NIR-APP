@@ -2343,8 +2343,8 @@ async function navigationOrderAndActiveState(browser) {
     await page.screenshot({ path: path.join(outDir, 'navigation-archive-1440.png') });
     report.screenshots.push('navigation-archive-1440.png');
 
-    // The mobile drawer removes destinations already present in the bottom navigation, while
-    // keeping the same progressive-disclosure groups for the remaining routes.
+    // The restored mobile action bar is a shortcut surface, not the navigation contract. Keep
+    // every authorised destination in the drawer so the hamburger remains complete on its own.
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(100);
     await page.getByRole('button', { name: 'פתיחת תפריט' }).click();
@@ -2354,8 +2354,9 @@ async function navigationOrderAndActiveState(browser) {
     const drawerLinks = drawerGroups.flatMap((group) => group.items);
     assert.deepEqual(drawerGroups.map((group) => group.section), ['', 'ניהול', 'בקרה'],
       'the drawer renders different progressive-disclosure groups than the desktop sidebar');
-    assert.deepEqual(drawerGroups[0].items.map((item) => item.path), ['/receiving', '/documents', '/suppliers'],
-      `the drawer duplicated bottom navigation destinations: ${JSON.stringify(drawerLinks)}`);
+    assert.deepEqual(drawerGroups[0].items.map((item) => item.path),
+      ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
+      `the drawer omitted an authorised daily destination: ${JSON.stringify(drawerLinks)}`);
     assert.equal(await drawer.locator('[aria-current="page"]').count(), 0,
       'the archive incorrectly marked a different drawer destination as current');
     await page.waitForFunction(() => {
