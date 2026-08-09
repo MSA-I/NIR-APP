@@ -60,7 +60,9 @@ console/page/server ואפס overflow במסכים שנבדקו. הרצה רצו
 42 בדיקות viewport, ‏48 בדיקות נגישות, ‏62 screenshots, אפס failures ואפס console errors. ראיות:
 `C:\Users\art1\.codex\visualizations\2026\08\09\20260809-134919-p4-quality-gates`. ‏build ייצור
 מפורש נוסף עבר עם אותם 422 טסטים; PWA precache כולל 73 entries ‏(2492.05 KiB), ‏`git diff --check`
-עבר וה־clone נשאר נקי.
+עבר וה־clone נשאר נקי. ריצת GitHub הראשונה חשפה שה־workflow לא סיפק את שני משתני ה־Vite
+הפומביים; ‏`48baaa6` הוסיף placeholders לא־סודיים ל־CI בלבד. ‏`build-gate` ריצה
+`31311705692` הסתיימה `success` על GitHub עם אותו `npm run build` מלא.
 
 **ייצור:** לפני שינוי נשמר גיבוי JSON-פר-טבלה מאומת ב־
 `D:\משה פרוייקטים\פיתוח אתרים\NIR-APP-DOCS\backups\20260809-141952-pre-finished-product-0086-0089`:
@@ -102,16 +104,18 @@ offline shell עבר; ‏13 screenshots ודוח נשמרו ב־
 
 ---
 
-## חבילה 6 — CI מינימלי (09.08.2026) — הקובץ בריפו; מופעל בפוש הבא
+## חבילה 6 — CI מינימלי (09.08.2026) — פעיל ומאומת ב־GitHub
 
 **‏`.github/workflows/build.yml`:** ‏`npm run build` המלא על Linux (‏Node 24 — הסקריפטים מריצים
 TS ישירות) בכל push/PR ל-`main`; ‏npm cache מטפל גם ב-tarball של xlsx מה-CDN (נעול ב-integrity
 בלוק). ‏`npm run quality` **לא** הועבר — ‏Docker/SQL/Deno/דפדפן נשארים ריצה ידנית מתועדת.
 ‏`CLAUDE.md` עודכן ("אין CI" הוסר; נכתב במפורש מה מכוסה ומה לא).
 
-**מה עוד לא קרה, בכוונה:** הריפו לא נדחף ל-GitHub בסשן הזה — ‏Cloudflare Pages נפרס מ-`main`,
-ולכן push הוא אירוע פריסה ששייך לסוף הקמפיין, אחרי `npm run quality`. לכן שני סעיפי קבלה
-ממתינים לפוש: הוכחת "PR שבור נכשל" והגנת הענף (required status — הגדרת GitHub של הבעלים).
+**אימות חי:** הפוש הראשון הפעיל את ה־workflow וחשף כשל תצורה אמיתי: שלושה suites שטוענים את
+Supabase client נעצרו כי ל־runner לא היו `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`; ‏41 suites
+ו־378 בדיקות כבר עברו. ‏`48baaa6` הוסיף לערך ה־build placeholders ציבוריים, לא־סודיים ולא־נפרסים,
+והריצה `31311705692` הסתיימה `success` עם ‏44/44 קבצים ו־422/422 בדיקות. ‏quality המלא נשאר ידני
+כמתוכנן. הגנת ענף כ־required status היא עדיין הגדרת GitHub של הבעלים ולא שונתה בפריסה הזו.
 
 ---
 
