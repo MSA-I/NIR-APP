@@ -6,7 +6,7 @@ import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
 
 /**
- * Self-service password recovery (OPEN-DECISIONS #114, decided 08.08.2026).
+ * Self-service password recovery (OPEN-DECISIONS #114, decided 09.08.2026).
  *
  * The success sentence is identical whether or not the address is registered — a login screen
  * must not double as a member directory. This is not a mask over an error: Supabase Auth itself

@@ -85,7 +85,7 @@ export default function Credits() {
             <input type="month" className="input w-auto!" aria-label="סינון דרישות זיכוי לפי חודש" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} />
           </>
         }
-        /* #49, decided 08.08.2026 (package 2): damaged and returned lines joined the receipt
+        /* #49, decided 09.08.2026 (package 2): damaged and returned lines joined the receipt
            automation (0087), under the same checkbox the shortage credit uses. What still goes
            through the invoice is everything the receipt cannot know — wrong price, duplicate
            charge — so the subtitle names both routes for what they actually do. */

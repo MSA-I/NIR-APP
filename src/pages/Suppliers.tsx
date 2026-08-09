@@ -348,7 +348,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
             aria-describedby="supplier-status-hint">
             {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
-          {/* OPEN-DECISIONS #115, decided 08.08.2026 (owner delegated): `inactive` means
+          {/* OPEN-DECISIONS #115, decided 09.08.2026 (owner delegated): `inactive` means
               "לא להזמין ממנו יותר" — the procurement doors close (new order, price-list upload),
               the money doors stay open so an open account can still be settled. Deliberately NOT
               filtered: invoice intake, payment requests, bank matching, documents, analytics —

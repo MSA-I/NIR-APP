@@ -2734,7 +2734,7 @@ async function machineFiledDocument(browser) {
 }
 
 /**
- * Package 2 (decisions #49 + #116, 08.08.2026) — the receiving screen's two new affordances,
+ * Package 2 (decisions #49 + #116, 09.08.2026) — the receiving screen's two new affordances,
  * asserted per role, with the same route-mock shape receivingAccessibility uses.
  *
  * Three parts: (A) kitchen with a delivery note sees the unordered-item guidance and NO

@@ -1,4 +1,4 @@
--- Package 2 of the "finished product" campaign (owner decisions, 08.08.2026):
+-- Package 2 of the "finished product" campaign (owner decisions, 09.08.2026):
 --
 --   (1) OPEN-DECISIONS #49, decided: damaged/returned receipt lines open a credit request
 --       AUTOMATICALLY, under the same p_open_credits switch the shortage automation already
@@ -42,7 +42,7 @@ begin
     raise exception 'receipt_credit_injection: credit-count anchor not found exactly once';
   end if;
   v_inject := v_anchor
-    || v_eol || '      -- #49 (decided 08.08.2026): unusable delivery is credited automatically.'
+    || v_eol || '      -- #49 (decided 09.08.2026): unusable delivery is credited automatically.'
     || v_eol || '      -- Full quantity at the snapshot price; refinements are a later decision.'
     || v_eol || '      insert into credit_requests ('
     || v_eol || '        org_id, supplier_id, receipt_item_id, reason, amount,'
@@ -177,7 +177,7 @@ end
 $$;
 
 comment on function public.open_manual_exception(text, uuid, exception_type, text) is
-  'OPEN-DECISIONS #116 (decided 08.08.2026): the single reasoned door for a human-opened '
+  'OPEN-DECISIONS #116 (decided 09.08.2026): the single reasoned door for a human-opened '
   'exception. owner/office only; the browser holds no INSERT grant on exceptions (0036).';
 
 revoke all on function public.open_manual_exception(text, uuid, exception_type, text)

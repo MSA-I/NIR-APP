@@ -546,7 +546,7 @@ select pg_temp.p1_assert(
   (select received_qty = 0 from purchase_order_items where id = '71000000-0000-0000-0000-000000000002'),
   'returned quantity was counted as usable delivery'
 );
--- #49 (decided 08.08.2026): the returned line now opens its own credit at the snapshot
+-- #49 (decided 09.08.2026): the returned line now opens its own credit at the snapshot
 -- price (5 × 20 = 100) beside the shortage credit ((10 − 6) × 10 = 40).
 select pg_temp.p1_assert(
   (select count(*) = 2
@@ -588,7 +588,7 @@ exception when sqlstate 'P0001' then
 end
 $$;
 
--- Manual exceptions (#116, decided 08.08.2026): owner/office only, reasoned, entity-bound,
+-- Manual exceptions (#116, decided 09.08.2026): owner/office only, reasoned, entity-bound,
 -- idempotent per (entity, type) while one is still open.
 reset role;
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000003', true);

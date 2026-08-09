@@ -309,7 +309,7 @@ export function ReceiveOrder() {
   const { profile } = useAuth();
   const [lines, setLines] = useState<Record<string, LineState>>({});
   const [openCredits, setOpenCredits] = useState(true);
-  // #116 (decided 08.08.2026): a manual exception is an owner/office command. kitchen — the
+  // #116 (decided 09.08.2026): a manual exception is an owner/office command. kitchen — the
   // role that actually stands at the truck — reports to them; the sentence below says so.
   const canOpenException = !!profile && ['owner', 'office'].includes(profile.role);
   const [exceptionOpen, setExceptionOpen] = useState(false);
@@ -740,7 +740,7 @@ export function ReceiveOrder() {
                   הכמויות מולאו מתעודת המשלוח עבור <span className="num">{data.delivered.matchedQty.size}</span> פריטים.
                   שאר השורות נשארו בכמות שהוזמנה. בדוק מול הסחורה שהגיעה בפועל לפני שמירה.
                 </div>}
-            {/* #116, decided 08.08.2026 — G1 left this paragraph action-less because no manual
+            {/* #116, decided 09.08.2026 — G1 left this paragraph action-less because no manual
                 exception command existed and promising one would have lied. The command exists
                 now (open_manual_exception, 0087), owner/office only: they get the button, and
                 kitchen — the role actually standing at the truck — gets the true next step
@@ -822,7 +822,7 @@ export function ReceiveOrder() {
         <input type="checkbox" className="rounded" checked={openCredits} onChange={(e) => setOpenCredits(e.target.checked)} />
         פתיחת דרישות זיכוי אוטומטית לחוסרים, לפריטים פגומים ולהחזרות
       </label>
-      {/* #49, decided 08.08.2026: damaged/returned joined the same automation (0087). The
+      {/* #49, decided 09.08.2026: damaged/returned joined the same automation (0087). The
           credit is the full unusable quantity at the order's snapshot price. */}
       <p className="px-1 text-xs text-ink-muted">פריט פגום או שהוחזר אינו נספר כאספקה תקינה; כשהתיבה מסומנת נפתחת עליו דרישת זיכוי אוטומטית לפי מחיר ההזמנה.</p>
       {/* sticky action bar */}

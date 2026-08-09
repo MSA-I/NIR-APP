@@ -6,7 +6,7 @@
 import { supabase } from './supabase';
 import type { Invitation, InvitationStatus, Role } from './types';
 
-/** Roles an owner may invite. `supplier` joined on 08.08.2026 (OPEN-DECISIONS #17): the DB
+/** Roles an owner may invite. `supplier` joined on 09.08.2026 (OPEN-DECISIONS #17): the DB
  *  path has existed since 0025 — invitations.supplier_id plus the 3-arg create_invitation
  *  overload — and a supplier invitation must carry the supplier it binds to. */
 export const INVITABLE_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'];

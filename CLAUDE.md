@@ -47,13 +47,13 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   ‏`alerts · dashboard · orders · split · p2 · review · tokens · exemptions`.
   ‏`check:review` מריץ `node --test` על `src/components/document-review/model.test.ts` — ‏**22** בדיקות
   (‏`ℹ tests 22` בפלט; היה רשום כאן 16, התיישן ל-21 בגל 11, והתיישן שוב ל-22 בגלי 08.08 —
-  נמדד מחדש 08.08.2026 בריצת השער של חבילה 2).
+  נמדד מחדש 09.08.2026 בריצת השער של חבילה 2).
   ‏`check:tokens` אוכף את חוק הטוקנים של `DESIGN.md` — אפס מחלקות פלטה גולמיות ואפס הקסים ב-`.tsx`.
   ‏`check:exemptions` מצמיד את רשם חריגי ה-`SECURITY DEFINER`: הוא סופר **מטקסט המיגרציות** כמה
   חריגים נוספו ונוקזו מעל זרע `0057` (‏59) ודורש שההצמדה ב-`p9_five_domains.sql` תסכים. זו אותה
   טענה שכבר קיימת ב-p9 — במילישניות, במקום בדקה התשע-עשרה של שער בן עשרים דקות. **ארבעה גלים
   רצופים גילו אותה שם.**
-  ‏`npm run test` — ‏**389** בדיקות ב-**37** קבצים (נספר מפלט `vitest run`, ‏08.08.2026 אחה"צ).
+  ‏`npm run test` — ‏**389** בדיקות ב-**37** קבצים (נספר מפלט `vitest run`, ‏09.08.2026 אחה"צ).
   **אין ESLint ואין Prettier** בריפו, למרות הערות `eslint-disable` שנשארו ב-`src/lib/useQuery.ts`.
 - `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **27**
   סוויטות SQL, ‏**preflight עם 44 זרועות**, ‏`npm audit --audit-level=high`, חוזי Deno,
@@ -66,7 +66,7 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
     ב-`supabase/tests/` יש **28** קבצי `.sql`; ההפרש הוא `p1_preflight.sql`, שרץ דרך `Invoke-Preflight`.
   - **44 זרועות preflight** = ‏`select '<שם>'` ב-`p1_preflight.sql` (‏1 + ‏43 `union all select '`),
     ו-`Invoke-Preflight` **זורק** אם לא חזרו בדיוק 44 שורות.
-  - **32 תרחישים** = קריאות `await run(` ב-`check-browser-smoke.cjs` (‏32 נכון ל-08.08.2026, אחרי
+  - **32 תרחישים** = קריאות `await run(` ב-`check-browser-smoke.cjs` (‏32 נכון ל-09.08.2026, אחרי
     שחזור הסיסמה של חבילה 1 והחלטות הקבלה של חבילה 2; ‏`run(` לבדו תופס גם את הגדרת הפונקציה).
 
   **היסטוריית הסטייה, כי היא חזרה חמש פעמים:** ‏13 → 20 → 26 → **27** לסוויטות; ‏22 → 25 → 29 → 30 →

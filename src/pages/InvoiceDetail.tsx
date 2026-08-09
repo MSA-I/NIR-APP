@@ -257,7 +257,7 @@ export default function InvoiceDetail() {
         </>}
         lifecycle={lifecycleSteps.length ? <LifecycleStrip steps={lifecycleSteps} current={inv.review_status} nextAction={nextAction} /> : undefined} />
 
-      {/* Finding 8 / decision ח (08.08.2026): kitchen may CREATE an invoice (0023) but cannot
+      {/* Finding 8 / decision ח (09.08.2026): kitchen may CREATE an invoice (0023) but cannot
           amend or soft-delete one in any status (0034: owner/office only) — and until now the
           screen said nothing, so the person who typed the wrong amount had no next step. The
           decision was a reporting channel, not an edit path: the sentence names who can fix it

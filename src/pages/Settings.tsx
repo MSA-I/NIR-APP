@@ -243,7 +243,7 @@ export default function Settings() {
       <div className="card card-pad space-y-4">
         <div>
           <h2 className="section-title flex items-center gap-2"><KeyRound size={17} /> החלפת הסיסמה שלך</h2>
-          {/* OPEN-DECISIONS #114, decided 08.08.2026: employees recover their own password via
+          {/* OPEN-DECISIONS #114, decided 09.08.2026: employees recover their own password via
               "שכחתי סיסמה" on the login screen (ForgotPassword → ResetPassword). An org owner
               still cannot reset another user's password — that stays closed by decision, and the
               operator valve (admin-provision reset_password) remains the fallback when mail
@@ -313,7 +313,7 @@ export default function Settings() {
           <p className="text-sm text-ink-muted mt-1">
             נשלח מייל עם קישור אישי להגדרת שם וסיסמה. הקישור תקף 7 ימים.
           </p>
-          {/* OPEN-DECISIONS #17, decided 08.08.2026: supplier agents ARE invited from here. The
+          {/* OPEN-DECISIONS #17, decided 09.08.2026: supplier agents ARE invited from here. The
               DB path existed since 0025 (invitations.supplier_id + the 3-arg create_invitation);
               what was missing was this picker and the Edge Function forwarding. The binding is
               mandatory — invitations_supplier_role_check refuses a supplier invitation without

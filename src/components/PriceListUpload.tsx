@@ -193,7 +193,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
 
   const { data: suppliers, loading: suppliersLoading, error: suppliersError } = useQuery(async () => {
     if (supplier) return [supplier];
-    // #115 (decided 08.08.2026): inactive = "לא להזמין ממנו יותר", and a price list is the start
+    // #115 (decided 09.08.2026): inactive = "לא להזמין ממנו יותר", and a price list is the start
     // of new procurement — so this picker filters like /orders/new does (NewOrder.tsx). Money
     // screens deliberately do not.
     return unwrap(await supabase.from('suppliers').select('id, name')

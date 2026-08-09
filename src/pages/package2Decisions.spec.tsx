@@ -1,5 +1,5 @@
 /**
- * Package 2 — the pins that keep the 08.08.2026 decisions true after later edits.
+ * Package 2 — the pins that keep the 09.08.2026 decisions true after later edits.
  *
  * What is here is what breaks SILENTLY: the Hebrew label a new enum value renders under
  * (#116/§17 — without it /exceptions prints a raw enum token), and the #115 procurement
