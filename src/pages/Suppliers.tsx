@@ -48,8 +48,10 @@ function RiskCell({ m }: { m?: SupplierMetrics }) {
   if (!ex && !cr) return <span className="text-ink-ghost">—</span>;
   return (
     <span className="flex items-center gap-1">
-      {ex > 0 && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-alert-soft text-alert-on-soft whitespace-nowrap">{ex} חריגים</span>}
-      {cr > 0 && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-await-soft text-await-on-soft whitespace-nowrap">{cr} זיכויים</span>}
+      {/* Singular is not a rounding error in Hebrew: the plural form read "1 חריגים" on every
+          supplier that had exactly one, in both the table and the mobile card. */}
+      {ex > 0 && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-alert-soft text-alert-on-soft whitespace-nowrap">{ex} {ex === 1 ? 'חריג' : 'חריגים'}</span>}
+      {cr > 0 && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-await-soft text-await-on-soft whitespace-nowrap">{cr} {cr === 1 ? 'זיכוי' : 'זיכויים'}</span>}
     </span>
   );
 }

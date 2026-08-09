@@ -122,7 +122,8 @@ export async function runInvoiceChecks(inv: {
     results.push({
       code: 'open_credit',
       severity: 'info',
-      message: `לספק זה ${credits.length} זיכויים פתוחים בסך ${fmtMoneyExact(sum)} — כדאי לקזז לפני תשלום`,
+      message: `לספק זה ${credits.length} ${credits.length === 1 ? 'זיכוי פתוח' : 'זיכויים פתוחים'} `
+        + `בסך ${fmtMoneyExact(sum)} — כדאי לקזז לפני תשלום`,
     });
   }
 
