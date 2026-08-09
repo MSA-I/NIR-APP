@@ -105,7 +105,10 @@ export default function PriceLists() {
             <button className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={15} /> העלאת מחירון</button>
           </div>
         ) : (
-          <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמשרד בלבד.</span>
+          /* „מנהל רכש”, not „משרד”: PRODUCT.md:13 and status.ts's ROLE_LABEL both name `office`
+             that way, and this screen used the other word while the sentence beside it used this
+             one. One role, one word. */
+          <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמנהל הרכש בלבד.</span>
         )} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q) || r.supplier.name.toLowerCase().includes(q)}

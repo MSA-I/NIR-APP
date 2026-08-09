@@ -41,6 +41,13 @@ export interface InviteResult {
   invitationId: string;
   email: string;
   expiresAt: string;
+  /**
+   * True when the Edge Function is configured with Resend's sandbox sender, which accepts the
+   * request and then delivers only to the Resend account owner (DEBT-REGISTER §25). Absent on an
+   * older deployed function, and treated as "not limited" then — the screen degrades to the old
+   * wording rather than inventing a warning it cannot support.
+   */
+  deliveryLimited?: boolean;
 }
 
 /** `error` is a Hebrew message ready to show the owner; `result` is set only on success. */

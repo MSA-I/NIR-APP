@@ -276,6 +276,10 @@ export function InvoicesList() {
         ))}
       </div>
       <DataTable rows={data.rows} columns={columns}
+        emptyTitle="אין חשבוניות עדיין"
+        emptySubtitle={canCreate
+          ? 'חשבונית נקלטת בכפתור «חשבונית חדשה», או מצילום מסמך שנכנס לתיקיית המסמכים.'
+          : 'קליטת חשבוניות זמינה לבעלים, למנהל הרכש ולמנהל המטבח.'}
         error={error}
         server={{
           total: data.total,

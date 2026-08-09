@@ -1,5 +1,5 @@
 import { Link, Outlet, useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -8,9 +8,11 @@ import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
 import Fab from './Fab';
 import NotificationBell from './NotificationBell';
 import FeedbackButton from './FeedbackButton';
-import { ConfirmDialog, useDialogLayer, useToast } from './ui';
+import { ConfirmDialog, Note, useDialogLayer, useToast } from './ui';
 import { useFeatureFlags } from '../lib/flags';
 import { FEEDBACK_FLAG } from '../lib/feedback';
+import { TRIAL_WARNING_DAYS, trialDaysRemaining } from '../lib/trial';
+import { fmtDate } from '../lib/format';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
 import { pendingOfflineWork } from '../lib/offlineQueue';
 import type { Role } from '../lib/types';
@@ -77,6 +79,12 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/analytics', label: 'ביצועי ספקים', icon: Activity, roles: ['owner', 'office', 'accountant'] },
       { to: '/audit', label: 'יומן ביקורת', icon: ScrollText, roles: ['owner', 'accountant'] },
       { to: '/settings', label: 'הגדרות', icon: Settings, roles: ['owner'] },
+      // /onboarding was absent from this catalogue entirely, so nothing could route to it: not the
+      // sidebar, not the drawer, not quickActions, and homeFor() always answers /dashboard. The
+      // setup wizard was built to be RE-OPENED — it reads live counts on every mount so it shows
+      // true completion state rather than a remembered claim (Onboarding.tsx:32-45) — and the one
+      // thing missing was a door. It belongs to the owner, beside /settings, not in daily work.
+      { to: '/onboarding', label: 'אשף ההקמה', icon: ListChecks, roles: ['owner'] },
     ],
   },
 ];
@@ -128,7 +136,7 @@ export function sectionsForRole(role: Role | undefined, isPlatformAdmin: boolean
 }
 
 export function footerItemsForRole(role: Role | undefined): NavItem[] {
-  return role === 'owner' ? itemsFor(role, ['/settings']) : [];
+  return role === 'owner' ? itemsFor(role, ['/onboarding', '/settings']) : [];
 }
 
 export function drawerSectionsForRole(role: Role | undefined, isPlatformAdmin: boolean): NavSection[] {
@@ -186,6 +194,9 @@ export default function Layout() {
   // Read here only to decide whether the desktop header exists at all; FeedbackButton gates
   // itself on the same flag, fail-closed. The flag governs UI, never permission (0059's flag law).
   const feedbackOn = useFeatureFlags().isEnabled(FEEDBACK_FLAG);
+  // null unless this is a trial with a future end date — see trialDaysRemaining for why an already
+  // expired trial answers null rather than 0.
+  const trialDays = trialDaysRemaining(org);
   // Unfiled-documents pill (0014): counted only for staff who can act on that queue. The
   // Only procurement staff can act on the gallery queue. A known count > 0 is required,
   // so null (loading) and 0 never fabricate an all-clear or workload.
@@ -391,6 +402,21 @@ export default function Layout() {
         {/* max-w column centred (mx-auto) in the space beside the sidebar — otherwise a wide
             viewport strands all content on the start side in RTL, leaving a dead zone on the
             end side. keyed by path so each screen change re-triggers the fade (section 11). */}
+        {/* #15 shipped the soft block but nothing announced it in advance: the first thing the owner
+            learned was a full-screen stop. Owner only — a kitchen user cannot arrange the
+            continuation, and a banner nobody can act on for a week is noise; the expired screen
+            still tells everyone at the moment it matters. Wording matches that screen ("מפעיל
+            השירות", "הנתונים שמורים") so the two never contradict each other. */}
+        {profile?.role === 'owner' && trialDays !== null && trialDays <= TRIAL_WARNING_DAYS && (
+          <div className="mx-auto mb-4 min-w-0 max-w-[1400px] px-4 no-print sm:px-6">
+            <Note tone="await">
+              תקופת הניסיון מסתיימת ב-{fmtDate(org?.trial_ends_at)}
+              {' — '}
+              {trialDays === 1 ? 'נותר יום אחד' : `נותרו ${trialDays} ימים`}. הנתונים שמורים במלואם;
+              להמשך השימוש יש להסדיר את ההמשך מול מפעיל השירות.
+            </Note>
+          </div>
+        )}
         <div key={location.pathname} className="page-fade mx-auto min-w-0 max-w-[1400px]">
           <Outlet />
         </div>

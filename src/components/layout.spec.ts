@@ -29,7 +29,13 @@ describe('מעטפת הניווט', () => {
     expect(visible.has('/orders/new')).toBe(false);
     expect(visible.has('/documents/archive')).toBe(false);
     expect(visible.has('/alerts')).toBe(false);
-    expect(footerItemsForRole('owner').map((item) => item.to)).toEqual(['/settings']);
+    // /onboarding joined the footer (09.08.2026) and this list is pinned, so the addition has to
+    // argue for itself here rather than slip in. The argument: the route existed with NO door at
+    // all — absent from NAV_SECTIONS, from quickActions, and from homeFor() — so the setup wizard
+    // could not be reopened by the owner it belongs to, even though it was built to be reopened.
+    // It sits in the footer, beside /settings, precisely so it does NOT compete with daily work,
+    // which is what the rest of this test protects.
+    expect(footerItemsForRole('owner').map((item) => item.to)).toEqual(['/onboarding', '/settings']);
   });
 
   it('תפקידים ממוקדים נשארים עם שני יעדים בלבד', () => {

@@ -113,10 +113,14 @@ export default function Products() {
               two screens — one a sentence, one silence. Same wording, so it reads as one rule. */}
           {canUploadPrices
             ? <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={16} /> העלאת מחירון ספק</button>
-            : <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמשרד בלבד.</span>}
+            : <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמנהל הרכש בלבד.</span>}
           {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> מוצר חדש</button>}
         </>} />
       <DataTable rows={rows} columns={columns} searchable
+        emptyTitle="אין מוצרים עדיין"
+        emptySubtitle={canUploadPrices
+          ? 'הדרך המהירה היא העלאת מחירון — הוא יוצר את המוצרים ואת המחירים יחד.'
+          : 'הוספת מוצרים והעלאת מחירונים זמינות לבעלים ולמנהל הרכש.'}
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.sku ?? '').toLowerCase().includes(q)}
         searchLabel="חיפוש במוצרים"
         rowLabel={(r) => `מוצר ${r.name}`}

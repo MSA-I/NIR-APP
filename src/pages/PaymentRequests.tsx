@@ -120,6 +120,8 @@ export default function PaymentRequests() {
           {isOffice && <button className="btn-primary" onClick={() => setManualCreateOpen(true)}><Plus size={16} /> דרישה חדשה</button>}
         </>} />
       <DataTable rows={rows} columns={columns} searchable
+        emptyTitle="אין דרישות תשלום"
+        emptySubtitle={'דרישת תשלום נפתחת מול ספק שיש לו חשבוניות פתוחות, ונקשרת אליהן.'}
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || String(r.number).includes(q)}
         searchLabel="חיפוש בדרישות תשלום"
         rowLabel={(r) => `דרישת תשלום מספר ${r.number} עבור ${r.supplier.name}`}
