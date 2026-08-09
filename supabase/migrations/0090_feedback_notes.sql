@@ -81,6 +81,14 @@ grant select on table feedback_notes to authenticated;
 grant insert (org_id, user_id, note, route, role, viewport_width, app_release)
   on table feedback_notes to authenticated;
 
+-- The trusted server, EXPLICITLY. `0039_service_role_dml_restore.sql:6` granted CRUD on "all tables
+-- in schema public" — a one-time grant that covers the tables existing when it ran, and nothing
+-- created afterwards. Measured on a clean reset before this line existed: service_role held zero
+-- privileges here, which would have failed p0_client_dml_acl's "full CRUD on every public table"
+-- assertion AND broken the feature at runtime — send-feedback writes sent_at/send_error as
+-- service_role, and without UPDATE a delivered note could never be recorded as delivered.
+grant select, insert, update, delete on table feedback_notes to service_role;
+
 -- ===== The flag that shows the button =====
 -- Born off for every organization, like every flag in 0059. Turning it on for the design partner
 -- is platform_set_org_flag (platform admin + reason + audit) — no schema change, no deploy.
