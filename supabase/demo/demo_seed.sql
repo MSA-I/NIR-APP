@@ -563,7 +563,11 @@ as $fn$
 declare
   v_assessment jsonb;
 begin
-  if p_override_key is not null then
+  -- The three-way override only exists once 0099 has been applied. Guarding on the function
+  -- rather than on a migration number keeps this seed correct at every point in the stacked
+  -- split: before 0099 there is no approval guard to override, so approval proceeds directly.
+  if p_override_key is not null
+     and to_regprocedure('public.get_invoice_three_way_match(uuid)') is not null then
     v_assessment := public.get_invoice_three_way_match(p_invoice_id);
     perform public.override_invoice_three_way_match(
       p_invoice_id,

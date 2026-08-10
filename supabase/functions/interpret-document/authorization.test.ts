@@ -397,7 +397,7 @@ Deno.test("a price list reaches its separate bounded command", async () => {
     INTERPRETATION,
     ACTOR,
   );
-  if (calls.length !== 1 || calls[0][0] !== "apply_eligible_price_list_interpretation") {
+  if (calls.length !== 1 || calls[0][0] !== "apply_price_list_interpretation") {
     throw new Error(`unexpected price-list rpc calls: ${JSON.stringify(calls)}`);
   }
   const args = calls[0][1];
@@ -476,19 +476,10 @@ Deno.test("the router sends each kind to its own command and defaults to the inv
   }
 
   // And without an injected decision, the real routing table.
-  // The whole chain, not just its first call: the price-list route gained a shadow measurement
-  // in front of the live command, and "reached the shadow" is not the same claim as "reached the
-  // command". Recording every rpc keeps both halves under the assertion.
   const routed: string[] = [];
   const record = (label: string) => {
     const { client: c, calls } = recordingClient({ data: {}, error: null });
-    return {
-      client: c,
-      read: () =>
-        routed.push(
-          `${label}:${calls.map(([name]) => name).join(">") || "none"}`,
-        ),
-    };
+    return { client: c, read: () => routed.push(`${label}:${calls[0]?.[0] ?? "none"}`) };
   };
   const priceList = record("price_list");
   await decideOnInterpretation(
@@ -506,48 +497,12 @@ Deno.test("the router sends each kind to its own command and defaults to the inv
   );
   invoice.read();
   const expected = [
-    "price_list:run_price_list_shadow>apply_eligible_price_list_interpretation",
+    "price_list:apply_price_list_interpretation",
     "delivery:apply_delivery_note_interpretation",
     "invoice:apply_document_interpretation",
   ].join(",");
   if (routed.join(",") !== expected) {
     throw new Error(`routing table changed: ${routed.join(",")}`);
-  }
-});
-
-Deno.test("a price list records shadow evidence before the live command", async () => {
-  const { client, calls, signals } = recordingClient({
-    data: { predicted_outcome: "would_apply", shadow_run_id: INTERPRETATION },
-    error: null,
-  });
-  await decideOnInterpretation(client, true, JOB, INTERPRETATION, ACTOR);
-  if (
-    calls.length !== 2 || calls[0][0] !== "run_price_list_shadow" ||
-    calls[1][0] !== "apply_eligible_price_list_interpretation"
-  ) {
-    throw new Error(`shadow/live ordering changed: ${JSON.stringify(calls)}`);
-  }
-  for (const [, args] of calls) {
-    if (
-      args.p_job_id !== JOB || args.p_interpretation_id !== INTERPRETATION ||
-      args.p_actor_id !== ACTOR || Object.keys(args).length !== 3
-    ) {
-      throw new Error(`unexpected price-list arguments: ${JSON.stringify(args)}`);
-    }
-  }
-  if (signals.length !== 2 || signals.some((signal) => !(signal instanceof AbortSignal))) {
-    throw new Error("shadow and live price-list commands must both be bounded");
-  }
-});
-
-Deno.test("shadow measurement failure blocks the live price-list command", async () => {
-  const { client, calls } = recordingClient({
-    data: null,
-    error: { message: "shadow unavailable" },
-  });
-  await decideOnInterpretation(client, true, JOB, INTERPRETATION, ACTOR);
-  if (calls.map(([name]) => name).join(",") !== "run_price_list_shadow") {
-    throw new Error(`shadow failure reached the live command: ${JSON.stringify(calls)}`);
   }
 });
 
