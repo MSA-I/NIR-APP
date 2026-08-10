@@ -381,11 +381,11 @@ export function OrderDetail() {
           <h2 className="text-xl font-bold">{`הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`}</h2>
           <div className="text-sm mt-1">ספק: {order.supplier.name} · תאריך: {fmtDate(order.created_at)} {order.expected_date && `· אספקה מבוקשת: ${fmtDate(order.expected_date)}`}</div>
         </div>
-        <ul className="divide-y divide-line-soft md:hidden print:hidden" aria-label="פריטי ההזמנה">
+        <ul className="divide-y divide-line-soft lg:hidden print:hidden" aria-label="פריטי ההזמנה">
           {order.items.map((item) => (
             <li key={item.id} className="py-3 first:pt-0 last:pb-0">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0"><div className="font-medium text-ink-body">{item.product.name}</div><div className="mt-1 text-xs text-ink-muted">{item.qty} {item.product.unit} × <span className="num">₪{item.unit_price.toFixed(2)}</span></div></div>
+                <div className="min-w-0"><div className="font-medium text-ink-body">{item.product.name}</div><div className="mt-1 text-xs text-ink-muted">{item.qty} {item.product.unit} × <span className="num">{fmtMoneyExact(item.unit_price)}</span></div></div>
                 <span className="num shrink-0 font-semibold">{fmtMoneyExact(item.qty * item.unit_price)}</span>
               </div>
               {order.status !== 'draft' && <div className="mt-2 text-xs text-ink-muted">התקבל: <span className={`num ${item.received_qty >= item.qty ? 'text-done-fg' : item.received_qty > 0 ? 'text-await-fg' : ''}`}>{item.received_qty}</span> מתוך <span className="num">{item.qty}</span></div>}
@@ -393,7 +393,7 @@ export function OrderDetail() {
           ))}
           <li className="flex items-center justify-between pt-3 font-bold"><span>סה״כ להזמנה</span><span className="num">{fmtMoneyExact(total)}</span></li>
         </ul>
-        <div className="hidden overflow-x-auto md:block print:block print:overflow-visible">
+        <div className="hidden overflow-x-auto lg:block print:block print:overflow-visible">
         <table className="w-full">
           <thead className="bg-surface-sunken border-b border-line-soft">
             <tr>
@@ -408,7 +408,7 @@ export function OrderDetail() {
                 <td className="td font-medium text-ink-body">{i.product.name}</td>
                 <td className="td">{i.product.unit}</td>
                 <td className="td num">{i.qty}</td>
-                <td className="td num">₪{i.unit_price.toFixed(2)}</td>
+                <td className="td num">{fmtMoneyExact(i.unit_price)}</td>
                 <td className="td num">{fmtMoneyExact(i.qty * i.unit_price)}</td>
                 {order.status !== 'draft' && (
                   <td className="td no-print num">

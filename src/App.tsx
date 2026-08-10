@@ -141,7 +141,7 @@ function AccountUnavailable() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
+    <div className="min-h-dvh flex items-center justify-center p-6">
       <div className="card card-pad max-w-md text-center">
         <h1 className="page-title">החשבון אינו זמין</h1>
         <p className="text-ink-soft mt-2">
@@ -176,7 +176,7 @@ function TrialExpired({ endedAt }: { endedAt: string | null }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
+    <div className="min-h-dvh flex items-center justify-center p-6">
       <div className="card card-pad max-w-md text-center">
         <h1 className="page-title">תקופת הניסיון הסתיימה</h1>
         <p className="text-ink-soft mt-2">
@@ -208,7 +208,7 @@ function BootstrapUnavailable() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
+    <div className="min-h-dvh flex items-center justify-center p-6">
       <div className="card card-pad max-w-md text-center">
         <h1 className="page-title">לא ניתן לטעון את החשבון</h1>
         <p className="text-ink-soft mt-2">

@@ -7,7 +7,7 @@ import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, TaskLine, type 
 import { EXCEPTION_TYPE, PO_STATUS, SEVERITY } from '../lib/status';
 import {
   addCalendarDays, BUSINESS_TIME_ZONE, dateStartInstant, daysInCalendarMonth,
-  fmtMoney, fmtMoneyExact, fmtMonth, localDateKey, shiftCalendarMonth, startOfCalendarWeek,
+  fmtMoneyExact, fmtMoneyRounded, fmtMonth, localDateKey, shiftCalendarMonth, startOfCalendarWeek,
   todayISO as businessTodayISO,
 } from '../lib/format';
 import { chartTheme } from '../lib/theme';
@@ -18,7 +18,9 @@ import { fetchAll } from '../lib/supabasePaging';
 // audit round 2: glance values are whole-shekel by convention — the three money-strip tiles round to
 // whole ₪ so they read consistently at a glance (₪8,131 not ₪14,842.6). Tables elsewhere keep exact
 // amounts; format.ts is untouched. null stays null → "—", never a fake rounded 0 (CLAUDE.md:37).
-const glanceMoney = (v: number | null) => fmtMoney(v == null ? null : Math.round(v));
+// The rounding moved into the formatter (format.ts): a glance surface is a shape decision, not
+// something each call site re-derives. The alias stays because it names the surface.
+const glanceMoney = fmtMoneyRounded;
 // "עודכן ב-HH:MM" freshness stamp — the screen promises real-time, so it says when it last read.
 const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TIME_ZONE });
 
@@ -139,10 +141,11 @@ type DeliveryOrder = {
 // detail: supplier · order number · status · expected products. purchase_orders has no
 // delivery-hour column, so no time is shown or invented. Orders with a NULL expected_date are
 // excluded from the counts and reported honestly as one quiet hint line instead.
-function DeliveriesCard({ today, tomorrow, noDateCount }: {
+function DeliveriesCard({ today, tomorrow, noDateCount, className = '' }: {
   today: DeliveryOrder[];
   tomorrow: DeliveryOrder[];
   noDateCount: number;
+  className?: string;
 }) {
   const distinctSuppliers = (rows: DeliveryOrder[]) => new Set(rows.map((o) => o.supplier_id)).size;
   const groups = [
@@ -179,7 +182,7 @@ function DeliveriesCard({ today, tomorrow, noDateCount }: {
   }
 
   return (
-    <section className="card overflow-hidden">
+    <section className={`card overflow-hidden ${className}`}>
       <div className="px-4 py-4 sm:px-5">
         <h2 className="section-title">אספקות היום ומחר</h2>
         <p className="mt-0.5 text-xs text-ink-muted">ספקים שאמורים לספק סחורה; פירוט ההזמנות בלחיצה</p>
@@ -549,7 +552,7 @@ export default function Dashboard() {
       { key: 'pay-today', label: 'תשלומים לביצוע היום', count: paymentsDueToday, tone: 'await', to: '/payment-requests?due=today', hint: paymentsDueToday == null ? 'לא הוגדרו תאריכי יעד' : undefined, clearLabel: 'אין תשלומים להיום' },
       { key: 'exceptions', label: 'חריגים פתוחים', count: exceptions.length, tone: 'alert', to: '/exceptions?status=open', hint: highExceptions ? `${highExceptions} בחומרה גבוהה` : undefined, clearLabel: 'אין חריגים פתוחים' },
       { key: 'credits', label: 'זיכויים פתוחים', count: credits.length, amount: openCreditsSum, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
-      { key: 'commitments', label: 'התחייבויות רכש פתוחות', count: openPos.length, amount: committedSum, tone: 'idle', to: '/orders?status=open', hint: remainingSum > 0 ? `נותר לקבלה ${fmtMoney(remainingSum)}` : undefined, clearLabel: 'אין התחייבויות פתוחות' },
+      { key: 'commitments', label: 'התחייבויות רכש פתוחות', count: openPos.length, amount: committedSum, tone: 'idle', to: '/orders?status=open', hint: remainingSum > 0 ? `נותר לקבלה ${fmtMoneyRounded(remainingSum)}` : undefined, clearLabel: 'אין התחייבויות פתוחות' },
       { key: 'late-delivery', label: 'הזמנות באיחור באספקה', count: lateDeliveries, tone: 'alert', to: '/receiving', clearLabel: 'אין הזמנות באיחור' },
       { key: 'awaiting-confirmation', label: 'הזמנות ממתינות לאישור ספק', count: awaitingConfirmation, tone: 'await', to: '/orders?status=sent', clearLabel: 'כל ההזמנות אושרו' },
       { key: 'price-increases', label: 'ספקים שהעלו מחירים (30 יום)', count: priceIncreaseSuppliers, tone: 'await', to: '/prices?increases=1', clearLabel: 'אין שינויי מחירים' },
@@ -632,13 +635,23 @@ export default function Dashboard() {
         </Note>
       )}
 
+      {/* flex, not space-y: `order` below only moves flex/grid children, and margins cannot be
+          reordered at all. Each zone declares its own entrance step for both viewports — see the
+          `--dash-step` rules in index.css — because below lg the money band moves to the top and
+          DOM position stops describing what the eye sees. */}
       {data && (
-        <div className="dash-enter space-y-5">
-          <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול" />
+        <div className="dash-enter flex flex-col gap-5">
+          <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול"
+            className="[--dash-step-mobile:1] [--dash-step:0]" />
 
-          <DeliveriesCard today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount} />
+          <DeliveriesCard today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount}
+            className="[--dash-step-mobile:2] [--dash-step:1]" />
 
-          <div className="card grid grid-cols-1 sm:grid-cols-3">
+          {/* Section 12 on a phone: the manager opens the app and sees a figure. The band used to
+              sit below two cards, so the first fold at 390 held no money at all. It is FIRST on
+              screen below lg and third from lg up, where all three zones fit the fold anyway.
+              DOM order is unchanged on purpose — the quality gate pins the heading order. */}
+          <div className="card grid grid-cols-1 sm:grid-cols-3 order-first lg:order-none [--dash-step-mobile:0] [--dash-step:2]">
             <BandStat title="יתרת חשבוניות פתוחות" value={data.money.openBalance} tone="await" to="/invoices?pay=unpaid"
               icon={ReceiptText} context="נכון לעכשיו"
               aux={data.money.openBalance == null ? 'אין נתונים זמינים' : `${data.money.openInvoiceCount} חשבוניות פתוחות`} />
@@ -647,11 +660,11 @@ export default function Dashboard() {
               spark={data.paidWeekly} sparkLabel="מגמת תשלומים לספקים בשמונה השבועות האחרונים" />
             <BandStat title="נרכש החודש" value={data.money.purchasedMonth} to="/orders?status=all"
               icon={ShoppingCart} context="מתחילת החודש" delta={data.money.purchasedDelta}
-              aux={data.savings != null ? `חיסכון משוער ${fmtMoney(data.savings)}${data.savingsPct != null ? ` · ${data.savingsPct.toFixed(0)}%` : ''}` : undefined}
+              aux={data.savings != null ? `חיסכון משוער ${fmtMoneyRounded(data.savings)}${data.savingsPct != null ? ` · ${data.savingsPct.toFixed(0)}%` : ''}` : undefined}
               spark={data.weekly} sparkLabel="מגמת רכש בשמונה השבועות האחרונים" />
           </div>
 
-          <section className="card overflow-hidden">
+          <section className="card overflow-hidden [--dash-step-mobile:3] [--dash-step:3]">
             <div className="px-4 py-4 sm:px-5">
               <h2 className="section-title">מגמות</h2>
               <p className="mt-0.5 text-xs text-ink-muted">רכש, תשלומים ותמהיל הוצאות במבט אחד</p>
@@ -699,7 +712,7 @@ export default function Dashboard() {
             </div>
           </section>
 
-          <section className="card overflow-hidden">
+          <section className="card overflow-hidden [--dash-step-mobile:4] [--dash-step:4]">
             <div className="px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
               <h2 className="section-title">תמונת מצב תפעולית</h2>
               <p className="mt-0.5 text-xs text-ink-muted">הפירוט זמין לפי צורך; הפעולות הדחופות נשארות למעלה.</p>
@@ -755,7 +768,7 @@ export default function Dashboard() {
                           <span className="ms-2 text-xs text-ink-muted">{price.supplier.name}</span>
                         </span>
                         <span className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 sm:justify-start">
-                          <span className="text-xs text-ink-muted">מ־<span className="num">₪{price.previous_price!.toFixed(2)}</span> ל־<span className="num">₪{price.current_price.toFixed(2)}</span></span>
+                          <span className="text-xs text-ink-muted">מ־<span className="num">{fmtMoneyExact(price.previous_price)}</span> ל־<span className="num">{fmtMoneyExact(price.current_price)}</span></span>
                           <span className="inline-flex items-center gap-1 font-medium text-alert-fg num" dir="ltr">
                             <TrendingUp size={13} className="text-trend-up-fg" />+{price.pct.toFixed(1)}%
                           </span>

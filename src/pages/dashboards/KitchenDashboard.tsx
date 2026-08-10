@@ -9,7 +9,7 @@ import { CategoryDonut, ComparisonLineChart, SpendBarChart, money, type LinePoin
 import { chartTheme } from '../../lib/theme';
 import { topCategoriesWithOther } from '../../lib/dashboardSeries';
 import {
-  addCalendarDays, dateStartInstant, fmtMonth, fmtMoney, fmtNum, monthlyBuckets, shiftCalendarMonth,
+  addCalendarDays, dateStartInstant, fmtMonth, fmtMoneyRounded, fmtNum, monthlyBuckets, shiftCalendarMonth,
   startOfCalendarWeek, todayISO, weeklyBuckets,
 } from '../../lib/format';
 import { DashboardFrame, ChartCard } from './parts';
@@ -79,10 +79,10 @@ export default function KitchenDashboard() {
     const avgLead = leadSamples ? leadSuppliers.reduce((s, m) => s + m.avg_lead_days! * m.lead_samples, 0) / leadSamples : null;
 
     const kpis: ScoreItem[] = [
-      { label: 'נרכש החודש', value: fmtMoney(purchasedMonth) },
-      { label: 'פתוח לקבלה', value: fmtMoney(openValue), tone: openValue ? 'await' : 'idle' },
+      { label: 'נרכש החודש', value: fmtMoneyRounded(purchasedMonth) },
+      { label: 'פתוח לקבלה', value: fmtMoneyRounded(openValue), tone: openValue ? 'await' : 'idle' },
       { label: 'הזמנות פתוחות', value: fmtNum(openPos.length) },
-      { label: 'יתרת ספקים פתוחה', value: fmtMoney(openBalance) },
+      { label: 'יתרת ספקים פתוחה', value: fmtMoneyRounded(openBalance) },
       { label: 'עמידה בזמנים', value: fmtPct(otdPct), tone: otdTone(otdPct) },
       { label: 'ימי אספקה ממוצעים', value: fmtLeadDays(avgLead) },
     ];
@@ -140,7 +140,7 @@ export default function KitchenDashboard() {
         </ChartCard>
         <ChartCard title="תמהיל רכש החודש" subtitle="ארבע הקטגוריות הגדולות וכל היתר">
           <CategoryDonut slices={data.categories} total={data.categoryTotal}
-            ariaLabel={`תמהיל רכש לפי קטגוריה, סה״כ ${fmtMoney(data.categoryTotal)}`}
+            ariaLabel={`תמהיל רכש לפי קטגוריה, סה״כ ${fmtMoneyRounded(data.categoryTotal)}`}
             emptyMessage="אין רכש החודש" />
         </ChartCard>
         <ChartCard title="רכש מול קבלות" subtitle="שמונה השבועות האחרונים" className="lg:col-span-2">

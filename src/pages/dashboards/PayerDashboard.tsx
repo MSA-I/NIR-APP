@@ -8,7 +8,7 @@ import { DOMAIN } from '../../lib/query/keys';
 import { AttentionZone, SkeletonCards, ErrorNote, Note, type AttentionItem } from '../../components/ui';
 import { Scorecard, type ScoreItem } from '../../components/supplier-metrics';
 import { SpendBarChart, money } from '../../components/charts';
-import { addCalendarDays, fmtMonth, fmtMoney, monthlyBuckets, shiftCalendarMonth, todayISO } from '../../lib/format';
+import { addCalendarDays, fmtMonth, fmtMoneyExact, monthlyBuckets, shiftCalendarMonth, todayISO } from '../../lib/format';
 import { DashboardFrame, ChartCard } from './parts';
 
 type QueueRow = { due_date: string | null; amount: number };
@@ -124,12 +124,12 @@ export default function PayerDashboard() {
     const paidMonth = paymentsThisMonth.length ? paymentsThisMonth.reduce((s, p) => s + p.amount, 0) : null;
 
     const kpis: ScoreItem[] = [
-      { label: 'לביצוע היום', value: fmtMoney(dueTodayAmount), tone: dueTodayCount ? 'await' : 'idle' },
-      { label: 'באיחור', value: fmtMoney(overdueAmount), tone: overdueCount ? 'alert' : 'idle' },
+      { label: 'לביצוע היום', value: fmtMoneyExact(dueTodayAmount), tone: dueTodayCount ? 'await' : 'idle' },
+      { label: 'באיחור', value: fmtMoneyExact(overdueAmount), tone: overdueCount ? 'alert' : 'idle' },
       // The measured count decides between "nothing waiting" (dash, as before) and a real sum; the
       // sum itself is the server's. Neither half is invented and neither is a substituted zero.
-      { label: 'סה״כ ממתין לביצוע', value: fmtMoney(pendingCount === 0 ? null : pendingTotal) },
-      { label: 'בוצע החודש', value: fmtMoney(paidMonth), tone: paidMonth ? 'done' : 'idle' },
+      { label: 'סה״כ ממתין לביצוע', value: fmtMoneyExact(pendingCount === 0 ? null : pendingTotal) },
+      { label: 'בוצע החודש', value: fmtMoneyExact(paidMonth), tone: paidMonth ? 'done' : 'idle' },
     ];
 
     // count === null lands in AttentionZone's neutral "—" tier: an unmeasured row can never be

@@ -4,6 +4,7 @@ import { Loader2, UserPlus, AlertCircle, MailCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { homeFor } from '../auth/AuthContext';
 import { resolveRoleLabels } from '../lib/status';
+import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
 import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
 import {
@@ -40,7 +41,8 @@ export default function AcceptInvite() {
         const res = await lookupInvitation(token);
         if (!cancelled) setLookup(res);
       } catch (e) {
-        if (!cancelled) setLookupError(e instanceof Error ? e.message : String(e));
+        // Raw otherwise, on the screen where an invited employee first meets the product.
+        if (!cancelled) setLookupError(toHebrewError(e));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -70,7 +72,7 @@ export default function AcceptInvite() {
         setFormError(
           /Invalid login credentials/i.test(error.message)
             ? 'קיים כבר חשבון לכתובת הזו, והסיסמה שהוזנה אינה נכונה.'
-            : error.message,
+            : toHebrewError(error),
         );
         return;
       }
@@ -128,7 +130,8 @@ export default function AcceptInvite() {
           <h2 className="section-title">הצטרפות ל{lookup.org_name}</h2>
           <p className="text-sm text-ink-muted mt-1">
             התפקיד שהוגדר עבורך: <strong className="text-ink-mid">
-              {resolveRoleLabels({ role_labels: lookup.role_labels })[lookup.role ?? ''] ?? lookup.role}
+              {/* Never the bare enum: an unrecognised role used to print "office" to the invitee. */}
+              {resolveRoleLabels({ role_labels: lookup.role_labels })[lookup.role ?? ''] ?? '—'}
             </strong>
           </p>
         </div>
@@ -187,7 +190,7 @@ const INVALID_MESSAGE: Record<string, string> = {
 
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-shell p-4">
+    <div className="min-h-dvh flex items-center justify-center bg-shell p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <img src="/icons/icon-192.png" alt="" width="52" height="52"

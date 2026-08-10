@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-table';
 import type { StatusMeta, Tone } from '../lib/status';
 import type { ServerSort } from '../lib/serverList';
-import { fmtMoney } from '../lib/format';
+import { fmtMoneyRounded } from '../lib/format';
 import { ActionMenu, type ActionMenuItem } from './ActionMenu';
 
 /* ---------- StatusBadge ---------- */
@@ -357,7 +357,7 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
           {item.hint && <span className="ms-2 text-xs text-ink-muted max-sm:block max-sm:ms-0 max-sm:mt-0.5">{item.hint}</span>}
         </span>
         {item.amount != null && item.amount > 0 && (
-          <span className={`num text-sm ${muted ? 'font-medium text-ink-soft' : 'font-semibold text-ink-mid'}`}>{fmtMoney(item.amount)}</span>
+          <span className={`num text-sm ${muted ? 'font-medium text-ink-soft' : 'font-semibold text-ink-mid'}`}>{fmtMoneyRounded(item.amount)}</span>
         )}
         <ChevronLeft size={16} className="text-ink-ghost shrink-0" aria-hidden="true" />
       </Link>
@@ -387,7 +387,13 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
  * obligations (money we owe), so a bare figure is apples+oranges. The caller — which knows what
  * the mix means — may pass a short qualifier (e.g. "חשיפה"); we render it, we never invent it.
  */
-export function AttentionZone({ items, totalLabel }: { items: AttentionItem[]; totalLabel?: string }) {
+export function AttentionZone({ items, totalLabel, className = '' }: {
+  items: AttentionItem[];
+  totalLabel?: string;
+  /** Caller-supplied classes on the card root. The owner dashboard uses it to declare this zone's
+   *  entrance step, which differs between phone and desktop since the money band moves. */
+  className?: string;
+}) {
   const clear = items.filter((i) => i.count === 0);
   const unknownRows = items.filter((i) => i.count == null);
   // Rank the active rows by tone severity; the original index is the tiebreaker, so same-tone
@@ -403,12 +409,12 @@ export function AttentionZone({ items, totalLabel }: { items: AttentionItem[]; t
   const actionTotal = actionRows.reduce((s, i) => s + (i.amount ?? 0), 0);
 
   return (
-    <section className="card card-pad">
+    <section className={`card card-pad ${className}`}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="section-title flex items-center gap-2"><Bell size={18} className="text-await-fg" aria-hidden="true" /> דורש טיפול היום</h2>
         <span className="text-xs text-ink-muted">
           {actionRows.length} סוגי טיפול
-          {actionTotal > 0 && <> · {totalLabel ? <>{totalLabel} </> : null}<span className="num">{fmtMoney(actionTotal)}</span></>}
+          {actionTotal > 0 && <> · {totalLabel ? <>{totalLabel} </> : null}<span className="num">{fmtMoneyRounded(actionTotal)}</span></>}
         </span>
       </div>
 
@@ -629,7 +635,11 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
 
   if (!open) return null;
   const closeDisabled = busy && !allowCloseWhileBusy;
-  return (
+  // Portaled to <body>: a modal rendered in place inherits its ancestor's stacking context, and
+  // the sticky header is z-40 — so a dialog opened from the header (FeedbackButton) painted its
+  // z-50 *inside* a z-40 context and the mobile action bar (also z-40, later in the DOM) sat on
+  // top of the send button. The browser gate caught it: the tap landed on 'פעולות מהירות'.
+  return createPortal(
     <div className="dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-shell/50 p-0 sm:p-4" onClick={() => requestClose()}>
       <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined} aria-busy={busy || undefined} tabIndex={-1}
@@ -646,7 +656,8 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
         </div>
         <div aria-live="polite" className="sr-only">{announcement}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -846,7 +857,7 @@ function readHiddenColumns(storageKey: string | undefined, validKeys: readonly s
 
 /**
  * The enterprise toolbar needs to know which of its two layouts is live. The table body itself
- * keeps both DOM branches mounted and CSS-hidden (`md:hidden` / `hidden md:block` — the browser
+ * keeps both DOM branches mounted and CSS-hidden (`lg:hidden` / `hidden lg:block` — the browser
  * gate measures `:visible` on that model and it must not change), but the toolbar cannot do the
  * same: rendering the screen's `toolbar` slot twice would duplicate every id inside it (gate B6).
  * Defaults to desktop where matchMedia is unavailable (jsdom).
@@ -1180,7 +1191,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
   ) : (
     <>
           {mobile === 'cards' && (
-            <ul className="md:hidden divide-y divide-line-soft">
+            <ul className="lg:hidden divide-y divide-line-soft">
               {pageRows.map((row) => {
                 const title = mobileTitle ? mobileTitle(row) : visibleColumns[0]?.render(row);
                 const details = visibleColumns.filter((c, i) => (c.priority ?? 2) <= 2 && !(i === 0 && !mobileTitle));
@@ -1238,7 +1249,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
               })}
             </ul>
           )}
-          <div className={mobile === 'cards' ? 'overflow-x-auto hidden md:block' : 'overflow-x-auto'}>
+          <div className={mobile === 'cards' ? 'overflow-x-auto hidden lg:block' : 'overflow-x-auto'}>
             <table className="w-full">
               <thead className="bg-surface-sunken border-b border-line-soft">
                 <tr>

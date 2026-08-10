@@ -293,9 +293,13 @@ export default function InvoiceDetail() {
                 different claim from "₪0.00 paid". fmtMoneyExact(null) renders — so the tile stays honest.
                 The balance tile below keeps its ?? total_amount fallback: an invoice with no ledger row
                 genuinely owes its full amount, which is a derivation, not an invented figure. */}
-            <div className="border-s border-line-soft p-4 print-area"><div className="text-xs text-ink-muted">שולם</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.paid_amount ?? null)}</div></div>
-            {/* credited = already offset, a settled claim like "paid" — done, not the retired violet (audit 2026-07-21) */}
-            <div className="border-t border-line-soft p-4 print-area sm:border-s sm:border-t-0"><div className="text-xs text-ink-muted">זוכה</div><div className="text-lg font-bold num text-start text-done-fg">{fmtMoneyExact(data.balance?.credited_amount ?? null)}</div></div>
+            {/* Tone follows the VALUE, like the balance tile below and like Suppliers.tsx:496-497.
+                done-green on a 0.00 read as "paid ✓" to anyone scanning the row — and nothing had
+                been paid. Zero is the absence of a claim, which is what `idle` means (DESIGN.md). */}
+            <div className="border-s border-line-soft p-4 print-area"><div className="text-xs text-ink-muted">שולם</div><div className={`text-lg font-bold num text-start ${data.balance?.paid_amount ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(data.balance?.paid_amount ?? null)}</div></div>
+            {/* credited = already offset, a settled claim like "paid" — done, not the retired violet
+                (audit 2026-07-21) — but only once something actually was credited. */}
+            <div className="border-t border-line-soft p-4 print-area sm:border-s sm:border-t-0"><div className="text-xs text-ink-muted">זוכה</div><div className={`text-lg font-bold num text-start ${data.balance?.credited_amount ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(data.balance?.credited_amount ?? null)}</div></div>
             <div className="border-s border-t border-line-soft p-4 print-area sm:border-t-0"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`text-lg font-bold num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
           </>
         )}
@@ -347,7 +351,9 @@ export default function InvoiceDetail() {
           </button>
         </div>
         {checkError && <Note tone="alert">{checkError}</Note>}
-        {checks ? <CheckList checks={checks} /> : !checking && !checkError && <div className="text-sm text-ink-muted">לחץ ״הרצת בדיקות״ להשוואת החשבונית מול הזמנות, קבלות, תשלומים ותנועות בנק.</div>}
+        {checks ? <CheckList checks={checks} /> : !checking && !checkError && /* Device-neutral wording: on a phone nobody clicks. */ (
+          <div className="text-sm text-ink-muted">״הרצת בדיקות״ משווה את החשבונית מול הזמנות, קבלות, תשלומים ותנועות בנק.</div>
+        )}
       </div>
 
       {creditOpen && (

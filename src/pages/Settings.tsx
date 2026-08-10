@@ -6,7 +6,7 @@ import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageHeader, SkeletonCards, useToast, ErrorNote, DataTable, StatusBadge, ConfirmDialog, Modal, type Column } from '../components/ui';
+import { PageHeader, SkeletonCards, useToast, ErrorNote, Note, DataTable, StatusBadge, ConfirmDialog, Modal, type Column } from '../components/ui';
 import { AutonomyPolicyPanel } from '../components/AutonomyPolicyPanel';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVITATION_STATUS } from '../lib/status';
@@ -30,6 +30,9 @@ export default function Settings() {
   const [inviteSupplierId, setInviteSupplierId] = useState('');
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  // Separate from inviteError on purpose: the invitation WAS created, so an error tone would
+  // contradict the sentence it carries. This is a standing "needs your attention" fact.
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [resendTarget, setResendTarget] = useState<Invitation | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<Invitation | null>(null);
   const [accessTarget, setAccessTarget] = useState<Profile | null>(null);
@@ -132,6 +135,7 @@ export default function Settings() {
 
   async function onInvite() {
     setInviteError(null);
+    setInviteNotice(null);
     if (inviteRole === 'supplier' && !inviteSupplierId) {
       setInviteError('להזמנת סוכן ספק יש לבחור ספק מהרשימה.');
       return;
@@ -143,7 +147,17 @@ export default function Settings() {
     setInviting(false);
     if (err) { setInviteError(err); return; }
 
-    toast(`ההזמנה נשלחה אל ${result?.email ?? inviteEmail.trim()}`);
+    const invitee = result?.email ?? inviteEmail.trim();
+    // "נשלחה" is a claim about the world. With Resend's sandbox sender it was false for every
+    // address but one, and the owner found out only when the person said they got nothing.
+    if (result?.deliveryLimited) {
+      setInviteNotice(
+        `ההזמנה נוצרה עבור ${invitee} וממתינה ברשימה — אבל אין דומיין שליחה מאומת, ולכן המייל לא `
+        + 'יגיע אליו. יש ליצור קשר בדרך אחרת, ולשלוח מחדש לאחר אימות דומיין.',
+      );
+    } else {
+      toast(`ההזמנה נשלחה אל ${invitee}`);
+    }
     setInviteEmail('');
     setInviteSupplierId('');
     void refetchInvites();
@@ -354,6 +368,7 @@ export default function Settings() {
           </div>
         )}
         {inviteError && <ErrorNote message={inviteError} />}
+        {inviteNotice && <Note tone="await">{inviteNotice}</Note>}
       </div>
 
       <div className="space-y-2">

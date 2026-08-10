@@ -132,9 +132,18 @@ select count(*)::text as total,
        count(*) filter (where state)::text as enabled
 from resolve_feature_flags() \gset flags_base_
 reset role;
+-- Three since 0091 added `feedback.notes` (the design-partner feedback surface). The number is
+-- pinned rather than derived on purpose, in the spirit of the exemption-registry pin: a flag is a
+-- new switch on the product, so adding one must edit THIS line and argue for it, not slip in and
+-- watch the suite stay green. This run is that argument -- the gate caught the third flag on its
+-- first execution, which is the latch doing its job.
+--
+-- What stays non-negotiable is the second half: `enabled = 0`. Every flag is born off for every
+-- tenant, and `feedback.notes` is too; only platform_set_org_flag (platform admin + reason + audit)
+-- turns one on. A flag that shipped on would defeat the whole law.
 select pg_temp.p4_assert(
-  :'flags_base_total'::int = 2 and :'flags_base_enabled'::int = 0,
-  'the defined surface is exactly two flags, both born off');
+  :'flags_base_total'::int = 3 and :'flags_base_enabled'::int = 0,
+  'the defined surface is exactly three flags, all born off');
 
 -- An orphan config row (no definition) must NOT expand the resolved surface.
 reset role;
@@ -146,8 +155,9 @@ select pg_temp.p4_claims('27000000-0000-0000-0000-000000000003', interval '0');
 set local role authenticated;
 select count(*)::text as total from resolve_feature_flags() \gset flags_rogue_
 reset role;
+-- Three, matching the definition count above: the rogue config row must not add a fourth.
 select pg_temp.p4_assert(
-  :'flags_rogue_total'::int = 2,
+  :'flags_rogue_total'::int = 3,
   'resolve must never return a key outside private.flag_definitions -- no expansion');
 select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claims', '', true);

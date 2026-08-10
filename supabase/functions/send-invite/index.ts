@@ -244,10 +244,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // Deliberately no token in the response -- the browser never needs it.
+  //
+  // `deliveryLimited` is the one delivery fact the browser DOES need. Resend accepts the request
+  // and returns 200 even when it will not deliver: on the sandbox sender (`@resend.dev`, i.e. no
+  // verified domain -- DEBT-REGISTER §25) mail reaches only the Resend account owner's own address.
+  // The screen used to report "ההזמנה נשלחה" for every one of those, which is a claim about the
+  // world that was not true (PRODUCT.md:62). This function is the only place that knows which
+  // sender is configured, so it is the only place that can answer honestly.
   return ok(cors, {
     ok: true,
     invitationId: issued.invitation_id,
     email: issued.email,
     expiresAt: issued.expires_at,
+    deliveryLimited: /@resend\.dev>?\s*$/i.test(fromEmail.trim()),
   });
 });

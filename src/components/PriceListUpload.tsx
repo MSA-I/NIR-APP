@@ -15,7 +15,7 @@ import { useAuth } from '../auth/AuthContext';
 import { Modal, Note, ErrorNote, useToast } from './ui';
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow, nameKey, groupSkipped } from '../lib/importSheet';
 import { fetchAll } from '../lib/supabasePaging';
-import { todayISO } from '../lib/format';
+import { fmtMoneyExact, todayISO } from '../lib/format';
 import type { Supplier } from '../lib/types';
 import { TusUploadCancelledError, TusUploadError, tusUploadToDocuments } from '../lib/tusUpload';
 import { SupplierSelectField, useQuickSupplier } from './QuickSupplierPicker';
@@ -412,7 +412,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
                 {preview.rows.slice(0, 100).map((r, i) => (
                   <tr key={i}>
                     <td className="td">{r.name}</td>
-                    <td className="td num">₪{r.price.toFixed(2)}</td>
+                    <td className="td num">{fmtMoneyExact(r.price)}</td>
                     <td className="td">{r.productId ? <span className="badge-done">מוצר קיים</span>
                       : r.ambiguous ? <span className="badge-alert">שם כפול בקטלוג</span>
                         : <span className="badge-await">מוצר חדש</span>}</td>

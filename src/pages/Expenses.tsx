@@ -9,7 +9,7 @@ import { DataTable, EmptyState, ErrorNote, Modal, Note, PageHeader, SkeletonCard
 import { INVOICE_PAYMENT_STATUS } from '../lib/status';
 import { toHebrewError } from '../lib/errors';
 import {
-  addCalendarDays, daysInCalendarMonth, fmtDate, fmtMoney, fmtMoneyExact, fmtNum,
+  addCalendarDays, daysInCalendarMonth, fmtDate, fmtMoneyRounded, fmtMoneyExact, fmtNum,
   shiftCalendarMonth, todayISO,
 } from '../lib/format';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
@@ -272,11 +272,11 @@ export default function Expenses() {
 
         <div className="grid grid-cols-1 border-y border-line-strong bg-surface sm:grid-cols-3">
           <StripStat title="סה״כ הוצאות בטווח" icon={Banknote}
-            value={fmtMoney(Math.round(data.totalAll))} context={`${fmtDate(from)} – ${fmtDate(to)}`} />
+            value={fmtMoneyRounded(data.totalAll)} context={`${fmtDate(from)} – ${fmtDate(to)}`} />
           <StripStat title="מספר חשבוניות" icon={ReceiptText}
             value={fmtNum(data.invoices.length)} context="חשבוניות שאינן מחוקות בטווח" />
           <StripStat title="ממוצע לחשבונית" icon={Calculator}
-            value={avg == null ? '—' : fmtMoney(Math.round(avg))}
+            value={avg == null ? '—' : fmtMoneyRounded(avg)}
             context={avg == null ? 'אין חשבוניות בטווח' : 'סה״כ חלקי מספר החשבוניות'} />
         </div>
 
@@ -289,7 +289,7 @@ export default function Expenses() {
           <>
             <section className="space-y-2">
               <h2 className="section-title">הוצאות לפי ספק</h2>
-              <div className="divide-y divide-line-soft border-y border-line-strong bg-surface md:hidden">
+              <div className="divide-y divide-line-soft border-y border-line-strong bg-surface lg:hidden">
                 {data.bySupplier.map((supplier) => (
                   <button key={supplier.id} type="button" onClick={() => setDrill(supplier)}
                     className="flex min-h-16 w-full items-center gap-3 px-3 py-2.5 text-start hover:bg-surface-sunken active:bg-action-wash/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus">
@@ -305,7 +305,7 @@ export default function Expenses() {
                   </button>
                 ))}
               </div>
-              <div className="hidden md:block">
+              <div className="hidden lg:block">
                 <DataTable rows={data.bySupplier} columns={columns} mobile="scroll"
                   rowLabel={(r) => `הוצאות עבור ${r.name}`}
                   onRowClick={(r) => setDrill(r)} emptyTitle="אין חשבוניות בטווח" />
@@ -323,8 +323,8 @@ export default function Expenses() {
                 </summary>
                 <div className="border-t border-line-soft">
                   <div className="px-3 py-2 text-xs text-ink-muted sm:px-4">
-                    חשבוניות מקושרות בסך <span className="num">{fmtMoney(Math.round(data.coveredTotal))}</span> מתוך{' '}
-                    <span className="num">{fmtMoney(Math.round(data.totalAll))}</span>. הסכומים למטה הם ערכי פריטי ההזמנה במחירי snapshot.
+                    חשבוניות מקושרות בסך <span className="num">{fmtMoneyRounded(data.coveredTotal)}</span> מתוך{' '}
+                    <span className="num">{fmtMoneyRounded(data.totalAll)}</span>. הסכומים למטה הם ערכי פריטי ההזמנה במחירי snapshot.
                   </div>
                   {categoryRows.length > 0 ? (
                     <ul className="divide-y divide-line-soft border-t border-line-soft text-sm">
