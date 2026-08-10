@@ -1,12 +1,15 @@
 import { useEffect, useId, useState } from 'react';
 import { toHebrewError } from "../lib/errors";
-import { Building2, ShieldCheck, Plus, Copy, KeyRound, MessageSquare } from 'lucide-react';
+import { Building2, ShieldCheck, Plus, Copy, MessageSquare, Archive, RefreshCw, Undo2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { DataTable, StatusBadge, ConfirmDialog, Modal, useToast, ErrorNote, SkeletonTable, SkeletonList, type Column } from '../components/ui';
-import { fmtDate, fmtDateTime, fmtNum, todayISO } from '../lib/format';
+import { ReauthModal } from '../components/ReauthModal';
+import { addCalendarDays, dateStartInstant, fmtDate, fmtDateTime, fmtNum, todayISO } from '../lib/format';
 import { ORG_STATUS, ROLE_LABEL } from '../lib/status';
-import { provisionOrg, resetUserPassword, generatePassword, type PlatformOrg, type ProvisionResult } from '../lib/platform';
+// No resetUserPassword: the campaign replaced owner-initiated password reset with self-service
+// recovery to the verified address (campaign report §15), so the function no longer exists.
+import { provisionOrg, generatePassword, type PlatformOrg, type ProvisionResult } from '../lib/platform';
 
 interface NewOrgForm {
   name: string;
@@ -14,9 +17,32 @@ interface NewOrgForm {
   ownerEmail: string;
   password: string;
   vatRate: string;
-  trialEndsAt: string;
   categories: string;
 }
+
+interface PlatformOffboardingRequest {
+  id: string;
+  org_id: string;
+  organization_name: string;
+  status: 'requested' | 'approved' | 'export_building' | 'export_ready' | 'export_failed' | 'cancelled' | 'reactivated';
+  requested_at: string;
+  cancellation_deadline: string;
+  export_completed_at: string | null;
+  export_attempts: number;
+  export_parts_total: number;
+  export_parts_completed: number;
+  last_export_error: string | null;
+}
+
+const OFFBOARDING_STATUS: Record<PlatformOffboardingRequest['status'], string> = {
+  requested: 'ממתין לאישור',
+  approved: 'ממתין להכנת ייצוא',
+  export_building: 'הייצוא בהכנה',
+  export_ready: 'הייצוא מוכן',
+  export_failed: 'ניסיון הייצוא נכשל',
+  cancelled: 'בוטל בידי הלקוח',
+  reactivated: 'הופעל מחדש',
+};
 
 const emptyForm = (): NewOrgForm => ({
   name: '',
@@ -24,24 +50,79 @@ const emptyForm = (): NewOrgForm => ({
   ownerEmail: '',
   password: generatePassword(),
   vatRate: '18',
-  trialEndsAt: '',
   categories: '',
 });
+
+const trialEndInstant = (date: string) => new Date(
+  Date.parse(dateStartInstant(addCalendarDays(date, 1))) - 1,
+).toISOString();
 
 export default function Admin() {
   const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [handover, setHandover] = useState<{ email: string; password: string; result: ProvisionResult } | null>(null);
-  const [pending, setPending] = useState<{ org: PlatformOrg; action: 'suspend' | 'reactivate' } | null>(null);
+  const [pending, setPending] = useState<{ org: PlatformOrg; action: 'suspend' | 'reactivate'; reason?: string } | null>(null);
+  const [statusReauth, setStatusReauth] = useState(false);
+  const [extension, setExtension] = useState<{ org: PlatformOrg; date: string; reason: string } | null>(null);
+  const [extensionReauth, setExtensionReauth] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [resetting, setResetting] = useState(false);
-  const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
+  const [offboardingPending, setOffboardingPending] = useState<{
+    request: PlatformOffboardingRequest;
+    action: 'approve' | 'build' | 'reactivate';
+  } | null>(null);
 
   const { data, loading, error, refetch } = useQuery(async () => {
     const isPlatformAdmin = unwrap(await supabase.rpc('is_platform_admin')) as boolean;
-    if (!isPlatformAdmin) return { isPlatformAdmin, orgs: [] as PlatformOrg[] };
-    return { isPlatformAdmin, orgs: unwrap(await supabase.rpc('platform_orgs')) as PlatformOrg[] };
+    if (!isPlatformAdmin) return {
+      isPlatformAdmin,
+      orgs: [] as PlatformOrg[],
+      offboarding: [] as PlatformOffboardingRequest[],
+    };
+    const [orgs, offboarding] = await Promise.all([
+      supabase.rpc('platform_orgs'),
+      supabase.rpc('platform_offboarding_requests'),
+    ]);
+    return {
+      isPlatformAdmin,
+      orgs: unwrap(orgs) as PlatformOrg[],
+      offboarding: unwrap(offboarding) as PlatformOffboardingRequest[],
+    };
   });
+
+  async function applyOffboardingAction() {
+    if (!offboardingPending) return;
+    const { request, action } = offboardingPending;
+    setBusy(true);
+    try {
+      if (action === 'reactivate') {
+        const reactivated = await supabase.rpc('reactivate_organization_from_offboarding', {
+          p_request_id: request.id,
+        });
+        if (reactivated.error) throw reactivated.error;
+        toast('הארגון הופעל מחדש במצב פעיל.');
+      } else {
+        if (action === 'approve') {
+          const approved = await supabase.rpc('approve_organization_offboarding', {
+            p_request_id: request.id,
+          });
+          if (approved.error) throw approved.error;
+        }
+        const started = await supabase.functions.invoke<{ accepted?: boolean; status?: string }>('tenant-export', {
+          body: { action: 'build', request_id: request.id },
+        });
+        if (started.error) throw started.error;
+        toast(action === 'approve'
+          ? 'הבקשה אושרה והכנת הייצוא הועברה לעיבוד.'
+          : 'ניסיון הכנת הייצוא הועבר מחדש לעיבוד.');
+      }
+      setOffboardingPending(null);
+      await refetch();
+    } catch (actionError) {
+      toast(toHebrewError(actionError), 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function applyStatus(org: PlatformOrg, action: 'suspend' | 'reactivate', reason?: string) {
     const status = action === 'suspend' ? 'suspended' : 'active';
@@ -52,9 +133,10 @@ export default function Admin() {
       p_trial_ends_at: org.trial_ends_at,
       p_reason: reason?.trim() ?? '',
     });
-    if (res.error) { setBusy(false); toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { setBusy(false); setStatusReauth(false); toast(toHebrewError(res.error.message), 'error'); return; }
 
     setBusy(false);
+    setStatusReauth(false);
     setPending(null);
     toast(action === 'suspend' ? 'הארגון הושהה — הגישה נחסמה' : 'הארגון הופעל מחדש');
     void refetch();
@@ -69,7 +151,6 @@ export default function Admin() {
       owner_name: form.ownerName.trim(),
       owner_password: form.password,
       vat_rate: Number(form.vatRate),
-      trial_ends_at: form.trialEndsAt || null,
       ...(categories.length ? { categories } : {}),
     });
     setBusy(false);
@@ -80,14 +161,21 @@ export default function Admin() {
     void refetch();
   }
 
-  async function submitReset(email: string) {
+  async function extendTrial() {
+    if (!extension) return;
     setBusy(true);
-    const password = generatePassword();
-    const res = await resetUserPassword(email.trim().toLowerCase(), password);
+    const res = await supabase.rpc('set_organization_lifecycle', {
+      p_org_id: extension.org.id,
+      p_status: 'trial',
+      p_trial_ends_at: trialEndInstant(extension.date),
+      p_reason: extension.reason.trim(),
+    });
     setBusy(false);
-    if (!res.ok) { toast(toHebrewError(res.message), 'error'); return; }
-    setResetting(false);
-    setIssued({ email: res.result.email ?? email.trim(), password });
+    setExtensionReauth(false);
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    setExtension(null);
+    toast('תקופת הניסיון הוארכה');
+    void refetch();
   }
 
   const columns: Column<PlatformOrg>[] = [
@@ -101,11 +189,58 @@ export default function Admin() {
       key: 'actions',
       header: '',
       render: (o) => (
-        <button
-          className={o.status === 'suspended' ? 'btn-secondary py-1! text-xs' : 'btn-ghost py-1! text-xs text-alert-solid'}
-          onClick={() => setPending({ org: o, action: o.status === 'suspended' ? 'reactivate' : 'suspend' })}>
-          {o.status === 'suspended' ? 'הפעלה מחדש' : 'השהיה'}
-        </button>
+        <div className="flex flex-wrap justify-end gap-1">
+          {o.status === 'trial' && (
+            <button
+              className="btn-ghost py-1! text-xs"
+              onClick={() => setExtension({ org: o, date: addCalendarDays(todayISO(), 30), reason: '' })}>
+              הארכת ניסיון
+            </button>
+          )}
+          <button
+            className={o.status === 'suspended' ? 'btn-secondary py-1! text-xs' : 'btn-ghost py-1! text-xs text-alert-solid'}
+            onClick={() => setPending({ org: o, action: o.status === 'suspended' ? 'reactivate' : 'suspend' })}>
+            {o.status === 'suspended' ? 'הפעלה מחדש' : 'השהיה'}
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const offboardingColumns: Column<PlatformOffboardingRequest>[] = [
+    { key: 'organization', header: 'ארגון', render: (r) => <span className="font-medium text-ink">{r.organization_name}</span>, sortValue: (r) => r.organization_name },
+    {
+      key: 'status', header: 'מצב', sortValue: (r) => r.status,
+      render: (r) => (
+        <div>
+          <div>{OFFBOARDING_STATUS[r.status]}</div>
+          {r.status === 'export_building' && r.export_parts_total > 0 && (
+            <div className="mt-0.5 text-xs text-ink-muted num">{fmtNum(r.export_parts_completed)} / {fmtNum(r.export_parts_total)}</div>
+          )}
+        </div>
+      ),
+    },
+    { key: 'requested', header: 'מועד הבקשה', render: (r) => fmtDate(r.requested_at), sortValue: (r) => r.requested_at },
+    { key: 'attempts', header: 'ניסיונות ייצוא', className: 'num', render: (r) => fmtNum(r.export_attempts), sortValue: (r) => r.export_attempts },
+    {
+      key: 'actions', header: '', render: (r) => (
+        <div className="flex flex-wrap justify-end gap-1">
+          {r.status === 'requested' && (
+            <button type="button" className="btn-primary py-1! text-xs" onClick={() => setOffboardingPending({ request: r, action: 'approve' })}>
+              אישור והכנת ייצוא
+            </button>
+          )}
+          {['approved', 'export_building', 'export_failed'].includes(r.status) && (
+            <button type="button" className="btn-secondary py-1! text-xs" onClick={() => setOffboardingPending({ request: r, action: 'build' })}>
+              <RefreshCw size={13} /> {r.status === 'export_failed' ? 'ניסיון חוזר' : r.status === 'export_building' ? 'בדיקה והמשך' : 'הכנת ייצוא'}
+            </button>
+          )}
+          {!['cancelled', 'reactivated'].includes(r.status) && (
+            <button type="button" className="btn-ghost py-1! text-xs" onClick={() => setOffboardingPending({ request: r, action: 'reactivate' })}>
+              <Undo2 size={13} /> הפעלה מחדש
+            </button>
+          )}
+        </div>
       ),
     },
   ];
@@ -129,9 +264,6 @@ export default function Admin() {
         emptySubtitle="לקוח חדש נפתח כאן — הרשמה עצמית אינה קיימת במערכת"
         toolbar={
           <div className="ms-auto flex flex-wrap items-center gap-2">
-            <button className="btn-secondary flex items-center gap-1.5" onClick={() => setResetting(true)}>
-              <KeyRound size={16} /> הנפקת סיסמה
-            </button>
             <button className="btn-primary flex items-center gap-1.5" onClick={() => setCreating(true)}>
               <Plus size={16} /> ארגון חדש
             </button>
@@ -142,24 +274,64 @@ export default function Admin() {
       <FeedbackNotes />
 
       <NewOrgModal open={creating} busy={busy} onClose={() => setCreating(false)} onSubmit={submitNewOrg} />
-      <ResetPasswordModal open={resetting} busy={busy} onClose={() => setResetting(false)} onSubmit={submitReset} />
-
-      {issued && (
-        <Modal open onClose={() => setIssued(null)} title="סיסמה חדשה הונפקה — למסירה">
+      <Modal open={extension !== null} onClose={() => setExtension(null)} title={`הארכת תקופת הניסיון — ${extension?.org.name ?? ''}`} busy={busy}>
+        {extension && (
           <div className="space-y-4">
-            <p className="text-sm text-ink-soft">
-              הסיסמה הקודמת בוטלה והחדשה כבר בתוקף. היא מוצגת פעם אחת בלבד — מסור אותה בערוץ מאובטח
-              ובקש להחליף אותה מ«הגדרות» מיד אחרי הכניסה.
-            </p>
-            <CredentialRow label="אימייל" value={issued.email} onCopy={() => toast('הועתק')} onCopyError={() => toast('ההעתקה נכשלה — יש להעתיק ידנית', 'error')} />
-            <CredentialRow label="סיסמה חדשה" value={issued.password} onCopy={() => toast('הועתק')} onCopyError={() => toast('ההעתקה נכשלה — יש להעתיק ידנית', 'error')} />
-            <div className="flex justify-end">
-              <button className="btn-primary" onClick={() => setIssued(null)}>סגירה</button>
+            <div>
+              <label className="label" htmlFor="trial-extension-date">תאריך סיום חדש *</label>
+              <input
+                id="trial-extension-date"
+                className="input"
+                type="date"
+                min={addCalendarDays(todayISO(), 1)}
+                value={extension.date}
+                onChange={(event) => setExtension({ ...extension, date: event.target.value })}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="trial-extension-reason">סיבת ההארכה *</label>
+              <textarea
+                id="trial-extension-reason"
+                className="input min-h-24"
+                value={extension.reason}
+                onChange={(event) => setExtension({ ...extension, reason: event.target.value })}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" disabled={busy} onClick={() => setExtension(null)}>ביטול</button>
+              <button
+                className="btn-primary"
+                disabled={busy || !extension.date || !extension.reason.trim()}
+                onClick={() => setExtensionReauth(true)}>
+                אימות והארכה
+              </button>
             </div>
           </div>
-        </Modal>
-      )}
+        )}
+      </Modal>
+      <ReauthModal
+        open={extensionReauth}
+        title="אימות זהות להארכת תקופת ניסיון"
+        onConfirm={() => { void extendTrial(); }}
+        onCancel={() => setExtensionReauth(false)}
+      />
 
+      <section className="space-y-3" aria-labelledby="offboarding-heading">
+        <div>
+          <h2 id="offboarding-heading" className="section-title flex items-center gap-2"><Archive size={17} /> סיום שירות וייצוא דיירים</h2>
+          <p className="mt-1 text-sm text-ink-muted">אישור מפעיל מתחיל הכנת ייצוא מבוקר. התהליך אינו מוחק מידע ואינו חוסם צפייה של הלקוח.</p>
+        </div>
+        <DataTable
+          rows={data.offboarding}
+          columns={offboardingColumns}
+          searchable
+          searchFn={(row, query) => row.organization_name.toLowerCase().includes(query)}
+          searchLabel="חיפוש בבקשות סיום שירות"
+          rowLabel={(row) => `בקשת סיום שירות של ${row.organization_name}`}
+          emptyTitle="אין בקשות סיום שירות"
+          emptySubtitle="בקשות שיוגשו בידי בעלי ארגונים יופיעו כאן"
+        />
+      </section>
       {handover && (
         <Modal open onClose={() => setHandover(null)} title="הארגון הוקם — פרטי כניסה למסירה">
           <div className="space-y-4">
@@ -179,7 +351,7 @@ export default function Admin() {
       )}
 
       <ConfirmDialog
-        open={!!pending}
+        open={!!pending && !statusReauth}
         busy={busy}
         danger={pending?.action === 'suspend'}
         requireReason
@@ -191,7 +363,29 @@ export default function Admin() {
         }
         confirmLabel={pending?.action === 'suspend' ? 'השהיה' : 'הפעלה מחדש'}
         onClose={() => setPending(null)}
-        onConfirm={(reason) => { if (pending) void applyStatus(pending.org, pending.action, reason); }}
+        onConfirm={(reason) => {
+          if (!pending) return;
+          if (pending.action === 'reactivate') {
+            setPending({ ...pending, reason });
+            setStatusReauth(true);
+            return;
+          }
+          void applyStatus(pending.org, pending.action, reason);
+        }}
+      />
+      <ReauthModal
+        open={statusReauth}
+        title="אימות זהות להפעלת ארגון מחדש"
+        onConfirm={() => { if (pending) void applyStatus(pending.org, pending.action, pending.reason); }}
+        onCancel={() => setStatusReauth(false)}
+      />
+      <ReauthModal
+        open={offboardingPending !== null}
+        title={offboardingPending?.action === 'reactivate'
+          ? 'אימות זהות לפני הפעלת הארגון מחדש'
+          : 'אימות זהות לפני טיפול בייצוא הארגון'}
+        onConfirm={() => { void applyOffboardingAction(); }}
+        onCancel={() => setOffboardingPending(null)}
       />
     </div>
   );
@@ -323,36 +517,6 @@ function CredentialRow({ label, value, onCopy, onCopyError }: {
   );
 }
 
-function ResetPasswordModal({ open, busy, onClose, onSubmit }: {
-  open: boolean; busy: boolean; onClose: () => void; onSubmit: (email: string) => void;
-}) {
-  const [email, setEmail] = useState('');
-  const inputId = useId();
-
-  useEffect(() => { if (!open) setEmail(''); }, [open]);
-  if (!open) return null;
-
-  return (
-    <Modal open onClose={onClose} title="הנפקת סיסמה חדשה למשתמש">
-      <div className="space-y-4">
-        <p className="text-sm text-ink-soft">
-          לשימוש כשמשתמש איבד גישה. הסיסמה נוצרת כאן, מחליפה את הקודמת מיד, ומוצגת פעם אחת בלבד.
-        </p>
-        <div>
-          <label className="label" htmlFor={inputId}>אימייל המשתמש</label>
-          <input id={inputId} type="email" className="input" dir="ltr" placeholder="name@example.com"
-            value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div className="flex justify-end gap-2">
-          <button className="btn-ghost" onClick={onClose}>ביטול</button>
-          <button className="btn-primary" disabled={busy || !email.includes('@')}
-            onClick={() => onSubmit(email)}>הנפקה</button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
 function NewOrgModal({ open, busy, onClose, onSubmit }: {
   open: boolean; busy: boolean; onClose: () => void; onSubmit: (form: NewOrgForm) => void;
 }) {
@@ -401,10 +565,6 @@ function NewOrgModal({ open, busy, onClose, onSubmit }: {
           <div>
             <label className="label" htmlFor="new-org-vat">שיעור מע״מ (%)</label>
             <input id="new-org-vat" className="input num" type="number" step="0.5" value={form.vatRate} onChange={(e) => set('vatRate', e.target.value)} />
-          </div>
-          <div>
-            <label className="label" htmlFor="new-org-trial">סיום תקופת ניסיון (אופציונלי)</label>
-            <input id="new-org-trial" className="input" type="date" min={todayISO()} value={form.trialEndsAt} onChange={(e) => set('trialEndsAt', e.target.value)} />
           </div>
           <div className="sm:col-span-2">
             <label className="label" htmlFor="new-org-categories">קטגוריות בסיס (מופרדות בפסיק — ריק יוצר «כללי» בלבד)</label>

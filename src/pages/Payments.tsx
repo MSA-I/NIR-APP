@@ -22,8 +22,9 @@ import {
   type ServerPredicate,
   type ServerSort,
 } from '../lib/serverList';
+import { financialSupplierMap } from '../lib/financialSuppliers';
 
-type Row = Payment & {
+type Row = Omit<Payment, 'supplier'> & {
   supplier: { name: string };
   allocations: { amount: number; invoice: { invoice_number: string } | null }[];
   executor: { full_name: string } | null;
@@ -80,7 +81,7 @@ export default function Payments() {
       }
       const result = await fetchServerList<Row>(supabase, {
         table: 'payments',
-        select: '*, supplier:suppliers(name), allocations:payment_allocations(amount, invoice:invoices(invoice_number)), executor:profiles!p0_payments_actor_tenant_fk(full_name)',
+        select: '*, allocations:payment_allocations(amount, invoice:invoices(invoice_number)), executor:profiles!p0_payments_actor_tenant_fk(full_name)',
         predicates,
         sort: uiSort
           ? [{ column: SORT_COLUMN[uiSort[0].column], ascending: uiSort[0].ascending }]
@@ -88,7 +89,15 @@ export default function Payments() {
         page,
         pageSize: PAGE_SIZE,
       });
-      return { ...result, narrowed };
+      const suppliers = await financialSupplierMap(result.rows.map((row) => row.supplier_id));
+      return {
+        ...result,
+        rows: result.rows.map((row) => ({
+          ...row,
+          supplier: { name: suppliers.get(row.supplier_id)?.name ?? '—' },
+        })),
+        narrowed,
+      };
     },
     [],
     [DOMAIN.payments, 'list', { id: idFilter, month: monthFilter, q: searchTerm, sort: sortParam, page }],

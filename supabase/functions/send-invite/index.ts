@@ -17,9 +17,17 @@
 //                        a client-supplied base URL would let a caller aim the token elsewhere)
 //   ALLOWED_ORIGINS   -- optional, comma-separated; defaults to APP_BASE_URL. Add the dev
 //                        origin (http://localhost:5199) here to call this from `npm run dev`.
-//   SUPABASE_URL / SUPABASE_ANON_KEY -- injected by the platform
+//   SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY -- injected by the platform;
+//                         service_role is used only for the canonical tenant lifecycle preflight
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.91.1';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.91.1';
+import {
+  releaseOrganizationEgress,
+  reserveOrganizationEgress,
+  type ServiceRpc,
+  type ServiceRpcResult,
+} from '../_shared/organization-egress.ts';
+import { runReservedEgress } from '../_shared/reserved-egress.ts';
 
 /** Echo the caller's Origin only when it is on the allowlist -- never a blanket '*'. */
 function corsFor(req: Request): Record<string, string> {
@@ -39,7 +47,8 @@ type ErrorCode =
   | 'unauthenticated' | 'not_owner' | 'invalid_request' | 'invalid_email'
   | 'already_member' | 'role_not_invitable' | 'invitation_unknown'
   | 'invitation_accepted' | 'invitation_revoked' | 'invite_cooldown'
-  | 'invite_daily_limit' | 'email_failed' | 'misconfigured'
+  | 'invite_daily_limit' | 'email_failed' | 'org_unavailable'
+  | 'service_unavailable' | 'misconfigured'
   | 'supplier_invitation_requires_supplier' | 'supplier_outside_organization';
 
 interface InviteRequest {
@@ -71,6 +80,8 @@ const ROLE_LABEL: Record<string, string> = {
 
 /** Hebrew message per error code -- the UI shows these verbatim. */
 const MESSAGE: Record<ErrorCode, string> = {
+  org_unavailable: 'לא ניתן לשלוח הזמנות כאשר הארגון במצב קריאה בלבד.',
+  service_unavailable: 'לא ניתן לאמת כרגע את מצב הארגון. נסה שוב מאוחר יותר.',
   unauthenticated: 'נדרשת התחברות',
   not_owner: 'רק בעל העסק יכול להזמין משתמשים',
   invalid_request: 'בקשה לא תקינה',
@@ -87,6 +98,23 @@ const MESSAGE: Record<ErrorCode, string> = {
   supplier_invitation_requires_supplier: 'להזמנת סוכן ספק יש לבחור ספק מהרשימה',
   supplier_outside_organization: 'הספק שנבחר אינו קיים בעסק או שהוסר',
 };
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const EMAIL_PROVIDER_TIMEOUT_MS = 10_000;
+
+function serviceRpc(admin: SupabaseClient<any, any, any>): ServiceRpc {
+  return (name, args) =>
+    admin.rpc(name, args) as unknown as PromiseLike<ServiceRpcResult>;
+}
+
+class EmailProviderError extends Error {
+  readonly status: number | null;
+
+  constructor(status: number | null) {
+    super('email_provider_failed');
+    this.status = status;
+  }
+}
 
 function fail(cors: Record<string, string>, code: ErrorCode, status: number) {
   return new Response(JSON.stringify({ error: { code, message: MESSAGE[code] } }), {
@@ -166,7 +194,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const resendKey = Deno.env.get('RESEND_API_KEY');
   const fromEmail = Deno.env.get('INVITE_FROM_EMAIL');
   const appBaseUrl = Deno.env.get('APP_BASE_URL');
-  if (!resendKey || !fromEmail || !appBaseUrl) return fail(cors, 'misconfigured', 500);
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!resendKey || !fromEmail || !appBaseUrl || !supabaseUrl || !anonKey || !serviceKey) {
+    return fail(cors, 'misconfigured', 500);
+  }
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) return fail(cors, 'unauthenticated', 401);
@@ -178,28 +211,77 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return fail(cors, 'invalid_request', 400);
   }
   if (body.action !== 'create' && body.action !== 'resend') return fail(cors, 'invalid_request', 400);
+  if (body.action === 'create') {
+    if (typeof body.email !== 'string' || typeof body.role !== 'string') {
+      return fail(cors, 'invalid_request', 400);
+    }
+    if (!(body.role in ROLE_LABEL)) return fail(cors, 'role_not_invitable', 400);
+    // Fast fail only -- invitations_supplier_role_check and the tenant-aware RPC remain the
+    // authoritative boundary.
+    if (body.role === 'supplier' && (typeof body.supplierId !== 'string' || !body.supplierId)) {
+      return fail(cors, 'supplier_invitation_requires_supplier', 400);
+    }
+    if (body.role !== 'supplier' && body.supplierId != null) {
+      return fail(cors, 'invalid_request', 400);
+    }
+  } else if (typeof body.invitationId !== 'string') {
+    return fail(cors, 'invalid_request', 400);
+  }
 
-  // Anon key + the caller's JWT: every RPC below runs as the caller, so auth_org()/auth_role()
-  // decide what they may do. No service_role anywhere in this function.
+  // Anon key + the caller's JWT: invitation RPCs still run as the caller, so
+  // auth_org()/auth_role() remain the mutation boundary. The service client below only reserves
+  // and settles the bounded external-email lease; it never receives invitation data or tokens.
   const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
+    supabaseUrl,
+    anonKey,
     { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } },
   );
 
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData?.user) return fail(cors, 'unauthenticated', 401);
 
+  const profileResult = await supabase.from('profiles').select('org_id, role, active')
+    .eq('id', userData.user.id).maybeSingle();
+  if (profileResult.error) return fail(cors, 'service_unavailable', 503);
+  if (!profileResult.data?.active || profileResult.data.role !== 'owner') {
+    return fail(cors, 'not_owner', 403);
+  }
+  const orgId = profileResult.data.org_id;
+  if (typeof orgId !== 'string') return fail(cors, 'not_owner', 403);
+  const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+  const rpc = serviceRpc(admin);
+  const presentedCorrelation = req.headers.get('x-correlation-id') ?? '';
+  const correlationId = UUID.test(presentedCorrelation)
+    ? presentedCorrelation
+    : crypto.randomUUID();
+  let reservation;
+  try {
+    reservation = await reserveOrganizationEgress(rpc, {
+      orgId,
+      kind: 'invitation_email',
+      correlationId,
+      ttlSeconds: 30,
+    });
+  } catch {
+    return fail(cors, 'service_unavailable', 503);
+  }
+  if (!reservation.lease) {
+    if (reservation.settledOutcome === 'delivered') {
+      return ok(cors, { ok: true, idempotent: true });
+    }
+    return fail(
+      cors,
+      reservation.settledOutcome ? 'email_failed' : 'org_unavailable',
+      reservation.settledOutcome ? 502 : 409,
+    );
+  }
+  const egressLease = reservation.lease;
+  if (egressLease.idempotent) {
+    return fail(cors, 'service_unavailable', 409);
+  }
+
   let issued: IssuedInvitation;
   if (body.action === 'create') {
-    if (typeof body.email !== 'string' || typeof body.role !== 'string') return fail(cors, 'invalid_request', 400);
-    if (!(body.role in ROLE_LABEL)) return fail(cors, 'role_not_invitable', 400);
-    // Fast fail only — the DB constraint (invitations_supplier_role_check, 0025) is the boundary.
-    if (body.role === 'supplier' && (typeof body.supplierId !== 'string' || !body.supplierId)) {
-      return fail(cors, 'supplier_invitation_requires_supplier', 400);
-    }
-    if (body.role !== 'supplier' && body.supplierId != null) return fail(cors, 'invalid_request', 400);
-
     const { data, error } = await supabase.rpc(
       'create_invitation',
       body.role === 'supplier'
@@ -208,15 +290,29 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
     if (error) {
       const code = codeFromPgError(error.message);
+      try {
+        await releaseOrganizationEgress(rpc, egressLease, {
+          outcome: 'failed',
+          evidenceCode: `invitation_${code}`,
+        });
+      } catch {
+        return fail(cors, 'service_unavailable', 503);
+      }
       return fail(cors, code, code === 'invite_cooldown' || code === 'invite_daily_limit' ? 429 : 403);
     }
     issued = data as IssuedInvitation;
   } else {
-    if (typeof body.invitationId !== 'string') return fail(cors, 'invalid_request', 400);
-
     const { data, error } = await supabase.rpc('resend_invitation', { p_id: body.invitationId });
     if (error) {
       const code = codeFromPgError(error.message);
+      try {
+        await releaseOrganizationEgress(rpc, egressLease, {
+          outcome: 'failed',
+          evidenceCode: `invitation_${code}`,
+        });
+      } catch {
+        return fail(cors, 'service_unavailable', 503);
+      }
       return fail(cors, code, code === 'invite_cooldown' || code === 'invite_daily_limit' ? 429 : 403);
     }
     issued = data as IssuedInvitation;
@@ -225,21 +321,53 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const link = `${appBaseUrl.replace(/\/+$/, '')}/accept-invite?token=${encodeURIComponent(issued.token)}`;
   const roleLabel = ROLE_LABEL[issued.role] ?? issued.role;
 
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: fromEmail,
-      to: [issued.email],
-      subject: `הוזמנת להצטרף ל-${issued.org_name} ב-SupplyFlow`,
-      html: emailHtml(issued.org_name, roleLabel, link, issued.expires_at),
-      text: emailText(issued.org_name, roleLabel, link),
-    }),
-  });
+  try {
+    await runReservedEgress({
+      reserve: () => Promise.resolve(egressLease),
+      perform: async () => {
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${resendKey}`,
+            'Content-Type': 'application/json',
+            // Resend retains this key for 24 hours, so response/settlement retries cannot send a
+            // second copy of the same token-bearing email.
+            'Idempotency-Key': `supplyflow-invite/${correlationId}`,
+          },
+          body: JSON.stringify({
+            from: fromEmail,
+            to: [issued.email],
+            subject: `הוזמנת להצטרף ל-${issued.org_name} ב-SupplyFlow`,
+            html: emailHtml(issued.org_name, roleLabel, link, issued.expires_at),
+            text: emailText(issued.org_name, roleLabel, link),
+          }),
+          signal: AbortSignal.timeout(EMAIL_PROVIDER_TIMEOUT_MS),
+        });
 
-  if (!res.ok) {
-    // The status is safe to log; the body may echo the recipient, and `link` carries the token.
-    console.error('resend rejected the invitation email, status', res.status);
+        if (!res.ok) {
+          // The status is safe to log; the body may echo the recipient, and `link` carries token.
+          console.error('resend rejected the invitation email, status', res.status);
+          throw new EmailProviderError(res.status);
+        }
+        return res.status;
+      },
+      settle: (lease, outcome) => {
+        const providerStatus = outcome.ok
+          ? outcome.result
+          : outcome.error instanceof EmailProviderError
+          ? outcome.error.status
+          : null;
+        return releaseOrganizationEgress(rpc, lease, {
+          outcome: outcome.ok ? 'delivered' : 'failed',
+          evidenceCode: outcome.ok ? 'resend_accepted' : 'resend_failed',
+          providerStatus,
+        });
+      },
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'organization_egress_settlement_failed') {
+      return fail(cors, 'service_unavailable', 503);
+    }
     return fail(cors, 'email_failed', 502);
   }
 

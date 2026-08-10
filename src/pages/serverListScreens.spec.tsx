@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -34,6 +34,7 @@ vi.mock('../auth/AuthContext', () => ({
     profile: { role: 'owner', full_name: 'בודק' },
     org: { settings: {} },
     session: {},
+    organizationAccess: { mode: 'active', canWrite: true },
   }),
 }));
 
@@ -45,6 +46,21 @@ beforeAll(() => {
   // matchMedia is deliberately NOT stubbed: ui.tsx's useMediaQuery defaults to desktop when it
   // is absent (jsdom), which keeps the toolbar inline instead of inside the closed mobile sheet.
   window.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as never;
+});
+
+beforeEach(() => {
+  server.use(http.get(`${SUPABASE_URL}/rest/v1/financial_supplier_directory`, ({ request }) => {
+    const filter = new URL(request.url).searchParams.get('id');
+    const ids = /^in\.\((.*)\)$/.exec(filter ?? '')?.[1]?.split(',').filter(Boolean) ?? [];
+    return HttpResponse.json(ids.map((id) => ({
+      id,
+      name: `ספק ${id.replace(/^sup-/, '')}`,
+      tax_id: null,
+      payment_terms: null,
+      status: 'active',
+      bank_details: null,
+    })));
+  }));
 });
 
 interface Seen { url: URL; method: string }
@@ -220,7 +236,7 @@ describe('/invoices — server mode', () => {
   it('states visibly when the supplier arm of a search was narrowed away', async () => {
     const seen = useJsonTable('invoices', [invoiceRow(0)]);
     useBalances();
-    server.use(http.get(`${SUPABASE_URL}/rest/v1/suppliers`, ({ request }) => {
+    server.use(http.get(`${SUPABASE_URL}/rest/v1/financial_supplier_directory`, ({ request }) => {
       const limit = Number(new URL(request.url).searchParams.get('limit') ?? '999');
       return HttpResponse.json(
         Array.from({ length: Math.min(limit, SUPPLIER_SEARCH_ID_CAP + 1) }, (_, i) => ({ id: `sup-${i}` })),

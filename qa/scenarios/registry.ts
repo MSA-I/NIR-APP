@@ -262,8 +262,8 @@ const definitions = [
     dependsOn: ['payer-transfer-execution'],
     routeExpectations: [{
       role: 'accountant',
-      allowed: ['/dashboard', '/invoices', '/payments', '/pay', '/bank', '/expenses', '/reports', '/audit', '/analytics'],
-      forbidden: ['/suppliers', '/products', '/prices', '/orders', '/receiving', '/documents', '/payment-requests', '/settings', '/my-prices', '/admin'],
+      allowed: ['/dashboard', '/invoices', '/payments', '/pay', '/bank', '/expenses', '/reports', '/audit'],
+      forbidden: ['/suppliers', '/products', '/prices', '/orders', '/receiving', '/documents', '/payment-requests', '/analytics', '/settings', '/my-prices', '/admin'],
     }],
     steps: [
       {
@@ -314,7 +314,7 @@ const definitions = [
       { role: 'office', allowed: ['/dashboard', '/suppliers', '/orders', '/receiving', '/invoices', '/documents', '/payment-requests', '/analytics'], forbidden: ['/pay', '/payments', '/bank', '/reports', '/audit', '/settings', '/admin'] },
       { role: 'kitchen', allowed: ['/dashboard', '/orders', '/receiving', '/invoices', '/documents'], forbidden: ['/payment-requests', '/pay', '/payments', '/bank', '/reports', '/audit', '/settings', '/admin'] },
       { role: 'payer', allowed: ['/dashboard', '/pay'], forbidden: ['/suppliers', '/orders', '/receiving', '/invoices', '/payment-requests', '/payments', '/bank', '/reports', '/audit', '/settings', '/admin'] },
-      { role: 'accountant', allowed: ['/dashboard', '/invoices', '/payments', '/pay', '/bank', '/reports', '/audit', '/analytics'], forbidden: ['/suppliers', '/orders', '/receiving', '/documents', '/payment-requests', '/settings', '/admin'] },
+      { role: 'accountant', allowed: ['/dashboard', '/invoices', '/payments', '/pay', '/bank', '/reports', '/audit'], forbidden: ['/suppliers', '/orders', '/receiving', '/documents', '/payment-requests', '/analytics', '/settings', '/admin'] },
       { role: 'supplier', allowed: ['/dashboard', '/my-prices', '/documents/:documentId/review'], forbidden: ['/suppliers', '/orders', '/invoices', '/payment-requests', '/pay', '/payments', '/bank', '/reports', '/audit', '/settings', '/admin'] },
     ],
     steps: [

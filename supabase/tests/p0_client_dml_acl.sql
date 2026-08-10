@@ -17,9 +17,9 @@ $$;
 
 -- ===== Static browser-write and trusted-server CRUD contract =====
 
--- The trusted server holds full CRUD on every public table -- with exactly ONE named
--- exception, listed here rather than pattern-matched so that the next table to drop the grant
--- has to make its own case in this file instead of being absorbed silently.
+-- The trusted server holds full CRUD on every public table except the named command-only
+-- ledgers below. Each exception is listed rather than pattern-matched so that the next table
+-- to drop a grant has to make its own case here instead of being absorbed silently.
 --
 -- org_autonomy_policies (0076) governs whether the system may write a financial record with no
 -- human approval. Its only legitimate writer is platform_set_autonomy_policy, a SECURITY
@@ -39,13 +39,54 @@ returns table (table_name text, why text)
 language sql
 immutable
 as $$
-  select * from (values (
-    'org_autonomy_policies'::text,
-    'autonomy configuration (0076): the only legitimate writer is a SECURITY DEFINER owned by '
-    || 'postgres, so the grant buys nothing and costs a bypass of the tighten-only floor and '
-    || 'the mandatory reason'::text
-  )) as exceptions(table_name, why)
+  select * from (values
+    (
+      'org_autonomy_policies'::text,
+      'autonomy configuration (0076): the only legitimate writer is a SECURITY DEFINER owned by '
+      || 'postgres, so the grant buys nothing and costs a bypass of the tighten-only floor and '
+      || 'the mandatory reason'::text
+    ),
+    (
+      'price_list_shadow_runs'::text,
+      'immutable automation evidence (0096): writes require the bounded shadow RPC and its '
+      || 'document/job/interpretation chain; direct service DML could forge or erase evidence'::text
+    ),
+    (
+      'price_list_shadow_lines'::text,
+      'immutable line evidence (0096): writes are owned by the same bounded shadow RPC; direct '
+      || 'service DML could change the prediction later compared with a human decision'::text
+    ),
+    (
+      'price_list_calibration_reviews'::text,
+      'human calibration evidence (0096): only the authenticated reviewed command may append a '
+      || 'reasoned revision; service DML could impersonate a reviewer'::text
+    ),
+    (
+      'price_list_empty_run_reviews'::text,
+      'human empty-run evidence (0096): only the authenticated reviewed command may append a '
+      || 'reasoned revision; service DML could impersonate a reviewer'::text
+    ),
+    (
+      'price_list_automation_scope_decisions'::text,
+      'platform eligibility evidence (0096): only the step-up, reasoned platform command may '
+      || 'append a decision; service DML would bypass corpus and audit checks'::text
+    )
+  ) as exceptions(table_name, why)
 $$;
+
+select pg_temp.p0_acl_assert(
+  not exists (
+    select 1
+    from pg_temp.p0_service_role_write_exceptions() exceptions
+    left join pg_catalog.pg_class relation
+      on relation.oid = to_regclass(format('%I.%I', 'public', exceptions.table_name))
+    left join pg_catalog.pg_namespace namespace on namespace.oid = relation.relnamespace
+    where relation.oid is null
+       or relation.relkind not in ('r', 'p')
+       or namespace.nspname is distinct from 'public'
+  ),
+  'a service_role write exception does not resolve to an existing public table'
+);
 
 select pg_temp.p0_acl_assert(
   not exists (
@@ -73,12 +114,12 @@ select pg_temp.p0_acl_assert(
 );
 
 -- The latch, in the spirit of p9_five_domains.sql's exemption-count pin: the exception list
--- stays at exactly one entry. An agent that revokes the grant on a second table must edit THIS
+-- stays at exactly six entries. An agent that revokes the grant on another table must edit THIS
 -- line and argue for it, rather than appending a row and watching the suite stay green.
 select pg_temp.p0_acl_assert(
-  (select count(*) from pg_temp.p0_service_role_write_exceptions()) = 1,
-  'the service_role write-exception list must stay at exactly one table (org_autonomy_policies '
-  || '-- 0076); a second exception is a decision, not an append'
+  (select count(*) from pg_temp.p0_service_role_write_exceptions()) = 6,
+  'the service_role write-exception list must stay at exactly six command-only tables; a new '
+  || 'exception is a security decision, not an append'
 );
 
 -- The exception must be EXERCISED, not merely declared. A listed table that still holds the
@@ -241,9 +282,9 @@ select pg_temp.p0_acl_assert(
   'legacy two-argument finalize overload is executable without an audit reason'
 );
 
--- Exercise the exact provisioning regression: service_role can create,
--- read and modify an organization even though browser roles do not. A tenant hard-delete is no
--- longer a valid CRUD probe: since 0092 the trial/lifecycle latch deliberately blocks its
+-- Exercise the exact provisioning regression: service_role keeps the table privileges needed to
+-- create, read and modify an organization even though browser roles do not. A tenant hard-delete
+-- is no longer a valid CRUD probe: since 0092 the trial/lifecycle latch deliberately blocks its
 -- cascading child deletes (the org row vanishes before the cascade runs, and every child guard
 -- then reads the missing tenant as suspended) until an explicit offboarding contract exists.
 set local role service_role;
@@ -317,7 +358,7 @@ insert into public.invoices (
   '63000000-0000-0000-0000-000000000001',
   '13000000-0000-0000-0000-000000000001',
   '33000000-0000-0000-0000-000000000002',
-  'P0-ACL-APPROVED', '2026-07-23', 100, 18, 118, 'approved'
+  'P0-ACL-EXISTING', '2026-07-23', 100, 18, 118, 'received'
 );
 
 insert into public.payments (
@@ -770,7 +811,7 @@ exception when insufficient_privilege then
 end
 $$;
 
--- Accountant may register proof only for a payment they executed. An approved invoice stays
+-- Accountant may register proof only for a payment they executed. An existing invoice stays
 -- readable but cannot receive an accountant-authored attachment.
 do $$
 begin

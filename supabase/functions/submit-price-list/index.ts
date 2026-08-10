@@ -13,6 +13,7 @@
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.91.1';
 import * as PapaModule from 'https://esm.sh/papaparse@5.4.1?target=denonext';
 import * as XLSX from 'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs';
+import { organizationWriteAllowed } from '../_shared/organization-access.ts';
 
 // esm.sh exposes PapaParse as a CommonJS default at runtime, while @types/papaparse declares
 // named members only. Resolve that interop boundary explicitly so Deno types and Edge agree.
@@ -516,12 +517,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return fail(cors, new IntakeError('not_authorized', 403));
   }
 
-  const [{ data: org }, { data: supplier }] = await Promise.all([
-    admin.from('organizations').select('status').eq('id', profile.org_id).maybeSingle(),
+  const [{ data: orgMode }, { data: supplier }] = await Promise.all([
+    admin.rpc('service_organization_access_mode', { p_org_id: profile.org_id }),
     admin.from('suppliers').select('id').eq('org_id', profile.org_id)
       .eq('id', supplierId).is('deleted_at', null).maybeSingle(),
   ]);
-  if (!org || (org as { status: string }).status === 'suspended' || !supplier) {
+  if (!organizationWriteAllowed(orgMode ? { access_mode: String(orgMode) } : null) || !supplier) {
     return fail(cors, new IntakeError('not_authorized', 403));
   }
 

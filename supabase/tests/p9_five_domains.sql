@@ -90,7 +90,13 @@ select pg_temp.p9_assert(
       and pol.polname = 'notification_preferences_select_own'
       and pol.polpermissive
       and pol.polcmd = 'r'
-      and pg_catalog.pg_get_expr(pol.polqual, pol.polrelid) like '%auth.uid()%'),
+      and exists (
+        select 1
+        from pg_catalog.pg_depend dependency
+        where dependency.classid = 'pg_catalog.pg_policy'::regclass
+          and dependency.objid = pol.oid
+          and dependency.refobjid = 'auth.uid()'::regprocedure
+      )),
   'the preference read policy must be permissive, SELECT-only and pinned to the caller');
 
 select pg_temp.p9_assert(
@@ -259,13 +265,63 @@ select pg_temp.p9_assert(
 -- has the same empty-auth_scopes constraint as 0077. Its tenant comes from tenant-composite
 -- document/interpretation keys before it may create a product or write a price.
 --
+-- 0096 adds FOUR. run_price_list_shadow is service_role-only, so auth_scopes() is empty.
+-- Its actor is the immutable uploader and its tenant is pinned through interpretation, document,
+-- job, extraction, actor and supplier composite keys. It reads the document/catalog context and
+-- writes only immutable shadow evidence -- no catalog, price, submission or financial table.
+-- Making it invoker cannot read the private policy/matcher or cross the forced-RLS append path
+-- after proving that chain. service_role has EXECUTE on the command but no direct ledger table
+-- privilege; trigger guards independently reject writes outside the command and every UPDATE/DELETE.
+-- There is no audit row because
+-- the versioned immutable prediction is the evidence and the command performs no business mutation.
+-- platform_set_price_list_automation_scope is a cross-tenant platform operation: the operator has
+-- no profile/auth_org(), so an invoker cannot read the selected tenant's forced-RLS evidence or
+-- append its decision. It first proves is_platform_admin(), then binds every read/write to the
+-- explicit org and tenant-composite shadow run, requires fully reviewed all-correct evidence, and
+-- writes a mandatory-reason audit row. apply_eligible_price_list_interpretation is service-only
+-- with the same empty-auth_scopes constraint as the existing price writer. It derives the tenant
+-- from the immutable job/interpretation/document chain and can reach that writer only after an
+-- exact supplier/layout/version fingerprint has an eligible append-only platform decision.
+-- record_price_list_empty_run_review is an owner-only tenant command for the zero-row corpus case;
+-- its composite keys bind the run/document/interpretation/reviewer to auth_org(), its trigger GUC
+-- exposes no direct INSERT grant, and it writes one immutable verdict plus mandatory-reason audit.
+--
+-- 0092 adds ONE row-local trigger guard. private.organization_row_write_guard() cannot be INVOKER:
+-- it must stop writes made through service_role and existing SECURITY DEFINER commands even when
+-- that actor has no browser SELECT/EXECUTE grant on the private lifecycle helper. It examines only
+-- the firing row's OLD/NEW org_id and cannot select or return a sibling unit row. Its purpose is to
+-- close a cross-command lifecycle bypass, not to widen scope.
+--
+-- 0103 adds THREE service-only export workers. service_claim_organization_export initializes a
+-- reviewed, A6-pinned tenant snapshot for a locked offboarding request; the new bounded snapshot
+-- worker copies at most 50 rows/~1MiB (or one explicitly capped oversized record), verifies the
+-- reviewed schema and relation fingerprint, and advances private durable cursors atomically. No
+-- browser role can read the private registry/snapshot or supply an org_id. The worker cannot be
+-- INVOKER because that would require browser SELECT over every exportable tenant table and private
+-- snapshot INSERT privileges; its locked request/generation is the tenant boundary and its exact
+-- row/byte caps, schema fingerprint, worker token and private ACLs are the proof.
+-- service_complete_organization_export proves
+-- the same live generation/token, every durable artifact and its Storage evidence before it may
+-- mark the one request ready and append audit evidence. INVOKER would require exposing the private
+-- snapshot/part ledger and tenant-exports bucket to browser roles, defeating the delivery boundary.
+-- 0103 retains the existing complete_document_processing_job exemption as a temporary audited
+-- expand-compatible bridge for the deployed legacy Edge worker. It also adds the exact
+-- evidence-consuming completion signature, one evidence-only OCR recorder, one OCR extraction
+-- recovery command and one interpretation-evidence recovery command. These cannot be
+-- INVOKER: the service worker has no user JWT/auth_scopes(), while the source
+-- evidence and egress lease are private and deliberately have zero service-role table grants.
+-- Each command proves the immutable evidence hash and its exact org/job/attempt/source chain;
+-- apply/recovery then writes extraction or review state plus audit in a separate transaction.
+-- Exposing those ledgers or public
+-- table DML to make it invoker would weaken both evidence immutability and the command boundary.
+--
 -- The pin still moves only by an explicit edit here. A migration that adds an exemption and
 -- leaves this line alone fails, by design -- which it has now done on four consecutive waves,
 -- always at the end of a twenty-minute gate rather than in seconds. See the check:* script that
 -- asserts a migration touching scope_definer_exemptions also touches this file.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 67,
-  'the definer exemption registry must stay at 67 rows -- 59 minus the three 0073 drained, '
+  (select count(*) from private.scope_definer_exemptions) = 78,
+  'the definer exemption registry must stay at 78 rows -- 59 minus the three 0073 drained, '
   || 'plus the one 0075:464 added for rescue_document_from_archive (not drainable: invoker '
   || 'would require granting UPDATE on document_filings to the browser), plus the one 0077 '
   || 'added for apply_document_interpretation (not drainable: it runs with no user JWT, so '
@@ -281,7 +337,14 @@ select pg_temp.p9_assert(
   || 'goods_receipts row, because 0023:167-168 revoked that from authenticated), plus the '
   || 'one 0092 added for organization_row_write_guard (the tenant read-only latch: it must '
   || 'also govern service_role and definer writers, reads only the firing NEW/OLD org_id, '
-  || 'and is an honesty row like #57 -- its body names no enforced table for A5 to see); '
+  || 'and is an honesty row like #57 -- its body names no enforced table for A5 to see), '
+  -- The campaign adds the rest. Its own lifecycle-guard row is NOT counted again here: that is
+  -- the 0092 row above, adopted early from what the campaign called 0092.
+  || 'plus the four 0096 measured-automation paths documented above, plus the THREE '
+  || '0103 service-only claim/bounded-snapshot/finalizer paths whose browser ACL is intentionally empty, '
+  || 'plus four exact OCR evidence paths: recorder, evidence-consuming completion, extraction '
+  || 'recovery and interpretation recovery, while the legacy completion bridge remains during '
+  || 'the DB-first Edge rollout; '
   || 'zero silent additions');
 
 select pg_temp.p9_assert(
@@ -359,12 +422,26 @@ insert into products (id, org_id, category_id, name, unit) values
 
 -- One approved charge, so the accountant branch has a row it may legally see and so the
 -- payment-request approval preconditions of 0031:887-917 are satisfiable.
-insert into invoices (id, org_id, supplier_id, invoice_number, invoice_date, total_amount,
-                      review_status) values
+insert into invoices (id, org_id, supplier_id, invoice_number, invoice_date,
+                      amount_before_vat, vat_amount, total_amount, review_status) values
   ('69000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
-   '39000000-0000-4000-8000-000000000001', 'P9SEARCH-INV-1', current_date, 500, 'approved'),
+   '39000000-0000-4000-8000-000000000001', 'P9SEARCH-INV-1', current_date, 500, 0, 500, 'received'),
   ('69000000-0000-4000-8000-000000000002', '19000000-0000-4000-8000-000000000001',
-   '39000000-0000-4000-8000-000000000001', 'P9SEARCH-INV-2', current_date, 300, 'received');
+   '39000000-0000-4000-8000-000000000001', 'P9SEARCH-INV-2', current_date, 300, 0, 300, 'received');
+select set_config('request.jwt.claim.sub', '29000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select public.set_invoice_review_status(
+  '69000000-0000-4000-8000-000000000001', 'in_review',
+  'P9 approved invoice fixture enters review'
+);
+select public.set_invoice_review_status(
+  '69000000-0000-4000-8000-000000000001', 'approved',
+  'P9 approved invoice fixture after server assessment'
+);
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claim.role', '', true);
 
 insert into purchase_orders (id, org_id, supplier_id, status, created_by) values
   ('79000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
@@ -806,8 +883,20 @@ begin
         select 1 from read_allowed_transitions(p_entity, v_from) t where t.next_status = v_to
       ) into v_reader;
 
-      perform pg_temp.p9_claims(null);
-      execute format(p_reset, v_from);
+      if p_entity = 'invoice_review' then
+        -- 0099 snapshots every approved transition with a non-null approving actor. The probe's
+        -- direct reset is fixture setup, so emulate the audited command writer instead of creating
+        -- an impossible anonymous approval snapshot.
+        perform pg_temp.p9_claims('29000000-0000-4000-8000-000000000001');
+        perform set_config(
+          'app.p1_financial_writer', '29000000-0000-4000-8000-000000000001', true
+        );
+        execute format(p_reset, v_from);
+        perform set_config('app.p1_financial_writer', '', true);
+      else
+        perform pg_temp.p9_claims(null);
+        execute format(p_reset, v_from);
+      end if;
       perform pg_temp.p9_claims('29000000-0000-4000-8000-000000000001');
 
       v_error := null;

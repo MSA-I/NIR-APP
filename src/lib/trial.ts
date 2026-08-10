@@ -1,24 +1,54 @@
-/**
- * Trial expiry — OPEN-DECISIONS #15, decided 09.08.2026 (owner): SOFT block.
- *
- * Soft means exactly this: when a `trial` organization's `trial_ends_at` has passed, the app
- * stops at a truthful full-screen notice instead of its screens. Nothing in the database is
- * touched, no RLS changes — `suspended` (0006) remains the hard tool, and the operator
- * extends or activates from /admin. A platform operator is never blocked (they are the one
- * who can fix it).
- *
- * The date comparison is strict-after: on the last day the trial still works — "ends at" a
- * moment that has not arrived yet is not "ended".
- */
-export interface TrialSubject {
-  status: string;
-  trial_ends_at: string | null;
+export type OrganizationAccessMode = 'active' | 'trial' | 'grace' | 'read_only' | 'offboarding' | 'suspended';
+
+export interface OrganizationAccess {
+  mode: OrganizationAccessMode;
+  graceDaysRemaining: number | null;
+  canWrite: boolean;
 }
 
-export function isTrialExpired(org: TrialSubject | null | undefined, now: Date = new Date()): boolean {
-  if (!org || org.status !== 'trial' || !org.trial_ends_at) return false;
-  const endsAt = new Date(org.trial_ends_at);
-  return Number.isFinite(endsAt.getTime()) && endsAt.getTime() <= now.getTime();
+export type OrganizationAccessStateRow = {
+  access_mode: string;
+  trial_ends_at?: string | null;
+  grace_ends_at?: string | null;
+  grace_days_remaining: number | null;
+};
+
+export const ACTIVE_ORGANIZATION_ACCESS: OrganizationAccess = {
+  mode: 'active',
+  graceDaysRemaining: null,
+  canWrite: true,
+};
+
+export const READ_ONLY_ORGANIZATION_ACCESS: OrganizationAccess = {
+  mode: 'read_only',
+  graceDaysRemaining: null,
+  canWrite: false,
+};
+
+const MODES = new Set<OrganizationAccessMode>([
+  'active', 'trial', 'grace', 'read_only', 'offboarding', 'suspended',
+]);
+
+/**
+ * Converts the database's canonical lifecycle projection into UI state. Trial and grace
+ * boundaries use the database clock; invalid or missing evidence fails closed.
+ */
+export function organizationAccessFromServer(
+  row: OrganizationAccessStateRow | null | undefined,
+): OrganizationAccess {
+  if (!row || !MODES.has(row.access_mode as OrganizationAccessMode)) {
+    return READ_ONLY_ORGANIZATION_ACCESS;
+  }
+  const mode = row.access_mode as OrganizationAccessMode;
+  return {
+    mode,
+    graceDaysRemaining: mode === 'grace'
+      && Number.isInteger(row.grace_days_remaining)
+      && (row.grace_days_remaining ?? -1) >= 0
+      ? row.grace_days_remaining
+      : null,
+    canWrite: mode === 'active' || mode === 'trial' || mode === 'grace',
+  };
 }
 
 /**
@@ -32,9 +62,20 @@ export function isTrialExpired(org: TrialSubject | null | undefined, now: Date =
 export const TRIAL_WARNING_DAYS = 7;
 
 /**
+ * The organization shape the countdown needs, and nothing more. Kept separate from the
+ * server-projected `OrganizationAccessStateRow` above: this one reads the plain organizations
+ * row that the layout already holds, so the banner costs no extra query.
+ */
+export interface TrialSubject {
+  status: string;
+  trial_ends_at: string | null;
+}
+
+/**
  * Whole days left in the trial, or `null` when the question does not apply — not a trial, no end
- * date, an unparsable one, or already expired (that case belongs to isTrialExpired and its screen,
- * and a warning about something that has already happened is not a warning).
+ * date, an unparsable one, or already expired (an expired tenant is the server's read-only mode,
+ * surfaced by `organizationAccessFromServer`, and a warning about something that has already
+ * happened is not a warning).
  *
  * Rounded UP, deliberately: with 30 hours left, "נותר יום אחד" understates it and "נותרו 2 ימים"
  * is what a person planning their week needs to hear. Zero is never returned — the last partial day

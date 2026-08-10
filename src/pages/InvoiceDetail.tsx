@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { toHebrewError } from '../lib/errors';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { Loader2, Send, CheckCircle2, RotateCcw, SearchCheck } from 'lucide-react';
+import { Loader2, Send, CheckCircle2, RotateCcw, SearchCheck, FilePenLine } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -14,12 +14,117 @@ import { fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
 import { creditDraftFromInterpretation, type CreditDraft } from '../components/document-review/model';
 import type { InterpretationContract } from '../lib/useDocumentProcessing';
 import type { Invoice, InvoiceReviewStatus, CreditReason } from '../lib/types';
+import { financialSupplierMap } from '../lib/financialSuppliers';
+import { ReauthModal } from '../components/ReauthModal';
+import {
+  InvoiceLineReviewModal,
+  type InvoiceReviewCandidate,
+  type InvoiceReviewLine,
+} from '../components/InvoiceLineReviewModal';
 
-type FullInvoice = Invoice & {
+type FullInvoice = Omit<Invoice, 'supplier'> & {
   supplier: { id: string; name: string };
   orders: { order_id: string; purchase_orders: { id: string; number: number; status: string } }[];
   receipts: { receipt_id: string; goods_receipts: { id: string; number: number; received_at: string } }[];
 };
+
+type ThreeWayReason = {
+  code: string;
+  severity: 'critical' | 'error' | 'warning' | 'info';
+  line_number?: number;
+  expected?: number;
+  actual?: number;
+  ordered_unit_price?: number;
+  invoice_unit_price_normalized?: number;
+  difference_amount?: number;
+  difference_percent?: number;
+  ordered_quantity?: number;
+  received_quantity?: number;
+  prior_approved_invoiced_quantity?: number;
+  current_invoice_quantity?: number;
+  invoiced_quantity?: number;
+  invoice_quantity?: number;
+  allocated_quantity?: number;
+  invoice_unit?: string;
+  order_unit?: string;
+  expected_vat_rate?: number;
+  actual_vat_rate?: number;
+};
+
+type ThreeWayAssessment = {
+  status: 'review_required' | 'not_comparable' | 'matched_with_warnings' | 'matched';
+  approval_blocked: boolean;
+  approval_allowed: boolean;
+  definite_duplicate_invoice: boolean;
+  assessment_hash: string;
+  override_active: boolean;
+  override?: { reason: string; created_at: string } | null;
+  reasons: ThreeWayReason[];
+  evidence_batch_id?: string | null;
+  lines: (InvoiceReviewLine & { reasons: ThreeWayReason[] })[];
+  candidate_context?: InvoiceReviewCandidate[];
+};
+
+const THREE_WAY_REASON_LABELS: Record<string, string> = {
+  definite_duplicate_invoice: 'נמצאה חשבונית נוספת של אותו ספק עם אותו מספר — יש לתקן את הכפילות לפני אישור.',
+  no_order_not_comparable: 'לחשבונית זו אין הזמנת רכש להשוואה',
+  invoice_lines_missing: 'אין שורות חשבונית זמינות להתאמה.',
+  duplicate_invoice_line_suspected: 'שורה זו חשודה ככפולה ונדרשת בדיקה; היא לא נמחקה ולא מוזגה.',
+  missing_order_item: 'לא נמצא פריט הזמנה תואם באופן חד־משמעי.',
+  multi_order_ambiguity: 'קיימות כמה התאמות אפשריות להזמנות שונות — נדרשת בחירה ידנית.',
+  incomplete_explicit_allocation: 'הכמות בשורה לא הוקצתה במלואה לפריטי ההזמנה.',
+  product_mismatch: 'המוצר בחשבונית שונה מהמוצר שהוזמן.',
+  unit_or_packaging_conversion_requires_review: 'היחידות דורשות יחס אריזה מפורש ומאושר; המערכת לא הסיקה המרה מהטקסט.',
+  legacy_order_unit_snapshot_missing: 'חסרה יחידת המידה שנשמרה בהזמנה, ולכן אי־אפשר להשוות בבטחה.',
+  unit_price_above_order: 'מחיר היחידה בחשבונית גבוה ממחיר ההזמנה ביותר מ־1%.',
+  unit_price_within_tolerance: 'מחיר היחידה שונה, אך הפער אינו עולה על 1%.',
+  unit_price_below_order: 'מחיר היחידה בחשבונית נמוך ממחיר ההזמנה.',
+  invoiced_quantity_above_ordered: 'הכמות שחויבה גבוהה מהכמות שהוזמנה.',
+  invoiced_quantity_above_received: 'הכמות שחויבה גבוהה מהכמות שהתקבלה.',
+  received_but_not_invoiced: 'התקבלה כמות שטרם חויבה בחשבונית.',
+  line_arithmetic_discrepancy: 'חישוב השורה אינו מסתכם נכון מעבר ל־₪0.05.',
+  invoice_net_total_discrepancy: 'סכום שורות החשבונית לפני מע״מ אינו תואם לסכום החשבונית.',
+  invoice_vat_total_discrepancy: 'סכום המע״מ בשורות אינו תואם לסכום המע״מ בחשבונית מעבר ל־₪1.',
+  invoice_grand_total_discrepancy: 'סך השורות אינו תואם לסך החשבונית מעבר ל־₪1.',
+  vat_rate_mismatch: 'שיעור המע״מ בשורה שונה משיעור המע״מ המצופה.',
+  expected_vat_rate_missing: 'אין שיעור מע״מ ארגוני מאושר להשוואה, ולכן לא ניתן לאשר את השורה.',
+};
+
+function threeWayReasonDetails(reason: ThreeWayReason) {
+  if (reason.ordered_unit_price != null && reason.invoice_unit_price_normalized != null) {
+    const difference = reason.difference_amount
+      ?? reason.invoice_unit_price_normalized - reason.ordered_unit_price;
+    const percent = reason.difference_percent
+      ?? (reason.ordered_unit_price === 0 ? null : difference / reason.ordered_unit_price * 100);
+    return `מחיר בהזמנה ${fmtMoneyExact(reason.ordered_unit_price)}, בחשבונית ${fmtMoneyExact(reason.invoice_unit_price_normalized)}, הפרש ${fmtMoneyExact(difference)}${percent == null ? '' : ` (${percent.toFixed(2)}%)`}`;
+  }
+  if (reason.invoiced_quantity != null) {
+    const values = [
+      reason.ordered_quantity == null ? null : `הוזמן ${reason.ordered_quantity}`,
+      reason.received_quantity == null ? null : `התקבל ${reason.received_quantity}`,
+      reason.prior_approved_invoiced_quantity == null
+        ? null : `אושר בחשבוניות קודמות ${reason.prior_approved_invoiced_quantity}`,
+      reason.current_invoice_quantity == null
+        ? null : `בחשבונית זו ${reason.current_invoice_quantity}`,
+      `חויב במצטבר ${reason.invoiced_quantity}`,
+    ].filter(Boolean);
+    return values.join(' · ');
+  }
+  if (reason.invoice_quantity != null && reason.allocated_quantity != null) {
+    return `כמות בחשבונית ${reason.invoice_quantity} · הוקצתה ${reason.allocated_quantity}`;
+  }
+  if (reason.expected_vat_rate != null && reason.actual_vat_rate != null) {
+    return `שיעור מצופה ${reason.expected_vat_rate}% · בפועל ${reason.actual_vat_rate}%`;
+  }
+  if (reason.actual_vat_rate != null) return `שיעור בפועל ${reason.actual_vat_rate}%`;
+  if (reason.expected != null && reason.actual != null) {
+    return `מצופה ${fmtMoneyExact(reason.expected)} · בפועל ${fmtMoneyExact(reason.actual)}`;
+  }
+  if (reason.invoice_unit && reason.order_unit) {
+    return `יחידה בחשבונית: ${reason.invoice_unit} · יחידה בהזמנה: ${reason.order_unit}`;
+  }
+  return null;
+}
 
 /**
  * The review actions this screen can offer, in reading order.
@@ -97,7 +202,7 @@ export async function readAllowedInvoiceTransitions(
 export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const [checks, setChecks] = useState<CheckResult[] | null>(null);
   const [checkError, setCheckError] = useState<string | null>(null);
@@ -106,13 +211,23 @@ export default function InvoiceDetail() {
   const [creditOpen, setCreditOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reviewTarget, setReviewTarget] = useState<InvoiceReviewStatus | null>(null);
+  const [overrideConfirmOpen, setOverrideConfirmOpen] = useState(false);
+  const [overrideReauthOpen, setOverrideReauthOpen] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideIdempotencyKey, setOverrideIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [lineReviewOpen, setLineReviewOpen] = useState(false);
   const isProcurementManager = profile?.role === 'office';
   const canOpenProcurement = profile?.role !== 'accountant';
 
   const { data, loading, error, refetch } = useQuery(async () => {
-    const invoice = unwrap(await supabase.from('invoices')
-      .select('*, supplier:suppliers(id, name), orders:invoice_order_links(order_id, purchase_orders(id, number, status)), receipts:invoice_receipt_links(receipt_id, goods_receipts(id, number, received_at))')
-      .eq('id', id!).single()) as FullInvoice;
+    const rawInvoice = unwrap(await supabase.from('invoices')
+      .select('*, orders:invoice_order_links(order_id, purchase_orders(id, number, status)), receipts:invoice_receipt_links(receipt_id, goods_receipts(id, number, received_at))')
+      .eq('id', id!).single()) as Omit<FullInvoice, 'supplier'>;
+    const suppliers = await financialSupplierMap([rawInvoice.supplier_id]);
+    const invoice: FullInvoice = {
+      ...rawInvoice,
+      supplier: { id: rawInvoice.supplier_id, name: suppliers.get(rawInvoice.supplier_id)?.name ?? '—' },
+    };
     const balance = isProcurementManager
       ? null
       : unwrap(await supabase.from('invoice_balances').select('*').eq('invoice_id', id!).maybeSingle()) as
@@ -127,11 +242,19 @@ export default function InvoiceDetail() {
     // row. `readAllowedInvoiceTransitions` resolves to null instead of throwing, so a failure of
     // the graph read cannot take the invoice down with it.
     const allowedTransitions = await readAllowedInvoiceTransitions(invoice.review_status);
-    return { invoice, balance, allocations, allowedTransitions };
+    const threeWayResult = await supabase.rpc('get_invoice_three_way_match', { p_invoice_id: id! });
+    return {
+      invoice,
+      balance,
+      allocations,
+      allowedTransitions,
+      threeWay: threeWayResult.error ? null : threeWayResult.data as ThreeWayAssessment,
+      threeWayError: threeWayResult.error ? toHebrewError(threeWayResult.error.message) : null,
+    };
   }, [id, isProcurementManager]);
 
   const inv = data?.invoice;
-  const canEdit = profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canEdit = organizationAccess.canWrite && profile && ['owner', 'office', 'kitchen'].includes(profile.role);
   const isOffice = profile && ['owner', 'office'].includes(profile.role);
 
   // ?print=1 (Invoices list "הדפסה" action): print once when the data is on screen, then strip
@@ -213,6 +336,24 @@ export default function InvoiceDetail() {
     void refetch();
   }
 
+  async function overrideThreeWayMatch() {
+    if (!inv || !data.threeWay || !overrideReason.trim()) return;
+    setBusy(true);
+    const res = await supabase.rpc('override_invoice_three_way_match', {
+      p_invoice_id: inv.id,
+      p_assessment_hash: data.threeWay.assessment_hash,
+      p_idempotency_key: overrideIdempotencyKey,
+      p_reason: overrideReason.trim(),
+    });
+    setBusy(false);
+    setOverrideReauthOpen(false);
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    setOverrideReason('');
+    setOverrideIdempotencyKey(crypto.randomUUID());
+    toast('עקיפת חסימת ההתאמה נרשמה ביומן הביקורת');
+    void refetch();
+  }
+
   if (loading) return <RecordSkeleton />;
   if (error && !data) return <ErrorNote message={error} />;
   if (!inv || !data) return <ErrorNote message="חשבונית לא נמצאה" />;
@@ -282,6 +423,21 @@ export default function InvoiceDetail() {
         message="המעבר והסיבה יישמרו יחד ביומן הביקורת."
         confirmLabel="עדכון סטטוס" requireReason busy={busy} />
 
+      <ConfirmDialog open={overrideConfirmOpen} onClose={() => setOverrideConfirmOpen(false)}
+        onConfirm={(reason) => {
+          setOverrideReason(reason ?? '');
+          setOverrideConfirmOpen(false);
+          setOverrideReauthOpen(true);
+        }}
+        title="עקיפת חסימת 3-way match"
+        message="רק בעלים רשאי לעקוף חסימה. הסיבה, זהות המבצע וגרסת ההתאמה יישמרו ביומן הביקורת. כפילות חשבונית ודאית אינה ניתנת לעקיפה."
+        confirmLabel="המשך לאימות זהות" requireReason busy={busy} />
+
+      <ReauthModal open={overrideReauthOpen}
+        title="אימות זהות לעקיפת חסימת 3-way match"
+        onConfirm={() => void overrideThreeWayMatch()}
+        onCancel={() => { setOverrideReauthOpen(false); setOverrideReason(''); }} />
+
       {/* print-area on the money + details cards: shadows/borders drop in print so the sheet
           stays a clean invoice document (same convention as the Orders print sheet). */}
       <div className={`card grid overflow-hidden ${isProcurementManager ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-4'}`}>
@@ -343,6 +499,95 @@ export default function InvoiceDetail() {
         </div>
       </div>
 
+      <section className="card card-pad no-print" aria-labelledby="invoice-three-way-title">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 id="invoice-three-way-title" className="section-title">התאמת הזמנה, קבלה וחשבונית</h2>
+            <p className="text-sm text-ink-muted mt-1">השוואה ברמת שורה מול הכמות שהוזמנה, הכמות שהתקבלה ומחיר ההזמנה.</p>
+          </div>
+          {data.threeWay && (
+            <span className={`badge ${
+              data.threeWay.override_active ? 'bg-await-soft text-await-fg'
+                : data.threeWay.status === 'review_required' ? 'bg-alert-soft text-alert-fg'
+                  : data.threeWay.status === 'matched_with_warnings' ? 'bg-await-soft text-await-fg'
+                    : data.threeWay.status === 'matched' ? 'bg-done-soft text-done-fg'
+                      : 'bg-info-soft text-info-fg'
+            }`}>
+              {data.threeWay.override_active ? 'אושרה עקיפה מתועדת'
+                : data.threeWay.status === 'review_required' ? 'נדרשת בדיקה'
+                  : data.threeWay.status === 'matched_with_warnings' ? 'תואם עם אזהרות'
+                    : data.threeWay.status === 'matched' ? 'תואם'
+                      : 'אין הזמנה להשוואה'}
+            </span>
+          )}
+          {isOffice && organizationAccess.canWrite && inv.review_status !== 'approved' && (
+            <button className="btn-secondary" onClick={() => setLineReviewOpen(true)}>
+              <FilePenLine size={15} /> בדיקת שורות והתאמות
+            </button>
+          )}
+        </div>
+
+        {data.threeWayError && <ErrorNote message={`לא ניתן לטעון את בדיקת ההתאמה: ${data.threeWayError}`} />}
+        {data.threeWay && (
+          <div className="mt-4 space-y-3">
+            {data.threeWay.reasons.length > 0 ? (
+              <ul className="divide-y divide-line-soft border border-line-soft rounded-lg">
+                {data.threeWay.reasons.map((reason, index) => {
+                  const details = threeWayReasonDetails(reason);
+                  return (
+                    <li key={`${reason.code}-${reason.line_number ?? 'invoice'}-${index}`} className="px-3 py-2.5 text-sm">
+                      <div className="flex items-start gap-2">
+                        <span className={`mt-1.5 size-2 rounded-full shrink-0 ${reason.severity === 'critical' || reason.severity === 'error' ? 'bg-alert-solid' : reason.severity === 'warning' ? 'bg-await-solid' : 'bg-info-solid'}`} aria-hidden="true" />
+                        <div>
+                          <div className="font-medium text-ink">
+                            {reason.line_number != null && <span className="num">שורה {reason.line_number}: </span>}
+                            {THREE_WAY_REASON_LABELS[reason.code] ?? 'נמצא פער הדורש בדיקה.'}
+                          </div>
+                          {details && <div className="text-ink-muted num mt-0.5">{details}</div>}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <Note tone="done" role="status">לא נמצאו פערים בהתאמת שורות החשבונית להזמנה ולקבלה.</Note>
+            )}
+
+            {data.threeWay.lines.length > 0 && (
+              <details>
+                <summary className="text-sm font-medium cursor-pointer">הצגת {data.threeWay.lines.length} שורות החשבונית</summary>
+                <ul className="mt-2 divide-y divide-line-soft border border-line-soft rounded-lg">
+                  {data.threeWay.lines.map((line) => (
+                    <li key={line.id} className="px-3 py-2 text-sm flex flex-wrap justify-between gap-2">
+                      <span><span className="num text-ink-muted">{line.line_number}.</span> {line.description}</span>
+                      <span className="num text-ink-muted">{line.quantity} {line.unit} × {fmtMoneyExact(line.unit_price)} = {fmtMoneyExact(line.line_total)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+
+            {data.threeWay.override_active && data.threeWay.override && (
+              <Note tone="await" role="status">
+                החסימה נעקפה על ידי בעלים לאחר אימות זהות. סיבה: {data.threeWay.override.reason}
+              </Note>
+            )}
+
+            {profile?.role === 'owner' && organizationAccess.canWrite
+              && data.threeWay.approval_blocked && !data.threeWay.override_active
+              && !data.threeWay.definite_duplicate_invoice && (
+                <div className="flex justify-end">
+                  <button className="btn-secondary text-alert-solid" disabled={busy}
+                    onClick={() => setOverrideConfirmOpen(true)}>
+                    עקיפת חסימה לאחר אימות זהות
+                  </button>
+                </div>
+              )}
+          </div>
+        )}
+      </section>
+
       <div className="card card-pad no-print">
         <div className="flex items-center justify-between mb-3">
           <div className="section-title">בדיקות אוטומטיות</div>
@@ -360,6 +605,22 @@ export default function InvoiceDetail() {
         <CreditFromInvoice invoice={inv} draft={creditDraft}
           onClose={() => { setCreditOpen(false); setCreditDraft(null); }}
           onSaved={() => { setCreditOpen(false); setCreditDraft(null); toast('דרישת הזיכוי נפתחה'); void refetch(); }} />
+      )}
+      {lineReviewOpen && profile && data.threeWay && (
+        <InvoiceLineReviewModal
+          invoiceId={inv.id}
+          actorId={profile.id}
+          assessment={data.threeWay}
+          orderNumbers={Object.fromEntries(inv.orders.map((order) => [
+            order.purchase_orders.id,
+            order.purchase_orders.number,
+          ]))}
+          onClose={() => setLineReviewOpen(false)}
+          onSaved={() => {
+            setLineReviewOpen(false);
+            void refetch();
+          }}
+        />
       )}
     </div>
   );

@@ -42,6 +42,7 @@ const REASONS = Object.freeze({
   sendOrder: 'P4 integrated purchase order sent',
   completeReceipt: 'P4 integrated goods receipt completion',
   createInvoice: 'P4 integrated invoice creation',
+  recordInvoiceLines: 'P4 integrated human-reviewed invoice lines',
   reviewInvoice: 'P4 integrated invoice review started',
   approveInvoice: 'P4 integrated invoice approval',
   createPaymentRequest: 'P4 integrated payment request creation',
@@ -330,6 +331,7 @@ function validateAudits(rows, ids, actorRoleById) {
     ['purchase_order_status_changed', ids.order, 1, 'office', [REASONS.sendOrder]],
     ['goods_receipt_completed', ids.receipt, 1, 'office', [REASONS.completeReceipt]],
     ['invoice_created', ids.invoice, 1, 'office', [REASONS.createInvoice]],
+    ['invoice_line_evidence_recorded', ids.invoiceEvidence, 1, 'office', [REASONS.recordInvoiceLines]],
     ['invoice_review_status_changed', ids.invoice, 2, 'office', [REASONS.reviewInvoice, REASONS.approveInvoice]],
     ['payment_request_created', ids.paymentRequest, 1, 'office', [REASONS.createPaymentRequest]],
     ['payment_request_transitioned', ids.paymentRequest, 1, 'owner', [REASONS.approvePaymentRequest]],
@@ -373,6 +375,7 @@ async function main() {
     submission: crypto.randomUUID(),
     receipt: crypto.randomUUID(),
     invoice: crypto.randomUUID(),
+    invoiceEvidence: crypto.randomUUID(),
     paymentRequest: crypto.randomUUID(),
     credit: crypto.randomUUID(),
   };
@@ -492,6 +495,33 @@ async function main() {
   }, 'Office create invoice');
   assert.equal(createdInvoice.review_status, 'received');
   assert.equal(createdInvoice.duplicate_detected, false);
+  const invoiceLineEvidence = await rpc(actors.office.client, 'record_invoice_line_evidence', {
+    p_evidence_batch_id: ids.invoiceEvidence,
+    p_invoice_id: ids.invoice,
+    p_idempotency_key: crypto.randomUUID(),
+    p_source_type: 'manual_entry',
+    p_document_id: null,
+    p_interpretation_id: null,
+    p_actor_id: actors.office.userId,
+    p_lines: [{
+      line_number: 1,
+      description: 'P4 integrated tomatoes',
+      supplier_sku: null,
+      barcode: null,
+      product_id: PRODUCT_ID,
+      quantity: 30,
+      unit: 'kg',
+      unit_price: 10,
+      discount_amount: 0,
+      vat_rate: 18,
+      line_total: AMOUNTS.order,
+      evidence_block_ids: [],
+      raw_evidence: { source: 'p4_integrated_human_review' },
+    }],
+    p_reason: REASONS.recordInvoiceLines,
+  }, 'Office record reviewed invoice line evidence');
+  assert.equal(invoiceLineEvidence.line_count, 1);
+  assert.equal(invoiceLineEvidence.idempotent, false);
   const inReview = await rpc(actors.office.client, 'set_invoice_review_status', {
     p_invoice_id: ids.invoice,
     p_status: 'in_review',
@@ -686,12 +716,13 @@ async function main() {
   const semanticActions = [
     'supplier_price_submission_processed', 'purchase_request_finalized',
     'purchase_order_status_changed', 'goods_receipt_completed', 'invoice_created',
-    'invoice_review_status_changed', 'payment_request_created', 'payment_request_transitioned',
+    'invoice_line_evidence_recorded', 'invoice_review_status_changed',
+    'payment_request_created', 'payment_request_transitioned',
     'payment_request_executed', 'bank_import_created', 'bank_match_confirmed',
     'bank_match_removed', 'invoice_credit_requested', 'credit_request_transitioned',
   ];
   const entityIds = [
-    ids.submission, ids.purchaseRequest, ids.order, ids.receipt, ids.invoice,
+    ids.submission, ids.purchaseRequest, ids.order, ids.receipt, ids.invoice, ids.invoiceEvidence,
     ids.paymentRequest, ids.bankImport, ids.bankTransaction, ids.credit,
   ];
   const auditRows = await dataOf(evidence.from('audit_logs')

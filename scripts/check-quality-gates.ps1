@@ -782,14 +782,21 @@ function Invoke-OcrEdgeSmoke {
 }
 
 function Invoke-InterpretDocumentContractTests {
-  Write-Gate "Interpret-document prompt, provider-failure and authorization contracts"
+  Write-Gate "Document automation and branding upload security contracts"
   $previousPreference = $ErrorActionPreference
   try {
     $ErrorActionPreference = "Continue"
     $testOutput = @(& npx.cmd --yes deno test `
       --config (Join-Path $repoRoot "supabase\functions\interpret-document\deno.json") `
+      --allow-read=$repoRoot `
       (Join-Path $repoRoot "supabase\functions\interpret-document\core.test.ts") `
-      (Join-Path $repoRoot "supabase\functions\interpret-document\authorization.test.ts") 2>&1)
+      (Join-Path $repoRoot "supabase\functions\interpret-document\authorization.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\_shared\organization-access.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\_shared\organization-egress.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\_shared\reserved-egress.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\_shared\edge-organization-access-wiring.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\document-processing\contract_test.ts") `
+      (Join-Path $repoRoot "supabase\functions\upload-organization-logo\core.test.ts") 2>&1)
     $testExit = $LASTEXITCODE
   }
   finally {
@@ -804,6 +811,17 @@ function Invoke-InterpretDocumentContractTests {
   if ($testText -match '(?i)\b[1-9][0-9]*\s+(?:ignored|skipped)\b') {
     throw "Interpret-document contract tests reported ignored or skipped cases."
   }
+  npx.cmd --yes deno check `
+    --config (Join-Path $repoRoot "supabase\functions\upload-organization-logo\deno.json") `
+    (Join-Path $repoRoot "supabase\functions\upload-organization-logo\index.ts")
+  if ($LASTEXITCODE -ne 0) { throw "Branding upload Edge Function failed Deno typecheck." }
+  npx.cmd --yes deno check `
+    --config (Join-Path $repoRoot "supabase\functions\interpret-document\deno.json") `
+    (Join-Path $repoRoot "supabase\functions\interpret-document\index.ts")
+  if ($LASTEXITCODE -ne 0) { throw "Interpret-document Edge Function failed Deno typecheck." }
+  npx.cmd --yes deno check --allow-import --node-modules-dir=auto `
+    (Join-Path $repoRoot "supabase\functions\submit-price-list\index.ts")
+  if ($LASTEXITCODE -ne 0) { throw "Submit-price-list Edge Function failed Deno typecheck." }
 }
 
 function Invoke-OutboxWorkerContractTests {
@@ -832,6 +850,36 @@ function Invoke-OutboxWorkerContractTests {
   if ($testText -match '(?i)\b[1-9][0-9]*\s+(?:ignored|skipped)\b') {
     throw "Outbox-worker contract tests reported ignored or skipped cases."
   }
+}
+
+function Invoke-TenantExportContractTests {
+  Write-Gate "Tenant export streaming and delivery contracts"
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $testOutput = @(& npx.cmd --yes deno test `
+      --config (Join-Path $repoRoot "supabase\functions\tenant-export\deno.json") `
+      --allow-read=$repoRoot `
+      (Join-Path $repoRoot "supabase\functions\tenant-export\core.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\tenant-export\index_wiring.test.ts") 2>&1)
+    $testExit = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  $testOutput | ForEach-Object { Write-Output $_ }
+  Assert-ExitCode "Tenant export contract tests" $testOutput -ExitCode $testExit
+  $testText = $testOutput -join "`n"
+  if ($testText -notmatch '(?i)\b[1-9][0-9]*\s+passed\b') {
+    throw "Tenant export contract tests did not report any completed test."
+  }
+  if ($testText -match '(?i)\b[1-9][0-9]*\s+(?:ignored|skipped)\b') {
+    throw "Tenant export contract tests reported ignored or skipped cases."
+  }
+  npx.cmd --yes deno check `
+    --config (Join-Path $repoRoot "supabase\functions\tenant-export\deno.json") `
+    (Join-Path $repoRoot "supabase\functions\tenant-export\index.ts")
+  if ($LASTEXITCODE -ne 0) { throw "Tenant export Edge Function failed Deno typecheck." }
 }
 
 function Invoke-OcrWorkerSelfCheck {
@@ -918,6 +966,18 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\migrations\0083_fix_document_interpretation_claim.sql",
     "supabase\migrations\0084_automatic_document_classification.sql",
     "supabase\migrations\0085_reprocess_reviewed_document.sql",
+    "supabase\migrations\0093_document_reprocess_and_price_list_safety.sql",
+    "supabase\migrations\0094_inactive_supplier_commerce_guards.sql",
+    "supabase\migrations\0095_harden_scope_enforcement_source_markers.sql",
+    "supabase\migrations\0096_document_automation_calibration_shadow_operations.sql",
+    "supabase\migrations\0097_financial_supplier_read_boundary.sql",
+    "supabase\migrations\0098_organization_branding.sql",
+    "supabase\migrations\0099_invoice_line_three_way_match.sql",
+    "supabase\migrations\0100_management_dashboard_snapshot.sql",
+    "supabase\migrations\0092_trial_grace_read_only_enforcement.sql",
+    "supabase\migrations\0101_supplier_purchase_order_portal.sql",
+    "supabase\migrations\0102_inventory_intelligence_read_model.sql",
+    "supabase\migrations\0103_tenant_offboarding_export.sql",
     "supabase\tests\smart_document_processing.sql",
     "supabase\tests\document_learning.sql",
     "supabase\tests\document_export_templates.sql",
@@ -925,11 +985,39 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\tests\p1_price_submissions_concurrency.sql",
     "supabase\tests\p15_automatic_price_list_intake.sql",
     "supabase\tests\p16_automatic_delivery_note_receiving.sql",
+    "supabase\tests\p16_inactive_supplier_semantics.sql",
+    "supabase\tests\p17_financial_supplier_view.sql",
+    "supabase\tests\p18_document_automation_calibration.sql",
+    "supabase\tests\p18_price_list_concurrency.sql",
+    "supabase\tests\p19_organization_branding.sql",
+    "supabase\tests\p20_invoice_three_way_match.sql",
+    "supabase\tests\p20_invoice_approval_concurrency.sql",
+    "supabase\tests\p21_dashboard_snapshot.sql",
+    "supabase\tests\p22_trial_read_only.sql",
+    "supabase\tests\p23_supplier_portal.sql",
+    "supabase\tests\p24_inventory_intelligence.sql",
+    "supabase\tests\p25_tenant_offboarding_export.sql",
+    "supabase\functions\_shared\organization-access.ts",
+    "supabase\functions\_shared\organization-access.test.ts",
+    "supabase\functions\_shared\organization-egress.ts",
+    "supabase\functions\_shared\organization-egress.test.ts",
+    "supabase\functions\_shared\reserved-egress.ts",
+    "supabase\functions\_shared\reserved-egress.test.ts",
+    "supabase\functions\_shared\edge-organization-access-wiring.test.ts",
     "supabase\functions\document-processing\index.ts",
     "supabase\functions\interpret-document\index.ts",
     "supabase\functions\interpret-document\core.test.ts",
     "supabase\functions\interpret-document\authorization.test.ts",
+    "supabase\functions\upload-organization-logo\index.ts",
+    "supabase\functions\upload-organization-logo\core.ts",
+    "supabase\functions\upload-organization-logo\core.test.ts",
+    "supabase\functions\upload-organization-logo\deno.json",
     "supabase\functions\submit-price-list\index.ts",
+    "supabase\functions\tenant-export\index.ts",
+    "supabase\functions\tenant-export\core.ts",
+    "supabase\functions\tenant-export\core.test.ts",
+    "supabase\functions\tenant-export\deno.json",
+    "supabase\functions\tenant-export\index_wiring.test.ts",
     "worker\ocr\Dockerfile",
     "worker\ocr\self_check.py",
     "docker-compose.ocr.yml",
@@ -946,6 +1034,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "document-processing" = "false"
     "interpret-document" = "false"
     "submit-price-list" = "true"
+    "upload-organization-logo" = "true"
     "send-push" = "false"
     "outbox-worker" = "false"
   }
@@ -1037,6 +1126,7 @@ try {
 
     Invoke-InterpretDocumentContractTests
     Invoke-OutboxWorkerContractTests
+    Invoke-TenantExportContractTests
     Invoke-OcrWorkerSelfCheck
 
     Write-Gate "P0 tenant security, Storage and local Push"
@@ -1096,6 +1186,8 @@ try {
 
     Invoke-SqlTest "supabase\tests\p0_client_dml_acl.sql" "P0 browser DML ACL and trusted-server CRUD"
     Invoke-SqlTest "supabase\tests\smart_document_processing.sql" "Document queue, tenant boundary, lease fencing and extraction ledger" "supabase_admin"
+    Invoke-SqlTest "supabase\tests\p18_price_list_concurrency.sql" "Concurrent price-list reprocess and scope idempotency serialization" "supabase_admin"
+    Invoke-SqlTest "supabase\tests\p20_invoice_approval_concurrency.sql" "Concurrent invoice approvals serialize cumulative receipt consumption" "supabase_admin"
     Write-Gate "Reset after committed OCR queue fixtures"
     Reset-LocalDatabase
     Invoke-SqlTest "supabase\tests\document_learning.sql" "Document interpretation, learning and review mutations"
@@ -1105,7 +1197,16 @@ try {
     Invoke-SqlTest "supabase\tests\p14_apply_interpretation.sql" "Machine-written invoices: the switch, min(type,supplier) confidence, idempotency and the untouched order"
     Invoke-SqlTest "supabase\tests\p15_automatic_price_list_intake.sql" "Automatic price lists: default-off, ambiguity, partial intake, idempotency and reasoned reversal"
     Invoke-SqlTest "supabase\tests\p16_automatic_delivery_note_receiving.sql" "Automatic delivery notes: draft-only receipts, three-tier order resolution, and a financial footprint that never moves"
+    Invoke-SqlTest "supabase\tests\p16_inactive_supplier_semantics.sql" "Inactive suppliers block new orders and price-list mutations while history remains readable"
+    Invoke-SqlTest "supabase\tests\p17_financial_supplier_view.sql" "Financial supplier identity projection, role boundary and tenant isolation"
+    Invoke-SqlTest "supabase\tests\p18_document_automation_calibration.sql" "Document automation: immutable shadow predictions, reviewed calibration, drift, tenant isolation and no business mutation"
+    Invoke-SqlTest "supabase\tests\p19_organization_branding.sql" "Organization branding immutable paths, server-only uploads and storage limits"
+    Invoke-SqlTest "supabase\tests\p20_invoice_three_way_match.sql" "Invoice line evidence, true three-way assessment, approval blocks, override and tenant isolation"
+    Invoke-SqlTest "supabase\tests\p21_dashboard_snapshot.sql" "Management dashboard snapshot, evidence-aware metrics and tenant isolation"
     Invoke-SqlTest "supabase\tests\p22_trial_read_only.sql" "Trial lifecycle: 30-day trial, 7-day grace, then DB-authoritative read-only that platform recovery can lift"
+    Invoke-SqlTest "supabase\tests\p23_supplier_portal.sql" "Supplier purchase-order projection, acknowledgement, idempotency and supplier isolation"
+    Invoke-SqlTest "supabase\tests\p24_inventory_intelligence.sql" "Inventory consumption evidence, incoming supply, suggestions, price context and tenant isolation"
+    Invoke-SqlTest "supabase\tests\p25_tenant_offboarding_export.sql" "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"

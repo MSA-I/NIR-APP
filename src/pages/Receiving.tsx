@@ -16,11 +16,12 @@ import { PO_STATUS, RECEIPT_LINE_STATUS, type Tone } from '../lib/status';
 import { fmtDate, fmtDateTime, todayISO } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import {
-  deleteReceiptDraft, ensureReceiptKey, getOpenOrder, getReceiptDraft, isOpenOrderStale,
-  listOpenOrders, listUnsyncedDraftOrderIds, putOpenOrder, putReceiptDraft,
+  claimLegacyReceiptRecovery, createReceiptDraftAutosaver, ensureReceiptKey, getOpenOrder, getReceiptDraft,
+  inspectLegacyReceiptRecovery, isOpenOrderStale,
+  listOpenOrders, listUnsyncedDraftOrderIds, putOpenOrder,
   type OfflineReceiptLine, type ReceiptKeyResolution, type SaveGoodsReceiptPayload,
 } from '../lib/offlineDb';
-import { offlineQueue } from '../lib/offlineQueue';
+import { offlineQueue, useOfflineQueue } from '../lib/offlineQueue';
 import type { InterpretationContract } from '../lib/useDocumentProcessing';
 import type { ReceiptLineStatus } from '../lib/types';
 
@@ -418,14 +419,27 @@ export function ReceiveOrder() {
   const [localDraftPending, setLocalDraftPending] = useState(false);
   const [busy, setBusy] = useState(false);
   const [doneReceiptId, setDoneReceiptId] = useState<string | null>(null);
+  const [donePendingSync, setDonePendingSync] = useState(false);
+  const offlineSnapshot = useOfflineQueue();
+
+  useEffect(() => {
+    if (!donePendingSync || !doneReceiptId || offlineSnapshot.lastSuccessfulSyncAt === null) return;
+    if (!offlineSnapshot.actions.some((action) => action.idempotencyKey === doneReceiptId)) {
+      setDonePendingSync(false);
+    }
+  }, [donePendingSync, doneReceiptId, offlineSnapshot.actions, offlineSnapshot.lastSuccessfulSyncAt]);
   const [invoiceSupplier, setInvoiceSupplier] = useState<string | null>(null);
   const [conflict, setConflict] = useState<ReceiptConflictState | null>(null);
   const [conflictComplete, setConflictComplete] = useState(false);
+  const [conflictQueueRef, setConflictQueueRef] = useState<{ id: number; syncVersion: number } | null>(null);
   const [scan, setScan] = useState<BarcodeScanResult | null>(null);
   const [highlightItemId, setHighlightItemId] = useState<string | null>(null);
+  const [recoveringLegacy, setRecoveringLegacy] = useState(false);
   const qtyInputs = useRef<Record<string, HTMLInputElement | null>>({});
+  const draftAutosaver = useRef(createReceiptDraftAutosaver());
+  const lastDraftFingerprint = useRef<string | null>(null);
 
-  const { data, loading, error } = useQuery(async () => {
+  const { data, loading, error, refetch } = useQuery(async () => {
     try {
       const order = toReceivingOrder(unwrap(await supabase.from('purchase_orders')
         .select('*, supplier:suppliers(id, name), items:purchase_order_items(*, product:products(id, name, unit, sku, barcode))')
@@ -482,7 +496,8 @@ export function ReceiveOrder() {
           };
         }
       }
-      return { order, draft, delivered, fromDevice: false, readAt: null as number | null, stale: false };
+      const legacyRecovery = await inspectLegacyReceiptRecovery(order.id);
+      return { order, draft, delivered, fromDevice: false, readAt: null as number | null, stale: false, legacyRecovery };
     } catch (serverError) {
       const cached = await getOpenOrder(orderId!);
       if (!cached) throw serverError;
@@ -495,6 +510,7 @@ export function ReceiveOrder() {
         fromDevice: true,
         readAt: cached.fetchedAt,
         stale: isOpenOrderStale(cached),
+        legacyRecovery: null,
       };
     }
   }, [orderId, documentId]);
@@ -512,9 +528,15 @@ export function ReceiveOrder() {
    */
   useEffect(() => {
     if (!data) return;
+    if (data.legacyRecovery) {
+      setReceiptKey(null);
+      setLocalDraftPending(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       const local = await getReceiptDraft(data.order.id);
+      const queueState = await offlineQueue.refresh();
       const localLines = local && local.syncedAt === null
         ? new Map(local.lines.map((line) => [line.order_item_id, line]))
         : null;
@@ -528,6 +550,13 @@ export function ReceiveOrder() {
       setLines(init);
       if (local) setOpenCredits(local.openCredits);
       setLocalDraftPending(!!local && local.syncedAt === null);
+      if (local?.completed && queueState?.actions.some((action) => (
+        action.idempotencyKey === local.receiptId && action.complete && action.state !== 'conflict'
+      ))) {
+        setDoneReceiptId(local.receiptId);
+        setDonePendingSync(true);
+        setInvoiceSupplier(data.order.supplier.id);
+      }
       const resolution = await ensureReceiptKey({
         orderId: data.order.id,
         // Only a successful server read can contribute the server draft's id; offline this is null
@@ -536,12 +565,91 @@ export function ReceiveOrder() {
         lines: toOfflineLines(data.order.items, init),
         openCredits: local?.openCredits ?? true,
       });
-      if (!cancelled) setReceiptKey(resolution);
+      if (cancelled) return;
+      lastDraftFingerprint.current = JSON.stringify({
+        lines: toOfflineLines(data.order.items, init),
+        openCredits: local?.openCredits ?? true,
+      });
+      setReceiptKey(resolution);
+      const queuedConflict = queueState.actions.find((action) => (
+        action.idempotencyKey === resolution.receiptId && action.conflictCode
+      ));
+      if (queuedConflict?.conflictCode) {
+        setConflictComplete(queuedConflict.complete);
+        setConflictQueueRef({ id: queuedConflict.id, syncVersion: queuedConflict.syncVersion });
+        const conflictLines = local?.lines ?? toOfflineLines(data.order.items, init);
+        const products = new Map(data.order.items.map((item) => [
+          item.id, { name: item.product.name, unit: item.product.unit },
+        ]));
+        const hydratedConflict = await loadReceiptConflict({
+          orderId: data.order.id,
+          receiptId: resolution.receiptId,
+          orderNumber: data.order.number,
+          supplierName: data.order.supplier.name,
+          localLines: conflictLines,
+          products,
+          localObservedAt: queuedConflict.observedAt,
+          code: queuedConflict.conflictCode,
+        }).catch((): ReceiptConflictState => ({
+          code: queuedConflict.conflictCode!,
+          orderId: data.order.id,
+          orderNumber: data.order.number,
+          supplierName: data.order.supplier.name,
+          receiptId: resolution.receiptId,
+          lines: conflictLines.map((line) => ({
+            orderItemId: line.order_item_id,
+            productName: products.get(line.order_item_id)?.name ?? '—',
+            unit: products.get(line.order_item_id)?.unit ?? '',
+            localQty: line.qty_received,
+            localStatus: line.status,
+            localNotes: line.notes,
+            orderedQty: null,
+            serverReceivedQty: null,
+            serverRemaining: null,
+            serverDraftQty: null,
+          })),
+          localObservedAt: queuedConflict.observedAt,
+          serverReceiptId: null,
+          serverReceiptStatus: null,
+          serverReceiptAt: null,
+          serverActorName: '—',
+          serverOrderStatus: null,
+          rereadError: 'לא ניתן היה לקרוא מחדש את נתוני ההזמנה מהשרת. הטיוטה והקונפליקט נשמרו במכשיר.',
+        }));
+        if (!cancelled) setConflict(hydratedConflict);
+      }
     })();
     return () => { cancelled = true; };
   }, [data]);
 
   const order = data?.order;
+
+  useEffect(() => {
+    if (!order || !receiptKey || doneReceiptId
+      || Object.keys(lines).length !== order.items.length) return;
+    const offlineLines = toOfflineLines(order.items, lines);
+    const fingerprint = JSON.stringify({ lines: offlineLines, openCredits });
+    if (lastDraftFingerprint.current === fingerprint) return;
+    lastDraftFingerprint.current = fingerprint;
+    const observedAt = Date.now();
+    void draftAutosaver.current.save({
+      orderId: order.id,
+      receiptId: receiptKey.receiptId,
+      keySource: receiptKey.keySource,
+      lines: offlineLines,
+      openCredits,
+      notes: null,
+      observedAt,
+      updatedAt: observedAt,
+      syncedAt: null,
+      completed: false,
+    }).then(() => {
+      setLocalDraftPending(true);
+    }).catch((autosaveError) => {
+      if (lastDraftFingerprint.current === fingerprint) lastDraftFingerprint.current = null;
+      toast(toHebrewError(autosaveError), 'error');
+    });
+  }, [doneReceiptId, lines, openCredits, order, receiptKey, toast]);
 
   const progress = useMemo(() => {
     if (!order) return { done: 0, total: 0 };
@@ -590,6 +698,21 @@ export function ReceiveOrder() {
     return toOfflineLines(order?.items ?? [], lines);
   }
 
+  async function recoverLegacyWork() {
+    if (!order || !data?.legacyRecovery) return;
+    setRecoveringLegacy(true);
+    try {
+      const recovered = await claimLegacyReceiptRecovery(order.id);
+      if (!recovered) throw new Error('legacy_receipt_recovery_missing');
+      toast('הטיוטה הישנה שויכה לחשבון הנוכחי ושוחזרה.');
+      await refetch();
+    } catch (recoveryError) {
+      toast(toHebrewError(recoveryError), 'error');
+    } finally {
+      setRecoveringLegacy(false);
+    }
+  }
+
   async function send(complete: boolean, payloadLines: OfflineReceiptLine[], reason: string) {
     if (!order || !receiptKey) return;
     const observedAt = Date.now();
@@ -605,7 +728,7 @@ export function ReceiveOrder() {
     // Stored before sent: whatever happens to the network afterwards, the device keeps what the
     // person saw. `observedAt` is the moment of this save — the moment they asserted what arrived.
     const existing = await getReceiptDraft(order.id);
-    await putReceiptDraft({
+    await draftAutosaver.current.save({
       orderId: order.id,
       receiptId: receiptKey.receiptId,
       keySource: receiptKey.keySource,
@@ -615,7 +738,7 @@ export function ReceiveOrder() {
       observedAt,
       updatedAt: observedAt,
       syncedAt: null,
-      completed: existing?.completed ?? false,
+      completed: (existing?.completed ?? false) || complete,
     });
     setLocalDraftPending(true);
 
@@ -628,10 +751,12 @@ export function ReceiveOrder() {
 
     switch (outcome.kind) {
       case 'sent':
+        setDonePendingSync(false);
         setLocalDraftPending(false);
         if (complete) {
-          // The receipt is closed: its local draft has nothing left to protect.
-          await deleteReceiptDraft(order.id);
+          // Atomic queue finalization already deleted the exact accepted draft. Do not issue a
+          // second unconditional delete here: another tab may have persisted a newer draft while
+          // the server request was in flight, and the finalizer deliberately preserves that row.
           setDoneReceiptId(outcome.receiptId);
           setInvoiceSupplier(order.supplier.id);
           toast('הקבלה הושלמה');
@@ -643,10 +768,22 @@ export function ReceiveOrder() {
       case 'queued':
         setConflict(null);
         toast(outcome.reason);
-        if (!complete) navigate('/receiving');
+        if (complete) {
+          setDonePendingSync(true);
+          setDoneReceiptId(receiptKey.receiptId);
+          setInvoiceSupplier(order.supplier.id);
+        } else navigate('/receiving');
         return;
       case 'conflict':
         setConflictComplete(complete);
+        {
+          const queuedConflict = offlineQueue.getSnapshot().actions.find((action) => (
+            action.idempotencyKey === receiptKey.receiptId && action.state === 'conflict'
+          ));
+          setConflictQueueRef(queuedConflict
+            ? { id: queuedConflict.id, syncVersion: queuedConflict.syncVersion }
+            : null);
+        }
         toast(outcome.message, 'error');
         setConflict(await loadReceiptConflict({
           orderId: order.id,
@@ -687,11 +824,21 @@ export function ReceiveOrder() {
         return;
       }
       if (resolution.kind === 'discard-local') {
-        const queued = offlineQueue.getSnapshot().actions
-          .find((action) => action.idempotencyKey === receiptKey.receiptId);
-        if (queued) await offlineQueue.discardAction(queued.id);
-        await deleteReceiptDraft(order.id);
+        if (!conflictQueueRef) {
+          toast('מצב הקונפליקט השתנה. לא נמחקו נתונים; יש לפתוח את הקבלה מחדש.', 'error');
+          return;
+        }
+        const discarded = await offlineQueue.discardAction(
+          conflictQueueRef.id, conflictQueueRef.syncVersion, 'conflict',
+        );
+        if (!discarded) {
+          setConflict(null);
+          setConflictQueueRef(null);
+          toast('הטיוטה השתנתה בחלון אחר ולכן לא נמחקה. יש לפתוח את הקבלה מחדש.', 'error');
+          return;
+        }
         setConflict(null);
+        setConflictQueueRef(null);
         setLocalDraftPending(false);
         toast('הטיוטה המקומית נמחקה. הנתונים בשרת נשארו כפי שהם.');
         navigate('/receiving');
@@ -713,15 +860,23 @@ export function ReceiveOrder() {
   /* completion screen: attach invoice photo + optional invoice creation */
   if (doneReceiptId) {
     return (
-      <div className="max-w-xl mx-auto space-y-4 text-center pt-6">
-        <CheckCircle2 size={48} className="text-done-solid mx-auto" />
-        <h1 className="text-xl font-bold text-ink">הקבלה נשמרה!</h1>
-        <p className="text-sm text-ink-muted">עכשיו אפשר לצלם את החשבונית או תעודת המשלוח ולצרף אותה לקבלה.</p>
+      <div
+        className="max-w-xl mx-auto space-y-4 text-center pt-6"
+        data-testid="receiving-completion"
+        data-sync-state={donePendingSync ? 'pending' : 'synced'}
+      >
+        <CheckCircle2 size={48} className={donePendingSync ? 'text-await-solid mx-auto' : 'text-done-solid mx-auto'} />
+        <h1 className="text-xl font-bold text-ink">{donePendingSync ? 'הקבלה שמורה במכשיר' : 'הקבלה נשמרה!'}</h1>
+        <p className="text-sm text-ink-muted">{donePendingSync
+          ? 'השרת עדיין לא אישר את הקבלה. היא והתמונות שתצלם יישלחו לפי הסדר כשהחיבור יחזור.'
+          : 'עכשיו אפשר לצלם את החשבונית או תעודת המשלוח ולצרף אותה לקבלה.'}</p>
+        <OfflineQueueStatus />
         <div className="card card-pad text-start">
           <DocumentList entityType="goods_receipt" entityId={doneReceiptId} capture />
         </div>
         <div className="flex flex-col sm:flex-row gap-2 justify-center">
-          <button className="btn-primary" onClick={() => navigate(`/invoices/new?supplier=${invoiceSupplier}&order=${order.id}&receipt=${doneReceiptId}`)}>
+          <button className="btn-primary" disabled={donePendingSync}
+            onClick={() => navigate(`/invoices/new?supplier=${invoiceSupplier}&order=${order.id}&receipt=${doneReceiptId}`)}>
             <FileText size={15} /> הזנת חשבונית להזמנה זו
           </button>
           <button className="btn-secondary" onClick={() => navigate('/receiving')}>חזרה לקבלת סחורה</button>
@@ -769,6 +924,23 @@ export function ReceiveOrder() {
       </div>
 
       <OfflineQueueStatus />
+
+      {data?.legacyRecovery && !data.fromDevice && (
+        <Note tone="await">
+          <div className="space-y-2">
+            <p>
+              נמצאה במכשיר טיוטה מהגרסה הקודמת ללא שיוך ארגון או משתמש
+              {data.legacyRecovery.queuedActions > 0 && <> · <span className="num">{data.legacyRecovery.queuedActions}</span> פעולות ממתינות</>}
+              {data.legacyRecovery.pendingPhotos > 0 && <> · <span className="num">{data.legacyRecovery.pendingPhotos}</span> תמונות ממתינות</>}.
+              השחזור ישייך אותה לחשבון הנוכחי.
+            </p>
+            <button type="button" className="btn-secondary" disabled={recoveringLegacy}
+              onClick={() => void recoverLegacyWork()}>
+              {recoveringLegacy ? 'משחזר…' : 'שחזור — זו העבודה שלי'}
+            </button>
+          </div>
+        </Note>
+      )}
 
       {data?.fromDevice && (
         <Note tone={data.stale ? 'alert' : 'await'}>

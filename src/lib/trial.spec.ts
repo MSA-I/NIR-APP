@@ -1,26 +1,23 @@
-/** #15 (decided 09.08.2026): the soft block fires only for a `trial` org whose end passed. */
 import { describe, expect, it } from 'vitest';
-import { isTrialExpired } from './trial';
+import { organizationAccessFromServer } from './trial';
 
-const NOW = new Date('2026-08-09T12:00:00Z');
-
-describe('isTrialExpired', () => {
-  it('expired trial blocks', () => {
-    expect(isTrialExpired({ status: 'trial', trial_ends_at: '2026-08-08T00:00:00Z' }, NOW)).toBe(true);
+describe('organizationAccess', () => {
+  it('uses the server lifecycle result and never the device clock', () => {
+    expect(organizationAccessFromServer({ access_mode: 'trial', grace_days_remaining: null }))
+      .toEqual({ mode: 'trial', graceDaysRemaining: null, canWrite: true });
+    expect(organizationAccessFromServer({ access_mode: 'grace', grace_days_remaining: 5 }))
+      .toEqual({ mode: 'grace', graceDaysRemaining: 5, canWrite: true });
+    expect(organizationAccessFromServer({ access_mode: 'read_only', grace_days_remaining: null }))
+      .toEqual({ mode: 'read_only', graceDaysRemaining: null, canWrite: false });
+    expect(organizationAccessFromServer({ access_mode: 'offboarding', grace_days_remaining: null }))
+      .toEqual({ mode: 'offboarding', graceDaysRemaining: null, canWrite: false });
   });
 
-  it('a trial that has not ended yet does not block', () => {
-    expect(isTrialExpired({ status: 'trial', trial_ends_at: '2026-08-10T00:00:00Z' }, NOW)).toBe(false);
-  });
-
-  it('only trial status counts — an active org with a stale date is untouched', () => {
-    expect(isTrialExpired({ status: 'active', trial_ends_at: '2020-01-01T00:00:00Z' }, NOW)).toBe(false);
-    expect(isTrialExpired({ status: 'suspended', trial_ends_at: '2020-01-01T00:00:00Z' }, NOW)).toBe(false);
-  });
-
-  it('no date, no org — no block', () => {
-    expect(isTrialExpired({ status: 'trial', trial_ends_at: null }, NOW)).toBe(false);
-    expect(isTrialExpired(null, NOW)).toBe(false);
-    expect(isTrialExpired({ status: 'trial', trial_ends_at: 'not-a-date' }, NOW)).toBe(false);
+  it('fails closed for missing, malformed or forged writable evidence', () => {
+    expect(organizationAccessFromServer(null).canWrite).toBe(false);
+    expect(organizationAccessFromServer({ access_mode: 'unknown', grace_days_remaining: 7 }).canWrite)
+      .toBe(false);
+    expect(organizationAccessFromServer({ access_mode: 'grace', grace_days_remaining: -1 }))
+      .toEqual({ mode: 'grace', graceDaysRemaining: null, canWrite: true });
   });
 });

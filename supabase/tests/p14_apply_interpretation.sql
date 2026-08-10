@@ -97,6 +97,28 @@ begin
 end
 $$;
 
+-- Only the Platform Admin lifecycle command is contractually step-up protected. Keeping this
+-- persona separate prevents ordinary owner scenarios in this suite from silently acquiring AMR
+-- and masking an accidental future step-up requirement on filing/reversal commands.
+create function pg_temp.p14_become_fresh(p_sub uuid)
+returns void
+language plpgsql
+as $$
+begin
+  perform set_config('request.jwt.claim.sub', p_sub::text, true);
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
+  perform set_config('request.jwt.claims', jsonb_build_object(
+    'sub', p_sub::text,
+    'role', 'authenticated',
+    'amr', jsonb_build_array(jsonb_build_object(
+      'method', 'password',
+      'timestamp', extract(epoch from clock_timestamp())::bigint
+    ))
+  )::text, true);
+  perform set_config('role', 'authenticated', true);
+end
+$$;
+
 -- The trusted server: no JWT at all. This is the actual calling shape of the Edge Function, and
 -- it is the shape under which auth_org() is NULL -- the whole reason C2 must read the private
 -- door instead of evaluate_autonomy_policy.
@@ -538,9 +560,12 @@ insert into suppliers (id, org_id, name) values
   ('34000000-0000-4000-8000-000000000004', '14000000-0000-4000-8000-000000000004',
    'ספק בדיקה P14 ד');
 
--- The EXECUTE boundary is asserted above through the effective ACL. Calling the denied function
--- after SET ROLE crashes the local PostgreSQL 17 image (SIGSEGV) before it can return 42501, so
--- repeating that same assertion as a runtime probe would test the image, not the contract.
+-- The matching dynamic denial is exercised through the real authenticated PostgREST boundary in
+-- check-p0-security.ps1. The local Supabase PostgreSQL image SIGSEGVs on *any* direct SQL EXECUTE
+-- denial for a public function (also reproduced with a one-line disposable function), so keeping
+-- that generic engine fault inside this transaction would crash the server instead of measuring
+-- this command. P0 requires a PGRST/ACL refusal and rejects a business-guard response, while the
+-- catalog assertions above still pin the exact service_role/authenticated/anon grant matrix.
 
 -- ===== (a) OFF MEANS ZERO =====
 -- Tenant A is UNCONFIGURED at this point, which is the state of every tenant in the world by
