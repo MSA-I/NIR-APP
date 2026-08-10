@@ -494,8 +494,12 @@ export const CANONICAL_LINE_ITEM_KEYS = [
 //   line_vat_amount       vat_rate is a rate. 0077 refuses to derive the VAT split rather than
 //                         invent a tax figure; the same rule applies per line.
 //
-// If a future migration starts reading one of these by name, it MOVES to the canonical list where
-// the bijection can guard it. core.test.ts asserts that, so the move cannot be forgotten.
+// The boundary these keys sit on is *applying*, not *reading*: what makes a key canonical is that
+// 0077 or 0099 consumes it while writing a financial record, and core.test.ts pins exactly those two
+// migrations. 0106 reads `supplier_vat_id` to resolve which supplier sent a document, and it stays a
+// review key, because that resolver decides nothing — it returns candidates for a person to approve
+// and never writes. A migration that starts consuming one of these while applying is the case that
+// MOVES it to the canonical list where the bijection can guard it.
 export const REVIEW_FIELD_KEYS = [
   "supplier_vat_id",
   "delivery_note_number",
