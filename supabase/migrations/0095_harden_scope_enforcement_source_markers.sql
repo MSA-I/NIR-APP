@@ -196,42 +196,42 @@ insert into private.scope_definer_enforcements (
 ) values
   (
     'create_monthly_report_snapshot(date,uuid)',
-    '7c9566caca02f48902791f95a23ec7f8', 'assert_unit',
+    '23c498f6c0c93bd98c9914c81645cfab', 'assert_unit',
     '0074 locks the requested legal entity and asserts p_unit_id before reading snapshot sources.'
   ),
   (
     'create_payment_request(uuid,uuid,date,text,text,jsonb,text)',
-    'ec6870ddbe75ea86eeacd515a7f5e836', 'assert_unit',
+    'c1311494f9499fd5905bb964291e151b', 'assert_unit',
     '0073 derives the request unit from locked invoices and asserts it before the financial write.'
   ),
   (
     'mark_monthly_report_snapshot_sent(uuid,text)',
-    'd8718aefec3cabc60547826eb12b50a3', 'assert_unit',
+    'bb0a841eace73cbfec39b7489cad0173', 'assert_unit',
     '0074 locks the snapshot row and asserts its persisted unit before changing sent state.'
   ),
   (
     'open_manual_exception(text,uuid,exception_type,text)',
-    '6f1d9039b9dfeeada46c9ab981e281b0', 'assert_unit',
+    '6d3133f71512582d050983694b06be05', 'assert_unit',
     '0087 locks the exact purchase order or invoice, derives its persisted unit and asserts that unit before inserting the reasoned exception.'
   ),
   (
     'p0_invoice_balance_rows()',
-    '2ea54924b75ef99057fbac0f167e699d', 'filtered_read',
+    '3ef5dfb1cba14b3a244acfaa7abdd150', 'filtered_read',
     '0057 filters every invoice row to unit_id null or unit_id present in auth_scopes().'
   ),
   (
     'p0_supplier_balance_rows()',
-    '305bb1741da579c9f62ce354b9711309', 'filtered_read',
+    '375328ffc7b68f0d0ae8b57472bd0818', 'filtered_read',
     '0057 derives supplier balances only from invoices filtered by null-or-auth_scopes unit.'
   ),
   (
     'p1_transition_payment_request(uuid,text,text,boolean,text,uuid,numeric)',
-    '624abddd16eb937474c86f360bc5dfa4', 'assert_unit',
+    '3f8bf5a048ae0dc09af496ba73d5d5b7', 'assert_unit',
     '0073 locks the payment request and asserts its unit before any state or allocation mutation.'
   ),
   (
     'payment_request_financial_check_signals(uuid,numeric,uuid[],uuid)',
-    '225c699716392ae7eed878b22373e920', 'assert_unit',
+    '73cf21ebbea3457c24ede4db3e173ce4', 'assert_unit',
     '0073 derives one unit from the selected invoices or request and asserts it before returning signals.'
   );
 
@@ -274,7 +274,7 @@ begin
       continue;
     end if;
 
-    select enforcement.body_hash = md5(v_candidate.prosrc)
+    select enforcement.body_hash = md5(replace(v_candidate.prosrc, e'\r', ''))
            and private.sql_has_executable_scope_marker(v_candidate.prosrc)
       into v_registered
     from private.scope_definer_enforcements enforcement
@@ -291,7 +291,7 @@ begin
     from private.scope_definer_enforcements enforcement
     left join pg_catalog.pg_proc p
       on p.oid = pg_catalog.to_regprocedure(enforcement.function_signature)
-    where p.oid is null or not p.prosecdef or md5(p.prosrc) <> enforcement.body_hash
+    where p.oid is null or not p.prosecdef or md5(replace(p.prosrc, e'\r', '')) <> enforcement.body_hash
   loop
     detail := 'stale scope enforcement registration: ' || v_enforcement.function_signature;
     return next;

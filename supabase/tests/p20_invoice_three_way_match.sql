@@ -101,7 +101,7 @@ select pg_temp.p20_assert(
       'record_invoice_line_matches(uuid,uuid,uuid,uuid,jsonb,text)',
       'override_invoice_three_way_match(uuid,text,uuid,text)',
       'get_invoice_three_way_match(uuid)'
-    ) and enforcement.body_hash <> md5(proc.prosrc)
+    ) and enforcement.body_hash <> md5(replace(proc.prosrc, e'\r', ''))
   ) and (
     select count(*) = 4 from private.scope_definer_enforcements
     where function_signature in (

@@ -2193,7 +2193,9 @@ is 'SECURITY INVOKER trigger: appends the exact immutable three-way assessment u
 insert into private.scope_definer_enforcements (
   function_signature, body_hash, enforcement_kind, scope_proof
 )
-select reviewed.function_signature, md5(proc.prosrc), 'filtered_read', reviewed.scope_proof
+-- CR-stripped, matching 0095's checker: a hash stored from a CRLF checkout would never equal
+-- the one the checker recomputes, and A5 would fail closed on Windows only.
+select reviewed.function_signature, md5(replace(proc.prosrc, e'\r', '')), 'filtered_read', reviewed.scope_proof
 from (values
   (
     'record_invoice_line_evidence(uuid,uuid,uuid,text,uuid,uuid,uuid,jsonb,text)',

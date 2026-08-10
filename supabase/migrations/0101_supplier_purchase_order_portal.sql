@@ -124,7 +124,8 @@ insert into private.scope_definer_enforcements (
 )
 select
   'supplier_portal_context()',
-  md5(p.prosrc),
+  -- CR-stripped, matching 0095's checker (see the note in 0099).
+  md5(replace(p.prosrc, e'\r', '')),
   'filtered_read',
   '0101 binds the actor to auth_org and auth_supplier, then filters every issued purchase order to null-or-auth_scopes unit before returning the narrow supplier projection.'
 from pg_catalog.pg_proc p

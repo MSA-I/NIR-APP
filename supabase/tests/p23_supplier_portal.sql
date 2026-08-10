@@ -22,7 +22,7 @@ select pg_temp.p23_assert(
       on proc.oid = 'public.supplier_portal_context()'::regprocedure
     where enforcement.function_signature = 'supplier_portal_context()'
       and enforcement.enforcement_kind = 'filtered_read'
-      and enforcement.body_hash = md5(proc.prosrc)
+      and enforcement.body_hash = md5(replace(proc.prosrc, e'\r', ''))
   ),
   'supplier portal definer scope enforcement is missing or stale'
 );
