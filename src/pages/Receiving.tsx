@@ -94,10 +94,58 @@ interface ReceivingListOrder {
   items: { id: string }[];
 }
 
-function ReceivingOrderCard({ order, today, localDraft, onOpen }: {
+/**
+ * One line's opening value, resolved from the four sources in order of authority.
+ *
+ * Extracted from the effect below so it can be pinned by a test. The case that made that worth
+ * doing: since 0090 a draft may be opened by the machine from a delivery note, and such a draft
+ * carries ONLY the lines whose sku or barcode matched a product on the order. Every other ordered
+ * line has no draft row at all and must still appear, at its remaining quantity — a line that
+ * silently vanished from this map would be a line the receiving screen never asks about, and an
+ * order that can never be completed.
+ */
+export function hydrateReceiptLines(input: {
+  items: { id: string; product_id: string; qty: number; received_qty: number }[];
+  localLines: Map<string, { qty_received: number; status: ReceiptLineStatus; notes: string | null }> | null;
+  draftLines: { order_item_id: string; qty_received: number; status: ReceiptLineStatus; notes: string | null }[] | null;
+  deliveredQty: Map<string, number> | null;
+}): Record<string, LineState> {
+  const init: Record<string, LineState> = {};
+  for (const item of input.items) {
+    const remaining = Math.max(0, item.qty - item.received_qty);
+    const localLine = input.localLines?.get(item.id);
+    if (localLine) {
+      init[item.id] = { qty: localLine.qty_received, status: localLine.status, notes: localLine.notes ?? '' };
+      continue;
+    }
+    const draftLine = input.draftLines?.find((d) => d.order_item_id === item.id);
+    if (draftLine) {
+      init[item.id] = { qty: draftLine.qty_received, status: draftLine.status, notes: draftLine.notes ?? '' };
+      continue;
+    }
+    const delivered = input.deliveredQty?.get(item.product_id);
+    const qty = delivered ?? remaining;
+    init[item.id] = {
+      qty,
+      status: delivered === undefined ? 'full' : qty === 0 ? 'missing' : qty < remaining ? 'partial' : 'full',
+      notes: '',
+    };
+  }
+  return init;
+}
+
+/** A draft the machine opened from a delivery note, and the evidence that picked this order. */
+interface MachineDraft {
+  orderMatchedBy: 'by_number' | 'by_items' | 'single_open_order';
+  matchedCount: number;
+  waitingCount: number;
+}
+
+function ReceivingOrderCard({ order, today, localDraft, machineDraft, onOpen }: {
   order: ReceivingListOrder;
   today: string;
   localDraft: boolean;
+  machineDraft: MachineDraft | null;
   onOpen: () => void;
 }) {
   const attentionReason = order.status === 'partial'
@@ -124,6 +172,17 @@ function ReceivingOrderCard({ order, today, localDraft, onOpen }: {
       {/* A receipt recorded on this device that the server has not accepted yet. Shown on the card
           because the person who typed it needs to see it from the list, not only after opening. */}
       {localDraft && <div className="mt-1 text-xs font-medium text-alert-fg">טיוטה מקומית — טרם סונכרנה</div>}
+      {machineDraft && (
+        <div className="mt-1 text-xs font-medium text-await-fg">
+          טיוטה אוטומטית מתעודת משלוח — {machineDraft.matchedCount} שורות מוכנות לאישור
+          {machineDraft.waitingCount > 0 && `, ${machineDraft.waitingCount} ממתינות`}
+          {/* Named, not hidden. This is the tier that picked the order because it was the only one
+              open — a real link, on the weakest evidence of the three, and the person standing at
+              the delivery is the only one who can see whether it is the right order. */}
+          {machineDraft.orderMatchedBy === 'single_open_order'
+            && ' · ההזמנה נבחרה כיחידה הפתוחה — כדאי לוודא'}
+        </div>
+      )}
     </button>
   );
 }
@@ -167,6 +226,41 @@ export function ReceivingList() {
   });
 
   useEffect(() => { void listUnsyncedDraftOrderIds().then(setLocalDrafts); }, [data]);
+
+  // Which of these orders already carry a draft the machine opened. Read from the decision ledger
+  // rather than from goods_receipts, because a draft's own row cannot say who opened it —
+  // save_goods_receipt leaves received_by null until completion (0023:1644), so a human's draft
+  // and a machine's draft are byte-identical on that column.
+  //
+  // The ledger alone is not enough, though: a decision stays `draft_created` forever, while the
+  // draft it opened stops existing the moment a person completes it (and reversal is the only
+  // path that stamps reverted_at). Intersecting with the live drafts keeps the card honest — a
+  // badge saying "מוכנות לאישור" over a receipt that was already completed is a claim about work
+  // that no longer exists.
+  const { data: machineDrafts } = useQuery(async () => {
+    const [decisions, liveDrafts] = await Promise.all([
+      supabase.from('delivery_note_interpretation_decisions')
+        .select('order_id, order_matched_by, matched_count, waiting_count')
+        .eq('outcome', 'draft_created')
+        .is('reverted_at', null),
+      supabase.from('goods_receipts').select('order_id').eq('status', 'draft'),
+    ]);
+    // `?? []`: a null body with no error is "no rows", not a crash — PostgREST never sends it for
+    // a list select, but the browser gate's receiving scenario stubs goods_receipts with
+    // `json: null` (check-browser-smoke.cjs), and a badge query must degrade to "no badge".
+    const rows = (unwrap(decisions) ?? []) as {
+      order_id: string;
+      order_matched_by: MachineDraft['orderMatchedBy'];
+      matched_count: number;
+      waiting_count: number;
+    }[];
+    const stillDraft = new Set(((unwrap(liveDrafts) ?? []) as { order_id: string }[]).map((d) => d.order_id));
+    return new Map(rows.filter((row) => stillDraft.has(row.order_id)).map((row) => [row.order_id, {
+      orderMatchedBy: row.order_matched_by,
+      matchedCount: row.matched_count,
+      waitingCount: row.waiting_count,
+    }]));
+  });
 
   // Receiving from a delivery note: the document names the supplier, never the order. Seeding the
   // search with the supplier narrows the list to plausible orders; choosing among them stays the
@@ -257,7 +351,7 @@ export function ReceivingList() {
         // section, not div: aria-label on a roleless div is dropped by screen readers, so this list
         // of results arrived unnamed. Matches the labelled section in the focused-queue branch below.
         <section className="space-y-3" aria-label="תוצאות קבלת סחורה">
-          {filtered.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} localDraft={isLocalDraft(order.id)} onOpen={() => openOrder(order.id)} />)}
+          {filtered.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} localDraft={isLocalDraft(order.id)} machineDraft={machineDrafts?.get(order.id) ?? null} onOpen={() => openOrder(order.id)} />)}
         </section>
       ) : (
         <>
@@ -267,7 +361,7 @@ export function ReceivingList() {
               <span className="badge-await num">{attention.length}</span>
             </div>
             {attention.length
-              ? attention.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} localDraft={isLocalDraft(order.id)} onOpen={() => openOrder(order.id)} />)
+              ? attention.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} localDraft={isLocalDraft(order.id)} machineDraft={machineDrafts?.get(order.id) ?? null} onOpen={() => openOrder(order.id)} />)
               : <div className="card card-pad text-sm text-ink-soft">אין קבלות שדורשות פעולה כרגע.</div>}
           </section>
 
@@ -279,12 +373,12 @@ export function ReceivingList() {
                   <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
                 </summary>
                 <div className="space-y-3 pt-2">
-                  {remaining.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} localDraft={isLocalDraft(order.id)} onOpen={() => openOrder(order.id)} />)}
+                  {remaining.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} localDraft={isLocalDraft(order.id)} machineDraft={machineDrafts?.get(order.id) ?? null} onOpen={() => openOrder(order.id)} />)}
                 </div>
               </details>
               <section className="hidden space-y-3 sm:block" aria-labelledby="receiving-other-title">
                 <h2 id="receiving-other-title" className="section-title">הזמנות נוספות</h2>
-                {remaining.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} localDraft={isLocalDraft(order.id)} onOpen={() => openOrder(order.id)} />)}
+                {remaining.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} localDraft={isLocalDraft(order.id)} machineDraft={machineDrafts?.get(order.id) ?? null} onOpen={() => openOrder(order.id)} />)}
               </section>
             </>
           )}
@@ -424,27 +518,12 @@ export function ReceiveOrder() {
       const localLines = local && local.syncedAt === null
         ? new Map(local.lines.map((line) => [line.order_item_id, line]))
         : null;
-      const init: Record<string, LineState> = {};
-      for (const item of data.order.items) {
-        const remaining = Math.max(0, item.qty - item.received_qty);
-        const localLine = localLines?.get(item.id);
-        if (localLine) {
-          init[item.id] = { qty: localLine.qty_received, status: localLine.status, notes: localLine.notes ?? '' };
-          continue;
-        }
-        const draftLine = data.draft?.items.find((d) => d.order_item_id === item.id);
-        if (draftLine) {
-          init[item.id] = { qty: draftLine.qty_received, status: draftLine.status, notes: draftLine.notes ?? '' };
-          continue;
-        }
-        const delivered = data.delivered?.matchedQty.get(item.product_id);
-        const qty = delivered ?? remaining;
-        init[item.id] = {
-          qty,
-          status: delivered === undefined ? 'full' : qty === 0 ? 'missing' : qty < remaining ? 'partial' : 'full',
-          notes: '',
-        };
-      }
+      const init = hydrateReceiptLines({
+        items: data.order.items,
+        localLines,
+        draftLines: data.draft?.items ?? null,
+        deliveredQty: data.delivered?.matchedQty ?? null,
+      });
       if (cancelled) return;
       setLines(init);
       if (local) setOpenCredits(local.openCredits);

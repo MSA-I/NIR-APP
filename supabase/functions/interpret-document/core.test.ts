@@ -592,6 +592,14 @@ test("the handler still routes both interpretation paths through the decision", 
     body.includes("isPriceList: storedKindIsPriceList ||"),
     "dedicated and newly detected price lists no longer share the price-list decision route",
   );
+  // The third destination, pinned for the same reason as the other two and with one extra
+  // condition of its own: the AND. Routing on the stored kind alone would send a document filed
+  // as a delivery note but read as an invoice to 0090, where it can only come back
+  // `not_a_delivery_note` -- silently taking away the invoice 0077 would have created.
+  assert.ok(
+    body.includes("isDeliveryNote: storedKindIsDeliveryNote &&"),
+    "the delivery-note route no longer requires the stored kind AND the read type to agree",
+  );
 });
 
 // Every `private.interpretation_field(<payload>, array[...])` call in 0077 -- one per value the

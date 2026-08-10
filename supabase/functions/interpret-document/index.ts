@@ -445,8 +445,61 @@ export async function applyPriceListInterpretationDecision(
   }
 }
 
+export async function applyDeliveryNoteInterpretationDecision(
+  admin: DecisionRpcClient,
+  jobId: string,
+  interpretationId: string,
+  actorId: string,
+): Promise<void> {
+  try {
+    const applied = await admin.rpc("apply_delivery_note_interpretation", {
+      p_job_id: jobId,
+      p_interpretation_id: interpretationId,
+      p_actor_id: actorId,
+    }).abortSignal(AbortSignal.timeout(DECISION_TIMEOUT_MS));
+    if (applied.error) {
+      console.error(
+        "apply_delivery_note_interpretation failed",
+        jobId,
+        interpretationId,
+        applied.error.message,
+      );
+      return;
+    }
+    const verdict = applied.data && typeof applied.data === "object"
+      ? applied.data as Record<string, unknown>
+      : {};
+    // order_matched_by is on this line deliberately. It is the one field that says WHICH tier of
+    // evidence picked the order, and `single_open_order` is the weakest of the three -- a link
+    // that turns out wrong will be investigated from this log before anything else.
+    console.log(
+      "apply_delivery_note_interpretation",
+      jobId,
+      interpretationId,
+      String(verdict.outcome ?? "unknown"),
+      String(verdict.reason_code ?? ""),
+      String(verdict.receipt_id ?? ""),
+      String(verdict.order_matched_by ?? ""),
+      String(verdict.matched_count ?? ""),
+      String(verdict.waiting_count ?? ""),
+    );
+  } catch (error) {
+    console.error(
+      "apply_delivery_note_interpretation failed",
+      jobId,
+      interpretationId,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
 // Route by the document's business kind, never by the uploader's role. A manager-uploaded price
 // list and a supplier-uploaded price list must reach the same financial command.
+//
+// Three destinations now, and the order of the checks is the contract: a document is at most one
+// business kind, so the flags cannot both be set by the callers below, and invoice remains the
+// fallback so that a kind nobody routed still reaches 0077's ladder and gets a named refusal
+// rather than silence.
 export async function decideOnInterpretation(
   admin: DecisionRpcClient,
   isPriceList: boolean,
@@ -454,10 +507,13 @@ export async function decideOnInterpretation(
   interpretationId: string,
   actorId: string,
   apply?: ApplyDecision,
+  isDeliveryNote = false,
 ): Promise<void> {
   await (apply ?? (
     isPriceList
       ? applyPriceListInterpretationDecision
+      : isDeliveryNote
+      ? applyDeliveryNoteInterpretationDecision
       : applyInterpretationDecision
   ))(admin, jobId, interpretationId, actorId);
 }
@@ -470,6 +526,9 @@ export interface ResumeInterpretationOptions {
   actorId: string;
   context: { already_interpreted: boolean; interpretation_id?: string };
   apply?: ApplyDecision;
+  // Optional so the existing callers and their contract tests keep compiling unchanged. A
+  // document is one kind, so this is never true alongside isPriceList.
+  isDeliveryNote?: boolean;
 }
 
 // ===== A REPLAY RE-OFFERS THE DECISION, and that is the only retry this feature has. =====
@@ -504,6 +563,7 @@ export async function resumeExistingInterpretation(
     context.interpretation_id,
     options.actorId,
     options.apply,
+    options.isDeliveryNote ?? false,
   );
   return context.interpretation_id;
 }
@@ -517,6 +577,7 @@ export interface SaveAndDecideOptions {
   args: Record<string, unknown>;
   findExisting: () => Promise<string | null>;
   apply?: ApplyDecision;
+  isDeliveryNote?: boolean;
 }
 
 // Persistence and the decision that follows it, extracted from the handler so that the WIRING is
@@ -572,6 +633,7 @@ export async function saveAndDecideInterpretation(
         existingId,
         options.actorId,
         options.apply,
+        options.isDeliveryNote ?? false,
       );
       return { interpretationId: existingId, idempotent: true };
     }
@@ -585,6 +647,7 @@ export async function saveAndDecideInterpretation(
     interpretationId,
     options.actorId,
     options.apply,
+    options.isDeliveryNote ?? false,
   );
   return { interpretationId, idempotent: false };
 }
@@ -764,6 +827,7 @@ export async function handler(req: Request): Promise<Response> {
 
   const isSupplier = profile.role === "supplier";
   const storedKindIsPriceList = document.document_kind === "price_list";
+  const storedKindIsDeliveryNote = document.document_kind === "delivery_note";
   if (isSupplier) {
     if (
       !supplierInterpretationContextAllowed(
@@ -794,6 +858,10 @@ export async function handler(req: Request): Promise<Response> {
     admin,
     isSupplier,
     isPriceList: storedKindIsPriceList,
+    // The replay path has no payload to consult -- the interpretation is already stored. The
+    // stored kind is the only evidence here, and 0090's doubled gate turns a disagreement into
+    // `not_a_delivery_note` rather than a wrong write. Same trade the price-list replay makes.
+    isDeliveryNote: storedKindIsDeliveryNote,
     jobId: job.id,
     actorId,
     context,
@@ -896,6 +964,12 @@ export async function handler(req: Request): Promise<Response> {
       isSupplier,
       isPriceList: storedKindIsPriceList ||
         result.interpretation.document_type === "price_list",
+      // BOTH must agree, unlike the price-list line above. A document filed as a delivery note
+      // that the model then read as an invoice is a real supplier charge, and routing it here
+      // would trade 0077's invoice for `not_a_delivery_note` -- a worse answer than the one the
+      // tenant gets today. Kind alone decides only on replay, where there is no payload to ask.
+      isDeliveryNote: storedKindIsDeliveryNote &&
+        result.interpretation.document_type === "delivery_note",
       jobId: job.id,
       actorId,
       args: {

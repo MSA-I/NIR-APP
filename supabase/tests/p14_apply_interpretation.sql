@@ -2480,20 +2480,23 @@ do $$
 declare
   v_def text := replace(
     pg_get_functiondef('public.documents_guard_columns()'::regprocedure), e'\r', '');
+  -- No trailing ';' since 0090: the invoice leg is no longer last. 0090 appended a sixth leg
+  -- (goods_receipt -> inbox) after it, and that one now carries the terminator.
   v_leg text := replace($leg$
                 or (old.entity_type = 'invoice'
                     and new.entity_type = 'inbox'
-                    and new.entity_id is null);$leg$, e'\r', '');
+                    and new.entity_id is null)$leg$, e'\r', '');
 begin
   if position(v_leg in v_def) = 0 then
     raise exception 'P14 mutation proof cannot run: the invoice -> inbox leg is not where 0077 '
       'section 4a left it in documents_guard_columns';
   end if;
-  -- The terminator goes on a LINE OF ITS OWN. Splicing a bare ';' in place of the leg appends it
-  -- to the last line of the leg's own comment block, where `--` swallows it, the assignment never
-  -- terminates and the whole replay dies on a syntax error one statement later -- which would
-  -- have been a mutation proof that proved nothing except that the test was broken.
-  execute replace(v_def, v_leg, e'\n                ;');
+  -- Spliced out entirely rather than replaced with a terminator. Before 0090 the leg ended the
+  -- assignment, so removing it required putting a ';' back on a LINE OF ITS OWN -- a bare ';'
+  -- landed on the last line of the leg's comment block, where `--` swallowed it and the replay
+  -- died on a syntax error, proving nothing except that the test was broken. The sixth leg now
+  -- terminates the assignment, so the correct mutation is simply to delete these three lines.
+  execute replace(v_def, v_leg, '');
 end
 $$;
 

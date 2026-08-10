@@ -1,11 +1,13 @@
-# Package 6 (09.08.2026) — the minimal CI: the same `npm run build` gate the constitution
-# calls "השער האוטומטי היחיד", on Linux, for every push/PR to main. Until now the gate ran
-# only by hand on one Windows machine; this does not replace `npm run quality` (Docker +
-# PowerShell + 27 SQL suites + 33 browser scenarios), which stays a manual, documented run.
+# Package 6 (09.08.2026) — the fast CI: the same `npm run build` gate the constitution calls
+# "השער האוטומטי היחיד", on Linux, for every push/PR to main. It is the ~92-second feedback
+# loop; the heavy gate lives beside it in quality-gate.yml (the SQL suites and preflight,
+# Deno contracts, the OCR worker image and the browser scenarios — counts live in CLAUDE.md,
+# where check:counts pins them), which as of 09.08.2026 also runs on CI rather than by hand
+# on one Windows machine.
 #
-# What this covers: tsc --noEmit, the eight check:* scripts, vitest (jsdom), vite build
+# What this covers: tsc --noEmit, the nine check:* scripts, vitest (jsdom), vite build
 # (including the PWA sw injection). What it deliberately does NOT cover: anything needing
-# Docker, a live Supabase, Deno, or a browser.
+# Docker, a live Supabase, Deno, or a browser — quality-gate.yml covers those.
 #
 # The xlsx dependency installs from cdn.sheetjs.com (a tarball URL in package.json, pinned
 # by integrity hash in package-lock.json). setup-node's npm cache keeps the tarball out of
