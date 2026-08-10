@@ -20,6 +20,7 @@ vi.mock('../auth/AuthContext', () => ({
     org: { name: 'ארגון בדיקה' },
     roleLabels: { owner: 'בעלים' },
     isPlatformAdmin: false,
+    organizationAccess: { mode: 'active', canWrite: true },
     signOut: async () => ({ error: null }),
   }),
 }));
@@ -52,6 +53,7 @@ function renderAt(path: string) {
           <Route element={<Layout />}>
             <Route path="/dashboard" element={null} />
             <Route path="/documents" element={null} />
+            <Route path="/documents/operations" element={null} />
             <Route path="/documents/archive" element={null} />
             <Route path="/documents/:documentId/review" element={null} />
             <Route path="/orders" element={null} />
@@ -77,7 +79,7 @@ const currentLabels = () =>
   Array.from(document.querySelectorAll('[aria-current="page"]')).map((el) => el.textContent?.trim());
 
 const PATHS = [
-  '/dashboard', '/documents', '/documents/abc/review', '/orders', '/orders/new', '/orders/abc',
+  '/dashboard', '/documents', '/documents/operations', '/documents/abc/review', '/orders', '/orders/new', '/orders/abc',
   '/receiving/abc', '/invoices/abc', '/suppliers/abc', '/payments', '/settings',
 ];
 

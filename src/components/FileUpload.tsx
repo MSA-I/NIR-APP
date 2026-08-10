@@ -17,8 +17,13 @@ import {
 import { fetchAll } from '../lib/supabasePaging';
 import { DOCUMENT_USER_STATE_META, documentUserState, useDocumentProcessing } from '../lib/useDocumentProcessing';
 import { TusUploadCancelledError, TusUploadError, tusUploadToDocuments } from '../lib/tusUpload';
-import { flushPendingPhotos, stashPendingPhoto } from '../lib/pendingPhotos';
-import { deletePendingPhoto, listPendingPhotos } from '../lib/offlineDb';
+import {
+  claimPendingPhotos,
+  deletePendingPhoto,
+  putPendingPhoto,
+  receiptPendingServerAcceptance,
+  updatePendingPhoto,
+} from '../lib/offlineDb';
 import { offlineQueue } from '../lib/offlineQueue';
 import {
   UploadCenter,
@@ -206,7 +211,7 @@ export async function uploadDocument(
   entityId: string | null,
   file: File,
   metadata: DocumentMetadata = {},
-  options: { resume?: DocumentUploadResume | null } = {},
+  options: { resume?: DocumentUploadResume | null; objectKey?: string | null } = {},
 ) {
   // Claimed in the synchronous prologue, before any await — see UploadCenter's ambient
   // context note. Null whenever this runs outside the Center's queue.
@@ -222,9 +227,10 @@ export async function uploadDocument(
   if (!path) {
     const safeName = file.name.replace(/[^\w.\-]+/g, '_');
     // org_id must lead the path -- the bucket's RLS policy reads it to enforce tenant isolation.
+    const objectKey = options.objectKey ?? Date.now().toString();
     path = entityId
-      ? `${orgId}/${entityType}/${entityId}/${Date.now()}_${safeName}`
-      : `${orgId}/inbox/${Date.now()}_${safeName}`;
+      ? `${orgId}/${entityType}/${entityId}/${objectKey}_${safeName}`
+      : `${orgId}/inbox/${objectKey}_${safeName}`;
     // Upload the exact File object (camera captures included — tus takes the File as-is).
     // Canvas/Blob conversion would discard source pixels, orientation and metadata needed
     // by OCR and long-term document evidence.
@@ -335,37 +341,113 @@ async function entityMetadata(entityType: string, entityId: string, documentKind
   return { documentKind };
 }
 
-let pendingPhotoFlushInFlight = false;
+async function queuePendingDocumentPhoto(
+  entityType: string,
+  entityId: string,
+  documentKind: DocumentKind,
+  file: File,
+  resume: DocumentUploadResume | null = null,
+) {
+  uploadMimeType(file);
+  await putPendingPhoto({
+    entityType,
+    entityId,
+    fileName: file.name,
+    blob: file,
+    documentKind,
+    clientUploadId: crypto.randomUUID(),
+    storagePath: resume?.storagePath ?? null,
+    documentId: resume?.documentId ?? null,
+    attempts: 0,
+    state: 'pending',
+    lastError: null,
+    lastAttemptAt: null,
+    createdAt: Date.now(),
+  });
+}
 
-/**
- * Send every photo stashed while offline (§4, closed 09.08.2026). Wired in this module
- * because it owns uploadDocument — the flush must take the exact path a live capture takes
- * (same storage layout, same registration, same processing enqueue). Concurrency-guarded:
- * the offline strip mounts per screen and 'online' can fire in bursts.
- */
-export async function flushPendingPhotosNow(orgId: string): Promise<{ uploaded: number; remaining: number }> {
-  if (pendingPhotoFlushInFlight) return { uploaded: 0, remaining: 0 };
-  pendingPhotoFlushInFlight = true;
-  try {
-    const result = await flushPendingPhotos({
-      list: listPendingPhotos,
-      remove: deletePendingPhoto,
-      upload: (photo) => uploadDocument(
-        orgId, photo.entityType, photo.entityId,
-        new File([photo.blob], photo.fileName, { type: photo.blob.type || 'image/jpeg' }),
-      ),
-    });
-    if (result.uploaded > 0) await offlineQueue.refresh();
-    return result;
-  } finally {
-    pendingPhotoFlushInFlight = false;
+export function receiptPhotoMustRemainQueued(
+  entityType: string,
+  online: boolean,
+  receiptPending: boolean,
+) {
+  return entityType === 'goods_receipt' && (!online || receiptPending);
+}
+
+async function runPendingDocumentPhotoSync(includeNeedsAttention: boolean) {
+  const leaseOwner = crypto.randomUUID();
+  const photos = await claimPendingPhotos(leaseOwner, includeNeedsAttention);
+  let uploaded = 0;
+  let failed = 0;
+  for (const photo of photos) {
+    if (photo.id == null || photo.syncVersion == null || !photo.orgId || !photo.actorUserId) { failed += 1; continue; }
+    if (photo.state === 'needs_attention' && !includeNeedsAttention) { failed += 1; continue; }
+    try {
+      if (photo.entityType === 'goods_receipt'
+        && await receiptPendingServerAcceptance(photo.entityId)) {
+        await updatePendingPhoto(photo.id, {
+          storagePath: photo.storagePath ?? null,
+          documentId: photo.documentId ?? null,
+          attempts: photo.attempts ?? 0,
+          state: photo.state ?? 'pending',
+          lastError: photo.lastError ?? null,
+          lastAttemptAt: photo.lastAttemptAt ?? null,
+          syncLeaseOwner: null,
+          syncLeaseExpiresAt: null,
+        }, leaseOwner, photo.syncVersion);
+        continue;
+      }
+      const documentKind = (photo.documentKind ?? defaultDocumentKind(photo.entityType)) as DocumentKind;
+      const metadata = await entityMetadata(photo.entityType, photo.entityId, documentKind);
+      const file = new File([photo.blob], photo.fileName, {
+        type: photo.blob.type,
+        lastModified: photo.createdAt,
+      });
+      await uploadDocument(photo.orgId, photo.entityType, photo.entityId, file, {
+        ...metadata,
+        enqueueProcessing: true,
+      }, {
+        objectKey: photo.clientUploadId ?? `legacy-${photo.id}`,
+        resume: photo.storagePath ? {
+          storagePath: photo.storagePath,
+          documentId: photo.documentId ?? null,
+        } : null,
+      });
+      if (await deletePendingPhoto(photo.id, leaseOwner, photo.syncVersion)) uploaded += 1;
+      else failed += 1;
+    } catch (error) {
+      const failure = documentUploadFailure(error);
+      await updatePendingPhoto(photo.id, {
+        storagePath: failure.resume?.storagePath ?? photo.storagePath ?? null,
+        documentId: failure.resume?.documentId ?? photo.documentId ?? null,
+        attempts: (photo.attempts ?? 0) + 1,
+        state: failure.retryable || failure.resume ? 'failed' : 'needs_attention',
+        lastError: failure.message,
+        lastAttemptAt: Date.now(),
+        syncLeaseOwner: null,
+        syncLeaseExpiresAt: null,
+      }, leaseOwner, photo.syncVersion);
+      failed += 1;
+    }
   }
+  await offlineQueue.refresh();
+  return { uploaded, failed };
+}
+
+let pendingDocumentPhotoSync: ReturnType<typeof runPendingDocumentPhotoSync> | null = null;
+
+/** Uploads scoped receipt photos only after the receipt action has had a chance to sync. */
+export function syncPendingDocumentPhotos(includeNeedsAttention = false) {
+  pendingDocumentPhotoSync ??= runPendingDocumentPhotoSync(includeNeedsAttention).finally(() => {
+    pendingDocumentPhotoSync = null;
+  });
+  return pendingDocumentPhotoSync;
 }
 
 export function DocumentList({ entityType, entityId, canUpload = true, capture }: {
   entityType: string; entityId: string; canUpload?: boolean; capture?: boolean;
 }) {
-  const { profile } = useAuth();
+  const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -379,11 +461,15 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   const registeredSeenRef = useRef(new Set<string>());
   const [retryFiles, setRetryFiles] = useState<File[]>([]);
   const [uploadSummary, setUploadSummary] = useState<UploadBatchSummary | null>(null);
+  const [locallyQueued, setLocallyQueued] = useState(0);
   const [pending, setPending] = useState<DocumentRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [documentKind, setDocumentKind] = useState<DocumentKind>(() => defaultDocumentKind(entityType));
-  const canDelete = profile?.role === 'owner' || profile?.role === 'office';
+  const canWrite = organizationAccess?.canWrite ?? true;
+  const canDelete = canWrite && (profile?.role === 'owner' || profile?.role === 'office');
   const canReview = profile != null && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canMutateDocuments = canWrite && canReview;
+  const canUploadNow = canWrite && canUpload;
 
   useEffect(() => setDocumentKind(defaultDocumentKind(entityType)), [entityType]);
 
@@ -409,27 +495,28 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
 
   async function uploadFiles(files: File[], previousSummary: UploadBatchSummary | null = null) {
     if (!files.length || !profile) return;
-    // §4 (closed 09.08.2026): a capture with no network is stashed, not failed. The photo
-    // lands in the pending_photos store the queue strip already counts, and the flush below
-    // sends it when the connection returns. Checked here, before the batch machinery, so the
-    // user hears "נשמר במכשיר" instead of a retry screen for a send that cannot succeed.
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      for (const file of files) await stashPendingPhoto(entityType, entityId, file);
-      await offlineQueue.refresh();
-      toast(files.length === 1
-        ? 'אין חיבור — הצילום נשמר במכשיר ויועלה אוטומטית כשיחזור החיבור'
-        : `אין חיבור — ${files.length} צילומים נשמרו במכשיר ויועלו אוטומטית כשיחזור החיבור`);
-      return;
-    }
     setBusy(true);
     busyRef.current = true;
     try {
+      const receiptPending = entityType === 'goods_receipt'
+        ? await receiptPendingServerAcceptance(entityId)
+        : false;
+      if (receiptPhotoMustRemainQueued(entityType, navigator.onLine !== false, receiptPending)) {
+        for (const file of files) await queuePendingDocumentPhoto(entityType, entityId, documentKind, file);
+        setLocallyQueued((count) => count + files.length);
+        setUploadSummary(null);
+        await offlineQueue.refresh();
+        toast(files.length === 1
+          ? 'התמונה נשמרה במכשיר וממתינה לסנכרון.'
+          : `${files.length} תמונות נשמרו במכשיר וממתינות לסנכרון.`);
+        return;
+      }
       const metadata = await entityMetadata(entityType, entityId, documentKind);
       const result = await enqueueUploadCenterBatch(
         files,
         (file) => uploadDocument(profile.org_id, entityType, entityId, file, {
           ...metadata,
-          enqueueProcessing: canReview,
+          enqueueProcessing: canMutateDocuments,
         }, { resume: resumeRef.current.get(file) ?? null }),
         {
           source: ENTITY_SOURCE_LABELS[entityType] ?? 'מסמך מצורף',
@@ -452,18 +539,37 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
       );
       for (const file of result.succeeded) resumeRef.current.delete(file);
       const failures = result.failed.map(({ item, error }) => ({ item, ...documentUploadFailure(error) }));
-      const failed = failures.filter(({ retryable, resume }) => retryable || resume !== null).map(({ item }) => item);
+      const locallyStored = new Set<File>();
+      if (entityType === 'goods_receipt') {
+        for (const failure of failures) {
+          if (!failure.retryable && failure.resume === null) continue;
+          await queuePendingDocumentPhoto(entityType, entityId, documentKind, failure.item, failure.resume);
+          locallyStored.add(failure.item);
+        }
+      }
+      if (locallyStored.size) {
+        setLocallyQueued((count) => count + locallyStored.size);
+        await offlineQueue.refresh();
+      }
+      const failed = failures
+        .filter(({ item, retryable, resume }) => !locallyStored.has(item) && (retryable || resume !== null))
+        .map(({ item }) => item);
       const registered = failures.filter(({ registered: isRegistered }) => isRegistered).length;
       setRetryFiles(failed);
-      const summary = mergeDocumentUploadSummary(previousSummary, files, result);
+      const summary = mergeDocumentUploadSummary(previousSummary, files, {
+        succeeded: result.succeeded,
+        failed: result.failed.filter(({ item }) => !locallyStored.has(item)),
+      });
       setUploadSummary(summary);
       if (result.succeeded.length || registered) await refetch();
       if (summary.failed.length) {
-        const succeededLabel = canReview ? 'הועלו וממתינים לעיבוד' : 'הועלו';
+        const succeededLabel = canMutateDocuments ? 'הועלו וממתינים לעיבוד' : 'הועלו';
         const detail = failures[0] ? ` ${failures[0].message}` : '';
         toast(`${summary.succeeded.length} ${succeededLabel}, ${summary.failed.length} לא הושלמו.${detail}`, 'error');
+      } else if (locallyStored.size) {
+        toast(`${locallyStored.size} קבצים נשמרו במכשיר וממתינים לסנכרון.`);
       } else {
-        toast(canReview
+        toast(canMutateDocuments
           ? result.succeeded.length === 1 ? 'הועלה וממתין לעיבוד' : `${result.succeeded.length} קבצים הועלו וממתינים לעיבוד`
           : result.succeeded.length === 1 ? 'הקובץ הועלה בהצלחה' : `${result.succeeded.length} קבצים הועלו בהצלחה`);
       }
@@ -525,7 +631,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <span className="text-sm font-medium text-ink-soft flex items-center gap-1.5"><Paperclip size={15} /> מסמכים מצורפים</span>
-        {canUpload && <div className="flex flex-wrap items-center gap-2">
+        {canUploadNow && <div className="flex flex-wrap items-center gap-2">
           {entityType === 'goods_receipt' && (
             <label className="flex items-center gap-1.5 text-xs text-ink-soft">
               סוג
@@ -547,11 +653,16 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
           onChange={(e) => void onPick(e.target.files)} />
       </div>
       <UploadCenter />
+      {locallyQueued > 0 && (
+        <Note tone="await" className="mb-2">
+          <span className="num">{locallyQueued}</span> קבצים שמורים במכשיר וממתינים לסנכרון.
+        </Note>
+      )}
       {uploadSummary && (
         <Note tone={uploadSummary.failed.length ? 'alert' : 'done'} className="mb-2">
           <div role="status">
             <div>
-              <span className="num">{uploadSummary.succeeded.length}</span> {canReview ? 'הועלו וממתינים לעיבוד' : 'הועלו'} ·{' '}
+              <span className="num">{uploadSummary.succeeded.length}</span> {canMutateDocuments ? 'הועלו וממתינים לעיבוד' : 'הועלו'} ·{' '}
               <span className="num">{uploadSummary.failed.length}</span> לא הושלמו
             </div>
             {uploadSummary.failed.length > 0 && (

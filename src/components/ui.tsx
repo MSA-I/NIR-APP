@@ -1249,7 +1249,12 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
               })}
             </ul>
           )}
-          <div className={mobile === 'cards' ? 'overflow-x-auto hidden lg:block' : 'overflow-x-auto'}>
+          {/* A wide table is a keyboard-scrollable region, not a mouse-only viewport. tabIndex is
+              intentionally on the scroller (not the table), so arrow keys move the clipped area. */}
+          {/* The cards-to-table switch stays at `lg`, matching the shell (readiness package 5):
+              at `md` the desktop table rendered inside the phone frame. */}
+          <div className={mobile === 'cards' ? 'overflow-x-auto hidden lg:block' : 'overflow-x-auto'}
+            role="region" aria-label="טבלת נתונים — ניתן לגלול אופקית" tabIndex={0}>
             <table className="w-full">
               <thead className="bg-surface-sunken border-b border-line-soft">
                 <tr>

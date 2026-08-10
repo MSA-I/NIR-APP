@@ -188,6 +188,7 @@ async function runAsRole(
   testInfo: TestInfo,
   role: QaRole,
   action: (session: RoleSession) => Promise<void>,
+  options: { serviceWorkers?: 'allow' | 'block' } = {},
 ): Promise<void> {
   const context = await browser.newContext({
     baseURL: qa.baseUrl,
@@ -195,7 +196,7 @@ async function runAsRole(
     locale: 'he-IL',
     timezoneId: 'Asia/Jerusalem',
     colorScheme: 'light',
-    serviceWorkers: 'block',
+    serviceWorkers: options.serviceWorkers ?? 'block',
     acceptDownloads: true,
     viewport: role === 'kitchen' ? { width: 390, height: 844 } : { width: 1280, height: 900 },
   });
@@ -449,6 +450,91 @@ test.describe.serial('critical cross-role workflow', () => {
       }]),
     ];
     });
+  });
+
+  test('[offline:kitchen-recovery] offline photo and receipt draft survive page close and sync on reconnect', async ({ browser }, testInfo) => {
+    const receiptId = workflowValue('receiptId');
+    const orderId = workflowValue('orderId');
+    const receiptImage = await fixturePath(testInfo, 'kitchen-offline-recovery', 'receipt-jpg');
+    const context = await browser.newContext({
+      baseURL: qa.baseUrl,
+      storageState: storageStatePath(qa.authStateRoot, 'kitchen'),
+      locale: 'he-IL',
+      timezoneId: 'Asia/Jerusalem',
+      colorScheme: 'light',
+      serviceWorkers: 'allow',
+      viewport: { width: 390, height: 844 },
+    });
+    let page = await context.newPage();
+    try {
+      await page.goto(`/receipts/${receiptId}`);
+      await expect(page.getByRole('heading', { name: /קבלה #/ })).toBeVisible();
+      await page.evaluate(() => navigator.serviceWorker.ready);
+      await page.reload();
+      await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
+
+      await context.setOffline(true);
+      await chooseFile(page, page.getByRole('button', { name: 'צילום / העלאה', exact: true }), receiptImage);
+      await expect(page.getByText('התמונה נשמרה במכשיר וממתינה לסנכרון.', { exact: true })).toBeVisible();
+      await expect(page.getByTestId('offline-pending-uploads')).toHaveText('1');
+
+      await page.close();
+      page = await context.newPage();
+      await page.goto('/receiving');
+      await expect(page.getByRole('heading', { name: 'קבלת סחורה', exact: true })).toBeVisible();
+      await page.reload();
+      await expect(page.getByTestId('offline-pending-uploads')).toHaveText('1');
+
+      // A second tab shares this origin's IndexedDB. Both receive the same online event, but the
+      // atomic pending-photo lease and stable object key must permit one registration only.
+      const peerPage = await context.newPage();
+      await peerPage.goto('/receiving');
+      await expect(peerPage.getByTestId('offline-pending-uploads')).toHaveText('1');
+      let documentRegistrations = 0;
+      const countRegistration = (request: { method(): string; url(): string }) => {
+        if (request.method() === 'POST' && new URL(request.url()).pathname === '/rest/v1/documents') {
+          documentRegistrations += 1;
+        }
+      };
+      context.on('request', countRegistration);
+
+      const photoSaved = page.waitForResponse((response) => response.ok()
+        && response.request().method() === 'POST'
+        && new URL(response.url()).pathname === '/rest/v1/documents');
+      await context.setOffline(false);
+      await photoSaved;
+      await expect(page.getByTestId('offline-queue-status')).toHaveCount(0);
+      await expect(peerPage.getByTestId('offline-queue-status')).toHaveCount(0);
+      expect(documentRegistrations).toBe(1);
+      context.off('request', countRegistration);
+      await peerPage.close();
+      await page.goto(`/receipts/${receiptId}`);
+      await expect(page.getByText(path.basename(receiptImage), { exact: true }).first()).toBeVisible();
+
+      await page.goto(`/receiving/${orderId}`);
+      await expect(page.getByRole('heading', { name: 'קבלת סחורה', exact: true })).toBeVisible();
+      await context.setOffline(true);
+      await page.getByRole('button', { name: 'שמירת ביניים', exact: true }).click();
+      await expect(page).toHaveURL('/receiving');
+      await expect(page.getByTestId('offline-pending-actions')).toHaveText('1');
+
+      await page.close();
+      page = await context.newPage();
+      await page.goto('/receiving');
+      await page.reload();
+      await expect(page.getByTestId('offline-pending-actions')).toHaveText('1');
+      await page.screenshot({ path: testInfo.outputPath('offline-receiving-persisted.png'), fullPage: true });
+
+      const draftSaved = page.waitForResponse((response) => response.ok()
+        && response.request().method() === 'POST'
+        && new URL(response.url()).pathname === '/rest/v1/rpc/save_goods_receipt');
+      await context.setOffline(false);
+      await draftSaved;
+      await expect(page.getByTestId('offline-queue-status')).toHaveCount(0);
+    } finally {
+      await context.setOffline(false).catch(() => undefined);
+      await context.close();
+    }
   });
 
   test('[critical:office-invoice-review] office creates, reviews, approves, and requests payment', async ({ browser }, testInfo) => {

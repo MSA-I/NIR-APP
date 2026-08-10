@@ -289,29 +289,48 @@ def _process_job(
     def heartbeat() -> None:
         while not heartbeat_done.wait(config.heartbeat_seconds):
             try:
-                _gateway_retry(lambda: client.heartbeat(job_id, config.worker_id, config.lease_seconds))
+                _gateway_retry(
+                    lambda: client.heartbeat(job, config.worker_id, config.lease_seconds)
+                )
             except (GatewayError, ProcessingError):
                 heartbeat_lost.set()
                 return
 
     thread = threading.Thread(target=heartbeat, name="ocr-heartbeat", daemon=True)
+    heartbeat_started = False
+
+    def stop_heartbeat() -> None:
+        heartbeat_done.set()
+        if heartbeat_started:
+            thread.join(timeout=2)
+
     started = time.monotonic()
-    thread.start()
     error: ProcessingError | None = None
     try:
         with job_temp_dir(config.temp_root) as workdir:
             source = workdir / "source.bin"
             _gateway_retry(lambda: client.download(job["download_url"], source, limits.max_file_bytes))
+            _gateway_retry(
+                lambda: client.acknowledge_download(
+                    job, config.worker_id, config.lease_seconds
+                )
+            )
+            thread.start()
+            heartbeat_started = True
             payload = _run_extraction(source, job["mime_type"], config, workdir, stop, limits)
             if heartbeat_lost.is_set():
                 raise GatewayError("lease_lost", "Document processing lease was lost")
             engine, model, model_version = _pipeline_identity(config.adapter_name)
             duration_ms = max(0, round((time.monotonic() - started) * 1_000))
-            _gateway_retry(
+            completion = _gateway_retry(
                 lambda: client.complete(
+                    job,
                     {
                         "job_id": job_id,
+                        "processing_attempt_id": job["processing_attempt_id"],
                         "lease_owner": config.worker_id,
+                        "download_lease_id": job["download_lease_id"],
+                        "download_lease_token": job["download_lease_token"],
                         "engine": engine,
                         "model": model,
                         "model_version": model_version,
@@ -327,29 +346,62 @@ def _process_job(
                     }
                 )
             )
-            _log("job_completed", job_id=job_id, duration_ms=duration_ms)
+            if completion["business_applied"]:
+                _log("job_completed", job_id=job_id, duration_ms=duration_ms)
+            else:
+                _log(
+                    "job_evidence_recorded",
+                    job_id=job_id,
+                    access_mode=completion["access_mode"],
+                    duration_ms=duration_ms,
+                )
     except _WorkerStopping:
-        _log("job_shutdown_deferred", job_id=job_id)
+        error = ProcessingError(
+            "worker_stopping", "Document processing stopped before completion", retryable=True
+        )
     except ProcessingError as exc:
         error = exc
     except BaseException:
         error = ProcessingError("worker_internal_error", "Document processing failed unexpectedly")
-    finally:
-        heartbeat_done.set()
-        thread.join(timeout=2)
 
-    if error is None or stop.is_set() or heartbeat_lost.is_set() or error.code == "lease_lost":
+    if error is None or heartbeat_lost.is_set() or error.code == "lease_lost":
+        stop_heartbeat()
         if error is not None and heartbeat_lost.is_set():
             _log("job_lease_lost", job_id=job_id)
         return
-    if error.retryable and job["attempt_count"] < config.max_job_attempts:
-        _log("job_retry_deferred", job_id=job_id, error_code=error.code, attempt=job["attempt_count"])
-        return
+    retryable = error.retryable and job["attempt_count"] < config.max_job_attempts
     try:
-        _gateway_retry(lambda: client.fail(job_id, config.worker_id, error.code[:100], error.safe_message[:1_000]))
-        _log("job_failed", job_id=job_id, error_code=error.code)
+        failure = _gateway_retry(
+            lambda: client.fail(
+                job,
+                config.worker_id,
+                error.code[:100],
+                error.safe_message[:1_000],
+                retryable,
+            )
+        )
+        if failure["business_applied"] and failure["job_status"] == "queued":
+            _log(
+                "job_retry_queued",
+                job_id=job_id,
+                error_code=error.code,
+                attempt=job["attempt_count"],
+            )
+        elif failure["business_applied"]:
+            _log("job_failed", job_id=job_id, error_code=error.code)
+        else:
+            _log(
+                "job_failure_evidence_recorded",
+                job_id=job_id,
+                error_code=error.code,
+                access_mode=failure["access_mode"],
+            )
     except (GatewayError, ProcessingError) as fail_error:
         _log("job_fail_report_failed", job_id=job_id, error_code=fail_error.code)
+    finally:
+        # A downloaded source is an acknowledged external disclosure. Keep renewing both the job
+        # lease and its attempt-bound egress lease until the failure receipt is durably settled.
+        stop_heartbeat()
 
 
 def process_one(

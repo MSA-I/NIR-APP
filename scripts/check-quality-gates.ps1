@@ -923,6 +923,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\tests\document_export_templates.sql",
     "supabase\tests\p1_price_submissions.sql",
     "supabase\tests\p1_price_submissions_concurrency.sql",
+    "supabase\tests\p18_price_list_concurrency.sql",
     "supabase\tests\p15_automatic_price_list_intake.sql",
     "supabase\tests\p16_automatic_delivery_note_receiving.sql",
     "supabase\functions\document-processing\index.ts",
@@ -1123,6 +1124,7 @@ try {
     Invoke-SqlTest "supabase\tests\p2_data_reliability.sql" "P2 retry, alerts, pagination and reliability"
     Invoke-SqlTest "supabase\tests\server_list_contracts.sql" "Server list predicates, duplicate key across pages and tenant scope"
     Invoke-SqlTest "supabase\tests\p1_price_submissions_concurrency.sql" "P1B real concurrent revisions and checksum retries" "supabase_admin"
+    Invoke-SqlTest "supabase\tests\p18_price_list_concurrency.sql" "Concurrent price-list reprocess and shadow measurement stay single-writer" "supabase_admin"
     Invoke-SqlTest "supabase\tests\roadmap_db_contracts.sql" "Roadmap supplier, inventory, savings and WhatsApp contracts"
     Invoke-SqlTest "supabase\tests\p1_concurrency.sql" "P1 real concurrent sessions" "supabase_admin"
     Invoke-SqlTest "supabase\tests\payment_credit_override_concurrency.sql" "Concurrent payment replay, approval, execution and credit creation" "supabase_admin"

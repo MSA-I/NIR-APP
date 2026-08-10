@@ -1,0 +1,15 @@
+{
+  "nodeModulesDir": "auto",
+  "imports": {
+    "@supabase/supabase-js": "jsr:@supabase/supabase-js@2",
+    "@noble/hashes/sha256": "npm:@noble/hashes@1.8.0/sha256",
+    "@noble/hashes/utils": "npm:@noble/hashes@1.8.0/utils"
+  },
+  "lock": {
+    "path": "./deno.lock",
+    "frozen": true
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}

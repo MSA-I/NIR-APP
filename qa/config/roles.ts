@@ -51,6 +51,8 @@ export const ROLE_CONTRACTS: Readonly<Record<QaRole, RoleContract>> = {
     representativeAllowedRoutes: [
       { path: '/dashboard', heading: 'מרכז הבקרה' },
       { path: '/settings', heading: 'הגדרות מערכת' },
+      { path: '/inventory', heading: 'מלאי' },
+      { path: '/documents/operations', heading: 'מרכז תפעול מסמכים' },
     ],
     deniedRoutes: denied('/my-prices', '/pay'),
   },
@@ -63,8 +65,9 @@ export const ROLE_CONTRACTS: Readonly<Record<QaRole, RoleContract>> = {
     representativeAllowedRoutes: [
       { path: '/invoices', heading: 'חשבוניות' },
       { path: '/payment-requests', heading: 'דרישות תשלום' },
+      { path: '/inventory', heading: 'מלאי' },
     ],
-    deniedRoutes: denied('/payments', '/pay', '/bank', '/reports', '/audit', '/settings', '/my-prices'),
+    deniedRoutes: denied('/documents/operations', '/payments', '/pay', '/bank', '/reports', '/audit', '/settings', '/my-prices'),
   },
   kitchen: {
     role: 'kitchen',
@@ -75,8 +78,9 @@ export const ROLE_CONTRACTS: Readonly<Record<QaRole, RoleContract>> = {
     representativeAllowedRoutes: [
       { path: '/receiving', heading: 'קבלת סחורה' },
       { path: '/orders', heading: 'הזמנות רכש' },
+      { path: '/inventory', heading: 'מלאי' },
     ],
-    deniedRoutes: denied('/payment-requests', '/payments', '/pay', '/bank', '/reports', '/audit', '/settings', '/my-prices'),
+    deniedRoutes: denied('/documents/operations', '/payment-requests', '/payments', '/pay', '/bank', '/reports', '/audit', '/settings', '/my-prices'),
   },
   payer: {
     role: 'payer',
@@ -95,6 +99,8 @@ export const ROLE_CONTRACTS: Readonly<Record<QaRole, RoleContract>> = {
       '/receipts/example-id',
       '/invoices',
       '/documents',
+      '/documents/operations',
+      '/inventory',
       '/payment-requests',
       '/payments',
       '/bank',
@@ -114,7 +120,7 @@ export const ROLE_CONTRACTS: Readonly<Record<QaRole, RoleContract>> = {
       { path: '/reports', heading: 'דוח חודשי לרואת חשבון' },
       { path: '/bank', heading: 'התאמות בנק' },
     ],
-    deniedRoutes: denied('/suppliers', '/orders', '/receiving', '/receipts/example-id', '/documents', '/payment-requests', '/settings', '/my-prices'),
+    deniedRoutes: denied('/suppliers', '/orders', '/receiving', '/receipts/example-id', '/documents', '/documents/operations', '/inventory', '/payment-requests', '/analytics', '/settings', '/my-prices'),
   },
   supplier: {
     role: 'supplier',
@@ -132,6 +138,8 @@ export const ROLE_CONTRACTS: Readonly<Record<QaRole, RoleContract>> = {
       '/receiving',
       '/receipts/example-id',
       '/invoices',
+      '/documents/operations',
+      '/inventory',
       '/payment-requests',
       '/pay',
       '/payments',
@@ -156,7 +164,9 @@ interface RouteRule {
 // Mirrors App.tsx. Platform administration is intentionally absent: it is not a tenant role.
 export const ROUTE_RULES: readonly RouteRule[] = [
   { pattern: /^\/dashboard$/, roles: ALL },
-  { pattern: /^\/(?:suppliers(?:\/[^/]+)?|products|prices|orders(?:\/new|\/[^/]+)?|receiving(?:\/[^/]+)?|invoices\/new|documents)$/, roles: STAFF },
+  { pattern: /^\/documents\/operations$/, roles: ['owner'] },
+  { pattern: /^\/finance\/suppliers\/[^/]+$/, roles: ['owner', 'accountant'] },
+  { pattern: /^\/(?:suppliers(?:\/[^/]+)?|products|inventory|prices|orders(?:\/new|\/[^/]+)?|receiving(?:\/[^/]+)?|invoices\/new|documents)$/, roles: STAFF },
   { pattern: /^\/receipts\/[^/]+$/, roles: STAFF },
   { pattern: /^\/invoices(?:\/[^/]+)?$/, roles: READERS },
   { pattern: /^\/documents\/[^/]+\/review$/, roles: ['owner', 'office', 'kitchen', 'supplier'] },
@@ -170,7 +180,7 @@ export const ROUTE_RULES: readonly RouteRule[] = [
   { pattern: /^\/exceptions$/, roles: READERS },
   { pattern: /^\/alerts$/, roles: FINANCE },
   { pattern: /^\/(?:expenses|reports|audit)$/, roles: ['owner', 'accountant'] },
-  { pattern: /^\/analytics$/, roles: ['owner', 'office', 'accountant'] },
+  { pattern: /^\/analytics$/, roles: ['owner', 'office'] },
   { pattern: /^\/(?:settings|onboarding)$/, roles: ['owner'] },
   { pattern: /^\/my-prices$/, roles: ['supplier'] },
 ];

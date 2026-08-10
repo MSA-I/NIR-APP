@@ -29,6 +29,9 @@ describe('מעטפת הניווט', () => {
     expect(visible.has('/orders/new')).toBe(false);
     expect(visible.has('/documents/archive')).toBe(false);
     expect(visible.has('/alerts')).toBe(false);
+    // The campaign's two new destinations are daily work, so they belong in the menu proper.
+    expect(visible.has('/documents/operations')).toBe(true);
+    expect(visible.has('/inventory')).toBe(true);
     // /onboarding joined the footer (09.08.2026) and this list is pinned, so the addition has to
     // argue for itself here rather than slip in. The argument: the route existed with NO door at
     // all — absent from NAV_SECTIONS, from quickActions, and from homeFor() — so the setup wizard
@@ -53,7 +56,9 @@ describe('מעטפת הניווט', () => {
   it('קטלוג המסלולים נשאר מלא וללא כפילויות', () => {
     const paths = NAV_SECTIONS.flatMap((section) => section.items).map((item) => item.to);
     expect(paths).toHaveLength(new Set(paths).size);
-    expect(paths).toEqual(expect.arrayContaining(['/orders/new', '/documents/archive', '/alerts', '/settings']));
+    expect(paths).toEqual(expect.arrayContaining([
+      '/orders/new', '/documents/operations', '/documents/archive', '/inventory', '/alerts', '/settings',
+    ]));
   });
 
   it('כל מסלול מורשה מוצג או מוחרג במכוון ל-surface הקשרי', () => {

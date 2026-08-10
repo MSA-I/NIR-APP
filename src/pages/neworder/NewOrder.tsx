@@ -26,6 +26,7 @@ import {
 import { centsFromUnits, hundredths, lineUnits, moneyFromCents } from '../../lib/orderSavings';
 import { deferProduct, dismissNextOrderItem, listNextOrderItems, type NextOrderItem } from '../../lib/nextOrderItems';
 import { fmtMoneyExact } from '../../lib/format';
+import { NEW_COMMERCE_SUPPLIER_STATUSES } from '../../lib/status';
 import { sendOrderWhatsApp } from '../../lib/share';
 import type { Product, PurchaseOrder, Supplier, SupplierProduct } from '../../lib/types';
 import ProductStep from './ProductStep';
@@ -203,7 +204,7 @@ export default function NewOrder() {
     const [products, sps, suppliers] = await Promise.all([
       supabase.from('products').select('*').eq('active', true).order('name'),
       supabase.from('supplier_products').select('*').eq('available', true),
-      supabase.from('suppliers').select('*').is('deleted_at', null).in('status', ['active', 'problematic']),
+      supabase.from('suppliers').select('*').is('deleted_at', null).in('status', NEW_COMMERCE_SUPPLIER_STATUSES),
     ]);
     let draft: DraftRow | null = null;
     let source: SourceOrder | null = null;

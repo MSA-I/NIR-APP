@@ -264,8 +264,8 @@ select pg_temp.p9_assert(
 -- always at the end of a twenty-minute gate rather than in seconds. See the check:* script that
 -- asserts a migration touching scope_definer_exemptions also touches this file.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 67,
-  'the definer exemption registry must stay at 67 rows -- 59 minus the three 0073 drained, '
+  (select count(*) from private.scope_definer_exemptions) = 71,
+  'the definer exemption registry must stay at 71 rows -- 59 minus the three 0073 drained, '
   || 'plus the one 0075:464 added for rescue_document_from_archive (not drainable: invoker '
   || 'would require granting UPDATE on document_filings to the browser), plus the one 0077 '
   || 'added for apply_document_interpretation (not drainable: it runs with no user JWT, so '
@@ -281,7 +281,10 @@ select pg_temp.p9_assert(
   || 'goods_receipts row, because 0023:167-168 revoked that from authenticated), plus the '
   || 'one 0092 added for organization_row_write_guard (the tenant read-only latch: it must '
   || 'also govern service_role and definer writers, reads only the firing NEW/OLD org_id, '
-  || 'and is an honesty row like #57 -- its body names no enforced table for A5 to see); '
+  || 'and is an honesty row like #57 -- its body names no enforced table for A5 to see), '
+  || 'plus the four 0096 measured-automation paths: run_price_list_shadow is service_role-only '
+  || 'so auth_scopes() is empty, and the three reviewed/eligibility commands write append-only '
+  || 'evidence whose tenant is pinned by the document/job/interpretation chain; '
   || 'zero silent additions');
 
 select pg_temp.p9_assert(

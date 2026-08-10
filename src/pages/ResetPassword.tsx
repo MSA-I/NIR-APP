@@ -34,7 +34,7 @@ export default function ResetPassword() {
     }
     const expectingTokens = hash.has('access_token');
     let cancelled = false;
-    const markReady = () => setState((s) => (s === 'checking' ? 'ready' : s));
+    const markReady = () => setState((current) => (current === 'checking' ? 'ready' : current));
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!cancelled && session) markReady();
@@ -47,7 +47,7 @@ export default function ResetPassword() {
     });
     const deadline = expectingTokens
       ? window.setTimeout(() => {
-          if (!cancelled) setState((s) => (s === 'checking' ? 'invalid' : s));
+          if (!cancelled) setState((current) => (current === 'checking' ? 'invalid' : current));
         }, 8000)
       : undefined;
 
@@ -58,19 +58,27 @@ export default function ResetPassword() {
     };
   }, []);
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
     const problem = passwordProblem(password, confirm);
     setError(problem);
     if (problem) return;
     setBusy(true);
-    const { error: err } = await supabase.auth.updateUser({ password });
+    const { error: updateError } = await supabase.auth.updateUser({ password });
     setBusy(false);
-    if (err) {
-      setError(toHebrewError(err.message));
+    if (updateError) {
+      setError(toHebrewError(updateError.message));
       return;
     }
     setState('done');
+    const signedOut = await supabase.auth.signOut({ scope: 'global' });
+    setBusy(false);
+    if (signedOut.error) {
+      await supabase.auth.signOut({ scope: 'local' });
+      setError('הסיסמה הוחלפה, אך לא ניתן היה לנתק את כל החיבורים. יש להתחבר מחדש ולפנות למנהל המערכת אם חיבור ישן עדיין פעיל.');
+      return;
+    }
+    navigate('/login?reset=success', { replace: true });
   }
 
   return (
@@ -99,20 +107,20 @@ export default function ResetPassword() {
         )}
 
         {state === 'ready' && (
-          <form onSubmit={(e) => void onSubmit(e)} className="card card-pad space-y-4">
+          <form onSubmit={(event) => void onSubmit(event)} className="card card-pad space-y-4">
             <div>
               <label className="label" htmlFor="reset-password-new">
                 סיסמה חדשה ({MIN_PASSWORD_LENGTH} תווים לפחות)
               </label>
               <input id="reset-password-new" type="password" className="input" dir="ltr"
                 autoComplete="new-password" value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(null); }} required />
+                onChange={(event) => { setPassword(event.target.value); setError(null); }} required />
             </div>
             <div>
               <label className="label" htmlFor="reset-password-confirm">אימות סיסמה</label>
               <input id="reset-password-confirm" type="password" className="input" dir="ltr"
                 autoComplete="new-password" value={confirm}
-                onChange={(e) => { setConfirm(e.target.value); setError(null); }} required />
+                onChange={(event) => { setConfirm(event.target.value); setError(null); }} required />
             </div>
             {error && <div role="alert" className="text-sm text-alert-solid">{error}</div>}
             <button type="submit" className="btn-primary w-full" disabled={busy || !password || !confirm}>
@@ -124,9 +132,9 @@ export default function ResetPassword() {
 
         {state === 'done' && (
           <div className="card card-pad space-y-3 text-center">
-            <p className="text-sm">הסיסמה הוחלפה. אתם מחוברים למערכת עם הסיסמה החדשה.</p>
-            <button className="btn-primary w-full" onClick={() => navigate('/', { replace: true })}>
-              מעבר למערכת
+            <p className="text-sm">{error ?? 'הסיסמה הוחלפה. מנתק את החיבורים הישנים ומעביר למסך הכניסה…'}</p>
+            <button className="btn-primary w-full" onClick={() => navigate('/login', { replace: true })}>
+              חזרה למסך הכניסה
             </button>
           </div>
         )}

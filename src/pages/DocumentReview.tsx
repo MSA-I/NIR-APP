@@ -24,14 +24,15 @@ async function interpretErrorMessage(error: unknown): Promise<string> {
 export default function DocumentReview() {
   const { documentId } = useParams<{ documentId: string }>();
   const [params] = useSearchParams();
-  const { profile } = useAuth();
+  const { profile, organizationAccess } = useAuth();
+  const canWrite = organizationAccess?.canWrite ?? true;
   const processing = useDocumentProcessing(documentId ? [documentId] : [], { details: true });
   const snapshot = documentId ? processing.snapshots[documentId] : null;
 
   // Nothing else in the app calls interpret-document, so without this a job stays at 'extracted'
   // for ever. Triggering on the review screen is also the cheapest cost control there is: nobody
   // pays to interpret a document nobody opened.
-  const jobId = snapshot?.job?.status === 'extracted' && !snapshot.interpretation
+  const jobId = canWrite && snapshot?.job?.status === 'extracted' && !snapshot.interpretation
     ? snapshot.job.id
     : null;
   const startedFor = useRef<string | null>(null);
@@ -120,6 +121,7 @@ export default function DocumentReview() {
         actorId={profile.id}
         onRefetch={processing.refetch}
         initialPanel={params.get('panel')}
+        readOnly={!canWrite}
       />
     </div>
   );

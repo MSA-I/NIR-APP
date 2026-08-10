@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { Eye, EyeOff, Loader2, Lock } from 'lucide-react';
 import { useAuth, homeFor } from '../auth/AuthContext';
 import { toHebrewError } from '../lib/errors';
@@ -8,6 +8,7 @@ import { APP_NAME } from '../lib/branding';
 export default function Login() {
   const { signIn, session, profile, loading } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +65,9 @@ export default function Login() {
         </div>
         <div className="lg:w-96 lg:shrink-0">
         <form onSubmit={(e) => void onSubmit(e)} className="card card-pad space-y-5" aria-busy={busy || undefined}>
+          {params.get('reset') === 'success' && (
+            <p role="status" className="note-done">הסיסמה הוחלפה וכל החיבורים נותקו. אפשר להתחבר מחדש.</p>
+          )}
           <div>
             <label className="label" htmlFor="email">אימייל</label>
             <input id="email" type="email" className="input" dir="ltr" autoComplete="username"

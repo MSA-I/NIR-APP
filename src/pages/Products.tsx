@@ -18,7 +18,7 @@ interface ProductRow extends Product {
 }
 
 export default function Products() {
-  const { profile } = useAuth();
+  const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -49,9 +49,9 @@ export default function Products() {
     }));
   });
 
-  const canWrite = profile?.role !== 'accountant' && profile?.role !== 'payer';
+  const canWrite = organizationAccess.canWrite && profile?.role !== 'accountant' && profile?.role !== 'payer';
   // Narrower than canWrite: the price-import RPC and the document reservation are owner/office only.
-  const canUploadPrices = profile?.role === 'owner' || profile?.role === 'office';
+  const canUploadPrices = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
   const rows = (data ?? []).filter((p) => !catFilter || p.category_id === catFilter);
 
   // Open the product editor straight from a global-search result (?id=). Read-only roles never

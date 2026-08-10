@@ -28,8 +28,8 @@ const monthLabel = (value: string) => new Intl.DateTimeFormat('he-IL', {
 }).format(new Date(`${value.slice(0, 7)}-01T00:00:00Z`));
 
 export default function PriceLists() {
-  const { profile } = useAuth();
-  const canWrite = profile?.role === 'owner' || profile?.role === 'office';
+  const { profile, organizationAccess } = useAuth();
+  const canWrite = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
   const toast = useToast();
   const [supplierFilter, setSupplierFilter] = useState('');
   // '1' via ?increases=1 (from the dashboard price-increase card); re-syncs on navigation.
