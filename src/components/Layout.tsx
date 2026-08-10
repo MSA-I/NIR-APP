@@ -182,7 +182,6 @@ const PAGE_TITLE_PATTERNS: [RegExp, string][] = [
   [/^\/invoices\/new$/, 'חשבונית חדשה'],
   [/^\/invoices\/[^/]+$/, 'פרטי חשבונית'],
   [/^\/documents\/[^/]+\/review$/, 'בדיקת מסמך'],
-  [/^\/pay\/emergency$/, 'תשלום חירום'],
   [/^\/onboarding$/, 'הקמת המערכת'],
   [/^\/admin$/, 'ניהול פלטפורמה'],
 ];

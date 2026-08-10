@@ -19,7 +19,10 @@ describe('trial lifecycle UI contract', () => {
   });
 
   it('marks mutation-only routes as write guarded while read routes stay available', () => {
-    for (const path of ['/orders/new', '/receiving/:orderId', '/invoices/new', '/pay', '/pay/emergency', '/onboarding']) {
+    // '/pay/emergency' left this list with the route itself (G4, 10.08.2026). The owner's
+    // emergency execution path was retired; 0111 revokes EXECUTE on its command and asserts the
+    // regular path still carries the password step-up 0061 injects.
+    for (const path of ['/orders/new', '/receiving/:orderId', '/invoices/new', '/pay', '/onboarding']) {
       expect(app).toMatch(new RegExp(`path="${path.replace('/', '\\/')}"[^\n]+<Guard[^\n]+ write>`));
     }
     expect(app).toContain('path="/reports" element={<Guard roles={[\'owner\', \'accountant\']}><Reports /></Guard>}');

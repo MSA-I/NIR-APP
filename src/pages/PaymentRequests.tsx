@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toHebrewError } from '../lib/errors';
-import { Link, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { Plus, Loader2, Send, CheckCircle2, ShieldAlert, XCircle, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -86,7 +86,6 @@ export default function PaymentRequests() {
   });
 
   const isOffice = organizationAccess.canWrite && !!profile && ['owner', 'office'].includes(profile.role);
-  const isOwner = organizationAccess.canWrite && profile?.role === 'owner';
 
   // Mirrors the detail modal's cancel flow: status → cancelled, reason recorded in audit_logs.
   // Terminal statuses (cancelled/executed/matched — same set the detail modal treats as final)
@@ -124,7 +123,9 @@ export default function PaymentRequests() {
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <PageHeader title="דרישות תשלום" meta={`${rows.length} דרישות בתצוגה`}
         actions={<>
-          {isOwner && <Link className="btn-secondary" to="/pay/emergency"><ShieldAlert size={16} /> מסלול חירום לביצוע</Link>}
+          {/* The owner's emergency execution route was removed (G4, 10.08.2026). An approved
+              request is executed on /pay, with the same step-up, the same mandatory reason and
+              the same audit row the emergency path had. */}
           {isOffice && <button className="btn-primary" onClick={() => setManualCreateOpen(true)}><Plus size={16} /> דרישה חדשה</button>}
         </>} />
       <DataTable rows={rows} columns={columns} searchable

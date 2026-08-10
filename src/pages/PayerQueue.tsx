@@ -23,9 +23,20 @@ type Row = Omit<PaymentRequest, 'supplier'> & {
 };
 type RawRow = Omit<Row, 'supplier'>;
 
-type PayerQueueMode = 'regular' | 'emergency';
-
-export default function PayerQueue({ mode = 'regular' }: { mode?: PayerQueueMode }) {
+/**
+ * The one payment-execution queue (G4, 10.08.2026).
+ *
+ * There used to be a second mode here — the owner's emergency route, reached from
+ * /pay/emergency. The owner asked for it to go, and what makes that safe rather than lossy is
+ * that it never did anything this path cannot: the same approved payment requests, the same
+ * reference, the same mandatory reason, the same audit row. Its only differences were an
+ * unconditional password prompt and a separate RPC — and 0061 asserts password freshness on
+ * this RPC too.
+ *
+ * Emergency payments already executed keep their payments, their audit rows and their history.
+ * Only the ability to start a NEW one is gone.
+ */
+export default function PayerQueue() {
   const [selected, setSelected] = useState<Row | null>(null);
 
   const { data, loading, error, refetch } = useQuery(async () => {
@@ -48,15 +59,11 @@ export default function PayerQueue({ mode = 'regular' }: { mode?: PayerQueueMode
 
   return (
     <div className="space-y-5 max-w-2xl">
-      <PageHeader title={mode === 'emergency' ? 'מסלול חירום לביצוע תשלום' : 'תשלומים לביצוע'}
+      <PageHeader title="תשלומים לביצוע"
         meta={`${pending.length} העברות ממתינות לביצוע`} />
 
-      {mode === 'emergency' && (
-        <Note tone="alert">מסלול זה מיועד לבעלים בלבד. כל ביצוע דורש אימות סיסמה טרי, סיבה מפורשת ונרשם ביומן הביקורת כפעולת חירום נפרדת.</Note>
-      )}
-
       {!pending.length ? (
-        <div className="card"><EmptyState title="אין העברות שממתינות לביצוע" subtitle={mode === 'emergency' ? 'רק דרישות תשלום מאושרות זמינות במסלול החירום' : 'דרישות תשלום מאושרות יופיעו כאן'} /></div>
+        <div className="card"><EmptyState title="אין העברות שממתינות לביצוע" subtitle="דרישות תשלום מאושרות יופיעו כאן" /></div>
       ) : (
         <div className="space-y-3">
           {pending.map((r) => (
@@ -97,12 +104,12 @@ export default function PayerQueue({ mode = 'regular' }: { mode?: PayerQueueMode
         </div>
       )}
 
-      {selected && <ExecuteModal pr={selected} mode={mode} onClose={() => setSelected(null)} onDone={() => { setSelected(null); void refetch(); }} />}
+      {selected && <ExecuteModal pr={selected} onClose={() => setSelected(null)} onDone={() => { setSelected(null); void refetch(); }} />}
     </div>
   );
 }
 
-function ExecuteModal({ pr, mode, onClose, onDone }: { pr: Row; mode: PayerQueueMode; onClose: () => void; onDone: () => void }) {
+function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; onDone: () => void }) {
   const { profile } = useAuth();
   const toast = useToast();
   const [f, setF] = useState({ paid_date: todayISO(), reference: '', notes: '', reason: '' });
@@ -110,10 +117,9 @@ function ExecuteModal({ pr, mode, onClose, onDone }: { pr: Row; mode: PayerQueue
   const [busy, setBusy] = useState(false);
   const [paymentId, setPaymentId] = useState<string | null>(null);
 
-  // Field validation first, then the step-up gate. The emergency path keeps its historical
-  // unconditional password prompt (skipWhenFresh=false); the regular path re-authenticates only
-  // when the JWT's password AMR entry is stale — the server (0061) asserts freshness on both RPCs,
-  // so a fresh session sees no new modal and a stale one is prompted instead of rejected.
+  // Field validation first, then the step-up gate. Re-authentication happens only when the JWT's
+  // password AMR entry is stale — the server (0061) asserts freshness itself, so a fresh session
+  // sees no new modal and a stale one is prompted instead of rejected.
   function requestExecute() {
     if (!f.reference.trim()) { toast('נדרשת אסמכתת העברה', 'error'); return; }
     if (!f.reason.trim()) { toast('נדרשת סיבה לביצוע ההעברה', 'error'); return; }
@@ -123,7 +129,7 @@ function ExecuteModal({ pr, mode, onClose, onDone }: { pr: Row; mode: PayerQueue
   async function execute() {
     setBusy(true);
     try {
-      const payment = unwrap(await supabase.rpc(mode === 'emergency' ? 'execute_emergency_payment_request' : 'execute_payment_request', {
+      const payment = unwrap(await supabase.rpc('execute_payment_request', {
         p_payment_request_id: pr.id,
         p_paid_date: f.paid_date,
         p_method: 'העברה בנקאית',
@@ -138,7 +144,7 @@ function ExecuteModal({ pr, mode, onClose, onDone }: { pr: Row; mode: PayerQueue
       })) as { payment_id: string };
 
       setPaymentId(payment.payment_id);
-      toast(mode === 'emergency' ? 'העברת החירום נרשמה בהצלחה' : 'ההעברה נרשמה בהצלחה');
+      toast('ההעברה נרשמה בהצלחה');
     } catch (e) {
       toast(toHebrewError(e), 'error');
     } finally {
@@ -160,7 +166,7 @@ function ExecuteModal({ pr, mode, onClose, onDone }: { pr: Row; mode: PayerQueue
   }
 
   return (
-    <Modal open onClose={onClose} title={`${mode === 'emergency' ? 'ביצוע חירום' : 'ביצוע העברה'} — ${pr.supplier.name}`} busy={busy} statusMessage={busy ? 'רושם את ההעברה' : undefined}>
+    <Modal open onClose={onClose} title={`ביצוע העברה — ${pr.supplier.name}`} busy={busy} statusMessage={busy ? 'רושם את ההעברה' : undefined}>
       <div className="space-y-4">
         <div className="rounded-lg bg-surface-sunken border border-line px-4 py-3">
           <div className="flex items-center gap-2 text-sm font-medium text-ink-mid mb-1"><Landmark size={15} /> פרטי חשבון להעברה</div>
@@ -195,7 +201,7 @@ function ExecuteModal({ pr, mode, onClose, onDone }: { pr: Row; mode: PayerQueue
             <dd dir="ltr">{pr.invoices.map((i) => i.invoice?.invoice_number).filter(Boolean).join(', ') || 'לא זמינות'}</dd></div>
           <div className="flex justify-between"><dt className="text-ink-muted">אושר על ידי</dt><dd>{pr.approver?.full_name ?? 'לא זמין'}</dd></div>
           <div className="flex justify-between"><dt className="text-ink-muted">מבוצע על ידי</dt><dd>{profile?.full_name ?? 'המשתמש המחובר'}</dd></div>
-          <div className="flex justify-between gap-4"><dt className="text-ink-muted">רישום ביומן</dt><dd className="text-start">{mode === 'emergency' ? 'ביצוע תשלום במסלול חירום והסיבה' : 'ביצוע תשלום והסיבה'}</dd></div>
+          <div className="flex justify-between gap-4"><dt className="text-ink-muted">רישום ביומן</dt><dd className="text-start">{'ביצוע תשלום והסיבה'}</dd></div>
           {pr.notes && <Note tone="await">{pr.notes}</Note>}
           {pr.open_credit_override_total != null && (
             <Note tone="alert">
@@ -219,15 +225,14 @@ function ExecuteModal({ pr, mode, onClose, onDone }: { pr: Row; mode: PayerQueue
         <div className="flex justify-end gap-2">
           <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
           <button className="btn-primary" disabled={busy} onClick={requestExecute}>
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {mode === 'emergency' ? 'ביצוע חירום ורישום ההעברה' : 'ההעברה בוצעה'}
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} ההעברה בוצעה
           </button>
         </div>
       </div>
 
       <ReauthModal
         open={reauthOpen}
-        skipWhenFresh={mode !== 'emergency'}
-        title={mode === 'emergency' ? 'אימות סיסמת הבעלים לביצוע חירום' : 'אימות זהות לביצוע ההעברה'}
+        title="אימות זהות לביצוע ההעברה"
         onConfirm={() => { setReauthOpen(false); void execute(); }}
         onCancel={() => setReauthOpen(false)}
       />
