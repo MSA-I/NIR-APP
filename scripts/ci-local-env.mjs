@@ -4,17 +4,16 @@
 // Everything else here mirrors check-quality-gates.ps1:674-686 line for line.
 //
 // Usage:
-//   node scripts/ci-local-env.mjs write-functions-env   # writes supabase/functions/.env
-//   node scripts/ci-local-env.mjs export-secrets        # appends the same secrets to $GITHUB_ENV
+//   node scripts/ci-local-env.mjs write-functions-env                # writes supabase/functions/.env
+//   node scripts/ci-local-env.mjs write-demo-manifest <seed> <path>  # demo Auth accounts, outside the repo
 
-import { writeFileSync, existsSync, appendFileSync, readFileSync } from 'node:fs';
+import { writeFileSync, existsSync } from 'node:fs';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const envPath = path.join(repoRoot, 'supabase', 'functions', '.env');
-const secretsCache = path.join(repoRoot, '.ci-gate-secrets.json');
 
 /** P-256 keys in the shape web-push expects: uncompressed point for the public half. */
 function newVapidKeys() {
@@ -57,9 +56,6 @@ if (mode === 'write-functions-env') {
     'VAPID_SUBJECT=mailto:quality-local@example.test',
   ];
   writeFileSync(envPath, lines.join('\n') + '\n', 'utf8');
-  // Later steps need the same three values; they are per-run throwaways for an ephemeral
-  // local stack, never real credentials, but they still must not reach the build output.
-  writeFileSync(secretsCache, JSON.stringify(secrets), 'utf8');
   console.log(`Wrote ${lines.length} lines to supabase/functions/.env (VAPID public key ${vapid.publicKey.length} chars).`);
 } else if (mode === 'write-demo-manifest') {
   // Mirrors New-DemoManifest (check-quality-gates.ps1:461-472). The password shape is a
@@ -77,16 +73,7 @@ if (mode === 'write-functions-env') {
   }));
   writeFileSync(outPath, JSON.stringify({ accounts }, null, 2), 'utf8');
   console.log(`Wrote a ${accounts.length}-account demo manifest to ${outPath}.`);
-} else if (mode === 'export-secrets') {
-  if (!process.env.GITHUB_ENV) throw new Error('export-secrets is for GitHub Actions; $GITHUB_ENV is unset.');
-  const secrets = JSON.parse(readFileSync(secretsCache, 'utf8'));
-  for (const [key, value] of Object.entries(secrets)) {
-    appendFileSync(process.env.GITHUB_ENV, `${key}=${value}\n`);
-    // Keep them out of the log even though they are per-run and worthless outside it.
-    console.log(`::add-mask::${value}`);
-  }
-  console.log(`Exported ${Object.keys(secrets).length} per-run gate secrets.`);
 } else {
-  console.error('Usage: node scripts/ci-local-env.mjs <write-functions-env|export-secrets>');
+  console.error('Usage: node scripts/ci-local-env.mjs <write-functions-env|write-demo-manifest>');
   process.exit(2);
 }

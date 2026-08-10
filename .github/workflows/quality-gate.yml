@@ -94,9 +94,9 @@ jobs:
       - name: Dependency audit
         run: npm audit --audit-level=high
 
-  # ------------------------------------------------------------------- 29 SQL suites + preflight
+  # ---------------------------------------------------- the SQL suites + the preflight
   sql:
-    name: 29 SQL suites + 44-arm preflight
+    name: SQL suites + preflight (parsed from the gate)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -127,9 +127,9 @@ jobs:
         if: always()
         run: supabase stop --no-backup || true
 
-  # --------------------------------------------------------------------- 34 browser scenarios
+  # ---------------------------------------------------------- the browser scenarios
   browser:
-    name: 34 browser, keyboard, print and a11y scenarios
+    name: Browser, keyboard, print and a11y scenarios
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -239,7 +239,7 @@ jobs:
           done
           echo 'vite preview never served /login'; exit 1
 
-      - name: The 34 scenarios
+      - name: The scenarios (counted in CLAUDE.md, enforced by check:counts)
         run: node scripts/check-browser-smoke.cjs
         env:
           QUALITY_BASE_URL: http://127.0.0.1:5199
