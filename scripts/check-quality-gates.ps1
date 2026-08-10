@@ -999,6 +999,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\tests\p25_tenant_offboarding_export.sql",
     "supabase\tests\p26_price_baseline.sql",
     "supabase\tests\p27_document_supplier_resolution.sql",
+    "supabase\tests\p28_document_order_resolution.sql",
     "supabase\functions\_shared\organization-access.ts",
     "supabase\functions\_shared\organization-access.test.ts",
     "supabase\functions\_shared\organization-egress.ts",
@@ -1211,6 +1212,7 @@ try {
     Invoke-SqlTest "supabase\tests\p25_tenant_offboarding_export.sql" "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p26_price_baseline.sql" "Contractual price baseline as of the document date, reversal ordering, undisclosed fallbacks and read-only guarantee"
     Invoke-SqlTest "supabase\tests\p27_document_supplier_resolution.sql" "Deterministic supplier resolution from document evidence: rung order, ambiguity, tenancy and the model's guess as advisory only"
+    Invoke-SqlTest "supabase\tests\p28_document_order_resolution.sql" "Per-subtype order resolution: an invoice is never matched by the single open order, a delivery note may be, and no tier ever chooses among candidates"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"
