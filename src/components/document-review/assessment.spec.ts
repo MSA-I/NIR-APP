@@ -1,0 +1,200 @@
+import { describe, expect, it } from 'vitest';
+import {
+  approvalEffects,
+  blockingFindings,
+  canSubmit,
+  findingLabel,
+  reviewedProposal,
+  storageAndApprovalSentences,
+  type DocumentReviewRead,
+} from './assessment';
+
+/**
+ * These tests guard the two things this screen exists to get right: telling a person what is wrong
+ * in words they use, and telling them exactly what the button will and will not do.
+ *
+ * The effect sentences are pinned against `public.apply_reviewed_document` (0110) as it is actually
+ * written. If that command's branches change and these do not, the screen starts promising
+ * something the server does not do — which is worse than saying nothing, because the person will
+ * have read it and believed it.
+ */
+
+const read = (over: Partial<DocumentReviewRead> = {}): DocumentReviewRead => ({
+  document_id: 'd1',
+  file_name: 'invoice.pdf',
+  document_kind: 'invoice',
+  document_type: 'invoice',
+  document_date: '2026-06-15',
+  file_stored: true,
+  data_approved: false,
+  interpretation_id: 'i1',
+  supplier_resolution: null,
+  order_resolution: null,
+  assessment: null,
+  state: 'ready_for_approval',
+  ...over,
+});
+
+const assessment = (over: Record<string, unknown> = {}) => ({
+  document_type: 'invoice',
+  document_number: 'INV-1',
+  document_date: '2026-06-15',
+  supplier_id: 's1',
+  order_id: 'o1',
+  sources: { document: true, ordered: true, received: false, baseline: true },
+  totals: { lines_net: 20, header_net: 20, header_vat: 3.6, header_total: 23.6, overcharge_total: 0 },
+  severity: 'info' as const,
+  approval_blocked: false,
+  lines: [],
+  order_items: [],
+  findings: [],
+  ...over,
+});
+
+describe('storage and approval are two sentences', () => {
+  it('never says the data is approved because the file is stored', () => {
+    const [stored, approved] = storageAndApprovalSentences(read());
+    expect(stored).toContain('הקובץ נשמר');
+    expect(approved).toContain('לא אושרו');
+    // The failure this guards against is one word covering both. If they ever became the same
+    // sentence, a person would walk away believing an invoice was recorded when it is queued.
+    expect(stored).not.toBe(approved);
+  });
+
+  it('says so plainly once the data really was approved', () => {
+    const [, approved] = storageAndApprovalSentences(read({ data_approved: true }));
+    expect(approved).toContain('אושרו');
+  });
+});
+
+describe('approvalEffects mirrors what apply_reviewed_document actually does', () => {
+  it('promises an invoice will not receive goods', () => {
+    const effects = approvalEffects('invoice', true);
+    const negative = effects.filter((effect) => !effect.happens).map((effect) => effect.text);
+    expect(negative.join(' ')).toContain('לא ישתנו כמויות שהתקבלו');
+    expect(negative.join(' ')).toContain('לא יבוצע תשלום');
+    expect(effects.some((effect) => effect.happens && effect.text.includes('התקבלה'))).toBe(true);
+  });
+
+  it('says an unlinked invoice is legitimate rather than an error', () => {
+    const effects = approvalEffects('invoice', false);
+    expect(effects.some((effect) => effect.text.includes('לגיטימי'))).toBe(true);
+  });
+
+  it('promises a delivery note only drafts, and names what completes it', () => {
+    const effects = approvalEffects('delivery_note', true);
+    expect(effects.some((effect) => effect.happens && effect.text.includes('טיוטת'))).toBe(true);
+    const negative = effects.filter((effect) => !effect.happens).map((effect) => effect.text).join(' ');
+    expect(negative).toContain('מלאי');
+    expect(negative).toContain('אישור נפרד');
+    // 0110's anchor (c) forbids this command writing a completed receipt at all.
+    expect(effects.some((effect) => effect.happens && effect.text.includes('מלאי'))).toBe(false);
+  });
+
+  it('promises a receipt creates nothing', () => {
+    const effects = approvalEffects('tax_receipt', false);
+    const negative = effects.filter((effect) => !effect.happens).map((effect) => effect.text).join(' ');
+    expect(negative).toContain('לא תיווצר חשבונית');
+    expect(negative).toContain('לא תשלום');
+    expect(effects.filter((effect) => effect.happens)).toHaveLength(1);
+  });
+
+  it('offers no approval path for a subtype the command does not handle', () => {
+    expect(approvalEffects('price_list', false).every((effect) => !effect.happens)).toBe(true);
+    expect(approvalEffects(null, false).every((effect) => !effect.happens)).toBe(true);
+  });
+});
+
+describe('findings', () => {
+  it('prefers the server sentence, which carries the numbers', () => {
+    expect(findingLabel({ code: 'price_above_baseline', severity: 'error', message: 'המחיר גבוה ב-₪4' }))
+      .toBe('המחיר גבוה ב-₪4');
+  });
+
+  it('falls back to a label, then to the code itself', () => {
+    expect(findingLabel({ code: 'duplicate_document', severity: 'critical' }))
+      .toBe('מסמך כפול');
+    // Not "unknown error": a code a bookkeeper can read aloud to support is worth more than a
+    // sentence that says nothing.
+    expect(findingLabel({ code: 'some_future_code', severity: 'error' })).toBe('some_future_code');
+  });
+
+  it('puts the hardest blocker first and leaves advisories out of the work list', () => {
+    const blocking = blockingFindings(assessment({
+      findings: [
+        { code: 'price_below_baseline', severity: 'info' },
+        { code: 'price_above_baseline', severity: 'error' },
+        { code: 'duplicate_document', severity: 'critical' },
+        { code: 'receipt_recorded_exception', severity: 'warning' },
+      ],
+    }) as never);
+    expect(blocking.map((finding) => finding.code)).toEqual([
+      'duplicate_document', 'price_above_baseline']);
+  });
+});
+
+describe('reviewedProposal', () => {
+  it('sends numbers as strings, so no arithmetic happens in the browser', () => {
+    const proposal = reviewedProposal(
+      read({ assessment: assessment({
+        lines: [{
+          line_index: 0, description: 'בשר', sku: 'SKU', barcode: null, product_id: 'p1',
+          product_source: 'supplier_sku', quantity: 2, unit: 'kg', unit_price: 20,
+          discount_amount: 0, vat_rate: 18, line_total: 40, normalized_quantity: 2,
+          normalized_unit_price: 20, baseline_price: 20, baseline_source: 'price_history',
+          baseline_effective_date: '2026-01-01', overcharge_amount: null, findings: [],
+        }],
+      }) as never }),
+      's1', 'o1', {});
+    expect(proposal.lines[0].quantity).toBe('2');
+    expect(proposal.lines[0].unit_price).toBe('20');
+    expect(proposal.totals.total).toBe('23.6');
+    expect(typeof proposal.lines[0].line_total).toBe('string');
+  });
+
+  it('lets a reviewer edit win over what the machine read', () => {
+    const proposal = reviewedProposal(
+      read({ assessment: assessment({
+        lines: [{
+          line_index: 0, description: null, sku: null, barcode: null, product_id: null,
+          product_source: 'unmatched', quantity: null, unit: null, unit_price: null,
+          discount_amount: 0, vat_rate: null, line_total: null, normalized_quantity: null,
+          normalized_unit_price: null, baseline_price: null, baseline_source: null,
+          baseline_effective_date: null, overcharge_amount: null, findings: [],
+        }],
+      }) as never }),
+      's1', null, { 0: { product_id: 'p9', quantity: '3' } });
+    // The whole point of the reviewer branch in 0110: a line the matcher refuses to guess at is
+    // exactly the line a person has to resolve.
+    expect(proposal.lines[0].product_id).toBe('p9');
+    expect(proposal.lines[0].quantity).toBe('3');
+    expect(proposal.order_id).toBeNull();
+  });
+});
+
+describe('canSubmit errs toward letting the server decide', () => {
+  it('refuses only what it can be certain about', () => {
+    expect(canSubmit(read({ interpretation_id: null }), 's1')).toBe(false);
+    expect(canSubmit(read(), null)).toBe(false);
+    expect(canSubmit(read({ document_type: null }), 's1')).toBe(false);
+  });
+
+  it('requires an order for a delivery note, because 0110 does', () => {
+    expect(canSubmit(read({
+      document_type: 'delivery_note',
+      assessment: assessment({ order_id: null }) as never,
+    }), 's1')).toBe(false);
+    expect(canSubmit(read({
+      document_type: 'delivery_note',
+      assessment: assessment({ order_id: 'o1' }) as never,
+    }), 's1')).toBe(true);
+  });
+
+  it('does not block an invoice with findings — the server is the gate, not this', () => {
+    // Blocking here as well would mean two places decide, and the screen's copy would drift from
+    // the command's behaviour. It exists to save a round trip, nothing more.
+    expect(canSubmit(read({
+      assessment: assessment({ approval_blocked: true }) as never,
+    }), 's1')).toBe(true);
+  });
+});
