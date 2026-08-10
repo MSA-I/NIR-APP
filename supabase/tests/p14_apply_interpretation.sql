@@ -97,9 +97,14 @@ begin
 end
 $$;
 
--- Only the Platform Admin lifecycle command is contractually step-up protected. Keeping this
--- persona separate prevents ordinary owner scenarios in this suite from silently acquiring AMR
--- and masking an accidental future step-up requirement on filing/reversal commands.
+-- A freshly password-authenticated session. Only the Platform Admin lifecycle command is
+-- contractually step-up protected, and keeping this persona separate prevents ordinary owner
+-- scenarios in this suite from silently acquiring AMR and masking an accidental future step-up
+-- requirement on filing/reversal commands.
+--
+-- One fixture step needs it: since 0092 a tenant cannot be born suspended (its child fixtures
+-- could not be written into a read-only tenant), so the fixture suspends it through the
+-- production lifecycle command -- which demands is_platform_admin() and recent password auth.
 create function pg_temp.p14_become_fresh(p_sub uuid)
 returns void
 language plpgsql
@@ -131,29 +136,6 @@ begin
   perform set_config('request.jwt.claim.role', '', true);
   perform set_config('request.jwt.claims', '', true);
   perform set_config('role', 'none', true);
-end
-$$;
-
--- A freshly password-authenticated session, for the one fixture step that must run as a real
--- platform operator: since 0092 a tenant cannot be born suspended (its child fixtures could not
--- be written into a read-only tenant), so the fixture suspends it through the production
--- lifecycle command -- which demands is_platform_admin() and recent password authentication.
-create function pg_temp.p14_become_fresh(p_sub uuid)
-returns void
-language plpgsql
-as $$
-begin
-  perform set_config('request.jwt.claim.sub', p_sub::text, true);
-  perform set_config('request.jwt.claim.role', 'authenticated', true);
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', p_sub::text,
-    'role', 'authenticated',
-    'amr', jsonb_build_array(jsonb_build_object(
-      'method', 'password',
-      'timestamp', extract(epoch from clock_timestamp())::bigint
-    ))
-  )::text, true);
-  perform set_config('role', 'authenticated', true);
 end
 $$;
 
