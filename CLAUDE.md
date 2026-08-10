@@ -66,24 +66,24 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   אוסף בדיקות; המספר נלקח מפלט הריצה, וקבצי ה-spec כן נספרים.
   **אם הוא נכשל — מתקנים את `CLAUDE.md`, לא את הסקריפט.**
   **אין ESLint ואין Prettier** בריפו, למרות הערות `eslint-disable` שנשארו ב-`src/lib/useQuery.ts`.
-- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **41**
+- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **42**
   סוויטות SQL, ‏**preflight עם 44 זרועות**, ‏`npm audit --audit-level=high`, חוזי Deno,
   ו-**35 תרחישי דפדפן**. מספר טענות P0 מדווח בזמן ריצה (‏266 בריצה שתועדה) — הוא אינו ליטרל בקוד.
 
   **איך נספר כל מספר כאן — כדי שהבא יספור ולא יעתיק:**
-  - **41 סוויטות** = קריאות `Invoke-SqlTest` ב-`check-quality-gates.ps1` שהארגומנט הראשון שלהן הוא
-    `supabase\tests\…`. בקובץ יש **44** מופעים של המחרוזת: אחד הוא הגדרת הפונקציה, ושניים טוענים
+  - **42 סוויטות** = קריאות `Invoke-SqlTest` ב-`check-quality-gates.ps1` שהארגומנט הראשון שלהן הוא
+    `supabase\tests\…`. בקובץ יש **45** מופעים של המחרוזת: אחד הוא הגדרת הפונקציה, ושניים טוענים
     fixtures (‏`supabase\demo\demo_seed.sql`, ‏`scripts\fixtures\ocr\browser-fixture.sql`).
-    ב-`supabase/tests/` יש **42** קבצי `.sql`; ההפרש הוא `p1_preflight.sql`, שרץ דרך `Invoke-Preflight`.
+    ב-`supabase/tests/` יש **43** קבצי `.sql`; ההפרש הוא `p1_preflight.sql`, שרץ דרך `Invoke-Preflight`.
   - **44 זרועות preflight** = ‏`select '<שם>'` ב-`p1_preflight.sql` (‏1 + ‏43 `union all select '`),
     ו-`Invoke-Preflight` **זורק** אם לא חזרו בדיוק 44 שורות.
   - **35 תרחישים** = קריאות `await run(` ב-`check-browser-smoke.cjs` (‏35 נכון ל-10.08.2026, אחרי
     ערוץ ההערות של חבילה 0 בקמפיין המוכנות; ‏`run(` לבדו תופס גם את הגדרת הפונקציה).
 
-  **היסטוריית הסטייה, כי היא חזרה שמונה פעמים:** ‏13 → 20 → 26 → 27 → 28 → 29 → 30 → **41** לסוויטות; ‏22 → 25 → 29 → 30 → 33 → 34 →
+  **היסטוריית הסטייה, כי היא חזרה שמונה פעמים:** ‏13 → 20 → 26 → 27 → 28 → 29 → 30 → 41 → **42** לסוויטות; ‏22 → 25 → 29 → 30 → 33 → 34 →
   **35** לתרחישים; ‏16 → 21 → **22** ל-`check:review`; ‏שבעה → שמונה → תשעה → **עשרה** לסקריפטי ה-`check:*`. בכל פעם הקובץ
   הזה — שכל סוכן קורא **ראשון** — שלח את הקורא לספור פחות ממה שקיים. **סופרים לפני שכותבים.**
-  הקפיצה האחרונה (‏30 → 41) היא נרמול קמפיין ה-codex: אחת-עשרה סוויטות חדשות (‏p16 סמנטיקת ספק
+  הקפיצה מ-30 ל-41 היא נרמול קמפיין ה-codex: אחת-עשרה סוויטות חדשות (‏p16 סמנטיקת ספק
   לא-פעיל, ‏p17, ‏p18 ×2, ‏p19, ‏p20 ×2, ‏p21, ‏p23, ‏p24, ‏p25) נרשמו בשער באותו מיזוג. **‏`check:counts`
   תפס את חמשת המספרים האלה** — הוא עובד.
   ### השער רץ ב-CI. **אל תריץ אותו מקומית.** (‏09.08.2026)
@@ -105,7 +105,7 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   **מה `.github/workflows/quality-gate.yml` מריץ** — שלושה jobs **במקביל**, ולכן זמן הקיר הוא
   האיטי שבהם ולא הסכום:
   ‏`contracts` (חוזי Deno · ‏OCR worker build + self-check · ‏`npm audit`) ·
-  ‏`sql` (‏**41 סוויטות + preflight**) · ‏`browser` (‏**35 תרחישים** + fixtures + preview).
+  ‏`sql` (‏**42 סוויטות + preflight**) · ‏`browser` (‏**35 תרחישים** + fixtures + preview).
 
   **רשימת הסוויטות אינה מועתקת ל-YAML.** ‏`scripts/ci-sql-suites.mjs` **מפרסר אותה מתוך
   `check-quality-gates.ps1`** בזמן ריצה — אותה רשימה, אותו סדר, אותם תפקידי DB. עותק שני היה
