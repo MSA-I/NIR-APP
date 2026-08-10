@@ -112,6 +112,29 @@ begin
 end
 $$;
 
+-- A freshly password-authenticated session, for the one fixture step that must run as a real
+-- platform operator: since 0092 a tenant cannot be born suspended (its child fixtures could not
+-- be written into a read-only tenant), so the fixture suspends it through the production
+-- lifecycle command -- which demands is_platform_admin() and recent password authentication.
+create function pg_temp.p14_become_fresh(p_sub uuid)
+returns void
+language plpgsql
+as $$
+begin
+  perform set_config('request.jwt.claim.sub', p_sub::text, true);
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
+  perform set_config('request.jwt.claims', jsonb_build_object(
+    'sub', p_sub::text,
+    'role', 'authenticated',
+    'amr', jsonb_build_array(jsonb_build_object(
+      'method', 'password',
+      'timestamp', extract(epoch from clock_timestamp())::bigint
+    ))
+  )::text, true);
+  perform set_config('role', 'authenticated', true);
+end
+$$;
+
 create function pg_temp.p14_capture_error(p_sql text)
 returns text
 language plpgsql
@@ -480,7 +503,9 @@ select pg_temp.p14_assert(
 insert into organizations (id, name, status) values
   ('14000000-0000-4000-8000-000000000001', 'P14 tenant A', 'active'),
   ('14000000-0000-4000-8000-000000000002', 'P14 tenant B', 'active'),
-  ('14000000-0000-4000-8000-000000000003', 'P14 suspended tenant', 'suspended'),
+  -- Born active, suspended later through the lifecycle command (scenario j): since 0092 the
+  -- read-only latch would refuse every child fixture written into an already-suspended tenant.
+  ('14000000-0000-4000-8000-000000000003', 'P14 suspended tenant', 'active'),
   ('14000000-0000-4000-8000-000000000004', 'P14 tenant D', 'active');
 
 insert into auth.users (id, email) values
@@ -869,10 +894,22 @@ select pg_temp.p14_seed(
   9, '14000000-0000-4000-8000-000000000003', '24000000-0000-4000-8000-000000000003',
   pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000003', 0.99));
 
+-- Suspend through the production command, exactly as an operator would: 0092's row guard now
+-- fires before the command's own organization_inactive ladder, so the refusal the trusted
+-- server observes is the latch's -- at the FIRST attempted write, before any ledger row.
+select pg_temp.p14_become_fresh('24000000-0000-4000-8000-000000000010');
+select public.set_organization_lifecycle(
+  '14000000-0000-4000-8000-000000000003',
+  'suspended', null, 'P14 suspend after immutable fixture creation'
+);
+select pg_temp.p14_trusted();
+
 select pg_temp.p14_assert(
-  pg_temp.p14_apply('74000000-0000-4000-8000-000000000009') ->> 'reason_code'
-    = 'organization_inactive',
-  'a suspended organization must be refused BY NAME even with autonomy switched on at 0.99');
+  pg_temp.p14_trusted_error(
+    $$select pg_temp.p14_apply('74000000-0000-4000-8000-000000000009')$$
+  ) = 'organization_read_only',
+  'a suspended organization must be refused BY NAME at the first attempted write, even with '
+  || 'autonomy switched on at 0.99');
 
 select pg_temp.p14_assert(
   (select count(*) = 0 from public.invoices
