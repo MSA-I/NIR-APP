@@ -18,8 +18,10 @@ export interface Organization {
   id: string;
   name: string;
   vat_rate: number;
-  status: OrgStatus;
-  trial_ends_at: string | null;
+    status: OrgStatus;
+    trial_ends_at: string | null;
+    logo_path: string | null;
+    logo_updated_at: string | null;
   settings: {
     bank_match_days: number;
     bank_match_amount_tolerance: number;

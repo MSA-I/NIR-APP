@@ -10,9 +10,10 @@ import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, Skeleto
 import { EXCEPTION_TYPE, EXCEPTION_STATUS, SEVERITY } from '../lib/status';
 import { fmtDate, fmtMoneyExact } from '../lib/format';
 import { logAction } from '../lib/audit';
+import { financialSupplierMap } from '../lib/financialSuppliers';
 import type { ExceptionRow, ExceptionStatus } from '../lib/types';
 
-type Row = ExceptionRow & { supplier: { name: string } | null };
+type Row = Omit<ExceptionRow, 'supplier'> & { supplier: { name: string } | null };
 
 const DETAIL_LABELS: Record<string, string> = {
   evidence: 'ראיה',
@@ -54,7 +55,7 @@ function businessDetailLines(details: Record<string, unknown> | null): string[] 
 
 export default function Exceptions() {
   const navigate = useNavigate();
-  const { profile, roleLabels } = useAuth();
+  const { profile, roleLabels, organizationAccess } = useAuth();
   const [statusFilter, setStatusFilter] = useParamState('status', 'open');
   const [typeFilter, setTypeFilter] = useParamState('type');
   const [severityFilter, setSeverityFilter] = useParamState('severity');
@@ -64,10 +65,15 @@ export default function Exceptions() {
   const [idFilter, setIdFilter] = useParamState('id');
   const [selected, setSelected] = useState<Row | null>(null);
 
-  const { data, loading, error, refetch } = useQuery(async () =>
-    unwrap(await supabase.from('exceptions')
-      .select('*, supplier:suppliers(name)')
-      .order('created_at', { ascending: false })) as Promise<Row[]>);
+  const { data, loading, error, refetch } = useQuery(async () => {
+    const rows = unwrap(await supabase.from('exceptions').select('*')
+      .order('created_at', { ascending: false })) as ExceptionRow[];
+    const suppliers = await financialSupplierMap(rows.flatMap((row) => row.supplier_id ? [row.supplier_id] : []));
+    return rows.map<Row>((row) => ({
+      ...row,
+      supplier: row.supplier_id ? { name: suppliers.get(row.supplier_id)?.name ?? '—' } : null,
+    }));
+  });
 
   // Deep-link auto-open (audit round 2): arriving via /exceptions?id=X previously pinned the list
   // to that one row but still made the user click it. Open its detail modal once on load so the
@@ -87,7 +93,7 @@ export default function Exceptions() {
       (!typeFilter || typeFilter.split(',').includes(r.type)) &&
       (!severityFilter || r.severity === severityFilter));
 
-  const canWrite = !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canWrite = organizationAccess.canWrite && !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
 
   const columns: Column<Row>[] = [
     { key: 'severity', header: 'חומרה', sortValue: (r) => r.severity, render: (r) => <StatusBadge meta={SEVERITY[r.severity]} /> },
@@ -135,7 +141,7 @@ export default function Exceptions() {
         emptyTitle="אין חריגים שדורשים טיפול" emptySubtitle="חריגים נפתחים אוטומטית מבדיקות חשבוניות, תשלומים והתאמות בנק." />
 
       {selected && (
-        <ExceptionDetail row={selected} canWrite={canWrite}
+        <ExceptionDetail row={selected} canWrite={canWrite} canOpenProcurement={profile?.role !== 'accountant'}
           onClose={() => setSelected(null)}
           onChanged={() => { setSelected(null); void refetch(); }}
           onNavigate={(path) => navigate(path)} />
@@ -144,8 +150,8 @@ export default function Exceptions() {
   );
 }
 
-function ExceptionDetail({ row, canWrite, onClose, onChanged, onNavigate }: {
-  row: Row; canWrite: boolean; onClose: () => void; onChanged: () => void; onNavigate: (p: string) => void;
+function ExceptionDetail({ row, canWrite, canOpenProcurement, onClose, onChanged, onNavigate }: {
+  row: Row; canWrite: boolean; canOpenProcurement: boolean; onClose: () => void; onChanged: () => void; onNavigate: (p: string) => void;
 }) {
   const { profile } = useAuth();
   const toast = useToast();
@@ -175,7 +181,10 @@ function ExceptionDetail({ row, canWrite, onClose, onChanged, onNavigate }: {
   if (row.invoice_id) links.push({ label: 'לחשבונית', path: `/invoices/${row.invoice_id}` });
   if (row.payment_request_id) links.push({ label: 'לדרישת התשלום', path: `/payment-requests?id=${row.payment_request_id}` });
   if (row.bank_transaction_id) links.push({ label: 'לתנועת הבנק', path: `/bank?id=${row.bank_transaction_id}` });
-  if (row.supplier_id) links.push({ label: 'לכרטיס הספק', path: `/suppliers/${row.supplier_id}` });
+  if (row.supplier_id) links.push({
+    label: canOpenProcurement ? 'לכרטיס הספק' : 'לתצוגה הכספית של הספק',
+    path: canOpenProcurement ? `/suppliers/${row.supplier_id}` : `/finance/suppliers/${row.supplier_id}`,
+  });
 
   const detailLines = businessDetailLines(row.details);
 

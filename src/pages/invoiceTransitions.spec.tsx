@@ -31,6 +31,7 @@ vi.mock('../auth/AuthContext', () => ({
     org: { id: 'org-test', settings: {} },
     session: {},
     roleLabels: {},
+    organizationAccess: { mode: 'active', canWrite: true },
   }),
 }));
 
@@ -53,7 +54,22 @@ function useInvoiceScreen(reviewStatus: string, transitions: string[] | { status
   const calls: Array<Record<string, unknown>> = [];
   server.use(
     http.get(`${SUPABASE_URL}/rest/v1/invoices`, () => HttpResponse.json(invoice(reviewStatus))),
+    http.get(`${SUPABASE_URL}/rest/v1/financial_supplier_directory`, () => HttpResponse.json([{
+      id: 'sup-1', name: 'מאפה זהב', tax_id: null, payment_terms: null,
+      status: 'active', bank_details: null,
+    }])),
     http.get(`${SUPABASE_URL}/rest/v1/documents`, () => HttpResponse.json([])),
+    http.post(`${SUPABASE_URL}/rest/v1/rpc/get_invoice_three_way_match`, () => HttpResponse.json({
+      status: 'not_comparable',
+      approval_blocked: false,
+      approval_allowed: true,
+      definite_duplicate_invoice: false,
+      assessment_hash: 'no-order-assessment',
+      override_active: false,
+      override: null,
+      reasons: [{ code: 'no_order_not_comparable', severity: 'warning' }],
+      lines: [],
+    })),
     http.post(`${SUPABASE_URL}/rest/v1/rpc/read_allowed_transitions`, async ({ request }) => {
       calls.push((await request.json()) as Record<string, unknown>);
       if (Array.isArray(transitions)) {

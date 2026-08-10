@@ -16,6 +16,7 @@ from .errors import GatewayError, ProcessingError
 
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 CHECKSUM_RE = re.compile(r"^etag:[0-9a-fA-F]{16,128}(?:-[0-9]+)?$")
+EVIDENCE_SHA_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -95,6 +96,8 @@ class GatewayClient:
             return None
         required = {
             "job_id",
+            "processing_attempt_id",
+            "processing_attempt_started_at",
             "document_id",
             "mime_type",
             "file_name",
@@ -104,15 +107,29 @@ class GatewayClient:
             "attempt_count",
             "download_url",
             "download_expires_in",
+            "download_lease_id",
+            "download_lease_token",
         }
         if type(data) is not dict or set(data) != required:
             raise GatewayError("gateway_invalid_response", "Claim response has an invalid shape")
         try:
             uuid.UUID(data["job_id"])
             uuid.UUID(data["document_id"])
+            uuid.UUID(data["processing_attempt_id"])
+            uuid.UUID(data["download_lease_id"])
+            uuid.UUID(data["download_lease_token"])
         except (ValueError, TypeError, AttributeError) as exc:
             raise GatewayError("gateway_invalid_response", "Claim response contains an invalid id") from exc
-        strings = ("mime_type", "file_name", "lease_until", "download_url")
+        strings = (
+            "mime_type",
+            "file_name",
+            "lease_until",
+            "processing_attempt_id",
+            "processing_attempt_started_at",
+            "download_url",
+            "download_lease_id",
+            "download_lease_token",
+        )
         if any(type(data[key]) is not str or not data[key] for key in strings):
             raise GatewayError("gateway_invalid_response", "Claim response contains invalid metadata")
         if data["contract_version"] != "1" or type(data["input_checksum"]) is not str or not CHECKSUM_RE.fullmatch(data["input_checksum"]):
@@ -123,40 +140,162 @@ class GatewayClient:
             raise GatewayError("gateway_invalid_response", "Claim response contains an invalid download expiry")
         return data
 
-    def heartbeat(self, job_id: str, lease_owner: str, lease_seconds: int) -> None:
+    def acknowledge_download(
+        self, job: dict[str, Any], lease_owner: str, lease_seconds: int
+    ) -> None:
         data = self._post(
             {
-                "action": "heartbeat",
-                "job_id": job_id,
+                "action": "ack_download",
+                "job_id": job["job_id"],
                 "lease_owner": lease_owner,
+                "download_lease_id": job["download_lease_id"],
+                "download_lease_token": job["download_lease_token"],
                 "lease_seconds": lease_seconds,
             }
         )
-        if type(data) is not dict or set(data) != {"lease_until"} or type(data["lease_until"]) is not str:
+        required = {
+            "job_id", "org_id", "processing_attempt_id", "egress_lease_id",
+            "acknowledged_at", "job_lease_until", "egress_expires_at", "idempotent",
+        }
+        if type(data) is not dict or set(data) != required:
+            raise GatewayError(
+                "gateway_invalid_response", "Download acknowledgement has an invalid shape"
+            )
+        try:
+            uuid.UUID(data["org_id"])
+            uuid.UUID(data["processing_attempt_id"])
+            uuid.UUID(data["egress_lease_id"])
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise GatewayError(
+                "gateway_invalid_response", "Download acknowledgement has an invalid id"
+            ) from exc
+        if (
+            data["job_id"] != job["job_id"]
+            or data["processing_attempt_id"] != job["processing_attempt_id"]
+            or data["egress_lease_id"] != job["download_lease_id"]
+            or type(data["idempotent"]) is not bool
+            or any(
+                type(data[key]) is not str or not data[key]
+                for key in ("acknowledged_at", "job_lease_until", "egress_expires_at")
+            )
+        ):
+            raise GatewayError(
+                "gateway_invalid_response", "Download acknowledgement binding does not match"
+            )
+
+    def heartbeat(self, job: dict[str, Any], lease_owner: str, lease_seconds: int) -> None:
+        data = self._post(
+            {
+                "action": "heartbeat",
+                "job_id": job["job_id"],
+                "lease_owner": lease_owner,
+                "download_lease_id": job["download_lease_id"],
+                "download_lease_token": job["download_lease_token"],
+                "lease_seconds": lease_seconds,
+            }
+        )
+        required = {
+            "job_id", "processing_attempt_id", "egress_lease_id", "acknowledged_at",
+            "job_lease_until", "egress_expires_at",
+        }
+        if (
+            type(data) is not dict
+            or set(data) != required
+            or data["job_id"] != job["job_id"]
+            or data["processing_attempt_id"] != job["processing_attempt_id"]
+            or data["egress_lease_id"] != job["download_lease_id"]
+            or any(
+                type(data[key]) is not str or not data[key]
+                for key in ("acknowledged_at", "job_lease_until", "egress_expires_at")
+            )
+        ):
             raise GatewayError("gateway_invalid_response", "Heartbeat response has an invalid shape")
 
-    def complete(self, payload: dict[str, Any]) -> str:
+    def complete(self, job: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
         data = self._post({"action": "complete", **payload})
-        if type(data) is not dict or set(data) != {"extraction_id"}:
+        required = {
+            "job_id", "processing_attempt_id", "egress_lease_id", "extraction_id",
+            "evidence_sha256", "payload_sha256", "business_applied", "access_mode",
+            "idempotent",
+        }
+        if type(data) is not dict or set(data) != required:
             raise GatewayError("gateway_invalid_response", "Completion response has an invalid shape")
         try:
-            uuid.UUID(data["extraction_id"])
+            uuid.UUID(data["processing_attempt_id"])
+            uuid.UUID(data["egress_lease_id"])
+            if data["extraction_id"] is not None:
+                uuid.UUID(data["extraction_id"])
         except (ValueError, TypeError, AttributeError) as exc:
             raise GatewayError("gateway_invalid_response", "Completion response contains an invalid id") from exc
-        return data["extraction_id"]
+        if (
+            data["job_id"] != job["job_id"]
+            or data["processing_attempt_id"] != job["processing_attempt_id"]
+            or data["egress_lease_id"] != job["download_lease_id"]
+            or type(data["evidence_sha256"]) is not str
+            or not EVIDENCE_SHA_RE.fullmatch(data["evidence_sha256"])
+            or type(data["payload_sha256"]) is not str
+            or not EVIDENCE_SHA_RE.fullmatch(data["payload_sha256"])
+            or type(data["business_applied"]) is not bool
+            or type(data["access_mode"]) is not str
+            or not data["access_mode"]
+            or type(data["idempotent"]) is not bool
+            or (data["business_applied"] and data["extraction_id"] is None)
+            or (not data["business_applied"] and data["extraction_id"] is not None)
+        ):
+            raise GatewayError(
+                "gateway_invalid_response", "Completion response binding does not match"
+            )
+        return data
 
-    def fail(self, job_id: str, lease_owner: str, error_code: str, error_message: str | None) -> None:
+    def fail(
+        self,
+        job: dict[str, Any],
+        lease_owner: str,
+        error_code: str,
+        error_message: str | None,
+        retryable: bool,
+    ) -> dict[str, Any]:
         data = self._post(
             {
                 "action": "fail",
-                "job_id": job_id,
+                "job_id": job["job_id"],
                 "lease_owner": lease_owner,
+                "download_lease_id": job["download_lease_id"],
+                "download_lease_token": job["download_lease_token"],
                 "error_code": error_code,
                 "error_message": error_message,
+                "retryable": retryable,
             }
         )
-        if type(data) is not dict or set(data) != {"job_id"} or data["job_id"] != job_id:
+        required = {
+            "job_id", "processing_attempt_id", "egress_lease_id", "evidence_sha256",
+            "job_status", "retryable", "business_applied", "access_mode", "idempotent",
+        }
+        if type(data) is not dict or set(data) != required:
             raise GatewayError("gateway_invalid_response", "Failure response has an invalid shape")
+        try:
+            uuid.UUID(data["processing_attempt_id"])
+            uuid.UUID(data["egress_lease_id"])
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise GatewayError("gateway_invalid_response", "Failure response contains an invalid id") from exc
+        if (
+            data["job_id"] != job["job_id"]
+            or data["processing_attempt_id"] != job["processing_attempt_id"]
+            or data["egress_lease_id"] != job["download_lease_id"]
+            or type(data["evidence_sha256"]) is not str
+            or not EVIDENCE_SHA_RE.fullmatch(data["evidence_sha256"])
+            or type(data["job_status"]) is not str
+            or not data["job_status"]
+            or data["retryable"] is not retryable
+            or type(data["business_applied"]) is not bool
+            or type(data["access_mode"]) is not str
+            or not data["access_mode"]
+            or type(data["idempotent"]) is not bool
+        ):
+            raise GatewayError(
+                "gateway_invalid_response", "Failure response binding does not match"
+            )
+        return data
 
     def download(self, url: str, destination: str | Path, max_bytes: int) -> int:
         parsed = urllib.parse.urlparse(url)

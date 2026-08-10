@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toHebrewError } from "../lib/errors";
 import { Link } from 'react-router';
-import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, KeyRound, ClipboardCheck } from 'lucide-react';
+import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, KeyRound, ClipboardCheck, ImageUp, Download, Undo2, LogOut } from 'lucide-react';
 import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -10,20 +10,78 @@ import { PageHeader, SkeletonCards, useToast, ErrorNote, Note, DataTable, Status
 import { AutonomyPolicyPanel } from '../components/AutonomyPolicyPanel';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVITATION_STATUS } from '../lib/status';
-import { fmtDate, fmtDateTime } from '../lib/format';
+import { fmtDate, fmtDateTime, fmtNum } from '../lib/format';
 import {
   ASSIGNABLE_ROLES, INVITABLE_ROLES, INVITATION_COLUMNS, invitationStatusOf,
   sendInvite, resendInvite, revokeInvite, type Invitation,
 } from '../lib/invitations';
 import type { Profile, Role } from '../lib/types';
+import {
+  BRAND_LOGO_TYPES,
+  brandFailureAllowsNewCorrelation,
+  brandLogoProblem,
+} from '../lib/organizationBranding';
+
+interface OffboardingState {
+  id: string;
+  status: 'requested' | 'approved' | 'export_building' | 'export_ready' | 'export_failed' | 'cancelled' | 'reactivated';
+  requested_at: string;
+  approved_at: string | null;
+  cancellation_deadline: string;
+  platform_reactivation_deadline: string;
+  operational_purge_eligible_at: string;
+  security_logs_retain_until: string;
+  financial_records_retain_until: string;
+  export_completed_at: string | null;
+  export_size_bytes: number | null;
+  export_file_count: number | null;
+  export_parts_total: number;
+  export_parts_completed: number;
+  last_export_error: string | null;
+  can_owner_cancel: boolean;
+}
+
+const OFFBOARDING_STATUS_LABELS: Record<OffboardingState['status'], string> = {
+  requested: 'הבקשה נשלחה',
+  approved: 'הבקשה אושרה — הייצוא ממתין להכנה',
+  export_building: 'מכינים את קובצי הייצוא',
+  export_ready: 'הייצוא מוכן להורדה',
+  export_failed: 'הכנת הייצוא דורשת טיפול',
+  cancelled: 'הבקשה בוטלה',
+  reactivated: 'הארגון הופעל מחדש',
+};
+
+/** Keep command identity across a lost response or refresh; clear it only after reconciliation. */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+function stableSessionUuid(key: string): string {
+  const existing = window.sessionStorage.getItem(key);
+  if (existing && UUID_PATTERN.test(existing)) return existing;
+  const created = crypto.randomUUID();
+  window.sessionStorage.setItem(key, created);
+  return created;
+}
+
+async function logoUploadSessionKey(orgId: string, file: File): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `supplyflow:branding:upload:${orgId}:${hex}`;
+}
 
 export default function Settings() {
-  const { profile, org, roleLabels, isPlatformAdmin } = useAuth();
+  const { profile, org, roleLabels, isPlatformAdmin, organizationAccess, refreshOrganizationAccess } = useAuth();
+  const canWrite = organizationAccess?.canWrite ?? true;
   const toast = useToast();
+  const [orgName, setOrgName] = useState(org?.name ?? '');
   const [vatRate, setVatRate] = useState(org?.vat_rate?.toString() ?? '18');
   const [matchDays, setMatchDays] = useState(org?.settings?.bank_match_days?.toString() ?? '7');
   const [tolerance, setTolerance] = useState(org?.settings?.bank_match_amount_tolerance?.toString() ?? '1');
   const [busy, setBusy] = useState(false);
+  const [logoPath, setLogoPath] = useState(org?.logo_path ?? null);
+  const [logoVersion, setLogoVersion] = useState(org?.logo_updated_at ?? '');
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [offboardingBusy, setOffboardingBusy] = useState(false);
+  const [offboardingAction, setOffboardingAction] = useState<'request' | 'cancel' | 'download' | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<Role>('office');
@@ -57,14 +115,64 @@ export default function Settings() {
   const { data: invitations, refetch: refetchInvites } = useQuery<Invitation[]>(async () =>
     unwrap(await supabase.from('invitations').select(INVITATION_COLUMNS).order('created_at', { ascending: false })));
 
+  const { data: offboardingRows, error: offboardingError, refetch: refetchOffboarding } = useQuery<OffboardingState[]>(async () =>
+    unwrap(await supabase.rpc('organization_offboarding_state')) as OffboardingState[]);
+  const offboarding = offboardingRows?.[0] ?? null;
+  const offboardingOpen = !!offboarding && !['cancelled', 'reactivated'].includes(offboarding.status);
+
+  async function runOffboardingAction(action: 'request' | 'cancel' | 'download') {
+    setOffboardingBusy(true);
+    try {
+      if (action === 'request') {
+        const keyName = `supplyflow:offboarding:request:${profile?.org_id ?? 'unknown'}`;
+        const idempotencyKey = stableSessionUuid(keyName);
+        const requested = await supabase.rpc('request_organization_offboarding', {
+          p_idempotency_key: idempotencyKey,
+        });
+        if (requested.error) throw requested.error;
+        window.sessionStorage.removeItem(keyName);
+        toast('בקשת סיום השירות התקבלה. המערכת עברה למצב קריאה בלבד.');
+      } else if (action === 'cancel') {
+        if (!offboarding?.id) throw new Error('offboarding_request_unknown');
+        const keyName = `supplyflow:offboarding:cancel:${offboarding.id}`;
+        const idempotencyKey = stableSessionUuid(keyName);
+        const cancelled = await supabase.rpc('cancel_organization_offboarding', {
+          p_request_id: offboarding.id,
+          p_idempotency_key: idempotencyKey,
+        });
+        if (cancelled.error) throw cancelled.error;
+        window.sessionStorage.removeItem(keyName);
+        toast('בקשת סיום השירות בוטלה והגישה המלאה שוחזרה.');
+      } else {
+        if (!offboarding?.id) throw new Error('offboarding_request_unknown');
+        const link = await supabase.functions.invoke<{ signed_url: string; expires_at: string }>('tenant-export', {
+          body: { action: 'download', request_id: offboarding.id },
+        });
+        if (link.error || !link.data?.signed_url) throw link.error ?? new Error('export_link_unavailable');
+        window.location.assign(link.data.signed_url);
+      }
+      await Promise.all([refetchOffboarding(), refreshOrganizationAccess()]);
+    } catch (actionError) {
+      toast(toHebrewError(actionError), 'error');
+    } finally {
+      setOffboardingBusy(false);
+    }
+  }
+
   // For the supplier-agent invitation (OPEN-DECISIONS #17): the invitation must bind to an
   // existing, non-deleted supplier. Owner-only screen, so the read is unrestricted anyway.
   const { data: suppliers } = useQuery<{ id: string; name: string }[]>(async () =>
     unwrap(await supabase.from('suppliers').select('id, name').is('deleted_at', null).order('name')));
 
   async function saveOrg() {
+    const name = orgName.trim();
+    if (!name || name.length > 120) {
+      toast('שם הארגון חייב לכלול 1–120 תווים.', 'error');
+      return;
+    }
     setBusy(true);
     const res = await supabase.from('organizations').update({
+      name,
       vat_rate: Number(vatRate),
       // merge, don't replace — settings also carries keys this screen doesn't edit
       // (e.g. invite_expiry_days, read by invitation_expiry_days() in migration 0007)
@@ -78,6 +186,79 @@ export default function Settings() {
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     toast('ההגדרות נשמרו — ייכנסו לתוקף בכניסה הבאה');
   }
+
+  async function uploadLogo(file: File | undefined) {
+    if (!file || !org) return;
+    const problem = await brandLogoProblem(file);
+    if (problem) { toast(problem, 'error'); return; }
+    setLogoBusy(true);
+    let keyName: string | null = null;
+    try {
+      keyName = await logoUploadSessionKey(org.id, file);
+      const correlationId = stableSessionUuid(keyName);
+      const body = new FormData();
+      body.append('file', file);
+      const uploaded = await supabase.functions.invoke<{
+        path: string; updated_at: string; cleanup_failed: boolean;
+      }>(
+        'upload-organization-logo', {
+          body,
+          headers: { 'x-correlation-id': correlationId },
+        },
+      );
+      if (uploaded.error || !uploaded.data?.path || !uploaded.data.updated_at) {
+        throw uploaded.error ?? new Error('organization_logo_upload_failed');
+      }
+      setLogoPath(uploaded.data.path);
+      setLogoVersion(uploaded.data.updated_at);
+      window.sessionStorage.removeItem(keyName);
+      toast(uploaded.data.cleanup_failed
+        ? 'הלוגו נשמר, אך ניקוי הגרסה הקודמת נכשל.'
+        : 'הלוגו נשמר. בכניסה הבאה יופיע בכל הממשק.');
+    } catch (error) {
+      if (keyName && brandFailureAllowsNewCorrelation(error)) {
+        window.sessionStorage.removeItem(keyName);
+      }
+      toast(toHebrewError(error), 'error');
+    } finally {
+      setLogoBusy(false);
+    }
+  }
+
+  async function removeLogo() {
+    if (!org || !logoPath) return;
+    setLogoBusy(true);
+    const keyName = `supplyflow:branding:remove:${org.id}:${logoPath}`;
+    try {
+      const correlationId = stableSessionUuid(keyName);
+      const body = new FormData();
+      body.append('action', 'remove');
+      const removed = await supabase.functions.invoke<{ cleanup_failed: boolean }>(
+        'upload-organization-logo', {
+          body,
+          headers: { 'x-correlation-id': correlationId },
+        },
+      );
+      if (removed.error) throw removed.error;
+      window.sessionStorage.removeItem(keyName);
+      setLogoPath(null);
+      setLogoVersion('');
+      toast(removed.data?.cleanup_failed
+        ? 'הלוגו הוסר מהממשק, אך ניקוי קובץ המקור נכשל.'
+        : 'הלוגו הוסר.');
+    } catch (error) {
+      if (brandFailureAllowsNewCorrelation(error)) {
+        window.sessionStorage.removeItem(keyName);
+      }
+      toast(toHebrewError(error), 'error');
+    } finally {
+      setLogoBusy(false);
+    }
+  }
+
+  const logoUrl = logoPath
+    ? `${supabase.storage.from('organization-branding').getPublicUrl(logoPath).data.publicUrl}?v=${encodeURIComponent(logoVersion)}`
+    : null;
 
   async function changePassword() {
     const problem = passwordProblem(newPassword, confirmPassword);
@@ -213,7 +394,7 @@ export default function Settings() {
       key: 'actions', header: '',
       render: (r) => {
         const status = invitationStatusOf(r);
-        if (status === 'accepted' || status === 'revoked') return null;
+        if (!canWrite || status === 'accepted' || status === 'revoked') return null;
         return (
           <div className="flex gap-1">
             <button className="btn-ghost py-1! text-xs" onClick={() => setResendTarget(r)}>
@@ -240,11 +421,28 @@ export default function Settings() {
       <div className="card card-pad space-y-4">
         <h2 className="section-title">הגדרות עסק</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div><label className="label" htmlFor="settings-vat-rate">שיעור מע״מ (%)</label><input id="settings-vat-rate" type="number" step="0.5" className="input num" value={vatRate} onChange={(e) => setVatRate(e.target.value)} /></div>
-          <div><label className="label" htmlFor="settings-match-days">טווח ימים להתאמת בנק</label><input id="settings-match-days" type="number" className="input num" value={matchDays} onChange={(e) => setMatchDays(e.target.value)} /></div>
-          <div><label className="label" htmlFor="settings-tolerance">סטיית סכום מותרת (₪)</label><input id="settings-tolerance" type="number" step="0.5" className="input num" value={tolerance} onChange={(e) => setTolerance(e.target.value)} /></div>
+          <div className="sm:col-span-3"><label className="label" htmlFor="settings-org-name">שם הארגון לתצוגה</label><input id="settings-org-name" className="input" maxLength={120} value={orgName} disabled={!canWrite} onChange={(e) => setOrgName(e.target.value)} /></div>
+          <div><label className="label" htmlFor="settings-vat-rate">שיעור מע״מ (%)</label><input id="settings-vat-rate" type="number" step="0.5" className="input num" value={vatRate} disabled={!canWrite} onChange={(e) => setVatRate(e.target.value)} /></div>
+          <div><label className="label" htmlFor="settings-match-days">טווח ימים להתאמת בנק</label><input id="settings-match-days" type="number" className="input num" value={matchDays} disabled={!canWrite} onChange={(e) => setMatchDays(e.target.value)} /></div>
+          <div><label className="label" htmlFor="settings-tolerance">סטיית סכום מותרת (₪)</label><input id="settings-tolerance" type="number" step="0.5" className="input num" value={tolerance} disabled={!canWrite} onChange={(e) => setTolerance(e.target.value)} /></div>
         </div>
-        <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>שמירה</button></div>
+        {canWrite && <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>שמירה</button></div>}
+      </div>
+
+      <div className="card card-pad space-y-4">
+        <div>
+          <h2 className="section-title flex items-center gap-2"><ImageUp size={17} /> לוגו הארגון</h2>
+          <p className="mt-1 text-sm text-ink-muted">PNG, JPEG או WebP עד 2MB. הלוגו מופיע בסרגל המערכת ובהדפסת הדוח החודשי.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {logoUrl ? <img src={logoUrl} alt={`לוגו ${orgName}`} className="h-14 w-28 rounded-lg border border-line bg-white object-contain p-1" /> : <div className="flex h-14 w-28 items-center justify-center rounded-lg border border-dashed border-line text-xs text-ink-muted">ללא לוגו</div>}
+          {canWrite && <label className="btn-secondary cursor-pointer">
+            <ImageUp size={15} /> {logoPath ? 'החלפת לוגו' : 'העלאת לוגו'}
+            <input type="file" className="sr-only" accept={BRAND_LOGO_TYPES.join(',')} disabled={logoBusy}
+              onChange={(event) => { void uploadLogo(event.target.files?.[0]); event.currentTarget.value = ''; }} />
+          </label>}
+          {canWrite && logoPath && <button type="button" className="btn-ghost" disabled={logoBusy} onClick={() => void removeLogo()}>הסרת לוגו</button>}
+        </div>
       </div>
 
       {/* The autonomy switch lives here because this is where the owner looked for it. It is
@@ -252,7 +450,58 @@ export default function Settings() {
           it (platform_set_autonomy_policy, 0076:270-272) raises `not_platform_admin` for anyone
           else. An owner without the grant would meet a control that refuses on submit — the exact
           shape of screen DEAD-ENDS-AUDIT.md was written about. Absent beats broken. */}
-      {isPlatformAdmin && org && <AutonomyPolicyPanel orgId={org.id} orgName={org.name} />}
+      {canWrite && isPlatformAdmin && org && <AutonomyPolicyPanel orgId={org.id} orgName={org.name} />}
+
+      <div className="card card-pad space-y-4">
+        <div>
+          <h2 className="section-title flex items-center gap-2"><LogOut size={17} /> סיום שירות וייצוא מידע</h2>
+          <p className="mt-1 text-sm text-ink-muted">
+            בקשת סיום שירות מעבירה את הארגון מיד למצב קריאה בלבד. המידע נשאר זמין לצפייה, והמערכת מכינה ייצוא של הנתונים העסקיים ב־CSV וב־JSON יחד עם מסמכי המקור.
+          </p>
+        </div>
+        {offboardingError && <ErrorNote message={offboardingError} />}
+        {offboarding && (
+          <div className="rounded-lg border border-line bg-surface-sunken px-4 py-3 text-sm">
+            <div className="font-medium text-ink">{OFFBOARDING_STATUS_LABELS[offboarding.status]}</div>
+            <div className="mt-1 text-ink-muted">
+              הבקשה נפתחה ב־<span className="num">{fmtDateTime(offboarding.requested_at)}</span>. אפשר לבטל עד <span className="num">{fmtDateTime(offboarding.cancellation_deadline)}</span>.
+            </div>
+            {offboarding.status === 'export_ready' && offboarding.export_completed_at && (
+              <div className="mt-1 text-ink-muted">
+                הייצוא הושלם ב־<span className="num">{fmtDateTime(offboarding.export_completed_at)}</span>. קישור חדש יהיה תקף לשבעה ימים וניתן לביטול.
+              </div>
+            )}
+            {offboarding.status === 'export_building' && offboarding.export_parts_total > 0 && (
+              <div className="mt-1 text-ink-muted" role="status">
+                הושלמו <span className="num">{fmtNum(offboarding.export_parts_completed)}</span> מתוך <span className="num">{fmtNum(offboarding.export_parts_total)}</span> חלקי ייצוא. אפשר לצאת מהמסך; ההתקדמות נשמרת בשרת.
+              </div>
+            )}
+            {offboarding.status === 'export_failed' && (
+              <div role="alert" className="mt-2 text-alert-fg">הכנת הייצוא לא הושלמה. מנהל השירות יכול להפעיל ניסיון חוזר בטוח.</div>
+            )}
+          </div>
+        )}
+        <div className="flex flex-wrap justify-end gap-2">
+          {!offboardingOpen && (
+            <button type="button" className="btn-secondary text-alert-solid" disabled={offboardingBusy}
+              onClick={() => setOffboardingAction('request')}>
+              <LogOut size={15} /> בקשת סיום שירות
+            </button>
+          )}
+          {offboarding?.status === 'export_ready' && (
+            <button type="button" className="btn-primary" disabled={offboardingBusy}
+              onClick={() => setOffboardingAction('download')}>
+              <Download size={15} /> יצירת קישור הורדה
+            </button>
+          )}
+          {offboardingOpen && offboarding.can_owner_cancel && (
+            <button type="button" className="btn-secondary" disabled={offboardingBusy}
+              onClick={() => setOffboardingAction('cancel')}>
+              <Undo2 size={15} /> ביטול בקשת הסיום
+            </button>
+          )}
+        </div>
+      </div>
 
       <div className="card card-pad space-y-4">
         <div>
@@ -305,7 +554,7 @@ export default function Settings() {
                 <td className="td" dir="ltr">{u.phone ?? '—'}</td>
                 <td className="td">{u.active ? <span className="badge-done">פעיל</span> : <span className="badge-idle">מושבת</span>}</td>
                   <td className="td">
-                    {u.id !== profile?.id && (
+                    {canWrite && u.id !== profile?.id && (
                       <div className="flex flex-wrap gap-1">
                         {u.role !== 'supplier' && (
                           <button className="btn-ghost py-1! text-xs" onClick={() => openRoleChange(u)}>שינוי תפקיד</button>
@@ -321,7 +570,7 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="card card-pad space-y-4">
+      {canWrite && <div className="card card-pad space-y-4">
         <div>
           <h2 className="section-title flex items-center gap-2"><MailPlus size={17} /> הזמנת עובד</h2>
           <p className="text-sm text-ink-muted mt-1">
@@ -369,7 +618,7 @@ export default function Settings() {
         )}
         {inviteError && <ErrorNote message={inviteError} />}
         {inviteNotice && <Note tone="await">{inviteNotice}</Note>}
-      </div>
+      </div>}
 
       <div className="space-y-2">
         <h2 className="section-title">הזמנות</h2>
@@ -458,6 +707,20 @@ export default function Settings() {
         title="אימות זהות לשינוי הרשאות"
         onConfirm={() => { const pending = pendingSensitive; setPendingSensitive(null); pending?.run(); }}
         onCancel={() => setPendingSensitive(null)}
+      />
+      <ReauthModal
+        open={offboardingAction !== null}
+        title={offboardingAction === 'request'
+          ? 'אימות זהות לפני בקשת סיום שירות'
+          : offboardingAction === 'cancel'
+            ? 'אימות זהות לפני ביטול בקשת הסיום'
+            : 'אימות זהות לפני יצירת קישור ייצוא'}
+        onConfirm={() => {
+          const action = offboardingAction;
+          setOffboardingAction(null);
+          if (action) void runOffboardingAction(action);
+        }}
+        onCancel={() => setOffboardingAction(null)}
       />
     </div>
   );

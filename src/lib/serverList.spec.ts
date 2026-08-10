@@ -511,10 +511,10 @@ describe('fetchServerList — filters', () => {
 describe('searchSupplierIds — the two-step cross-table search', () => {
   const suppliers = (count: number) => Array.from({ length: count }, (_, i) => ({ id: `sup-${i}` }));
 
-  /** A suppliers endpoint that answers `select=id` lookups and logs what was asked. */
+  /** The financial supplier projection answers `select=id` lookups and logs what was asked. */
   function useSuppliers(rows: { id: string }[]): Seen[] {
     const seen: Seen[] = [];
-    server.use(http.get(`${SUPABASE_URL}/rest/v1/suppliers`, ({ request: req }) => {
+    server.use(http.get(`${SUPABASE_URL}/rest/v1/financial_supplier_directory`, ({ request: req }) => {
       const url = new URL(req.url);
       seen.push({ url, method: req.method, prefer: req.headers.get('prefer') });
       const limit = Number(url.searchParams.get('limit') ?? String(rows.length));
@@ -561,8 +561,8 @@ describe('searchSupplierIds — the two-step cross-table search', () => {
   });
 
   it('carries a refused lookup as request_failed with Hebrew attached', async () => {
-    server.use(http.get(`${SUPABASE_URL}/rest/v1/suppliers`, () => HttpResponse.json(
-      { message: 'permission denied for table suppliers', code: '42501', details: null, hint: null },
+    server.use(http.get(`${SUPABASE_URL}/rest/v1/financial_supplier_directory`, () => HttpResponse.json(
+      { message: 'permission denied for view financial_supplier_directory', code: '42501', details: null, hint: null },
       { status: 403 },
     )));
 

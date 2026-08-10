@@ -374,7 +374,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
  *  `entity_type='archive'`: the documents interpretation could not place, which no one files by
  *  hand. One component either way, so "what is a document row" has a single answer. */
 export default function DocumentsGallery({ archive = false }: { archive?: boolean }) {
-  const { profile } = useAuth();
+  const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -390,8 +390,9 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   // the select below then shows the reader which of the four is in force.
   const processingFilter: DocumentUserState | 'all' =
     documentUserStateFromParam(params.get('processing')) ?? 'all';
-  const canFile = profile?.role === 'owner' || profile?.role === 'office';
-  const canUpload = !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canWrite = organizationAccess?.canWrite ?? true;
+  const canFile = canWrite && (profile?.role === 'owner' || profile?.role === 'office');
+  const canUpload = canWrite && !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
   const canEnqueue = canUpload;
   const canRetry = canFile;
 

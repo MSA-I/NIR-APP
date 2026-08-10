@@ -75,6 +75,7 @@ export default function PayerDashboard() {
     const settled = await Promise.allSettled([
       readExactCount(queue().lt('due_date', today)),
       readExactCount(queue().eq('due_date', today)),
+      readExactCount(queue().not('due_date', 'is', null)),
       readExactCount(queue()),
       // Correct here because of two facts, and only here: `RoleDashboard.tsx:17` renders this screen
       // for the `payer` role alone, and `payment_requests_select` (0034:421-430) hides `draft` and
@@ -94,34 +95,42 @@ export default function PayerDashboard() {
       failures.push({ code, label });
       return null;
     };
-    const overdueCount = take(settled[0], 'overdue_count', 'מספר התשלומים באיחור');
-    const dueTodayCount = take(settled[1], 'due_today_count', 'מספר התשלומים לביצוע היום');
-    const pendingCount = take(settled[2], 'pending_count', 'מספר ההעברות הממתינות');
-    const pendingTotal = take(settled[3], 'pending_total', 'סך ההעברות הממתינות');
+    const overdueRead = take(settled[0], 'overdue_count', 'מספר התשלומים באיחור');
+    const dueTodayRead = take(settled[1], 'due_today_count', 'מספר התשלומים לביצוע היום');
+    const dueDateCoverage = take(settled[2], 'due_date_coverage', 'כיסוי תאריכי הפירעון');
+    const pendingCount = take(settled[3], 'pending_count', 'מספר ההעברות הממתינות');
+    // Overdue is defined only over active requests with an explicit due_date. One dated request is
+    // enough to measure that population; undated requests are not silently assigned a date. With
+    // no dated request at all, the result is unknown (—), not a fabricated zero.
+    const hasDueDateEvidence = dueDateCoverage !== null && dueDateCoverage > 0;
+    const overdueCount = hasDueDateEvidence ? overdueRead : null;
+    const dueTodayCount = hasDueDateEvidence ? dueTodayRead : null;
+    const pendingTotal = take(settled[4], 'pending_total', 'סך ההעברות הממתינות');
     // The same double cast the previous version used: without generated DB types supabase-js infers
     // an awkward structural type from a select string, so the row shape is asserted at the boundary.
-    const queueRaw = take(settled[4], 'due_amounts', 'סכומי ההעברות לפי מועד');
-    const paymentRaw = take(settled[5], 'executed_payments', 'ההעברות שבוצעו');
+    const queueRaw = take(settled[5], 'due_amounts', 'סכומי ההעברות לפי מועד');
+    const paymentRaw = take(settled[6], 'executed_payments', 'ההעברות שבוצעו');
     const queueRows = queueRaw === null ? null : (queueRaw as unknown as QueueRow[]);
     const paymentRows = paymentRaw === null ? null : (paymentRaw as unknown as Payment[]);
 
     const isOverdue = (r: QueueRow) => !!r.due_date && r.due_date < today;
     const isDueToday = (r: QueueRow) => r.due_date === today;
     const isDueWeek = (r: QueueRow) => !!r.due_date && r.due_date > today && r.due_date <= weekEnd;
-    const isLater = (r: QueueRow) => !r.due_date || r.due_date > weekEnd;
+    const isLater = (r: QueueRow) => !!r.due_date && r.due_date > weekEnd;
 
-    /** null when the row read failed, and null when there is nothing in the bucket — a dash either
-     *  way, which is what this tile has always shown rather than ₪0.00 for an empty bucket. */
+    /** A successful empty read is a measured zero. Only a failed read is unknown. */
     const bucketAmount = (match: (row: QueueRow) => boolean): number | null => {
       if (queueRows === null) return null;
       const rows = queueRows.filter(match);
-      return rows.length ? rows.reduce((sum, row) => sum + (row.amount ?? 0), 0) : null;
+      return rows.reduce((sum, row) => sum + (row.amount ?? 0), 0);
     };
-    const overdueAmount = bucketAmount(isOverdue);
-    const dueTodayAmount = bucketAmount(isDueToday);
+    const overdueAmount = hasDueDateEvidence ? bucketAmount(isOverdue) : null;
+    const dueTodayAmount = hasDueDateEvidence ? bucketAmount(isDueToday) : null;
 
     const paymentsThisMonth = paymentRows?.filter((p) => p.paid_date.slice(0, 7) === monthKey) ?? [];
-    const paidMonth = paymentsThisMonth.length ? paymentsThisMonth.reduce((s, p) => s + p.amount, 0) : null;
+    const paidMonth = paymentRows === null
+      ? null
+      : paymentsThisMonth.reduce((s, p) => s + p.amount, 0);
 
     const kpis: ScoreItem[] = [
       { label: 'לביצוע היום', value: fmtMoneyExact(dueTodayAmount), tone: dueTodayCount ? 'await' : 'idle' },
@@ -135,7 +144,7 @@ export default function PayerDashboard() {
     // count === null lands in AttentionZone's neutral "—" tier: an unmeasured row can never be
     // read as an all-clear (ui.tsx:224-227).
     const attention: AttentionItem[] = [
-      { key: 'overdue', label: 'תשלומים באיחור', count: overdueCount, amount: overdueAmount, tone: 'alert', to: '/pay', clearLabel: 'אין תשלומים באיחור' },
+      { key: 'overdue', label: 'תשלומים באיחור', count: overdueCount, amount: overdueAmount, tone: 'alert', to: '/pay', hint: !hasDueDateEvidence ? 'אין מספיק תאריכי פירעון כדי למדוד איחורים' : undefined, clearLabel: 'אין תשלומים באיחור' },
       { key: 'today', label: 'תשלומים לביצוע היום', count: dueTodayCount, amount: dueTodayAmount, tone: 'await', to: '/pay', clearLabel: 'אין תשלומים להיום' },
       { key: 'pending', label: 'ממתינים לביצוע העברה', count: pendingCount, amount: pendingTotal, tone: 'idle', to: '/pay', clearLabel: 'אין העברות ממתינות' },
     ];
@@ -145,7 +154,10 @@ export default function PayerDashboard() {
       paymentRows.map((p) => ({ date: p.paid_date, value: p.amount })), { monthKey, months: 4 },
     ).map((b) => ({ key: fmtMonth(`${b.key}-01`), label: b.count ? money(b.total) : '', total: b.total }));
 
-    const dueBuckets = queueRows === null || queueRows.length === 0
+    const datedQueueRows = hasDueDateEvidence
+      ? queueRows?.filter((row) => row.due_date !== null) ?? null
+      : null;
+    const dueBuckets = datedQueueRows === null || datedQueueRows.length === 0
       ? []
       : [
           { name: 'באיחור', total: overdueAmount ?? 0 },
@@ -158,7 +170,10 @@ export default function PayerDashboard() {
     const monthlyEmpty = paymentRows === null
       ? 'לא ניתן לטעון את ההעברות שבוצעו' : 'לא בוצעו העברות בתקופה';
     const dueEmpty = queueRows === null
-      ? 'לא ניתן לטעון את סכומי ההמתנה' : 'אין העברות ממתינות';
+      ? 'לא ניתן לטעון את סכומי ההמתנה'
+      : !hasDueDateEvidence
+        ? 'אין מספיק תאריכי פירעון כדי להציג התפלגות מועדים'
+        : 'אין העברות ממתינות';
 
     return {
       kpis, attention, monthly, dueBuckets, monthlyEmpty, dueEmpty,

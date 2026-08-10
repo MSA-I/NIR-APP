@@ -9,6 +9,12 @@ export default mergeConfig(
   defineConfig({
     test: {
       environment: 'jsdom',
+      env: {
+        // Unit tests must never depend on an ignored developer .env file. Components that do not
+        // exercise Supabase still import the shared client, so give that client an inert local URL.
+        VITE_SUPABASE_URL: 'http://127.0.0.1:55431',
+        VITE_SUPABASE_ANON_KEY: 'vitest-local-anon-key',
+      },
       globals: true,
       setupFiles: ['./src/test/setup.ts'],
       // `.spec` is vitest; `.test` stays with `node --test`. The one existing unit suite,

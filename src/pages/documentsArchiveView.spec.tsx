@@ -32,6 +32,7 @@ vi.mock('../auth/AuthContext', () => ({
     profile: { role: 'owner', full_name: 'בודק', org_id: 'org-1' },
     org: { settings: {} },
     session: {},
+    organizationAccess: { mode: 'active', canWrite: true },
   }),
 }));
 

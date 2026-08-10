@@ -607,7 +607,7 @@ export async function searchSupplierIds(
     // Same rule as `contains-text`: an empty term is the caller forgetting to not search.
     throw new ServerListError('invalid_request', 'empty_supplier_search');
   }
-  let query = client.from('suppliers').select('id') as ListQuery<{ id: string }>;
+  let query = client.from('financial_supplier_directory').select('id') as ListQuery<{ id: string }>;
   if (signal) query = query.abortSignal(signal);
   // One row past the cap: "151 rows" distinguishes "too many" from "exactly 150" without counting.
   const response = await query.ilike('name', containsPattern(q)).limit(SUPPLIER_SEARCH_ID_CAP + 1);

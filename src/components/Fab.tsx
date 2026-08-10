@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import { isFocusPath, quickActionsFor } from '../lib/quickActions';
 import type { Role } from '../lib/types';
 import { useQuickCapture } from './QuickCapture';
+import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/trial';
 
 /**
  * G1, finding 7 — a filter where there used to be `[]`.
@@ -36,11 +37,14 @@ export function quickActionsForPath(role: Role | undefined, pathname: string) {
  * full navigation source (DESIGN.md); this bar exposes frequent actions, not a parallel menu.
  */
 export default function Fab() {
-  const { profile } = useAuth();
+  const { profile, organizationAccess = ACTIVE_ORGANIZATION_ACCESS } = useAuth();
   const { pathname } = useLocation();
   const { openCapture, element, busy, retryCount } = useQuickCapture();
 
-  const mobileActions = quickActionsForPath(profile?.role, pathname);
+  // A read-only tenant (trial expired, or offboarding requested) gets no write affordances. The
+  // desktop speed-dial the campaign gated here no longer exists — it was removed by owner decision
+  // on 09.08.2026 — so the gate applies to the one surface that remains.
+  const mobileActions = organizationAccess.canWrite ? quickActionsForPath(profile?.role, pathname) : [];
   if (!mobileActions.length) return <>{element}</>;
 
   const mobileItemClass =

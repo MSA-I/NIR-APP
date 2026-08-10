@@ -285,7 +285,11 @@ set autonomy_enabled = excluded.autonomy_enabled,
     min_confidence = excluded.min_confidence;
 
 select set_config('request.jwt.claim.role', 'service_role', true);
-set local role service_role;
+-- The legacy writer is deliberately revoked from service_role by the calibrated
+-- automation boundary. This fixture seeds a historical auto-applied result as the
+-- database owner so the browser can render that terminal state; runtime automation
+-- reaches the writer only through apply_eligible_price_list_interpretation().
+set local role postgres;
 select public.apply_price_list_interpretation(
   '97100000-0000-4000-8000-000000000007',
   '97300000-0000-4000-8000-000000000007',

@@ -61,8 +61,24 @@ insert into invoices (
   '62000000-0000-0000-0000-000000000001',
   '12000000-0000-0000-0000-000000000001',
   (select id from p2_suppliers where n = 1),
-  'P2-CREDIT', '2026-07-22', '2026-07-22', 100, 18, 118, 'approved'
+  'P2-CREDIT', '2026-07-22', '2026-07-22', 100, 18, 118, 'received'
 );
+
+-- Use the same server-authoritative approval path as production. The stable credit invoice has
+-- no linked order by design, so its immutable assessment records "not comparable" rather than
+-- manufacturing purchase-order evidence for this aggregate/reliability harness.
+select set_config('request.jwt.claim.sub', '22000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select set_invoice_review_status(
+  '62000000-0000-0000-0000-000000000001', 'in_review',
+  'P2 credit fixture enters review'
+);
+select set_invoice_review_status(
+  '62000000-0000-0000-0000-000000000001', 'approved',
+  'P2 credit fixture persists assessment'
+);
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
 
 insert into invoices (
   id, org_id, supplier_id, invoice_number, invoice_date, received_date,

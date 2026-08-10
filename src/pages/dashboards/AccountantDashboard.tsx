@@ -10,6 +10,7 @@ import { chartTheme } from '../../lib/theme';
 import { topCategoriesWithOther } from '../../lib/dashboardSeries';
 import { fmtMonth, fmtMoneyRounded, fmtNum, monthlyBuckets, shiftCalendarMonth, todayISO, weeklyBuckets } from '../../lib/format';
 import { DashboardFrame, ChartCard } from './parts';
+import { readFinancialSuppliers } from '../../lib/financialSuppliers';
 
 type Payment = { amount: number; paid_date: string };
 type Bank = { status: string; tx_date: string; amount: number; is_debit: boolean };
@@ -35,7 +36,7 @@ export default function AccountantDashboard() {
       fetchAll((from, to) => supabase.from('invoices').select('review_status, export_status').is('deleted_at', null).order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('invoice_balances').select('balance').order('invoice_id').range(from, to)),
       fetchAll((from, to) => supabase.from('supplier_balances').select('supplier_id, open_balance').gt('open_balance', 0).order('supplier_id').range(from, to)),
-      fetchAll((from, to) => supabase.from('suppliers').select('id, name').order('id').range(from, to)),
+      readFinancialSuppliers(),
     ]);
 
     const payments = paymentsRes as unknown as Payment[];
@@ -50,7 +51,8 @@ export default function AccountantDashboard() {
     const paymentsThisMonth = payments.filter((p) => p.paid_date.slice(0, 7) === monthKey);
     const paidMonth = paymentsThisMonth.length ? paymentsThisMonth.reduce((s, p) => s + p.amount, 0) : null;
     const openInvoiceBalance = invBal.length ? invBal.reduce((s, b) => s + Math.max(0, b.balance), 0) : null;
-    const unmatchedBank = bank.filter((b) => ['unmatched', 'suggested'].includes(b.status)).length;
+    const unmatchedBank = bank.filter((b) => b.status === 'unmatched').length;
+    const suggestedBank = bank.filter((b) => b.status === 'suggested').length;
     // Fix (was `status === 'active'`, never true): open credits are open/requested/received (enum values).
     const openCreditRows = credits.filter((c) => ['open', 'requested', 'received'].includes(c.status));
     const openCreditsSum = openCreditRows.length ? openCreditRows.reduce((s, c) => s + c.amount, 0) : null;
@@ -60,6 +62,7 @@ export default function AccountantDashboard() {
       { label: 'שולם החודש', value: fmtMoneyRounded(paidMonth) },
       { label: 'יתרת חשבוניות פתוחות', value: fmtMoneyRounded(openInvoiceBalance), tone: openInvoiceBalance ? 'await' : 'idle' },
       { label: 'תנועות בנק לא מותאמות', value: fmtNum(unmatchedBank), tone: unmatchedBank ? 'await' : 'idle' },
+      { label: 'התאמות שממתינות לאישור', value: fmtNum(suggestedBank), tone: suggestedBank ? 'await' : 'idle' },
       { label: 'זיכויים פתוחים', value: fmtNum(openCreditRows.length), sub: openCreditsSum != null ? fmtMoneyRounded(openCreditsSum) : undefined },
       { label: 'ממתין להעברה לרו״ח', value: fmtNum(notSent), tone: notSent ? 'await' : 'idle' },
     ];
@@ -72,6 +75,7 @@ export default function AccountantDashboard() {
       { key: 'review', label: 'חשבוניות לבדיקה', count: toReview, tone: 'await', to: '/invoices', clearLabel: 'אין חשבוניות לבדיקה' },
       { key: 'not-sent', label: 'חשבוניות מאושרות שלא נשלחו לרו״ח', count: notSent, tone: 'await', to: '/invoices', clearLabel: 'הכול נשלח לרו״ח' },
       { key: 'bank', label: 'תנועות בנק לא מותאמות', count: unmatchedBank, tone: 'await', to: '/bank', clearLabel: 'אין תנועות פתוחות' },
+      { key: 'bank-suggested', label: 'התאמות שממתינות לאישור', count: suggestedBank, tone: 'await', to: '/bank?status=suggested', clearLabel: 'אין הצעות שממתינות לאישור' },
       { key: 'credits', label: 'זיכויים פתוחים', count: openCreditRows.length, amount: openCreditsSum, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
     ];
 
@@ -92,7 +96,11 @@ export default function AccountantDashboard() {
     );
     const supplierTotal = supplierSlices.reduce((s, c) => s + c.total, 0);
 
-    return { kpis, attention, monthly, weekly, supplierSlices, supplierTotal };
+    const supplierBalances = supBal
+      .map((row) => ({ ...row, name: suppliers.get(row.supplier_id) ?? '—' }))
+      .sort((a, b) => b.open_balance - a.open_balance)
+      .slice(0, 5);
+    return { kpis, attention, monthly, weekly, supplierSlices, supplierTotal, supplierBalances };
   });
 
   if (loading) return <SkeletonCards count={5} cols={5} title />;
@@ -130,6 +138,13 @@ export default function AccountantDashboard() {
               : `/invoices?q=${encodeURIComponent(slice.name)}&pay=open`)}
             hrefLabel={(slice) => `חשבוניות פתוחות של ${slice.name}`}
             emptyMessage="אין יתרות פתוחות" />
+          {data.supplierBalances.length > 0 && <div className="mt-4 divide-y divide-line border-t border-line">
+            {data.supplierBalances.map((supplier) => <Link key={supplier.supplier_id}
+              to={`/finance/suppliers/${supplier.supplier_id}`}
+              className="flex min-h-11 items-center justify-between gap-3 py-2 text-sm">
+              <span>{supplier.name}</span><span className="num font-medium">{fmtMoneyRounded(supplier.open_balance)}</span>
+            </Link>)}
+          </div>}
         </ChartCard>
         <ChartCard title="תשלומים מול חיובי בנק" subtitle="שמונה השבועות האחרונים" className="lg:col-span-2">
           <ComparisonLineChart points={data.weekly} xKey="week" legend

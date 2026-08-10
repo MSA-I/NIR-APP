@@ -117,6 +117,13 @@ describe('decidedLines — a human decision, never an automatic merge', () => {
     expect(resolved.status).toBe('damaged');
     expect(resolved.qty_received).toBe(5);
   });
+
+  it('fails closed when the server remainder is unknown', () => {
+    expect(() => decidedLines(
+      [line({ orderedQty: null, serverReceivedQty: null, serverRemaining: null })],
+      { 'item-1': 'local' },
+    )).toThrow('receipt_conflict_server_state_unknown');
+  });
 });
 
 describe('the dialog', () => {
@@ -141,6 +148,22 @@ describe('the dialog', () => {
     expect(screen.queryByRole('button', { name: 'שליחה לפי ההכרעה' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'השארת הטיוטה במכשיר' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'מחיקת הטיוטה המקומית' })).toBeInTheDocument();
+  });
+
+  it('shows unknown server quantities as — and blocks re-send after a failed re-read', () => {
+    render(<ReceiptConflictDialog
+      conflict={state({
+        rereadError: 'לא ניתן לקרוא מחדש את נתוני ההזמנה. שליחה מחדש חסומה.',
+        lines: [line({ orderedQty: null, serverReceivedQty: null, serverRemaining: null })],
+      })}
+      onClose={() => {}}
+      onResolve={() => {}}
+    />);
+
+    expect(screen.getByText(/שליחה מחדש חסומה/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'שליחה לפי ההכרעה' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'השרת עבור עגבניות' })).not.toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(3);
   });
 
   it('renders nothing without a conflict', () => {

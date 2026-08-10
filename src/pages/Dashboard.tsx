@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 import { type ReactNode } from 'react';
 import { Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RotateCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useQuery } from '../lib/useQuery';
+import { unwrap, useQuery } from '../lib/useQuery';
 import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, TaskLine, type AttentionItem } from '../components/ui';
 import { EXCEPTION_TYPE, PO_STATUS, SEVERITY } from '../lib/status';
 import {
@@ -25,6 +25,23 @@ const glanceMoney = fmtMoneyRounded;
 const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TIME_ZONE });
 
 type WeeklyPoint = { week: string; total: number; count: number; label: string };
+type ManagementDashboardSnapshot = {
+  money: { openBalance: number | null; openInvoiceCount: number };
+  paymentRequests: {
+    pendingApproval: number;
+    drafts: number;
+    dueDateCoverage: number;
+    activeCount: number;
+    overdue: number | null;
+    dueToday: number | null;
+  };
+  credits: { count: number; sum: number | null };
+  bank: { unmatched: number; suggested: number };
+  invoices: { pendingApproval: number; toReview: number; notSent: number };
+  openOrders: { count: number; committed: number | null; remaining: number; noDate: number; late: number; awaitingConfirmation: number };
+  openSupplierCount: number;
+  topBalances: { id: string; name: string; balance: number }[];
+};
 
 function DeltaChip({ value }: { value: number }) {
   const rounded = Math.round(value);
@@ -349,22 +366,15 @@ export default function Dashboard() {
     const chartsFromTimestamp = dateStartInstant(chartsFrom);
 
     const [
-      ordersRes, invoicesRes, paymentsRes, balancesRes, prRes, exceptionsRes, creditsRes,
-      bankRes, supBalRes, suppliersRes, poItemsRes, priceUpRes, reqItemsRes, offersRes, openPoRes,
-      deliveriesRes,
+      ordersRes, invoicesRes, paymentsRes, exceptionsRes, poItemsRes, priceUpRes,
+      reqItemsRes, offersRes, deliveriesRes, snapshotRes,
     ] = await Promise.all([
       // recent orders (8 weeks) — purchased today/week/month + the weekly series. created_at is the
       // time axis, non-draft/cancelled the filter, at snapshot prices (OPEN-DECISIONS #4, locked).
       fetchAll((from, to) => supabase.from('purchase_orders').select('id, created_at, status, items:purchase_order_items(qty, unit_price)').gte('created_at', trendFromTimestamp).lte('created_at', now.toISOString()).not('status', 'in', '(draft,cancelled)').order('created_at').order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('invoices').select('id, supplier_id, invoice_date, received_date, total_amount, review_status, payment_status, export_status').is('deleted_at', null).gte('invoice_date', chartsFrom).order('invoice_date').order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('payments').select('id, amount, paid_date').gte('paid_date', trendFromISO).lte('paid_date', todayISO).order('paid_date').order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('invoice_balances').select('invoice_id, balance').order('invoice_id').range(from, to)),
-      fetchAll((from, to) => supabase.from('payment_requests').select('id, status, due_date, amount').order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('exceptions').select('*, supplier:suppliers(name)').in('status', ['open', 'in_progress']).order('created_at', { ascending: false }).order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('credit_requests').select('id, amount, status').in('status', ['open', 'requested', 'received']).order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('bank_transactions').select('id, status').order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('supplier_balances').select('supplier_id, open_balance').gt('open_balance', 0).order('supplier_id').range(from, to)),
-      fetchAll((from, to) => supabase.from('suppliers').select('id, name').order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('purchase_order_items').select('id, qty, unit_price, product:products(category:categories(name)), order:purchase_orders!inner(created_at, status)').gte('order.created_at', chartsFromTimestamp).lte('order.created_at', now.toISOString()).not('order.status', 'in', '(draft,cancelled)').order('id').range(from, to)),
       // price increases — now bounded to the last 30 days (was a full unbounded scan): matches the
       // "מוצרים שהתייקרו לאחרונה" label and the alerts window (OPEN-DECISIONS #26).
@@ -373,31 +383,24 @@ export default function Dashboard() {
       // available offers for the savings estimate — kept minimal (2 cols) but cannot be date-bounded:
       // savings needs the max CURRENT available offer per product regardless of when it was set.
       fetchAll((from, to) => supabase.from('supplier_products').select('id, product_id, current_price').eq('available', true).order('id').range(from, to)),
-      // open commitments — any date, so a PO sent months ago that is still open still counts. Also
-      // serves the "awaiting goods receipt" queue, replacing the old serial round-trip.
-      fetchAll((from, to) => supabase.from('purchase_orders').select('id, status, expected_date, items:purchase_order_items(qty, unit_price, received_qty)').in('status', ['sent', 'confirmed', 'partial']).order('id').range(from, to)),
       // deliveries due today/tomorrow — open POs (sent/confirmed/partial) whose expected_date is
       // today or tomorrow (OPEN-DECISIONS: a delivery = open order + expected_date). NULL
       // expected_date rows are excluded by the gte and surfaced as a count from openPos instead.
       fetchAll((from, to) => supabase.from('purchase_orders').select('id, number, status, expected_date, supplier_id, supplier:suppliers(name), items:purchase_order_items(qty, product:products(name))').in('status', ['sent', 'confirmed', 'partial']).gte('expected_date', todayISO).lte('expected_date', tomorrowISO).order('expected_date').order('id').range(from, to)),
+      supabase.rpc('management_dashboard_snapshot', { p_today: todayISO }),
     ]);
 
     const orders = ordersRes as unknown as { created_at: string; items: { qty: number; unit_price: number }[] }[];
     const invoices = invoicesRes as unknown as { supplier_id: string; invoice_date: string; received_date: string; total_amount: number; review_status: string; payment_status: string; export_status: string }[];
     const payments = paymentsRes as unknown as { amount: number; paid_date: string }[];
-    const balances = balancesRes as unknown as { balance: number }[];
-    const prs = prRes as unknown as { status: string; due_date: string | null; amount: number }[];
     const exceptions = exceptionsRes as unknown as ({ id: string; type: string; severity: 'low' | 'medium' | 'high'; title: string; created_at: string; supplier: { name: string } | null })[];
-    const credits = creditsRes as unknown as { amount: number }[];
-    const bank = bankRes as unknown as { status: string }[];
-    const supBal = supBalRes as unknown as { supplier_id: string; open_balance: number }[];
-    const suppliers = new Map((suppliersRes as unknown as { id: string; name: string }[]).map((s) => [s.id, s.name]));
     const poItems = poItemsRes as unknown as { qty: number; unit_price: number; product: { category: { name: string } | null } | null; order: { created_at: string } }[];
     const priceRows = priceUpRes as unknown as { current_price: number; previous_price: number | null; price_effective_date: string; product: { id: string; name: string }; supplier: { name: string } }[];
     const reqItems = reqItemsRes as unknown as { qty: number; unit_price: number | null; product_id: string }[];
     const offers = offersRes as unknown as { product_id: string; current_price: number }[];
-    const openPos = openPoRes as unknown as { status: string; expected_date: string | null; items: { qty: number; unit_price: number; received_qty: number }[] }[];
     const deliveries = deliveriesRes as unknown as DeliveryOrder[];
+    const snapshot = unwrap(snapshotRes) as ManagementDashboardSnapshot | null;
+    if (!snapshot) throw new Error('dashboard_snapshot_unavailable');
 
     const orderValue = (o: { items: { qty: number; unit_price: number }[] }) => o.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
 
@@ -414,36 +417,31 @@ export default function Dashboard() {
     });
     const purchasedMonth = ordersThisMonth.length ? ordersThisMonth.reduce((s, o) => s + orderValue(o), 0) : null;
     const paidMonth = paymentsThisMonth.length ? paymentsThisMonth.reduce((s, p) => s + p.amount, 0) : null;
-    const openBalance = balances.length ? balances.reduce((s, b) => s + Math.max(0, b.balance), 0) : null;
-    const openInvoiceCount = balances.filter((b) => b.balance > 0).length;
+    const { openBalance, openInvoiceCount } = snapshot.money;
 
     // ── attention counts. A count of 0 is a real "all clear" (rendered in tier B as "✓ אין…").
     // `null` is reserved for what genuinely cannot be measured.
-    const invoicesPendingApproval = invoices.filter((i) => i.review_status === 'pending_approval').length;
-    const prPendingApproval = prs.filter((p) => p.status === 'pending_approval').length;
+    const invoicesPendingApproval = snapshot.invoices.pendingApproval;
+    const prPendingApproval = snapshot.paymentRequests.pendingApproval;
 
     // Payments due/overdue can ONLY come from payment_requests that carry a MANUAL due_date —
-    // invoices have no due_date and suppliers.payment_terms is free text nobody parses. If not one
-    // active request has a due date, we cannot claim anything about what is due/overdue → null (—),
+    // invoices have no due_date and suppliers.payment_terms is free text nobody parses. Undated
+    // requests are excluded; if not one active request has a date, the metric is unknown → null (—),
     // never 0 (which would falsely assert "nothing is overdue"). See OPEN-DECISIONS #27.
-    const activeDueDated = prs.filter((p) => p.due_date && !['executed', 'matched', 'cancelled'].includes(p.status));
-    const canMeasureDue = activeDueDated.length > 0;
-    const paymentsOverdue = canMeasureDue ? activeDueDated.filter((p) => p.due_date! < todayISO).length : null;
-    const paymentsDueToday = canMeasureDue ? activeDueDated.filter((p) => p.due_date! === todayISO).length : null;
+    const paymentsOverdue = snapshot.paymentRequests.overdue;
+    const paymentsDueToday = snapshot.paymentRequests.dueToday;
 
     const highExceptions = exceptions.filter((e) => e.severity === 'high').length;
     const suspectedDup = exceptions.filter((e) => ['duplicate_invoice', 'duplicate_payment'].includes(e.type)).length;
-    // aligned with Reports.tsx:95 (unmatched || suggested) — both screens now agree (OPEN-DECISIONS #4 / plan).
-    const unmatchedBank = bank.filter((b) => ['unmatched', 'suggested'].includes(b.status)).length;
+    const unmatchedBank = snapshot.bank.unmatched;
+    const suggestedBank = snapshot.bank.suggested;
 
-    const openCreditsSum = credits.length ? credits.reduce((s, c) => s + c.amount, 0) : null;
+    const openCreditsSum = snapshot.credits.sum;
 
-    const committedSum = openPos.length ? openPos.reduce((s, o) => s + o.items.reduce((t, i) => t + i.qty * i.unit_price, 0), 0) : null;
-    const remainingSum = openPos.reduce((s, o) => s + o.items.reduce((t, i) => t + Math.max(0, (i.qty - i.received_qty) * i.unit_price), 0), 0);
-    // open orders (sent/confirmed/partial) past their requested delivery date — a late supplier.
-    const lateDeliveries = openPos.filter((o) => o.expected_date && o.expected_date < todayISO).length;
-    // orders sent to a supplier but not yet confirmed as received — a reminder to chase confirmation (3.3).
-    const awaitingConfirmation = openPos.filter((o) => o.status === 'sent').length;
+    const committedSum = snapshot.openOrders.committed;
+    const remainingSum = snapshot.openOrders.remaining;
+    const lateDeliveries = snapshot.openOrders.late;
+    const awaitingConfirmation = snapshot.openOrders.awaitingConfirmation;
 
     // ── estimated savings this month: chosen price vs the most expensive available offer.
     const maxOffer = new Map<string, number>();
@@ -540,19 +538,18 @@ export default function Dashboard() {
       .map((category) => ({ ...category, label: moneyShort(category.total) }));
 
     // supplier open balances — id is KEPT so each row can link to /suppliers/:id (was dropped).
-    const topBalances = supBal.sort((a, b) => b.open_balance - a.open_balance).slice(0, 6)
-      .map((b) => ({ id: b.supplier_id, name: suppliers.get(b.supplier_id) ?? '—', balance: b.open_balance }));
+    const topBalances = snapshot.topBalances;
 
     // ── "דורש טיפול היום", ordered by business importance.
     // Tones use section 6's semantic vocabulary: await=ממתין · alert=דחוף · info=מידע · idle=ניטרלי.
     const attention: AttentionItem[] = [
       { key: 'inv-approval', label: 'חשבוניות הממתינות לאישור', count: invoicesPendingApproval, tone: 'await', to: '/invoices?review=pending_approval', clearLabel: 'אין חשבוניות לאישור' },
       { key: 'pr-approval', label: 'דרישות תשלום הממתינות לאישור', count: prPendingApproval, tone: 'await', to: '/payment-requests?status=pending_approval', clearLabel: 'אין דרישות לאישור' },
-      { key: 'pay-overdue', label: 'דרישות תשלום באיחור', count: paymentsOverdue, tone: 'alert', to: '/payment-requests?due=overdue', hint: paymentsOverdue == null ? 'לא הוגדרו תאריכי יעד' : undefined, clearLabel: 'אין תשלומים באיחור' },
+      { key: 'pay-overdue', label: 'דרישות תשלום באיחור', count: paymentsOverdue, tone: 'alert', to: '/payment-requests?due=overdue', hint: paymentsOverdue == null ? 'אין מספיק תאריכי פירעון כדי למדוד איחורים' : undefined, clearLabel: 'אין תשלומים באיחור' },
       { key: 'pay-today', label: 'תשלומים לביצוע היום', count: paymentsDueToday, tone: 'await', to: '/payment-requests?due=today', hint: paymentsDueToday == null ? 'לא הוגדרו תאריכי יעד' : undefined, clearLabel: 'אין תשלומים להיום' },
       { key: 'exceptions', label: 'חריגים פתוחים', count: exceptions.length, tone: 'alert', to: '/exceptions?status=open', hint: highExceptions ? `${highExceptions} בחומרה גבוהה` : undefined, clearLabel: 'אין חריגים פתוחים' },
-      { key: 'credits', label: 'זיכויים פתוחים', count: credits.length, amount: openCreditsSum, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
-      { key: 'commitments', label: 'התחייבויות רכש פתוחות', count: openPos.length, amount: committedSum, tone: 'idle', to: '/orders?status=open', hint: remainingSum > 0 ? `נותר לקבלה ${fmtMoneyRounded(remainingSum)}` : undefined, clearLabel: 'אין התחייבויות פתוחות' },
+      { key: 'credits', label: 'זיכויים פתוחים', count: snapshot.credits.count, amount: openCreditsSum, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
+      { key: 'commitments', label: 'התחייבויות רכש פתוחות', count: snapshot.openOrders.count, amount: committedSum, tone: 'idle', to: '/orders?status=open', hint: remainingSum > 0 ? `נותר לקבלה ${fmtMoneyRounded(remainingSum)}` : undefined, clearLabel: 'אין התחייבויות פתוחות' },
       { key: 'late-delivery', label: 'הזמנות באיחור באספקה', count: lateDeliveries, tone: 'alert', to: '/receiving', clearLabel: 'אין הזמנות באיחור' },
       { key: 'awaiting-confirmation', label: 'הזמנות ממתינות לאישור ספק', count: awaitingConfirmation, tone: 'await', to: '/orders?status=sent', clearLabel: 'כל ההזמנות אושרו' },
       { key: 'price-increases', label: 'ספקים שהעלו מחירים (30 יום)', count: priceIncreaseSuppliers, tone: 'await', to: '/prices?increases=1', clearLabel: 'אין שינויי מחירים' },
@@ -565,7 +562,7 @@ export default function Dashboard() {
       deliveries: {
         today: deliveries.filter((d) => d.expected_date === todayISO),
         tomorrow: deliveries.filter((d) => d.expected_date === tomorrowISO),
-        noDateCount: openPos.filter((o) => o.expected_date == null).length,
+        noDateCount: snapshot.openOrders.noDate,
       },
       attention,
       money: { openBalance, openInvoiceCount, paidMonth, paidDelta, purchasedMonth, purchasedDelta, monthKey },
@@ -573,17 +570,17 @@ export default function Dashboard() {
       priceIncreases: priceIncreases.slice(0, 6),
       priceIncreaseCount: priceIncreases.length,
       topBalances,
-      openSupplierCount: supBal.length,
+      openSupplierCount: snapshot.openSupplierCount,
       exceptions: exceptions.slice(0, 6),
       exceptionCount: exceptions.length,
-      meta: { suspectedDup, unmatchedBank },
+      meta: { suspectedDup, unmatchedBank, suggestedBank },
       queue: {
-        receiving: openPos.length,
-        invoicesToReview: invoices.filter((i) => ['received', 'in_review'].includes(i.review_status)).length,
-        prDrafts: prs.filter((p) => p.status === 'draft').length,
+        receiving: snapshot.openOrders.count,
+        invoicesToReview: snapshot.invoices.toReview,
+        prDrafts: snapshot.paymentRequests.drafts,
         prPendingApproval,
         highExceptions,
-        notSentToAccountant: invoices.filter((i) => i.export_status === 'not_sent' && i.review_status === 'approved').length,
+        notSentToAccountant: snapshot.invoices.notSent,
       },
     };
   });
@@ -737,7 +734,7 @@ export default function Dashboard() {
                     </li>
                   ))}
                 </ul>
-                {(data.meta.suspectedDup > 0 || data.meta.unmatchedBank > 0) && (
+                {(data.meta.suspectedDup > 0 || data.meta.unmatchedBank > 0 || data.meta.suggestedBank > 0) && (
                   <div className="mt-3 flex flex-wrap gap-x-4 border-t border-line-soft pt-2 text-xs">
                     {data.meta.suspectedDup > 0 && (
                       <Link to="/exceptions?type=duplicate_invoice,duplicate_payment" className="inline-flex min-h-11 items-center text-ink-muted hover:text-ink-mid active:text-ink">
@@ -747,6 +744,11 @@ export default function Dashboard() {
                     {data.meta.unmatchedBank > 0 && (
                       <Link to="/bank?status=unmatched" className="inline-flex min-h-11 items-center text-ink-muted hover:text-ink-mid active:text-ink">
                         תנועות בנק לא מותאמות: <span className="num font-medium">{data.meta.unmatchedBank}</span>
+                      </Link>
+                    )}
+                    {data.meta.suggestedBank > 0 && (
+                      <Link to="/bank?status=suggested" className="inline-flex min-h-11 items-center text-ink-muted hover:text-ink-mid active:text-ink">
+                        התאמות שממתינות לאישור: <span className="num font-medium">{data.meta.suggestedBank}</span>
                       </Link>
                     )}
                   </div>

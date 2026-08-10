@@ -13,6 +13,11 @@ import {
   MAX_PROVIDER_PAYLOAD_BYTES,
   MODEL_ID,
   PROMPT_VERSION,
+  PROVIDER_EGRESS_MARGIN_MS,
+  PROVIDER_EGRESS_TTL_SECONDS,
+  PROVIDER_MAX_ATTEMPTS,
+  PROVIDER_RETRY_DELAY_MAX_MS,
+  PROVIDER_TIMEOUT_MS,
   REASONING_EFFORT,
   SYSTEM_PROMPT,
 } from "./core.ts";
@@ -22,6 +27,9 @@ import {
 // drift these tests exist to catch. `with { type: "text" }` resolves through the module graph,
 // so this needs no --allow-read and still runs under the gate's permission-free `deno test`.
 import migrationSql from "../../migrations/0077_apply_document_interpretation.sql" with {
+  type: "text",
+};
+import invoiceMatchMigrationSql from "../../migrations/0099_invoice_line_three_way_match.sql" with {
   type: "text",
 };
 import reviewModelSource from "../../../src/components/document-review/model.ts" with {
@@ -402,9 +410,40 @@ test("raw schema uses only closed objects and normalizes line values to the v1 r
   assert.deepEqual(result.interpretation.line_items[0].values, { total: 100 });
 });
 
-test("malformed provider JSON is a technical failure, never a fallback interpretation", async () => {
+test("invoice line evidence survives the closed wire schema and normalization unchanged", async () => {
+  const interpretation: InterpretationContract = {
+    ...validInterpretation(),
+    line_items: [{
+      source_row: 7,
+      values: {
+        description: "קמח לבן",
+        sku: "SUP-42",
+        barcode: "7290000000042",
+        quantity: 20,
+        unit: "ק״ג",
+        unit_price: 42,
+        discount_amount: 5,
+        vat_rate: 18,
+        line_total: 835,
+      },
+      evidence_block_ids: ["block-1"],
+    }],
+  };
   const fetchImpl = (async () =>
-    jsonResponse(providerResponse(outputText("{not-json")))) as typeof fetch;
+    jsonResponse(providerResponse(outputText(
+      JSON.stringify(providerWireInterpretation(interpretation)),
+    )))) as typeof fetch;
+
+  const result = await createOpenAiProvider({ apiKey: "test-key", fetchImpl })
+    .interpret(payload());
+
+  assert.deepEqual(result.interpretation.line_items, interpretation.line_items);
+});
+
+test("malformed provider JSON is a technical failure, never a fallback interpretation", async () => {
+  const fetchImpl =
+    (async () =>
+      jsonResponse(providerResponse(outputText("{not-json")))) as typeof fetch;
   await assert.rejects(
     createOpenAiProvider({ apiKey: "test-key", fetchImpl }).interpret(
       payload(),
@@ -493,6 +532,28 @@ test("429 honors Retry-After and never exceeds the configured attempt limit", as
   assert.deepEqual(delays, [1000]);
 });
 
+test("a Retry-After that cannot fit the lease margin is not slept or retried", async () => {
+  let attempts = 0;
+  let slept = false;
+  const fetchImpl = (async () => {
+    attempts += 1;
+    return jsonResponse({ error: "rate limited" }, 429, { "retry-after": "6" });
+  }) as typeof fetch;
+  await assert.rejects(
+    createOpenAiProvider({
+      apiKey: "test-key",
+      fetchImpl,
+      maxAttempts: 2,
+      sleep: async () => {
+        slept = true;
+      },
+    }).interpret(payload()),
+    (error) => errorCode(error) === "provider_rate_limited",
+  );
+  assert.equal(attempts, 1);
+  assert.equal(slept, false);
+});
+
 test("a refusal fails closed as a rejection, never as parsed JSON", async () => {
   const fetchImpl = (async () =>
     jsonResponse(providerResponse({
@@ -503,7 +564,9 @@ test("a refusal fails closed as a rejection, never as parsed JSON", async () => 
       }],
     }))) as typeof fetch;
   await assert.rejects(
-    createOpenAiProvider({ apiKey: "test-key", fetchImpl }).interpret(payload()),
+    createOpenAiProvider({ apiKey: "test-key", fetchImpl }).interpret(
+      payload(),
+    ),
     (error) => errorCode(error) === "provider_rejected",
   );
 });
@@ -515,7 +578,9 @@ test("an exhausted output budget is reported as truncation, not as a bad model",
       incomplete_details: { reason: "max_output_tokens" },
     }))) as typeof fetch;
   await assert.rejects(
-    createOpenAiProvider({ apiKey: "test-key", fetchImpl }).interpret(payload()),
+    createOpenAiProvider({ apiKey: "test-key", fetchImpl }).interpret(
+      payload(),
+    ),
     (error) => errorCode(error) === "provider_output_truncated",
   );
 });
@@ -532,10 +597,13 @@ test("a dated model snapshot is accepted and recorded verbatim", async () => {
 
 test("a response from an unrelated model fails closed", async () => {
   const fetchImpl = (async () =>
-    jsonResponse(providerResponse({ model: "some-other-model" }))) as typeof
-      fetch;
+    jsonResponse(
+      providerResponse({ model: "some-other-model" }),
+    )) as typeof fetch;
   await assert.rejects(
-    createOpenAiProvider({ apiKey: "test-key", fetchImpl }).interpret(payload()),
+    createOpenAiProvider({ apiKey: "test-key", fetchImpl }).interpret(
+      payload(),
+    ),
     (error) => errorCode(error) === "provider_invalid_output",
   );
 });
@@ -578,7 +646,7 @@ test("the handler still routes both interpretation paths through the decision", 
   for (
     const call of [
       "resumeExistingInterpretation(",
-      "saveAndDecideInterpretation(",
+      "recoverInterpretationFromEgress(",
     ]
   ) {
     assert.ok(
@@ -650,14 +718,55 @@ test("no value 0077 reads out of fields[] is left unnamed by the prompt", () => 
       `added, removed, or written in a shape this test does not parse.`,
   );
   for (const aliases of lists) {
-    assert.ok(aliases.length > 0, "an interpretation_field call site parsed to no keys");
+    assert.ok(
+      aliases.length > 0,
+      "an interpretation_field call site parsed to no keys",
+    );
     assert.ok(
       (CANONICAL_FIELD_KEYS as readonly string[]).includes(aliases[0]),
-      `0077 reads fields[] under "${aliases[0]}" and the prompt never asks for it. Add it to ` +
+      `0077 reads fields[] under "${
+        aliases[0]
+      }" and the prompt never asks for it. Add it to ` +
         `CANONICAL_FIELD_KEYS (and bump PROMPT_VERSION), or the model has no reason to emit it ` +
         `and the document queues for a human forever.`,
     );
   }
+});
+
+test("the complete provider retry envelope stays inside the database lease with margin", () => {
+  const worstCase = PROVIDER_TIMEOUT_MS * PROVIDER_MAX_ATTEMPTS +
+    PROVIDER_RETRY_DELAY_MAX_MS * (PROVIDER_MAX_ATTEMPTS - 1);
+  assert.ok(
+    worstCase <=
+      PROVIDER_EGRESS_TTL_SECONDS * 1000 - PROVIDER_EGRESS_MARGIN_MS,
+    `provider budget ${worstCase}ms exceeds its fenced lease`,
+  );
+});
+
+test("every invoice line key consumed by 0099 is named by the interpretation contract", () => {
+  const start = invoiceMatchMigrationSql.indexOf(
+    "create or replace function public.capture_applied_invoice_line_evidence()",
+  );
+  const end = invoiceMatchMigrationSql.indexOf(
+    "revoke all on function public.capture_applied_invoice_line_evidence()",
+    start,
+  );
+  assert.ok(
+    start >= 0 && end > start,
+    "0099 invoice capture function was not found",
+  );
+  const capture = invoiceMatchMigrationSql.slice(start, end);
+  const consumed = [
+    ...new Set(
+      [...capture.matchAll(/item\s*#>>?\s*'\{values,([a-z_]+)\}'/g)]
+        .map(([, key]) => key),
+    ),
+  ].sort();
+  assert.deepEqual(
+    consumed,
+    [...CANONICAL_LINE_ITEM_KEYS].sort(),
+    "0099 and the prompt disagree on the exact invoice line evidence keys",
+  );
 });
 
 test("the system prompt names every canonical key without weakening the injection boundary", () => {
@@ -688,8 +797,18 @@ test("the system prompt names every canonical key without weakening the injectio
   // And order_number has to say WHOSE order: 0077 resolves it against our own
   // purchase_orders.number, so a supplier's internal reference emitted under that key links the
   // invoice to an unrelated order of ours whenever the integers collide.
-  assert.match(SYSTEM_PROMPT, /order_number is the buyer's purchase-order number/);
-  assert.match(SYSTEM_PROMPT, /Never match or fill a missing line key from a product name/);
+  assert.match(
+    SYSTEM_PROMPT,
+    /order_number is the buyer's purchase-order number/,
+  );
+  assert.match(
+    SYSTEM_PROMPT,
+    /Never match or fill a missing line key from a product name/,
+  );
+  assert.match(
+    SYSTEM_PROMPT,
+    /Never normalize or infer a unit or packaging conversion/,
+  );
 });
 
 // Names the review screen recognises: the string literals inside its key-alias arrays, plus the
@@ -767,6 +886,8 @@ const PROMPT_DIGESTS: Record<string, string> = {
     "b49fb69f270a3e6839c9016400b7e6fbc2e63472383c0f6ed75c780e2bf82f82",
   "interpret-document-v8":
     "551030c7c567787518c55e23f668cc4775fead3f190baf8beea3196f97eab571",
+  "interpret-document-v9":
+    "19b0125802fdae68640150eeda9ec1b43e78d296211c399d704453bfb3710244",
 };
 
 // CRLF is folded before hashing, and the reason is a checkout hazard rather than tidiness: this

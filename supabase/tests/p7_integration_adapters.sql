@@ -232,15 +232,15 @@ insert into suppliers (id, org_id, name) values
   ('37000000-0000-0000-0000-000000000001', '17000000-0000-0000-0000-000000000001',
    'P7 Supplier');
 
-insert into invoices (id, org_id, supplier_id, invoice_number, invoice_date, total_amount,
-                      review_status) values
+insert into invoices (id, org_id, supplier_id, invoice_number, invoice_date,
+                      amount_before_vat, vat_amount, total_amount, review_status) values
   ('47000000-0000-0000-0000-000000000001', '17000000-0000-0000-0000-000000000001',
-   '37000000-0000-0000-0000-000000000001', 'P7-INV-1', current_date, 100, 'received'),
+   '37000000-0000-0000-0000-000000000001', 'P7-INV-1', current_date, 100, 0, 100, 'received'),
   ('47000000-0000-0000-0000-000000000002', '17000000-0000-0000-0000-000000000001',
-   '37000000-0000-0000-0000-000000000001', 'P7-INV-2', current_date, 200,
+   '37000000-0000-0000-0000-000000000001', 'P7-INV-2', current_date, 200, 0, 200,
    'pending_approval'),
   ('47000000-0000-0000-0000-000000000003', '17000000-0000-0000-0000-000000000001',
-   '37000000-0000-0000-0000-000000000001', 'P7-INV-3', current_date, 300,
+   '37000000-0000-0000-0000-000000000001', 'P7-INV-3', current_date, 300, 0, 300,
    'pending_approval');
 
 -- Vault secrets for the subscriptions (rolled back with the transaction).

@@ -49,6 +49,7 @@ const auth = vi.hoisted(() => ({
     profile: { id: 'user-1', org_id: 'org-test', role: 'office' } as { id: string; org_id: string; role: string },
     org: { vat_rate: 18 },
     session: {},
+    organizationAccess: { mode: 'active', canWrite: true },
   },
 }));
 vi.mock('../auth/AuthContext', () => ({ useAuth: () => auth.current }));
@@ -67,6 +68,7 @@ import InvoiceNew from './InvoiceNew';
 import PaymentRequests from './PaymentRequests';
 
 const SUPPLIERS_ENDPOINT = `${SUPABASE_URL}/rest/v1/suppliers`;
+const FINANCIAL_SUPPLIERS_ENDPOINT = `${SUPABASE_URL}/rest/v1/financial_supplier_directory`;
 const EXISTING = { id: 'sup-1', name: 'ספק קיים בע״מ', tax_id: '514000000', status: 'active' };
 const NEW_ROW = { id: 'sup-new', name: 'ירקות השדה בע״מ' };
 
@@ -79,12 +81,23 @@ beforeEach(() => {
     profile: { id: 'user-1', org_id: 'org-test', role: 'office' },
     org: { vat_rate: 18 },
     session: {},
+    organizationAccess: { mode: 'active', canWrite: true },
   };
 });
 
 /** Every GET the three screens and the quick-create dialog make against `suppliers`. */
 function useSupplierTable(rows: Array<Record<string, unknown>> = [EXISTING]) {
-  server.use(http.get(SUPPLIERS_ENDPOINT, () => HttpResponse.json(rows)));
+  server.use(
+    http.get(SUPPLIERS_ENDPOINT, () => HttpResponse.json(rows)),
+    http.get(FINANCIAL_SUPPLIERS_ENDPOINT, () => HttpResponse.json(rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      tax_id: row.tax_id ?? null,
+      payment_terms: row.payment_terms ?? null,
+      status: row.status ?? 'active',
+      bank_details: row.bank_details ?? null,
+    })))),
+  );
 }
 
 /** The insert, recorded, so a test can assert both what was written and that nothing was. */

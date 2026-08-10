@@ -29,10 +29,10 @@ export interface ReceiptConflictLine {
   localQty: number;
   localStatus: ReceiptLineStatusValue;
   localNotes: string | null;
-  orderedQty: number;
-  serverReceivedQty: number;
+  orderedQty: number | null;
+  serverReceivedQty: number | null;
   /** What the server would accept for a `full` line right now (`0023:1518`: exactly this). */
-  serverRemaining: number;
+  serverRemaining: number | null;
   /** The quantity on the server's own draft line for this item, when a server draft exists. */
   serverDraftQty: number | null;
 }
@@ -165,9 +165,8 @@ interface ConflictReadInput {
 /**
  * Re-reads the server rows the conflict is about and pairs them with the local claim.
  *
- * Deliberately tolerant: a blocked or partial read degrades to `—` and a stated `rereadError`,
- * because the screen's job is to let a person decide with whatever is actually known — not to fail
- * and leave the receipt with nowhere to go.
+ * A blocked or partial read degrades to `—` and a stated `rereadError`. Local work can still be kept
+ * or discarded, but re-send is fail-closed: unknown server quantities are never converted to zero.
  */
 export async function loadReceiptConflict(input: ConflictReadInput): Promise<ReceiptConflictState> {
   const state: ReceiptConflictState = {
@@ -196,7 +195,7 @@ export async function loadReceiptConflict(input: ConflictReadInput): Promise<Rec
   ]);
 
   if (items.error || order.error || receipts.error) {
-    state.rereadError = 'לא ניתן היה לקרוא מחדש את נתוני ההזמנה מהשרת. ההשוואה מוצגת לפי מה שידוע במכשיר.';
+    state.rereadError = 'לא ניתן היה לקרוא מחדש את נתוני ההזמנה מהשרת. ערכים לא ידועים מוצגים כ־—, ושליחה מחדש חסומה עד לקריאה מוצלחת.';
   }
 
   const serverItems = new Map(
@@ -248,8 +247,8 @@ export async function loadReceiptConflict(input: ConflictReadInput): Promise<Rec
   state.lines = input.localLines.map((line) => {
     const item = serverItems.get(line.order_item_id);
     const product = input.products.get(line.order_item_id);
-    const orderedQty = item?.qty ?? 0;
-    const serverReceivedQty = item?.received_qty ?? 0;
+    const orderedQty = item?.qty ?? null;
+    const serverReceivedQty = item?.received_qty ?? null;
     return {
       orderItemId: line.order_item_id,
       productName: product?.name ?? '—',
@@ -259,7 +258,9 @@ export async function loadReceiptConflict(input: ConflictReadInput): Promise<Rec
       localNotes: line.notes,
       orderedQty,
       serverReceivedQty,
-      serverRemaining: Math.max(0, orderedQty - serverReceivedQty),
+      serverRemaining: orderedQty !== null && serverReceivedQty !== null
+        ? Math.max(0, orderedQty - serverReceivedQty)
+        : null,
       serverDraftQty: serverDraftQty.get(line.order_item_id) ?? null,
     };
   });
@@ -280,6 +281,9 @@ export function decidedLines(
   choice: Readonly<Record<string, 'local' | 'server'>>,
 ): OfflineReceiptLine[] {
   return lines.map((line) => {
+    if (line.serverRemaining === null) {
+      throw new Error('receipt_conflict_server_state_unknown');
+    }
     const takeServer = choice[line.orderItemId] === 'server';
     const qty = takeServer ? line.serverDraftQty ?? line.serverRemaining : line.localQty;
     const bounded = Math.max(0, Math.min(qty, line.serverRemaining));
@@ -326,10 +330,27 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
 
   if (!conflict || !presentation) return null;
 
+  const canResend = presentation.resendable
+    && conflict.rereadError === null
+    && conflict.lines.length > 0
+    && conflict.lines.every((line) => (
+      line.orderedQty !== null
+      && line.serverReceivedQty !== null
+      && line.serverRemaining !== null
+    ));
+  const showLineDecision = presentation.perLineDecision && canResend;
+  const availableOptions = presentation.options.filter((option) => (
+    option.kind !== 'resend-decided' || canResend
+  ));
+
   const disagreeing = conflict.lines.filter((line) =>
-    line.localQty !== (line.serverDraftQty ?? line.localQty) || line.localQty > line.serverRemaining);
+    line.serverRemaining !== null && (
+      line.localQty !== (line.serverDraftQty ?? line.localQty)
+      || line.localQty > line.serverRemaining
+    ));
 
   const submit = (kind: ConflictOptionKind) => {
+    if (kind === 'resend-decided' && !canResend) return;
     onResolve({
       kind,
       lines: kind === 'resend-decided' ? decidedLines(conflict.lines, choice) : [],
@@ -384,7 +405,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
                 <th scope="col" className="py-2 text-start font-medium">פריט</th>
                 <th scope="col" className="py-2 text-start font-medium">במכשיר</th>
                 <th scope="col" className="py-2 text-start font-medium">בשרת</th>
-                {presentation.perLineDecision && (
+                {showLineDecision && (
                   <th scope="col" className="py-2 text-start font-medium">ההכרעה</th>
                 )}
               </tr>
@@ -395,7 +416,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
                   <td className="py-2 pe-2">
                     <div className="text-ink">{line.productName}</div>
                     <div className="text-xs text-ink-muted">
-                      הוזמן <span className="num">{line.orderedQty}</span> {line.unit}
+                      הוזמן <span className="num">{line.orderedQty ?? '—'}</span> {line.unit}
                     </div>
                   </td>
                   <td className="py-2 pe-2">
@@ -406,16 +427,16 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
                   </td>
                   <td className="py-2 pe-2">
                     <div>
-                      נותר לקבלה: <span className="num">{line.serverRemaining}</span>
+                      נותר לקבלה: <span className="num">{line.serverRemaining ?? '—'}</span>
                     </div>
                     <div className="text-xs text-ink-muted">
-                      התקבל בעבר: <span className="num">{line.serverReceivedQty}</span>
+                      התקבל בעבר: <span className="num">{line.serverReceivedQty ?? '—'}</span>
                       {line.serverDraftQty !== null && (
                         <> · בטיוטת השרת: <span className="num">{line.serverDraftQty}</span></>
                       )}
                     </div>
                   </td>
-                  {presentation.perLineDecision && (
+                  {showLineDecision && (
                     <td className="py-2">
                       <div className="flex flex-wrap gap-1.5">
                         {([['local', 'המכשיר'], ['server', 'השרת']] as const).map(([value, label]) => (
@@ -439,7 +460,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
           </table>
         </div>
 
-        {presentation.perLineDecision && (
+        {showLineDecision && (
           <p className="text-xs text-ink-muted">
             {disagreeing.length
               ? <>שורות שבהן הערכים נבדלים: <span className="num">{disagreeing.length}</span>. מיזוג אוטומטי של כמויות אינו קיים בכוונה — כמות היא טענה על סחורה שהגיעה.</>
@@ -447,7 +468,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
           </p>
         )}
 
-        {presentation.requiresExplanation && (
+        {presentation.requiresExplanation && canResend && (
           <div>
             <label className="label" htmlFor={explanationId}>
               הסבר להכרעה (חובה — נרשם ביומן הביקורת עם הקבלה)
@@ -465,7 +486,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
           <button type="button" className="btn-secondary min-h-11" disabled={busy} onClick={onClose}>
             סגירה בלי הכרעה
           </button>
-          {presentation.options.map((option) => (
+          {availableOptions.map((option) => (
             <button key={option.kind} type="button"
               className={`${option.danger ? 'btn-danger' : 'btn-primary'} min-h-11`}
               disabled={busy || (option.kind === 'resend-decided' && presentation.requiresExplanation && !explanation.trim())}

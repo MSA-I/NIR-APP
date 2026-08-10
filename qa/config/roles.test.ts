@@ -21,6 +21,9 @@ test('route precedence preserves the sensitive App.tsx authorization distinction
   assert.equal(isRouteAllowed('accountant', '/invoices/example-id'), true);
   assert.equal(isRouteAllowed('accountant', '/invoices/new'), false);
   assert.equal(isRouteAllowed('supplier', '/documents/example-id/review'), true);
+  assert.equal(isRouteAllowed('accountant', '/finance/suppliers/example-id'), true);
+  assert.equal(isRouteAllowed('office', '/finance/suppliers/example-id'), false);
+  assert.equal(isRouteAllowed('accountant', '/analytics'), false);
   assert.equal(isRouteAllowed('supplier', '/documents'), false);
   assert.equal(isRouteAllowed('owner', '/pay/emergency'), true);
   assert.equal(isRouteAllowed('owner', '/pay'), false);

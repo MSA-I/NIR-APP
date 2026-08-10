@@ -1,5 +1,5 @@
 import { Link, Outlet, useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -17,6 +17,8 @@ import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orde
 import { pendingOfflineWork } from '../lib/offlineQueue';
 import type { Role } from '../lib/types';
 import { toHebrewError } from '../lib/errors';
+import { supabase } from '../lib/supabase';
+import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/trial';
 import { isRouteFamilyActive } from '../lib/quickActions';
 
 export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[] }
@@ -43,6 +45,7 @@ export const NAV_SECTIONS: NavSection[] = [
     // reading belongs beside the ledgers it feeds, not inside them.
     section: 'מסמכים',
     items: [
+      { to: '/documents/operations', label: 'תפעול מסמכים', icon: Activity, roles: ['owner'] },
       { to: '/documents', label: 'תיקיית המסמכים', icon: FolderOpen, roles: ['owner', 'office', 'kitchen'] },
       { to: '/documents/archive', label: 'ארכיון', icon: Archive, roles: ['owner', 'office', 'kitchen'] },
     ],
@@ -52,10 +55,11 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office', 'kitchen'] },
       { to: '/receiving', label: 'קבלת סחורה', icon: PackageCheck, roles: ['owner', 'office', 'kitchen'] },
+      { to: '/inventory', label: 'מלאי', icon: Warehouse, roles: ['owner', 'office', 'kitchen'] },
       { to: '/suppliers', label: 'ספקים', icon: Truck, roles: ['owner', 'office', 'kitchen'] },
       { to: '/products', label: 'מוצרים', icon: Package, roles: ['owner', 'office', 'kitchen'] },
       { to: '/prices', label: 'מחירונים', icon: Tags, roles: ['owner', 'office', 'kitchen'] },
-      { to: '/my-prices', label: 'המחירון שלי', icon: Tags, roles: ['supplier'] },
+      { to: '/my-prices', label: 'פורטל הספק', icon: Tags, roles: ['supplier'] },
     ],
   },
   {
@@ -76,7 +80,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/exceptions', label: 'חריגים', icon: AlertTriangle, roles: ['owner', 'office', 'kitchen', 'accountant'] },
       { to: '/expenses', label: 'ריכוז הוצאות', icon: PieChart, roles: ['owner', 'accountant'] },
       { to: '/reports', label: 'דוח לרו״ח', icon: BarChart3, roles: ['owner', 'accountant'] },
-      { to: '/analytics', label: 'ביצועי ספקים', icon: Activity, roles: ['owner', 'office', 'accountant'] },
+      { to: '/analytics', label: 'ביצועי ספקים', icon: Activity, roles: ['owner', 'office'] },
       { to: '/audit', label: 'יומן ביקורת', icon: ScrollText, roles: ['owner', 'accountant'] },
       { to: '/settings', label: 'הגדרות', icon: Settings, roles: ['owner'] },
       // /onboarding was absent from this catalogue entirely, so nothing could route to it: not the
@@ -102,17 +106,17 @@ const DAILY_PATHS: Record<Role, readonly string[]> = {
 };
 
 const MANAGEMENT_PATHS: Partial<Record<Role, readonly string[]>> = {
-  owner: ['/products', '/prices', '/credits', '/payment-requests', '/payments', '/bank'],
-  office: ['/products', '/prices', '/credits', '/payment-requests'],
-  kitchen: ['/products', '/prices', '/invoices', '/credits'],
+  owner: ['/inventory', '/products', '/prices', '/credits', '/payment-requests', '/payments', '/bank'],
+  office: ['/inventory', '/products', '/prices', '/credits', '/payment-requests'],
+  kitchen: ['/inventory', '/products', '/prices', '/invoices', '/credits'],
   accountant: ['/credits'],
 };
 
 const CONTROL_PATHS: Partial<Record<Role, readonly string[]>> = {
-  owner: ['/exceptions', '/expenses', '/reports', '/analytics', '/audit'],
+  owner: ['/documents/operations', '/exceptions', '/expenses', '/reports', '/analytics', '/audit'],
   office: ['/exceptions', '/analytics'],
   kitchen: ['/exceptions'],
-  accountant: ['/exceptions', '/expenses', '/reports', '/analytics', '/audit'],
+  accountant: ['/exceptions', '/expenses', '/reports', '/audit'],
 };
 
 function catalogItem(path: string, role: Role): NavItem | null {
@@ -183,7 +187,7 @@ export function pageTitleFor(pathname: string): string {
 }
 
 export default function Layout() {
-  const { profile, org, roleLabels, isPlatformAdmin, signOut } = useAuth();
+  const { profile, org, roleLabels, isPlatformAdmin, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, signOut } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const location = useLocation();
@@ -205,6 +209,9 @@ export default function Layout() {
   // so null (loading) and 0 never fabricate an all-clear or workload.
   const inboxCount = useInboxCount(!!role && (['owner', 'office', 'kitchen'] as Role[]).includes(role));
   const orgName = org?.name ?? '';
+  const orgLogoUrl = org?.logo_path
+    ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
+    : null;
   const currentTitle = pageTitleFor(location.pathname);
 
   const sections = sectionsForRole(role, isPlatformAdmin);
@@ -304,7 +311,8 @@ export default function Layout() {
   const sidebar = (displaySections: readonly NavSection[], navLabel: string, expandGroups = false) => (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 border-b border-shell-ink/10 px-4 py-4 pe-12 lg:pe-4">
-        <img src="/icons/icon-192.png" alt="" width="40" height="40" className="size-10 shrink-0 rounded-lg ring-1 ring-shell-ink/15" />
+        <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="40" height="40"
+          className="size-10 shrink-0 rounded-lg bg-white object-contain p-0.5 ring-1 ring-shell-ink/15" />
         <div className="min-w-0">
           <div className="text-base font-bold text-shell-ink">{APP_NAME}</div>
           <div className="truncate text-xs text-shell-ink-dim" title={orgName || undefined}>{orgName || 'ניהול רכש ותשלומים'}</div>
@@ -360,7 +368,8 @@ export default function Layout() {
           <Menu size={22} />
         </button>
         <div className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2">
-          <img src="/icons/icon-192.png" alt="" width="28" height="28" className="size-7 shrink-0 rounded-md ring-1 ring-shell-ink/15" />
+          <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="28" height="28"
+            className="size-7 shrink-0 rounded-md bg-white object-contain p-px ring-1 ring-shell-ink/15" />
           <div className="min-w-0 leading-tight">
             <div className="truncate text-sm font-semibold" title={currentTitle}>{currentTitle}</div>
             <div className="truncate text-[11px] text-shell-ink-dim" title={orgName || APP_NAME}>{APP_NAME}{orgName ? ` · ${orgName}` : ''}</div>
@@ -398,6 +407,21 @@ export default function Layout() {
           <NotificationBell />
           <FeedbackButton />
         </header>
+      )}
+      {organizationAccess.mode === 'grace' && (
+        <div role="status" className="no-print border-b border-await-line bg-await-wash px-4 py-3 text-sm text-await-fg lg:ms-60 lg:px-6">
+          תקופת הניסיון הסתיימה. נותרו <span className="num font-semibold">{organizationAccess.graceDaysRemaining}</span> ימים להמשך שימוש מלא במערכת. לאחר מכן המערכת תעבור למצב קריאה בלבד והמידע שלך יישאר זמין לצפייה ולייצוא.
+        </div>
+      )}
+      {organizationAccess.mode === 'read_only' && (
+        <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:ms-60 lg:px-6">
+          תקופת הניסיון הסתיימה. המערכת נמצאת כעת במצב קריאה בלבד. כל המידע הקיים נשמר וזמין לצפייה ולייצוא. להפעלת המערכת מחדש יש לפנות למנהל השירות.
+        </div>
+      )}
+      {organizationAccess.mode === 'offboarding' && (
+        <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:ms-60 lg:px-6">
+          הארגון נמצא בתהליך סיום שירות והמערכת במצב קריאה בלבד. המידע נשמר וזמין לצפייה ולייצוא. בעל הארגון יכול לבטל את הבקשה בתוך 30 ימים ממועד הגשתה.
+        </div>
       )}
       {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring. */}
       <main id="main" tabIndex={-1}

@@ -8,7 +8,8 @@ import { APP_NAME } from '../lib/branding';
 /**
  * Self-service password recovery (OPEN-DECISIONS #114, decided 09.08.2026).
  *
- * The success sentence is identical whether or not the address is registered — a login screen
+ * The success sentence ("אם קיימת כתובת תואמת") is identical whether or not the address is
+ * registered — a login screen
  * must not double as a member directory. This is not a mask over an error: Supabase Auth itself
  * answers 200 for unknown addresses, so the only failures that reach `error` are real transport
  * or rate-limit failures, and those ARE shown, because "נשלח קישור" over a failed request would

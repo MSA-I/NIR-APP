@@ -10,7 +10,7 @@ import { Breadcrumbs, DataTable, StatusBadge, useToast, Modal, ErrorNote, Confir
 import { ReauthModal } from '../components/ReauthModal';
 import { PriceListUploadModal, SUBMISSION_STATUS, submissionMonthLabel } from '../components/PriceListUpload';
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
-import { SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
+import { canStartSupplierCommerce, SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
 import { fmtMoneyExact, fmtNum, fmtDate, fmtDays } from '../lib/format';
 import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission } from '../lib/types';
 
@@ -58,7 +58,7 @@ function RiskCell({ m }: { m?: SupplierMetrics }) {
 
 export function SuppliersList() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const [editing, setEditing] = useState<SupplierRow | null | 'new'>(null);
   const [priceUploadFor, setPriceUploadFor] = useState<SupplierWithBalance | null>(null);
@@ -86,17 +86,15 @@ export function SuppliersList() {
     }));
   });
 
-  const canWrite = profile?.role === 'owner' || profile?.role === 'office';
+  const canWrite = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
 
   // ?balance=open from the dashboard "ספקים עם יתרה פתוחה" card.
   const [balanceFilter, setBalanceFilter] = useParamState('balance');
-  // #115 (decided): the list finally has a status filter, so an inactive supplier can at least
-  // be hidden from the eyes that asked for it. Default shows everyone — hiding rows with an
-  // open balance by default would bury exactly the rows worth a look.
   const [statusFilter, setStatusFilter] = useParamState('status');
-  const rows = useMemo(() => (data ?? [])
-    .filter((r) => balanceFilter !== 'open' || (r.open_balance ?? 0) > 0)
-    .filter((r) => !statusFilter || r.status === statusFilter), [data, balanceFilter, statusFilter]);
+  const rows = useMemo(() => (data ?? []).filter((r) =>
+    (balanceFilter !== 'open' || (r.open_balance ?? 0) > 0)
+    && (!statusFilter || r.status === statusFilter)
+  ), [data, balanceFilter, statusFilter]);
 
   // Delete guard (adversarial review round): a soft-deleted supplier vanishes from the lists
   // while money is still owed to them or goods are still on their way — the open balance and
@@ -168,7 +166,9 @@ export function SuppliersList() {
         mobileTrailing={(r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} />}
         rowActions={canWrite ? (r) => [
           { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setEditing(r) },
-          { key: 'price-list', label: 'העלאת מחירון', icon: Upload, onSelect: () => setPriceUploadFor(r) },
+          ...(canStartSupplierCommerce(r.status) ? [
+            { key: 'price-list', label: 'העלאת מחירון', icon: Upload, onSelect: () => setPriceUploadFor(r) },
+          ] : []),
           { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', onSelect: () => void requestDelete(r) },
         ] : undefined}
         activeFilters={(balanceFilter === 'open' ? 1 : 0) + (statusFilter ? 1 : 0)}
@@ -408,7 +408,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
 export function SupplierCard() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, organizationAccess } = useAuth();
   const [tab, setTab] = useState<'orders' | 'invoices' | 'payments' | 'credits' | 'prices'>('orders');
   const [editing, setEditing] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -462,7 +462,7 @@ export function SupplierCard() {
     };
   }, [id]);
 
-  const canWrite = profile?.role === 'owner' || profile?.role === 'office';
+  const canWrite = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
 
   useEffect(() => {
     if (editParam !== 'bank') return;
@@ -537,7 +537,9 @@ export function SupplierCard() {
             {s.delivery_days.length > 0 && <span className="flex items-center gap-1"><Truck size={13} />ימי אספקה {fmtDays(s.delivery_days)}</span>}
             {s.cutoff_time && <span className="flex items-center gap-1"><Clock size={13} />סגירת הזמנות {s.cutoff_time.slice(0, 5)}</span>}
           </>}
-        primaryAction={canWrite && <button className="btn-primary" onClick={() => setUploadOpen(true)}><Upload size={15} /> העלאת מחירון</button>}
+        primaryAction={canWrite && canStartSupplierCommerce(s.status)
+          ? <button className="btn-primary" onClick={() => setUploadOpen(true)}><Upload size={15} /> העלאת מחירון</button>
+          : null}
         secondaryActions={canWrite && <>
             {/* Named, not buried: "החליף מספר חשבון" is the task, and it used to be four steps
                 inside a form of twenty fields. Navigates rather than calling setEditing directly,

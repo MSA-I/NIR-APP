@@ -13,7 +13,6 @@ export interface ProvisionPayload {
   owner_name: string;
   owner_password: string;
   vat_rate?: number;
-  trial_ends_at?: string | null;
   categories?: string[];
 }
 
@@ -21,11 +20,6 @@ export interface ProvisionResult {
   org_id: string;
   owner_user_id: string;
   categories_created: number;
-}
-
-export interface ResetPasswordResult {
-  user_id: string;
-  email: string | null;
 }
 
 export type AdminOutcome<T> = { ok: true; result: T } | { ok: false; message: string };
@@ -64,22 +58,6 @@ async function invokeAdmin<T>(body: Record<string, unknown>): Promise<AdminOutco
 
 export function provisionOrg(payload: ProvisionPayload): Promise<AdminOutcome<ProvisionResult>> {
   return invokeAdmin<ProvisionResult>({ ...payload });
-}
-
-/**
- * Issues a new password for an existing user. The recovery valve for "I forgot my password"
- * while there is no verified sending domain for email recovery — the operator delivers the new
- * password out of band, exactly like the initial one.
- */
-export function resetUserPassword(
-  email: string,
-  newPassword: string,
-): Promise<AdminOutcome<ResetPasswordResult>> {
-  return invokeAdmin<ResetPasswordResult>({
-    action: 'reset_password',
-    email,
-    new_password: newPassword,
-  });
 }
 
 const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';

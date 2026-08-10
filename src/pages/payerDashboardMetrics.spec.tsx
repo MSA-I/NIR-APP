@@ -25,11 +25,11 @@ import PayerDashboard from './dashboards/PayerDashboard';
 const TODAY = todayISO();
 const PENDING_TOTAL = 1000;
 
-const queueRows = [
+const queueRows: Array<{ due_date: string | null; amount: number }> = [
   { due_date: addCalendarDays(TODAY, -3), amount: 100 },
   { due_date: TODAY, amount: 200 },
   { due_date: addCalendarDays(TODAY, 2), amount: 300 },
-  { due_date: null, amount: 400 },
+  { due_date: addCalendarDays(TODAY, 10), amount: 400 },
 ];
 const paymentRows = [{ amount: 500, paid_date: TODAY }];
 
@@ -47,7 +47,12 @@ const failure = (message: string) => HttpResponse.json(
  * `readExactCount` reads, which is why a missing header would surface as `count_unavailable` rather
  * than as a zero.
  */
-function usePayerMetrics(broken: Broken = 'none') {
+function usePayerMetrics(
+  broken: Broken = 'none',
+  rows = queueRows,
+  pendingTotal: number = PENDING_TOTAL,
+  executedPayments = paymentRows,
+) {
   const requests: string[] = [];
   server.use(
     http.head(`${SUPABASE_URL}/rest/v1/payment_requests`, ({ request }) => {
@@ -55,23 +60,26 @@ function usePayerMetrics(broken: Broken = 'none') {
       requests.push(`HEAD payment_requests ${url.searchParams.get('due_date') ?? 'all'}`);
       if (broken === 'counts') return failure('count read refused');
       const dueDate = url.searchParams.get('due_date');
-      const total = dueDate === `lt.${TODAY}` ? 1 : dueDate === `eq.${TODAY}` ? 1 : queueRows.length;
+      const dueRows = rows.filter((row) => row.due_date !== null);
+      const total = dueDate === `lt.${TODAY}` ? dueRows.filter((row) => row.due_date! < TODAY).length
+        : dueDate === `eq.${TODAY}` ? dueRows.filter((row) => row.due_date === TODAY).length
+          : dueDate === 'not.is.null' ? dueRows.length : rows.length;
       return new HttpResponse(null, { status: 200, headers: { 'content-range': `*/${total}` } });
     }),
     http.get(`${SUPABASE_URL}/rest/v1/payment_requests`, () => {
       requests.push('GET payment_requests');
       if (broken === 'due_amounts') return failure('queue row read refused');
-      return HttpResponse.json(queueRows);
+      return HttpResponse.json(rows);
     }),
     http.get(`${SUPABASE_URL}/rest/v1/payments`, () => {
       requests.push('GET payments');
       if (broken === 'executed_payments') return failure('payment row read refused');
-      return HttpResponse.json(paymentRows);
+      return HttpResponse.json(executedPayments);
     }),
     http.post(`${SUPABASE_URL}/rest/v1/rpc/p2_active_payment_request_total`, () => {
       requests.push('RPC p2_active_payment_request_total');
       if (broken === 'pending_total') return failure('aggregate refused');
-      return HttpResponse.json(PENDING_TOTAL);
+      return HttpResponse.json(pendingTotal);
     }),
   );
   return requests;
@@ -120,6 +128,7 @@ describe('PayerDashboard — six settled metrics, no fabricated zero (PLAN-10 §
     expect(requests.filter((entry) => entry.startsWith('HEAD'))).toEqual([
       `HEAD payment_requests lt.${TODAY}`,
       `HEAD payment_requests eq.${TODAY}`,
+      'HEAD payment_requests not.is.null',
       'HEAD payment_requests all',
     ]);
     expect(requests).toContain('RPC p2_active_payment_request_total');
@@ -131,6 +140,52 @@ describe('PayerDashboard — six settled metrics, no fabricated zero (PLAN-10 §
     expect(attentionCount('תשלומים לביצוע היום')).toBe('1');
     expect(attentionCount('ממתינים לביצוע העברה')).toBe(String(queueRows.length));
     expect(partialNote()).toBe('');
+  });
+
+  it('shows missing due-date evidence as unknown instead of claiming zero overdue', async () => {
+    usePayerMetrics('none', [{ due_date: null, amount: 400 }]);
+    renderDashboard();
+    await ready();
+
+    expect(attentionCount('תשלומים באיחור')).toBe('—');
+    expect(screen.getByText('אין מספיק תאריכי פירעון כדי למדוד איחורים')).toBeInTheDocument();
+    expect(screen.getByText('אין מספיק תאריכי פירעון כדי להציג התפלגות מועדים')).toBeInTheDocument();
+    expect(screen.queryByText('אין תשלומים באיחור')).toBeNull();
+  });
+
+  it('measures overdue only over the explicitly dated subset', async () => {
+    usePayerMetrics('none', [
+      { due_date: addCalendarDays(TODAY, -2), amount: 100 },
+      { due_date: null, amount: 900 },
+    ]);
+    renderDashboard();
+    await ready();
+
+    expect(attentionCount('תשלומים באיחור')).toBe('1');
+    expect(tile('באיחור')).toBe(fmtMoneyExact(100));
+    expect(screen.queryByText('אין מספיק תאריכי פירעון כדי למדוד איחורים')).toBeNull();
+    expect(screen.queryByText('אין מספיק תאריכי פירעון כדי להציג התפלגות מועדים')).toBeNull();
+    expect(screen.queryByText('אין תשלומים באיחור')).toBeNull();
+  });
+
+  it('keeps an empty queue overdue metric unknown because it has no due-date evidence', async () => {
+    usePayerMetrics('none', [], 0, []);
+    renderDashboard();
+    await ready();
+
+    expect(tile('באיחור')).toBe('—');
+    expect(tile('לביצוע היום')).toBe('—');
+    // The two halves of the no-fabricated-zero rule, and they land differently on purpose.
+    // "ממתין לביצוע": the measured COUNT is zero, so there is nothing waiting and the sum is
+    // suppressed to a dash rather than printed as ₪0 owed (PayerDashboard.tsx:140).
+    expect(tile('סה״כ ממתין לביצוע')).toBe('—');
+    // "בוצע החודש": the payments read SUCCEEDED and returned no rows. That is a measured zero,
+    // not an unknown, so ₪0 is the honest answer here (PayerDashboard.tsx:131-133).
+    expect(tile('בוצע החודש')).toBe(fmtMoneyExact(0));
+    expect(screen.getByText('אין מספיק תאריכי פירעון כדי למדוד איחורים')).toBeInTheDocument();
+    expect(screen.queryByText('אין תשלומים באיחור')).toBeNull();
+    expect(screen.queryByText('אין תשלומים להיום')).toBeNull();
+    expect(screen.getAllByText('אין העברות ממתינות').length).toBeGreaterThan(0);
   });
 
   it('keeps the counts and the server sum when the per-bucket amount read fails', async () => {
@@ -179,8 +234,10 @@ describe('PayerDashboard — six settled metrics, no fabricated zero (PLAN-10 §
     expect(attentionCount('ממתינים לביצוע העברה')).toBe('—');
     // The clear phrasing belongs to a measured zero only; it must not appear for an unknown.
     expect(screen.queryByText('אין תשלומים באיחור')).toBeNull();
-    // The amounts came from a different read and are still on screen.
-    expect(tile('באיחור')).toBe(fmtMoneyExact(100));
+    // The row read alone is not proof that every active request had a due date: overdue is
+    // defined only over the dated population, and the count read that measures that coverage
+    // is the one that failed. So the amount is unknown too (PayerDashboard.tsx:105-127).
+    expect(tile('באיחור')).toBe('—');
   });
 
   it('keeps the waiting queue when the executed-payment read fails', async () => {

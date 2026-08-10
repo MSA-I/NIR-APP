@@ -123,19 +123,30 @@ insert into purchase_orders (id, org_id, supplier_id, unit_id, status) values
 update purchase_orders set unit_id = null
 where id = '45000000-0000-0000-0000-000000000003';
 
--- Invoices across legal entities; inv3 is the org-visible NULL row. inv1 is approved so the
--- accountant gate has exactly one visible invoice.
+-- Invoices across legal entities; inv3 is the org-visible NULL row. inv1 is transitioned to
+-- approved after insert so the 3-way approval guard evaluates and persists the trusted fixture
+-- assessment instead of bypassing the production command boundary with an approved INSERT.
 insert into invoices (id, org_id, supplier_id, unit_id, invoice_number, invoice_date,
                       amount_before_vat, vat_amount, total_amount, review_status) values
   ('55000000-0000-0000-0000-000000000001', '15000000-0000-0000-0000-000000000001',
    '35000000-0000-0000-0000-000000000001', :'unit_le1', 'P3-INV-1', '2026-07-01',
-   847.46, 152.54, 1000, 'approved'),
+   847.46, 152.54, 1000, 'received'),
   ('55000000-0000-0000-0000-000000000002', '15000000-0000-0000-0000-000000000001',
    '35000000-0000-0000-0000-000000000001', '16000000-0000-0000-0000-000000000002',
    'P3-INV-2', '2026-07-02', 423.73, 76.27, 500, 'received'),
   ('55000000-0000-0000-0000-000000000003', '15000000-0000-0000-0000-000000000001',
    '35000000-0000-0000-0000-000000000001', null, 'P3-INV-3', '2026-07-03',
    169.49, 30.51, 200, 'received');
+select set_config('request.jwt.claim.sub', '25000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select public.set_invoice_review_status(
+  '55000000-0000-0000-0000-000000000001', 'in_review',
+  'P3 enters review through the financial command boundary');
+select public.set_invoice_review_status(
+  '55000000-0000-0000-0000-000000000001', 'approved',
+  'P3 persists the no-order assessment before accountant scope assertions');
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
 update invoices set unit_id = null
 where id = '55000000-0000-0000-0000-000000000003';
 
@@ -386,12 +397,80 @@ rollback to savepoint mutation_a1;
 savepoint mutation_a5;
 create function public.p3_rogue_definer() returns bigint
 language sql stable security definer
-as 'select count(*) from public.invoices';
+as $function$
+  -- Fake enforcement markers must not satisfy A5: auth_scopes().
+  /* A block comment containing assert_unit_in_scope(null) is not enforcement either. */
+  select count(*) from public.invoices
+$function$;
 select pg_temp.p3_assert(
   exists (select 1 from private.scope_enforcement_violations()
           where assertion = 'A5' and detail like '%p3_rogue_definer%'),
-  'A5 must catch a new definer touching a scoped table with neither marker nor exemption');
+  'A5 must catch a scoped definer whose only enforcement markers are comments');
 rollback to savepoint mutation_a5;
+
+savepoint mutation_a5_string;
+create function public.p3_rogue_definer_string() returns bigint
+language sql stable security definer
+as $function$
+  select count(*) from public.invoices where 'auth_scopes()' is not null
+$function$;
+select pg_temp.p3_assert(
+  exists (select 1 from private.scope_enforcement_violations()
+          where assertion = 'A5' and detail like '%p3_rogue_definer_string%'),
+  'A5 must not accept an enforcement marker inside a string literal');
+rollback to savepoint mutation_a5_string;
+
+savepoint mutation_a5_standard_string_backslash;
+create function public.p3_rogue_definer_standard_string_backslash() returns bigint
+language sql stable security definer
+as $function$
+  select count(*) from public.invoices where '\' is distinct from 'auth_scopes()'
+$function$;
+select pg_temp.p3_assert(
+  exists (select 1 from private.scope_enforcement_violations()
+          where assertion = 'A5' and detail like '%p3_rogue_definer_standard_string_backslash%'),
+  'A5 must treat backslash as ordinary text in a standard-conforming string');
+rollback to savepoint mutation_a5_standard_string_backslash;
+
+savepoint mutation_a5_escape_string;
+create function public.p3_rogue_definer_escape_string() returns bigint
+language sql stable security definer
+as $function$
+  select count(*) from public.invoices where E'\'auth_scopes()' is not null
+$function$;
+select pg_temp.p3_assert(
+  exists (select 1 from private.scope_enforcement_violations()
+          where assertion = 'A5' and detail like '%p3_rogue_definer_escape_string%'),
+  'A5 must keep an escaped quote inside an E string and reject its fake marker');
+rollback to savepoint mutation_a5_escape_string;
+
+savepoint mutation_a5_nested_comment;
+create function public.p3_rogue_definer_nested_comment() returns bigint
+language sql stable security definer
+as $function$
+  /* outer comment /* auth_scopes() */ assert_unit_in_scope(null) */
+  select count(*) from public.invoices
+$function$;
+select pg_temp.p3_assert(
+  exists (select 1 from private.scope_enforcement_violations()
+          where assertion = 'A5' and detail like '%p3_rogue_definer_nested_comment%'),
+  'A5 must remove a nested block comment before looking for enforcement calls');
+rollback to savepoint mutation_a5_nested_comment;
+
+savepoint mutation_a5_executable_noop;
+create function public.p3_rogue_definer_executable_noop() returns bigint
+language plpgsql stable security definer
+as $function$
+begin
+  perform public.auth_scopes();
+  return (select count(*) from public.invoices);
+end
+$function$;
+select pg_temp.p3_assert(
+  exists (select 1 from private.scope_enforcement_violations()
+          where assertion = 'A5' and detail like '%p3_rogue_definer_executable_noop%'),
+  'A5 must reject an executable scope call that has no reviewed enforcement registration');
+rollback to savepoint mutation_a5_executable_noop;
 
 -- ===== (f) The exemption latch =====
 -- Tenant A holds two legal entities and two branches; the registry 0057 seeded is
