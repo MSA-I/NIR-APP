@@ -20,6 +20,7 @@ const DOCUMENT_TYPES = [
   'price_list',
   'quote',
   'payment_confirmation',
+  'tax_receipt',
   'other',
 ] as const;
 

@@ -246,7 +246,10 @@ export interface ExceptionRow {
   supplier?: Supplier;
 }
 
-export type DocumentKind = 'invoice' | 'delivery_note' | 'credit' | 'quote' | 'price_list' | 'payment_confirmation' | 'other';
+// `credit` rather than `credit_note` is deliberate and pre-dates the interpretation contract:
+// 0084:14-17 is the bridge that translates between the two spellings. `tax_receipt` is spelled
+// the same on both sides and so needs no entry there.
+export type DocumentKind = 'invoice' | 'delivery_note' | 'credit' | 'quote' | 'price_list' | 'payment_confirmation' | 'tax_receipt' | 'other';
 export interface DocumentRow {
   id: string; org_id: string; entity_type: string;
   // null for exactly two entity_types, and they mean opposite things: 'inbox' is *not yet*

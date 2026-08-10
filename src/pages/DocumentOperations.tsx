@@ -217,6 +217,7 @@ const DOCUMENT_TYPE_LABEL: Record<string, string> = {
   delivery_note: 'תעודת משלוח',
   receipt: 'קבלה',
   payment_confirmation: 'אישור תשלום',
+  tax_receipt: 'קבלה',
   credit_note: 'תעודת זיכוי',
 };
 

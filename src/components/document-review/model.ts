@@ -52,6 +52,9 @@ export const DOCUMENT_TYPE_LABELS: Record<InterpretationContract['document_type'
   price_list: 'מחירון',
   quote: 'הצעת מחיר',
   payment_confirmation: 'אישור תשלום',
+  // "קבלה" plain, because that is what the paper says. The distinction from אישור תשלום above is
+  // whose document it is: that one is ours, this one is the supplier's (0104).
+  tax_receipt: 'קבלה',
   other: 'מסמך אחר',
 };
 
@@ -699,6 +702,9 @@ export function documentRoutingSummary(snapshot: ReviewSnapshot): DocumentRoutin
     price_list: 'מוצרים ומחירים',
     quote: 'מסמכי ספק',
     payment_confirmation: 'תשלומים',
+    // A receipt is evidence about something already recorded, so it has no ledger of its own to
+    // be filed into — it is filed beside the invoice or payment it proves (OPEN-DECISIONS #141).
+    tax_receipt: 'חשבונית או תשלום קיימים',
     other: 'ארכיון המסמכים',
   } as const)[payload.document_type];
   return {

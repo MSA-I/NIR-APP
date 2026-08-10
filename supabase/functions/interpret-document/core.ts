@@ -182,7 +182,11 @@ export const InterpretationSchema = z.object({
     "credit_note",
     "price_list",
     "quote",
+    // Ours, filed against a transfer we made.
     "payment_confirmation",
+    // The supplier's, arriving from outside: evidence about an invoice or a payment that already
+    // exists, never a payable of its own (0104, OPEN-DECISIONS #141).
+    "tax_receipt",
     "other",
   ]),
   document_type_confidence: confidence,
@@ -271,6 +275,7 @@ export const INTERPRETATION_JSON_SCHEMA = {
         "price_list",
         "quote",
         "payment_confirmation",
+        "tax_receipt",
         "other",
       ],
     },
