@@ -131,7 +131,12 @@ const LINE_ITEM_KEY_LABELS: Record<string, string> = {
   amount: 'סה״כ לשורה',
   discount: 'הנחה',
   discount_amount: 'סכום הנחה',
+  discount_rate: 'שיעור הנחה',
   vat_rate: 'שיעור מע״מ',
+  // Distinct from the document-level מע״מ on purpose: a line that prints its own VAT amount is
+  // stating a different fact from the header total, and 0077 refuses to derive either one.
+  line_vat_amount: 'מע״מ לשורה',
+  package_size: 'גודל אריזה',
   notes: 'הערות',
 };
 
