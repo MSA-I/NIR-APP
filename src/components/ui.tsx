@@ -635,7 +635,11 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
 
   if (!open) return null;
   const closeDisabled = busy && !allowCloseWhileBusy;
-  return (
+  // Portaled to <body>: a modal rendered in place inherits its ancestor's stacking context, and
+  // the sticky header is z-40 — so a dialog opened from the header (FeedbackButton) painted its
+  // z-50 *inside* a z-40 context and the mobile action bar (also z-40, later in the DOM) sat on
+  // top of the send button. The browser gate caught it: the tap landed on 'פעולות מהירות'.
+  return createPortal(
     <div className="dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-shell/50 p-0 sm:p-4" onClick={() => requestClose()}>
       <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined} aria-busy={busy || undefined} tabIndex={-1}
@@ -652,7 +656,8 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
         </div>
         <div aria-live="polite" className="sr-only">{announcement}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
