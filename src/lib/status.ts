@@ -38,10 +38,14 @@ export function canStartSupplierCommerce(status: string): boolean {
   return (NEW_COMMERCE_SUPPLIER_STATUSES as readonly string[]).includes(status);
 }
 
+// The two labels say WHO the order is waiting on, because that is the only thing the reader has
+// to decide from. "מוכנה" and "נשלחה" left it to be guessed — ready for what, sent to whom — and
+// the stored enum values `ready`/`sent` are untouched: they are wired into RLS, the transition
+// allowlist and every historical audit row. Display text is the client's, per CLAUDE.md.
 export const PO_STATUS: Record<string, StatusMeta> = {
   draft: m('טיוטה', 'idle'),
-  ready: m('מוכנה', 'await'),            // ממתינה לשליחה — יש פעולה מצדנו (OPEN-DECISIONS #33)
-  sent: m('נשלחה', 'info'),              // הכדור אצל הספק — מידע
+  ready: m('מוכנה לשליחה לספק', 'await'), // יש פעולה מצדנו (OPEN-DECISIONS #33)
+  sent: m('נשלחה לספק', 'info'),          // הכדור אצל הספק — מידע
   confirmed: m('אושרה', 'done'),         // הספק אישר — הצעד הושלם
   partial: m('התקבלה חלקית', 'await'),
   received: m('התקבלה', 'done'),

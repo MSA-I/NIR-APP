@@ -338,14 +338,16 @@ export function ReceivingList() {
           value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
           <option value="all">כל הסטטוסים</option>
           <option value="attention">דורש פעולה</option>
-          <option value="sent">נשלחה</option>
-          <option value="confirmed">אושרה</option>
-          <option value="partial">התקבלה חלקית</option>
+          {/* Read from PO_STATUS rather than retyped, so the filter cannot drift from the badge
+              beside it — which is exactly what happened to "נשלחה" before it became "נשלחה לספק". */}
+          <option value="sent">{PO_STATUS.sent.label}</option>
+          <option value="confirmed">{PO_STATUS.confirmed.label}</option>
+          <option value="partial">{PO_STATUS.partial.label}</option>
         </select>
       </div>
 
       {!orders.length ? (
-        <div className="card"><EmptyState title="אין הזמנות שממתינות לקבלה" subtitle="הזמנות בסטטוס נשלחה / אושרה יופיעו כאן" /></div>
+        <div className="card"><EmptyState title="אין הזמנות שממתינות לקבלה" subtitle={`הזמנות בסטטוס ${PO_STATUS.sent.label} / ${PO_STATUS.confirmed.label} יופיעו כאן`} /></div>
       ) : !filtered.length ? (
         <div className="card"><EmptyState title="לא נמצאו הזמנות" subtitle="אפשר לשנות את החיפוש או הסינון" /></div>
       ) : !focusedQueue ? (
