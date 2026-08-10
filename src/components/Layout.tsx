@@ -1,5 +1,5 @@
 import { Link, Outlet, useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -26,9 +26,16 @@ export interface NavSection { section: string; items: NavItem[]; collapsible?: b
 
 // Four work groups — מסמכים / רכש / כספים / בקרה — under two ungrouped links that need no
 // header to explain them. The less self-evident items (מחירונים, דרישות תשלום, התאמות בנק,
-// יומן ביקורת, הגדרות, and the focused /pay, /my-prices, /admin routes) sit where the plain
+// הגדרות, and the focused /pay, /my-prices, /admin routes) sit where the plain
 // procurement/finance/control reading puts them, and /pay is shared by payer and accountant.
 // None of it invents business meaning.
+//
+// יומן ביקורת was here until 10.08.2026. The LEDGER did not go anywhere — audit_logs, its
+// server-side triggers, the reason on every sensitive command and the immutability rules are what
+// make this a financial system and they are untouched. What went is the customer-facing SCREEN:
+// a page-sized table of raw mutation rows that answered no question a business owner actually
+// asks, and that no other surface ever linked to. Privileged inspection stays where it belongs,
+// in the platform console and in the database.
 export const NAV_SECTIONS: NavSection[] = [
   {
     // מרכז הבקרה ראשון: הוא התשובה לסעיף 12 — מה דורש טיפול, עכשיו. הזמנה חדשה אחריו,
@@ -81,7 +88,6 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/expenses', label: 'ריכוז הוצאות', icon: PieChart, roles: ['owner', 'accountant'] },
       { to: '/reports', label: 'דוח לרו״ח', icon: BarChart3, roles: ['owner', 'accountant'] },
       { to: '/analytics', label: 'ביצועי ספקים', icon: Activity, roles: ['owner', 'office'] },
-      { to: '/audit', label: 'יומן ביקורת', icon: ScrollText, roles: ['owner', 'accountant'] },
       { to: '/settings', label: 'הגדרות', icon: Settings, roles: ['owner'] },
       // /onboarding was absent from this catalogue entirely, so nothing could route to it: not the
       // sidebar, not the drawer, not quickActions, and homeFor() always answers /dashboard. The
@@ -113,10 +119,10 @@ const MANAGEMENT_PATHS: Partial<Record<Role, readonly string[]>> = {
 };
 
 const CONTROL_PATHS: Partial<Record<Role, readonly string[]>> = {
-  owner: ['/documents/operations', '/exceptions', '/expenses', '/reports', '/analytics', '/audit'],
+  owner: ['/documents/operations', '/exceptions', '/expenses', '/reports', '/analytics'],
   office: ['/exceptions', '/analytics'],
   kitchen: ['/exceptions'],
-  accountant: ['/exceptions', '/expenses', '/reports', '/audit'],
+  accountant: ['/exceptions', '/expenses', '/reports'],
 };
 
 function catalogItem(path: string, role: Role): NavItem | null {

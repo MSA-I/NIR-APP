@@ -67,7 +67,7 @@ const definitions = [
     routeExpectations: [{
       role: 'kitchen',
       allowed: ['/dashboard', '/orders', '/receiving', '/invoices', '/documents'],
-      forbidden: ['/payment-requests', '/payments', '/pay', '/bank', '/reports', '/audit', '/settings', '/admin'],
+      forbidden: ['/payment-requests', '/payments', '/pay', '/bank', '/reports', '/settings', '/admin'],
     }],
     steps: [
       {
@@ -116,7 +116,7 @@ const definitions = [
     routeExpectations: [{
       role: 'office',
       allowed: ['/dashboard', '/invoices', '/invoices/new', '/documents', '/payment-requests', '/analytics'],
-      forbidden: ['/payments', '/pay', '/bank', '/reports', '/audit', '/settings', '/admin'],
+      forbidden: ['/payments', '/pay', '/bank', '/reports', '/settings', '/admin'],
     }],
     steps: [
       {
@@ -173,7 +173,7 @@ const definitions = [
     dependsOn: ['office-invoice-review'],
     routeExpectations: [{
       role: 'owner',
-      allowed: ['/dashboard', '/payment-requests', '/payments', '/pay/emergency', '/bank', '/reports', '/audit', '/settings'],
+      allowed: ['/dashboard', '/payment-requests', '/payments', '/pay/emergency', '/bank', '/reports', '/settings'],
       forbidden: ['/pay', '/my-prices', '/admin'],
     }],
     steps: [
@@ -214,7 +214,7 @@ const definitions = [
     routeExpectations: [{
       role: 'payer',
       allowed: ['/dashboard', '/pay'],
-      forbidden: ['/suppliers', '/orders', '/receiving', '/invoices', '/payment-requests', '/payments', '/bank', '/reports', '/audit', '/settings', '/admin'],
+      forbidden: ['/suppliers', '/orders', '/receiving', '/invoices', '/payment-requests', '/payments', '/bank', '/reports', '/settings', '/admin'],
     }],
     steps: [
       {
@@ -262,7 +262,7 @@ const definitions = [
     dependsOn: ['payer-transfer-execution'],
     routeExpectations: [{
       role: 'accountant',
-      allowed: ['/dashboard', '/invoices', '/payments', '/pay', '/bank', '/expenses', '/reports', '/audit'],
+      allowed: ['/dashboard', '/invoices', '/payments', '/pay', '/bank', '/expenses', '/reports'],
       forbidden: ['/suppliers', '/products', '/prices', '/orders', '/receiving', '/documents', '/payment-requests', '/analytics', '/settings', '/my-prices', '/admin'],
     }],
     steps: [
@@ -310,12 +310,12 @@ const definitions = [
     fixtures: ['demo-seed'],
     dependsOn: [],
     routeExpectations: [
-      { role: 'owner', allowed: ['/dashboard', '/suppliers', '/orders', '/receiving', '/invoices', '/payment-requests', '/payments', '/bank', '/reports', '/audit', '/settings'], forbidden: ['/pay', '/my-prices', '/admin'] },
-      { role: 'office', allowed: ['/dashboard', '/suppliers', '/orders', '/receiving', '/invoices', '/documents', '/payment-requests', '/analytics'], forbidden: ['/pay', '/payments', '/bank', '/reports', '/audit', '/settings', '/admin'] },
-      { role: 'kitchen', allowed: ['/dashboard', '/orders', '/receiving', '/invoices', '/documents'], forbidden: ['/payment-requests', '/pay', '/payments', '/bank', '/reports', '/audit', '/settings', '/admin'] },
-      { role: 'payer', allowed: ['/dashboard', '/pay'], forbidden: ['/suppliers', '/orders', '/receiving', '/invoices', '/payment-requests', '/payments', '/bank', '/reports', '/audit', '/settings', '/admin'] },
-      { role: 'accountant', allowed: ['/dashboard', '/invoices', '/payments', '/pay', '/bank', '/reports', '/audit'], forbidden: ['/suppliers', '/orders', '/receiving', '/documents', '/payment-requests', '/analytics', '/settings', '/admin'] },
-      { role: 'supplier', allowed: ['/dashboard', '/my-prices', '/documents/:documentId/review'], forbidden: ['/suppliers', '/orders', '/invoices', '/payment-requests', '/pay', '/payments', '/bank', '/reports', '/audit', '/settings', '/admin'] },
+      { role: 'owner', allowed: ['/dashboard', '/suppliers', '/orders', '/receiving', '/invoices', '/payment-requests', '/payments', '/bank', '/reports', '/settings'], forbidden: ['/pay', '/my-prices', '/admin'] },
+      { role: 'office', allowed: ['/dashboard', '/suppliers', '/orders', '/receiving', '/invoices', '/documents', '/payment-requests', '/analytics'], forbidden: ['/pay', '/payments', '/bank', '/reports', '/settings', '/admin'] },
+      { role: 'kitchen', allowed: ['/dashboard', '/orders', '/receiving', '/invoices', '/documents'], forbidden: ['/payment-requests', '/pay', '/payments', '/bank', '/reports', '/settings', '/admin'] },
+      { role: 'payer', allowed: ['/dashboard', '/pay'], forbidden: ['/suppliers', '/orders', '/receiving', '/invoices', '/payment-requests', '/payments', '/bank', '/reports', '/settings', '/admin'] },
+      { role: 'accountant', allowed: ['/dashboard', '/invoices', '/payments', '/pay', '/bank', '/reports'], forbidden: ['/suppliers', '/orders', '/receiving', '/documents', '/payment-requests', '/analytics', '/settings', '/admin'] },
+      { role: 'supplier', allowed: ['/dashboard', '/my-prices', '/documents/:documentId/review'], forbidden: ['/suppliers', '/orders', '/invoices', '/payment-requests', '/pay', '/payments', '/bank', '/reports', '/settings', '/admin'] },
     ],
     steps: [
       {

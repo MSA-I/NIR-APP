@@ -49,7 +49,6 @@ const Expenses = lazy(() => import('./pages/Expenses'));
 const DocumentsGallery = lazy(() => import('./pages/DocumentsInbox'));
 const DocumentOperations = lazy(() => import('./pages/DocumentOperations'));
 const DocumentReview = lazy(() => import('./pages/DocumentReview'));
-const AuditLogPage = lazy(() => import('./pages/AuditLog'));
 const Settings = lazy(() => import('./pages/Settings'));
 const SupplierPrices = lazy(() => import('./pages/SupplierPrices'));
 const Admin = lazy(() => import('./pages/Admin'));
@@ -321,7 +320,6 @@ export default function App() {
         <Route path="/expenses" element={<Guard roles={['owner', 'accountant']}><Expenses /></Guard>} />
         <Route path="/reports" element={<Guard roles={['owner', 'accountant']}><Reports /></Guard>} />
         <Route path="/analytics" element={<Guard roles={['owner', 'office']}><Analytics /></Guard>} />
-        <Route path="/audit" element={<Guard roles={['owner', 'accountant']}><AuditLogPage /></Guard>} />
         <Route path="/settings" element={<Guard roles={['owner']}><Settings /></Guard>} />
         <Route path="/my-prices" element={<Guard roles={['supplier']}><SupplierPrices /></Guard>} />
 

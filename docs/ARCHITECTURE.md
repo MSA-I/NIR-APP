@@ -91,7 +91,6 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 | `/finance/suppliers/:id` | כרטיס ספק פיננסי מצומצם ללא קטלוג/מחירון/דירוג רכש | `owner`, `accountant` |
 | `/inventory` | יתרה מדודה, תנועות והצעות רכש read-only | `owner`, `office`, `kitchen` |
 | `/forgot-password`, `/reset-password` | שחזור עצמי דרך המייל המאומת | משתמש Auth |
-| `/audit` | יומן ביקורת | `owner`, `accountant` |
 | `/settings` | משתמשים + הגדרות עסק | `owner` |
 | `/admin` | lifecycle של ארגונים | מפעיל פלטפורמה בלבד |
 
