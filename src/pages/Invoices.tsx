@@ -268,9 +268,16 @@ export function InvoicesList() {
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
       {fetching && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
+      {/* No "new invoice" action (G1, 10.08.2026). An invoice arrives from a supplier; it is not
+          something this business creates. The way one comes into existence is: photograph the
+          document, let it be read, approve it. The gallery is where that starts. */}
       <PageHeader title="חשבוניות"
         meta={`${data.total} חשבוניות${activeFilters ? ` · ${activeFilters} מסננים פעילים` : ''}`}
-        actions={canCreate && <button className="btn-primary" onClick={() => navigate('/invoices/new')}><Plus size={16} /> חשבונית חדשה</button>} />
+        actions={canCreate && (
+          <button className="btn-primary" onClick={() => navigate('/documents')}>
+            <Plus size={16} aria-hidden="true" /> העלאת מסמך שהתקבל
+          </button>
+        )} />
       <div role="group" aria-label="סינון חשבוניות לפי שלב הבדיקה" className="flex flex-wrap gap-1.5">
         {[['', 'הכל'], ...Object.entries(INVOICE_REVIEW_STATUS).map(([key, value]) => [key, value.label])].map(([value, label]) => (
           <button key={value || 'all'} type="button" aria-pressed={reviewFilter === value}

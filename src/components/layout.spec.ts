@@ -75,9 +75,12 @@ describe('מעטפת הניווט', () => {
 
 describe('סרגל הפעולות המהירות במובייל', () => {
   it('מחזיר את הפעולות והסדר המקוריים לפי תפקיד', () => {
-    expect(quickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'invoice']);
-    expect(quickActionsFor('office').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'invoice']);
-    expect(quickActionsFor('kitchen').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'invoice']);
+    // 'invoice' (→ /invoices/new) left this bar in G1, 10.08.2026: this application receives
+    // supplier invoices and does not issue them. 'capture' is what replaced it — the invoice that
+    // arrives is photographed, read and approved.
+    expect(quickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive']);
+    expect(quickActionsFor('office').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive']);
+    expect(quickActionsFor('kitchen').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive']);
     expect(quickActionsFor('accountant').map((item) => item.key)).toEqual(['dashboard', 'invoices', 'pay']);
     expect(quickActionsFor('payer')).toEqual([]);
     expect(quickActionsFor('supplier')).toEqual([]);

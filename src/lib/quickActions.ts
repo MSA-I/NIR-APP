@@ -1,4 +1,4 @@
-import { Camera, CreditCard, FilePlus, FileText, LayoutDashboard, PackageCheck, ShoppingCart, type LucideIcon } from 'lucide-react';
+import { Camera, CreditCard, FileText, LayoutDashboard, PackageCheck, ShoppingCart, type LucideIcon } from 'lucide-react';
 import type { Role } from './types';
 
 export interface QuickAction {
@@ -17,7 +17,11 @@ const QUICK_ACTIONS: readonly QuickAction[] = [
   { key: 'dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, kind: 'link', to: '/dashboard', roles: ['owner', 'office', 'kitchen', 'accountant'] },
   { key: 'capture', label: 'צילום מסמך', icon: Camera, kind: 'capture', roles: ['owner', 'office', 'kitchen'] },
   { key: 'receive', label: 'קבלת סחורה', icon: PackageCheck, kind: 'link', to: '/receiving', roles: ['owner', 'office', 'kitchen'] },
-  { key: 'invoice', label: 'חשבונית חדשה', icon: FilePlus, kind: 'link', to: '/invoices/new', roles: ['owner', 'office', 'kitchen'] },
+  // "חשבונית חדשה" was removed here (G1, 10.08.2026). This application RECEIVES supplier
+  // invoices; it does not issue them to anyone. The action that replaces it already sits two rows
+  // up: `capture` — photograph the invoice that arrived. `/invoices/new` still exists as a route,
+  // reachable from a document that has been reviewed, which is the only way an invoice should
+  // come into being.
   { key: 'invoices', label: 'חשבוניות', icon: FileText, kind: 'link', to: '/invoices', roles: ['accountant'] },
   { key: 'pay', label: 'תשלומים', icon: CreditCard, kind: 'link', to: '/pay', roles: ['accountant'] },
 ];

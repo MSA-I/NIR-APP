@@ -430,7 +430,7 @@ export function ReceiveOrder() {
       setDonePendingSync(false);
     }
   }, [donePendingSync, doneReceiptId, offlineSnapshot.actions, offlineSnapshot.lastSuccessfulSyncAt]);
-  const [invoiceSupplier, setInvoiceSupplier] = useState<string | null>(null);
+
   const [conflict, setConflict] = useState<ReceiptConflictState | null>(null);
   const [conflictComplete, setConflictComplete] = useState(false);
   const [conflictQueueRef, setConflictQueueRef] = useState<{ id: number; syncVersion: number } | null>(null);
@@ -557,7 +557,6 @@ export function ReceiveOrder() {
       ))) {
         setDoneReceiptId(local.receiptId);
         setDonePendingSync(true);
-        setInvoiceSupplier(data.order.supplier.id);
       }
       const resolution = await ensureReceiptKey({
         orderId: data.order.id,
@@ -760,7 +759,6 @@ export function ReceiveOrder() {
           // second unconditional delete here: another tab may have persisted a newer draft while
           // the server request was in flight, and the finalizer deliberately preserves that row.
           setDoneReceiptId(outcome.receiptId);
-          setInvoiceSupplier(order.supplier.id);
           toast('הקבלה הושלמה');
         } else {
           toast('נשמרה טיוטת קבלה — אפשר להמשיך מאוחר יותר');
@@ -773,7 +771,6 @@ export function ReceiveOrder() {
         if (complete) {
           setDonePendingSync(true);
           setDoneReceiptId(receiptKey.receiptId);
-          setInvoiceSupplier(order.supplier.id);
         } else navigate('/receiving');
         return;
       case 'conflict':
@@ -877,9 +874,13 @@ export function ReceiveOrder() {
           <DocumentList entityType="goods_receipt" entityId={doneReceiptId} capture />
         </div>
         <div className="flex flex-col sm:flex-row gap-2 justify-center">
+          {/* Was "הזנת חשבונית להזמנה זו" → /invoices/new (G1, 10.08.2026). Nobody at a delivery
+              types an invoice; the invoice is a piece of paper in their hand. The capture control
+              directly above this row already files it against this receipt, and the gallery is
+              where it is read and approved. */}
           <button className="btn-primary" disabled={donePendingSync}
-            onClick={() => navigate(`/invoices/new?supplier=${invoiceSupplier}&order=${order.id}&receipt=${doneReceiptId}`)}>
-            <FileText size={15} /> הזנת חשבונית להזמנה זו
+            onClick={() => navigate('/documents')}>
+            <FileText size={15} aria-hidden="true" /> לצילום החשבונית שהתקבלה
           </button>
           <button className="btn-secondary" onClick={() => navigate('/receiving')}>חזרה לקבלת סחורה</button>
         </div>

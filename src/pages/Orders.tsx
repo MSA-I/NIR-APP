@@ -393,9 +393,11 @@ export function OrderDetail() {
               reads them and offers no picker), and the link existed on exactly one transient
               screen. Offered from the moment the order has left the building; a cancelled order is
               excluded because there is nothing to be invoiced for. */}
+          {/* Retargeted from /invoices/new (G1, 10.08.2026): the invoice for this order arrives
+              from the supplier, so the action is to upload it, not to type it. */}
           {canWrite && !['draft', 'cancelled'].includes(order.status) && (
-            <button className="btn-secondary" onClick={() => navigate(`/invoices/new?supplier=${order.supplier.id}&order=${order.id}`)}>
-              <FileText size={15} /> הזנת חשבונית להזמנה זו
+            <button className="btn-secondary" onClick={() => navigate('/documents')}>
+              <FileText size={15} aria-hidden="true" /> העלאת החשבונית שהתקבלה
             </button>
           )}
           <button className="btn-secondary" onClick={() => window.print()}><Printer size={15} /> הדפסה</button>

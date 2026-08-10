@@ -102,8 +102,9 @@ export default function ReceiptDetail() {
         status={<StatusBadge meta={RECEIPT_STATUS[receipt.status]} />}
         meta={`${supplier.name} · התקבלה ב-${fmtDate(receipt.received_at)}`}
         primaryAction={canOpenOrder && (
-          <Link className="btn-primary inline-flex" to={`/invoices/new?supplier=${supplier.id}&order=${order.id}&receipt=${receipt.id}`}>
-            <FileText size={15} aria-hidden="true" /> הזנת חשבונית לקבלה זו
+          /* Retargeted from /invoices/new (G1, 10.08.2026): an invoice is received, not entered. */
+          <Link className="btn-primary inline-flex" to="/documents">
+            <FileText size={15} aria-hidden="true" /> העלאת החשבונית שהתקבלה
           </Link>
         )} />
 
