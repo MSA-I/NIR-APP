@@ -8,13 +8,15 @@ declare
 begin
   select p.prosrc into v_body from pg_catalog.pg_proc p
   where p.oid = 'public.auth_org()'::regprocedure;
-  if md5(v_body) <> '006e580399a7e4aa486e8e2e02918de6' then
+  -- md5 over the CR-stripped body: the same migration text hashes differently between a
+  -- CRLF checkout (Windows) and an LF one (Linux CI) unless \r is normalized away first.
+  if md5(replace(v_body, e'\r', '')) <> 'b17d0961c2d54dff31c0932942b40c43' then
     raise exception '0092 ancestry guard failed: auth_org changed';
   end if;
 
   select p.prosrc into v_body from pg_catalog.pg_proc p
   where p.oid = 'public.set_organization_lifecycle(uuid,public.org_status,timestamptz,text)'::regprocedure;
-  if md5(v_body) <> '58811364a1681913beeddfb1f99b6af3' then
+  if md5(replace(v_body, e'\r', '')) <> '0a0b1f960faeb209f75834595aa47bde' then
     raise exception '0092 ancestry guard failed: set_organization_lifecycle changed';
   end if;
 end
