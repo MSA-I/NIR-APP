@@ -231,17 +231,28 @@ export function ReceivingList() {
   // rather than from goods_receipts, because a draft's own row cannot say who opened it —
   // save_goods_receipt leaves received_by null until completion (0023:1644), so a human's draft
   // and a machine's draft are byte-identical on that column.
+  //
+  // The ledger alone is not enough, though: a decision stays `draft_created` forever, while the
+  // draft it opened stops existing the moment a person completes it (and reversal is the only
+  // path that stamps reverted_at). Intersecting with the live drafts keeps the card honest — a
+  // badge saying "מוכנות לאישור" over a receipt that was already completed is a claim about work
+  // that no longer exists.
   const { data: machineDrafts } = useQuery(async () => {
-    const rows = unwrap(await supabase.from('delivery_note_interpretation_decisions')
-      .select('order_id, order_matched_by, matched_count, waiting_count')
-      .eq('outcome', 'draft_created')
-      .is('reverted_at', null)) as {
-        order_id: string;
-        order_matched_by: MachineDraft['orderMatchedBy'];
-        matched_count: number;
-        waiting_count: number;
-      }[];
-    return new Map(rows.map((row) => [row.order_id, {
+    const [decisions, liveDrafts] = await Promise.all([
+      supabase.from('delivery_note_interpretation_decisions')
+        .select('order_id, order_matched_by, matched_count, waiting_count')
+        .eq('outcome', 'draft_created')
+        .is('reverted_at', null),
+      supabase.from('goods_receipts').select('order_id').eq('status', 'draft'),
+    ]);
+    const rows = unwrap(decisions) as {
+      order_id: string;
+      order_matched_by: MachineDraft['orderMatchedBy'];
+      matched_count: number;
+      waiting_count: number;
+    }[];
+    const stillDraft = new Set((unwrap(liveDrafts) as { order_id: string }[]).map((d) => d.order_id));
+    return new Map(rows.filter((row) => stillDraft.has(row.order_id)).map((row) => [row.order_id, {
       orderMatchedBy: row.order_matched_by,
       matchedCount: row.matched_count,
       waitingCount: row.waiting_count,
