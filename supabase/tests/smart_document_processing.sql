@@ -159,7 +159,9 @@ select smart_document_processing_test.assert(
 insert into public.organizations (id, name, status) values
   ('15000000-0000-4000-8000-000000000001', 'Smart document tenant A', 'active'),
   ('15000000-0000-4000-8000-000000000002', 'Smart document tenant B', 'active'),
-  ('15000000-0000-4000-8000-000000000003', 'Smart document tenant suspended', 'suspended');
+  -- Born active, suspended right after the fixtures below exist: since 0092 the read-only
+  -- latch refuses every child fixture written into an already-suspended tenant.
+  ('15000000-0000-4000-8000-000000000003', 'Smart document tenant suspended', 'active');
 
 insert into auth.users (id, email) values
   ('25000000-0000-4000-8000-000000000001', 'smart-doc-owner-a@example.test'),
@@ -232,6 +234,39 @@ insert into public.document_processing_jobs (
     1, 'worker-suspended', now() + interval '10 minutes',
     '1998-01-01 00:00:00+00', '1998-01-01 00:00:00+00'
   );
+
+-- Suspend tenant 3 through the production lifecycle command, as an operator would -- the same
+-- explicit platform latch p22 exercises. Directly seeding status = 'suspended' stopped being
+-- possible when 0092 landed: the row guard refuses child fixtures of a read-only tenant, which
+-- is exactly the behaviour the suite then proves for the service path.
+insert into auth.users (id, email) values
+  ('25000000-0000-4000-8000-000000000099', 'smart-doc-platform@example.test');
+insert into public.profiles (id, org_id, full_name, role) values
+  ('25000000-0000-4000-8000-000000000099', '15000000-0000-4000-8000-000000000001',
+   'Smart doc platform operator', 'owner');
+insert into public.platform_admins (user_id, note) values
+  ('25000000-0000-4000-8000-000000000099', 'Smart doc platform operator');
+-- One DO block, deliberately: this file runs in autocommit, so transaction-local claims set in
+-- one statement would evaporate before the next. Inside the block the claims and the command
+-- share a transaction, and nothing leaks past its commit.
+do $$
+begin
+  perform set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000099', true);
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
+  perform set_config('request.jwt.claims', jsonb_build_object(
+    'sub', '25000000-0000-4000-8000-000000000099',
+    'role', 'authenticated',
+    'amr', jsonb_build_array(jsonb_build_object(
+      'method', 'password',
+      'timestamp', extract(epoch from clock_timestamp())::bigint
+    ))
+  )::text, true);
+  perform public.set_organization_lifecycle(
+    '15000000-0000-4000-8000-000000000003',
+    'suspended', null, 'Smart doc suite: suspend after fixture creation'
+  );
+end
+$$;
 
 update public.documents
 set deleted_at = now(), deleted_by = '25000000-0000-4000-8000-000000000001'

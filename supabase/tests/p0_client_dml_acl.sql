@@ -241,8 +241,11 @@ select pg_temp.p0_acl_assert(
   'legacy two-argument finalize overload is executable without an audit reason'
 );
 
--- Exercise the exact provisioning regression: service_role can create, read, modify and remove an
--- organization even though PUBLIC/anon/authenticated do not receive a table-wide write grant.
+-- Exercise the exact provisioning regression: service_role can create,
+-- read and modify an organization even though browser roles do not. A tenant hard-delete is no
+-- longer a valid CRUD probe: since 0092 the trial/lifecycle latch deliberately blocks its
+-- cascading child deletes (the org row vanishes before the cascade runs, and every child guard
+-- then reads the missing tenant as suspended) until an explicit offboarding contract exists.
 set local role service_role;
 insert into public.organizations (id, name, status)
 values ('13000000-0000-0000-0000-000000000009', 'P0 ACL service probe', 'active');
@@ -252,16 +255,24 @@ where id = '13000000-0000-0000-0000-000000000009';
 select id, name, status
 from public.organizations
 where id = '13000000-0000-0000-0000-000000000009';
-delete from public.organizations
-where id = '13000000-0000-0000-0000-000000000009';
+do $$
+begin
+  delete from public.organizations
+  where id = '13000000-0000-0000-0000-000000000009';
+  raise exception 'expected organization hard-delete to remain blocked';
+exception when sqlstate '42501' then
+  if sqlerrm <> 'organization_read_only' then raise; end if;
+end
+$$;
 reset role;
 
 select pg_temp.p0_acl_assert(
-  not exists (
+  exists (
     select 1 from public.organizations
     where id = '13000000-0000-0000-0000-000000000009'
+      and name = 'P0 ACL service probe updated'
   ),
-  'service_role organization DML probe did not complete'
+  'service_role organization provisioning probe was lost or hard-delete bypassed the lifecycle latch'
 );
 
 -- ===== Trusted fixtures =====
