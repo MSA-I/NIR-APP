@@ -25,6 +25,17 @@ export interface SignOutResult {
   pushWarning: string | null;
 }
 
+/**
+ * How long the account bootstrap may run before it is treated as failed.
+ *
+ * Generous on purpose — four round trips on a slow phone are normal, and overshooting is
+ * self-healing (see the watchdog in the bootstrap effect: a late success still fills the
+ * profile and clears the error). Undershooting is not: it would show a failure screen to a
+ * user whose account was about to load.
+ */
+export const BOOTSTRAP_TIMEOUT_MS = 15_000;
+export const BOOTSTRAP_TIMEOUT_MESSAGE = 'טעינת פרטי החשבון נמשכה זמן רב מדי.';
+
 interface AuthState {
   session: Session | null;
   profile: Profile | null;
@@ -91,6 +102,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session) { setProfile(null); setOrg(null); setIsPlatformAdmin(false); setOfflineBootstrap(false); return; }
     let cancelled = false;
+    // A watchdog rather than a Promise.race, because the only requirement is that `loading`
+    // cannot stick. supabase-js resolves the auth token before it issues *any* request, so a
+    // wedged token refresh hangs every call below without ever rejecting — the `finally` that
+    // clears `loading` is then never reached, and `Guard` renders PageLoader forever on every
+    // route. That is exactly what stranded sessions held open across the 10.08 deploy.
+    // Firing this converts the hang into the ordinary bootstrap failure the `catch` below
+    // already renders, which carries both "ניסיון חוזר" and sign-out. It does not cure the
+    // wedge; it makes the app recoverable without devtools.
+    const watchdog = setTimeout(() => {
+      if (cancelled) return;
+      setBootstrapError(BOOTSTRAP_TIMEOUT_MESSAGE);
+      setLoading(false);
+    }, BOOTSTRAP_TIMEOUT_MS);
     (async () => {
       try {
         // maybeSingle, not single: zero rows is an expected outcome, not an error.
@@ -180,10 +204,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       } finally {
+        clearTimeout(watchdog);
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(watchdog); };
   }, [session, bootstrapAttempt]);
 
   const roleLabels = useMemo(() => resolveRoleLabels(org?.settings), [org?.settings]);
