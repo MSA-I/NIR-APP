@@ -47,6 +47,9 @@ describe('the autonomy switch is reachable from הגדרות, and only by someon
     expect(panel).toContain('requireReason');
     expect(panel).toContain("key: 'document.interpretation'");
     expect(panel).toContain("key: 'price_list.intake'");
+    // A policy the migration defines but the panel never lists is a switch nobody can reach --
+    // the tenant would have no way to turn the feature on, or off after turning it on.
+    expect(panel).toContain("key: 'delivery_note.receiving'");
     expect(panel).toContain('autonomy-policy-');
   });
 });
