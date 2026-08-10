@@ -7,6 +7,7 @@ import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, PageHeader, SkeletonTable, ConfirmDialog, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
+import { fmtMoneyExact } from '../lib/format';
 import { useCategories } from './Suppliers';
 import type { Product } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
@@ -94,7 +95,7 @@ export default function Products() {
     { key: 'suppliers', header: 'ספקים', className: 'num', sortValue: (r) => r.supplierCount ?? 0, render: (r) => r.supplierCount ?? 0 },
     {
       key: 'best', header: 'מחיר מיטבי', className: 'num', sortValue: (r) => r.bestPrice ?? 0,
-      render: (r) => (r.bestPrice != null ? `₪${r.bestPrice.toFixed(2)}` : '—'),
+      render: (r) => fmtMoneyExact(r.bestPrice),
     },
   ];
 
@@ -112,10 +113,14 @@ export default function Products() {
               two screens — one a sentence, one silence. Same wording, so it reads as one rule. */}
           {canUploadPrices
             ? <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={16} /> העלאת מחירון ספק</button>
-            : <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמשרד בלבד.</span>}
+            : <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמנהל הרכש בלבד.</span>}
           {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> מוצר חדש</button>}
         </>} />
       <DataTable rows={rows} columns={columns} searchable
+        emptyTitle="אין מוצרים עדיין"
+        emptySubtitle={canUploadPrices
+          ? 'הדרך המהירה היא העלאת מחירון — הוא יוצר את המוצרים ואת המחירים יחד.'
+          : 'הוספת מוצרים והעלאת מחירונים זמינות לבעלים ולמנהל הרכש.'}
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.sku ?? '').toLowerCase().includes(q)}
         searchLabel="חיפוש במוצרים"
         rowLabel={(r) => `מוצר ${r.name}`}

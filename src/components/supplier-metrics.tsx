@@ -113,7 +113,11 @@ export function RatingStars({ value, onChange, label = 'דירוג ספק' }: { 
         </label>
       ))}
       {value != null && (
-        <button type="button" className="text-xs text-ink-faint hover:text-ink-soft ms-1" onClick={() => onChange(0)}>
+        /* 44px, like every other action in the app (DESIGN.md). It was a bare text button with no
+           height floor — the smallest touch target in the interface, next to five star radios. */
+        <button type="button"
+          className="ms-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-xs text-ink-faint hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          onClick={() => onChange(0)}>
           נקה
         </button>
       )}

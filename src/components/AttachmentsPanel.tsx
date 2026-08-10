@@ -249,7 +249,15 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
           })}
         </ul>
       ) : (
-        <div className="border-y border-dashed border-line px-3 py-5 text-center text-sm text-ink-muted">אין מסמכים מצורפים</div>
+        /* An empty state owes one next action, and only one it can keep: the upload control above
+           is behind `canUpload`, so a role without it is told who to ask instead of being pointed
+           at a button that is not on their screen. */
+        <div className="border-y border-dashed border-line px-3 py-5 text-center text-sm text-ink-muted">
+          אין מסמכים מצורפים.{' '}
+          {canUpload
+            ? 'ניתן לצרף חשבונית או תעודת משלוח דרך «הוספת קבצים» למעלה.'
+            : 'צירוף מסמכים זמין לבעלים, למשרד ולמנהל המטבח.'}
+        </div>
       )}
 
       <ConfirmDialog open={pendingDelete !== null} onClose={() => setPendingDelete(null)}

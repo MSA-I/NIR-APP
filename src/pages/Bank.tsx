@@ -399,11 +399,16 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             ))}
           </div>
           <div className="max-h-48 overflow-auto border border-line-soft rounded-lg">
-            <table className="w-full text-xs">
-              <thead className="bg-surface-sunken sticky top-0"><tr>{headers.map((h) => <th key={h} scope="col" className="th text-[11px]!">{h}</th>)}</tr></thead>
+            <table className="w-full">
+              {/* The overrides that used to force .th to 11px and .td to 12px are gone. This is the
+                  preview a person reads before importing bank transactions — business data — and
+                  DESIGN.md reserves 11px for sidebar group headings, explicitly not for content.
+                  The wrapper above already scrolls in both axes, so the canonical scale costs
+                  nothing but a wider table. */}
+              <thead className="bg-surface-sunken sticky top-0"><tr>{headers.map((h) => <th key={h} scope="col" className="th">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {rawRows.slice(0, 6).map((r, i) => (
-                  <tr key={i}>{headers.map((h) => <td key={h} className="td text-xs!">{String(r[h] ?? '')}</td>)}</tr>
+                  <tr key={i}>{headers.map((h) => <td key={h} className="td">{String(r[h] ?? '')}</td>)}</tr>
                 ))}
               </tbody>
             </table>

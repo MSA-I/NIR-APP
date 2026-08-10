@@ -126,6 +126,26 @@ select pg_temp.p0_acl_assert(
   'notification delivery state ACL is not service-only'
 );
 
+-- 0091: feedback notes are append-only from the browser, and "delivered" is not a claim the client
+-- is able to make. The author's columns hold INSERT; sent_at and send_error hold no grant at all,
+-- which is what lets the UI's "נשלח" mean the server observed a delivery. Same column-grant
+-- discipline as suppliers.bank_details (0061/0088), applied to an honesty boundary instead of a
+-- fraud surface.
+select pg_temp.p0_acl_assert(
+  has_table_privilege('authenticated', 'public.feedback_notes', 'SELECT')
+  and has_column_privilege('authenticated', 'public.feedback_notes', 'note', 'INSERT')
+  and has_column_privilege('authenticated', 'public.feedback_notes', 'route', 'INSERT')
+  and has_column_privilege('authenticated', 'public.feedback_notes', 'viewport_width', 'INSERT')
+  and not has_column_privilege('authenticated', 'public.feedback_notes', 'sent_at', 'INSERT')
+  and not has_column_privilege('authenticated', 'public.feedback_notes', 'send_error', 'INSERT')
+  and not has_column_privilege('authenticated', 'public.feedback_notes', 'created_at', 'INSERT')
+  and not has_any_column_privilege('authenticated', 'public.feedback_notes', 'UPDATE')
+  and not has_table_privilege('authenticated', 'public.feedback_notes', 'DELETE')
+  and not has_table_privilege('anon', 'public.feedback_notes', 'SELECT')
+  and not has_any_column_privilege('anon', 'public.feedback_notes', 'INSERT'),
+  'feedback notes ACL must be append-only for the browser, with no grant on the delivery columns'
+);
+
 select pg_temp.p0_acl_assert(
   not exists (
     select 1

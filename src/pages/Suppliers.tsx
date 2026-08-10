@@ -11,7 +11,7 @@ import { ReauthModal } from '../components/ReauthModal';
 import { PriceListUploadModal, SUBMISSION_STATUS, submissionMonthLabel } from '../components/PriceListUpload';
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
 import { SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
-import { fmtMoney, fmtMoneyExact, fmtNum, fmtDate, fmtDays } from '../lib/format';
+import { fmtMoneyExact, fmtNum, fmtDate, fmtDays } from '../lib/format';
 import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission } from '../lib/types';
 
 // suppliers.rating* are added in migration 0011. The hand-written Supplier type (types.ts) is
@@ -48,8 +48,10 @@ function RiskCell({ m }: { m?: SupplierMetrics }) {
   if (!ex && !cr) return <span className="text-ink-ghost">—</span>;
   return (
     <span className="flex items-center gap-1">
-      {ex > 0 && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-alert-soft text-alert-on-soft whitespace-nowrap">{ex} חריגים</span>}
-      {cr > 0 && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-await-soft text-await-on-soft whitespace-nowrap">{cr} זיכויים</span>}
+      {/* Singular is not a rounding error in Hebrew: the plural form read "1 חריגים" on every
+          supplier that had exactly one, in both the table and the mobile card. */}
+      {ex > 0 && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-alert-soft text-alert-on-soft whitespace-nowrap">{ex} {ex === 1 ? 'חריג' : 'חריגים'}</span>}
+      {cr > 0 && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-await-soft text-await-on-soft whitespace-nowrap">{cr} {cr === 1 ? 'זיכוי' : 'זיכויים'}</span>}
     </span>
   );
 }
@@ -142,9 +144,9 @@ export function SuppliersList() {
     { key: 'cats', header: 'קטגוריות', priority: 3, render: (r) => <span className="text-ink-muted">{r.categories?.join(', ') || '—'}</span> },
     { key: 'contact', header: 'איש קשר', priority: 3, render: (r) => r.contact_name || '—' },
     { key: 'phone', header: 'טלפון', render: (r) => <span dir="ltr">{r.phone || '—'}</span> },
-    { key: 'min', header: 'מינ׳ הזמנה', priority: 3, className: 'num', sortValue: (r) => r.min_order_amount ?? 0, render: (r) => fmtMoney(r.min_order_amount) },
+    { key: 'min', header: 'מינ׳ הזמנה', priority: 3, className: 'num', sortValue: (r) => r.min_order_amount ?? 0, render: (r) => fmtMoneyExact(r.min_order_amount) },
     { key: 'risk', header: 'התראות', mobileLabel: null, render: (r) => <RiskCell m={r.metrics} /> },
-    { key: 'balance', header: 'יתרה פתוחה', sortValue: (r) => r.open_balance ?? 0, render: (r) => <span className={`num ${r.open_balance ? 'text-await-fg font-medium' : ''}`}>{fmtMoney(r.open_balance)}</span>, className: 'num' },
+    { key: 'balance', header: 'יתרה פתוחה', sortValue: (r) => r.open_balance ?? 0, render: (r) => <span className={`num ${r.open_balance ? 'text-await-fg font-medium' : ''}`}>{fmtMoneyExact(r.open_balance)}</span>, className: 'num' },
     { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} /> },
   ];
 
@@ -510,9 +512,9 @@ export function SupplierCard() {
     // "zero open exceptions". fmtNum(null) renders — so the tile stays honest (constitution §"אין ערכים
     // סטטיים מזויפים"), matching how OTD and lead time above already behave.
     { label: 'חריגים פתוחים', value: fmtNum(m?.open_exceptions ?? null), sub: m ? `${fmtNum(m.exceptions_lifetime)} בסה״כ` : 'טרם חושבו מדדים', tone: (m?.open_exceptions ?? 0) > 0 ? 'alert' : 'idle' },
-    { label: 'זיכויים פתוחים', value: fmtNum(m?.open_credits ?? null), sub: fmtMoney(m?.open_credits_amount ?? null), tone: (m?.open_credits ?? 0) > 0 ? 'await' : 'idle' },
+    { label: 'זיכויים פתוחים', value: fmtNum(m?.open_credits ?? null), sub: fmtMoneyExact(m?.open_credits_amount ?? null), tone: (m?.open_credits ?? 0) > 0 ? 'await' : 'idle' },
     { label: 'שינויי מחיר (180 יום)', value: fmtNum(m?.price_changes_window ?? null), sub: m ? `${fmtNum(m.priced_items)} פריטים` : 'טרם חושבו מדדים', tone: 'idle' },
-    { label: 'מינימום הזמנה', value: fmtMoney(s.min_order_amount), tone: 'idle' },
+    { label: 'מינימום הזמנה', value: fmtMoneyExact(s.min_order_amount), tone: 'idle' },
     { label: 'תנאי תשלום', value: s.payment_terms ?? '—', tone: 'idle', numeric: false },
   ];
 
@@ -663,8 +665,8 @@ function SupplierPricesTab({ rows, history, submissions }: {
 
   const columns: Column<PricedProduct>[] = [
     { key: 'product', header: 'מוצר', sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-ink">{r.product.name}</span> },
-    { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">₪{r.current_price.toFixed(2)}</span> },
-    { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => (r.previous_price != null ? `₪${r.previous_price.toFixed(2)}` : '—') },
+    { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
+    { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => fmtMoneyExact(r.previous_price) },
     {
       key: 'change', header: 'שינוי', sortValue: changePct,
       render: (r) => {

@@ -1,5 +1,5 @@
 import { Link, Outlet, useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, ScrollText, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -7,7 +7,12 @@ import { APP_NAME } from '../lib/branding';
 import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
 import Fab from './Fab';
 import NotificationBell from './NotificationBell';
-import { ConfirmDialog, useDialogLayer, useToast } from './ui';
+import FeedbackButton from './FeedbackButton';
+import { ConfirmDialog, Note, useDialogLayer, useToast } from './ui';
+import { useFeatureFlags } from '../lib/flags';
+import { FEEDBACK_FLAG } from '../lib/feedback';
+import { TRIAL_WARNING_DAYS, trialDaysRemaining } from '../lib/trial';
+import { fmtDate } from '../lib/format';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
 import { pendingOfflineWork } from '../lib/offlineQueue';
 import type { Role } from '../lib/types';
@@ -74,6 +79,15 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/analytics', label: 'ביצועי ספקים', icon: Activity, roles: ['owner', 'office', 'accountant'] },
       { to: '/audit', label: 'יומן ביקורת', icon: ScrollText, roles: ['owner', 'accountant'] },
       { to: '/settings', label: 'הגדרות', icon: Settings, roles: ['owner'] },
+      // /onboarding was absent from this catalogue entirely, so nothing could route to it: not the
+      // sidebar, not the drawer, not quickActions, and homeFor() always answers /dashboard. The
+      // setup wizard was built to be RE-OPENED — it reads live counts on every mount so it shows
+      // true completion state rather than a remembered claim (Onboarding.tsx:32-45) — and the one
+      // thing missing was a door. It belongs to the owner, beside /settings, not in daily work.
+      // „הקמת המערכת”, matching PAGE_TITLE_PATTERNS' existing entry for this route rather than
+      // inventing a second name for it — pageTitleFor prefers the nav label, so a different word
+      // here would have quietly changed the browser tab title too.
+      { to: '/onboarding', label: 'הקמת המערכת', icon: ListChecks, roles: ['owner'] },
     ],
   },
 ];
@@ -125,7 +139,7 @@ export function sectionsForRole(role: Role | undefined, isPlatformAdmin: boolean
 }
 
 export function footerItemsForRole(role: Role | undefined): NavItem[] {
-  return role === 'owner' ? itemsFor(role, ['/settings']) : [];
+  return role === 'owner' ? itemsFor(role, ['/onboarding', '/settings']) : [];
 }
 
 export function drawerSectionsForRole(role: Role | undefined, isPlatformAdmin: boolean): NavSection[] {
@@ -180,6 +194,12 @@ export default function Layout() {
   const role = profile?.role;
   // Section 5: payer/supplier get no search box — their routes are dead ends for it.
   const canSearch = canGlobalSearch(role);
+  // Read here only to decide whether the desktop header exists at all; FeedbackButton gates
+  // itself on the same flag, fail-closed. The flag governs UI, never permission (0059's flag law).
+  const feedbackOn = useFeatureFlags().isEnabled(FEEDBACK_FLAG);
+  // null unless this is a trial with a future end date — see trialDaysRemaining for why an already
+  // expired trial answers null rather than 0.
+  const trialDays = trialDaysRemaining(org);
   // Unfiled-documents pill (0014): counted only for staff who can act on that queue. The
   // Only procurement staff can act on the gallery queue. A known count > 0 is required,
   // so null (loading) and 0 never fabricate an all-clear or workload.
@@ -269,7 +289,19 @@ export default function Layout() {
     );
   });
 
-  const sidebar = (displaySections: readonly NavSection[], navLabel: string) => (
+  /**
+   * `expandGroups` — the desktop sidebar shows every group open (owner decision 09.08.2026).
+   *
+   * The groups were born collapsed in the UX-polish campaign, on the reasoning that "ניהול" and
+   * "בקרה" are rare destinations and progressive disclosure keeps the daily list short. On a phone
+   * that still holds: the drawer is a temporary overlay competing with the content behind it, and
+   * it keeps the disclosure. On a desktop the sidebar is a permanent 240px column with room to
+   * spare — hiding six destinations behind two chevrons costs a click and buys nothing.
+   *
+   * Note this renders them through the EXISTING non-collapsible branch rather than forcing
+   * `<details open>`: an always-open disclosure is a control that lies about being a control.
+   */
+  const sidebar = (displaySections: readonly NavSection[], navLabel: string, expandGroups = false) => (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 border-b border-shell-ink/10 px-4 py-4 pe-12 lg:pe-4">
         <img src="/icons/icon-192.png" alt="" width="40" height="40" className="size-10 shrink-0 rounded-lg ring-1 ring-shell-ink/15" />
@@ -280,7 +312,7 @@ export default function Layout() {
       </div>
       <nav aria-label={navLabel} className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
         {displaySections.map((s, i) => (
-          s.collapsible ? (
+          s.collapsible && !expandGroups ? (
             <details key={`${s.section}-${location.pathname}`} className="group" open={s.items.some((item) => isRouteFamilyActive(location.pathname, item.to)) || undefined}>
               <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-3 text-xs font-semibold text-shell-heading hover:bg-shell-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
                 {s.section}<ChevronDown size={15} aria-hidden="true" className="transition-transform group-open:rotate-180" />
@@ -318,7 +350,7 @@ export default function Layout() {
         דלג לתוכן
       </a>
       {/* Desktop sidebar */}
-      <aside className="hidden lg:block fixed inset-y-0 start-0 w-60 bg-shell border-e border-shell-ink/10 z-40 no-print">{sidebar(sections, 'ניווט ראשי')}</aside>
+      <aside className="hidden lg:block fixed inset-y-0 start-0 w-60 bg-shell border-e border-shell-ink/10 z-40 no-print">{sidebar(sections, 'ניווט ראשי', true)}</aside>
 
       {/* Mobile top bar */}
       <header className="phone-safe-header lg:hidden sticky top-0 z-40 bg-shell text-shell-ink border-b border-shell-ink/10 flex min-w-0 items-center no-print">
@@ -336,6 +368,7 @@ export default function Layout() {
         </div>
         <div className="flex items-center gap-1">
           <NotificationBell onShell />
+          <FeedbackButton onShell />
           {canSearch && (
             <button className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
               aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={21} /></button>
@@ -355,11 +388,15 @@ export default function Layout() {
 
       {/* Global search — desktop. Injected above <main>: the headerless desktop area is empty
           today (plan §2), and lg:ms-60 lines it up beside the fixed w-60 sidebar. z-30 keeps it
-          below the sidebar (z-40); sticky works because the min-h-screen wrapper has no overflow. */}
-      {canSearch && (
+          below the sidebar (z-40); sticky works because the min-h-dvh wrapper has no overflow. */}
+      {/* The header exists when it has something to hold. Until package 0 that was the search box
+          alone, which left payer and supplier — the two roles with the most blocked tasks in
+          DEAD-ENDS-AUDIT — with no desktop slot to report from. */}
+      {(canSearch || feedbackOn) && (
         <header className="hidden lg:flex sticky top-0 z-30 lg:ms-60 h-14 items-center gap-3 border-b border-line bg-surface px-6 no-print">
-          <GlobalSearch />
+          {canSearch && <GlobalSearch />}
           <NotificationBell />
+          <FeedbackButton />
         </header>
       )}
       {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring. */}
@@ -368,6 +405,21 @@ export default function Layout() {
         {/* max-w column centred (mx-auto) in the space beside the sidebar — otherwise a wide
             viewport strands all content on the start side in RTL, leaving a dead zone on the
             end side. keyed by path so each screen change re-triggers the fade (section 11). */}
+        {/* #15 shipped the soft block but nothing announced it in advance: the first thing the owner
+            learned was a full-screen stop. Owner only — a kitchen user cannot arrange the
+            continuation, and a banner nobody can act on for a week is noise; the expired screen
+            still tells everyone at the moment it matters. Wording matches that screen ("מפעיל
+            השירות", "הנתונים שמורים") so the two never contradict each other. */}
+        {profile?.role === 'owner' && trialDays !== null && trialDays <= TRIAL_WARNING_DAYS && (
+          <div className="mx-auto mb-4 min-w-0 max-w-[1400px] px-4 no-print sm:px-6">
+            <Note tone="await">
+              תקופת הניסיון מסתיימת ב-{fmtDate(org?.trial_ends_at)}
+              {' — '}
+              {trialDays === 1 ? 'נותר יום אחד' : `נותרו ${trialDays} ימים`}. הנתונים שמורים במלואם;
+              להמשך השימוש יש להסדיר את ההמשך מול מפעיל השירות.
+            </Note>
+          </div>
+        )}
         <div key={location.pathname} className="page-fade mx-auto min-w-0 max-w-[1400px]">
           <Outlet />
         </div>

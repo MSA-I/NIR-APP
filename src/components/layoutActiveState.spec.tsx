@@ -11,7 +11,8 @@ import { MemoryRouter, Route, Routes } from 'react-router';
  * /documents/archive marked both /documents and /documents/archive as the current page.
  *
  * The shell is mocked down to its navigation. The session, the unfiled-documents pill and the
- * three ornaments (search, bell, FAB) are not what is under test, and each would reach the network.
+ * four ornaments (search, bell, FAB, feedback) are not what is under test, and each would reach the
+ * network — as does the flag lookup that decides whether the desktop header exists at all.
  */
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
@@ -26,6 +27,8 @@ vi.mock('../lib/useInboxCount', () => ({ useInboxCount: () => null }));
 vi.mock('./GlobalSearch', () => ({ default: () => null, canGlobalSearch: () => false }));
 vi.mock('./Fab', () => ({ default: () => null }));
 vi.mock('./NotificationBell', () => ({ default: () => null }));
+vi.mock('./FeedbackButton', () => ({ default: () => null }));
+vi.mock('../lib/flags', () => ({ useFeatureFlags: () => ({ isEnabled: () => false }) }));
 
 import Layout from './Layout';
 import { ToastProvider } from './ui';
@@ -97,11 +100,16 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
     expect(currentLabels()).toEqual(['תיקיית המסמכים']);
   });
 
-  it('יעד בקרה נדיר פותח את הקבוצה ומסומן בתוכה', () => {
+  it('יעד בקרה נדיר גלוי בסרגל הדסקטופ בלי disclosure כלל', () => {
+    // Owner decision 09.08.2026: the desktop sidebar is fully open. This used to assert that the
+    // group HAPPENED to be open because a child route was active; the guarantee is now stronger —
+    // there is no <details> in the desktop nav to be open or closed. The drawer keeps its
+    // disclosure, and the test below still renders it.
     renderAt('/payments');
     const current = document.querySelector('[aria-current="page"]');
     expect(current?.textContent?.trim()).toBe('תשלומים');
-    expect(current?.closest('details')?.open).toBe(true);
+    expect(current?.closest('details')).toBeNull();
+    expect(document.querySelector('nav[aria-label="ניווט ראשי"] details')).toBeNull();
   });
 
   it('כותרת הדפדפן מפרידה מסך, דייר ומוצר', async () => {

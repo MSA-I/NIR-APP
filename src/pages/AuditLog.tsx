@@ -59,6 +59,8 @@ export default function AuditLogPage() {
       <PageHeader title={<span className="flex items-center gap-2"><ScrollText size={22} /> יומן ביקורת</span>}
         meta={`${rows.length} פעולות בתצוגה`} />
       <DataTable rows={rows} columns={columns} pageSize={25} searchable
+        emptyTitle="אין רשומות ביומן"
+        emptySubtitle={'היומן מתמלא מפעולות רגישות בלבד — שינוי פרטי בנק, אישור חשבונית, ביצוע תשלום.'}
         searchFn={(r, q) => r.action.includes(q) || (r.reason ?? '').toLowerCase().includes(q) || (r.profile?.full_name ?? '').includes(q)}
         searchLabel="חיפוש ביומן הביקורת"
         rowLabel={(r) => `${actionLabel(r.action)} ב${ENTITY_LABEL[r.entity_type] ?? r.entity_type} מיום ${fmtDateTime(r.created_at)}`}

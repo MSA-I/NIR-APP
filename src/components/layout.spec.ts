@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { NAV_SECTIONS, drawerSectionsForRole, footerItemsForRole, sectionsForRole } from './Layout';
-import { desktopQuickActionsFor, isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
+import { isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
 import type { Role } from '../lib/types';
 
 const ALL_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'];
@@ -29,7 +29,13 @@ describe('מעטפת הניווט', () => {
     expect(visible.has('/orders/new')).toBe(false);
     expect(visible.has('/documents/archive')).toBe(false);
     expect(visible.has('/alerts')).toBe(false);
-    expect(footerItemsForRole('owner').map((item) => item.to)).toEqual(['/settings']);
+    // /onboarding joined the footer (09.08.2026) and this list is pinned, so the addition has to
+    // argue for itself here rather than slip in. The argument: the route existed with NO door at
+    // all — absent from NAV_SECTIONS, from quickActions, and from homeFor() — so the setup wizard
+    // could not be reopened by the owner it belongs to, even though it was built to be reopened.
+    // It sits in the footer, beside /settings, precisely so it does NOT compete with daily work,
+    // which is what the rest of this test protects.
+    expect(footerItemsForRole('owner').map((item) => item.to)).toEqual(['/onboarding', '/settings']);
   });
 
   it('תפקידים ממוקדים נשארים עם שני יעדים בלבד', () => {
@@ -78,10 +84,9 @@ describe('סרגל הפעולות המהירות במובייל', () => {
     }
   });
 
-  it('משאיר את ה-speed dial בדסקטופ עם פקודות בלבד', () => {
-    expect(desktopQuickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'capture', 'invoice']);
-    expect(desktopQuickActionsFor('accountant')).toEqual([]);
-  });
+  // The desktop speed-dial test that used to sit here went with the speed-dial itself (owner
+  // decision 09.08.2026). Nothing replaced it: the test above already pins the phone list per role,
+  // and a second assertion of the same fact is not coverage.
 });
 
 describe('התאמת משפחת מסלול', () => {
