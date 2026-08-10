@@ -233,7 +233,14 @@ begin
   end if;
 
   -- ---- Duplicate: the same supplier's same document number already recorded.
+  --
+  -- NOT for a tax_receipt, and the exclusion is the whole semantics of the subtype rather than a
+  -- convenience. A receipt PRINTS the number of the invoice it acknowledges; finding that invoice
+  -- is the successful outcome, and calling it a duplicate would block every receipt that does its
+  -- job while passing the ones that reference nothing (OPEN-DECISIONS #141: evidence, never a
+  -- payable). A duplicate matters for a document that would CREATE a debt.
   if p_supplier_id is not null and v_number_key is not null
+     and lower(btrim(coalesce(p_document_type, ''))) <> 'tax_receipt'
      and exists (
        select 1 from public.invoices existing
        where existing.org_id = p_org_id
