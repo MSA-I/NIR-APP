@@ -17,7 +17,7 @@ import type { Role } from './types';
 /** The flag that shows the surface. Gates UI only — never permission (the 0059 flag law). */
 export const FEEDBACK_FLAG = 'feedback.notes';
 
-/** Matches the feedback_notes_note_length check in 0090. */
+/** Matches the feedback_notes_note_length check in 0091. */
 export const NOTE_MAX_LENGTH = 1500;
 
 export interface FeedbackContext {
@@ -60,7 +60,7 @@ export async function submitFeedbackNote(
   if (!trimmed) return { saved: false, delivered: false, message: 'אין מה לשלוח — ההערה ריקה' };
 
   // created_at, sent_at and send_error are absent on purpose: the browser holds no grant on them
-  // (0090), so "נשלח" cannot originate here.
+  // (0091), so "נשלח" cannot originate here.
   const inserted = await supabase.from('feedback_notes')
     .insert({
       org_id: orgId,

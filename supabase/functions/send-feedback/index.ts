@@ -10,10 +10,10 @@
 //
 // Two clients, each with exactly one job:
 //   * the CALLER's JWT reads the note. That read IS the authorisation -- RLS returns the row only
-//     to a member of its organization (0090), so no role check is re-implemented here. Same
+//     to a member of its organization (0091), so no role check is re-implemented here. Same
 //     discipline as send-invite, where the RPCs enforce ownership.
 //   * service_role writes sent_at / send_error, because `authenticated` deliberately holds no
-//     grant on those columns (0090): "delivered" must be a fact the server recorded, never a
+//     grant on those columns (0091): "delivered" must be a fact the server recorded, never a
 //     claim the client made.
 //
 // Required environment (supabase secrets set ...):

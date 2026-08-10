@@ -198,7 +198,7 @@ nowrap מקוננות בטלפון · ‏`PayerQueue.tsx:202` ו-`Reports.tsx:46
 `claude/ui-readiness-and-feedback-20260809` ב-worktree נפרד, כדי לא לגעת ב-`main` בזמן שסוכן מקביל
 עובד בו. התוכנית המלאה: `C:\Users\art1\.claude\plans\skill-orchestrator-floating-swan.md`.
 
-**‏`0090_feedback_notes.sql`.** ‏`feedback_notes` עם `org_id` + RLS, **append-only ברמת הפריווילגיה
+**‏`0091_feedback_notes.sql`.** ‏`feedback_notes` עם `org_id` + RLS, **append-only ברמת הפריווילגיה
 ולא רק ב-policy:** ל-`authenticated` יש `insert` על עמודות הכותב בלבד — **אין לו grant על `sent_at`
 ועל `send_error`**, ולכן "נשלח" הוא עובדה שהשרת רשם ולא טענה שהלקוח כתב. אותה משמעת עמודות של
 `0061`/`0088` על `suppliers.bank_details`, מופנית הפעם לגבול של כנות ולא לשטח הונאה.
@@ -239,7 +239,7 @@ gateway, בלי ספרייה. ‏`allowed_mentions: { parse: [] }` כי הערת
 supabase-js אמיתי: ההוספה נושאת מסך/תפקיד/viewport ו**אין בה** עמודות מסירה · שליחה שנכשלה שומרת
 ואומרת את האמת · הוספה שנכשלה משאירה את הטקסט · דגל כבוי = אין כפתור). ‏`p0_client_dml_acl.sql`
 קיבל זרוע שמצמידה את ה-ACL. **תרחיש דפדפן חדש (‏35)**: הדגל וה-Edge Function מנותבים,
-‏**ה-INSERT לא** — הוא נכתב ל-PostgREST האמיתי, ולכן זה המקום היחיד שבו ה-grants וה-RLS של `0090`
+‏**ה-INSERT לא** — הוא נכתב ל-PostgREST האמיתי, ולכן זה המקום היחיד שבו ה-grants וה-RLS של `0091`
 נבחנים מדפדפן אמיתי. **נבחר מסלול הכשל בכוונה:** מסירה לדיסקורד אינה ניתנת להוכחה בשער מנותק-רשת,
 ותרחיש שמדמה שליחה ואז טוען "נשלח" מאמת את המוק של עצמו.
 
@@ -252,7 +252,7 @@ supabase-js אמיתי: ההוספה נושאת מסך/תפקיד/viewport ו**�
 1. משה יוצר Webhook בערוץ דיסקורד ומעביר את הכתובת.
 2. ‏`supabase secrets set DISCORD_FEEDBACK_WEBHOOK_URL=…`
 3. ‏`supabase functions deploy send-feedback` (**עם** אימות JWT — לא `--no-verify-jwt`).
-4. החלת `0090` על הפרויקט המרוחק.
+4. החלת `0091` על הפרויקט המרוחק.
 5. הדלקת הדגל לארגון הלקוח: ‏`platform_set_org_flag` (מפעיל פלטפורמה + סיבה + audit).
 
 **מה שלא הוכח, בקול:** מסירה בפועל לדיסקורד. היא תוכח בהערה חיה אחת אחרי הפריסה, לא לפניה.

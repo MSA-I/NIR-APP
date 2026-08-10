@@ -110,7 +110,7 @@ begin
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0090 scope enforcement assertions failed:\n%', v_violations;
+    raise exception e'0091 scope enforcement assertions failed:\n%', v_violations;
   end if;
 end
 $reassert$;

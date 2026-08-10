@@ -2920,7 +2920,7 @@ async function passwordRecovery(browser) {
  * Package 0 — the design partner's feedback note.
  *
  * What is routed: the flag (the barcode idiom at :1157) and the Edge Function. What is NOT routed
- * is the INSERT — it goes to the real PostgREST, so this is the only place where 0090's column
+ * is the INSERT — it goes to the real PostgREST, so this is the only place where 0091's column
  * grants and RLS are exercised from an actual browser session.
  *
  * The FAILURE path is the one asserted end to end, on purpose. Discord delivery cannot be proved

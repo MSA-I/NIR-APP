@@ -126,7 +126,7 @@ select pg_temp.p0_acl_assert(
   'notification delivery state ACL is not service-only'
 );
 
--- 0090: feedback notes are append-only from the browser, and "delivered" is not a claim the client
+-- 0091: feedback notes are append-only from the browser, and "delivered" is not a claim the client
 -- is able to make. The author's columns hold INSERT; sent_at and send_error hold no grant at all,
 -- which is what lets the UI's "נשלח" mean the server observed a delivery. Same column-grant
 -- discipline as suppliers.bank_details (0061/0088), applied to an honesty boundary instead of a

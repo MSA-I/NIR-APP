@@ -132,7 +132,7 @@ select count(*)::text as total,
        count(*) filter (where state)::text as enabled
 from resolve_feature_flags() \gset flags_base_
 reset role;
--- Three since 0090 added `feedback.notes` (the design-partner feedback surface). The number is
+-- Three since 0091 added `feedback.notes` (the design-partner feedback surface). The number is
 -- pinned rather than derived on purpose, in the spirit of the exemption-registry pin: a flag is a
 -- new switch on the product, so adding one must edit THIS line and argue for it, not slip in and
 -- watch the suite stay green. This run is that argument -- the gate caught the third flag on its
