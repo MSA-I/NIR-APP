@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -52,10 +52,15 @@ const FILED = 'חשבונית-1001.pdf';
 // row are unfiled by isUnfiled()'s reading — entity_id is null on each — so if the שיוך actions
 // appear for one and not the other, the archive flag is the only thing that can explain it.
 const UNFILED = 'סריקה-חדשה.pdf';
+// A document the pipeline HAS read, so the subtype column has something true to say. It is the
+// positive control for the dash rule below: without it, "no row says מסמך נוסף" would also pass
+// on a gallery that had stopped rendering the subtype column at all.
+const CLASSIFIED = 'תעודת-משלוח-77.pdf';
 const DOCS = [
   row('d-1', ARCHIVED, 'archive', null),
   row('d-2', FILED, 'invoice', 'inv-1'),
   row('d-3', UNFILED, 'inbox', null),
+  { ...row('d-4', CLASSIFIED, 'inbox', null), document_kind: 'delivery_note' },
 ];
 
 /**
@@ -261,5 +266,45 @@ describe('עמודת התיוק אינה נשאלת בארכיון', () => {
     await screen.findAllByText(UNFILED);
     expect(screen.queryAllByText('לא משויך')).not.toHaveLength(0);
     expect(screen.getByLabelText('סטטוס תיוק')).toBeInTheDocument();
+  });
+});
+
+/**
+ * One intake, and the person is not asked to classify the paper before it is read.
+ *
+ * The upload form used to open with a "סוג מסמך" select and the gallery then printed whatever was
+ * chosen. Both halves were wrong in the same direction: the question is asked of the wrong party
+ * (someone at a truck with a phone) at the wrong moment (before anything has read the document),
+ * and the answer then outranks the evidence extracted afterwards. The select is gone, and an
+ * unread document's subtype column reads `—` rather than borrowing the `other` placeholder and
+ * calling it "מסמך נוסף" — the standing rule that missing evidence is a dash, never a value.
+ */
+describe('קליטה אחת — הסוג נקרא מהמסמך, לא נבחר מראש', () => {
+  it('טופס ההעלאה אינו שואל לסוג המסמך', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({});
+    await screen.findAllByText(UNFILED);
+
+    await userEvent.click(screen.getByRole('button', { name: /העלאת מסמך/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'העלאת מסמך' });
+
+    expect(within(dialog).queryByLabelText('סוג מסמך')).not.toBeInTheDocument();
+    // …and it says who will answer the question instead, so the omission does not read as a gap.
+    expect(within(dialog).getByText(/המערכת תזהה בעצמה מה סוג המסמך/)).toBeInTheDocument();
+  });
+
+  it('מסמך שטרם נקרא מציג — בעמודת הסוג, ומסמך שנקרא מציג את סוגו', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({});
+    await screen.findAllByText(UNFILED);
+
+    // `ignore: option` because the subtype FILTER legitimately lists every value, including the
+    // two named here. The claim is about what the rows say, not about what can be filtered on.
+    const inRows = { ignore: 'option, script, style' };
+    // Every unread row here carries document_kind='other'. None of them may claim "מסמך נוסף".
+    expect(screen.queryAllByText('מסמך נוסף', inRows)).toHaveLength(0);
+    // The one row whose subtype was actually read still says it — the rule silences the
+    // placeholder, not the column.
+    expect(screen.queryAllByText('תעודת משלוח', inRows)).not.toHaveLength(0);
   });
 });
