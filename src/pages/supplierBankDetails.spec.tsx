@@ -84,7 +84,7 @@ function renderForm(onSaved = vi.fn()) {
   return onSaved;
 }
 
-const bankField = () => screen.getByLabelText('פרטי בנק (מוצג למבצע ההעברות)');
+const bankField = () => screen.getByLabelText('פרטי בנק — מלא רק כדי לשנות (אינם מוצגים)');
 const saveButton = () => screen.getByRole('button', { name: 'שמירה' });
 
 beforeEach(() => {

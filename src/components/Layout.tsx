@@ -63,7 +63,10 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office', 'kitchen'] },
       { to: '/receiving', label: 'קבלת סחורה', icon: PackageCheck, roles: ['owner', 'office', 'kitchen'] },
       { to: '/inventory', label: 'מלאי', icon: Warehouse, roles: ['owner', 'office', 'kitchen'] },
-      { to: '/suppliers', label: 'ספקים', icon: Truck, roles: ['owner', 'office', 'kitchen'] },
+      // kitchen left this list on 10.08.2026 (G2). A kitchen manager orders from suppliers and
+      // receives goods; managing the supplier record — bank details, payment terms, status — is
+      // back-office work. 0112 is the half that actually enforces it.
+      { to: '/suppliers', label: 'ספקים', icon: Truck, roles: ['owner', 'office'] },
       { to: '/products', label: 'מוצרים', icon: Package, roles: ['owner', 'office', 'kitchen'] },
       { to: '/prices', label: 'מחירונים', icon: Tags, roles: ['owner', 'office', 'kitchen'] },
       { to: '/my-prices', label: 'פורטל הספק', icon: Tags, roles: ['supplier'] },
@@ -105,7 +108,7 @@ export const NAV_SECTIONS: NavSection[] = [
 const DAILY_PATHS: Record<Role, readonly string[]> = {
   owner: ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
   office: ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
-  kitchen: ['/dashboard', '/orders', '/receiving', '/documents', '/suppliers'],
+  kitchen: ['/dashboard', '/orders', '/receiving', '/documents'],
   accountant: ['/dashboard', '/invoices', '/pay', '/payments', '/bank'],
   payer: ['/dashboard', '/pay'],
   supplier: ['/dashboard', '/my-prices'],

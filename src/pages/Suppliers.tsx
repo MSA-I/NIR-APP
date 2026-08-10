@@ -69,7 +69,13 @@ export function SuppliersList() {
     // Same shape as the card query (Promise.all): suppliers + balances + metrics in parallel,
     // merged through Maps. The list answers "who needs my attention"; the card answers "why".
     const [supRes, balRes, metRes] = await Promise.all([
-      supabase.from('suppliers').select('*, supplier_categories(category_id, categories(name))').is('deleted_at', null).order('name'),
+      // Explicit columns, not `*` (0112). `suppliers.bank_details` is no longer selectable by
+      // any client role — the column privilege was revoked so that no crafted query reaches the
+      // account money is sent to — and `select('*')` expands to include it, which would fail the
+      // whole screen. The edit dialog fetches it on demand through financial_supplier_directory.
+      supabase.from('suppliers')
+        .select('id, org_id, name, tax_id, contact_name, phone, whatsapp, email, address, delivery_days, cutoff_time, min_order_amount, payment_terms, notes, status, deleted_at, created_at, updated_at, rating, rating_updated_at, rating_note, supplier_categories(category_id, categories(name))')
+        .is('deleted_at', null).order('name'),
       supabase.from('supplier_balances').select('*'),
       supabase.from('supplier_metrics').select('*'),
     ]);
@@ -233,7 +239,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
     name: supplier?.name ?? '', tax_id: supplier?.tax_id ?? '', contact_name: supplier?.contact_name ?? '',
     phone: supplier?.phone ?? '', whatsapp: supplier?.whatsapp ?? '', email: supplier?.email ?? '',
     address: supplier?.address ?? '', min_order_amount: supplier?.min_order_amount?.toString() ?? '',
-    payment_terms: supplier?.payment_terms ?? '', bank_details: supplier?.bank_details ?? '',
+    payment_terms: supplier?.payment_terms ?? '', bank_details: '',
     notes: supplier?.notes ?? '', status: (supplier?.status ?? 'active') as SupplierStatus,
     delivery_days: supplier?.delivery_days ?? [] as number[],
     cutoff_time: supplier?.cutoff_time?.slice(0, 5) ?? '',
@@ -274,8 +280,12 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
       rating_updated_at: ratingChanged ? new Date().toISOString() : (supplier?.rating_updated_at ?? null),
     };
     if (supplier) {
-      const nextBank = f.bank_details || null;
-      const bankChanged = nextBank !== (supplier.bank_details ?? null);
+      // The field opens EMPTY now (0112): the list row no longer carries bank_details, because
+      // the column is not selectable by any client role. So "changed" means "something was
+      // typed" — an untouched field leaves the stored details alone rather than clearing them,
+      // which is the safe direction for the column that decides where money goes.
+      const nextBank = f.bank_details.trim() || null;
+      const bankChanged = nextBank !== null;
       const res = await supabase.from('suppliers').update(row).eq('id', supplier.id);
       setBusy(false);
       if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
@@ -353,7 +363,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         <div><label className="label" htmlFor="supplier-cutoff">שעת סגירת הזמנות</label><input id="supplier-cutoff" type="time" className="input" value={f.cutoff_time} onChange={(e) => set('cutoff_time', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-minimum">מינימום הזמנה (₪)</label><input id="supplier-minimum" type="number" className="input num" value={f.min_order_amount} onChange={(e) => set('min_order_amount', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-payment-terms">תנאי תשלום</label><input id="supplier-payment-terms" className="input" placeholder="שוטף + 30" value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} /></div>
-        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-details">פרטי בנק (מוצג למבצע ההעברות)</label><input id="supplier-bank-details" ref={bankFieldRef} className="input" value={f.bank_details} onChange={(e) => set('bank_details', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-details">פרטי בנק — מלא רק כדי לשנות (אינם מוצגים)</label><input id="supplier-bank-details" ref={bankFieldRef} className="input" value={f.bank_details} onChange={(e) => set('bank_details', e.target.value)} /></div>
         <div>
           <label className="label" htmlFor="supplier-status">סטטוס</label>
           <select id="supplier-status" className="input" value={f.status} onChange={(e) => set('status', e.target.value)}
