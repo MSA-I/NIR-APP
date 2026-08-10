@@ -458,11 +458,11 @@ select pg_temp.p16_assert(
 );
 
 -- ===== 9. A human reclassification stops the machine =====
-update public.documents set document_kind = 'invoice'
-where id = '91000000-0000-4000-8000-000000000010';
 select pg_temp.p16_seed(10, jsonb_build_array(
   pg_temp.p16_line(1, 'SUP-DN-6', null, '1')
 ), '36000000-0000-4000-8000-000000000002')::text as interpretation \gset kind_
+-- Reclassified AFTER the seed (the seed writes document_kind = 'delivery_note'): the update must
+-- follow it, or it touches a row that does not exist yet and reclassifies nothing.
 update public.documents set document_kind = 'invoice'
 where id = '91000000-0000-4000-8000-000000000010';
 select pg_temp.p16_apply(:'kind_interpretation'::uuid)::text as result \gset kind_
