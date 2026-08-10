@@ -210,6 +210,11 @@ insert into private.tenant_export_registry (table_name, disposition, excluded_co
   ('categories','include','{}','Tenant catalogue categories.'),
   ('comments','include','{}','Tenant-authored operational comments.'),
   ('credit_requests','include','{}','Tenant credit workflow records.'),
+  -- 0090 and 0091 landed on main after this campaign forked, so their tables reach A6
+  -- unclassified. Classified here rather than by relaxing A6: an unreviewed tenant table is
+  -- exactly what that assertion exists to catch.
+  ('delivery_note_interpretation_decisions','include','{}','Auditable delivery-note automation decisions, including which evidence tier resolved the order.'),
+  ('delivery_note_interpretation_lines','include','{}','Per-line delivery-note automation outcomes and their reason codes.'),
   ('document_annotations','include','{}','Human document annotation evidence.'),
   ('document_auto_actions','include','{}','Auditable document automation decisions.'),
   ('document_export_template_versions','include','{}','Tenant document export contracts.'),
@@ -229,6 +234,10 @@ insert into private.tenant_export_registry (table_name, disposition, excluded_co
   ('exceptions','include','{}','Tenant exception and resolution history.'),
   ('external_identity_mappings','include','{}','Tenant external identity references.'),
   ('external_references','include','{}','Tenant integration reference mapping.'),
+  -- send_error is a raw string from the Discord delivery attempt, not tenant business data.
+  -- Excluded on the same grounds as integration_failures.raw_error above: an untrusted
+  -- third-party error string does not belong in a tenant export.
+  ('feedback_notes','include',array['send_error'],'Tenant-authored product feedback with its capture context, without third-party delivery errors.'),
   ('goods_receipt_items','include','{}','Tenant goods receipt line records.'),
   ('goods_receipts','include','{}','Tenant goods receipt records.'),
   ('identity_provider_settings','include',array['secret_config'],'Identity configuration without provider secrets.'),
