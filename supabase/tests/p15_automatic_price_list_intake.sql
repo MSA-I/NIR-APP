@@ -242,6 +242,21 @@ insert into public.supplier_products (
   ('55000000-0000-4000-8000-000000000002', '15000000-0000-4000-8000-000000000001', '35000000-0000-4000-8000-000000000001', '45000000-0000-4000-8000-000000000002', 20, '2026-07-01', true, null),
   ('55000000-0000-4000-8000-000000000003', '15000000-0000-4000-8000-000000000001', '35000000-0000-4000-8000-000000000001', '45000000-0000-4000-8000-000000000003', 30, '2026-07-01', true, null),
   ('55000000-0000-4000-8000-000000000004', '15000000-0000-4000-8000-000000000001', '35000000-0000-4000-8000-000000000001', '45000000-0000-4000-8000-000000000004', 40, '2026-07-01', true, null);
+insert into public.products (id, org_id, name, unit, sku, barcode, active) values (
+  '45000000-0000-4000-8000-000000000099',
+  '15000000-0000-4000-8000-000000000001',
+  'P15 inactive', 'unit', 'INACTIVE-PRODUCT', '729000000099', false
+);
+insert into public.supplier_products (
+  id, org_id, supplier_id, product_id, current_price,
+  price_effective_date, available, supplier_sku
+) values (
+  '55000000-0000-4000-8000-000000000099',
+  '15000000-0000-4000-8000-000000000001',
+  '35000000-0000-4000-8000-000000000001',
+  '45000000-0000-4000-8000-000000000099',
+  15, '2026-07-01', false, 'INACTIVE-SUPPLIER'
+);
 insert into public.price_history (org_id, supplier_product_id, price, effective_date)
 select org_id, id, current_price, price_effective_date
 from public.supplier_products
@@ -256,8 +271,10 @@ select pg_temp.p15_assert(
     'EXECUTE')
   and not has_function_privilege('authenticated',
     'public.apply_price_list_interpretation(uuid,uuid,uuid)', 'EXECUTE')
+  and not has_function_privilege('service_role',
+    'public.apply_price_list_interpretation(uuid,uuid,uuid)', 'EXECUTE')
   and has_function_privilege('service_role',
-    'public.apply_price_list_interpretation(uuid,uuid,uuid)', 'EXECUTE'),
+    'public.apply_eligible_price_list_interpretation(uuid,uuid,uuid)', 'EXECUTE'),
   'the old writer or the new command ACL was widened'
 );
 
@@ -271,7 +288,7 @@ select count(*) as history_before from public.price_history
 where org_id = '15000000-0000-4000-8000-000000000001'
 \gset off_
 select set_config('request.jwt.claim.role', 'service_role', true);
-set local role service_role;
+set local role postgres;
 select public.apply_price_list_interpretation(
   (select job_id from public.document_interpretations where id = :'off_interpretation'::uuid),
   :'off_interpretation'::uuid, null
@@ -299,7 +316,7 @@ select pg_temp.p15_seed(6, jsonb_build_array(
 ), 'price_list', 'quote', true)::text as interpretation
 \gset trusted_
 select set_config('request.jwt.claim.role', 'service_role', true);
-set local role service_role;
+set local role postgres;
 select public.apply_price_list_interpretation(
   (select job_id from public.document_interpretations where id = :'trusted_interpretation'::uuid),
   :'trusted_interpretation'::uuid, null
@@ -324,7 +341,7 @@ select count(*) as history_before from public.price_history
 where org_id = '15000000-0000-4000-8000-000000000001'
 \gset ambiguous_
 select set_config('request.jwt.claim.role', 'service_role', true);
-set local role service_role;
+set local role postgres;
 select public.apply_price_list_interpretation(
   (select job_id from public.document_interpretations where id = :'ambiguous_interpretation'::uuid),
   :'ambiguous_interpretation'::uuid, null
@@ -333,11 +350,93 @@ select public.apply_price_list_interpretation(
 reset role;
 select pg_temp.p15_assert(
   :'ambiguous_result'::jsonb ->> 'outcome' = 'queued_for_review'
-  and :'ambiguous_result'::jsonb ->> 'reason_code' = 'line_product_ambiguous'
+    and :'ambiguous_result'::jsonb ->> 'reason_code' = 'line_product_ambiguous'
   and (select count(*) = :'ambiguous_history_before'::integer from public.price_history where org_id = '15000000-0000-4000-8000-000000000001')
   and (select current_price = 30 from public.supplier_products where id = '55000000-0000-4000-8000-000000000003')
   and (select current_price = 40 from public.supplier_products where id = '55000000-0000-4000-8000-000000000004'),
   'an ambiguous barcode mutated a price'
+);
+
+-- Every supplied strong identifier is evidence. A supplier SKU for product one paired with the
+-- barcode of product two is a conflict, never a precedence rule or a product-name match.
+select pg_temp.p15_seed(7, jsonb_build_array(
+  pg_temp.p15_line(
+    1, 'SUPPLIER-ONE', '729000000002', '999.90',
+    'P15 conflicting identifiers must not match by name'
+  )
+))::text as interpretation
+\gset conflict_
+select count(*) as history_before from public.price_history
+where org_id = '15000000-0000-4000-8000-000000000001'
+\gset conflict_
+select count(*) as products_before from public.products
+where org_id = '15000000-0000-4000-8000-000000000001'
+\gset conflict_
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role postgres;
+select public.apply_price_list_interpretation(
+  (select job_id from public.document_interpretations
+   where id = :'conflict_interpretation'::uuid),
+  :'conflict_interpretation'::uuid, null
+)::text as result
+\gset conflict_
+reset role;
+select pg_temp.p15_assert(
+  :'conflict_result'::jsonb ->> 'outcome' = 'queued_for_review'
+  and :'conflict_result'::jsonb ->> 'reason_code' = 'line_product_ambiguous'
+  and (select current_price = 10 from public.supplier_products
+       where id = '55000000-0000-4000-8000-000000000001')
+  and (select current_price = 20 from public.supplier_products
+       where id = '55000000-0000-4000-8000-000000000002')
+  and (select count(*) = :'conflict_history_before'::integer
+       from public.price_history
+       where org_id = '15000000-0000-4000-8000-000000000001')
+  and (select count(*) = :'conflict_products_before'::integer
+       from public.products
+       where org_id = '15000000-0000-4000-8000-000000000001')
+  and not exists (
+    select 1 from public.products
+    where name = 'P15 conflicting identifiers must not match by name'
+  )
+  and exists (
+    select 1 from public.price_list_interpretation_lines
+    where interpretation_id = :'conflict_interpretation'::uuid
+      and outcome = 'waiting'
+      and reason_code = 'line_product_ambiguous'
+      and product_id is null
+      and supplier_product_id is null
+  ),
+  'conflicting SKU and barcode selected or created a product'
+);
+
+select pg_temp.p15_seed(8, jsonb_build_array(
+  pg_temp.p15_line(1, 'INACTIVE-SUPPLIER', '729000000099', '77.70', 'Must not duplicate inactive')
+))::text as interpretation
+\gset inactive_
+select count(*) as products_before from public.products
+where org_id = '15000000-0000-4000-8000-000000000001'
+\gset inactive_
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role postgres;
+select public.apply_price_list_interpretation(
+  (select job_id from public.document_interpretations where id = :'inactive_interpretation'::uuid),
+  :'inactive_interpretation'::uuid, null
+)::text as result
+\gset inactive_
+reset role;
+select pg_temp.p15_assert(
+  :'inactive_result'::jsonb ->> 'outcome' = 'queued_for_review'
+  and :'inactive_result'::jsonb ->> 'reason_code' = 'line_product_ambiguous'
+  and (select count(*) = :'inactive_products_before'::integer
+       from public.products where org_id = '15000000-0000-4000-8000-000000000001')
+  and (select active = false from public.products
+       where id = '45000000-0000-4000-8000-000000000099')
+  and exists (
+    select 1 from public.price_list_interpretation_lines
+    where interpretation_id = :'inactive_interpretation'::uuid
+      and outcome = 'waiting' and reason_code = 'line_product_ambiguous'
+  ),
+  'inactive product identifier was treated as a new product candidate'
 );
 
 -- Three rows: supplier SKU, product barcode, and one unkeyed name that must remain waiting.
@@ -354,7 +453,7 @@ select count(*) as products_before from public.products
 where org_id = '15000000-0000-4000-8000-000000000001'
 \gset partial_
 select set_config('request.jwt.claim.role', 'service_role', true);
-set local role service_role;
+set local role postgres;
 select public.apply_price_list_interpretation(
   (select job_id from public.document_interpretations where id = :'partial_interpretation'::uuid),
   :'partial_interpretation'::uuid, null
@@ -377,7 +476,7 @@ select pg_temp.p15_assert(
 
 -- A retry is idempotent, and reversal is a separate reasoned command with compensating history.
 select set_config('request.jwt.claim.role', 'service_role', true);
-set local role service_role;
+set local role postgres;
 select public.apply_price_list_interpretation(
   (select job_id from public.document_interpretations where id = :'partial_interpretation'::uuid),
   :'partial_interpretation'::uuid, null
@@ -421,6 +520,67 @@ select pg_temp.p15_assert(
   'reasoned reversal did not restore the two prior prices'
 );
 
+select
+  (select count(*) from public.price_history
+   where org_id = '15000000-0000-4000-8000-000000000001') as history_count,
+  (select count(*) from public.audit_logs
+   where action = 'price_list_auto_action_reverted'
+     and entity_id = (
+       select id from public.price_list_interpretation_decisions
+       where interpretation_id = :'partial_interpretation'::uuid
+     )) as reversal_audit_count,
+  (select count(*) from public.audit_logs) as total_audit_count,
+  (select reverted_at::text from public.price_list_interpretation_decisions
+   where interpretation_id = :'partial_interpretation'::uuid) as reverted_at
+\gset replay_before_
+
+select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select public.revert_price_list_auto_action(
+  (select id from public.price_list_interpretation_decisions
+   where interpretation_id = :'partial_interpretation'::uuid),
+  'P15 verified compensating reversal'
+)::text as result
+\gset replay_
+do $$
+begin
+  perform public.revert_price_list_auto_action(
+    (select id from public.price_list_interpretation_decisions
+     where interpretation_id = '84000000-0000-4000-8000-000000000003'),
+    'P15 different reversal reason'
+  );
+  raise exception 'expected price_list_auto_action_revert_reason_conflict';
+exception when sqlstate '55000' then
+  if sqlerrm <> 'price_list_auto_action_revert_reason_conflict' then raise; end if;
+end
+$$;
+reset role;
+
+select pg_temp.p15_assert(
+  (:'replay_result'::jsonb ->> 'idempotent')::boolean
+  and (:'replay_result'::jsonb ->> 'reverted_price_count')::integer = 2
+  and (select count(*) = :'replay_before_history_count'::integer
+       from public.price_history
+       where org_id = '15000000-0000-4000-8000-000000000001')
+  and (select count(*) = :'replay_before_reversal_audit_count'::integer
+       from public.audit_logs
+       where action = 'price_list_auto_action_reverted'
+         and entity_id = (
+           select id from public.price_list_interpretation_decisions
+           where interpretation_id = :'partial_interpretation'::uuid
+         ))
+  and (select count(*) = :'replay_before_total_audit_count'::integer
+       from public.audit_logs)
+  and (select reverted_at::text = :'replay_before_reverted_at'
+       from public.price_list_interpretation_decisions
+       where interpretation_id = :'partial_interpretation'::uuid)
+  and (select reverted_reason = 'P15 verified compensating reversal'
+       from public.price_list_interpretation_decisions
+       where interpretation_id = :'partial_interpretation'::uuid),
+  'same-reason reversal replay mutated price history, audit or the original reversal evidence'
+);
+
 -- A genuinely new keyed row creates the catalog product and its supplier price atomically.
 select count(*) as products_before from public.products
 where org_id = '15000000-0000-4000-8000-000000000001'
@@ -433,7 +593,7 @@ select pg_temp.p15_seed(4, jsonb_build_array(
 ))::text as interpretation
 \gset created_
 select set_config('request.jwt.claim.role', 'service_role', true);
-set local role service_role;
+set local role postgres;
 select public.apply_price_list_interpretation(
   (select job_id from public.document_interpretations where id = :'created_interpretation'::uuid),
   :'created_interpretation'::uuid, null
@@ -463,13 +623,41 @@ select pg_temp.p15_assert(
   'a new keyed price-list row did not create one product and one price'
 );
 
+-- A later order makes the newly-created catalog row shared commercial state. Reversal must
+-- disable only the batch's supplier link and preserve the catalog identity and order history.
+insert into public.purchase_orders (
+  id, org_id, supplier_id, status, created_by
+) values (
+  '86000000-0000-4000-8000-000000000004',
+  '15000000-0000-4000-8000-000000000001',
+  '35000000-0000-4000-8000-000000000001',
+  'draft',
+  '25000000-0000-4000-8000-000000000001'
+);
+insert into public.purchase_order_items (
+  id, org_id, order_id, product_id, qty, unit_price
+) select
+  '87000000-0000-4000-8000-000000000004',
+  '15000000-0000-4000-8000-000000000001',
+  '86000000-0000-4000-8000-000000000004',
+  p.id,
+  1,
+  44.90
+from public.products p
+where p.org_id = '15000000-0000-4000-8000-000000000001'
+  and p.name = 'P15 newly catalogued';
+
+-- Deactivation blocks new commerce, but must never strand the compensating rollback for an
+-- already-applied automatic batch.
+update public.suppliers set status = 'inactive'
+where id = '35000000-0000-4000-8000-000000000001';
 select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 select public.revert_price_list_auto_action(
   (select id from public.price_list_interpretation_decisions
     where interpretation_id = :'created_interpretation'::uuid),
-  'P15 soft-deactivates an automatically created product'
+  'P15 disables only the automatically created supplier link'
 );
 reset role;
 select pg_temp.p15_assert(
@@ -478,9 +666,15 @@ select pg_temp.p15_assert(
     from public.products p
     join public.supplier_products sp on sp.org_id = p.org_id and sp.product_id = p.id
     where p.org_id = '15000000-0000-4000-8000-000000000001'
-      and p.name = 'P15 newly catalogued' and not p.active and not sp.available
-  ),
-  'reversal did not soft-deactivate the automatically created product'
+      and p.name = 'P15 newly catalogued' and p.active and not sp.available
+  )
+  and exists (
+    select 1 from public.purchase_order_items poi
+    where poi.id = '87000000-0000-4000-8000-000000000004'
+  )
+  and (select status = 'inactive' from public.suppliers
+       where id = '35000000-0000-4000-8000-000000000001'),
+  'reversal disabled shared product/history or changed the supplier status'
 );
 
 rollback;
