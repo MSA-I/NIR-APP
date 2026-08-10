@@ -1,0 +1,114 @@
+---
+name: close-package
+description: Close a work package — run the gate, update PROGRESS.md and DEBT-REGISTER.md, re-pin the counts in CLAUDE.md, and prepare the commit. Use when a package, wave or campaign step is finished.
+disable-model-invocation: true
+---
+
+# Closing a package
+
+Packages 1, 2, 5, 6 and 7 each ended with the same ritual, and each time a step was done from
+memory. The steps that get skipped are always the documentation ones — which is why
+`docs/DEBT-REGISTER.md` exists at all, and why the counts in `CLAUDE.md` drifted six times.
+
+Work through this in order. Do not batch, do not reorder, and do not report a step as done that
+you did not run.
+
+## 1. Establish what actually changed
+
+```
+git status --porcelain
+git diff --stat
+```
+
+Name the package out loud before continuing: what it set out to do, and what of that shipped. If
+part of the scope did not ship, that is not a failure to hide — it is a DEBT-REGISTER row in
+step 4.
+
+## 2. Run the gate and read its output
+
+```
+npm run build
+```
+
+That is `tsc --noEmit` + the nine `check:*` scripts + `vitest run` + `vite build`. It is the only
+automatic gate.
+
+- **Green** → continue.
+- **Red** → stop. Fix, re-run, and do not proceed to the documentation steps with a red gate. A
+  package closed on a red gate is not closed.
+- **`check:counts` red** → the gate is telling you `CLAUDE.md` now understates the repository.
+  Fix `CLAUDE.md` to the counted values it prints. Never adjust the script to agree with prose.
+
+`npm run quality` (Docker + PowerShell + 28 SQL suites + 34 browser scenarios) is a separate,
+manual run on the Windows machine, one at a time. Ask whether this package needs it before
+assuming either way — most do at campaign end, not at package end.
+
+## 3. Update `docs/PROGRESS.md`
+
+Add a section at the **top** of the log, following the existing shape:
+
+```
+## <what closed> (<DD.MM.YYYY>) — <gate state; deployment state>
+```
+
+Absolute dates, never "today" or "last week". State three things:
+
+- What now works that did not work before, in the user's terms.
+- The gate state as a fact: which gate ran, when, and its result.
+- What is deliberately still open, with a pointer to the DEBT-REGISTER row.
+
+Do not claim a visual change works without a screenshot, and do not claim a feature works without
+having exercised it. An unverified claim here is worse than no claim: the next agent builds on it.
+
+## 4. Update `docs/DEBT-REGISTER.md`
+
+Two directions, both required:
+
+- **Added:** anything this package deferred, worked around, or discovered and did not fix. Each
+  row needs *what* (the fact, unsoftened), *why it was deferred*, *where the evidence is*, and
+  *the next cheap step*.
+- **Drained:** anything this package actually fixed. Find the row, mark it resolved, and point at
+  the commit or test that proves it. A debt row that stays open after its fix shipped sends the
+  next agent to redo the work.
+
+## 5. Re-pin the counts
+
+```
+npm run check:counts
+```
+
+Already run inside step 2, but run it again after the documentation edits — step 3 and 4 can
+introduce numbers, and this is the cheapest possible confirmation that `CLAUDE.md` still matches
+the repository.
+
+## 6. Check for shell junk before committing
+
+```
+git status --porcelain
+```
+
+Files named `$p`, `{`, `0)`, `` `${c.id} `` are redirect artifacts, not work. Delete them:
+
+```
+rm -f -- '<name>'                      # Git Bash
+Remove-Item -LiteralPath '<name>'      # PowerShell
+```
+
+## 7. Prepare the commit
+
+Message in English, body in the repo's existing voice: what changed and why, not a file list.
+Reference the package number.
+
+**Do not commit or push without being asked.** Show the message, show `git status`, and stop.
+
+## Report
+
+Close with a short, factual summary:
+
+- Gate: which one ran, when, result.
+- PROGRESS.md: what was added.
+- DEBT-REGISTER.md: rows added / drained.
+- What is left open, and why.
+
+If any step was skipped, say which and why. A close that omits a step and does not say so is the
+thing this skill exists to prevent.
