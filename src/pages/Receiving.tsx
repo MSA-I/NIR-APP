@@ -245,13 +245,16 @@ export function ReceivingList() {
         .is('reverted_at', null),
       supabase.from('goods_receipts').select('order_id').eq('status', 'draft'),
     ]);
-    const rows = unwrap(decisions) as {
+    // `?? []`: a null body with no error is "no rows", not a crash — PostgREST never sends it for
+    // a list select, but the browser gate's receiving scenario stubs goods_receipts with
+    // `json: null` (check-browser-smoke.cjs), and a badge query must degrade to "no badge".
+    const rows = (unwrap(decisions) ?? []) as {
       order_id: string;
       order_matched_by: MachineDraft['orderMatchedBy'];
       matched_count: number;
       waiting_count: number;
     }[];
-    const stillDraft = new Set((unwrap(liveDrafts) as { order_id: string }[]).map((d) => d.order_id));
+    const stillDraft = new Set(((unwrap(liveDrafts) ?? []) as { order_id: string }[]).map((d) => d.order_id));
     return new Map(rows.filter((row) => stillDraft.has(row.order_id)).map((row) => [row.order_id, {
       orderMatchedBy: row.order_matched_by,
       matchedCount: row.matched_count,
