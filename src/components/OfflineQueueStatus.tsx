@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { CloudOff, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router';
 import { fmtDateTime } from '../lib/format';
 import { useOfflineQueue, offlineQueue } from '../lib/offlineQueue';
 import { syncPendingDocumentPhotos } from './FileUpload';
@@ -121,7 +122,14 @@ export default function OfflineQueueStatus() {
             <li key={action.id} className="text-alert-fg">
               {action.orderLabel}: {action.reason}
               {action.attempts > 0 && <> <span className="num">(ניסיונות: {action.attempts})</span></>}
-              {action.conflictCode && <> — נדרשת הכרעה במסך הקבלה.</>}
+              {action.conflictCode && (
+                <>
+                  {' '}— נדרשת הכרעה.{' '}
+                  <Link className="font-semibold underline underline-offset-2" to={`/receiving/${action.orderId}`}>
+                    פתיחת מסך הקבלה
+                  </Link>
+                </>
+              )}
             </li>
           ))}
         </ul>

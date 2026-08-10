@@ -114,14 +114,14 @@ insert into suppliers (id, org_id, name, bank_details) values
   ('35000000-0000-0000-0000-000000000001', '15000000-0000-0000-0000-000000000001',
    'P5 Supplier', 'IL00-0000-secret-account');
 
-insert into invoices (id, org_id, supplier_id, invoice_number, invoice_date, total_amount,
-                      review_status) values
+insert into invoices (id, org_id, supplier_id, invoice_number, invoice_date,
+                      amount_before_vat, vat_amount, total_amount, review_status) values
   ('45000000-0000-0000-0000-000000000001', '15000000-0000-0000-0000-000000000001',
-   '35000000-0000-0000-0000-000000000001', 'P5-INV-1', current_date, 100, 'received'),
+   '35000000-0000-0000-0000-000000000001', 'P5-INV-1', current_date, 100, 0, 100, 'received'),
   ('45000000-0000-0000-0000-000000000002', '15000000-0000-0000-0000-000000000001',
-   '35000000-0000-0000-0000-000000000001', 'P5-INV-2', current_date, 200, 'received'),
+   '35000000-0000-0000-0000-000000000001', 'P5-INV-2', current_date, 200, 0, 200, 'received'),
   ('45000000-0000-0000-0000-000000000003', '15000000-0000-0000-0000-000000000001',
-   '35000000-0000-0000-0000-000000000001', 'P5-INV-3', current_date, 300,
+   '35000000-0000-0000-0000-000000000001', 'P5-INV-3', current_date, 300, 0, 300,
    'pending_approval');
 
 -- The fixture supplier insert itself proves the trigger-authored arm of the map:

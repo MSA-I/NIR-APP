@@ -21,6 +21,7 @@ import {
   claimPendingPhotos,
   deletePendingPhoto,
   putPendingPhoto,
+  receiptPendingServerAcceptance,
   updatePendingPhoto,
 } from '../lib/offlineDb';
 import { offlineQueue } from '../lib/offlineQueue';
@@ -365,15 +366,37 @@ async function queuePendingDocumentPhoto(
   });
 }
 
+export function receiptPhotoMustRemainQueued(
+  entityType: string,
+  online: boolean,
+  receiptPending: boolean,
+) {
+  return entityType === 'goods_receipt' && (!online || receiptPending);
+}
+
 async function runPendingDocumentPhotoSync(includeNeedsAttention: boolean) {
   const leaseOwner = crypto.randomUUID();
   const photos = await claimPendingPhotos(leaseOwner, includeNeedsAttention);
   let uploaded = 0;
   let failed = 0;
   for (const photo of photos) {
-    if (photo.id == null || !photo.orgId || !photo.actorUserId) { failed += 1; continue; }
+    if (photo.id == null || photo.syncVersion == null || !photo.orgId || !photo.actorUserId) { failed += 1; continue; }
     if (photo.state === 'needs_attention' && !includeNeedsAttention) { failed += 1; continue; }
     try {
+      if (photo.entityType === 'goods_receipt'
+        && await receiptPendingServerAcceptance(photo.entityId)) {
+        await updatePendingPhoto(photo.id, {
+          storagePath: photo.storagePath ?? null,
+          documentId: photo.documentId ?? null,
+          attempts: photo.attempts ?? 0,
+          state: photo.state ?? 'pending',
+          lastError: photo.lastError ?? null,
+          lastAttemptAt: photo.lastAttemptAt ?? null,
+          syncLeaseOwner: null,
+          syncLeaseExpiresAt: null,
+        }, leaseOwner, photo.syncVersion);
+        continue;
+      }
       const documentKind = (photo.documentKind ?? defaultDocumentKind(photo.entityType)) as DocumentKind;
       const metadata = await entityMetadata(photo.entityType, photo.entityId, documentKind);
       const file = new File([photo.blob], photo.fileName, {
@@ -390,8 +413,8 @@ async function runPendingDocumentPhotoSync(includeNeedsAttention: boolean) {
           documentId: photo.documentId ?? null,
         } : null,
       });
-      await deletePendingPhoto(photo.id, leaseOwner);
-      uploaded += 1;
+      if (await deletePendingPhoto(photo.id, leaseOwner, photo.syncVersion)) uploaded += 1;
+      else failed += 1;
     } catch (error) {
       const failure = documentUploadFailure(error);
       await updatePendingPhoto(photo.id, {
@@ -403,7 +426,7 @@ async function runPendingDocumentPhotoSync(includeNeedsAttention: boolean) {
         lastAttemptAt: Date.now(),
         syncLeaseOwner: null,
         syncLeaseExpiresAt: null,
-      }, leaseOwner);
+      }, leaseOwner, photo.syncVersion);
       failed += 1;
     }
   }
@@ -475,7 +498,10 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
     setBusy(true);
     busyRef.current = true;
     try {
-      if (entityType === 'goods_receipt' && navigator.onLine === false) {
+      const receiptPending = entityType === 'goods_receipt'
+        ? await receiptPendingServerAcceptance(entityId)
+        : false;
+      if (receiptPhotoMustRemainQueued(entityType, navigator.onLine !== false, receiptPending)) {
         for (const file of files) await queuePendingDocumentPhoto(entityType, entityId, documentKind, file);
         setLocallyQueued((count) => count + files.length);
         setUploadSummary(null);

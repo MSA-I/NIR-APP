@@ -153,7 +153,7 @@ describe('PayerDashboard — six settled metrics, no fabricated zero (PLAN-10 §
     expect(screen.queryByText('אין תשלומים באיחור')).toBeNull();
   });
 
-  it('does not treat a partially dated queue as proof that nothing else is overdue', async () => {
+  it('measures overdue only over the explicitly dated subset', async () => {
     usePayerMetrics('none', [
       { due_date: addCalendarDays(TODAY, -2), amount: 100 },
       { due_date: null, amount: 900 },
@@ -161,26 +161,26 @@ describe('PayerDashboard — six settled metrics, no fabricated zero (PLAN-10 §
     renderDashboard();
     await ready();
 
-    expect(attentionCount('תשלומים באיחור')).toBe('—');
-    expect(tile('באיחור')).toBe('—');
-    expect(screen.getByText('אין מספיק תאריכי פירעון כדי למדוד איחורים')).toBeInTheDocument();
-    expect(screen.getByText('אין מספיק תאריכי פירעון כדי להציג התפלגות מועדים')).toBeInTheDocument();
+    expect(attentionCount('תשלומים באיחור')).toBe('1');
+    expect(tile('באיחור')).toBe(fmtMoney(100));
+    expect(screen.queryByText('אין מספיק תאריכי פירעון כדי למדוד איחורים')).toBeNull();
+    expect(screen.queryByText('אין מספיק תאריכי פירעון כדי להציג התפלגות מועדים')).toBeNull();
     expect(screen.queryByText('אין תשלומים באיחור')).toBeNull();
   });
 
-  it('shows a measured empty queue as real zero rather than unknown', async () => {
+  it('keeps an empty queue overdue metric unknown because it has no due-date evidence', async () => {
     usePayerMetrics('none', [], 0, []);
     renderDashboard();
     await ready();
 
-    expect(tile('באיחור')).toBe(fmtMoney(0));
-    expect(tile('לביצוע היום')).toBe(fmtMoney(0));
+    expect(tile('באיחור')).toBe('—');
+    expect(tile('לביצוע היום')).toBe('—');
     expect(tile('סה״כ ממתין לביצוע')).toBe(fmtMoney(0));
     expect(tile('בוצע החודש')).toBe(fmtMoney(0));
-    expect(screen.getByText('אין תשלומים באיחור')).toBeInTheDocument();
-    expect(screen.getByText('אין תשלומים להיום')).toBeInTheDocument();
+    expect(screen.getByText('אין מספיק תאריכי פירעון כדי למדוד איחורים')).toBeInTheDocument();
+    expect(screen.queryByText('אין תשלומים באיחור')).toBeNull();
+    expect(screen.queryByText('אין תשלומים להיום')).toBeNull();
     expect(screen.getAllByText('אין העברות ממתינות').length).toBeGreaterThan(0);
-    expect(screen.queryByText('אין מספיק תאריכי פירעון כדי למדוד איחורים')).toBeNull();
   });
 
   it('keeps the counts and the server sum when the per-bucket amount read fails', async () => {

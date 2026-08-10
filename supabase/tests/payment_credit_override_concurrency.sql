@@ -55,19 +55,35 @@ insert into suppliers (id, org_id, name) values
 
 insert into invoices (
   id, org_id, unit_id, supplier_id, invoice_number, invoice_date,
-  total_amount, review_status, payment_status
+  amount_before_vat, vat_amount, total_amount, review_status, payment_status
 ) values
   ('a5730000-0000-4000-8000-000000000021', 'a5730000-0000-4000-8000-000000000001',
    :'pc_legal_entity', 'a5730000-0000-4000-8000-000000000011',
-   '0073-CONCURRENCY-REPLAY', current_date, 100, 'approved', 'unpaid'),
+   '0073-CONCURRENCY-REPLAY', current_date, 100, 0, 100, 'received', 'unpaid'),
   ('a5730000-0000-4000-8000-000000000022', 'a5730000-0000-4000-8000-000000000001',
    :'pc_legal_entity', 'a5730000-0000-4000-8000-000000000012',
-   '0073-CONCURRENCY-CREDIT', current_date, 80, 'approved', 'unpaid');
+   '0073-CONCURRENCY-CREDIT', current_date, 80, 0, 80, 'received', 'unpaid');
 
 -- Create both requests through the real command so the replay payload and baseline audit facts
 -- are production-shaped before independent sessions begin.
 select set_config('request.jwt.claim.sub', 'a5730000-0000-4000-8000-000000000002', false);
 set role authenticated;
+select set_invoice_review_status(
+  'a5730000-0000-4000-8000-000000000021', 'in_review',
+  '0073 replay fixture enters review'
+);
+select set_invoice_review_status(
+  'a5730000-0000-4000-8000-000000000021', 'approved',
+  '0073 replay fixture persists assessment'
+);
+select set_invoice_review_status(
+  'a5730000-0000-4000-8000-000000000022', 'in_review',
+  '0073 credit fixture enters review'
+);
+select set_invoice_review_status(
+  'a5730000-0000-4000-8000-000000000022', 'approved',
+  '0073 credit fixture persists assessment'
+);
 select create_payment_request(
   'a5730000-0000-4000-8000-000000000031',
   'a5730000-0000-4000-8000-000000000011', '2026-09-01',

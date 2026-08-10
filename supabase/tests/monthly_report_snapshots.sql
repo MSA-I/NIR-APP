@@ -263,11 +263,24 @@ insert into public.invoices (
 ) values
   ('f5740000-0000-0000-0000-000000000001', 'a5740000-0000-0000-0000-000000000001', :'snap_le1',
    'd5740000-0000-0000-0000-000000000001', 'SNAP-LE1', '2026-08-02',
-   'c5740000-0000-0000-0000-000000000001', 100, 18, 118, 'approved', 'unpaid'),
+   'c5740000-0000-0000-0000-000000000001', 100, 18, 118, 'received', 'unpaid'),
   ('f5740000-0000-0000-0000-000000000002', 'a5740000-0000-0000-0000-000000000001',
    'b5740000-0000-0000-0000-000000000002', 'd5740000-0000-0000-0000-000000000001',
    'SNAP-LE2', '2026-08-03', 'c5740000-0000-0000-0000-000000000001',
    200, 36, 236, 'in_review', 'unpaid');
+
+-- Persist the same immutable 0106 approval assessment used by production rather than seeding an
+-- already-approved row that bypasses the invoice approval guard.
+select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000001');
+set local role authenticated;
+select public.set_invoice_review_status(
+  'f5740000-0000-0000-0000-000000000001', 'in_review', '0074 trusted fixture review started'
+);
+select public.set_invoice_review_status(
+  'f5740000-0000-0000-0000-000000000001', 'approved', '0074 trusted fixture approved'
+);
+reset role;
+select pg_temp.snapshot_actor(null);
 
 insert into public.payments (
   id, org_id, unit_id, supplier_id, amount, paid_date, method, reference, executed_by

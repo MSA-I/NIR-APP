@@ -8,6 +8,8 @@ export interface OrganizationAccess {
 
 export type OrganizationAccessStateRow = {
   access_mode: string;
+  trial_ends_at?: string | null;
+  grace_ends_at?: string | null;
   grace_days_remaining: number | null;
 };
 

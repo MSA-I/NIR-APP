@@ -17,11 +17,18 @@ type AllocationRow = { payment_id: string; amount: number };
 type BankRow = { id: string; tx_date: string; amount: number; status: string };
 
 export function financialDueExposure(requests: RequestRow[], today: string): number | null {
-  const open = requests.filter((request) => ['approved', 'sent_for_execution'].includes(request.status));
-  if (open.length === 0) return 0;
-  if (open.some((request) => request.due_date === null)) return null;
-  return open.filter((request) => request.due_date! <= today)
+  const dated = requests.filter((request) =>
+    ['approved', 'sent_for_execution'].includes(request.status) && request.due_date !== null);
+  if (dated.length === 0) return null;
+  return dated.filter((request) => request.due_date! <= today)
     .reduce((sum, request) => sum + request.amount, 0);
+}
+
+export function financialBankStatusCounts(rows: BankRow[]) {
+  return {
+    unmatched: rows.filter((row) => row.status === 'unmatched').length,
+    suggested: rows.filter((row) => row.status === 'suggested').length,
+  };
 }
 
 export default function FinancialSupplier() {
@@ -65,6 +72,7 @@ export default function FinancialSupplier() {
     const balanceByInvoice = new Map(balances.map((row) => [row.invoice_id, row]));
     const today = todayISO();
     const dueExposure = financialDueExposure(requests, today);
+    const bankStatusCounts = financialBankStatusCounts(bank);
     const openBalance = (supplierBalance.data as { open_balance: number } | null)?.open_balance ?? null;
     const allocatedByPayment = new Map<string, number>();
     for (const allocation of allocations) {
@@ -78,7 +86,7 @@ export default function FinancialSupplier() {
         .map((row) => ({ date: row.created_at, label: `זיכוי #${row.number}`, amount: -row.amount })),
     ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
 
-    return { supplier, invoices, credits, payments, requests, bank, balanceByInvoice, allocatedByPayment, openBalance, dueExposure, activity };
+    return { supplier, invoices, credits, payments, requests, bank, balanceByInvoice, allocatedByPayment, openBalance, dueExposure, bankStatusCounts, activity };
   }, [id]);
 
   if (loading) return <PageLoader />;
@@ -98,10 +106,11 @@ export default function FinancialSupplier() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="card card-pad"><div className="text-sm text-ink-muted">יתרה פתוחה</div><div className="mt-1 text-2xl font-bold num">{fmtMoney(data.openBalance)}</div></div>
         <div className="card card-pad"><div className="text-sm text-ink-muted">חשיפה שהגיעה למועד</div><div className="mt-1 text-2xl font-bold num">{fmtMoney(data.dueExposure)}</div></div>
-        <div className="card card-pad"><div className="text-sm text-ink-muted">תנועות בנק לא מותאמות</div><div className="mt-1 text-2xl font-bold num">{data.bank.filter((row) => ['unmatched', 'suggested'].includes(row.status)).length}</div></div>
+        <div className="card card-pad"><div className="text-sm text-ink-muted">תנועות בנק לא מותאמות</div><div className="mt-1 text-2xl font-bold num">{data.bankStatusCounts.unmatched}</div></div>
+        <div className="card card-pad"><div className="text-sm text-ink-muted">התאמות שממתינות לאישור</div><div className="mt-1 text-2xl font-bold num">{data.bankStatusCounts.suggested}</div></div>
       </div>
 
       {data.dueExposure === null && <Note tone="info">אין במערכת מועדי פירעון שמאפשרים לחשב חשיפה שהגיעה למועד; לכן מוצג — ולא אפס.</Note>}

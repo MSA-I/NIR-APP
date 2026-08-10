@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../lib/supabase', () => ({ supabase: {} }));
 
-import { financialDueExposure } from './FinancialSupplier';
+import { financialBankStatusCounts, financialDueExposure } from './FinancialSupplier';
 
 const source = readFileSync(join(process.cwd(), 'src', 'pages', 'FinancialSupplier.tsx'), 'utf8');
 const app = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
@@ -16,6 +16,26 @@ describe('financial supplier capability boundary', () => {
       { id: 'matched', number: 1, amount: 500, due_date: null, status: 'matched' },
       { id: 'open', number: 2, amount: 75, due_date: '2026-08-01', status: 'approved' },
     ], '2026-08-08')).toBe(75);
+  });
+
+  it('keeps unknown due dates distinct from a real zero', () => {
+    expect(financialDueExposure([], '2026-08-08')).toBeNull();
+    expect(financialDueExposure([
+      { id: 'undated', number: 1, amount: 500, due_date: null, status: 'approved' },
+    ], '2026-08-08')).toBeNull();
+    expect(financialDueExposure([
+      { id: 'future', number: 2, amount: 75, due_date: '2026-08-09', status: 'approved' },
+    ], '2026-08-08')).toBe(0);
+  });
+
+  it('counts suggested bank matches separately from unmatched transactions', () => {
+    expect(financialBankStatusCounts([
+      { id: 'u1', tx_date: '2026-08-01', amount: 10, status: 'unmatched' },
+      { id: 's1', tx_date: '2026-08-02', amount: 20, status: 'suggested' },
+      { id: 'm1', tx_date: '2026-08-03', amount: 30, status: 'matched' },
+    ])).toEqual({ unmatched: 1, suggested: 1 });
+    expect(source).toContain('תנועות בנק לא מותאמות');
+    expect(source).toContain('התאמות שממתינות לאישור');
   });
 
   it('does not request procurement-sensitive supplier data', () => {

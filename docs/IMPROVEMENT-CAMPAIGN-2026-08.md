@@ -2,7 +2,7 @@
 
 **תאריך טיוטה:** 09.08.2026
 **ענף:** `codex/improvement-campaign-20260808`
-**סטטוס:** מימוש מקומי בביקורת; שער מלא, commit, push ופריסה הם `PENDING`.
+**סטטוס:** שערי המימוש המקומיים עברו; ביקורת שחרור, commit, push ופריסה הם `PENDING`.
 **מקור אמת:** קוד ומיגרציות `0100`–`0111`, לאחר מיזוג `origin/main` שכבר כלל את `0086`–`0089`.
 מסמך זה אינו הופך פעולה שלא הורצה להצלחה.
 
@@ -15,8 +15,8 @@ match אמיתי, snapshot שרתי לדשבורד, קבלת סחורה offline 
 עמיד ובר־ביטול, והקשחת SECURITY DEFINER.
 
 האינטגרציה החיצונית החיה נדחתה במפורש משום שלא אושרו יעד או credentials. תשתית outbox נשארה
-מוכנה ונבדקת מקומית. נכון לטיוטה זו אין אישור שחרור: תוצאות quality, פריסה ו־SHA יירשמו בסעיפים
-18, 20 ו־25 רק לאחר ביצוע בפועל.
+מוכנה ונבדקה מקומית. `npm run quality` עבר ללא דילוגים; פריסה ו־SHA יירשמו בסעיפים 20 ו־25 רק
+לאחר ביצוע בפועל.
 
 ## 2. ממצאי פתיחת הריפו
 
@@ -36,17 +36,17 @@ match אמיתי, snapshot שרתי לדשבורד, קבלת סחורה offline 
 
 | Workstream | תוצאה בקוד | מצב שחרור |
 |---|---|---|
-| בטיחות מחירונים | calibration, shadow, drift, rollback ו־matching חזק | `PENDING` gates |
-| מרכז תפעול מסמכים | metrics, attempts, failure, history, reprocess ו־review | `PENDING` browser |
-| שורות חשבונית ו־3-way | evidence, allocations, assessment, guard ו־override | `PENDING` DB/browser |
-| Dashboard | snapshot שרתי למדדי הנהלה שהוכרעו | `PENDING` P21/browser |
-| Offline receiving | app shell, drafts, conflicts, photos ו־resume | `PENDING` browser |
-| ספקים | inactive semantics, finance view ו־portal order acknowledgement | `PENDING` P16/P17/P23 |
-| מלאי | read model מדוד והצעות read-only | `PENDING` P24/browser |
-| SaaS | Trial ‏30+7/read-only, branding, recovery ו־offboarding/export | `PENDING` P19/P22/P25/browser |
-| Security | executable scope proof + pinned body hash | `PENDING` full reset |
-| Integration platform | outbox worker/tests הוקשחו; live target נדחה | local gate `PENDING` |
-| Documentation | Current State, decisions, debt, architecture ו־report | diff review `PENDING` |
+| בטיחות מחירונים | calibration, shadow, drift, rollback ו־matching חזק | `PASS` local gates |
+| מרכז תפעול מסמכים | metrics, attempts, failure, history, reprocess ו־review | `PASS` browser |
+| שורות חשבונית ו־3-way | evidence, allocations, assessment, guard ו־override | `PASS` DB/browser |
+| Dashboard | snapshot שרתי למדדי הנהלה שהוכרעו | `PASS` P21/browser |
+| Offline receiving | app shell, drafts, conflicts, photos ו־resume | `PASS` browser |
+| ספקים | inactive semantics, finance view ו־portal order acknowledgement | `PASS` P16/P17/P23/browser |
+| מלאי | read model מדוד והצעות read-only | `PASS` P24/browser |
+| SaaS | Trial ‏30+7/read-only, branding, recovery ו־offboarding/export | `PASS` P19/P22/P25/browser |
+| Security | executable scope proof + pinned body hash | `PASS` full reset |
+| Integration platform | outbox worker/tests הוקשחו; live target נדחה | `PASS` local gate; live proof `DEFERRED` |
+| Documentation | Current State, decisions, debt, architecture ו־report | release diff review `PENDING` |
 
 ## 4. החלטות ארכיטקטורה
 
@@ -147,8 +147,8 @@ snapshot immutable של ה-assessment. בדיקת הכמות המצטברת קו
 
 `management_dashboard_snapshot` מחזיר snapshot דיירי אחד למדדים שהוכרעו. תנועות `unmatched`
 נספרות לבדן ו־`suggested` בנפרד. invoice/payment-request approvals נפרדים. overdue נספר רק על
-דרישה פעילה עם `due_date`; אם אפילו דרישה פעילה אחת חסרת תאריך, כל מדדי האיחור מוחזרים null והמסך
-מציג `—` עם ההסבר המאושר, במקום מדד חלקי. תור פעיל ריק שנמדד מציג `0`; כשל read מציג `—`.
+דרישה פעילה עם `due_date`; דרישות ללא תאריך אינן נכללות במדד. אם אין אף דרישה פעילה עם `due_date`, מדדי האיחור מוחזרים null והמסך
+מציג `—` עם ההסבר המאושר, לא `0`. כשל read מציג `—`.
 גרפים ורשימות
 שאינם חלק מה־snapshot נשארים חוב ביצועים מדוד, לא מספרים מומצאים.
 
@@ -156,13 +156,18 @@ snapshot immutable של ה-assessment. בדיקת הכמות המצטברת קו
 
 - Service Worker cache-first לנכסים סטטיים ו־network→shell fallback לניווט.
 - אין cache ל־Supabase/API/Functions או מידע פיננסי חי.
-- טיוטת receipt, key, quantities, missing/damaged ו־notes נשמרים ב־IndexedDB.
-- תמונה נשמרת כ־Blob ב־`pending_photos`, כולל resume path/document id ו־attempt state.
-- סנכרון מחודש משתמש באותו RPC/idempotency key; duplicate retry אינו יוצר קבלה שנייה.
-- קונפליקט מקבל מצב אנושי; permanent scope/auth failure אינו נכנס ללולאת retry.
+- טיוטת receipt, key, quantities, missing/damaged ו־notes נשמרים אוטומטית ב־IndexedDB לפני Save;
+  מפתח הקבלה נוצר אטומית גם בין טאבים.
+- תמונה נשמרת כ־Blob ב־`pending_photos`, כולל resume path/document id ו־attempt state, ונשארת
+  מקומית עד שקבלת הסחורה התקבלה בשרת.
+- סנכרון מחודש משתמש באותו RPC/idempotency key. תור ותמונות משתמשים ב־lease+version CAS כך ש־sender
+  או dialog ישן אינם מוחקים payload חדש; finalization מקומי לאחר קבלת השרת הוא transaction אטומי.
+- קונפליקט נשמר ומוצג שוב לאחר reload; permanent scope/auth failure אינו נכנס ללולאת retry.
+- bootstrap לא־מקוון שומר רק actor/org/role ו־lifecycle projection סמכותי. Trial/Grace פגים לפי
+  deadline מוחלט, ומצב read-only/suspended/offboarding נכשל סגור בלי לשמור פרטי ארגון פיננסיים.
 - המצבים בעברית: שמור במכשיר, ממתין לסנכרון, מסנכרן, סונכרן, נדרש טיפול.
 
-שער browser מלא לרשת שנופלת/חוזרת, refresh וסגירת tab: `PENDING`.
+שער browser מלא לרשת שנופלת/חוזרת, refresh וסגירת tab: `PASS`.
 
 ## 13. שינויים בזרימות ספק
 
@@ -223,16 +228,20 @@ ERP, מערכת הנהלת חשבונות, בנק, endpoint, tenant או account
 
 | שער | תוצאה | ראיה |
 |---|---|---|
-| TypeScript | `PASS` ביניים; יירוץ שוב בשער הסופי | `npm.cmd run build`, ‏09.08.2026 |
-| Vitest | `PASS` ביניים: 50 files, ‏451/451 tests | `npm.cmd test -- --run`, ‏09.08.2026 |
-| DB reset/migrations | `PENDING` | — |
-| P16–P24 | `PENDING` | — |
-| RLS/tenant/idempotency/finance | `PENDING` | — |
-| Edge/Deno | tenant-export ‏11/11 + typecheck/format `PASS`; document/branding contracts ‏73/73 `PASS`; rerun בשער הסופי | `deno test` / `deno check` / `deno fmt --check`, ‏09.08.2026 |
-| Playwright desktop/mobile/RTL/a11y | `PENDING` | — |
-| Offline/retry/recovery | `PENDING` | — |
-| `npm run build` | `PASS` ביניים לפני שילוב upstream; rerun חובה אחרי merge | TypeScript, checks, pin ‏75, ‏451 Vitest ו־Vite build עברו ב־56s; תוצאה זו אינה שער שחרור לענף המשולב |
-| `npm run quality` | `PENDING` | — |
+| TypeScript | `PASS` | הורץ כחלק מ־`npm run build` בתוך השער הסופי |
+| Vitest | `PASS`: ‏58 files, ‏502/502 tests | 24.81s; ללא skipped |
+| DB reset/migrations | `PASS` | reset נקי ומסלול upgrade עד `0111`, כולל reset בידוד סופי |
+| P16–P24 ומבחני הקמפיין | `PASS` | price list, supplier, trial, 3-way, dashboard, inventory ו־portal |
+| RLS/tenant/idempotency/finance | `PASS` | P0 ‏278 assertions; preflight, financial commands ו־concurrency עברו |
+| Edge/Deno/OCR worker | `PASS` | HTTP/provider mock, single-writer, signing, redirects, export streaming ו־worker self-check |
+| Playwright desktop/mobile/RTL/a11y | `PASS` | כל תרחישי browser עברו; `failures: []` |
+| Offline/retry/recovery | `PASS` | network loss, queue persistence, tab close, reconnect, app shell ו־password recovery |
+| `npm run build` | `PASS` | TypeScript, checks, SECURITY DEFINER pin, ‏502 Vitest, Vite ו־PWA precache ‏81 entries |
+| `npm run quality` | `PASS` | exit 0, ‏1062.1s, “P4 quality gates passed with no skipped tests” |
+
+ראיות browser/P4: `C:\Users\art1\.codex\visualizations\2026\08\09\20260809-220721-p4-quality-gates`;
+‏P4 שמר 19 שורות audit סמנטיות והפיק PDF בגודל 293,024 bytes. תרחיש ה־offline הוכיח
+autosave של qty=4 לפני Save, סגירת tab, hydration, queue ו־RPC עם אותו payload.
 
 לא תירשם הצלחה אם test skipped או אם השער רץ על SHA אחר.
 
@@ -280,7 +289,6 @@ ERP, מערכת הנהלת חשבונות, בנק, endpoint, tenant או account
 - drift מספרי הוא observability בלבד; רק structural fingerprint מפעיל Shadow.
 - packaging conversion דורש יחס מוצר מאושר.
 - dashboard snapshot אינו מכסה עדיין כל גרף ורשימה.
-- browser offline ותמונות דורשים שער final לפני טענת production.
 - lease העלאת תמונה offline הוא 15 דקות ללא heartbeat; object key יציב מגן מכפילות מסמך, אך
   upload ארוך במיוחד עשוי להיתבע מחדש מטאב אחר (#27 ב־DEBT-REGISTER).
 - purge סופי של דייר אינו אוטומטי; export/read-only/cancel/reactivate קיימים, אך retention executor

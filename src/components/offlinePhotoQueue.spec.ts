@@ -11,13 +11,14 @@ vi.mock('../lib/offlineDb', () => ({
   claimPendingPhotos: mocks.claimPendingPhotos,
   deletePendingPhoto: vi.fn(),
   putPendingPhoto: vi.fn(),
+  receiptPendingServerAcceptance: vi.fn(async () => false),
   updatePendingPhoto: vi.fn(),
 }));
 vi.mock('../lib/offlineQueue', () => ({
   offlineQueue: { refresh: mocks.refresh },
 }));
 
-import { syncPendingDocumentPhotos } from './FileUpload';
+import { receiptPhotoMustRemainQueued, syncPendingDocumentPhotos } from './FileUpload';
 
 const read = (name: string) => readFileSync(join(process.cwd(), 'src', 'components', name), 'utf8');
 const readPage = (name: string) => readFileSync(join(process.cwd(), 'src', 'pages', name), 'utf8');
@@ -30,9 +31,15 @@ describe('offline receipt photo wiring', () => {
     const offlineDb = readFileSync(join(process.cwd(), 'src', 'lib', 'offlineDb.ts'), 'utf8');
     expect(upload).toContain('blob: file');
     expect(upload).toContain('storagePath: resume?.storagePath ?? null');
-    expect(upload).toContain("entityType === 'goods_receipt' && navigator.onLine === false");
+    expect(receiptPhotoMustRemainQueued('goods_receipt', true, true)).toBe(true);
+    expect(receiptPhotoMustRemainQueued('goods_receipt', true, false)).toBe(false);
+    expect(upload).toContain('await receiptPendingServerAcceptance(entityId)');
+    expect(upload).toContain("photo.entityType === 'goods_receipt'");
+    expect(upload.indexOf('await receiptPendingServerAcceptance(photo.entityId)')).toBeLessThan(
+      upload.indexOf('await uploadDocument(photo.orgId'),
+    );
     expect(upload.indexOf('await uploadDocument(photo.orgId')).toBeLessThan(
-      upload.indexOf('await deletePendingPhoto(photo.id, leaseOwner)'),
+      upload.indexOf('await deletePendingPhoto(photo.id, leaseOwner, photo.syncVersion)'),
     );
     expect(upload).toContain('await updatePendingPhoto(photo.id, {');
     expect(upload).toContain("state: failure.retryable || failure.resume ? 'failed' : 'needs_attention'");
@@ -63,10 +70,10 @@ describe('offline receipt photo wiring', () => {
     const offlineDb = readFileSync(join(process.cwd(), 'src', 'lib', 'offlineDb.ts'), 'utf8');
     expect(upload).toContain('const photos = await claimPendingPhotos(leaseOwner, includeNeedsAttention)');
     expect(upload).toContain('objectKey: photo.clientUploadId');
-    expect(upload).toContain('await deletePendingPhoto(photo.id, leaseOwner)');
+    expect(upload).toContain('await deletePendingPhoto(photo.id, leaseOwner, photo.syncVersion)');
     expect(offlineDb).toContain("db.transaction(OFFLINE_STORES.pendingPhotos, 'readwrite')");
     expect(offlineDb).toContain('syncLeaseExpiresAt: now + PENDING_PHOTO_SYNC_LEASE_MS');
-    expect(offlineDb).toContain("row.syncLeaseOwner !== leaseOwner");
+    expect(offlineDb).toContain('pendingPhotoLeaseMatches(row, leaseOwner, syncVersion, now)');
   });
 
   it('syncs the receipt action before its pending photos', () => {
@@ -78,16 +85,19 @@ describe('offline receipt photo wiring', () => {
     expect(status).toContain('queue.pendingActions === 0 && queue.pendingUploads === 0');
     expect(status).toContain('photo.lastError');
     expect(status).toContain("lastAutoAttempt.current = ''");
+    expect(status).toContain('to={`/receiving/${action.orderId}`}');
   });
 
   it('unblocks the completion screen only after the queued receipt disappears after a successful sync', () => {
     const receiving = readPage('Receiving.tsx');
     expect(receiving).toContain('completed: (existing?.completed ?? false) || complete');
-    expect(receiving).toContain('const queueState = local?.completed ? await offlineQueue.refresh() : null');
+    expect(receiving).toContain('const queueState = await offlineQueue.refresh()');
     expect(receiving).toContain('action.idempotencyKey === local.receiptId && action.complete');
     expect(receiving).toContain('offlineSnapshot.lastSuccessfulSyncAt === null');
     expect(receiving).toContain('action.idempotencyKey === doneReceiptId');
     expect(receiving).toContain('setDonePendingSync(false)');
+    expect(receiving).toContain('const queuedConflict = queueState.actions.find');
+    expect(receiving).toContain('setConflict(hydratedConflict)');
   });
 
   it('restricts cached bootstrap to receiving routes for the same unexpired session', () => {

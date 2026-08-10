@@ -128,6 +128,7 @@ export interface OfflineQueueActionView {
   reason: string | null;
   conflictCode: ReceiptConflictCode | null;
   observedAt: number;
+  syncVersion: number;
 }
 
 export interface OfflineQueueSnapshot {
@@ -179,6 +180,8 @@ export interface OfflineQueueDeps {
   isOnline: () => boolean;
   now: () => number;
   storageAvailable: () => boolean;
+  /** Stable for one queue instance/tab; tests set it to make lease races explicit. */
+  workerId?: string;
 }
 
 export interface OfflineQueue {
@@ -189,7 +192,11 @@ export interface OfflineQueue {
   /** Manual retry — what the design document mandates (:85). */
   sync: () => Promise<OfflineQueueSnapshot>;
   /** Drops one action after a human decided its fate on the conflict screen. */
-  discardAction: (id: number) => Promise<void>;
+  discardAction: (
+    id: number,
+    expectedSyncVersion: number,
+    expectedState: OfflineQueuedAction['state'],
+  ) => Promise<boolean>;
   /** Wires the auto-resume listener. Idempotent. */
   start: () => void;
   stop: () => void;
@@ -204,6 +211,11 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
   let sessionExpired = false;
   let started = false;
   let onlineListener: (() => void) | null = null;
+  const leaseOwner = deps.workerId ?? (
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `offline-queue-${Math.random().toString(36).slice(2)}`
+  );
 
   const emit = () => { for (const listener of listeners) listener(); };
 
@@ -220,6 +232,7 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
       ? RECEIPT_CONFLICT_CODES.find((code) => code === action.lastErrorCode) ?? null
       : null,
     observedAt: action.observedAt,
+    syncVersion: action.syncVersion ?? 0,
   });
 
   async function refresh(): Promise<OfflineQueueSnapshot> {
@@ -254,48 +267,13 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
     return snapshot;
   }
 
-  async function markDraftSynced(action: OfflineQueuedAction, at: number) {
-    if (action.payload.p_complete) {
-      await deps.store.deleteReceiptDraft(action.orderId);
-      await deps.store.deleteOpenOrder(action.orderId);
-      return;
-    }
-    const draft = await deps.store.getReceiptDraft(action.orderId);
-    if (!draft || draft.receiptId !== action.idempotencyKey) return;
-    await deps.store.putReceiptDraft({
-      ...draft,
-      syncedAt: at,
-      completed: draft.completed || action.payload.p_complete,
-      updatedAt: at,
-    });
-  }
-
-  async function enqueue(input: SubmitReceiptInput, reason: string): Promise<void> {
+  async function enqueue(input: SubmitReceiptInput, reason: string | null): Promise<OfflineQueuedAction> {
     const scope = await deps.resolveScope();
     if (!scope) {
       throw new OfflineStorageError('לא ניתן לזהות את הארגון והמשתמש עבור השמירה המקומית.');
     }
-    const existing = (await deps.store.listQueuedActions())
-      .find((action) => action.idempotencyKey === input.payload.p_receipt_id);
     const now = deps.now();
-    if (existing) {
-      if (existing.payload.p_complete && !input.payload.p_complete) return;
-      // One receipt, one queue entry: the newest local state for this key replaces the older one.
-      // Two entries under one key would send the same receipt twice and invite the server's own
-      // idempotency comparison to reject the second as a conflict.
-      await deps.store.putQueuedAction({
-        ...existing,
-        payload: input.payload,
-        observedAt: input.observedAt,
-        orderLabel: input.orderLabel,
-        state: 'pending',
-        lastError: reason,
-        lastErrorCode: null,
-        lastAttemptAt: now,
-      });
-      return;
-    }
-    await deps.store.enqueueAction({
+    return deps.store.upsertQueuedAction({
       kind: 'save_goods_receipt',
       orgId: scope.orgId,
       actorUserId: scope.actorUserId,
@@ -342,50 +320,85 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
     }
     sessionExpired = false;
     const sentAt = deps.now();
+    let queued: OfflineQueuedAction;
     try {
-      // Observed and synced are the same act on this path, so the reason stays the base string.
+      // Persist and claim before the network call. A replacement in another tab increments the
+      // payload version and clears this lease, so this sender can no longer delete it afterwards.
+      queued = await enqueue(input, null);
+    } catch (error) {
+      await refresh();
+      return { kind: 'rejected', message: localStorageMessage(error) };
+    }
+    if (queued.id == null) {
+      await refresh();
+      return { kind: 'rejected', message: 'לא ניתן לזהות את הפעולה המקומית שנשמרה.' };
+    }
+    const claimed = await deps.store.claimQueuedAction(queued.id, leaseOwner, sentAt);
+    if (!claimed || claimed.syncVersion == null) {
+      const reason = 'הקבלה נשמרה במכשיר ומסונכרנת כעת בחלון אחר.';
+      await refresh();
+      return { kind: 'queued', reason };
+    }
+    let serverAccepted = false;
+    try {
       const result = await deps.send({
-        ...input.payload,
-        p_reason: receiptAuditReason(input.payload.p_reason, sentAt, sentAt),
+        ...claimed.payload,
+        p_reason: receiptAuditReason(claimed.payload.p_reason, claimed.observedAt, sentAt),
       });
-      const stored = (await deps.store.listQueuedActions())
-        .find((action) => action.idempotencyKey === input.payload.p_receipt_id);
-      if (stored?.id != null) await deps.store.deleteQueuedAction(stored.id);
-      await markDraftSynced(
-        {
-          kind: 'save_goods_receipt',
-          idempotencyKey: input.payload.p_receipt_id,
-          orderId: input.orderId,
-          orderLabel: input.orderLabel,
-          payload: input.payload,
-          observedAt: input.observedAt,
-          attempts: 0,
-          state: 'pending',
-          lastError: null,
-          lastErrorCode: null,
-          lastAttemptAt: null,
-          createdAt: sentAt,
-        },
-        sentAt,
+      serverAccepted = true;
+      const accepted = await deps.store.finalizeClaimedQueuedAction(
+        claimed.id!, leaseOwner, claimed.syncVersion, sentAt, deps.now(),
       );
-      await deps.store.setLastSuccessfulSyncAt(sentAt);
+      if (!accepted) {
+        const reason = 'השרת קיבל גרסה קודמת, ושינויים חדשים יותר נשארו במכשיר לסנכרון.';
+        await refresh();
+        return { kind: 'queued', reason };
+      }
+      try {
+        await deps.store.setLastSuccessfulSyncAt(sentAt);
+      } catch (metadataError) {
+        console.error('[supplyflow] receipt accepted but sync timestamp was not stored', metadataError);
+      }
       await refresh();
       return { kind: 'sent', receiptId: result.receipt_id, result };
     } catch (error) {
       const conflict = receiptConflictCode(error);
+      const permanentFailure = isPermanentQueueFailure(error);
+      const transportFailure = isTransportFailure(error);
+      const finalizationFailure = serverAccepted;
+      const failureMessage = finalizationFailure
+        ? 'השרת קיבל את הקבלה, אך הניקוי המקומי לא הושלם. הפעולה נשארה לתיקון בטוח בניסיון הבא.'
+        : toHebrewError(error);
+      const updated = await deps.store.updateClaimedQueuedAction(
+        claimed.id!,
+        leaseOwner,
+        claimed.syncVersion,
+        {
+          attempts: claimed.attempts + 1,
+          state: finalizationFailure || transportFailure
+            ? 'failed'
+            : conflict ? 'conflict' : permanentFailure || !transportFailure ? 'needs_attention' : 'failed',
+          lastError: failureMessage,
+          lastErrorCode: conflict ?? (permanentFailure ? 'permanent_scope_rejection' : null),
+          lastAttemptAt: sentAt,
+        },
+        deps.now(),
+      );
+      if (!updated) {
+        const reason = 'הפעולה השתנתה בחלון אחר ונשארה במכשיר לסנכרון.';
+        await refresh();
+        return { kind: 'queued', reason };
+      }
+      if (finalizationFailure) {
+        await refresh();
+        return { kind: 'queued', reason: failureMessage };
+      }
       if (conflict) {
-        // Nothing to retry blindly: a human has to decide. The local draft stays where it is.
         await refresh();
         return { kind: 'conflict', code: conflict, message: toHebrewError(error) };
       }
-      if (isTransportFailure(error)) {
+      if (transportFailure) {
         const reason = 'השליחה נכשלה בגלל תקלת רשת. הקבלה נשמרה במכשיר ותישלח בניסיון הבא.';
-        try {
-          await enqueue(input, reason);
-        } catch (storageError) {
-          await refresh();
-          return { kind: 'rejected', message: localStorageMessage(storageError) };
-        }
         await refresh();
         return { kind: 'queued', reason };
       }
@@ -411,6 +424,9 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
         // just re-collect the same rejection and bury the decision under attempt counters.
         if (action.state === 'conflict' || action.state === 'needs_attention' || action.id == null) continue;
         const sentAt = deps.now();
+        const claimed = await deps.store.claimQueuedAction(action.id, leaseOwner, sentAt);
+        if (!claimed || claimed.syncVersion == null || claimed.id == null) continue;
+        let serverAccepted = false;
         try {
           // Do not rely on the actor checked at the start of the batch. A sign-out/sign-in can
           // happen between two actions, so identity and scope are rechecked immediately before
@@ -422,11 +438,11 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
             break;
           }
           if (
-            !action.actorUserId
-            || !action.orgId
-            || actorUserId !== action.actorUserId
-            || scope.actorUserId !== action.actorUserId
-            || scope.orgId !== action.orgId
+            !claimed.actorUserId
+            || !claimed.orgId
+            || actorUserId !== claimed.actorUserId
+            || scope.actorUserId !== claimed.actorUserId
+            || scope.orgId !== claimed.orgId
           ) {
             // Do not mutate another actor's record either. It stays bound to its owner and becomes
             // visible again only when that same owner signs in.
@@ -434,25 +450,41 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
             break;
           }
           await deps.send({
-            ...action.payload,
-            p_reason: receiptAuditReason(action.payload.p_reason, action.observedAt, sentAt),
+            ...claimed.payload,
+            p_reason: receiptAuditReason(claimed.payload.p_reason, claimed.observedAt, sentAt),
           });
-          await deps.store.deleteQueuedAction(action.id);
-          await markDraftSynced(action, sentAt);
-          await deps.store.setLastSuccessfulSyncAt(sentAt);
+          serverAccepted = true;
+          const accepted = await deps.store.finalizeClaimedQueuedAction(
+            claimed.id, leaseOwner, claimed.syncVersion, sentAt, deps.now(),
+          );
+          if (accepted) {
+            try {
+              await deps.store.setLastSuccessfulSyncAt(sentAt);
+            } catch (metadataError) {
+              console.error('[supplyflow] receipt accepted but sync timestamp was not stored', metadataError);
+            }
+          }
         } catch (error) {
           // Continue after failure (the runUploadBatch rule): every remaining action still gets
           // its turn, and each keeps its own reason so a retry targets only what failed.
           const conflict = receiptConflictCode(error);
           const permanentFailure = isPermanentQueueFailure(error);
-          await deps.store.putQueuedAction({
-            ...action,
-            attempts: action.attempts + 1,
-            state: conflict ? 'conflict' : permanentFailure ? 'needs_attention' : 'failed',
-            lastError: toHebrewError(error),
-            lastErrorCode: conflict ?? (permanentFailure ? 'permanent_scope_rejection' : null),
-            lastAttemptAt: sentAt,
-          });
+          const failureMessage = serverAccepted
+            ? 'השרת קיבל את הקבלה, אך הניקוי המקומי לא הושלם. הפעולה נשארה לתיקון בטוח בניסיון הבא.'
+            : toHebrewError(error);
+          await deps.store.updateClaimedQueuedAction(
+            claimed.id,
+            leaseOwner,
+            claimed.syncVersion,
+            {
+              attempts: claimed.attempts + 1,
+              state: serverAccepted ? 'failed' : conflict ? 'conflict' : permanentFailure ? 'needs_attention' : 'failed',
+              lastError: failureMessage,
+              lastErrorCode: conflict ?? (permanentFailure ? 'permanent_scope_rejection' : null),
+              lastAttemptAt: sentAt,
+            },
+            deps.now(),
+          );
         }
       }
     } finally {
@@ -488,9 +520,12 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
     refresh,
     submitReceipt,
     sync,
-    discardAction: async (id: number) => {
-      await deps.store.deleteQueuedAction(id);
+    discardAction: async (id, expectedSyncVersion, expectedState) => {
+      const discarded = await deps.store.discardConflictedQueuedAction(
+        id, expectedSyncVersion, expectedState,
+      );
       await refresh();
+      return discarded;
     },
     start,
     stop,

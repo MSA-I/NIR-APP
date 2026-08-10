@@ -90,7 +90,13 @@ select pg_temp.p9_assert(
       and pol.polname = 'notification_preferences_select_own'
       and pol.polpermissive
       and pol.polcmd = 'r'
-      and pg_catalog.pg_get_expr(pol.polqual, pol.polrelid) like '%(user_id = uid())%'),
+      and exists (
+        select 1
+        from pg_catalog.pg_depend dependency
+        where dependency.classid = 'pg_catalog.pg_policy'::regclass
+          and dependency.objid = pol.oid
+          and dependency.refobjid = 'auth.uid()'::regprocedure
+      )),
   'the preference read policy must be permissive, SELECT-only and pinned to the caller');
 
 select pg_temp.p9_assert(
@@ -406,12 +412,12 @@ insert into products (id, org_id, category_id, name, unit) values
 
 -- One approved charge, so the accountant branch has a row it may legally see and so the
 -- payment-request approval preconditions of 0031:887-917 are satisfiable.
-insert into invoices (id, org_id, supplier_id, invoice_number, invoice_date, total_amount,
-                      review_status) values
+insert into invoices (id, org_id, supplier_id, invoice_number, invoice_date,
+                      amount_before_vat, vat_amount, total_amount, review_status) values
   ('69000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
-   '39000000-0000-4000-8000-000000000001', 'P9SEARCH-INV-1', current_date, 500, 'received'),
+   '39000000-0000-4000-8000-000000000001', 'P9SEARCH-INV-1', current_date, 500, 0, 500, 'received'),
   ('69000000-0000-4000-8000-000000000002', '19000000-0000-4000-8000-000000000001',
-   '39000000-0000-4000-8000-000000000001', 'P9SEARCH-INV-2', current_date, 300, 'received');
+   '39000000-0000-4000-8000-000000000001', 'P9SEARCH-INV-2', current_date, 300, 0, 300, 'received');
 select set_config('request.jwt.claim.sub', '29000000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;

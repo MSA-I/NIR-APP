@@ -119,8 +119,9 @@ select pg_temp.p17_assert(
 );
 select pg_temp.p17_assert(
   public.supplier_portal_context()->'supplier'->>'id'
-    = '37000000-0000-4000-8000-000000000001',
-  'supplier portal projection did not retain the supplier agent own identity'
+    = '37000000-0000-4000-8000-000000000001'
+  and public.supplier_portal_context()->'supplier'->>'status' = 'active',
+  'supplier portal projection did not retain the supplier agent own identity and commerce status'
 );
 reset role;
 

@@ -182,15 +182,9 @@ create index integration_outbox_offboarding_request_idx
 alter table public.organization_offboarding_requests enable row level security;
 revoke all on table public.organization_offboarding_requests from public, anon, authenticated;
 
--- The browser never mutates the table. These read policies support future SQL-console diagnosis;
--- application reads still go through the narrow RPCs below.
-create policy organization_offboarding_owner_select
-on public.organization_offboarding_requests for select to authenticated
-using (org_id = public.auth_org() and public.auth_role() = 'owner');
-
-create policy organization_offboarding_platform_select
-on public.organization_offboarding_requests for select to authenticated
-using (public.is_platform_admin());
+-- The row contains worker leases, token hashes and retention controls. Keep browser access at
+-- RLS default-deny with no authenticated table grant or policy; owners and platform operators
+-- receive only the purpose-built projections exposed by the audited SECURITY DEFINER RPCs below.
 
 insert into private.scope_registry (table_name, scope_class, enforced)
 values ('organization_offboarding_requests', 'org_global', false);

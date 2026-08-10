@@ -93,6 +93,7 @@ select pg_temp.p23_assert(
 
 select pg_temp.p23_assert(
   public.supplier_portal_context()->'supplier'->>'id' = '26300000-0000-4000-8000-000000000001'
+  and public.supplier_portal_context()->'supplier'->>'status' = 'active'
   and jsonb_array_length(public.supplier_portal_context()->'orders') = 3
   and not exists (
     select 1
@@ -104,7 +105,7 @@ select pg_temp.p23_assert(
       '26600000-0000-4000-8000-000000000006'
     )
   ),
-  'projection exposed an unissued, other-supplier or other-tenant order'
+  'projection omitted supplier commerce status or exposed an unissued, other-supplier or other-tenant order'
 );
 
 select pg_temp.p23_assert(

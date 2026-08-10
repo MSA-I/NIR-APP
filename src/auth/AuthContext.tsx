@@ -7,7 +7,12 @@ import { OrgScopeProvider } from '../lib/query/orgScope';
 import { resolveRoleLabels } from '../lib/status';
 import { cleanupPushBeforeSignOut } from '../lib/push';
 import { toHebrewError } from '../lib/errors';
-import { getRememberedOfflineBootstrap, rememberOfflineBootstrap } from '../lib/offlineDb';
+import {
+  getRememberedOfflineBootstrap,
+  offlineAccessProjectionFromServer,
+  organizationAccessFromOfflineBootstrap,
+  rememberOfflineBootstrap,
+} from '../lib/offlineDb';
 import {
   organizationAccessFromServer,
   READ_ONLY_ORGANIZATION_ACCESS,
@@ -125,9 +130,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               await rememberOfflineBootstrap({
                 actorUserId: session.user.id,
                 orgId: p.org_id,
-                profile: p,
-                organization: o,
-                organizationAccess: serverAccess,
+                role: p.role,
+                access: offlineAccessProjectionFromServer(accessRows[0], serverAccess),
                 cachedAt: Date.now(),
               });
             } catch {
@@ -150,18 +154,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           }
           if (cached) {
-            setProfile(cached.profile);
-            setOrg(cached.organization);
+            // IndexedDB holds only scope keys, role and the server access projection. A minimal
+            // profile is enough for the receiving guard; no Organization object is synthesized.
+            setProfile({
+              id: cached.actorUserId,
+              org_id: cached.orgId,
+              role: cached.role,
+              full_name: '',
+              phone: null,
+              active: true,
+              supplier_id: null,
+            });
+            setOrg(null);
             setIsPlatformAdmin(false);
             setOfflineBootstrap(true);
-            setAccess(organizationAccessFromServer(
-              cached.organizationAccess
-                ? {
-                    access_mode: cached.organizationAccess.mode,
-                    grace_days_remaining: cached.organizationAccess.graceDaysRemaining,
-                  }
-                : null,
-            ));
+            setAccess(organizationAccessFromOfflineBootstrap(cached, Date.now()));
             setBootstrapError(null);
           } else {
             setProfile(null);
@@ -187,7 +194,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (result.error) throw result.error;
     const rows = result.data as OrganizationAccessStateRow[] | null;
     if (rows?.length !== 1) throw new Error('organization_access_state_unavailable');
-    setAccess(organizationAccessFromServer(rows[0]));
+    const serverAccess = organizationAccessFromServer(rows[0]);
+    setAccess(serverAccess);
+    try {
+      await rememberOfflineBootstrap({
+        actorUserId: session.user.id,
+        orgId: profile.org_id,
+        role: profile.role,
+        access: offlineAccessProjectionFromServer(rows[0], serverAccess),
+        cachedAt: Date.now(),
+      });
+    } catch {
+      // The live server projection remains authoritative when the local cache is unavailable.
+    }
   }
 
   // Open tabs re-read the canonical server clock instead of crossing trial/grace boundaries with

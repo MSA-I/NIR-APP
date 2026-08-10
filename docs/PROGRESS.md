@@ -10,7 +10,7 @@
 offline", "אין כותב ל־pending_photos", "אין שורות חשבונית" או "מלאי מתקדם עתידי" הוחלפו בקוד
 הקמפיין ואינם מתארים עוד את הענף הנוכחי.
 
-**נמסר בקוד, טרם אושר לשחרור:**
+**נמסר בקוד ועבר שער מקומי מלא; טרם אושר/נפרס לייצור:**
 
 - `0100`–`0103`: reprocess מנומק, התאמה חזקה למחירון, rollback, calibration corpus, Shadow Mode,
   structural drift ומרכז תפעול מסמכים. אין thresholds מספריים מומצאים ל־drift.
@@ -22,12 +22,18 @@ offline", "אין כותב ל־pending_photos", "אין שורות חשבוני�
 - `0108`: Trial ‏30 יום + 7 ימי Grace ואז read-only, עם platform-admin step-up וסיבה.
 - `0109`: פורטל ספק צר להזמנות שהונפקו ואישור `sent→confirmed` לאותו `supplier_id` בלבד.
 - `0110`: inventory read model מדוד והצעות read-only; בלי ספירה אין יתרה מומצאת.
-- Offline: app shell סטטי בלבד, טיוטה/תור/קונפליקט ב־IndexedDB ותמונות offline עם resume.
+- Offline: app shell סטטי בלבד, autosave לטיוטה, תור/קונפליקט ב־IndexedDB, תמונות offline עם resume,
+  lifecycle fail-closed ו־lease/version CAS בין טאבים.
 - Platform: outbox/signing/retry/dead-letter נשמרו. הוכחת צד ג׳ חיה **DEFERRED בהחלטת בעלים** עד
   יעד ו־credentials מפורשים ואינה blocker לשאר הקמפיין.
 
-**שערי שחרור:** `npm run build`, ‏`npm run quality`, reset/DB tests, browser/mobile/RTL/accessibility,
-Release Reviewer, commit/push, migrations/Edge/frontend production ואימות חי — כולם **PENDING**.
+**שער מקומי סופי:** `npm run quality` עבר ב־09.08.2026 ב־exit 0 וללא skipped tests: ‏58 קובצי
+Vitest ו־502/502 בדיקות, P0 עם 278 assertions, reset/upgrade עד `0111`, SQL/RLS/financial/concurrency,
+Edge/OCR, ‏P4 עם 19 audit rows, וכל תרחישי browser/mobile/RTL/accessibility/offline עם
+`failures: []`. ראיות: `C:\Users\art1\.codex\visualizations\2026\08\09\20260809-220721-p4-quality-gates`.
+
+**שערים שנותרו:** Release Reviewer, commit/push, migrations/Edge/OCR/frontend production ואימות חי
+הם **PENDING**.
 אין להסיק מקיום המיגרציות או מהסעיף הזה שהן הוחלו בייצור. התוצאות ו־SHA יירשמו רק ב־
 `IMPROVEMENT-CAMPAIGN-2026-08.md` לאחר ביצוע בפועל.
 

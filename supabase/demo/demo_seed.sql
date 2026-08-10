@@ -99,10 +99,10 @@ insert into suppliers (id, org_id, name, tax_id, contact_name, phone, whatsapp, 
 ('aa000000-0000-4000-8000-000000000008', '11111111-1111-4111-8111-111111111111', 'משקאות אור בע"מ', '512990011', 'ליאור אור', '04-6112299', '053-6112299', 'lior@mashkaot-or.demo', 'אזור תעשייה צ''ק פוסט', '{1}', '16:00', 600, 'שוטף + 60', 'בנק מזרחי 20 | סניף 430 | חשבון 556677', 'אספקה שבועית בימי שני', 'active'),
 ('aa000000-0000-4000-8000-000000000009', '11111111-1111-4111-8111-111111111111', 'יין ושמחה', '514112233', 'מירב כץ', '03-9556677', '050-9556677', 'meirav@yain-vesimcha.demo', 'ראשון לציון', '{3}', '14:00', 800, 'שוטף + 30', 'בנק לאומי 10 | סניף 811 | חשבון 123987', 'יבואן יינות ואלכוהול', 'active'),
 ('aa000000-0000-4000-8000-000000000010', '11111111-1111-4111-8111-111111111111', 'נקי וזוהר', '515334455', 'אתי דהן', '04-6223311', '052-6223311', 'eti@naki-vezoher.demo', 'עפולה', '{0,3}', '15:00', 350, 'שוטף + 30', 'בנק דיסקונט 11 | סניף 062 | חשבון 445566', null, 'active'),
-('aa000000-0000-4000-8000-000000000011', '11111111-1111-4111-8111-111111111111', 'ברק כימיקלים', '513445566', 'ברק שלו', '04-6334422', '054-6334422', 'barak@barak-chem.demo', 'נצרת עילית', '{2}', '14:00', 300, 'שוטף + 30', null, 'בעיות אספקה חוזרות ברבעון האחרון', 'problematic'),
+('aa000000-0000-4000-8000-000000000011', '11111111-1111-4111-8111-111111111111', 'ברק כימיקלים', '513445566', 'ברק שלו', '04-6334422', '054-6334422', 'barak@barak-chem.demo', 'נצרת עילית', '{2}', '14:00', 300, 'שוטף + 30', null, 'בעיות אספקה חוזרות ברבעון האחרון', 'active'),
 ('aa000000-0000-4000-8000-000000000012', '11111111-1111-4111-8111-111111111111', 'חד פעמי אלף', '516556677', 'אלון עזרא', '04-6445533', '050-6445533', 'alon@hadpaami-alef.demo', 'אזור תעשייה עפולה', '{0,2,4}', '16:00', 400, 'שוטף + 30', 'בנק הפועלים 12 | סניף 654 | חשבון 220044', null, 'active'),
 ('aa000000-0000-4000-8000-000000000013', '11111111-1111-4111-8111-111111111111', 'אריזות הדרום', '512667788', 'סיגל אברהם', '08-6778899', '052-6778899', 'sigal@arizot-hadarom.demo', 'באר שבע', '{1,4}', '13:00', 350, 'שוטף + 45', null, 'משלוח חינם מעל 800 ₪', 'active'),
-('aa000000-0000-4000-8000-000000000014', '11111111-1111-4111-8111-111111111111', 'שף ציוד מקצועי', '515889900', 'רון אשכנזי', '03-5667788', '053-5667788', 'ron@chef-tziud.demo', 'פתח תקווה', '{}', null, null, 'מזומן / אשראי', null, 'ספק חדש — ממתין לאישור הנהלה', 'pending'),
+('aa000000-0000-4000-8000-000000000014', '11111111-1111-4111-8111-111111111111', 'שף ציוד מקצועי', '515889900', 'רון אשכנזי', '03-5667788', '053-5667788', 'ron@chef-tziud.demo', 'פתח תקווה', '{}', null, null, 'מזומן / אשראי', null, 'ספק חדש — ממתין לאישור הנהלה', 'active'),
 ('aa000000-0000-4000-8000-000000000015', '11111111-1111-4111-8111-111111111111', 'תבליני הגליל', '511556677', 'סמיר חורי', '04-6990011', '050-6990011', 'samir@tavliney-hagalil.demo', 'שפרעם', '{0,3}', '14:00', 200, 'שוטף + 30', 'בנק ערבי ישראלי 34 | סניף 785 | חשבון 667788', 'תבלינים, קטניות ומוצרים יבשים', 'active');
 
 insert into profiles (id, org_id, full_name, role, phone, supplier_id)
@@ -505,20 +505,19 @@ select v.receipt_id::uuid, v.order_item_id::uuid, v.product_id::uuid,
 
 -- ===== Invoices =====
 insert into invoices (id, org_id, supplier_id, invoice_number, invoice_date, received_date, received_by, amount_before_vat, vat_amount, total_amount, review_status, payment_status, export_status, notes) values
-('f4000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000001', '5731', '2026-06-03', '2026-06-03', pg_temp.demo_user('kitchen'), 1000.00, 180.00, 1180.00, 'approved', 'paid', 'sent', null),
-('f4000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000005', '7702', '2026-06-10', '2026-06-10', pg_temp.demo_user('kitchen'), 4000.00, 720.00, 4720.00, 'approved', 'paid', 'sent', 'שולם בשני תשלומים'),
-('f4000000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000003', '11250', '2026-06-05', '2026-06-05', pg_temp.demo_user('kitchen'), 500.00, 90.00, 590.00, 'approved', 'paid', 'sent', null),
-('f4000000-0000-4000-8000-000000000004', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000003', '11311', '2026-06-12', '2026-06-12', pg_temp.demo_user('kitchen'), 350.00, 63.00, 413.00, 'approved', 'paid', 'sent', null),
-('f4000000-0000-4000-8000-000000000005', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000003', '11390', '2026-06-19', '2026-06-19', pg_temp.demo_user('kitchen'), 700.00, 126.00, 826.00, 'approved', 'paid', 'sent', null),
-('f4000000-0000-4000-8000-000000000006', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000010', '2088', '2026-06-15', '2026-06-16', pg_temp.demo_user('office'), 900.00, 162.00, 1062.00, 'approved', 'partial', 'not_sent', 'שולם חלקית — 500 ₪'),
-('f4000000-0000-4000-8000-000000000007', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000008', '30125', '2026-06-28', '2026-06-29', pg_temp.demo_user('kitchen'), 2400.00, 432.00, 2832.00, 'approved', 'unpaid', 'not_sent', 'דרישת תשלום מאושרת — ממתין לביצוע'),
+('f4000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000001', '5731', '2026-06-03', '2026-06-03', pg_temp.demo_user('kitchen'), 1000.00, 180.00, 1180.00, 'received', 'paid', 'sent', null),
+('f4000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000005', '7702', '2026-06-10', '2026-06-10', pg_temp.demo_user('kitchen'), 4000.00, 720.00, 4720.00, 'received', 'paid', 'sent', 'שולם בשני תשלומים'),
+('f4000000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000003', '11250', '2026-06-05', '2026-06-05', pg_temp.demo_user('kitchen'), 500.00, 90.00, 590.00, 'received', 'paid', 'sent', null),
+('f4000000-0000-4000-8000-000000000004', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000003', '11311', '2026-06-12', '2026-06-12', pg_temp.demo_user('kitchen'), 350.00, 63.00, 413.00, 'received', 'paid', 'sent', null),
+('f4000000-0000-4000-8000-000000000005', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000003', '11390', '2026-06-19', '2026-06-19', pg_temp.demo_user('kitchen'), 700.00, 126.00, 826.00, 'received', 'paid', 'sent', null),
+('f4000000-0000-4000-8000-000000000006', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000010', '2088', '2026-06-15', '2026-06-16', pg_temp.demo_user('office'), 900.00, 162.00, 1062.00, 'received', 'partial', 'not_sent', 'שולם חלקית — 500 ₪'),
+('f4000000-0000-4000-8000-000000000007', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000008', '30125', '2026-06-28', '2026-06-29', pg_temp.demo_user('kitchen'), 2400.00, 432.00, 2832.00, 'received', 'unpaid', 'not_sent', 'דרישת תשלום מאושרת — ממתין לביצוע'),
 ('f4000000-0000-4000-8000-000000000008', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000012', '888214', '2026-07-02', '2026-07-02', pg_temp.demo_user('kitchen'), 1398.81, 251.79, 1650.60, 'investigation', 'unpaid', 'not_sent', 'סכום גבוה מההזמנה ב-246.60 ₪ — נפתחה דרישת זיכוי'),
-('f4000000-0000-4000-8000-000000000009', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000005', '7702', '2026-07-03', '2026-07-03', pg_temp.demo_user('office'), 4000.00, 720.00, 4720.00, 'investigation', 'unpaid', 'not_sent', 'חשד לכפילות — אותו מספר חשבונית ואותו סכום כמו חשבונית מ-10.6'),
 ('f4000000-0000-4000-8000-000000000010', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000006', '45120', '2026-07-06', '2026-07-06', pg_temp.demo_user('kitchen'), 3000.00, 540.00, 3540.00, 'pending_approval', 'unpaid', 'not_sent', 'חסרים פריטים בקבלה — ממתין לזיכוי מהספק'),
 ('f4000000-0000-4000-8000-000000000011', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000007', '6633', '2026-07-10', '2026-07-10', pg_temp.demo_user('kitchen'), 2500.00, 450.00, 2950.00, 'in_review', 'unpaid', 'not_sent', '6 ק"ג דניס פגומים — דרישת זיכוי פתוחה'),
 ('f4000000-0000-4000-8000-000000000012', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000002', '1509', '2026-07-12', '2026-07-12', pg_temp.demo_user('kitchen'), 661.02, 118.98, 780.00, 'received', 'unpaid', 'not_sent', null),
-('f4000000-0000-4000-8000-000000000013', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000015', '509', '2026-05-20', '2026-05-20', pg_temp.demo_user('kitchen'), 542.37, 97.63, 640.00, 'approved', 'unpaid', 'sent', 'חשבונית ישנה ללא תשלום — דורש בירור'),
-('f4000000-0000-4000-8000-000000000014', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000013', '3377', '2026-06-18', '2026-06-18', pg_temp.demo_user('office'), 762.71, 137.29, 900.00, 'approved', 'paid', 'sent', 'קוזז זיכוי 150 ₪ מהיתרה');
+('f4000000-0000-4000-8000-000000000013', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000015', '509', '2026-05-20', '2026-05-20', pg_temp.demo_user('kitchen'), 542.37, 97.63, 640.00, 'received', 'unpaid', 'sent', 'חשבונית ישנה ללא תשלום — דורש בירור'),
+('f4000000-0000-4000-8000-000000000014', '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000013', '3377', '2026-06-18', '2026-06-18', pg_temp.demo_user('office'), 762.71, 137.29, 900.00, 'received', 'paid', 'sent', 'קוזז זיכוי 150 ₪ מהיתרה');
 
 insert into invoice_order_links (invoice_id, order_id, org_id)
 select v.invoice_id::uuid, v.order_id::uuid,
@@ -529,7 +528,6 @@ select v.invoice_id::uuid, v.order_id::uuid,
 ('f4000000-0000-4000-8000-000000000006', 'f0000000-0000-4000-8000-000000000004'),
 ('f4000000-0000-4000-8000-000000000007', 'f0000000-0000-4000-8000-000000000005'),
 ('f4000000-0000-4000-8000-000000000008', 'f0000000-0000-4000-8000-000000000006'),
-('f4000000-0000-4000-8000-000000000009', 'f0000000-0000-4000-8000-000000000002'),
 ('f4000000-0000-4000-8000-000000000010', 'f0000000-0000-4000-8000-000000000007'),
 ('f4000000-0000-4000-8000-000000000011', 'f0000000-0000-4000-8000-000000000008'),
 ('f4000000-0000-4000-8000-000000000012', 'f0000000-0000-4000-8000-000000000009'),
@@ -552,6 +550,102 @@ select v.invoice_id::uuid, v.receipt_id::uuid,
 ('f4000000-0000-4000-8000-000000000013', 'f2000000-0000-4000-8000-000000000010'),
 ('f4000000-0000-4000-8000-000000000014', 'f2000000-0000-4000-8000-000000000011')
 ) as v(invoice_id, receipt_id);
+
+-- Approved demo history must cross the same server-authoritative 0106 boundary as a live
+-- invoice. Linked legacy rows predate line extraction, so the owner reviews and overrides their
+-- exact immutable assessment hash with fresh password authentication before approval.
+create function pg_temp.demo_approve_invoice(
+  p_invoice_id uuid,
+  p_override_key uuid default null
+) returns void
+language plpgsql
+as $fn$
+declare
+  v_assessment jsonb;
+begin
+  if p_override_key is not null then
+    v_assessment := public.get_invoice_three_way_match(p_invoice_id);
+    perform public.override_invoice_three_way_match(
+      p_invoice_id,
+      v_assessment ->> 'assessment_hash',
+      p_override_key,
+      format(
+        'Demo seed: owner reviewed linked legacy invoice %s without extracted line evidence',
+        p_invoice_id
+      )
+    );
+  end if;
+
+  perform public.set_invoice_review_status(
+    p_invoice_id,
+    'in_review',
+    'Demo seed: owner started invoice review'
+  );
+  perform public.set_invoice_review_status(
+    p_invoice_id,
+    'approved',
+    'Demo seed: owner approved invoice after three-way assessment'
+  );
+end
+$fn$;
+
+select set_config('request.jwt.claim.sub', pg_temp.demo_user('owner')::text, false);
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', pg_temp.demo_user('owner'),
+  'amr', jsonb_build_array(jsonb_build_object(
+    'method', 'password',
+    'timestamp', extract(epoch from clock_timestamp())::bigint
+  ))
+)::text, false);
+set role authenticated;
+
+-- Linked invoices have their order and receipt context in place before the assessment is read.
+select pg_temp.demo_approve_invoice(
+  'f4000000-0000-4000-8000-000000000001', 'f4100000-0000-4000-8000-000000000001'
+);
+select pg_temp.demo_approve_invoice(
+  'f4000000-0000-4000-8000-000000000002', 'f4100000-0000-4000-8000-000000000002'
+);
+select pg_temp.demo_approve_invoice(
+  'f4000000-0000-4000-8000-000000000003', 'f4100000-0000-4000-8000-000000000003'
+);
+select pg_temp.demo_approve_invoice('f4000000-0000-4000-8000-000000000004');
+select pg_temp.demo_approve_invoice('f4000000-0000-4000-8000-000000000005');
+select pg_temp.demo_approve_invoice(
+  'f4000000-0000-4000-8000-000000000006', 'f4100000-0000-4000-8000-000000000006'
+);
+select pg_temp.demo_approve_invoice(
+  'f4000000-0000-4000-8000-000000000007', 'f4100000-0000-4000-8000-000000000007'
+);
+select pg_temp.demo_approve_invoice(
+  'f4000000-0000-4000-8000-000000000013', 'f4100000-0000-4000-8000-000000000013'
+);
+select pg_temp.demo_approve_invoice(
+  'f4000000-0000-4000-8000-000000000014', 'f4100000-0000-4000-8000-000000000014'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '', false);
+select set_config('request.jwt.claims', '', false);
+
+-- Seed the duplicate only after historical invoice 7702 is immutably approved. If both rows
+-- existed earlier, the definite-duplicate rule would correctly make that approval non-overridable.
+insert into invoices (
+  id, org_id, supplier_id, invoice_number, invoice_date, received_date, received_by,
+  amount_before_vat, vat_amount, total_amount, review_status, payment_status, export_status, notes
+) values (
+  'f4000000-0000-4000-8000-000000000009',
+  '11111111-1111-4111-8111-111111111111',
+  'aa000000-0000-4000-8000-000000000005',
+  '7702', '2026-07-03', '2026-07-03', pg_temp.demo_user('office'),
+  4000.00, 720.00, 4720.00, 'investigation', 'unpaid', 'not_sent',
+  'חשד לכפילות — אותו מספר חשבונית ואותו סכום כמו חשבונית מ-10.6'
+);
+insert into invoice_order_links (invoice_id, order_id, org_id) values (
+  'f4000000-0000-4000-8000-000000000009',
+  'f0000000-0000-4000-8000-000000000002',
+  '11111111-1111-4111-8111-111111111111'
+);
 
 -- ===== Credit requests =====
 insert into credit_requests (id, org_id, supplier_id, invoice_id, receipt_item_id, reason, amount, status, notes, created_by, created_at, resolved_at) values
@@ -722,6 +816,20 @@ insert into approval_policy_configurations
   (id, org_id, policy_key, threshold_amount, required_approvals, step_up_required)
 values ('fb900000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',
         'payment_request.approval', 25000.00, 2, false);
+
+-- Historical catalog and purchasing rows are loaded while the suppliers are active so the
+-- production commerce guard remains meaningful. Only after the history exists do we restore the
+-- present-day non-active statuses shown by the demo.
+update suppliers
+set status = case id
+  when 'aa000000-0000-4000-8000-000000000011'::uuid then 'problematic'::supplier_status
+  when 'aa000000-0000-4000-8000-000000000014'::uuid then 'pending'::supplier_status
+  else status
+end
+where id in (
+  'aa000000-0000-4000-8000-000000000011'::uuid,
+  'aa000000-0000-4000-8000-000000000014'::uuid
+);
 
 -- Note: the allocation audit rows used to need repairing here — payment_allocations and
 -- bank_allocations had no org_id column, so the audit trigger recorded them with no tenant.

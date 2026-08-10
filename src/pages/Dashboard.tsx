@@ -422,8 +422,8 @@ export default function Dashboard() {
     const prPendingApproval = snapshot.paymentRequests.pendingApproval;
 
     // Payments due/overdue can ONLY come from payment_requests that carry a MANUAL due_date —
-    // invoices have no due_date and suppliers.payment_terms is free text nobody parses. If not one
-    // active request has a due date, we cannot claim anything about what is due/overdue → null (—),
+    // invoices have no due_date and suppliers.payment_terms is free text nobody parses. Undated
+    // requests are excluded; if not one active request has a date, the metric is unknown → null (—),
     // never 0 (which would falsely assert "nothing is overdue"). See OPEN-DECISIONS #27.
     const paymentsOverdue = snapshot.paymentRequests.overdue;
     const paymentsDueToday = snapshot.paymentRequests.dueToday;

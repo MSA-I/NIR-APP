@@ -9,6 +9,7 @@ declare
   v_supplier uuid := public.auth_supplier();
   v_org_name text;
   v_supplier_name text;
+  v_supplier_status public.supplier_status;
   v_prices jsonb;
   v_orders jsonb;
 begin
@@ -16,7 +17,7 @@ begin
     raise exception 'supplier_portal_not_authorized' using errcode = '42501';
   end if;
 
-  select o.name, s.name into v_org_name, v_supplier_name
+  select o.name, s.name, s.status into v_org_name, v_supplier_name, v_supplier_status
   from public.organizations o
   join public.suppliers s
     on s.org_id = o.id
@@ -100,7 +101,11 @@ begin
 
   return jsonb_build_object(
     'organization_name', v_org_name,
-    'supplier', jsonb_build_object('id', v_supplier, 'name', v_supplier_name),
+    'supplier', jsonb_build_object(
+      'id', v_supplier,
+      'name', v_supplier_name,
+      'status', v_supplier_status
+    ),
     'current_month', date_trunc('month', now() at time zone 'Asia/Jerusalem')::date,
     'prices', v_prices,
     'orders', v_orders

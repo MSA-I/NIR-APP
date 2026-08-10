@@ -884,8 +884,8 @@ try {
     Assert-Status $response @(200) "active tenant push event accepted"
     Assert-True ([int]$response.Json.notifications -eq 2) "active tenant selects its owner and office recipients"
     $response = Invoke-JsonRequest -Method Post -Uri "$apiUrl/functions/v1/send-push" -Headers @{ "x-push-secret" = $PushSecret } -Body @{ event = "price_increase"; org_id = $orgA; payload = @{ count = 1; event_key = $suspendedEventKey } }
-    Assert-Status $response @(200) "suspended tenant push event handled safely"
-    Assert-True ([int]$response.Json.notifications -eq 0) "service-role push path selects no suspended recipient"
+    Assert-Status $response @(409) "suspended tenant push event is rejected before notification delivery"
+    Assert-True ($response.Json.error.code -eq "org_unavailable") "suspended tenant push returns the lifecycle denial contract"
     $response = Invoke-Rest -Method Get -Resource "notifications?dedupe_key=eq.price_increase:$activeEventKey&select=org_id" -ApiKey $serviceKey -Token $serviceKey
     Assert-Status $response @(200) "trusted active push verification"
     Assert-Count $response.Json 2 "active push writes exactly two notifications"

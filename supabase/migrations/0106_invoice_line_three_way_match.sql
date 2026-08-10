@@ -479,30 +479,155 @@ language sql stable security invoker set search_path = public, private, pg_temp 
     from public.invoice_line_evidence_batches b
     where b.org_id = p_org_id and b.invoice_id = p_invoice_id
     order by b.revision desc limit 1
+  ), identity_matches as (
+    select line.id as invoice_line_id,
+      poi.id as purchase_order_item_id,
+      line.quantity as invoice_quantity,
+      line.unit as invoice_unit,
+      poi.qty as ordered_quantity,
+      poi.received_qty as received_quantity,
+      poi.unit_snapshot as order_unit,
+      case
+        when line.product_id is not null and line.product_id = poi.product_id then 1
+        when line.supplier_sku is not null and sp.supplier_sku is not null
+          and lower(trim(line.supplier_sku)) = lower(trim(sp.supplier_sku)) then 2
+        when line.barcode is not null and product.barcode is not null
+          and regexp_replace(line.barcode, '[[:space:]-]+', '', 'g')
+            = regexp_replace(product.barcode, '[[:space:]-]+', '', 'g') then 3
+        else null
+      end as identity_rank
+    from latest_batch batch
+    join public.invoice_lines line
+      on line.org_id = p_org_id and line.evidence_batch_id = batch.id
+    join public.invoice_order_links iol
+      on iol.org_id = p_org_id and iol.invoice_id = p_invoice_id
+    join public.purchase_orders po
+      on po.org_id = iol.org_id and po.id = iol.order_id
+    join public.invoices inv
+      on inv.org_id = p_org_id and inv.id = p_invoice_id and inv.supplier_id = po.supplier_id
+    join public.purchase_order_items poi
+      on poi.org_id = po.org_id and poi.order_id = po.id
+    join public.products product
+      on product.org_id = poi.org_id and product.id = poi.product_id
+    left join public.supplier_products sp
+      on sp.org_id = poi.org_id and sp.supplier_id = inv.supplier_id
+     and sp.product_id = poi.product_id
+    where (line.product_id is not null and line.product_id = poi.product_id)
+       or (line.supplier_sku is not null and sp.supplier_sku is not null
+         and lower(trim(line.supplier_sku)) = lower(trim(sp.supplier_sku)))
+       or (line.barcode is not null and product.barcode is not null
+         and regexp_replace(line.barcode, '[[:space:]-]+', '', 'g')
+           = regexp_replace(product.barcode, '[[:space:]-]+', '', 'g'))
+  ), first_identity_level as (
+    select matched.*,
+      min(matched.identity_rank) over (partition by matched.invoice_line_id)
+        as selected_identity_rank
+    from identity_matches matched
+    where matched.identity_rank is not null
+  ), identity_candidates as (
+    select ranked.*
+    from first_identity_level ranked
+    where ranked.identity_rank = ranked.selected_identity_rank
+  ), latest_prior_approval as (
+    -- Only immutable approval snapshots consume capacity. Draft/review invoices must not make
+    -- candidate selection depend on mutable work in progress.
+    select distinct on (snapshot.invoice_id)
+      snapshot.invoice_id, snapshot.assessment
+    from public.invoice_three_way_approval_snapshots snapshot
+    join public.invoices prior_invoice
+      on prior_invoice.org_id = snapshot.org_id
+     and prior_invoice.id = snapshot.invoice_id
+     and prior_invoice.deleted_at is null
+    join public.invoices current_invoice
+      on current_invoice.org_id = p_org_id
+     and current_invoice.id = p_invoice_id
+     and current_invoice.supplier_id = prior_invoice.supplier_id
+    where snapshot.org_id = p_org_id
+      and snapshot.invoice_id <> p_invoice_id
+    order by snapshot.invoice_id, snapshot.revision desc
+  ), prior_item_allocations as (
+    select (approved_item ->> 'purchase_order_item_id')::uuid as purchase_order_item_id,
+      coalesce(sum((approved_item ->> 'current_invoice_quantity')::numeric), 0)
+        as prior_invoiced_quantity,
+      coalesce(bool_or(not coalesce(
+        (approved_item ->> 'unit_resolved')::boolean, false)), false)
+        as has_unresolved_unit
+    from latest_prior_approval approval
+    cross join lateral jsonb_array_elements(
+      coalesce(approval.assessment -> 'order_items', '[]'::jsonb)) approved_item
+    where approved_item ->> 'purchase_order_item_id' is not null
+      and exists (
+        select 1
+        from identity_candidates candidate
+        where candidate.purchase_order_item_id::text
+          = approved_item ->> 'purchase_order_item_id'
+      )
+    group by (approved_item ->> 'purchase_order_item_id')::uuid
+  ), same_level_candidates as (
+    select candidate.*,
+      coalesce(prior.prior_invoiced_quantity, 0) as prior_invoiced_quantity,
+      coalesce(prior.has_unresolved_unit, false) as has_unresolved_unit,
+      factor.value as unit_factor,
+      greatest(
+        least(candidate.ordered_quantity, candidate.received_quantity)
+          - coalesce(prior.prior_invoiced_quantity, 0),
+        0
+      ) as remaining_quantity,
+      case
+        when private.invoice_unit_canonical(candidate.order_unit) in ('g','kg','ml','liter')
+          then least(candidate.ordered_quantity, candidate.received_quantity) * 0.02
+        else 0
+      end as quantity_tolerance
+    from identity_candidates candidate
+    left join prior_item_allocations prior
+      on prior.purchase_order_item_id = candidate.purchase_order_item_id
+    cross join lateral (
+      select private.invoice_unit_factor(candidate.invoice_unit, candidate.order_unit) as value
+    ) factor
+  ), evaluated_candidates as (
+    select candidate.*,
+      candidate.unit_factor is not null
+        and not candidate.has_unresolved_unit
+        and abs(
+          candidate.invoice_quantity * candidate.unit_factor
+            - candidate.remaining_quantity
+        ) <= 0.000001 as exact_remaining_match,
+      candidate.unit_factor is not null
+        and not candidate.has_unresolved_unit
+        and candidate.invoice_quantity * candidate.unit_factor
+          <= candidate.remaining_quantity + candidate.quantity_tolerance
+        as fits_remaining_quantity
+    from same_level_candidates candidate
+  ), candidate_counts as (
+    select candidate.*,
+      count(*) over (partition by candidate.invoice_line_id) as candidate_count,
+      count(*) filter (where candidate.exact_remaining_match)
+        over (partition by candidate.invoice_line_id) as exact_match_count,
+      count(*) filter (where candidate.fits_remaining_quantity)
+        over (partition by candidate.invoice_line_id) as fitting_match_count
+    from evaluated_candidates candidate
+  ), resolved_candidates as (
+    select candidate.*,
+      case
+        when candidate.candidate_count = 1 then 'single'
+        when candidate.exact_match_count = 1 then 'exact_remaining'
+        when candidate.exact_match_count = 0 and candidate.fitting_match_count = 1
+          then 'only_fitting_remaining'
+        else 'ambiguous'
+      end as resolution
+    from candidate_counts candidate
   )
-  select distinct line.id, poi.id
-  from latest_batch batch
-  join public.invoice_lines line
-    on line.org_id = p_org_id and line.evidence_batch_id = batch.id
-  join public.invoice_order_links iol
-    on iol.org_id = p_org_id and iol.invoice_id = p_invoice_id
-  join public.purchase_orders po
-    on po.org_id = iol.org_id and po.id = iol.order_id
-  join public.invoices inv
-    on inv.org_id = p_org_id and inv.id = p_invoice_id and inv.supplier_id = po.supplier_id
-  join public.purchase_order_items poi
-    on poi.org_id = po.org_id and poi.order_id = po.id
-  join public.products product
-    on product.org_id = poi.org_id and product.id = poi.product_id
-  left join public.supplier_products sp
-    on sp.org_id = poi.org_id and sp.supplier_id = inv.supplier_id
-   and sp.product_id = poi.product_id
-  where (line.product_id is not null and line.product_id = poi.product_id)
-     or (line.supplier_sku is not null and sp.supplier_sku is not null
-       and lower(trim(line.supplier_sku)) = lower(trim(sp.supplier_sku)))
-     or (line.barcode is not null and product.barcode is not null
-       and regexp_replace(line.barcode, '[[:space:]-]+', '', 'g')
-         = regexp_replace(product.barcode, '[[:space:]-]+', '', 'g'))
+  -- Identity is hierarchical: product -> supplier SKU -> barcode. Remaining quantity is a
+  -- tie-breaker only when it proves one candidate exactly or leaves only one candidate capable
+  -- of carrying the line. Every unresolved tie is returned intact for manual review; no row-order
+  -- or "first match" behavior is allowed.
+  select candidate.invoice_line_id, candidate.purchase_order_item_id
+  from resolved_candidates candidate
+  where candidate.resolution = 'ambiguous'
+     or (candidate.resolution = 'single')
+     or (candidate.resolution = 'exact_remaining' and candidate.exact_remaining_match)
+     or (candidate.resolution = 'only_fitting_remaining'
+       and candidate.fits_remaining_quantity)
 $$;
 
 create or replace function private.invoice_effective_line_matches(p_org_id uuid, p_invoice_id uuid)
@@ -548,35 +673,8 @@ language sql stable security invoker set search_path = public, private, pg_temp 
   )
 $$;
 
-create or replace function private.invoice_line_identified_product(
-  p_org_id uuid,
-  p_invoice_id uuid,
-  p_invoice_line_id uuid
-) returns uuid
-language sql stable security invoker set search_path = public, private, pg_temp as $$
-  with source_line as (
-    select line.product_id
-    from public.invoice_lines line
-    where line.org_id = p_org_id and line.invoice_id = p_invoice_id
-      and line.id = p_invoice_line_id
-  ), candidate_products as (
-    select distinct item.product_id
-    from private.invoice_line_candidates(p_org_id, p_invoice_id) candidate
-    join public.purchase_order_items item
-      on item.org_id = p_org_id and item.id = candidate.purchase_order_item_id
-    where candidate.invoice_line_id = p_invoice_line_id
-  )
-  select coalesce(line.product_id, case
-    when (select count(*) from candidate_products) = 1
-      then (select product_id from candidate_products)
-    else null
-  end)
-  from source_line line
-$$;
-
 revoke all on function private.invoice_line_candidates(uuid,uuid),
-  private.invoice_effective_line_matches(uuid,uuid),
-  private.invoice_line_identified_product(uuid,uuid,uuid)
+  private.invoice_effective_line_matches(uuid,uuid)
   from public, anon, authenticated, service_role;
 
 -- ===== 5. Server-authoritative evidence and explicit-match commands =====
@@ -1112,9 +1210,10 @@ declare
   v_ordered_quantity_tolerance numeric;
   v_received_quantity_tolerance numeric;
   v_line_expected numeric;
-  v_identified_product uuid;
   v_expected_vat_rate numeric;
   v_line_duplicate boolean;
+  v_line_candidate_cache jsonb := '{}'::jsonb;
+  v_effective_match_cache jsonb := '[]'::jsonb;
   v_definite_duplicate boolean := false;
   v_blocked boolean := false;
   v_warning boolean := false;
@@ -1156,6 +1255,26 @@ begin
     ));
   end if;
 
+  -- This identity is independent of extracted lines and therefore applies equally to browser,
+  -- service-ingested and legacy invoices. Separate ±₪1 comparisons against line totals must not
+  -- combine to hide a materially inconsistent invoice header.
+  if abs(
+    (v_invoice.amount_before_vat + v_invoice.vat_amount) - v_invoice.total_amount
+  ) > 1 then
+    v_blocked := true;
+    v_reasons := v_reasons || jsonb_build_array(jsonb_build_object(
+      'code', 'invoice_header_arithmetic_discrepancy', 'severity', 'error',
+      'header_net', v_invoice.amount_before_vat,
+      'header_vat', v_invoice.vat_amount,
+      'expected_header_grand', v_invoice.amount_before_vat + v_invoice.vat_amount,
+      'actual_header_grand', v_invoice.total_amount,
+      'difference_amount',
+        (v_invoice.amount_before_vat + v_invoice.vat_amount) - v_invoice.total_amount,
+      'tolerance', 1,
+      'message_key', 'invoice_three_way.invoice_header_arithmetic_discrepancy'
+    ));
+  end if;
+
   select count(*)::integer into v_linked_order_count
   from public.invoice_order_links link
   join public.purchase_orders po
@@ -1191,6 +1310,80 @@ begin
     order by match_set.revision desc
     limit 1;
 
+    -- Materialize candidates exactly once for the complete invoice assessment. Duplicate
+    -- detection is then a set self-join over normalized cached identities instead of an
+    -- invoice_line_identified_product call for every line pair (which recomputed candidate and
+    -- approval-snapshot JSON repeatedly).
+    with candidates as materialized (
+      select candidate.invoice_line_id, candidate.purchase_order_item_id
+      from private.invoice_line_candidates(p_org_id, p_invoice_id) candidate
+    ), candidate_rollup as (
+      select candidate.invoice_line_id,
+        count(*)::integer as candidate_count,
+        array_agg(distinct item.product_id order by item.product_id) as candidate_product_ids
+      from candidates candidate
+      join public.purchase_order_items item
+        on item.org_id = p_org_id and item.id = candidate.purchase_order_item_id
+      group by candidate.invoice_line_id
+    ), normalized_lines as (
+      select line.id,
+        coalesce(line.product_id, case
+          when cardinality(rollup.candidate_product_ids) = 1
+            then rollup.candidate_product_ids[1]
+          else null
+        end) as identified_product_id,
+        private.invoice_unit_comparison_unit(line.unit) as comparison_unit,
+        private.invoice_unit_comparison_quantity(line.quantity, line.unit)
+          as comparison_quantity,
+        private.invoice_unit_comparison_price(line.unit_price, line.unit)
+          as comparison_unit_price,
+        line.vat_rate,
+        line.line_total,
+        coalesce(rollup.candidate_count, 0) as candidate_count
+      from public.invoice_lines line
+      left join candidate_rollup rollup on rollup.invoice_line_id = line.id
+      where line.org_id = p_org_id and line.evidence_batch_id = v_batch.id
+    ), duplicate_flags as (
+      select current_line.id,
+        current_line.identified_product_id,
+        current_line.candidate_count,
+        bool_or(other_line.id is not null) as duplicate_suspected
+      from normalized_lines current_line
+      left join normalized_lines other_line
+        on other_line.id <> current_line.id
+       and current_line.identified_product_id is not null
+       and other_line.identified_product_id = current_line.identified_product_id
+       and other_line.comparison_unit = current_line.comparison_unit
+       and other_line.comparison_quantity = current_line.comparison_quantity
+       and other_line.comparison_unit_price = current_line.comparison_unit_price
+       and other_line.vat_rate = current_line.vat_rate
+       and other_line.line_total = current_line.line_total
+      group by current_line.id, current_line.identified_product_id,
+        current_line.candidate_count
+    )
+    select coalesce(jsonb_object_agg(
+      duplicate.id::text,
+      jsonb_build_object(
+        'identified_product_id', duplicate.identified_product_id,
+        'candidate_count', duplicate.candidate_count,
+        'duplicate_suspected', duplicate.duplicate_suspected
+      )
+    ), '{}'::jsonb)
+      into v_line_candidate_cache
+    from duplicate_flags duplicate;
+
+    -- Compute explicit/deterministic allocations once per assessment. Keeping this immutable
+    -- per-call snapshot in JSON avoids invoking invoice_effective_line_matches for every evidence
+    -- line (and therefore avoids recomputing all invoice candidates once per line).
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'invoice_line_id', effective.invoice_line_id,
+      'purchase_order_item_id', effective.purchase_order_item_id,
+      'allocated_quantity', effective.allocated_quantity,
+      'match_source', effective.match_source
+    ) order by effective.invoice_line_id, effective.purchase_order_item_id), '[]'::jsonb)
+      into v_effective_match_cache
+    from private.invoice_effective_line_matches(p_org_id, p_invoice_id) effective;
+
     for v_line in
       select line.*
       from public.invoice_lines line
@@ -1210,26 +1403,8 @@ begin
         ));
       end if;
 
-      v_identified_product := private.invoice_line_identified_product(
-        p_org_id, p_invoice_id, v_line.id);
-      select exists (
-        select 1
-        from public.invoice_lines other
-        where other.org_id = v_line.org_id
-          and other.evidence_batch_id = v_line.evidence_batch_id
-          and other.id <> v_line.id
-          and v_identified_product is not null
-          and private.invoice_line_identified_product(
-                p_org_id, p_invoice_id, other.id) = v_identified_product
-          and private.invoice_unit_comparison_unit(other.unit)
-            = private.invoice_unit_comparison_unit(v_line.unit)
-          and private.invoice_unit_comparison_quantity(other.quantity, other.unit)
-            = private.invoice_unit_comparison_quantity(v_line.quantity, v_line.unit)
-          and private.invoice_unit_comparison_price(other.unit_price, other.unit)
-            = private.invoice_unit_comparison_price(v_line.unit_price, v_line.unit)
-          and other.vat_rate = v_line.vat_rate
-          and other.line_total = v_line.line_total
-      ) into v_line_duplicate;
+      v_line_duplicate := coalesce((v_line_candidate_cache
+        #>> array[v_line.id::text, 'duplicate_suspected'])::boolean, false);
       if v_line_duplicate then
         -- Suspicion is kept as two immutable evidence lines; nothing is merged automatically.
         v_warning := true;
@@ -1278,9 +1453,8 @@ begin
             -- A match set is line-scoped: resolving one ambiguous line must not erase a different
             -- line's unique deterministic identity. Unmentioned lines keep the same 0/1/many
             -- candidate policy they had before the explicit set existed.
-            select count(*)::integer into v_candidate_count
-            from private.invoice_line_candidates(p_org_id, p_invoice_id) candidate
-            where candidate.invoice_line_id = v_line.id;
+            v_candidate_count := coalesce((v_line_candidate_cache
+              #>> array[v_line.id::text, 'candidate_count'])::integer, 0);
             if v_candidate_count = 0 then
               v_blocked := true;
               v_line_reasons := v_line_reasons || jsonb_build_array(jsonb_build_object(
@@ -1297,9 +1471,8 @@ begin
             end if;
           end if;
         else
-          select count(*)::integer into v_candidate_count
-          from private.invoice_line_candidates(p_org_id, p_invoice_id) candidate
-          where candidate.invoice_line_id = v_line.id;
+          v_candidate_count := coalesce((v_line_candidate_cache
+            #>> array[v_line.id::text, 'candidate_count'])::integer, 0);
           if v_candidate_count = 0 then
             v_blocked := true;
             v_line_reasons := v_line_reasons || jsonb_build_array(jsonb_build_object(
@@ -1326,7 +1499,12 @@ begin
                  item.received_qty as received_quantity,
                  item.unit_price as ordered_unit_price,
                  item.unit_snapshot as order_unit
-          from private.invoice_effective_line_matches(p_org_id, p_invoice_id) effective
+          from jsonb_to_recordset(v_effective_match_cache) as effective(
+            invoice_line_id uuid,
+            purchase_order_item_id uuid,
+            allocated_quantity numeric,
+            match_source text
+          )
           join public.purchase_order_items item
             on item.org_id = p_org_id and item.id = effective.purchase_order_item_id
           where effective.invoice_line_id = v_line.id
@@ -1481,7 +1659,12 @@ begin
        and linked_order.supplier_id = v_invoice.supplier_id
       join public.purchase_order_items item
         on item.org_id = linked_order.org_id and item.order_id = linked_order.id
-      left join private.invoice_effective_line_matches(p_org_id, p_invoice_id) effective
+      left join jsonb_to_recordset(v_effective_match_cache) as effective(
+        invoice_line_id uuid,
+        purchase_order_item_id uuid,
+        allocated_quantity numeric,
+        match_source text
+      )
         on effective.purchase_order_item_id = item.id
       left join public.invoice_lines line
         on line.org_id = p_org_id and line.id = effective.invoice_line_id

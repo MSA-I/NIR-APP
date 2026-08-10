@@ -123,19 +123,30 @@ insert into purchase_orders (id, org_id, supplier_id, unit_id, status) values
 update purchase_orders set unit_id = null
 where id = '45000000-0000-0000-0000-000000000003';
 
--- Invoices across legal entities; inv3 is the org-visible NULL row. inv1 is approved so the
--- accountant gate has exactly one visible invoice.
+-- Invoices across legal entities; inv3 is the org-visible NULL row. inv1 is transitioned to
+-- approved after insert so the 3-way approval guard evaluates and persists the trusted fixture
+-- assessment instead of bypassing the production command boundary with an approved INSERT.
 insert into invoices (id, org_id, supplier_id, unit_id, invoice_number, invoice_date,
                       amount_before_vat, vat_amount, total_amount, review_status) values
   ('55000000-0000-0000-0000-000000000001', '15000000-0000-0000-0000-000000000001',
    '35000000-0000-0000-0000-000000000001', :'unit_le1', 'P3-INV-1', '2026-07-01',
-   847.46, 152.54, 1000, 'approved'),
+   847.46, 152.54, 1000, 'received'),
   ('55000000-0000-0000-0000-000000000002', '15000000-0000-0000-0000-000000000001',
    '35000000-0000-0000-0000-000000000001', '16000000-0000-0000-0000-000000000002',
    'P3-INV-2', '2026-07-02', 423.73, 76.27, 500, 'received'),
   ('55000000-0000-0000-0000-000000000003', '15000000-0000-0000-0000-000000000001',
    '35000000-0000-0000-0000-000000000001', null, 'P3-INV-3', '2026-07-03',
    169.49, 30.51, 200, 'received');
+select set_config('request.jwt.claim.sub', '25000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select public.set_invoice_review_status(
+  '55000000-0000-0000-0000-000000000001', 'in_review',
+  'P3 enters review through the financial command boundary');
+select public.set_invoice_review_status(
+  '55000000-0000-0000-0000-000000000001', 'approved',
+  'P3 persists the no-order assessment before accountant scope assertions');
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
 update invoices set unit_id = null
 where id = '55000000-0000-0000-0000-000000000003';
 

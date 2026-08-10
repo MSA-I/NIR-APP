@@ -1189,11 +1189,40 @@ insert into invoices (
   amount_before_vat, vat_amount, total_amount, review_status
 ) values
   ('60000000-0000-0000-0000-000000000007', '10000000-0000-0000-0000-000000000001',
-   '30000000-0000-0000-0000-000000000001', 'INV-ACCOUNTANT', '2026-07-21', 100, 18, 118, 'approved'),
+   '30000000-0000-0000-0000-000000000001', 'INV-ACCOUNTANT', '2026-07-21', 100, 18, 118, 'received'),
   ('60000000-0000-0000-0000-000000000008', '10000000-0000-0000-0000-000000000001',
-   '30000000-0000-0000-0000-000000000001', 'INV-EMERGENCY', '2026-07-22', 50, 9, 59, 'approved'),
+   '30000000-0000-0000-0000-000000000001', 'INV-EMERGENCY', '2026-07-22', 50, 9, 59, 'received'),
   ('60000000-0000-0000-0000-000000000011', '10000000-0000-0000-0000-000000000001',
-   '30000000-0000-0000-0000-000000000001', 'INV-REOPENED', '2026-07-22', 25, 4.5, 29.5, 'approved');
+   '30000000-0000-0000-0000-000000000001', 'INV-REOPENED', '2026-07-22', 25, 4.5, 29.5, 'received');
+
+-- Build approved fixtures through the reviewed command so 0106 stores an immutable assessment
+-- snapshot before the accountant and emergency-payment scenarios consume them.
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '20000000-0000-0000-0000-000000000001'
+)::text, true);
+set local role authenticated;
+select set_invoice_review_status(
+  '60000000-0000-0000-0000-000000000007', 'in_review', 'P1 trusted fixture review started'
+);
+select set_invoice_review_status(
+  '60000000-0000-0000-0000-000000000007', 'approved', 'P1 trusted fixture approved'
+);
+select set_invoice_review_status(
+  '60000000-0000-0000-0000-000000000008', 'in_review', 'P1 trusted fixture review started'
+);
+select set_invoice_review_status(
+  '60000000-0000-0000-0000-000000000008', 'approved', 'P1 trusted fixture approved'
+);
+select set_invoice_review_status(
+  '60000000-0000-0000-0000-000000000011', 'in_review', 'P1 trusted fixture review started'
+);
+select set_invoice_review_status(
+  '60000000-0000-0000-0000-000000000011', 'approved', 'P1 trusted fixture approved'
+);
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
 insert into payment_requests (
   id, org_id, supplier_id, amount, status, created_by, approved_by, approved_at
 ) values

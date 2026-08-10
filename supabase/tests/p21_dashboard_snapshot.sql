@@ -79,8 +79,9 @@ select pg_temp.p21_assert(
   and public.management_dashboard_snapshot('2026-08-09') #>> '{paymentRequests,drafts}' = '1'
   and public.management_dashboard_snapshot('2026-08-09') #>> '{paymentRequests,dueDateCoverage}' = '1'
   and public.management_dashboard_snapshot('2026-08-09') #>> '{paymentRequests,activeCount}' = '2'
-  and public.management_dashboard_snapshot('2026-08-09') #> '{paymentRequests,overdue}' = 'null'::jsonb,
-  'partial due-date coverage was treated as a complete overdue measurement');
+  and public.management_dashboard_snapshot('2026-08-09') #>> '{paymentRequests,overdue}' = '1'
+  and public.management_dashboard_snapshot('2026-08-09') #>> '{paymentRequests,dueToday}' = '0',
+  'dated active requests were not measured independently from undated active requests');
 select pg_temp.p21_assert(
   public.management_dashboard_snapshot('2026-08-09') #>> '{credits,count}' = '1'
   and (public.management_dashboard_snapshot('2026-08-09') #>> '{credits,sum}')::numeric = 7,
@@ -99,9 +100,9 @@ set local role authenticated;
 select pg_temp.p21_assert(
   public.management_dashboard_snapshot('2026-08-09') #>> '{paymentRequests,activeCount}' = '0'
   and public.management_dashboard_snapshot('2026-08-09') #>> '{paymentRequests,dueDateCoverage}' = '0'
-  and public.management_dashboard_snapshot('2026-08-09') #>> '{paymentRequests,overdue}' = '0'
-  and public.management_dashboard_snapshot('2026-08-09') #>> '{paymentRequests,dueToday}' = '0',
-  'an empty fully measured queue must remain a real zero');
+  and public.management_dashboard_snapshot('2026-08-09') #> '{paymentRequests,overdue}' = 'null'::jsonb
+  and public.management_dashboard_snapshot('2026-08-09') #> '{paymentRequests,dueToday}' = 'null'::jsonb,
+  'absence of any active request with an explicit due date must remain unknown, not zero');
 
 reset role;
 select set_config('request.jwt.claim.sub', '31000000-0000-4000-8000-000000000002', true);

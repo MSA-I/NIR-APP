@@ -159,6 +159,16 @@ select pg_temp.p20_assert(
   )) > 0,
   'invoice approval must serialize cumulative three-way assessment before commit'
 );
+select pg_temp.p20_assert(
+  to_regprocedure('private.invoice_line_identified_product(uuid,uuid,uuid)') is null
+  and (select regexp_count(proc.prosrc, 'from private[.]invoice_line_candidates') = 2
+       from pg_proc proc
+       where proc.oid = 'private.invoice_three_way_raw(uuid,uuid)'::regprocedure)
+  and (select regexp_count(proc.prosrc, 'from private[.]invoice_effective_line_matches') = 1
+       from pg_proc proc
+       where proc.oid = 'private.invoice_three_way_raw(uuid,uuid)'::regprocedure),
+  'assessment must cache candidates and effective matches once, not recompute them per line'
+);
 
 do $$
 declare v_blocked boolean := false;
@@ -193,19 +203,43 @@ insert into public.profiles (id, org_id, full_name, role) values
   ('21000000-0000-4000-8000-000000000005', '20000000-0000-4000-8000-000000000002', 'P20 owner B', 'owner');
 insert into public.suppliers (id, org_id, name, tax_id) values
   ('22000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'P20 supplier A', 'P20-A'),
-  ('22000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000002', 'P20 supplier B', 'P20-B');
+  ('22000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000002', 'P20 supplier B', 'P20-B'),
+  ('22000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000001', 'P20 wrong linked supplier', 'P20-WRONG');
 insert into public.products (id, org_id, name, unit, sku, barcode) values
   ('23000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'Flour P20', 'kg', 'FLOUR-P20', '7290000000201'),
   ('23000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', 'Cans P20', 'unit', 'CAN-P20', '7290000000202'),
   ('23000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000001', 'Cases P20', 'case', 'CASE-P20', '7290000000203'),
+  ('23000000-0000-4000-8000-000000000005', '20000000-0000-4000-8000-000000000001', 'Hierarchy A P20', 'unit', 'HIER-A-P20', '7290000000205'),
+  ('23000000-0000-4000-8000-000000000006', '20000000-0000-4000-8000-000000000001', 'Hierarchy B P20', 'unit', 'HIER-B-P20', '7290000000206'),
+  ('23000000-0000-4000-8000-000000000007', '20000000-0000-4000-8000-000000000001', 'Duplicate supplier SKU A P20', 'unit', 'DUP-A-P20', '7290000000207'),
+  ('23000000-0000-4000-8000-000000000008', '20000000-0000-4000-8000-000000000001', 'Duplicate supplier SKU B P20', 'unit', 'DUP-B-P20', '7290000000208'),
+  ('23000000-0000-4000-8000-000000000009', '20000000-0000-4000-8000-000000000001', 'Duplicate barcode A P20', 'unit', 'BAR-A-P20', '7290000000209'),
+  ('23000000-0000-4000-8000-000000000010', '20000000-0000-4000-8000-000000000001', 'Duplicate barcode B P20', 'unit', 'BAR-B-P20', '7290000000209'),
   ('23000000-0000-4000-8000-000000000004', '20000000-0000-4000-8000-000000000002', 'Tenant B P20', 'kg', 'B-P20', '7290000000299');
+insert into public.supplier_products (
+  org_id, supplier_id, product_id, current_price, supplier_sku
+) values
+  ('20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', '23000000-0000-4000-8000-000000000005', 5, 'SUP-HIER-A'),
+  ('20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', '23000000-0000-4000-8000-000000000006', 5, 'SUP-HIER-B'),
+  ('20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', '23000000-0000-4000-8000-000000000007', 5, 'SUP-DUPLICATE'),
+  ('20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', '23000000-0000-4000-8000-000000000008', 5, 'SUP-DUPLICATE'),
+  ('20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', '23000000-0000-4000-8000-000000000009', 5, 'SUP-BAR-A'),
+  ('20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', '23000000-0000-4000-8000-000000000010', 5, 'SUP-BAR-B');
 insert into public.purchase_orders (id, org_id, supplier_id, status, created_by) values
   ('24000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'sent', '21000000-0000-4000-8000-000000000001'),
   ('24000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'sent', '21000000-0000-4000-8000-000000000001'),
   ('24000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'sent', '21000000-0000-4000-8000-000000000001'),
   ('24000000-0000-4000-8000-000000000004', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'sent', '21000000-0000-4000-8000-000000000001'),
   ('24000000-0000-4000-8000-000000000005', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'sent', '21000000-0000-4000-8000-000000000001'),
-  ('24000000-0000-4000-8000-000000000006', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'sent', '21000000-0000-4000-8000-000000000001');
+  ('24000000-0000-4000-8000-000000000006', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'sent', '21000000-0000-4000-8000-000000000001'),
+  ('24000000-0000-4000-8000-000000000007', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'sent', '21000000-0000-4000-8000-000000000001'),
+  ('24000000-0000-4000-8000-000000000008', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'sent', '21000000-0000-4000-8000-000000000001'),
+  ('24000000-0000-4000-8000-000000000009', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'sent', '21000000-0000-4000-8000-000000000001'),
+  ('24000000-0000-4000-8000-000000000010', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'sent', '21000000-0000-4000-8000-000000000001'),
+  ('24000000-0000-4000-8000-000000000011', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'sent', '21000000-0000-4000-8000-000000000001'),
+  ('24000000-0000-4000-8000-000000000012', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000003', 'sent', '21000000-0000-4000-8000-000000000001'),
+  ('24000000-0000-4000-8000-000000000013', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'sent', '21000000-0000-4000-8000-000000000001'),
+  ('24000000-0000-4000-8000-000000000014', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'sent', '21000000-0000-4000-8000-000000000001');
 insert into public.purchase_order_items (id, org_id, order_id, product_id, qty, unit_price) values
   ('25000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001', '23000000-0000-4000-8000-000000000001', 20, 42),
   ('25000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000002', '23000000-0000-4000-8000-000000000001', 20, 42),
@@ -213,7 +247,15 @@ insert into public.purchase_order_items (id, org_id, order_id, product_id, qty, 
   ('25000000-0000-4000-8000-000000000004', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000004', '23000000-0000-4000-8000-000000000003', 2, 100),
   ('25000000-0000-4000-8000-000000000005', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000005', '23000000-0000-4000-8000-000000000001', 2, 42),
   ('25000000-0000-4000-8000-000000000006', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000005', '23000000-0000-4000-8000-000000000002', 3, 5),
-  ('25000000-0000-4000-8000-000000000007', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000006', '23000000-0000-4000-8000-000000000002', 10, 5);
+  ('25000000-0000-4000-8000-000000000007', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000006', '23000000-0000-4000-8000-000000000002', 10, 5),
+  ('25000000-0000-4000-8000-000000000008', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000007', '23000000-0000-4000-8000-000000000005', 4, 5),
+  ('25000000-0000-4000-8000-000000000009', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000008', '23000000-0000-4000-8000-000000000005', 10, 5),
+  ('25000000-0000-4000-8000-000000000010', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000009', '23000000-0000-4000-8000-000000000006', 4, 5),
+  ('25000000-0000-4000-8000-000000000011', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000010', '23000000-0000-4000-8000-000000000007', 4, 5),
+  ('25000000-0000-4000-8000-000000000012', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000011', '23000000-0000-4000-8000-000000000008', 4, 5),
+  ('25000000-0000-4000-8000-000000000013', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000012', '23000000-0000-4000-8000-000000000005', 4, 5),
+  ('25000000-0000-4000-8000-000000000014', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000013', '23000000-0000-4000-8000-000000000009', 4, 5),
+  ('25000000-0000-4000-8000-000000000015', '20000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000014', '23000000-0000-4000-8000-000000000010', 4, 5);
 
 select pg_temp.p20_assert(
   (select unit_snapshot = 'kg' from public.purchase_order_items where id = '25000000-0000-4000-8000-000000000001')
@@ -268,6 +310,54 @@ select public.save_goods_receipt(
   '[{"order_item_id":"25000000-0000-4000-8000-000000000007","qty_received":10,"status":"full","notes":null}]',
   'P20 records quantity shared by two invoices'
 );
+select public.save_goods_receipt(
+  '24000000-0000-4000-8000-000000000007', '26000000-0000-4000-8000-000000000007',
+  true, 'P20 smaller hierarchy balance', false,
+  '[{"order_item_id":"25000000-0000-4000-8000-000000000008","qty_received":4,"status":"full","notes":null}]',
+  'P20 records the smaller remaining quantity candidate'
+);
+select public.save_goods_receipt(
+  '24000000-0000-4000-8000-000000000008', '26000000-0000-4000-8000-000000000008',
+  true, 'P20 larger hierarchy balance', false,
+  '[{"order_item_id":"25000000-0000-4000-8000-000000000009","qty_received":10,"status":"full","notes":null}]',
+  'P20 records the only candidate capable of carrying six units'
+);
+select public.save_goods_receipt(
+  '24000000-0000-4000-8000-000000000009', '26000000-0000-4000-8000-000000000009',
+  true, 'P20 conflicting lower-priority identity', false,
+  '[{"order_item_id":"25000000-0000-4000-8000-000000000010","qty_received":4,"status":"full","notes":null}]',
+  'P20 records the lower-priority identity collision candidate'
+);
+select public.save_goods_receipt(
+  '24000000-0000-4000-8000-000000000010', '26000000-0000-4000-8000-000000000010',
+  true, 'P20 duplicate supplier SKU A', false,
+  '[{"order_item_id":"25000000-0000-4000-8000-000000000011","qty_received":4,"status":"full","notes":null}]',
+  'P20 records the first deliberately duplicated catalog identity'
+);
+select public.save_goods_receipt(
+  '24000000-0000-4000-8000-000000000011', '26000000-0000-4000-8000-000000000011',
+  true, 'P20 duplicate supplier SKU B', false,
+  '[{"order_item_id":"25000000-0000-4000-8000-000000000012","qty_received":4,"status":"full","notes":null}]',
+  'P20 records the second deliberately duplicated catalog identity'
+);
+select public.save_goods_receipt(
+  '24000000-0000-4000-8000-000000000012', '26000000-0000-4000-8000-000000000012',
+  true, 'P20 wrong-supplier linked order', false,
+  '[{"order_item_id":"25000000-0000-4000-8000-000000000013","qty_received":4,"status":"full","notes":null}]',
+  'P20 records evidence that must remain outside supplier A matching'
+);
+select public.save_goods_receipt(
+  '24000000-0000-4000-8000-000000000013', '26000000-0000-4000-8000-000000000013',
+  true, 'P20 duplicate barcode A', false,
+  '[{"order_item_id":"25000000-0000-4000-8000-000000000014","qty_received":4,"status":"full","notes":null}]',
+  'P20 records the first deliberately duplicated barcode'
+);
+select public.save_goods_receipt(
+  '24000000-0000-4000-8000-000000000014', '26000000-0000-4000-8000-000000000014',
+  true, 'P20 duplicate barcode B', false,
+  '[{"order_item_id":"25000000-0000-4000-8000-000000000015","qty_received":4,"status":"full","notes":null}]',
+  'P20 records the second deliberately duplicated barcode'
+);
 reset role;
 select pg_temp.p20_actor(null, false);
 
@@ -281,7 +371,7 @@ insert into public.invoices (
   ('27000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-PRICE-WARN', current_date, 848.40, 144.23, 992.63),
   ('27000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-PRICE-BLOCK', current_date, 848.60, 144.26, 992.86),
   ('27000000-0000-4000-8000-000000000004', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-UNIT-OVER', current_date, 55, 9.35, 64.35),
-  ('27000000-0000-4000-8000-000000000005', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-AMBIGUOUS', current_date, 756, 128.52, 884.52),
+  ('27000000-0000-4000-8000-000000000005', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-AMBIGUOUS', current_date, 714, 121.38, 835.38),
   ('27000000-0000-4000-8000-000000000006', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-NO-ORDER', current_date, 100, 17, 117),
   ('27000000-0000-4000-8000-000000000007', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-DUP-LINE', current_date, 756, 128.52, 884.52),
   ('27000000-0000-4000-8000-000000000008', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-MASS-TOLERANCE', current_date, 771.12, 131.09, 902.21),
@@ -293,7 +383,17 @@ insert into public.invoices (
   ('27000000-0000-4000-8000-000000000016', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-PRICE-BELOW', current_date, 820, 139.40, 959.40),
   ('27000000-0000-4000-8000-000000000017', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-RECEIVED-NOT-INVOICED', current_date, 84, 14.28, 98.28),
   ('27000000-0000-4000-8000-000000000018', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-CUMULATIVE-A', current_date, 30, 5.10, 35.10),
-  ('27000000-0000-4000-8000-000000000019', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-CUMULATIVE-B', current_date, 30, 5.10, 35.10);
+  ('27000000-0000-4000-8000-000000000019', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-CUMULATIVE-B', current_date, 30, 5.10, 35.10),
+  ('27000000-0000-4000-8000-000000000021', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-REMAINING-CHOICE', current_date, 30, 5.10, 35.10),
+  ('27000000-0000-4000-8000-000000000022', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-PRODUCT-PRIORITY', current_date, 20, 3.40, 23.40),
+  ('27000000-0000-4000-8000-000000000023', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-SKU-PRIORITY', current_date, 20, 3.40, 23.40),
+  ('27000000-0000-4000-8000-000000000024', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-DUPLICATE-SCALE', current_date, 200, 34, 234),
+  ('27000000-0000-4000-8000-000000000025', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-HEADER-ARITHMETIC', current_date, 101, 18, 116),
+  ('27000000-0000-4000-8000-000000000026', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-LEGACY-HEADER-ARITHMETIC', current_date, 101, 18, 116),
+  ('27000000-0000-4000-8000-000000000027', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-DUPLICATE-IDENTITY', current_date, 20, 3.40, 23.40),
+  ('27000000-0000-4000-8000-000000000028', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-WRONG-SUPPLIER-LINK', current_date, 20, 3.40, 23.40),
+  ('27000000-0000-4000-8000-000000000029', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-HEADER-ONE-SHEKEL', current_date, 100, 17, 116),
+  ('27000000-0000-4000-8000-000000000030', '20000000-0000-4000-8000-000000000001', '22000000-0000-4000-8000-000000000001', 'P20-DUPLICATE-BARCODE', current_date, 20, 3.40, 23.40);
 insert into public.invoice_order_links (org_id, invoice_id, order_id) values
   ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001'),
   ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000002', '24000000-0000-4000-8000-000000000002'),
@@ -315,7 +415,19 @@ insert into public.invoice_order_links (org_id, invoice_id, order_id) values
   ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000016', '24000000-0000-4000-8000-000000000002'),
   ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000017', '24000000-0000-4000-8000-000000000005'),
   ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000018', '24000000-0000-4000-8000-000000000006'),
-  ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000019', '24000000-0000-4000-8000-000000000006');
+  ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000019', '24000000-0000-4000-8000-000000000006'),
+  ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000021', '24000000-0000-4000-8000-000000000007'),
+  ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000021', '24000000-0000-4000-8000-000000000008'),
+  ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000022', '24000000-0000-4000-8000-000000000007'),
+  ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000022', '24000000-0000-4000-8000-000000000009'),
+  ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000023', '24000000-0000-4000-8000-000000000007'),
+  ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000023', '24000000-0000-4000-8000-000000000009'),
+  ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000027', '24000000-0000-4000-8000-000000000010'),
+  ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000027', '24000000-0000-4000-8000-000000000011'),
+  ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000028', '24000000-0000-4000-8000-000000000007'),
+  ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000028', '24000000-0000-4000-8000-000000000012'),
+  ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000030', '24000000-0000-4000-8000-000000000013'),
+  ('20000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000030', '24000000-0000-4000-8000-000000000014');
 
 select pg_temp.p20_actor('21000000-0000-4000-8000-000000000001', false);
 set local role authenticated;
@@ -368,7 +480,7 @@ select public.record_invoice_line_evidence(
   '28000000-0000-4000-8000-000000000005', '27000000-0000-4000-8000-000000000005',
   '29000000-0000-4000-8000-000000000005', 'manual_entry', null, null,
   '21000000-0000-4000-8000-000000000001',
-  jsonb_build_array(pg_temp.p20_line('Flour', 'SUP-FLOUR', null, '23000000-0000-4000-8000-000000000001', 18, 'kg', 42, 0, 17, 756)),
+  jsonb_build_array(pg_temp.p20_line('Flour', 'SUP-FLOUR', null, '23000000-0000-4000-8000-000000000001', 17, 'kg', 42, 0, 17, 714)),
   'P20 ambiguous multi-order evidence'
 );
 select public.record_invoice_line_evidence(
@@ -454,6 +566,73 @@ select public.record_invoice_line_evidence(
     6, 'unit', 5, 0, 17, 30)),
   'P20 second invoice would exceed the same receipt cumulatively'
 );
+select public.record_invoice_line_evidence(
+  '28000000-0000-4000-8000-000000000021', '27000000-0000-4000-8000-000000000021',
+  '29000000-0000-4000-8000-000000000021', 'manual_entry', null, null,
+  '21000000-0000-4000-8000-000000000001',
+  jsonb_build_array(pg_temp.p20_line('Six hierarchy units', null, null,
+    '23000000-0000-4000-8000-000000000005', 6, 'unit', 5, 0, 17, 30)),
+  'P20 remaining quantity uniquely selects the linked order with capacity'
+);
+select public.record_invoice_line_evidence(
+  '28000000-0000-4000-8000-000000000022', '27000000-0000-4000-8000-000000000022',
+  '29000000-0000-4000-8000-000000000022', 'manual_entry', null, null,
+  '21000000-0000-4000-8000-000000000001',
+  jsonb_build_array(pg_temp.p20_line('Product identity wins', 'SUP-HIER-B', '7290000000206',
+    '23000000-0000-4000-8000-000000000005', 4, 'unit', 5, 0, 17, 20)),
+  'P20 product identity outranks conflicting SKU and barcode'
+);
+select public.record_invoice_line_evidence(
+  '28000000-0000-4000-8000-000000000023', '27000000-0000-4000-8000-000000000023',
+  '29000000-0000-4000-8000-000000000023', 'manual_entry', null, null,
+  '21000000-0000-4000-8000-000000000001',
+  jsonb_build_array(pg_temp.p20_line('Supplier SKU wins', 'SUP-HIER-A', '7290000000206',
+    null, 4, 'unit', 5, 0, 17, 20)),
+  'P20 supplier SKU outranks a conflicting barcode when product identity is absent'
+);
+select public.record_invoice_line_evidence(
+  '28000000-0000-4000-8000-000000000024', '27000000-0000-4000-8000-000000000024',
+  '29000000-0000-4000-8000-000000000024', 'manual_entry', null, null,
+  '21000000-0000-4000-8000-000000000001',
+  (select jsonb_agg(pg_temp.p20_line(
+     'Repeated scale line', null, null, '23000000-0000-4000-8000-000000000005',
+     1, 'unit', 5, 0, 17, 5, series.line_number
+   ) order by series.line_number)
+   from generate_series(1, 40) series(line_number)),
+  'P20 set-based duplicate detection scale fixture'
+);
+select public.record_invoice_line_evidence(
+  '28000000-0000-4000-8000-000000000025', '27000000-0000-4000-8000-000000000025',
+  '29000000-0000-4000-8000-000000000025', 'manual_entry', null, null,
+  '21000000-0000-4000-8000-000000000001',
+  jsonb_build_array(pg_temp.p20_line('Header identity mismatch', null, null,
+    '23000000-0000-4000-8000-000000000005', 1, 'unit', 100, 0, 17, 100)),
+  'P20 line totals are each within one shekel while the header identity is not'
+);
+select public.record_invoice_line_evidence(
+  '28000000-0000-4000-8000-000000000027', '27000000-0000-4000-8000-000000000027',
+  '29000000-0000-4000-8000-000000000027', 'manual_entry', null, null,
+  '21000000-0000-4000-8000-000000000001',
+  jsonb_build_array(pg_temp.p20_line('Ambiguous duplicate supplier SKU',
+    'SUP-DUPLICATE', null, null, 4, 'unit', 5, 0, 17, 20)),
+  'P20 duplicated supplier SKU must not select either product'
+);
+select public.record_invoice_line_evidence(
+  '28000000-0000-4000-8000-000000000028', '27000000-0000-4000-8000-000000000028',
+  '29000000-0000-4000-8000-000000000028', 'manual_entry', null, null,
+  '21000000-0000-4000-8000-000000000001',
+  jsonb_build_array(pg_temp.p20_line('Correct supplier only', null, null,
+    '23000000-0000-4000-8000-000000000005', 4, 'unit', 5, 0, 17, 20)),
+  'P20 a linked order from another supplier must not become a candidate'
+);
+select public.record_invoice_line_evidence(
+  '28000000-0000-4000-8000-000000000030', '27000000-0000-4000-8000-000000000030',
+  '29000000-0000-4000-8000-000000000030', 'manual_entry', null, null,
+  '21000000-0000-4000-8000-000000000001',
+  jsonb_build_array(pg_temp.p20_line('Ambiguous duplicate barcode',
+    null, '7290000000209', null, 4, 'unit', 5, 0, 17, 20)),
+  'P20 duplicated barcode must not select either product'
+);
 
 -- ===== Read-model reasons and tolerance boundaries =====
 
@@ -498,6 +677,121 @@ select pg_temp.p20_assert(
     where r->>'code' = 'multi_order_ambiguity'),
   'multiple matching linked orders must require an explicit human allocation'
 );
+select pg_temp.p20_assert(
+  public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000021')
+    #>> '{lines,0,matches,0,purchase_order_item_id}' = '25000000-0000-4000-8000-000000000009'
+  and not exists (
+    select 1
+    from jsonb_array_elements(
+      public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000021')->'reasons') reason
+    where reason->>'code' = 'multi_order_ambiguity'
+  ),
+  'remaining quantity did not uniquely select the only linked order item able to carry the line'
+);
+select pg_temp.p20_assert(
+  public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000022')
+    #>> '{lines,0,matches,0,purchase_order_item_id}' = '25000000-0000-4000-8000-000000000008'
+  and public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000023')
+    #>> '{lines,0,matches,0,purchase_order_item_id}' = '25000000-0000-4000-8000-000000000008',
+  'identity collision ignored the product-to-SKU-to-barcode priority contract'
+);
+select pg_temp.p20_assert(
+  exists (
+    select 1
+    from jsonb_array_elements(
+      public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000027')->'reasons') reason
+    where reason->>'code' = 'multi_order_ambiguity'
+      and (reason->>'candidate_count')::integer = 2
+  ),
+  'duplicate supplier SKU selected a product instead of requiring review'
+);
+select pg_temp.p20_assert(
+  exists (
+    select 1
+    from jsonb_array_elements(
+      public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000030')->'reasons') reason
+    where reason->>'code' = 'multi_order_ambiguity'
+      and (reason->>'candidate_count')::integer = 2
+  ),
+  'duplicate barcode selected a product instead of requiring review'
+);
+select pg_temp.p20_assert(
+  public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000028')
+    #>> '{lines,0,matches,0,purchase_order_item_id}' = '25000000-0000-4000-8000-000000000008'
+  and jsonb_array_length(
+    public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000028')
+      ->'candidate_context') = 1,
+  'an invoice-linked purchase order from another supplier entered candidate matching'
+);
+select pg_temp.p20_assert(
+  not (public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000025')
+    ->>'approval_allowed')::boolean
+  and exists (
+    select 1
+    from jsonb_array_elements(
+      public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000025')->'reasons') reason
+    where reason->>'code' = 'invoice_header_arithmetic_discrepancy'
+      and (reason->>'expected_header_grand')::numeric = 119
+      and (reason->>'actual_header_grand')::numeric = 116
+      and (reason->>'difference_amount')::numeric = 3
+  ),
+  'separate one-shekel line comparisons hid a three-shekel invoice-header identity error'
+);
+select pg_temp.p20_assert(
+  not (public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000026')
+    ->>'approval_allowed')::boolean
+  and exists (
+    select 1
+    from jsonb_array_elements(
+      public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000026')->'reasons') reason
+    where reason->>'code' = 'invoice_header_arithmetic_discrepancy'
+  ),
+  'legacy invoice without line evidence bypassed the invoice-header arithmetic identity'
+);
+select pg_temp.p20_assert(
+  (public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000029')
+    ->>'approval_allowed')::boolean
+  and not exists (
+    select 1
+    from jsonb_array_elements(
+      public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000029')->'reasons') reason
+    where reason->>'code' = 'invoice_header_arithmetic_discrepancy'
+  ),
+  'an invoice-header identity difference of exactly one shekel exceeded its inclusive tolerance'
+);
+select public.set_invoice_review_status(
+  '27000000-0000-4000-8000-000000000025', 'in_review',
+  'P20 header arithmetic discrepancy enters review');
+do $$
+begin
+  perform public.set_invoice_review_status(
+    '27000000-0000-4000-8000-000000000025', 'approved',
+    'P20 header arithmetic discrepancy must remain blocked');
+  raise exception 'P20 invoice three-way assertion failed: invalid header arithmetic was approved';
+exception when sqlstate '55000' then
+  if sqlerrm <> 'invoice_approval_blocked_three_way_review' then raise; end if;
+end
+$$;
+
+-- Scale regression: the old nested helper recomputed all candidates and approval JSON for every
+-- pair of duplicate lines. The set-based cache must assess forty duplicate lines within one
+-- bounded call; EXPLAIN ANALYZE records the actual execution path in the test artifact.
+set local statement_timeout = '5s';
+select pg_temp.p20_assert(
+  jsonb_array_length(
+    public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000024')->'lines') = 40
+  and (select count(*) = 40
+       from jsonb_array_elements(
+         public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000024')->'lines') line
+       where exists (
+         select 1 from jsonb_array_elements(line->'reasons') reason
+         where reason->>'code' = 'duplicate_invoice_line_suspected'
+       )),
+  'set-based duplicate cache did not preserve all forty duplicate-line warnings'
+);
+explain (analyze, costs off, summary on, format text)
+select public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000024');
+set local statement_timeout = 0;
 select pg_temp.p20_assert(
   public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000006')->>'status' = 'not_comparable'
   and public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000006')->>'comparison_state' = 'not_comparable',
@@ -632,10 +926,10 @@ select public.record_invoice_line_matches(
   '28100000-0000-4000-8000-000000000005', '27000000-0000-4000-8000-000000000005',
   '28000000-0000-4000-8000-000000000005', '29100000-0000-4000-8000-000000000005',
   jsonb_build_array(jsonb_build_object(
-    'invoice_line_id', (select id from public.invoice_lines where evidence_batch_id = '28000000-0000-4000-8000-000000000005'),
-    'purchase_order_item_id', '25000000-0000-4000-8000-000000000001',
-    'allocated_quantity', 18
-  )), 'P20 resolves deterministic multi-order ambiguity'
+      'invoice_line_id', (select id from public.invoice_lines where evidence_batch_id = '28000000-0000-4000-8000-000000000005'),
+      'purchase_order_item_id', '25000000-0000-4000-8000-000000000001',
+      'allocated_quantity', 17
+    )), 'P20 resolves deterministic multi-order ambiguity'
 );
 select pg_temp.p20_assert(
   public.get_invoice_three_way_match('27000000-0000-4000-8000-000000000005')->>'status' = 'matched_with_warnings'

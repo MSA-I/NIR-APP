@@ -959,8 +959,8 @@ function offlineReceivingOrder() {
 }
 
 /** Reads the app's own IndexedDB, so persistence is asserted as a fact rather than inferred. */
-function readOfflineStore(page) {
-  return page.evaluate(async () => {
+function readOfflineStore(page, orderId = OFFLINE_ORDER_ID) {
+  return page.evaluate(async ({ targetOrderId }) => {
     const db = await new Promise((resolve, reject) => {
       const request = indexedDB.open('supplyflow-offline');
       request.onsuccess = () => resolve(request.result);
@@ -972,31 +972,58 @@ function readOfflineStore(page) {
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
-    const drafts = await readAll('receipt_drafts');
-    const queue = await readAll('sync_queue');
-    const openOrders = await readAll('open_orders');
+    // v1 order/draft stores are recovery-only. Production reads and writes the actor/tenant-scoped
+    // v2 stores, so reading v1 here would make both persistence and never-cache assertions vacuous.
+    const drafts = (await readAll('receipt_drafts_v2'))
+      .filter((draft) => draft.orderId === targetOrderId);
+    const queue = (await readAll('sync_queue'))
+      .filter((action) => action.orderId === targetOrderId
+        || (action.payload && action.payload.p_order_id === targetOrderId));
+    const openOrders = (await readAll('open_orders_v2'))
+      .filter((entry) => entry.orderId === targetOrderId);
     db.close();
     return {
-      drafts: drafts.map((draft) => ({ orderId: draft.orderId, receiptId: draft.receiptId, keySource: draft.keySource, syncedAt: draft.syncedAt })),
-      queue: queue.map((action) => ({ key: action.idempotencyKey, receiptId: action.payload && action.payload.p_receipt_id, state: action.state, attempts: action.attempts })),
+      drafts: drafts.map((draft) => ({
+        orderId: draft.orderId,
+        receiptId: draft.receiptId,
+        keySource: draft.keySource,
+        syncedAt: draft.syncedAt,
+        lines: (draft.lines || []).map((line) => ({
+          orderItemId: line.order_item_id,
+          qtyReceived: line.qty_received,
+          status: line.status,
+          notes: line.notes,
+        })),
+      })),
+      queue: queue.map((action) => ({
+        key: action.idempotencyKey,
+        receiptId: action.payload && action.payload.p_receipt_id,
+        state: action.state,
+        attempts: action.attempts,
+        lines: (action.payload && action.payload.p_lines) || [],
+      })),
+      openOrderCount: openOrders.length,
+      cachedItemCount: openOrders.reduce((count, entry) => count + ((entry.order && entry.order.items) || []).length, 0),
       openOrderKeys: openOrders.map((entry) => Object.keys(entry.order || {})),
       cachedItemKeys: openOrders.flatMap((entry) => ((entry.order && entry.order.items) || []).map((item) => Object.keys(item))),
     };
-  });
+  }, { targetOrderId: orderId });
 }
 
 /**
  * Offline goods receiving, end to end (PLAN-09 §3).
  *
  * `serviceWorkers: 'block'` stays on deliberately: the queue is plain JS plus IndexedDB and owes
- * nothing to a service worker. App-shell precaching is a separate deferred decision
- * (OPEN-DECISIONS #101), and this scenario is written to be true without it — the tab is closed
- * rather than reloaded offline, which is the honest version of "survives a restart".
+ * nothing to a service worker. App-shell precaching is covered by its own scenario, and this one
+ * isolates the queue contract by closing the receiving tab before the pending write is accepted.
  */
 async function offlineReceiving(browser) {
   const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
   const order = offlineReceivingOrder();
   const receiptRequests = [];
+  let holdReceiptSync = false;
+  let releaseReceiptSync;
+  const receiptSyncGate = new Promise((resolve) => { releaseReceiptSync = resolve; });
   // The offline period legitimately produces failed requests: background reads, the flag resolver
   // and the auth refresh all lose the network at once. Their absence would be the surprise.
   const offlineNoise = [
@@ -1015,12 +1042,13 @@ async function offlineReceiving(browser) {
       return route.fulfill({ status: 200, headers: jsonHeaders, json: detail ? order : [order] });
     });
     await context.route('**/rest/v1/goods_receipts?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: null }));
-    await context.route('**/rest/v1/rpc/save_goods_receipt', (route) => {
+    await context.route('**/rest/v1/rpc/save_goods_receipt', async (route) => {
       receiptRequests.push(route.request().postDataJSON());
+      if (holdReceiptSync) await receiptSyncGate;
       return route.fulfill({ status: 200, headers: jsonHeaders, json: { receipt_id: OFFLINE_RECEIPT_ID } });
     });
 
-    const page = await context.newPage();
+    let page = await context.newPage();
     captureConsole(page, 'offline-receiving', offlineNoise);
     await login(page, 'kitchen');
     await page.goto(`${baseURL}/receiving/${OFFLINE_ORDER_ID}`);
@@ -1028,26 +1056,33 @@ async function offlineReceiving(browser) {
     await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור עגבניות בדיקה' }).waitFor();
 
     // The key is minted and stored at draft creation, before anything is sent (ADR-0006:37-39).
-    await page.waitForFunction(async () => {
+    await page.waitForFunction(async ({ storeName, targetOrderId }) => {
       const db = await new Promise((resolve) => {
         const request = indexedDB.open('supplyflow-offline');
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => resolve(null);
       });
-      if (!db || !db.objectStoreNames.contains('receipt_drafts')) return false;
+      if (!db) return false;
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.close();
+        return false;
+      }
       const rows = await new Promise((resolve) => {
-        const request = db.transaction('receipt_drafts', 'readonly').objectStore('receipt_drafts').getAll();
+        const request = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => resolve([]);
       });
       db.close();
-      return rows.length > 0;
-    }, null, { timeout: 20_000 });
+      return rows.some((draft) => draft.orderId === targetOrderId);
+    }, { storeName: 'receipt_drafts_v2', targetOrderId: OFFLINE_ORDER_ID }, { timeout: 20_000 });
     const atDraft = await readOfflineStore(page);
     assert.equal(atDraft.drafts.length, 1, 'no receipt draft was persisted at draft creation');
     const persistedKey = atDraft.drafts[0].receiptId;
     assert.match(persistedKey, /^[0-9a-f-]{36}$/i, `persisted receipt key is not a uuid: ${persistedKey}`);
     // The cached order carries no money: the never-cache rule is structural here, not a promise.
+    assert.equal(atDraft.openOrderCount, 1, 'the target order was not present in the scoped offline cache');
+    assert.equal(atDraft.cachedItemCount, order.items.length,
+      'the target order items were not present in the scoped offline cache');
     for (const keys of atDraft.cachedItemKeys) {
       assert.equal(keys.includes('unit_price'), false, 'the offline order cache stored a price');
     }
@@ -1058,9 +1093,54 @@ async function offlineReceiving(browser) {
     await context.setOffline(true);
     // spinbutton, not getByLabel: the +/- buttons' own labels contain the same phrase.
     await page.getByRole('spinbutton', { name: 'כמות שהתקבלה עבור עגבניות בדיקה' }).fill('4');
+
+    // An edit is durable before the user presses save. Wait for the app's actual IndexedDB row,
+    // kill the tab, reopen the order, and prove the UI hydrates the same value from that row.
+    await page.waitForFunction(async ({ storeName, targetOrderId, targetItemId }) => {
+      const db = await new Promise((resolve) => {
+        const request = indexedDB.open('supplyflow-offline');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => resolve(null);
+      });
+      if (!db || !db.objectStoreNames.contains(storeName)) return false;
+      const rows = await new Promise((resolve) => {
+        const request = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => resolve([]);
+      });
+      db.close();
+      const draft = rows.find((row) => row.orderId === targetOrderId);
+      const line = draft && (draft.lines || []).find((row) => row.order_item_id === targetItemId);
+      return line && Number(line.qty_received) === 4;
+    }, {
+      storeName: 'receipt_drafts_v2',
+      targetOrderId: OFFLINE_ORDER_ID,
+      targetItemId: 'p8-offline-item',
+    }, { timeout: 20_000 });
+    const editedDraft = await readOfflineStore(page);
+    assert.equal(editedDraft.drafts[0].lines[0].qtyReceived, 4,
+      'the quantity edit was not persisted before an explicit save');
+
+    await page.close();
+    await context.setOffline(false);
+    page = await context.newPage();
+    captureConsole(page, 'offline-receiving-edit-recovery', offlineNoise);
+    await page.goto(`${baseURL}/receiving/${OFFLINE_ORDER_ID}`);
+    if (new URL(page.url()).pathname === '/login') {
+      await login(page, 'kitchen');
+      await page.goto(`${baseURL}/receiving/${OFFLINE_ORDER_ID}`);
+    }
+    await settle(page);
+    const restoredQuantity = page.getByRole('spinbutton', { name: 'כמות שהתקבלה עבור עגבניות בדיקה' });
+    await restoredQuantity.waitFor({ timeout: 20_000 });
+    assert.equal(await restoredQuantity.inputValue(), '4',
+      'the receipt quantity did not survive a tab crash before explicit save');
+
+    await context.setOffline(true);
     await page.getByRole('button', { name: /סיום קבלה/ }).click();
 
-    await page.locator('[data-testid="receiving-local-draft"]').waitFor({ timeout: 15_000 });
+    const completion = page.locator('[data-testid="receiving-completion"][data-sync-state="pending"]');
+    await completion.waitFor({ timeout: 15_000 });
     const status = page.locator('[data-testid="offline-queue-status"]');
     await status.waitFor();
     // Two counters, separate, and a sync time that is a real `—` rather than "just now".
@@ -1076,17 +1156,20 @@ async function offlineReceiving(browser) {
     assert.equal(queued.queue.length, 1, 'the receipt was not queued on the device');
     assert.equal(queued.queue[0].receiptId, persistedKey,
       'the queued payload does not carry the key persisted at draft creation');
+    assert.equal(Number(queued.queue[0].lines[0].qty_received), 4,
+      'the queued receipt lost the quantity restored from the autosaved draft');
     const toast = page.locator('.mobile-toast-offset [role]').first();
     await toast.waitFor();
-    const [toastBox, taskbarBox] = await Promise.all([toast.boundingBox(), page.locator('.phone-taskbar').boundingBox()]);
-    assert(toastBox && taskbarBox && toastBox.y + toastBox.height <= taskbarBox.y,
-      `offline feedback covers receiving actions: toast=${JSON.stringify(toastBox)} taskbar=${JSON.stringify(taskbarBox)}`);
+    const toastBox = await toast.boundingBox();
+    const viewport = page.viewportSize();
+    assert(toastBox && viewport && toastBox.y >= 0 && toastBox.y + toastBox.height <= viewport.height,
+      `offline feedback is outside the visible completion screen: toast=${JSON.stringify(toastBox)} viewport=${JSON.stringify(viewport)}`);
     await page.screenshot({ path: path.join(outDir, 'receiving-offline-390.png'), fullPage: true });
     report.screenshots.push('receiving-offline-390.png');
 
-    // The tab dies with the work still queued — the case ADR-0006 actually cares about. A reload
-    // while offline is NOT attempted: without app-shell precaching (#101) it would simply fail, and
-    // the queue's promise is that IndexedDB survives, not that the shell does.
+    // The tab dies with the work still queued — the case ADR-0006 actually cares about. Hold the
+    // first accepted response so persistence can be observed before the reopened app drains it.
+    holdReceiptSync = true;
     await page.close();
     await context.setOffline(false);
 
@@ -1105,8 +1188,12 @@ async function offlineReceiving(browser) {
     assert.equal((await resumedStatus.locator('[data-testid="offline-pending-actions"]').innerText()).trim(), '1',
       'the queued receipt did not survive the closed tab');
 
-    // The manual retry the design document mandates (:85).
-    await resumedStatus.getByRole('button', { name: /ניסיון סנכרון עכשיו/ }).click();
+    releaseReceiptSync();
+    await resumed.waitForTimeout(1_500);
+    const stillPending = await resumed.locator('[data-testid="offline-pending-actions"]').textContent().catch(() => null);
+    if (stillPending?.trim() === '1') {
+      await resumedStatus.getByRole('button', { name: /ניסיון סנכרון עכשיו/ }).click();
+    }
     await resumed.waitForFunction(
       () => document.querySelector('[data-testid="offline-pending-actions"]') === null
         || document.querySelector('[data-testid="offline-pending-actions"]').textContent.trim() === '0',
@@ -1117,6 +1204,8 @@ async function offlineReceiving(browser) {
     assert.equal(receiptRequests[0].p_receipt_id, persistedKey,
       'the receipt was sent under a different key than the one persisted at draft creation');
     assert.equal(receiptRequests[0].p_complete, true, 'the queued completion was sent as a draft save');
+    assert.equal(Number(receiptRequests[0].p_lines[0].qty_received), 4,
+      'the server request lost the quantity restored from the autosaved draft');
     // The observed device clock travels in the reason (#100), never in the signature.
     assert.match(receiptRequests[0].p_reason, /^השלמת קבלת סחורה/,
       `queued reason was not system-authored: ${receiptRequests[0].p_reason}`);
@@ -1570,15 +1659,20 @@ async function orderSupplierComparison(browser) {
 
 async function paymentRequestNamesAndModalStack(browser) {
   const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1024, height: 768 } });
+  const supplierId = '94000000-0000-4000-8000-000000000001';
   const request = {
-    id: 'p4-request', org_id: 'p4-org', supplier_id: 'p4-supplier', number: 7001, amount: 850,
+    id: 'p4-request', org_id: 'p4-org', supplier_id: supplierId, number: 7001, amount: 850,
     due_date: '2026-07-30', status: 'draft', notes: 'בדיקת שכבות', created_at: '2026-07-22T08:00:00Z',
     supplier: { name: 'ספק בדיקת שכבות' },
   };
   await context.route('**/rest/v1/payment_requests?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [request] }));
   await context.route('**/rest/v1/payment_request_invoices?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
-  await context.route('**/rest/v1/suppliers?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ id: 'p4-supplier', name: 'ספק בדיקת שכבות', deleted_at: null }] }));
-  await context.route('**/rest/v1/invoices?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ id: 'p4-invoice', supplier_id: 'p4-supplier', invoice_number: 'INV-P4-01', invoice_date: '2026-07-01', total_amount: 850, review_status: 'approved' }] }));
+  await context.route('**/rest/v1/financial_supplier_directory?**', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: [{ id: supplierId, name: 'ספק בדיקת שכבות', tax_id: null, payment_terms: null, status: 'active', bank_details: null }],
+  }));
+  await context.route('**/rest/v1/invoices?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ id: 'p4-invoice', supplier_id: supplierId, invoice_number: 'INV-P4-01', invoice_date: '2026-07-01', total_amount: 850, review_status: 'approved' }] }));
   await context.route('**/rest/v1/invoice_balances?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ invoice_id: 'p4-invoice', balance: 850 }] }));
   await context.route('**/rest/v1/bank_transactions?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/credit_requests?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
@@ -1623,7 +1717,7 @@ async function paymentRequestNamesAndModalStack(browser) {
     const createButton = page.getByRole('button', { name: 'דרישה חדשה' });
     await createButton.click();
     const create = page.getByRole('dialog', { name: 'דרישת תשלום חדשה' });
-    await create.locator('#payment-request-supplier').selectOption('p4-supplier');
+    await create.locator('#payment-request-supplier').selectOption(supplierId);
     const checkbox = create.getByRole('checkbox', { name: 'בחירת חשבונית INV-P4-01 של ספק בדיקת שכבות להקצאה בדרישת התשלום' });
     await checkbox.waitFor({ timeout: 20_000 });
     await checkbox.check();
@@ -1637,19 +1731,24 @@ async function paymentRequestNamesAndModalStack(browser) {
 
 async function bankContextualNames(browser) {
   const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1024, height: 768 } });
+  const supplierId = '94000000-0000-4000-8000-000000000002';
   const transaction = {
     id: 'p4-bank-row', org_id: 'p4-bank-org', import_id: 'p4-bank-import', tx_date: '2026-07-20',
     amount: 850, description: 'העברה לספק בדיקת נגישות', reference: 'P4-REF',
-    row_hash: 'p4-bank-row-hash', supplier_id: 'p4-bank-supplier', status: 'unmatched',
+    row_hash: 'p4-bank-row-hash', supplier_id: supplierId, status: 'unmatched',
     created_at: '2026-07-20T08:00:00Z', supplier: { name: 'ספק בדיקת נגישות' },
   };
   await context.route('**/rest/v1/bank_transactions?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [transaction] }));
   await context.route('**/rest/v1/bank_imports?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
-  await context.route('**/rest/v1/suppliers?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ id: 'p4-bank-supplier', name: 'ספק בדיקת נגישות' }] }));
+  await context.route('**/rest/v1/financial_supplier_directory?**', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: [{ id: supplierId, name: 'ספק בדיקת נגישות', tax_id: null, payment_terms: null, status: 'active', bank_details: null }],
+  }));
   await context.route('**/rest/v1/payments?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/bank_allocations?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/invoices?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{
-    id: 'p4-bank-invoice', supplier_id: 'p4-bank-supplier', invoice_number: 'BANK-P4-01',
+    id: 'p4-bank-invoice', supplier_id: supplierId, invoice_number: 'BANK-P4-01',
     invoice_date: '2026-07-18', total_amount: 850,
   }] }));
   await context.route('**/rest/v1/invoice_balances?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ invoice_id: 'p4-bank-invoice', balance: 850 }] }));
@@ -2944,8 +3043,11 @@ async function passwordRecovery(browser) {
     await page.goto(`${baseURL}/login`);
     await page.getByRole('link', { name: 'שכחתי סיסמה' }).click();
     await page.waitForFunction(() => location.pathname === '/forgot-password', null, { timeout: 15_000 });
-    await page.locator('#email').fill(account.email);
-    await page.getByRole('button', { name: 'שליחת קישור איפוס' }).click();
+    const recoverySubmit = page.getByRole('button', { name: 'שליחת קישור איפוס' });
+    const recoveryForm = page.locator('form').filter({ has: recoverySubmit });
+    await recoveryForm.waitFor({ timeout: 15_000 });
+    await recoveryForm.locator('#email').fill(account.email);
+    await recoverySubmit.click();
     await page.getByText('אם הכתובת רשומה במערכת').waitFor({ timeout: 10_000 });
     assert(recover, 'no /auth/v1/recover request was issued');
     assert.equal(recover.body.email, account.email, 'recover did not carry the typed address');
@@ -2974,9 +3076,12 @@ async function passwordRecovery(browser) {
     await page.getByRole('button', { name: 'החלפת סיסמה' }).click();
     await page.getByText('הסיסמה הוחלפה').waitFor({ timeout: 15_000 });
     passwordChanged = true;
-    await page.getByRole('button', { name: 'מעבר למערכת' }).click();
-    await page.waitForFunction((expected) => location.pathname === expected, homes.kitchen, { timeout: 25_000 });
-    await page.locator('#main').waitFor({ state: 'visible', timeout: 25_000 });
+    // The secure completion path revokes every recovery session and returns to a cold login.
+    // Staying on /reset-password means global revocation failed and must fail this scenario.
+    await page.waitForFunction(() => (
+      location.pathname === '/login' && new URLSearchParams(location.search).get('reset') === 'success'
+    ), null, { timeout: 25_000 });
+    await page.getByText('הסיסמה הוחלפה וכל החיבורים נותקו').waitFor({ timeout: 10_000 });
     await page.screenshot({ path: path.join(outDir, 'password-recovery-done.png') });
     report.screenshots.push('password-recovery-done.png');
 

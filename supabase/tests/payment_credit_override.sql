@@ -93,18 +93,66 @@ insert into suppliers (id, org_id, name) values
 
 insert into invoices (
   id, org_id, unit_id, supplier_id, invoice_number, invoice_date,
-  total_amount, review_status, payment_status
+  amount_before_vat, vat_amount, total_amount, review_status, payment_status
 ) values
   ('17340000-0000-0000-0000-000000000001', '17300000-0000-0000-0000-000000000001', :'unit_le_a1',
-   '17330000-0000-0000-0000-000000000001', '0073-A1', current_date, 100, 'approved', 'unpaid'),
+   '17330000-0000-0000-0000-000000000001', '0073-A1', current_date, 100, 0, 100, 'received', 'unpaid'),
   ('17340000-0000-0000-0000-000000000002', '17300000-0000-0000-0000-000000000001', '17310000-0000-0000-0000-000000000002',
-   '17330000-0000-0000-0000-000000000001', '0073-A2', current_date, 80, 'approved', 'unpaid'),
+   '17330000-0000-0000-0000-000000000001', '0073-A2', current_date, 80, 0, 80, 'received', 'unpaid'),
   ('17340000-0000-0000-0000-000000000003', '17300000-0000-0000-0000-000000000001', :'unit_le_a1',
-   '17330000-0000-0000-0000-000000000002', '0073-CLEAN', current_date, 60, 'approved', 'unpaid'),
+   '17330000-0000-0000-0000-000000000002', '0073-CLEAN', current_date, 60, 0, 60, 'received', 'unpaid'),
   ('17340000-0000-0000-0000-000000000004', '17300000-0000-0000-0000-000000000001', :'unit_le_a1',
-   '17330000-0000-0000-0000-000000000003', '0073-MALFORMED', current_date, 40, 'approved', 'unpaid'),
+   '17330000-0000-0000-0000-000000000003', '0073-MALFORMED', current_date, 40, 0, 40, 'received', 'unpaid'),
   ('17340000-0000-0000-0000-000000000009', '17300000-0000-0000-0000-000000000002', :'unit_le_b1',
-   '17330000-0000-0000-0000-000000000009', '0073-B1', current_date, 70, 'approved', 'unpaid');
+   '17330000-0000-0000-0000-000000000009', '0073-B1', current_date, 70, 0, 70, 'received', 'unpaid');
+
+-- 0106 forbids trusted fixtures from materializing an approved invoice without the same
+-- server-authoritative review transition and immutable three-way approval snapshot as production.
+select set_config('request.jwt.claim.sub', '17320000-0000-0000-0000-000000000001', true);
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '17320000-0000-0000-0000-000000000001'
+)::text, true);
+set local role authenticated;
+select set_invoice_review_status(
+  '17340000-0000-0000-0000-000000000001', 'in_review', '0073 trusted fixture review started'
+);
+select set_invoice_review_status(
+  '17340000-0000-0000-0000-000000000001', 'approved', '0073 trusted fixture approved'
+);
+select set_invoice_review_status(
+  '17340000-0000-0000-0000-000000000002', 'in_review', '0073 trusted fixture review started'
+);
+select set_invoice_review_status(
+  '17340000-0000-0000-0000-000000000002', 'approved', '0073 trusted fixture approved'
+);
+select set_invoice_review_status(
+  '17340000-0000-0000-0000-000000000003', 'in_review', '0073 trusted fixture review started'
+);
+select set_invoice_review_status(
+  '17340000-0000-0000-0000-000000000003', 'approved', '0073 trusted fixture approved'
+);
+select set_invoice_review_status(
+  '17340000-0000-0000-0000-000000000004', 'in_review', '0073 trusted fixture review started'
+);
+select set_invoice_review_status(
+  '17340000-0000-0000-0000-000000000004', 'approved', '0073 trusted fixture approved'
+);
+reset role;
+
+select set_config('request.jwt.claim.sub', '17320000-0000-0000-0000-000000000009', true);
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '17320000-0000-0000-0000-000000000009'
+)::text, true);
+set local role authenticated;
+select set_invoice_review_status(
+  '17340000-0000-0000-0000-000000000009', 'in_review', '0073 trusted fixture review started'
+);
+select set_invoice_review_status(
+  '17340000-0000-0000-0000-000000000009', 'approved', '0073 trusted fixture approved'
+);
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
 
 -- A receipt-linked credit in entity A2 proves warehouse -> legal-entity derivation.
 insert into purchase_orders (id, org_id, unit_id, supplier_id, status) values

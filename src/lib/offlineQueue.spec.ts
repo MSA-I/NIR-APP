@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 
 /**
  * `src/lib/supabase.ts` throws at module load without `VITE_SUPABASE_URL`, and nothing here talks to
@@ -20,7 +21,7 @@ import {
   receiptConflictCode,
   type OfflineQueueDeps,
 } from './offlineQueue';
-import { OfflineStorageError } from './offlineDb';
+import { OfflineStorageError, receiptPendingServerAcceptanceFromRows } from './offlineDb';
 import type {
   OfflineQueuedAction, OfflineQueueStore, OfflineReceiptDraft, SaveGoodsReceiptPayload,
 } from './offlineDb';
@@ -32,28 +33,82 @@ function memoryStore(seed: Omit<OfflineQueuedAction, 'id'>[] = []) {
   let nextId = 1;
   let photos = 0;
   let lastSync: number | null = null;
-  for (const action of seed) queue.set(nextId, { ...action, id: nextId++ });
+  for (const action of seed) queue.set(nextId, {
+    ...action, id: nextId++, syncVersion: action.syncVersion ?? 1,
+    syncLeaseOwner: null, syncLeaseExpiresAt: null,
+  });
 
   const store: OfflineQueueStore = {
     listQueuedActions: async () => [...queue.values()].sort((a, b) => (a.id ?? 0) - (b.id ?? 0)),
-    putQueuedAction: async (action) => { if (action.id != null) queue.set(action.id, action); },
-    deleteQueuedAction: async (id) => { queue.delete(id); },
-    enqueueAction: async (action) => {
-      const id = nextId++;
-      queue.set(id, { ...action, id });
-      return id;
+    upsertQueuedAction: async (action) => {
+      const existing = [...queue.values()].find((row) => row.idempotencyKey === action.idempotencyKey);
+      const keepCompletion = !!existing?.payload.p_complete && !action.payload.p_complete;
+      const id = existing?.id ?? nextId++;
+      const row: OfflineQueuedAction = {
+        ...(existing ?? {}), ...action, id,
+        payload: keepCompletion ? existing!.payload : action.payload,
+        observedAt: keepCompletion ? existing!.observedAt : action.observedAt,
+        syncVersion: (existing?.syncVersion ?? 0) + 1,
+        syncLeaseOwner: null,
+        syncLeaseExpiresAt: null,
+      };
+      queue.set(id, row);
+      return row;
+    },
+    claimQueuedAction: async (id, owner, now) => {
+      const row = queue.get(id);
+      if (!row || row.state === 'conflict' || row.state === 'needs_attention'
+        || (row.syncLeaseOwner && (row.syncLeaseExpiresAt ?? 0) > now)) return null;
+      const claimed = {
+        ...row,
+        syncVersion: (row.syncVersion ?? 0) + 1,
+        syncLeaseOwner: owner,
+        syncLeaseExpiresAt: now + 60_000,
+      };
+      queue.set(id, claimed);
+      return claimed;
+    },
+    updateClaimedQueuedAction: async (id, owner, version, patch, now) => {
+      const row = queue.get(id);
+      if (!row || row.syncLeaseOwner !== owner || row.syncVersion !== version
+        || (row.syncLeaseExpiresAt ?? 0) <= now) return false;
+      queue.set(id, { ...row, ...patch, syncLeaseOwner: null, syncLeaseExpiresAt: null });
+      return true;
+    },
+    finalizeClaimedQueuedAction: async (id, owner, version, acceptedAt, now) => {
+      const row = queue.get(id);
+      if (!row || row.syncLeaseOwner !== owner || row.syncVersion !== version
+        || (row.syncLeaseExpiresAt ?? 0) <= now) return false;
+      const draft = drafts.get(row.orderId);
+      const currentDraft = draft?.receiptId === row.idempotencyKey
+        && draft.updatedAt === row.observedAt;
+      if (row.payload.p_complete) {
+        if (currentDraft) drafts.delete(row.orderId);
+        if (!draft || currentDraft) openOrders.delete(row.orderId);
+      } else if (draft && currentDraft) {
+        drafts.set(row.orderId, { ...draft, syncedAt: acceptedAt, updatedAt: acceptedAt });
+      }
+      queue.delete(id);
+      return true;
+    },
+    discardConflictedQueuedAction: async (id, expectedVersion, expectedState) => {
+      const row = queue.get(id);
+      if (!row || row.syncVersion !== expectedVersion || row.state !== expectedState
+        || row.state !== 'conflict' || row.syncLeaseOwner) return false;
+      const draft = drafts.get(row.orderId);
+      if (draft?.receiptId === row.idempotencyKey && draft.updatedAt !== row.observedAt) return false;
+      if (draft?.receiptId === row.idempotencyKey) drafts.delete(row.orderId);
+      queue.delete(id);
+      return true;
     },
     countPendingPhotos: async () => photos,
     getLastSuccessfulSyncAt: async () => lastSync,
     setLastSuccessfulSyncAt: async (at) => { lastSync = at; },
-    getReceiptDraft: async (orderId) => drafts.get(orderId) ?? null,
-    putReceiptDraft: async (draft) => { drafts.set(draft.orderId, draft); },
-    deleteReceiptDraft: async (orderId) => { drafts.delete(orderId); },
-    deleteOpenOrder: async (orderId) => { openOrders.delete(orderId); },
   };
   return {
     store, queue, drafts, openOrders,
     addOpenOrder: (orderId: string) => { openOrders.add(orderId); },
+    putDraft: (draft: OfflineReceiptDraft) => { drafts.set(draft.orderId, draft); },
     setPhotos: (count: number) => { photos = count; },
     lastSync: () => lastSync,
   };
@@ -154,7 +209,7 @@ describe('submitting a receipt', () => {
 
   it('reports an explicit failure when IndexedDB refuses the queue write', async () => {
     const memory = memoryStore();
-    memory.store.enqueueAction = async () => {
+    memory.store.upsertQueuedAction = async () => {
       throw new OfflineStorageError('האחסון המקומי אינו זמין.');
     };
     const queue = build({ store: memory.store, isOnline: () => false });
@@ -183,7 +238,7 @@ describe('submitting a receipt', () => {
     expect(queue.getSnapshot().pendingActions).toBe(1);
   });
 
-  it('opens a conflict instead of queueing a rejection that a retry cannot fix', async () => {
+  it('persists a conflict so a reload can still show the required decision', async () => {
     const memory = memoryStore();
     const queue = build({
       store: memory.store,
@@ -196,8 +251,43 @@ describe('submitting a receipt', () => {
 
     expect(outcome.kind).toBe('conflict');
     expect(outcome.kind === 'conflict' && outcome.code).toBe('receipt_qty_exceeds_order');
-    // Nothing was queued: re-sending would just re-collect the same rejection.
-    expect(queue.getSnapshot().pendingActions).toBe(0);
+    expect(queue.getSnapshot().pendingActions).toBe(1);
+    expect(queue.getSnapshot().actions[0]).toMatchObject({
+      state: 'conflict', conflictCode: 'receipt_qty_exceeds_order', orderId: 'order-1',
+    });
+    const reloaded = build({ store: memory.store, send: vi.fn() });
+    const reloadedSnapshot = await reloaded.refresh();
+    expect(reloadedSnapshot.actions[0]).toMatchObject({
+      state: 'conflict', conflictCode: 'receipt_qty_exceeds_order',
+    });
+  });
+
+  it('refuses a stale conflict discard after another tab replaced the payload', async () => {
+    const memory = memoryStore();
+    const firstTab = build({
+      store: memory.store,
+      send: async () => { throw new Error('receipt_qty_exceeds_order'); },
+      workerId: 'tab-a',
+    });
+    await firstTab.submitReceipt({
+      orderId: 'order-1', orderLabel: 'ספק', payload: payload('receipt-1'), observedAt: 1_000,
+    });
+    const staleConflict = firstTab.getSnapshot().actions[0];
+
+    const replacement = payload('receipt-1');
+    replacement.p_lines = [{ ...replacement.p_lines[0], qty_received: 9 }];
+    const secondTab = build({ store: memory.store, isOnline: () => false, workerId: 'tab-b' });
+    await secondTab.submitReceipt({
+      orderId: 'order-1', orderLabel: 'ספק', payload: replacement, observedAt: 2_000,
+    });
+
+    expect(await firstTab.discardAction(
+      staleConflict.id, staleConflict.syncVersion, 'conflict',
+    )).toBe(false);
+    expect([...memory.queue.values()][0]).toMatchObject({
+      state: 'pending', syncVersion: staleConflict.syncVersion + 1,
+    });
+    expect([...memory.queue.values()][0].payload.p_lines[0].qty_received).toBe(9);
   });
 
   it('records a real last-successful-sync time on acceptance, and none before', async () => {
@@ -239,6 +329,108 @@ describe('submitting a receipt', () => {
 });
 
 describe('syncing the queue', () => {
+  it('preserves a newer draft written while an accepted request is in flight', async () => {
+    const memory = memoryStore();
+    memory.addOpenOrder('order-1');
+    memory.putDraft({
+      orderId: 'order-1', receiptId: 'receipt-1', keySource: 'device', lines: [],
+      openCredits: true, notes: null, observedAt: 1_000, updatedAt: 1_000,
+      syncedAt: null, completed: true,
+    });
+    let release!: () => void;
+    const send = vi.fn(() => new Promise<{ receipt_id: string }>((resolve) => {
+      release = () => resolve({ receipt_id: 'receipt-1' });
+    }));
+    const queue = build({ store: memory.store, send, workerId: 'tab-a' });
+    const submission = queue.submitReceipt({
+      orderId: 'order-1', orderLabel: 'ספק', payload: payload('receipt-1'), observedAt: 1_000,
+    });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+
+    memory.putDraft({
+      orderId: 'order-1', receiptId: 'receipt-1', keySource: 'device',
+      lines: [{ ...payload('receipt-1').p_lines[0], qty_received: 9 }],
+      openCredits: true, notes: 'newer tab', observedAt: 2_000, updatedAt: 2_000,
+      syncedAt: null, completed: true,
+    });
+    release();
+
+    await expect(submission).resolves.toMatchObject({ kind: 'sent', receiptId: 'receipt-1' });
+    expect(memory.queue.size).toBe(0);
+    expect(memory.drafts.get('order-1')).toMatchObject({ updatedAt: 2_000, notes: 'newer tab' });
+  });
+
+  it('keeps Receiving cleanup delegated to the atomic queue finalizer', () => {
+    const source = readFileSync('src/pages/Receiving.tsx', 'utf8');
+    expect(source).not.toContain('deleteReceiptDraft(');
+    expect(source).toContain('Atomic queue finalization already deleted the exact accepted draft');
+  });
+
+  it('keeps an accepted receipt retryable when atomic local finalization fails', async () => {
+    const memory = memoryStore([queued('receipt-1')]);
+    memory.addOpenOrder('order-1');
+    memory.putDraft({
+      orderId: 'order-1', receiptId: 'receipt-1', keySource: 'device', lines: [],
+      openCredits: true, notes: null, observedAt: 1_000, updatedAt: 1_000,
+      syncedAt: null, completed: true,
+    });
+    const finalize = memory.store.finalizeClaimedQueuedAction;
+    memory.store.finalizeClaimedQueuedAction = vi.fn()
+      .mockRejectedValueOnce(new OfflineStorageError('cleanup failed'))
+      .mockImplementation(finalize);
+    const send = vi.fn(async () => ({ receipt_id: 'receipt-1' }));
+    const queue = build({ store: memory.store, send, workerId: 'tab-a' });
+
+    const failed = await queue.sync();
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(failed.actions[0]).toMatchObject({ state: 'failed', idempotencyKey: 'receipt-1' });
+    expect(receiptPendingServerAcceptanceFromRows(
+      'receipt-1', [...memory.drafts.values()], [...memory.queue.values()],
+    )).toBe(true);
+
+    await queue.sync();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(memory.queue.size).toBe(0);
+    expect(memory.drafts.size).toBe(0);
+    expect(receiptPendingServerAcceptanceFromRows(
+      'receipt-1', [...memory.drafts.values()], [...memory.queue.values()],
+    )).toBe(false);
+  });
+
+  it('does not let a stale sender delete a payload replaced by another queue instance', async () => {
+    const memory = memoryStore([queued('receipt-1')]);
+    let release!: () => void;
+    const staleSend = vi.fn(() => new Promise<{ receipt_id: string }>((resolve) => {
+      release = () => resolve({ receipt_id: 'receipt-1' });
+    }));
+    const firstTab = build({ store: memory.store, send: staleSend, workerId: 'tab-a' });
+    const firstSync = firstTab.sync();
+    await vi.waitFor(() => expect(staleSend).toHaveBeenCalledTimes(1));
+
+    const replacement = payload('receipt-1');
+    replacement.p_lines = [{ ...replacement.p_lines[0], qty_received: 9 }];
+    const secondTabOffline = build({
+      store: memory.store, isOnline: () => false, workerId: 'tab-b',
+    });
+    await secondTabOffline.submitReceipt({
+      orderId: 'order-1', orderLabel: 'ספק', payload: replacement, observedAt: 2_000,
+    });
+
+    release();
+    await firstSync;
+    expect([...memory.queue.values()]).toHaveLength(1);
+    expect([...memory.queue.values()][0].payload.p_lines[0].qty_received).toBe(9);
+
+    const freshSend = vi.fn(async (sent: SaveGoodsReceiptPayload) => ({ receipt_id: sent.p_receipt_id }));
+    const secondTabOnline = build({ store: memory.store, send: freshSend, workerId: 'tab-b' });
+    await secondTabOnline.sync();
+    expect(freshSend).toHaveBeenCalledWith(expect.objectContaining({
+      p_lines: [expect.objectContaining({ qty_received: 9 })],
+    }));
+    expect(memory.queue.size).toBe(0);
+  });
+
   it('continues after a failure and gives each action its own reason', async () => {
     const memory = memoryStore([queued('receipt-1', 'order-1'), queued('receipt-2', 'order-2'), queued('receipt-3', 'order-3')]);
     const sent: string[] = [];
@@ -374,7 +566,7 @@ describe('syncing the queue', () => {
   it('removes a completed local draft once the server accepts it', async () => {
     const memory = memoryStore([queued('receipt-1')]);
     memory.addOpenOrder('order-1');
-    await memory.store.putReceiptDraft({
+    memory.putDraft({
       orderId: 'order-1', receiptId: 'receipt-1', keySource: 'device',
       lines: [], openCredits: true, notes: null,
       observedAt: 1_000, updatedAt: 1_000, syncedAt: null, completed: false,

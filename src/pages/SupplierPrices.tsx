@@ -26,7 +26,7 @@ type PortalPrice = Omit<SupplierProduct, 'id' | 'org_id' | 'supplier_id' | 'prod
 };
 interface SupplierPortalContext {
   organization_name: string;
-  supplier: { id: string; name: string };
+  supplier: { id: string; name: string; status: string };
   prices: PortalPrice[];
   orders: SupplierPortalOrder[];
 }
@@ -89,14 +89,13 @@ export default function SupplierPrices() {
 
   const { data, loading, error, refetch } = useQuery(async () => {
     const supplierId = profile!.supplier_id!;
-    const [portalResult, submissionsResult, supplierStatusResult] = await Promise.all([
+    const [portalResult, submissionsResult] = await Promise.all([
       supabase.rpc('supplier_portal_context'),
       supabase.from('supplier_price_submissions').select('*')
         .eq('supplier_id', supplierId)
         .order('target_month', { ascending: false })
         .order('revision', { ascending: false })
         .limit(24),
-      supabase.from('suppliers').select('status').eq('id', supplierId).single(),
     ]);
     const portal = unwrap(portalResult) as SupplierPortalContext;
     const rows = portal.prices.map<Row>((price) => ({
@@ -109,7 +108,7 @@ export default function SupplierPrices() {
     return {
       organizationName: portal.organization_name,
       supplier: portal.supplier,
-      supplierStatus: unwrap(supplierStatusResult).status as string,
+      supplierStatus: portal.supplier.status,
       rows,
       products: rows.map<CatalogProduct>(({ product }) => product),
       submissions: unwrap(submissionsResult) as SupplierPriceSubmission[],

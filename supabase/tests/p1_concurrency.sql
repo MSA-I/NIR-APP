@@ -83,12 +83,30 @@ insert into invoices (
   id, org_id, supplier_id, invoice_number, invoice_date,
   amount_before_vat, vat_amount, total_amount, review_status
 ) values
-  ('61000000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-PAYMENT', '2026-07-10', 84.75, 15.25, 100, 'approved'),
-  ('61000000-0000-0000-0000-000000000002', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-REVERSE-A', '2026-07-11', 84.75, 15.25, 100, 'approved'),
-  ('61000000-0000-0000-0000-000000000003', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-REVERSE-B', '2026-07-12', 84.75, 15.25, 100, 'approved'),
-  ('61000000-0000-0000-0000-000000000004', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-BANK', '2026-07-13', 42.37, 7.63, 50, 'approved'),
-  ('61000000-0000-0000-0000-000000000005', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-MONTH', '2026-07-14', 21.19, 3.81, 25, 'approved'),
-  ('61000000-0000-0000-0000-000000000006', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-CREDIT', '2026-07-15', 21.19, 3.81, 25, 'approved');
+  ('61000000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-PAYMENT', '2026-07-10', 84.75, 15.25, 100, 'received'),
+  ('61000000-0000-0000-0000-000000000002', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-REVERSE-A', '2026-07-11', 84.75, 15.25, 100, 'received'),
+  ('61000000-0000-0000-0000-000000000003', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-REVERSE-B', '2026-07-12', 84.75, 15.25, 100, 'received'),
+  ('61000000-0000-0000-0000-000000000004', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-BANK', '2026-07-13', 42.37, 7.63, 50, 'received'),
+  ('61000000-0000-0000-0000-000000000005', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-MONTH', '2026-07-14', 21.19, 3.81, 25, 'received'),
+  ('61000000-0000-0000-0000-000000000006', '11000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', 'P1-CREDIT', '2026-07-15', 21.19, 3.81, 25, 'received');
+
+-- Persist the production three-way assessment for every payment fixture instead of bypassing
+-- the approval guard with an approved INSERT. These invoices deliberately have no linked order,
+-- so the server records the allowed "not comparable" assessment before the concurrency races.
+select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+select set_invoice_review_status(id, 'in_review', 'P1 concurrency fixture enters review')
+from invoices
+where id between '61000000-0000-0000-0000-000000000001'::uuid
+             and '61000000-0000-0000-0000-000000000006'::uuid
+order by id;
+select set_invoice_review_status(id, 'approved', 'P1 concurrency fixture persists assessment')
+from invoices
+where id between '61000000-0000-0000-0000-000000000001'::uuid
+             and '61000000-0000-0000-0000-000000000006'::uuid
+order by id;
+reset role;
+select set_config('request.jwt.claim.sub', '', false);
 
 insert into credit_requests (
   id, org_id, supplier_id, invoice_id, reason, amount, status, created_by

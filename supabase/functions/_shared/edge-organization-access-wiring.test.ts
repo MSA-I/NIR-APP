@@ -127,7 +127,8 @@ Deno.test("send-invite fences mutation and idempotent Resend delivery", async ()
   assertOrdered(handler, [
     "reservation = await reserveOrganizationEgress",
     "if (egressLease.idempotent)",
-    "await supabase.rpc('create_invitation'",
+    "const { data, error } = await supabase.rpc(",
+    "'create_invitation'",
     "await runReservedEgress",
     "fetch('https://api.resend.com/emails'",
     "releaseOrganizationEgress",

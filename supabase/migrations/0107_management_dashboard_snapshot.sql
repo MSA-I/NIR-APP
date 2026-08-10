@@ -124,12 +124,14 @@ as $$
       'drafts', pr.drafts,
       'dueDateCoverage', pr.active_due_dated,
       'activeCount', pr.active_total,
+      -- Measure only explicitly dated active requests. Undated active rows do not suppress a
+      -- valid measurement, while zero dated rows remains unknown (JSON null), never a fake zero.
       'overdue', case
-        when pr.active_due_dated = pr.active_total then pr.overdue
+        when pr.active_due_dated > 0 then pr.overdue
         else null
       end,
       'dueToday', case
-        when pr.active_due_dated = pr.active_total then pr.due_today
+        when pr.active_due_dated > 0 then pr.due_today
         else null
       end
     ),

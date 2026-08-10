@@ -98,9 +98,23 @@ insert into invoices (
   amount_before_vat, vat_amount, total_amount, review_status
 ) values
   ('67000000-0000-0000-0000-000000000001', '17000000-0000-0000-0000-000000000001',
-   '37000000-0000-0000-0000-000000000001', 'P4-INV-PAYER', '2026-07-15', 100, 18, 118, 'approved'),
+   '37000000-0000-0000-0000-000000000001', 'P4-INV-PAYER', '2026-07-15', 100, 18, 118, 'received'),
   ('67000000-0000-0000-0000-000000000002', '17000000-0000-0000-0000-000000000001',
-   '37000000-0000-0000-0000-000000000001', 'P4-INV-EMERGENCY', '2026-07-16', 50, 9, 59, 'approved');
+   '37000000-0000-0000-0000-000000000001', 'P4-INV-EMERGENCY', '2026-07-16', 50, 9, 59, 'received');
+-- Preserve the production approval invariant in this trusted fixture: the owner command performs
+-- both legal transitions and stores the server-computed no-order 3-way assessment.
+select set_config('request.jwt.claim.sub', '27000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select public.set_invoice_review_status(
+  '67000000-0000-0000-0000-000000000001', 'in_review', 'P4 payer fixture enters review');
+select public.set_invoice_review_status(
+  '67000000-0000-0000-0000-000000000001', 'approved', 'P4 payer fixture persists its assessment');
+select public.set_invoice_review_status(
+  '67000000-0000-0000-0000-000000000002', 'in_review', 'P4 emergency fixture enters review');
+select public.set_invoice_review_status(
+  '67000000-0000-0000-0000-000000000002', 'approved', 'P4 emergency fixture persists its assessment');
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
 insert into payment_requests (
   id, org_id, supplier_id, amount, status, created_by, approved_by, approved_at
 ) values
