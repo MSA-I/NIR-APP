@@ -308,18 +308,35 @@ export default function Layout() {
    * Note this renders them through the EXISTING non-collapsible branch rather than forcing
    * `<details open>`: an always-open disclosure is a control that lies about being a control.
    */
-  const sidebar = (displaySections: readonly NavSection[], navLabel: string, expandGroups = false) => (
+  const accountBlock = (
+    <div className="px-1 pt-3">
+      <div className="text-sm text-shell-ink font-medium">{profile?.full_name}</div>
+      <div className="text-xs text-shell-ink-dim mb-2">{role ? roleLabels[role] : ''}</div>
+      <button className="flex min-h-11 items-center gap-1.5 rounded-lg text-xs text-shell-ink-dim hover:text-shell-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => void handleSignOut()}>
+        <LogOut size={13} /> התנתקות
+      </button>
+    </div>
+  );
+
+  const sidebar = (displaySections: readonly NavSection[], navLabel: string, expandGroups = false, stickyFooter = true) => (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 border-b border-shell-ink/10 px-4 py-4 pe-12 lg:pe-4">
+      {/* The mark is a door. Every product trains people that the logo goes home, and here it went
+          nowhere — a 40px target in the corner of every screen that silently did nothing. It is a
+          Link rather than a decorated div so it lands in the tab order, announces itself and
+          honours a middle click; the image stays alt="" because the accessible name belongs to the
+          link, and repeating it would make a screen reader say the brand twice. */}
+      <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
+        onClick={() => { if (mobileOpen) closeMobileMenu(); }}
+        className="flex items-center gap-3 border-b border-shell-ink/10 px-4 py-4 pe-12 hover:bg-shell-ink/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset lg:pe-4">
         <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="40" height="40"
           className="size-10 shrink-0 rounded-lg bg-white object-contain p-0.5 ring-1 ring-shell-ink/15" />
         <div className="min-w-0">
           <div className="text-base font-bold text-shell-ink">{APP_NAME}</div>
           <div className="truncate text-xs text-shell-ink-dim" title={orgName || undefined}>{orgName || 'ניהול רכש ותשלומים'}</div>
         </div>
-      </div>
+      </Link>
       <nav aria-label={navLabel} className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
-        {displaySections.map((s, i) => (
+        {[...displaySections, ...(stickyFooter || footerItems.length === 0 ? [] : [{ section: 'החשבון והמערכת', items: footerItems }])].map((s, i) => (
           s.collapsible && !expandGroups ? (
             <details key={`${s.section}-${location.pathname}`} className="group" open={s.items.some((item) => isRouteFamilyActive(location.pathname, item.to)) || undefined}>
               <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-3 text-xs font-semibold text-shell-heading hover:bg-shell-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
@@ -334,17 +351,19 @@ export default function Layout() {
             </div>
           )
         ))}
+        {/* On a phone the account block travels WITH the menu instead of pinning to the bottom.
+            The drawer is 100dvh of overlay: a fixed strip there is a second bar competing with the
+            list scrolling behind it, and on a short viewport it ate the last destinations. On the
+            desktop sidebar the strip is right — that column is permanent, has room, and the strip
+            is the one place the signed-in identity lives. Same markup, different anchoring. */}
+        {!stickyFooter && accountBlock}
       </nav>
-      <div className="border-t border-shell-ink/10 px-3 py-3">
-        {footerItems.length > 0 && <div className="mb-2 space-y-0.5">{navLinks(footerItems)}</div>}
-        <div className="px-1">
-        <div className="text-sm text-shell-ink font-medium">{profile?.full_name}</div>
-        <div className="text-xs text-shell-ink-dim mb-2">{role ? roleLabels[role] : ''}</div>
-        <button className="flex min-h-11 items-center gap-1.5 rounded-lg text-xs text-shell-ink-dim hover:text-shell-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => void handleSignOut()}>
-          <LogOut size={13} /> התנתקות
-        </button>
+      {stickyFooter && (
+        <div className="border-t border-shell-ink/10 px-3 py-3">
+          {footerItems.length > 0 && <div className="mb-2 space-y-0.5">{navLinks(footerItems)}</div>}
+          {accountBlock}
         </div>
-      </div>
+      )}
     </div>
   );
 
@@ -368,8 +387,14 @@ export default function Layout() {
           <Menu size={22} />
         </button>
         <div className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2">
-          <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="28" height="28"
-            className="size-7 shrink-0 rounded-md bg-white object-contain p-px ring-1 ring-shell-ink/15" />
+          {/* Only the mark is the link, not the whole block: the text beside it is the CURRENT
+              page's title, and wrapping that in a "go to dashboard" link would make the screen
+              name its own destination — the one place a logo home-link reliably confuses people. */}
+          <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+            <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="28" height="28"
+              className="size-7 rounded-md bg-white object-contain p-px ring-1 ring-shell-ink/15" />
+          </Link>
           <div className="min-w-0 leading-tight">
             <div className="truncate text-sm font-semibold" title={currentTitle}>{currentTitle}</div>
             <div className="truncate text-[11px] text-shell-ink-dim" title={orgName || APP_NAME}>{APP_NAME}{orgName ? ` · ${orgName}` : ''}</div>
@@ -390,7 +415,7 @@ export default function Layout() {
           <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label="תפריט ראשי"
             tabIndex={-1} className="phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-shell border-e border-shell-ink/10 focus:outline-none" onClick={(e) => e.stopPropagation()}>
             <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 rounded-lg text-shell-ink-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={20} /></button>
-            {sidebar(drawerSections, 'יעדים נוספים')}
+            {sidebar(drawerSections, 'יעדים נוספים', false, false)}
           </aside>
         </div>
       )}
