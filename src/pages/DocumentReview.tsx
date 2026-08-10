@@ -1,6 +1,7 @@
-import { ArrowRight, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
+import { BackAction } from '../components/BackAction';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { DocumentReviewWorkspace } from '../components/document-review/DocumentReviewWorkspace';
 import { ErrorNote, Note, PageLoader } from '../components/ui';
@@ -74,9 +75,7 @@ export default function DocumentReview() {
   return (
     <div className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link className="btn-ghost" to={returnPath}>
-          <ArrowRight size={18} aria-hidden="true" /> חזרה למסמכים
-        </Link>
+        <BackAction fallback={returnPath} label="חזרה למסמכים" carrySearch />
         {processing.fetching && (
           <span className="inline-flex min-h-11 items-center gap-2 text-sm text-ink-muted" role="status">
             <RefreshCw className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> מעדכן נתונים
