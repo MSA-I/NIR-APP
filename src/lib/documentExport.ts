@@ -188,8 +188,28 @@ function buildTable(input: DocumentExportInput, template: DocumentExportTemplate
   return { columns, rows };
 }
 
-const neutralizeSpreadsheetString = (value: DocumentExportCell): DocumentExportCell =>
+/**
+ * A cell that opens with `= + - @ TAB CR` is a formula to Excel and to Sheets, whatever the app
+ * meant by it. The leading apostrophe is the spreadsheet's own "this is text" marker: it does not
+ * survive into the value a person sees, and it is what stops a supplier name like `=HYPERLINK(...)`
+ * or `@SUM(...)` from executing when an accountant opens the file.
+ *
+ * Exported because it was private here while `monthlyReport.ts` and `Expenses.tsx` — the two
+ * exports that actually go OUT of the building, to an accountant — wrote supplier names,
+ * exception titles, payment references and bank descriptions into cells raw. One neutralizer, one
+ * place; the alternative was a second regex that could drift from this one.
+ */
+export const neutralizeSpreadsheetString = (value: DocumentExportCell): DocumentExportCell =>
   typeof value === 'string' && /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+
+/** The same rule over a row object, for the `json_to_sheet` callers. Keys are ours; values are not. */
+export function neutralizeSpreadsheetRow<T extends Record<string, unknown>>(row: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    out[key] = typeof value === 'string' ? neutralizeSpreadsheetString(value) : value;
+  }
+  return out as T;
+}
 
 const spreadsheetMatrix = (table: DocumentExportTable): DocumentExportCell[][] => [
   table.columns.map(({ label }) => neutralizeSpreadsheetString(label)),

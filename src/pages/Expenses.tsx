@@ -15,6 +15,7 @@ import {
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { useAuth } from '../auth/AuthContext';
 import { financialSupplierMap } from '../lib/financialSuppliers';
+import { neutralizeSpreadsheetRow } from '../lib/documentExport';
 
 type InvoiceRow = {
   id: string; invoice_number: string; invoice_date: string; total_amount: number;
@@ -174,18 +175,21 @@ export default function Expenses() {
   function exportExcel() {
     if (!data || data.invalidRange || fetching || error) return;
     try {
+      // Supplier, product-category and invoice-number text is tenant data on its way into a file
+      // somebody opens in Excel. `=`/`@` at the start of a cell is a formula there, whatever we
+      // meant by it — same neutralizer as documentExport.ts, which is now the one place it lives.
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.bySupplier.map((r) => ({
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.bySupplier.map((r) => neutralizeSpreadsheetRow({
         'ספק': r.name, 'חשבוניות': r.count, 'סה"כ': r.total,
         '% מהסך': data.totalAll > 0 ? Number(((r.total / data.totalAll) * 100).toFixed(1)) : null,
       }))), 'לפי ספק');
       if (data.categoryBreakdownAvailable) {
         const catRows: { 'קטגוריה': string; 'ערך בהזמנות מקושרות': number }[] = [...data.catTotals]
           .sort((a, b) => b.total - a.total)
-          .map((c) => ({ 'קטגוריה': c.name, 'ערך בהזמנות מקושרות': c.total }));
+          .map((c) => neutralizeSpreadsheetRow({ 'קטגוריה': c.name, 'ערך בהזמנות מקושרות': c.total }));
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'קטגוריות בהזמנות');
       }
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.invoices.map((i) => ({
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.invoices.map((i) => neutralizeSpreadsheetRow({
         'ספק': i.supplier?.name ?? '', 'מספר חשבונית': i.invoice_number, 'תאריך': i.invoice_date,
         'סה"כ': i.total_amount, 'סטטוס תשלום': INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
       }))), 'חשבוניות');
