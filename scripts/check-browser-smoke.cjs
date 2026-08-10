@@ -2942,7 +2942,11 @@ async function feedbackNoteChannel(browser) {
     }));
 
     const page = await context.newPage();
-    captureConsole(page, 'feedback-note');
+    // The send is EXPECTED to fail here: the local Edge env deliberately has no
+    // DISCORD_FEEDBACK_WEBHOOK_URL, because this scenario asserts the honest-failure path
+    // ("ההערה נשמרה, אך השליחה נכשלה"). The HTTP error from send-feedback is therefore part
+    // of the script, not an unexpected console error.
+    captureConsole(page, 'feedback-note', [/functions\/v1\/send-feedback/]);
     await login(page, 'owner');
     await page.goto(`${baseURL}/dashboard`);
     await settle(page);
