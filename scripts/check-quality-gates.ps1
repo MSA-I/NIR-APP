@@ -1008,6 +1008,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\tests\p34_product_purchase_summary.sql",
     "supabase\tests\p35_preferred_supplier_tiebreak.sql",
     "supabase\tests\p36_document_removal_impact.sql",
+    "supabase\tests\p37_document_overcharge_credit.sql",
     "supabase\functions\_shared\organization-access.ts",
     "supabase\functions\_shared\organization-access.test.ts",
     "supabase\functions\_shared\organization-egress.ts",
@@ -1229,6 +1230,7 @@ try {
     Invoke-SqlTest "supabase\tests\p34_product_purchase_summary.sql" "One delivery counted once: the order item is the de-duplication grain, a completed receipt beats a supplier bill, and products are never merged by name"
     Invoke-SqlTest "supabase\tests\p35_preferred_supplier_tiebreak.sql" "A supplier preference breaks a tie and never wins one: price orders first, both recommendation sites carry the rule, and setting it takes a reason"
     Invoke-SqlTest "supabase\tests\p36_document_removal_impact.sql" "Document removal states what it destroys before it destroys it: an approved, paid or reported record blocks the destructive option, and every refusal names itself"
+    Invoke-SqlTest "supabase\tests\p37_document_overcharge_credit.sql" "One overcharge, one draft credit request: a retry drafts nothing, being undercharged drafts nothing, and the price list is never touched"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"
