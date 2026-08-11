@@ -1005,6 +1005,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\tests\p31_apply_reviewed_document.sql",
     "supabase\tests\p32_kitchen_supplier_read_boundary.sql",
     "supabase\tests\p33_canonical_purchase_metrics.sql",
+    "supabase\tests\p34_product_purchase_summary.sql",
     "supabase\functions\_shared\organization-access.ts",
     "supabase\functions\_shared\organization-access.test.ts",
     "supabase\functions\_shared\organization-egress.ts",
@@ -1223,6 +1224,7 @@ try {
     Invoke-SqlTest "supabase\tests\p31_apply_reviewed_document.sql" "Applying an approved document: the server recomputes the assessment rather than trusting the proposal, an invoice never receives goods, a delivery note only drafts, and a tax receipt creates no payable"
     Invoke-SqlTest "supabase\tests\p32_kitchen_supplier_read_boundary.sql" "Kitchen narrowed without being broken: bank_details unreachable by column privilege while row access stays so PostgREST embeds keep returning the supplier name"
     Invoke-SqlTest "supabase\tests\p33_canonical_purchase_metrics.sql" "One definition per money question: the business day rather than the UTC day, snapshot prices, approved invoices only, and only credits that actually reduced a balance"
+    Invoke-SqlTest "supabase\tests\p34_product_purchase_summary.sql" "One delivery counted once: the order item is the de-duplication grain, a completed receipt beats a supplier bill, and products are never merged by name"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"
