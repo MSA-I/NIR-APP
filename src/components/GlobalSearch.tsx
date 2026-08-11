@@ -40,7 +40,11 @@ const PRODUCT_STATUS: Record<string, StatusMeta> = {
 const ALLOWED: Record<Role, EntityType[]> = {
   owner:      ['supplier', 'product', 'invoice', 'order', 'payment', 'credit'],
   office:     ['supplier', 'product', 'invoice', 'order', 'credit'],
-  kitchen:    ['supplier', 'product', 'invoice', 'order', 'credit'],            // no /payments
+  // 'supplier' left this row on 11.08.2026 (G2/0117): a kitchen manager no longer has
+  // /suppliers/:id, so a supplier hit was a result that looked like an answer and behaved like
+  // a broken link. The server stopped sending them in 0117; this keeps the group heading and
+  // the placeholder hint honest about what will come back.
+  kitchen:    ['product', 'invoice', 'order', 'credit'],                        // no /payments, no supplier card
   accountant: ['invoice', 'payment', 'credit'],                                // approved invoices are enforced by RLS
   payer:      [],
   supplier:   [],
