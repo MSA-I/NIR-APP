@@ -8,6 +8,7 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { PageHeader, SkeletonCards, useToast, ErrorNote, Note, DataTable, StatusBadge, ConfirmDialog, Modal, type Column } from '../components/ui';
 import { AutonomyPolicyPanel } from '../components/AutonomyPolicyPanel';
+import { ExportTemplatesPanel } from '../components/ExportTemplatesPanel';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVITATION_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime, fmtNum } from '../lib/format';
@@ -71,6 +72,8 @@ async function logoUploadSessionKey(orgId: string, file: File): Promise<string> 
 export default function Settings() {
   const { profile, org, roleLabels, isPlatformAdmin, organizationAccess, refreshOrganizationAccess } = useAuth();
   const canWrite = organizationAccess?.canWrite ?? true;
+  // The two roles 0126's template commands accept. Named once, used by the panel gate below.
+  const isOffice = profile?.role === 'owner' || profile?.role === 'office';
   const toast = useToast();
   const [orgName, setOrgName] = useState(org?.name ?? '');
   const [vatRate, setVatRate] = useState(org?.vat_rate?.toString() ?? '18');
@@ -451,6 +454,12 @@ export default function Settings() {
           else. An owner without the grant would meet a control that refuses on submit — the exact
           shape of screen DEAD-ENDS-AUDIT.md was written about. Absent beats broken. */}
       {canWrite && isPlatformAdmin && org && <AutonomyPolicyPanel orgId={org.id} orgName={org.name} />}
+
+      {/* Package K. Gated on the same two roles 0126's commands accept, for the reason the autonomy
+          panel above states: a control that refuses on submit is worse than a control that is not
+          there. `resolve_export_report_template` also admits the accountant, but reading which
+          template their report uses belongs beside the report, not in the owner's settings. */}
+      {canWrite && org && isOffice && <ExportTemplatesPanel orgId={org.id} />}
 
       <div className="card card-pad space-y-4">
         <div>
