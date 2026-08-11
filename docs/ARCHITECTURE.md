@@ -54,7 +54,8 @@ supabase/
                            0045–0085 עיבוד/פרשנות מסמכים, review, אוטונומיה וקליטת מחירון
                            0093–0096 reprocess, rollback, calibration, shadow והקשחת scope
                            0097–0103 גבול ספק פיננסי, מיתוג, 3-way, dashboard, trial, portal, מלאי ו־offboarding/export
-  functions/               admin-provision · send-invite · send-push · submit-price-list
+                           0104–0126 מסמך ספק שהתקבל, הסרת מסמך, צילום פידבק ותבניות ייצוא
+  functions/               admin-provision · send-invite · send-push · send-feedback · submit-price-list
                            interpret-document · outbox-worker · upload-organization-logo · tenant-export
                            service_role נשאר בשרת בלבד
   seed.sql                 seed ניטרלי לדייר חדש (ארגון + קטגוריות)
@@ -96,7 +97,7 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 
 ## מטריצת הרשאות (RLS — נאכף בשרת)
 
-> **שלושה שינויים בענף `feat/received-supplier-document` (11.08.2026), טרם נפרסו:**
+> **שלושה שינויים שנפרסו ב־`0104`–`0126` (11.08.2026):**
 > ‏**(א)** ‏`payer` **יוצא מהמוצר** — הרו״ח הוא המבצע. ערך ה-enum נשאר חוקי וחשבונות קיימים ממשיכים
 > לעבוד (‏`0111` מעגן זאת), אך התפקיד אינו מוצע יותר בהזמנה או בשינוי תפקיד, ודשבורד ה-payer מוזג
 > לזה של הרו״ח. ‏**(ב)** ‏`kitchen` **מאבד את כרטיס הספק** — הנתיב ירד, ו-`0112` הוציא את
@@ -254,7 +255,7 @@ idempotency, HMAC, retries ו־dead-letter. **Live Integration Proof הוא DEFE
 מפורשים. `0095` מחליפה marker טקסטואלי ב־lexer של SQL, קריאה executable ו־body hash; רשם החריגים
 נשאר גלוי וריקונו נשאר עבודה פונקציה־פונקציה.
 
-## חוזה "מסמך ספק שהתקבל" — `0104`–`0117` (בענף, **לא נפרס**)
+## חוזה "מסמך ספק שהתקבל" — `0104`–`0117` (**פרוס בייצור**)
 
 הזרימה החדשה היא **שרשרת קריאה ואז פקודה אחת שכותבת**. כל מה שלפני האישור **קורא בלבד**, וכל אחת
 מהפונקציות אומרת זאת בגוף שלה:
