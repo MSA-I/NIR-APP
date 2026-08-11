@@ -384,9 +384,9 @@ async function roleAndViewportMatrix(browser) {
 
 async function quickActionsContract(browser) {
   const roleLabels = {
-    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
-    office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
-    kitchen: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה'],
+    office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה'],
+    kitchen: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה'],
     accountant: ['מרכז הבקרה', 'חשבוניות', 'תשלומים'],
   };
   const roleTargets = {
@@ -1556,7 +1556,10 @@ async function orderSupplierComparison(browser) {
     const sendQueue = page.getByRole('dialog', { name: 'שליחת הזמנות לספקים' });
     await sendQueue.waitFor({ timeout: 25_000 });
     await sendQueue.getByText('מאפה זהב', { exact: true }).waitFor();
-    await sendQueue.getByRole('button', { name: 'שליחה ב-WhatsApp' }).waitFor();
+    // 'פתיחת WhatsApp', not 'שליחה ב-WhatsApp' (H5, 10.08.2026). Opening the WhatsApp window
+    // prepares a message; only the operator knows whether it was actually sent, so marking the
+    // order sent is a second, explicit confirmation rather than a side effect of a link opening.
+    await sendQueue.getByRole('button', { name: 'פתיחת WhatsApp' }).waitFor();
   } finally {
     try {
       await qualitySupplierPrice(58.5);
@@ -2360,7 +2363,12 @@ async function navigationOrderAndActiveState(browser) {
     await drawer.waitFor();
     const drawerGroups = await readSidebar(drawer.locator('nav'));
     const drawerLinks = drawerGroups.flatMap((group) => group.items);
-    assert.deepEqual(drawerGroups.map((group) => group.section), ['', 'ניהול', 'בקרה'],
+    // The drawer carries TWO groups the desktop sidebar does not, and that is the point of H4
+    // (10.08.2026): profile, settings and sign-out used to live in a sticky footer strip that sat
+    // over the menu while it scrolled. They moved into the drawer's own flow. The daily
+    // destinations below are still asserted to match the sidebar exactly — what changed is where
+    // the account surface lives, not which destinations a role has.
+    assert.deepEqual(drawerGroups.map((group) => group.section).slice(0, 3), ['', 'ניהול', 'בקרה'],
       'the drawer renders different progressive-disclosure groups than the desktop sidebar');
     assert.deepEqual(drawerGroups[0].items.map((item) => item.path),
       ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
