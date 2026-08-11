@@ -390,9 +390,9 @@ async function quickActionsContract(browser) {
     accountant: ['מרכז הבקרה', 'חשבוניות', 'תשלומים'],
   };
   const roleTargets = {
-    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
-    office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
-    kitchen: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
+    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving'],
+    office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving'],
+    kitchen: ['/orders/new?fresh=1', '/dashboard', null, '/receiving'],
     accountant: ['/dashboard', '/invoices', '/pay'],
   };
 
