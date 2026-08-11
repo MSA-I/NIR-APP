@@ -407,6 +407,15 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   const canUpload = canWrite && !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
   const canEnqueue = canUpload;
   const canRetry = canFile;
+  /**
+   * Removing a document is not filing it (owner, 11.08.2026, and 0121 in the database).
+   * Whoever photographed the wrong page is who notices, and that is the kitchen manager at
+   * the truck far more often than the owner. The server holds the real boundary: it opens
+   * `document_only` to the same four roles and keeps the derived reversal for owner/office,
+   * telling the dialog so through `can_remove_derived` and a named blocker.
+   */
+  const canRemoveDocument = canWrite && !!profile
+    && ['owner', 'office', 'kitchen', 'accountant'].includes(profile.role);
 
   const [q, setQ] = useState('');
   const [supplierId, setSupplierId] = useState('');
@@ -887,7 +896,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
               // reason, shows what would go with it, and blocks the destructive option by name
               // when a safe reversal cannot be proven.
               { key: 'remove-with-impact', label: 'הסרה עם תצוגת השפעה', icon: Trash2, tone: 'danger',
-                hidden: !canFile || archive, onSelect: () => setRemovalDoc(doc) },
+                hidden: !canRemoveDocument || archive, onSelect: () => setRemovalDoc(doc) },
             ];
           }}
           emptyTitle={data?.docs.length ? 'לא נמצאו מסמכים לפי הסינון' : empty.title}
