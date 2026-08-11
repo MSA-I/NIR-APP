@@ -72,7 +72,8 @@ jobs:
             || { echo 'Ignored or skipped cases are not acceptable in this gate.'; exit 1; }
 
       - name: Send-feedback function type contract
-        run: npx --yes deno check --frozen supabase/functions/send-feedback/index.ts
+        working-directory: supabase/functions/send-feedback
+        run: npx --yes deno check --config deno.json --lock deno.lock --frozen index.ts
 
       - name: Outbox-worker delivery, header and signature contracts
         run: |
