@@ -10,12 +10,13 @@ import { runInvoiceChecks, type CheckResult } from '../lib/checks';
 import { fmtDate, todayISO } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import type { Supplier } from '../lib/types';
-import { fetchAll } from '../lib/supabasePaging';
+import { type PageResponse, fetchAll } from '../lib/supabasePaging';
 import { invoiceCheckFingerprint } from '../lib/checkFingerprint';
 import { invoiceDraftFromInterpretation } from '../components/document-review/model';
 import type { InterpretationContract } from '../lib/useDocumentProcessing';
 import { PO_STATUS } from '../lib/status';
 import { SupplierSelectField, useQuickSupplier } from '../components/QuickSupplierPicker';
+import { SUPPLIER_COLUMNS } from '../lib/supplierColumns';
 import {
   isUuid,
   resolveInvoiceLinkedContext,
@@ -107,8 +108,9 @@ export default function InvoiceNew() {
   const [overrideOpen, setOverrideOpen] = useState(false);
 
   const { data: suppliers, loading, error } = useQuery<Supplier[]>(async () =>
-    fetchAll<Supplier>((from, to) => supabase.from('suppliers').select('*').is('deleted_at', null)
-      .order('name').order('id').range(from, to)));
+    fetchAll<Supplier>((from, to) => supabase.from('suppliers').select(SUPPLIER_COLUMNS)
+      .is('deleted_at', null).order('name').order('id')
+      .range(from, to) as unknown as PromiseLike<PageResponse<Supplier>>));
 
   const linksRequested = !!presetOrder || !!presetReceipt;
   const { data: linkResolution, loading: linksLoading } = useQuery(async () => {

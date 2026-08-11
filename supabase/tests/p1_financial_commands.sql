@@ -63,9 +63,17 @@ select pg_temp.p1_assert(
             or (select oid from pg_catalog.pg_roles where rolname = 'authenticated') = any(p.polroles)
           )
       )
-      and not has_table_privilege('authenticated', c.oid, 'SELECT')
+      -- COLUMN-level SELECT counts. The claim this assertion makes is "a client can read this
+      -- table at all, and RLS decides which rows" -- not "the grant is written at table
+      -- granularity". 0112 replaced the table grant on `suppliers` with per-column grants to put
+      -- bank_details out of the browser's reach, which RLS cannot do; that narrows a COLUMN and
+      -- leaves every row-level guarantee this suite is about exactly where it was.
+      and not exists (
+        select 1 from information_schema.columns col
+        where col.table_schema = 'public' and col.table_name = c.relname
+          and has_column_privilege('authenticated', c.oid, col.column_name, 'SELECT'))
   ),
-  'authenticated is missing SELECT on an RLS-protected application table'
+  'authenticated cannot read a single column of an RLS-protected application table'
 );
 
 -- Stable fixtures. Inserts run without a JWT and therefore model trusted migration/seed work.
@@ -672,10 +680,16 @@ end
 $$;
 insert into suppliers (org_id, name)
 values ('10000000-0000-0000-0000-000000000001', 'ספק בלי בנק ביצירה');
+-- The claim is about what was STORED, not about who may look at it. Since 0112 no client role
+-- can select suppliers.bank_details -- a column privilege, beneath RLS, which is the only way to
+-- hide a column -- so the verification steps out of the client role to read it. Who may see the
+-- column is asserted where it belongs, in p32.
+reset role;
 select pg_temp.p1_assert(
   (select bank_details is null from suppliers where name = 'ספק בלי בנק ביצירה'),
   'creation without bank details must succeed and stay bank-less'
 );
+set local role authenticated;
 
 -- Prices: current row + history are inseparable; batch validation is all-or-nothing.
 reset role;
@@ -1326,75 +1340,32 @@ exception when sqlstate '42501' then
   if sqlerrm not like '%payment_request_not_executable%' then raise; end if;
 end
 $$;
+-- --- emergency execution: RETIRED 10.08.2026 (owner decision, 0111) ---
+--
+-- Three step-up attempts and an audit-log check used to live here. They are gone with the
+-- capability: a step-up asserted on a command nobody can call asserts nothing, and an audit row
+-- for an execution that can no longer happen cannot be produced. What replaces them says more --
+-- the route is closed to every client role, and the REGULAR path still refuses an owner who has
+-- no executable request, which is the boundary this section was really about.
 do $$
 begin
-  perform execute_emergency_payment_request(
-    '80000000-0000-0000-0000-000000000008', '2026-07-23', 'העברה בנקאית',
-    'EMERGENCY-REF', null,
+  perform execute_payment_request(
+    '80000000-0000-0000-0000-000000000008', '2026-07-23', 'העברה בנקאית', 'EMERGENCY-REF', null,
     '[{"invoice_id":"60000000-0000-0000-0000-000000000008","credit_id":null,"amount":59}]'::jsonb,
-    'emergency without fresh password'
+    'owner regular attempt after the emergency route was retired'
   );
-  raise exception 'expected missing amr rejection';
+  raise exception 'expected owner regular execution rejection';
 exception when sqlstate '42501' then
-  if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
+  if sqlerrm not like '%payment_request_not_executable%' then raise; end if;
 end
 $$;
 reset role;
-select set_config('request.jwt.claims', jsonb_build_object(
-  'sub', '20000000-0000-0000-0000-000000000001',
-  'amr', jsonb_build_array(jsonb_build_object(
-    'method', 'password', 'timestamp', extract(epoch from clock_timestamp() - interval '10 minutes')::bigint
-  ))
-)::text, true);
-set local role authenticated;
-do $$
-begin
-  perform execute_emergency_payment_request(
-    '80000000-0000-0000-0000-000000000008', '2026-07-23', 'העברה בנקאית',
-    'EMERGENCY-REF', null,
-    '[{"invoice_id":"60000000-0000-0000-0000-000000000008","credit_id":null,"amount":59}]'::jsonb,
-    'stale emergency attempt'
-  );
-  raise exception 'expected stale amr rejection';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
-end
-$$;
-reset role;
-select set_config('request.jwt.claims', jsonb_build_object(
-  'sub', '20000000-0000-0000-0000-000000000001',
-  'amr', jsonb_build_array(jsonb_build_object(
-    'method', 'password', 'timestamp', extract(epoch from clock_timestamp())::bigint
-  ))
-)::text, true);
-set local role authenticated;
 select pg_temp.p1_assert(
-  (execute_emergency_payment_request(
-    '80000000-0000-0000-0000-000000000008', '2026-07-23', 'העברה בנקאית',
-    'EMERGENCY-REF', null,
-    '[{"invoice_id":"60000000-0000-0000-0000-000000000008","credit_id":null,"amount":59}]'::jsonb,
-    'תשלום חירום מאומת'
-  )->>'emergency')::boolean,
-  'fresh owner emergency execution did not commit'
-);
+  not has_function_privilege('authenticated', 'public.execute_emergency_payment_request(uuid,date,text,text,text,jsonb,text)', 'execute'),
+  'a client role can still start an emergency payment after the owner retired that route');
 select pg_temp.p1_assert(
-  (execute_emergency_payment_request(
-    '80000000-0000-0000-0000-000000000008', '2026-07-23', 'העברה בנקאית',
-    'EMERGENCY-REF', null,
-    '[{"invoice_id":"60000000-0000-0000-0000-000000000008","credit_id":null,"amount":59}]'::jsonb,
-    'תשלום חירום מאומת'
-  )->>'idempotent')::boolean,
-  'owner emergency retry must be idempotent'
-);
-select pg_temp.p1_assert(
-  exists (
-    select 1 from audit_logs
-    where action = 'payment_request_emergency_executed'
-      and entity_id = '80000000-0000-0000-0000-000000000008'
-      and reason = 'תשלום חירום מאומת'
-  ),
-  'owner emergency audit is missing or not distinct'
-);
+  to_regprocedure('public.execute_emergency_payment_request(uuid,date,text,text,text,jsonb,text)') is not null,
+  'the emergency command was dropped rather than revoked; audit_logs still names it');
 
 reset role;
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);

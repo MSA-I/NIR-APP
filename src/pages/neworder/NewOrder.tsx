@@ -32,6 +32,7 @@ import type { Product, PurchaseOrder, Supplier, SupplierProduct } from '../../li
 import ProductStep from './ProductStep';
 import SupplierSplitStep from './SupplierSplitStep';
 import SummaryStep from './SummaryStep';
+import { SUPPLIER_COLUMNS } from '../../lib/supplierColumns';
 
 interface CartItem extends SplitLine {
   product: Product;
@@ -206,7 +207,7 @@ export default function NewOrder() {
     const [products, sps, suppliers] = await Promise.all([
       supabase.from('products').select('*').eq('active', true).order('name'),
       supabase.from('supplier_products').select('*').eq('available', true),
-      supabase.from('suppliers').select('*').is('deleted_at', null).in('status', NEW_COMMERCE_SUPPLIER_STATUSES),
+      supabase.from('suppliers').select(SUPPLIER_COLUMNS).is('deleted_at', null).in('status', NEW_COMMERCE_SUPPLIER_STATUSES),
     ]);
     let draft: DraftRow | null = null;
     let source: SourceOrder | null = null;

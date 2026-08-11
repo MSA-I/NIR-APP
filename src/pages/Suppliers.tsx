@@ -13,6 +13,7 @@ import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type Suppl
 import { canStartSupplierCommerce, SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
 import { fmtMoneyExact, fmtNum, fmtDate, fmtDays } from '../lib/format';
 import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission } from '../lib/types';
+import { SUPPLIER_COLUMNS } from '../lib/supplierColumns';
 
 // suppliers.rating* are added in migration 0011. The hand-written Supplier type (types.ts) is
 // read-only this wave and does not carry them yet, so extend it locally.
@@ -435,7 +436,7 @@ export function SupplierCard() {
   const [editFocus, setEditFocus] = useState<'bank' | undefined>(undefined);
 
   const { data, loading, error, refetch } = useQuery(async () => {
-    const supplier = unwrap(await supabase.from('suppliers').select('*').eq('id', id!).single()) as SupplierRow;
+    const supplier = unwrap(await supabase.from('suppliers').select(SUPPLIER_COLUMNS).eq('id', id!).single()) as SupplierRow;
     // supplier_price_submissions RLS grants SELECT to owner/office (or the supplier itself) —
     // other staff roles skip the query instead of reading an empty result as "no history".
     const staff = profile?.role === 'owner' || profile?.role === 'office';

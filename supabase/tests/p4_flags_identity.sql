@@ -472,59 +472,31 @@ select pg_temp.p4_assert(
   'fresh payer execution must commit');
 reset role;
 
--- --- execute_emergency_payment_request (owner) ---
-select pg_temp.p4_claims('27000000-0000-0000-0000-000000000001', null);
-set local role authenticated;
-do $$
-begin
-  perform execute_emergency_payment_request(
-    '87000000-0000-0000-0000-000000000002', '2026-07-21', 'העברה בנקאית', 'P4-EMG-1', null,
-    '[{"invoice_id":"67000000-0000-0000-0000-000000000002","credit_id":null,"amount":59}]'::jsonb,
-    'P4: emergency no amr');
-  raise exception 'P4 flags/identity assertion failed: emergency executed without amr';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
-end
-$$;
-reset role;
-select pg_temp.p4_claims('27000000-0000-0000-0000-000000000001', interval '-10 minutes');
-set local role authenticated;
-do $$
-begin
-  perform execute_emergency_payment_request(
-    '87000000-0000-0000-0000-000000000002', '2026-07-21', 'העברה בנקאית', 'P4-EMG-1', null,
-    '[{"invoice_id":"67000000-0000-0000-0000-000000000002","credit_id":null,"amount":59}]'::jsonb,
-    'P4: emergency stale amr');
-  raise exception 'P4 flags/identity assertion failed: emergency executed with stale amr';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
-end
-$$;
-reset role;
-select pg_temp.p4_claims('27000000-0000-0000-0000-000000000001', interval '10 minutes');
-set local role authenticated;
-do $$
-begin
-  perform execute_emergency_payment_request(
-    '87000000-0000-0000-0000-000000000002', '2026-07-21', 'העברה בנקאית', 'P4-EMG-1', null,
-    '[{"invoice_id":"67000000-0000-0000-0000-000000000002","credit_id":null,"amount":59}]'::jsonb,
-    'P4: emergency future amr');
-  raise exception 'P4 flags/identity assertion failed: emergency executed with a future amr';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
-end
-$$;
-reset role;
-select pg_temp.p4_claims('27000000-0000-0000-0000-000000000001', interval '0');
-set local role authenticated;
+-- --- execute_emergency_payment_request: RETIRED 10.08.2026 (owner decision, 0111) ---
+--
+-- Four step-up cases used to live here: no amr, stale amr, future amr, and a fresh one that
+-- committed. They are gone because the CAPABILITY is gone, and asserting a step-up on a command
+-- nobody can call would be asserting nothing. What replaces them is stronger -- the command is
+-- unreachable by any client role, at any freshness.
+--
+-- The function is deliberately NOT dropped: emergency payments already executed name it in
+-- audit_logs, and dropping it would turn an auditable record into a dangling name. So both
+-- halves are asserted -- revoked, and still there.
 select pg_temp.p4_assert(
-  (execute_emergency_payment_request(
-    '87000000-0000-0000-0000-000000000002', '2026-07-21', 'העברה בנקאית', 'P4-EMG-1', null,
-    '[{"invoice_id":"67000000-0000-0000-0000-000000000002","credit_id":null,"amount":59}]'::jsonb,
-    'P4: תשלום חירום מאומת'
-  )->>'emergency')::boolean,
-  'fresh owner emergency execution must commit');
-reset role;
+  not has_function_privilege('authenticated', 'public.execute_emergency_payment_request(uuid,date,text,text,text,jsonb,text)', 'execute')
+  and not has_function_privilege('anon', 'public.execute_emergency_payment_request(uuid,date,text,text,text,jsonb,text)', 'execute'),
+  'a client role can still start an emergency payment. The owner retired that route on 10.08.2026 and 0111 revoked it');
+select pg_temp.p4_assert(
+  to_regprocedure('public.execute_emergency_payment_request(uuid,date,text,text,text,jsonb,text)') is not null,
+  'the emergency command was DROPPED rather than revoked. Payments already executed name it in audit_logs; dropping it turns an auditable record into a dangling name');
+
+-- Retiring the emergency route must not have taken the protection with it: the regular path
+-- still carries the step-up 0061 injects into its LIVE body.
+select pg_temp.p4_assert(
+  (select position('assert_recent_password_authentication' in p.prosrc) > 0
+   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'execute_payment_request'),
+  'execute_payment_request lost its password step-up when the emergency route was retired');
 
 -- --- manage_profile_access (owner -> kitchen) ---
 select pg_temp.p4_claims('27000000-0000-0000-0000-000000000001', null);

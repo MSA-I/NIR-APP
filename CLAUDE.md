@@ -42,10 +42,10 @@
 Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **Tailwind v4 CSS-first** · recharts · lucide-react
 
 - `npm run dev` — פורט **5199**
-- `npm run build` = `tsc --noEmit` + **עשרת** סקריפטי ה-`check:*` + `vitest run` (‏`npm run test`) + `vite build` — **השער האוטומטי היחיד.**
-  עשרה, לא תשעה: ‏`check:exemptions` נוסף בגל 11, ‏`check:counts` בקמפיין האוטומציות, ו-`check:money`
+- `npm run build` = `tsc --noEmit` + **אחד-עשר** סקריפטי ה-`check:*` + `vitest run` (‏`npm run test`) + `vite build` — **השער האוטומטי היחיד.**
+  אחד-עשר, לא עשרה: ‏`check:exemptions` נוסף בגל 11, ‏`check:counts` בקמפיין האוטומציות, ו-`check:money`
   בחבילה 1 של קמפיין המוכנות. הרשימה מ-`package.json` היא
-  ‏`alerts · dashboard · orders · split · p2 · review · tokens · money · exemptions · counts`.
+  ‏`alerts · dashboard · orders · split · p2 · review · tokens · money · exemptions · counts · supplier-columns`.
   ‏`check:money` אוכף מקור אמת אחד לצורת הכסף — אפס `₪` מודבק לערך מוזרק, אפס `toLocaleString(`
   ואפס פורמטר מטבע שני מחוץ ל-`src/lib/format.ts`; נבדק במוטציה — הפרה מושתלת מפילה אותו.
   ‏`check:review` מריץ `node --test` על `src/components/document-review/model.test.ts` — ‏**22** בדיקות
@@ -84,7 +84,7 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
     ערוץ ההערות של חבילה 0 בקמפיין המוכנות; ‏`run(` לבדו תופס גם את הגדרת הפונקציה).
 
   **היסטוריית הסטייה, כי היא חזרה שמונה-עשרה פעמים:** ‏13 → 20 → 26 → 27 → 28 → 29 → 30 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → **52** לסוויטות; ‏22 → 25 → 29 → 30 → 33 → 34 →
-  **35** לתרחישים; ‏16 → 21 → **22** ל-`check:review`; ‏שבעה → שמונה → תשעה → **עשרה** לסקריפטי ה-`check:*`. בכל פעם הקובץ
+  **35** לתרחישים; ‏16 → 21 → **22** ל-`check:review`; ‏שבעה → שמונה → תשעה → עשרה → **אחד-עשר** לסקריפטי ה-`check:*`. בכל פעם הקובץ
   הזה — שכל סוכן קורא **ראשון** — שלח את הקורא לספור פחות ממה שקיים. **סופרים לפני שכותבים.**
   הקפיצה מ-30 ל-41 היא נרמול קמפיין ה-codex: אחת-עשרה סוויטות חדשות (‏p16 סמנטיקת ספק
   לא-פעיל, ‏p17, ‏p18 ×2, ‏p19, ‏p20 ×2, ‏p21, ‏p23, ‏p24, ‏p25) נרשמו בשער באותו מיזוג. **‏`check:counts`
@@ -145,7 +145,7 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   (‏88), ‏`Invoke-PriceListEdgeSmoke`, ‏`Invoke-OcrEdgeSmoke` ו-`check-p4-integrated-journey.cjs`.
   אלה קשורים ל-PowerShell של Windows ורצים רק בריצה הידנית. **תיק ירוק אינו טענה שהם עברו.**
 
-  ‏`.github/workflows/build.yml` ממשיך להריץ את `npm run build` המלא (‏tsc + עשרת ה-`check:*` +
+  ‏`.github/workflows/build.yml` ממשיך להריץ את `npm run build` המלא (‏tsc + אחד-עשר ה-`check:*` +
   ‏vitest + ‏vite build) על כל push/PR — הוא המשוב המהיר (‏~92 שניות), ו-`quality-gate.yml` הוא
   השער הכבד.
 

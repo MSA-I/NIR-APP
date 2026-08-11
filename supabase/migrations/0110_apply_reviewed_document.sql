@@ -214,6 +214,16 @@ create trigger document_review_applications_immutable_trg
   before update or delete on public.document_review_applications
   for each row execute function public.reject_document_review_application_mutation();
 
+-- The trial/offboarding read-only guard. 0092's sweep attached this to every org-owned table that
+-- existed at the time, and 0096 records why each table added afterwards must attach it explicitly:
+-- without it an expired or offboarding tenant could still write here through a definer or
+-- service_role path, and this ledger is written by a SECURITY DEFINER command. `p22_trial_read_only`
+-- asserts it universally -- which is how this omission was caught, in CI, after passing locally.
+drop trigger if exists zz_organization_write_guard on public.document_review_applications;
+create trigger zz_organization_write_guard
+  before insert or update or delete on public.document_review_applications
+  for each row execute function private.organization_row_write_guard();
+
 -- ===== 3. The command =====
 create or replace function public.apply_reviewed_document(
   p_document_id uuid,
