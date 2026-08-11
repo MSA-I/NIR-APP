@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { toHebrewError } from './errors';
+import type { ScreenshotCapture } from './screenshot';
 import type { Role } from './types';
 
 /**
@@ -27,11 +28,27 @@ export interface FeedbackContext {
   viewportWidth: number | null;
   /** VITE_RELEASE — the same build identifier the app reports to Sentry. */
   appRelease: string | null;
+  /**
+   * The tab title, the query string and the hash, separately from `route` (0122).
+   *
+   * `route` is capped at 200 characters by 0091, and a filtered list can spend more than that on
+   * its query string alone — while the filters ARE the state the report is about. The title names
+   * the screen in the words the customer uses rather than the words the router uses.
+   */
+  pageTitle: string | null;
+  routeQuery: string | null;
+  routeHash: string | null;
 }
 
 export interface FeedbackOutcome {
   saved: boolean;
   delivered: boolean;
+  /**
+   * Whether the picture made it. A THIRD truth, kept apart from the other two for the same reason
+   * they are kept apart from each other: "saved" and "delivered" are different facts, and so is
+   * "the screenshot you were shown is the one they got".
+   */
+  screenshotAttached: boolean;
   /** Hebrew, ready to show. Always says what actually happened. */
   message: string;
 }
@@ -55,9 +72,13 @@ export async function submitFeedbackNote(
   orgId: string,
   userId: string,
   context: FeedbackContext,
+  screenshot?: ScreenshotCapture | null,
 ): Promise<FeedbackOutcome> {
   const trimmed = note.trim();
-  if (!trimmed) return { saved: false, delivered: false, message: 'אין מה לשלוח — ההערה ריקה' };
+  if (!trimmed) {
+    return { saved: false, delivered: false, screenshotAttached: false,
+             message: 'אין מה לשלוח — ההערה ריקה' };
+  }
 
   // created_at, sent_at and send_error are absent on purpose: the browser holds no grant on them
   // (0091), so "נשלח" cannot originate here.
@@ -70,26 +91,71 @@ export async function submitFeedbackNote(
       role: context.role,
       viewport_width: context.viewportWidth,
       app_release: context.appRelease,
+      page_title: context.pageTitle,
+      route_query: context.routeQuery,
+      route_hash: context.routeHash,
     })
     .select('id')
     .single();
 
   if (inserted.error || !inserted.data) {
-    return { saved: false, delivered: false, message: toHebrewError(inserted.error) };
+    return { saved: false, delivered: false, screenshotAttached: false,
+             message: toHebrewError(inserted.error) };
   }
 
+  // The picture, after the words and never before them. Everything below this line can fail without
+  // costing the note: the row already exists, and a failed upload leaves it a note with no
+  // screenshot — which is why every column 0122 adds is nullable.
+  const noteId = inserted.data.id as string;
+  const attached = screenshot ? await attachScreenshot(noteId, orgId, screenshot) : false;
+  const pictureNote = screenshot && !attached ? ' (הצילום לא נשמר — ההערה נשלחה בלעדיו)' : '';
+
   const { data, error } = await supabase.functions.invoke('send-feedback', {
-    body: { noteId: inserted.data.id },
+    body: { noteId },
   });
 
   if (error) {
     const message = await edgeMessage(error);
-    return { saved: true, delivered: false, message: message ?? 'ההערה נשמרה, אך השליחה נכשלה' };
+    return { saved: true, delivered: false, screenshotAttached: attached,
+             message: (message ?? 'ההערה נשמרה, אך השליחה נכשלה') + pictureNote };
   }
   const failed = (data as { error?: EdgeError } | null)?.error;
   if (failed) {
-    return { saved: true, delivered: false, message: failed.message ?? 'ההערה נשמרה, אך השליחה נכשלה' };
+    return { saved: true, delivered: false, screenshotAttached: attached,
+             message: (failed.message ?? 'ההערה נשמרה, אך השליחה נכשלה') + pictureNote };
   }
 
-  return { saved: true, delivered: true, message: 'ההערה נשלחה. תודה — היא מגיעה אליי מיד.' };
+  return { saved: true, delivered: true, screenshotAttached: attached,
+           message: 'ההערה נשלחה. תודה — היא מגיעה אליי מיד.' + pictureNote };
+}
+
+/**
+ * Upload the capture and point the note at it.
+ *
+ * The path is `{org_id}/{note_id}.png`: the tenant prefix that 0122's storage policy READS out of
+ * the name and compares against `auth_org()`, then the note id, so one note can hold exactly one
+ * picture and a retry overwrites rather than accumulates.
+ *
+ * Returns false on any failure, quietly. The caller has already saved the note, and somebody who
+ * wrote a sentence should not be handed a storage error about a courtesy.
+ */
+async function attachScreenshot(
+  noteId: string,
+  orgId: string,
+  screenshot: ScreenshotCapture,
+): Promise<boolean> {
+  const uploaded = await supabase.storage.from('feedback')
+    .upload(orgId + '/' + noteId + '.png', screenshot.blob,
+            { contentType: 'image/png', upsert: true });
+  if (uploaded.error) return false;
+
+  const updated = await supabase.from('feedback_notes')
+    .update({
+      screenshot_path: orgId + '/' + noteId + '.png',
+      screenshot_bytes: screenshot.bytes,
+      screenshot_checksum: screenshot.checksum,
+      screenshot_mime: 'image/png',
+    })
+    .eq('id', noteId);
+  return !updated.error;
 }

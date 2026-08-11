@@ -30,6 +30,20 @@ vi.mock('../lib/supabase', async () => {
   };
 });
 
+/**
+ * html2canvas, stubbed rather than run. jsdom paints nothing, so the real library would either
+ * throw or return an empty canvas -- and either way the test would be measuring jsdom's renderer.
+ * What these tests are about is the WIRE, and the stub keeps the one thing that matters to it: the
+ * capture is awaited before the dialog opens (package L).
+ */
+vi.mock('../lib/screenshot', () => ({
+  SCREENSHOT_MAX_BYTES: 4 * 1024 * 1024,
+  captureViewport: vi.fn(async () => capturedShot),
+}));
+let capturedShot: {
+  blob: Blob; previewUrl: string; bytes: number; checksum: string; width: number; height: number;
+} | null = null;
+
 let flagOn = true;
 vi.mock('../lib/flags', () => ({ useFeatureFlags: () => ({ isEnabled: () => flagOn }) }));
 vi.mock('../auth/AuthContext', () => ({
@@ -70,11 +84,13 @@ function captureInsert(inserts: Record<string, unknown>[], status = 201) {
 async function openAndSubmit(text: string) {
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: 'שליחת הערה' }));
-  await user.type(screen.getByLabelText('ההערה'), text);
+  // findBy, not getBy: the click captures the viewport BEFORE it opens the dialog (package L), so
+  // the dialog arrives one microtask later. That ordering is the feature, not a race.
+  await user.type(await screen.findByLabelText('ההערה'), text);
   await user.click(screen.getByRole('button', { name: 'שליחה' }));
 }
 
-beforeEach(() => { flagOn = true; });
+beforeEach(() => { flagOn = true; capturedShot = null; });
 
 describe('feedback note — the wire', () => {
   it('sends the screen, the role and the viewport, and never a delivery column', async () => {

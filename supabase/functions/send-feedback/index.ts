@@ -72,6 +72,11 @@ interface NoteRow {
   app_release: string | null;
   created_at: string;
   sent_at: string | null;
+  page_title: string | null;
+  route_query: string | null;
+  route_hash: string | null;
+  screenshot_path: string | null;
+  screenshot_bytes: number | null;
 }
 
 function fail(cors: Record<string, string>, code: ErrorCode, status: number) {
@@ -104,7 +109,7 @@ function composeMessage(note: NoteRow, orgName: string, authorName: string): str
 
   const header = [
     `**הערה חדשה מ-${orgName}**`,
-    `מסך: \`${note.route}\``,
+    `מסך: ${note.page_title ? `${note.page_title} · ` : ''}\`${note.route}${note.route_query ?? ''}${note.route_hash ?? ''}\``,
     `מי: ${authorName} · ${ROLE_LABEL[note.role] ?? note.role}`,
     `מכשיר: ${note.viewport_width ? `${note.viewport_width}px` : 'רוחב לא נמסר'}`
       + ` · גרסה: ${note.app_release ?? 'לא נמסרה'}`,
@@ -154,7 +159,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const { data: noteData, error: noteError } = await asCaller
     .from('feedback_notes')
-    .select('id, org_id, user_id, note, route, role, viewport_width, app_release, created_at, sent_at')
+    .select('id, org_id, user_id, note, route, role, viewport_width, app_release, created_at, '
+            + 'sent_at, page_title, route_query, route_hash, screenshot_path, screenshot_bytes')
     .eq('id', body.noteId)
     .maybeSingle();
   if (noteError) {
@@ -182,17 +188,52 @@ Deno.serve(async (req: Request): Promise<Response> => {
     (author?.full_name as string | undefined) ?? 'משתמש לא מזוהה',
   );
 
+  /*
+   * The screenshot (0122), fetched HERE and never by the browser.
+   *
+   * The bucket has no read policy at all -- not for the author, not for the owner, not for a
+   * platform admin -- so this service-role download is the only way a screenshot is ever opened,
+   * and it is opened once, to be posted, and then forgotten. An image with exactly one reader
+   * cannot leak through a screen somebody left open.
+   *
+   * A missing or unreadable file is NOT a delivery failure. The note is the record and it goes
+   * either way; the message simply arrives without a picture. Failing the send over a courtesy
+   * would be the tail wagging the dog.
+   */
+  let screenshot: Uint8Array | null = null;
+  if (note.screenshot_path) {
+    try {
+      const downloaded = await admin.storage.from('feedback').download(note.screenshot_path);
+      if (downloaded.error || !downloaded.data) {
+        console.error('feedback screenshot unreadable', downloaded.error?.message ?? 'no body');
+      } else {
+        screenshot = new Uint8Array(await downloaded.data.arrayBuffer());
+      }
+    } catch (e) {
+      console.error('feedback screenshot download threw', e instanceof Error ? e.message : e);
+    }
+  }
+
   let sendError: string | null = null;
   try {
-    const res = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        content,
-        // A customer's note is untrusted text: no mention in it may ever ping the channel.
-        allowed_mentions: { parse: [] },
-      }),
-    });
+    // `allowed_mentions: { parse: [] }` travels in both shapes. A customer's note is untrusted
+    // text, and no mention inside it may ever ping the channel -- multipart is not an exception to
+    // that, it is just a different envelope for the same payload.
+    const payload = JSON.stringify({ content, allowed_mentions: { parse: [] } });
+    let res: Response;
+    if (screenshot) {
+      const form = new FormData();
+      form.append('payload_json', payload);
+      // The name is what the vendor sees in the channel; the note id is what ties it back to a row.
+      form.append('files[0]', new Blob([screenshot], { type: 'image/png' }), `feedback-${note.id}.png`);
+      res = await fetch(webhookUrl, { method: 'POST', body: form });
+    } else {
+      res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+      });
+    }
     // Discord answers 204 with no body on success.
     if (!res.ok) sendError = `discord_status_${res.status}`;
   } catch (e) {
