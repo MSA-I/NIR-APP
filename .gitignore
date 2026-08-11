@@ -19,8 +19,7 @@ supabase/.branches/
 playwright-report/
 test-results/
 
-# Written by the deno steps of a LOCAL `npm run quality` run. The repository has never carried a
-# root deno.lock — the Deno config lives in supabase/functions/interpret-document/deno.json and CI
-# resolves without one. Committing it now would change what CI resolves, which is a supply-chain
-# decision and not a tidy-up.
+# Written by root-level Deno commands. Edge functions that opt into a dedicated, reviewed lockfile
+# add an explicit exception below; the repository still does not carry a shared root lockfile.
 deno.lock
+!supabase/functions/send-feedback/deno.lock
