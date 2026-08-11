@@ -168,7 +168,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return fail(cors, 'invalid_request', 400);
   }
   if (!noteData) return fail(cors, 'note_unknown', 404);
-  const note = noteData as NoteRow;
+  // The untyped Edge client reports a GenericStringError union even after maybeSingle().
+  // The explicit projection above is the runtime contract; cross the type boundary once here.
+  const note = noteData as unknown as NoteRow;
 
   // Already delivered: say so and post nothing. A second click must not duplicate the message.
   if (note.sent_at) return ok(cors, { ok: true, sentAt: note.sent_at, duplicate: true });
@@ -225,7 +227,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const form = new FormData();
       form.append('payload_json', payload);
       // The name is what the vendor sees in the channel; the note id is what ties it back to a row.
-      form.append('files[0]', new Blob([screenshot], { type: 'image/png' }), `feedback-${note.id}.png`);
+      // Deno's BlobPart contract requires an ArrayBuffer-backed view, while a downloaded Blob may
+      // surface as Uint8Array<ArrayBufferLike>. Copy once so SharedArrayBuffer cannot cross it.
+      const screenshotBuffer = Uint8Array.from(screenshot).buffer;
+      form.append('files[0]', new Blob([screenshotBuffer], { type: 'image/png' }), `feedback-${note.id}.png`);
       res = await fetch(webhookUrl, { method: 'POST', body: form });
     } else {
       res = await fetch(webhookUrl, {
