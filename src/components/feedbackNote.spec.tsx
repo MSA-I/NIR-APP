@@ -120,8 +120,12 @@ describe('feedback note — the wire', () => {
     expect(body).not.toHaveProperty('sent_at');
     expect(body).not.toHaveProperty('send_error');
 
-    // The function receives the id of the stored row, never the text.
-    expect(sends).toEqual([{ noteId: 'note-1' }]);
+    // The function receives the id of the stored row, never the text. Since 0124 that id is
+    // generated in the browser and travels IN the insert, because attaching a screenshot
+    // afterwards would need an UPDATE grant on a table that is append-only by design.
+    expect(String(body.id)).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(sends).toEqual([{ noteId: body.id }]);
   });
 
   it('a failed send still stores the note, and says so instead of claiming delivery', async () => {

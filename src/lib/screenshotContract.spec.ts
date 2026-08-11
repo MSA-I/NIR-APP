@@ -79,11 +79,27 @@ describe('a picture is never worth a lost sentence', () => {
     expect(screenshot).toContain('return null;');
   });
 
-  it('inserts the note before it touches storage', () => {
-    const insert = feedback.indexOf(".from('feedback_notes')");
-    const upload = feedback.indexOf(".storage.from('feedback')");
-    expect(insert).toBeGreaterThan(-1);
-    expect(upload).toBeGreaterThan(insert);
+  it('never asks for an UPDATE on the note, which is why the upload goes first', () => {
+    // p0_client_dml_acl.sql:188 asserts feedback_notes is append-only for the browser, and 0122
+    // quietly broke it with a column-scoped UPDATE grant. The heavy gate caught it; 0124 put the
+    // invariant back by generating the id here and uploading before the insert.
+    expect(feedback).toContain('crypto.randomUUID()');
+    // The CALL, not the helper's definition: the upload lives below the function that uses it, so
+    // comparing raw file positions would assert the layout of the file rather than the order of
+    // the work.
+    const upload = feedback.indexOf('await uploadScreenshot(');
+    const insert = feedback.indexOf('.insert({');
+    expect(upload).toBeGreaterThan(-1);
+    expect(insert).toBeGreaterThan(upload);
+    expect(feedback).not.toContain('.update({');
+  });
+
+  it('never puts a delivery claim inside a failure message', () => {
+    // The browser gate caught this as a copy defect, and it was one: the "saved but not delivered"
+    // toast carried a parenthetical reading "ההערה נשלחה בלעדיו", so a screen reporting a failed
+    // send contained the words "the note was sent".
+    const failureAdjacent = feedback.slice(feedback.indexOf('pictureNote'));
+    expect(failureAdjacent).not.toContain('ההערה נשלחה בלעדיו');
   });
 
   it('reports "saved", "delivered" and "attached" as three separate truths', () => {

@@ -80,10 +80,25 @@ export async function submitFeedbackNote(
              message: 'אין מה לשלוח — ההערה ריקה' };
   }
 
-  // created_at, sent_at and send_error are absent on purpose: the browser holds no grant on them
-  // (0091), so "נשלח" cannot originate here.
+  /*
+   * The id is ours, and the picture goes first (0124).
+   *
+   * The obvious order — insert, upload, then update the row with the path — needs an UPDATE grant
+   * on this table, and `p0_client_dml_acl.sql:188` asserts by name that the browser has none: the
+   * row is a record, not a draft. Generating the id here lets the upload address its destination
+   * before the row exists, so the insert carries the path and nothing is ever updated.
+   *
+   * The guarantee this was built around is untouched. Everything above the insert can fail and the
+   * note still arrives, carrying nulls instead of a path.
+   *
+   * created_at, sent_at and send_error stay absent on purpose: the browser holds no grant on them
+   * (0091), so "נשלח" cannot originate here.
+   */
+  const noteId = crypto.randomUUID();
+  const attachment = screenshot ? await uploadScreenshot(noteId, orgId, screenshot) : null;
   const inserted = await supabase.from('feedback_notes')
     .insert({
+      id: noteId,
       org_id: orgId,
       user_id: userId,
       note: trimmed,
@@ -94,6 +109,7 @@ export async function submitFeedbackNote(
       page_title: context.pageTitle,
       route_query: context.routeQuery,
       route_hash: context.routeHash,
+      ...attachment,
     })
     .select('id')
     .single();
@@ -103,12 +119,8 @@ export async function submitFeedbackNote(
              message: toHebrewError(inserted.error) };
   }
 
-  // The picture, after the words and never before them. Everything below this line can fail without
-  // costing the note: the row already exists, and a failed upload leaves it a note with no
-  // screenshot — which is why every column 0122 adds is nullable.
-  const noteId = inserted.data.id as string;
-  const attached = screenshot ? await attachScreenshot(noteId, orgId, screenshot) : false;
-  const pictureNote = screenshot && !attached ? ' (הצילום לא נשמר — ההערה נשלחה בלעדיו)' : '';
+  const attached = Boolean(attachment);
+  const pictureNote = screenshot && !attached ? ' · הצילום לא צורף' : '';
 
   const { data, error } = await supabase.functions.invoke('send-feedback', {
     body: { noteId },
@@ -130,32 +142,32 @@ export async function submitFeedbackNote(
 }
 
 /**
- * Upload the capture and point the note at it.
+ * Upload the capture, and hand back the columns the insert should carry.
  *
  * The path is `{org_id}/{note_id}.png`: the tenant prefix that 0122's storage policy READS out of
  * the name and compares against `auth_org()`, then the note id, so one note can hold exactly one
  * picture and a retry overwrites rather than accumulates.
  *
- * Returns false on any failure, quietly. The caller has already saved the note, and somebody who
- * wrote a sentence should not be handed a storage error about a courtesy.
+ * Returns null on any failure, quietly. The note is written next either way, and somebody who took
+ * the trouble to write a sentence should not be handed a storage error about a courtesy.
+ *
+ * If the INSERT then fails, this leaves an orphaned object: a PNG under 4 MB, in the tenant's own
+ * folder, in a bucket with no read policy at all. That is a cheaper thing to own than the standing
+ * UPDATE grant the other ordering would need (0124).
  */
-async function attachScreenshot(
+async function uploadScreenshot(
   noteId: string,
   orgId: string,
   screenshot: ScreenshotCapture,
-): Promise<boolean> {
+): Promise<Record<string, string | number> | null> {
+  const path = orgId + '/' + noteId + '.png';
   const uploaded = await supabase.storage.from('feedback')
-    .upload(orgId + '/' + noteId + '.png', screenshot.blob,
-            { contentType: 'image/png', upsert: true });
-  if (uploaded.error) return false;
-
-  const updated = await supabase.from('feedback_notes')
-    .update({
-      screenshot_path: orgId + '/' + noteId + '.png',
-      screenshot_bytes: screenshot.bytes,
-      screenshot_checksum: screenshot.checksum,
-      screenshot_mime: 'image/png',
-    })
-    .eq('id', noteId);
-  return !updated.error;
+    .upload(path, screenshot.blob, { contentType: 'image/png', upsert: true });
+  if (uploaded.error) return null;
+  return {
+    screenshot_path: path,
+    screenshot_bytes: screenshot.bytes,
+    screenshot_checksum: screenshot.checksum,
+    screenshot_mime: 'image/png',
+  };
 }

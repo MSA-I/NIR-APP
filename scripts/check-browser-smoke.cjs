@@ -3082,6 +3082,10 @@ async function feedbackNoteChannel(browser) {
     await page.getByRole('button', { name: 'שליחה' }).click();
 
     await page.getByText('ההערה נשמרה, אך השליחה נכשלה').waitFor();
+    // Substring, not sentence: this caught a real copy defect on 11.08.2026, when the "saved but
+    // not delivered" toast grew a parenthetical about the screenshot that happened to contain the
+    // words "ההערה נשלחה". A failure message must not contain a delivery claim
+    // anywhere inside it, however it got there.
     assert.equal(await page.getByText(/ההערה נשלחה/).count(), 0,
       'the screen claimed a delivery that failed');
 
