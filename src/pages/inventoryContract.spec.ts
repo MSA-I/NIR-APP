@@ -37,11 +37,14 @@ describe('inventory UI contract', () => {
     expect(source).toContain('cheapest_supplier_name');
   });
 
-  it('uses one idempotency UUID for retries and requires a reason', () => {
+  it('uses one idempotency UUID for retries, and records a reason without demanding one', () => {
     expect(source).toContain('useState(() => crypto.randomUUID())');
     expect(source.match(/p_movement_id: commandId/g)).toHaveLength(2);
-    expect(source).toContain('if (!reason.trim())');
-    expect(source).toContain('maxLength={1000} required');
+    // The owner made the box optional on 11.08.2026; the LEDGER still gets a sentence, which is
+    // what `reasonOr` is for. An empty p_reason would be refused by the server anyway.
+    expect(source).not.toContain('if (!reason.trim())');
+    expect(source.match(/reasonOr\(reason, /g)).toHaveLength(2);
+    expect(source).toContain('maxLength={1000}');
     expect(source).toContain("hidden: !canAdjust");
   });
 

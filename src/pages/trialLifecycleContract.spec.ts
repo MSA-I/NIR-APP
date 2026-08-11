@@ -32,8 +32,10 @@ describe('trial lifecycle UI contract', () => {
     expect(admin).toContain('<ReauthModal');
     expect(admin).toContain("p_status: 'trial'");
     expect(admin).toContain('p_trial_ends_at: trialEndInstant(extension.date)');
-    expect(admin).toContain('p_reason: extension.reason.trim()');
-    expect(admin).toContain('disabled={busy || !extension.date || !extension.reason.trim()}');
+    expect(admin).toContain('p_reason: reasonOr(extension.reason,');
+    // The reason box stopped being a gate on 11.08.2026 (owner). The DATE still is: an extension
+    // with no end date is not an extension.
+    expect(admin).toContain('disabled={busy || !extension.date}');
     expect(admin).toContain('open={statusReauth}');
     expect(admin).not.toContain('new-org-trial');
     expect(provision).not.toContain('body.trial_ends_at');

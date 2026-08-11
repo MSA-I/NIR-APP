@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { reasonOr } from '../lib/reason';
 import { Landmark, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -122,7 +123,6 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
   // sees no new modal and a stale one is prompted instead of rejected.
   function requestExecute() {
     if (!f.reference.trim()) { toast('נדרשת אסמכתת העברה', 'error'); return; }
-    if (!f.reason.trim()) { toast('נדרשת סיבה לביצוע ההעברה', 'error'); return; }
     setReauthOpen(true);
   }
 
@@ -140,7 +140,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           credit_id: null,
           amount: link.amount_allocated,
         })),
-        p_reason: f.reason.trim(),
+        p_reason: reasonOr(f.reason, 'ביצוע העברת תשלום'),
       })) as { payment_id: string };
 
       setPaymentId(payment.payment_id);

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { reasonOr } from '../lib/reason';
 import { toHebrewError } from '../lib/errors';
 import { useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
@@ -327,7 +328,6 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
 
   async function save(toApproval: boolean) {
     if (!supplierId || amount <= 0) { toast('בחר ספק וחשבוניות לתשלום', 'error'); return; }
-    if (!reason.trim()) { toast('נדרשת סיבה ליצירת דרישת התשלום', 'error'); return; }
     if (!checkFingerprint || !checksReady) {
       toast(checkError ?? 'יש להמתין לסיום בדיקות הכפילות', 'error');
       return;
@@ -353,7 +353,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
         p_requested_status: toApproval ? 'pending_approval' : 'draft',
         p_allocations: Object.entries(chosen).filter(([, value]) => value > 0)
           .map(([invoice_id, value]) => ({ invoice_id, amount: value })),
-        p_reason: reason.trim(),
+        p_reason: reasonOr(reason, 'יצירת דרישת תשלום'),
       })) as { payment_request_id: string; number: number; status: PaymentRequestStatus };
 
       if (pr.status === 'suspected_duplicate') {

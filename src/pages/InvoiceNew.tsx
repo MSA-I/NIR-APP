@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { reasonOr } from '../lib/reason';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -34,7 +35,6 @@ export default function InvoiceNew() {
   const presetSupplier = params.get('supplier') ?? '';
   const presetOrder = params.get('order');
   const presetReceipt = params.get('receipt');
-  const presetFrom = params.get('from'); // duplicate-as-draft from the Invoices list
   const presetDocument = params.get('document'); // draft from a reviewed, scanned document
 
   const [f, setF] = useState({
@@ -43,28 +43,13 @@ export default function InvoiceNew() {
   });
   const [invoiceId] = useState(() => crypto.randomUUID());
 
-  // ?from=<invoiceId> ("שכפול כטיוטה"): prefill supplier, amounts and notes from the source.
-  // invoice_number stays EMPTY and the date stays today — a duplicated number would trip the
-  // duplicate checks below, and rightly so.
-  useEffect(() => {
-    if (!presetFrom) return;
-    void (async () => {
-      const res = await supabase.from('invoices')
-        .select('supplier_id, amount_before_vat, vat_amount, total_amount, notes')
-        .eq('id', presetFrom).maybeSingle();
-      if (res.error || !res.data) { toast('טעינת חשבונית המקור נכשלה', 'error'); return; }
-      const src = res.data as { supplier_id: string; amount_before_vat: number; vat_amount: number; total_amount: number; notes: string | null };
-      setF((s) => ({
-        ...s,
-        supplier_id: src.supplier_id,
-        before_vat: src.amount_before_vat ? String(src.amount_before_vat) : '',
-        vat: src.vat_amount ? String(src.vat_amount) : '',
-        total: src.total_amount ? String(src.total_amount) : '',
-        notes: src.notes ?? '',
-      }));
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [presetFrom]);
+  /*
+   * `?from=<invoiceId>` is gone (owner, 11.08.2026). It prefilled this form from an existing
+   * invoice, and it existed for one reason: correcting a wrong amount meant soft deleting the
+   * invoice and re-typing it, because no command edits one. But a supplier's invoice is not ours
+   * to correct -- the supplier reissues it or sends a credit note, and both arrive as documents.
+   * See the note at the top of Invoices.tsx.
+   */
 
   // ?document=<documentId>: draft from a scanned document whose type a reviewer approved. The
   // interpretation only fills the form -- every value below is still the human's to check, the
@@ -208,7 +193,6 @@ export default function InvoiceNew() {
       toast('ספק, מספר חשבונית וסכום הם שדות חובה', 'error');
       return;
     }
-    if (!f.reason.trim()) { toast('נדרשת סיבה לקליטת החשבונית', 'error'); return; }
     if (!checkFingerprint || !checksReady) {
       toast(checkError ?? 'יש להמתין לסיום בדיקות הכפילות', 'error');
       return;
@@ -241,7 +225,7 @@ export default function InvoiceNew() {
         p_order_id: linkedOrderId,
         p_receipt_id: linkedReceiptId,
         p_override_reason: overrideReason?.trim() || null,
-        p_reason: f.reason.trim(),
+        p_reason: reasonOr(f.reason, 'קליטת חשבונית שהתקבלה'),
       })) as { invoice_id: string; review_status: string; duplicate_detected: boolean };
 
       toast(inv.review_status === 'investigation'

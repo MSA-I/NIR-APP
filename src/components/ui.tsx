@@ -9,6 +9,7 @@ import {
 import type { StatusMeta, Tone } from '../lib/status';
 import type { ServerSort } from '../lib/serverList';
 import { fmtMoneyRounded } from '../lib/format';
+import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
 import { ActionMenu, type ActionMenuItem } from './ActionMenu';
 
 /* ---------- StatusBadge ---------- */
@@ -661,7 +662,7 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
   );
 }
 
-export function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel = 'אישור', reasonLabel = 'סיבה (חובה — נרשם ביומן הביקורת)', danger, requireReason, busy }: {
+export function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel = 'אישור', reasonLabel = OPTIONAL_REASON_LABEL, danger, requireReason, busy }: {
   open: boolean; onClose: () => void; onConfirm: (reason?: string) => void;
   title: string; message: string; confirmLabel?: string; reasonLabel?: string; danger?: boolean; requireReason?: boolean; busy?: boolean;
 }) {
@@ -682,8 +683,11 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
       )}
       <div className="flex gap-2 justify-end">
         <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-        <button className={danger ? 'btn-danger' : 'btn-primary'} disabled={busy || (requireReason && !reason.trim())}
-          onClick={() => onConfirm(requireReason ? reason.trim() : undefined)}>
+        {/* The reason no longer blocks the button (owner, 11.08.2026). `requireReason` now means
+            "this action records a reason", not "this action interrogates the user" — when the box
+            is empty the ledger gets a sentence naming the action instead of a forced "asdf". */}
+        <button className={danger ? 'btn-danger' : 'btn-primary'} disabled={busy}
+          onClick={() => onConfirm(requireReason ? reasonOr(reason, title) : undefined)}>
           {busy ? <Loader2 size={16} className="animate-spin" /> : confirmLabel}
         </button>
       </div>

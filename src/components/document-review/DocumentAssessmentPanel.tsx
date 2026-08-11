@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { reasonOr } from '../../lib/reason';
 import { AlertTriangle, Check, CircleCheck, Info, Loader2, ShieldAlert } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toHebrewError } from '../../lib/errors';
@@ -106,7 +107,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
       // A fresh key per attempt, so a genuine second approval is possible while a retry of THIS
       // attempt — the dropped-connection case 0110 is built for — returns the first result.
       p_idempotency_key: crypto.randomUUID(),
-      p_reason: reason.trim(),
+      p_reason: reasonOr(reason, 'אישור מסמך שהתקבל מהספק'),
     });
     setBusy(false);
     if (result.error) {
@@ -302,7 +303,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
       {editable && (
         <div className="rounded-lg border border-line bg-surface p-4">
           <label className="block text-sm font-medium text-ink-strong" htmlFor="review-reason">
-            סיבה (חובה — נרשמת ביומן הביקורת ובתיק המסמך)
+            סיבה (רשות — נרשמת ביומן הביקורת ובתיק המסמך)
           </label>
           <textarea
             id="review-reason"
@@ -314,7 +315,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
           <button
             type="button"
             className="btn btn-primary mt-3 min-h-11"
-            disabled={busy || !reason.trim() || !canSubmit(read, supplierId)}
+            disabled={busy || !canSubmit(read, supplierId)}
             onClick={() => void submit()}
           >
             {busy && <Loader2 size={16} aria-hidden="true" className="animate-spin" />}

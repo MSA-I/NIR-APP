@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { reasonOr } from '../lib/reason';
 import { AlertTriangle, Check, Loader2, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toHebrewError } from '../lib/errors';
@@ -65,7 +66,10 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
   const submit = useCallback(async () => {
     setBusy(true);
     const result = await supabase.rpc('remove_document', {
-      p_document_id: documentId, p_mode: mode, p_reason: reason.trim(),
+      p_document_id: documentId, p_mode: mode,
+      p_reason: reasonOr(reason, mode === 'document_and_derived'
+        ? 'הסרת מסמך וביטול מה שנוצר ממנו'
+        : 'הסרת מסמך מתיקיית המסמכים'),
     });
     setBusy(false);
     if (result.error) { toast(toHebrewError(result.error), 'error'); return; }
@@ -149,7 +153,7 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
 
           <div>
             <label className="label" htmlFor="removal-reason">
-              סיבה (חובה — נרשמת ביומן הביקורת)
+              סיבה (רשות — נרשמת ביומן הביקורת)
             </label>
             <textarea id="removal-reason" className="input min-h-20" value={reason}
               maxLength={1000} onChange={(event) => setReason(event.target.value)} />
@@ -172,7 +176,7 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
             <button type="button" className="btn-secondary min-h-11" disabled={busy}
               onClick={onClose}>ביטול</button>
             <button type="button" className="btn-primary min-h-11"
-              disabled={busy || !reason.trim()} onClick={() => void submit()}>
+              disabled={busy} onClick={() => void submit()}>
               {busy && <Loader2 size={16} aria-hidden="true" className="animate-spin" />}
               הסרה
             </button>

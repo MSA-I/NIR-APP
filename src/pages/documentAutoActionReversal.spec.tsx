@@ -214,19 +214,39 @@ describe('הדיאלוג של ביטול השיוך', () => {
     expect(dialog).toHaveTextContent(/רישום היצירה ורישום הביטול נשמרים שניהם/);
 
     const confirm = screen.getByRole('button', { name: 'ביטול השיוך' });
-    expect(confirm).toBeDisabled();
-    // Whitespace is not a reason. The server refuses it by name; the browser must not offer the
-    // button that earns that refusal.
+    // The reason stopped gating the button on 11.08.2026 (owner: nobody reads these notes). What
+    // did NOT change is that the ledger gets a sentence -- whitespace still never reaches the
+    // server, it is replaced by one naming the action.
+    expect(confirm).toBeEnabled();
     await userEvent.type(screen.getByLabelText(/סיבה/), '   ');
-    expect(confirm).toBeDisabled();
+    expect(confirm).toBeEnabled();
     expect(rpcCalls).toHaveLength(0);
 
     await userEvent.clear(screen.getByLabelText(/סיבה/));
     await userEvent.type(screen.getByLabelText(/סיבה/), 'הספק לא סיפק את הפריט');
-    expect(confirm).toBeEnabled();
     await userEvent.click(confirm);
 
     expect(rpcCalls).toHaveLength(1);
     expect(rpcCalls[0]).toEqual({ p_action_id: 'act-1', p_reason: 'הספק לא סיפק את הפריט' });
+  });
+
+  it('שולח משפט ליומן גם כשלא נכתבה סיבה', async () => {
+    // The half of the owner's ruling that is invisible on screen: an empty box must not become an
+    // empty p_reason. Roughly fifty server commands refuse that by name, and an audit line reading
+    // "" explains nothing to whoever opens it a year later.
+    ROLE.current = 'owner';
+    rpcCalls.length = 0;
+    server.use(...traffic());
+    renderGallery();
+    await screen.findAllByText('שויך אוטומטית');
+    await openMenuFor(MACHINE);
+    await userEvent.click(screen.getByText('ביטול השיוך האוטומטי'));
+    await screen.findByRole('dialog');
+
+    await userEvent.click(screen.getByRole('button', { name: 'ביטול השיוך' }));
+
+    expect(rpcCalls).toHaveLength(1);
+    expect(String(rpcCalls[0].p_reason)).toContain('ללא הערה');
+    expect(String(rpcCalls[0].p_reason).length).toBeGreaterThan(0);
   });
 });

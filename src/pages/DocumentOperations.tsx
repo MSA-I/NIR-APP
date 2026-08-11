@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { reasonOr } from '../lib/reason';
 import { ClipboardCheck, Eye, History, RefreshCw, RotateCcw } from 'lucide-react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
@@ -813,7 +814,7 @@ function CalibrationReviewModal({ row, onClose, onSaved }: {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!row || !reason.trim()) return;
+    if (!row) return;
     if (row.is_empty_run) {
       setSaving(true);
       try {
@@ -821,7 +822,7 @@ function CalibrationReviewModal({ row, onClose, onSaved }: {
           p_shadow_run_id: row.shadow_run_id,
           p_idempotency_key: idempotencyKey,
           p_verdict: verdict,
-          p_reason: reason.trim(),
+          p_reason: reasonOr(reason, 'ביטול פעולה אוטומטית על מסמך'),
         }));
         toast('הכרעת המסמך ללא השורות נשמרה ביומן הראיות.');
         await onSaved();
@@ -870,7 +871,7 @@ function CalibrationReviewModal({ row, onClose, onSaved }: {
         p_expected_action: action,
         p_expected_product_id: productId,
         p_expected_unit_price: unitPrice,
-        p_reason: reason.trim(),
+        p_reason: reasonOr(reason, 'עדכון מדיניות עיבוד מסמכים'),
       }));
       toast('החלטת הכיול נשמרה ביומן הראיות.');
       await onSaved();
@@ -957,13 +958,13 @@ function CalibrationReviewModal({ row, onClose, onSaved }: {
         </div>}
 
         <label className="block text-sm font-medium text-ink-body">סיבת ההחלטה
-          <textarea className="input mt-1 min-h-24" required maxLength={1000} value={reason}
+          <textarea className="input mt-1 min-h-24" maxLength={1000} value={reason}
             onChange={(event) => setReason(event.target.value)}
             placeholder="מה נבדק ומה הוביל להחלטה" />
         </label>
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>ביטול</button>
-          <button type="submit" className="btn-primary" disabled={saving || !reason.trim()}>
+          <button type="submit" className="btn-primary" disabled={saving}>
             {saving ? 'שומר החלטה…' : 'שמירת החלטה'}
           </button>
         </div>
