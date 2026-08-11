@@ -237,6 +237,8 @@ body {
    (owner decision 09.08.2026). --shadow-fab stays: the mobile capture puck uses it. */
 
 .mobile-action-bar {
+  display: grid;
+  grid-template-columns: repeat(var(--mobile-action-count, 1), minmax(0, 1fr));
   inset-inline: 0;
   inset-block-end: 0;
   min-block-size: var(--mobile-action-bar-size);
@@ -269,6 +271,8 @@ body {
 .mobile-action-puck {
   position: absolute;
   inset-block-start: -1.25rem;
+  inset-inline: 0;
+  margin-inline: auto;
   display: grid;
   place-items: center;
   inline-size: 3.5rem;
@@ -368,6 +372,7 @@ body {
 }
 
 @media (min-width: 64rem) {
+  .mobile-action-bar { display: none; }
   .phone-safe-main { padding-block-end: 2rem; }
   .mobile-overlay-stack { inset-block-end: 1.5rem; }
 }

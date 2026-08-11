@@ -13,8 +13,13 @@ test('scenario registry has exactly nine ordered and valid scenarios', () => {
   assert.doesNotThrow(() => assertScenarioRegistry());
   assert.equal(SCENARIOS.length, 9);
   assert.deepEqual(SCENARIOS.map(({ sequence }) => sequence), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
-  assert.equal(getRunnableScenarios().length, 8);
-  assert.deepEqual(getBlockedScenarios().map(({ id }) => id), ['platform-admin']);
+  assert.equal(getRunnableScenarios().length, 5);
+  assert.deepEqual(getBlockedScenarios().map(({ id }) => id), [
+    'supplier-price-list',
+    'kitchen-receiving',
+    'payer-transfer-execution',
+    'platform-admin',
+  ]);
 });
 
 test('platform fixture is fail-closed and accountant payment requests are denied by route contract', () => {
@@ -27,6 +32,14 @@ test('platform fixture is fail-closed and accountant payment requests are denied
   assert.ok(accountant);
   assert.ok(accountant.forbidden.includes('/payment-requests'));
   assert.ok(!accountant.allowed.includes('/payment-requests'));
+});
+
+test('retired product personas remain historical scenarios and cannot be scheduled', () => {
+  for (const id of ['supplier-price-list', 'kitchen-receiving', 'payer-transfer-execution'] as const) {
+    const scenario = getScenario(id);
+    assert.equal(scenario.status, 'BLOCKED');
+    assert.match(scenario.blockedReason ?? '', /Historical/);
+  }
 });
 
 test('kitchen and accountant use the same valid demo-seed supplier chain', () => {

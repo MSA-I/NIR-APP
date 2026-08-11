@@ -8,10 +8,7 @@ import { APP_NAME } from '../lib/branding';
 const LOCAL_DEMO_ROLES = [
   { role: 'owner', label: 'מנהל/בעלים' },
   { role: 'office', label: 'מנהל רכש' },
-  { role: 'kitchen', label: 'מנהל מטבח' },
-  { role: 'accountant', label: 'הנהלת חשבונות' },
-  { role: 'supplier', label: 'ספק' },
-  { role: 'payer', label: 'מבצע העברות' },
+  { role: 'accountant', label: 'רואה חשבון' },
 ] as const;
 
 /**

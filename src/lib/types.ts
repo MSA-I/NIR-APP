@@ -2,6 +2,19 @@
 
 export type Role = 'owner' | 'kitchen' | 'office' | 'payer' | 'accountant' | 'supplier';
 
+/**
+ * The enum above is historical database vocabulary and cannot be narrowed without rewriting the
+ * RLS contract. Product accounts are narrower: from 12.08.2026 only these three personas may be
+ * active. Keeping the two concepts separate prevents a historical `payer` value from silently
+ * becoming a login option again.
+ */
+export const ACTIVE_ACCOUNT_ROLES = ['owner', 'office', 'accountant'] as const satisfies readonly Role[];
+export type ActiveAccountRole = (typeof ACTIVE_ACCOUNT_ROLES)[number];
+
+export function isActiveAccountRole(role: string | null | undefined): role is ActiveAccountRole {
+  return ACTIVE_ACCOUNT_ROLES.includes(role as ActiveAccountRole);
+}
+
 export interface Profile {
   id: string;
   org_id: string;

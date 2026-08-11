@@ -3,8 +3,7 @@ import { qaRepositoryRoot, QA_SUPABASE_URL } from '../config/environments.ts';
 import {
   QA_ORGANIZATION_ID,
   QA_ROLES,
-  QA_SUPPLIER_PROFILE_ID,
-  type QaRole,
+  type ActiveQaRole,
 } from '../config/roles.ts';
 import { loadQaCredentials, type QaCredential } from './credential-loader.ts';
 import { assertStorageStateCreated, prepareStorageStateDirectory, storageStatePath } from './storage-state.ts';
@@ -21,8 +20,8 @@ export interface SetupRoleAuthenticationInput {
 }
 
 export interface SetupRoleAuthenticationResult {
-  readonly states: Record<QaRole, string>;
-  readonly userIds: Record<QaRole, string>;
+  readonly states: Record<ActiveQaRole, string>;
+  readonly userIds: Record<ActiveQaRole, string>;
 }
 
 interface AuthSession {
@@ -32,14 +31,14 @@ interface AuthSession {
 
 interface VerifiedProfile {
   readonly userId: string;
-  readonly role: QaRole;
+  readonly role: ActiveQaRole;
   readonly orgId: string;
   readonly supplierId: string | null;
 }
 
 interface AuthenticatePageInput {
   readonly page: Page;
-  readonly role: QaRole;
+  readonly role: ActiveQaRole;
   readonly credential: QaCredential;
   readonly apiUrl: typeof QA_SUPABASE_URL;
   readonly anonKey: string;
@@ -59,7 +58,7 @@ function parseAuthSession(value: unknown): AuthSession {
   return { accessToken: value.access_token, userId: value.user.id };
 }
 
-function parseProfile(value: unknown, expectedRole: QaRole): Omit<VerifiedProfile, 'userId'> {
+function parseProfile(value: unknown, expectedRole: ActiveQaRole): Omit<VerifiedProfile, 'userId'> {
   if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) {
     throw new Error(`Local profile fixture is missing or ambiguous for role: ${expectedRole}`);
   }
@@ -69,10 +68,7 @@ function parseProfile(value: unknown, expectedRole: QaRole): Omit<VerifiedProfil
   }
   if (row.active !== true) throw new Error(`Authenticated profile is inactive for role: ${expectedRole}`);
   const supplierId = typeof row.supplier_id === 'string' ? row.supplier_id : null;
-  if (expectedRole === 'supplier' && supplierId !== QA_SUPPLIER_PROFILE_ID) {
-    throw new Error('Supplier QA profile is not linked to the canonical supplier.');
-  }
-  if (expectedRole !== 'supplier' && supplierId !== null) {
+  if (supplierId !== null) {
     throw new Error(`Non-supplier QA profile is unexpectedly linked to a supplier: ${expectedRole}`);
   }
   return { role: expectedRole, orgId: row.org_id, supplierId };
@@ -107,7 +103,7 @@ function assertSafeRunId(value: string): void {
 async function verifyRoleWithRest(
   request: APIRequestContext,
   session: AuthSession,
-  role: QaRole,
+  role: ActiveQaRole,
   apiUrl: typeof QA_SUPABASE_URL,
   anonKey: string,
 ): Promise<VerifiedProfile> {
@@ -167,8 +163,8 @@ export async function setupRoleAuthentication(
   const credentials = loadQaCredentials(input.credentialsPath, qaRepositoryRoot());
   prepareStorageStateDirectory(input.authDirectory);
   const browser = await chromium.launch({ headless: true });
-  const stateEntries: Array<readonly [QaRole, string]> = [];
-  const userIdEntries: Array<readonly [QaRole, string]> = [];
+  const stateEntries: Array<readonly [ActiveQaRole, string]> = [];
+  const userIdEntries: Array<readonly [ActiveQaRole, string]> = [];
   const organizationIds = new Set<string>();
   try {
     for (const role of QA_ROLES) {
@@ -207,7 +203,7 @@ export async function setupRoleAuthentication(
     throw new Error('Canonical QA role accounts do not resolve to one known organization.');
   }
   return {
-    states: Object.freeze(Object.fromEntries(stateEntries)) as Record<QaRole, string>,
-    userIds: Object.freeze(Object.fromEntries(userIdEntries)) as Record<QaRole, string>,
+    states: Object.freeze(Object.fromEntries(stateEntries)) as Record<ActiveQaRole, string>,
+    userIds: Object.freeze(Object.fromEntries(userIdEntries)) as Record<ActiveQaRole, string>,
   };
 }

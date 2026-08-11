@@ -3,14 +3,15 @@ import { NAV_SECTIONS, drawerSectionsForRole, footerItemsForRole, sectionsForRol
 import { isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
 import type { Role } from '../lib/types';
 
-const ALL_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'];
+const ACTIVE_ROLES: Role[] = ['owner', 'office', 'accountant'];
+const RETIRED_ROLES: Role[] = ['kitchen', 'payer', 'supplier'];
 const pathsFor = (role: Role | undefined, isPlatformAdmin = false) =>
   sectionsForRole(role, isPlatformAdmin).flatMap((section) => section.items).map((item) => item.to);
 
 describe('מעטפת הניווט', () => {
-  it('מרכז הבקרה הוא הפריט הראשון בכל תפקיד', () => {
-    expect(Object.fromEntries(ALL_ROLES.map((role) => [role, pathsFor(role)[0]])))
-      .toEqual(Object.fromEntries(ALL_ROLES.map((role) => [role, '/dashboard'])));
+  it('מרכז הבקרה הוא הפריט הראשון בכל חשבון פעיל', () => {
+    expect(Object.fromEntries(ACTIVE_ROLES.map((role) => [role, pathsFor(role)[0]])))
+      .toEqual(Object.fromEntries(ACTIVE_ROLES.map((role) => [role, '/dashboard'])));
   });
 
   it('העבודה היומית גלויה ומוגבלת, והאזורים הנדירים מתקפלים', () => {
@@ -41,9 +42,9 @@ describe('מעטפת הניווט', () => {
     expect(footerItemsForRole('owner').map((item) => item.to)).toEqual(['/onboarding', '/settings']);
   });
 
-  it('תפקידים ממוקדים נשארים עם שני יעדים בלבד', () => {
-    expect(pathsFor('supplier')).toEqual(['/dashboard', '/my-prices']);
-    expect(pathsFor('payer')).toEqual(['/dashboard', '/pay']);
+  it('לתפקידים שפרשו אין יעד מוצר, ולרואה החשבון נשאר מסלול הביצוע', () => {
+    for (const role of RETIRED_ROLES) expect(pathsFor(role)).toEqual([]);
+    expect(pathsFor('accountant')).toEqual(expect.arrayContaining(['/dashboard', '/invoices', '/pay']));
     expect(footerItemsForRole('supplier')).toEqual([]);
   });
 
@@ -63,7 +64,7 @@ describe('מעטפת הניווט', () => {
 
   it('כל מסלול מורשה מוצג או מוחרג במכוון ל-surface הקשרי', () => {
     const contextual = new Set(['/orders/new', '/documents/archive', '/alerts']);
-    for (const role of ALL_ROLES) {
+    for (const role of ACTIVE_ROLES) {
       const allowed = NAV_SECTIONS.flatMap((section) => section.items)
         .filter((item) => item.roles.includes(role)).map((item) => item.to);
       const surfaced = new Set([...pathsFor(role), ...footerItemsForRole(role).map((item) => item.to)]);
@@ -74,20 +75,20 @@ describe('מעטפת הניווט', () => {
 });
 
 describe('סרגל הפעולות המהירות במובייל', () => {
-  it('מחזיר את הפעולות והסדר המקוריים לפי תפקיד', () => {
+  it('מחזיר פעולות מסך תפקידיות כשהצילום נמצא בדיוק באמצע', () => {
     // 'invoice' (→ /invoices/new) left this bar in G1, 10.08.2026: this application receives
     // supplier invoices and does not issue them. 'capture' is what replaced it — the invoice that
     // arrives is photographed, read and approved.
-    expect(quickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive']);
-    expect(quickActionsFor('office').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive']);
-    expect(quickActionsFor('kitchen').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive']);
+    expect(quickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'documents']);
+    expect(quickActionsFor('office').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'documents']);
     expect(quickActionsFor('accountant').map((item) => item.key)).toEqual(['dashboard', 'invoices', 'pay']);
+    expect(quickActionsFor('kitchen')).toEqual([]);
     expect(quickActionsFor('payer')).toEqual([]);
     expect(quickActionsFor('supplier')).toEqual([]);
   });
 
   it('מחזיר את כל יעדי הניווט הרגילים למגירה', () => {
-    for (const role of ALL_ROLES) {
+    for (const role of ACTIVE_ROLES) {
       expect(drawerSectionsForRole(role, false)).toEqual(sectionsForRole(role, false));
     }
   });

@@ -8,10 +8,10 @@ const app = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
 const layout = readFileSync(join(process.cwd(), 'src', 'components', 'Layout.tsx'), 'utf8');
 
 describe('inventory UI contract', () => {
-  it('exposes the route to staff roles and denies finance/supplier roles', () => {
+  it('exposes the route only to the active procurement roles', () => {
     expect(isRouteAllowed('owner', '/inventory')).toBe(true);
     expect(isRouteAllowed('office', '/inventory')).toBe(true);
-    expect(isRouteAllowed('kitchen', '/inventory')).toBe(true);
+    expect(isRouteAllowed('kitchen', '/inventory')).toBe(false);
     expect(isRouteAllowed('payer', '/inventory')).toBe(false);
     expect(isRouteAllowed('accountant', '/inventory')).toBe(false);
     expect(isRouteAllowed('supplier', '/inventory')).toBe(false);

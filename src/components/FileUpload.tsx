@@ -467,7 +467,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   const [documentKind, setDocumentKind] = useState<DocumentKind>(() => defaultDocumentKind(entityType));
   const canWrite = organizationAccess?.canWrite ?? true;
   const canDelete = canWrite && (profile?.role === 'owner' || profile?.role === 'office');
-  const canReview = profile != null && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canReview = profile != null && ['owner', 'office'].includes(profile.role);
   const canMutateDocuments = canWrite && canReview;
   const canUploadNow = canWrite && canUpload;
 

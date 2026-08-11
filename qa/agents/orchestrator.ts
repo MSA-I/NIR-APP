@@ -10,11 +10,8 @@ import {
 import type { VerifierAgent } from './verifier-agent.ts';
 
 export const DEFAULT_CROSS_ROLE_ORDER: readonly QaRole[] = [
-  'supplier',
-  'kitchen',
   'office',
   'owner',
-  'payer',
   'accountant',
 ];
 

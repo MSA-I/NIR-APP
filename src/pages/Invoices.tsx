@@ -104,7 +104,7 @@ export function InvoicesList() {
   const [deleteTarget, setDeleteTarget] = useState<InvoiceRow | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
   const isProcurementManager = profile?.role === 'office';
-  const canCreate = organizationAccess.canWrite && profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canCreate = organizationAccess.canWrite && profile && ['owner', 'office'].includes(profile.role);
   const isOffice = profile && ['owner', 'office'].includes(profile.role);
   const canViewExport = profile?.role !== 'office';
 
@@ -284,7 +284,7 @@ export function InvoicesList() {
         emptyTitle="אין חשבוניות עדיין"
         emptySubtitle={canCreate
           ? 'חשבונית נקלטת מצילום או מהעלאת המסמך שהתקבל מהספק, בתיקיית המסמכים.'
-          : 'קליטת חשבוניות זמינה לבעלים, למנהל הרכש ולמנהל המטבח.'}
+          : 'קליטת חשבוניות זמינה למנהל ולמנהל הרכש.'}
         error={error}
         server={{
           total: data.total,

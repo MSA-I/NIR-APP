@@ -471,17 +471,17 @@ function Invoke-SqlTest([string]$RelativePath, [string]$Label, [string]$Database
 function Invoke-Preflight {
   $containerPath = "/var/lib/postgresql/p4-p1_preflight.sql"
   Copy-SqlToDatabase "supabase\tests\p1_preflight.sql" $containerPath
-  Write-Gate "P1 preflight (44 anomaly checks)"
+  Write-Gate "P1 preflight (46 anomaly checks)"
   # Kept as a plain capture (the rows are parsed, not streamed), but the classification
   # material is now handed to Assert-ExitCode instead of falling to the catch-all.
   $output = @(& docker exec -e PGPASSWORD=postgres $dbContainer psql -qAt -F "|" -U postgres -d postgres -v ON_ERROR_STOP=1 -f $containerPath)
   Assert-ExitCode "P1 preflight" $output
   $rows = @($output | Where-Object { $_ -match '^([^|]+)\|([0-9]+)\|' })
-  if ($rows.Count -ne 44) { throw "P1 preflight returned $($rows.Count) result rows instead of 44." }
+  if ($rows.Count -ne 46) { throw "P1 preflight returned $($rows.Count) result rows instead of 46." }
   $bad = @($rows | Where-Object { [int](($_ -split '\|')[1]) -ne 0 })
   $rows | ForEach-Object { Write-Output $_ }
   if ($bad.Count) { throw "P1 preflight found local fixture anomalies: $($bad -join '; ')" }
-  Write-Output "P1 preflight passed: 44/44 checks returned rows_found=0."
+  Write-Output "P1 preflight passed: 46/46 checks returned rows_found=0."
 }
 
 function Assert-PowerShellSyntax {
@@ -497,7 +497,7 @@ function Assert-PowerShellSyntax {
 }
 
 function New-DemoManifest([string]$Seed) {
-  $roles = @("owner", "kitchen", "office", "payer", "accountant", "supplier")
+  $roles = @("owner", "office", "accountant")
   $accounts = foreach ($role in $roles) {
     [ordered]@{
       email = "$role@demo.supplyflow.local"
@@ -1233,6 +1233,8 @@ try {
     Invoke-SqlTest "supabase\tests\p36_document_removal_impact.sql" "Document removal states what it destroys before it destroys it: an approved, paid or reported record blocks the destructive option, and every refusal names itself"
     Invoke-SqlTest "supabase\tests\p37_document_overcharge_credit.sql" "One overcharge, one draft credit request: a retry drafts nothing, being undercharged drafts nothing, and the price list is never touched"
     Invoke-SqlTest "supabase\tests\p38_export_report_templates.sql" "The accountants own workbook becomes the export: the document contract validator is untouched, an approved report template has a file, and an approved file is never swapped"
+    Invoke-SqlTest "supabase\tests\p39_retired_personas.sql" "Retired kitchen, payer and supplier identities preserve history but cannot be invited, activated or restored as product accounts"
+    Invoke-SqlTest "supabase\tests\p40_storage_browser_upload.sql" "Browser Storage inserts work with service-populated fields absent while tenant paths and the three active product roles remain enforced"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"

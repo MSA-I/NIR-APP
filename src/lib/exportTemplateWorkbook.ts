@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { neutralizeSpreadsheetString } from './documentExport';
+import type { PlaceholderMapping } from './exportTemplates';
 
 /**
  * Reading the accountant's own workbook, so their layout becomes the export (package K, 0123).
@@ -187,8 +188,53 @@ export function parseTemplateWorkbook(fileName: string, bytes: ArrayBuffer): Par
 export function fillTemplateWorkbook(
   bytes: ArrayBuffer,
   values: Record<string, string | number | null>,
+  mapping?: PlaceholderMapping[],
 ): Uint8Array {
   const book = XLSX.read(bytes, { type: 'array', cellStyles: true, bookVBA: false });
+
+  const writeFilledCell = (sheet: XLSX.WorkSheet, address: string, cell: XLSX.CellObject, filled: string) => {
+    if (filled === cell.v) return;
+    // A cell that is now purely one number stays a number, so the accountant's own formatting
+    // and any SUM over it keep working.
+    const asNumber = Number(filled);
+    if (filled.trim() !== '' && Number.isFinite(asNumber) && !/^0\d/.test(filled.trim())) {
+      sheet[address] = { t: 'n', v: asNumber, z: cell.z, s: cell.s } as XLSX.CellObject;
+    } else {
+      sheet[address] = {
+        t: 's',
+        v: neutralizeSpreadsheetString(filled) as string,
+        z: cell.z,
+        s: cell.s,
+      } as XLSX.CellObject;
+    }
+  };
+
+  if (mapping) {
+    // The approved mapping names the exact sheet and cell. A key-only scan would ignore `source`
+    // and would fill two identical-looking placeholders with the same value even when a person
+    // explicitly mapped them differently. Sheet+cell is the frozen agreement in 0123/0126.
+    for (const row of mapping) {
+      if (!row.source) continue;
+      const sheet = book.Sheets[row.sheet];
+      const cell = sheet?.[row.cell] as XLSX.CellObject | undefined;
+      if (!sheet || !cell || typeof cell.v !== 'string') {
+        throw new Error(`export_template_cell_missing:${row.sheet}:${row.cell}`);
+      }
+      const escapedKey = row.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const exactPlaceholder = new RegExp(`\\{\\{\\s*${escapedKey}\\s*\\}\\}`, 'g');
+      if (!exactPlaceholder.test(cell.v)) {
+        throw new Error(`export_template_placeholder_mismatch:${row.sheet}:${row.cell}`);
+      }
+      exactPlaceholder.lastIndex = 0;
+      const value = values[row.source];
+      // Source keys are validated before download. A null is still a deliberate "no measured
+      // value" and therefore leaves the placeholder visible instead of inventing zero.
+      if (value === undefined || value === null) continue;
+      writeFilledCell(sheet, row.cell, cell, cell.v.replace(exactPlaceholder, String(value)));
+    }
+
+    return XLSX.write(book, { type: 'array', bookType: 'xlsx', cellStyles: true }) as Uint8Array;
+  }
 
   for (const name of book.SheetNames) {
     const sheet = book.Sheets[name];
@@ -205,20 +251,7 @@ export function fillTemplateWorkbook(
           // string would hand an accountant a blank cell that looks like a zero.
           return value === undefined || value === null ? whole : String(value);
         });
-        if (filled === cell.v) continue;
-        // A cell that is now purely one number stays a number, so the accountant's own formatting
-        // and any SUM over it keep working.
-        const asNumber = Number(filled);
-        if (filled.trim() !== '' && Number.isFinite(asNumber) && !/^0\d/.test(filled.trim())) {
-          sheet[address] = { t: 'n', v: asNumber, z: cell.z, s: cell.s } as XLSX.CellObject;
-        } else {
-          sheet[address] = {
-            t: 's',
-            v: neutralizeSpreadsheetString(filled) as string,
-            z: cell.z,
-            s: cell.s,
-          } as XLSX.CellObject;
-        }
+        writeFilledCell(sheet, address, cell, filled);
       }
     }
   }

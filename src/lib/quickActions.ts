@@ -1,4 +1,4 @@
-import { Camera, CreditCard, FileText, LayoutDashboard, PackageCheck, ShoppingCart, type LucideIcon } from 'lucide-react';
+import { Camera, CreditCard, FileText, FolderOpen, LayoutDashboard, PackageCheck, ShoppingCart, type LucideIcon } from 'lucide-react';
 import type { Role } from './types';
 
 export interface QuickAction {
@@ -13,10 +13,11 @@ export interface QuickAction {
 // The role-aware quick-action bar, phone only since the desktop speed-dial was removed
 // (09.08.2026). Order is canonical and is asserted in layout.spec.ts.
 const QUICK_ACTIONS: readonly QuickAction[] = [
-  { key: 'order', label: 'הזמנה חדשה', icon: ShoppingCart, kind: 'link', to: '/orders/new?fresh=1', roles: ['owner', 'office', 'kitchen'] },
-  { key: 'dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, kind: 'link', to: '/dashboard', roles: ['owner', 'office', 'kitchen', 'accountant'] },
-  { key: 'capture', label: 'צילום מסמך', icon: Camera, kind: 'capture', roles: ['owner', 'office', 'kitchen'] },
-  { key: 'receive', label: 'קבלת סחורה', icon: PackageCheck, kind: 'link', to: '/receiving', roles: ['owner', 'office', 'kitchen'] },
+  { key: 'order', label: 'הזמנה חדשה', icon: ShoppingCart, kind: 'link', to: '/orders/new?fresh=1', roles: ['owner', 'office'] },
+  { key: 'dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, kind: 'link', to: '/dashboard', roles: ['owner', 'office', 'accountant'] },
+  { key: 'capture', label: 'צילום מסמך', icon: Camera, kind: 'capture', roles: ['owner', 'office'] },
+  { key: 'receive', label: 'קבלת סחורה', icon: PackageCheck, kind: 'link', to: '/receiving', roles: ['owner', 'office'] },
+  { key: 'documents', label: 'מסמכים', icon: FolderOpen, kind: 'link', to: '/documents', roles: ['owner', 'office'] },
   // "חשבונית חדשה" was removed here (G1, 10.08.2026). This application RECEIVES supplier
   // invoices; it does not issue them to anyone. The action that replaces it already sits two rows
   // up: `capture` — photograph the invoice that arrived. `/invoices/new` still exists as a route,

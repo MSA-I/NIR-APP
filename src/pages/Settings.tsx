@@ -88,7 +88,6 @@ export default function Settings() {
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<Role>('office');
-  const [inviteSupplierId, setInviteSupplierId] = useState('');
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   // Separate from inviteError on purpose: the invitation WAS created, so an error tone would
@@ -161,11 +160,6 @@ export default function Settings() {
       setOffboardingBusy(false);
     }
   }
-
-  // For the supplier-agent invitation (OPEN-DECISIONS #17): the invitation must bind to an
-  // existing, non-deleted supplier. Owner-only screen, so the read is unrestricted anyway.
-  const { data: suppliers } = useQuery<{ id: string; name: string }[]>(async () =>
-    unwrap(await supabase.from('suppliers').select('id, name').is('deleted_at', null).order('name')));
 
   async function saveOrg() {
     const name = orgName.trim();
@@ -320,14 +314,8 @@ export default function Settings() {
   async function onInvite() {
     setInviteError(null);
     setInviteNotice(null);
-    if (inviteRole === 'supplier' && !inviteSupplierId) {
-      setInviteError('להזמנת סוכן ספק יש לבחור ספק מהרשימה.');
-      return;
-    }
     setInviting(true);
-    const { error: err, result } = await sendInvite(
-      inviteEmail.trim(), inviteRole, inviteRole === 'supplier' ? inviteSupplierId : undefined,
-    );
+    const { error: err, result } = await sendInvite(inviteEmail.trim(), inviteRole);
     setInviting(false);
     if (err) { setInviteError(err); return; }
 
@@ -343,7 +331,6 @@ export default function Settings() {
       toast(`ההזמנה נשלחה אל ${invitee}`);
     }
     setInviteEmail('');
-    setInviteSupplierId('');
     void refetchInvites();
   }
 
@@ -565,10 +552,12 @@ export default function Settings() {
                   <td className="td">
                     {canWrite && u.id !== profile?.id && (
                       <div className="flex flex-wrap gap-1">
-                        {u.role !== 'supplier' && (
+                        {u.active && (
                           <button className="btn-ghost py-1! text-xs" onClick={() => openRoleChange(u)}>שינוי תפקיד</button>
                         )}
-                        <button className="btn-ghost py-1! text-xs" onClick={() => setAccessTarget(u)}>{u.active ? 'השבתה' : 'הפעלה'}</button>
+                        {(u.active || ASSIGNABLE_ROLES.includes(u.role)) && (
+                          <button className="btn-ghost py-1! text-xs" onClick={() => setAccessTarget(u)}>{u.active ? 'השבתה' : 'הפעלה'}</button>
+                        )}
                       </div>
                     )}
                 </td>
@@ -585,14 +574,8 @@ export default function Settings() {
           <p className="text-sm text-ink-muted mt-1">
             נשלח מייל עם קישור אישי להגדרת שם וסיסמה. הקישור תקף 7 ימים.
           </p>
-          {/* OPEN-DECISIONS #17, decided 09.08.2026: supplier agents ARE invited from here. The
-              DB path existed since 0025 (invitations.supplier_id + the 3-arg create_invitation);
-              what was missing was this picker and the Edge Function forwarding. The binding is
-              mandatory — invitations_supplier_role_check refuses a supplier invitation without
-              a supplier, and the agent will see that supplier's price list alone. */}
           <p className="text-sm text-ink-muted mt-1">
-            הזמנת סוכן ספק מחייבת שיוך לספק קיים — בחרו תפקיד ״ספק״ ואת הספק מהרשימה.
-            הסוכן יקבל גישה למחירון של אותו ספק בלבד.
+            ניתן להזמין מנהל, מנהל רכש או רואה חשבון. ספקים ועובדי תפעול אינם חשבונות מערכת.
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_11rem_auto] gap-3 sm:items-end">
@@ -612,19 +595,6 @@ export default function Settings() {
             {inviting ? 'שולח…' : 'שליחת הזמנה'}
           </button>
         </div>
-        {inviteRole === 'supplier' && (
-          <div>
-            <label className="label" htmlFor="inviteSupplier">שיוך לספק</label>
-            <select id="inviteSupplier" className="input" value={inviteSupplierId}
-              onChange={(e) => { setInviteSupplierId(e.target.value); setInviteError(null); }}>
-              <option value="">בחירת ספק…</option>
-              {(suppliers ?? []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-            <p className="text-xs text-ink-muted mt-1">
-              סוכן הספק יראה ויעדכן אך ורק את המחירון של הספק שנבחר כאן.
-            </p>
-          </div>
-        )}
         {inviteError && <ErrorNote message={inviteError} />}
         {inviteNotice && <Note tone="await">{inviteNotice}</Note>}
       </div>}
@@ -667,9 +637,7 @@ export default function Settings() {
         <div className="space-y-4">
           <div>
             <label className="label" htmlFor="role-change-select">תפקיד חדש</label>
-            {/* ASSIGNABLE_ROLES, not INVITABLE_ROLES: an existing employee cannot become a
-                supplier agent here — that would need a supplier_id this dialog has no way to
-                supply. A supplier account starts as a supplier invitation. */}
+            {/* The enum carries historical roles; ASSIGNABLE_ROLES is the active product contract. */}
             <select id="role-change-select" className="input" value={nextRole}
               onChange={(e) => setNextRole(e.target.value as Role)}>
               {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{roleLabels[r] ?? r}</option>)}

@@ -30,7 +30,7 @@ export default function ReceiptDetail() {
   const { receiptId } = useParams<{ receiptId: string }>();
   const { profile } = useAuth();
   const orgId = profile?.org_id ?? null;
-  const canOpenOrder = profile?.role === 'owner' || profile?.role === 'office' || profile?.role === 'kitchen';
+  const canOpenOrder = profile?.role === 'owner' || profile?.role === 'office';
 
   const { data, loading } = useQuery<ReceiptDetailData | null>(async () => {
     if (!orgId || !isUuid(receiptId ?? null)) return null;

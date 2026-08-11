@@ -63,10 +63,7 @@ const OCR_STAGE_FIXTURES = [
 const homes = {
   owner: '/dashboard',
   office: '/dashboard',
-  kitchen: '/dashboard',
-  payer: '/dashboard',
   accountant: '/dashboard',
-  supplier: '/dashboard',
 };
 
 function credentials(role) {
@@ -130,27 +127,23 @@ async function settle(page) {
   await page.waitForTimeout(250);
 }
 
-async function supplierPortalProjection(browser) {
-  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
-  const page = await context.newPage();
-  const requests = [];
-  captureConsole(page, 'supplier-portal-projection');
-  page.on('request', (request) => requests.push(new URL(request.url()).pathname));
-  try {
-    await login(page, 'supplier');
-    await settle(page);
-    requests.length = 0;
-    await page.goto(`${baseURL}/my-prices`);
-    await settle(page);
-    await page.getByRole('heading', { name: 'היסטוריית הגשות' }).waitFor();
-    assert(requests.includes('/rest/v1/rpc/supplier_portal_context'), 'supplier portal projection RPC was not used');
-    assert.equal(requests.some((requestPath) => /^\/rest\/v1\/(suppliers|supplier_products|products)$/.test(requestPath)), false,
-      'supplier portal queried a base catalog table blocked by its RLS contract');
-    assert.equal(await page.locator('main [role="alert"]').count(), 0, 'supplier portal rendered an error alert');
-    await page.screenshot({ path: path.join(outDir, 'supplier-portal-390.png') });
-    report.screenshots.push('supplier-portal-390.png');
-  } finally {
-    await closeContext(context);
+async function retiredPersonasBlocked(browser) {
+  for (const role of ['kitchen', 'payer', 'supplier']) {
+    const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    captureConsole(page, `retired-persona:${role}`);
+    try {
+      const account = credentials(role);
+      await page.goto(`${baseURL}/login`);
+      await page.locator('#email').fill(account.email);
+      await page.locator('#password').fill(account.password);
+      await page.getByRole('button', { name: 'התחברות' }).click();
+      await page.locator('[role="alert"]').waitFor({ state: 'visible', timeout: 15_000 });
+      assert.equal(new URL(page.url()).pathname, '/login', `${role}: retired account left the login screen`);
+      assert.equal(await page.locator('#main').count(), 0, `${role}: retired account reached the product shell`);
+    } finally {
+      await closeContext(context);
+    }
   }
 }
 
@@ -333,7 +326,7 @@ async function roleAndViewportMatrix(browser) {
     try {
       await login(page, role);
       assert.equal(new URL(page.url()).pathname, expectedHome, `${role}: wrong home route`);
-      const hasMobileActions = ['owner', 'office', 'kitchen', 'accountant'].includes(role);
+      const hasMobileActions = ['owner', 'office', 'accountant'].includes(role);
       assert.equal(await page.getByRole('group', { name: 'פעולות מהירות' }).count(), hasMobileActions ? 1 : 0,
         `${role}: wrong mobile action group visibility`);
       assert.equal(await page.locator('.mobile-action-bar').count(), hasMobileActions ? 1 : 0,
@@ -364,8 +357,6 @@ async function roleAndViewportMatrix(browser) {
   }
 
   const denied = [
-    ['kitchen', '/bank', '/dashboard'],
-    ['payer', '/products', '/dashboard'],
     ['accountant', '/products', '/dashboard'],
   ];
   for (const [role, requested, expected] of denied) {
@@ -384,15 +375,13 @@ async function roleAndViewportMatrix(browser) {
 
 async function quickActionsContract(browser) {
   const roleLabels = {
-    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה'],
-    office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה'],
-    kitchen: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה'],
+    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'מסמכים'],
+    office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'מסמכים'],
     accountant: ['מרכז הבקרה', 'חשבוניות', 'תשלומים'],
   };
   const roleTargets = {
-    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving'],
-    office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving'],
-    kitchen: ['/orders/new?fresh=1', '/dashboard', null, '/receiving'],
+    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/documents'],
+    office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/documents'],
     accountant: ['/dashboard', '/invoices', '/pay'],
   };
 
@@ -412,13 +401,22 @@ async function quickActionsContract(browser) {
       const items = bar.locator('.mobile-action');
       assert.deepEqual((await items.allTextContents()).map((label) => label.trim()), expectedLabels,
         `${role}: wrong mobile action labels or order`);
-      const targets = await items.evaluateAll((nodes) => nodes.map((node) => {
+        const targets = await items.evaluateAll((nodes) => nodes.map((node) => {
         const href = node.getAttribute('href');
         if (!href) return null;
         const url = new URL(href, window.location.origin);
         return `${url.pathname}${url.search}`;
       }));
       assert.deepEqual(targets, roleTargets[role], `${role}: wrong mobile action destinations or order`);
+
+      if (role === 'owner' || role === 'office') {
+        const centers = await items.evaluateAll((nodes) => nodes.map((node) => {
+          const rect = node.getBoundingClientRect();
+          return rect.left + rect.width / 2;
+        }));
+        assert(Math.abs(centers[2] - 195) <= 1,
+          `${role}: capture is not centered at 390px (${JSON.stringify(centers)})`);
+      }
 
       if (role === 'owner') {
         await page.screenshot({ path: path.join(outDir, 'mobile-action-bar-390.png') });
@@ -479,51 +477,6 @@ async function quickActionsContract(browser) {
     } finally {
       await closeContext(context);
     }
-  }
-
-  for (const role of ['payer']) {
-    const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
-    const page = await context.newPage();
-    try {
-      await login(page, role);
-      assert.equal(await page.getByRole('group', { name: 'פעולות מהירות' }).count(), 0, `${role}: mobile action group must be absent`);
-      assert.equal(await page.locator('.mobile-action-bar').count(), 0, `${role}: mobile action bar must be absent`);
-      await assertMobileSpeedDialHidden(page, `${role}/390`);
-    } finally {
-      await closeContext(context);
-    }
-  }
-
-  const supplierContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
-  await supplierContext.route('**/rest/v1/profiles?**', async (route) => {
-    const response = await route.fetch();
-    const body = await response.json();
-    const asSupplier = (profile) => ({
-      ...profile,
-      role: 'supplier',
-      supplier_id: 'aa000000-0000-4000-8000-000000000001',
-    });
-    await route.fulfill({ response, json: Array.isArray(body) ? body.map(asSupplier) : asSupplier(body) });
-  });
-  // This contract only verifies role-aware shell actions. Keep the supplier dashboard's
-  // production-aligned submission projection out of the older isolated migration fixture.
-  await supplierContext.route('**/rest/v1/supplier_price_submissions?**', (route) =>
-    route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
-  const supplierPage = await supplierContext.newPage();
-  captureConsole(supplierPage, 'mobile-action-bar:supplier');
-  try {
-    const account = credentials('owner');
-    await supplierPage.goto(`${baseURL}/login`);
-    await supplierPage.locator('#email').fill(account.email);
-    await supplierPage.locator('#password').fill(account.password);
-    await supplierPage.getByRole('button', { name: 'התחברות' }).click();
-    await supplierPage.waitForFunction(() => location.pathname === '/dashboard', null, { timeout: 25_000 });
-    await settle(supplierPage);
-    assert.equal(await supplierPage.getByRole('group', { name: 'פעולות מהירות' }).count(), 0, 'supplier: mobile action group must be absent');
-    assert.equal(await supplierPage.locator('.mobile-action-bar').count(), 0, 'supplier: mobile action bar must be absent');
-    await assertMobileSpeedDialHidden(supplierPage, 'supplier/390');
-  } finally {
-    await closeContext(supplierContext);
   }
 
   // The desktop speed-dial was removed (owner decision 09.08.2026). What stood here was ~120 lines
@@ -803,7 +756,7 @@ async function receivingAccessibility(browser) {
   const page = await context.newPage();
   captureConsole(page, 'receiving-accessibility');
   try {
-    await login(page, 'kitchen');
+    await login(page, 'office');
     await settle(page);
     await context.route('**/rest/v1/purchase_orders?**', (route) => {
       const url = new URL(route.request().url());
@@ -959,7 +912,7 @@ async function offlineReceiving(browser) {
 
     let page = await context.newPage();
     captureConsole(page, 'offline-receiving', offlineNoise);
-    await login(page, 'kitchen');
+    await login(page, 'office');
     await page.goto(`${baseURL}/receiving/${OFFLINE_ORDER_ID}`);
     await settle(page);
     await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור עגבניות בדיקה' }).waitFor();
@@ -1036,7 +989,7 @@ async function offlineReceiving(browser) {
     captureConsole(page, 'offline-receiving-edit-recovery', offlineNoise);
     await page.goto(`${baseURL}/receiving/${OFFLINE_ORDER_ID}`);
     if (new URL(page.url()).pathname === '/login') {
-      await login(page, 'kitchen');
+      await login(page, 'office');
       await page.goto(`${baseURL}/receiving/${OFFLINE_ORDER_ID}`);
     }
     await settle(page);
@@ -1088,7 +1041,7 @@ async function offlineReceiving(browser) {
     // The stored session normally survives with the context; a token refresh that died mid-offline
     // can still bounce this page to /login, and that is not what this scenario is measuring.
     if (new URL(resumed.url()).pathname === '/login') {
-      await login(resumed, 'kitchen');
+      await login(resumed, 'office');
       await resumed.goto(`${baseURL}/receiving/${OFFLINE_ORDER_ID}`);
     }
     await settle(resumed);
@@ -1156,7 +1109,7 @@ async function barcodeFlagAndCamera(browser) {
       route.fulfill({ status: 200, headers: jsonHeaders, json: [{ flag_key: 'receiving.barcode', state: false }] }));
     const page = await off.newPage();
     captureConsole(page, 'barcode-flag-off');
-    await login(page, 'kitchen');
+    await login(page, 'office');
     await page.goto(`${baseURL}/receiving/${OFFLINE_ORDER_ID}`);
     await settle(page);
     await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור עגבניות בדיקה' }).waitFor();
@@ -1188,7 +1141,7 @@ async function barcodeFlagAndCamera(browser) {
     });
     const page = await on.newPage();
     captureConsole(page, 'barcode-camera-denied');
-    await login(page, 'kitchen');
+    await login(page, 'office');
     await page.goto(`${baseURL}/receiving/${OFFLINE_ORDER_ID}`);
     await settle(page);
     await page.getByRole('button', { name: 'סריקת ברקוד' }).click();
@@ -1266,7 +1219,7 @@ async function orderSupplierComparison(browser) {
   };
 
   try {
-    await login(page, 'kitchen');
+    await login(page, 'office');
     await page.goto(`${baseURL}/orders/new?fresh=1`);
     await settle(page);
     assert(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches),
@@ -2187,7 +2140,7 @@ async function automaticPriceListAcceptance(browser) {
 const SEARCH_TYPE_GATE_TERM = 'מאפ';
 // The three types a payer's routes cannot open: /suppliers, /products and /payments are all closed
 // to it, so a hit of these kinds should never have crossed the wire (handoff-09 §2).
-const PAYER_FORBIDDEN_TYPES = ['supplier', 'product', 'payment'];
+const ACCOUNTANT_FORBIDDEN_TYPES = ['supplier', 'product', 'order'];
 
 /**
  * Lifts the PostgREST credentials the app itself is using out of a live request.
@@ -2246,30 +2199,23 @@ async function searchTypeGate(browser) {
     await closeContext(ownerContext);
   }
 
-  const payerContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1280, height: 800 } });
-  const payerPage = await payerContext.newPage();
-  captureConsole(payerPage, 'search-type-gate:payer');
+  const accountantContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1280, height: 800 } });
+  const accountantPage = await accountantContext.newPage();
+  captureConsole(accountantPage, 'search-type-gate:accountant');
   try {
-    await login(payerPage, 'payer');
-    await settle(payerPage);
-    assert.equal(await payerPage.getByRole('combobox', { name: 'חיפוש כללי' }).count(), 0,
-      'payer shell rendered a global search box');
-    await payerPage.setViewportSize({ width: 390, height: 844 });
-    await payerPage.waitForTimeout(100);
-    assert.equal(await payerPage.getByRole('button', { name: 'חיפוש', exact: true }).count(), 0,
-      'payer shell rendered the mobile search opener');
+    await login(accountantPage, 'accountant');
+    await settle(accountantPage);
+    assert.equal(await accountantPage.getByRole('combobox', { name: 'חיפוש כללי' }).count(), 1,
+      'accountant shell lost its permitted search box');
 
-    const credentials = await postgrestCredentials(payerPage, () => payerPage.goto(`${baseURL}/pay`));
-    await settle(payerPage);
+    const credentials = await postgrestCredentials(accountantPage, () => accountantPage.goto(`${baseURL}/invoices`));
+    await settle(accountantPage);
     const hits = await globalSearchWith(credentials, SEARCH_TYPE_GATE_TERM);
     const types = [...new Set(hits.map((hit) => hit.entity))];
-    assert.deepEqual(types.filter((type) => PAYER_FORBIDDEN_TYPES.includes(type)), [],
-      `payer received forbidden result types: ${JSON.stringify(types)}`);
-    // The contract is stronger than "no forbidden type": a payer reaches no searchable screen at
-    // all, so the honest answer is an empty set of every type (handoff-09 §2, the role map).
-    assert.equal(hits.length, 0, `payer received ${hits.length} search rows; 0069 grants the payer no reachable type`);
+    assert.deepEqual(types.filter((type) => ACCOUNTANT_FORBIDDEN_TYPES.includes(type)), [],
+      `accountant received forbidden result types: ${JSON.stringify(types)}`);
   } finally {
-    await closeContext(payerContext);
+    await closeContext(accountantContext);
   }
 }
 
@@ -2860,13 +2806,13 @@ async function receivingDecisionsContract(browser) {
     context.route('**/rest/v1/supplier_products?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] })),
   ]);
 
-  // (A) + (B) — kitchen
+  // (A) + (B) — office now owns receiving after the kitchen persona retired.
   const kitchenContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
   const kitchenPage = await kitchenContext.newPage();
   captureConsole(kitchenPage, 'receiving-decisions-kitchen');
   const savePayloads = [];
   try {
-    await login(kitchenPage, 'kitchen');
+    await login(kitchenPage, 'office');
     await routeOrder(kitchenContext);
     await kitchenContext.route('**/rest/v1/rpc/save_goods_receipt', (route) => {
       savePayloads.push(route.request().postDataJSON());
@@ -2876,9 +2822,6 @@ async function receivingDecisionsContract(browser) {
     await kitchenPage.goto(`${baseURL}/receiving/p4-d2-order?document=p4-d2-doc`);
     await settle(kitchenPage);
     await kitchenPage.getByText('שורות בתעודה שלא זוהו במחירון הספק').waitFor();
-    await kitchenPage.getByText('פתיחת חריג לבירור זמינה למנהל ולמנהל הרכש בלבד').waitFor();
-    assert.equal(await kitchenPage.getByRole('button', { name: 'פתיחת חריג לבירור', exact: true }).count(), 0,
-      'kitchen was offered an exception button the server would refuse');
     await kitchenPage.getByText('פתיחת דרישות זיכוי אוטומטית לחוסרים, לפריטים פגומים ולהחזרות').waitFor();
 
     // (B) — no document param: the same flow receivingAccessibility proves, plus the damaged line.
@@ -2937,15 +2880,15 @@ async function receivingDecisionsContract(browser) {
  * recovery link: GoTrue itself mints it (admin generate_link — the same token the email would
  * carry), the browser lands on /reset-password exactly as a mail client would, sets a new
  * password through the form, and the new password must then open the app from a cold login.
- * The kitchen password is restored through the admin API in `finally`, so later scenarios keep
+ * The office password is restored through the admin API in `finally`, so later scenarios keep
  * their credentials no matter where this one stops.
  */
 async function passwordRecovery(browser) {
   const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block' });
   const page = await context.newPage();
   captureConsole(page, 'password-recovery');
-  const account = credentials('kitchen');
-  const newPassword = `P4!${passwordSeed}-kitchen-changed-9`;
+  const account = credentials('office');
+  const newPassword = `P4!${passwordSeed}-office-changed-9`;
   const adminHeaders = {
     apikey: serviceRoleKey,
     authorization: `Bearer ${serviceRoleKey}`,
@@ -3014,7 +2957,7 @@ async function passwordRecovery(browser) {
       await coldPage.locator('#email').fill(account.email);
       await coldPage.locator('#password').fill(newPassword);
       await coldPage.getByRole('button', { name: 'התחברות' }).click();
-      await coldPage.waitForFunction((expected) => location.pathname === expected, homes.kitchen, { timeout: 25_000 });
+      await coldPage.waitForFunction((expected) => location.pathname === expected, homes.office, { timeout: 25_000 });
     } finally {
       await closeContext(coldContext);
     }
@@ -3135,7 +3078,7 @@ async function run(name, check) {
   const browser = await chromium.launch({ headless: true, executablePath: browserPath });
   try {
     await run('role and viewport matrix', () => roleAndViewportMatrix(browser));
-    await run('supplier portal uses the RLS-safe projection', () => supplierPortalProjection(browser));
+    await run('retired kitchen, payer and supplier accounts cannot sign in', () => retiredPersonasBlocked(browser));
     await run('mobile action bar, and no quick-action surface on desktop', () => quickActionsContract(browser));
     await run('overlay stacking and breakpoint reset', () => overlayStacking(browser));
     await run('dashboard, quick actions and dialogs', () => dashboardAndDialogs(browser));
@@ -3160,14 +3103,14 @@ async function run(name, check) {
     await run('Admin password and Clipboard state', () => adminState(browser));
     await run('OCR documents, review, status and export', () => documentOcrAcceptance(browser));
     await run('automatic price list creates keyed products and leaves unsafe rows for review', () => automaticPriceListAcceptance(browser));
-    await run('global search type gate: payer receives no forbidden types', () => searchTypeGate(browser));
+    await run('global search type gate: accountant receives only reachable types', () => searchTypeGate(browser));
     await run('navigation opens on the control centre and the archive is current alone', () => navigationOrderAndActiveState(browser));
     await run('documents speak human states and keep the numbers behind the disclosure', () => documentVocabulary(browser));
     await run('a machine-filed document names its author and can be undone', () => machineFiledDocument(browser));
     await run('receiving speaks the #49/#116 decisions per role', () => receivingDecisionsContract(browser));
     await run('an offline reload keeps the app shell', () => offlineShellReload(browser));
-    // Late on purpose: it rotates the kitchen password against the live GoTrue and restores it
-    // in `finally` — running it after the scenarios that log in as kitchen keeps a mid-scenario
+    // Late on purpose: it rotates the office password against the live GoTrue and restores it
+    // in `finally` — running it after the scenarios that log in as office keeps a mid-scenario
     // crash from cascading into theirs.
     await run('forgotten password recovers by mail link and the new password signs in', () => passwordRecovery(browser));
     // Registered last on purpose: it is the only scenario that inserts a row into the live

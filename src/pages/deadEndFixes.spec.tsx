@@ -54,7 +54,7 @@ describe('finding 7 — the FAB keeps its camera where the user is busiest', () 
 
   it('keeps only the capture action on the three long-form routes', () => {
     for (const path of SUPPRESSED) {
-      const actions = quickActionsForPath('kitchen', path);
+      const actions = quickActionsForPath('office', path);
       expect(actions.map((action) => action.kind)).toEqual(['capture']);
     }
   });
@@ -67,12 +67,12 @@ describe('finding 7 — the FAB keeps its camera where the user is busiest', () 
    */
   it('still removes every navigating action there — the form is not at risk', () => {
     for (const path of SUPPRESSED) {
-      expect(quickActionsForPath('kitchen', path).some((action) => action.kind === 'link')).toBe(false);
+      expect(quickActionsForPath('office', path).some((action) => action.kind === 'link')).toBe(false);
     }
   });
 
   it('changes nothing anywhere else', () => {
-    for (const role of ['owner', 'office', 'kitchen', 'accountant'] as const) {
+    for (const role of ['owner', 'office', 'accountant'] as const) {
       expect(quickActionsForPath(role, '/dashboard')).toEqual(quickActionsFor(role));
     }
   });
@@ -118,18 +118,16 @@ describe('finding 8 — "שכפול כטיוטה" is gone, and nothing replaced 
 /* ================= finding 12 — the header rule whose premise expired ================= */
 
 describe('finding 12 — no group header over a single grouped link', () => {
-  it('shows no headers to supplier or payer, the two roles the rule was written for', () => {
-    for (const role of ['supplier', 'payer'] as const) {
+  it('shows no headers or destinations to retired product roles', () => {
+    for (const role of ['supplier', 'payer', 'kitchen'] as const) {
       const sections = sectionsForRole(role, false);
-      // Both roles now keep both daily destinations in the unnamed section, with no decorative
-      // group label above a menu that does not need grouping.
-      expect(sections.filter((s) => s.section).flatMap((s) => s.items)).toHaveLength(0);
+      expect(sections.flatMap((s) => s.items)).toHaveLength(0);
       expect(showNavHeaders(sections)).toBe(false);
     }
   });
 
   it('still shows them to every role with a real menu', () => {
-    for (const role of ['owner', 'office', 'kitchen', 'accountant'] as const) {
+    for (const role of ['owner', 'office', 'accountant'] as const) {
       expect(showNavHeaders(sectionsForRole(role, false))).toBe(true);
     }
   });
@@ -140,10 +138,10 @@ describe('finding 12 — no group header over a single grouped link', () => {
    * and the "רכש" header the comment describes started rendering over a vendor's own price list.
    * Counting named sections only is what makes the rule immune to that.
    */
-  it('is not moved by items in the unnamed leading section', () => {
-    const withDashboard = sectionsForRole('supplier', false);
-    expect(withDashboard.flatMap((s) => s.items).length).toBeGreaterThan(1);
-    expect(showNavHeaders(withDashboard)).toBe(false);
+  it('is not moved by the unnamed leading section', () => {
+    const accountant = sectionsForRole('accountant', false);
+    expect(accountant[0]?.section).toBe('');
+    expect(showNavHeaders(accountant)).toBe(true);
   });
 });
 
@@ -198,6 +196,15 @@ describe('finding 5 — the receipt error names the constraint instead of sugges
   it('says what a receipt may contain, which is the only actionable fact', () => {
     expect(message).toContain('שורות ההזמנה');
     expect(message).toContain('לא הוזמן');
+  });
+});
+
+describe('retired identities — reassignment cannot look half successful', () => {
+  it('routes the owner to the platform operator instead of leaking the database code', () => {
+    const message = toHebrewError(new Error('retired_identity_requires_platform_reactivation'));
+    expect(message).toContain('מנהל השירות');
+    expect(message).toContain('חסימת הכניסה');
+    expect(message).not.toContain('retired_identity');
   });
 });
 

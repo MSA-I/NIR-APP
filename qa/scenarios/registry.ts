@@ -11,7 +11,8 @@ const definitions = [
     title: 'Supplier price-list submission',
     purpose: 'Prove that the canonical supplier can submit a synthetic price list through the controlled document intake without gaining tenant-wide access.',
     roles: ['supplier'],
-    status: 'READY',
+    status: 'BLOCKED',
+    blockedReason: 'Historical supplier-account scenario: supplier is no longer a product persona. Replace it with an office-operated price-list scenario before enabling it again.',
     viewport: 'both',
     fixtures: ['demo-seed', 'price-list-xlsx'],
     dependsOn: [],
@@ -60,7 +61,8 @@ const definitions = [
     title: 'Kitchen goods receiving',
     purpose: 'Prove partial receiving and discrepancy capture against an existing open purchase order.',
     roles: ['kitchen'],
-    status: 'READY',
+    status: 'BLOCKED',
+    blockedReason: 'Historical kitchen-account scenario: receiving now belongs to office and no kitchen credentials may be created.',
     viewport: 'both',
     fixtures: ['demo-seed', 'receipt-jpg'],
     dependsOn: [],
@@ -112,7 +114,9 @@ const definitions = [
     status: 'READY',
     viewport: 'both',
     fixtures: ['demo-seed'],
-    dependsOn: ['kitchen-receiving'],
+    // The retired kitchen browser persona no longer owns a prerequisite run. The local fixture
+    // supplies the purchase/receipt context and office is the active procurement account.
+    dependsOn: [],
     routeExpectations: [{
       role: 'office',
       allowed: ['/dashboard', '/invoices', '/invoices/new', '/documents', '/payment-requests', '/analytics'],
@@ -207,7 +211,8 @@ const definitions = [
     title: 'Payer transfer execution',
     purpose: 'Prove execution of an approved request by the payer without access to broader accounting or procurement data.',
     roles: ['payer'],
-    status: 'READY',
+    status: 'BLOCKED',
+    blockedReason: 'Historical payer-account scenario: accountant is now the sole transfer executor and no payer credentials may be created.',
     viewport: 'both',
     fixtures: ['demo-seed'],
     dependsOn: ['owner-payment-approval'],
@@ -259,7 +264,8 @@ const definitions = [
     status: 'READY',
     viewport: 'both',
     fixtures: ['demo-seed', 'bank-csv'],
-    dependsOn: ['payer-transfer-execution'],
+    // Accountant is the transfer executor; the retired payer scenario is historical only.
+    dependsOn: ['owner-payment-approval'],
     routeExpectations: [{
       role: 'accountant',
       allowed: ['/dashboard', '/invoices', '/payments', '/pay', '/bank', '/expenses', '/reports'],

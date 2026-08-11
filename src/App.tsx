@@ -4,7 +4,7 @@ import { useAuth, homeFor } from './auth/AuthContext';
 import { PageLoader, useToast } from './components/ui';
 import { toHebrewError } from './lib/errors';
 import { reportError } from './lib/observability';
-import type { Role } from './lib/types';
+import { ACTIVE_ACCOUNT_ROLES, type Role } from './lib/types';
 import { ACTIVE_ORGANIZATION_ACCESS } from './lib/trial';
 
 // Eager: the auth shell that must paint before (or regardless of) a resolved session.
@@ -17,8 +17,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import { TermsOfService, PrivacyPolicy } from './pages/Legal';
 
-// Lazy: every screen behind the Layout loads its own chunk on demand, so a supplier hitting
-// /my-prices or a payment executor hitting /pay never downloads Dashboard/Reports (and recharts) up front.
+// Lazy: every screen behind the Layout loads its own chunk on demand.
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const RoleDashboard = lazy(() => import('./pages/RoleDashboard'));
 const Alerts = lazy(() => import('./pages/Alerts'));
@@ -51,7 +50,6 @@ const DocumentsGallery = lazy(() => import('./pages/DocumentsInbox'));
 const DocumentOperations = lazy(() => import('./pages/DocumentOperations'));
 const DocumentReview = lazy(() => import('./pages/DocumentReview'));
 const Settings = lazy(() => import('./pages/Settings'));
-const SupplierPrices = lazy(() => import('./pages/SupplierPrices'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 
@@ -84,7 +82,7 @@ function LazyPageBoundary({ children }: { children: ReactNode }) {
   return <LazyRouteErrorBoundary key={pathname}>{children}</LazyRouteErrorBoundary>;
 }
 
-function Guard({ roles, children, write = false }: { roles: Role[]; children: ReactNode; write?: boolean }) {
+function Guard({ roles, children, write = false }: { roles: readonly Role[]; children: ReactNode; write?: boolean }) {
   const { session, profile, loading, organizationAccess = ACTIVE_ORGANIZATION_ACCESS } = useAuth();
   if (loading) return <PageLoader />;
   if (!session || !profile) return <Navigate to="/login" replace />;
@@ -123,11 +121,10 @@ function PlatformGuard({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-const STAFF: Role[] = ['owner', 'office', 'kitchen'];
+const STAFF: Role[] = ['owner', 'office'];
 const FINANCE: Role[] = ['owner', 'office'];
-const READERS: Role[] = ['owner', 'office', 'kitchen', 'accountant'];
-const ALL_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'];
-const DOCUMENT_REVIEWERS: Role[] = ['owner', 'office', 'kitchen', 'supplier'];
+const READERS: Role[] = ['owner', 'office', 'accountant'];
+const DOCUMENT_REVIEWERS: Role[] = ['owner', 'office'];
 
 /** /dashboard is every role's home: finance gets the full Dashboard, others a role-tailored one. */
 function DashboardHome() {
@@ -280,7 +277,7 @@ export default function App() {
         <Route element={<LazyPageBoundary><Suspense fallback={<PageLoader />}><Outlet /></Suspense></LazyPageBoundary>}>
         <Route path="/" element={loading ? <PageLoader /> : <Navigate to={homeFor(profile?.role)} replace />} />
 
-        <Route path="/dashboard" element={<Guard roles={ALL_ROLES}><DashboardHome /></Guard>} />
+        <Route path="/dashboard" element={<Guard roles={ACTIVE_ACCOUNT_ROLES}><DashboardHome /></Guard>} />
 
         <Route path="/suppliers" element={<Guard roles={STAFF}><SuppliersList /></Guard>} />
         <Route path="/suppliers/:id" element={<Guard roles={STAFF}><SupplierCard /></Guard>} />
@@ -312,7 +309,7 @@ export default function App() {
         <Route path="/credits" element={<Guard roles={READERS}><Credits /></Guard>} />
         <Route path="/payment-requests" element={<Guard roles={FINANCE}><PaymentRequests /></Guard>} />
         <Route path="/payments" element={<Guard roles={['owner', 'accountant']}><Payments /></Guard>} />
-        <Route path="/pay" element={<Guard roles={['payer', 'accountant']} write><PayerQueue /></Guard>} />
+        <Route path="/pay" element={<Guard roles={['accountant']} write><PayerQueue /></Guard>} />
 
         <Route path="/bank" element={<Guard roles={['owner', 'accountant']}><Bank /></Guard>} />
         <Route path="/exceptions" element={<Guard roles={READERS}><Exceptions /></Guard>} />
@@ -325,8 +322,6 @@ export default function App() {
         <Route path="/reports/products" element={<Guard roles={['owner', 'office', 'accountant']}><ProductPurchaseSummary /></Guard>} />
         <Route path="/analytics" element={<Guard roles={['owner', 'office']}><Analytics /></Guard>} />
         <Route path="/settings" element={<Guard roles={['owner']}><Settings /></Guard>} />
-        <Route path="/my-prices" element={<Guard roles={['supplier']}><SupplierPrices /></Guard>} />
-
         <Route path="/onboarding" element={<Guard roles={['owner']} write><Onboarding /></Guard>} />
         <Route path="/admin" element={<PlatformGuard><Admin /></PlatformGuard>} />
 

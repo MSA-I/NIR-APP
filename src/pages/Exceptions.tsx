@@ -93,7 +93,7 @@ export default function Exceptions() {
       (!typeFilter || typeFilter.split(',').includes(r.type)) &&
       (!severityFilter || r.severity === severityFilter));
 
-  const canWrite = organizationAccess.canWrite && !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canWrite = organizationAccess.canWrite && !!profile && ['owner', 'office'].includes(profile.role);
 
   const columns: Column<Row>[] = [
     { key: 'severity', header: 'חומרה', sortValue: (r) => r.severity, render: (r) => <StatusBadge meta={SEVERITY[r.severity]} /> },

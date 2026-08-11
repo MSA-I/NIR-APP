@@ -104,7 +104,7 @@ export default function Credits() {
           onChanged={() => { setSelected(null); void refetch(); }}
           onOpenInvoice={(id) => navigate(`/invoices/${id}`)}
           canWrite={organizationAccess.canWrite && !!profile && (
-            ['owner', 'kitchen'].includes(profile.role)
+            ['owner', 'office'].includes(profile.role)
             || (profile.role === 'accountant'
               && (selected.invoice_id == null || selected.invoice?.review_status === 'approved'))
           )} />

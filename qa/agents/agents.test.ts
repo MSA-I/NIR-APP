@@ -152,6 +152,10 @@ function orchestrationScenario(role: QaRole, scenarioId: ScenarioId): AgentScena
     ...context,
     definition: {
       ...context.definition,
+      // This helper tests orchestration mechanics with archived scenario shapes. Scheduling uses
+      // the registry status; the unit harness deliberately removes that precondition.
+      status: 'READY',
+      blockedReason: undefined,
       steps: context.definition.steps.map((step) => ({
         ...step,
         mutatesData: false,
@@ -560,7 +564,7 @@ test('orchestrator continues an independent role after a proven product failure'
   assert.equal(result.roleResults[1]?.blockerType, null);
 });
 
-test('dependency gate invokes all six role models after a dependency has a product failure', async () => {
+test('dependency gate invokes all three active role models after a dependency has a product failure', async () => {
   const invokedRoles: QaRole[] = [];
   const verifier = createVerifierAgent({
     allowedCheckIds: ['data-integrity'],
@@ -573,12 +577,12 @@ test('dependency gate invokes all six role models after a dependency has a produ
   });
   const result = await runQaAgentOrchestrator({
     runId: 'continue-after-product-dependency',
-    modelAdapter: orchestrationModel(new Set<QaRole>(['kitchen']), invokedRoles),
+    modelAdapter: orchestrationModel(new Set<QaRole>(['office']), invokedRoles),
     verifierAgent: verifier,
     assignments: DEFAULT_CROSS_ROLE_ORDER.map((role) => ({
       role,
       scenario: orchestrationScenario(role, ROLE_SCENARIOS[role]),
-      browserTools: role === 'kitchen'
+      browserTools: role === 'office'
         ? productMutationTools(role, ROLE_SCENARIOS[role])
         : { ...blockedTools, snapshot: async () => snapshot },
       analyzeAfterActions: false,
@@ -591,10 +595,10 @@ test('dependency gate invokes all six role models after a dependency has a produ
 
   assert.deepEqual([...new Set(invokedRoles)], DEFAULT_CROSS_ROLE_ORDER);
   assert.equal(result.roleResults.length, DEFAULT_CROSS_ROLE_ORDER.length);
-  const kitchen = result.roleResults.find(({ role }) => role === 'kitchen');
-  assert.equal(kitchen?.status, 'failed');
-  assert.equal(kitchen?.blockerType, 'PRODUCT');
-  for (const role of DEFAULT_CROSS_ROLE_ORDER.filter((candidate) => candidate !== 'kitchen')) {
+  const office = result.roleResults.find(({ role }) => role === 'office');
+  assert.equal(office?.status, 'failed');
+  assert.equal(office?.blockerType, 'PRODUCT');
+  for (const role of DEFAULT_CROSS_ROLE_ORDER.filter((candidate) => candidate !== 'office')) {
     assert.equal(result.roleResults.find((item) => item.role === role)?.status, 'completed');
   }
   assert.equal(

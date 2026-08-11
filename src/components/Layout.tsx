@@ -9,8 +9,6 @@ import Fab from './Fab';
 import NotificationBell from './NotificationBell';
 import FeedbackButton from './FeedbackButton';
 import { ConfirmDialog, Note, useDialogLayer, useToast } from './ui';
-import { useFeatureFlags } from '../lib/flags';
-import { FEEDBACK_FLAG } from '../lib/feedback';
 import { TRIAL_WARNING_DAYS, trialDaysRemaining } from '../lib/trial';
 import { fmtDate } from '../lib/format';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
@@ -26,8 +24,8 @@ export interface NavSection { section: string; items: NavItem[]; collapsible?: b
 
 // Four work groups — מסמכים / רכש / כספים / בקרה — under two ungrouped links that need no
 // header to explain them. The less self-evident items (מחירונים, דרישות תשלום, התאמות בנק,
-// הגדרות, and the focused /pay, /my-prices, /admin routes) sit where the plain
-// procurement/finance/control reading puts them, and /pay is shared by payer and accountant.
+// הגדרות, and the focused /pay and /admin routes) sit where the plain
+// procurement/finance/control reading puts them.
 // None of it invents business meaning.
 //
 // יומן ביקורת was here until 10.08.2026. The LEDGER did not go anywhere — audit_logs, its
@@ -42,8 +40,8 @@ export const NAV_SECTIONS: NavSection[] = [
     // כי היא הפעולה התכופה ביותר אבל לא זו שפותחים איתה את היום.
     section: '',
     items: [
-      { to: '/dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, roles: ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'] },
-      { to: '/orders/new', label: 'הזמנה חדשה', icon: ShoppingCart, roles: ['owner', 'office', 'kitchen'] },
+      { to: '/dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, roles: ['owner', 'office', 'accountant'] },
+      { to: '/orders/new', label: 'הזמנה חדשה', icon: ShoppingCart, roles: ['owner', 'office'] },
     ],
   },
   {
@@ -53,41 +51,37 @@ export const NAV_SECTIONS: NavSection[] = [
     section: 'מסמכים',
     items: [
       { to: '/documents/operations', label: 'תפעול מסמכים', icon: Activity, roles: ['owner'] },
-      { to: '/documents', label: 'תיקיית המסמכים', icon: FolderOpen, roles: ['owner', 'office', 'kitchen'] },
-      { to: '/documents/archive', label: 'ארכיון', icon: Archive, roles: ['owner', 'office', 'kitchen'] },
+      { to: '/documents', label: 'תיקיית המסמכים', icon: FolderOpen, roles: ['owner', 'office'] },
+      { to: '/documents/archive', label: 'ארכיון', icon: Archive, roles: ['owner', 'office'] },
     ],
   },
   {
     section: 'רכש',
     items: [
-      { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office', 'kitchen'] },
-      { to: '/receiving', label: 'קבלת סחורה', icon: PackageCheck, roles: ['owner', 'office', 'kitchen'] },
-      { to: '/inventory', label: 'מלאי', icon: Warehouse, roles: ['owner', 'office', 'kitchen'] },
-      // kitchen left this list on 10.08.2026 (G2). A kitchen manager orders from suppliers and
-      // receives goods; managing the supplier record — bank details, payment terms, status — is
-      // back-office work. 0112 is the half that actually enforces it.
+      { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office'] },
+      { to: '/receiving', label: 'קבלת סחורה', icon: PackageCheck, roles: ['owner', 'office'] },
+      { to: '/inventory', label: 'מלאי', icon: Warehouse, roles: ['owner', 'office'] },
       { to: '/suppliers', label: 'ספקים', icon: Truck, roles: ['owner', 'office'] },
-      { to: '/products', label: 'מוצרים', icon: Package, roles: ['owner', 'office', 'kitchen'] },
-      { to: '/prices', label: 'מחירונים', icon: Tags, roles: ['owner', 'office', 'kitchen'] },
-      { to: '/my-prices', label: 'פורטל הספק', icon: Tags, roles: ['supplier'] },
+      { to: '/products', label: 'מוצרים', icon: Package, roles: ['owner', 'office'] },
+      { to: '/prices', label: 'מחירונים', icon: Tags, roles: ['owner', 'office'] },
     ],
   },
   {
     section: 'כספים',
     items: [
-      { to: '/invoices', label: 'חשבוניות', icon: FileText, roles: ['owner', 'office', 'kitchen', 'accountant'] },
-      { to: '/credits', label: 'זיכויים', icon: RotateCcw, roles: ['owner', 'office', 'kitchen', 'accountant'] },
+      { to: '/invoices', label: 'חשבוניות', icon: FileText, roles: ['owner', 'office', 'accountant'] },
+      { to: '/credits', label: 'זיכויים', icon: RotateCcw, roles: ['owner', 'office', 'accountant'] },
       { to: '/payment-requests', label: 'דרישות תשלום', icon: Send, roles: ['owner', 'office'] },
       { to: '/payments', label: 'תשלומים', icon: CreditCard, roles: ['owner', 'accountant'] },
       { to: '/bank', label: 'התאמות בנק', icon: Landmark, roles: ['owner', 'accountant'] },
-      { to: '/pay', label: 'תשלומים לביצוע', icon: CreditCard, roles: ['payer', 'accountant'] },
+      { to: '/pay', label: 'תשלומים לביצוע', icon: CreditCard, roles: ['accountant'] },
     ],
   },
   {
     section: 'בקרה',
     items: [
       { to: '/alerts', label: 'התראות', icon: Bell, roles: ['owner', 'office'] },
-      { to: '/exceptions', label: 'חריגים', icon: AlertTriangle, roles: ['owner', 'office', 'kitchen', 'accountant'] },
+      { to: '/exceptions', label: 'חריגים', icon: AlertTriangle, roles: ['owner', 'office', 'accountant'] },
       { to: '/expenses', label: 'ריכוז הוצאות', icon: PieChart, roles: ['owner', 'accountant'] },
       { to: '/reports', label: 'דוח לרו״ח', icon: BarChart3, roles: ['owner', 'accountant'] },
       { to: '/analytics', label: 'ביצועי ספקים', icon: Activity, roles: ['owner', 'office'] },
@@ -108,23 +102,21 @@ export const NAV_SECTIONS: NavSection[] = [
 const DAILY_PATHS: Record<Role, readonly string[]> = {
   owner: ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
   office: ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
-  kitchen: ['/dashboard', '/orders', '/receiving', '/documents'],
   accountant: ['/dashboard', '/invoices', '/pay', '/payments', '/bank'],
-  payer: ['/dashboard', '/pay'],
-  supplier: ['/dashboard', '/my-prices'],
+  kitchen: [],
+  payer: [],
+  supplier: [],
 };
 
 const MANAGEMENT_PATHS: Partial<Record<Role, readonly string[]>> = {
   owner: ['/inventory', '/products', '/prices', '/credits', '/payment-requests', '/payments', '/bank'],
   office: ['/inventory', '/products', '/prices', '/credits', '/payment-requests'],
-  kitchen: ['/inventory', '/products', '/prices', '/invoices', '/credits'],
   accountant: ['/credits'],
 };
 
 const CONTROL_PATHS: Partial<Record<Role, readonly string[]>> = {
   owner: ['/documents/operations', '/exceptions', '/expenses', '/reports', '/analytics'],
   office: ['/exceptions', '/analytics'],
-  kitchen: ['/exceptions'],
   accountant: ['/exceptions', '/expenses', '/reports'],
 };
 
@@ -163,15 +155,8 @@ export function drawerSectionsForRole(role: Role | undefined, isPlatformAdmin: b
  * Whether the sidebar's group headers earn their space — exported so the rule can be asserted
  * against `sectionsForRole` output rather than inferred from a mounted shell.
  *
- * Group headers only pay for themselves once there is more than one item to organise. supplier and
- * payer each see a single grouped link, and a "רכש" header over a vendor's own price list reads as
- * if they were doing the buying.
- *
- * G1, finding 12 (companion): the count is over the NAMED sections only. It used to count every
- * item, and once /dashboard was added for all roles (NAV_SECTIONS:37) — it lives in the unnamed
- * leading section and so never had a header to suppress — supplier and payer crossed the threshold
- * and started seeing exactly the "רכש"/"כספים" headers the rule exists to prevent. The premise
- * expired; the intent did not.
+ * Group headers only pay for themselves once there is more than one item to organise. The count is
+ * over named sections only; `/dashboard` lives in the unnamed leading section.
  */
 export function showNavHeaders(sections: readonly NavSection[]): boolean {
   return sections.filter((s) => s.section).reduce((n, s) => n + s.items.length, 0) > 1;
@@ -204,18 +189,17 @@ export default function Layout() {
   const [pendingOffline, setPendingOffline] = useState<{ actions: number; uploads: number } | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const role = profile?.role;
-  // Section 5: payer/supplier get no search box — their routes are dead ends for it.
   const canSearch = canGlobalSearch(role);
-  // Read here only to decide whether the desktop header exists at all; FeedbackButton gates
-  // itself on the same flag, fail-closed. The flag governs UI, never permission (0059's flag law).
-  const feedbackOn = useFeatureFlags().isEnabled(FEEDBACK_FLAG);
+  // Feedback is now a product surface for every active account, not a rollout flag that can make
+  // the user's screenshot option disappear between sessions.
+  const feedbackOn = !!profile;
   // null unless this is a trial with a future end date — see trialDaysRemaining for why an already
   // expired trial answers null rather than 0.
   const trialDays = trialDaysRemaining(org);
   // Unfiled-documents pill (0014): counted only for staff who can act on that queue. The
   // Only procurement staff can act on the gallery queue. A known count > 0 is required,
   // so null (loading) and 0 never fabricate an all-clear or workload.
-  const inboxCount = useInboxCount(!!role && (['owner', 'office', 'kitchen'] as Role[]).includes(role));
+  const inboxCount = useInboxCount(!!role && (['owner', 'office'] as Role[]).includes(role));
   const orgName = org?.name ?? '';
   const orgLogoUrl = org?.logo_path
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`

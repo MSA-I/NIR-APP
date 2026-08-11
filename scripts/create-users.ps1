@@ -1,5 +1,7 @@
-﻿# Creates the six demo Auth users. Passwords come from an external per-user manifest and
-# are never printed. The manifest must live outside this repository.
+﻿# Creates the active demo Auth users. Passwords come from an external per-user manifest and
+# ACTIVE PRODUCT CONTRACT: only owner, office and accountant are created. Any legacy
+# kitchen/payer/supplier identities are banned. Passwords are never printed and the manifest must
+# live outside this repository.
 #
 # Manifest shape:
 # { "accounts": [ { "email": "owner@demo.supplyflow.local", "password": "..." }, ... ] }
@@ -15,14 +17,17 @@ param(
 
 $ErrorActionPreference = "Stop"
 $knownProductionHost = "rkftlbctohswhbbiaqin.supabase.co"
-$requiredEmails = @(
+$activeEmails = @(
   "owner@demo.supplyflow.local",
-  "kitchen@demo.supplyflow.local",
   "office@demo.supplyflow.local",
+  "accountant@demo.supplyflow.local"
+)
+$retiredEmails = @(
+  "kitchen@demo.supplyflow.local",
   "payer@demo.supplyflow.local",
-  "accountant@demo.supplyflow.local",
   "supplier@demo.supplyflow.local"
 )
+$allowedEmails = @($activeEmails + $retiredEmails)
 
 if (-not $env:SUPABASE_SERVICE_KEY) { throw "SUPABASE_SERVICE_KEY not set" }
 
@@ -44,8 +49,8 @@ if ($manifestFile.Equals($repoRoot, [System.StringComparison]::OrdinalIgnoreCase
 
 $manifest = Get-Content -LiteralPath $manifestFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $accounts = @($manifest.accounts)
-if ($accounts.Count -ne $requiredEmails.Count) {
-  throw "Credentials manifest must contain exactly the six demo accounts."
+if ($accounts.Count -notin @(3, 6)) {
+  throw "Credentials manifest must contain the three active demo accounts, optionally plus all three retired accounts."
 }
 
 $seenEmails = @{}
@@ -53,15 +58,19 @@ $seenPasswords = @{}
 foreach ($account in $accounts) {
   $email = ([string]$account.email).Trim().ToLowerInvariant()
   $password = [string]$account.password
-  if ($requiredEmails -notcontains $email) { throw "Unexpected demo account in credentials manifest: $email" }
+  if ($allowedEmails -notcontains $email) { throw "Unexpected demo account in credentials manifest: $email" }
   if ($seenEmails.ContainsKey($email)) { throw "Duplicate demo account in credentials manifest: $email" }
   if ($password.Length -lt 16) { throw "Each demo password must contain at least 16 characters." }
   if ($seenPasswords.ContainsKey($password)) { throw "Every demo account must use a unique password." }
   $seenEmails[$email] = $true
   $seenPasswords[$password] = $true
 }
-foreach ($email in $requiredEmails) {
+foreach ($email in $activeEmails) {
   if (-not $seenEmails.ContainsKey($email)) { throw "Missing demo account in credentials manifest: $email" }
+}
+$retiredManifestCount = @($retiredEmails | Where-Object { $seenEmails.ContainsKey($_) }).Count
+if ($retiredManifestCount -notin @(0, $retiredEmails.Count)) {
+  throw "Credentials manifest must omit all retired accounts or include all three for backward compatibility."
 }
 
 $headers = @{
@@ -80,7 +89,7 @@ foreach ($user in @($listed.users)) {
   if ($listedEmail) { $existingByEmail[$listedEmail] = [string]$user.id }
 }
 
-foreach ($account in $accounts) {
+foreach ($account in @($accounts | Where-Object { $activeEmails -contains ([string]$_.email).Trim().ToLowerInvariant() })) {
   $email = ([string]$account.email).Trim().ToLowerInvariant()
   $attributes = @{
     email = $email
@@ -99,4 +108,14 @@ foreach ($account in $accounts) {
       -Headers $headers -ContentType "application/json" -Body ($attributes | ConvertTo-Json -Compress)
     Write-Output "created $email -> $($response.id)"
   }
+}
+
+# Older local stacks may still carry kitchen/payer/supplier Auth users. Never recreate them; if
+# they exist, block sign-in without changing the password or deleting the historical identity.
+foreach ($email in $retiredEmails) {
+  if (-not $existingByEmail.ContainsKey($email)) { continue }
+  $attributes = @{ ban_duration = "876000h" }
+  $response = Invoke-RestMethod -Method Put -Uri "$adminBase/users/$($existingByEmail[$email])" `
+    -Headers $headers -ContentType "application/json" -Body ($attributes | ConvertTo-Json -Compress)
+  Write-Output "retired $email -> $($response.id)"
 }

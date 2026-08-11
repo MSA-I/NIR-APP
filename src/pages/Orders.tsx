@@ -57,7 +57,7 @@ export function OrdersList() {
   const [draftCancelTarget, setDraftCancelTarget] = useState<DraftListRow | null>(null);
   const [sentConfirmTarget, setSentConfirmTarget] = useState<OrderRow | null>(null);
   const [busy, setBusy] = useState(false);
-  const canWrite = organizationAccess.canWrite && !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canWrite = organizationAccess.canWrite && !!profile && ['owner', 'office'].includes(profile.role);
 
   const { data, loading, error, refetch } = useQuery(async () => {
     const [orders, drafts] = await Promise.all([
@@ -278,7 +278,7 @@ export function OrderDetail() {
     setParams(next, { replace: true });
   }, [params, order, setParams]);
 
-  const canWrite = organizationAccess.canWrite && profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canWrite = organizationAccess.canWrite && profile && ['owner', 'office'].includes(profile.role);
 
   async function setStatus(
     status: PoStatus,

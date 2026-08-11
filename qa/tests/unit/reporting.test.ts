@@ -386,9 +386,9 @@ describe('runner status and coverage contracts', () => {
     const infrastructureAgent = storedAgent('FAILED', 'INFRASTRUCTURE');
     const roleRun = {
       runId: 'qa-test',
-      role: 'supplier' as const,
-      scenarioId: 'supplier-price-list',
-      scenarioName: 'Supplier price-list submission',
+      role: 'accountant' as const,
+      scenarioId: 'accountant-reconciliation',
+      scenarioName: 'Accountant transfer execution, bank reconciliation and reporting',
       status: 'failed' as const,
       blockerType: 'PRODUCT' as const,
       terminalReason: 'required_verification_failed',
@@ -424,7 +424,7 @@ describe('runner status and coverage contracts', () => {
       agentMode: 'enabled',
     });
     assert.equal(
-      coverage.scenarios.find(({ id }) => id === 'agent-supplier-supplier-price-list')?.blockerType,
+      coverage.scenarios.find(({ id }) => id === 'agent-accountant-accountant-reconciliation')?.blockerType,
       'PRODUCT',
     );
     assert.throws(() => AgentRunSchema.parse({
@@ -466,9 +466,9 @@ describe('runner status and coverage contracts', () => {
     const base = storedAgent('FAILED', 'INFRASTRUCTURE');
     const roleBase = {
       runId: 'qa-test',
-      role: 'supplier' as const,
-      scenarioId: 'supplier-price-list',
-      scenarioName: 'Supplier price-list submission',
+      role: 'accountant' as const,
+      scenarioId: 'accountant-reconciliation',
+      scenarioName: 'Accountant transfer execution, bank reconciliation and reporting',
       status: 'failed' as const,
       blockerType: 'INFRASTRUCTURE' as const,
       terminalReason: 'matrix-test',

@@ -12,6 +12,10 @@
  */
 
 const PATTERNS: [RegExp, string][] = [
+  [/retired_identity_requires_platform_reactivation/i,
+    'זהות של תפקיד שפרש יכולה לחזור לחשבון פעיל רק דרך מנהל השירות, שמעדכן יחד את התפקיד ואת חסימת הכניסה.'],
+  [/account_role_retired|role_not_invitable/i,
+    'התפקיד הזה הוצא מהמוצר והחשבון אינו פעיל. ניתן להיכנס רק כמנהל, מנהל רכש או רואה חשבון.'],
   [/offboarding_already_requested/i,
     'כבר קיימת בקשת סיום שירות פעילה. רענן את המסך כדי לראות את מצבה.'],
   [/offboarding_cancellation_window_closed/i,

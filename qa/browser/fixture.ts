@@ -1,12 +1,12 @@
 import { test as base, expect } from '@playwright/test';
-import { roleFromProjectName, type QaRole } from '../config/roles.ts';
+import { roleFromProjectName, type ActiveQaRole } from '../config/roles.ts';
 import { ConsoleMonitor } from './console-monitor.ts';
 import { DownloadMonitor } from './download-monitor.ts';
 import { EvidenceCollector } from './evidence.ts';
 import { NetworkMonitor } from './network-monitor.ts';
 
 interface QaFixtures {
-  readonly qaRole: QaRole;
+  readonly qaRole: ActiveQaRole;
   readonly consoleMonitor: ConsoleMonitor;
   readonly networkMonitor: NetworkMonitor;
   readonly downloadMonitor: DownloadMonitor;

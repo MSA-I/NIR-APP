@@ -7,12 +7,17 @@ import { useAuth } from '../auth/AuthContext';
 import { StatusBadge, useToast, ConfirmDialog, ErrorNote, PageHeader, SkeletonCards, Note, Modal } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
-import { currentMonthISO, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange } from '../lib/format';
+import { addCalendarDays, currentMonthISO, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import { fetchAll } from '../lib/supabasePaging';
 import { buildLockedMonthlyWorkbook, buildMonthlyWorkbook, type MonthlyReportLabels, type MonthlyReportSnapshot } from '../lib/monthlyReport';
 import * as XLSX from 'xlsx';
 import { financialSupplierMap } from '../lib/financialSuppliers';
+import {
+  downloadRenderedWorkbook,
+  monthlyReportTemplateValues,
+  renderConfiguredReportTemplate,
+} from '../lib/reportTemplateExport';
 
 function toSnapshotHebrewError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
@@ -160,21 +165,42 @@ export default function Reports() {
     return { legalEntities, selectedUnitId, snapshots, deliveries };
   }, [canManageExport, requestedUnitId, safeMonth]);
 
-  function exportExcel() {
-    if (!data || fetching || error) return;
+  async function exportExcel() {
+    if (!data || fetching || error || !org) return;
+    setBusy(true);
     try {
-      const wb = buildMonthlyWorkbook({
-        orgName: org?.name, month: safeMonth, generatedAt: data.generatedAt, data,
-        labels: reportLabels,
+      const { start, end } = monthRange(safeMonth);
+      const values = monthlyReportTemplateValues({
+        orgName: org.name,
+        periodLabel: fmtMonth(`${safeMonth}-01`),
+        periodFrom: fmtDate(start),
+        periodTo: fmtDate(addCalendarDays(end, -1)),
+        generatedAt: fmtDateTime(data.generatedAt),
+        invoices: data.invoices,
+        credits: data.credits,
       });
       // This file lands in an accountant's inbox, and an accountant serves several businesses.
       // The name has to say whose report it is; a fixed tenant name would break multi-tenancy.
       // Strip only what filesystems object to; Hebrew names are fine and are the whole point.
-      const slug = (org?.name ?? '').replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
-      XLSX.writeFile(wb, `${slug || 'supplyflow'}-report-${safeMonth}.xlsx`);
+      const slug = org.name.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
+      const fileName = `${slug || 'supplyflow'}-report-${safeMonth}.xlsx`;
+      const templated = await renderConfiguredReportTemplate({
+        exportKey: 'accountant_monthly_report', orgId: org.id, values,
+      });
+      if (templated) {
+        downloadRenderedWorkbook(templated, fileName);
+      } else {
+        const wb = buildMonthlyWorkbook({
+          orgName: org.name, month: safeMonth, generatedAt: data.generatedAt, data,
+          labels: reportLabels,
+        });
+        XLSX.writeFile(wb, fileName);
+      }
       toast('קובץ ה-Excel הורד');
     } catch (e) {
       toast(toHebrewError(e), 'error');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -282,7 +308,7 @@ export default function Reports() {
           <label className="sr-only" htmlFor="monthly-report-month">חודש הדוח</label>
           {/* The native clear affordance emits '' — keep the previous month instead of a broken query. */}
           <input id="monthly-report-month" type="month" className="input w-auto!" value={month} onChange={(e) => { if (e.target.value) setMonth(e.target.value); }} />
-          <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הורדת הדוח כקובץ Excel'} onClick={exportExcel}><FileSpreadsheet size={15} /> ייצוא Excel</button>
+          <button className="btn-secondary" disabled={busy || fetching || !!error} title={exportBlockedReason ?? 'הורדת הדוח כקובץ Excel'} onClick={() => void exportExcel()}><FileSpreadsheet size={15} /> ייצוא Excel</button>
           <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הדפסת הדוח או שמירה כ-PDF'} onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
         </div>} />
 

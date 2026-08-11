@@ -1112,7 +1112,7 @@ export function receiptPendingServerAcceptanceFromRows(
 const LAST_SYNC_KEY = 'lastSuccessfulSyncAt';
 const SCOPE_KEY_PREFIX = 'scope:';
 const BOOTSTRAP_KEY_PREFIX = 'bootstrap:';
-const OFFLINE_ROLES = new Set<Role>(['owner', 'kitchen', 'office', 'payer', 'accountant', 'supplier']);
+const OFFLINE_ROLES = new Set<Role>(['owner', 'office', 'accountant']);
 const OFFLINE_ACCESS_MODES = new Set<OrganizationAccessMode>([
   'active', 'trial', 'grace', 'read_only', 'offboarding', 'suspended',
 ]);

@@ -34,15 +34,16 @@ describe('environment safety', () => {
 });
 
 describe('role and scenario contracts', () => {
-  test('defines positive and negative routes for every tenant role', () => {
+  test('defines positive and negative routes for every active tenant role and retires the rest', () => {
     for (const role of QA_ROLES) {
       assert.equal(isRouteAllowed(role, '/dashboard'), true, role);
     }
-    assert.equal(isRouteAllowed('supplier', '/my-prices'), true);
+    assert.equal(isRouteAllowed('supplier', '/my-prices'), false);
     assert.equal(isRouteAllowed('supplier', '/bank'), false);
     assert.equal(isRouteAllowed('kitchen', '/payment-requests'), false);
     assert.equal(isRouteAllowed('office', '/pay'), false);
-    assert.equal(isRouteAllowed('payer', '/pay'), true);
+    assert.equal(isRouteAllowed('payer', '/pay'), false);
+    assert.equal(isRouteAllowed('accountant', '/pay'), true);
     assert.equal(isRouteAllowed('accountant', '/suppliers'), false);
   });
 
@@ -50,7 +51,12 @@ describe('role and scenario contracts', () => {
     const platform = getScenario('platform-admin');
     assert.equal(platform.status, 'BLOCKED');
     assert.match(platform.blockedReason ?? '', /fixture/i);
-    assert.deepEqual(getBlockedScenarios().map(({ id }) => id), ['platform-admin']);
+    assert.deepEqual(getBlockedScenarios().map(({ id }) => id), [
+      'supplier-price-list',
+      'kitchen-receiving',
+      'payer-transfer-execution',
+      'platform-admin',
+    ]);
   });
 
   test('aggregates verifier status without hiding failures or blockers', () => {

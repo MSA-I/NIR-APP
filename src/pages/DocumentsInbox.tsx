@@ -404,7 +404,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     documentUserStateFromParam(params.get('processing')) ?? 'all';
   const canWrite = organizationAccess?.canWrite ?? true;
   const canFile = canWrite && (profile?.role === 'owner' || profile?.role === 'office');
-  const canUpload = canWrite && !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canUpload = canWrite && !!profile && ['owner', 'office'].includes(profile.role);
   const canEnqueue = canUpload;
   const canRetry = canFile;
   /**
@@ -415,7 +415,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
    * telling the dialog so through `can_remove_derived` and a named blocker.
    */
   const canRemoveDocument = canWrite && !!profile
-    && ['owner', 'office', 'kitchen', 'accountant'].includes(profile.role);
+    && ['owner', 'office', 'accountant'].includes(profile.role);
 
   const [q, setQ] = useState('');
   const [supplierId, setSupplierId] = useState('');

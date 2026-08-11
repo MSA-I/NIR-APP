@@ -39,7 +39,7 @@ begin
   end if;
 
   if (select count(*) from auth.users where email in
-      ('owner@demo.supplyflow.local','kitchen@demo.supplyflow.local','office@demo.supplyflow.local','payer@demo.supplyflow.local','accountant@demo.supplyflow.local','supplier@demo.supplyflow.local')) < 6 then
+      ('owner@demo.supplyflow.local','office@demo.supplyflow.local','accountant@demo.supplyflow.local')) < 3 then
     raise exception 'Demo auth users are missing. Run scripts/create-users.ps1 first.';
   end if;
 end $$;
@@ -64,18 +64,23 @@ insert into profiles (id, org_id, full_name, role, phone)
 select u.id, '11111111-1111-4111-8111-111111111111', x.full_name, x.role::user_role, x.phone
 from (values
   ('owner@demo.supplyflow.local',      'בעלים לדוגמה',       'owner',      '050-5551111'),
-  ('kitchen@demo.supplyflow.local',    'צוות תפעול לדוגמה',  'kitchen',    '052-5552222'),
-  ('office@demo.supplyflow.local',     'משרד לדוגמה',        'office',     '053-5553333'),
-  ('payer@demo.supplyflow.local',      'מבצע תשלום לדוגמה',  'payer',      '054-5554444'),
+  ('office@demo.supplyflow.local',     'מנהל רכש לדוגמה',    'office',     '053-5553333'),
   ('accountant@demo.supplyflow.local', 'רו״ח לדוגמה',        'accountant', '050-5555555')
 ) as x(email, full_name, role, phone)
 join auth.users u on u.email = x.email;
 
--- Every later reference to a demo user resolves through this, for the same reason.
+-- Every later reference to a demo actor resolves through this, for the same reason. Historical
+-- rows that used the former kitchen/payer personas are now attributed to their product successors:
+-- office owns procurement/receiving work and accountant owns transfer execution.
 create function pg_temp.demo_user(p_role text) returns uuid
 language sql stable as $fn$
   select id from profiles
-  where org_id = '11111111-1111-4111-8111-111111111111' and role = p_role::user_role
+  where org_id = '11111111-1111-4111-8111-111111111111'
+    and role = case p_role
+      when 'kitchen' then 'office'::user_role
+      when 'payer' then 'accountant'::user_role
+      else p_role::user_role
+    end
   limit 1
 $fn$;
 
@@ -104,11 +109,6 @@ insert into suppliers (id, org_id, name, tax_id, contact_name, phone, whatsapp, 
 ('aa000000-0000-4000-8000-000000000013', '11111111-1111-4111-8111-111111111111', 'אריזות הדרום', '512667788', 'סיגל אברהם', '08-6778899', '052-6778899', 'sigal@arizot-hadarom.demo', 'באר שבע', '{1,4}', '13:00', 350, 'שוטף + 45', null, 'משלוח חינם מעל 800 ₪', 'active'),
 ('aa000000-0000-4000-8000-000000000014', '11111111-1111-4111-8111-111111111111', 'שף ציוד מקצועי', '515889900', 'רון אשכנזי', '03-5667788', '053-5667788', 'ron@chef-tziud.demo', 'פתח תקווה', '{}', null, null, 'מזומן / אשראי', null, 'ספק חדש — ממתין לאישור הנהלה', 'active'),
 ('aa000000-0000-4000-8000-000000000015', '11111111-1111-4111-8111-111111111111', 'תבליני הגליל', '511556677', 'סמיר חורי', '04-6990011', '050-6990011', 'samir@tavliney-hagalil.demo', 'שפרעם', '{0,3}', '14:00', 200, 'שוטף + 30', 'בנק ערבי ישראלי 34 | סניף 785 | חשבון 667788', 'תבלינים, קטניות ומוצרים יבשים', 'active');
-
-insert into profiles (id, org_id, full_name, role, phone, supplier_id)
-select u.id, '11111111-1111-4111-8111-111111111111', 'משק ירוק — פורטל ספק',
-       'supplier'::user_role, '052-6331122', 'aa000000-0000-4000-8000-000000000001'
-from auth.users u where u.email = 'supplier@demo.supplyflow.local';
 
 insert into supplier_categories (supplier_id, category_id, org_id)
 select v.supplier_id::uuid, v.category_id::uuid,
@@ -732,7 +732,7 @@ insert into exceptions (id, org_id, type, severity, status, title, details, supp
 ('fc000000-0000-4000-8000-000000000004', '11111111-1111-4111-8111-111111111111', 'payment_without_invoice', 'medium', 'open', 'העברה ליין ושמחה ללא חשבונית במערכת', '{"amount":1500.00,"date":"2026-07-06"}', 'aa000000-0000-4000-8000-000000000009', null, null, null, 'fa000000-0000-4000-8000-000000000006', 'office', '2026-07-15 09:20+03'),
 ('fc000000-0000-4000-8000-000000000005', '11111111-1111-4111-8111-111111111111', 'unknown_supplier', 'medium', 'open', 'העברה בנקאית לגורם לא מזוהה — 950 ₪', '{"description":"העברת זהב עסקים 3392201"}', null, null, null, null, 'fa000000-0000-4000-8000-000000000007', 'office', '2026-07-15 09:25+03'),
 ('fc000000-0000-4000-8000-000000000006', '11111111-1111-4111-8111-111111111111', 'invoice_without_payment', 'low', 'open', 'חשבונית תבליני הגליל ממאי טרם שולמה', '{"invoice_number":"509","total":640.00,"age_days":57}', 'aa000000-0000-4000-8000-000000000015', 'f4000000-0000-4000-8000-000000000013', null, null, null, 'office', '2026-07-01 08:00+03'),
-('fc000000-0000-4000-8000-000000000007', '11111111-1111-4111-8111-111111111111', 'receipt_mismatch', 'medium', 'in_progress', 'פערי קבלה מול חשבונית — מחלבות העמק', '{"missing":["ביצים L — 15 תבניות","שמנת מתוקה — 10 ליטר"],"value":500.00}', 'aa000000-0000-4000-8000-000000000006', 'f4000000-0000-4000-8000-000000000010', null, null, null, 'kitchen', '2026-07-06 09:10+03'),
+('fc000000-0000-4000-8000-000000000007', '11111111-1111-4111-8111-111111111111', 'receipt_mismatch', 'medium', 'in_progress', 'פערי קבלה מול חשבונית — מחלבות העמק', '{"missing":["ביצים L — 15 תבניות","שמנת מתוקה — 10 ליטר"],"value":500.00}', 'aa000000-0000-4000-8000-000000000006', 'f4000000-0000-4000-8000-000000000010', null, null, null, 'office', '2026-07-06 09:10+03'),
 ('fc000000-0000-4000-8000-000000000008', '11111111-1111-4111-8111-111111111111', 'credit_not_deducted', 'low', 'open', 'זיכוי פתוח שטרם קוזז — דגי הים התיכון', '{"credit_amount":390.00,"invoice_number":"6633"}', 'aa000000-0000-4000-8000-000000000007', 'f4000000-0000-4000-8000-000000000011', null, null, null, 'office', '2026-07-11 10:00+03');
 
 -- ===== Comments =====

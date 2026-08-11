@@ -75,6 +75,10 @@ jobs:
         working-directory: supabase/functions/send-feedback
         run: npx --yes deno check --config deno.json --lock deno.lock --frozen index.ts
 
+      - name: Send-invite function type contract
+        working-directory: supabase/functions/send-invite
+        run: npx --yes deno check --config deno.json --lock deno.lock --frozen index.ts
+
       - name: Outbox-worker delivery, header and signature contracts
         run: |
           set -euo pipefail
