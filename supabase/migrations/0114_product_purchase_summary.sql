@@ -121,16 +121,24 @@ as $fn$
            p.name as product_name,
            p.unit,
            sum(pi.ordered_qty) as ordered_qty,
-           sum(pi.received_qty) as received_qty,
-           sum(pi.invoiced_qty) as invoiced_qty,
+           -- NULL when the source contributed nothing at all; 0 only when it contributed rows
+           -- that sum to zero. Caught by looking at the screen: a product with 25 kg received and
+           -- no invoice matched to it yet was rendering ₪0.00 spend, which reads as "this was
+           -- free" rather than "nobody has billed us for it". Same class of lie as a fabricated
+           -- zero anywhere else in this product.
+           case when sum(pi.receipt_count) > 0 then sum(pi.received_qty) end as received_qty,
+           case when sum(pi.invoice_count) > 0 then sum(pi.invoiced_qty) end as invoiced_qty,
            sum(pi.canonical_qty) as canonical_qty,
            -- One product can be bought from several suppliers on several orders, and the row is
            -- only readable if it says how many of each it is standing on.
            count(distinct pi.supplier_id)::bigint as supplier_count,
            count(distinct pi.order_id)::bigint as order_count,
            sum(pi.invoice_count)::bigint as invoice_count,
-           sum(pi.invoiced_amount) as gross_amount,
-           case when sum(pi.canonical_qty) > 0
+           case when sum(pi.invoice_count) > 0 then sum(pi.invoiced_amount) end as gross_amount,
+           -- Unknown spend divided by a known quantity is not zero, it is unknown. The same
+           -- screen that showed ₪0.00 spend was showing ₪0.00 average beside it, which is the
+           -- more convincing of the two lies: it looks like a price somebody negotiated.
+           case when sum(pi.invoice_count) > 0 and sum(pi.canonical_qty) > 0
                 then round(sum(pi.invoiced_amount) / sum(pi.canonical_qty), 4) end
              as average_unit_price,
            -- If ANY line under this product still leans on the supplier's word, the row says so.

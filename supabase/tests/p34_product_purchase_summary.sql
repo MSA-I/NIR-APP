@@ -167,7 +167,7 @@ select pg_temp.p34_assert(
 -- ===== 3. Products are never merged by name =====
 
 select pg_temp.p34_assert(
-  (select (p ->> 'canonical_qty')::numeric = 6 and (p ->> 'gross_amount')::numeric = 0
+  (select (p ->> 'canonical_qty')::numeric = 6 and p ->> 'gross_amount' is null
    from pg_temp.p34_product('30340000-0000-4000-8000-000000000002') p),
   '"עגבניות שרי 500 גרם" was merged into "עגבניות שרי", or its receipted quantity was lost. They '
   'are one product to a person and two rows to Postgres; merging them on a screen that drives '
@@ -178,6 +178,16 @@ select pg_temp.p34_assert(
      private.product_purchase_summary(
        '10340000-0000-4000-8000-000000000001', '2026-08-01', '2026-08-31', null) -> 'products')),
   'the product count changed, which means rows were merged or dropped');
+
+-- Received, never billed: the spend is a DASH, not ₪0.00. Found by looking at the actual screen —
+-- 88 products rendering ₪0.00 against quantities somebody had physically received, which reads as
+-- "this was free" rather than "nobody has billed us for it yet".
+select pg_temp.p34_assert(
+  (select p ->> 'gross_amount' is null and p ->> 'invoiced_qty' is null
+          and (p ->> 'received_qty')::numeric = 6
+   from pg_temp.p34_product('30340000-0000-4000-8000-000000000002') p),
+  'a product that was received but never billed reports a spend of zero instead of nothing. Zero '
+  'is a claim that it was free');
 
 -- ===== 4. Ordered is never the answer =====
 
