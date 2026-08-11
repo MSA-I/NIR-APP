@@ -12,9 +12,10 @@ declare
   v_product uuid;
   v_order uuid;
   v_order_number text;
-  v_doc uuid := 'f1111111-1111-4111-8111-111111111111';
-  v_job uuid := 'f2222222-1111-4111-8111-111111111111';
-  v_extraction uuid := 'f3333333-1111-4111-8111-111111111111';
+  -- Versioned IDs keep an older immutable interpretation from blocking a corrected fixture.
+  v_doc uuid := 'f1111111-1111-4111-8111-111111111112';
+  v_job uuid := 'f2222222-1111-4111-8111-111111111112';
+  v_extraction uuid := 'f3333333-1111-4111-8111-111111111112';
   v_sku text;
   v_unit text;
 begin
@@ -27,13 +28,30 @@ begin
   order by po.created_at desc limit 1;
   select poi.product_id into v_product
   from public.purchase_order_items poi where poi.order_id = v_order limit 1;
-  select coalesce(sp.supplier_sku, 'SKU-DEMO'), coalesce(p.unit, 'unit') into v_sku, v_unit
+  select coalesce(
+           nullif(btrim(sp.supplier_sku), ''),
+           nullif(btrim(p.sku), '')
+         ), coalesce(p.unit, 'unit')
+    into v_sku, v_unit
   from public.products p
   left join public.supplier_products sp
     on sp.org_id = v_org and sp.product_id = p.id and sp.supplier_id = v_supplier
   where p.id = v_product;
 
+  if v_sku is null then
+    raise exception 'review-screen fixture requires an order item with a resolvable SKU';
+  end if;
+
   raise notice 'order=% supplier=% product=% sku=%', v_order_number, v_supplier, v_product, v_sku;
+
+  -- Interpretation rows are an immutable learning ledger. A repeated setup run must preserve the
+  -- existing evidence instead of trying to delete it and tripping the production invariant.
+  if exists (
+    select 1 from public.document_interpretations where document_id = v_doc
+  ) then
+    raise notice 'review-screen fixture already exists for document %', v_doc;
+    return;
+  end if;
 
   delete from public.document_interpretations where document_id = v_doc;
   delete from public.document_extractions where document_id = v_doc;
