@@ -4,6 +4,7 @@ import {
   blockingFindings,
   canSubmit,
   findingLabel,
+  resolutionLabel,
   reviewedProposal,
   storageAndApprovalSentences,
   type DocumentReviewRead,
@@ -196,5 +197,31 @@ describe('canSubmit errs toward letting the server decide', () => {
     expect(canSubmit(read({
       assessment: assessment({ approval_blocked: true }) as never,
     }), 's1')).toBe(true);
+  });
+});
+
+describe('resolutionLabel', () => {
+  it('says what the evidence was, not what the tier is called', () => {
+    // The screen used to render the raw token, producing "זוהתה · by_number" on a Hebrew page.
+    expect(resolutionLabel('by_number')).toBe('מספר ההזמנה מודפס על המסמך');
+    expect(resolutionLabel('tax_id')).toBe('ח.פ / עוסק מורשה תואם');
+  });
+
+  it('marks the two inferred tiers as worth verifying', () => {
+    // 0120 and 0090 both record that these are safe only because a person confirms them, so the
+    // label has to carry that rather than presenting them as settled facts.
+    expect(resolutionLabel('by_date_proximity')).toContain('כדאי לוודא');
+    expect(resolutionLabel('single_open_order')).toContain('כדאי לוודא');
+  });
+
+  it('reads the comma-joined form 0106 produces when two identifiers agree', () => {
+    expect(resolutionLabel('barcode,supplier_sku'))
+      .toBe('ברקוד מודפס · מק"ט ספק מודפס');
+  });
+
+  it('falls back to the token, which support can read aloud, and to null for nothing', () => {
+    expect(resolutionLabel('a_tier_this_build_has_not_met')).toBe('a_tier_this_build_has_not_met');
+    expect(resolutionLabel(null)).toBeNull();
+    expect(resolutionLabel('')).toBeNull();
   });
 });

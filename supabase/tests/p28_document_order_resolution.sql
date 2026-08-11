@@ -68,7 +68,13 @@ insert into public.suppliers (id, org_id, name, status) values
   ('4a280000-0000-4000-8000-000000000002', '1a280000-0000-4000-8000-000000000001',
    'P28 ספק עם הזמנה פתוחה אחת', 'active'),
   ('4a280000-0000-4000-8000-000000000003', '1a280000-0000-4000-8000-000000000002',
-   'P28 ספק של דייר אחר', 'active');
+   'P28 ספק של דייר אחר', 'active'),
+  -- S4 exists to exercise the date tier in isolation. It has TWO open orders, so single_open_order
+  -- can never fire for it, and their expected dates sit two days apart, so the same supplier can
+  -- produce a decisive window, an ambiguous one and an empty one depending only on the document
+  -- date.
+  ('4a280000-0000-4000-8000-000000000004', '1a280000-0000-4000-8000-000000000001',
+   'P28 ספק לבדיקת קרבת תאריכים', 'active');
 
 insert into public.products (id, org_id, name, unit) values
   ('3a280000-0000-4000-8000-000000000001', '1a280000-0000-4000-8000-000000000001', 'P28 מוצר א', 'unit'),
@@ -77,7 +83,9 @@ insert into public.products (id, org_id, name, unit) values
   ('3a280000-0000-4000-8000-000000000004', '1a280000-0000-4000-8000-000000000001',
    'P28 מוצר שמעולם לא הוזמן', 'unit'),
   ('3a280000-0000-4000-8000-000000000005', '1a280000-0000-4000-8000-000000000002',
-   'P28 מוצר של דייר אחר', 'unit');
+   'P28 מוצר של דייר אחר', 'unit'),
+  ('3a280000-0000-4000-8000-000000000006', '1a280000-0000-4000-8000-000000000001',
+   'P28 מוצר של ספק התאריכים', 'unit');
 
 -- O1 is CLOSED. A supplier's invoice usually arrives after the goods were received, so an explicit
 -- printed number has to reach it; if `by_number` inherited 0090's open-status set, every invoice for
@@ -97,7 +105,12 @@ insert into public.purchase_orders (id, org_id, supplier_id, status, expected_da
   ('5a280000-0000-4000-8000-000000000006', '1a280000-0000-4000-8000-000000000002',
    '4a280000-0000-4000-8000-000000000003', 'sent',      '2026-03-12'),
   ('5a280000-0000-4000-8000-000000000007', '1a280000-0000-4000-8000-000000000001',
-   '4a280000-0000-4000-8000-000000000001', 'partial',   null);
+   '4a280000-0000-4000-8000-000000000001', 'partial',   null),
+  -- S4's two open orders, two days apart. See the supplier comment above.
+  ('5a280000-0000-4000-8000-000000000008', '1a280000-0000-4000-8000-000000000001',
+   '4a280000-0000-4000-8000-000000000004', 'sent',      '2026-05-10'),
+  ('5a280000-0000-4000-8000-000000000009', '1a280000-0000-4000-8000-000000000001',
+   '4a280000-0000-4000-8000-000000000004', 'confirmed', '2026-05-12');
 
 insert into public.purchase_order_items (org_id, order_id, product_id, qty, unit_price) values
   ('1a280000-0000-4000-8000-000000000001', '5a280000-0000-4000-8000-000000000001',
@@ -120,25 +133,39 @@ insert into public.purchase_order_items (org_id, order_id, product_id, qty, unit
   ('1a280000-0000-4000-8000-000000000001', '5a280000-0000-4000-8000-000000000005',
    '3a280000-0000-4000-8000-000000000001', 5, 10),
   ('1a280000-0000-4000-8000-000000000002', '5a280000-0000-4000-8000-000000000006',
-   '3a280000-0000-4000-8000-000000000005', 5, 10);
+   '3a280000-0000-4000-8000-000000000005', 5, 10),
+  -- Only O8 lists this product, so a document naming it has full coverage of exactly one order --
+  -- which is how section 4b proves the item tier still outranks the date tier.
+  ('1a280000-0000-4000-8000-000000000001', '5a280000-0000-4000-8000-000000000008',
+   '3a280000-0000-4000-8000-000000000006', 5, 10);
 
 -- ===== 1. The subtype policy, which is the whole point =====
 
 select pg_temp.p28_assert(
-  private.document_order_tiers('invoice') = array['by_number', 'by_items']
+  private.document_order_tiers('invoice') = array['by_number', 'by_items', 'by_date_proximity']
   and private.document_order_tiers('delivery_note')
-      = array['by_number', 'by_items', 'single_open_order']
+      = array['by_number', 'by_items', 'by_date_proximity', 'single_open_order']
   and private.document_order_tiers('tax_receipt') = array['by_number']
   and cardinality(private.document_order_tiers('price_list')) = 0
   and cardinality(private.document_order_tiers(null)) = 0,
   'the per-subtype tier policy changed. It is not a preference: an invoice without '
   'single_open_order is 0077:1134-1141, a delivery note with it is the owner exception of '
-  '09.08.2026 that 0090:257-262 records, and a receipt with by_number alone is OPEN-DECISIONS #141');
+  '09.08.2026 that 0090:257-262 records, a receipt with by_number alone is OPEN-DECISIONS #141, '
+  'and by_date_proximity on the two goods subtypes is OPEN-DECISIONS #148');
 
 select pg_temp.p28_assert(
-  private.document_order_tiers('  INVOICE  ') = array['by_number', 'by_items'],
+  private.document_order_tiers('  INVOICE  ')
+    = array['by_number', 'by_items', 'by_date_proximity'],
   'the subtype is matched case- and whitespace-sensitively, so a document_type that arrived with a '
   'trailing space would silently lose every tier it is entitled to');
+
+-- The window is a decision with a date on it, not a tuning knob. Widening it to thirty days would
+-- make far more documents "match" and would be indistinguishable, from the outside, from the
+-- resolver getting better at its job.
+select pg_temp.p28_assert(
+  private.document_order_date_window() = 5,
+  'the date-proximity window is no longer the five days the owner decided on 11.08.2026 '
+  '(OPEN-DECISIONS #148)');
 
 select pg_temp.p28_assert(
   (select r ->> 'reason' = 'subtype_has_no_tiers'
@@ -238,6 +265,83 @@ select pg_temp.p28_assert(
   'a receipt was matched by product coverage. A receipt prints amounts, not goods -- the item tier '
   'has nothing to read on one, and it is not in its tier set');
 
+-- ===== 3b. by_date_proximity: the owner's five days, and the silence on either side of them =====
+--
+-- 0107 refused to build this tier while the threshold was an invented business answer. The owner
+-- gave the number on 11.08.2026, and 0120 built it in the only shape that cannot choose among
+-- candidates: exactly one qualifying order, or nothing. S4 has two open orders two days apart, so
+-- moving only the document date walks the tier through all three of its outcomes.
+
+-- Decisive: 16.05 is four days from O9 and six from O8. One order qualifies, so one is the answer.
+select pg_temp.p28_assert(
+  (select r ->> 'resolved' = 'true'
+          and r ->> 'order_id' = '5a280000-0000-4000-8000-000000000009'
+          and r ->> 'matched_by' = 'by_date_proximity'
+   from pg_temp.p28_resolve(
+     'invoice', '4a280000-0000-4000-8000-000000000004', null, date '2026-05-16') r),
+  'the only order whose expected delivery falls inside the owner''s five-day window was not '
+  'matched. This is the tier OPEN-DECISIONS #148 asked for');
+
+-- Six days is outside five. The boundary is asserted from both sides, because an off-by-one here
+-- would be invisible in every other assertion in this file.
+select pg_temp.p28_assert(
+  (select r ->> 'resolved' = 'true' and r ->> 'order_id' = '5a280000-0000-4000-8000-000000000009'
+   from pg_temp.p28_resolve(
+     'invoice', '4a280000-0000-4000-8000-000000000004', null, date '2026-05-17') r)
+  and (select r ->> 'reason' = 'no_evidence'
+       from pg_temp.p28_resolve(
+         'invoice', '4a280000-0000-4000-8000-000000000004', null, date '2026-05-18') r),
+  'the five-day window is not inclusive of exactly five days: 17.05 is five days from O9 and must '
+  'match, 18.05 is six and must not');
+
+-- Ambiguous: 11.05 sits one day from O9 and one from O8. Two qualifying orders is the case the
+-- whole design of this tier exists to refuse.
+select pg_temp.p28_assert(
+  (select r ->> 'resolved' = 'false' and r ->> 'order_id' is null
+          and r ->> 'reason' = 'no_evidence'
+          and jsonb_array_length(r -> 'candidates') = 2
+          and (select bool_and((c ->> 'authoritative')::boolean = false)
+               from jsonb_array_elements(r -> 'candidates') c)
+   from pg_temp.p28_resolve(
+     'invoice', '4a280000-0000-4000-8000-000000000004', null, date '2026-05-11') r),
+  'TWO orders fell inside the window and one of them was chosen. The tier is safe only because it '
+  'fires on exactly one qualifying order or not at all -- and when it stays silent both orders must '
+  'still reach the screen, as advisory candidates, for a person to choose between');
+
+-- Silent with no date at all. A document that printed no date knows nothing about which delivery it
+-- describes, and proximity to an unknown date is not proximity.
+select pg_temp.p28_assert(
+  (select r ->> 'reason' = 'no_evidence'
+   from pg_temp.p28_resolve('invoice', '4a280000-0000-4000-8000-000000000004') r),
+  'a document with no date was matched by date proximity');
+
+-- An order with no expected date cannot participate. O7 is S1's open order with a null expected
+-- date; a null must not be read as "close enough to everything".
+select pg_temp.p28_assert(
+  (select r ->> 'reason' = 'no_evidence'
+   from pg_temp.p28_resolve(
+     'invoice', '4a280000-0000-4000-8000-000000000001', null, date '2026-08-01') r),
+  'an order with no expected delivery date was matched by date proximity, which would make a null '
+  'the closest date to everything');
+
+-- Rung order: the goods still outrank the calendar. Here the date names O9 and the products cover
+-- O8 exclusively -- the products have to win, or the ladder is decoration.
+select pg_temp.p28_assert(
+  (select r ->> 'order_id' = '5a280000-0000-4000-8000-000000000008'
+          and r ->> 'matched_by' = 'by_items'
+   from pg_temp.p28_resolve(
+     'invoice', '4a280000-0000-4000-8000-000000000004', null, date '2026-05-16',
+     array['3a280000-0000-4000-8000-000000000006']::uuid[]) r),
+  'the date tier overrode full product coverage');
+
+-- A receipt is not in the tier's subtype set. Its date is a payment date, not a delivery date, so
+-- proximity to a delivery window would be reading a coincidence (OPEN-DECISIONS #141).
+select pg_temp.p28_assert(
+  (select r ->> 'reason' = 'no_evidence'
+   from pg_temp.p28_resolve(
+     'tax_receipt', '4a280000-0000-4000-8000-000000000004', null, date '2026-05-16') r),
+  'a receipt was matched by date proximity');
+
 -- ===== 4. single_open_order: the owner exception, and only where it was granted =====
 
 select pg_temp.p28_assert(
@@ -285,13 +389,13 @@ select pg_temp.p28_assert(
           and r ->> 'matched_by' is null and r ->> 'reason' = 'no_evidence'
           and jsonb_array_length(r -> 'candidates') = 3
    from pg_temp.p28_resolve(
-     'invoice', '4a280000-0000-4000-8000-000000000001', null, date '2026-03-18') r),
+     'invoice', '4a280000-0000-4000-8000-000000000001', null, date '2026-03-12') r),
   'the supplier''s three open orders were not offered when no tier fired');
 
 select pg_temp.p28_assert(
   (select bool_and((c ->> 'authoritative')::boolean = false and c ->> 'matched_by' = 'open_order')
    from pg_temp.p28_resolve(
-          'invoice', '4a280000-0000-4000-8000-000000000001', null, date '2026-03-18') r,
+          'invoice', '4a280000-0000-4000-8000-000000000001', null, date '2026-03-12') r,
         jsonb_array_elements(r -> 'candidates') c),
   'an advisory candidate was marked authoritative. A caller that trusts only authoritative '
   'candidates would then treat a suggestion as a decided link');
@@ -299,7 +403,7 @@ select pg_temp.p28_assert(
 select pg_temp.p28_assert(
   (select array_agg(c ->> 'order_id' order by ord)
    from pg_temp.p28_resolve(
-          'invoice', '4a280000-0000-4000-8000-000000000001', null, date '2026-03-18') r,
+          'invoice', '4a280000-0000-4000-8000-000000000001', null, date '2026-03-12') r,
         jsonb_array_elements(r -> 'candidates') with ordinality as t(c, ord))
   = array['5a280000-0000-4000-8000-000000000003',
           '5a280000-0000-4000-8000-000000000002',
@@ -313,7 +417,7 @@ select pg_temp.p28_assert(
   (select array_agg(c ->> 'order_id' order by ord)
    from pg_temp.p28_resolve(
           'invoice', '4a280000-0000-4000-8000-000000000001',
-          pg_temp.p28_payload(null, '2026-03-18')) r,
+          pg_temp.p28_payload(null, '2026-03-12')) r,
         jsonb_array_elements(r -> 'candidates') with ordinality as t(c, ord))
   = array['5a280000-0000-4000-8000-000000000003',
           '5a280000-0000-4000-8000-000000000002',

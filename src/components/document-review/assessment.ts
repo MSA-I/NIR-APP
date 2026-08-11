@@ -140,6 +140,50 @@ export const FINDING_LABELS: Record<string, string> = {
   credit_required: 'נדרש זיכוי',
 };
 
+/**
+ * What decided the supplier or the order, in Hebrew.
+ *
+ * The server sends a machine token — `tax_id`, `by_date_proximity` — because the token is what
+ * anchors, suites and other callers reason about. Rendering it straight onto a Hebrew screen
+ * produced lines like "זוהתה · by_number", which tells a bookkeeper nothing and looks like a bug.
+ *
+ * The labels say what the EVIDENCE was, not what the tier is called, because "the order number is
+ * printed on the document" is a claim a person can check against the paper in their hand while
+ * "by_number" is not. Two of them end in a caution: the date window and the single open order are
+ * both inferences about which delivery this is, and 0120 and 0090 respectively record that they are
+ * safe only because a person confirms them.
+ */
+export const RESOLUTION_LABELS: Record<string, string> = {
+  // Supplier (0106), strongest evidence first.
+  tax_id: 'ח.פ / עוסק מורשה תואם',
+  document_supplier: 'הספק מזוהה במסמך עצמו',
+  supplier_sku: 'מק"ט ספק מודפס',
+  barcode: 'ברקוד מודפס',
+  exact_name: 'שם ספק תואם במדויק',
+  model_suggestion: 'הצעת המערכת — לאישור אדם',
+  // Order (0107 + 0120), strongest evidence first.
+  by_number: 'מספר ההזמנה מודפס על המסמך',
+  by_items: 'ההזמנה מכילה את כל המוצרים שבמסמך',
+  by_date_proximity: 'תאריך המסמך קרוב לאספקה הצפויה — כדאי לוודא',
+  single_open_order: 'ההזמנה הפתוחה היחידה של הספק — כדאי לוודא',
+  open_order: 'הזמנה פתוחה — לבחירת אדם',
+};
+
+/**
+ * A tier token as a sentence. Handles the comma-joined form 0106 produces when a supplier's SKU and
+ * barcode both point at it, and falls back to the token itself for anything this build has not met —
+ * an unfamiliar token read aloud to support beats "לא ידוע".
+ */
+export function resolutionLabel(matchedBy: string | null | undefined): string | null {
+  if (!matchedBy) return null;
+  return matchedBy
+    .split(',')
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .map((token) => RESOLUTION_LABELS[token] || token)
+    .join(' · ') || null;
+}
+
 export const SEVERITY_ORDER: Record<FindingSeverity, number> = {
   critical: 0, error: 1, warning: 2, info: 3,
 };

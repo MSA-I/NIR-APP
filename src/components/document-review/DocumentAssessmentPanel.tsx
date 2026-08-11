@@ -10,6 +10,7 @@ import {
   blockingFindings,
   canSubmit,
   findingLabel,
+  resolutionLabel,
   reviewedProposal,
   storageAndApprovalSentences,
   type AssessmentFinding,
@@ -155,7 +156,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
           <h3 className="text-sm font-medium text-ink-strong">הספק</h3>
           <p className="mt-1 text-sm text-ink-body">
             {read.supplier_resolution.resolved
-              ? `זוהה · ${read.supplier_resolution.matched_by}`
+              ? `זוהה · ${resolutionLabel(read.supplier_resolution.matched_by)}`
               : read.supplier_resolution.reason === 'ambiguous'
                 ? 'יותר ממועמד אחד — נדרשת בחירה'
                 : 'לא זוהה מהמסמך'}
@@ -179,7 +180,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
           <h3 className="text-sm font-medium text-ink-strong">ההזמנה</h3>
           <p className="mt-1 text-sm text-ink-body">
             {read.order_resolution.resolved
-              ? `זוהתה · ${read.order_resolution.matched_by}`
+              ? `זוהתה · ${resolutionLabel(read.order_resolution.matched_by)}`
               : read.order_resolution.reason === 'ambiguous'
                 ? 'כמה הזמנות אפשריות — נדרשת בחירה'
                 /* A document with no order is legitimate, not a failure (0107). */
