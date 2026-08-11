@@ -44,6 +44,7 @@ const Payments = lazy(() => import('./pages/Payments'));
 const Bank = lazy(() => import('./pages/Bank'));
 const Exceptions = lazy(() => import('./pages/Exceptions'));
 const Reports = lazy(() => import('./pages/Reports'));
+const ProductPurchaseSummary = lazy(() => import('./pages/ProductPurchaseSummary'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const Expenses = lazy(() => import('./pages/Expenses'));
 const DocumentsGallery = lazy(() => import('./pages/DocumentsInbox'));
@@ -318,6 +319,10 @@ export default function App() {
         <Route path="/alerts" element={<Guard roles={FINANCE}><Alerts /></Guard>} />
         <Route path="/expenses" element={<Guard roles={['owner', 'accountant']}><Expenses /></Guard>} />
         <Route path="/reports" element={<Guard roles={['owner', 'accountant']}><Reports /></Guard>} />
+        {/* The product purchase summary reads spend per product — the tenant's commercial
+            position — so its readers are the money roles, matching get_product_purchase_summary's
+            own role check rather than being wider than it. */}
+        <Route path="/reports/products" element={<Guard roles={['owner', 'office', 'accountant']}><ProductPurchaseSummary /></Guard>} />
         <Route path="/analytics" element={<Guard roles={['owner', 'office']}><Analytics /></Guard>} />
         <Route path="/settings" element={<Guard roles={['owner']}><Settings /></Guard>} />
         <Route path="/my-prices" element={<Guard roles={['supplier']}><SupplierPrices /></Guard>} />

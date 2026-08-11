@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { INBOX_CHANGED_EVENT } from '../components/QuickCapture';
 import { ConfirmDialog, DataTable, ErrorNote, Modal, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
+import { DocumentRemovalDialog } from '../components/DocumentRemovalDialog';
 import { ok, toHebrewError } from '../lib/errors';
 import { fmtDate, fmtDateTime, todayISO } from '../lib/format';
 import type { DocumentRow } from '../lib/types';
@@ -384,6 +385,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
  *  `entity_type='archive'`: the documents interpretation could not place, which no one files by
  *  hand. One component either way, so "what is a document row" has a single answer. */
 export default function DocumentsGallery({ archive = false }: { archive?: boolean }) {
+  const [removalDoc, setRemovalDoc] = useState<DocumentRow | null>(null);
   const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -878,6 +880,14 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
               // Removal from the archive: no reason, by the owner's ruling (#110). Nothing new
               // in the database — decision #28's soft delete, the stored file kept for audit.
               { key: 'delete', label: 'הסרה', icon: Trash2, tone: 'danger', hidden: !canFile || !archive, onSelect: () => setDeleteDoc(doc) },
+              // Removal WITH the consequences computed first (0116/0119), offered in the folder
+              // rather than the archive. The archive's action above stays exactly as it is —
+              // owner ruling #110 settled that removing an archived document needs no reason —
+              // and this is the different case: a document that CREATED something. It asks for a
+              // reason, shows what would go with it, and blocks the destructive option by name
+              // when a safe reversal cannot be proven.
+              { key: 'remove-with-impact', label: 'הסרה עם תצוגת השפעה', icon: Trash2, tone: 'danger',
+                hidden: !canFile || archive, onSelect: () => setRemovalDoc(doc) },
             ];
           }}
           emptyTitle={data?.docs.length ? 'לא נמצאו מסמכים לפי הסינון' : empty.title}
@@ -920,6 +930,12 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         title="הסרת מסמך מהארכיון"
         message={`המסמך "${deleteDoc?.file_name ?? ''}" יוסר מהרשימה. הקובץ נשמר לביקורת.`}
         confirmLabel="הסרה" danger busy={deleting} />
+
+      <DocumentRemovalDialog
+        documentId={removalDoc?.id ?? ''}
+        open={!!removalDoc}
+        onClose={() => setRemovalDoc(null)}
+        onRemoved={() => { void refetch(); }} />
 
     </div>
   );

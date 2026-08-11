@@ -286,6 +286,14 @@ export default function Reports() {
           <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הדפסת הדוח או שמירה כ-PDF'} onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
         </div>} />
 
+      {/* The product summary is a sibling report, reached from here rather than from the main
+          navigation: it answers a different question about the same money, and a sub-report that
+          earns its own top-level row makes the catalogue longer without making anything easier
+          to find. */}
+      <p className="no-print text-sm">
+        <Link className="link" to="/reports/products">סיכום רכישות מוצרים ←</Link>
+      </p>
+
       <ConfirmDialog open={sendSnapshot !== null} onClose={() => setSendSnapshot(null)}
         onConfirm={(reason) => {
           if (!sendSnapshot) return;

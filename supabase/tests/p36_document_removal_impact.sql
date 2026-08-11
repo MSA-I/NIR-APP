@@ -287,5 +287,90 @@ select pg_temp.p36_assert(
    from public.get_document_removal_impact('60360000-0000-4000-8000-000000000001') r),
   'the owner cannot read the impact preview through the public wrapper');
 
+-- ===== 7. The command that acts on the preview (0119) =====
+--
+-- The preview is a courtesy; the gate is what remove_document recomputes inside its own row
+-- lock. These assertions are about the gap between the two: a person can read "safe to remove"
+-- and press the button after somebody else approved the invoice underneath them.
+
+do $$
+begin
+  perform public.remove_document('60360000-0000-4000-8000-000000000003',
+                                 'document_and_derived', 'P36 מנסה למחוק חשבונית ששולמה');
+  raise exception 'P36 removal assertion failed: A PAID INVOICE WAS UNDONE by a document
+    removal. Money that left the building is not undone by deleting the paper that described it';
+exception when sqlstate '55000' then
+  if position('document_removal_blocked' in sqlerrm) = 0 then raise; end if;
+  -- The blockers travel in the error, so the screen can say WHICH one stopped it.
+  if position('שולמה' in sqlerrm) = 0 then
+    raise exception 'P36 removal assertion failed: the refusal did not name the blocker. Got: %',
+      sqlerrm;
+  end if;
+end
+$$;
+
+select pg_temp.p36_assert(
+  (select count(*) = 1 from public.invoices
+   where id = 'c0360000-0000-4000-8000-000000000003' and deleted_at is null),
+  'the blocked attempt still deleted the invoice');
+
+-- document_only is ALWAYS available, including on the document whose derived records are frozen.
+select pg_temp.p36_assert(
+  (select (r ->> 'removed')::boolean and (r ->> 'undone_count')::integer = 0
+          and (r ->> 'original_file_retained')::boolean
+   from public.remove_document('60360000-0000-4000-8000-000000000003',
+                               'document_only', 'P36 המסמך לא שייך לכאן') r),
+  'removing the document alone was refused on a document whose derived records are frozen. '
+  'Filing something away is not destruction');
+
+select pg_temp.p36_assert(
+  (select count(*) = 1 from public.invoices
+   where id = 'c0360000-0000-4000-8000-000000000003' and deleted_at is null),
+  'document_only deleted a derived invoice. The mode names are the promise');
+
+-- A second press on a stale screen is not an error a person should have to interpret.
+select pg_temp.p36_assert(
+  (select (r ->> 'already_removed')::boolean and (r ->> 'removed')::boolean = false
+   from public.remove_document('60360000-0000-4000-8000-000000000003',
+                               'document_only', 'P36 לחיצה שנייה') r),
+  'removing an already-removed document raised instead of answering idempotently');
+
+-- The reversible case really reverses, and the DRAFT receipt goes with it.
+select pg_temp.p36_assert(
+  (select (r ->> 'undone_count')::integer = 1
+   from public.remove_document('60360000-0000-4000-8000-000000000004',
+                               'document_and_derived', 'P36 תעודה שגויה') r),
+  'a draft receipt created by this document was not undone');
+
+select pg_temp.p36_assert(
+  (select count(*) = 0 from public.goods_receipts
+   where id = 'd0360000-0000-4000-8000-000000000001'),
+  'the draft receipt survived the reversal');
+
+select pg_temp.p36_assert(
+  (select count(*) = 1 from public.goods_receipts
+   where id = 'd0360000-0000-4000-8000-000000000002'),
+  'THE COMPLETED RECEIPT WAS DELETED TOO. Only the draft belonged to this document');
+
+do $$
+begin
+  perform public.remove_document('60360000-0000-4000-8000-000000000001', 'document_only', '  ');
+  raise exception 'P36 removal assertion failed: a document was removed without a reason';
+exception when sqlstate '22023' then
+  if sqlerrm <> 'document_removal_reason_required' then raise; end if;
+end
+$$;
+
+select set_config('request.jwt.claim.sub', '20360000-0000-4000-8000-000000000002', true);
+do $$
+begin
+  perform public.remove_document('60360000-0000-4000-8000-000000000001',
+                                 'document_only', 'P36 מטבח מנסה');
+  raise exception 'P36 removal assertion failed: a kitchen manager removed a document';
+exception when sqlstate '42501' then
+  if sqlerrm <> 'document_removal_not_authorized' then raise; end if;
+end
+$$;
+
 reset role;
 rollback;
