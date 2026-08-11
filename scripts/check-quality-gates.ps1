@@ -997,6 +997,19 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\tests\p23_supplier_portal.sql",
     "supabase\tests\p24_inventory_intelligence.sql",
     "supabase\tests\p25_tenant_offboarding_export.sql",
+    "supabase\tests\p26_price_baseline.sql",
+    "supabase\tests\p27_document_supplier_resolution.sql",
+    "supabase\tests\p28_document_order_resolution.sql",
+    "supabase\tests\p29_document_reconciliation_assessment.sql",
+    "supabase\tests\p30_document_review_assessment_read.sql",
+    "supabase\tests\p31_apply_reviewed_document.sql",
+    "supabase\tests\p32_kitchen_supplier_read_boundary.sql",
+    "supabase\tests\p33_canonical_purchase_metrics.sql",
+    "supabase\tests\p34_product_purchase_summary.sql",
+    "supabase\tests\p35_preferred_supplier_tiebreak.sql",
+    "supabase\tests\p36_document_removal_impact.sql",
+    "supabase\tests\p37_document_overcharge_credit.sql",
+    "supabase\tests\p38_export_report_templates.sql",
     "supabase\functions\_shared\organization-access.ts",
     "supabase\functions\_shared\organization-access.test.ts",
     "supabase\functions\_shared\organization-egress.ts",
@@ -1207,6 +1220,19 @@ try {
     Invoke-SqlTest "supabase\tests\p23_supplier_portal.sql" "Supplier purchase-order projection, acknowledgement, idempotency and supplier isolation"
     Invoke-SqlTest "supabase\tests\p24_inventory_intelligence.sql" "Inventory consumption evidence, incoming supply, suggestions, price context and tenant isolation"
     Invoke-SqlTest "supabase\tests\p25_tenant_offboarding_export.sql" "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery" "supabase_admin"
+    Invoke-SqlTest "supabase\tests\p26_price_baseline.sql" "Contractual price baseline as of the document date, reversal ordering, undisclosed fallbacks and read-only guarantee"
+    Invoke-SqlTest "supabase\tests\p27_document_supplier_resolution.sql" "Deterministic supplier resolution from document evidence: rung order, ambiguity, tenancy and the model's guess as advisory only"
+    Invoke-SqlTest "supabase\tests\p28_document_order_resolution.sql" "Per-subtype order resolution: an invoice is never matched by the single open order, a delivery note may be, and no tier ever chooses among candidates"
+    Invoke-SqlTest "supabase\tests\p29_document_reconciliation_assessment.sql" "Four-source document assessment: baseline as of the document date, draft receipts are not arrivals, absence from a partial document is not a shortage, and assessing writes nothing"
+    Invoke-SqlTest "supabase\tests\p30_document_review_assessment_read.sql" "The review screen's single door to the private resolvers: role boundary, unit scope inside a definer body, and file-stored versus data-approved kept apart"
+    Invoke-SqlTest "supabase\tests\p31_apply_reviewed_document.sql" "Applying an approved document: the server recomputes the assessment rather than trusting the proposal, an invoice never receives goods, a delivery note only drafts, and a tax receipt creates no payable"
+    Invoke-SqlTest "supabase\tests\p32_kitchen_supplier_read_boundary.sql" "Kitchen narrowed without being broken: bank_details unreachable by column privilege while row access stays so PostgREST embeds keep returning the supplier name"
+    Invoke-SqlTest "supabase\tests\p33_canonical_purchase_metrics.sql" "One definition per money question: the business day rather than the UTC day, snapshot prices, approved invoices only, and only credits that actually reduced a balance"
+    Invoke-SqlTest "supabase\tests\p34_product_purchase_summary.sql" "One delivery counted once: the order item is the de-duplication grain, a completed receipt beats a supplier bill, and products are never merged by name"
+    Invoke-SqlTest "supabase\tests\p35_preferred_supplier_tiebreak.sql" "A supplier preference breaks a tie and never wins one: price orders first, both recommendation sites carry the rule, and setting it takes a reason"
+    Invoke-SqlTest "supabase\tests\p36_document_removal_impact.sql" "Document removal states what it destroys before it destroys it: an approved, paid or reported record blocks the destructive option, and every refusal names itself"
+    Invoke-SqlTest "supabase\tests\p37_document_overcharge_credit.sql" "One overcharge, one draft credit request: a retry drafts nothing, being undercharged drafts nothing, and the price list is never touched"
+    Invoke-SqlTest "supabase\tests\p38_export_report_templates.sql" "The accountants own workbook becomes the export: the document contract validator is untouched, an approved report template has a file, and an approved file is never swapped"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"

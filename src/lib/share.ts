@@ -39,26 +39,45 @@ export function orderWhatsAppLink(order: WhatsAppOrder, orgName: string): string
 }
 
 /**
- * Opens WhatsApp with the order text and moves a draft/ready order to sent through the
- * server-authored, reasoned status command. Returns whether the status changed and a Hebrew
- * error when the command fails; the message was still opened in that case.
+ * Opens WhatsApp with the order text prefilled. **It does not touch the order's status.**
+ *
+ * It used to: opening the wa.me window was immediately followed by a transition to `sent`. But
+ * wa.me only hands the draft message to WhatsApp — the person still has to press Send, and may
+ * close the tab, pick the wrong contact, or edit the text and give up. There is no callback and
+ * no receipt, so the app was recording a fact it could not observe, and `sent_at` — which the
+ * on-time-delivery metric and the supplier's confirmation window both read — carried a
+ * timestamp for a message that may never have left.
+ *
+ * `needsSentConfirmation` below decides whether to ASK afterwards; `markOrderSentToSupplier` is
+ * the answer. Automatic confirmation waits for a verified WhatsApp Business delivery webhook.
  */
-export async function sendOrderWhatsApp(order: WhatsAppOrder, orgName: string): Promise<{ opened: boolean; statusChanged: boolean; error?: string }> {
+export function openOrderWhatsApp(order: WhatsAppOrder, orgName: string): { opened: boolean; error?: string } {
   const link = orderWhatsAppLink(order, orgName);
-  if (!link) return { opened: false, statusChanged: false, error: 'לספק אין מספר WhatsApp זמין' };
+  if (!link) return { opened: false, error: 'לספק אין מספר WhatsApp זמין' };
   if (openExternalPopup(link) !== 'opened') {
-    return { opened: false, statusChanged: false, error: 'הדפדפן חסם את חלון WhatsApp. יש לאפשר חלונות קופצים ולנסות שוב.' };
+    return { opened: false, error: 'הדפדפן חסם את חלון WhatsApp. יש לאפשר חלונות קופצים ולנסות שוב.' };
   }
-  if (order.status !== 'draft' && order.status !== 'ready') return { opened: true, statusChanged: false };
+  return { opened: true };
+}
+
+/** Only an order still on our side of the fence has anything to confirm. */
+export function needsSentConfirmation(status: string): boolean {
+  return status === 'draft' || status === 'ready';
+}
+
+/**
+ * The human's answer to "did it actually go out?", through the existing reasoned server
+ * transition — which is what stamps `sent_at`.
+ */
+export async function markOrderSentToSupplier(orderId: string): Promise<{ error?: string }> {
   const res = await supabase.rpc('transition_purchase_order_status', {
-    p_purchase_order_id: order.id,
+    p_purchase_order_id: orderId,
     p_target_status: 'sent',
-    p_reason: 'שליחת הזמנה לספק',
+    p_reason: 'המשתמש אישר שההזמנה נשלחה לספק',
     p_confirmation_note: null,
     p_expected_date: null,
   });
-  if (res.error) return { opened: true, statusChanged: false, error: toHebrewError(res.error.message) };
-  return { opened: true, statusChanged: true };
+  return res.error ? { error: toHebrewError(res.error.message) } : {};
 }
 
 /** True when the Web Share API is available (mobile browsers, some desktops). */

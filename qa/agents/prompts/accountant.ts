@@ -13,7 +13,7 @@ export const ACCOUNTANT_ROLE_PROMPT: RolePrompt = {
   ],
   expectedRoutes: [
     '/dashboard', '/invoices', '/invoices/:id', '/credits', '/exceptions',
-    '/payments', '/pay', '/bank', '/expenses', '/reports', '/analytics', '/audit',
+    '/payments', '/pay', '/bank', '/expenses', '/reports', '/analytics',
   ],
   forbiddenActions: [
     'שינוי ספקים, מוצרים, מחירונים, הזמנות, קבלת סחורה או מסמכי inbox.',

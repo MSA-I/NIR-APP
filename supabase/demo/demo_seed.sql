@@ -746,10 +746,10 @@ insert into monthly_exports (org_id, month, status, sent_at, sent_by, notes) val
 ('11111111-1111-4111-8111-111111111111', '2026-06-01', 'sent', '2026-07-06 09:30+03', pg_temp.demo_user('office'), 'הועבר לרו"ח דינה — כולל 3 חריגים פתוחים'),
 ('11111111-1111-4111-8111-111111111111', '2026-07-01', 'open', null, null, null);
 
--- ===== Wave 4: an explicit flag configuration + a shared saved view =====
--- One org_flag_configurations row and one saved_views row so the demo_verify.sql arms
+-- ===== Wave 4: explicit flag configurations + a shared saved view =====
+-- Two org_flag_configurations rows and one saved_views row so the demo_verify.sql arms
 -- added for the wave-4 tables exercise real rows (PLAN-04 §2.5), not empty joins. The
--- flag row is focused on the demo warehouse and left OFF -- an explicit operator answer
+-- barcode flag is focused on the demo warehouse and left OFF -- an explicit operator answer
 -- for the demo tenant, not a behaviour change -- and no financial number moves. The unit
 -- id is resolved from the trigger-seeded chain (0054), same as every user resolution
 -- above goes through pg_temp.demo_user.
@@ -758,6 +758,13 @@ select 'fd000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-11111111
        'receiving.barcode', false, '{}'::jsonb, u.id
 from org_units u
 where u.org_id = '11111111-1111-4111-8111-111111111111' and u.unit_type = 'warehouse';
+
+-- The demo is the place where the design partner verifies the feedback channel. Leaving its UI
+-- flag at the catalog default (off) made the message-and-screenshot option disappear locally even
+-- though the production tenant had been enabled explicitly through platform_set_org_flag.
+insert into org_flag_configurations (id, org_id, flag_key, state, targeting, unit_id) values
+('fd000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111',
+ 'feedback.notes', true, '{}'::jsonb, null);
 
 insert into saved_views (id, org_id, user_id, screen, unit_id, name, payload, shared) values
 ('fe000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',

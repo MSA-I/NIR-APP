@@ -5,6 +5,39 @@ import { useAuth, homeFor } from '../auth/AuthContext';
 import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
 
+const LOCAL_DEMO_ROLES = [
+  { role: 'owner', label: 'מנהל/בעלים' },
+  { role: 'office', label: 'מנהל רכש' },
+  { role: 'kitchen', label: 'מנהל מטבח' },
+  { role: 'accountant', label: 'הנהלת חשבונות' },
+  { role: 'supplier', label: 'ספק' },
+  { role: 'payer', label: 'מבצע העברות' },
+] as const;
+
+/**
+ * Demo credentials are a local-development convenience, never a production surface.
+ *
+ * Two conditions are required rather than one: an explicit seed, and a loopback Supabase host.
+ * A production build that accidentally receives the seed still shows nothing, and a developer
+ * pointed at the live project cannot fill known demo passwords into it from this screen.
+ */
+function localDemoAccounts(supabaseUrl: string | undefined, seed: string | undefined) {
+  const cleanSeed = seed?.trim();
+  if (!cleanSeed || !supabaseUrl) return [];
+  try {
+    const host = new URL(supabaseUrl).hostname;
+    if (!['127.0.0.1', 'localhost', '::1'].includes(host)) return [];
+  } catch {
+    return [];
+  }
+  return LOCAL_DEMO_ROLES.map(({ role, label }) => ({
+    role,
+    label,
+    email: `${role}@demo.supplyflow.local`,
+    password: `P4!${cleanSeed}-${role}-Aa7`,
+  }));
+}
+
 export default function Login() {
   const { signIn, session, profile, loading } = useAuth();
   const navigate = useNavigate();
@@ -14,6 +47,12 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const demoAccounts = import.meta.env.DEV
+    ? localDemoAccounts(
+        import.meta.env.VITE_SUPABASE_URL as string | undefined,
+        import.meta.env.VITE_DEMO_PASSWORD_SEED as string | undefined,
+      )
+    : [];
 
   if (!loading && session && profile) return <Navigate to={homeFor(profile.role)} replace />;
 
@@ -86,6 +125,30 @@ export default function Login() {
             </div>
           </div>
           {error && <div role="alert" className="note-alert">{error}</div>}
+          {import.meta.env.DEV && demoAccounts.length > 0 && (
+            <details className="rounded-lg border border-shell-ink/15 bg-shell-ink/5 px-3 py-2 text-start">
+              <summary className="min-h-11 cursor-pointer content-center text-sm font-medium text-ink">
+                חשבונות דמו מקומיים
+              </summary>
+              <p className="mb-2 text-xs text-ink-muted">
+                ממלא את פרטי החשבון לבדיקה. האפשרות זמינה רק מול Supabase המקומי.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {demoAccounts.map((account) => (
+                  <button key={account.role} type="button"
+                    className="btn-secondary min-h-11 justify-center px-2 text-xs"
+                    aria-label={`מילוי פרטי ${account.label}`}
+                    onClick={() => {
+                      setEmail(account.email);
+                      setPassword(account.password);
+                      setError(null);
+                    }}>
+                    {account.label}
+                  </button>
+                ))}
+              </div>
+            </details>
+          )}
           <button type="submit" className="btn-primary w-full" disabled={busy}>
             {busy ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Lock size={15} aria-hidden="true" />}
             {busy ? 'מתחבר…' : 'התחברות'}

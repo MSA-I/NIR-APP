@@ -1,5 +1,26 @@
 import * as XLSX from 'xlsx';
 
+/**
+ * The spreadsheet-injection rule, and the ONE place in this file that is a copy of something.
+ *
+ * It duplicates `neutralizeSpreadsheetString` in documentExport.ts, deliberately and under
+ * protest. This module is imported at RUNTIME by scripts/check-p2-reliability.ts:14 through
+ * Node's ESM loader, which resolves only explicit extensions; TypeScript under
+ * `moduleResolution: "bundler"` rejects a `.ts` extension without `allowImportingTsExtensions`.
+ * The two loaders cannot both be satisfied by a relative import here, so this file must stay
+ * free of them, and the choice was a four-line copy or a repo-wide compiler-option change.
+ *
+ * The copy cannot drift: monthlyReport.spec.ts imports BOTH implementations and asserts they
+ * agree character for character over the whole input table. Change one without the other and the
+ * suite fails.
+ */
+const neutralize = <T>(value: T): T =>
+  (typeof value === 'string' && /^[=+\-@\t\r]/.test(value) ? `'${value}` : value) as T;
+
+export function neutralizeMonthlyRow<T extends Record<string, unknown>>(row: T): T {
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, neutralize(value)])) as T;
+}
+
 export interface MonthlyReportData {
   invoices: { supplier: { name: string }; invoice_number: string; invoice_date: string; amount_before_vat: number; vat_amount: number; total_amount: number; review_status: string; payment_status: string }[];
   payments: { supplier: { name: string }; paid_date: string; amount: number; method: string | null; reference: string | null }[];
@@ -80,8 +101,13 @@ export function buildMonthlyWorkbook(input: {
   const creditTotal = data.credits.reduce((sum, row) => sum + row.amount, 0);
   const workbook = XLSX.utils.book_new();
 
+  // Everything below that is not a number goes through neutralizeSpreadsheetRow. This workbook
+  // LEAVES THE BUILDING — it is the file the accountant opens — and it carries supplier names,
+  // exception titles, payment references and payment methods straight from tenant data. A value
+  // starting `=` or `@` is a formula to Excel regardless of what we meant by it, and until now
+  // this file neutralized nothing while documentExport.ts, which never leaves the app, did.
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
-    ['שם ארגון', input.orgName ?? '—'],
+    ['שם ארגון', neutralize(input.orgName ?? '—')],
     ['חודש', input.month],
     ['נוצר בתאריך', input.generatedAt.toISOString()],
     ['הערה', 'הקובץ משקף את הנתונים שהושלמו בזמן המצוין; הוא אינו snapshot טרנזקציוני.'],
@@ -94,19 +120,19 @@ export function buildMonthlyWorkbook(input: {
     ['זיכויים', data.credits.length, creditTotal],
     ['חריגים פתוחים כרגע', data.exceptions.length, null],
   ]), 'פרטי הדוח');
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.invoices.map((row) => ({
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.invoices.map((row) => neutralizeMonthlyRow({
     'ספק': row.supplier.name, 'מספר חשבונית': row.invoice_number, 'תאריך': row.invoice_date,
     'לפני מע"מ': row.amount_before_vat, 'מע"מ': row.vat_amount, 'סה"כ': row.total_amount,
     'סטטוס בדיקה': input.labels.invoiceReview[row.review_status]?.label,
     'סטטוס תשלום': input.labels.invoicePayment[row.payment_status]?.label,
   }))), 'חשבוניות');
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.payments.map((row) => ({
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.payments.map((row) => neutralizeMonthlyRow({
     'ספק': row.supplier.name, 'תאריך': row.paid_date, 'סכום': row.amount, 'אמצעי': row.method, 'אסמכתא': row.reference,
   }))), 'תשלומים');
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.credits.map((row) => ({
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.credits.map((row) => neutralizeMonthlyRow({
     'ספק': row.supplier.name, 'סיבה': input.labels.creditReason[row.reason], 'סכום': row.amount, 'סטטוס': input.labels.creditStatus[row.status]?.label,
   }))), 'זיכויים');
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.exceptions.map((row) => ({
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.exceptions.map((row) => neutralizeMonthlyRow({
     'סוג': input.labels.exceptionType[row.type], 'תיאור': row.title, 'ספק': row.supplier?.name ?? '',
   }))), 'חריגים פתוחים כרגע');
   return workbook;
@@ -156,13 +182,13 @@ export function buildLockedMonthlyWorkbook(input: {
 
   workbook.Sheets['פרטי הדוח'] = XLSX.utils.aoa_to_sheet([
     ['סוג הדוח', 'דוח סופי נעול'],
-    ['שם ארגון', snapshot.organization_name],
-    ['ישות משפטית', snapshot.legal_entity_name],
+    ['שם ארגון', neutralize(snapshot.organization_name)],
+    ['ישות משפטית', neutralize(snapshot.legal_entity_name)],
     ['חודש', snapshot.report_month.slice(0, 7)],
     ['גרסת snapshot', snapshot.version],
     ['גרסת מבנה הדוח', snapshot.report_version],
     ['נוצר בתאריך', snapshot.created_at],
-    ['נוצר על ידי', snapshot.created_by_name],
+    ['נוצר על ידי', neutralize(snapshot.created_by_name)],
     ['Snapshot ID', snapshot.id],
     ['Checksum', snapshot.content_hash],
     ['הערה', 'דוח סופי זה נוצר רק מנתוני snapshot נעולים במסד הנתונים ומשקף את גבול הדוח החי במועד היצירה.'],
@@ -177,7 +203,7 @@ export function buildLockedMonthlyWorkbook(input: {
     ['תנועות בנק', snapshot.totals.bank_transaction_count, snapshot.totals.bank_total],
   ]);
 
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(snapshot.bank_rows.map((row) => ({
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(snapshot.bank_rows.map((row) => neutralizeMonthlyRow({
     'תאריך': row.tx_date,
     'תיאור': row.description,
     'סכום': row.amount,

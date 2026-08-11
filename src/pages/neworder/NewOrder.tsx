@@ -27,11 +27,12 @@ import { centsFromUnits, hundredths, lineUnits, moneyFromCents } from '../../lib
 import { deferProduct, dismissNextOrderItem, listNextOrderItems, type NextOrderItem } from '../../lib/nextOrderItems';
 import { fmtMoneyExact } from '../../lib/format';
 import { NEW_COMMERCE_SUPPLIER_STATUSES } from '../../lib/status';
-import { sendOrderWhatsApp } from '../../lib/share';
+import { openOrderWhatsApp, markOrderSentToSupplier } from '../../lib/share';
 import type { Product, PurchaseOrder, Supplier, SupplierProduct } from '../../lib/types';
 import ProductStep from './ProductStep';
 import SupplierSplitStep from './SupplierSplitStep';
 import SummaryStep from './SummaryStep';
+import { SUPPLIER_COLUMNS } from '../../lib/supplierColumns';
 
 interface CartItem extends SplitLine {
   product: Product;
@@ -140,6 +141,8 @@ export default function NewOrder() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [sendQueue, setSendQueue] = useState<QueueOrder[] | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  // Orders whose WhatsApp window we opened. Not "sent" — only the operator can say that.
+  const [openedInWhatsApp, setOpenedInWhatsApp] = useState<ReadonlySet<string>>(new Set());
   const [nextOrderItems, setNextOrderItems] = useState<NextOrderItem[]>([]);
   const [nextOrderBusyId, setNextOrderBusyId] = useState<string | null>(null);
   const [pendingNextOrderAdd, setPendingNextOrderAdd] = useState<NextOrderItem | null>(null);
@@ -204,7 +207,7 @@ export default function NewOrder() {
     const [products, sps, suppliers] = await Promise.all([
       supabase.from('products').select('*').eq('active', true).order('name'),
       supabase.from('supplier_products').select('*').eq('available', true),
-      supabase.from('suppliers').select('*').is('deleted_at', null).in('status', NEW_COMMERCE_SUPPLIER_STATUSES),
+      supabase.from('suppliers').select(SUPPLIER_COLUMNS).is('deleted_at', null).in('status', NEW_COMMERCE_SUPPLIER_STATUSES),
     ]);
     let draft: DraftRow | null = null;
     let source: SourceOrder | null = null;
@@ -684,18 +687,23 @@ export default function NewOrder() {
     }
   }
 
-  async function sendQueuedOrder(order: QueueOrder) {
-    setSendingId(order.id);
-    const result = await sendOrderWhatsApp(order, org?.name ?? '');
-    setSendingId(null);
+  function sendQueuedOrder(order: QueueOrder) {
+    const result = openOrderWhatsApp(order, org?.name ?? '');
     if (result.error) { toast(result.error, 'error'); return; }
     if (!result.opened) return;
-    if (result.statusChanged) {
-      setSendQueue((queue) => queue?.map((row) => row.id === order.id
-        ? { ...row, status: 'sent', sent_at: new Date().toISOString() }
-        : row) ?? null);
-      toast('ההזמנה נפתחה ב-WhatsApp וסומנה כנשלחה');
-    }
+    // Opening the window is not sending. The row now offers the confirmation instead.
+    setOpenedInWhatsApp((ids) => new Set(ids).add(order.id));
+  }
+
+  async function confirmQueuedOrderSent(order: QueueOrder) {
+    setSendingId(order.id);
+    const result = await markOrderSentToSupplier(order.id);
+    setSendingId(null);
+    if (result.error) { toast(result.error, 'error'); return; }
+    setSendQueue((queue) => queue?.map((row) => row.id === order.id
+      ? { ...row, status: 'sent', sent_at: new Date().toISOString() }
+      : row) ?? null);
+    toast('ההזמנה סומנה כנשלחה לספק');
   }
 
   if (loading) return <PageLoader />;
@@ -773,18 +781,33 @@ export default function NewOrder() {
 
       <PriceDiffModal report={priceDiff} onClose={() => setPriceDiff(null)} />
 
-      <Modal open={sendQueue !== null} onClose={() => navigate('/orders')} title="שליחת הזמנות לספקים" busy={sendingId !== null} statusMessage={sendingId ? 'פותח את הודעת הספק ומעדכן את ההזמנה' : undefined}>
-        <p className="mb-3 text-sm text-ink-soft">כל הזמנה תסומן כנשלחה רק לאחר פתיחת הודעת WhatsApp שלה.</p>
+      <Modal open={sendQueue !== null} onClose={() => navigate('/orders')} title="שליחת הזמנות לספקים" busy={sendingId !== null} statusMessage={sendingId ? 'מעדכן את סטטוס ההזמנה' : undefined}>
+        <p className="mb-3 text-sm text-ink-soft">
+          פתיחת WhatsApp מכינה את ההודעה — היא אינה שולחת אותה. אחרי שההודעה נשלחה בפועל יש לסמן זאת כאן,
+          ורק אז ההזמנה תירשם כנשלחה לספק.
+        </p>
         <div className="divide-y divide-line-soft border-y border-line-strong">
           {sendQueue?.map((order) => {
             const hasWhatsApp = !!(order.supplier.whatsapp || order.supplier.phone);
+            const opened = openedInWhatsApp.has(order.id);
             return (
               <div key={order.id} className="flex flex-wrap items-center gap-2 py-3">
                 <div><div className="font-medium text-ink-body">{order.supplier.name}</div><div className="text-xs text-ink-muted">הזמנה #<span className="num">{order.number}</span></div></div>
-                <div className="ms-auto">
-                  {order.status === 'sent' ? <span className="badge badge-done">נשלחה</span>
-                    : hasWhatsApp ? <button type="button" className="btn-primary" disabled={sendingId !== null} onClick={() => void sendQueuedOrder(order)}>{sendingId === order.id ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={15} />} שליחה ב-WhatsApp</button>
-                      : <span className="text-xs text-await-fg">אין מספר זמין · נשארה מוכנה</span>}
+                <div className="ms-auto flex flex-wrap items-center gap-2">
+                  {order.status === 'sent' ? <span className="badge badge-done">נשלחה לספק</span>
+                    : hasWhatsApp ? (
+                      <>
+                        <button type="button" className={opened ? 'btn-secondary' : 'btn-primary'} disabled={sendingId !== null} onClick={() => sendQueuedOrder(order)}>
+                          <MessageCircle size={15} /> {opened ? 'פתיחה מחדש' : 'פתיחת WhatsApp'}
+                        </button>
+                        {opened && (
+                          <button type="button" className="btn-primary" disabled={sendingId !== null} onClick={() => void confirmQueuedOrderSent(order)}>
+                            {sendingId === order.id ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} סמן כנשלחה לספק
+                          </button>
+                        )}
+                      </>
+                    )
+                      : <span className="text-xs text-await-fg">אין מספר זמין · נשארה מוכנה לשליחה</span>}
                 </div>
               </div>
             );

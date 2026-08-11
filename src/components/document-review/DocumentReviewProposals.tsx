@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { reasonOr } from '../../lib/reason';
 import { useNavigate } from 'react-router';
 import { Check, FilePlus2, Info, Loader2, RotateCcw, ShieldAlert, X } from 'lucide-react';
 import type { Role } from '../../lib/types';
@@ -102,17 +103,13 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
       toast('יש לבחור סוג מסמך שונה.', 'error');
       return;
     }
-    if (!reason.trim()) {
-      toast('יש להזין סיבה לתיקון סוג המסמך.', 'error');
-      return;
-    }
     setBusy(true);
     try {
       const result = await supabase.rpc('review_document_type', {
         p_interpretation_id: currentInterpretation.id,
         p_decision: 'approved',
         p_expected_suggested_document_type: automaticType,
-        p_reason: reason.trim(),
+        p_reason: reasonOr(reason, 'תיקון סוג המסמך'),
         p_expected_input_checksum: currentExtraction.input_checksum,
         p_expected_contract_version: currentExtraction.contract_version,
         p_expected_revision: latest?.revision ?? 0,
@@ -406,10 +403,6 @@ function FeedbackControls({ annotation, onRefetch }: {
   const [busy, setBusy] = useState<string | null>(null);
 
   async function submit(feedbackType: 'accepted' | 'rejected' | 'corrected') {
-    if (!reason.trim()) {
-      toast('יש להזין סיבה למשוב.', 'error');
-      return;
-    }
     if (feedbackType === 'corrected' && (!tagKey.trim() || !label.trim())) {
       toast('לתיקון הצעה נדרשים מפתח ותווית.', 'error');
       return;
@@ -420,7 +413,7 @@ function FeedbackControls({ annotation, onRefetch }: {
         p_annotation_id: annotation.id,
         p_feedback_type: feedbackType,
         p_after: feedbackType === 'corrected' ? { tag_key: tagKey.trim(), label: label.trim() } : {},
-        p_reason: reason.trim(),
+        p_reason: reasonOr(reason, 'משוב על הצעת המערכת'),
       });
       if (result.error) throw new Error(result.error.message);
       const refreshed = await onRefetch();
@@ -485,15 +478,11 @@ function RuleControls({ rule, role, onRefetch }: {
   }
 
   async function disableRule() {
-    if (!reason.trim()) {
-      toast('יש להזין סיבה להשבתת הכלל.', 'error');
-      return;
-    }
     setBusy('disable');
     try {
       const result = await supabase.rpc('disable_document_learning_rule', {
         p_rule_id: rule.id,
-        p_reason: reason.trim(),
+        p_reason: reasonOr(reason, 'השבתת כלל למידה'),
       });
       if (result.error) throw new Error(result.error.message);
       await finish('הכלל הושבת');
@@ -507,8 +496,8 @@ function RuleControls({ rule, role, onRefetch }: {
 
   async function correctRule(event: FormEvent) {
     event.preventDefault();
-    if (!tagKey.trim() || !label.trim() || !reason.trim()) {
-      toast('יש למלא מפתח, תווית וסיבה לעדכון הכלל.', 'error');
+    if (!tagKey.trim() || !label.trim()) {
+      toast('יש למלא מפתח ותווית לעדכון הכלל.', 'error');
       return;
     }
     setBusy('correct');
@@ -521,7 +510,7 @@ function RuleControls({ rule, role, onRefetch }: {
         p_mark_fingerprint: rule.mark_fingerprint,
         p_tag_key: tagKey.trim(),
         p_label: label.trim(),
-        p_reason: reason.trim(),
+        p_reason: reasonOr(reason, 'עדכון כלל למידה'),
       });
       if (result.error) throw new Error(result.error.message);
       await finish('נוצרה גרסה מתוקנת של הכלל');

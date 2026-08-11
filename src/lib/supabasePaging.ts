@@ -17,7 +17,9 @@
  * other, so neither is going away.
  */
 
-type PageResponse<T> = {
+/** Exported so a call site that must narrow its `select` can still name the shape fetchAll
+ *  expects — see SUPPLIER_COLUMNS, where `select('*')` would now return HTTP 403. */
+export type PageResponse<T> = {
   data: T[] | null;
   error: { message: string } | null;
 };

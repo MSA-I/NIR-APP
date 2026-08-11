@@ -13,6 +13,8 @@
  * them would prove the mock, not the screen.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
@@ -21,7 +23,6 @@ import { quickActionsForPath } from '../components/Fab';
 import { quickActionsFor } from '../lib/quickActions';
 import { showNavHeaders, sectionsForRole } from '../components/Layout';
 import { CategoryDonut } from '../components/charts';
-import { duplicateInvoiceHref } from './Invoices';
 import { toHebrewError } from '../lib/errors';
 import {
   DOCUMENT_PROCESSING_STAGE_META,
@@ -84,38 +85,33 @@ describe('finding 7 — the FAB keeps its camera where the user is busiest', () 
   });
 });
 
-/* ================= finding 8 — the duplicate that dropped its links ================= */
+/* ================= finding 8 — the correction path that was never ours ================= */
 
-describe('finding 8 — "שכפול כטיוטה" carries the order and receipt forward', () => {
-  it('carries both links when the source invoice has them', () => {
-    const href = duplicateInvoiceHref({
-      id: 'inv-1',
-      order_links: [{ order_id: 'ord-9' }],
-      receipt_links: [{ receipt_id: 'rec-4' }],
-    });
-    const params = new URL(href, 'https://x').searchParams;
-    expect(params.get('from')).toBe('inv-1');
-    expect(params.get('order')).toBe('ord-9');
-    expect(params.get('receipt')).toBe('rec-4');
-  });
-
+describe('finding 8 — "שכפול כטיוטה" is gone, and nothing replaced it', () => {
   /**
-   * The silent half of the old behaviour, and the expensive one: with no `order` parameter
-   * `linkedOrderIds` is empty and the whole three-way match block in `checks.ts` never runs. It
-   * does not fail — it reports nothing, which on screen is indistinguishable from "all clear".
+   * The old fix here made the duplicate carry its order and receipt links forward, because dropping
+   * them silently emptied `linkedOrderIds` and skipped the whole three-way match block — which on
+   * screen is indistinguishable from "all clear".
+   *
+   * The owner removed the feature on 11.08.2026 rather than the bug: a supplier's invoice is not
+   * ours to correct. So the assertion becomes that the entry point cannot come back by accident,
+   * which is cheaper to keep true than a link-carrying rule for a route nobody reaches.
    */
-  it('omits what the source does not have, instead of emitting empty parameters', () => {
-    const href = duplicateInvoiceHref({ id: 'inv-2', order_links: [], receipt_links: [] });
-    expect(href).toBe('/invoices/new?from=inv-2');
+  const readPage = (name: string) =>
+    readFileSync(join(process.cwd(), 'src', 'pages', name), 'utf8');
+  const invoicesSource = readPage('Invoices.tsx');
+  const invoiceNewSource = readPage('InvoiceNew.tsx');
+
+  it('offers no duplicate-as-draft action on the invoice list', () => {
+    expect(invoicesSource).not.toContain('duplicateInvoiceHref');
+    expect(invoicesSource).not.toContain("key: 'duplicate'");
   });
 
-  it('survives an embed that came back undefined rather than empty', () => {
-    const href = duplicateInvoiceHref({
-      id: 'inv-3',
-      order_links: undefined as unknown as { order_id: string }[],
-      receipt_links: undefined as unknown as { receipt_id: string }[],
-    });
-    expect(href).toBe('/invoices/new?from=inv-3');
+  it('does not prefill the invoice form from another invoice', () => {
+    // `?document=` stays: that is a scanned document a person reviewed, not a copy of a record we
+    // already hold.
+    expect(invoiceNewSource).not.toContain("params.get('from')");
+    expect(invoiceNewSource).toContain("params.get('document')");
   });
 });
 

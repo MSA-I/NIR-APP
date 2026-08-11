@@ -384,15 +384,15 @@ async function roleAndViewportMatrix(browser) {
 
 async function quickActionsContract(browser) {
   const roleLabels = {
-    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
-    office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
-    kitchen: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה'],
+    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה'],
+    office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה'],
+    kitchen: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה'],
     accountant: ['מרכז הבקרה', 'חשבוניות', 'תשלומים'],
   };
   const roleTargets = {
-    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
-    office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
-    kitchen: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/invoices/new'],
+    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving'],
+    office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving'],
+    kitchen: ['/orders/new?fresh=1', '/dashboard', null, '/receiving'],
     accountant: ['/dashboard', '/invoices', '/pay'],
   };
 
@@ -1556,7 +1556,10 @@ async function orderSupplierComparison(browser) {
     const sendQueue = page.getByRole('dialog', { name: 'שליחת הזמנות לספקים' });
     await sendQueue.waitFor({ timeout: 25_000 });
     await sendQueue.getByText('מאפה זהב', { exact: true }).waitFor();
-    await sendQueue.getByRole('button', { name: 'שליחה ב-WhatsApp' }).waitFor();
+    // 'פתיחת WhatsApp', not 'שליחה ב-WhatsApp' (H5, 10.08.2026). Opening the WhatsApp window
+    // prepares a message; only the operator knows whether it was actually sent, so marking the
+    // order sent is a second, explicit confirmation rather than a side effect of a link opening.
+    await sendQueue.getByRole('button', { name: 'פתיחת WhatsApp' }).waitFor();
   } finally {
     try {
       await qualitySupplierPrice(58.5);
@@ -2360,7 +2363,12 @@ async function navigationOrderAndActiveState(browser) {
     await drawer.waitFor();
     const drawerGroups = await readSidebar(drawer.locator('nav'));
     const drawerLinks = drawerGroups.flatMap((group) => group.items);
-    assert.deepEqual(drawerGroups.map((group) => group.section), ['', 'ניהול', 'בקרה'],
+    // The drawer carries TWO groups the desktop sidebar does not, and that is the point of H4
+    // (10.08.2026): profile, settings and sign-out used to live in a sticky footer strip that sat
+    // over the menu while it scrolled. They moved into the drawer's own flow. The daily
+    // destinations below are still asserted to match the sidebar exactly — what changed is where
+    // the account surface lives, not which destinations a role has.
+    assert.deepEqual(drawerGroups.map((group) => group.section).slice(0, 3), ['', 'ניהול', 'בקרה'],
       'the drawer renders different progressive-disclosure groups than the desktop sidebar');
     assert.deepEqual(drawerGroups[0].items.map((item) => item.path),
       ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
@@ -2710,7 +2718,10 @@ async function machineFiledDocument(browser) {
       assert(dialogText.includes(sentence), `the reversal dialog does not say «${sentence}»`);
     }
     const confirm = dialog.getByRole('button', { name: 'ביטול השיוך', exact: true });
-    assert(await confirm.isDisabled(), 'a machine-authored invoice can be reversed without a stated reason');
+    // The reason box stopped gating the button on 11.08.2026 (owner: nobody reads these notes).
+    // What is asserted below instead is the half that still matters: whatever a person types
+    // reaches the server verbatim, and an empty box becomes a sentence rather than nothing.
+    assert(await confirm.isEnabled(), 'the reversal button is still gated on a typed reason');
     await dialog.getByRole('textbox', { name: /סיבה/ }).fill(AUTO_ACTION_REASON);
     await confirm.click();
     await dialog.waitFor({ state: 'hidden', timeout: 20_000 });
@@ -3024,9 +3035,10 @@ async function passwordRecovery(browser) {
 /**
  * Package 0 — the design partner's feedback note.
  *
- * What is routed: the flag (the barcode idiom at :1157) and the Edge Function. What is NOT routed
- * is the INSERT — it goes to the real PostgREST, so this is the only place where 0091's column
- * grants and RLS are exercised from an actual browser session.
+ * What is routed: only the Edge Function. The flag comes from the real demo seed, because this
+ * scenario is the regression shield for the option disappearing locally; the INSERT and Storage
+ * upload go to the real stack so 0091's column grants, 0125's upload policy and the screenshot
+ * metadata contract are exercised from an actual browser session.
  *
  * The FAILURE path is the one asserted end to end, on purpose. Discord delivery cannot be proved
  * from a network-isolated gate, and a scenario that mocked the send and then asserted "נשלח" would
@@ -3038,8 +3050,6 @@ async function feedbackNoteChannel(browser) {
     locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 },
   });
   try {
-    await context.route('**/rest/v1/rpc/resolve_feature_flags', (route) =>
-      route.fulfill({ status: 200, headers: jsonHeaders, json: [{ flag_key: 'feedback.notes', state: true }] }));
     await context.route('**/functions/v1/send-feedback', (route) => route.fulfill({
       status: 502,
       headers: jsonHeaders,
@@ -3063,6 +3073,8 @@ async function feedbackNoteChannel(browser) {
       `the feedback trigger is ${box && Math.round(box.width)}x${box && Math.round(box.height)}, below the 44px touch floor`);
 
     await trigger.click();
+    await page.getByText('לצרף צילום של המסך', { exact: true }).waitFor();
+    await page.getByAltText('תצוגה מקדימה של הצילום שיישלח').waitFor();
     // Unique per run: the lookup below must find this note and not a previous run's.
     const note = `בדיקת שער ${Date.now()}`;
     await page.getByLabel('ההערה').fill(note);
@@ -3071,13 +3083,17 @@ async function feedbackNoteChannel(browser) {
     await page.getByRole('button', { name: 'שליחה' }).click();
 
     await page.getByText('ההערה נשמרה, אך השליחה נכשלה').waitFor();
+    // Substring, not sentence: this caught a real copy defect on 11.08.2026, when the "saved but
+    // not delivered" toast grew a parenthetical about the screenshot that happened to contain the
+    // words "ההערה נשלחה". A failure message must not contain a delivery claim
+    // anywhere inside it, however it got there.
     assert.equal(await page.getByText(/ההערה נשלחה/).count(), 0,
       'the screen claimed a delivery that failed');
 
     // The row is the record. It must exist exactly once, name the screen it was written from, and
     // carry no delivery stamp — the browser holds no grant that could have written one.
     const stored = await fetch(
-      `${apiURL}/rest/v1/feedback_notes?select=note,route,role,sent_at,send_error&note=eq.${encodeURIComponent(note)}`,
+      `${apiURL}/rest/v1/feedback_notes?select=note,route,role,sent_at,send_error,screenshot_path,screenshot_bytes,screenshot_checksum,screenshot_mime&note=eq.${encodeURIComponent(note)}`,
       { headers: { apikey: serviceRoleKey, authorization: `Bearer ${serviceRoleKey}` } },
     );
     assert(stored.ok, `feedback note lookup failed with HTTP ${stored.status}`);
@@ -3086,6 +3102,13 @@ async function feedbackNoteChannel(browser) {
     assert.equal(rows[0].route, '/dashboard',
       `the stored note names ${rows[0].route}, not the screen it was written from`);
     assert.equal(rows[0].sent_at, null, 'a send that failed left sent_at set');
+    assert.match(rows[0].screenshot_path ?? '',
+      /^11111111-1111-4111-8111-111111111111\/[0-9a-f-]{36}\.png$/,
+      `the stored note did not carry its tenant-scoped screenshot path: ${rows[0].screenshot_path}`);
+    assert(Number(rows[0].screenshot_bytes) > 0, 'the stored screenshot has no byte count');
+    assert.match(rows[0].screenshot_checksum ?? '', /^[0-9a-f]{64}$/,
+      'the stored screenshot checksum is missing or malformed');
+    assert.equal(rows[0].screenshot_mime, 'image/png', 'the stored screenshot is not a PNG');
   } finally {
     await closeContext(context);
   }

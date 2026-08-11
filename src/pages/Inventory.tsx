@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { reasonOr } from '../lib/reason';
 import { ClipboardCheck, Minus, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -340,10 +341,6 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
       toast('התאמה ידנית חייבת לשנות את הכמות.', 'error');
       return;
     }
-    if (!reason.trim()) {
-      toast('יש להזין סיבה לפעולה.', 'error');
-      return;
-    }
 
     setBusy(true);
     try {
@@ -352,7 +349,7 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
           p_movement_id: commandId,
           p_product_id: product.product_id,
           p_counted_quantity: parsed,
-          p_reason: reason.trim(),
+          p_reason: reasonOr(reason, 'תיקון מלאי'),
         }))
         : ok(await supabase.rpc('record_inventory_movement', {
           p_movement_id: commandId,
@@ -360,7 +357,7 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
           p_movement_type: command,
           p_quantity: parsed,
           p_allow_negative: canAllowNegative && allowNegative,
-          p_reason: reason.trim(),
+          p_reason: reasonOr(reason, 'תיקון מלאי'),
         }));
       const result = unwrap(response) as { idempotent?: boolean } | null;
       toast(result?.idempotent ? 'הפעולה כבר נשמרה קודם; הנתונים רועננו.' : 'תנועת המלאי נשמרה.');
@@ -386,8 +383,8 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
           </div>
         </div>
         <div>
-          <label className="label" htmlFor="inventory-command-reason">סיבה (חובה — נרשמת ביומן הביקורת)</label>
-          <textarea id="inventory-command-reason" className="input" rows={3} maxLength={1000} required value={reason}
+          <label className="label" htmlFor="inventory-command-reason">סיבה (רשות — נרשמת ביומן הביקורת)</label>
+          <textarea id="inventory-command-reason" className="input" rows={3} maxLength={1000} value={reason}
             onChange={(event) => setReason(event.target.value)} />
         </div>
         {command !== 'stocktake' && canAllowNegative && (
@@ -402,7 +399,7 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
         )}
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-          <button type="button" className="btn-primary" disabled={busy || !quantity.trim() || !reason.trim()} onClick={() => void submit()}>
+          <button type="button" className="btn-primary" disabled={busy || !quantity.trim()} onClick={() => void submit()}>
             {busy ? 'שומר…' : copy.submit}
           </button>
         </div>

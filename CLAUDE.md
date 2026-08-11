@@ -12,6 +12,7 @@
 
 | מסמך | מה יש בו |
 |---|---|
+| `docs/HANDOFF-received-supplier-document.md` | **קרא ראשון כל עוד ענף `feat/received-supplier-document` פתוח.** מה כבר ירוק ואיפה, מה נשאר, והמלכודות שהסשן ההוא שילם עליהן |
 | `docs/PROGRESS.md` | **קרא ראשון.** איפה עצרנו, מה השלב הנוכחי, מה נדחה ולמה |
 | `docs/DEBT-REGISTER.md` | **קרא שני.** כל הדחייה, החוב והמגבלה הידועה במקום אחד — מה, למה נדחה, איפה ההוכחה, ומה הצעד הזול הבא. אל תתחיל עבודה חדשה לפני שבדקת שהיא לא נמצאת שם |
 | `docs/ARCHITECTURE.md` | כללי מודל הנתונים — מחייבים |
@@ -42,10 +43,10 @@
 Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **Tailwind v4 CSS-first** · recharts · lucide-react
 
 - `npm run dev` — פורט **5199**
-- `npm run build` = `tsc --noEmit` + **עשרת** סקריפטי ה-`check:*` + `vitest run` (‏`npm run test`) + `vite build` — **השער האוטומטי היחיד.**
-  עשרה, לא תשעה: ‏`check:exemptions` נוסף בגל 11, ‏`check:counts` בקמפיין האוטומציות, ו-`check:money`
+- `npm run build` = `tsc --noEmit` + **אחד-עשר** סקריפטי ה-`check:*` + `vitest run` (‏`npm run test`) + `vite build` — **השער האוטומטי היחיד.**
+  אחד-עשר, לא עשרה: ‏`check:exemptions` נוסף בגל 11, ‏`check:counts` בקמפיין האוטומציות, ו-`check:money`
   בחבילה 1 של קמפיין המוכנות. הרשימה מ-`package.json` היא
-  ‏`alerts · dashboard · orders · split · p2 · review · tokens · money · exemptions · counts`.
+  ‏`alerts · dashboard · orders · split · p2 · review · tokens · money · exemptions · counts · supplier-columns`.
   ‏`check:money` אוכף מקור אמת אחד לצורת הכסף — אפס `₪` מודבק לערך מוזרק, אפס `toLocaleString(`
   ואפס פורמטר מטבע שני מחוץ ל-`src/lib/format.ts`; נבדק במוטציה — הפרה מושתלת מפילה אותו.
   ‏`check:review` מריץ `node --test` על `src/components/document-review/model.test.ts` — ‏**22** בדיקות
@@ -56,35 +57,79 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   חריגים נוספו ונוקזו מעל זרע `0057` (‏59) ודורש שההצמדה ב-`p9_five_domains.sql` תסכים. זו אותה
   טענה שכבר קיימת ב-p9 — במילישניות, במקום בדקה התשע-עשרה של שער בן עשרים דקות. **ארבעה גלים
   רצופים גילו אותה שם.**
-  ‏`npm run test` — ‏**514** בדיקות ב-**61** קבצים (נספר מפלט `vitest run`, ‏10.08.2026 בערב, אחרי
-  ‏`bootstrapWatchdog.spec.tsx`; היה 512/60 אחרי נרמול קמפיין ה-codex ומיזוגו).
+  ‏`npm run test` — ‏**607** בדיקות ב-**69** קבצים (נספר מפלט `vitest run`, ‏11.08.2026 בערב, אחרי
+  ששני חוזי `Login.spec.tsx` הצמידו את קיצור חשבונות הדמו ל-loopback בלבד; היה 605 אחרי
+  ‏`exportTemplates.spec.ts` — מיפוי ה-placeholders, שמתאים **רק** בשוויון מדויק (‏`0126`); היה 594/68 אחרי
+  ‏`exportTemplateWorkbook.spec.ts` — קריאת חוברת התבנית ומה נדחה (‏`0123`); היה 583/67 אחרי
+  ‏`screenshotContract.spec.ts` — ההבטחות של צילום הפידבק (‏`0122`); היה 571/66 אחרי
+  ‏`reason.spec.ts` — הסיבה שהפסיקה לחסום כפתור ולא הפסיקה להיכתב ליומן (הכרעת בעלים 11.08.2026);
+  היה 547/65 אחרי
+  ‏`assessment.spec.ts` — מודל מסך הבדיקה, שמצמיד את משפטי "מה יקרה באישור" להתנהגות בפועל של
+  ‏`apply_reviewed_document` (‏`0110`); היה 536/64 אחרי
+  ‏`nameKey.spec.ts` — התאום בצד הלקוח של `private.name_match_key` מ-`0106`; היה 529/63 אחרי
+  ‏`share.spec.ts`, גיליון הסינון ב-`dataTable.spec.tsx`, הקליטה האחת ב-`documentsArchiveView.spec.tsx` ו-`monthlyReport.spec.ts`,
+  ‏514/61 אחרי `bootstrapWatchdog.spec.tsx`, ו-512/60 אחרי נרמול קמפיין ה-codex ומיזוגו).
   ‏`check:counts` מצמיד את **המספרים שבקובץ הזה**: הוא סופר מחדש את הסוויטות, זרועות ה-preflight,
   תרחישי הדפדפן, בדיקות `check:review`, קבצי ה-spec וסקריפטי ה-`check:*` — ודורש שכל אזכור שלהם
   ב-`CLAUDE.md` יסכים. הוא נוסף אחרי שהסטייה חזרה **שש פעמים**, ובריצתו הראשונה תפס שבע טענות
-  שהתיישנו. **הוא אינו סופר את מספר בדיקות ה-vitest** (‏514) — אי אפשר לקרוא אותו מטקסט בלי לממש
+  שהתיישנו. **הוא אינו סופר את מספר בדיקות ה-vitest** (‏605) — אי אפשר לקרוא אותו מטקסט בלי לממש
   אוסף בדיקות; המספר נלקח מפלט הריצה, וקבצי ה-spec כן נספרים.
   **אם הוא נכשל — מתקנים את `CLAUDE.md`, לא את הסקריפט.**
   **אין ESLint ואין Prettier** בריפו, למרות הערות `eslint-disable` שנשארו ב-`src/lib/useQuery.ts`.
-- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **41**
+- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **54**
   סוויטות SQL, ‏**preflight עם 44 זרועות**, ‏`npm audit --audit-level=high`, חוזי Deno,
   ו-**35 תרחישי דפדפן**. מספר טענות P0 מדווח בזמן ריצה (‏266 בריצה שתועדה) — הוא אינו ליטרל בקוד.
 
   **איך נספר כל מספר כאן — כדי שהבא יספור ולא יעתיק:**
-  - **41 סוויטות** = קריאות `Invoke-SqlTest` ב-`check-quality-gates.ps1` שהארגומנט הראשון שלהן הוא
-    `supabase\tests\…`. בקובץ יש **44** מופעים של המחרוזת: אחד הוא הגדרת הפונקציה, ושניים טוענים
+  - **54 סוויטות** = קריאות `Invoke-SqlTest` ב-`check-quality-gates.ps1` שהארגומנט הראשון שלהן הוא
+    `supabase\tests\…`. בקובץ יש **57** מופעים של המחרוזת: אחד הוא הגדרת הפונקציה, ושניים טוענים
     fixtures (‏`supabase\demo\demo_seed.sql`, ‏`scripts\fixtures\ocr\browser-fixture.sql`).
-    ב-`supabase/tests/` יש **42** קבצי `.sql`; ההפרש הוא `p1_preflight.sql`, שרץ דרך `Invoke-Preflight`.
+    ב-`supabase/tests/` יש **55** קבצי `.sql`; ההפרש הוא `p1_preflight.sql`, שרץ דרך `Invoke-Preflight`.
   - **44 זרועות preflight** = ‏`select '<שם>'` ב-`p1_preflight.sql` (‏1 + ‏43 `union all select '`),
     ו-`Invoke-Preflight` **זורק** אם לא חזרו בדיוק 44 שורות.
   - **35 תרחישים** = קריאות `await run(` ב-`check-browser-smoke.cjs` (‏35 נכון ל-10.08.2026, אחרי
     ערוץ ההערות של חבילה 0 בקמפיין המוכנות; ‏`run(` לבדו תופס גם את הגדרת הפונקציה).
 
-  **היסטוריית הסטייה, כי היא חזרה שמונה פעמים:** ‏13 → 20 → 26 → 27 → 28 → 29 → 30 → **41** לסוויטות; ‏22 → 25 → 29 → 30 → 33 → 34 →
-  **35** לתרחישים; ‏16 → 21 → **22** ל-`check:review`; ‏שבעה → שמונה → תשעה → **עשרה** לסקריפטי ה-`check:*`. בכל פעם הקובץ
+  **היסטוריית הסטייה, כי היא חזרה תשע-עשרה פעמים:** ‏13 → 20 → 26 → 27 → 28 → 29 → 30 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → **54** לסוויטות; ‏22 → 25 → 29 → 30 → 33 → 34 →
+  **35** לתרחישים; ‏16 → 21 → **22** ל-`check:review`; ‏שבעה → שמונה → תשעה → עשרה → **אחד-עשר** לסקריפטי ה-`check:*`. בכל פעם הקובץ
   הזה — שכל סוכן קורא **ראשון** — שלח את הקורא לספור פחות ממה שקיים. **סופרים לפני שכותבים.**
-  הקפיצה האחרונה (‏30 → 41) היא נרמול קמפיין ה-codex: אחת-עשרה סוויטות חדשות (‏p16 סמנטיקת ספק
+  הקפיצה מ-30 ל-41 היא נרמול קמפיין ה-codex: אחת-עשרה סוויטות חדשות (‏p16 סמנטיקת ספק
   לא-פעיל, ‏p17, ‏p18 ×2, ‏p19, ‏p20 ×2, ‏p21, ‏p23, ‏p24, ‏p25) נרשמו בשער באותו מיזוג. **‏`check:counts`
   תפס את חמשת המספרים האלה** — הוא עובד.
+  שנים-עשר הצעדים שאחריה הם קמפיין "מסמך ספק שהתקבל": ‏42 היא `p26_price_baseline.sql` (המחיר בתאריך
+  המסמך), ‏43 היא `p27_document_supplier_resolution.sql` (סולם ראיות הספק, `0106`), ‏44 היא
+  `p28_document_order_resolution.sql` (מדיניות דרגות ההתאמה לפי תת-סוג, `0107` — חשבונית לעולם
+  לא מותאמת ל"הזמנה הפתוחה היחידה", תעודת משלוח כן), ‏45 היא
+  `p29_document_reconciliation_assessment.sql` (‏`0108` — ארבעת המקורות: מה הוזמן, מה התקבל
+  בקבלה **שהושלמה**, מה כתוב במסמך, ומה המחיר המוסכם **בתאריך המסמך**), ו-**46 היא
+  `p30_document_review_assessment_read.sql`** (‏`0109` — הדלת היחידה של הדפדפן לשלושת הפותרים
+  הפרטיים: גבול תפקיד, **צמצום `auth_scopes()` בתוך גוף `SECURITY DEFINER` שבו RLS אינו רץ**,
+  והפרדת "הקובץ נשמר" מ"הנתונים אושרו").
+  ו-**47 היא `p31_apply_reviewed_document.sql`** (‏`0110` — הרגע שבו אישור של אדם הופך לרשומה
+  כספית: השרת **מחשב מחדש** את ה-assessment במקום להאמין להצעה, חשבונית אינה מקבלת סחורה,
+  תעודת משלוח יוצרת **טיוטה בלבד**, וקבלה אינה יוצרת חוב).
+  ‏**48 היא `p32_kitchen_supplier_read_boundary.sql`** (‏`0112` — צמצום תפקיד בלי לשבור אותו:
+  ‏`bank_details` בלתי-נגיש דרך **הרשאת עמודה**, שיושבת *מתחת* ל-RLS, בעוד גישת השורה נשמרת —
+  כי PostgREST מסנן embeds לפי RLS, והסרת התפקיד מהחוקה הייתה מחזירה `supplier: null` בכל מסך
+  הזמנה, קבלה ושיתוף).
+  ‏**49 היא `p33_canonical_purchase_metrics.sql`** (‏`0113` — הגדרה אחת לכל שאלת כסף: **היום
+  העסקי ולא היום ב-UTC**, מחירי snapshot, חשבוניות מאושרות בלבד, ורק זיכויים שכבר הקטינו יתרה).
+  ‏**50 היא `p34_product_purchase_summary.sql`** (‏`0114` — משלוח אחד נספר **פעם אחת**:
+  ‏`purchase_order_items.id` הוא גרעין הניכוי, קבלה שהושלמה גוברת על חשבון הספק, ומוצרים
+  לעולם אינם ממוזגים לפי דמיון שם).
+  ‏**51 היא `p35_preferred_supplier_tiebreak.sql`** (‏`0115` — ספק מועדף **שובר** שוויון ולעולם
+  אינו **מנצח** אותו: המחיר מסדר ראשון, ומועדף מחליף את שובר-השוויון השרירותי `supplier_id`).
+  ‏**52 היא `p36_document_removal_impact.sql`** (‏`0116` — מה מחיקת מסמך לוקחת איתה, **מחושב
+  לפני שהיא לוקחת**: חשבונית מאושרת, ששולמה או שנספרה בדוח חודשי חוסמת את האפשרות ההרסנית,
+  וכל סירוב נוקב בשם עצמו).
+  ‏**53 היא `p37_document_overcharge_credit.sql`** (‏`0118` — חיוב יתר אחד, בקשת זיכוי אחת
+  **בטיוטה**: ניסיון חוזר אינו מנסח עוד אחת, חיוב **מתחת** למחיר המוסכם אינו מנסח כלום,
+  והמחירון אינו נוגע).
+  ‏**54 היא `p38_export_report_templates.sql`** (‏`0126` — חוברת ה-Excel של הרו״ח הופכת לייצוא:
+  הוולידטור של חוזה **המסמך** לא נגע, תבנית מאושרת **חייבת** קובץ, וקובץ של גרסה מאושרת לעולם
+  אינו מוחלף. הסוויטה מצאה בריצתה הראשונה ש-`attach_export_template_workbook` מ-`0123` **מעולם
+  לא עבדה** — טריגר האי-שינויוּת של `0047` חסם אותה).
+  ‏`check:counts` תפס את המספרים של כל אחד משנים-עשר הצעדים לפני הקומיט — שתים-עשרה פעמים ברצף.
   ### השער רץ ב-CI. **אל תריץ אותו מקומית.** (‏09.08.2026)
 
   ‏`npm run quality` **מסרב לרוץ** על מכונה זו ויוצא עם קוד **3**. זו לא תקלה — זו ההגדרה.
@@ -104,7 +149,7 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   **מה `.github/workflows/quality-gate.yml` מריץ** — שלושה jobs **במקביל**, ולכן זמן הקיר הוא
   האיטי שבהם ולא הסכום:
   ‏`contracts` (חוזי Deno · ‏OCR worker build + self-check · ‏`npm audit`) ·
-  ‏`sql` (‏**41 סוויטות + preflight**) · ‏`browser` (‏**35 תרחישים** + fixtures + preview).
+  ‏`sql` (‏**54 סוויטות + preflight**) · ‏`browser` (‏**35 תרחישים** + fixtures + preview).
 
   **רשימת הסוויטות אינה מועתקת ל-YAML.** ‏`scripts/ci-sql-suites.mjs` **מפרסר אותה מתוך
   `check-quality-gates.ps1`** בזמן ריצה — אותה רשימה, אותו סדר, אותם תפקידי DB. עותק שני היה
@@ -114,7 +159,7 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   (‏88), ‏`Invoke-PriceListEdgeSmoke`, ‏`Invoke-OcrEdgeSmoke` ו-`check-p4-integrated-journey.cjs`.
   אלה קשורים ל-PowerShell של Windows ורצים רק בריצה הידנית. **תיק ירוק אינו טענה שהם עברו.**
 
-  ‏`.github/workflows/build.yml` ממשיך להריץ את `npm run build` המלא (‏tsc + עשרת ה-`check:*` +
+  ‏`.github/workflows/build.yml` ממשיך להריץ את `npm run build` המלא (‏tsc + אחד-עשר ה-`check:*` +
   ‏vitest + ‏vite build) על כל push/PR — הוא המשוב המהיר (‏~92 שניות), ו-`quality-gate.yml` הוא
   השער הכבד.
 

@@ -631,18 +631,14 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <span className="text-sm font-medium text-ink-soft flex items-center gap-1.5"><Paperclip size={15} /> מסמכים מצורפים</span>
+        {/* The "סוג" select that stood here — delivery note / invoice / other, chosen before the
+            camera opened — is gone. This is the receiving screen: the person holding the phone is
+            standing at the truck with the paper in the other hand, and the one question they
+            should not be asked is which of three accounting categories it belongs to. The subtype
+            is read off the document and confirmed on the review screen. `defaultDocumentKind`
+            still seeds a value from the entity, and 0084's trigger replaces it with what the
+            document says. */}
         {canUploadNow && <div className="flex flex-wrap items-center gap-2">
-          {entityType === 'goods_receipt' && (
-            <label className="flex items-center gap-1.5 text-xs text-ink-soft">
-              סוג
-              <select className="input w-auto! py-1.5!" value={documentKind}
-                onChange={(event) => setDocumentKind(event.target.value as DocumentKind)}>
-                <option value="delivery_note">תעודת משלוח</option>
-                <option value="invoice">חשבונית</option>
-                <option value="other">מסמך נוסף</option>
-              </select>
-            </label>
-          )}
           <button className="btn-secondary py-1.5!" disabled={busy || retryFiles.length > 0} onClick={() => inputRef.current?.click()}>
               {busy ? <Loader2 size={15} className="animate-spin" /> : capture ? <Camera size={15} /> : <Paperclip size={15} />}
               {capture ? 'צילום / העלאה' : 'העלאת קובץ'}

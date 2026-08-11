@@ -283,3 +283,74 @@ describe('DataTable — column picker (OPEN-DECISIONS #80)', () => {
     expect(screen.getByRole('checkbox', { name: 'שם' })).toBeDisabled();
   });
 });
+
+/**
+ * The phone is where filtering was unreachable, and the two causes were independent.
+ *
+ * 1. The sheet was gated on `server || columnPicker`. Nine screens — orders, suppliers, credits,
+ *    payment requests, exceptions, products, inventory, price lists, documents — pass only
+ *    `toolbar` and `activeFilters`, so they took the legacy branch that renders the toolbar
+ *    inline at every width and has no sheet at all.
+ * 2. The sheet swapped at `md` while the body swapped at `lg`, so 768–1023px lost it too.
+ *
+ * jsdom has no matchMedia and `useMediaQuery` then answers desktop, so a phone must be stated.
+ */
+function setViewport(matches: (query: string) => boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: (query: string) => ({
+      matches: matches(query),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }),
+  });
+}
+
+describe('DataTable — mobile filter sheet', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'matchMedia');
+  });
+
+  const phone = () => setViewport(() => false);
+  const tablet = () => setViewport((q) => !q.includes('64rem'));
+
+  it('offers the sheet to a screen that passes only toolbar and activeFilters', () => {
+    phone();
+    render(
+      <DataTable rows={makeRows(3)} columns={clientColumns} activeFilters={1}
+        onClearFilters={() => {}}
+        toolbar={<select aria-label="סינון לפי סטטוס"><option>הכל</option></select>} />,
+    );
+    const trigger = screen.getByRole('button', { name: /סינון ותצוגה/ });
+    expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+    // The count travels with the trigger — that is the only place it shows on a phone.
+    expect(trigger).toHaveTextContent('1');
+    // The toolbar is mounted in exactly one place at a time, so its ids cannot duplicate.
+    expect(screen.queryByLabelText('סינון לפי סטטוס')).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    expect(screen.getByRole('dialog', { name: 'סינון ותצוגה' })).toBeInTheDocument();
+    expect(screen.getByLabelText('סינון לפי סטטוס')).toBeInTheDocument();
+  });
+
+  it('still offers the sheet at tablet width, where the body is still cards', () => {
+    tablet();
+    render(
+      <DataTable rows={makeRows(3)} columns={clientColumns}
+        toolbar={<select aria-label="סינון לפי סטטוס"><option>הכל</option></select>} />,
+    );
+    expect(screen.getByRole('button', { name: /סינון ותצוגה/ })).toBeInTheDocument();
+  });
+
+  it('keeps the toolbar inline on desktop and shows no sheet trigger', () => {
+    setViewport(() => true);
+    render(
+      <DataTable rows={makeRows(3)} columns={clientColumns}
+        toolbar={<select aria-label="סינון לפי סטטוס"><option>הכל</option></select>} />,
+    );
+    expect(screen.getByLabelText('סינון לפי סטטוס')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /סינון ותצוגה/ })).not.toBeInTheDocument();
+  });
+});

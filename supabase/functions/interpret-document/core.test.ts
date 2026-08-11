@@ -19,6 +19,8 @@ import {
   PROVIDER_RETRY_DELAY_MAX_MS,
   PROVIDER_TIMEOUT_MS,
   REASONING_EFFORT,
+  REVIEW_FIELD_KEYS,
+  REVIEW_LINE_ITEM_KEYS,
   SYSTEM_PROMPT,
 } from "./core.ts";
 
@@ -769,12 +771,54 @@ test("every invoice line key consumed by 0099 is named by the interpretation con
   );
 });
 
+// The review keys earn their separate list by NOT being consumed in SQL. If that stops being
+// true, the bijection above -- the thing that catches a key with no reader and a reader with no
+// key -- silently stops covering the one that moved, because it only ever looks at the canonical
+// lists. So the split itself is asserted, in both directions.
+test("no review-only key is consumed in SQL, and none of them shadows a canonical key", () => {
+  const canonical = new Set<string>([
+    ...CANONICAL_FIELD_KEYS,
+    ...CANONICAL_LINE_ITEM_KEYS,
+  ]);
+  const consumedFieldKeys = new Set(consumedKeyLists().flat());
+  const consumedLineKeys = new Set(
+    [...invoiceMatchMigrationSql.matchAll(
+      /item\s*#>>?\s*'\{values,([a-z_]+)\}'/g,
+    )].map(([, key]) => key),
+  );
+  for (const key of [...REVIEW_FIELD_KEYS, ...REVIEW_LINE_ITEM_KEYS]) {
+    assert.ok(
+      !canonical.has(key),
+      `"${key}" is in both a review list and a canonical list. One key, one home: the duplicate ` +
+        `makes it unclear which guard is responsible for it.`,
+    );
+    assert.ok(
+      !consumedFieldKeys.has(key) && !consumedLineKeys.has(key),
+      `"${key}" is listed as review-only evidence but 0077 or 0099 now reads it. A key a command ` +
+        `depends on belongs in the canonical list, where the bijection test fails when the ` +
+        `reader and the prompt disagree. Move it -- and bump PROMPT_VERSION.`,
+    );
+  }
+  // Non-empty in its own right: an emptied list would satisfy every loop above.
+  assert.ok(
+    REVIEW_FIELD_KEYS.length > 0 && REVIEW_LINE_ITEM_KEYS.length > 0,
+    "a review key list is empty, so the loops above proved nothing",
+  );
+});
+
 test("the system prompt names every canonical key without weakening the injection boundary", () => {
-  for (const key of [...CANONICAL_FIELD_KEYS, ...CANONICAL_LINE_ITEM_KEYS]) {
+  for (
+    const key of [
+      ...CANONICAL_FIELD_KEYS,
+      ...CANONICAL_LINE_ITEM_KEYS,
+      ...REVIEW_FIELD_KEYS,
+      ...REVIEW_LINE_ITEM_KEYS,
+    ]
+  ) {
     assert.match(
       SYSTEM_PROMPT,
       new RegExp(`(?<![A-Za-z0-9_])${key}(?![A-Za-z0-9_])`),
-      `SYSTEM_PROMPT does not name the consumed key "${key}".`,
+      `SYSTEM_PROMPT does not name the key "${key}" it is supposed to request.`,
     );
   }
   // The boundary the prompt existed for before any key was named.
@@ -809,6 +853,22 @@ test("the system prompt names every canonical key without weakening the injectio
     SYSTEM_PROMPT,
     /Never normalize or infer a unit or packaging conversion/,
   );
+  // The review keys carry the same "named is not filled" rule, and each of the three that can be
+  // computed from a value already in the contract says so by name. Without these, "ask for
+  // discount_rate" reads as "work it out from discount_amount", which is the failure mode the
+  // canonical keys already have a clause for.
+  assert.match(
+    SYSTEM_PROMPT,
+    /supplier_vat_id is the supplier's own registered business or VAT number/,
+  );
+  assert.match(SYSTEM_PROMPT, /never derive it from payment terms/);
+  assert.match(SYSTEM_PROMPT, /currency is the currency the document prints/);
+  assert.match(SYSTEM_PROMPT, /never infer it from a unit word/);
+  assert.match(SYSTEM_PROMPT, /never convert one into the other/);
+  assert.match(
+    SYSTEM_PROMPT,
+    /never compute it from vat_rate or from the line total/,
+  );
 });
 
 // Names the review screen recognises: the string literals inside its key-alias arrays, plus the
@@ -842,7 +902,16 @@ test("the review screen recognises every key the prompt asks the model to emit",
     known.size > 20,
     `only ${known.size} keys parsed out of model.ts -- the parse, not the file, is what broke.`,
   );
-  for (const key of [...CANONICAL_FIELD_KEYS, ...CANONICAL_LINE_ITEM_KEYS]) {
+  for (
+    const key of [
+      ...CANONICAL_FIELD_KEYS,
+      ...CANONICAL_LINE_ITEM_KEYS,
+      // The review keys matter here MORE than the canonical ones, not less: the screen is their
+      // only reader, so a missing Hebrew label is not a cosmetic gap, it is the whole feature.
+      ...REVIEW_FIELD_KEYS,
+      ...REVIEW_LINE_ITEM_KEYS,
+    ]
+  ) {
     assert.ok(
       known.has(key),
       `src/components/document-review/model.ts carries no alias or label for "${key}", so the ` +
@@ -888,6 +957,8 @@ const PROMPT_DIGESTS: Record<string, string> = {
     "551030c7c567787518c55e23f668cc4775fead3f190baf8beea3196f97eab571",
   "interpret-document-v9":
     "19b0125802fdae68640150eeda9ec1b43e78d296211c399d704453bfb3710244",
+  "interpret-document-v10":
+    "ce5afb034b2322d56eac4696372c5137670e2c4f3463cb00b7a50d9653b4a98e",
 };
 
 // CRLF is folded before hashing, and the reason is a checkout hazard rather than tidiness: this

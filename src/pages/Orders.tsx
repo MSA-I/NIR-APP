@@ -9,7 +9,7 @@ import { useAuth } from '../auth/AuthContext';
 import { Breadcrumbs, DataTable, StatusBadge, useToast, ConfirmDialog, LifecycleStrip, Modal, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, Note, type Column } from '../components/ui';
 import { PO_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, todayISO } from '../lib/format';
-import { sendOrderWhatsApp, orderWhatsAppLink } from '../lib/share';
+import { openOrderWhatsApp, orderWhatsAppLink, markOrderSentToSupplier, needsSentConfirmation } from '../lib/share';
 import { cancelOrderDraft } from '../lib/orderDrafts';
 import type { PurchaseOrder, PurchaseOrderItem, PoStatus } from '../lib/types';
 
@@ -40,8 +40,8 @@ export function orderPrimaryAction(status: PoStatus, hasWhatsApp: boolean): Orde
 export function orderLifecycle(status: PoStatus, wasSent: boolean, wasConfirmed: boolean) {
   return [
     ...(status === 'draft' ? [{ key: 'draft', label: 'טיוטה' }] : []),
-    ...(status === 'ready' ? [{ key: 'ready', label: 'מוכנה' }] : []),
-    ...(wasSent || status === 'sent' ? [{ key: 'sent', label: 'נשלחה' }] : []),
+    ...(status === 'ready' ? [{ key: 'ready', label: 'מוכנה לשליחה לספק' }] : []),
+    ...(wasSent || status === 'sent' ? [{ key: 'sent', label: 'נשלחה לספק' }] : []),
     ...(wasConfirmed || status === 'confirmed' || status === 'partial' ? [{ key: 'confirmed', label: 'אושרה' }] : []),
     ...(status === 'partial' ? [{ key: 'partial', label: 'התקבלה חלקית' }] : []),
     ...(status === 'received' ? [{ key: 'received', label: 'התקבלה' }] : []),
@@ -55,6 +55,7 @@ export function OrdersList() {
   const [statusFilter, setStatusFilter] = useParamState('status', 'open');
   const [cancelTarget, setCancelTarget] = useState<OrderRow | null>(null);
   const [draftCancelTarget, setDraftCancelTarget] = useState<DraftListRow | null>(null);
+  const [sentConfirmTarget, setSentConfirmTarget] = useState<OrderRow | null>(null);
   const [busy, setBusy] = useState(false);
   const canWrite = organizationAccess.canWrite && !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
 
@@ -96,10 +97,22 @@ export function OrdersList() {
     void refetch();
   }
 
-  async function sendWhatsApp(r: OrderRow) {
-    const res = await sendOrderWhatsApp(r, org?.name ?? '');
+  function sendWhatsApp(r: OrderRow) {
+    const res = openOrderWhatsApp(r, org?.name ?? '');
     if (res.error) { toast(res.error, 'error'); return; }
-    if (res.statusChanged) { toast('הסטטוס עודכן'); void refetch(); }
+    // The window is open; whether the message left is the operator's to say.
+    if (needsSentConfirmation(r.status)) setSentConfirmTarget(r);
+  }
+
+  async function confirmSent() {
+    if (!sentConfirmTarget) return;
+    setBusy(true);
+    const res = await markOrderSentToSupplier(sentConfirmTarget.id);
+    setBusy(false);
+    setSentConfirmTarget(null);
+    if (res.error) { toast(res.error, 'error'); return; }
+    toast('ההזמנה סומנה כנשלחה לספק');
+    void refetch();
   }
 
   async function cancelDraft(reason?: string) {
@@ -177,9 +190,16 @@ export function OrdersList() {
           { key: 'edit', label: 'עריכה', icon: Pencil, hidden: !canWrite, onSelect: () => navigate(`/orders/${r.id}`) },
           { key: 'duplicate', label: 'שכפול', icon: Copy, hidden: !canWrite, onSelect: () => navigate(`/orders/new?from=${r.id}`) },
           {
-            key: 'whatsapp', label: 'שליחה בוואטסאפ', icon: MessageCircle,
+            key: 'whatsapp', label: 'פתיחת ההזמנה ב-WhatsApp', icon: MessageCircle,
             hidden: !canWrite || !(r.supplier.whatsapp || r.supplier.phone) || !['draft', 'ready', 'sent'].includes(r.status),
-            onSelect: () => void sendWhatsApp(r),
+            onSelect: () => sendWhatsApp(r),
+          },
+          {
+            // Reachable without WhatsApp too: the order may have gone out by phone, email or a
+            // printed sheet, and the status must still be recordable.
+            key: 'mark-sent', label: 'סמן כנשלחה לספק', icon: Send,
+            hidden: !canWrite || !needsSentConfirmation(r.status),
+            onSelect: () => setSentConfirmTarget(r),
           },
           { key: 'print', label: 'הדפסה', icon: Printer, onSelect: () => navigate(`/orders/${r.id}?print=1`) },
           {
@@ -200,6 +220,14 @@ export function OrdersList() {
         emptyTitle="עדיין אין הזמנות רכש" emptySubtitle="אפשר ליצור טיוטה חדשה כדי להתחיל את תהליך הרכש"
         emptyAction={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={15} /> טיוטה חדשה</button>} />
 
+      <ConfirmDialog open={!!sentConfirmTarget} onClose={() => setSentConfirmTarget(null)}
+        onConfirm={() => void confirmSent()}
+        title="סימון ההזמנה כנשלחה לספק"
+        message={sentConfirmTarget
+          ? `האם ההודעה על הזמנה #${sentConfirmTarget.number} עבור ${sentConfirmTarget.supplier.name} נשלחה בפועל לספק? `
+            + 'המערכת אינה יכולה לדעת זאת בעצמה. הסימון יירשם עם מועד השליחה ויתועד ביומן הביקורת.'
+          : ''}
+        confirmLabel="כן, נשלחה לספק" busy={busy} />
       <ConfirmDialog open={!!cancelTarget} onClose={() => setCancelTarget(null)}
         onConfirm={(reason) => void cancelOrder(reason)}
         title="ביטול הזמנה" message="האם לבטל את ההזמנה? הפעולה תתועד ביומן הביקורת."
@@ -227,6 +255,7 @@ export function OrderDetail() {
   const toast = useToast();
   const [confirm, setConfirm] = useState<{ status: PoStatus; label: string } | null>(null);
   const [supplierConfirmOpen, setSupplierConfirmOpen] = useState(false);
+  const [sentConfirmOpen, setSentConfirmOpen] = useState(false);
   const [confirmNote, setConfirmNote] = useState('');
   const [confirmExpected, setConfirmExpected] = useState('');  // optional: set/correct אספקה מבוקשת at confirmation
   const [busy, setBusy] = useState(false);
@@ -288,13 +317,24 @@ export function OrderDetail() {
     void refetch();
   }
 
-  // The WhatsApp order-send flow (link building, wa.me open and reasoned status command) lives in
-  // lib/share.ts and is shared with the Orders list row actions.
-  async function sendWhatsApp() {
+  // Link building and the wa.me open live in lib/share.ts, shared with the Orders list row
+  // actions. Opening the window is all it does — the status follows a human confirmation.
+  function sendWhatsApp() {
     if (!order) return;
-    const res = await sendOrderWhatsApp(order, orgName);
+    const res = openOrderWhatsApp(order, orgName);
     if (res.error) { toast(res.error, 'error'); return; }
-    if (res.statusChanged) { toast('הסטטוס עודכן'); void refetch(); }
+    if (needsSentConfirmation(order.status)) setSentConfirmOpen(true);
+  }
+
+  async function confirmSent() {
+    if (!order) return;
+    setBusy(true);
+    const res = await markOrderSentToSupplier(order.id);
+    setBusy(false);
+    setSentConfirmOpen(false);
+    if (res.error) { toast(res.error, 'error'); return; }
+    toast('ההזמנה סומנה כנשלחה לספק');
+    void refetch();
   }
 
   if (loading) return <RecordSkeleton />;
@@ -305,17 +345,17 @@ export function OrderDetail() {
 
   const waLink = orderWhatsAppLink(order, orgName);
   const primaryKey = canWrite ? orderPrimaryAction(order.status, !!waLink) : null;
-  const nextAction = primaryKey === 'ready' ? 'סימון ההזמנה כמוכנה'
+  const nextAction = primaryKey === 'ready' ? 'סימון ההזמנה כמוכנה לשליחה'
     : primaryKey === 'sent' ? 'סימון ההזמנה כנשלחה לספק'
-      : primaryKey === 'whatsapp' ? 'שליחת ההזמנה לספק'
+      : primaryKey === 'whatsapp' ? 'פתיחת ההזמנה ב-WhatsApp ואישור השליחה'
         : primaryKey === 'confirm' ? 'תיעוד אישור הספק'
           : primaryKey === 'receive' ? 'קבלת הסחורה' : undefined;
   const primaryAction = primaryKey === 'ready' ? (
-    <button className="btn-primary" disabled={busy} onClick={() => void setStatus('ready', 'סימון הזמנה כמוכנה')}><CheckCircle2 size={15} /> סימון כמוכנה</button>
+    <button className="btn-primary" disabled={busy} onClick={() => void setStatus('ready', 'סימון הזמנה כמוכנה לשליחה')}><CheckCircle2 size={15} /> סימון כמוכנה לשליחה</button>
   ) : primaryKey === 'sent' ? (
-    <button className="btn-primary" disabled={busy} onClick={() => void setStatus('sent', 'שליחת הזמנה לספק')}><Send size={15} /> סימון כנשלחה לספק</button>
+    <button className="btn-primary" disabled={busy} onClick={() => setSentConfirmOpen(true)}><Send size={15} /> סימון כנשלחה לספק</button>
   ) : primaryKey === 'whatsapp' ? (
-    <button className="btn-primary" disabled={busy} onClick={() => void sendWhatsApp()}><MessageCircle size={15} /> שליחה ב-WhatsApp</button>
+    <button className="btn-primary" disabled={busy} onClick={() => sendWhatsApp()}><MessageCircle size={15} /> פתיחה ב-WhatsApp</button>
   ) : primaryKey === 'confirm' ? (
     <button className="btn-primary" disabled={busy} onClick={() => setSupplierConfirmOpen(true)}><CheckCircle2 size={15} /> הספק אישר</button>
   ) : primaryKey === 'receive' ? (
@@ -337,7 +377,13 @@ export function OrderDetail() {
         primaryAction={primaryAction}
         secondaryActions={<>
           {canWrite && ['draft', 'sent'].includes(order.status) && waLink && primaryKey !== 'whatsapp' && (
-            <button className="btn-secondary" disabled={busy} onClick={() => void sendWhatsApp()}><MessageCircle size={15} /> {order.status === 'sent' ? 'שליחה חוזרת ב-WhatsApp' : 'שליחה ב-WhatsApp'}</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => sendWhatsApp()}><MessageCircle size={15} /> {order.status === 'sent' ? 'פתיחה חוזרת ב-WhatsApp' : 'פתיחה ב-WhatsApp'}</button>
+          )}
+          {/* When WhatsApp is the primary action the confirmation still has to be reachable on its
+              own: the order may have gone out by phone or email, or the operator may have dismissed
+              the prompt after sending. Opening WhatsApp is not what records the send. */}
+          {canWrite && primaryKey === 'whatsapp' && (
+            <button className="btn-secondary" disabled={busy} onClick={() => setSentConfirmOpen(true)}><Send size={15} /> סמן כנשלחה לספק</button>
           )}
           {canWrite && order.status === 'sent' && (
             <button className="btn-secondary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={15} /> קבלת סחורה</button>
@@ -347,9 +393,11 @@ export function OrderDetail() {
               reads them and offers no picker), and the link existed on exactly one transient
               screen. Offered from the moment the order has left the building; a cancelled order is
               excluded because there is nothing to be invoiced for. */}
+          {/* Retargeted from /invoices/new (G1, 10.08.2026): the invoice for this order arrives
+              from the supplier, so the action is to upload it, not to type it. */}
           {canWrite && !['draft', 'cancelled'].includes(order.status) && (
-            <button className="btn-secondary" onClick={() => navigate(`/invoices/new?supplier=${order.supplier.id}&order=${order.id}`)}>
-              <FileText size={15} /> הזנת חשבונית להזמנה זו
+            <button className="btn-secondary" onClick={() => navigate('/documents')}>
+              <FileText size={15} aria-hidden="true" /> העלאת החשבונית שהתקבלה
             </button>
           )}
           <button className="btn-secondary" onClick={() => window.print()}><Printer size={15} /> הדפסה</button>
@@ -433,6 +481,15 @@ export function OrderDetail() {
       <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)}
         onConfirm={(reason) => confirm && void cancelOrder(reason)}
         title={confirm?.label ?? ''} message="האם לבטל את ההזמנה? הפעולה תתועד ביומן הביקורת." danger requireReason busy={busy} />
+
+      {/* The one place `sent` is recorded from this screen. wa.me hands the message to WhatsApp
+          and tells us nothing afterwards, so the app asks instead of assuming. */}
+      <ConfirmDialog open={sentConfirmOpen} onClose={() => setSentConfirmOpen(false)}
+        onConfirm={() => void confirmSent()}
+        title="סימון ההזמנה כנשלחה לספק"
+        message={`האם ההודעה על הזמנה #${order.number} עבור ${order.supplier.name} נשלחה בפועל לספק? `
+          + 'המערכת אינה יכולה לדעת זאת בעצמה. הסימון יירשם עם מועד השליחה ויתועד ביומן הביקורת.'}
+        confirmLabel="כן, נשלחה לספק" busy={busy} />
 
       <Modal open={supplierConfirmOpen} onClose={() => setSupplierConfirmOpen(false)} title="אישור קבלת הזמנה ע״י הספק" busy={busy} statusMessage={busy ? 'שומר את אישור הספק' : undefined}>
         <p className="text-sm text-ink-soft mb-3">מועד האישור והמשתמש המסמן יתועדו במערכת וביומן הביקורת.</p>

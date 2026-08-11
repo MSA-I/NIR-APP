@@ -9,6 +9,7 @@ import {
 import type { StatusMeta, Tone } from '../lib/status';
 import type { ServerSort } from '../lib/serverList';
 import { fmtMoneyRounded } from '../lib/format';
+import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
 import { ActionMenu, type ActionMenuItem } from './ActionMenu';
 
 /* ---------- StatusBadge ---------- */
@@ -661,7 +662,7 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
   );
 }
 
-export function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel = 'אישור', reasonLabel = 'סיבה (חובה — נרשם ביומן הביקורת)', danger, requireReason, busy }: {
+export function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel = 'אישור', reasonLabel = OPTIONAL_REASON_LABEL, danger, requireReason, busy }: {
   open: boolean; onClose: () => void; onConfirm: (reason?: string) => void;
   title: string; message: string; confirmLabel?: string; reasonLabel?: string; danger?: boolean; requireReason?: boolean; busy?: boolean;
 }) {
@@ -682,8 +683,11 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
       )}
       <div className="flex gap-2 justify-end">
         <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-        <button className={danger ? 'btn-danger' : 'btn-primary'} disabled={busy || (requireReason && !reason.trim())}
-          onClick={() => onConfirm(requireReason ? reason.trim() : undefined)}>
+        {/* The reason no longer blocks the button (owner, 11.08.2026). `requireReason` now means
+            "this action records a reason", not "this action interrogates the user" — when the box
+            is empty the ledger gets a sentence naming the action instead of a forced "asdf". */}
+        <button className={danger ? 'btn-danger' : 'btn-primary'} disabled={busy}
+          onClick={() => onConfirm(requireReason ? reasonOr(reason, title) : undefined)}>
           {busy ? <Loader2 size={16} className="animate-spin" /> : confirmLabel}
         </button>
       </div>
@@ -1144,10 +1148,19 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
     onClearFilters?.();
   };
 
-  // The enterprise toolbar exists only for callers that asked for something enterprise; the
-  // twenty untouched call sites keep the original toolbar markup below, byte for byte.
-  const enterprise = !!server || columnPicker !== undefined;
-  const isDesktop = useMediaQuery('(min-width: 768px)'); // md — the breakpoint that swaps cards/table
+  // Any screen that offers filtering gets the filter sheet. This used to read
+  // `!!server || columnPicker !== undefined`, which meant a screen passing only `toolbar` and
+  // `activeFilters` — orders, suppliers, credits, payment requests, exceptions, products,
+  // inventory, price lists, documents — fell through to the legacy branch below, where the
+  // toolbar renders inline at every width and the "סינון ותצוגה" sheet does not exist at all.
+  // On a 390px phone that is filtering the user cannot reach. The trigger for the sheet is
+  // having something to put in it, not which optional prop the screen happened to adopt.
+  const enterprise = !!server || columnPicker !== undefined || !!toolbar || activeFilters > 0;
+  // lg, not md. DESIGN.md:224-230 already unified the cards↔table swap with the app shell at `lg`
+  // (owner ruling 09.08.2026) because a desktop table inside the phone frame is a tablet-in-
+  // portrait bug; this toolbar kept the old `md` and so re-created the same split from the other
+  // side — between 768 and 1023 the sheet vanished while the body was still cards.
+  const isDesktop = useMediaQuery('(min-width: 64rem)');
   const [sheetOpen, setSheetOpen] = useState(false);
   useEffect(() => { if (isDesktop) setSheetOpen(false); }, [isDesktop]);
 

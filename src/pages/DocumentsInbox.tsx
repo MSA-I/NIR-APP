@@ -6,9 +6,10 @@ import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { INBOX_CHANGED_EVENT } from '../components/QuickCapture';
 import { ConfirmDialog, DataTable, ErrorNote, Modal, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
+import { DocumentRemovalDialog } from '../components/DocumentRemovalDialog';
 import { ok, toHebrewError } from '../lib/errors';
 import { fmtDate, fmtDateTime, todayISO } from '../lib/format';
-import type { DocumentKind, DocumentRow } from '../lib/types';
+import type { DocumentRow } from '../lib/types';
 import {
   DOCUMENT_KIND_OPTIONS,
   DOCUMENT_UPLOAD_ACCEPT,
@@ -276,7 +277,6 @@ function UploadModal({ suppliers, onClose, onDone }: {
   const { profile } = useAuth();
   const toast = useToast();
   const [files, setFiles] = useState<File[]>([]);
-  const [kind, setKind] = useState<DocumentKind>('other');
   const [supplierId, setSupplierId] = useState('');
   const [documentDate, setDocumentDate] = useState(todayISO());
   const [busy, setBusy] = useState(false);
@@ -286,8 +286,10 @@ function UploadModal({ suppliers, onClose, onDone }: {
     if (!profile || files.length === 0) return;
     setBusy(true);
     try {
+      // No documentKind: uploadDocument falls back to the entity default, which for the inbox is
+      // 'other' — an honest "not read yet". 0084's trigger replaces it with what the document
+      // actually says the moment the interpretation lands.
       const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, 'inbox', null, file, {
-        documentKind: kind,
         supplierId: supplierId || null,
         documentDate: documentDate || null,
       }));
@@ -317,7 +319,10 @@ function UploadModal({ suppliers, onClose, onDone }: {
 
   return (
     <Modal open onClose={onClose} title="העלאת מסמך" busy={busy} statusMessage={busy ? 'מעלה את המסמכים' : undefined}>
-      <p className="mb-4 text-sm text-ink-muted">המסמך ייקלט כלא משויך. אפשר לשייך אותו לחשבונית או לקבלת סחורה לאחר ההעלאה.</p>
+      <p className="mb-4 text-sm text-ink-muted">
+        הקובץ נשמר מיד ולא ילך לאיבוד. המערכת תזהה בעצמה מה סוג המסמך, מי הספק ולאיזו הזמנה הוא שייך,
+        ותציג את הממצאים לבדיקה ולאישור לפני שהם משפיעים על משהו.
+      </p>
       <div className="space-y-3">
         <label className="block">
           <span className="label">קובץ</span>
@@ -327,25 +332,31 @@ function UploadModal({ suppliers, onClose, onDone }: {
             onChange={(event) => { setUploadSummary(null); setFiles(Array.from(event.target.files ?? [])); }} />
           {files.length > 0 && <div className="mt-1 text-xs text-ink-muted">{files.map((file) => file.name).join(', ')}</div>}
         </label>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label>
-            <span className="label">סוג מסמך</span>
-            <select className="input" value={kind} onChange={(event) => setKind(event.target.value as DocumentKind)}>
-              {DOCUMENT_KIND_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          </label>
-          <label>
-            <span className="label">תאריך מסמך</span>
-            <input type="date" className="input num" value={documentDate} onChange={(event) => setDocumentDate(event.target.value)} />
-          </label>
-        </div>
-        <label className="block">
-          <span className="label">ספק</span>
-          <select className="input" value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
-            <option value="">ללא ספק</option>
-            {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
-          </select>
-        </label>
+        {/* The "סוג מסמך" select that stood here is gone. Asking a person holding a phone beside a
+            delivery truck to classify the paper BEFORE anything has read it is asking the wrong
+            party at the wrong moment: the extraction pipeline reads the subtype off the document
+            itself, and a human confirms or corrects it on the review screen, where the document is
+            on screen to check against. A guess made at upload time is a guess that the evidence
+            extracted afterwards then has to argue with. Supplier and date stay — optional, folded
+            away — as hints for a document the model cannot read. */}
+        <details className="rounded-lg border border-line-soft px-3 py-2">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center text-sm text-action">
+            פרטים ידניים (לא חובה)
+          </summary>
+          <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2">
+            <label>
+              <span className="label">ספק</span>
+              <select className="input" value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
+                <option value="">זיהוי אוטומטי</option>
+                {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+              </select>
+            </label>
+            <label>
+              <span className="label">תאריך מסמך</span>
+              <input type="date" className="input num" value={documentDate} onChange={(event) => setDocumentDate(event.target.value)} />
+            </label>
+          </div>
+        </details>
         {uploadSummary && (
           <Note tone={uploadSummary.failed.length ? 'alert' : 'done'}>
             <div role="status">
@@ -374,6 +385,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
  *  `entity_type='archive'`: the documents interpretation could not place, which no one files by
  *  hand. One component either way, so "what is a document row" has a single answer. */
 export default function DocumentsGallery({ archive = false }: { archive?: boolean }) {
+  const [removalDoc, setRemovalDoc] = useState<DocumentRow | null>(null);
   const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -395,6 +407,15 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   const canUpload = canWrite && !!profile && ['owner', 'office', 'kitchen'].includes(profile.role);
   const canEnqueue = canUpload;
   const canRetry = canFile;
+  /**
+   * Removing a document is not filing it (owner, 11.08.2026, and 0121 in the database).
+   * Whoever photographed the wrong page is who notices, and that is the kitchen manager at
+   * the truck far more often than the owner. The server holds the real boundary: it opens
+   * `document_only` to the same four roles and keeps the derived reversal for owner/office,
+   * telling the dialog so through `can_remove_derived` and a named blocker.
+   */
+  const canRemoveDocument = canWrite && !!profile
+    && ['owner', 'office', 'kitchen', 'accountant'].includes(profile.role);
 
   const [q, setQ] = useState('');
   const [supplierId, setSupplierId] = useState('');
@@ -665,7 +686,22 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         </span>
       ),
     },
-    { key: 'kind', header: 'סוג', sortValue: (doc) => doc.document_kind, render: (doc) => documentKindLabel(doc.document_kind) },
+    {
+      // A document nobody has read yet has no subtype, and `other` is the row's placeholder for
+      // that — not an answer. Since the upload form stopped asking, rendering it as "מסמך נוסף"
+      // would put a category on a page the system has not opened. Dash, per the standing rule
+      // that missing evidence is `—` and never a fabricated value. Once the interpretation lands,
+      // 0084's trigger writes the real subtype and this cell says it; a document that genuinely
+      // IS `other` reaches a read state and reads "מסמך נוסף" honestly.
+      key: 'kind', header: 'סוג', sortValue: (doc) => doc.document_kind,
+      render: (doc) => {
+        const stage = processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed';
+        const unread = doc.document_kind === 'other' && stage !== null && documentUserState(stage) === 'intake';
+        return unread
+          ? <span className="text-ink-muted" title="המערכת טרם קראה את המסמך">—</span>
+          : documentKindLabel(doc.document_kind);
+      },
+    },
     { key: 'supplier', header: 'ספק', sortValue: (doc) => doc.supplier?.name ?? '', render: (doc) => doc.supplier?.name ?? '—' },
     {
       key: 'date', header: 'תאריך מסמך', className: 'num', sortValue: (doc) => doc.document_date ?? doc.created_at,
@@ -853,6 +889,14 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
               // Removal from the archive: no reason, by the owner's ruling (#110). Nothing new
               // in the database — decision #28's soft delete, the stored file kept for audit.
               { key: 'delete', label: 'הסרה', icon: Trash2, tone: 'danger', hidden: !canFile || !archive, onSelect: () => setDeleteDoc(doc) },
+              // Removal WITH the consequences computed first (0116/0119), offered in the folder
+              // rather than the archive. The archive's action above stays exactly as it is —
+              // owner ruling #110 settled that removing an archived document needs no reason —
+              // and this is the different case: a document that CREATED something. It asks for a
+              // reason, shows what would go with it, and blocks the destructive option by name
+              // when a safe reversal cannot be proven.
+              { key: 'remove-with-impact', label: 'הסרה עם תצוגת השפעה', icon: Trash2, tone: 'danger',
+                hidden: !canRemoveDocument || archive, onSelect: () => setRemovalDoc(doc) },
             ];
           }}
           emptyTitle={data?.docs.length ? 'לא נמצאו מסמכים לפי הסינון' : empty.title}
@@ -895,6 +939,12 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         title="הסרת מסמך מהארכיון"
         message={`המסמך "${deleteDoc?.file_name ?? ''}" יוסר מהרשימה. הקובץ נשמר לביקורת.`}
         confirmLabel="הסרה" danger busy={deleting} />
+
+      <DocumentRemovalDialog
+        documentId={removalDoc?.id ?? ''}
+        open={!!removalDoc}
+        onClose={() => setRemovalDoc(null)}
+        onRemoved={() => { void refetch(); }} />
 
     </div>
   );

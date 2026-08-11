@@ -10,8 +10,7 @@ import { chartTheme } from '../../lib/theme';
 import { topCategoriesWithOther } from '../../lib/dashboardSeries';
 import {
   addCalendarDays, dateStartInstant, fmtMonth, fmtMoneyRounded, fmtNum, monthlyBuckets, shiftCalendarMonth,
-  startOfCalendarWeek, todayISO, weeklyBuckets,
-} from '../../lib/format';
+  startOfCalendarWeek, todayISO, weeklyBuckets, localDateKey } from '../../lib/format';
 import { DashboardFrame, ChartCard } from './parts';
 
 type OrderItem = { qty: number; unit_price: number };
@@ -64,7 +63,12 @@ export default function KitchenDashboard() {
     const metrics = metricsRes as unknown as Metric[];
 
     // ── KPIs
-    const ordersThisMonth = orders.filter((o) => o.created_at.slice(0, 7) === monthKey);
+    // `localDateKey`, not `slice(0, 7)` (I1, 10.08.2026). The raw string is UTC; the business
+    // runs in Asia/Jerusalem. An order placed on 31.07 at 22:00 local is 19:00Z — same month
+    // either way — but one placed at 01:00 local on 01.08 is 22:00Z on 31.07, and a raw slice
+    // files it under July while the main dashboard, which already uses localDateKey, files it
+    // under August. Same order, same label "נרכש החודש", two different numbers.
+    const ordersThisMonth = orders.filter((o) => localDateKey(o.created_at).slice(0, 7) === monthKey);
     const purchasedMonth = ordersThisMonth.length ? ordersThisMonth.reduce((s, o) => s + orderValue(o.items), 0) : null;
     const remaining = openPos.reduce((s, o) => s + o.items.reduce((t, i) => t + Math.max(0, (i.qty - i.received_qty) * i.unit_price), 0), 0);
     const openValue = openPos.length ? remaining : null;

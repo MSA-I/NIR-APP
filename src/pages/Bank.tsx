@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { reasonOr } from '../lib/reason';
 import { useSearchParams } from 'react-router';
 import { Upload, Landmark, Link2, AlertTriangle, EyeOff, Loader2, CheckCircle2, Unlink } from 'lucide-react';
 import Papa from 'papaparse';
@@ -245,12 +246,11 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
   const [busy, setBusy] = useState(false);
 
   async function unmatch() {
-    if (!reason.trim()) { toast('נדרשת סיבה להסרת ההתאמה', 'error'); return; }
     setBusy(true);
     try {
       unwrap(await supabase.rpc('unmatch_bank_transaction', {
         p_bank_transaction_id: tx.id,
-        p_reason: reason.trim(),
+        p_reason: reasonOr(reason, 'הסרת ההתאמה'),
       }));
       toast('ההתאמה הוסרה. התשלום נשאר רשום במערכת.');
       onChanged();
@@ -335,7 +335,6 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
 
   async function runImport() {
     if (!map.date || !map.description || !map.amount) { toast('יש למפות לפחות תאריך, תיאור וסכום', 'error'); return; }
-    if (!reason.trim()) { toast('נדרשת סיבה לייבוא תדפיס הבנק', 'error'); return; }
     setBusy(true);
     try {
       const suppliers = await readFinancialSuppliers();
@@ -368,7 +367,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         p_file_hash: fileHash,
         p_column_mapping: map,
         p_rows: normalized,
-        p_reason: reason.trim(),
+        p_reason: reasonOr(reason, 'ייבוא תדפיס הבנק'),
       })) as { row_count: number; idempotent: boolean };
       setResult(imported.idempotent
         ? `הקובץ כבר יובא קודם. נמצאו ${imported.row_count} תנועות בייבוא הקיים.`
@@ -422,7 +421,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
               </tbody>
             </table>
           </div>
-          <div><label className="label">סיבת הייבוא *</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+          <div><label className="label">סיבת הייבוא (רשות)</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
           <div className="flex justify-end gap-2">
             <button className="btn-secondary" disabled={busy} onClick={() => { setHeaders([]); setRawRows([]); }}>קובץ אחר</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>
@@ -515,13 +514,12 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   }, [supplierId]);
 
   async function assignSupplier() {
-    if (!reason.trim()) { toast('נדרשת סיבה לפעולה', 'error'); return; }
     setBusy(true);
     try {
       const res = await supabase.rpc('assign_bank_transaction_supplier', {
         p_bank_transaction_id: tx.id,
         p_supplier_id: supplierId || null,
-        p_reason: reason.trim(),
+        p_reason: reasonOr(reason, 'פעולה'),
       });
       if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
       toast(supplierId ? 'הספק שויך לתנועה' : 'שיוך הספק הוסר מהתנועה');
@@ -534,7 +532,6 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   }
 
   async function confirmCandidate(c: Candidate) {
-    if (!reason.trim()) { toast('נדרשת סיבה לאישור ההתאמה', 'error'); return; }
     setBusy(true);
     try {
       unwrap(await supabase.rpc('match_bank_transaction', {
@@ -546,7 +543,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
           ? [{ invoice_id: c.id, amount: Math.min(tx.amount, c.amount) }]
           : [],
         p_confidence: c.confidence,
-        p_reason: reason.trim(),
+        p_reason: reasonOr(reason, 'אישור ההתאמה'),
       }));
       toast('ההתאמה אושרה');
       onChanged();
@@ -560,7 +557,6 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   async function confirmManual() {
     const entries = Object.entries(chosenInvoices).filter(([, v]) => v > 0);
     if (!entries.length) return;
-    if (!reason.trim()) { toast('נדרשת סיבה לאישור ההתאמה', 'error'); return; }
     setBusy(true);
     try {
       unwrap(await supabase.rpc('match_bank_transaction', {
@@ -570,7 +566,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
         p_payment_id: directPaymentId,
         p_allocations: entries.map(([invoice_id, amount]) => ({ invoice_id, amount })),
         p_confidence: null,
-        p_reason: reason.trim(),
+        p_reason: reasonOr(reason, 'אישור ההתאמה'),
       }));
       toast('ההתאמה הידנית נשמרה');
       onChanged();
@@ -582,12 +578,11 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   }
 
   async function openException() {
-    if (!reason.trim()) { toast('נדרשת סיבה לפתיחת החריג', 'error'); return; }
     setBusy(true);
     const res = await supabase.rpc('open_bank_transaction_exception', {
       p_bank_transaction_id: tx.id,
       p_supplier_id: supplierId || null,
-      p_reason: reason.trim(),
+      p_reason: reasonOr(reason, 'פתיחת החריג'),
     });
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
@@ -596,12 +591,11 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   }
 
   async function ignore() {
-    if (!reason.trim()) { toast('נדרשת סיבה לסימון התנועה', 'error'); return; }
     setBusy(true);
     try {
       const res = await supabase.rpc('ignore_bank_transaction', {
         p_bank_transaction_id: tx.id,
-        p_reason: reason.trim(),
+        p_reason: reasonOr(reason, 'סימון התנועה'),
       });
       if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
       toast('התנועה סומנה כלא רלוונטית');
@@ -653,7 +647,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
             value={supplierId} disabled={loading} />
           {supplierId !== (tx.supplier_id ?? '') && <button className="btn-secondary" disabled={busy || loading} onClick={() => void assignSupplier()}>שיוך ספק</button>}
         </div>
-        <div><label className="label" htmlFor="bank-action-reason">סיבת הפעולה *</label><input id="bank-action-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+        <div><label className="label" htmlFor="bank-action-reason">סיבת הפעולה (רשות)</label><input id="bank-action-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
 
         {loading && <div role="status" className="text-sm text-ink-muted">טוען ספקים והצעות התאמה…</div>}
         {error && <ErrorNote message={error} />}

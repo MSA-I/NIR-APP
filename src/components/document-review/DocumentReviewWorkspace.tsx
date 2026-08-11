@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { openReservedPopup } from '../../lib/popup';
 import { DOCUMENT_PROCESSING_STAGE_META } from '../../lib/useDocumentProcessing';
 import { Note, useToast } from '../ui';
+import { DocumentAssessmentPanel } from './DocumentAssessmentPanel';
 import { DocumentExportPreview } from './DocumentExportPreview';
 import { DocumentReviewProposals } from './DocumentReviewProposals';
 import { DocumentSourceViewer } from './DocumentSourceViewer';
@@ -354,7 +355,22 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
               <Note tone="idle">המסמך ותוצאות העיבוד זמינים לצפייה. פעולות בדיקה ועדכון אינן זמינות במצב קריאה בלבד.</Note>
             ) : isPriceList
               ? <PriceListReviewConfirmation snapshot={snapshot} role={role} actorId={actorId} onRefetch={onRefetch} />
-              : snapshot.interpretation && <DocumentReviewProposals snapshot={snapshot} role={role} onRefetch={onRefetch} />}
+              : snapshot.interpretation && (
+                <>
+                  {/* The four-source comparison and the approval, first: it is the decision this
+                      screen exists for. The proposals panel below it stays what it has always
+                      been — the machine's reading and the learning rules — and a supplier portal
+                      account gets neither, because the assessment carries our ordered quantities
+                      and our contracted prices (0109 refuses that role outright). */}
+                  {role !== 'supplier' && (
+                    <DocumentAssessmentPanel
+                      documentId={snapshot.document.id}
+                      onApplied={() => { void onRefetch(); }}
+                    />
+                  )}
+                  <DocumentReviewProposals snapshot={snapshot} role={role} onRefetch={onRefetch} />
+                </>
+              )}
             {!readOnly && snapshot.interpretation && !isPriceList && role !== 'supplier'
               && <DocumentExportPreview snapshot={snapshot} actorId={actorId} autoFocus={initialPanel === 'export'} />}
           </div>

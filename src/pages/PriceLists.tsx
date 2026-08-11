@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { reasonOr } from '../lib/reason';
 import { useParamState } from '../lib/useParamState';
 import { toHebrewError } from "../lib/errors";
 import { TrendingUp, TrendingDown, Upload, History, Pencil, X, FileCheck2 } from 'lucide-react';
@@ -239,14 +240,13 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
   async function save() {
     const p = Number(price);
     if (!p || p <= 0) { toast('מחיר לא תקין', 'error'); return; }
-    if (!reason.trim()) { toast('נדרשת סיבה לעדכון המחיר', 'error'); return; }
     setBusy(true);
     const upd = await supabase.rpc('set_supplier_product_price', {
       p_supplier_product_id: row.id,
       p_price: p,
       p_effective_date: date,
       p_available: available,
-      p_reason: reason.trim(),
+      p_reason: reasonOr(reason, 'עדכון המחיר'),
     });
     if (upd.error) { setBusy(false); toast(toHebrewError(upd.error.message), 'error'); return; }
     setBusy(false);
@@ -259,7 +259,7 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
         <div><label className="label" htmlFor="price-list-price">מחיר חדש (₪)</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
         <div><label className="label" htmlFor="price-list-date">בתוקף מתאריך</label><input id="price-list-date" type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="rounded" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> זמין אצל הספק</label>
-        <div><label className="label">סיבת העדכון *</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+        <div><label className="label">סיבת העדכון (רשות)</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
         <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
@@ -302,7 +302,6 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   }
 
   async function runImport() {
-    if (!reason.trim()) { toast('נדרשת סיבה לייבוא המחירון', 'error'); return; }
     setBusy(true);
     try {
       const suppliers = unwrap(await supabase.from('suppliers').select('id, name')) as { id: string; name: string }[];
@@ -320,7 +319,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       const imported = unwrap(await supabase.rpc('import_supplier_prices', {
         p_rows: rows,
         p_effective_date: todayISO(),
-        p_reason: reason.trim(),
+        p_reason: reasonOr(reason, 'ייבוא המחירון'),
       })) as { updated: number; created: number; unchanged: number };
       setReport(`עודכנו ${imported.updated} מחירים, נוצרו ${imported.created} רשומות חדשות, ${imported.unchanged} ללא שינוי.`);
     } catch (e) {
@@ -350,7 +349,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
               </tbody>
             </table>
           </div>
-          <div><label className="label">סיבת הייבוא *</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+          <div><label className="label">סיבת הייבוא (רשות)</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
           <div className="flex justify-end gap-2">
             <button className="btn-secondary" disabled={busy} onClick={() => setPreview([])}>חזרה</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>{busy ? 'מייבא...' : 'אישור וייבוא'}</button>

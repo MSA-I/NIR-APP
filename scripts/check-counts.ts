@@ -186,7 +186,12 @@ for (const claim of claims) {
  * so it is compared as a set. A script added to package.json and not to that line is the exact
  * failure the "שבעה → שמונה" drift was.
  */
-const listedScripts = /`(alerts(?: · [a-z0-9:]+)+)`/.exec(prose);
+// The character class carries `-` because a script name may be hyphenated
+// (`check:supplier-columns`, the first one). This widens what the anchor can TOKENISE; it
+// does not weaken what is compared — the set equality below is unchanged, and a script added
+// to package.json and not to CLAUDE.md still fails. The rule "fix CLAUDE.md, not the script"
+// is about the COUNTS; a parser that cannot express a legal name is a different bug.
+const listedScripts = /`(alerts(?: · [a-z0-9:-]+)+)`/.exec(prose);
 if (!listedScripts) {
   failures.push(
     '  check-scripts — could not find the `alerts · dashboard · …` list in CLAUDE.md.\n'

@@ -30,6 +30,20 @@ vi.mock('../lib/supabase', async () => {
   };
 });
 
+/**
+ * html2canvas, stubbed rather than run. jsdom paints nothing, so the real library would either
+ * throw or return an empty canvas -- and either way the test would be measuring jsdom's renderer.
+ * What these tests are about is the WIRE, and the stub keeps the one thing that matters to it: the
+ * capture is awaited before the dialog opens (package L).
+ */
+vi.mock('../lib/screenshot', () => ({
+  SCREENSHOT_MAX_BYTES: 4 * 1024 * 1024,
+  captureViewport: vi.fn(async () => capturedShot),
+}));
+let capturedShot: {
+  blob: Blob; previewUrl: string; bytes: number; checksum: string; width: number; height: number;
+} | null = null;
+
 let flagOn = true;
 vi.mock('../lib/flags', () => ({ useFeatureFlags: () => ({ isEnabled: () => flagOn }) }));
 vi.mock('../auth/AuthContext', () => ({
@@ -70,11 +84,13 @@ function captureInsert(inserts: Record<string, unknown>[], status = 201) {
 async function openAndSubmit(text: string) {
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: 'שליחת הערה' }));
-  await user.type(screen.getByLabelText('ההערה'), text);
+  // findBy, not getBy: the click captures the viewport BEFORE it opens the dialog (package L), so
+  // the dialog arrives one microtask later. That ordering is the feature, not a race.
+  await user.type(await screen.findByLabelText('ההערה'), text);
   await user.click(screen.getByRole('button', { name: 'שליחה' }));
 }
 
-beforeEach(() => { flagOn = true; });
+beforeEach(() => { flagOn = true; capturedShot = null; });
 
 describe('feedback note — the wire', () => {
   it('sends the screen, the role and the viewport, and never a delivery column', async () => {
@@ -104,8 +120,12 @@ describe('feedback note — the wire', () => {
     expect(body).not.toHaveProperty('sent_at');
     expect(body).not.toHaveProperty('send_error');
 
-    // The function receives the id of the stored row, never the text.
-    expect(sends).toEqual([{ noteId: 'note-1' }]);
+    // The function receives the id of the stored row, never the text. Since 0124 that id is
+    // generated in the browser and travels IN the insert, because attaching a screenshot
+    // afterwards would need an UPDATE grant on a table that is append-only by design.
+    expect(String(body.id)).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(sends).toEqual([{ noteId: body.id }]);
   });
 
   it('a failed send still stores the note, and says so instead of claiming delivery', async () => {

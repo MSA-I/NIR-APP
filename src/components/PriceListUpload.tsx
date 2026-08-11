@@ -7,6 +7,7 @@
 // Prices are still written only by the sanctioned RPCs — this file adds no new writer.
 
 import { useMemo, useRef, useState } from 'react';
+import { reasonOr } from '../lib/reason';
 import { useNavigate } from 'react-router';
 import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
@@ -308,7 +309,6 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
 
   async function runImport() {
     if (!preview) return;
-    if (!reason.trim()) { toast('נדרשת סיבה לעדכון המחירון', 'error'); return; }
     setBusy(true);
     try {
       let workingRows = preview.rows;
@@ -339,7 +339,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
       const imported = unwrap(await supabase.rpc('import_supplier_prices', {
         p_rows: rows,
         p_effective_date: todayISO(),
-        p_reason: reason.trim(),
+        p_reason: reasonOr(reason, 'עדכון המחירון'),
       })) as { updated: number; created: number; unchanged: number };
       const skippedNew = workingRows.filter((r) => !r.productId && !r.ambiguous).length;
       setReport([
@@ -433,7 +433,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
               צור {newRows.length === 1 ? 'מוצר חדש אחד' : <>‏<span className="num">{newRows.length}</span> מוצרים חדשים</>} בקטלוג ועדכן את מחירם
             </label>
           )}
-          <div><label className="label" htmlFor="price-upload-reason">סיבת העדכון *</label><input id="price-upload-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="מחירון חודשי מהספק" /></div>
+          <div><label className="label" htmlFor="price-upload-reason">סיבת העדכון (רשות)</label><input id="price-upload-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="מחירון חודשי מהספק" /></div>
           <div className="flex justify-end gap-2">
             <button className="btn-secondary" disabled={busy} onClick={() => { setPreview(null); setCreateNew(false); }}>חזרה</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>{busy ? 'קולט…' : 'אישור ועדכון מחירים'}</button>

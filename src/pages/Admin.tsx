@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import { reasonOr } from '../lib/reason';
 import { toHebrewError } from "../lib/errors";
 import { Building2, ShieldCheck, Plus, Copy, MessageSquare, Archive, RefreshCw, Undo2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -168,7 +169,7 @@ export default function Admin() {
       p_org_id: extension.org.id,
       p_status: 'trial',
       p_trial_ends_at: trialEndInstant(extension.date),
-      p_reason: extension.reason.trim(),
+      p_reason: reasonOr(extension.reason, 'הארכת תקופת הניסיון'),
     });
     setBusy(false);
     setExtensionReauth(false);
@@ -289,7 +290,7 @@ export default function Admin() {
               />
             </div>
             <div>
-              <label className="label" htmlFor="trial-extension-reason">סיבת ההארכה *</label>
+              <label className="label" htmlFor="trial-extension-reason">סיבת ההארכה (רשות)</label>
               <textarea
                 id="trial-extension-reason"
                 className="input min-h-24"
@@ -301,7 +302,7 @@ export default function Admin() {
               <button className="btn-secondary" disabled={busy} onClick={() => setExtension(null)}>ביטול</button>
               <button
                 className="btn-primary"
-                disabled={busy || !extension.date || !extension.reason.trim()}
+                disabled={busy || !extension.date}
                 onClick={() => setExtensionReauth(true)}>
                 אימות והארכה
               </button>

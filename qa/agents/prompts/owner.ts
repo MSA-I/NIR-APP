@@ -14,7 +14,7 @@ export const OWNER_ROLE_PROMPT: RolePrompt = {
     '/dashboard', '/suppliers', '/products', '/prices', '/orders', '/orders/new',
     '/receiving', '/invoices', '/invoices/new', '/documents', '/credits',
     '/payment-requests', '/payments', '/pay/emergency', '/bank', '/exceptions',
-    '/alerts', '/expenses', '/reports', '/analytics', '/audit', '/settings',
+    '/alerts', '/expenses', '/reports', '/analytics', '/settings',
     '/onboarding',
   ],
   forbiddenActions: [

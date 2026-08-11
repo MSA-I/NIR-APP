@@ -24,12 +24,13 @@ function renderAt(path: string) {
 }
 
 describe('סרגל פעולות מהירות תחתון', () => {
-  it('מחזיר לבעלים את חמש הפעולות המקוריות בלי להפוך אותן לניווט', () => {
+  it('מחזיר לבעלים את ארבע הפעולות בלי להפוך אותן לניווט', () => {
     state.role = 'owner';
     renderAt('/orders/order-1');
     const group = screen.getByRole('group', { name: 'פעולות מהירות' });
     expect([...group.querySelectorAll('.mobile-action')].map((item) => item.textContent)).toEqual([
-      'הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'חשבונית חדשה',
+      // 'חשבונית חדשה' left this bar in G1: an invoice is received, not created.
+      'הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה',
     ]);
     expect(screen.queryByRole('navigation', { name: 'ניווט ראשי בנייד' })).toBeNull();
   });

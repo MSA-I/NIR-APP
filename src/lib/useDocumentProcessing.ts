@@ -180,6 +180,7 @@ export type InterpretationContract = {
     | 'price_list'
     | 'quote'
     | 'payment_confirmation'
+    | 'tax_receipt'
     | 'other';
   document_type_confidence: number | null;
   supplier: {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { reasonOr } from '../../lib/reason';
 import { CheckCircle2, Loader2, Plus } from 'lucide-react';
 import { Link } from 'react-router';
 import type { Role } from '../../lib/types';
@@ -408,10 +409,6 @@ export function PriceListReviewConfirmation({
       setError('יש לבחור חודש יעד.');
       return;
     }
-    if (!reason.trim()) {
-      setError('יש להזין סיבה לאישור המחירון.');
-      return;
-    }
     if (!approvedRows.length) {
       setError('יש לאשר לפחות שורה אחת.');
       return;
@@ -427,7 +424,7 @@ export function PriceListReviewConfirmation({
       interpretationId: currentInterpretation.id,
       targetMonth: `${targetMonth}-01`,
       approvedRows,
-      reason: reason.trim(),
+      reason: reasonOr(reason, 'אישור מחירון שהתקבל'),
     };
     setAttemptedPayload(payload);
     await submitPayload(payload);
@@ -662,7 +659,7 @@ export function PriceListReviewConfirmation({
               <input type="month" className="input num" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} disabled={busy} />
             </label>
             <label>
-              <span className="label">סיבת האישור *</span>
+              <span className="label">סיבת האישור (רשות)</span>
               <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} />
             </label>
           </div>

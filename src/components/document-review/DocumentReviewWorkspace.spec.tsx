@@ -23,6 +23,10 @@ import type { ReviewSnapshot } from './model';
 // and this call is not what is under test, so the client is stubbed rather than described.
 vi.mock('../../lib/supabase', () => ({
   supabase: {
+    // The assessment panel this workspace now renders makes one read on mount. Answering it
+    // with an error keeps this spec about what it has always been about — the evidence tables
+    // and the staged disclosure — while leaving no unhandled rejection behind.
+    rpc: async () => ({ data: null, error: { message: 'not mocked in this spec' } }),
     storage: {
       from: () => ({
         createSignedUrl: async () => ({ data: { signedUrl: 'https://files.example.test/source' }, error: null }),

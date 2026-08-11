@@ -84,7 +84,7 @@ function renderForm(onSaved = vi.fn()) {
   return onSaved;
 }
 
-const bankField = () => screen.getByLabelText('פרטי בנק (מוצג למבצע ההעברות)');
+const bankField = () => screen.getByLabelText('פרטי בנק — מלא רק כדי לשנות (אינם מוצגים)');
 const saveButton = () => screen.getByRole('button', { name: 'שמירה' });
 
 beforeEach(() => {
@@ -107,14 +107,14 @@ describe('SupplierForm — the dedicated bank-details flow (PLAN-04 §3.2)', () 
     await waitFor(() => expect(patched).toHaveLength(1));
     expect(Object.keys(patched[0])).not.toContain('bank_details');
 
-    // The dedicated step opens, and its confirm stays locked until a reason is given.
+    // The dedicated step opens. Since 11.08.2026 the reason no longer locks it (owner ruling) --
+    // what still separates this from the generic save is the step-up boundary and the RPC below.
     const dialogTitle = await screen.findByRole('heading', { name: 'עדכון פרטי בנק' });
     expect(dialogTitle).toBeInTheDocument();
     const confirmButton = screen.getByRole('button', { name: 'אישור העדכון' });
-    expect(confirmButton).toBeDisabled();
     expect(rpcBodies).toHaveLength(0);
 
-    await user.type(screen.getByLabelText('סיבה (חובה — נרשם ביומן הביקורת)'), 'עדכון חשבון לפי מכתב מהספק');
+    await user.type(screen.getByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'), 'עדכון חשבון לפי מכתב מהספק');
     await user.click(confirmButton);
 
     // Fresh JWT ⇒ the step-up prompt is skipped and the RPC carries the reason.
@@ -154,7 +154,7 @@ describe('SupplierForm — the dedicated bank-details flow (PLAN-04 §3.2)', () 
 
     // The same reasoned step an existing supplier's change takes, now for the fresh row.
     await screen.findByRole('heading', { name: 'עדכון פרטי בנק' });
-    await user.type(screen.getByLabelText('סיבה (חובה — נרשם ביומן הביקורת)'), 'הקמת ספק עם פרטי בנק');
+    await user.type(screen.getByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'), 'הקמת ספק עם פרטי בנק');
     await user.click(screen.getByRole('button', { name: 'אישור העדכון' }));
 
     await waitFor(() => expect(rpcBodies).toHaveLength(1));
@@ -189,7 +189,7 @@ describe('SupplierForm — the dedicated bank-details flow (PLAN-04 §3.2)', () 
     await user.type(bankField(), 'בנק 20');
     await user.click(saveButton());
     await user.type(
-      await screen.findByLabelText('סיבה (חובה — נרשם ביומן הביקורת)'),
+      await screen.findByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'),
       'החלפת חשבון',
     );
     await user.click(screen.getByRole('button', { name: 'אישור העדכון' }));
@@ -234,7 +234,7 @@ describe('SupplierForm — the dedicated bank-details flow (PLAN-04 §3.2)', () 
     await user.type(bankField(), 'בנק 31');
     await user.click(saveButton());
     await user.type(
-      await screen.findByLabelText('סיבה (חובה — נרשם ביומן הביקורת)'),
+      await screen.findByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'),
       'עדכון חשבון',
     );
     await user.click(screen.getByRole('button', { name: 'אישור העדכון' }));

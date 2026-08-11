@@ -818,8 +818,14 @@ select pg_temp.p1b_assert(
   auth_role() = 'owner',
   'owner Storage fixture has the wrong auth_role'
 );
+-- The Storage policy joins suppliers by id; what it needs is that `authenticated` can READ the
+-- table, not that the grant is written at table granularity. 0112 replaced the table grant with
+-- per-column grants so that bank_details is out of the browser's reach -- a column privilege is
+-- the only thing that can hide a column, since RLS cannot -- and `id` is exactly what this
+-- policy reads.
 select pg_temp.p1b_assert(
-  has_table_privilege('authenticated', 'public.suppliers', 'select'),
+  has_column_privilege('authenticated', 'public.suppliers', 'id', 'select')
+  and has_column_privilege('authenticated', 'public.suppliers', 'org_id', 'select'),
   'authenticated role lacks supplier visibility required by the Storage policy'
 );
 select pg_temp.p1b_assert(

@@ -10,13 +10,19 @@ import type { Invitation, InvitationStatus, Role } from './types';
 /** Roles an owner may invite. `supplier` joined on 09.08.2026 (OPEN-DECISIONS #17): the DB
  *  path has existed since 0025 — invitations.supplier_id plus the 3-arg create_invitation
  *  overload — and a supplier invitation must carry the supplier it binds to. */
-export const INVITABLE_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant', 'supplier'];
+/**
+ * `payer` left this list on 10.08.2026 (G3). The owner's decision: the accountant IS the
+ * executor. The enum value stays legal and existing payer accounts keep working — 0111 asserts
+ * both — but the product stops handing the role out, so no new account can be created into a
+ * role that is on its way out.
+ */
+export const INVITABLE_ROLES: Role[] = ['owner', 'office', 'kitchen', 'accountant', 'supplier'];
 
 /** Roles the role-change dialog may assign. `supplier` is deliberately absent: turning an
  *  existing employee into a supplier agent would need a supplier_id that
  *  manage_profile_access refuses to invent — a supplier account starts as a supplier
  *  invitation, never as a role change. */
-export const ASSIGNABLE_ROLES: Role[] = ['owner', 'office', 'kitchen', 'payer', 'accountant'];
+export const ASSIGNABLE_ROLES: Role[] = ['owner', 'office', 'kitchen', 'accountant'];
 
 // Invitation / InvitationStatus live in ./types with the rest of the schema mirror.
 export type { Invitation, InvitationStatus };
