@@ -116,6 +116,12 @@ begin
     raise exception '0121: public.remove_document is gone; there is nothing to open.';
   end if;
 
+  -- PostgreSQL preserves the line endings that arrived inside the function body. The Linux CI
+  -- replay writes LF while a Windows production push writes CRLF, so anchored source checks must
+  -- compare one canonical representation. This changes formatting only; the guarded replacement
+  -- below still refuses any definition whose executable text differs from 0119.
+  v_def := replace(replace(v_def, E'\r\n', E'\n'), E'\r', E'\n');
+
   -- Idempotent by construction, for the reason 0117 learned the hard way: a migration that mutates
   -- and then fails on something later leaves the mutation applied, and re-running it must not
   -- double-apply. Both anchors are checked against the ALREADY-OPEN text first.
