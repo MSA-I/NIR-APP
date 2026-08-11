@@ -3035,9 +3035,10 @@ async function passwordRecovery(browser) {
 /**
  * Package 0 — the design partner's feedback note.
  *
- * What is routed: the flag (the barcode idiom at :1157) and the Edge Function. What is NOT routed
- * is the INSERT — it goes to the real PostgREST, so this is the only place where 0091's column
- * grants and RLS are exercised from an actual browser session.
+ * What is routed: only the Edge Function. The flag comes from the real demo seed, because this
+ * scenario is the regression shield for the option disappearing locally; the INSERT and Storage
+ * upload go to the real stack so 0091's column grants, 0125's upload policy and the screenshot
+ * metadata contract are exercised from an actual browser session.
  *
  * The FAILURE path is the one asserted end to end, on purpose. Discord delivery cannot be proved
  * from a network-isolated gate, and a scenario that mocked the send and then asserted "נשלח" would
@@ -3049,8 +3050,6 @@ async function feedbackNoteChannel(browser) {
     locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 },
   });
   try {
-    await context.route('**/rest/v1/rpc/resolve_feature_flags', (route) =>
-      route.fulfill({ status: 200, headers: jsonHeaders, json: [{ flag_key: 'feedback.notes', state: true }] }));
     await context.route('**/functions/v1/send-feedback', (route) => route.fulfill({
       status: 502,
       headers: jsonHeaders,
@@ -3074,6 +3073,8 @@ async function feedbackNoteChannel(browser) {
       `the feedback trigger is ${box && Math.round(box.width)}x${box && Math.round(box.height)}, below the 44px touch floor`);
 
     await trigger.click();
+    await page.getByText('לצרף צילום של המסך', { exact: true }).waitFor();
+    await page.getByAltText('תצוגה מקדימה של הצילום שיישלח').waitFor();
     // Unique per run: the lookup below must find this note and not a previous run's.
     const note = `בדיקת שער ${Date.now()}`;
     await page.getByLabel('ההערה').fill(note);
@@ -3092,7 +3093,7 @@ async function feedbackNoteChannel(browser) {
     // The row is the record. It must exist exactly once, name the screen it was written from, and
     // carry no delivery stamp — the browser holds no grant that could have written one.
     const stored = await fetch(
-      `${apiURL}/rest/v1/feedback_notes?select=note,route,role,sent_at,send_error&note=eq.${encodeURIComponent(note)}`,
+      `${apiURL}/rest/v1/feedback_notes?select=note,route,role,sent_at,send_error,screenshot_path,screenshot_bytes,screenshot_checksum,screenshot_mime&note=eq.${encodeURIComponent(note)}`,
       { headers: { apikey: serviceRoleKey, authorization: `Bearer ${serviceRoleKey}` } },
     );
     assert(stored.ok, `feedback note lookup failed with HTTP ${stored.status}`);
@@ -3101,6 +3102,13 @@ async function feedbackNoteChannel(browser) {
     assert.equal(rows[0].route, '/dashboard',
       `the stored note names ${rows[0].route}, not the screen it was written from`);
     assert.equal(rows[0].sent_at, null, 'a send that failed left sent_at set');
+    assert.match(rows[0].screenshot_path ?? '',
+      /^11111111-1111-4111-8111-111111111111\/[0-9a-f-]{36}\.png$/,
+      `the stored note did not carry its tenant-scoped screenshot path: ${rows[0].screenshot_path}`);
+    assert(Number(rows[0].screenshot_bytes) > 0, 'the stored screenshot has no byte count');
+    assert.match(rows[0].screenshot_checksum ?? '', /^[0-9a-f]{64}$/,
+      'the stored screenshot checksum is missing or malformed');
+    assert.equal(rows[0].screenshot_mime, 'image/png', 'the stored screenshot is not a PNG');
   } finally {
     await closeContext(context);
   }

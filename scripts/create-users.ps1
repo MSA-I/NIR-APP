@@ -1,4 +1,4 @@
-# Creates the six demo Auth users. Passwords come from an external per-user manifest and
+﻿# Creates the six demo Auth users. Passwords come from an external per-user manifest and
 # are never printed. The manifest must live outside this repository.
 #
 # Manifest shape:
@@ -69,15 +69,34 @@ $headers = @{
   Authorization = "Bearer $($env:SUPABASE_SERVICE_KEY)"
 }
 
+# Local gates recreate the database but can leave Auth users behind with a per-run random password.
+# Resolve the existing users once so this script can restore a known external manifest instead of
+# failing with "email already exists". CI still takes the create branch on its empty stack.
+$adminBase = "$($target.AbsoluteUri.TrimEnd('/'))/auth/v1/admin"
+$listed = Invoke-RestMethod -Method Get -Uri "$adminBase/users?page=1&per_page=1000" -Headers $headers
+$existingByEmail = @{}
+foreach ($user in @($listed.users)) {
+  $listedEmail = ([string]$user.email).Trim().ToLowerInvariant()
+  if ($listedEmail) { $existingByEmail[$listedEmail] = [string]$user.id }
+}
+
 foreach ($account in $accounts) {
   $email = ([string]$account.email).Trim().ToLowerInvariant()
-  $body = @{
+  $attributes = @{
     email = $email
     password = [string]$account.password
     email_confirm = $true
-  } | ConvertTo-Json -Compress
+  }
 
-  $response = Invoke-RestMethod -Method Post -Uri "$($target.AbsoluteUri.TrimEnd('/'))/auth/v1/admin/users" `
-    -Headers $headers -ContentType "application/json" -Body $body
-  Write-Output "created $email -> $($response.id)"
+  if ($existingByEmail.ContainsKey($email)) {
+    $attributes["ban_duration"] = "none"
+    $response = Invoke-RestMethod -Method Put -Uri "$adminBase/users/$($existingByEmail[$email])" `
+      -Headers $headers -ContentType "application/json" -Body ($attributes | ConvertTo-Json -Compress)
+    Write-Output "updated $email -> $($response.id)"
+  }
+  else {
+    $response = Invoke-RestMethod -Method Post -Uri "$adminBase/users" `
+      -Headers $headers -ContentType "application/json" -Body ($attributes | ConvertTo-Json -Compress)
+    Write-Output "created $email -> $($response.id)"
+  }
 }
