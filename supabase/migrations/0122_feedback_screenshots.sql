@@ -17,10 +17,11 @@
 --      reads rather than trusts. A browser cannot write into another tenant's folder.
 --   2. Only PNG, and only up to 4 MB. A viewport screenshot is a few hundred KB; the cap is what
 --      stops the field from becoming a file-transfer channel.
---   3. Nobody reads the image through the browser. Not the author, not the owner, not a platform
---      admin -- there is no SELECT policy at all, so the only reader is `send-feedback`, which
---      holds the service role and posts it once. An image with no reader is an image that cannot
---      leak through a screen someone left open.
+--   3. Reading is tenant-scoped, and the routine reader is `send-feedback` on the service role,
+--      which opens one image to post it and forgets it. (This migration first shipped with NO read
+--      policy at all and an argument for why that was better. It was a good argument about a bucket
+--      nothing could ever be written into: the storage API's upload ends in `insert ... returning *`,
+--      and `returning` needs a SELECT policy. 0125 corrects it, with the measurement.)
 --   4. The row records what was sent -- size, checksum, mime -- so "what did we send them" has an
 --      answer that does not require opening the file.
 --
@@ -149,9 +150,9 @@ with check (
   and lower(coalesce(metadata ->> 'mimetype', '')) = 'image/png'
 );
 
--- No select, update or delete policy exists on purpose. See point 3 of the header: the only reader
--- is `send-feedback` through the service role, and an image nobody can open through a browser
--- cannot be leaked by a browser somebody left open.
+-- No update or delete policy exists on purpose: a screenshot is the record of what was sent. The
+-- read policy this bucket needs in order to accept an upload at all arrives in 0125, with the
+-- storage-service log line that proves why.
 
 -- (No `comment on policy` here: storage.objects is owned by the storage role and a migration
 -- running as the project owner cannot comment on it. The paragraph above is the comment.)
@@ -190,17 +191,21 @@ begin
     raise exception '0122: the feedback bucket accepts something other than png.';
   end if;
 
-  -- (b) Nobody can read one through the browser. A SELECT policy added later would silently turn
-  -- the archive of everything customers have photographed into a browsable gallery.
+  -- (b) Any read policy on this bucket is tenant-scoped. The original form of this anchor forbade
+  -- a read policy outright, which forbade the feature working -- see the header. What actually
+  -- needs guarding is the thing that would turn the archive of everything customers have
+  -- photographed into a browsable gallery: a policy that does not compare the path prefix to the
+  -- caller's own organisation.
   if exists (
     select 1 from pg_policy p
     where p.polrelid = 'storage.objects'::regclass
       and p.polname like 'feedback%'
       and p.polcmd in ('r', '*')
+      and position('auth_org()' in coalesce(pg_get_expr(p.polqual, p.polrelid), '')) = 0
   ) then
     raise exception
-      '0122: a read policy appeared on the feedback bucket. Only send-feedback, on the service '
-      'role, is meant to open a screenshot.';
+      '0122: a read policy on the feedback bucket does not pin the tenant prefix. Every customer''s '
+      'screenshots would be readable by every other customer.';
   end if;
 
   -- (c) The browser still cannot claim delivery. 0091's guarantee, restated because this migration
