@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
-import { Plus, AlertTriangle, AlertOctagon, Info, Eye, Copy, Share2, Printer, Trash2 } from 'lucide-react';
+import { Plus, AlertTriangle, AlertOctagon, Info, Eye, Share2, Printer, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toHebrewError } from '../lib/errors';
 import { useQuery } from '../lib/useQuery';
@@ -32,32 +32,25 @@ import { financialSupplierMap } from '../lib/financialSuppliers';
 export type InvoiceRow = Omit<Invoice, 'supplier'> & {
   supplier: { name: string };
   order_links: { order_id: string }[];
-  /** G1, finding 8: read only so "שכפול כטיוטה" can carry the receipt link forward. */
-  receipt_links: { receipt_id: string }[];
   balance?: number;
 };
 
-/**
- * The duplicate-as-draft URL — G1, finding 8.
+/*
+ * There is no correction path for an invoice on this screen, and that is the decision rather than a
+ * gap (owner, 11.08.2026).
  *
- * There is no RPC that edits an invoice's amount, so for owner/office the real correction path is
- * soft-delete plus "שכפול כטיוטה". That duplicate used to arrive at `/invoices/new?from=` carrying
- * amounts, supplier and notes but NOT the order and receipt links, because `InvoiceNew` reads those
- * from URL parameters only (:34-35) and nothing was putting them there. The fix therefore silently
- * severed an invoice from its order — and with `linkedOrderIds` empty the three-way match block
- * never runs at all (`checks.ts:66-87`), which on screen is indistinguishable from "all clear".
+ * "שכפול כטיוטה" used to be it: no RPC edits an invoice's amount, so correcting one meant soft
+ * deleting it and re-typing a duplicate. But the premise underneath that was that a wrong invoice
+ * is OURS to fix. It is not. Every invoice here is a document a supplier issued and sent us; the
+ * business does not issue invoices at all. A supplier's invoice with a wrong amount is corrected by
+ * the supplier, who sends a corrected document or a credit note — and both of those arrive through
+ * the document gallery like any other paper. Retyping their document into a draft of our own
+ * produces a record that looks authoritative and matches nothing the supplier holds.
  *
- * One link each is all the form accepts, and one is all any invoice has today; taking `[0]` is a
- * statement about the URL contract, not a guess about the data.
+ * What remains for a wrong invoice: a credit request (the overcharge path 0118 already opens
+ * automatically), or soft deletion with a reason. If this product ever issues invoices to its own
+ * customers, that is a different document, a different table and a different button.
  */
-export function duplicateInvoiceHref(row: Pick<InvoiceRow, 'id' | 'order_links' | 'receipt_links'>): string {
-  const params = new URLSearchParams({ from: row.id });
-  const orderId = row.order_links?.[0]?.order_id;
-  const receiptId = row.receipt_links?.[0]?.receipt_id;
-  if (orderId) params.set('order', orderId);
-  if (receiptId) params.set('receipt', receiptId);
-  return `/invoices/new?${params.toString()}`;
-}
 
 /** Shared renderer for automatic-check results. */
 export function CheckList({ checks }: { checks: CheckResult[] }) {
@@ -168,7 +161,7 @@ export function InvoicesList() {
 
       const result = await fetchServerList<InvoiceRow>(supabase, {
         table: 'invoices',
-        select: '*, order_links:invoice_order_links(order_id), receipt_links:invoice_receipt_links(receipt_id)',
+        select: '*, order_links:invoice_order_links(order_id)',
         predicates,
         sort: uiSort
           ? [{ column: SORT_COLUMN[uiSort[0].column], ascending: uiSort[0].ascending }]
@@ -290,7 +283,7 @@ export function InvoicesList() {
       <DataTable rows={data.rows} columns={columns}
         emptyTitle="אין חשבוניות עדיין"
         emptySubtitle={canCreate
-          ? 'חשבונית נקלטת בכפתור «חשבונית חדשה», או מצילום מסמך שנכנס לתיקיית המסמכים.'
+          ? 'חשבונית נקלטת מצילום או מהעלאת המסמך שהתקבל מהספק, בתיקיית המסמכים.'
           : 'קליטת חשבוניות זמינה לבעלים, למנהל הרכש ולמנהל המטבח.'}
         error={error}
         server={{
@@ -318,7 +311,6 @@ export function InvoicesList() {
           // system, and the row action navigated to a detail screen whose amount is plain text
           // (InvoiceDetail.tsx:248-249). "פתיחה" is the same navigation under its real name.
           { key: 'edit', label: 'פתיחה', icon: Eye, hidden: !canCreate, onSelect: () => navigate(`/invoices/${r.id}`) },
-          { key: 'duplicate', label: 'שכפול כטיוטה', icon: Copy, hidden: !canCreate, onSelect: () => navigate(duplicateInvoiceHref(r)) },
           { key: 'share', label: 'שליחה', icon: Share2, hidden: !canShare(), onSelect: () => void shareInvoice(r, r.supplier.name) },
           { key: 'print', label: 'הדפסה', icon: Printer, onSelect: () => navigate(`/invoices/${r.id}?print=1`) },
           { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', hidden: !isOffice, onSelect: () => setDeleteTarget(r) },
