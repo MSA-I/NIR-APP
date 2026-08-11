@@ -690,8 +690,22 @@ try {
   Assert-True ($lifecycleAudit[0].user_id -eq $accounts.platform.Id -and [bool]$lifecycleAudit[0].reason) "lifecycle audit records actor and reason"
 
   # Server-authored audit, no browser fabrication, and no financial hard delete.
-  $response = Invoke-Rest -Method Patch -Resource "suppliers?id=eq.$supplierA" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{ notes = "P0 audited update" } -Prefer "return=representation"
+  #
+  # `select=` NAMES its columns, and that is not tidiness. 0112 replaced the table-level SELECT
+  # grant on suppliers with per-column grants that exclude bank_details, so a bare
+  # `return=representation` -- which is the HTTP spelling of `select=*` -- now returns 403 for
+  # everyone including the owner. This checker was the last caller doing it; the application
+  # has `check:supplier-columns` forbidding the same thing. The assertion below is unchanged in
+  # substance: an owner may patch a supplier, and the server writes the audit row.
+  $response = Invoke-Rest -Method Patch -Resource "suppliers?id=eq.$supplierA&select=id,notes" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{ notes = "P0 audited update" } -Prefer "return=representation"
   Assert-Status $response @(200) "sensitive row mutation"
+
+  # And the boundary that broke the line above, asserted rather than merely worked around.
+  # bank_details left `authenticated` entirely in 0112: it is reachable only through the
+  # dedicated command, and a column privilege sits BENEATH row-level security, so no policy
+  # and no role can hand it back through PostgREST. Owner included -- that is the point.
+  $response = Invoke-Rest -Method Get -Resource "suppliers?id=eq.$supplierA&select=bank_details" -ApiKey $anonKey -Token $accounts.ownerA.Token
+  Assert-Status $response @(401, 403) "bank details stay out of reach over HTTP"
   $mutationAudit = Get-Rows "audit_logs?action=eq.update&entity_type=eq.suppliers&entity_id=eq.$supplierA&select=user_id,old_values,new_values&order=created_at.desc&limit=1" $accounts.ownerA $anonKey "server mutation audit read"
   Assert-Count $mutationAudit 1 "real mutation creates server audit row"
   Assert-True ($mutationAudit[0].user_id -eq $accounts.ownerA.Id -and $null -ne $mutationAudit[0].old_values -and $null -ne $mutationAudit[0].new_values) "mutation audit captures actor and before/after values"
