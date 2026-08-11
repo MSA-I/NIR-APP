@@ -2718,7 +2718,10 @@ async function machineFiledDocument(browser) {
       assert(dialogText.includes(sentence), `the reversal dialog does not say «${sentence}»`);
     }
     const confirm = dialog.getByRole('button', { name: 'ביטול השיוך', exact: true });
-    assert(await confirm.isDisabled(), 'a machine-authored invoice can be reversed without a stated reason');
+    // The reason box stopped gating the button on 11.08.2026 (owner: nobody reads these notes).
+    // What is asserted below instead is the half that still matters: whatever a person types
+    // reaches the server verbatim, and an empty box becomes a sentence rather than nothing.
+    assert(await confirm.isEnabled(), 'the reversal button is still gated on a typed reason');
     await dialog.getByRole('textbox', { name: /סיבה/ }).fill(AUTO_ACTION_REASON);
     await confirm.click();
     await dialog.waitFor({ state: 'hidden', timeout: 20_000 });
