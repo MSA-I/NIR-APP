@@ -1248,10 +1248,12 @@ try {
     Invoke-SqlTest "supabase\tests\monthly_report_snapshots.sql" "Immutable legal-entity monthly accountant snapshots"
     Invoke-Preflight
     Invoke-SqlTest "supabase\tests\p1_financial_commands.sql" "P1 financial commands, rollback and idempotency"
-    Invoke-SqlTest "supabase\tests\p1_price_submissions.sql" "P1B trusted price-list intake, tenant isolation and rollback"
+    # Archived 12.08.2026: supplier is no longer a product account. The historical supplier-agent
+    # harness remains in supabase/tests, while active owner/office intake is covered by p15/p38/p40
+    # and the retired-account boundary is covered by p39.
     Invoke-SqlTest "supabase\tests\p2_data_reliability.sql" "P2 retry, alerts, pagination and reliability"
     Invoke-SqlTest "supabase\tests\server_list_contracts.sql" "Server list predicates, duplicate key across pages and tenant scope"
-    Invoke-SqlTest "supabase\tests\p1_price_submissions_concurrency.sql" "P1B real concurrent revisions and checksum retries" "supabase_admin"
+    # Archived with the supplier-agent harness above; its only caller identity is the retired role.
     Invoke-SqlTest "supabase\tests\roadmap_db_contracts.sql" "Roadmap supplier, inventory, savings and WhatsApp contracts"
     Invoke-SqlTest "supabase\tests\p1_concurrency.sql" "P1 real concurrent sessions" "supabase_admin"
     Invoke-SqlTest "supabase\tests\payment_credit_override_concurrency.sql" "Concurrent payment replay, approval, execution and credit creation" "supabase_admin"

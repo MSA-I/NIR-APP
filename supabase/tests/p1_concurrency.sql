@@ -33,15 +33,15 @@ insert into organizations (id, name, status) values
 insert into auth.users (id, email) values
   ('21000000-0000-0000-0000-000000000001', 'p1-concurrency-owner@example.test'),
   ('21000000-0000-0000-0000-000000000002', 'p1-concurrency-office@example.test'),
-  ('21000000-0000-0000-0000-000000000003', 'p1-concurrency-kitchen@example.test'),
-  ('21000000-0000-0000-0000-000000000004', 'p1-concurrency-payer@example.test'),
+  ('21000000-0000-0000-0000-000000000003', 'p1-concurrency-receiving-office@example.test'),
+  ('21000000-0000-0000-0000-000000000004', 'p1-concurrency-payment-accountant@example.test'),
   ('21000000-0000-0000-0000-000000000005', 'p1-concurrency-accountant@example.test');
 
 insert into profiles (id, org_id, full_name, role) values
   ('21000000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', 'P1 owner', 'owner'),
   ('21000000-0000-0000-0000-000000000002', '11000000-0000-0000-0000-000000000001', 'P1 office', 'office'),
-  ('21000000-0000-0000-0000-000000000003', '11000000-0000-0000-0000-000000000001', 'P1 kitchen', 'kitchen'),
-  ('21000000-0000-0000-0000-000000000004', '11000000-0000-0000-0000-000000000001', 'P1 payer', 'payer'),
+  ('21000000-0000-0000-0000-000000000003', '11000000-0000-0000-0000-000000000001', 'P1 receiving office', 'office'),
+  ('21000000-0000-0000-0000-000000000004', '11000000-0000-0000-0000-000000000001', 'P1 payment accountant', 'accountant'),
   ('21000000-0000-0000-0000-000000000005', '11000000-0000-0000-0000-000000000001', 'P1 accountant', 'accountant');
 
 insert into suppliers (id, org_id, name) values

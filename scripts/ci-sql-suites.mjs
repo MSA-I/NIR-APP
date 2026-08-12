@@ -25,6 +25,12 @@ const source = readFileSync(gatePath, 'utf8');
 const startIndex = source.indexOf('$qaMutex = Enter-QaMutex');
 if (startIndex < 0) throw new Error('Could not find the start of the gate run in check-quality-gates.ps1');
 const body = source.slice(startIndex);
+const preflightRelPath = 'supabase/tests/p1_preflight.sql';
+const preflightSource = readFileSync(path.join(repoRoot, preflightRelPath), 'utf8');
+const expectedPreflightRows = [...preflightSource.matchAll(/select\s+'/g)].length;
+if (expectedPreflightRows === 0) {
+  throw new Error('Parsed zero preflight arms from p1_preflight.sql');
+}
 
 /** @type {{kind:string,relPath?:string,label:string,user?:string}[]} */
 const sequence = [];
@@ -36,7 +42,11 @@ for (const match of body.matchAll(lineRe)) {
     continue;
   }
   if (kind === 'Invoke-Preflight') {
-    sequence.push({ kind: 'preflight', relPath: 'supabase/tests/p1_preflight.sql', label: 'P1 preflight (44 anomaly checks)' });
+    sequence.push({
+      kind: 'preflight',
+      relPath: preflightRelPath,
+      label: `P1 preflight (${expectedPreflightRows} anomaly checks)`,
+    });
     continue;
   }
   // Invoke-SqlTest "supabase\tests\x.sql" "Label" ["role"]
@@ -111,7 +121,7 @@ for (const step of sequence) {
     console.log(`\n== ${step.label}`);
     const { containerPath } = psql(step.relPath, 'postgres');
     // Preflight is a report, not an assertion script: it returns one row per check and the
-    // gate requires exactly 44 of them, all with rows_found=0.
+    // gate requires every arm declared in the canonical SQL file, all with rows_found=0.
     const out = run('docker', ['exec', '-e', 'PGPASSWORD=postgres', container,
       'psql', '-qAt', '-F', '|', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-f', containerPath],
       { capture: true });
@@ -119,9 +129,12 @@ for (const step of sequence) {
     const rows = (out.stdout ?? '').split('\n').filter((l) => /^([^|]+)\|([0-9]+)\|/.test(l));
     const bad = rows.filter((l) => Number(l.split('|')[1]) !== 0);
     if (out.status !== 0) { ok = false; console.error(out.stderr); }
-    else if (rows.length !== 44) { ok = false; console.error(`P1 preflight returned ${rows.length} rows instead of 44.`); }
+    else if (rows.length !== expectedPreflightRows) {
+      ok = false;
+      console.error(`P1 preflight returned ${rows.length} rows instead of ${expectedPreflightRows}.`);
+    }
     else if (bad.length) { ok = false; console.error(`P1 preflight found anomalies: ${bad.join('; ')}`); }
-    else console.log('P1 preflight passed: 44/44 checks returned rows_found=0.');
+    else console.log(`P1 preflight passed: ${expectedPreflightRows}/${expectedPreflightRows} checks returned rows_found=0.`);
   } else {
     console.log(`\n== ${step.label}`);
     const { containerPath, user } = psql(step.relPath, step.user);

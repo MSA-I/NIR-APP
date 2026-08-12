@@ -131,7 +131,10 @@ async function retiredPersonasBlocked(browser) {
   for (const role of ['kitchen', 'payer', 'supplier']) {
     const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
     const page = await context.newPage();
-    captureConsole(page, `retired-persona:${role}`);
+    captureConsole(page, `retired-persona:${role}`, [
+      /HTTP 400 .*\/auth\/v1\/token\?grant_type=password/,
+      /\[supplyflow\] Invalid login credentials/,
+    ]);
     try {
       const account = credentials(role);
       await page.goto(`${baseURL}/login`);

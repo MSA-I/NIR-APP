@@ -25,7 +25,8 @@
   אסמכתת PNG, וה־DB אישר `executed`, קישור `payment` ונתיב Storage דיירי.
 - השער הסופי עבר אחרי תיקון הסגירה: `npm run build`, ‏`tsc --noEmit`, ‏613/613 Vitest,
   אחד־עשר בדיקני החוזה ו־Vite production build. עברו גם `qa:typecheck` ו־149/149
-  `qa:test`; ‏`check:counts` אישר 56 סוויטות, 46 זרועות preflight ו־35 תרחישי דפדפן.
+  `qa:test`; לאחר פרישת חשבון הספק שתי סוויטות P1B תלויות־ספק נשמרו כארכיון והוצאו מהשער הפעיל;
+  ‏`check:counts` מאשר כעת 54 סוויטות, 46 זרועות preflight ו־35 תרחישי דפדפן.
   ‏p39 ו־Deno frozen עברו שוב אחרי תיקון ההסבה. הראיות נשמרו ב־`retire-personas-evidence`.
   עדיין נדרשים commit, ‏push וארבעת שערי ה־CI על ה־SHA המדויק. רק אחריהם מיזוג ופריסת ייצור.
 

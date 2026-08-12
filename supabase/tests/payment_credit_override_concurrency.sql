@@ -39,13 +39,13 @@ limit 1
 
 insert into auth.users (id, email) values
   ('a5730000-0000-4000-8000-000000000002', '0073-concurrency-owner@example.test'),
-  ('a5730000-0000-4000-8000-000000000003', '0073-concurrency-payer@example.test');
+  ('a5730000-0000-4000-8000-000000000003', '0073-concurrency-accountant@example.test');
 
 insert into profiles (id, org_id, full_name, role) values
   ('a5730000-0000-4000-8000-000000000002', 'a5730000-0000-4000-8000-000000000001',
    '0073 concurrency owner', 'owner'),
   ('a5730000-0000-4000-8000-000000000003', 'a5730000-0000-4000-8000-000000000001',
-   '0073 concurrency payer', 'payer');
+   '0073 concurrency accountant', 'accountant');
 
 insert into suppliers (id, org_id, name) values
   ('a5730000-0000-4000-8000-000000000011', 'a5730000-0000-4000-8000-000000000001',
