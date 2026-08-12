@@ -12,18 +12,19 @@ import {
   Note,
   SkeletonCards,
   SkeletonTable,
-  StatusBadge,
   useToast,
   type Column,
 } from '../components/ui';
 import { ok, toHebrewError } from '../lib/errors';
 import { fmtDateTime, fmtMoneyRounded, fmtNum } from '../lib/format';
 import { DOCUMENT_PROCESSING_CHANGED_EVENT } from '../lib/useDocumentProcessing';
+import { DocumentStatusBadge } from '../components/DocumentStatusBadge';
+import { documentProcessingFailureText, isSupersededProcessingFailure } from '../lib/documentStatus';
 import { supabase } from '../lib/supabase';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { useQuery, unwrap } from '../lib/useQuery';
 import {
-  attemptStatusMeta,
+  attemptUiStatus,
   calibrationReviewRpcName,
   normalizeIncorrectCalibration,
   type CalibrationAction,
@@ -176,6 +177,7 @@ interface ProcessingAttempt {
   attempt_count: number;
   created_at: string;
   updated_at: string;
+  lease_until?: string | null;
   queue_age_seconds: number | null;
   last_error_code: string | null;
   last_error_message: string | null;
@@ -199,6 +201,8 @@ interface ProcessingAttempt {
   price_list_reason_code: string | null;
   price_list_applied_count: number | null;
   price_list_waiting_count: number | null;
+  is_stuck?: boolean | null;
+  stuck_reason?: string | null;
 }
 
 interface AttemptRow extends ProcessingAttempt {
@@ -273,9 +277,9 @@ function documentFormatLabel(value: string) {
 }
 
 function attemptFilterKey(attempt: AttemptRow): Exclude<AttemptFilter, 'all'> {
-  const meta = attemptStatusMeta(attempt);
-  if (meta.tone === 'alert' || meta.tone === 'await') return 'attention';
-  if (meta.tone === 'info') return 'processing';
+  const status = attemptUiStatus(attempt);
+  if (status.state === 'failed' || status.state === 'stuck' || status.state === 'review') return 'attention';
+  if (status.state === 'processing') return 'processing';
   return 'completed';
 }
 
@@ -396,9 +400,27 @@ export default function DocumentOperations() {
 
   const supplierNames = useMemo(() => new Map((suppliers.data ?? []).map((supplier) => [supplier.id, supplier.name])), [suppliers.data]);
   const currentAttempts = useMemo(() => newestAttempts(attempts.data ?? []), [attempts.data]);
+  const currentIssue = useMemo(() => currentAttempts
+    .filter((attempt) => ['failed', 'stuck'].includes(attemptUiStatus(attempt).state))
+    .sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at))[0] ?? null,
+  [currentAttempts]);
   const filteredAttempts = useMemo(() => currentAttempts.filter((attempt) =>
     filter === 'all' || attemptFilterKey(attempt) === filter), [currentAttempts, filter]);
   const selectedHistory = historyAttempts.data ?? [];
+
+  useEffect(() => {
+    const refresh = () => {
+      void Promise.all([operations.refetch(), attempts.refetch(), historyAttempts.refetch()]);
+    };
+    const interval = window.setInterval(refresh, 10_000);
+    window.addEventListener('focus', refresh);
+    window.addEventListener(DOCUMENT_PROCESSING_CHANGED_EVENT, refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener(DOCUMENT_PROCESSING_CHANGED_EVENT, refresh);
+    };
+  }, [operations.refetch, attempts.refetch, historyAttempts.refetch]);
 
   async function refreshAll() {
     await Promise.all([
@@ -434,7 +456,7 @@ export default function DocumentOperations() {
     },
     {
       key: 'status', header: 'מצב תפעולי', priority: 1,
-      sortValue: (row) => attemptFilterKey(row), render: (row) => <StatusBadge meta={attemptStatusMeta(row)} />,
+      sortValue: (row) => attemptUiStatus(row).priority, render: (row) => <DocumentStatusBadge status={attemptUiStatus(row)} />,
     },
     {
       key: 'updated', header: 'עדכון אחרון', priority: 2, sortValue: (row) => row.updated_at,
@@ -474,7 +496,8 @@ export default function DocumentOperations() {
         </div>
       </header>
 
-      <OperationsOverview query={operations} />
+      <OperationsOverview query={operations} currentIssue={currentIssue}
+        onOpenIssue={(attempt) => setHistoryDocumentId(attempt.document_id)} />
 
       <section aria-labelledby="document-attempts-title">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -539,7 +562,11 @@ export default function DocumentOperations() {
   );
 }
 
-function OperationsOverview({ query }: { query: ReturnType<typeof useQuery<DocumentOperationsMetrics>> }) {
+function OperationsOverview({ query, currentIssue, onOpenIssue }: {
+  query: ReturnType<typeof useQuery<DocumentOperationsMetrics>>;
+  currentIssue: AttemptRow | null;
+  onOpenIssue: (attempt: AttemptRow) => void;
+}) {
   const metrics = query.data;
   return (
     <section aria-labelledby="document-operations-overview-title" className="space-y-3">
@@ -558,14 +585,17 @@ function OperationsOverview({ query }: { query: ReturnType<typeof useQuery<Docum
             <KpiCard title="הושלמו" value={fmtNum(metrics.documents_completed)} sub="המצב הנוכחי לכל מסמך" tone="done" />
           </div>
 
-          {metrics.last_failure && (
+          {currentIssue && (
             <Note tone="alert">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>הכשל האחרון נרשם ב־<span className="num">{fmtDateTime(metrics.last_failure.at)}</span>. פתח את המסמך שנכשל לקבלת פרטים ולניסיון נוסף.</span>
-                <details className="text-xs">
-                  <summary className="cursor-pointer font-medium">פרטי כשל טכניים</summary>
-                  <p className="mt-2 whitespace-pre-wrap" dir="auto">{metrics.last_failure.message ?? metrics.last_failure.code ?? 'לא נמסרו פרטים'}</p>
-                </details>
+                <span>
+                  <strong>{attemptUiStatus(currentIssue).label}:</strong>{' '}
+                  {currentIssue.file_name ?? 'מסמך ללא שם זמין'} · <span className="num">{fmtDateTime(currentIssue.updated_at)}</span>.
+                  {' '}{attemptUiStatus(currentIssue).description}
+                </span>
+                <button type="button" className="btn-secondary min-h-11" onClick={() => onOpenIssue(currentIssue)}>
+                  פתיחת המסמך
+                </button>
               </div>
             </Note>
           )}
@@ -1048,7 +1078,7 @@ function AttemptHistoryModal({ attempts, open, loading, error, onClose, onReview
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-semibold text-ink">{index === 0 ? 'תוצאה נוכחית' : `תוצאה קודמת ${index}`}</h3>
-                    <StatusBadge meta={attemptStatusMeta(attempt)} />
+                    <DocumentStatusBadge status={attemptUiStatus(attempt)} />
                   </div>
                   <p className="mt-1 text-xs text-ink-muted"><span className="num">{fmtDateTime(attempt.updated_at)}</span></p>
                 </div>
@@ -1070,8 +1100,9 @@ function AttemptHistoryModal({ attempts, open, loading, error, onClose, onReview
                 <Metric label="עלות מדווחת" value={fmtMoneyRounded(attempt.usage_cost)} />
               </dl>
               {attempt.status === 'failed' && (
-                <Note tone="alert" className="mt-4">
-                  <strong>פרטי כשל:</strong> <span dir="auto">{attempt.last_error_message ?? attempt.last_error_code ?? 'לא נמסרו פרטים'}</span>
+                <Note tone={isSupersededProcessingFailure(attempt.last_error_code) ? 'idle' : 'alert'} className="mt-4">
+                  <strong>{isSupersededProcessingFailure(attempt.last_error_code) ? 'אירוע היסטורי:' : 'מה קרה:'}</strong>{' '}
+                  <span>{documentProcessingFailureText(attempt.last_error_code, attempt.last_error_message)}</span>
                 </Note>
               )}
               <details className="mt-4 text-xs text-ink-soft">

@@ -2,7 +2,7 @@ name: supplyflow-ocr
 
 services:
   worker:
-    image: supplyflow-ocr-worker:2026-07-29
+    image: supplyflow-ocr-worker:2026-08-12-contract-v2
     pull_policy: never
     build:
       context: ./worker/ocr

@@ -39,11 +39,11 @@ describe('document operations capability and UX contract', () => {
   });
 
   it('maps operational states to clear Hebrew meanings', () => {
-    expect(attemptStatusMeta(attempt('queued')).label).toBe('ממתין');
+    expect(attemptStatusMeta(attempt('queued')).label).toBe('ממתין לעיבוד');
     expect(attemptStatusMeta(attempt('interpreting')).label).toBe('בעיבוד');
     expect(attemptStatusMeta(attempt('completed')).label).toBe('הושלם');
     expect(attemptStatusMeta(attempt('review')).label).toBe('נדרשת בדיקה');
-    expect(attemptStatusMeta(attempt('failed')).label).toBe('נכשל');
+    expect(attemptStatusMeta(attempt('failed')).label).toBe('העיבוד נכשל');
     expect(attemptStatusMeta(attempt('completed', 'partially_applied')).label).toBe('הוחל חלקית');
     expect(attemptStatusMeta(attempt('completed', 'auto_applied')).label).toBe('הוחל אוטומטית');
     expect(attemptStatusMeta(attempt('completed', 'auto_applied', true)).label).toBe('בוטל');

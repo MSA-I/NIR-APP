@@ -71,6 +71,30 @@ jobs:
           ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-interpret.log \
             || { echo 'Ignored or skipped cases are not acceptable in this gate.'; exit 1; }
 
+      - name: Document gateway and organization-boundary contracts
+        run: |
+          set -euo pipefail
+          npx --yes deno test \
+            --config supabase/functions/document-processing/deno.json \
+            supabase/functions/document-processing/contract_test.ts 2>&1 | tee deno-document-gateway.log
+          npx --yes deno test \
+            --config supabase/functions/interpret-document/deno.json \
+            --allow-read=. \
+            supabase/functions/_shared/organization-access.test.ts \
+            supabase/functions/_shared/organization-egress.test.ts \
+            supabase/functions/_shared/reserved-egress.test.ts \
+            supabase/functions/_shared/edge-organization-access-wiring.test.ts 2>&1 | tee deno-organization-boundaries.log
+          grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-document-gateway.log \
+            || { echo 'No document-gateway test completed.'; exit 1; }
+          grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-organization-boundaries.log \
+            || { echo 'No organization-boundary test completed.'; exit 1; }
+          ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-document-gateway.log deno-organization-boundaries.log \
+            || { echo 'Ignored or skipped cases are not acceptable in this gate.'; exit 1; }
+
+      - name: Document-processing function type contract
+        working-directory: supabase/functions/document-processing
+        run: npx --yes deno check --config deno.json --lock deno.lock --frozen index.ts
+
       - name: Send-feedback function type contract
         working-directory: supabase/functions/send-feedback
         run: npx --yes deno check --config deno.json --lock deno.lock --frozen index.ts

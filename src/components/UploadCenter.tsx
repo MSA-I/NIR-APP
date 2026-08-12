@@ -16,14 +16,14 @@ import { ShieldCheck, X } from 'lucide-react';
 import { toHebrewError } from '../lib/errors';
 import { TusUploadCancelledError } from '../lib/tusUpload';
 import {
-  DOCUMENT_USER_STATE_META,
-  documentUserState,
   useDocumentProcessing,
   type DocumentProcessingStage,
 } from '../lib/useDocumentProcessing';
+import { documentUiStatus } from '../lib/documentStatus';
 import type { StatusMeta } from '../lib/status';
 import { setUploadBatchDelegate, type UploadBatchResult } from '../lib/uploadBatch';
 import { Note, StatusBadge } from './ui';
+import { DocumentStatusBadge } from './DocumentStatusBadge';
 
 /* ================= queue model ================= */
 
@@ -553,7 +553,7 @@ const UPLOAD_STATE_META: Record<UploadCenterStatus, StatusMeta> = {
  */
 function displayMeta(entry: UploadCenterEntry, stage: DocumentProcessingStage | null): StatusMeta {
   if (entry.status === 'registered') {
-    if (stage && stage !== 'unprocessed') return DOCUMENT_USER_STATE_META[documentUserState(stage)];
+    if (stage && stage !== 'unprocessed') return documentUiStatus({ status: stage });
     if (entry.error) return { label: 'נרשם — העיבוד לא החל', tone: 'await' };
     return UPLOAD_STATE_META.registered;
   }
@@ -659,13 +659,19 @@ export function UploadCenter() {
       )}
       <ul className="divide-y divide-line-soft">
         {entries.map((entry) => {
-          const stage = entry.documentId ? processing.snapshots[entry.documentId]?.stage ?? null : null;
+          const snapshot = entry.documentId ? processing.snapshots[entry.documentId] : undefined;
+          const stage = snapshot?.stage ?? null;
+          const processingStatus = entry.status === 'registered' && stage && stage !== 'unprocessed'
+            ? documentUiStatus({ status: stage, job: snapshot?.job })
+            : null;
           return (
             <li key={entry.id} className="px-3 py-2.5">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="min-w-0 flex-1 truncate text-sm text-ink-mid" title={entry.fileName}>{entry.fileName}</span>
                 {entry.size > 0 && <span className="num text-xs text-ink-muted">{formatFileSize(entry.size)}</span>}
-                <StatusBadge meta={displayMeta(entry, stage)} />
+                {processingStatus
+                  ? <DocumentStatusBadge status={processingStatus} />
+                  : <StatusBadge meta={displayMeta(entry, stage)} />}
                 {entry.canRetry && (
                   <button type="button" className="btn-ghost min-h-11 px-2!"
                     onClick={() => retryUploadCenterEntry(entry.id)}>

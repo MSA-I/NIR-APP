@@ -819,6 +819,10 @@ function Invoke-InterpretDocumentContractTests {
     --config (Join-Path $repoRoot "supabase\functions\interpret-document\deno.json") `
     (Join-Path $repoRoot "supabase\functions\interpret-document\index.ts")
   if ($LASTEXITCODE -ne 0) { throw "Interpret-document Edge Function failed Deno typecheck." }
+  npx.cmd --yes deno check `
+    --config (Join-Path $repoRoot "supabase\functions\document-processing\deno.json") `
+    (Join-Path $repoRoot "supabase\functions\document-processing\index.ts")
+  if ($LASTEXITCODE -ne 0) { throw "Document-processing Edge Function failed Deno typecheck." }
   npx.cmd --yes deno check --allow-import --node-modules-dir=auto `
     (Join-Path $repoRoot "supabase\functions\submit-price-list\index.ts")
   if ($LASTEXITCODE -ne 0) { throw "Submit-price-list Edge Function failed Deno typecheck." }

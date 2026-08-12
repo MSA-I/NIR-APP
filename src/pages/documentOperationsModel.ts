@@ -1,4 +1,5 @@
 import type { StatusMeta } from '../lib/status';
+import { documentUiStatus, type DocumentStatusInput, type DocumentUiStatus } from '../lib/documentStatus';
 
 export type CalibrationAction = 'apply_existing_price' | 'create_product' | 'review' | 'rejected_by_policy';
 
@@ -55,18 +56,53 @@ export interface OperationalAttemptState {
   price_list_outcome: string | null;
   reversal_known: boolean;
   reverted: boolean | null;
+  attempt_count?: number;
+  created_at?: string;
+  updated_at?: string;
+  lease_until?: string | null;
+  queue_age_seconds?: number | null;
+  last_error_code?: string | null;
+  is_stuck?: boolean | null;
+  stuck_reason?: string | null;
 }
 
 /** One user-facing vocabulary for the queue, attempt table and history drilldown. */
-export function attemptStatusMeta(attempt: OperationalAttemptState): StatusMeta {
-  if (attempt.reversal_known && attempt.reverted) return { label: 'בוטל', tone: 'idle' };
-  if (attempt.status === 'failed') return { label: 'נכשל', tone: 'alert' };
-  if (['queued', 'leased', 'extracted', 'interpreting'].includes(attempt.status)) {
-    return attempt.status === 'queued' ? { label: 'ממתין', tone: 'await' } : { label: 'בעיבוד', tone: 'info' };
+export function attemptUiStatus(attempt: OperationalAttemptState): DocumentUiStatus {
+  const canonical = documentUiStatus({
+    status: attempt.status as DocumentStatusInput['status'],
+    job: {
+      status: attempt.status as never,
+      attempt_count: attempt.attempt_count ?? 0,
+      created_at: attempt.created_at ?? '',
+      updated_at: attempt.updated_at ?? '',
+      lease_until: attempt.lease_until ?? null,
+      last_error_code: attempt.last_error_code ?? null,
+    },
+    queueAgeSeconds: attempt.queue_age_seconds,
+    isStuck: attempt.is_stuck,
+    stuckReason: attempt.stuck_reason,
+  });
+  if (attempt.reversal_known && attempt.reverted) {
+    return { ...canonical, state: 'historical', label: 'בוטל', tone: 'idle', description: 'הפעולה בוטלה ונשמרה בהיסטוריה', loading: false, priority: 5 };
   }
-  if (attempt.price_list_outcome === 'partially_applied') return { label: 'הוחל חלקית', tone: 'await' };
-  if (attempt.status === 'review' || attempt.price_list_outcome === 'queued_for_review') return { label: 'נדרשת בדיקה', tone: 'await' };
-  if (attempt.price_list_outcome === 'auto_applied') return { label: 'הוחל אוטומטית', tone: 'done' };
-  if (attempt.status === 'completed') return { label: 'הושלם', tone: 'done' };
-  return { label: 'מצב לא ידוע', tone: 'idle' };
+  if (canonical.state === 'failed' || canonical.state === 'stuck'
+    || canonical.state === 'processing' || canonical.state === 'historical') {
+    return canonical;
+  }
+  if (attempt.price_list_outcome === 'partially_applied') {
+    return { ...canonical, state: 'review', label: 'הוחל חלקית', tone: 'await', description: 'חלק מהשורות הוחלו וחלק עדיין ממתינות לבדיקה', priority: 2 };
+  }
+  if (attempt.status === 'review' || attempt.price_list_outcome === 'queued_for_review') {
+    return { ...canonical, state: 'review', label: 'נדרשת בדיקה', tone: 'await', description: 'העיבוד הסתיים וממתין להחלטה אנושית', priority: 2 };
+  }
+  if (attempt.price_list_outcome === 'auto_applied') {
+    return { ...canonical, state: 'completed', label: 'הוחל אוטומטית', tone: 'done', description: 'העיבוד והפעולה האוטומטית הושלמו', priority: 4 };
+  }
+  if (attempt.status === 'completed') return canonical;
+  return { ...canonical, state: 'unavailable', label: 'מצב לא ידוע', tone: 'idle', description: 'מצב הניסיון אינו זמין', priority: 6 };
+}
+
+export function attemptStatusMeta(attempt: OperationalAttemptState): StatusMeta {
+  const { label, tone } = attemptUiStatus(attempt);
+  return { label, tone };
 }

@@ -126,7 +126,7 @@ describe('מה השורה אומרת על מסמך ששויך אוטומטית',
 
   // The control, and the assertion that makes the one above mean something: the colleague's
   // invoice reads exactly as it always did.
-  it('מסמך ששויך ביד נשאר "משויך" ואינו נטען כאוטומטי', async () => {
+  it('מסמך ששויך ביד מציין את היעד ואינו נטען כאוטומטי', async () => {
     ROLE.current = 'owner';
     server.use(...traffic());
     renderGallery();
@@ -134,7 +134,7 @@ describe('מה השורה אומרת על מסמך ששויך אוטומטית',
     // are two queries, and the rows render before the second answers. Asserting the absence of a
     // badge that has not loaded yet would pass against a screen that never labels anything.
     const machineBadges = await screen.findAllByText('שויך אוטומטית');
-    const humanBadges = screen.getAllByText('משויך');
+    const humanBadges = screen.getAllByText('שויך לחשבונית');
     // Both rows are filed to an invoice and differ in nothing else, so the counts being EQUAL and
     // non-zero is the claim: exactly one of the two is labelled machine-written. (Each badge
     // renders once per surface — desktop table and mobile card — which is why this compares the

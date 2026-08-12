@@ -8,7 +8,9 @@ import { supabase } from '../lib/supabase';
 import type { DocumentRow } from '../lib/types';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { ActionMenu } from './ActionMenu';
-import { ConfirmDialog, ErrorNote, Note, Skeleton, StatusBadge, useToast } from './ui';
+import { ConfirmDialog, ErrorNote, Note, Skeleton, useToast } from './ui';
+import { DocumentStatusBadge } from './DocumentStatusBadge';
+import { documentUiStatus } from '../lib/documentStatus';
 import {
   DOCUMENT_UPLOAD_ACCEPT,
   documentUploadFailure,
@@ -18,7 +20,7 @@ import {
 import { openReservedPopup } from '../lib/popup';
 import { runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
-import { DOCUMENT_USER_STATE_META, documentUserState, useDocumentProcessing } from '../lib/useDocumentProcessing';
+import { useDocumentProcessing } from '../lib/useDocumentProcessing';
 
 export interface LinkedReceipt {
   id: string;
@@ -229,7 +231,9 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
                     {canReview && (
                       <span data-document-processing-status={stage ?? 'loading'}>
                         {stage
-                          ? <StatusBadge meta={DOCUMENT_USER_STATE_META[documentUserState(stage)]} />
+                          ? <DocumentStatusBadge status={documentUiStatus({
+                            status: stage, job: processing.snapshots[doc.id]?.job, document: doc,
+                          })} />
                           : <><Skeleton className="h-6 w-24" /><span className="sr-only">סטטוס העיבוד נטען</span></>}
                       </span>
                     )}

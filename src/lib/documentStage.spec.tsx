@@ -28,6 +28,7 @@ import {
   type DocumentProcessingStage,
   type DocumentUserState,
 } from './useDocumentProcessing';
+import { documentUiStatus } from './documentStatus';
 import { ProcessingBadge, ProcessingFilterSelect } from '../pages/DocumentsInbox';
 
 const STAGES = Object.keys(DOCUMENT_PROCESSING_STAGE_META) as DocumentProcessingStage[];
@@ -174,21 +175,22 @@ describe('חוזה התג מול שער הדפדפן', () => {
   it.each(STAGES)('%s — data-stage נושא את השלב הגולמי, והטקסט עברי אנושי', (stage) => {
     render(<ProcessingBadge documentId="doc-1" stage={stage} />);
     const badge = screen.getByTestId('document-processing-status');
+    const status = documentUiStatus({ status: stage });
     expect(badge.getAttribute('data-document-id')).toBe('doc-1');
     expect(badge.getAttribute('data-stage')).toBe(stage);
-    expect(badge.textContent?.trim()).toBe(DOCUMENT_USER_STATE_META[documentUserState(stage)].label);
-    expect(badge.className).toBe(`badge-${DOCUMENT_USER_STATE_META[documentUserState(stage)].tone}`);
+    expect(badge.textContent?.trim()).toBe(status.label);
+    expect(badge.className).toContain(`badge-${status.tone}`);
   });
 
   it.each(STAGES)('%s — ההסבר נגיש גם בלי ריחוף, ומחוץ לטקסט התג', (stage) => {
     const { container } = render(<ProcessingBadge documentId="doc-4" stage={stage} />);
     const badge = screen.getByTestId('document-processing-status');
-    const description = documentUserStateDescription(stage);
+    const description = documentUiStatus({ status: stage }).description;
     expect(badge.getAttribute('title')).toBe(description);
     // ולא ב-title בלבד: tooltip אינו קיים במגע, והתרחיש מריץ את הדף הזה ב-390px.
     expect(container.querySelector('.sr-only')?.textContent).toBe(description);
     // ומחוץ לתג — check-browser-smoke.cjs מודד את ה-innerText שלו מול תווית אחת.
-    expect(badge.textContent?.trim()).toBe(documentUserStateLabel(stage, null));
+    expect(badge.textContent?.trim()).toBe(documentUiStatus({ status: stage }).label);
   });
 
   it('שורה שהעיבוד שלה הושלם ושויכה מספרת על היעד בתג עצמו', () => {

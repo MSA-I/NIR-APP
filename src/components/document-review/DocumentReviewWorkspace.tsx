@@ -3,8 +3,9 @@ import { Cpu, FileCheck2, ScanText } from 'lucide-react';
 import type { Role } from '../../lib/types';
 import { supabase } from '../../lib/supabase';
 import { openReservedPopup } from '../../lib/popup';
-import { DOCUMENT_PROCESSING_STAGE_META } from '../../lib/useDocumentProcessing';
+import { documentProcessingFailureText, documentUiStatus } from '../../lib/documentStatus';
 import { Note, useToast } from '../ui';
+import { DocumentStatusBadge } from '../DocumentStatusBadge';
 import { DocumentAssessmentPanel } from './DocumentAssessmentPanel';
 import { DocumentExportPreview } from './DocumentExportPreview';
 import { DocumentReviewProposals } from './DocumentReviewProposals';
@@ -49,7 +50,7 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
   const [technicalOpen, setTechnicalOpen] = useState(false);
   const isPriceList = snapshot.interpretation?.payload.document_type === 'price_list';
   const extraction = snapshot.extraction?.payload ?? null;
-  const stageMeta = DOCUMENT_PROCESSING_STAGE_META[snapshot.stage];
+  const uiStatus = documentUiStatus({ status: snapshot.stage, job: snapshot.job, document: snapshot.document });
 
   /**
    * Every confidence number the everyday screens stopped printing, in one place.
@@ -180,7 +181,7 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="page-title break-words">בדיקת מסמך</h1>
-              <span className={`badge-${stageMeta.tone}`}>{stageMeta.label}</span>
+              <DocumentStatusBadge status={uiStatus} data-stage={snapshot.stage} />
             </div>
             <p className="mt-1 break-words text-sm text-ink-muted">{snapshot.document.file_name}</p>
           </div>
@@ -320,11 +321,15 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
 
       {snapshot.stage === 'failed' && (
         <Note tone="alert" role="alert">
-          העיבוד נכשל{snapshot.job?.last_error_message ? `: ${snapshot.job.last_error_message}` : '.'} אפשר לחזור לגלריה ולשלוח את המסמך מחדש לתור.
+          <strong>העיבוד נכשל.</strong>{' '}
+          {documentProcessingFailureText(snapshot.job?.last_error_code, snapshot.job?.last_error_message)} אפשר לחזור לגלריה ולשלוח את המסמך מחדש לתור.
         </Note>
       )}
-      {snapshot.stage !== 'review' && snapshot.stage !== 'failed' && (
-        <Note tone="info" role="status">המסמך מוצג לקריאה בלבד כל עוד אינו במצב „דורש בדיקה”. הסטטוס מתרענן אוטומטית.</Note>
+      {uiStatus.loading && (
+        <Note tone="info" role="status">המסמך בעיבוד ומוצג כרגע לקריאה בלבד. הסטטוס מתרענן מנתוני השרת.</Note>
+      )}
+      {uiStatus.state === 'stuck' && (
+        <Note tone="alert" role="alert">העיבוד לא התקדם לפי הגיל ומספר הניסיונות שנשמרו בשרת. יש לפתוח את מרכז תפעול המסמכים לטיפול.</Note>
       )}
       {snapshot.extraction?.payload.document.partial && (
         <Note tone="await" role="status">החילוץ חלקי. יש להשוות כל ערך למקור לפני מתן משוב.</Note>

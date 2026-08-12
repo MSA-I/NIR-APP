@@ -12,6 +12,8 @@ import tempfile
 import threading
 import time
 import uuid
+import urllib.error
+import urllib.request
 import zipfile
 import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -39,6 +41,8 @@ from src import (
     sniff_mime,
     validate_extraction,
 )
+from src.gateway import GATEWAY_CONTRACT_HEADER, GATEWAY_CONTRACT_VERSION
+from src.worker import WORKER_VERSION
 
 
 def _contract(page_count: int, text: str) -> dict[str, Any]:
@@ -726,16 +730,25 @@ def _gateway_e2e_check(scratch: Path) -> dict[str, Any]:
         "failure_reporting": False,
         "heartbeat_during_fail": False,
         "errors": [],
+        "contract_rejections": 0,
+        "advertise_wrong_contract_once": True,
     }
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: Any) -> None:
             del format, args
 
-        def send_json(self, status: int, payload: dict[str, Any]) -> None:
+        def send_json(
+            self,
+            status: int,
+            payload: dict[str, Any],
+            *,
+            contract_version: str = GATEWAY_CONTRACT_VERSION,
+        ) -> None:
             body = json.dumps(payload, separators=(",", ":")).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
+            self.send_header(GATEWAY_CONTRACT_HEADER, contract_version)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -774,6 +787,16 @@ def _gateway_e2e_check(scratch: Path) -> dict[str, Any]:
             if self.headers.get("x-ocr-worker-token") != token:
                 self.send_json(401, {"ok": False, "error": {"code": "invalid_worker_token", "message": "Invalid token"}})
                 return
+            if self.headers.get(GATEWAY_CONTRACT_HEADER) != GATEWAY_CONTRACT_VERSION:
+                state["contract_rejections"] += 1
+                self.send_json(409, {
+                    "ok": False,
+                    "error": {
+                        "code": "gateway_contract_mismatch",
+                        "message": "Worker and document gateway contracts do not match",
+                    },
+                })
+                return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 request = json.loads(self.rfile.read(length).decode("utf-8", "strict"))
@@ -782,6 +805,14 @@ def _gateway_e2e_check(scratch: Path) -> dict[str, Any]:
                 return
             action = request.get("action")
             if action == "claim":
+                if state["advertise_wrong_contract_once"]:
+                    state["advertise_wrong_contract_once"] = False
+                    self.send_json(
+                        200,
+                        {"ok": True, "data": None},
+                        contract_version="stale",
+                    )
+                    return
                 job = state["claims"].pop(0) if state["claims"] else None
                 if job is not None:
                     job = dict(job)
@@ -908,6 +939,31 @@ def _gateway_e2e_check(scratch: Path) -> dict[str, Any]:
         temp_root=temp_root,
     )
     try:
+        claims_before_contract_probe = len(state["claims"])
+        stale_request = urllib.request.Request(
+            f"{base_url}/functions/v1/document-processing",
+            data=json.dumps({
+                "action": "claim",
+                "lease_owner": "stale-worker",
+                "lease_seconds": 120,
+            }).encode(),
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "x-ocr-worker-token": token,
+                GATEWAY_CONTRACT_HEADER: "1",
+            },
+        )
+        try:
+            urllib.request.urlopen(stale_request, timeout=5)
+        except urllib.error.HTTPError as error:
+            assert error.code == 409
+            stale_response = json.loads(error.read().decode("utf-8"))
+            assert stale_response["error"]["code"] == "gateway_contract_mismatch"
+        else:
+            raise AssertionError("stale_gateway_contract_was_accepted")
+        assert len(state["claims"]) == claims_before_contract_probe
+
         try:
             GatewayClient(base_url, "wrong-worker-token-00000000000", timeout_seconds=5).claim("rejected", 120)
         except GatewayError as error:
@@ -915,6 +971,13 @@ def _gateway_e2e_check(scratch: Path) -> dict[str, Any]:
         else:
             raise AssertionError("gateway_wrong_token_was_accepted")
         client = GatewayClient(base_url, token, timeout_seconds=5)
+        try:
+            client.claim("self-check-worker", 120)
+        except GatewayError as error:
+            assert error.code == "gateway_contract_mismatch"
+        else:
+            raise AssertionError("mismatched_gateway_advertisement_was_accepted")
+        assert len(state["claims"]) == claims_before_contract_probe
         assert process_one(client, config) is True
         assert process_one(client, config) is True
         assert process_one(client, config) is True
@@ -925,10 +988,14 @@ def _gateway_e2e_check(scratch: Path) -> dict[str, Any]:
         assert state["complete_attempts"] == 2
         assert state["fail"] == [failure_job, retry_job]
         assert state["heartbeat_during_fail"] is True
+        assert state["contract_rejections"] == 1
         assert state["errors"] == []
         assert not list(temp_root.glob("job-*"))
         return {
             "token_rejection": "passed",
+            "contract_version": GATEWAY_CONTRACT_VERSION,
+            "stale_contract_rejected_before_claim": "passed",
+            "mismatched_gateway_advertisement_rejected": "passed",
             "download_retry": "passed",
             "download_ack_before_ocr": "passed",
             "complete_receipt": "passed",
@@ -1028,6 +1095,8 @@ def main() -> int:
             json.dumps(
                 {
                     "status": "self_check_passed",
+                    "worker_version": WORKER_VERSION,
+                    "gateway_contract_version": GATEWAY_CONTRACT_VERSION,
                     "parsers": parser_names,
                     "limits": "passed",
                     "macro_security": "passed",

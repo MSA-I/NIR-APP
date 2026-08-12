@@ -3,7 +3,9 @@ import { Camera, FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { Link } from 'react-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
-import { useToast, Skeleton, ConfirmDialog, ErrorNote, Note, StatusBadge } from './ui';
+import { useToast, Skeleton, ConfirmDialog, ErrorNote, Note } from './ui';
+import { DocumentStatusBadge } from './DocumentStatusBadge';
+import { documentUiStatus } from '../lib/documentStatus';
 import { ok, toHebrewError } from '../lib/errors';
 import { useQuery, unwrap } from '../lib/useQuery';
 import type { DocumentKind, DocumentRow } from '../lib/types';
@@ -15,7 +17,7 @@ import {
   type UploadBatchSummary,
 } from '../lib/uploadBatch';
 import { fetchAll } from '../lib/supabasePaging';
-import { DOCUMENT_USER_STATE_META, documentUserState, useDocumentProcessing } from '../lib/useDocumentProcessing';
+import { useDocumentProcessing } from '../lib/useDocumentProcessing';
 import { TusUploadCancelledError, TusUploadError, tusUploadToDocuments } from '../lib/tusUpload';
 import {
   claimPendingPhotos,
@@ -85,6 +87,12 @@ export interface DocumentUploadResume {
   storagePath: string;
   documentId: string | null;
 }
+
+// A retry from QuickCapture, the inbox modal, an attachment panel or the global Upload Center
+// receives the same File object. Keep its safe resume point here, at the upload boundary, so every
+// caller resumes registration/enqueue and none of them has to remember how storage was reached.
+// WeakMap deliberately does not retain files after the browser releases them.
+const documentUploadResumeByFile = new WeakMap<File, DocumentUploadResume>();
 
 class DocumentUploadError extends Error {
   constructor(
@@ -219,7 +227,7 @@ export async function uploadDocument(
   const mimeType = uploadMimeType(file);
   const { data: user, error: userError } = await supabase.auth.getUser();
   if (userError || !user.user) throw new Error(userError?.message ?? 'unauthenticated');
-  const resume = options.resume ?? null;
+  const resume = options.resume ?? documentUploadResumeByFile.get(file) ?? null;
   let path = resume?.storagePath ?? null;
   let documentId = resume?.documentId ?? null;
   let freshUpload = false;
@@ -254,8 +262,6 @@ export async function uploadDocument(
     center?.registerAbort(null);
     freshUpload = true;
   }
-  center?.markStored(documentId);
-
   if (!documentId) {
     const ins = await supabase.from('documents').insert({
       org_id: orgId, entity_type: entityType, entity_id: entityId,
@@ -285,23 +291,30 @@ export async function uploadDocument(
       if (objectRemains) {
         // The object is durable but the registry row is not. The retry must redo ONLY the
         // insert against the same stored path — re-uploading would duplicate the object.
+        const nextResume = { storagePath: path, documentId: null };
+        documentUploadResumeByFile.set(file, nextResume);
+        center?.markStored(null);
         throw new DocumentUploadError(
           'הקובץ נשמר באחסון, אך רישום המסמך לא הושלם. ניסיון חוזר ישלים את הרישום בלי להעלות מחדש.',
           true,
           false,
-          { storagePath: path, documentId: null },
+          nextResume,
         );
       }
+      documentUploadResumeByFile.delete(file);
       throw new Error(insertMessage);
     }
     documentId = ins.data.id;
   }
+  documentUploadResumeByFile.set(file, { storagePath: path, documentId });
   center?.markRegistered(documentId);
   if (metadata.enqueueProcessing === false) {
+    documentUploadResumeByFile.delete(file);
     return { documentId, jobId: null };
   }
   const queued = await supabase.rpc('enqueue_document_processing', { p_document_id: documentId });
   if (queued.error && processingQueueUnavailable(queued.error)) {
+    documentUploadResumeByFile.delete(file);
     return { documentId, jobId: null };
   }
   if (queued.error || typeof queued.data !== 'string') {
@@ -315,6 +328,7 @@ export async function uploadDocument(
       { storagePath: path, documentId },
     );
   }
+  documentUploadResumeByFile.delete(file);
   return { documentId, jobId: queued.data };
 }
 
@@ -706,7 +720,9 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
                 {canReview && (
                   <span data-document-processing-status={stage ?? 'loading'}>
                     {stage
-                      ? <StatusBadge meta={DOCUMENT_USER_STATE_META[documentUserState(stage)]} />
+                      ? <DocumentStatusBadge status={documentUiStatus({
+                        status: stage, job: processing.snapshots[d.id]?.job, document: d,
+                      })} />
                       : <><Skeleton className="h-6 w-24" /><span className="sr-only">סטטוס העיבוד נטען</span></>}
                   </span>
                 )}

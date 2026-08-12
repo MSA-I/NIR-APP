@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { Archive, Bot, ChevronDown, Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, RotateCcw, Search, Trash2, Undo2, Upload, X } from 'lucide-react';
+import { Archive, ChevronDown, Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, RotateCcw, Search, Trash2, Undo2, Upload, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -21,15 +21,13 @@ import {
 import { openReservedPopup } from '../lib/popup';
 import { runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
+import { DocumentStatusBadge } from '../components/DocumentStatusBadge';
+import { documentMatchesFilingFilter, documentUiStatus } from '../lib/documentStatus';
 import {
   DOCUMENT_PROCESSING_CHANGED_EVENT,
   DOCUMENT_USER_STATE_FILTERS,
-  DOCUMENT_USER_STATE_META,
   documentUserState,
-  documentUserStateDescription,
   documentUserStateFromParam,
-  documentUserStateLabel,
-  documentUserStateUrgency,
   useDocumentProcessing,
   type DocumentProcessingStage,
   type DocumentUserState,
@@ -71,7 +69,7 @@ function autoActionConfidence(action: AutoActionRow): string {
 }
 
 function autoActionDescription(action: AutoActionRow): string {
-  return `החשבונית נוצרה אוטומטית על ידי המערכת מתוך המסמך הזה, ללא אישור אדם, ברמת ביטחון ${autoActionConfidence(action)}.`;
+  return `החשבונית נוצרה ושויכה אוטומטית על ידי המערכת מתוך המסמך הזה, ללא אישור אדם, ברמת ביטחון ${autoActionConfidence(action)}.`;
 }
 
 type InvoicePick = { id: string; invoice_number: string; invoice_date: string; supplier: { name: string } | null };
@@ -96,22 +94,9 @@ export function ProcessingBadge({ documentId, stage, doc }: {
       </span>
     );
   }
-  const meta = DOCUMENT_USER_STATE_META[documentUserState(stage)];
-  return (
-    <>
-      <span data-testid="document-processing-status" data-document-id={documentId} data-stage={stage}
-        className={`badge-${meta.tone}`} title={documentUserStateDescription(stage)}>
-        {documentUserStateLabel(stage, doc)}
-      </span>
-      {/* The sentence is not carried by `title` alone. A tooltip does not exist on touch — and the
-          OCR scenario drives this page at 390px — and screen readers treat it inconsistently, which
-          PRODUCT.md's WCAG 2.1 AA target does not allow for the only copy that distinguishes a
-          document nothing was ever sent for from one being read right now. Kept a SIBLING of the
-          badge, not a child, so the badge's own innerText stays the label alone — that is what
-          check-browser-smoke.cjs measures. `title` stays for the pointer. */}
-      <span className="sr-only">{documentUserStateDescription(stage)}</span>
-    </>
-  );
+  const status = documentUiStatus({ status: stage, document: doc });
+  return <DocumentStatusBadge status={status} data-testid="document-processing-status"
+    data-document-id={documentId} data-stage={stage} />;
 }
 
 /** The state filter. Extracted so the RENDERED options can be asserted: pinning the exported array
@@ -156,20 +141,6 @@ function isUnfiled(doc: DocumentRow) {
  *  screen readers treat it inconsistently, which PRODUCT.md's WCAG 2.1 AA target does not allow
  *  for the only copy that distinguishes a machine's work from a person's. Same pairing, and same
  *  reason, as ProcessingBadge above. */
-function FilingBadge({ doc, action }: { doc: DocumentRow; action: AutoActionRow | null }) {
-  if (action) {
-    return (
-      <>
-        <span className="badge-info inline-flex items-center gap-1" title={autoActionDescription(action)}>
-          <Bot size={13} aria-hidden="true" /> שויך אוטומטית
-        </span>
-        <span className="sr-only">{autoActionDescription(action)}</span>
-      </>
-    );
-  }
-  return <span className={isUnfiled(doc) ? 'badge-await' : 'badge-done'}>{isUnfiled(doc) ? 'לא משויך' : 'משויך'}</span>;
-}
-
 /** Re-filing changes only the document's owner record. Metadata selected at upload remains
  *  intact, so a delivery note linked to a receipt is not silently renamed by the UI. */
 function RefileModal({ doc, target, onClose, onDone }: {
@@ -480,6 +451,16 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     [documentIdsKey],
   );
   const autoActionFor = (doc: DocumentRow): AutoActionRow | null => autoActions?.[doc.id] ?? null;
+  const statusFor = (doc: GalleryDocument) => {
+    const autoAction = autoActionFor(doc);
+    return documentUiStatus({
+      status: processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed',
+      job: processing.snapshots[doc.id]?.job,
+      document: doc,
+      autoAssigned: autoAction !== null,
+      autoAssignmentDescription: autoAction ? autoActionDescription(autoAction) : null,
+    });
+  };
 
   // A job that has been extracted goes no further on its own: interpretation has to be asked for,
   // and until it is the document sits in the list looking like work is in progress when none is.
@@ -519,17 +500,18 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     return (data?.docs ?? []).filter((doc) => {
       const date = doc.document_date ?? doc.created_at.slice(0, 10);
       const stage = processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed';
+      const uiStatus = statusFor(doc);
       return (!needle || doc.file_name.toLowerCase().includes(needle))
         && (!supplierId || (supplierId === 'none' ? !doc.supplier_id : doc.supplier_id === supplierId))
         && (!kind || doc.document_kind === kind)
-        && (filing === 'all' || (filing === 'unfiled' ? isUnfiled(doc) : !isUnfiled(doc)))
+        && documentMatchesFilingFilter(uiStatus, filing)
         // A row whose processing state could not be read matches no state filter: it is unknown,
         // not "נקלט". The banner above the table is what explains the gap.
         && (processingFilter === 'all' || (stage !== null && documentUserState(stage) === processingFilter))
         && (!from || date >= from)
         && (!to || date <= to);
     });
-  }, [data, q, supplierId, kind, filing, processingFilter, processing.data, processing.snapshots, from, to]);
+  }, [data, q, supplierId, kind, filing, processingFilter, processing.data, processing.snapshots, from, to, autoActions]);
 
   function setFiling(value: string) {
     const next = new URLSearchParams(params);
@@ -711,22 +693,16 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         </span>
       ),
     },
-    archive ? null : {
-      key: 'filing', header: 'תיוק', mobileLabel: null, priority: 3, sortValue: (doc) => isUnfiled(doc) ? 0 : 1,
-      render: (doc) => <FilingBadge doc={doc} action={autoActionFor(doc)} />,
-    },
     {
       key: 'processing', header: 'מצב', mobileLabel: null, priority: 3,
       // Sorted by the state on screen, not by the stage underneath — with four labels, the seven
       // internal names would scatter identical-looking badges apart — and ranked by urgency rather
       // than by name, so ascending puts what waits on a person at the top. See USER_STATE_URGENCY.
-      sortValue: (doc) => documentUserStateUrgency(processing.snapshots[doc.id]?.stage ?? 'unprocessed'),
+      sortValue: (doc) => statusFor(doc).priority,
       render: (doc) => (
-        <ProcessingBadge
-          documentId={doc.id}
-          stage={processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed'}
-          doc={doc}
-        />
+        <DocumentStatusBadge status={statusFor(doc)} data-testid="document-processing-status"
+          data-document-id={doc.id}
+          data-stage={processing.data === null ? undefined : processing.snapshots[doc.id]?.stage ?? 'unprocessed'} />
       ),
     },
   ] as Array<Column<GalleryDocument> | null>).filter((column): column is Column<GalleryDocument> => column !== null);
@@ -847,9 +823,9 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           mobileTitle={(doc) => doc.file_name}
           mobileTrailing={(doc) => (
             <span className="flex flex-wrap justify-end gap-1">
-              <ProcessingBadge documentId={doc.id} doc={doc}
-                stage={processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed'} />
-              {!archive && <FilingBadge doc={doc} action={autoActionFor(doc)} />}
+              <DocumentStatusBadge status={statusFor(doc)} data-testid="document-processing-status"
+                data-document-id={doc.id}
+                data-stage={processing.data === null ? undefined : processing.snapshots[doc.id]?.stage ?? 'unprocessed'} />
             </span>
           )}
           rowActions={(doc) => {

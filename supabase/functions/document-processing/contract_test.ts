@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import {
+  GATEWAY_CONTRACT_HEADER,
+  GATEWAY_CONTRACT_VERSION,
+  gatewayContractMatches,
   jsonByteLength,
   RequestValidationError,
   validateActionRequest,
@@ -165,5 +168,26 @@ Deno.test("document processing request and extraction contracts", () => {
     (error) =>
       error instanceof RequestValidationError &&
       error.code === "invalid_request",
+  );
+});
+
+Deno.test("gateway contract handshake is exact and header based", () => {
+  assert.equal(GATEWAY_CONTRACT_VERSION, "2");
+  assert.equal(
+    gatewayContractMatches(
+      new Headers({
+        [GATEWAY_CONTRACT_HEADER]: GATEWAY_CONTRACT_VERSION,
+      }),
+    ),
+    true,
+  );
+  assert.equal(gatewayContractMatches(new Headers()), false);
+  assert.equal(
+    gatewayContractMatches(
+      new Headers({
+        [GATEWAY_CONTRACT_HEADER]: "1",
+      }),
+    ),
+    false,
   );
 });
