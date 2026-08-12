@@ -378,12 +378,12 @@ async function roleAndViewportMatrix(browser) {
 
 async function quickActionsContract(browser) {
   const roleLabels = {
-    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'מסמכים'],
+    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'תפעול מסמכים'],
     office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'מסמכים'],
     accountant: ['מרכז הבקרה', 'חשבוניות', 'תשלומים'],
   };
   const roleTargets = {
-    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/documents'],
+    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/documents/operations'],
     office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/documents'],
     accountant: ['/dashboard', '/invoices', '/pay'],
   };
