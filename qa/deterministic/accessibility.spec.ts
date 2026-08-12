@@ -69,8 +69,8 @@ test('bank import reason exposes its visible label as the accessible name', asyn
   await expect(dialog.getByRole('textbox', { name: 'סיבת הייבוא *', exact: true })).toBeVisible();
 });
 
-test('kitchen receiving remains usable at the mobile contract viewport', async ({ page, qaRole, evidence }) => {
-  test.skip(qaRole !== 'kitchen', 'The mobile operational contract belongs to the kitchen role.');
+test('office receiving remains usable at the mobile contract viewport', async ({ page, qaRole, evidence }) => {
+  test.skip(qaRole !== 'office', 'The mobile operational contract belongs to the office role.');
   await page.setViewportSize({ width: 390, height: 844 });
   evidence.record('mobile-route', '/receiving at 390x844');
   await page.goto('/receiving');

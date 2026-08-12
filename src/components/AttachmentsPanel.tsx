@@ -47,7 +47,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
   const receiptsKey = receipts.map((receipt) => receipt.id).join(',');
   const receiptById = new Map(receipts.map((receipt) => [receipt.id, receipt]));
   const canDelete = profile?.role === 'owner' || profile?.role === 'office';
-  const canUpload = profile != null && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canUpload = profile != null && ['owner', 'office'].includes(profile.role);
   const canReview = canUpload;
 
   const { data, loading, error, refetch } = useQuery<{ items: AttachmentItem[]; thumbs: Record<string, string> }>(async () => {

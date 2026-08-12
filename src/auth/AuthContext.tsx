@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import type { Organization, Profile } from '../lib/types';
+import { isActiveAccountRole, type Organization, type Profile } from '../lib/types';
 import { unwrap } from '../lib/useQuery';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import { resolveRoleLabels } from '../lib/status';
@@ -126,6 +126,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const p = unwrap(
           await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
         ) as Profile | null;
+        if (p && (!p.active || !isActiveAccountRole(p.role))) {
+          throw new Error('account_role_retired');
+        }
         const o = p
           ? (unwrap(
               await supabase.from('organizations').select('*').eq('id', p.org_id).maybeSingle(),
@@ -177,7 +180,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               // The unavailable cache is reported through the normal bootstrap failure below.
             }
           }
-          if (cached) {
+          if (cached && !isActiveAccountRole(cached.role)) {
+            setProfile(null);
+            setOrg(null);
+            setIsPlatformAdmin(false);
+            setOfflineBootstrap(false);
+            setAccess(READ_ONLY_ORGANIZATION_ACCESS);
+            setBootstrapError(toHebrewError('account_role_retired'));
+          } else if (cached) {
             // IndexedDB holds only scope keys, role and the server access projection. A minimal
             // profile is enough for the receiving guard; no Organization object is synthesized.
             setProfile({

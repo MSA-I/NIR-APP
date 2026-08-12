@@ -9,7 +9,8 @@
  *      outcome this feature must never produce is a comfortable "נשלח" over a failed POST.
  *   3. A failed INSERT keeps the dialog open with the text intact. Losing what somebody took the
  *      trouble to type is the other failure it must never have.
- *   4. The flag decides whether the surface exists at all, and the lookup is fail-closed.
+ *   4. Every active product account sees the surface; an unavailable feature-flag read cannot
+ *      make the screenshot channel disappear.
  */
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -44,11 +45,9 @@ let capturedShot: {
   blob: Blob; previewUrl: string; bytes: number; checksum: string; width: number; height: number;
 } | null = null;
 
-let flagOn = true;
-vi.mock('../lib/flags', () => ({ useFeatureFlags: () => ({ isEnabled: () => flagOn }) }));
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
-    profile: { id: 'user-1', org_id: 'org-1', role: 'kitchen', full_name: 'מנהל מטבח' },
+    profile: { id: 'user-1', org_id: 'org-1', role: 'office', full_name: 'מנהל רכש' },
   }),
 }));
 
@@ -90,7 +89,7 @@ async function openAndSubmit(text: string) {
   await user.click(screen.getByRole('button', { name: 'שליחה' }));
 }
 
-beforeEach(() => { flagOn = true; capturedShot = null; });
+beforeEach(() => { capturedShot = null; });
 
 describe('feedback note — the wire', () => {
   it('sends the screen, the role and the viewport, and never a delivery column', async () => {
@@ -112,7 +111,7 @@ describe('feedback note — the wire', () => {
     const body = inserts[0];
     expect(body.note).toBe('הכפתור נעלם כשמסמנים פגום');
     expect(body.route).toBe(ROUTE);
-    expect(body.role).toBe('kitchen');
+    expect(body.role).toBe('office');
     expect(body.org_id).toBe('org-1');
     expect(body.user_id).toBe('user-1');
     expect(typeof body.viewport_width).toBe('number');
@@ -158,9 +157,8 @@ describe('feedback note — the wire', () => {
     expect(screen.queryByText(/ההערה נשלחה/)).toBeNull();
   });
 
-  it('renders nothing when the flag is off — fail-closed, like every other flag read', () => {
-    flagOn = false;
+  it('renders for an active product account without depending on a feature flag', () => {
     renderButton();
-    expect(screen.queryByRole('button', { name: 'שליחת הערה' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'שליחת הערה' })).toBeVisible();
   });
 });

@@ -1,7 +1,8 @@
 import { Link, useLocation } from 'react-router';
+import type { CSSProperties } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { isFocusPath, quickActionsFor } from '../lib/quickActions';
+import { isFocusPath, isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
 import type { Role } from '../lib/types';
 import { useQuickCapture } from './QuickCapture';
 import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/trial';
@@ -55,7 +56,8 @@ export default function Fab() {
   return (
     <>
       <div role="group" aria-label="פעולות מהירות"
-        className="mobile-action-bar fixed z-40 flex border-t border-line bg-surface shadow-menu no-print lg:hidden">
+        style={{ '--mobile-action-count': mobileActions.length } as CSSProperties}
+        className="mobile-action-bar fixed z-40 border-t border-line bg-surface shadow-menu no-print lg:hidden">
         {mobileActions.map(({ key, label, icon: Icon, kind, to }) => {
           const content = (
             <>
@@ -77,7 +79,10 @@ export default function Fab() {
               <span className="mobile-action-label">{label}</span>
             </button>
           ) : (
-            <Link key={key} to={to!} className={mobileItemClass} data-quick-action-key={key}>{content}</Link>
+            <Link key={key} to={to!}
+              aria-current={isRouteFamilyActive(pathname, to!) ? 'page' : undefined}
+              className={`${mobileItemClass} ${isRouteFamilyActive(pathname, to!) ? 'bg-action-wash text-action-on-soft' : ''}`}
+              data-quick-action-key={key}>{content}</Link>
           );
         })}
       </div>

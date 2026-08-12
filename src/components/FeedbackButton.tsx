@@ -2,17 +2,16 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import { Camera, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { useFeatureFlags } from '../lib/flags';
-import { FEEDBACK_FLAG, NOTE_MAX_LENGTH, submitFeedbackNote } from '../lib/feedback';
+import { NOTE_MAX_LENGTH, submitFeedbackNote } from '../lib/feedback';
 import { captureViewport, type ScreenshotCapture } from '../lib/screenshot';
 import { Modal, Note, useToast } from './ui';
 
 /**
  * The design partner's note, from any screen, straight to the vendor.
  *
- * Self-gating, exactly like NotificationBell: the flag decides whether the surface exists, and the
- * lookup is fail-closed (an unknown or still-loading flag reads as off — src/lib/flags.ts). Layout
- * renders this unconditionally; nothing upstream has to know the flag.
+ * Available to every active product account. It used to be hidden behind `feedback.notes`; a slow
+ * or failed flag read therefore made the screenshot option disappear even though the note channel
+ * itself was healthy. The database remains the permission boundary.
  *
  * Placement is the top bar beside the bell, on both viewports. It is the one slot that exists in
  * phone mode and on desktop without colliding with the bottom action bar or the speed dial.
@@ -34,7 +33,6 @@ const COOLDOWN_MS = 30_000;
 
 export default function FeedbackButton({ onShell = false }: { onShell?: boolean }) {
   const { profile } = useAuth();
-  const { isEnabled } = useFeatureFlags();
   const location = useLocation();
   const toast = useToast();
   const noteId = useId();
@@ -114,7 +112,7 @@ export default function FeedbackButton({ onShell = false }: { onShell?: boolean 
     // took the trouble to type is the one failure this feature must never have.
   }, [profile, note, location.pathname, location.search, location.hash, includeShot, shot, toast]);
 
-  if (!profile || !isEnabled(FEEDBACK_FLAG)) return null;
+  if (!profile) return null;
 
   const cooling = cooldownUntil > Date.now();
   const label = cooling ? 'ההערה נשלחה — אפשר לשלוח עוד אחת בעוד רגע' : 'שליחת הערה';

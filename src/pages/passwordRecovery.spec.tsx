@@ -1,6 +1,6 @@
 /**
- * Package 1 — self-service password recovery (OPEN-DECISIONS #114) and the supplier
- * invitation contract (OPEN-DECISIONS #17).
+ * Package 1 — self-service password recovery (OPEN-DECISIONS #114) and the three active
+ * product-account invitation roles.
  *
  * What is pinned here, at the wire level (real supabase-js against MSW):
  *   1. /forgot-password issues POST /auth/v1/recover with the typed address and a
@@ -40,14 +40,19 @@ import ForgotPassword from './ForgotPassword';
 import ResetPassword from './ResetPassword';
 import { ASSIGNABLE_ROLES, INVITABLE_ROLES } from '../lib/invitations';
 
-describe('invitation role lists (OPEN-DECISIONS #17)', () => {
-  it('supplier is invitable — the 0025 DB path finally has a client', () => {
-    expect(INVITABLE_ROLES).toContain('supplier');
+describe('invitation role lists', () => {
+  it('invites and reassigns only owner, office and accountant', () => {
+    expect(INVITABLE_ROLES).toEqual(['owner', 'office', 'accountant']);
+    expect(ASSIGNABLE_ROLES).toEqual(INVITABLE_ROLES);
   });
 
-  it('supplier is NOT assignable via role change — that path cannot supply a supplier_id', () => {
+  it('keeps every retired persona out of both invitation and reassignment', () => {
+    expect(INVITABLE_ROLES).not.toContain('kitchen');
+    expect(INVITABLE_ROLES).not.toContain('payer');
+    expect(INVITABLE_ROLES).not.toContain('supplier');
+    expect(ASSIGNABLE_ROLES).not.toContain('kitchen');
+    expect(ASSIGNABLE_ROLES).not.toContain('payer');
     expect(ASSIGNABLE_ROLES).not.toContain('supplier');
-    expect(INVITABLE_ROLES.filter((r) => r !== 'supplier')).toEqual(ASSIGNABLE_ROLES);
   });
 });
 
@@ -63,13 +68,13 @@ describe('/forgot-password', () => {
 
     const user = userEvent.setup();
     render(<MemoryRouter><ForgotPassword /></MemoryRouter>);
-    await user.type(screen.getByLabelText('אימייל'), '  kitchen@demo.supplyflow.local  ');
+    await user.type(screen.getByLabelText('אימייל'), '  office@demo.supplyflow.local  ');
     await user.click(screen.getByRole('button', { name: /שליחת קישור איפוס/ }));
 
     // The anti-enumeration sentence: identical for registered and unknown addresses.
     await screen.findByText(/אם הכתובת רשומה במערכת/);
     expect(captured).toHaveLength(1);
-    expect(captured[0].body.email).toBe('kitchen@demo.supplyflow.local');
+    expect(captured[0].body.email).toBe('office@demo.supplyflow.local');
     const wire = captured[0].url + JSON.stringify(captured[0].body);
     expect(wire).toContain('reset-password');
   });
@@ -82,7 +87,7 @@ describe('/forgot-password', () => {
 
     const user = userEvent.setup();
     render(<MemoryRouter><ForgotPassword /></MemoryRouter>);
-    await user.type(screen.getByLabelText('אימייל'), 'kitchen@demo.supplyflow.local');
+    await user.type(screen.getByLabelText('אימייל'), 'office@demo.supplyflow.local');
     await user.click(screen.getByRole('button', { name: /שליחת קישור איפוס/ }));
 
     await screen.findByText(/נשלחו יותר מדי בקשות איפוס/);

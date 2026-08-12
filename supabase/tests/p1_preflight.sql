@@ -138,6 +138,19 @@ noncanonical_month_exports as (
 legacy_sent_exports as (
   select id from monthly_exports where status = 'sent'
 ),
+active_retired_product_profiles as (
+  select id
+  from profiles
+  where role in ('kitchen', 'payer', 'supplier')
+    and active
+),
+pending_retired_product_invitations as (
+  select id
+  from invitations
+  where role in ('kitchen', 'payer', 'supplier')
+    and accepted_at is null
+    and revoked_at is null
+),
 -- ===== Wave 3 organization-scope checks (0054-0058) =====
 -- A stale or orphaned closure is a SECURITY defect, not a performance defect: auth_scopes()
 -- answers from user_scope_closure, so a row that disagrees with a live recompute widens or
@@ -458,6 +471,12 @@ checks(check_name, rows_found, sample_ids) as (
   union all select 'legacy_sent_exports_without_snapshot', count(*),
     coalesce((select jsonb_agg(id) from (select id from legacy_sent_exports limit 20) s), '[]'::jsonb)
   from legacy_sent_exports
+  union all select 'active_retired_product_profiles', count(*),
+    coalesce((select jsonb_agg(id) from (select id from active_retired_product_profiles limit 20) s), '[]'::jsonb)
+  from active_retired_product_profiles
+  union all select 'pending_retired_product_invitations', count(*),
+    coalesce((select jsonb_agg(id) from (select id from pending_retired_product_invitations limit 20) s), '[]'::jsonb)
+  from pending_retired_product_invitations
   union all select 'stale_user_scope_closure', count(*),
     coalesce((select jsonb_agg(id) from (select id from stale_user_scope_closure limit 20) s), '[]'::jsonb)
   from stale_user_scope_closure

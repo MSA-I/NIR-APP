@@ -1,13 +1,13 @@
 import { readFileSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative } from 'node:path';
-import { QA_ROLES, ROLE_EMAILS, type QaRole } from '../config/roles.ts';
+import { QA_ROLES, ROLE_EMAILS, type ActiveQaRole } from '../config/roles.ts';
 
 export interface QaCredential {
   readonly email: string;
   readonly password: string;
 }
 
-type CredentialSet = Readonly<Record<QaRole, QaCredential>>;
+type CredentialSet = Readonly<Record<ActiveQaRole, QaCredential>>;
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -23,7 +23,7 @@ function readAccounts(value: unknown): readonly unknown[] {
     throw new Error('QA credentials manifest must contain an accounts array.');
   }
   if (value.accounts.length !== QA_ROLES.length) {
-    throw new Error('QA credentials manifest must contain exactly the six demo accounts.');
+    throw new Error('QA credentials manifest must contain exactly the three active demo accounts.');
   }
   return value.accounts;
 }
@@ -42,8 +42,9 @@ export function loadQaCredentials(manifestPath: string, repoRoot: string): Crede
     throw new Error('QA credentials manifest is not valid JSON.');
   }
 
-  const roleByEmail = new Map(Object.entries(ROLE_EMAILS).map(([role, email]) => [email, role as QaRole]));
-  const credentials: Partial<Record<QaRole, QaCredential>> = {};
+  const activeEmails = QA_ROLES.map((role) => [ROLE_EMAILS[role], role] as const);
+  const roleByEmail = new Map(activeEmails);
+  const credentials: Partial<Record<ActiveQaRole, QaCredential>> = {};
   const passwords = new Set<string>();
 
   for (const value of readAccounts(parsed)) {

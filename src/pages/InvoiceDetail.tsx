@@ -254,7 +254,7 @@ export default function InvoiceDetail() {
   }, [id, isProcurementManager]);
 
   const inv = data?.invoice;
-  const canEdit = organizationAccess.canWrite && profile && ['owner', 'office', 'kitchen'].includes(profile.role);
+  const canEdit = organizationAccess.canWrite && profile && ['owner', 'office'].includes(profile.role);
   const isOffice = profile && ['owner', 'office'].includes(profile.role);
 
   // ?print=1 (Invoices list "הדפסה" action): print once when the data is on screen, then strip
@@ -397,18 +397,6 @@ export default function InvoiceDetail() {
           {canEdit && <button className="btn-secondary" onClick={() => setCreditOpen(true)}><RotateCcw size={15} /> דרישת זיכוי</button>}
         </>}
         lifecycle={lifecycleSteps.length ? <LifecycleStrip steps={lifecycleSteps} current={inv.review_status} nextAction={nextAction} /> : undefined} />
-
-      {/* Finding 8 / decision ח (09.08.2026): kitchen may CREATE an invoice (0023) but cannot
-          amend or soft-delete one in any status (0034: owner/office only) — and until now the
-          screen said nothing, so the person who typed the wrong amount had no next step. The
-          decision was a reporting channel, not an edit path: the sentence names who can fix it
-          and how, instead of offering a control the server would refuse. */}
-      {profile?.role === 'kitchen' && (
-        <p className="text-sm text-ink-muted no-print">
-          טעות בסכום או בפרטי החשבונית? חשבונית אינה ניתנת לעריכה. יש לעדכן את מנהל הרכש —
-          הוא יכול למחוק אותה (מחיקה רכה) וליצור אותה מחדש כטיוטה עם הקישורים להזמנה ולקבלה.
-        </p>
-      )}
 
       {isOffice && graphUnavailable && (
         <Note tone="alert" role="alert">

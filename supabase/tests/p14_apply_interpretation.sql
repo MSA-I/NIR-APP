@@ -2009,21 +2009,21 @@ select pg_temp.p14_assert(
     where document_id = '44000000-0000-4000-8000-000000000006'),
   'and the cross-tenant attempt must have reverted nothing');
 
--- ROLE. kitchen reads both ledgers (the SELECT policies admit it) and files nothing. The three
+-- ROLE. accountant reads financial records but does not control document reversals. The three
 -- comparable reversals in this codebase -- soft_delete_invoice, rescue_document_from_archive and
 -- file_document -- all gate on owner/office, and this one is not allowed to be looser.
 insert into auth.users (id, email) values
-  ('24000000-0000-4000-8000-000000000070', 'p14-kitchen-a@example.test');
+  ('24000000-0000-4000-8000-000000000070', 'p14-accountant-a@example.test');
 insert into profiles (id, org_id, full_name, role) values
   ('24000000-0000-4000-8000-000000000070', '14000000-0000-4000-8000-000000000001',
-   'P14 Kitchen A', 'kitchen');
+   'P14 Accountant A', 'accountant');
 
 -- `= 'not_authorized'`, NOT `like '%not_authorized%'`. C5's review mutated the role gate out of
 -- the command and this assertion STILL PASSED: the call fell through to soft_delete_invoice, which
--- refuses kitchen with `invoice_soft_delete_not_authorized` -- and that string contains
+-- refuses accountant with `invoice_soft_delete_not_authorized` -- and that string contains
 -- `not_authorized`. The assertion was measuring a DOWNSTREAM refusal, which matters beyond
 -- hygiene: soft_delete_invoice is skipped entirely when invoice_id is null, so on the day a
--- second outcome is added that writes no invoice, kitchen would revert the document, the filing
+-- second outcome is added that writes no invoice, accountant would revert the document, the filing
 -- and the exception with nothing refusing at all.
 select pg_temp.p14_assert(
   pg_temp.p14_error(
@@ -2031,9 +2031,9 @@ select pg_temp.p14_assert(
     $$select public.revert_document_auto_action(
         (select id from public.document_auto_actions
           where document_id = '44000000-0000-4000-8000-000000000006'),
-        'P14: kitchen attempting a financial reversal')$$
+        'P14: accountant attempting a document reversal')$$
   ) = 'not_authorized',
-  'kitchen may READ what the machine did and may not undo it -- and the refusal must be THIS '
+  'accountant may READ the financial result and may not undo the document action -- and the refusal must be THIS '
   || 'command''s own, not soft_delete_invoice''s further down the call');
 
 -- The same gate, proven to run BEFORE anything is read: a nonexistent action id must still come
@@ -2043,7 +2043,7 @@ select pg_temp.p14_assert(
   pg_temp.p14_error(
     '24000000-0000-4000-8000-000000000070',
     $$select public.revert_document_auto_action(
-        '00000000-0000-4000-8000-000000000000', 'P14: kitchen probing for row existence')$$
+        '00000000-0000-4000-8000-000000000000', 'P14: accountant probing for row existence')$$
   ) = 'not_authorized',
   'the role gate must precede the row read, or a refused caller learns which ids exist');
 

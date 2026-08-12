@@ -276,7 +276,7 @@ insert into public.organizations (id, name, status) values
 insert into auth.users (id, email) values
   ('25000000-0000-4000-8000-000000000001', 'smart-doc-owner-a@example.test'),
   ('25000000-0000-4000-8000-000000000002', 'smart-doc-office-a@example.test'),
-  ('25000000-0000-4000-8000-000000000003', 'smart-doc-kitchen-a@example.test'),
+  ('25000000-0000-4000-8000-000000000003', 'smart-doc-office-b@example.test'),
   ('25000000-0000-4000-8000-000000000004', 'smart-doc-accountant-a@example.test'),
   ('25000000-0000-4000-8000-000000000005', 'smart-doc-owner-b@example.test'),
   ('25000000-0000-4000-8000-000000000006', 'smart-doc-owner-suspended@example.test'),
@@ -285,7 +285,7 @@ insert into auth.users (id, email) values
 insert into public.profiles (id, org_id, full_name, role) values
   ('25000000-0000-4000-8000-000000000001', '15000000-0000-4000-8000-000000000001', 'Smart doc owner A', 'owner'),
   ('25000000-0000-4000-8000-000000000002', '15000000-0000-4000-8000-000000000001', 'Smart doc office A', 'office'),
-  ('25000000-0000-4000-8000-000000000003', '15000000-0000-4000-8000-000000000001', 'Smart doc kitchen A', 'kitchen'),
+  ('25000000-0000-4000-8000-000000000003', '15000000-0000-4000-8000-000000000001', 'Smart doc office B', 'office'),
   ('25000000-0000-4000-8000-000000000004', '15000000-0000-4000-8000-000000000001', 'Smart doc accountant A', 'accountant'),
   ('25000000-0000-4000-8000-000000000005', '15000000-0000-4000-8000-000000000002', 'Smart doc owner B', 'owner'),
   ('25000000-0000-4000-8000-000000000006', '15000000-0000-4000-8000-000000000003', 'Smart doc owner suspended', 'owner'),

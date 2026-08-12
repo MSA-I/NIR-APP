@@ -146,28 +146,23 @@ select pg_temp.roadmap_assert(
   'trusted supplier submission intake RPC is missing'
 );
 
--- Owner invitation overload binds a supplier; the legacy overload cannot create supplier users.
+-- Supplier invitations are retired at the product boundary. The supplier-bound overload and the
+-- legacy overload must both fail before an invitation row can be created.
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claim.sub', '92000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
-select pg_temp.roadmap_assert(
-  create_invitation(
+do $$
+begin
+  perform create_invitation(
     'new-supplier-agent@example.test', 'supplier',
     '93000000-0000-0000-0000-000000000001'
-  )->>'supplier_id' = '93000000-0000-0000-0000-000000000001',
-  'supplier invitation was not supplier-bound'
-);
-with invitation_payload as (
-  select create_invitation(
-    'deleted-supplier-agent@example.test', 'supplier',
-    '93000000-0000-0000-0000-000000000005'
-  ) as result
-)
-insert into roadmap_values (key, value)
-select 'deleted_supplier_invitation_id', result->>'invitation_id' from invitation_payload
-union all
-select 'deleted_supplier_invitation_token', result->>'token' from invitation_payload;
+  );
+  raise exception 'expected retired supplier invitation rejection';
+exception when sqlstate '42501' then
+  if sqlerrm <> 'account_role_retired' then raise; end if;
+end
+$$;
 do $$
 begin
   perform create_invitation('legacy-supplier@example.test', 'supplier');
@@ -178,24 +173,17 @@ end
 $$;
 select soft_delete_supplier(
   '93000000-0000-0000-0000-000000000005',
-  'verify deleted supplier invitation handling'
+  'verify retired supplier cleanup remains available'
 );
 select pg_temp.roadmap_assert(
-  lookup_invitation(
-    (select value from roadmap_values where key = 'deleted_supplier_invitation_token')
-  )->>'status' = 'unknown',
-  'deleted supplier invitation still looked valid'
+  (select deleted_at is not null from suppliers
+   where id = '93000000-0000-0000-0000-000000000005')
+  and not exists (
+    select 1 from invitations
+    where role = 'supplier' and accepted_at is null and revoked_at is null
+  ),
+  'retired supplier cleanup left an active supplier or a pending supplier invitation'
 );
-do $$
-begin
-  perform resend_invitation(
-    (select value::uuid from roadmap_values where key = 'deleted_supplier_invitation_id')
-  );
-  raise exception 'expected deleted supplier resend rejection';
-exception when sqlstate '23514' then
-  if sqlerrm not like '%supplier_outside_organization%' then raise; end if;
-end
-$$;
 
 -- Inventory is unknown until the first count, then all changes are immutable ledger entries.
 select pg_temp.roadmap_assert(

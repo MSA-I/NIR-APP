@@ -1,9 +1,18 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Info } from 'lucide-react';
+import { AlertTriangle, FileSpreadsheet, Info } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { fmtMoneyExact, fmtNum, todayISO } from '../lib/format';
-import { DataTable, ErrorNote, Note, PageHeader, SkeletonTable, type Column } from '../components/ui';
+import { fmtDate, fmtMoneyExact, fmtNum, todayISO } from '../lib/format';
+import { DataTable, ErrorNote, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
+import { useAuth } from '../auth/AuthContext';
+import { toHebrewError } from '../lib/errors';
+import {
+  downloadRenderedWorkbook,
+  productPurchaseTemplateValues,
+  renderConfiguredReportTemplate,
+} from '../lib/reportTemplateExport';
+import { neutralizeSpreadsheetRow } from '../lib/documentExport';
+import * as XLSX from 'xlsx';
 
 /**
  * Per-product purchase rollup — the screen for `get_product_purchase_summary` (0114).
@@ -49,8 +58,11 @@ function monthStart(): string {
 }
 
 export default function ProductPurchaseSummary() {
+  const { org } = useAuth();
+  const toast = useToast();
   const [from, setFrom] = useState(monthStart);
   const [to, setTo] = useState(todayISO);
+  const [exporting, setExporting] = useState(false);
 
   const { data, loading, error } = useQuery<SummaryResponse>(async () =>
     unwrap(await supabase.rpc('get_product_purchase_summary', {
@@ -104,11 +116,62 @@ export default function ProductPurchaseSummary() {
       ) },
   ];
 
+  async function exportExcel() {
+    if (!data || !org || loading || error || from > to) return;
+    setExporting(true);
+    try {
+      const values = productPurchaseTemplateValues({
+        orgName: org.name,
+        periodLabel: `${fmtDate(from)} – ${fmtDate(to)}`,
+        periodFrom: fmtDate(from),
+        periodTo: fmtDate(to),
+        generatedAt: fmtDate(todayISO()),
+        products: data.products,
+        unmappedInvoiceLines: data.unmapped_invoice_lines,
+        unmappedInvoiceAmount: data.unmapped_invoice_amount,
+      });
+      const fileName = `product-purchases-${from}-${to}.xlsx`;
+      const templated = await renderConfiguredReportTemplate({
+        exportKey: 'product_purchase_summary', orgId: org.id, values,
+      });
+      if (templated) {
+        downloadRenderedWorkbook(templated, fileName);
+      } else {
+        const book = XLSX.utils.book_new();
+        const exportRows = data.products.map((row) => neutralizeSpreadsheetRow({
+          'מוצר': row.product_name,
+          'יחידה': row.unit ?? '',
+          'הוזמן': row.ordered_qty,
+          'התקבל': row.received_qty,
+          'חויב': row.invoiced_qty,
+          'נרכש בפועל': row.canonical_qty,
+          'מספר ספקים': row.supplier_count,
+          'מספר הזמנות': row.order_count,
+          'מספר חשבוניות': row.invoice_count,
+          'הוצאה ברוטו': row.gross_amount,
+          'מחיר יחידה ממוצע': row.average_unit_price,
+        }));
+        XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(exportRows), 'רכישות מוצרים');
+        XLSX.writeFile(book, fileName);
+      }
+      toast('קובץ ה-Excel הורד');
+    } catch (exportError) {
+      toast(toHebrewError(exportError), 'error');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
       <PageHeader title="סיכום רכישות מוצרים"
-        meta={data ? `${rows.length} מוצרים · ${data.from} עד ${data.to}` : undefined} />
+        meta={data ? `${rows.length} מוצרים · ${data.from} עד ${data.to}` : undefined}
+        actions={<button className="btn-secondary" type="button" onClick={() => void exportExcel()}
+          disabled={exporting || loading || !!error || !data || rows.length === 0 || from > to}>
+          <FileSpreadsheet size={15} aria-hidden="true" />
+          {exporting ? 'מכין קובץ…' : 'ייצוא Excel'}
+        </button>} />
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface p-3">
         <div>

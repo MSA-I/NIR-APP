@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { Banknote, Calculator, ChevronLeft, FileSpreadsheet, Printer, ReceiptText, type LucideIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
-import { useQuery } from '../lib/useQuery';
+import { useQuery, unwrap } from '../lib/useQuery';
 import { useParamState } from '../lib/useParamState';
 import { DataTable, EmptyState, ErrorNote, Modal, Note, PageHeader, SkeletonCards, StatusBadge, useToast, type Column } from '../components/ui';
 import { INVOICE_PAYMENT_STATUS } from '../lib/status';
@@ -16,6 +16,12 @@ import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { useAuth } from '../auth/AuthContext';
 import { financialSupplierMap } from '../lib/financialSuppliers';
 import { neutralizeSpreadsheetRow } from '../lib/documentExport';
+import {
+  downloadRenderedWorkbook,
+  expenseSummaryTemplateValues,
+  renderConfiguredReportTemplate,
+  type PurchaseMetrics,
+} from '../lib/reportTemplateExport';
 
 type InvoiceRow = {
   id: string; invoice_number: string; invoice_date: string; total_amount: number;
@@ -78,7 +84,7 @@ function StripStat({ title, value, context, icon: Icon }: {
 }
 
 export default function Expenses() {
-  const { profile } = useAuth();
+  const { profile, org } = useAuth();
   const toast = useToast();
   const defaults = presetRange('month');
   // useParamState seeds from the URL and re-syncs when it changes; the URL is also WRITTEN
@@ -87,6 +93,7 @@ export default function Expenses() {
   const [to] = useParamState('to', defaults.to);
   const [params, setParams] = useSearchParams();
   const [drill, setDrill] = useState<SupplierRow | null>(null);
+  const [exporting, setExporting] = useState(false);
   const invalidRange = !!from && !!to && from > to;
   const categoryBreakdownAvailable = profile?.role === 'owner';
 
@@ -102,9 +109,10 @@ export default function Expenses() {
     if (invalidRange) return {
       invoices: [], bySupplier: [], catTotals: [], totalAll: 0, coveredTotal: 0,
       invalidRange: true, categoryBreakdownAvailable,
+      metrics: { committed: null, gross_expense: null, credits_recognised: null, net_expense: null } as PurchaseMetrics,
     };
     const end = addCalendarDays(to, 1);
-    const [rawInvoices, categories] = await Promise.all([
+    const [rawInvoices, categories, metrics] = await Promise.all([
       fetchAll<RawInvoiceRow>((fromRow, toRow) => supabase.from('invoices')
         .select('id, invoice_number, invoice_date, total_amount, payment_status, supplier_id')
         .gte('invoice_date', from).lt('invoice_date', end)
@@ -114,6 +122,8 @@ export default function Expenses() {
         ? fetchAll<{ id: string; name: string }>((fromRow, toRow) => supabase.from('categories')
           .select('id, name').order('name').order('id').range(fromRow, toRow))
         : Promise.resolve([] as { id: string; name: string }[]),
+      supabase.rpc('get_purchase_metrics', { p_from: from, p_to: to })
+        .then((result) => unwrap(result) as PurchaseMetrics),
     ]);
     const suppliers = await financialSupplierMap(rawInvoices.map((invoice) => invoice.supplier_id));
     const invoices: InvoiceRow[] = rawInvoices.map((invoice) => ({
@@ -168,13 +178,32 @@ export default function Expenses() {
 
     return {
       invoices, bySupplier, catTotals, totalAll, coveredTotal,
-      invalidRange: false, categoryBreakdownAvailable,
+      invalidRange: false, categoryBreakdownAvailable, metrics,
     };
   }, [from, to, invalidRange, categoryBreakdownAvailable]);
 
-  function exportExcel() {
-    if (!data || data.invalidRange || fetching || error) return;
+  async function exportExcel() {
+    if (!data || data.invalidRange || fetching || error || !org) return;
+    setExporting(true);
     try {
+      const values = expenseSummaryTemplateValues({
+        orgName: org.name,
+        periodLabel: `${fmtDate(from)} – ${fmtDate(to)}`,
+        periodFrom: fmtDate(from),
+        periodTo: fmtDate(to),
+        generatedAt: fmtDate(todayISO()),
+        metrics: data.metrics,
+        bySupplier: data.bySupplier,
+      });
+      const templated = await renderConfiguredReportTemplate({
+        exportKey: 'owner_expense_summary', orgId: org.id, values,
+      });
+      const fileName = `expenses-${todayISO()}.xlsx`;
+      if (templated) {
+        downloadRenderedWorkbook(templated, fileName);
+        toast('קובץ ה-Excel הורד');
+        return;
+      }
       // Supplier, product-category and invoice-number text is tenant data on its way into a file
       // somebody opens in Excel. `=`/`@` at the start of a cell is a formula there, whatever we
       // meant by it — same neutralizer as documentExport.ts, which is now the one place it lives.
@@ -193,10 +222,12 @@ export default function Expenses() {
         'ספק': i.supplier?.name ?? '', 'מספר חשבונית': i.invoice_number, 'תאריך': i.invoice_date,
         'סה"כ': i.total_amount, 'סטטוס תשלום': INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
       }))), 'חשבוניות');
-      XLSX.writeFile(wb, `expenses-${todayISO()}.xlsx`);
+      XLSX.writeFile(wb, fileName);
       toast('קובץ ה-Excel הורד');
     } catch (e) {
       toast(toHebrewError(e), 'error');
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -237,7 +268,7 @@ export default function Expenses() {
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <PageHeader className="no-print" title="ריכוז הוצאות" actions={
         <div className="flex flex-wrap items-center gap-2">
-          <button className="btn-secondary" onClick={exportExcel} disabled={!hasInvoices || fetching || !!error || data.invalidRange} title={excelBlockedReason ?? 'הורדת הריכוז כקובץ Excel'}><FileSpreadsheet size={15} /> ייצוא Excel</button>
+          <button className="btn-secondary" onClick={() => void exportExcel()} disabled={exporting || !hasInvoices || fetching || !!error || data.invalidRange} title={excelBlockedReason ?? 'הורדת הריכוז כקובץ Excel'}><FileSpreadsheet size={15} /> ייצוא Excel</button>
           <button className="btn-secondary" disabled={fetching || !!error || data.invalidRange} onClick={() => window.print()} title={rangeBlockedReason ?? 'הדפסת הריכוז או שמירה כ-PDF'}><Printer size={15} /> הדפסה / PDF</button>
         </div>
       } />

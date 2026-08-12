@@ -36,10 +36,15 @@ describe('מסך הכניסה', () => {
     render(<MemoryRouter><Login /></MemoryRouter>);
 
     fireEvent.click(screen.getByText('חשבונות דמו מקומיים'));
+    expect(screen.getAllByRole('button', { name: /^מילוי פרטי/ }).map((button) => button.textContent))
+      .toEqual(['מנהל/בעלים', 'מנהל רכש', 'רואה חשבון']);
     fireEvent.click(screen.getByRole('button', { name: 'מילוי פרטי מנהל/בעלים' }));
 
     expect(screen.getByLabelText('אימייל')).toHaveValue('owner@demo.supplyflow.local');
     expect(screen.getByLabelText('סיסמה')).toHaveValue('P4!manualgate2026-owner-Aa7');
+    expect(screen.queryByText('מנהל מטבח')).not.toBeInTheDocument();
+    expect(screen.queryByText('מבצע העברות')).not.toBeInTheDocument();
+    expect(screen.queryByText('ספק')).not.toBeInTheDocument();
   });
 
   it('אינו חושף חשבונות דמו כשהאפליקציה מצביעה לייצור', () => {

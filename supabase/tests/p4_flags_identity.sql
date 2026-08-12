@@ -67,18 +67,18 @@ insert into organizations (id, name, status) values
 insert into auth.users (id, email) values
   ('27000000-0000-0000-0000-000000000001', 'p4-owner-a@example.test'),
   ('27000000-0000-0000-0000-000000000002', 'p4-office-a@example.test'),
-  ('27000000-0000-0000-0000-000000000003', 'p4-kitchen-a@example.test'),
+  ('27000000-0000-0000-0000-000000000003', 'p4-office-b@example.test'),
   ('27000000-0000-0000-0000-000000000004', 'p4-accountant-a@example.test'),
-  ('27000000-0000-0000-0000-000000000005', 'p4-payer-a@example.test'),
+  ('27000000-0000-0000-0000-000000000005', 'p4-accountant-executor@example.test'),
   ('27000000-0000-0000-0000-000000000009', 'p4-owner-b@example.test'),
   ('27000000-0000-0000-0000-000000000010', 'p4-platform-op@example.test');
 
 insert into profiles (id, org_id, full_name, role) values
   ('27000000-0000-0000-0000-000000000001', '17000000-0000-0000-0000-000000000001', 'P4 Owner A', 'owner'),
   ('27000000-0000-0000-0000-000000000002', '17000000-0000-0000-0000-000000000001', 'P4 Office A', 'office'),
-  ('27000000-0000-0000-0000-000000000003', '17000000-0000-0000-0000-000000000001', 'P4 Kitchen A', 'kitchen'),
+  ('27000000-0000-0000-0000-000000000003', '17000000-0000-0000-0000-000000000001', 'P4 Office B', 'office'),
   ('27000000-0000-0000-0000-000000000004', '17000000-0000-0000-0000-000000000001', 'P4 Accountant A', 'accountant'),
-  ('27000000-0000-0000-0000-000000000005', '17000000-0000-0000-0000-000000000001', 'P4 Payer A', 'payer'),
+  ('27000000-0000-0000-0000-000000000005', '17000000-0000-0000-0000-000000000001', 'P4 Accountant Executor', 'accountant'),
   ('27000000-0000-0000-0000-000000000009', '17000000-0000-0000-0000-000000000002', 'P4 Owner B', 'owner');
 
 -- The platform operator deliberately has NO profile: platform work is cross-tenant and
@@ -98,7 +98,7 @@ insert into invoices (
   amount_before_vat, vat_amount, total_amount, review_status
 ) values
   ('67000000-0000-0000-0000-000000000001', '17000000-0000-0000-0000-000000000001',
-   '37000000-0000-0000-0000-000000000001', 'P4-INV-PAYER', '2026-07-15', 100, 18, 118, 'received'),
+   '37000000-0000-0000-0000-000000000001', 'P4-INV-ACCOUNTANT', '2026-07-15', 100, 18, 118, 'received'),
   ('67000000-0000-0000-0000-000000000002', '17000000-0000-0000-0000-000000000001',
    '37000000-0000-0000-0000-000000000001', 'P4-INV-EMERGENCY', '2026-07-16', 50, 9, 59, 'received');
 -- Preserve the production approval invariant in this trusted fixture: the owner command performs
@@ -106,9 +106,9 @@ insert into invoices (
 select set_config('request.jwt.claim.sub', '27000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
 select public.set_invoice_review_status(
-  '67000000-0000-0000-0000-000000000001', 'in_review', 'P4 payer fixture enters review');
+  '67000000-0000-0000-0000-000000000001', 'in_review', 'P4 accountant fixture enters review');
 select public.set_invoice_review_status(
-  '67000000-0000-0000-0000-000000000001', 'approved', 'P4 payer fixture persists its assessment');
+  '67000000-0000-0000-0000-000000000001', 'approved', 'P4 accountant fixture persists its assessment');
 select public.set_invoice_review_status(
   '67000000-0000-0000-0000-000000000002', 'in_review', 'P4 emergency fixture enters review');
 select public.set_invoice_review_status(
@@ -418,7 +418,7 @@ select pg_temp.p4_assert(
 -- Every path behaviourally: missing AMR, stale (10 minutes old), future (10 minutes
 -- ahead -- beyond the +30s skew ceiling), then fresh succeeds.
 
--- --- execute_payment_request (payer) ---
+-- --- execute_payment_request (accountant, the only active executor) ---
 select pg_temp.p4_claims('27000000-0000-0000-0000-000000000005', null);
 set local role authenticated;
 do $$
@@ -427,7 +427,7 @@ begin
     '87000000-0000-0000-0000-000000000001', '2026-07-20', 'העברה בנקאית', 'P4-REF-1', null,
     '[{"invoice_id":"67000000-0000-0000-0000-000000000001","credit_id":null,"amount":118}]'::jsonb,
     'P4: no amr');
-  raise exception 'P4 flags/identity assertion failed: payer executed without amr';
+  raise exception 'P4 flags/identity assertion failed: accountant executed without amr';
 exception when sqlstate '42501' then
   if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
 end
@@ -441,7 +441,7 @@ begin
     '87000000-0000-0000-0000-000000000001', '2026-07-20', 'העברה בנקאית', 'P4-REF-1', null,
     '[{"invoice_id":"67000000-0000-0000-0000-000000000001","credit_id":null,"amount":118}]'::jsonb,
     'P4: stale amr');
-  raise exception 'P4 flags/identity assertion failed: payer executed with stale amr';
+  raise exception 'P4 flags/identity assertion failed: accountant executed with stale amr';
 exception when sqlstate '42501' then
   if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
 end
@@ -455,7 +455,7 @@ begin
     '87000000-0000-0000-0000-000000000001', '2026-07-20', 'העברה בנקאית', 'P4-REF-1', null,
     '[{"invoice_id":"67000000-0000-0000-0000-000000000001","credit_id":null,"amount":118}]'::jsonb,
     'P4: future amr');
-  raise exception 'P4 flags/identity assertion failed: payer executed with a future amr';
+  raise exception 'P4 flags/identity assertion failed: accountant executed with a future amr';
 exception when sqlstate '42501' then
   if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
 end
@@ -469,7 +469,7 @@ select pg_temp.p4_assert(
     '[{"invoice_id":"67000000-0000-0000-0000-000000000001","credit_id":null,"amount":118}]'::jsonb,
     'P4: ביצוע עם אימות טרי'
   )->>'idempotent')::boolean = false,
-  'fresh payer execution must commit');
+  'fresh accountant execution must commit');
 reset role;
 
 -- --- execute_emergency_payment_request: RETIRED 10.08.2026 (owner decision, 0111) ---
@@ -498,12 +498,12 @@ select pg_temp.p4_assert(
    where n.nspname = 'public' and p.proname = 'execute_payment_request'),
   'execute_payment_request lost its password step-up when the emergency route was retired');
 
--- --- manage_profile_access (owner -> kitchen) ---
+-- --- manage_profile_access (owner -> office) ---
 select pg_temp.p4_claims('27000000-0000-0000-0000-000000000001', null);
 do $$
 begin
   perform manage_profile_access(
-    '27000000-0000-0000-0000-000000000003', 'kitchen', false, null, 'P4: no amr');
+    '27000000-0000-0000-0000-000000000003', 'office', false, null, 'P4: no amr');
   raise exception 'P4 flags/identity assertion failed: access changed without amr';
 exception when sqlstate '42501' then
   if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
@@ -513,7 +513,7 @@ select pg_temp.p4_claims('27000000-0000-0000-0000-000000000001', interval '-10 m
 do $$
 begin
   perform manage_profile_access(
-    '27000000-0000-0000-0000-000000000003', 'kitchen', false, null, 'P4: stale amr');
+    '27000000-0000-0000-0000-000000000003', 'office', false, null, 'P4: stale amr');
   raise exception 'P4 flags/identity assertion failed: access changed with stale amr';
 exception when sqlstate '42501' then
   if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
@@ -523,7 +523,7 @@ select pg_temp.p4_claims('27000000-0000-0000-0000-000000000001', interval '10 mi
 do $$
 begin
   perform manage_profile_access(
-    '27000000-0000-0000-0000-000000000003', 'kitchen', false, null, 'P4: future amr');
+    '27000000-0000-0000-0000-000000000003', 'office', false, null, 'P4: future amr');
   raise exception 'P4 flags/identity assertion failed: access changed with a future amr';
 exception when sqlstate '42501' then
   if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
@@ -531,7 +531,7 @@ end
 $$;
 select pg_temp.p4_claims('27000000-0000-0000-0000-000000000001', interval '0');
 select manage_profile_access(
-  '27000000-0000-0000-0000-000000000003', 'kitchen', false, null,
+  '27000000-0000-0000-0000-000000000003', 'office', false, null,
   'P4: השבתה עם אימות טרי');
 select pg_temp.p4_assert(
   (select not active from profiles where id = '27000000-0000-0000-0000-000000000003')
@@ -543,7 +543,7 @@ select pg_temp.p4_assert(
       and details ->> 'profile_id' = '27000000-0000-0000-0000-000000000003'),
   'a fresh access change must land and record its permission_change security event');
 select manage_profile_access(
-  '27000000-0000-0000-0000-000000000003', 'kitchen', true, null,
+  '27000000-0000-0000-0000-000000000003', 'office', true, null,
   'P4: החזרת המשתמש לפעיל');
 
 -- --- mark_month_export_sent (owner) ---
@@ -756,10 +756,10 @@ select pg_temp.p4_assert(
   'the owner reader must return the provider row with its non-secret config');
 select pg_temp.p4_claims('27000000-0000-0000-0000-000000000003', interval '0');
 set local role authenticated;
-select count(*)::text as visible from read_identity_provider_settings() \gset kitchen_sso_
+select count(*)::text as visible from read_identity_provider_settings() \gset staff_sso_
 reset role;
 select pg_temp.p4_assert(
-  :'kitchen_sso_visible'::int = 0,
+  :'staff_sso_visible'::int = 0,
   'a non-owner must read zero SSO settings rows');
 
 -- --- update_supplier_bank_details (owner/office) + the revoked column =====

@@ -1856,10 +1856,18 @@ function createAgentVerifier(
   artifactRoot: string,
   allowedCheckIds: readonly string[],
   resourcesByRole: ReadonlyMap<QaRole, RoleBrowserResource>,
-  userIds: Readonly<Record<QaRole, string>>,
+  userIds: Readonly<Partial<Record<QaRole, string>>>,
   createdAfter: string,
   trustedEntityRefs: Map<string, string>,
 ) {
+  const requireActiveUserId = (role: QaRole): string => {
+    const userId = userIds[role];
+    if (!userId) {
+      throw new Error(`No active QA user ID exists for retired or unprovisioned role: ${role}`);
+    }
+    return userId;
+  };
+
   return createVerifierAgent({
     allowedCheckIds,
     callback: async (input) => {
@@ -1977,7 +1985,7 @@ function createAgentVerifier(
         const expectations = trustedMeaningfulExpectations(
           input.role,
           input.mutationEvidence.entityRefs,
-          userIds[input.role],
+          requireActiveUserId(input.role),
           mutationStepId === 'replay-price-workbook'
             ? createdAfter
             : input.mutationEvidence.startedAt,
@@ -2010,7 +2018,7 @@ function createAgentVerifier(
           verifyActionAuditWindow(
             runtime,
             expectations.auditWindow ?? expectations.audit,
-            userIds[input.role],
+            requireActiveUserId(input.role),
             input.mutationEvidence.startedAt,
             input.mutationEvidence.completedAt,
           ),
@@ -2111,7 +2119,7 @@ function createAgentVerifier(
           input.role,
           input.request.entityRefs,
           createdAfter,
-          userIds[input.role],
+          requireActiveUserId(input.role),
         );
         if (!expectation) {
           return {
@@ -2139,7 +2147,7 @@ function createAgentVerifier(
           resource,
           runtime,
           createdAfter,
-          userIds.payer,
+          requireActiveUserId('accountant'),
         );
         if (!expectations.length) {
           return {

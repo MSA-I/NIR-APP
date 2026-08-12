@@ -129,7 +129,7 @@ export default function InvoiceNew() {
   const effectiveSupplierId = linkedContext?.supplier.id ?? f.supplier_id;
   const linkedOrderId = linkedContext?.orderId ?? null;
   const linkedReceiptId = linkedContext?.receiptId ?? null;
-  const canOpenProcurement = profile?.role === 'owner' || profile?.role === 'office' || profile?.role === 'kitchen';
+  const canOpenProcurement = profile?.role === 'owner' || profile?.role === 'office';
 
   const vatRate = (org?.vat_rate ?? 18) / 100;
   const set = (k: string, v: string) => setF((s) => ({ ...s, [k]: v }));

@@ -144,4 +144,26 @@ describe('filling it in', () => {
     expect(cell?.t).toBe('s');
     expect(cell?.v).toBe('0123456');
   });
+
+  it('uses the approved sheet, cell and source instead of filling by placeholder name alone', () => {
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, { A1: text('{{total}}'), '!ref': 'A1' }, 'ראשי');
+    XLSX.utils.book_append_sheet(book, { A1: text('{{total}}'), '!ref': 'A1' }, 'משני');
+    const bytes = XLSX.write(book, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
+    const filled = fillTemplateWorkbook(bytes, { gross_total: 120, net_expense: 95 }, [
+      { key: 'total', sheet: 'ראשי', cell: 'A1', source: 'gross_total' },
+      { key: 'total', sheet: 'משני', cell: 'A1', source: 'net_expense' },
+    ]);
+    const result = XLSX.read(filled, { type: 'array' });
+    expect(result.Sheets['ראשי'].A1.v).toBe(120);
+    expect(result.Sheets['משני'].A1.v).toBe(95);
+  });
+
+  it('refuses an approved mapping when its exact cell no longer carries the placeholder', () => {
+    expect(() => fillTemplateWorkbook(
+      workbook({ A1: text('{{gross_total}}') }),
+      { gross_total: 120 },
+      [{ key: 'gross_total', sheet: 'דוח', cell: 'B2', source: 'gross_total' }],
+    )).toThrow('export_template_cell_missing');
+  });
 });
