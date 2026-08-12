@@ -79,7 +79,7 @@ describe('סרגל הפעולות המהירות במובייל', () => {
     // 'invoice' (→ /invoices/new) left this bar in G1, 10.08.2026: this application receives
     // supplier invoices and does not issue them. 'capture' is what replaced it — the invoice that
     // arrives is photographed, read and approved.
-    expect(quickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'documents']);
+    expect(quickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'document-operations']);
     expect(quickActionsFor('office').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'documents']);
     expect(quickActionsFor('accountant').map((item) => item.key)).toEqual(['dashboard', 'invoices', 'pay']);
     expect(quickActionsFor('kitchen')).toEqual([]);

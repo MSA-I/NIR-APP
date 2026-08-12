@@ -1,4 +1,4 @@
-import { Camera, CreditCard, FileText, FolderOpen, LayoutDashboard, PackageCheck, ShoppingCart, type LucideIcon } from 'lucide-react';
+import { Activity, Camera, CreditCard, FileText, FolderOpen, LayoutDashboard, PackageCheck, ShoppingCart, type LucideIcon } from 'lucide-react';
 import type { Role } from './types';
 
 export interface QuickAction {
@@ -17,7 +17,10 @@ const QUICK_ACTIONS: readonly QuickAction[] = [
   { key: 'dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, kind: 'link', to: '/dashboard', roles: ['owner', 'office', 'accountant'] },
   { key: 'capture', label: 'צילום מסמך', icon: Camera, kind: 'capture', roles: ['owner', 'office'] },
   { key: 'receive', label: 'קבלת סחורה', icon: PackageCheck, kind: 'link', to: '/receiving', roles: ['owner', 'office'] },
-  { key: 'documents', label: 'מסמכים', icon: FolderOpen, kind: 'link', to: '/documents', roles: ['owner', 'office'] },
+  // Keep five items for both procurement roles so capture stays in the exact middle. Document
+  // operations is owner-only; office receives the permitted document gallery in the same slot.
+  { key: 'document-operations', label: 'תפעול מסמכים', icon: Activity, kind: 'link', to: '/documents/operations', roles: ['owner'] },
+  { key: 'documents', label: 'מסמכים', icon: FolderOpen, kind: 'link', to: '/documents', roles: ['office'] },
   // "חשבונית חדשה" was removed here (G1, 10.08.2026). This application RECEIVES supplier
   // invoices; it does not issue them to anyone. The action that replaces it already sits two rows
   // up: `capture` — photograph the invoice that arrived. `/invoices/new` still exists as a route,
@@ -44,12 +47,13 @@ export function isFocusPath(pathname: string): boolean {
 
 /** One route-family rule shared by the desktop sidebar and mobile drawer. */
 export function isRouteFamilyActive(pathname: string, to: string): boolean {
-  if (to === '/documents') {
-    return pathname === to || /^\/documents\/[^/]+\/review$/.test(pathname);
+  const targetPath = to.split(/[?#]/, 1)[0];
+  if (targetPath === '/documents') {
+    return pathname === targetPath || /^\/documents\/[^/]+\/review$/.test(pathname);
   }
-  if (to === '/documents/archive') return pathname === to;
-  if (['/orders', '/receiving', '/invoices', '/suppliers'].includes(to)) {
-    return pathname === to || pathname.startsWith(`${to}/`);
+  if (targetPath === '/documents/archive') return pathname === targetPath;
+  if (['/orders', '/receiving', '/invoices', '/suppliers'].includes(targetPath)) {
+    return pathname === targetPath || pathname.startsWith(`${targetPath}/`);
   }
-  return pathname === to;
+  return pathname === targetPath;
 }
