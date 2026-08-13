@@ -1106,16 +1106,13 @@ select pg_temp.p1_assert(
   )->>'idempotent')::boolean = false,
   'office could not use the reasoned invoice soft-delete command'
 );
-do $$
-begin
-  perform transition_credit_request(
-    '65000000-0000-0000-0000-000000000004', 'closed', 'office attempt'
-  );
-  raise exception 'expected office credit transition rejection';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%credit_request_transition_not_authorized%' then raise; end if;
-end
-$$;
+select pg_temp.p1_assert(
+  not (transition_credit_request(
+    '65000000-0000-0000-0000-000000000004', 'offset',
+    'מנהל הרכש קיזז את הזיכוי שהתקבל'
+  )->>'idempotent')::boolean,
+  'office lost the active credit transition path'
+);
 select pg_temp.p1_assert(
   not (invoice_financial_check_signals('60000000-0000-0000-0000-000000000002')->>'bank_match_exists')::boolean,
   'office received a bank-match signal'

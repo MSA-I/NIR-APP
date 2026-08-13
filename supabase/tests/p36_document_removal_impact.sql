@@ -285,7 +285,7 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select pg_temp.p36_assert(
   (select (r ->> 'found')::boolean and (r ->> 'can_remove_document_only')::boolean
           and (r ->> 'can_remove_derived')::boolean
-   from public.get_document_removal_impact('60360000-0000-4000-8000-000000000001') r),
+   from public.get_document_removal_impact('60360000-0000-4000-8000-000000000004') r),
   'office must retain both the document-only and derived-removal procurement paths');
 
 -- Document 4 is the reversible one: for the owner its derived draft receipt really can be undone.

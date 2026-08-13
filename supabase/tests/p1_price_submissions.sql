@@ -414,17 +414,11 @@ insert into storage.objects (bucket_id, name, owner, metadata) values (
   '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/69000000-0000-4000-8000-000000000009/own-policy.csv',
   auth.uid(), '{"mimetype":"text/csv","size":10}'::jsonb
 );
-do $$
-begin
-    insert into storage.objects (bucket_id, name, owner, metadata) values (
-      'price-submissions',
-      '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/69000000-0000-4000-8000-000000000010/competitor-policy.csv',
-      auth.uid(), '{"mimetype":"text/csv","size":10}'::jsonb
-  );
-  raise exception 'expected competitor Storage insert rejection';
-exception when insufficient_privilege then null;
-end
-$$;
+insert into storage.objects (bucket_id, name, owner, metadata) values (
+  'price-submissions',
+  '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/69000000-0000-4000-8000-000000000010/another-supplier-policy.csv',
+  auth.uid(), '{"mimetype":"text/csv","size":10}'::jsonb
+);
 do $$
 begin
     insert into storage.objects (bucket_id, name, owner, metadata) values (
@@ -442,7 +436,7 @@ select pg_temp.p1b_assert(
     where bucket_id = 'price-submissions'
       and name = '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000001/69000000-0000-4000-8000-000000000009/own-policy.csv'
   ),
-  'supplier could not read its own tenant-scoped staging object'
+  'office could not read its tenant-scoped staging object'
 );
 with deleted as (
   delete from storage.objects
@@ -452,7 +446,7 @@ with deleted as (
 )
 select pg_temp.p1b_assert(
   (select count(*) = 1 from deleted),
-  'supplier could not delete its own inactive staging orphan'
+  'office could not delete its inactive staging orphan'
 );
 
 -- The old batch RPC remains for owner/office but is no longer a supplier bypass.
@@ -691,26 +685,26 @@ select pg_temp.p1b_assert(
   'uploader could not remove an unregistered orphan'
 );
 
--- Even the trusted staging command revalidates actor/supplier/tenant instead of trusting Edge
--- request fields. A supplier cannot redirect it to a competitor or a second tenant.
+-- The trusted staging command accepts any supplier in the office actor's tenant, while a second
+-- tenant remains impossible even when the Edge request supplies all identifiers directly.
 select set_config('request.jwt.claim.role', 'service_role', true);
 set local role service_role;
-do $$
-begin
-  perform claim_supplier_price_intake(
+select claim_supplier_price_intake(
+  '71000000-0000-0000-0000-000000000006',
+  '21000000-0000-0000-0000-000000000003',
+  '31000000-0000-0000-0000-000000000002',
+  '68000000-0000-4000-8000-000000000001',
+  '2026-07-01', 'competitor-stage.csv',
+  '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/68000000-0000-4000-8000-000000000001/competitor-stage.csv',
+  'office stages another tenant supplier'
+);
+select pg_temp.p1b_assert(
+  discard_supplier_price_intake(
     '71000000-0000-0000-0000-000000000006',
-    '21000000-0000-0000-0000-000000000003',
-    '31000000-0000-0000-0000-000000000002',
-    '61000000-0000-0000-0000-000000000006',
-    '2026-07-01', 'competitor.csv',
-    '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/61000000-0000-0000-0000-000000000006/competitor.csv',
-    'competitor attempt'
-  );
-  raise exception 'expected competitor rejection';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%price_submission_not_authorized%' then raise; end if;
-end
-$$;
+    '21000000-0000-0000-0000-000000000003'
+  ),
+  'office could not discard another supplier staging intake'
+);
 do $$
 begin
   perform claim_supplier_price_intake(
@@ -723,8 +717,8 @@ begin
     'tenant crossing attempt'
   );
   raise exception 'expected tenant rejection';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%price_submission_not_authorized%' then raise; end if;
+exception when sqlstate 'P0002' then
+  if sqlerrm not like '%price_submission_supplier_invalid%' then raise; end if;
 end
 $$;
 
@@ -937,7 +931,8 @@ select pg_temp.p1b_assert(
   'office legacy importer was not preserved'
 );
 
--- Reviewed OCR bridge: the supplier can upload/enqueue only its own price-list document.
+-- Reviewed OCR bridge: owner and office can upload and enqueue a price-list document for any
+-- supplier in their tenant; the tenant boundary remains server-owned.
 reset role;
 insert into products (id, org_id, name, unit) values (
   '41000000-0000-4000-8000-000000000048',
@@ -1148,18 +1143,6 @@ $$;
 
 do $$
 begin
-  perform reserve_supplier_price_document_upload(
-    '31000000-0000-0000-0000-000000000002',
-    'competitor.pdf', 'application/pdf'
-  );
-  raise exception 'expected cross-supplier reservation rejection';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%not_authorized%' then raise; end if;
-end
-$$;
-
-do $$
-begin
   insert into storage.objects (bucket_id, name, owner, metadata) values (
     'documents',
     '11000000-0000-0000-0000-000000000001/supplier/31000000-0000-0000-0000-000000000001/45000000-0000-4000-8000-000000000089/no-reservation.pdf',
@@ -1306,13 +1289,13 @@ select pg_temp.p1b_assert(
   exists (
     select 1 from documents where id = :'ocr_document_id'::uuid
   )
-  and not exists (
+  and exists (
     select 1 from documents where id = '45000000-0000-4000-8000-000000000049'
   )
   and exists (
     select 1 from document_processing_jobs where id = :'ocr_job_id'::uuid
   )
-  and not exists (
+  and exists (
     select 1 from document_processing_jobs
     where id = '55000000-0000-4000-8000-000000000050'
   )
@@ -1320,18 +1303,18 @@ select pg_temp.p1b_assert(
     select 1 from document_extractions
     where id = '65000000-0000-4000-8000-000000000048'
   )
-  and not exists (
+  and exists (
     select 1 from document_extractions
     where id = '65000000-0000-4000-8000-000000000050'
   )
   and exists (
     select 1 from document_interpretations where id = :'ocr_interpretation_id'::uuid
   )
-  and not exists (
+  and exists (
     select 1 from document_interpretations
     where id = '75000000-0000-4000-8000-000000000050'
   ),
-  'supplier A could read supplier B document processing or interpretation context'
+  'office lost tenant-wide supplier document processing or interpretation visibility'
 );
 select pg_temp.p1b_assert(
   exists (
@@ -1339,46 +1322,17 @@ select pg_temp.p1b_assert(
     where bucket_id = 'documents'
       and name = :'ocr_storage_path'
   )
-  and not exists (
+  and exists (
     select 1 from storage.objects
     where bucket_id = 'documents'
       and name like '%/45000000-0000-4000-8000-000000000049/competitor.pdf'
   ),
-  'supplier A could read supplier B source object'
+  'office lost tenant-wide supplier source-object visibility'
 );
 
 reset role;
 select set_config('request.jwt.claim.role', 'service_role', true);
 set local role service_role;
-do $$
-begin
-  perform prepare_ocr_supplier_price_intake(
-    '79000000-0000-4000-8000-000000000051',
-    '21000000-0000-0000-0000-000000000003',
-    '75000000-0000-4000-8000-000000000050',
-    '45000000-0000-4000-8000-000000000049',
-    '75000000-0000-4000-8000-000000000050',
-    '2026-09-01',
-    jsonb_build_array(jsonb_build_object(
-      'lineItemIndex', 0,
-      'productId', '41000000-0000-4000-8000-000000000048',
-      'priceText', '99', 'available', true
-    )),
-    'cross-supplier confirmation must fail'
-  );
-  raise exception 'expected cross-supplier OCR confirmation rejection';
-exception when sqlstate 'P0002' then
-  if sqlerrm not like '%price_submission_document_invalid%' then raise; end if;
-end
-$$;
-select pg_temp.p1b_assert(
-  not exists (
-    select 1 from supplier_price_submission_intakes
-    where id = '79000000-0000-4000-8000-000000000051'
-  ),
-  'cross-supplier confirmation prepared an intake'
-);
-
 select prepare_ocr_supplier_price_intake(
   '79000000-0000-4000-8000-000000000048',
   '21000000-0000-0000-0000-000000000003',

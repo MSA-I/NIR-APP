@@ -383,7 +383,6 @@ insert into organizations (id, name, status) values
 insert into auth.users (id, email) values
   ('29000000-0000-4000-8000-000000000001', 'p9-owner@example.test'),
   ('29000000-0000-4000-8000-000000000002', 'p9-office@example.test'),
-  ('29000000-0000-4000-8000-000000000003', 'p9-office-2@example.test'),
   ('29000000-0000-4000-8000-000000000004', 'p9-accountant@example.test'),
   ('29000000-0000-4000-8000-000000000005', 'p9-accountant-2@example.test'),
   ('29000000-0000-4000-8000-000000000007', 'p9-foreign-owner@example.test'),
@@ -399,8 +398,6 @@ insert into profiles (id, org_id, full_name, role, supplier_id) values
   ('29000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
    'P9 Owner', 'owner', null),
   ('29000000-0000-4000-8000-000000000002', '19000000-0000-4000-8000-000000000001',
-   'P9 Office', 'office', null),
-  ('29000000-0000-4000-8000-000000000003', '19000000-0000-4000-8000-000000000001',
    'P9 Office', 'office', null),
   ('29000000-0000-4000-8000-000000000004', '19000000-0000-4000-8000-000000000001',
    'P9 Accountant', 'accountant', null),
@@ -649,7 +646,7 @@ select pg_temp.p9_assert(
   'office may not receive payment hits -- /payments is owner/accountant only');
 
 select pg_temp.p9_assert(
-  not (pg_temp.p9_search_entities('29000000-0000-4000-8000-000000000003') && array['payment']),
+  not (pg_temp.p9_search_entities('29000000-0000-4000-8000-000000000002') && array['payment']),
   'office may not receive payment hits');
 
 select pg_temp.p9_assert(

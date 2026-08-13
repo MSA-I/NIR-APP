@@ -504,11 +504,11 @@ select pg_temp.roadmap_assert(
   'browser role can access WhatsApp connection secrets'
 );
 
-select set_config('request.jwt.claim.sub', '92000000-0000-0000-0000-000000000005', true);
+select set_config('request.jwt.claim.sub', '92000000-0000-0000-0000-000000000002', true);
 set local role authenticated;
 select pg_temp.roadmap_assert(
   get_whatsapp_connection_status()->>'status' = 'active',
-  'accountant cannot read the nonsecret WhatsApp action gate'
+  'office cannot read the nonsecret WhatsApp action gate'
 );
 reset role;
 select set_config('request.jwt.claim.sub', '', true);

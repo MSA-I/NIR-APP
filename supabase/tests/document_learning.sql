@@ -327,7 +327,6 @@ insert into auth.users (id, email) values
   ('26000000-0000-4000-8000-000000000005', 'document-owner-b@example.test'),
   ('26000000-0000-4000-8000-000000000006', 'document-cleanup-a@example.test'),
   ('26000000-0000-4000-8000-000000000007', 'document-supplier-a@example.test'),
-  ('26000000-0000-4000-8000-000000000008', 'document-accountant-a-2@example.test'),
   ('26000000-0000-4000-8000-000000000009', 'document-inactive-a@example.test');
 
 insert into public.profiles (id, org_id, full_name, role) values
@@ -336,8 +335,7 @@ insert into public.profiles (id, org_id, full_name, role) values
   ('26000000-0000-4000-8000-000000000003', '16000000-0000-4000-8000-000000000001', 'Document office A', 'office'),
   ('26000000-0000-4000-8000-000000000004', '16000000-0000-4000-8000-000000000001', 'Document accountant A', 'accountant'),
   ('26000000-0000-4000-8000-000000000005', '16000000-0000-4000-8000-000000000002', 'Document owner B', 'owner'),
-  ('26000000-0000-4000-8000-000000000006', '16000000-0000-4000-8000-000000000001', 'Document cleanup A', 'office'),
-  ('26000000-0000-4000-8000-000000000008', '16000000-0000-4000-8000-000000000001', 'Document accountant A', 'accountant');
+  ('26000000-0000-4000-8000-000000000006', '16000000-0000-4000-8000-000000000001', 'Document cleanup A', 'office');
 
 insert into public.profiles (id, org_id, full_name, role, active) values
   ('26000000-0000-4000-8000-000000000009', '16000000-0000-4000-8000-000000000001', 'Document inactive A', 'office', false);
@@ -845,9 +843,9 @@ select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000003
 set local role authenticated;
 select public.review_document_type(
   :'dl_i1_interpretation_id'::uuid, 'rejected', 'invoice',
-  'המטבח דחה את סוג המסמך', :'dl_review_input_checksum', :'dl_review_contract_version', 1
+  'מנהל הרכש דחה את סוג המסמך', :'dl_review_input_checksum', :'dl_review_contract_version', 1
 )::text as result
-\gset dl_type_office_
+\gset dl_type_office_peer_
 reset role;
 
 select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000001', true);
@@ -865,22 +863,6 @@ select public.review_document_type(
 reset role;
 
 select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000004', true);
-set local role authenticated;
-do $$
-begin
-  perform public.review_document_type(
-    (select id from public.document_interpretations
-     where job_id = '56000000-0000-4000-8000-000000000001'),
-    'approved', 'invoice', 'accountant must fail', 'etag:' || repeat('1', 64), '1', 3
-  );
-  raise exception 'expected accountant document-type rejection';
-exception when sqlstate '42501' then
-  if sqlerrm <> 'not_authorized' then raise; end if;
-end
-$$;
-reset role;
-
-select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000008', true);
 set local role authenticated;
 do $$
 begin
@@ -928,6 +910,7 @@ end
 $$;
 reset role;
 
+-- The retained supplier profile is historical evidence, not a browser identity.
 select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000007', true);
 set local role authenticated;
 select count(*)::text as own_decisions
@@ -942,10 +925,10 @@ do $$
 begin
   perform public.review_document_type(
     '76000000-0000-4000-8000-000000000010',
-    'rejected', 'price_list', 'supplier must not approve type',
+    'rejected', 'price_list', 'retired supplier identity must not approve type',
     'etag:' || repeat('a', 64), '1', 1
   );
-  raise exception 'expected supplier document-type mutation rejection';
+  raise exception 'expected retired supplier identity rejection';
 exception when sqlstate '42501' then
   if sqlerrm <> 'not_authorized' then raise; end if;
 end
@@ -958,11 +941,11 @@ select document_learning_test.assert(
     and (:'dl_type_office_retry_result'::jsonb ->> 'idempotent')::boolean
     and :'dl_type_office_result'::jsonb ->> 'decision_id'
       = :'dl_type_office_retry_result'::jsonb ->> 'decision_id'
-    and (:'dl_type_office_result'::jsonb ->> 'revision')::integer = 2
-    and :'dl_type_office_result'::jsonb ->> 'approved_document_type' is null
+    and (:'dl_type_office_peer_result'::jsonb ->> 'revision')::integer = 2
+    and :'dl_type_office_peer_result'::jsonb ->> 'approved_document_type' is null
     and (:'dl_type_owner_result'::jsonb ->> 'revision')::integer = 3
     and :'dl_type_owner_result'::jsonb ->> 'approved_document_type' = 'invoice'
-    and :'dl_type_supplier_visible_own_decisions'::integer = 1
+    and :'dl_type_supplier_visible_own_decisions'::integer = 0
     and :'dl_type_supplier_hidden_staff_decisions'::integer = 0,
   'document-type review revisions, retry behavior or supplier RLS are incorrect'
 );
@@ -1250,18 +1233,18 @@ end
 $$;
 reset role;
 
-select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000007', true);
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000002', true);
 set local role authenticated;
 select public.add_document_annotation(
   '76000000-0000-4000-8000-000000000010',
-  'mark', 'mark-1', 'supplier_note', 'הערת ספק',
-  'ספק מתקן מחירון בבעלותו', 'etag:' || repeat('a', 64), '1'
+  'mark', 'mark-1', 'office_note', 'הערת מנהל רכש',
+  'מנהל הרכש מתקן מחירון של ספק', 'etag:' || repeat('a', 64), '1'
 ) as annotation_id
 \gset dl_review_supplier_annotation_
 select public.add_document_review_correction(
   '76000000-0000-4000-8000-000000000010',
   'block', 'block-1', null, null,
-  'מחירון ספק', 'מחירון ספק מתוקן', 'ספק מתקן טקסט במחירון שלו',
+  'מחירון ספק', 'מחירון ספק מתוקן', 'מנהל הרכש מתקן טקסט במחירון',
   'etag:' || repeat('a', 64), '1', 0
 )::text as result
 \gset dl_review_supplier_correction_
@@ -1277,18 +1260,6 @@ select count(*)::text as staff_corrections
 from public.document_review_corrections
 where interpretation_id = :'dl_i1_interpretation_id'::uuid
 \gset dl_review_supplier_hidden_
-do $$
-begin
-  perform public.add_document_annotation(
-    (select interpretation_id from document_learning_review_context),
-    'block', 'block-1', 'forbidden', 'forbidden', 'foreign document must fail',
-    'etag:' || repeat('1', 64), '1'
-  );
-  raise exception 'expected supplier foreign-document rejection';
-exception when sqlstate 'P0002' then
-  if sqlerrm <> 'document_interpretation_unknown' then raise; end if;
-end
-$$;
 reset role;
 
 select set_config('request.jwt.claim.role', 'service_role', true);
@@ -1298,7 +1269,7 @@ set status = 'completed'
 where id = '56000000-0000-4000-8000-000000000010';
 reset role;
 
-select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000007', true);
+select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000002', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 do $$
@@ -1383,10 +1354,10 @@ begin
   perform public.add_document_annotation(
     '76000000-0000-4000-8000-000000000011',
     'block', 'block-1', 'forbidden', 'forbidden',
-    'staff interpretation on owned document must fail',
+    'retired supplier identity must not see a staff interpretation',
     'etag:' || repeat('a', 64), '1'
   );
-  raise exception 'expected supplier interpretation-actor rejection';
+  raise exception 'expected retired supplier identity rejection';
 exception when sqlstate 'P0002' then
   if sqlerrm <> 'document_interpretation_unknown' then raise; end if;
 end
@@ -1401,8 +1372,8 @@ select document_learning_test.assert(
     and (:'dl_review_supplier_correction_result'::jsonb ->> 'revision')::integer = 1
     and :'dl_review_supplier_visible_own_corrections'::integer = 1
     and :'dl_review_supplier_annotation_visible_own_annotations'::integer = 1
-    and :'dl_review_supplier_hidden_staff_corrections'::integer = 0,
-  'review mutation results, idempotency or supplier RLS are incorrect'
+    and :'dl_review_supplier_hidden_staff_corrections'::integer > 0,
+  'review mutation results, idempotency or office review visibility are incorrect'
 );
 
 select document_learning_test.assert(

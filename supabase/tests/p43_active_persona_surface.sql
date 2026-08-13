@@ -273,7 +273,8 @@ select (public.execute_payment_request(
   'העברה בנקאית', 'P43-REF-1', null,
   '[{"invoice_id":"60430000-0000-4000-8000-000000000001","credit_id":null,"amount":118}]'::jsonb,
   'P43 accountant executes approved payment'
-)->>'payment_id' as p43_payment_id \gset
+)->>'payment_id') as p43_payment_id
+\gset
 
 insert into storage.objects (bucket_id, name, owner, metadata) values (
   'documents',

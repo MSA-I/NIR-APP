@@ -411,19 +411,19 @@ from public.document_export_template_versions where id = :'org_supplier_version_
 
 reset role;
 
--- Office may propose, but may not approve an organization template.
-select set_config('request.jwt.claim.sub', '27000000-0000-4000-8000-000000000003', true);
+-- Accountant may read financial exports, but may not approve an organization template.
+select set_config('request.jwt.claim.sub', '27000000-0000-4000-8000-000000000004', true);
 select set_config('document_export_test.global_version_id', :'global_version_id', true);
 set local role authenticated;
 do $$
 begin
   perform public.approve_document_export_template_version(
     current_setting('document_export_test.global_version_id')::uuid,
-    'אישור אסור למשתמש מטבח'
+    'אישור אסור למשתמש הנהלת חשבונות'
   );
   raise exception 'expected organization approval denial';
 exception when sqlstate '42501' then
-  if sqlerrm <> 'document_export_org_template_not_authorized' then raise; end if;
+  if sqlerrm <> 'not_authorized' then raise; end if;
 end
 $$;
 reset role;

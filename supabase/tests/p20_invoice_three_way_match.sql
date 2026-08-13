@@ -971,19 +971,16 @@ select pg_temp.p20_assert(
 reset role;
 select pg_temp.p20_actor('21000000-0000-4000-8000-000000000003', false);
 set local role authenticated;
-do $$
-begin
-  perform public.record_invoice_line_evidence(
+select pg_temp.p20_assert(
+  not (public.record_invoice_line_evidence(
     '28000000-0000-4000-8000-000000000006', '27000000-0000-4000-8000-000000000006',
     '29000000-0000-4000-8000-000000000006', 'manual_entry', null, null,
     '21000000-0000-4000-8000-000000000003',
-    jsonb_build_array(pg_temp.p20_line('Not allowed', null, null, null, 1, 'unit', 100, 0, 17, 100)),
-    'P20 office mutation attempt');
-  raise exception 'P20 invoice three-way assertion failed: office wrote invoice evidence';
-exception when sqlstate '42501' then
-  if sqlerrm <> 'invoice_line_evidence_not_authorized' then raise; end if;
-end
-$$;
+    jsonb_build_array(pg_temp.p20_line('Office evidence', null, null, null, 1, 'unit', 100, 0, 17, 100)),
+    'P20 office records invoice evidence'
+  )->>'idempotent')::boolean,
+  'office lost the active invoice-evidence path'
+);
 reset role;
 
 select pg_temp.p20_actor('21000000-0000-4000-8000-000000000005', false);

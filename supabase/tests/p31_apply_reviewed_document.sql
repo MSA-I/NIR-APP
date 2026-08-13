@@ -63,7 +63,7 @@ insert into public.organizations (id, name, status, vat_rate) values
 
 insert into auth.users (id, email) values
   ('20310000-0000-4000-8000-000000000001', 'owner-p31@example.test'),
-  ('20310000-0000-4000-8000-000000000002', 'office-p31@example.test'),
+  ('20310000-0000-4000-8000-000000000002', 'office-p31@example.test');
 
 insert into public.suppliers (id, org_id, name, status) values
   ('40310000-0000-4000-8000-000000000001', '10310000-0000-4000-8000-000000000001',
