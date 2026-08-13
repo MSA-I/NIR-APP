@@ -1147,7 +1147,7 @@ begin
       'service_recover_document_interpretation_from_egress(uuid,uuid,uuid,uuid,text)'
     )
     and (
-      procedure.prosrc ~* '(auth_role\(\)|v_role|profile\.role|p\.role|inv\.role|new\.role|old\.role)[[:space:]]*(=|<>|!=|is[[:space:]]+(not[[:space:]]+)?distinct[[:space:]]+from|in[[:space:]]*\(|not[[:space:]]+in[[:space:]]*\(|when)[^;)]{0,120}''(kitchen|payer|supplier)'''
+      procedure.prosrc ~* '(auth_role\(\)|v_role|profile\.role|p\.role|inv\.role|new\.role|old\.role)[[:space:]]*(=|<>|!=|is[[:space:]]+(not[[:space:]]+)?distinct[[:space:]]+from|in[[:space:]]*\(|not[[:space:]]+in[[:space:]]*\()[^;)]{0,120}''(kitchen|payer|supplier)'''
       or procedure.prosrc ~* 'case[[:space:]]+(auth_role\(\)|v_role|profile\.role|p\.role|inv\.role|new\.role|old\.role)[^;]{0,120}when[[:space:]]+''(kitchen|payer|supplier)'''
       or procedure.prosrc ~* '''(kitchen|payer|supplier)''[[:space:]]*(=|<>|!=|is[[:space:]]+(not[[:space:]]+)?distinct[[:space:]]+from)[[:space:]]*(auth_role\(\)|v_role|profile\.role|p\.role|inv\.role|new\.role|old\.role)'
     );
