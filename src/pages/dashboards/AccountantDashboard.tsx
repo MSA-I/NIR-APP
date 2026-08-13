@@ -68,7 +68,7 @@ export default function AccountantDashboard() {
     ];
 
     // ── attention. NOTE: "חשבוניות לבדיקה" (received/in_review) is structurally ~0 for the accountant —
-    // RLS only exposes approved invoices; pre-approval review is office/kitchen work. Kept to match the
+    // RLS only exposes approved invoices; pre-approval review is owner/office work. Kept to match the
     // prior dashboard; flagged for a follow-up (a review queue belongs on the office dashboard).
     const toReview = invoices.filter((i) => ['received', 'in_review'].includes(i.review_status)).length;
     const attention: AttentionItem[] = [

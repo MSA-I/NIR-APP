@@ -1,4 +1,4 @@
-﻿-- PLAN-03 document interpretation/learning plus PLAN-05 review contracts.
+﻿-- Document interpretation, learning and review contracts.
 -- Run against a freshly reset disposable local database after migration 0050.
 -- Every fixture is rolled back; the test never writes business data permanently.
 \set ON_ERROR_STOP on
@@ -322,22 +322,22 @@ insert into public.organizations (id, name, status) values
 insert into auth.users (id, email) values
   ('26000000-0000-4000-8000-000000000001', 'document-owner-a@example.test'),
   ('26000000-0000-4000-8000-000000000002', 'document-office-a@example.test'),
-  ('26000000-0000-4000-8000-000000000003', 'document-kitchen-a@example.test'),
+  ('26000000-0000-4000-8000-000000000003', 'document-office-a-2@example.test'),
   ('26000000-0000-4000-8000-000000000004', 'document-accountant-a@example.test'),
   ('26000000-0000-4000-8000-000000000005', 'document-owner-b@example.test'),
   ('26000000-0000-4000-8000-000000000006', 'document-cleanup-a@example.test'),
   ('26000000-0000-4000-8000-000000000007', 'document-supplier-a@example.test'),
-  ('26000000-0000-4000-8000-000000000008', 'document-payer-a@example.test'),
+  ('26000000-0000-4000-8000-000000000008', 'document-accountant-a-2@example.test'),
   ('26000000-0000-4000-8000-000000000009', 'document-inactive-a@example.test');
 
 insert into public.profiles (id, org_id, full_name, role) values
   ('26000000-0000-4000-8000-000000000001', '16000000-0000-4000-8000-000000000001', 'Document owner A', 'owner'),
   ('26000000-0000-4000-8000-000000000002', '16000000-0000-4000-8000-000000000001', 'Document office A', 'office'),
-  ('26000000-0000-4000-8000-000000000003', '16000000-0000-4000-8000-000000000001', 'Document kitchen A', 'kitchen'),
+  ('26000000-0000-4000-8000-000000000003', '16000000-0000-4000-8000-000000000001', 'Document office A', 'office'),
   ('26000000-0000-4000-8000-000000000004', '16000000-0000-4000-8000-000000000001', 'Document accountant A', 'accountant'),
   ('26000000-0000-4000-8000-000000000005', '16000000-0000-4000-8000-000000000002', 'Document owner B', 'owner'),
   ('26000000-0000-4000-8000-000000000006', '16000000-0000-4000-8000-000000000001', 'Document cleanup A', 'office'),
-  ('26000000-0000-4000-8000-000000000008', '16000000-0000-4000-8000-000000000001', 'Document payer A', 'payer');
+  ('26000000-0000-4000-8000-000000000008', '16000000-0000-4000-8000-000000000001', 'Document accountant A', 'accountant');
 
 insert into public.profiles (id, org_id, full_name, role, active) values
   ('26000000-0000-4000-8000-000000000009', '16000000-0000-4000-8000-000000000001', 'Document inactive A', 'office', false);
@@ -591,7 +591,7 @@ select document_learning_test.assert(
   'personal precedence, Claude annotation expansion or review transition failed'
 );
 
--- Job 2: without a personal rule for kitchen, supplier+document beats document/global.
+-- Job 2: without a personal rule for office, supplier+document beats document/global.
 select set_config('request.jwt.claim.role', 'service_role', true);
 set local role service_role;
 select public.begin_document_interpretation(
@@ -847,7 +847,7 @@ select public.review_document_type(
   :'dl_i1_interpretation_id'::uuid, 'rejected', 'invoice',
   'המטבח דחה את סוג המסמך', :'dl_review_input_checksum', :'dl_review_contract_version', 1
 )::text as result
-\gset dl_type_kitchen_
+\gset dl_type_office_
 reset role;
 
 select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000001', true);
@@ -887,9 +887,9 @@ begin
   perform public.review_document_type(
     (select id from public.document_interpretations
      where job_id = '56000000-0000-4000-8000-000000000001'),
-    'approved', 'invoice', 'payer must fail', 'etag:' || repeat('1', 64), '1', 3
+    'approved', 'invoice', 'accountant must fail', 'etag:' || repeat('1', 64), '1', 3
   );
-  raise exception 'expected payer document-type rejection';
+  raise exception 'expected accountant document-type rejection';
 exception when sqlstate '42501' then
   if sqlerrm <> 'not_authorized' then raise; end if;
 end
@@ -958,8 +958,8 @@ select document_learning_test.assert(
     and (:'dl_type_office_retry_result'::jsonb ->> 'idempotent')::boolean
     and :'dl_type_office_result'::jsonb ->> 'decision_id'
       = :'dl_type_office_retry_result'::jsonb ->> 'decision_id'
-    and (:'dl_type_kitchen_result'::jsonb ->> 'revision')::integer = 2
-    and :'dl_type_kitchen_result'::jsonb ->> 'approved_document_type' is null
+    and (:'dl_type_office_result'::jsonb ->> 'revision')::integer = 2
+    and :'dl_type_office_result'::jsonb ->> 'approved_document_type' is null
     and (:'dl_type_owner_result'::jsonb ->> 'revision')::integer = 3
     and :'dl_type_owner_result'::jsonb ->> 'approved_document_type' = 'invoice'
     and :'dl_type_supplier_visible_own_decisions'::integer = 1
@@ -1200,10 +1200,10 @@ select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000003
 set local role authenticated;
 select public.add_document_annotation(
   :'dl_i1_interpretation_id'::uuid,
-  'mark', 'mark-1', 'kitchen_note', 'הערת מטבח',
+  'mark', 'mark-1', 'office_note', 'הערת מטבח',
   'בדיקת הרשאת מטבח', :'dl_review_input_checksum', :'dl_review_contract_version'
 ) as annotation_id
-\gset dl_review_kitchen_
+\gset dl_review_office_
 reset role;
 
 select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000001', true);
@@ -1918,28 +1918,28 @@ select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000003
 set local role authenticated;
 select count(*)::text as personal_visible
 from public.document_learning_rules where user_id is not null
-\gset dl_kitchen_
+\gset dl_office_
 select count(*)::text as office_annotations_visible
 from public.document_annotations
 where applied_for_user_id = '26000000-0000-4000-8000-000000000002'
-\gset dl_kitchen_annotations_
+\gset dl_office_annotations_
 select count(*)::text as replacement_visible
 from public.document_annotations
 where id = :'dl_replacement_annotation_id'::uuid
-\gset dl_kitchen_replacement_
+\gset dl_office_replacement_
 select count(*)::text as tenant_b_rules_visible
 from public.document_learning_rules
 where org_id = '16000000-0000-4000-8000-000000000002'
-\gset dl_kitchen_tenant_
+\gset dl_office_tenant_
 reset role;
 
 select document_learning_test.assert(
   :'dl_b_rules_visible'::integer = 1
     and :'dl_bi_interpretations_visible'::integer = 0
-    and :'dl_kitchen_personal_visible'::integer = 0
-    and :'dl_kitchen_annotations_office_annotations_visible'::integer = 0
-    and :'dl_kitchen_replacement_replacement_visible'::integer = 0
-    and :'dl_kitchen_tenant_tenant_b_rules_visible'::integer = 0
+    and :'dl_office_personal_visible'::integer = 0
+    and :'dl_office_annotations_office_annotations_visible'::integer = 0
+    and :'dl_office_replacement_replacement_visible'::integer = 0
+    and :'dl_office_tenant_tenant_b_rules_visible'::integer = 0
     and (select org_id = '16000000-0000-4000-8000-000000000002'
          from public.document_learning_rules where id = :'dl_tenant_b_rule_id'::uuid),
   'tenant or personal-learning RLS leaked rows'

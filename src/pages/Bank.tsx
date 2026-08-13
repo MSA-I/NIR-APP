@@ -111,7 +111,7 @@ export default function Bank() {
         predicates.push(...monthRangePredicates('tx_date', monthFilter));
         if (searchTerm) {
           // description has no trgm index — a search here is a seq scan within the tenant,
-          // accepted at current volume (PLAN-02 §3.2); an index is a DB wave.
+          // accepted at current volume (ADR-0007); an index is a DB wave.
           const suppliers = await searchSupplierIds(supabase, searchTerm);
           narrowed = suppliers.narrowed;
           predicates.push(twoStepSearchPredicate(['description', 'reference'], searchTerm, suppliers.ids));

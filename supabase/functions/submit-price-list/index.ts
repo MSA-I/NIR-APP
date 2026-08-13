@@ -14,6 +14,7 @@ import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supa
 import * as PapaModule from 'https://esm.sh/papaparse@5.4.1?target=denonext';
 import * as XLSX from 'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs';
 import { organizationWriteAllowed } from '../_shared/organization-access.ts';
+import { activePriceListRoleAllowed } from './authorization.ts';
 
 // esm.sh exposes PapaParse as a CommonJS default at runtime, while @types/papaparse declares
 // named members only. Resolve that interop boundary explicitly so Deno types and Edge agree.
@@ -110,8 +111,7 @@ interface ConfirmRequest {
 
 interface ProfileRow {
   org_id: string;
-  role: 'owner' | 'office' | 'supplier' | string;
-  supplier_id: string | null;
+  role: string;
   active: boolean;
 }
 
@@ -377,6 +377,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const { data: userData, error: userError } = await caller.auth.getUser();
   if (userError || !userData.user) return fail(cors, new IntakeError('unauthenticated', 401));
 
+  const { data: profileData, error: profileError } = await admin.from('profiles')
+    .select('org_id, role, active').eq('id', userData.user.id).maybeSingle();
+  const profile = profileData as ProfileRow | null;
+  if (profileError || !profile?.active || !activePriceListRoleAllowed(profile.role)) {
+    return fail(cors, new IntakeError('not_authorized', 403));
+  }
+
   let parsedBody: unknown;
   try {
     parsedBody = await req.json();
@@ -507,13 +514,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return fail(cors, new IntakeError('invalid_request', 400));
   }
 
-  const { data: profileData, error: profileError } = await admin.from('profiles')
-    .select('org_id, role, supplier_id, active').eq('id', userData.user.id).maybeSingle();
-  const profile = profileData as ProfileRow | null;
-  if (profileError || !profile?.active) return fail(cors, new IntakeError('not_authorized', 403));
-  if (!['owner', 'office', 'supplier'].includes(profile.role)
-      || (profile.role === 'supplier' && profile.supplier_id !== supplierId)
-      || pathParts[0] !== profile.org_id || pathParts[1] !== 'price-submissions') {
+  if (pathParts[0] !== profile.org_id || pathParts[1] !== 'price-submissions') {
     return fail(cors, new IntakeError('not_authorized', 403));
   }
 

@@ -8,7 +8,7 @@ import { toHebrewError } from '../lib/errors';
 
 /**
  * Client-side mirror of `assert_recent_password_authentication` (extracted from `0031:788-805`,
- * generalised in `0061`; contract: handoff/04-flags-stepup-contract.md §1). The server is the
+ * generalised in `0061`; contract: OPEN-DECISIONS #85). The server is the
  * boundary — this check only decides whether to *ask* the user for a password again. Two windows
  * on purpose:
  *
@@ -75,14 +75,14 @@ export interface ReauthModalProps {
   /**
    * When true (the default) and the current JWT already carries a fresh password `amr` entry,
    * the prompt is skipped and `onConfirm` fires immediately — a user who signed in seconds ago
-   * must not be asked for the same password twice. PayerQueue's emergency path passes `false`
+   * must not be asked for the same password twice. The accountant payment queue passes `false`
    * to keep its historical unconditional re-authentication.
    */
   skipWhenFresh?: boolean;
 }
 
 /**
- * The app's single step-up dialog, extracted from PayerQueue's emergency flow (PLAN-04 §3.1).
+ * The app's single step-up dialog, shared by the accountant payment queue and other sensitive flows.
  *
  * Semantics preserved from the original, verbatim in behaviour:
  * - `signInWithPassword` with the **current** user's email — never a typed identity;

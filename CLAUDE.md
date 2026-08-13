@@ -12,13 +12,13 @@
 
 | מסמך | מה יש בו |
 |---|---|
-| `docs/HANDOFF-received-supplier-document.md` | **קרא ראשון כל עוד ענף `feat/received-supplier-document` פתוח.** מה כבר ירוק ואיפה, מה נשאר, והמלכודות שהסשן ההוא שילם עליהן |
 | `docs/PROGRESS.md` | **קרא ראשון.** איפה עצרנו, מה השלב הנוכחי, מה נדחה ולמה |
 | `docs/DEBT-REGISTER.md` | **קרא שני.** כל הדחייה, החוב והמגבלה הידועה במקום אחד — מה, למה נדחה, איפה ההוכחה, ומה הצעד הזול הבא. אל תתחיל עבודה חדשה לפני שבדקת שהיא לא נמצאת שם |
 | `docs/ARCHITECTURE.md` | כללי מודל הנתונים — מחייבים |
+| `docs/ENTERPRISE-SECURITY-MODEL.md` | גבולות אמון, תפקידים פעילים ו־RLS |
+| `docs/INTEGRATION-ARCHITECTURE.md` · `docs/OFFLINE-SYNC-DESIGN.md` | חוזי אינטגרציה ו־offline הפעילים |
 | `docs/OPEN-DECISIONS.md` | הנחות עסקיות שנקבעו כברירת מחדל ואיפה משנים אותן |
 | `docs/LOCAL-CREDENTIALS-PATH.md` | נתיבי הסודות וחשבונות הבדיקה המקומיים/החיים. לקרוא סודות בזמן ריצה בלבד; לעולם לא להדפיס או להכניס ל-Git |
-| `docs/SupplyFlow-SaaS-Plan.html` | תוכנית ההפיכה ל-SaaS: 6 שלבים, עלויות, רגולציה |
 
 ## כללי ברזל
 
@@ -52,10 +52,11 @@
 Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **Tailwind v4 CSS-first** · recharts · lucide-react
 
 - `npm run dev` — פורט **5199**
-- `npm run build` = `tsc --noEmit` + **אחד-עשר** סקריפטי ה-`check:*` + `vitest run` (‏`npm run test`) + `vite build` — **השער האוטומטי היחיד.**
-  אחד-עשר, לא עשרה: ‏`check:exemptions` נוסף בגל 11, ‏`check:counts` בקמפיין האוטומציות, ו-`check:money`
+- `npm run build` = `tsc --noEmit` + **שנים-עשר** סקריפטי ה-`check:*` + `vitest run` (‏`npm run test`) + `vite build` — **השער האוטומטי היחיד.**
+  שנים-עשר: ‏`check:exemptions` נוסף בגל 11, ‏`check:counts` בקמפיין האוטומציות, `check:money`
+  ו-`check:dead-code` בניקוי שלושת התפקידים
   בחבילה 1 של קמפיין המוכנות. הרשימה מ-`package.json` היא
-  ‏`alerts · dashboard · orders · split · p2 · review · tokens · money · exemptions · counts · supplier-columns`.
+  ‏`alerts · dashboard · orders · split · p2 · review · tokens · money · exemptions · counts · supplier-columns · dead-code`.
   ‏`check:money` אוכף מקור אמת אחד לצורת הכסף — אפס `₪` מודבק לערך מוזרק, אפס `toLocaleString(`
   ואפס פורמטר מטבע שני מחוץ ל-`src/lib/format.ts`; נבדק במוטציה — הפרה מושתלת מפילה אותו.
   ‏`check:review` מריץ `node --test` על `src/components/document-review/model.test.ts` — ‏**22** בדיקות
@@ -66,7 +67,8 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   חריגים נוספו ונוקזו מעל זרע `0057` (‏59) ודורש שההצמדה ב-`p9_five_domains.sql` תסכים. זו אותה
   טענה שכבר קיימת ב-p9 — במילישניות, במקום בדקה התשע-עשרה של שער בן עשרים דקות. **ארבעה גלים
   רצופים גילו אותה שם.**
-  ‏`npm run test` — ‏**659** בדיקות ב-**72** קבצים (נספר מפלט `vitest run`, ‏13.08.2026, אחרי
+  ‏`npm run test` — ‏**651** בדיקות ב-**70** קבצים (מספר הקבצים נספר מכנית ב-`check:counts`;
+  מספר הבדיקות נמדד מפלט `vitest run` הסופי של 13.08.2026, אחרי
   חוזי שחזור עיבוד, הפרדת actor הראיה מ-owner ההחלטה, סיווג retry בהעלאה ומקור אמת יחיד לסטטוסי
   עיבוד עם spinner נגיש ומניעת העלאה כפולה/טענת אחסון שגויה בניסיון חוזר; היה 628 אחרי
   ‏`documentStatus.spec.tsx` ו-`uploadDocument.spec.ts`; היה 615 אחרי
@@ -85,77 +87,33 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   ‏`check:counts` מצמיד את **המספרים שבקובץ הזה**: הוא סופר מחדש את הסוויטות, זרועות ה-preflight,
   תרחישי הדפדפן, בדיקות `check:review`, קבצי ה-spec וסקריפטי ה-`check:*` — ודורש שכל אזכור שלהם
   ב-`CLAUDE.md` יסכים. הוא נוסף אחרי שהסטייה חזרה **שש פעמים**, ובריצתו הראשונה תפס שבע טענות
-  שהתיישנו. **הוא אינו סופר את מספר בדיקות ה-vitest** (‏659) — אי אפשר לקרוא אותו מטקסט בלי לממש
+  שהתיישנו. **הוא אינו סופר את מספר בדיקות ה-vitest** (‏651) — אי אפשר לקרוא אותו מטקסט בלי לממש
   אוסף בדיקות; המספר נלקח מפלט הריצה, וקבצי ה-spec כן נספרים.
   **אם הוא נכשל — מתקנים את `CLAUDE.md`, לא את הסקריפט.**
   **אין ESLint ואין Prettier** בריפו, למרות הערות `eslint-disable` שנשארו ב-`src/lib/useQuery.ts`.
-- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **56**
+- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **57**
   סוויטות SQL, ‏**preflight עם 46 זרועות**, ‏`npm audit --audit-level=high`, חוזי Deno,
   ו-**35 תרחישי דפדפן**. מספר טענות P0 מדווח בזמן ריצה (‏266 בריצה שתועדה) — הוא אינו ליטרל בקוד.
 
   **איך נספר כל מספר כאן — כדי שהבא יספור ולא יעתיק:**
-  - **56 סוויטות** = קריאות `Invoke-SqlTest` ב-`check-quality-gates.ps1` שהארגומנט הראשון שלהן הוא
-    `supabase\tests\…`. בקובץ יש **59** מופעים של המחרוזת: אחד הוא הגדרת הפונקציה, ושניים טוענים
+  - **57 סוויטות** = קריאות `Invoke-SqlTest` ב-`check-quality-gates.ps1` שהארגומנט הראשון שלהן הוא
+    `supabase\tests\…`. בקובץ יש **60** מופעים של המחרוזת: אחד הוא הגדרת הפונקציה, ושניים טוענים
     fixtures (‏`supabase\demo\demo_seed.sql`, ‏`scripts\fixtures\ocr\browser-fixture.sql`).
-    ב-`supabase/tests/` יש **59** קבצי `.sql`; שלושת הקבצים שאינם ברשימת הסוויטות הפעילה הם
-    `p1_preflight.sql`, שרץ דרך `Invoke-Preflight`, ושתי סוויטות P1B של חשבון הספק שפרש —
-    `p1_price_submissions.sql` ו-`p1_price_submissions_concurrency.sql` — שנשמרות כארכיון חוזה.
+    ב-`supabase/tests/` יש **58** קבצי `.sql`; הקובץ היחיד שאינו ברשימת הסוויטות הפעילה הוא
+    `p1_preflight.sql`, שרץ דרך `Invoke-Preflight`. שתי סוויטות P1B הוסבו ל-owner/office וחזרו
+    לשער בניקוי שלושת התפקידים.
   - **46 זרועות preflight** = ‏`select '<שם>'` ב-`p1_preflight.sql` (‏1 + ‏45 `union all select '`),
     ו-`Invoke-Preflight` **זורק** אם לא חזרו בדיוק 46 שורות.
   - **35 תרחישים** = קריאות `await run(` ב-`check-browser-smoke.cjs` (‏35 נכון ל-10.08.2026, אחרי
     ערוץ ההערות של חבילה 0 בקמפיין המוכנות; ‏`run(` לבדו תופס גם את הגדרת הפונקציה).
 
-  **היסטוריית הסטייה, כי היא חזרה עשרים וארבע פעמים:** ‏13 → 20 → 26 → 27 → 28 → 29 → 30 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 54 → 55 → **56** לסוויטות; ‏22 → 25 → 29 → 30 → 33 → 34 →
-  **35** לתרחישים; ‏16 → 21 → **22** ל-`check:review`; ‏שבעה → שמונה → תשעה → עשרה → **אחד-עשר** לסקריפטי ה-`check:*`. בכל פעם הקובץ
-  הזה — שכל סוכן קורא **ראשון** — שלח את הקורא לספור פחות ממה שקיים. **סופרים לפני שכותבים.**
-  הקפיצה מ-30 ל-41 היא נרמול קמפיין ה-codex: אחת-עשרה סוויטות חדשות (‏p16 סמנטיקת ספק
-  לא-פעיל, ‏p17, ‏p18 ×2, ‏p19, ‏p20 ×2, ‏p21, ‏p23, ‏p24, ‏p25) נרשמו בשער באותו מיזוג. **‏`check:counts`
-  תפס את חמשת המספרים האלה** — הוא עובד.
-  שלושה-עשר הצעדים שאחריה הם קמפיין "מסמך ספק שהתקבל": ‏42 היא `p26_price_baseline.sql` (המחיר בתאריך
-  המסמך), ‏43 היא `p27_document_supplier_resolution.sql` (סולם ראיות הספק, `0106`), ‏44 היא
-  `p28_document_order_resolution.sql` (מדיניות דרגות ההתאמה לפי תת-סוג, `0107` — חשבונית לעולם
-  לא מותאמת ל"הזמנה הפתוחה היחידה", תעודת משלוח כן), ‏45 היא
-  `p29_document_reconciliation_assessment.sql` (‏`0108` — ארבעת המקורות: מה הוזמן, מה התקבל
-  בקבלה **שהושלמה**, מה כתוב במסמך, ומה המחיר המוסכם **בתאריך המסמך**), ו-**46 היא
-  `p30_document_review_assessment_read.sql`** (‏`0109` — הדלת היחידה של הדפדפן לשלושת הפותרים
-  הפרטיים: גבול תפקיד, **צמצום `auth_scopes()` בתוך גוף `SECURITY DEFINER` שבו RLS אינו רץ**,
-  והפרדת "הקובץ נשמר" מ"הנתונים אושרו").
-  ו-**47 היא `p31_apply_reviewed_document.sql`** (‏`0110` — הרגע שבו אישור של אדם הופך לרשומה
-  כספית: השרת **מחשב מחדש** את ה-assessment במקום להאמין להצעה, חשבונית אינה מקבלת סחורה,
-  תעודת משלוח יוצרת **טיוטה בלבד**, וקבלה אינה יוצרת חוב).
-  ‏**48 היא `p32_kitchen_supplier_read_boundary.sql`** (‏`0112` — צמצום תפקיד בלי לשבור אותו:
-  ‏`bank_details` בלתי-נגיש דרך **הרשאת עמודה**, שיושבת *מתחת* ל-RLS, בעוד גישת השורה נשמרת —
-  כי PostgREST מסנן embeds לפי RLS, והסרת התפקיד מהחוקה הייתה מחזירה `supplier: null` בכל מסך
-  הזמנה, קבלה ושיתוף).
-  ‏**49 היא `p33_canonical_purchase_metrics.sql`** (‏`0113` — הגדרה אחת לכל שאלת כסף: **היום
-  העסקי ולא היום ב-UTC**, מחירי snapshot, חשבוניות מאושרות בלבד, ורק זיכויים שכבר הקטינו יתרה).
-  ‏**50 היא `p34_product_purchase_summary.sql`** (‏`0114` — משלוח אחד נספר **פעם אחת**:
-  ‏`purchase_order_items.id` הוא גרעין הניכוי, קבלה שהושלמה גוברת על חשבון הספק, ומוצרים
-  לעולם אינם ממוזגים לפי דמיון שם).
-  ‏**51 היא `p35_preferred_supplier_tiebreak.sql`** (‏`0115` — ספק מועדף **שובר** שוויון ולעולם
-  אינו **מנצח** אותו: המחיר מסדר ראשון, ומועדף מחליף את שובר-השוויון השרירותי `supplier_id`).
-  ‏**52 היא `p36_document_removal_impact.sql`** (‏`0116` — מה מחיקת מסמך לוקחת איתה, **מחושב
-  לפני שהיא לוקחת**: חשבונית מאושרת, ששולמה או שנספרה בדוח חודשי חוסמת את האפשרות ההרסנית,
-  וכל סירוב נוקב בשם עצמו).
-  ‏**53 היא `p37_document_overcharge_credit.sql`** (‏`0118` — חיוב יתר אחד, בקשת זיכוי אחת
-  **בטיוטה**: ניסיון חוזר אינו מנסח עוד אחת, חיוב **מתחת** למחיר המוסכם אינו מנסח כלום,
-  והמחירון אינו נוגע).
-  ‏**54 היא `p38_export_report_templates.sql`** (‏`0126` — חוברת ה-Excel של הרו״ח הופכת לייצוא:
-  הוולידטור של חוזה **המסמך** לא נגע, תבנית מאושרת **חייבת** קובץ, וקובץ של גרסה מאושרת לעולם
-  אינו מוחלף. הסוויטה מצאה בריצתה הראשונה ש-`attach_export_template_workbook` מ-`0123` **מעולם
-  לא עבדה** — טריגר האי-שינויוּת של `0047` חסם אותה).
-  ‏`p39_retired_personas.sql` נוספה עבור ‏`0127` — `kitchen`, ‏`payer` ו-`supplier` נשארים
-  בהיסטוריה וב-enum, אך אי אפשר להזמין, להפעיל מחדש או לשחזר אותם כחשבונות מוצר. ‏`p40_storage_browser_upload.sql`
-  נוספה עבור ‏`0128` — העלאת דפדפן מאושרת לפי התפקיד והנתיב הדיירי בלי להניח ש-Storage כבר מילא
-  `owner`, ‏`owner_id` או metadata. באותו cutover הוצאו מהשער שתי סוויטות P1B שתלויות בחשבון
-  `supplier`; הקבצים נשמרו ולא מוצגים כ-PASS של מוצר שאין בו עוד חשבון ספק.
-  ‏**55 היא `p41_document_upload_registration.sql`** (‏`0131` — מפתח העלאה דיירי ויציב הופך
-  רישום חוזר לאחר אובדן תשובה לאידמפוטנטי, בלי העלאה כפולה, מחיקת אובייקט שכבר נרשם או דליפת
-  מפתח התעבורה לייצוא הדייר).
-  ‏**56 היא `p42_document_processing_recovery.sql`** (‏`0132` — שחזור owner-only של ניסיון תקוע
-  צורך קודם ראיית ספק שכבר שולמה, חוסם lease חי ומרוצי settlement, ואינו מפעיל OCR מחדש כאשר
-  חילוץ או פענוח כבר נשמרו; request יציב ו-generation של תוצאת השלב מגדרים retry ואובדן תשובה).
-  ‏`check:counts` תפס את המספרים של כל אחד מחמישה-עשר הצעדים לפני הקומיט — חמש-עשרה פעמים ברצף.
+  **מצב השער הנוכחי:** ‏`p23_supplier_portal.sql` ו־`p32_kitchen_supplier_read_boundary.sql`
+  הוסרו עם משטחי הפרסונות שפרשו. סוויטות P1B הפעילות הוסבו ל־`owner`/`office`, ו־
+  `p43_active_persona_surface.sql` מוכיחה את גבול שלושת התפקידים של `0133`. ‏`p39` שומרת את
+  חוזה הפרישה, ‏`p40` את גבול העלאת הדפדפן, ו־`p42` את שחזור ראיות העיבוד. הספירה המכנית נשארת
+  המצב המכני הוא **57 סוויטות SQL**, **46 זרועות preflight**, ‏**35 תרחישי דפדפן**,
+  ‏**22** ל-`check:review` ו־**12 סקריפטי `check:*`**. כל שינוי ברשימות מחייב הרצת
+  `check:counts` ועדכון המספרים מהפלט, לא מהזיכרון.
   ### השער רץ ב-CI. **אל תריץ אותו מקומית.** (‏09.08.2026)
 
   ‏`npm run quality` **מסרב לרוץ** על מכונה זו ויוצא עם קוד **3**. זו לא תקלה — זו ההגדרה.
@@ -175,7 +133,7 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   **מה `.github/workflows/quality-gate.yml` מריץ** — שלושה jobs **במקביל**, ולכן זמן הקיר הוא
   האיטי שבהם ולא הסכום:
   ‏`contracts` (חוזי Deno · ‏OCR worker build + self-check · ‏`npm audit`) ·
-  ‏`sql` (‏**56 סוויטות + preflight**) · ‏`browser` (‏**35 תרחישים** + fixtures + preview).
+  ‏`sql` (‏**57 סוויטות + preflight**) · ‏`browser` (‏**35 תרחישים** + fixtures + preview).
 
   **רשימת הסוויטות אינה מועתקת ל-YAML.** ‏`scripts/ci-sql-suites.mjs` **מפרסר אותה מתוך
   `check-quality-gates.ps1`** בזמן ריצה — אותה רשימה, אותו סדר, אותם תפקידי DB. עותק שני היה
@@ -185,7 +143,7 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   (‏88), ‏`Invoke-PriceListEdgeSmoke`, ‏`Invoke-OcrEdgeSmoke` ו-`check-p4-integrated-journey.cjs`.
   אלה קשורים ל-PowerShell של Windows ורצים רק בריצה הידנית. **תיק ירוק אינו טענה שהם עברו.**
 
-  ‏`.github/workflows/build.yml` ממשיך להריץ את `npm run build` המלא (‏tsc + אחד-עשר ה-`check:*` +
+  ‏`.github/workflows/build.yml` ממשיך להריץ את `npm run build` המלא (‏tsc + שנים-עשר ה-`check:*` +
   ‏vitest + ‏vite build) על כל push/PR — הוא המשוב המהיר (‏~92 שניות), ו-`quality-gate.yml` הוא
   השער הכבד.
 

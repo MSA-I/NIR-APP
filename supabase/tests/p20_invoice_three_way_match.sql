@@ -192,13 +192,13 @@ insert into public.organizations (id, name, status, vat_rate) values
 insert into auth.users (id, email) values
   ('21000000-0000-4000-8000-000000000001', 'owner-a-p20@example.test'),
   ('21000000-0000-4000-8000-000000000002', 'office-a-p20@example.test'),
-  ('21000000-0000-4000-8000-000000000003', 'kitchen-a-p20@example.test'),
+  ('21000000-0000-4000-8000-000000000003', 'office-a-p20-2@example.test'),
   ('21000000-0000-4000-8000-000000000004', 'accountant-a-p20@example.test'),
   ('21000000-0000-4000-8000-000000000005', 'owner-b-p20@example.test');
 insert into public.profiles (id, org_id, full_name, role) values
   ('21000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'P20 owner A', 'owner'),
   ('21000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', 'P20 office A', 'office'),
-  ('21000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000001', 'P20 kitchen A', 'kitchen'),
+  ('21000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000001', 'P20 office A', 'office'),
   ('21000000-0000-4000-8000-000000000004', '20000000-0000-4000-8000-000000000001', 'P20 accountant A', 'accountant'),
   ('21000000-0000-4000-8000-000000000005', '20000000-0000-4000-8000-000000000002', 'P20 owner B', 'owner');
 insert into public.suppliers (id, org_id, name, tax_id) values
@@ -978,8 +978,8 @@ begin
     '29000000-0000-4000-8000-000000000006', 'manual_entry', null, null,
     '21000000-0000-4000-8000-000000000003',
     jsonb_build_array(pg_temp.p20_line('Not allowed', null, null, null, 1, 'unit', 100, 0, 17, 100)),
-    'P20 kitchen mutation attempt');
-  raise exception 'P20 invoice three-way assertion failed: kitchen wrote invoice evidence';
+    'P20 office mutation attempt');
+  raise exception 'P20 invoice three-way assertion failed: office wrote invoice evidence';
 exception when sqlstate '42501' then
   if sqlerrm <> 'invoice_line_evidence_not_authorized' then raise; end if;
 end

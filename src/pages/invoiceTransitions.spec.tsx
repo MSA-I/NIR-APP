@@ -106,7 +106,7 @@ const actionNames = () => screen.getAllByRole('button')
 
 const heading = () => screen.findByRole('heading', { name: /חשבונית 7702/ });
 
-describe('InvoiceDetail — the server owns the review graph (PLAN-10 §3, migration 0070)', () => {
+describe('InvoiceDetail — the server owns the review graph (migration 0070)', () => {
   it('asks for the invoice_review graph of the current status and offers exactly what came back', async () => {
     const calls = useInvoiceScreen('in_review', ['approved', 'investigation', 'pending_approval']);
     renderDetail();

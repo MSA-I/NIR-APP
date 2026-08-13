@@ -58,7 +58,7 @@ const groupNames = () => screen.getAllByRole('group').map((node) => node.getAttr
 
 beforeEach(() => { authState.role = 'owner'; });
 
-describe('GlobalSearch — ALLOWED is display order, not the gate (PLAN-10 §3, migration 0069)', () => {
+describe('GlobalSearch — ALLOWED is display order, not the gate (migration 0069)', () => {
   it('renders every type an owner can reach, in the map order and not the wire order', async () => {
     const user = userEvent.setup();
     const calls = useGlobalSearch();
@@ -89,12 +89,12 @@ describe('GlobalSearch — ALLOWED is display order, not the gate (PLAN-10 §3, 
     expect(screen.getAllByRole('option')).toHaveLength(3);
   });
 
-  it('still refuses a search box to the roles 0069 answers with an empty set', () => {
+  it('refuses a search box to every retired role', () => {
     expect(canGlobalSearch('payer')).toBe(false);
     expect(canGlobalSearch('supplier')).toBe(false);
+    expect(canGlobalSearch('kitchen')).toBe(false);
     expect(canGlobalSearch('owner')).toBe(true);
     expect(canGlobalSearch('office')).toBe(true);
-    expect(canGlobalSearch('kitchen')).toBe(true);
     expect(canGlobalSearch('accountant')).toBe(true);
     expect(canGlobalSearch(undefined)).toBe(false);
   });

@@ -7,11 +7,8 @@
 // a disclosure that starts closed, and that the supplier — the one value carried into a payee
 // field — says out loud what a middling grade obliges.
 //
-// Who this screen is for, since it is the reason the numbers left it: `document_interpretations`
-// is readable by owner/office/kitchen (`document_interpretations_select`, migration 0046), and a
-// supplier account reaches it read-only for price documents it owns
-// (`supplier_price_document_interpretations_select`, `0048_ocr_price_submission_bridge.sql:516`).
-// Not one of those is an engineer. The source viewer is not an expert surface.
+// Who this screen is for, since it is the reason the numbers left it: active owner/office document
+// reviewers. Neither is an engineer, and the source viewer is not an expert surface.
 
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
@@ -113,7 +110,6 @@ const renderWorkspace = (supplierConfidence: number | null) => render(
   <MemoryRouter>
     <DocumentReviewWorkspace
       snapshot={snapshotWith(supplierConfidence)}
-      role="owner"
       actorId="actor"
       onRefetch={async () => true}
       initialPanel={null}

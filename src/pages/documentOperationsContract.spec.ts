@@ -4,7 +4,6 @@ import { createElement } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
-import { isRouteAllowed } from '../../qa/config/roles';
 import { ToastProvider } from '../components/ui';
 import {
   attemptStatusMeta,
@@ -112,13 +111,11 @@ const attempt = (status: string, price_list_outcome: string | null = null, rever
 });
 
 describe('document operations capability and UX contract', () => {
-  it('is owner-only in the real router, QA mirror and navigation', () => {
-    expect(isRouteAllowed('owner', '/documents/operations')).toBe(true);
-    for (const role of ['office', 'kitchen', 'payer', 'accountant', 'supplier'] as const) {
-      expect(isRouteAllowed(role, '/documents/operations')).toBe(false);
-    }
+  it('is owner-only in the real router and navigation', () => {
     expect(app).toContain('path="/documents/operations" element={<Guard roles={[\'owner\']}><DocumentOperations /></Guard>}');
     expect(layout).toContain("{ to: '/documents/operations', label: 'תפעול מסמכים', icon: Activity, roles: ['owner'] }");
+    expect(app).not.toContain('roles={[\'office\']}><DocumentOperations');
+    expect(app).not.toContain('roles={[\'accountant\']}><DocumentOperations');
   });
 
   it('uses owner operations/calibration contracts and never exposes service/platform automation commands', () => {

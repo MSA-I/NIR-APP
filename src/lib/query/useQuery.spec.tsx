@@ -109,7 +109,7 @@ describe('useQuery — cached mode (explicit key)', () => {
   });
 });
 
-describe('useQuery — keepPreviousData (PLAN-02 §2.3)', () => {
+describe('useQuery — keepPreviousData (ADR-0007)', () => {
   const pageFetcher = () => {
     const resolvers: Array<(rows: string[]) => void> = [];
     const fn = vi.fn(() => new Promise<string[]>((resolve) => { resolvers.push(resolve); }));

@@ -1,7 +1,7 @@
 -- P5 domain-event harness for 0063-0064. Run only against an isolated local database
 -- with every migration applied. The transaction is rolled back.
 --
--- What it proves, per PLAN-05 §2:
+-- What it proves for the 0063 domain-event contract:
 --   (a) an EXISTING reasoned command -- set_invoice_review_status, not edited for events
 --       (asserted structurally against pg_proc) -- produces the correct domain event with
 --       the payload the map row projects, through the audit fan-out alone;

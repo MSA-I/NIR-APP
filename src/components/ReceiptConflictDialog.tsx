@@ -15,7 +15,7 @@ import { Modal, Note } from './ui';
  * timestamps and (when RLS allows it) who changed the server side, and then ask.
  *
  * Detection is **re-read-and-compare**: `purchase_order_items` has no updated-at column and no
- * trigger (`0001:164-171,415`), and PLAN-09 forbids adding one. So the client re-reads the rows it
+ * trigger (`0001:164-171,415`), and `OFFLINE-SYNC-DESIGN.md` forbids adding one. So the client re-reads the rows it
  * cares about and compares them with what it holds. That is weaker than a version stamp and it is
  * said out loud rather than dressed up: the comparison shows the state at read time, and the server
  * remains the only authority — every resolution goes back through `save_goods_receipt`, which

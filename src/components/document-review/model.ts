@@ -170,7 +170,7 @@ const CONFIDENCE_PARTIAL = 0.7;
  * How clearly the document was read, as words rather than a percentage.
  *
  * The percentage was removed from the everyday screens on the owner's instruction — the reviewers
- * are a bookkeeper and a kitchen manager, and "רמת ביטחון 87%" asks them to do arithmetic on a
+ * are operational product users, and "רמת ביטחון 87%" asks them to do arithmetic on a
  * number nobody calibrated instead of answering the only question they have: do I look at this one
  * harder? It is **not deleted**: `confidencePercent` prints it verbatim inside the "פרטים טכניים"
  * disclosure of the review workspace, one click away, for whoever is diagnosing an extraction.
@@ -565,7 +565,7 @@ export function correctionKey(
 /**
  * Who performed a review action, as a name. Falls back to — when the profile is not readable
  * (a supplier account cannot see tenant staff) or no longer exists. Never renders the raw uuid:
- * an identifier tells a kitchen manager or bookkeeper nothing, and — is the truthful "unknown".
+ * an identifier tells an operational user nothing, and — is the truthful "unknown".
  */
 /**
  * Why the automation stopped, in the language of the business rather than of the ladder.

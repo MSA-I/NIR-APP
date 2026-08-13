@@ -5,11 +5,11 @@
 
 import { supabase } from './supabase';
 import { toHebrewError } from './errors';
-import type { Invitation, InvitationStatus, Role } from './types';
+import type { ActiveRole, Invitation, InvitationStatus, Role } from './types';
 
 /** The only three product personas. The frozen enum still carries retired historical values. */
-export const INVITABLE_ROLES: Role[] = ['owner', 'office', 'accountant'];
-export const ASSIGNABLE_ROLES: Role[] = ['owner', 'office', 'accountant'];
+export const INVITABLE_ROLES: ActiveRole[] = ['owner', 'office', 'accountant'];
+export const ASSIGNABLE_ROLES: ActiveRole[] = ['owner', 'office', 'accountant'];
 
 // Invitation / InvitationStatus live in ./types with the rest of the schema mirror.
 export type { Invitation, InvitationStatus };
@@ -70,7 +70,7 @@ async function callSendInvite(
   return { error: null, result: data as InviteResult };
 }
 
-export const sendInvite = (email: string, role: Role) =>
+export const sendInvite = (email: string, role: ActiveRole) =>
   callSendInvite({ action: 'create', email, role });
 
 export const resendInvite = (invitationId: string) =>

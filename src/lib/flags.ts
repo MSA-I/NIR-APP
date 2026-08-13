@@ -7,7 +7,7 @@ import { useOrgScope } from './query/orgScope';
 import { toHebrewError } from './errors';
 
 /**
- * Feature-flag reads (PLAN-04 §3.3).
+ * Feature-flag reads (migration 0059).
  *
  * `resolve_feature_flags()` is the single stable definer that returns the evaluated set for
  * `(uid, org, scopes)`. The flag law (SECURITY-MODEL §8) holds on both sides of the wire: a flag
@@ -45,7 +45,7 @@ function toEnabled(value: unknown): boolean {
 }
 
 /**
- * Normalises the RPC result. The contract (handoff/04-flags-stepup-contract.md §4) is
+ * Normalises the RPC result. The contract (ENTERPRISE-SECURITY-MODEL §8) is
  * `returns table (flag_key text, state boolean)`; `{ key }` / `{ enabled }` spellings and a plain
  * `{ [key]: value }` object are tolerated defensively. Unrecognised rows are dropped, which reads
  * as "off" — the fail-closed direction.
@@ -69,7 +69,7 @@ function normalizeResolvedFlags(data: unknown): Map<string, boolean> {
 /**
  * TanStack is used directly (not through `src/lib/useQuery.ts`) for one reason only: the app
  * wrapper deliberately exposes no `staleTime`, and it is frozen this wave. The key still follows
- * the handoff-01 contract to the letter — rooted at the tenant via `flagsKey`, built from
+ * the migration 0059 contract to the letter — rooted at the tenant via `flagsKey`, built from
  * `DOMAIN`, invalidated by the same `invalidateOrg`/`clearOrg` as everything else.
  */
 export function useFeatureFlags(): FeatureFlagsState {

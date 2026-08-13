@@ -1,7 +1,7 @@
 -- P4b correlation-id harness for 0062. Run only against an isolated local database with
 -- every migration applied. The transaction is rolled back.
 --
--- What it proves, per PLAN-4b §2:
+-- What it proves for the correlation contract:
 --   (a) a simulated PostgREST header (`request.headers` GUC) lands in
 --       audit_logs.correlation_id through an EXISTING reasoned command -- revoke_invitation
 --       -- whose body was not edited for correlation (asserted structurally against

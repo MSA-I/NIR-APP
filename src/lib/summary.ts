@@ -65,7 +65,7 @@ export async function buildSummary(): Promise<Summary> {
     // 2. invoices awaiting approval.
     //    Reads invoices.review_status literally, because the line says "חשבוניות".
     //    Dashboard.tsx:124 counts `received|in_review` for its own card, which is a different
-    //    set — that divergence is open decision #1 in docs/NIR-PLAN.md and is owned by the
+    //    set — that divergence is open decision #1 in docs/OPEN-DECISIONS.md and is owned by the
     //    sections 1-6 work. When it is settled, this constant follows it rather than forking
     //    a third interpretation.
     { key: 'awaiting_approval', label: 'חשבוניות הממתינות לאישור', unit: 'count', to: '/invoices', run: () => readExactCount(

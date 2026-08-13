@@ -32,7 +32,7 @@ import { ToastProvider } from '../components/ui';
  *   * the dialog will not submit an empty reason. The server refuses one by name regardless; this
  *     asserts the browser does not offer the button that would earn that refusal.
  */
-const ROLE = { current: 'owner' as 'owner' | 'office' | 'kitchen' };
+const ROLE = { current: 'owner' as 'owner' | 'office' | 'accountant' };
 
 vi.mock('../lib/supabase', async () => {
   const { createClient } = await import('@supabase/supabase-js');
@@ -175,8 +175,8 @@ describe('פעולת ביטול השיוך האוטומטי', () => {
     expect(screen.queryByText('ביטול השיוך האוטומטי')).not.toBeInTheDocument();
   });
 
-  it('אינה מוצעת ל-kitchen — אותה סמכות שהשרת אוכף', async () => {
-    ROLE.current = 'kitchen';
+  it('אינה מוצעת ל-accountant — אותה סמכות שהשרת אוכף', async () => {
+    ROLE.current = 'accountant';
     server.use(...traffic());
     renderGallery();
     await screen.findAllByText('שויך אוטומטית');

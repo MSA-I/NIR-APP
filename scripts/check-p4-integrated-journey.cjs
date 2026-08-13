@@ -34,10 +34,10 @@ const ORG_ID = '11111111-1111-4111-8111-111111111111';
 const SUPPLIER_ID = 'aa000000-0000-4000-8000-000000000001';
 const PRODUCT_ID = 'bb000000-0000-4000-8000-000000000001';
 const AMOUNTS = Object.freeze({ order: 300, vat: 54, invoice: 354, payment: 300, credit: 54 });
-const ROLES = Object.freeze(['supplier', 'office', 'owner', 'accountant']);
+const ROLES = Object.freeze(['office', 'owner', 'accountant']);
 
 const REASONS = Object.freeze({
-  priceSubmission: 'P4 integrated supplier price submission',
+  priceSubmission: 'P4 integrated staff price submission',
   finalizeRequest: 'P4 integrated purchase request finalization',
   sendOrder: 'P4 integrated purchase order sent',
   completeReceipt: 'P4 integrated goods receipt completion',
@@ -326,7 +326,7 @@ function auditTransitionSet(rows, oldKey, newKey) {
 
 function validateAudits(rows, ids, actorRoleById) {
   const expected = [
-    ['supplier_price_submission_processed', ids.submission, 1, 'supplier', [REASONS.priceSubmission]],
+    ['supplier_price_submission_processed', ids.submission, 1, 'office', [REASONS.priceSubmission]],
     ['purchase_request_finalized', ids.purchaseRequest, 1, 'office', [REASONS.finalizeRequest]],
     ['purchase_order_status_changed', ids.order, 1, 'office', [REASONS.sendOrder]],
     ['goods_receipt_completed', ids.receipt, 1, 'office', [REASONS.completeReceipt]],
@@ -399,11 +399,11 @@ async function main() {
   );
   const priceFileHash = sha256(priceBytes);
   const storagePath = `${ORG_ID}/price-submissions/${SUPPLIER_ID}/${ids.submission}/${priceFileName}`;
-  await dataOf(actors.supplier.client.storage.from('price-submissions').upload(storagePath, priceBytes, {
+  await dataOf(actors.office.client.storage.from('price-submissions').upload(storagePath, priceBytes, {
     contentType: 'text/csv',
     upsert: false,
-  }), 'Supplier price CSV upload');
-  const edge = await invokePriceList(actors.supplier.accessToken, {
+  }), 'Office price CSV upload');
+  const edge = await invokePriceList(actors.office.accessToken, {
     submissionId: ids.submission,
     supplierId: SUPPLIER_ID,
     targetMonth,

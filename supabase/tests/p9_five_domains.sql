@@ -1,4 +1,4 @@
-﻿-- P9 harness for 0068-0070 (wave 9, PLAN-10 ֲ§2). Run only against an isolated local database
+﻿-- P9 harness for the 0068-0070 contract. Run only against an isolated local database
 -- with every migration applied. The transaction is rolled back.
 --
 -- What it proves:
@@ -12,8 +12,8 @@
 --       Push and LEAVES the notification row (the #39 badge contract); an in-app opt-out
 --       removes the row; a preference cannot widen the audience; the command is self-only and
 --       rejects an uncatalogued code; the reader is complete and tenant-pinned;
---   (c) the search type gate: as payer and as supplier agent global_search returns NOTHING;
---       as accountant it returns no supplier/product/order hit; as owner it returns all six;
+--   (c) the search type gate: accountant receives only invoice/payment/credit, office receives
+--       no payment hit, an unresolvable role receives nothing, and owner receives all six;
 --   (d) the approval policy: tighten-only enforcement, the platform-operator write boundary,
 --       the evaluator's threshold arithmetic and tenant pinning, and the STRUCTURAL proof
 --       that no financial command and no RLS expression anywhere mentions the evaluator;
@@ -383,10 +383,9 @@ insert into organizations (id, name, status) values
 insert into auth.users (id, email) values
   ('29000000-0000-4000-8000-000000000001', 'p9-owner@example.test'),
   ('29000000-0000-4000-8000-000000000002', 'p9-office@example.test'),
-  ('29000000-0000-4000-8000-000000000003', 'p9-kitchen@example.test'),
+  ('29000000-0000-4000-8000-000000000003', 'p9-office-2@example.test'),
   ('29000000-0000-4000-8000-000000000004', 'p9-accountant@example.test'),
-  ('29000000-0000-4000-8000-000000000005', 'p9-payer@example.test'),
-  ('29000000-0000-4000-8000-000000000006', 'p9-agent@example.test'),
+  ('29000000-0000-4000-8000-000000000005', 'p9-accountant-2@example.test'),
   ('29000000-0000-4000-8000-000000000007', 'p9-foreign-owner@example.test'),
   ('29000000-0000-4000-8000-000000000008', 'p9-operator@example.test');
 
@@ -402,13 +401,11 @@ insert into profiles (id, org_id, full_name, role, supplier_id) values
   ('29000000-0000-4000-8000-000000000002', '19000000-0000-4000-8000-000000000001',
    'P9 Office', 'office', null),
   ('29000000-0000-4000-8000-000000000003', '19000000-0000-4000-8000-000000000001',
-   'P9 Kitchen', 'kitchen', null),
+   'P9 Office', 'office', null),
   ('29000000-0000-4000-8000-000000000004', '19000000-0000-4000-8000-000000000001',
    'P9 Accountant', 'accountant', null),
   ('29000000-0000-4000-8000-000000000005', '19000000-0000-4000-8000-000000000001',
-   'P9 Payer', 'payer', null),
-  ('29000000-0000-4000-8000-000000000006', '19000000-0000-4000-8000-000000000001',
-   'P9 Supplier Agent', 'supplier', '39000000-0000-4000-8000-000000000001'),
+   'P9 Accountant', 'accountant', null),
   ('29000000-0000-4000-8000-000000000007', '19000000-0000-4000-8000-000000000002',
    'P9 Foreign Owner', 'owner', null);
 
@@ -547,7 +544,7 @@ select pg_temp.p9_assert(
   (select count(*) from notifications where entity_key = 'p9-key-inapp-off') = 1,
   'the other member must still be served while one opts out of the in-app record');
 
--- (b4) A preference cannot WIDEN the audience. The payer stores the most permissive
+-- (b4) A preference cannot WIDEN the audience. The accountant stores the most permissive
 -- preference possible and still receives nothing.
 select pg_temp.p9_claims('29000000-0000-4000-8000-000000000005');
 select set_notification_preference('duplicate_invoice', true, true);
@@ -566,7 +563,7 @@ select pg_temp.p9_assert(
   (select count(*) from notifications
    where entity_key = 'p9-key-widen'
      and user_id = '29000000-0000-4000-8000-000000000005') = 0,
-  'the payer must hold a preference row and still receive no notification');
+  'the accountant must hold a preference row and still receive no notification');
 
 -- (b5) The command surface: self only, catalogued codes only, reasoned audit.
 select pg_temp.p9_assert(
@@ -653,7 +650,7 @@ select pg_temp.p9_assert(
 
 select pg_temp.p9_assert(
   not (pg_temp.p9_search_entities('29000000-0000-4000-8000-000000000003') && array['payment']),
-  'kitchen may not receive payment hits');
+  'office may not receive payment hits');
 
 select pg_temp.p9_assert(
   not (pg_temp.p9_search_entities('29000000-0000-4000-8000-000000000004')
@@ -661,12 +658,9 @@ select pg_temp.p9_assert(
   'an accountant may not receive supplier, product or order hits -- those routes are staff');
 
 select pg_temp.p9_assert(
-  pg_temp.p9_search_entities('29000000-0000-4000-8000-000000000005') = '{}'::text[],
-  'a payer must receive NOTHING from global search -- their only route is the pay queue');
-
-select pg_temp.p9_assert(
-  pg_temp.p9_search_entities('29000000-0000-4000-8000-000000000006') = '{}'::text[],
-  'a supplier agent must receive NOTHING from global search');
+  pg_temp.p9_search_entities('29000000-0000-4000-8000-000000000005')
+    = array['credit', 'invoice', 'payment'],
+  'an accountant must receive exactly the three financial result types');
 
 select pg_temp.p9_assert(
   pg_temp.p9_search_entities(null) = '{}'::text[],
@@ -813,7 +807,7 @@ select pg_temp.p9_assert(
   'no RLS USING/WITH CHECK expression may mention the evaluator (SECURITY-MODEL:246-251)');
 
 -- Named explicitly, because these five are the commands a future wave would be tempted to
--- wire, and PLAN-10 forbids touching them at all this wave.
+-- wire, and the 0068-0070 contract forbids touching them here.
 select pg_temp.p9_assert(
   not exists (
     select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -975,8 +969,8 @@ select pg_temp.p9_probe(
 
 -- ===== (f) the mutation proof: a weakened type gate is detected =====
 -- The gate assertion in (c) has teeth only if it fails against a search that ignores the
--- role. A deliberately weakened stand-in with the same signature is installed, the payer
--- probe is re-run, and it must now find rows -- then the savepoint takes it away again.
+-- role. A deliberately weakened stand-in with the same signature is installed, the accountant
+-- probe is re-run, and it must now receive a supplier row -- then the savepoint takes it away.
 savepoint p9_search_gate_mutation;
 
 create or replace function global_search(q text, per_type int default 5)
@@ -995,14 +989,15 @@ begin
 end $$;
 
 select pg_temp.p9_assert(
-  pg_temp.p9_search_entities('29000000-0000-4000-8000-000000000005') <> '{}'::text[],
-  'the mutation must be visible -- otherwise the payer assertion above proves nothing');
+  pg_temp.p9_search_entities('29000000-0000-4000-8000-000000000005') = array['supplier'],
+  'the mutation must leak a supplier hit -- otherwise the accountant assertion proves nothing');
 
 rollback to savepoint p9_search_gate_mutation;
 
 select pg_temp.p9_assert(
-  pg_temp.p9_search_entities('29000000-0000-4000-8000-000000000005') = '{}'::text[],
-  'with the real function restored the payer must again receive nothing');
+  pg_temp.p9_search_entities('29000000-0000-4000-8000-000000000005')
+    = array['credit', 'invoice', 'payment'],
+  'with the real function restored the accountant must again receive only financial hits');
 
 rollback;
 

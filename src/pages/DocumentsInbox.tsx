@@ -84,7 +84,7 @@ type RefileOption = { id: string; title: string; sub: string };
  *
  *  `data-testid` and `data-document-id` are unchanged, and `data-stage` is ADDED carrying the raw
  *  internal stage: check-browser-smoke.cjs keeps measuring real pipeline state while the text says
- *  something a kitchen manager can act on. Exported for documentStage.spec.tsx, which asserts that
+ *  something a procurement user can act on. Exported for documentStage.spec.tsx, which asserts that
  *  pairing directly — the gate contract is too easy to break silently from inside this file. */
 export function ProcessingBadge({ documentId, stage, doc }: {
   documentId: string;
@@ -387,9 +387,8 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   const canRetry = canFile;
   /**
    * Removing a document is not filing it (owner, 11.08.2026, and 0121 in the database).
-   * Whoever photographed the wrong page is who notices, and that is the kitchen manager at
-   * the truck far more often than the owner. The server holds the real boundary: it opens
-   * `document_only` to the same four roles and keeps the derived reversal for owner/office,
+   * Whoever photographed the wrong page is who notices. The server holds the real boundary and
+   * keeps the derived reversal for owner/office,
    * telling the dialog so through `can_remove_derived` and a named blocker.
    */
   const canRemoveDocument = canWrite && !!profile

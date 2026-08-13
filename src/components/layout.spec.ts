@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { NAV_SECTIONS, drawerSectionsForRole, footerItemsForRole, sectionsForRole } from './Layout';
 import { isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
-import type { Role } from '../lib/types';
+import type { ActiveRole } from '../lib/types';
 
-const ACTIVE_ROLES: Role[] = ['owner', 'office', 'accountant'];
-const RETIRED_ROLES: Role[] = ['kitchen', 'payer', 'supplier'];
-const pathsFor = (role: Role | undefined, isPlatformAdmin = false) =>
+const ACTIVE_ROLES: ActiveRole[] = ['owner', 'office', 'accountant'];
+const pathsFor = (role: ActiveRole | undefined, isPlatformAdmin = false) =>
   sectionsForRole(role, isPlatformAdmin).flatMap((section) => section.items).map((item) => item.to);
 
 describe('מעטפת הניווט', () => {
@@ -42,10 +41,8 @@ describe('מעטפת הניווט', () => {
     expect(footerItemsForRole('owner').map((item) => item.to)).toEqual(['/onboarding', '/settings']);
   });
 
-  it('לתפקידים שפרשו אין יעד מוצר, ולרואה החשבון נשאר מסלול הביצוע', () => {
-    for (const role of RETIRED_ROLES) expect(pathsFor(role)).toEqual([]);
+  it('לרואה החשבון נשאר מסלול הביצוע', () => {
     expect(pathsFor('accountant')).toEqual(expect.arrayContaining(['/dashboard', '/invoices', '/pay']));
-    expect(footerItemsForRole('supplier')).toEqual([]);
   });
 
   it('מדור הפלטפורמה נוסף אחרון ורק למנהל פלטפורמה', () => {
@@ -82,9 +79,6 @@ describe('סרגל הפעולות המהירות במובייל', () => {
     expect(quickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'document-operations']);
     expect(quickActionsFor('office').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'documents']);
     expect(quickActionsFor('accountant').map((item) => item.key)).toEqual(['dashboard', 'invoices', 'pay']);
-    expect(quickActionsFor('kitchen')).toEqual([]);
-    expect(quickActionsFor('payer')).toEqual([]);
-    expect(quickActionsFor('supplier')).toEqual([]);
   });
 
   it('מחזיר את כל יעדי הניווט הרגילים למגירה', () => {

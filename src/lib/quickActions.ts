@@ -1,11 +1,11 @@
 import { Activity, Camera, CreditCard, FileText, FolderOpen, LayoutDashboard, PackageCheck, ShoppingCart, type LucideIcon } from 'lucide-react';
-import type { Role } from './types';
+import { isActiveRole, type ActiveRole, type Role } from './types';
 
 export interface QuickAction {
   key: string;
   label: string;
   icon: LucideIcon;
-  roles: readonly Role[];
+  roles: readonly ActiveRole[];
   kind: 'link' | 'capture';
   to?: string;
 }
@@ -33,7 +33,7 @@ const QUICK_ACTIONS: readonly QuickAction[] = [
 const FOCUS_PATHS = ['/orders/new', '/invoices/new', '/receiving/:orderId'] as const;
 
 export function quickActionsFor(role: Role | null | undefined): QuickAction[] {
-  return role ? QUICK_ACTIONS.filter((action) => action.roles.includes(role)) : [];
+  return isActiveRole(role) ? QUICK_ACTIONS.filter((action) => action.roles.includes(role)) : [];
 }
 
 // desktopQuickActionsFor was removed with the desktop speed-dial (owner decision 09.08.2026).

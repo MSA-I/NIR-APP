@@ -66,7 +66,7 @@ if (mode === 'write-functions-env') {
   if (path.resolve(outPath).startsWith(repoRoot + path.sep)) {
     throw new Error('The demo manifest must live outside the repository; create-users.ps1 refuses otherwise.');
   }
-  const roles = ['owner', 'kitchen', 'office', 'payer', 'accountant', 'supplier'];
+  const roles = ['owner', 'office', 'accountant'];
   const accounts = roles.map((role) => ({
     email: `${role}@demo.supplyflow.local`,
     password: `P4!${seed}-${role}-Aa7`,

@@ -46,6 +46,11 @@ insert into public.invitations (
 
 set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claim.sub', '2a390000-0000-4000-8000-000000000002', true);
+select pg_temp.p39_assert(
+  public.auth_role() is null and public.auth_org() is null,
+  'an active historical kitchen row resolved a browser role or tenant');
+
 select set_config('request.jwt.claim.sub', '2a390000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claims', jsonb_build_object(
   'sub', '2a390000-0000-4000-8000-000000000001',

@@ -33,18 +33,17 @@ insert into public.organizations (id, name, status, vat_rate) values
   ('10360000-0000-4000-8000-000000000001', 'P36 tenant', 'active', 18);
 insert into auth.users (id, email) values
   ('20360000-0000-4000-8000-000000000001', 'owner-p36@example.test'),
-  ('20360000-0000-4000-8000-000000000002', 'kitchen-p36@example.test'),
-  ('20360000-0000-4000-8000-000000000003', 'payer-p36@example.test');
+  ('20360000-0000-4000-8000-000000000002', 'office-p36@example.test'),
+  ('20360000-0000-4000-8000-000000000003', 'accountant-p36@example.test');
 insert into public.profiles (id, org_id, full_name, role) values
   ('20360000-0000-4000-8000-000000000001', '10360000-0000-4000-8000-000000000001',
    'P36 owner', 'owner'),
   ('20360000-0000-4000-8000-000000000002', '10360000-0000-4000-8000-000000000001',
-   'P36 kitchen', 'kitchen'),
-  -- A role OUTSIDE 0121's list, so that "everyone" is asserted to have an edge. payer is the
-  -- honest choice: it is a real role a real account can still hold (0111 revoked its command, not
-  -- the enum value), so this is a live boundary rather than a hypothetical one.
+   'P36 office', 'office'),
+  -- Accountant is the active financial reader: it may remove the document itself, but it may not
+  -- reverse derived procurement or invoice records through this surface.
   ('20360000-0000-4000-8000-000000000003', '10360000-0000-4000-8000-000000000001',
-   'P36 payer', 'payer');
+   'P36 accountant', 'accountant');
 insert into public.suppliers (id, org_id, name, status) values
   ('40360000-0000-4000-8000-000000000001', '10360000-0000-4000-8000-000000000001',
    'P36 ספק', 'active');
@@ -275,8 +274,8 @@ select pg_temp.p36_assert(
 -- ===== 6. Who may look, and who may reverse (0121) =====
 --
 -- The owner opened removal to every internal role on 11.08.2026. "Every internal role" is a
--- measured list rather than a synonym for "authenticated": the roles that can SEE a document are
--- owner, office, kitchen and accountant, and those four may remove one. Reversing what a document
+-- measured list rather than a synonym for "authenticated": the active roles that can SEE a
+-- document are owner, office and accountant, and those three may remove one. Reversing what it
 -- created is a different act -- it soft deletes an invoice -- and stays with owner and office.
 
 set local role authenticated;
@@ -285,32 +284,22 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 
 select pg_temp.p36_assert(
   (select (r ->> 'found')::boolean and (r ->> 'can_remove_document_only')::boolean
+          and (r ->> 'can_remove_derived')::boolean
    from public.get_document_removal_impact('60360000-0000-4000-8000-000000000001') r),
-  'a kitchen manager cannot read what removing a document would take with it. They are the person '
-  'holding the phone at the truck, and the one who photographed the wrong page');
+  'office must retain both the document-only and derived-removal procurement paths');
 
 -- Document 4 is the reversible one: for the owner its derived draft receipt really can be undone.
--- For a kitchen manager the same document must come back with the option withdrawn AND a reason,
+-- For an accountant the same document must come back with the option withdrawn AND a reason,
 -- because a disabled control with no explanation is indistinguishable from a broken screen.
+select set_config('request.jwt.claim.sub', '20360000-0000-4000-8000-000000000003', true);
 select pg_temp.p36_assert(
-  (select (r ->> 'can_remove_derived')::boolean = false
+  (select (r ->> 'can_remove_document_only')::boolean
+          and (r ->> 'can_remove_derived')::boolean = false
           and exists (select 1 from jsonb_array_elements(r -> 'blockers') b
                       where b ->> 'kind' = 'role_may_not_reverse'
                         and length(b ->> 'description') > 20)
    from public.get_document_removal_impact('60360000-0000-4000-8000-000000000004') r),
-  'the preview offered a kitchen manager the derived reversal, or withdrew it without saying why');
-
-select set_config('request.jwt.claim.sub', '20360000-0000-4000-8000-000000000003', true);
-do $$
-begin
-  perform public.get_document_removal_impact('60360000-0000-4000-8000-000000000001');
-  raise exception 'P36 removal assertion failed: a role outside 0121''s list read the impact '
-    'preview. "Everyone" is the four internal roles that can see a document, not everyone with a '
-    'session';
-exception when sqlstate '42501' then
-  if sqlerrm <> 'document_removal_not_authorized' then raise; end if;
-end
-$$;
+  'the preview offered an accountant the derived reversal, or withdrew it without saying why');
 
 select set_config('request.jwt.claim.sub', '20360000-0000-4000-8000-000000000001', true);
 select pg_temp.p36_assert(
@@ -394,14 +383,14 @@ $$;
 
 -- ===== 8. The two halves of the owner's sentence (0121) =====
 
-select set_config('request.jwt.claim.sub', '20360000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claim.sub', '20360000-0000-4000-8000-000000000003', true);
 
 do $$
 begin
   perform public.remove_document('60360000-0000-4000-8000-000000000001',
-                                 'document_and_derived', 'P36 מטבח מנסה לבטל נגזרות');
-  raise exception 'P36 removal assertion failed: A KITCHEN MANAGER UNDID DERIVED RECORDS. That '
-    'path soft deletes an invoice, and kitchen holds no invoice write anywhere else in the system';
+                                 'document_and_derived', 'P36 חשבונאי מנסה לבטל נגזרות');
+  raise exception 'P36 removal assertion failed: AN ACCOUNTANT UNDID DERIVED RECORDS. That path '
+    'soft deletes an invoice, outside the accountant payment command boundary';
 exception when sqlstate '42501' then
   if sqlerrm <> 'document_removal_derived_not_authorized' then raise; end if;
 end
@@ -410,20 +399,8 @@ $$;
 select pg_temp.p36_assert(
   (select (r ->> 'removed')::boolean and (r ->> 'undone_count')::integer = 0
    from public.remove_document('60360000-0000-4000-8000-000000000001',
-                               'document_only', 'P36 מטבח מסיר מסמך שצולם בטעות') r),
-  'a kitchen manager could not remove a document. This is the owner''s instruction of 11.08.2026, '
-  'and the person who mis-files a photograph is the person who notices');
-
-select set_config('request.jwt.claim.sub', '20360000-0000-4000-8000-000000000003', true);
-do $$
-begin
-  perform public.remove_document('60360000-0000-4000-8000-000000000002',
-                                 'document_only', 'P36 תפקיד מחוץ לרשימה');
-  raise exception 'P36 removal assertion failed: a role outside 0121''s list removed a document';
-exception when sqlstate '42501' then
-  if sqlerrm <> 'document_removal_not_authorized' then raise; end if;
-end
-$$;
+                               'document_only', 'P36 חשבונאי מסיר מסמך ששויך בטעות') r),
+  'an accountant could not remove the document while the derived financial record stayed intact');
 
 reset role;
 rollback;

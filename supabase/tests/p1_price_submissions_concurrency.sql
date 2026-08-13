@@ -25,12 +25,12 @@ create table p1b_concurrency_test.results (
 insert into organizations (id, name, status) values
   ('12000000-0000-0000-0000-000000000001', 'P1B concurrency tenant', 'active');
 insert into auth.users (id, email) values
-  ('22000000-0000-0000-0000-000000000001', 'p1b-concurrency-supplier@example.test');
+  ('22000000-0000-0000-0000-000000000001', 'p1b-concurrency-office@example.test');
 insert into suppliers (id, org_id, name) values
   ('32000000-0000-0000-0000-000000000001', '12000000-0000-0000-0000-000000000001', 'P1B concurrent supplier');
 insert into profiles (id, org_id, full_name, role, supplier_id) values
   ('22000000-0000-0000-0000-000000000001', '12000000-0000-0000-0000-000000000001',
-   'P1B concurrent supplier', 'supplier', '32000000-0000-0000-0000-000000000001');
+   'P1B concurrent office uploader', 'office', null);
 insert into products (id, org_id, name, unit) values
   ('42000000-0000-0000-0000-000000000001', '12000000-0000-0000-0000-000000000001', 'P1B concurrent product', 'unit');
 insert into supplier_products (

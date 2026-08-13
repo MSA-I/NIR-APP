@@ -8,11 +8,11 @@ export type Role = 'owner' | 'kitchen' | 'office' | 'payer' | 'accountant' | 'su
  * active. Keeping the two concepts separate prevents a historical `payer` value from silently
  * becoming a login option again.
  */
-export const ACTIVE_ACCOUNT_ROLES = ['owner', 'office', 'accountant'] as const satisfies readonly Role[];
-export type ActiveAccountRole = (typeof ACTIVE_ACCOUNT_ROLES)[number];
+export const ACTIVE_ROLES = ['owner', 'office', 'accountant'] as const satisfies readonly Role[];
+export type ActiveRole = (typeof ACTIVE_ROLES)[number];
 
-export function isActiveAccountRole(role: string | null | undefined): role is ActiveAccountRole {
-  return ACTIVE_ACCOUNT_ROLES.includes(role as ActiveAccountRole);
+export function isActiveRole(role: string | null | undefined): role is ActiveRole {
+  return ACTIVE_ROLES.includes(role as ActiveRole);
 }
 
 export interface Profile {
@@ -22,7 +22,7 @@ export interface Profile {
   role: Role;
   phone: string | null;
   active: boolean;
-  supplier_id: string | null; // set only for supplier agent logins
+  supplier_id: string | null; // historical supplier-agent association; never grants an active login
 }
 
 export type OrgStatus = 'trial' | 'active' | 'suspended';

@@ -28,39 +28,25 @@ insert into organizations (id, name, status) values
 insert into auth.users (id, email) values
   ('21000000-0000-0000-0000-000000000001', 'owner-p1b@example.test'),
   ('21000000-0000-0000-0000-000000000002', 'office-p1b@example.test'),
-  ('21000000-0000-0000-0000-000000000003', 'supplier-p1b@example.test'),
+  ('21000000-0000-0000-0000-000000000003', 'office-uploader-p1b@example.test'),
   ('21000000-0000-0000-0000-000000000004', 'owner-b-p1b@example.test'),
-  ('21000000-0000-0000-0000-000000000005', 'payer-p1b@example.test'),
-  ('21000000-0000-0000-0000-000000000006', 'accountant-p1b@example.test'),
-  ('21000000-0000-0000-0000-000000000007', 'kitchen-p1b@example.test'),
-  ('21000000-0000-0000-0000-000000000008', 'supplier-b-p1b@example.test');
+  ('21000000-0000-0000-0000-000000000005', 'accountant-p1b@example.test'),
+  ('21000000-0000-0000-0000-000000000006', 'accountant-secondary-p1b@example.test'),
+  ('21000000-0000-0000-0000-000000000008', 'office-uploader-2-p1b@example.test');
 
 insert into profiles (id, org_id, full_name, role) values
   ('21000000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', 'P1B owner', 'owner'),
   ('21000000-0000-0000-0000-000000000002', '11000000-0000-0000-0000-000000000001', 'P1B office', 'office'),
+  ('21000000-0000-0000-0000-000000000003', '11000000-0000-0000-0000-000000000001', 'P1B office uploader', 'office'),
   ('21000000-0000-0000-0000-000000000004', '11000000-0000-0000-0000-000000000002', 'P1B owner B', 'owner'),
-  ('21000000-0000-0000-0000-000000000005', '11000000-0000-0000-0000-000000000001', 'P1B payer', 'payer'),
-  ('21000000-0000-0000-0000-000000000006', '11000000-0000-0000-0000-000000000001', 'P1B accountant', 'accountant'),
-  ('21000000-0000-0000-0000-000000000007', '11000000-0000-0000-0000-000000000001', 'P1B kitchen', 'kitchen');
+  ('21000000-0000-0000-0000-000000000005', '11000000-0000-0000-0000-000000000001', 'P1B accountant', 'accountant'),
+  ('21000000-0000-0000-0000-000000000006', '11000000-0000-0000-0000-000000000001', 'P1B secondary accountant', 'accountant'),
+  ('21000000-0000-0000-0000-000000000008', '11000000-0000-0000-0000-000000000001', 'P1B second office uploader', 'office');
 
 insert into suppliers (id, org_id, name) values
   ('31000000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', 'P1B supplier A1'),
   ('31000000-0000-0000-0000-000000000002', '11000000-0000-0000-0000-000000000001', 'P1B supplier A2'),
   ('31000000-0000-0000-0000-000000000003', '11000000-0000-0000-0000-000000000002', 'P1B supplier B1');
-
-insert into profiles (id, org_id, full_name, role, supplier_id) values
-  (
-    '21000000-0000-0000-0000-000000000003',
-    '11000000-0000-0000-0000-000000000001',
-    'P1B supplier agent', 'supplier',
-    '31000000-0000-0000-0000-000000000001'
-  ),
-  (
-    '21000000-0000-0000-0000-000000000008',
-    '11000000-0000-0000-0000-000000000001',
-    'P1B supplier B agent', 'supplier',
-    '31000000-0000-0000-0000-000000000002'
-  );
 
 insert into products (id, org_id, name, unit) values
   ('41000000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', 'P1B Product A1', 'unit'),
@@ -264,18 +250,18 @@ select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000003
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 
--- P0 regression: the supplier reads only its own current prices, never a competitor or tenant B.
+-- Active office uploaders read the tenant price catalog while tenant B remains invisible.
 select pg_temp.p1b_assert(
-  (select count(*) = 1 from supplier_products),
-  'supplier current-price RLS did not isolate its own supplier'
+  (select count(*) = 2 from supplier_products),
+  'office current-price RLS did not expose the tenant catalog'
 );
 select pg_temp.p1b_assert(
-  (select count(*) = 1 from price_history),
-  'supplier history RLS did not isolate its own supplier'
+  (select count(*) = 2 from price_history),
+  'office price history RLS did not expose the tenant catalog'
 );
 select pg_temp.p1b_assert(
-  (select count(*) = 0 from supplier_price_submissions),
-  'supplier receipt RLS exposed a competitor or second tenant'
+  (select count(*) = 1 from supplier_price_submissions),
+  'office receipt RLS did not preserve tenant isolation'
 );
 select pg_temp.p1b_assert(
   exists (
@@ -287,27 +273,24 @@ select pg_temp.p1b_assert(
     select 1 from storage.objects
     where bucket_id = 'price-submissions'
       and name in (
-        '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/68000000-0000-4000-8000-000000000001/competitor-stage.csv',
         '11000000-0000-0000-0000-000000000002/price-submissions/31000000-0000-0000-0000-000000000003/68000000-0000-4000-8000-000000000002/tenant-stage.csv',
-        '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/62000000-0000-0000-0000-000000000001/competitor-ledger.csv',
         '11000000-0000-0000-0000-000000000002/price-submissions/31000000-0000-0000-0000-000000000003/62000000-0000-0000-0000-000000000002/tenant-ledger.csv'
       )
   ),
-  'supplier Storage RLS did not isolate uploader staging, competitor and second tenant files'
+  'office Storage RLS crossed the tenant boundary'
 );
 
 with deleted as (
   delete from storage.objects
   where bucket_id = 'price-submissions'
     and name in (
-      '11000000-0000-0000-0000-000000000001/price-submissions/31000000-0000-0000-0000-000000000002/68000000-0000-4000-8000-000000000001/competitor-stage.csv',
       '11000000-0000-0000-0000-000000000002/price-submissions/31000000-0000-0000-0000-000000000003/68000000-0000-4000-8000-000000000002/tenant-stage.csv'
     )
   returning 1
 )
 select pg_temp.p1b_assert(
   (select count(*) = 0 from deleted),
-  'supplier could delete competitor or second-tenant staging'
+  'office could delete second-tenant staging'
 );
 
 with deleted as (
@@ -514,8 +497,7 @@ select pg_temp.p1b_assert(
   'unknown supplier row created a catalog product'
 );
 
--- Suppliers must not read the audit ledger. Inspect the command evidence as the database
--- owner, then restore the supplier JWT/role before continuing the caller-facing assertions.
+-- Inspect immutable command evidence as the database owner, then restore the office uploader.
 reset role;
 select pg_temp.p1b_assert(
   exists (
@@ -746,8 +728,8 @@ exception when sqlstate '42501' then
 end
 $$;
 
--- Payer, accountant and kitchen preserve their P0 contract: no receipt visibility, no Storage
--- visibility and no execution of the trusted submit command.
+-- Accountants preserve their P0 contract: no receipt visibility, no Storage visibility and no
+-- execution of the trusted submit command.
 reset role;
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000005', true);
@@ -755,7 +737,7 @@ set local role authenticated;
 do $$
 begin
   perform submit_supplier_price_list('79900000-0000-0000-0000-000000000005');
-  raise exception 'expected payer submit rejection';
+  raise exception 'expected accountant submit rejection';
 exception when sqlstate '42501' then
   if sqlerrm not like '%price_submission_not_authorized%' then raise; end if;
 end
@@ -763,7 +745,7 @@ $$;
 select pg_temp.p1b_assert(
   (select count(*) = 0 from supplier_price_submissions)
   and (select count(*) = 0 from storage.objects where bucket_id = 'price-submissions'),
-  'payer can read price submission receipts or files'
+  'accountant can read price submission receipts or files'
 );
 
 reset role;
@@ -781,23 +763,6 @@ select pg_temp.p1b_assert(
   (select count(*) = 0 from supplier_price_submissions)
   and (select count(*) = 0 from storage.objects where bucket_id = 'price-submissions'),
   'accountant can read price submission receipts or files'
-);
-
-reset role;
-select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000007', true);
-set local role authenticated;
-do $$
-begin
-  perform submit_supplier_price_list('79900000-0000-0000-0000-000000000007');
-  raise exception 'expected kitchen submit rejection';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%price_submission_not_authorized%' then raise; end if;
-end
-$$;
-select pg_temp.p1b_assert(
-  (select count(*) = 0 from supplier_price_submissions)
-  and (select count(*) = 0 from storage.objects where bucket_id = 'price-submissions'),
-  'kitchen can read price submission receipts or files'
 );
 
 -- Owner and office retain the approved management path. Both claims are created from their
@@ -1253,24 +1218,6 @@ select pg_temp.p1b_assert(
   'document registration retry did not return the original document and job'
 );
 select pg_temp.p1b_assert(
-  supplier_price_upload_authorized(
-    auth_org(), '31000000-0000-0000-0000-000000000001', auth.uid()
-  )
-  and not supplier_price_upload_authorized(
-    auth_org(), '31000000-0000-0000-0000-000000000001',
-    '21000000-0000-0000-0000-000000000008'
-  )
-  and supplier_price_document_owned(
-    auth_org(), :'ocr_document_id'::uuid, auth.uid()
-  )
-  and not supplier_price_document_owned(
-    auth_org(), :'ocr_document_id'::uuid,
-    '21000000-0000-0000-0000-000000000008'
-  ),
-  'supplier authorization helpers were usable as a foreign actor oracle'
-);
-
-select pg_temp.p1b_assert(
   (select requested_by = auth.uid() and input_checksum = 'etag:' || repeat('a', 64)
    from document_processing_jobs where id = :'ocr_job_id'::uuid),
   'server registration did not bind the uploader, enqueue job and current eTag'
@@ -1309,14 +1256,14 @@ set status = 'extracted', lease_owner = null, lease_until = null
 where id = :'ocr_job_id'::uuid;
 
 set local role service_role;
-select begin_supplier_price_interpretation(
+select begin_document_interpretation(
   :'ocr_job_id'::uuid,
   '65000000-0000-4000-8000-000000000048',
   '21000000-0000-0000-0000-000000000003'
 )::text as begin_payload
 \gset ocr_
 
-select save_supplier_price_interpretation(
+select save_document_interpretation(
   :'ocr_job_id'::uuid,
   '65000000-0000-4000-8000-000000000048',
   '21000000-0000-0000-0000-000000000003',
@@ -1549,7 +1496,7 @@ select pg_temp.p1b_assert(
   'OCR replay created duplicate ledger or price history'
 );
 
--- Supplier provider failures use the same current-source fence and clean up the bound attempt.
+-- Staff provider failures use the same current-source fence and clean up the bound attempt.
 reset role;
 select set_config('request.jwt.claim.role', 'service_role', true);
 set local role service_role;
@@ -1575,13 +1522,13 @@ insert into document_extractions (
 from document_extractions
 where id = '65000000-0000-4000-8000-000000000048';
 set local role service_role;
-select begin_supplier_price_interpretation(
+select begin_document_interpretation(
   '55000000-0000-4000-8000-000000000049',
   '65000000-0000-4000-8000-000000000049',
   '21000000-0000-0000-0000-000000000003'
 )::text as failed_begin
 \gset ocr_
-select fail_supplier_price_interpretation(
+select fail_document_interpretation(
   '55000000-0000-4000-8000-000000000049',
   '65000000-0000-4000-8000-000000000049',
   '21000000-0000-0000-0000-000000000003',
@@ -1592,7 +1539,7 @@ select pg_temp.p1b_assert(
   (select status = 'failed' and last_error_code = 'provider_timeout'
    from document_processing_jobs
    where id = '55000000-0000-4000-8000-000000000049'),
-  'supplier failure wrapper left the job in interpreting state'
+  'staff failure path left the job in interpreting state'
 );
 
 -- A changed source object is rejected before a new intake can reach the writer.

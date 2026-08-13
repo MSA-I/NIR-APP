@@ -76,7 +76,7 @@ async function main() {
   const competitorId = crypto.randomUUID();
   const productIds = Array.from({ length: 1000 }, () => crypto.randomUUID());
   const supplierProductIds = Array.from({ length: 1000 }, () => crypto.randomUUID());
-  const email = `p1b-edge-${crypto.randomUUID()}@example.test`;
+  const email = `p1b-edge-office-${crypto.randomUUID()}@example.test`;
   const password = `P1b-${crypto.randomBytes(18).toString('base64url')}!9a`;
 
   await mustInsert(admin.from('organizations').insert({ id: orgId, name: 'P1B Edge tenant', status: 'active' }), 'organization');
@@ -97,9 +97,9 @@ async function main() {
   await mustInsert(admin.from('profiles').insert({
     id: userId,
     org_id: orgId,
-    full_name: 'P1B Edge supplier',
-    role: 'supplier',
-    supplier_id: supplierId,
+    full_name: 'P1B Edge office',
+    role: 'office',
+    supplier_id: null,
     active: true,
   }), 'profile');
   await mustInsert(admin.from('supplier_products').insert(productIds.map((productId, index) => ({
@@ -255,7 +255,13 @@ async function main() {
     contentType: 'text/csv',
     upsert: false,
   });
-  assert.ok(competitorUpload.error, 'supplier uploaded into a competitor path');
+  assert.equal(competitorUpload.error, null,
+    `office could not upload a price list for a second supplier: ${competitorUpload.error?.message ?? 'unknown error'}`);
+  const competitorDelete = await userClient.storage.from('price-submissions').remove([competitorPath]);
+  assert.equal(competitorDelete.error, null,
+    `office could not remove its unregistered price-list staging object: ${competitorDelete.error?.message ?? 'unknown error'}`);
+  const competitorGone = await admin.storage.from('price-submissions').download(competitorPath);
+  assert.ok(competitorGone.error, 'unregistered second-supplier staging object remained after removal');
 
   const submissionsBeforeFailure = await exactCount(
     admin.from('supplier_price_submissions').select('id', { count: 'exact', head: true }).eq('org_id', orgId),
@@ -296,7 +302,7 @@ async function main() {
     input_sizes: resultsByInputSize,
     retry_idempotent: retry.payload.idempotent,
     checksum_matches_bytes: receipt.data.file_checksum === expectedChecksum,
-    competitor_upload_blocked: Boolean(competitorUpload.error),
+    staff_multi_supplier_upload: competitorUpload.error === null,
     damaged_workbook_blocked: damaged.payload.error.code === 'damaged_spreadsheet',
     damaged_workbook_atomic: true,
   }, null, 2));

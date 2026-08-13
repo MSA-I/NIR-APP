@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { reasonOr } from '../../lib/reason';
 import { CheckCircle2, Loader2, Plus } from 'lucide-react';
 import { Link } from 'react-router';
-import type { Role } from '../../lib/types';
 import { toHebrewError } from '../../lib/errors';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../auth/AuthContext';
@@ -11,7 +10,6 @@ import { FILING_REASON_LABELS, type ReviewSnapshot } from './model';
 
 interface PriceListReviewConfirmationProps {
   snapshot: ReviewSnapshot;
-  role: Role;
   actorId: string;
   onRefetch: () => Promise<boolean>;
 }
@@ -51,14 +49,6 @@ interface SubmissionReceipt {
   rejected_count: number;
   unchanged_count: number;
   idempotent: boolean;
-}
-
-interface SupplierPortalContext {
-  prices: Array<{
-    product_id: string;
-    product_name: string;
-    unit: string;
-  }>;
 }
 
 function valueText(value: string | number | null): string {
@@ -140,7 +130,6 @@ async function edgeErrorMessage(error: unknown) {
 
 export function PriceListReviewConfirmation({
   snapshot,
-  role,
   actorId,
   onRefetch,
 }: PriceListReviewConfirmationProps) {
@@ -151,11 +140,9 @@ export function PriceListReviewConfirmation({
   const ownsDocument = Boolean(
     snapshot.document
     && snapshot.document.uploaded_by === actorId
-    && (role === 'owner' || role === 'office' || role === 'supplier'),
   );
   const { profile } = useAuth();
   // Manual recovery stays a staff act; the trusted automatic command may create a keyed product.
-  const staffCanCreate = role === 'owner' || role === 'office';
   const [drafts, setDrafts] = useState(() => emptyDrafts(lineItems.length));
   const [newProductFor, setNewProductFor] = useState<number | null>(null);
   const [newProductName, setNewProductName] = useState('');
@@ -219,31 +206,12 @@ export function PriceListReviewConfirmation({
     setCatalogError(null);
     void (async () => {
       try {
-        let options: ProductOption[];
-        if (role === 'supplier') {
-          const result = await supabase.rpc('supplier_portal_context');
-          if (result.error) throw result.error;
-          const portal = result.data as unknown as SupplierPortalContext;
-          if (!portal || !Array.isArray(portal.prices)) throw new Error('קטלוג הספק אינו זמין.');
-          const unique = new Map<string, ProductOption>();
-          for (const price of portal.prices) {
-            if (!price?.product_id || !price.product_name) continue;
-            unique.set(price.product_id, {
-              id: price.product_id,
-              name: price.product_name,
-              unit: price.unit,
-              sku: null,
-            });
-          }
-          options = [...unique.values()];
-        } else {
-          const result = await supabase.from('products')
-            .select('id,name,unit,sku')
-            .eq('active', true)
-            .order('name');
-          if (result.error) throw result.error;
-          options = (result.data ?? []) as ProductOption[];
-        }
+        const result = await supabase.from('products')
+          .select('id,name,unit,sku')
+          .eq('active', true)
+          .order('name');
+        if (result.error) throw result.error;
+        const options = (result.data ?? []) as ProductOption[];
         options.sort((left, right) => left.name.localeCompare(right.name, 'he'));
         if (!cancelled) setProducts(options);
       } catch (loadError) {
@@ -253,7 +221,7 @@ export function PriceListReviewConfirmation({
       }
     })();
     return () => { cancelled = true; };
-  }, [canStart, catalogRevision, receipt, role]);
+  }, [canStart, catalogRevision, receipt]);
 
   useEffect(() => {
     let cancelled = false;
@@ -431,7 +399,7 @@ export function PriceListReviewConfirmation({
   }
 
   const showControls = canStart;
-  const returnPath = role === 'supplier' ? '/my-prices' : '/prices';
+  const returnPath = '/prices';
   const detailsToggle = lineItems.length > 0 && (
     <button type="button" className="btn-secondary" data-testid="price-list-details-toggle"
       aria-expanded={detailsOpen} aria-controls="price-list-line-details"
@@ -495,8 +463,7 @@ export function PriceListReviewConfirmation({
           )}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             {detailsToggle}
-            {!autoDecision.reverted_at && autoDecision.submission_id
-              && (role === 'owner' || role === 'office') && (
+            {!autoDecision.reverted_at && autoDecision.submission_id && (
               <button type="button" className="btn-danger" onClick={() => setRevertOpen(true)}>
                 ביטול הקליטה האוטומטית
               </button>
@@ -609,7 +576,7 @@ export function PriceListReviewConfirmation({
                       <input className="input num" inputMode="decimal" maxLength={64} value={draft.priceText} onChange={(event) => updateDraft(index, { priceText: event.target.value })} disabled={!draft.approved || busy} />
                     </label>
                   </div>
-                  {staffCanCreate && draft.approved && (
+                  {draft.approved && (
                     newProductFor === index ? (
                       <div className="mt-3 rounded-lg border border-line bg-surface-sunken p-3">
                         <div className="grid gap-3 sm:grid-cols-2">

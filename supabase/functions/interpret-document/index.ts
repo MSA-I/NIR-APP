@@ -91,7 +91,6 @@ interface ProfileRow {
   org_id: string;
   role: string;
   active: boolean;
-  supplier_id: string | null;
 }
 
 interface JobRow {
@@ -157,31 +156,11 @@ interface RuleRow {
   version: number;
 }
 
-export function supplierInterpretationContextAllowed(
-  actorId: string,
-  profile: ProfileRow,
-  document: DocumentRow,
-  job: JobRow,
-  extraction: ExtractionRow,
+export function activeInterpretationRoleAllowed(
+  role: string,
+  recoveryActor: boolean,
 ): boolean {
-  const supplierId = profile.supplier_id;
-  return profile.active && profile.role === "supplier" &&
-    typeof supplierId === "string" && UUID.test(supplierId) &&
-    profile.org_id === document.org_id &&
-    document.entity_type === "supplier" &&
-    document.entity_id === supplierId &&
-    document.supplier_id === supplierId &&
-    document.document_kind === "price_list" &&
-    document.uploaded_by === actorId && document.deleted_at === null &&
-    document.storage_path.startsWith(
-      `${profile.org_id}/supplier/${supplierId}/${document.id}/`,
-    ) &&
-    job.org_id === profile.org_id && job.document_id === document.id &&
-    job.requested_by === actorId && job.contract_version === "1" &&
-    extraction.org_id === profile.org_id && extraction.job_id === job.id &&
-    extraction.document_id === document.id &&
-    extraction.contract_version === job.contract_version &&
-    extraction.input_checksum === job.input_checksum;
+  return recoveryActor ? role === "owner" : role === "owner" || role === "office";
 }
 
 function corsFor(req: Request): Record<string, string> {
@@ -285,21 +264,15 @@ async function markFailed(
   actorId: string,
   interpretationStartedAt: string,
   code: string,
-  supplierPriceList: boolean,
 ): Promise<void> {
-  const failed = await admin.rpc(
-    supplierPriceList
-      ? "fail_supplier_price_interpretation"
-      : "fail_document_interpretation",
-    {
+  const failed = await admin.rpc("fail_document_interpretation", {
       p_job_id: jobId,
       p_extraction_id: extractionId,
       p_actor_id: actorId,
       p_interpretation_started_at: interpretationStartedAt,
       p_error_code: code,
       p_error_message: null,
-    },
-  );
+    });
   if (failed.error) {
     console.error("interpret-document failure persistence failed");
   }
@@ -635,8 +608,8 @@ export async function applyDeliveryNoteInterpretationDecision(
   }
 }
 
-// Route by the document's business kind, never by the uploader's role. A manager-uploaded price
-// list and a supplier-uploaded price list must reach the same financial command.
+// Route by the document's business kind, never by the uploader's role. Every staff-uploaded price
+// list must reach the same financial command.
 //
 // Three destinations now, and the order of the checks is the contract: a document is at most one
 // business kind, so the flags cannot both be set by the callers below, and invoice remains the
@@ -664,7 +637,6 @@ export async function decideOnInterpretation(
 
 export interface ResumeInterpretationOptions {
   admin: DecisionRpcClient;
-  isSupplier: boolean;
   isPriceList: boolean;
   jobId: string;
   actorId: string;
@@ -710,92 +682,6 @@ export async function resumeExistingInterpretation(
     options.isDeliveryNote ?? false,
   );
   return context.interpretation_id;
-}
-
-export interface SaveAndDecideOptions {
-  admin: DecisionRpcClient;
-  isSupplier: boolean;
-  isPriceList: boolean;
-  jobId: string;
-  actorId: string;
-  args: Record<string, unknown>;
-  findExisting: () => Promise<string | null>;
-  apply?: ApplyDecision;
-  isDeliveryNote?: boolean;
-}
-
-// Persistence and the decision that follows it, extracted from the handler so that the WIRING is
-// pinned and not merely the parts. The handler itself cannot be driven under the gate's
-// permission-free `deno test` -- it reads Deno.env before anything else -- so a decision call
-// left inside it is a feature a refactor can delete with every gate still green. That is the
-// same silent-failure shape core.test.ts guards one layer up, and it deserves the same treatment.
-export async function saveAndDecideInterpretation(
-  options: SaveAndDecideOptions,
-): Promise<{ interpretationId: string; idempotent: boolean }> {
-  const { admin, isSupplier } = options;
-  const saved = await admin.rpc(
-    isSupplier
-      ? "save_supplier_price_interpretation"
-      : "save_document_interpretation",
-    options.args,
-  );
-  if (saved.error || !saved.data) {
-    if (saved.error?.message.includes("document_interpretation_conflict")) {
-      throw new EdgeError("interpretation_conflict", 409);
-    }
-    if (
-      saved.error?.message.includes("document_interpretation_attempt_mismatch")
-    ) {
-      throw new EdgeError("interpretation_in_progress", 409);
-    }
-    if (
-      saved.error?.message.includes("document_interpretation_actor_mismatch")
-    ) {
-      throw new EdgeError("interpretation_in_progress", 409);
-    }
-    if (
-      saved.error?.message.includes("document_interpretation_actor_invalid")
-    ) {
-      throw new EdgeError("not_authorized", 403);
-    }
-    if (saved.error?.message.includes("document_source_changed")) {
-      throw new EdgeError("invalid_job_state", 409);
-    }
-    const existingId = await options.findExisting();
-    if (existingId) {
-      // AN INTERPRETATION THAT EXISTS HAS NOT BEEN DECIDED ON. This branch is a save that
-      // COMMITTED and then reported a failure -- a transport error on the way back, or an error
-      // message matching none of the five conflicts above -- so the row is there and this call is
-      // the only one that will ever know about it. The client is handed a 200 and never comes
-      // back: the review screen computes its jobId from `extracted && !interpretation`, which is
-      // already false. Leaving it undecided here is the same permanent loss the replay path
-      // exists to prevent, reached by a narrower door, and the idempotency argument is identical
-      // -- 0077 keys on (org_id, interpretation_id) and returns the recorded decision rather than
-      // taking a second one.
-      await decideOnInterpretation(
-        admin,
-        options.isPriceList,
-        options.jobId,
-        existingId,
-        options.actorId,
-        options.apply,
-        options.isDeliveryNote ?? false,
-      );
-      return { interpretationId: existingId, idempotent: true };
-    }
-    throw new EdgeError("persistence_failed", 503);
-  }
-  const interpretationId = String(saved.data);
-  await decideOnInterpretation(
-    admin,
-    options.isPriceList,
-    options.jobId,
-    interpretationId,
-    options.actorId,
-    options.apply,
-    options.isDeliveryNote ?? false,
-  );
-  return { interpretationId, idempotent: false };
 }
 
 async function existingInterpretation(
@@ -1053,7 +939,7 @@ export async function handler(req: Request): Promise<Response> {
   if (!actorId) return fail(cors, new EdgeError("unauthenticated", 401));
 
   const profileResult = await admin.from("profiles").select(
-    "org_id,role,active,supplier_id",
+    "org_id,role,active",
   )
     .eq("id", actorId).maybeSingle();
   if (profileResult.error) {
@@ -1062,9 +948,7 @@ export async function handler(req: Request): Promise<Response> {
   const profile = profileResult.data as ProfileRow | null;
   if (
     !profile?.active ||
-    (recoveryActorId !== null
-      ? profile.role !== "owner"
-      : !["owner", "office", "kitchen", "supplier"].includes(profile.role))
+    !activeInterpretationRoleAllowed(profile.role, recoveryActorId !== null)
   ) {
     return fail(cors, new EdgeError("not_authorized", 403));
   }
@@ -1118,22 +1002,8 @@ export async function handler(req: Request): Promise<Response> {
   const extraction = extractionResult.data as ExtractionRow | null;
   if (!extraction) return fail(cors, new EdgeError("extraction_unknown", 404));
 
-  const isSupplier = profile.role === "supplier";
   const storedKindIsPriceList = document.document_kind === "price_list";
   const storedKindIsDeliveryNote = document.document_kind === "delivery_note";
-  if (isSupplier) {
-    if (
-      !supplierInterpretationContextAllowed(
-        actorId,
-        profile,
-        document,
-        job,
-        extraction,
-      )
-    ) {
-      return fail(cors, new EdgeError("not_authorized", 403));
-    }
-  }
 
   const rpc = serviceRpc(admin);
   try {
@@ -1167,21 +1037,15 @@ export async function handler(req: Request): Promise<Response> {
     return fail(cors, new EdgeError("invalid_job_state", 409));
   }
 
-  const beginResult = await admin.rpc(
-    isSupplier
-      ? "begin_supplier_price_interpretation"
-      : "begin_document_interpretation",
-    {
+  const beginResult = await admin.rpc("begin_document_interpretation", {
       p_job_id: job.id,
       p_extraction_id: extraction.id,
       p_actor_id: actorId,
-    },
-  );
+    });
   if (beginResult.error) return fail(cors, pgError(beginResult.error.message));
   const context = beginResult.data as BeginContext;
   const replayed = await resumeExistingInterpretation({
     admin,
-    isSupplier,
     isPriceList: storedKindIsPriceList,
     // The replay path has no payload to consult -- the interpretation is already stored. The
     // stored kind is the only evidence here, and 0090's doubled gate turns a disagreement into
@@ -1216,7 +1080,6 @@ export async function handler(req: Request): Promise<Response> {
         actorId,
         interpretationStartedAt,
         "unsupported_extraction_contract",
-        isSupplier,
       );
     }
     return fail(cors, new EdgeError("unsupported_extraction_contract", 409));
@@ -1236,12 +1099,6 @@ export async function handler(req: Request): Promise<Response> {
       .or(`user_id.is.null,user_id.eq.${actorId}`).order("version", {
         ascending: false,
       }).limit(201);
-    if (isSupplier && profile.supplier_id) {
-      suppliersQuery = suppliersQuery.eq("id", profile.supplier_id);
-      rulesQuery = rulesQuery.or(
-        `supplier_id.is.null,supplier_id.eq.${profile.supplier_id}`,
-      );
-    }
     const [suppliersResult, rulesResult] = await Promise.all([
       suppliersQuery,
       rulesQuery,
@@ -1253,18 +1110,7 @@ export async function handler(req: Request): Promise<Response> {
     const suppliers: SupplierCandidate[] =
       ((suppliersResult.data ?? []) as SupplierRow[])
         .map(({ id, name, status }) => ({ id, name, status }));
-    if (
-      isSupplier &&
-      (suppliers.length !== 1 || suppliers[0].id !== profile.supplier_id)
-    ) {
-      throw new EdgeError("context_unavailable", 503);
-    }
-    const visibleRules = ((rulesResult.data ?? []) as RuleRow[]).filter(
-      (rule) =>
-        !isSupplier || rule.supplier_id === null ||
-        rule.supplier_id === profile.supplier_id,
-    );
-    const rules: LearningRuleSummary[] = visibleRules
+    const rules: LearningRuleSummary[] = ((rulesResult.data ?? []) as RuleRow[])
       .sort((a, b) => Number(b.user_id !== null) - Number(a.user_id !== null))
       .map((rule) => ({
         id: rule.id,
@@ -1294,7 +1140,6 @@ export async function handler(req: Request): Promise<Response> {
       actorId,
       interpretationStartedAt,
       edgeError.code,
-      isSupplier,
     );
     return fail(cors, edgeError);
   }
@@ -1435,7 +1280,6 @@ export async function handler(req: Request): Promise<Response> {
               actorId,
               interpretationStartedAt,
               edgeError.code,
-              isSupplier,
             );
           } catch {
             // The provider outcome is already immutable. A lifecycle flip may intentionally
@@ -1518,7 +1362,6 @@ export async function handler(req: Request): Promise<Response> {
           actorId,
           interpretationStartedAt,
           edgeError.code,
-          isSupplier,
         );
       } catch {
         console.error("interpret-document failure state update skipped");

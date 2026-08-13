@@ -39,7 +39,7 @@ insert into public.organizations (id, name, status, vat_rate) values
 
 insert into auth.users (id, email) values
   ('2a380000-0000-4000-8000-000000000001', 'owner-p38@example.test'),
-  ('2a380000-0000-4000-8000-000000000002', 'kitchen-p38@example.test'),
+  ('2a380000-0000-4000-8000-000000000002', 'office-p38@example.test'),
   ('2a380000-0000-4000-8000-000000000003', 'accountant-p38@example.test'),
   ('2a380000-0000-4000-8000-000000000004', 'owner-other-p38@example.test');
 
@@ -47,7 +47,7 @@ insert into public.profiles (id, org_id, full_name, role) values
   ('2a380000-0000-4000-8000-000000000001', '1a380000-0000-4000-8000-000000000001',
    'P38 owner', 'owner'),
   ('2a380000-0000-4000-8000-000000000002', '1a380000-0000-4000-8000-000000000001',
-   'P38 kitchen', 'kitchen'),
+   'P38 office', 'office'),
   ('2a380000-0000-4000-8000-000000000003', '1a380000-0000-4000-8000-000000000001',
    'P38 accountant', 'accountant'),
   ('2a380000-0000-4000-8000-000000000004', '1a380000-0000-4000-8000-000000000002',
@@ -113,13 +113,13 @@ select pg_temp.p38_assert(
 
 set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
-select set_config('request.jwt.claim.sub', '2a380000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claim.sub', '2a380000-0000-4000-8000-000000000003', true);
 
 do $$
 begin
   perform public.propose_export_report_template(
-    'accountant_monthly_report', 'P38 מטבח מנסה', 'P38');
-  raise exception 'P38 export template assertion failed: a kitchen manager proposed an export '
+    'accountant_monthly_report', 'P38 רואה חשבון מנסה', 'P38');
+  raise exception 'P38 export template assertion failed: an accountant proposed an export '
     'template. The file it produces is sent to an accountant under this system''s name';
 exception when sqlstate '42501' then
   if sqlerrm <> 'export_template_not_authorized' then raise; end if;

@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import {
   type ApplyDecision,
+  activeInterpretationRoleAllowed,
   automaticInterpretationContextAllowed,
   applyDeliveryNoteInterpretationDecision,
   applyInterpretationDecision,
@@ -13,8 +14,6 @@ import {
   resumeExistingInterpretation,
   type RpcBuilder,
   type RpcResult,
-  saveAndDecideInterpretation,
-  supplierInterpretationContextAllowed,
 } from "./index.ts";
 
 function assert(value: unknown): asserts value {
@@ -27,7 +26,6 @@ function assertFalse(value: unknown): void {
 
 const ACTOR = "11111111-1111-4111-8111-111111111111";
 const ORG = "22222222-2222-4222-8222-222222222222";
-const SUPPLIER = "33333333-3333-4333-8333-333333333333";
 const DOCUMENT = "44444444-4444-4444-8444-444444444444";
 const JOB = "55555555-5555-4555-8555-555555555555";
 const CHECKSUM = "etag:0123456789abcdef";
@@ -36,21 +34,15 @@ const JOB_UPDATED_AT = "2026-08-13T07:08:09.123Z";
 
 function context() {
   return {
-    profile: {
-      org_id: ORG,
-      role: "supplier",
-      active: true,
-      supplier_id: SUPPLIER,
-    },
     document: {
       id: DOCUMENT,
       org_id: ORG,
-      entity_type: "supplier",
-      entity_id: SUPPLIER,
-      supplier_id: SUPPLIER,
-      document_kind: "price_list",
+      entity_type: "inbox",
+      entity_id: null,
+      supplier_id: null,
+      document_kind: "invoice",
       uploaded_by: ACTOR,
-      storage_path: `${ORG}/supplier/${SUPPLIER}/${DOCUMENT}/prices.pdf`,
+      storage_path: `${ORG}/inbox/${DOCUMENT}/source.pdf`,
       deleted_at: null,
     },
     job: {
@@ -74,109 +66,19 @@ function context() {
   };
 }
 
-Deno.test("supplier interpretation allows the exact owned price-list chain", () => {
-  const value = context();
-  assert(supplierInterpretationContextAllowed(
-    ACTOR,
-    value.profile,
-    value.document,
-    value.job,
-    value.extraction,
-  ));
+Deno.test("document interpretation accepts only owner and office", () => {
+  assert(activeInterpretationRoleAllowed("owner", false));
+  assert(activeInterpretationRoleAllowed("office", false));
+  for (const role of ["accountant", "kitchen", "payer", "supplier"]) {
+    assertFalse(activeInterpretationRoleAllowed(role, false));
+  }
 });
 
-Deno.test("supplier interpretation rejects a different supplier", () => {
-  const value = context();
-  value.document.supplier_id = "77777777-7777-4777-8777-777777777777";
-  assertFalse(supplierInterpretationContextAllowed(
-    ACTOR,
-    value.profile,
-    value.document,
-    value.job,
-    value.extraction,
-  ));
-});
-
-Deno.test("supplier interpretation rejects cross-tenant context", () => {
-  const value = context();
-  value.extraction.org_id = "88888888-8888-4888-8888-888888888888";
-  assertFalse(supplierInterpretationContextAllowed(
-    ACTOR,
-    value.profile,
-    value.document,
-    value.job,
-    value.extraction,
-  ));
-});
-
-Deno.test("supplier interpretation rejects another uploader", () => {
-  const value = context();
-  value.document.uploaded_by = "99999999-9999-4999-8999-999999999999";
-  assertFalse(supplierInterpretationContextAllowed(
-    ACTOR,
-    value.profile,
-    value.document,
-    value.job,
-    value.extraction,
-  ));
-});
-
-Deno.test("supplier interpretation rejects a non-price-list document", () => {
-  const value = context();
-  value.document.document_kind = "invoice";
-  assertFalse(supplierInterpretationContextAllowed(
-    ACTOR,
-    value.profile,
-    value.document,
-    value.job,
-    value.extraction,
-  ));
-});
-
-Deno.test("supplier interpretation rejects a job requested by another actor", () => {
-  const value = context();
-  value.job.requested_by = "99999999-9999-4999-8999-999999999999";
-  assertFalse(supplierInterpretationContextAllowed(
-    ACTOR,
-    value.profile,
-    value.document,
-    value.job,
-    value.extraction,
-  ));
-});
-
-Deno.test("supplier interpretation rejects checksum and version drift", () => {
-  const value = context();
-  value.extraction.input_checksum = "etag:changed";
-  assertFalse(supplierInterpretationContextAllowed(
-    ACTOR,
-    value.profile,
-    value.document,
-    value.job,
-    value.extraction,
-  ));
-
-  const versionDrift = context();
-  versionDrift.extraction.contract_version = "2";
-  assertFalse(supplierInterpretationContextAllowed(
-    ACTOR,
-    versionDrift.profile,
-    versionDrift.document,
-    versionDrift.job,
-    versionDrift.extraction,
-  ));
-});
-
-Deno.test("supplier interpretation rejects a non-canonical storage path", () => {
-  const value = context();
-  value.document.storage_path = `${ORG}/supplier/${SUPPLIER}/prices.pdf`;
-  assertFalse(supplierInterpretationContextAllowed(
-    ACTOR,
-    value.profile,
-    value.document,
-    value.job,
-    value.extraction,
-  ));
+Deno.test("document interpretation recovery remains owner-only", () => {
+  assert(activeInterpretationRoleAllowed("owner", true));
+  for (const role of ["office", "accountant", "kitchen", "payer", "supplier"]) {
+    assertFalse(activeInterpretationRoleAllowed(role, true));
+  }
 });
 
 // ===== Acting on the interpretation may never cost the interpretation =====
@@ -698,137 +600,14 @@ Deno.test("shadow measurement failure blocks the live price-list command", async
 
 // ===== The wiring itself, not only the parts =====
 //
-// Every test above passes with the decision disconnected from the pipeline entirely. The handler
-// cannot be driven here -- it reads Deno.env before anything else and the gate runs `deno test`
-// with no permissions -- so the post-save step and the replay step are exported and pinned
-// directly. Deleting either call inside them fails here rather than shipping green.
-
-Deno.test("a saved interpretation is offered to the decision exactly once", async () => {
-  const { client } = recordingClient({ data: INTERPRETATION, error: null });
-  const { apply, calls } = recordingApply();
-  const persisted = await saveAndDecideInterpretation({
-    admin: client,
-    isSupplier: false,
-    isPriceList: false,
-    jobId: JOB,
-    actorId: ACTOR,
-    args: { p_job_id: JOB },
-    findExisting: () => Promise.resolve(null),
-    apply,
-  });
-  if (persisted.interpretationId !== INTERPRETATION || persisted.idempotent) {
-    throw new Error(`unexpected persistence result: ${JSON.stringify(persisted)}`);
-  }
-  // The id passed on must be the one the save returned, not the job and not the request.
-  if (
-    calls.length !== 1 || calls[0][0] !== JOB ||
-    calls[0][1] !== INTERPRETATION || calls[0][2] !== ACTOR
-  ) {
-    throw new Error(`the decision was not offered the saved id: ${JSON.stringify(calls)}`);
-  }
-});
-
-Deno.test("a supplier price list is offered to the price-list decision", async () => {
-  const { client } = recordingClient({ data: INTERPRETATION, error: null });
-  const { apply, calls } = recordingApply();
-  await saveAndDecideInterpretation({
-    admin: client,
-    isSupplier: true,
-    isPriceList: true,
-    jobId: JOB,
-    actorId: ACTOR,
-    args: { p_job_id: JOB },
-    findExisting: () => Promise.resolve(null),
-    apply,
-  });
-  if (calls.length !== 1) {
-    throw new Error("a supplier price list did not reach the decision layer");
-  }
-});
-
-Deno.test("a save that failed but committed still reaches the decision", async () => {
-  // The narrow door into the same permanent loss the replay path exists to prevent: the save
-  // COMMITTED and reported a failure anyway (a transport error, or a message matching none of
-  // the known conflicts), so the row exists, the client is handed a 200, and nothing will ever
-  // ask again -- the review screen's trigger is already false.
-  const { client } = recordingClient({
-    data: null,
-    error: { message: "fetch failed" },
-  });
-  const { apply, calls } = recordingApply();
-  const persisted = await saveAndDecideInterpretation({
-    admin: client,
-    isSupplier: false,
-    isPriceList: false,
-    jobId: JOB,
-    actorId: ACTOR,
-    args: { p_job_id: JOB },
-    findExisting: () => Promise.resolve(SECOND_INTERPRETATION),
-    apply,
-  });
-  if (!persisted.idempotent || persisted.interpretationId !== SECOND_INTERPRETATION) {
-    throw new Error(`unexpected recovery result: ${JSON.stringify(persisted)}`);
-  }
-  // The id offered must be the one that was FOUND, not the one that failed to come back.
-  if (calls.length !== 1 || calls[0][1] !== SECOND_INTERPRETATION) {
-    throw new Error(`the recovered interpretation was left undecided: ${JSON.stringify(calls)}`);
-  }
-});
-
-Deno.test("a supplier save that failed but committed still reaches the price-list decision", async () => {
-  const { client } = recordingClient({
-    data: null,
-    error: { message: "fetch failed" },
-  });
-  const { apply, calls } = recordingApply();
-  await saveAndDecideInterpretation({
-    admin: client,
-    isSupplier: true,
-    isPriceList: true,
-    jobId: JOB,
-    actorId: ACTOR,
-    args: { p_job_id: JOB },
-    findExisting: () => Promise.resolve(SECOND_INTERPRETATION),
-    apply,
-  });
-  if (calls.length !== 1 || calls[0][1] !== SECOND_INTERPRETATION) {
-    throw new Error("a supplier price list did not reach the decision layer");
-  }
-});
-
-Deno.test("an interpretation that failed to save is never offered to the decision", async () => {
-  const { client } = recordingClient({
-    data: null,
-    error: { message: "document_interpretation_conflict" },
-  });
-  const { apply, calls } = recordingApply();
-  let raised = false;
-  try {
-    await saveAndDecideInterpretation({
-      admin: client,
-      isSupplier: false,
-      isPriceList: false,
-      jobId: JOB,
-      actorId: ACTOR,
-      args: { p_job_id: JOB },
-      findExisting: () => Promise.resolve(null),
-      apply,
-    });
-  } catch {
-    raised = true;
-  }
-  if (!raised) throw new Error("a save conflict should still fail the request");
-  if (calls.length !== 0) {
-    throw new Error("a decision was taken on an interpretation that was never saved");
-  }
-});
+// The handler cannot be driven here -- it reads Deno.env before anything else and the gate runs
+// `deno test` with no permissions -- so the replay step is exported and pinned directly.
 
 Deno.test("a replay re-offers the decision, because nothing else ever will", async () => {
   const { client } = recordingClient({ data: null, error: null });
   const { apply, calls } = recordingApply();
   const replayed = await resumeExistingInterpretation({
     admin: client,
-    isSupplier: false,
     isPriceList: false,
     jobId: JOB,
     actorId: ACTOR,
@@ -848,12 +627,11 @@ Deno.test("a replay re-offers the decision, because nothing else ever will", asy
   }
 });
 
-Deno.test("a replay of a supplier price list re-offers the price-list decision", async () => {
+Deno.test("a replay of a staff price list re-offers the price-list decision", async () => {
   const { client } = recordingClient({ data: null, error: null });
   const { apply, calls } = recordingApply();
   const replayed = await resumeExistingInterpretation({
     admin: client,
-    isSupplier: true,
     isPriceList: true,
     jobId: JOB,
     actorId: ACTOR,
@@ -862,7 +640,7 @@ Deno.test("a replay of a supplier price list re-offers the price-list decision",
   });
   if (replayed !== INTERPRETATION) throw new Error("the replay lost the id");
   if (calls.length !== 1) {
-    throw new Error("a supplier replay did not reach the decision layer");
+    throw new Error("a staff price-list replay did not reach the decision layer");
   }
 });
 
@@ -871,7 +649,6 @@ Deno.test("a first run is not a replay and decides nothing before the interpreta
   const { apply, calls } = recordingApply();
   const replayed = await resumeExistingInterpretation({
     admin: client,
-    isSupplier: false,
     isPriceList: false,
     jobId: JOB,
     actorId: ACTOR,

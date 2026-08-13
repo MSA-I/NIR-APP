@@ -18,8 +18,7 @@ insert into public.organizations (id, name, status) values
 insert into auth.users (id, email) values
   ('27000000-0000-4000-8000-000000000001', 'accountant-p17@example.test'),
   ('27000000-0000-4000-8000-000000000002', 'office-p17@example.test'),
-  ('27000000-0000-4000-8000-000000000003', 'owner-p17@example.test'),
-  ('27000000-0000-4000-8000-000000000004', 'supplier-p17@example.test');
+  ('27000000-0000-4000-8000-000000000003', 'owner-p17@example.test');
 insert into public.profiles (id, org_id, full_name, role) values
   ('27000000-0000-4000-8000-000000000001', '17000000-0000-4000-8000-000000000001', 'P17 accountant', 'accountant'),
   ('27000000-0000-4000-8000-000000000002', '17000000-0000-4000-8000-000000000001', 'P17 office', 'office'),
@@ -29,9 +28,6 @@ insert into public.suppliers (
 ) values
   ('37000000-0000-4000-8000-000000000001', '17000000-0000-4000-8000-000000000001', 'P17 supplier A', 'A-17', 'שוטף + 30', '{1}', '10:00', 500, 'procurement-only A'),
   ('37000000-0000-4000-8000-000000000002', '17000000-0000-4000-8000-000000000002', 'P17 supplier B', 'B-17', 'שוטף + 60', '{2}', '11:00', 700, 'procurement-only B');
-insert into public.profiles (id, org_id, full_name, role, supplier_id) values
-  ('27000000-0000-4000-8000-000000000004', '17000000-0000-4000-8000-000000000001', 'P17 supplier agent', 'supplier', '37000000-0000-4000-8000-000000000001');
-
 select pg_temp.p17_assert(
   not (select p.prosecdef from pg_catalog.pg_proc p
        where p.oid = 'public.read_financial_supplier(uuid)'::regprocedure),
@@ -109,20 +105,6 @@ set local role authenticated;
 select pg_temp.p17_assert(
   (select count(*) from public.read_financial_supplier('37000000-0000-4000-8000-000000000001')) = 1,
   'owner must retain the financial supplier card');
-reset role;
-
-select set_config('request.jwt.claim.sub', '27000000-0000-4000-8000-000000000004', true);
-set local role authenticated;
-select pg_temp.p17_assert(
-  (select count(*) from public.suppliers) = 0,
-  'supplier agent must use supplier_portal_context instead of the raw supplier row'
-);
-select pg_temp.p17_assert(
-  public.supplier_portal_context()->'supplier'->>'id'
-    = '37000000-0000-4000-8000-000000000001'
-  and public.supplier_portal_context()->'supplier'->>'status' = 'active',
-  'supplier portal projection did not retain the supplier agent own identity and commerce status'
-);
 reset role;
 
 rollback;

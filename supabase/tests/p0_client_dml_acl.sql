@@ -325,17 +325,17 @@ insert into public.organizations (id, name, status) values
 insert into auth.users (id, email) values
   ('23000000-0000-0000-0000-000000000001', 'owner-a-p0-acl@example.test'),
   ('23000000-0000-0000-0000-000000000002', 'office-a-p0-acl@example.test'),
-  ('23000000-0000-0000-0000-000000000003', 'kitchen-a-p0-acl@example.test'),
+  ('23000000-0000-0000-0000-000000000003', 'office-a-p0-acl-2@example.test'),
   ('23000000-0000-0000-0000-000000000004', 'accountant-a-p0-acl@example.test'),
-  ('23000000-0000-0000-0000-000000000005', 'payer-a-p0-acl@example.test'),
+  ('23000000-0000-0000-0000-000000000005', 'accountant-a-p0-acl-2@example.test'),
   ('23000000-0000-0000-0000-000000000006', 'owner-b-p0-acl@example.test');
 
 insert into public.profiles (id, org_id, full_name, role) values
   ('23000000-0000-0000-0000-000000000001', '13000000-0000-0000-0000-000000000001', 'P0 ACL owner A', 'owner'),
   ('23000000-0000-0000-0000-000000000002', '13000000-0000-0000-0000-000000000001', 'P0 ACL office A', 'office'),
-  ('23000000-0000-0000-0000-000000000003', '13000000-0000-0000-0000-000000000001', 'P0 ACL kitchen A', 'kitchen'),
+  ('23000000-0000-0000-0000-000000000003', '13000000-0000-0000-0000-000000000001', 'P0 ACL office A', 'office'),
   ('23000000-0000-0000-0000-000000000004', '13000000-0000-0000-0000-000000000001', 'P0 ACL accountant A', 'accountant'),
-  ('23000000-0000-0000-0000-000000000005', '13000000-0000-0000-0000-000000000001', 'P0 ACL payer A', 'payer'),
+  ('23000000-0000-0000-0000-000000000005', '13000000-0000-0000-0000-000000000001', 'P0 ACL accountant A', 'accountant'),
   ('23000000-0000-0000-0000-000000000006', '13000000-0000-0000-0000-000000000002', 'P0 ACL owner B', 'owner');
 
 insert into public.suppliers (id, org_id, name) values
@@ -696,18 +696,18 @@ select pg_temp.p0_acl_assert(
 
 reset role;
 
--- Kitchen may edit products, but active state changes always require the reasoned RPC.
+-- Office may edit products, but active state changes always require the reasoned RPC.
 select set_config('request.jwt.claim.sub', '23000000-0000-0000-0000-000000000003', true);
 set local role authenticated;
 
 with changed as (
-  update public.products set notes = 'Allowed kitchen edit'
+  update public.products set notes = 'Allowed office edit'
   where id = '43000000-0000-0000-0000-000000000001'
   returning 1
 )
 select pg_temp.p0_acl_assert(
   (select count(*) = 1 from changed),
-  'kitchen could not update an allowed product field'
+  'office could not update an allowed product field'
 );
 
 do $$
@@ -736,7 +736,7 @@ select pg_temp.p0_acl_assert(
   (public.set_product_active(
     '43000000-0000-0000-0000-000000000001', false, 'temporarily unavailable'
   )->>'idempotent')::boolean = false,
-  'kitchen product active-state RPC did not commit'
+  'office product active-state RPC did not commit'
 );
 
 reset role;

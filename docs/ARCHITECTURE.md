@@ -120,8 +120,9 @@ enum ‏`user_role` נשאר ללא שינוי; תוויות התצוגה נמצ
 ### חוזה אבטחת P0
 
 - `profiles.id`, ‏`profiles.org_id` ועמודות הזהות הדיירית אינן ניתנות לשינוי דרך JWT. משתמש
-  משנה בעצמו רק שם/טלפון; owner משנה `role`/`active`/`supplier_id` של חבר בארגונו דרך
-  `manage_profile_access`, עם סיבה ו־audit באותה טרנזקציה.
+  משנה בעצמו רק שם/טלפון; owner מנהל `role`/`active` של חשבונות `owner`/`office`/`accountant`
+  דרך `manage_profile_access`, עם סיבה ו־audit באותה טרנזקציה. `supplier_id` נשמר לקשרים
+  היסטוריים בלבד ואינו ניתן להגדרה על חשבון מוצר פעיל.
 - owner משנה רק שדות ארגון שהחוזה מתיר. ‏`status` ו־`trial_ends_at` משתנים רק דרך
   `set_organization_lifecycle` בידי platform admin, עם step-up, נעילה וסיבה. Trial הוא 30 יום,
   אחריו 7 ימי Grace מלאים ואז read-only; Reactivation מחזיר ל־`active`. השעיה נשארת מסלול מנהלי
@@ -142,16 +143,15 @@ enum ‏`user_role` נשאר ללא שינוי; תוויות התצוגה נמצ
   `documents` מורשית לאותו path. מחיקה מותרת רק ל־orphan חדש
   של אותו uploader שאין אליו שורת מסמך. bucket המסמכים פרטי; allowlist ‏`0045` חוסם
   SVG וקובצי executable, אך מאפשר `text/html` כמסמך מקור לעיבוד מבוקר.
-- ה־cutover של P1 הושלם ב־`0023`: מדיניות הכתיבה הישירה של payer לדרישה, תשלום והקצאה
-  הוסרו, והפעולה עוברת רק דרך `execute_payment_request`. מסמך `P0-P1-SECURITY-HANDOFF.md`
-  נשמר כחוזה היסטורי ומסומן כממומש.
+- ה־cutover של P1 הושלם ב־`0023`: מדיניות הכתיבה הישירה הישנה לדרישה, תשלום והקצאה
+  הוסרה, והפעולה עוברת רק דרך `execute_payment_request`; מ־`0133` רק `accountant` מבצע אותה.
 - `0031` הפרידה היסטורית את תפקידי `office` ו־`accountant`; `0111` ביטלה את מסלול החירום של
   `owner`, ו־`0127` משאירה רק את `accountant` כחשבון פעיל שמורשה להפעיל את
   `execute_payment_request`. הפקודה ממשיכה לדרוש step-up, סיבה ו־audit. ‏`unmatch_bank_transaction`
   מסירה רק התאמה לתשלום קיים; התאמה ישירה לחשבונית דורשת תיקון כספי נפרד ואינה מוחקת תשלום.
 - `0034` סוגרת את פערי ההמשך של אותו חוזה: מחיקת חשבונית רכה עוברת רק דרך
   `soft_delete_invoice` האטומי ונחסמת כשקיים קשר כספי; אותות בדיקה אינם חושפים בנק או
-  יתרה ל־`office`/`kitchen`; תור `accountant` כולל דרישה רק כל עוד כל חשבוניותיה מאושרות
+  יתרה מחוץ למשטחים הפיננסיים המצומצמים; תור `accountant` כולל דרישה רק כל עוד כל חשבוניותיה מאושרות
   ולא מחוקות; והסרת התאמה מרובת תשלומים מחזירה את כל הדרישות המקושרות ל־`executed`.
 - `0036` מחליפה DML משתמע ב־allowlist עמודות מפורש לכתיבות הדפדפן הלא־רגישות. שינוי
   `suppliers.deleted_at`, שינוי `products.active` וביטול הזמנה עוברים רק דרך
@@ -236,8 +236,9 @@ enum ‏`user_role` נשאר ללא שינוי; תוויות התצוגה נמצ
   נחסמים. הלקוח צורך ומרענן `organization_access_state` מן השרת ואינו מכריע פקיעה משעון המכשיר.
   `suspended` הוא מצב נפרד. אין pricing plan שמוסתר בקוד.
 - `0094` חוסמת פעילות מסחרית חדשה עם ספק inactive ומשאירה היסטוריה וסגירה פיננסית. `0097` חושפת
-  ל־accountant projection פיננסי נפרד. `0101` מחזירה לספק רק הזמנות שהונפקו עבור `auth_supplier()`
-  ומאפשרת רק `sent→confirmed`, ללא שינוי תאריך אספקה.
+  projection פיננסי נפרד, ו־`0133` מצרה אותו ל־`owner`/`office`/`accountant`. משטח אישור
+  ההזמנה של פרסונת הספק מ־`0101` וה־helper ‏`auth_supplier()` הוסרו; מעברי הזמנה פעילים הם
+  של `owner`/`office` בלבד.
 - `0102` הוא read model על ledger המלאי. בלי ספירה פיזית יתרה וצפי הם unknown; הצעת reorder ומחיר
   ספק הן read-only ואינן יוצרות הזמנה.
 - `0103` מוסיפה בקשת offboarding שמחילה read-only מיידי, ביטול owner עד 30 יום, הפעלה מחדש בידי
@@ -281,9 +282,9 @@ idempotency, HMAC, retries ו־dead-letter. **Live Integration Proof הוא DEFE
 דרך `purchase_order_items.id`, מפתח הניכוי היחיד שקיים; ‏`0116` מחשב מה מחיקת מסמך תיקח **לפני**
 שהיא לוקחת, וחוסם את האפשרות ההרסנית כשרשימת החוסמים אינה ריקה.
 
-**גבול חדש שאינו RLS:** ‏`0112` הוציא את `suppliers.bank_details` מהישג הדפדפן דרך **הרשאת עמודה**,
-שיושבת *מתחת* ל-RLS. הסרת `kitchen` מ-`suppliers_select` הייתה שוברת כל embed של ספק — ‏PostgREST
-מסנן embeds לפי RLS — ולכן החוקה נשארה והעמודה ירדה.
+**גבול שאינו RLS:** ‏`0112` הוציא את `suppliers.bank_details` מהטבלה הגולמית דרך **הרשאת עמודה**,
+שיושבת *מתחת* ל-RLS. ‏`0133` הסיר את ענף `kitchen` לאחר פרישת הפרסונה, אך שמר את גבול העמודה
+ואת ה־projection הפיננסי המצומצם לשלושת התפקידים הפעילים.
 
 ## חוזה עיבוד מסמכים ואוטומציה — מצב נוכחי
 
@@ -321,23 +322,22 @@ corpus; המערכת אינה "לומדת" או משנה policy מעצמה.
 `add_document_review_correction` מוסיפה revisions ל־`document_review_corrections` עבור block או
 תא טבלה. הטקסט המקורי, checksum וגרסת החוזה נגזרים ונבדקים בשרת; revision וטקסט צפויים חוסמים
 lost update, ושינוי ב־Storage חוסם שמירה. המסמך ננעל לפני ה־interpretation/job כדי לחסום מחיקה
-או השלמה מקבילה בלי להפוך את סדר הנעילות של `0048`. Owner/office/kitchen רשאים לערוך בדייר שלהם; supplier
-רשאי לערוך רק price list שהוא העלה ושפוענח עבורו. אין DML מהדפדפן, אין שינוי ל־payload של
+או השלמה מקבילה בלי להפוך את סדר הנעילות של `0048`. רק owner/office רשאים לערוך בדייר שלהם.
+אין DML מהדפדפן, אין שינוי ל־payload של
 `document_extractions`/`document_interpretations`, וכל הצלחה נכתבת ל־audit עם סיבה.
 
 מיגרציה `0050_document_type_review_decisions.sql` מפרידה בין הצעת `document_type` הבלתי־משתנה
 שב־interpretation לבין הכרעת review. ‏`review_document_type` מוסיפה revision ל־
 `document_type_review_decisions` עם `approved_document_type` נפרד (או `null` בדחייה), נועלת document
 ואז interpretation/job, ודוחה job שאינו ב־`review`, ‏suggestion/checksum/contract/revision ישנים או
-Storage שהשתנה. retry זהה מוחזר כאידמפוטנטי; שינוי ללא שינוי ערך נדחה. Owner/office/kitchen בלבד
-רשאים להכריע. ספק יכול לקרוא דרך RLS רק הכרעה של מחירון שבבעלותו, אך אינו מקבל RPC להכרעה;
-suggested supplier/fields נשארים display-only עד שיוגדר עבורם חוזה סמכותי נפרד.
+Storage שהשתנה. retry זהה מוחזר כאידמפוטנטי; שינוי ללא שינוי ערך נדחה. Owner/office בלבד
+רשאים להכריע; suggested supplier/fields נשארים display-only עד שיוגדר עבורם חוזה סמכותי נפרד.
 
 ## גבול פקודות פיננסי P1 — ממומש מקומית
 
 > מיגרציות P0 הן `0020`–`0022`, מיגרציית P1 היא `0023`, וכולן משולבות בענף P2 המקומי.
 > מסלול שדרוג מ־`0019`, התקנה נקייה ומטריצת שני דיירים נבדקו לאחר השילוב. הערת ה־"לא נפרסו"
-> המקורית הייתה snapshot היסטורי ונמחקה; מצב הפריסה הנוכחי נרשם רק ב־`CURRENT-STATE.md` ובדוח שחרור.
+> המקורית הייתה snapshot היסטורי ונמחקה; מצב הפריסה הנוכחי נרשם רק ב־`PROGRESS.md`; ראיות שחרור נשמרות ב־CI וב־Git history.
 
 כל שינוי כספי בתחום P1 עובר דרך RPC אחד. הלקוח רשאי לחשב preview, אך אינו קובע `org_id`,
 משתמש מבצע, מאשר, יתרה, סטטוס נגזר או audit. ‏`p1_financial_command_guard` משתמש בסמן
@@ -353,7 +353,7 @@ transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מ
 | חשבונית | `create_invoice`, ‏`set_invoice_review_status`, ‏`soft_delete_invoice` | UUID לקוח יציב, בדיקות DB חוזרות, ומחיקה רכה עם נעילה, בדיקת קשרים וסיבת audit באותה עסקה |
 | זיכוי מחשבונית | `create_invoice_credit_request`, ‏`transition_credit_request` | UUID לקוח יציב, נעילת חשבונית לפני זיכוי, מעברי סטטוס שרתיים ורענון יתרה באותה עסקה |
 | מחיר מנהל/ידני | `set_supplier_product_price`, ‏`import_supplier_prices` | נעילת `supplier_products`; מחיר נוכחי ו־`price_history` נכתבים יחד; batch legacy הוא `owner`/`office` בלבד |
-| הגשת מחירון ספק | `submit-price-list` → `submit_supplier_price_list` | Edge נועל ומאמת את גרסת אובייקט ה־Storage, גוזר hash ושורות מהבייטים; נעילת ספק מסדרת revision; ‏checksum חודשי מחזיר אותה קבלה; intake, מחיר, היסטוריה, קבלה ו־audit נסגרים באותה עסקת DB |
+| קליטת מחירון ספק עסקי | `submit-price-list` → `submit_supplier_price_list` | owner/office מעלים; Edge נועל ומאמת את גרסת אובייקט ה־Storage, גוזר hash ושורות מהבייטים; נעילת ספק מסדרת revision; ‏checksum חודשי מחזיר אותה קבלה; intake, מחיר, היסטוריה, קבלה ו־audit נסגרים באותה עסקת DB |
 | חודש לרו״ח | `mark_month_export_sent` | נעילת ארגון/export/חשבוניות ו־snapshot ממוין של `invoice_ids` |
 | snapshot חודשי סופי | `create_monthly_report_snapshot` | advisory lock לפי ארגון/ישות/חודש, גרסה עולה immutable, ייחוס מקורות fail-closed ו-audit/event באותה עסקה |
 | מסירת snapshot לרו״ח | `mark_monthly_report_snapshot_sent` | step-up, נעילת snapshot מסוננת-scope, recheck הרשאה לאחר המתנה ו-delivery immutable/idempotent לגרסה מדויקת |
@@ -370,7 +370,7 @@ transaction-local שרק ה־RPC מגדיר; grants ו־policies ישירים מ
 `{org_id}/price-submissions/{supplier_id}/{submission_id}/{file}` וללא overwrite: ניתן למחוק
 רק orphan של אותו uploader שלא נרשם ב־ledger; staging לא־רשום נקרא רק בידי אותו uploader
 ובתנאי שהדייר, התפקיד והספק בנתיב תואמים. לאחר רישום הקובץ הוא immutable ונקרא רק בידי
-`owner`/`office` או הספק שלו. intake פעיל חוסם מחיקה גם עבור ה־uploader, ואין מדיניות UPDATE.
+`owner`/`office`. intake פעיל חוסם מחיקה גם עבור ה־uploader, ואין מדיניות UPDATE.
 
 הדפדפן רשאי לבצע preview מקומי, אך אינו שולח hash או שורות לפקודת המחירים. הוא מעלה אובייקט
 פרטי ושולח ל־`submit-price-list` רק מזהי הגשה/ספק/חודש, שם ונתיב קובץ וסיבה. פונקציית הקצה
@@ -396,7 +396,7 @@ claim הלקוח קורא ומנקה את ה־orphan הלא־רשום שלו; מ
 הדפדפן. reset מקומי ממחזר במפורש את PostgREST וממתין מחדש ל־Auth/REST, כדי שלא להשתמש
 בחיבור pool שנשאר ממופע PostgreSQL שהוחלף; כשל בשלב הזה הוא `BLOCKED` תשתיתי ולא PASS.
 לאחר ה־fixture, `check-p4-integrated-journey.cjs` מבצע מסע אחד על אותן ישויות עם
-JWT נפרד ל־supplier/office/owner/accountant. ‏`service_role` משמש בו לקריאת projection של
+JWT נפרד ל־owner/office/accountant. ‏`service_role` משמש בו לקריאת projection של
 ראיות בלבד; כל מוטציה עסקית נעשית דרך JWT משתמש או Edge מהימן.
 
 המסע שומר `p4-integrated-before.json`, ‏`p4-integrated-after.json`,

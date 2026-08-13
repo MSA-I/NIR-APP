@@ -8,7 +8,7 @@
 // subscription's Vault secret. The worker never sees the secret and never re-serializes
 // the event: it posts `body` VERBATIM — the signature covers exactly those bytes.
 //
-// Signed-string contract (OPEN-DECISIONS #97, handoff/07-adapters-contract.md):
+// Signed-string contract (OPEN-DECISIONS #97, INTEGRATION-ARCHITECTURE.md):
 //   signature = hex( HMAC-SHA256( body || '.' || timestamp, secret ) )
 // sent as `x-supplyflow-signature: sha256=<hex>` + `x-supplyflow-timestamp: <timestamp>`.
 // A receiver recomputes the HMAC over the raw request body, a literal '.', and the
@@ -107,7 +107,7 @@ export function signedPayload(body: string, timestamp: string): string {
   return `${body}.${timestamp}`;
 }
 
-/** The five mandatory outbound headers (handoff/05 §6.3 + the wave-7 signature pair). */
+/** The five mandatory outbound headers from the canonical integration contract. */
 export function buildDeliveryHeaders(
   row: Pick<ClaimedRow, 'idempotency_key' | 'event'> & { signature: string; timestamp: string },
 ): Record<string, string> {

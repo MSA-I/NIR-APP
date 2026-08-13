@@ -5,7 +5,7 @@ import { matchDeliveryLineProduct, type DeliveryNoteLine } from './document-revi
 import { Modal, Note } from './ui';
 
 /**
- * Barcode-assisted goods receiving (PLAN-09 §1.3, OPEN-DECISIONS #102).
+ * Barcode-assisted goods receiving (הכרעה #102, OPEN-DECISIONS #102).
  *
  * **A scanned code is a key, never a guess.** It identifies which line of the order the person is
  * standing in front of; it never fills in a quantity, because a quantity is a claim about what came

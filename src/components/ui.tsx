@@ -102,7 +102,7 @@ export function SkeletonCards({ count = 4, cols = 4, title = false }: {
   );
 }
 
-/** Mirrors the stacked card-button lists (Receiving, PayerQueue) — not a table. */
+/** Mirrors the stacked card-button lists (Receiving, AccountantPaymentQueue) — not a table. */
 export function SkeletonList({ rows = 5, title = true }: { rows?: number; title?: boolean }) {
   return (
     <SkeletonRegion>
@@ -753,7 +753,7 @@ export interface ServerColumn<T> extends Omit<Column<T>, 'sortValue'> {
 }
 
 /**
- * The opt-in server mode of DataTable (PLAN-02 §2.2). Presence of this prop is the switch:
+ * The opt-in server mode of DataTable (ADR-0007). Presence of this prop is the switch:
  * the table stops filtering, sorting and slicing entirely and renders `rows` as the one page
  * the screen fetched via `fetchServerList`. Page reset on a sort/search/filter change is the
  * screen's job in this mode — the table only reports the interaction.
@@ -1380,7 +1380,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
         {tableBody}
         {!error && (
           <div className="flex items-center justify-between px-4 py-2.5 border-t border-line-soft text-sm text-ink-muted">
-            {/* Unconditional and a live region (PLAN-02 §2.2): the count is the filtered total —
+            {/* Unconditional and a live region (ADR-0007): the count is the filtered total —
                 the server's COUNT in server mode — never a page length, and the element persists
                 across states so a screen reader hears it change, including down to a true 0.
                 An unavailable count never reaches here: it throws upstream (queryResult.ts). */}

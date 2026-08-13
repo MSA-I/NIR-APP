@@ -16,7 +16,7 @@ import {
   ASSIGNABLE_ROLES, INVITABLE_ROLES, INVITATION_COLUMNS, invitationStatusOf,
   sendInvite, resendInvite, revokeInvite, type Invitation,
 } from '../lib/invitations';
-import type { Profile, Role } from '../lib/types';
+import { isActiveRole, type ActiveRole, type Profile } from '../lib/types';
 import {
   BRAND_LOGO_TYPES,
   brandFailureAllowsNewCorrelation,
@@ -87,7 +87,7 @@ export default function Settings() {
   const [offboardingAction, setOffboardingAction] = useState<'request' | 'cancel' | 'download' | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<Role>('office');
+  const [inviteRole, setInviteRole] = useState<ActiveRole>('office');
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   // Separate from inviteError on purpose: the invitation WAS created, so an error tone would
@@ -97,10 +97,10 @@ export default function Settings() {
   const [revokeTarget, setRevokeTarget] = useState<Invitation | null>(null);
   const [accessTarget, setAccessTarget] = useState<Profile | null>(null);
   const [roleTarget, setRoleTarget] = useState<Profile | null>(null);
-  const [nextRole, setNextRole] = useState<Role>('office');
+  const [nextRole, setNextRole] = useState<ActiveRole>('office');
   const [roleReason, setRoleReason] = useState('');
   const [dialogBusy, setDialogBusy] = useState(false);
-  // Step-up gate (PLAN-04 §3.2): `manage_profile_access` asserts a fresh password AMR entry on
+  // Step-up gate (migration 0061): `manage_profile_access` asserts a fresh password AMR entry on
   // the server (0061). The pending closure holds the confirmed action while ReauthModal decides —
   // a JWT fresher than ~4 minutes skips the prompt entirely (mandatory for the B23–B24 flow,
   // where the gate logs in seconds before deactivating), a stale one asks for the password.
@@ -287,6 +287,7 @@ export default function Settings() {
   }
 
   function openRoleChange(u: Profile) {
+    if (!isActiveRole(u.role)) return;
     setNextRole(u.role);
     setRoleReason('');
     setRoleTarget(u);
@@ -439,7 +440,7 @@ export default function Settings() {
           rendered only for a platform admin, and that gate is not decoration: the command behind
           it (platform_set_autonomy_policy, 0076:270-272) raises `not_platform_admin` for anyone
           else. An owner without the grant would meet a control that refuses on submit — the exact
-          shape of screen DEAD-ENDS-AUDIT.md was written about. Absent beats broken. */}
+          shape of the obsolete screen this flow replaced. Absent beats broken. */}
       {canWrite && isPlatformAdmin && org && <AutonomyPolicyPanel orgId={org.id} orgName={org.name} />}
 
       {/* Package K. Gated on the same two roles 0126's commands accept, for the reason the autonomy
@@ -555,7 +556,7 @@ export default function Settings() {
                         {u.active && (
                           <button className="btn-ghost py-1! text-xs" onClick={() => openRoleChange(u)}>שינוי תפקיד</button>
                         )}
-                        {(u.active || ASSIGNABLE_ROLES.includes(u.role)) && (
+                        {(u.active || (isActiveRole(u.role) && ASSIGNABLE_ROLES.includes(u.role))) && (
                           <button className="btn-ghost py-1! text-xs" onClick={() => setAccessTarget(u)}>{u.active ? 'השבתה' : 'הפעלה'}</button>
                         )}
                       </div>
@@ -587,7 +588,7 @@ export default function Settings() {
           <div>
             <label className="label" htmlFor="inviteRole">תפקיד</label>
             <select id="inviteRole" className="input" value={inviteRole}
-              onChange={(e) => { setInviteRole(e.target.value as Role); setInviteError(null); }}>
+              onChange={(e) => { setInviteRole(e.target.value as ActiveRole); setInviteError(null); }}>
               {INVITABLE_ROLES.map((r) => <option key={r} value={r}>{roleLabels[r]}</option>)}
             </select>
           </div>
@@ -639,7 +640,7 @@ export default function Settings() {
             <label className="label" htmlFor="role-change-select">תפקיד חדש</label>
             {/* The enum carries historical roles; ASSIGNABLE_ROLES is the active product contract. */}
             <select id="role-change-select" className="input" value={nextRole}
-              onChange={(e) => setNextRole(e.target.value as Role)}>
+              onChange={(e) => setNextRole(e.target.value as ActiveRole)}>
               {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{roleLabels[r] ?? r}</option>)}
             </select>
           </div>

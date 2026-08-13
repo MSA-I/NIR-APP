@@ -58,7 +58,7 @@ describe('financial supplier capability boundary', () => {
   it('uses the server projection on every accountant-facing supplier lookup', () => {
     const files = [
       'Bank.tsx', 'Credits.tsx', 'Exceptions.tsx', 'Expenses.tsx', 'InvoiceDetail.tsx',
-      'Invoices.tsx', 'PaymentRequests.tsx', 'Payments.tsx', 'PayerQueue.tsx', 'Reports.tsx',
+      'Invoices.tsx', 'PaymentRequests.tsx', 'Payments.tsx', 'AccountantPaymentQueue.tsx', 'Reports.tsx',
       join('dashboards', 'AccountantDashboard.tsx'),
     ];
     for (const file of files) {

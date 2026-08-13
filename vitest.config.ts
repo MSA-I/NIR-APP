@@ -23,11 +23,6 @@ export default mergeConfig(
       include: ['src/**/*.spec.{ts,tsx}'],
       restoreMocks: true,
       clearMocks: true,
-      coverage: {
-        provider: 'v8',
-        include: ['src/lib/query/**', 'src/lib/useQuery.ts'],
-        reporter: ['text-summary'],
-      },
     },
   }),
 );

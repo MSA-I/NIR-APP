@@ -27,7 +27,7 @@ $retiredEmails = @(
   "payer@demo.supplyflow.local",
   "supplier@demo.supplyflow.local"
 )
-$allowedEmails = @($activeEmails + $retiredEmails)
+$allowedEmails = $activeEmails
 
 if (-not $env:SUPABASE_SERVICE_KEY) { throw "SUPABASE_SERVICE_KEY not set" }
 
@@ -49,8 +49,8 @@ if ($manifestFile.Equals($repoRoot, [System.StringComparison]::OrdinalIgnoreCase
 
 $manifest = Get-Content -LiteralPath $manifestFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $accounts = @($manifest.accounts)
-if ($accounts.Count -notin @(3, 6)) {
-  throw "Credentials manifest must contain the three active demo accounts, optionally plus all three retired accounts."
+if ($accounts.Count -ne 3) {
+  throw "Credentials manifest must contain exactly the three active demo accounts."
 }
 
 $seenEmails = @{}
@@ -68,11 +68,6 @@ foreach ($account in $accounts) {
 foreach ($email in $activeEmails) {
   if (-not $seenEmails.ContainsKey($email)) { throw "Missing demo account in credentials manifest: $email" }
 }
-$retiredManifestCount = @($retiredEmails | Where-Object { $seenEmails.ContainsKey($_) }).Count
-if ($retiredManifestCount -notin @(0, $retiredEmails.Count)) {
-  throw "Credentials manifest must omit all retired accounts or include all three for backward compatibility."
-}
-
 $headers = @{
   apikey        = $env:SUPABASE_SERVICE_KEY
   Authorization = "Bearer $($env:SUPABASE_SERVICE_KEY)"

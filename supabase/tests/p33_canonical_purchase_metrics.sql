@@ -34,12 +34,12 @@ insert into public.organizations (id, name, status, vat_rate) values
   ('10330000-0000-4000-8000-000000000002', 'P33 other tenant', 'active', 18);
 insert into auth.users (id, email) values
   ('20330000-0000-4000-8000-000000000001', 'owner-p33@example.test'),
-  ('20330000-0000-4000-8000-000000000002', 'kitchen-p33@example.test');
+  ('20330000-0000-4000-8000-000000000002', 'office-p33@example.test');
 insert into public.profiles (id, org_id, full_name, role) values
   ('20330000-0000-4000-8000-000000000001', '10330000-0000-4000-8000-000000000001',
    'P33 owner', 'owner'),
   ('20330000-0000-4000-8000-000000000002', '10330000-0000-4000-8000-000000000001',
-   'P33 kitchen', 'kitchen');
+   'P33 office', 'office');
 insert into public.suppliers (id, org_id, name, status) values
   ('40330000-0000-4000-8000-000000000001', '10330000-0000-4000-8000-000000000001',
    'P33 ספק', 'active');
@@ -54,7 +54,7 @@ insert into public.supplier_products (org_id, supplier_id, product_id, current_p
 --
 -- 2026-08-01 00:30 Asia/Jerusalem is 2026-07-31 21:30Z. A raw UTC slice files this order under
 -- July; the business placed it in August. This one row is the divergence that had the main
--- dashboard and the kitchen dashboard reporting different totals for the same month.
+-- dashboard and the office dashboard reporting different totals for the same month.
 
 insert into public.purchase_orders (id, org_id, supplier_id, status, created_at) values
   ('50330000-0000-4000-8000-000000000001', '10330000-0000-4000-8000-000000000001',
@@ -211,18 +211,12 @@ select pg_temp.p33_assert(
   'the owner cannot read the canonical metrics through the public wrapper');
 
 select set_config('request.jwt.claim.sub', '20330000-0000-4000-8000-000000000002', true);
-do $$
-begin
-  perform public.get_purchase_metrics('2026-08-01', '2026-08-31');
-  raise exception 'P33 metric assertion failed: a kitchen manager read the money metrics. Role '
-    'visibility is not widened just to make two screens agree on a number';
-exception when sqlstate '42501' then
-  if sqlerrm <> 'purchase_metrics_not_authorized' then raise; end if;
-end
-$$;
+select pg_temp.p33_assert(
+  (select (r ->> 'gross_expense')::numeric = 140
+   from public.get_purchase_metrics('2026-08-01', '2026-08-31') r),
+  'office lost the canonical purchase metrics used by the active management surface');
 
--- Back to the owner: the role check runs FIRST, so leaving the kitchen claim in place here would
--- test authorization a second time and never reach the window validation at all.
+-- Back to the owner for the invalid-window contract.
 select set_config('request.jwt.claim.sub', '20330000-0000-4000-8000-000000000001', true);
 do $$
 begin

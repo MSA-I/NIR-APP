@@ -1,8 +1,8 @@
-// Resumable uploads to the private `documents` bucket (PLAN-07, wave 6b).
+// Resumable uploads to the private `documents` bucket (מיגרציה `0065`).
 //
 // One wrapper for both document flows — entity documents (FileUpload) and reserved
 // price-list documents (PriceListUpload). tus against Supabase Storage's resumable
-// endpoint gives the Upload Center its resume criterion (ENTERPRISE-UI-PLAN.md:170):
+// endpoint gives the Upload Center its resume criterion (OPEN-DECISIONS #95):
 // a network cut mid-upload continues from the last accepted offset instead of
 // starting over. HEAD offset-discovery is permission-skipped on the server, so it
 // always succeeds — real failures surface around the creation POST and the PATCH,
@@ -15,13 +15,13 @@ import { toHebrewError } from './errors';
 export const DOCUMENTS_BUCKET = 'documents';
 
 /**
- * 6MB always (PLAN-07 §1.6). Cloud storage rides S3 multipart, which requires every
+ * 6MB always (migration 0065). Cloud storage rides S3 multipart, which requires every
  * non-final part to be ≥5MB; the local FileStore backend has no minimum. One size for
  * both keeps local proof runs honest about cloud behaviour.
  */
 export const TUS_CHUNK_SIZE = 6 * 1024 * 1024;
 
-/** Renew the reservation once it has less than this long to live (PLAN-07 §1.5). */
+/** Renew the reservation once it has less than this long to live (migration 0065). */
 export const RESERVATION_RENEWAL_WINDOW_MS = 5 * 60 * 1000;
 
 /**
@@ -78,7 +78,7 @@ export interface TusUploadHandle {
 }
 
 /**
- * Contract: handoff/6b-upload-contract.md §1. `renew_supplier_price_document_upload
+ * Contract: OPEN-DECISIONS #95. `renew_supplier_price_document_upload
  * (p_document_id uuid) returns jsonb` — extends `expires_at` only (least(now()+15min,
  * created_at+45min)); no re-bind, actor only, `reserved` only. The return shape is read
  * defensively: a bare timestamp or an object carrying `expires_at` updates the local
@@ -131,7 +131,7 @@ function translateTusError(error: Error): TusUploadError {
 }
 
 /**
- * The renew RPC's error codes (handoff/6b-upload-contract.md §1). `registered` is the
+ * The renew RPC's error codes (OPEN-DECISIONS #95). `registered` is the
  * money rule at the renewal boundary: the document already exists — never re-upload.
  */
 const RENEWAL_ERROR_HEBREW: [RegExp, string][] = [
@@ -232,7 +232,7 @@ export function tusUploadToDocuments(file: File | Blob, options: TusDocumentUplo
             options.renewal &&
             !renewedAfterForbidden
           ) {
-            // Exactly one renew-then-resume before the failure surfaces (PLAN-07 §1.5).
+            // Exactly one renew-then-resume before the failure surfaces (migration 0065).
             renewedAfterForbidden = true;
             renewReservation(options.renewal.documentId)
               .then((nextExpiresAt) => {

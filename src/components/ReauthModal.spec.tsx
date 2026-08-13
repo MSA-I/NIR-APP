@@ -171,7 +171,7 @@ describe('ReauthModal', () => {
   });
 });
 
-describe('fresh_authentication_required — the Hebrew mapping (PLAN-04 §3.2)', () => {
+describe('fresh_authentication_required — the Hebrew mapping (migration 0061)', () => {
   it('maps the server error to the sentence a business user can act on', () => {
     expect(toHebrewError(new Error('fresh_authentication_required'))).toBe(
       'נדרש אימות מחדש — הזינו סיסמה כדי לאשר פעולה רגישה.',

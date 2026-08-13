@@ -1,6 +1,5 @@
-// The ONE price-list intake entry point, shared by Suppliers, Products, PriceLists and the
-// supplier portal. Extracted from the near-verbatim duplicates in PriceLists.tsx and
-// SupplierPrices.tsx so every "העלאת מחירון" button behaves identically:
+// The one price-list intake entry point shared by Suppliers, Products and PriceLists, so every
+// "העלאת מחירון" button behaves identically:
 //   - PDF / image / Word  → OCR document path: reserve → storage → register → /documents/:id/review
 //   - Excel / CSV (staff) → deterministic sheet import for ONE supplier via import_supplier_prices;
 //     unmatched product names become NEW products only after an explicit user opt-in, never silently.
@@ -119,7 +118,7 @@ export async function uploadPriceDocument(orgId: string, supplierId: string, fil
 
   // Resumable upload against the reserved path (wave 6b). The reservation's expires_at
   // drives the proactive renewal on chunk completion, and a 403 mid-PATCH gets exactly
-  // one renew-then-resume before the failure surfaces (PLAN-07 §1.5).
+  // one renew-then-resume before the failure surfaces (migration 0065).
   const handle = tusUploadToDocuments(file, {
     objectName: reservation.storage_path,
     contentType: mimeType,
@@ -168,9 +167,8 @@ interface SheetPreview {
 }
 
 /**
- * One modal for every price-list upload button. `supplier` locks the target supplier
- * (per-supplier buttons); without it the user picks one. Spreadsheets are a staff
- * (owner/office) route; the supplier role submits sheets through "הגשת מחירון חודשי".
+ * One modal for every price-list upload button. `supplier` locks the target business supplier
+ * (per-supplier buttons); without it the owner/office user picks one.
  */
 export function PriceListUploadModal({ supplier, onClose, onImported }: {
   supplier?: Pick<Supplier, 'id' | 'name'> | null;
@@ -180,7 +178,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
   const navigate = useNavigate();
   const toast = useToast();
   const { profile, organizationAccess } = useAuth();
-  const isStaff = (organizationAccess?.canWrite ?? true)
+  const canUpload = (organizationAccess?.canWrite ?? true)
     && (profile?.role === 'owner' || profile?.role === 'office');
   const orgId = profile?.org_id ?? '';
 
@@ -212,7 +210,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
   // resolves the moment the row exists rather than after the next refetch.
   const picker = useQuickSupplier(suppliers, setSupplierId);
 
-  const accept = isStaff ? `${PRICE_DOCUMENT_ACCEPT},.xlsx,.xls,.csv` : PRICE_DOCUMENT_ACCEPT;
+  const accept = `${PRICE_DOCUMENT_ACCEPT},.xlsx,.xls,.csv`;
   const newRows = useMemo(() => (preview?.rows ?? []).filter((r) => !r.productId && !r.ambiguous), [preview]);
   const matchedRows = useMemo(() => (preview?.rows ?? []).filter((r) => r.productId), [preview]);
   const ambiguousRows = useMemo(() => (preview?.rows ?? []).filter((r) => r.ambiguous), [preview]);
@@ -261,12 +259,12 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
   }
 
   async function submit() {
+    if (!canUpload) { toast('אין הרשאה להעלות מחירון', 'error'); return; }
     if (!supplierId) { toast('יש לבחור ספק למחירון', 'error'); return; }
     if (!file) { toast('יש לבחור קובץ', 'error'); return; }
     setBusy(true);
     try {
       if (isSpreadsheet(file.name)) {
-        if (!isStaff) throw new PriceDocumentError('קובצי Excel מוגשים דרך "הגשת מחירון חודשי".');
         await parseSheet(file);
       } else {
         // Runs through the Upload Center's queue so the file gets a per-file progress row;
@@ -442,9 +440,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
       ) : (
         <div className="space-y-4">
           <Note tone="info">
-            {isStaff
-              ? 'קובץ Excel/CSV נקלט מיד לאחר תצוגה מקדימה; PDF, תמונה או Word עוברים זיהוי אוטומטי ומסך בדיקה. כשמדיניות הקליטה מופעלת, שורה לא מותאמת עם שם ומק״ט או ברקוד יכולה ליצור מוצר חדש; אחרת היא ממתינה לאישור.'
-              : 'המקור נשמר כמסמך הספק שלך ומועבר למסך בדיקה. כשמדיניות הקליטה מופעלת, שורה לא מותאמת עם שם ומק״ט או ברקוד יכולה ליצור מוצר חדש; אחרת צוות הלקוח מכריע בה.'}
+            קובץ Excel/CSV נקלט מיד לאחר תצוגה מקדימה; PDF, תמונה או Word עוברים זיהוי אוטומטי ומסך בדיקה. כשמדיניות הקליטה מופעלת, שורה לא מותאמת עם שם ומק״ט או ברקוד יכולה ליצור מוצר חדש; אחרת היא ממתינה לאישור.
           </Note>
           {suppliersError ? <ErrorNote message={suppliersError} /> : supplier ? null : (
             <SupplierSelectField picker={picker} id="price-upload-supplier" label="ספק *"
@@ -456,7 +452,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
             <input ref={fileRef} type="file" className="input" accept={accept} disabled={busy}
               onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             <span className="mt-1 block text-xs text-ink-muted">
-              {isStaff ? 'Excel, CSV, PDF, תמונה או Word, עד 10MB.' : 'PDF, תמונה, Word או מסמך טקסט נתמך, עד 10MB.'}
+              Excel, CSV, PDF, תמונה או Word, עד 10MB.
             </span>
           </label>
           {suppliersLoading && !supplier && <span className="block text-xs text-ink-muted" role="status">רשימת הספקים נטענת — ההעלאה תתאפשר מיד בסיום.</span>}

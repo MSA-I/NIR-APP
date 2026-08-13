@@ -1,7 +1,7 @@
 -- P7 integration-adapter harness for 0066. Run only against an isolated local database
 -- with every migration applied. The transaction is rolled back.
 --
--- What it proves, per PLAN-08 §2:
+-- What it proves for the 0066 integration-adapter contract:
 --   (a) structure: Shape-2 ACLs on webhook_subscriptions / integration_failures, the
 --       owner-read surface on external_references, the three registry rows, the generated
 --       target derivation, the RPC grant matrix, and the enqueue trigger's existence;
@@ -201,7 +201,7 @@ select pg_temp.p7_assert(
 -- ===== (e1) the signature known-answer vector =====
 -- HMAC-SHA256(key='p7-known-answer-secret', message='{"p7":"known-answer"}.1754400000').
 -- The signed string is body || '.' || timestamp -- the exact receiver contract
--- (handoff/07-adapters-contract.md). The same vector is pinned in
+-- (OPEN-DECISIONS #97). The same vector is pinned in
 -- supabase/functions/outbox-worker/core.test.ts, proving both sides agree byte-for-byte.
 select pg_temp.p7_assert(
   encode(extensions.hmac('{"p7":"known-answer"}.1754400000',

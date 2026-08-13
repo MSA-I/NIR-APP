@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "include": ["files", "dependencies", "unlisted", "binaries"],
+  "entry": [
+    "src/main.tsx",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "src/**/*.spec.{ts,tsx}",
+    "src/components/document-review/model.test.ts",
+    "scripts/*.{ts,mjs,cjs}",
+    "scripts/fixtures/**/*.{ts,mjs,cjs}",
+    "supabase/functions/*/index.ts",
+    "supabase/functions/**/*.{test.ts,_test.ts}"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "scripts/**/*.{ts,mjs,cjs}",
+    "supabase/functions/**/*.ts"
+  ],
+  "ignoreDependencies": [
+    "playwright-core",
+    "pdfjs-dist",
+    "jsr",
+    "npm",
+    "@noble/hashes"
+  ]
+}

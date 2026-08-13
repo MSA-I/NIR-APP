@@ -23,7 +23,7 @@ export interface QueryOptions {
   /**
    * Keep the previous key's data on screen while the next key loads, instead of a skeleton.
    *
-   * This is the paging contract of PLAN-02 §2.3: a page change is a new query key, which is
+   * This is the paging contract of ADR-0007: a page change is a new query key, which is
    * `isPending` in TanStack v5 and would blank the table the user is reading. Mapped to
    * `placeholderData: keepPreviousData`; while the previous data is shown, `loading` stays
    * `false` and `fetching` is `true`. The very first fetch (nothing to show yet) still reports

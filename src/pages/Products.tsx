@@ -49,7 +49,7 @@ export default function Products() {
     }));
   });
 
-  const canWrite = organizationAccess.canWrite && profile?.role !== 'accountant' && profile?.role !== 'payer';
+  const canWrite = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
   // Narrower than canWrite: the price-import RPC and the document reservation are owner/office only.
   const canUploadPrices = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
   const rows = (data ?? []).filter((p) => !catFilter || p.category_id === catFilter);
@@ -108,9 +108,7 @@ export default function Products() {
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <PageHeader title="מוצרים" meta={`${rows.length} מוצרים בתצוגה`}
         actions={<>
-          {/* The same fence /prices already explains in words (PriceLists.tsx:108). Here the button
-              simply vanished for kitchen, so the identical situation had two different answers on
-              two screens — one a sentence, one silence. Same wording, so it reads as one rule. */}
+          {/* The same owner/office boundary used by the price-list screen. */}
           {canUploadPrices
             ? <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={16} /> העלאת מחירון ספק</button>
             : <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמנהל הרכש בלבד.</span>}
