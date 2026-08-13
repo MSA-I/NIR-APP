@@ -2605,6 +2605,7 @@ async function machineFiledDocument(browser) {
   let reverted = false;
   const revertCalls = [];
   await context.route('**/rest/v1/documents?**', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
     const response = await route.fetch();
     const rows = await response.json();
     const documents = Array.isArray(rows) && !reverted
