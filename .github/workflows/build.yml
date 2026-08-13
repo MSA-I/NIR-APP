@@ -86,10 +86,10 @@ jobs:
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$token_inputs|$money_inputs|$exemption_inputs|$supplier_inputs|$vitest_inputs"; then echo "verify=true" >> "$GITHUB_OUTPUT"; else echo "verify=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$vitest_inputs"; then echo "install=true" >> "$GITHUB_OUTPUT"; else echo "install=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$knip_inputs"; then echo "knip=true" >> "$GITHUB_OUTPUT"; else echo "knip=false" >> "$GITHUB_OUTPUT"; fi
-          if [ ! -s changed-files.txt ] || matches "$workflow|$token_inputs"; then echo "tokens=true" >> "$GITHUB_OUTPUT"; else echo "tokens=false" >> "$GITHUB_OUTPUT"; fi
-          if [ ! -s changed-files.txt ] || matches "$workflow|$money_inputs"; then echo "money=true" >> "$GITHUB_OUTPUT"; else echo "money=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-design-tokens\.ts$" || product_matches '^src/'; then echo "tokens=true" >> "$GITHUB_OUTPUT"; else echo "tokens=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-money\.ts$" || product_matches '^src/'; then echo "money=true" >> "$GITHUB_OUTPUT"; else echo "money=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$exemption_inputs"; then echo "exemptions=true" >> "$GITHUB_OUTPUT"; else echo "exemptions=false" >> "$GITHUB_OUTPUT"; fi
-          if [ ! -s changed-files.txt ] || matches "$workflow|$supplier_inputs"; then echo "supplier=true" >> "$GITHUB_OUTPUT"; else echo "supplier=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-supplier-columns\.ts$" || product_matches '^src/'; then echo "supplier=true" >> "$GITHUB_OUTPUT"; else echo "supplier=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$vitest_config|$vitest_inputs"; then echo "vitest=true" >> "$GITHUB_OUTPUT"; else echo "vitest=false" >> "$GITHUB_OUTPUT"; fi
 
   build:

@@ -96,7 +96,7 @@ jobs:
           ocr='^(docker-compose\.ocr\.yml|worker/ocr/)'
           audit='^(package\.json|package-lock\.json)$'
           sql='^(supabase/(config\.toml|migrations/|tests/|demo/|seed\.sql)|scripts/(check-quality-gates\.ps1|ci-sql-suites\.mjs|ci-local-env\.mjs|fixtures/.*\.sql))'
-          browser='^(src/|public/|index\.html|vite\.config\.[cm]?[jt]s|package\.json|package-lock\.json|supabase/(config\.toml|migrations/|demo/|seed\.sql)|scripts/(check-browser-smoke\.cjs|ci-sql-suites\.mjs|ci-local-env\.mjs|create-users\.ps1|fixtures/))'
+          browser='^(src/|public/|index\.html|vite\.config\.[cm]?[jt]s|package\.json|package-lock\.json|supabase/(config\.toml|demo/|seed\.sql)|scripts/(check-browser-smoke\.cjs|ci-sql-suites\.mjs|ci-local-env\.mjs|create-users\.ps1|fixtures/))'
 
           if matches "$workflow|$edge"; then echo "edge=true" >> "$GITHUB_OUTPUT"; else echo "edge=false" >> "$GITHUB_OUTPUT"; fi
           if matches "$workflow|$ocr"; then echo "ocr=true" >> "$GITHUB_OUTPUT"; else echo "ocr=false" >> "$GITHUB_OUTPUT"; fi
