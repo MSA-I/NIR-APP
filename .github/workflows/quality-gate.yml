@@ -102,7 +102,24 @@ jobs:
           if matches "$workflow|$ocr"; then echo "ocr=true" >> "$GITHUB_OUTPUT"; else echo "ocr=false" >> "$GITHUB_OUTPUT"; fi
           if matches "$workflow|$audit"; then echo "audit=true" >> "$GITHUB_OUTPUT"; else echo "audit=false" >> "$GITHUB_OUTPUT"; fi
           if matches "$workflow|$sql"; then echo "sql=true" >> "$GITHUB_OUTPUT"; else echo "sql=false" >> "$GITHUB_OUTPUT"; fi
-          if product_matches "$workflow|$browser"; then echo "browser=true" >> "$GITHUB_OUTPUT"; else echo "browser=false" >> "$GITHUB_OUTPUT"; fi
+          browser_required=false
+          if product_matches "$workflow|$browser"; then
+            browser_required=true
+          else
+            # A DB-only change normally stops at the SQL gate. Permission migrations are the
+            # exception: their product surface is the signed-in browser even when no src file
+            # changed, so inspect only changed migration files for the trust-boundary vocabulary.
+            while IFS= read -r migration; do
+              [ -f "$migration" ] || continue
+              if grep -Eqi \
+                '(create|alter|drop)[[:space:]]+policy|row[[:space:]]+level[[:space:]]+security|user_role|auth_(role|org|scopes)[[:space:]]*\(|(grant|revoke).*(authenticated|anon)' \
+                "$migration"; then
+                browser_required=true
+                break
+              fi
+            done < <(grep -E '^supabase/migrations/.*\.sql$' changed-files.txt || true)
+          fi
+          echo "browser=$browser_required" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------- contracts (no database)
   contracts:
