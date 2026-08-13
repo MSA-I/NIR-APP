@@ -2,10 +2,11 @@
 # hidden test runner, and both independent halves execute in parallel. Docker, live Supabase,
 # Deno and browser integration remain in quality-gate.yml.
 #
-# Documentation-only changes still create the named build/verify checks required by branch
-# protection, but both jobs are skipped before a runner is allocated. Any non-Markdown file keeps
-# the conservative default and runs both halves; this classifier is intentionally much narrower
-# than quality-gate.yml's product-area filters.
+# Every change still creates the named build/verify checks required by branch protection, but each
+# job is skipped before a runner is allocated unless one of its own inputs changed. Production
+# bundle inputs run `build`; code, tests, static guards and Knip inputs run `verify`. SQL suites,
+# Edge functions and OCR worker files no longer build a browser bundle merely because they are not
+# Markdown. Test-only changes run `verify` without the redundant production build.
 #
 # The xlsx dependency installs from cdn.sheetjs.com (a tarball URL in package.json, pinned
 # by integrity hash in package-lock.json). setup-node's npm cache keeps the tarball out of
@@ -28,13 +29,21 @@ jobs:
     name: Classify fast-gate inputs
     runs-on: ubuntu-latest
     outputs:
-      run_code: ${{ steps.filter.outputs.run_code }}
+      build: ${{ steps.filter.outputs.build }}
+      verify: ${{ steps.filter.outputs.verify }}
+      install: ${{ steps.filter.outputs.install }}
+      knip: ${{ steps.filter.outputs.knip }}
+      tokens: ${{ steps.filter.outputs.tokens }}
+      money: ${{ steps.filter.outputs.money }}
+      exemptions: ${{ steps.filter.outputs.exemptions }}
+      supplier: ${{ steps.filter.outputs.supplier }}
+      vitest: ${{ steps.filter.outputs.vitest }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - id: filter
-        name: Skip documentation-only changes
+        name: Select build and verification jobs
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -51,15 +60,41 @@ jobs:
           fi
           git diff --name-only "$base" "$HEAD_SHA" > changed-files.txt
 
-          if [ ! -s changed-files.txt ] || grep -Eqv '^(docs/|.*\.md$)' changed-files.txt; then
-            echo "run_code=true" >> "$GITHUB_OUTPUT"
+          # A test file can require Vitest/Knip without changing the production bundle.
+          grep -Ev '(^|/)[^/]+\.(spec|test)\.[cm]?[jt]sx?$' changed-files.txt > product-files.txt || true
+
+          matches() { grep -Eq "$1" changed-files.txt; }
+          product_matches() { grep -Eq "$1" product-files.txt; }
+
+          build_common='^(\.github/workflows/build\.yml|package\.json|package-lock\.json|tsconfig[^/]*\.json|vite\.config\.[cm]?[jt]s)$'
+          build_inputs='^(src/|public/|index\.html$)'
+          workflow='^\.github/workflows/build\.yml$'
+          knip_config='^(package\.json|package-lock\.json|knip\.json|tsconfig[^/]*\.json|vite\.config\.[cm]?[jt]s)$'
+          vitest_config='^(package\.json|package-lock\.json|tsconfig[^/]*\.json|vite\.config\.[cm]?[jt]s|vitest\.config\.[cm]?[jt]s)$'
+          knip_inputs='^(src/|scripts/|supabase/functions/|knip\.json$)'
+          token_inputs='^(src/|scripts/check-design-tokens\.ts$)'
+          money_inputs='^(src/|scripts/check-money\.ts$)'
+          exemption_inputs='^(supabase/migrations/|scripts/check-exemption-pin\.ts$)'
+          supplier_inputs='^(src/|scripts/check-supplier-columns\.ts$)'
+          vitest_inputs='^(src/|.*\.(spec|test)\.[cm]?[jt]sx?$)'
+
+          if [ ! -s changed-files.txt ] || product_matches "$build_common|$build_inputs"; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
           else
-            echo "run_code=false" >> "$GITHUB_OUTPUT"
+            echo "build=false" >> "$GITHUB_OUTPUT"
           fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$token_inputs|$money_inputs|$exemption_inputs|$supplier_inputs|$vitest_inputs"; then echo "verify=true" >> "$GITHUB_OUTPUT"; else echo "verify=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$vitest_inputs"; then echo "install=true" >> "$GITHUB_OUTPUT"; else echo "install=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$knip_inputs"; then echo "knip=true" >> "$GITHUB_OUTPUT"; else echo "knip=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$token_inputs"; then echo "tokens=true" >> "$GITHUB_OUTPUT"; else echo "tokens=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$money_inputs"; then echo "money=true" >> "$GITHUB_OUTPUT"; else echo "money=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$exemption_inputs"; then echo "exemptions=true" >> "$GITHUB_OUTPUT"; else echo "exemptions=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$supplier_inputs"; then echo "supplier=true" >> "$GITHUB_OUTPUT"; else echo "supplier=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$vitest_config|$vitest_inputs"; then echo "vitest=true" >> "$GITHUB_OUTPUT"; else echo "vitest=false" >> "$GITHUB_OUTPUT"; fi
 
   build:
     needs: changes
-    if: needs.changes.outputs.run_code == 'true'
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -84,16 +119,38 @@ jobs:
 
   verify:
     needs: changes
-    if: needs.changes.outputs.run_code == 'true'
+    if: needs.changes.outputs.verify == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
+        if: needs.changes.outputs.install == 'true'
         with:
           node-version: 24
           cache: npm
+      - uses: actions/setup-node@v4
+        if: needs.changes.outputs.install != 'true'
+        with:
+          node-version: 24
       - name: Install (npm ci — lockfile is the contract)
+        if: needs.changes.outputs.install == 'true'
         run: npm ci
-      - name: Static guards and Vitest
-        run: npm run verify
+      - name: Dead-code and dependency graph
+        if: needs.changes.outputs.knip == 'true'
+        run: npm run check:dead-code
+      - name: Design-token guard
+        if: needs.changes.outputs.tokens == 'true'
+        run: npm run check:tokens
+      - name: Money-format guard
+        if: needs.changes.outputs.money == 'true'
+        run: npm run check:money
+      - name: SECURITY DEFINER exemption guard
+        if: needs.changes.outputs.exemptions == 'true'
+        run: npm run check:exemptions
+      - name: Supplier-column guard
+        if: needs.changes.outputs.supplier == 'true'
+        run: npm run check:supplier-columns
+      - name: Vitest
+        if: needs.changes.outputs.vitest == 'true'
+        run: npm run test
