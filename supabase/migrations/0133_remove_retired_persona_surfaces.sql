@@ -934,6 +934,40 @@ language sql stable security definer set search_path = public as $$
   group by supplier.id
 $$;
 
+-- Procurement and inventory read models remain owner/office surfaces. Rebuild their catalog
+-- definitions in place so all calculations and columns stay unchanged while the retired kitchen
+-- role is removed from the server-side gate.
+do $narrow_active_views$
+declare
+  v_view_name text;
+  v_definition text;
+  v_rewritten text;
+begin
+  foreach v_view_name in array array[
+    'supplier_metrics',
+    'inventory_balances',
+    'inventory_movement_feed'
+  ] loop
+    v_definition := pg_get_viewdef(format('public.%I', v_view_name)::regclass, true);
+    v_rewritten := regexp_replace(
+      v_definition,
+      ',[[:space:]]*''kitchen''::(public\.)?user_role',
+      '',
+      'gi'
+    );
+    if v_rewritten is not distinct from v_definition then
+      raise exception '0133: retired role anchor moved for view public.%', v_view_name;
+    end if;
+    execute format(
+      'create or replace view public.%I with '
+      || '(security_invoker = on, security_barrier = on) as %s',
+      v_view_name,
+      v_rewritten
+    );
+  end loop;
+end
+$narrow_active_views$;
+
 -- Accountant/office/owner may read the narrow financial identity directory. Raw bank details stay
 -- column-revoked as established by 0112.
 create or replace view public.financial_supplier_directory
@@ -1009,8 +1043,9 @@ begin
   ) then
     raise exception '0133: authenticated RLS still contains a retired persona role';
   end if;
-  if exists (
-    select 1
+  select string_agg(format('%I.%I', namespace.nspname, relation.relname), ', '
+                    order by namespace.nspname, relation.relname)
+    into v_violations
     from pg_catalog.pg_class relation
     join pg_catalog.pg_namespace namespace on namespace.oid = relation.relnamespace
     where namespace.nspname in ('public', 'storage')
@@ -1022,8 +1057,10 @@ begin
         or pg_get_viewdef(relation.oid) ~*
           '''(kitchen|payer|supplier)''[^;]{0,120}(auth_role\(\)|[.]role)'
       )
-  ) then
-    raise exception '0133: authenticated view still contains a retired persona role';
+  ;
+  if v_violations is not null then
+    raise exception '0133: authenticated view still contains a retired persona role: %',
+      v_violations;
   end if;
   if exists (
     select 1 from pg_catalog.pg_policies
