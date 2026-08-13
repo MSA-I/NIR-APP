@@ -1066,13 +1066,13 @@ begin
   end if;
   if position(
        replace($pin$      and p.active
-      and p.role in ('owner', 'office')$pin$, e'\r', ''),
+      and p.role in ('owner', 'office')$pin$, e'\r', '') in
        replace(pg_get_functiondef(
          'public.assert_document_interpretation_actor(uuid,uuid)'::regprocedure
        ), e'\r', '')
      ) = 0
      or position(
-       replace($pin$         and p.role in ('owner', 'office', 'kitchen')$pin$, e'\r', ''),
+       replace($pin$         and p.role in ('owner', 'office', 'kitchen')$pin$, e'\r', '') in
        replace(pg_get_functiondef(
          'public.assert_document_interpretation_actor(uuid,uuid)'::regprocedure
        ), e'\r', '')
@@ -1080,7 +1080,7 @@ begin
     raise exception '0133: active interpretation roles or the 0132 kitchen recovery fence drifted';
   end if;
   if position(
-       'and v_historical_recovery and p.role = ''supplier''',
+       'and v_historical_recovery and p.role = ''supplier''' in
        pg_get_functiondef(
          'public.assert_supplier_price_interpretation_context(uuid,uuid,uuid)'::regprocedure
        )
