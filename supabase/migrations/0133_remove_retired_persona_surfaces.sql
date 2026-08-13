@@ -749,6 +749,12 @@ begin
       '(''owner'',''office'',''kitchen'',''accountant'')',
       '(''owner'',''office'',''accountant'')');
     v_rewritten := replace(v_rewritten,
+      '(''owner'', ''kitchen'', ''accountant'')',
+      '(''owner'', ''office'', ''accountant'')');
+    v_rewritten := replace(v_rewritten,
+      '(''owner'',''kitchen'',''accountant'')',
+      '(''owner'',''office'',''accountant'')');
+    v_rewritten := replace(v_rewritten,
       '(''owner'', ''office'', ''kitchen'', ''supplier'')',
       '(''owner'', ''office'')');
     v_rewritten := replace(v_rewritten,
@@ -1141,8 +1147,9 @@ begin
       'service_recover_document_interpretation_from_egress(uuid,uuid,uuid,uuid,text)'
     )
     and (
-      procedure.prosrc ~* '(auth_role\(\)|v_role|profile\.role|p\.role|inv\.role|new\.role|old\.role)[^;]{0,220}''(kitchen|payer|supplier)'''
-      or procedure.prosrc ~* '''(kitchen|payer|supplier)''[^;]{0,220}(auth_role\(\)|v_role|profile\.role|p\.role|inv\.role|new\.role|old\.role)'
+      procedure.prosrc ~* '(auth_role\(\)|v_role|profile\.role|p\.role|inv\.role|new\.role|old\.role)[[:space:]]*(=|<>|!=|is[[:space:]]+(not[[:space:]]+)?distinct[[:space:]]+from|in[[:space:]]*\(|not[[:space:]]+in[[:space:]]*\(|when)[^;)]{0,120}''(kitchen|payer|supplier)'''
+      or procedure.prosrc ~* 'case[[:space:]]+(auth_role\(\)|v_role|profile\.role|p\.role|inv\.role|new\.role|old\.role)[^;]{0,120}when[[:space:]]+''(kitchen|payer|supplier)'''
+      or procedure.prosrc ~* '''(kitchen|payer|supplier)''[[:space:]]*(=|<>|!=|is[[:space:]]+(not[[:space:]]+)?distinct[[:space:]]+from)[[:space:]]*(auth_role\(\)|v_role|profile\.role|p\.role|inv\.role|new\.role|old\.role)'
     );
   if v_violations is not null then
     raise exception '0133: live function authorization still contains a retired persona: %',
