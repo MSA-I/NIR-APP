@@ -15,7 +15,7 @@
 - `owner` ו־`office` ממשיכים רכש, קבלה, מסמכים ומחירונים. `accountant` ממשיך קריאה פיננסית,
   ביצוע תשלום והעלאת אסמכתה.
 
-## השינוי הממתין לשחרור
+## השינוי שוחרר ואומת
 
 `0133_remove_retired_persona_surfaces.sql` היא מיגרציה forward-only שמסירה את
 `supplier_portal_context()`, פוליסות ו־helpers ששירתו התחברות ספק, ומצרה RPCs, מחירונים,
@@ -30,6 +30,13 @@
 סקריפטים ותלויות ללא צרכן. `ActiveRole` משמש את קוד המוצר; `Role` הרחב נשאר רק בגבולות DB,
 נתונים היסטוריים ותצוגת audit. ‏Knip מוצמד ונכלל ב־`npm run verify` כ־`check:dead-code`.
 
+השינוי שוחרר לייצור ב־13.08.2026 מתוך
+`eea20c84cb5c774365aa1cc60bfa64546029fefb`. לפני המיגרציה נשמר גיבוי schema/data/roles;
+`0133` היא ראש ה־ledger ב־Supabase Production, ו־`private.scope_enforcement_violations()`
+מחזירה אפס. ה־frontend נפרס ל־Cloudflare Pages בכתובת הקנונית
+`https://supplyflow-baq.pages.dev` ובפריסה הייחודית
+`https://0b5f7c57.supplyflow-baq.pages.dev`; כל נכסי `dist` תואמים בשתי הכתובות.
+
 ## אימות קוד
 
 `npm run build` מבצע typecheck ובניית bundle בלבד. `npm run verify` מריץ את השומרים הסטטיים ואת
@@ -38,14 +45,17 @@
 אין להצמיד למסמכים ספירות של בדיקות, סוויטות או תרחישים; הפלט של ה־runner הוא מקור האמת.
 שער האינטגרציה `npm run quality` רץ ב־CI בלבד, וה־jobs הכבדים בו מסוננים לפי הנתיבים שהשתנו.
 
-## גבול השחרור
+## אימות השחרור החי
 
-מיזוג לריפו ופריסה לייצור הם שני מצבים שונים:
-
-- הכנסת הקוד ו־`0133` ל־`main` אינה משנה את Supabase Production או Cloudflare Pages.
-- Production אינה נחשבת נקייה עד rollout עתידי של המיגרציה וה־frontend, עם גיבוי, ledger,
-  postflight, asset parity ו־smoke מחובר לשלושת החשבונות המורשים.
-- עד rollout כזה אין לטעון שהמשטחים הישנים הוסרו מן הסביבה החיה.
+- הנתיבים הציבוריים `/`, ‏`/login`, ‏`/forgot-password`, ‏`/reset-password`, ‏`/terms`
+  ו־`/privacy` אומתו בשתי כתובות הפריסה בדסקטופ ובמובייל: HTTP תקין, RTL, ללא overflow
+  וללא שגיאות console/page/HTTP.
+- בכתובת הקנונית בוצע smoke מחובר וקריאה בלבד ל־`owner`, ‏`office` ו־`accountant`.
+  כל תפקיד הגיע למסך הבית ולמסך המורשה שלו; נתיבים שאינם מורשים והנתיב שפרש
+  `/my-prices` הוחזרו למרכז הבקרה. צילומי דסקטופ ומובייל אומתו ויזואלית.
+- ספירות הטבלאות העסקיות, אובייקטי Storage ו־`audit_logs` זהות לפני ואחרי ה־smoke;
+  לא בוצעה כתיבה עסקית. רק שלושת התפקידים הפעילים ניתנים להתחברות, ומשטחי
+  `kitchen`/`payer`/`supplier` שפרשו אינם פעילים בסביבה החיה.
 
 ## עבודה פתוחה
 

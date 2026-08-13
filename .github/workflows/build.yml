@@ -2,6 +2,11 @@
 # hidden test runner, and both independent halves execute in parallel. Docker, live Supabase,
 # Deno and browser integration remain in quality-gate.yml.
 #
+# Documentation-only changes still create the named build/verify checks required by branch
+# protection, but both jobs are skipped before a runner is allocated. Any non-Markdown file keeps
+# the conservative default and runs both halves; this classifier is intentionally much narrower
+# than quality-gate.yml's product-area filters.
+#
 # The xlsx dependency installs from cdn.sheetjs.com (a tarball URL in package.json, pinned
 # by integrity hash in package-lock.json). setup-node's npm cache keeps the tarball out of
 # most runs; if the CDN ever blocks CI, fix at the INSTALL level (cache/vendor the tarball)
@@ -19,7 +24,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Classify fast-gate inputs
+    runs-on: ubuntu-latest
+    outputs:
+      run_code: ${{ steps.filter.outputs.run_code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        name: Skip documentation-only changes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          base="$BEFORE_SHA"
+          if [ "$EVENT_NAME" = "pull_request" ]; then base="$BASE_SHA"; fi
+          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base="$(git rev-list --max-parents=0 "$HEAD_SHA")"
+          fi
+          git diff --name-only "$base" "$HEAD_SHA" > changed-files.txt
+
+          if [ ! -s changed-files.txt ] || grep -Eqv '^(docs/|.*\.md$)' changed-files.txt; then
+            echo "run_code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: changes
+    if: needs.changes.outputs.run_code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -43,6 +83,8 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ci-public-anon-placeholder
 
   verify:
+    needs: changes
+    if: needs.changes.outputs.run_code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
