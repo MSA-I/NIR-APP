@@ -796,6 +796,7 @@ function Invoke-InterpretDocumentContractTests {
       (Join-Path $repoRoot "supabase\functions\_shared\reserved-egress.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\edge-organization-access-wiring.test.ts") `
       (Join-Path $repoRoot "supabase\functions\document-processing\contract_test.ts") `
+      (Join-Path $repoRoot "supabase\functions\document-preprocessing\contract_test.ts") `
       (Join-Path $repoRoot "supabase\functions\upload-organization-logo\core.test.ts") 2>&1)
     $testExit = $LASTEXITCODE
   }
@@ -847,6 +848,10 @@ function Invoke-InterpretDocumentContractTests {
     --config (Join-Path $repoRoot "supabase\functions\document-processing\deno.json") `
     (Join-Path $repoRoot "supabase\functions\document-processing\index.ts")
   if ($LASTEXITCODE -ne 0) { throw "Document-processing Edge Function failed Deno typecheck." }
+  npx.cmd --yes deno check `
+    --config (Join-Path $repoRoot "supabase\functions\document-preprocessing\deno.json") `
+    (Join-Path $repoRoot "supabase\functions\document-preprocessing\index.ts")
+  if ($LASTEXITCODE -ne 0) { throw "Document-preprocessing Edge Function failed Deno typecheck." }
   npx.cmd --yes deno check `
     --config (Join-Path $repoRoot "supabase\functions\recover-document-processing\deno.json") `
     --lock (Join-Path $repoRoot "supabase\functions\recover-document-processing\deno.lock") `
@@ -1052,6 +1057,12 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\functions\_shared\reserved-egress.test.ts",
     "supabase\functions\_shared\edge-organization-access-wiring.test.ts",
     "supabase\functions\document-processing\index.ts",
+    "supabase\functions\document-preprocessing\contract.ts",
+    "supabase\functions\document-preprocessing\contract_test.ts",
+    "supabase\functions\document-preprocessing\deno.json",
+    "supabase\functions\document-preprocessing\index.ts",
+    "worker\ocr\test_scan_gateway.py",
+    "worker\ocr\test_scanning.py",
     "supabase\functions\recover-document-processing\core.ts",
     "supabase\functions\recover-document-processing\index.ts",
     "supabase\functions\recover-document-processing\contract_test.ts",
@@ -1084,6 +1095,7 @@ function Assert-OcrPrerequisites([string]$Config) {
   }
   $functionJwt = @{
     "document-processing" = "false"
+    "document-preprocessing" = "false"
     "interpret-document" = "false"
     "recover-document-processing" = "true"
     "submit-price-list" = "true"
@@ -1281,6 +1293,7 @@ try {
     Invoke-SqlTest "supabase\tests\p41_document_upload_registration.sql" "Idempotent document registration survives response loss without duplicate rows, object deletion, tenant crossing or export drift" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p42_document_processing_recovery.sql" "Owner recovery consumes settled provider evidence first, fences live work and creates at most one successor" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p43_active_persona_surface.sql" "Retired personas cannot authenticate or return; owner and office keep procurement while accountant keeps finance and payment-proof upload"
+    Invoke-SqlTest "supabase\tests\p45_document_scan_preprocessing.sql" "Images require a human-approved perspective-corrected scan derivative before OCR" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"

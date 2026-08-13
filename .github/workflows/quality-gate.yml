@@ -224,6 +224,19 @@ jobs:
         working-directory: supabase/functions/document-processing
         run: npx --yes deno check --config deno.json --lock deno.lock --frozen index.ts
 
+      - name: Document preprocessing contracts
+        if: needs.changes.outputs.edge == 'true'
+        run: |
+          set -euo pipefail
+          SCAN_ROOT=supabase/functions/document-preprocessing
+          npx --yes deno test --config "$SCAN_ROOT/deno.json" \
+            "$SCAN_ROOT/contract_test.ts" 2>&1 | tee deno-document-scan.log
+          grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-document-scan.log \
+            || { echo 'No document-scan contract completed.'; exit 1; }
+          ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-document-scan.log \
+            || { echo 'Ignored or skipped scan cases are not acceptable.'; exit 1; }
+          npx --yes deno check --config "$SCAN_ROOT/deno.json" "$SCAN_ROOT/index.ts"
+
       - name: Stuck document-processing recovery contracts
         if: needs.changes.outputs.edge == 'true'
         run: |
@@ -278,6 +291,10 @@ jobs:
       - name: OCR worker no-GPU / no-model self-check
         if: needs.changes.outputs.ocr == 'true'
         run: docker run --rm --network none --entrypoint python supplyflow-ocr-worker:acceptance /app/self_check.py
+
+      - name: Document scanner unit tests
+        if: needs.changes.outputs.ocr == 'true'
+        run: docker run --rm --network none --entrypoint python supplyflow-ocr-worker:acceptance -m unittest -v test_scanning.py test_scan_gateway.py
 
   # --------------------------------------------------------- dependency advisory boundary
   audit:

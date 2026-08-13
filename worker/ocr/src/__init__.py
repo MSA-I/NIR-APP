@@ -13,6 +13,8 @@ from .ocr import (
 )
 from .parsers import extract_file
 from .retry import bounded_backoff, retry_call
+from .scanning import ScanResult, detect_document_corners, scan_document, validate_corners
+from .scan_gateway import ScanGatewayClient
 from .tempfiles import job_temp_dir
 from .worker import WorkerConfig, process_one
 
@@ -26,14 +28,19 @@ __all__ = [
     "OpenAiOcrAdapter",
     "PageImage",
     "ProcessingError",
+    "ScanResult",
+    "ScanGatewayClient",
     "TesseractOcrAdapter",
     "WorkerConfig",
     "bounded_backoff",
     "create_ocr_adapter",
+    "detect_document_corners",
     "extract_file",
     "job_temp_dir",
     "process_one",
     "retry_call",
+    "scan_document",
     "sniff_mime",
     "validate_extraction",
+    "validate_corners",
 ]

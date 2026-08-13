@@ -21,6 +21,8 @@ from .limits import DEFAULT_LIMITS, ExtractionLimits
 from .ocr import TesseractOcrAdapter, create_ocr_adapter, openai_model_name
 from .parsers import extract_file
 from .retry import bounded_backoff, retry_call
+from .scan_gateway import ScanGatewayClient
+from .scanning import scan_document
 from .tempfiles import job_temp_dir
 
 
@@ -186,6 +188,53 @@ def _extract_child(
         os._exit(70)
 
 
+def _scan_child(
+    source: str,
+    output_path: str,
+    corners: list[list[float]] | None,
+    mode: str,
+    job_timeout_seconds: int,
+    max_memory_mb: int,
+    limits: ExtractionLimits,
+    result_path: str,
+) -> None:
+    result_file = Path(result_path)
+    temporary = result_file.with_suffix(".tmp")
+    try:
+        _scrub_credential_env()
+        _apply_resource_limits(job_timeout_seconds, max_memory_mb, limits)
+        result = scan_document(
+            source,
+            output_path,
+            corners=corners,
+            mode=mode,  # type: ignore[arg-type]
+            limits=limits,
+        )
+        payload: dict[str, Any] = {"ok": True, "metadata": result.metadata()}
+    except ProcessingError as exc:
+        payload = {
+            "ok": False,
+            "error": {"code": exc.code, "message": exc.safe_message, "retryable": exc.retryable},
+        }
+    except BaseException:
+        payload = {
+            "ok": False,
+            "error": {
+                "code": "worker_internal_error",
+                "message": "Document scanning failed unexpectedly",
+                "retryable": False,
+            },
+        }
+    try:
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        os.replace(temporary, result_file)
+    except OSError:
+        os._exit(70)
+
+
 class _WorkerStopping(Exception):
     pass
 
@@ -251,6 +300,70 @@ def _run_extraction(
             retryable=error.get("retryable") is True,
         )
     return result["payload"]
+
+
+def _run_scan(
+    source: Path,
+    output: Path,
+    corners: list[list[float]] | None,
+    mode: str,
+    config: WorkerConfig,
+    workdir: Path,
+    stop: threading.Event,
+    limits: ExtractionLimits,
+) -> dict[str, Any]:
+    result_path = workdir / "scan-result.json"
+    context = multiprocessing.get_context("spawn")
+    _scrub_credential_env()
+    process = context.Process(
+        target=_scan_child,
+        args=(
+            str(source),
+            str(output),
+            corners,
+            mode,
+            config.job_timeout_seconds,
+            config.max_memory_mb,
+            limits,
+            str(result_path),
+        ),
+        daemon=False,
+    )
+    process.start()
+    deadline = time.monotonic() + config.job_timeout_seconds
+    while process.is_alive() and time.monotonic() < deadline and not stop.wait(0.2):
+        pass
+    if process.is_alive():
+        process.terminate()
+        process.join(5)
+        if process.is_alive() and hasattr(process, "kill"):
+            process.kill()
+            process.join(5)
+        if stop.is_set():
+            raise _WorkerStopping()
+        raise ProcessingError("processing_timeout", "Document scanning exceeded its time limit", retryable=True)
+    process.join()
+    if process.exitcode != 0 or not result_path.is_file():
+        raise ProcessingError("processing_resource_failure", "Document scanning exceeded a resource limit", retryable=True)
+    try:
+        result = json.loads(result_path.read_text(encoding="utf-8", errors="strict"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ProcessingError("worker_internal_error", "Document scanning result is invalid") from exc
+    if type(result) is not dict or type(result.get("ok")) is not bool:
+        raise ProcessingError("worker_internal_error", "Document scanning result is invalid")
+    if result["ok"] is False:
+        error = result.get("error")
+        if type(error) is not dict:
+            raise ProcessingError("worker_internal_error", "Document scanning failed unexpectedly")
+        raise ProcessingError(
+            error.get("code", "worker_internal_error"),
+            error.get("message", "Document scanning failed unexpectedly"),
+            retryable=error.get("retryable") is True,
+        )
+    metadata = result.get("metadata")
+    if type(metadata) is not dict or not output.is_file():
+        raise ProcessingError("worker_internal_error", "Document scanning result is invalid")
+    return metadata
 
 
 def _gateway_retry(operation):  # type: ignore[no-untyped-def]
@@ -404,6 +517,108 @@ def _process_job(
         stop_heartbeat()
 
 
+def _process_scan_job(
+    client: ScanGatewayClient,
+    job: dict[str, Any],
+    config: WorkerConfig,
+    stop: threading.Event,
+    limits: ExtractionLimits,
+) -> None:
+    heartbeat_done = threading.Event()
+    heartbeat_lost = threading.Event()
+
+    def heartbeat() -> None:
+        while not heartbeat_done.wait(config.heartbeat_seconds):
+            try:
+                _gateway_retry(
+                    lambda: client.heartbeat(job, config.worker_id, config.lease_seconds)
+                )
+            except (GatewayError, ProcessingError):
+                heartbeat_lost.set()
+                return
+
+    thread = threading.Thread(target=heartbeat, name="scan-heartbeat", daemon=True)
+    heartbeat_started = False
+
+    def stop_heartbeat() -> None:
+        heartbeat_done.set()
+        if heartbeat_started:
+            thread.join(timeout=2)
+
+    started = time.monotonic()
+    error: ProcessingError | None = None
+    try:
+        with job_temp_dir(config.temp_root) as workdir:
+            source = workdir / "source.bin"
+            output = workdir / "scan.png"
+            _gateway_retry(lambda: client.download(job["download_url"], source, limits.max_file_bytes))
+            _gateway_retry(
+                lambda: client.acknowledge_download(
+                    job, config.worker_id, config.lease_seconds
+                )
+            )
+            thread.start()
+            heartbeat_started = True
+            metadata = _run_scan(
+                source,
+                output,
+                job["manual_corners"],
+                job["requested_mode"],
+                config,
+                workdir,
+                stop,
+                limits,
+            )
+            if heartbeat_lost.is_set():
+                raise GatewayError("lease_lost", "Document scan lease was lost")
+            completed = _gateway_retry(
+                lambda: client.complete(job, config.worker_id, output, metadata)
+            )
+            _log(
+                "scan_ready",
+                job_id=job["job_id"],
+                output_id=completed["output_id"],
+                duration_ms=max(0, round((time.monotonic() - started) * 1_000)),
+            )
+    except _WorkerStopping:
+        error = ProcessingError(
+            "worker_stopping", "Document scanning stopped before completion", retryable=True
+        )
+    except ProcessingError as exc:
+        error = exc
+    except GatewayError as exc:
+        error = ProcessingError(exc.code, exc.safe_message, retryable=exc.retryable)
+    except BaseException:
+        error = ProcessingError("worker_internal_error", "Document scanning failed unexpectedly")
+
+    if error is None or heartbeat_lost.is_set() or error.code == "lease_lost":
+        stop_heartbeat()
+        if error is not None:
+            _log("scan_lease_lost", job_id=job["job_id"])
+        return
+    retryable = error.retryable and job["attempt_count"] < config.max_job_attempts
+    try:
+        failed = _gateway_retry(
+            lambda: client.fail(
+                job,
+                config.worker_id,
+                error.code[:100],
+                error.safe_message[:1_000],
+                retryable,
+            )
+        )
+        _log(
+            "scan_needs_corners" if failed["status"] == "needs_corners" else "scan_failed",
+            job_id=job["job_id"],
+            error_code=error.code,
+            status=failed["status"],
+        )
+    except (GatewayError, ProcessingError) as fail_error:
+        _log("scan_fail_report_failed", job_id=job["job_id"], error_code=fail_error.code)
+    finally:
+        stop_heartbeat()
+
+
 def process_one(
     client: GatewayClient,
     config: WorkerConfig,
@@ -419,9 +634,29 @@ def process_one(
     return True
 
 
+def process_scan_one(
+    client: ScanGatewayClient,
+    config: WorkerConfig,
+    stop: threading.Event | None = None,
+    limits: ExtractionLimits = DEFAULT_LIMITS,
+) -> bool:
+    stop_event = stop or threading.Event()
+    job = _gateway_retry(lambda: client.claim(config.worker_id, config.lease_seconds))
+    if job is None:
+        return False
+    _log("scan_claimed", job_id=job["job_id"], attempt=job["attempt_count"])
+    _process_scan_job(client, job, config, stop_event, limits)
+    return True
+
+
 def run(config: WorkerConfig, stop: threading.Event | None = None) -> None:
     stop_event = stop or threading.Event()
     client = GatewayClient(
+        config.supabase_url,
+        config.token,
+        timeout_seconds=config.request_timeout_seconds,
+    )
+    scan_client = ScanGatewayClient(
         config.supabase_url,
         config.token,
         timeout_seconds=config.request_timeout_seconds,
@@ -431,7 +666,11 @@ def run(config: WorkerConfig, stop: threading.Event | None = None) -> None:
     _log("worker_started", worker_id=config.worker_id, adapter=config.adapter_name)
     while not stop_event.is_set():
         try:
-            processed = process_one(client, config, stop_event, limits)
+            scan_processed = process_scan_one(scan_client, config, stop_event, limits)
+            ocr_processed = False if stop_event.is_set() else process_one(
+                client, config, stop_event, limits
+            )
+            processed = scan_processed or ocr_processed
             failure_count = 0
             if not processed:
                 stop_event.wait(config.poll_seconds)

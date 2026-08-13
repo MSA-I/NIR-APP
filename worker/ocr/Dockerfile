@@ -32,6 +32,8 @@ RUN groupadd --gid 10001 ocr \
 
 COPY --chown=ocr:ocr src ./src
 COPY --chown=ocr:ocr self_check.py ./self_check.py
+COPY --chown=ocr:ocr test_scanning.py ./test_scanning.py
+COPY --chown=ocr:ocr test_scan_gateway.py ./test_scan_gateway.py
 
 USER 10001:10001
 CMD ["python", "-m", "src.worker"]

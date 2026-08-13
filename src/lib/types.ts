@@ -277,6 +277,7 @@ export interface DocumentRow {
 }
 
 export type DocumentProcessingStatus =
+  | 'awaiting_scan'
   | 'queued'
   | 'leased'
   | 'extracted'
@@ -340,6 +341,7 @@ export interface DocumentProcessingJob {
   last_error_message: string | null;
   created_at: string;
   updated_at: string;
+  scan_output_id?: string | null;
   /** Server-evaluated health fields returned by get_document_processing_statuses. */
   queue_age_seconds?: number | null;
   is_stuck?: boolean | null;
