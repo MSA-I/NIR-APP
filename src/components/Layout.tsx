@@ -1,5 +1,5 @@
 import { Link, Outlet, useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -49,6 +49,7 @@ export const NAV_SECTIONS: NavSection[] = [
     section: 'מסמכים',
     items: [
       { to: '/documents/operations', label: 'בקרת מסמכים', icon: Activity, roles: ['owner'] },
+      { to: '/documents/consolidated-invoices', label: 'חשבוניות מרכזות', icon: FileCheck2, roles: ['owner', 'office', 'accountant'] },
       { to: '/documents', label: 'תיקיית המסמכים', icon: FolderOpen, roles: ['owner', 'office'] },
       { to: '/documents/archive', label: 'ארכיון', icon: Archive, roles: ['owner', 'office'] },
     ],
@@ -110,9 +111,9 @@ const MANAGEMENT_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
 };
 
 const CONTROL_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
-  owner: ['/documents/operations', '/exceptions', '/expenses', '/reports', '/analytics'],
-  office: ['/exceptions', '/analytics'],
-  accountant: ['/exceptions', '/expenses', '/reports'],
+  owner: ['/documents/operations', '/documents/consolidated-invoices', '/exceptions', '/expenses', '/reports', '/analytics'],
+  office: ['/documents/consolidated-invoices', '/exceptions', '/analytics'],
+  accountant: ['/documents/consolidated-invoices', '/exceptions', '/expenses', '/reports'],
 };
 
 function catalogItem(path: string, role: ActiveRole): NavItem | null {
@@ -164,6 +165,7 @@ const PAGE_TITLE_PATTERNS: [RegExp, string][] = [
   [/^\/receipts\/[^/]+$/, 'פרטי קבלה'],
   [/^\/invoices\/new$/, 'חשבונית חדשה'],
   [/^\/invoices\/[^/]+$/, 'פרטי חשבונית'],
+  [/^\/documents\/consolidated-invoices$/, 'חשבוניות מרכזות'],
   [/^\/documents\/[^/]+\/review$/, 'בדיקת מסמך'],
   [/^\/onboarding$/, 'הקמת המערכת'],
   [/^\/admin$/, 'ניהול פלטפורמה'],

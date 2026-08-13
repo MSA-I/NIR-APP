@@ -48,6 +48,7 @@ const Analytics = lazy(() => import('./pages/Analytics'));
 const Expenses = lazy(() => import('./pages/Expenses'));
 const DocumentsGallery = lazy(() => import('./pages/DocumentsInbox'));
 const DocumentOperations = lazy(() => import('./pages/DocumentOperations'));
+const ConsolidatedInvoices = lazy(() => import('./pages/ConsolidatedInvoices'));
 const DocumentReview = lazy(() => import('./pages/DocumentReview'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Admin = lazy(() => import('./pages/Admin'));
@@ -290,6 +291,7 @@ export default function App() {
         <Route path="/invoices/:id" element={<Guard roles={READERS}><InvoiceDetail /></Guard>} />
         <Route path="/documents" element={<Guard roles={STAFF}><DocumentsGallery /></Guard>} />
         <Route path="/documents/operations" element={<Guard roles={['owner']}><DocumentOperations /></Guard>} />
+        <Route path="/documents/consolidated-invoices" element={<Guard roles={READERS}><ConsolidatedInvoices /></Guard>} />
         {/* The same register, narrowed to what the interpretation layer could not place. A second
             component would be a second answer to "what is a document row", so the gallery takes a
             prop instead and this route is the only thing that turns it on. */}

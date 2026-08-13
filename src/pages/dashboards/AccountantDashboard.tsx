@@ -33,7 +33,7 @@ export default function AccountantDashboard() {
       fetchAll((from, to) => supabase.from('payments').select('amount, paid_date').gte('paid_date', chartsFrom).lte('paid_date', today).order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('bank_transactions').select('status, tx_date, amount, is_debit').order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('credit_requests').select('amount, status').order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('invoices').select('review_status, export_status').is('deleted_at', null).order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('invoices').select('review_status, export_status').eq('financial_role', 'payable').is('deleted_at', null).order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('invoice_balances').select('balance').order('invoice_id').range(from, to)),
       fetchAll((from, to) => supabase.from('supplier_balances').select('supplier_id, open_balance').gt('open_balance', 0).order('supplier_id').range(from, to)),
       readFinancialSuppliers(),

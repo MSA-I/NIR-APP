@@ -5,11 +5,12 @@ import {
   automaticInterpretationContextAllowed,
   applyDeliveryNoteInterpretationDecision,
   applyInterpretationDecision,
+  applyInvoiceInterpretationDecision,
   applyPriceListInterpretationDecision,
   decideOnInterpretation,
   type DecisionRpcClient,
-  recoverInterpretationFromEgress,
   recoveredInterpretationDecisionContext,
+  recoverInterpretationFromEgress,
   recoveryActorFromAudit,
   resumeExistingInterpretation,
   type RpcBuilder,
@@ -123,6 +124,23 @@ function recordingClient(result: RpcResult): RecordedClient {
   };
 }
 
+function recordingSequenceClient(results: RpcResult[]): RecordedClient {
+  const calls: Array<[string, Record<string, unknown>]> = [];
+  const signals: AbortSignal[] = [];
+  return {
+    calls,
+    signals,
+    client: {
+      rpc(fn: string, args: Record<string, unknown>) {
+        calls.push([fn, args]);
+        const result = results.shift();
+        if (!result) throw new Error(`unexpected rpc call: ${fn}`);
+        return stubBuilder(result, signals);
+      },
+    },
+  };
+}
+
 function recordingApply(): { apply: ApplyDecision; calls: string[][] } {
   const calls: string[][] = [];
   return {
@@ -167,13 +185,21 @@ Deno.test("evidence recovery keeps the historical provider actor separate from t
     calls[0][0] !== "service_recover_document_interpretation_from_egress" ||
     calls[0][1].p_actor_id !== ACTOR
   ) {
-    throw new Error(`provider evidence was rebound to the recovery owner: ${JSON.stringify(calls)}`);
+    throw new Error(
+      `provider evidence was rebound to the recovery owner: ${
+        JSON.stringify(calls)
+      }`,
+    );
   }
   if (
     decision.calls.length !== 1 || decision.calls[0][0] !== JOB ||
     decision.calls[0][1] !== INTERPRETATION || decision.calls[0][2] !== OWNER
   ) {
-    throw new Error(`the verified recovery owner was not used for the decision: ${JSON.stringify(decision.calls)}`);
+    throw new Error(
+      `the verified recovery owner was not used for the decision: ${
+        JSON.stringify(decision.calls)
+      }`,
+    );
   }
 });
 
@@ -188,7 +214,9 @@ Deno.test("recovered price-list evidence uses one canonical kind and keeps its h
 
   if (!decision.isPriceList || decision.decisionActorId !== ACTOR) {
     throw new Error(
-      `recovered price-list decision drifted from its evidence actor: ${JSON.stringify(decision)}`,
+      `recovered price-list decision drifted from its evidence actor: ${
+        JSON.stringify(decision)
+      }`,
     );
   }
 });
@@ -223,6 +251,165 @@ Deno.test("the decision is called by name, bounded, with the interpretation and 
   }
 });
 
+Deno.test("a consolidated anchor uses only the DB-authoritative consolidated command", async () => {
+  const { client, calls, signals } = recordingSequenceClient([
+    {
+      data: {
+        processing_mode: "consolidated_supplier_invoice",
+        intake_id: "88888888-8888-4888-8888-888888888888",
+        case_id: "99999999-9999-4999-8999-999999999999",
+      },
+      error: null,
+    },
+    {
+      data: {
+        outcome: "received",
+        reason_code: null,
+        idempotent: false,
+      },
+      error: null,
+    },
+  ]);
+  await applyInvoiceInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
+  if (
+    calls.map(([name]) => name).join(",") !==
+      "get_consolidated_invoice_processing_claim,apply_consolidated_invoice_interpretation"
+  ) {
+    throw new Error(`consolidated routing changed: ${JSON.stringify(calls)}`);
+  }
+  const args = calls[1][1];
+  if (
+    args.p_job_id !== JOB || args.p_interpretation_id !== INTERPRETATION ||
+    args.p_actor_id !== ACTOR || Object.keys(args).length !== 3
+  ) {
+    throw new Error(
+      `unexpected consolidated arguments: ${JSON.stringify(args)}`,
+    );
+  }
+  if (
+    signals.length !== 2 ||
+    signals.some((signal) => !(signal instanceof AbortSignal))
+  ) {
+    throw new Error("claim and consolidated command must both be bounded");
+  }
+});
+
+Deno.test("a regular invoice continues to the existing invoice command", async () => {
+  const { client, calls } = recordingSequenceClient([
+    { data: null, error: null },
+    { data: { outcome: "queued_for_review" }, error: null },
+  ]);
+  await applyInvoiceInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
+  const names = calls.map(([name]) => name).join(",");
+  if (
+    names !==
+      "get_consolidated_invoice_processing_claim,apply_document_interpretation"
+  ) {
+    throw new Error(`regular invoice routing changed: ${names}`);
+  }
+});
+
+Deno.test("a claim failure never falls through to a regular payable", async () => {
+  const { client, calls } = recordingClient({
+    data: null,
+    error: { message: "consolidated_intake_not_ready" },
+  });
+  let failure: unknown;
+  try {
+    await applyInvoiceInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
+  } catch (error) {
+    failure = error;
+  }
+  if ((failure as { code?: unknown })?.code !== "service_unavailable") {
+    throw new Error("claim failure did not surface as retryable service failure");
+  }
+  if (
+    calls.length !== 1 ||
+    calls[0][0] !== "get_consolidated_invoice_processing_claim"
+  ) {
+    throw new Error(`claim failure fell through: ${JSON.stringify(calls)}`);
+  }
+});
+
+Deno.test("a consolidated command failure never falls through to a regular payable", async () => {
+  const { client, calls } = recordingSequenceClient([
+    {
+      data: { processing_mode: "consolidated_supplier_invoice" },
+      error: null,
+    },
+    {
+      data: null,
+      error: { message: "consolidated_duplicate_anchor" },
+    },
+  ]);
+  let failure: unknown;
+  try {
+    await applyInvoiceInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
+  } catch (error) {
+    failure = error;
+  }
+  if ((failure as { code?: unknown })?.code !== "service_unavailable") {
+    throw new Error(
+      "consolidated command failure did not surface as retryable service failure",
+    );
+  }
+  if (
+    calls.length !== 2 ||
+    calls.some(([name]) => name === "apply_document_interpretation")
+  ) {
+    throw new Error(
+      `consolidated failure fell through: ${JSON.stringify(calls)}`,
+    );
+  }
+});
+
+Deno.test("a consolidated retry remains on the idempotent consolidated command", async () => {
+  const claim = {
+    data: { processing_mode: "consolidated_supplier_invoice" },
+    error: null,
+  };
+  const { client, calls } = recordingSequenceClient([
+    claim,
+    { data: { outcome: "received", idempotent: false }, error: null },
+    claim,
+    { data: { outcome: "received", idempotent: true }, error: null },
+  ]);
+  await applyInvoiceInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
+  await applyInvoiceInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
+  const names = calls.map(([name]) => name);
+  if (
+    names.length !== 4 ||
+    names.filter((name) => name === "apply_consolidated_invoice_interpretation")
+        .length !== 2 ||
+    names.includes("apply_document_interpretation")
+  ) {
+    throw new Error(
+      `consolidated retry changed route: ${JSON.stringify(names)}`,
+    );
+  }
+});
+
+Deno.test("a mode-like field without the DB claim cannot select consolidated processing", async () => {
+  const { client, calls } = recordingClient({
+    data: { mode: "consolidated_supplier_invoice" },
+    error: null,
+  });
+  let failure: unknown;
+  try {
+    await applyInvoiceInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
+  } catch (error) {
+    failure = error;
+  }
+  if ((failure as { code?: unknown })?.code !== "service_unavailable") {
+    throw new Error("invalid claim did not surface as retryable service failure");
+  }
+  if (calls.length !== 1) {
+    throw new Error(
+      `non-authoritative mode reached a command: ${JSON.stringify(calls)}`,
+    );
+  }
+});
+
 Deno.test("a successful decision reports its verdict rather than passing in silence", async () => {
   const { client } = recordingClient({
     data: {
@@ -235,7 +422,8 @@ Deno.test("a successful decision reports its verdict rather than passing in sile
   });
   const lines: string[] = [];
   const original = console.log;
-  console.log = (...parts: unknown[]) => lines.push(parts.map(String).join(" "));
+  console.log = (...parts: unknown[]) =>
+    lines.push(parts.map(String).join(" "));
   try {
     await applyInterpretationDecision(client, JOB, INTERPRETATION, ACTOR);
   } finally {
@@ -363,7 +551,9 @@ Deno.test("stuck recovery selects the verified owner for an inactive uploader wi
   }];
 
   if (recoveryActorFromAudit(rows, value.job) !== OWNER) {
-    throw new Error("the current recovery owner was not selected for interpretation resume");
+    throw new Error(
+      "the current recovery owner was not selected for interpretation resume",
+    );
   }
 });
 
@@ -384,9 +574,18 @@ Deno.test("recovery actor evidence is bound to the exact current job generation"
     [],
     [{ ...current, user_id: "not-a-uuid" }],
     [{ ...current, action: "document_processing_reprocessed" }],
-    [{ ...current, new_values: { ...current.new_values, recovery_kind: "manual" } }],
-    [{ ...current, new_values: { ...current.new_values, outcome: "requeued" } }],
-    [{ ...current, new_values: { ...current.new_values, result_job_status: "review" } }],
+    [{
+      ...current,
+      new_values: { ...current.new_values, recovery_kind: "manual" },
+    }],
+    [{
+      ...current,
+      new_values: { ...current.new_values, outcome: "requeued" },
+    }],
+    [{
+      ...current,
+      new_values: { ...current.new_values, result_job_status: "review" },
+    }],
     [{
       ...current,
       new_values: {
@@ -398,7 +597,9 @@ Deno.test("recovery actor evidence is bound to the exact current job generation"
 
   for (const rows of rejected) {
     if (recoveryActorFromAudit(rows, value.job) !== null) {
-      throw new Error(`accepted an unbound recovery actor: ${JSON.stringify(rows)}`);
+      throw new Error(
+        `accepted an unbound recovery actor: ${JSON.stringify(rows)}`,
+      );
     }
   }
 });
@@ -444,18 +645,27 @@ Deno.test("a price list reaches its separate bounded command", async () => {
     INTERPRETATION,
     ACTOR,
   );
-  if (calls.length !== 1 || calls[0][0] !== "apply_eligible_price_list_interpretation") {
-    throw new Error(`unexpected price-list rpc calls: ${JSON.stringify(calls)}`);
+  if (
+    calls.length !== 1 ||
+    calls[0][0] !== "apply_eligible_price_list_interpretation"
+  ) {
+    throw new Error(
+      `unexpected price-list rpc calls: ${JSON.stringify(calls)}`,
+    );
   }
   const args = calls[0][1];
   if (
     args.p_job_id !== JOB || args.p_interpretation_id !== INTERPRETATION ||
     args.p_actor_id !== ACTOR || Object.keys(args).length !== 3
   ) {
-    throw new Error(`unexpected price-list rpc arguments: ${JSON.stringify(args)}`);
+    throw new Error(
+      `unexpected price-list rpc arguments: ${JSON.stringify(args)}`,
+    );
   }
   if (signals.length !== 1 || !(signals[0] instanceof AbortSignal)) {
-    throw new Error("the price-list decision was issued without an abort signal");
+    throw new Error(
+      "the price-list decision was issued without an abort signal",
+    );
   }
 });
 
@@ -494,7 +704,9 @@ Deno.test("a delivery note reaches its own bounded command, and no other", async
     );
   }
   if (signals.length !== 1 || !(signals[0] instanceof AbortSignal)) {
-    throw new Error("the delivery-note decision was issued without an abort signal");
+    throw new Error(
+      "the delivery-note decision was issued without an abort signal",
+    );
   }
 });
 
@@ -504,7 +716,8 @@ Deno.test("a delivery note reaches its own bounded command, and no other", async
 // except as "the feature quietly stopped working".
 Deno.test("the router sends each kind to its own command and defaults to the invoice ladder", async () => {
   const seen: string[] = [];
-  const spy = (name: string) => (
+  const spy = (name: string) =>
+  (
     _admin: Parameters<typeof applyInterpretationDecision>[0],
     _jobId: string,
     _interpretationId: string,
@@ -515,11 +728,37 @@ Deno.test("the router sends each kind to its own command and defaults to the inv
   };
   const { client } = recordingClient({ data: {}, error: null });
 
-  await decideOnInterpretation(client, true, JOB, INTERPRETATION, ACTOR, spy("price_list"), true);
-  await decideOnInterpretation(client, false, JOB, INTERPRETATION, ACTOR, spy("delivery"), true);
-  await decideOnInterpretation(client, false, JOB, INTERPRETATION, ACTOR, spy("invoice"), false);
+  await decideOnInterpretation(
+    client,
+    true,
+    JOB,
+    INTERPRETATION,
+    ACTOR,
+    spy("price_list"),
+    true,
+  );
+  await decideOnInterpretation(
+    client,
+    false,
+    JOB,
+    INTERPRETATION,
+    ACTOR,
+    spy("delivery"),
+    true,
+  );
+  await decideOnInterpretation(
+    client,
+    false,
+    JOB,
+    INTERPRETATION,
+    ACTOR,
+    spy("invoice"),
+    false,
+  );
   if (seen.join(",") !== "price_list,delivery,invoice") {
-    throw new Error(`the injected decision was not honoured: ${seen.join(",")}`);
+    throw new Error(
+      `the injected decision was not honoured: ${seen.join(",")}`,
+    );
   }
 
   // And without an injected decision, the real routing table.
@@ -528,7 +767,10 @@ Deno.test("the router sends each kind to its own command and defaults to the inv
   // command". Recording every rpc keeps both halves under the assertion.
   const routed: string[] = [];
   const record = (label: string) => {
-    const { client: c, calls } = recordingClient({ data: {}, error: null });
+    const { client: c, calls } = recordingClient({
+      data: label === "invoice" ? null : {},
+      error: null,
+    });
     return {
       client: c,
       read: () =>
@@ -539,23 +781,41 @@ Deno.test("the router sends each kind to its own command and defaults to the inv
   };
   const priceList = record("price_list");
   await decideOnInterpretation(
-    priceList.client, true, JOB, INTERPRETATION, ACTOR, undefined, false,
+    priceList.client,
+    true,
+    JOB,
+    INTERPRETATION,
+    ACTOR,
+    undefined,
+    false,
   );
   priceList.read();
   const delivery = record("delivery");
   await decideOnInterpretation(
-    delivery.client, false, JOB, INTERPRETATION, ACTOR, undefined, true,
+    delivery.client,
+    false,
+    JOB,
+    INTERPRETATION,
+    ACTOR,
+    undefined,
+    true,
   );
   delivery.read();
   const invoice = record("invoice");
   await decideOnInterpretation(
-    invoice.client, false, JOB, INTERPRETATION, ACTOR, undefined, false,
+    invoice.client,
+    false,
+    JOB,
+    INTERPRETATION,
+    ACTOR,
+    undefined,
+    false,
   );
   invoice.read();
   const expected = [
     "price_list:run_price_list_shadow>apply_eligible_price_list_interpretation",
     "delivery:apply_delivery_note_interpretation",
-    "invoice:apply_document_interpretation",
+    "invoice:get_consolidated_invoice_processing_claim>apply_document_interpretation",
   ].join(",");
   if (routed.join(",") !== expected) {
     throw new Error(`routing table changed: ${routed.join(",")}`);
@@ -579,10 +839,15 @@ Deno.test("a price list records shadow evidence before the live command", async 
       args.p_job_id !== JOB || args.p_interpretation_id !== INTERPRETATION ||
       args.p_actor_id !== ACTOR || Object.keys(args).length !== 3
     ) {
-      throw new Error(`unexpected price-list arguments: ${JSON.stringify(args)}`);
+      throw new Error(
+        `unexpected price-list arguments: ${JSON.stringify(args)}`,
+      );
     }
   }
-  if (signals.length !== 2 || signals.some((signal) => !(signal instanceof AbortSignal))) {
+  if (
+    signals.length !== 2 ||
+    signals.some((signal) => !(signal instanceof AbortSignal))
+  ) {
     throw new Error("shadow and live price-list commands must both be bounded");
   }
 });
@@ -594,7 +859,9 @@ Deno.test("shadow measurement failure blocks the live price-list command", async
   });
   await decideOnInterpretation(client, true, JOB, INTERPRETATION, ACTOR);
   if (calls.map(([name]) => name).join(",") !== "run_price_list_shadow") {
-    throw new Error(`shadow failure reached the live command: ${JSON.stringify(calls)}`);
+    throw new Error(
+      `shadow failure reached the live command: ${JSON.stringify(calls)}`,
+    );
   }
 });
 
@@ -623,7 +890,9 @@ Deno.test("a replay re-offers the decision, because nothing else ever will", asy
   // A decision lost to a transient failure leaves nothing in the database and no product path
   // that would come back for it. This call is the retry.
   if (calls.length !== 1 || calls[0][1] !== SECOND_INTERPRETATION) {
-    throw new Error(`the replay did not re-offer the decision: ${JSON.stringify(calls)}`);
+    throw new Error(
+      `the replay did not re-offer the decision: ${JSON.stringify(calls)}`,
+    );
   }
 });
 
@@ -655,7 +924,9 @@ Deno.test("a first run is not a replay and decides nothing before the interpreta
     context: { already_interpreted: false },
     apply,
   });
-  if (replayed !== null) throw new Error("a first run was mistaken for a replay");
+  if (replayed !== null) {
+    throw new Error("a first run was mistaken for a replay");
+  }
   if (calls.length !== 0) {
     throw new Error("a decision was taken before any interpretation existed");
   }

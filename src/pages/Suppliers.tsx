@@ -442,7 +442,7 @@ export function SupplierCard() {
     const staff = profile?.role === 'owner' || profile?.role === 'office';
     const [orders, invoices, payments, credits, balance, metrics, sps, submissions] = await Promise.all([
       supabase.from('purchase_orders').select('*').eq('supplier_id', id!).order('created_at', { ascending: false }).limit(50),
-      supabase.from('invoices').select('*').eq('supplier_id', id!).is('deleted_at', null).order('invoice_date', { ascending: false }).limit(50),
+      supabase.from('invoices').select('*').eq('supplier_id', id!).eq('financial_role', 'payable').is('deleted_at', null).order('invoice_date', { ascending: false }).limit(50),
       supabase.from('payments').select('*').eq('supplier_id', id!).order('paid_date', { ascending: false }).limit(50),
       supabase.from('credit_requests').select('*').eq('supplier_id', id!).order('created_at', { ascending: false }).limit(50),
       supabase.from('supplier_balances').select('*').eq('supplier_id', id!).maybeSingle(),

@@ -1020,6 +1020,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\migrations\0133_remove_retired_persona_surfaces.sql",
     "supabase\migrations\0134_retire_trial_lifecycle.sql",
     "supabase\migrations\0135_document_control_safe_read_models.sql",
+    "supabase\migrations\0136_consolidated_supplier_invoice.sql",
     "supabase\tests\smart_document_processing.sql",
     "supabase\tests\document_learning.sql",
     "supabase\tests\document_export_templates.sql",
@@ -1036,6 +1037,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\tests\p20_invoice_approval_concurrency.sql",
     "supabase\tests\p21_dashboard_snapshot.sql",
     "supabase\tests\p44_trial_retirement_document_control.sql",
+    "supabase\tests\p45_consolidated_supplier_invoice.sql",
     "supabase\tests\p24_inventory_intelligence.sql",
     "supabase\tests\p25_tenant_offboarding_export.sql",
     "supabase\tests\p26_price_baseline.sql",
@@ -1271,6 +1273,7 @@ try {
     Invoke-SqlTest "supabase\tests\p20_invoice_three_way_match.sql" "Invoice line evidence, true three-way assessment, approval blocks, override and tenant isolation"
     Invoke-SqlTest "supabase\tests\p21_dashboard_snapshot.sql" "Management dashboard snapshot, evidence-aware metrics and tenant isolation"
     Invoke-SqlTest "supabase\tests\p44_trial_retirement_document_control.sql" "Trial retirement, active-only writes and owner-only customer-safe document-control read models"
+    Invoke-SqlTest "supabase\tests\p45_consolidated_supplier_invoice.sql" "One supplier-month payable anchor, immutable supporting evidence, three reconciliation channels and concurrent intake fencing" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p24_inventory_intelligence.sql" "Inventory consumption evidence, incoming supply, suggestions, price context and tenant isolation"
     Invoke-SqlTest "supabase\tests\p25_tenant_offboarding_export.sql" "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p26_price_baseline.sql" "Contractual price baseline as of the document date, reversal ordering, undisclosed fallbacks and read-only guarantee"

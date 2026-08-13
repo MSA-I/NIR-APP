@@ -350,7 +350,7 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
     setBusy(true);
     const found = await supabase.from('invoices').select('id')
       .eq('supplier_id', supplierId).eq('invoice_number', draft.creditedInvoiceNumber)
-      .is('deleted_at', null).limit(2);
+      .eq('financial_role', 'payable').is('deleted_at', null).limit(2);
     setBusy(false);
     if (found.error) { toast(toHebrewError(found.error.message), 'error'); return; }
     const rows = (found.data ?? []) as { id: string }[];

@@ -492,7 +492,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
     // candidate open invoices (direct match when no payment was recorded)
     const invoices = await fetchAll<{ id: string; invoice_number: string; invoice_date: string; total_amount: number }>((from, to) => supabase.from('invoices')
       .select('id, invoice_number, invoice_date, total_amount')
-      .eq('supplier_id', supplierId).neq('payment_status', 'paid').is('deleted_at', null)
+      .eq('supplier_id', supplierId).eq('financial_role', 'payable').neq('payment_status', 'paid').is('deleted_at', null)
       .order('invoice_date').order('id').range(from, to));
     const ids = invoices.map((i) => i.id);
     const bals = ids.length ? await fetchInChunks(ids, (chunk) => fetchAll<{ invoice_id: string; balance: number }>((from, to) => supabase.from('invoice_balances')

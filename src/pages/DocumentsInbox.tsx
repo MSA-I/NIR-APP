@@ -167,7 +167,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
     if (target === 'invoice') {
       let query = supabase.from('invoices')
         .select('id, invoice_number, invoice_date, supplier:suppliers(name)')
-        .is('deleted_at', null).order('invoice_date', { ascending: false }).limit(20);
+        .eq('financial_role', 'payable').is('deleted_at', null).order('invoice_date', { ascending: false }).limit(20);
       if (dq) query = query.ilike('invoice_number', `%${dq}%`);
       const rows = unwrap(await query) as InvoicePick[];
       result = rows.map((row) => ({

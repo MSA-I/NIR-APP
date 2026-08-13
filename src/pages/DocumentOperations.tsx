@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Eye, FileSearch, RefreshCw, RotateCcw } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { Camera, Eye, FileSearch, RefreshCw, RotateCcw, Upload } from 'lucide-react';
+import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import {
   ConfirmDialog,
@@ -310,6 +310,24 @@ export default function DocumentOperations() {
           </div>
         )}
         {operations.error && <Note tone="alert" role="alert">{operations.error}</Note>}
+      </section>
+
+      <section aria-labelledby="consolidated-invoices-title" className="card card-pad space-y-4">
+        <div>
+          <h2 id="consolidated-invoices-title" className="section-title">חשבוניות מרכזות</h2>
+          <p className="mt-1 text-sm text-ink-soft">חשבונית אחת של ספק לחודש משמשת עוגן לכל חשבוניות הביניים ותעודות המשלוח של אותו ספק.</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Link className="btn-primary min-h-11 w-full sm:w-auto" to="/documents/consolidated-invoices">
+            <Camera size={16} aria-hidden="true" /> צילום מסמכים
+          </Link>
+          <Link className="btn-secondary min-h-11 w-full sm:w-auto" to="/documents/consolidated-invoices">
+            <Upload size={16} aria-hidden="true" /> העלאת מסמכים
+          </Link>
+          <Link className="btn-secondary min-h-11 w-full sm:w-auto" to="/documents/consolidated-invoices">
+            <FileSearch size={16} aria-hidden="true" /> צפייה בהתאמות
+          </Link>
+        </div>
       </section>
 
       {currentIssue && (

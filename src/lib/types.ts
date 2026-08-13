@@ -192,11 +192,13 @@ export interface GoodsReceiptItem {
 export type InvoiceReviewStatus = 'received' | 'in_review' | 'pending_approval' | 'approved' | 'investigation';
 export type InvoicePaymentStatus = 'unpaid' | 'partial' | 'paid';
 export type InvoiceExportStatus = 'not_sent' | 'sent';
+export type InvoiceFinancialRole = 'payable' | 'supporting_evidence';
 export interface Invoice {
   id: string; org_id: string; supplier_id: string; invoice_number: string;
   invoice_date: string; received_date: string; received_by: string | null;
   amount_before_vat: number; vat_amount: number; total_amount: number;
   review_status: InvoiceReviewStatus; payment_status: InvoicePaymentStatus; export_status: InvoiceExportStatus;
+  financial_role: InvoiceFinancialRole;
   notes: string | null; deleted_at: string | null; created_at: string;
   supplier?: Supplier;
 }

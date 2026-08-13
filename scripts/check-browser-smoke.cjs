@@ -3067,6 +3067,150 @@ async function feedbackNoteChannel(browser) {
   }
 }
 
+async function consolidatedSupplierInvoice(browser) {
+  const context = await browser.newContext({
+    locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 },
+  });
+  const caseId = '13600000-0000-4000-8000-000000000001';
+  const supplierId = '13640000-0000-4000-8000-000000000001';
+  const legalEntityId = '13620000-0000-4000-8000-000000000001';
+  const documentId = '13690000-0000-4000-8000-000000000001';
+  const month = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit',
+  }).formatToParts(new Date());
+  const year = Number(month.find((part) => part.type === 'year').value);
+  const monthNumber = Number(month.find((part) => part.type === 'month').value);
+  const target = new Date(Date.UTC(year, monthNumber - 2, 1));
+  const targetMonth = `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, '0')}-01`;
+  const invoiceDate = `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, '0')}-05`;
+  const rpc = (name, json) => context.route(`**/rest/v1/rpc/${name}`, (route) =>
+    route.fulfill({ status: 200, headers: jsonHeaders, json }));
+  await context.route('**/rest/v1/suppliers?**', (route) => route.fulfill({
+    status: 200, headers: jsonHeaders, json: [{ id: supplierId, name: 'ספק בדיקת מרכזת' }],
+  }));
+  await rpc('list_consolidated_invoice_legal_entities', [{ id: legalEntityId, name: 'הישות הראשית' }]);
+  await rpc('list_consolidated_invoice_cases', []);
+  await rpc('open_consolidated_invoice_intake', {
+    intake_id: '13680000-0000-4000-8000-000000000001', case_id: caseId,
+    processing_mode: 'consolidated_supplier_invoice', supplier_id: supplierId,
+    target_month: targetMonth, legal_entity_id: legalEntityId, status: 'uploading',
+    source_page_count: 1, idempotent: false,
+  });
+  await rpc('register_consolidated_invoice_page', {
+    intake_id: '13680000-0000-4000-8000-000000000001',
+    page_id: '13681000-0000-4000-8000-000000000001', page_number: 1,
+    document_id: documentId, storage_path: `demo/consolidated/${documentId}.pdf`, idempotent: false,
+  });
+  await rpc('complete_consolidated_invoice_intake', {
+    intake_id: '13680000-0000-4000-8000-000000000001', case_id: caseId,
+    status: 'ready', primary_document_id: documentId, document_ids: [documentId],
+    source_page_count: 1, idempotent: false,
+  });
+  await rpc('enqueue_document_processing', { job_id: '13682000-0000-4000-8000-000000000001' });
+  await rpc('get_consolidated_invoice_workspace', {
+    case: {
+      id: caseId, supplier_id: supplierId, supplier_name: 'ספק בדיקת מרכזת',
+      target_month: targetMonth, legal_entity_id: legalEntityId, legal_entity_name: 'הישות הראשית',
+      status: 'warnings', anchor_invoice_id: '13670000-0000-4000-8000-000000000001',
+      current_revision: 2, warning_count: 3,
+      created_at: `${invoiceDate}T08:00:00Z`, updated_at: `${invoiceDate}T09:00:00Z`,
+    },
+    anchor: {
+      invoice_id: '13670000-0000-4000-8000-000000000001', document_ids: [documentId],
+      invoice_number: 'M-136', invoice_date: invoiceDate, amount_before_vat: 100,
+      vat_amount: 18, total_amount: 118, financial_role: 'payable',
+      review_status: 'received', payment_status: 'unpaid',
+    },
+    sources: [{
+      source_type: 'interim_invoice', source_id: '13671000-0000-4000-8000-000000000001',
+      document_id: null, document_number: 'I-136', document_date: invoiceDate,
+      total_amount: 118, financial_role: 'supporting_evidence', status: 'received', late_arrival: false,
+    }],
+    reconciliation: {
+      anchor_vs_interim: [{
+        comparison: 'anchor_vs_interim', result: 'matched', product_id: '13630000-0000-4000-8000-000000000001',
+        product_name: 'קמח', supplier_sku: 'FLOUR-1', barcode: null,
+        anchor_quantity: 1, interim_quantity: 1, received_quantity: null,
+        anchor_unit_price: 100, interim_unit_price: 100, anchor_amount: 100,
+        interim_amount: 100, difference_quantity: 0, difference_amount: 0,
+        source_ids: [], message_key: 'consolidated_invoice.matched', severity: 'info',
+      }],
+      anchor_vs_receipts: [{
+        comparison: 'anchor_vs_receipts', result: 'missing_source', product_id: null,
+        product_name: 'שמן', supplier_sku: 'OIL-1', barcode: null,
+        anchor_quantity: 2, interim_quantity: null, received_quantity: null,
+        anchor_unit_price: 10, interim_unit_price: null, anchor_amount: 20,
+        interim_amount: null, difference_quantity: 2, difference_amount: 20,
+        source_ids: [], message_key: 'consolidated_invoice.missing_source', severity: 'warning',
+      }],
+      interim_vs_receipts: [{
+        comparison: 'interim_vs_receipts', result: 'ambiguous', product_id: null,
+        product_name: 'מוצר לא מזוהה', supplier_sku: null, barcode: null,
+        anchor_quantity: null, interim_quantity: 1, received_quantity: 1,
+        anchor_unit_price: null, interim_unit_price: 5, anchor_amount: null,
+        interim_amount: 5, difference_quantity: 0, difference_amount: 0,
+        source_ids: [], message_key: 'consolidated_invoice.ambiguous', severity: 'warning',
+      }],
+    },
+    current_revision: {
+      id: '13683000-0000-4000-8000-000000000001', revision: 2,
+      trigger: 'late_arrival', created_at: `${invoiceDate}T09:00:00Z`, created_by: null,
+    },
+    warnings: [{
+      code: 'consolidated_late_revision_created', severity: 'warning',
+      message_key: 'consolidated_invoice.late_revision', source_type: 'interim_invoice',
+      source_id: '13671000-0000-4000-8000-000000000001', product_id: null,
+    }],
+  });
+  await context.route('**/storage/v1/upload/resumable**', async (route) => {
+    const method = route.request().method();
+    const common = {
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'POST,HEAD,PATCH,OPTIONS',
+      'access-control-allow-headers': '*',
+      'access-control-expose-headers': 'Location,Upload-Offset,Tus-Resumable',
+      'tus-resumable': '1.0.0',
+    };
+    if (method === 'OPTIONS') return route.fulfill({ status: 204, headers: common });
+    if (method === 'POST') return route.fulfill({
+      status: 201,
+      headers: { ...common, location: `${apiURL}/storage/v1/upload/resumable/${documentId}`, 'upload-offset': String(route.request().postDataBuffer()?.length ?? 0) },
+    });
+    if (method === 'HEAD') return route.fulfill({ status: 200, headers: { ...common, 'upload-offset': '8', 'upload-length': '8' } });
+    return route.fulfill({ status: 204, headers: { ...common, 'upload-offset': '8' } });
+  });
+
+  const page = await context.newPage();
+  captureConsole(page, 'consolidated-invoice');
+  try {
+    await login(page, 'owner');
+    await page.goto(`${baseURL}/documents/consolidated-invoices`);
+    await settle(page);
+    await page.locator('#consolidated-supplier').selectOption(supplierId);
+    await page.waitForFunction((id) => document.querySelector('#consolidated-legal-entity')?.value === id, legalEntityId);
+    await page.getByLabel('העלאת עמודי חשבונית מרכזת').setInputFiles({
+      name: 'central-invoice.pdf', mimeType: 'application/pdf', buffer: Buffer.from('p45-file'),
+    });
+    await page.getByText('עמודים נקלטו כחשבונית מרכזת אחת').waitFor({ timeout: 15_000 });
+    await page.getByRole('heading', { name: /ספק בדיקת מרכזת/ }).waitFor();
+    for (const title of [
+      'מרכזת מול חשבוניות ביניים', 'מרכזת מול קבלות שהושלמו', 'חשבוניות ביניים מול קבלות',
+    ]) assert.equal(await page.getByRole('heading', { name: title }).count(), 1, `${title}: missing`);
+    await auditAccessibility(page, 'consolidated-invoice:390');
+    await page.screenshot({ path: path.join(outDir, 'consolidated-invoice-390.png'), fullPage: true });
+    report.screenshots.push('consolidated-invoice-390.png');
+    report.viewports.push({ scope: 'consolidated-invoice', width: 390, height: 844 });
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await auditAccessibility(page, 'consolidated-invoice:1440');
+    await page.screenshot({ path: path.join(outDir, 'consolidated-invoice-1440.png'), fullPage: true });
+    report.screenshots.push('consolidated-invoice-1440.png');
+    report.viewports.push({ scope: 'consolidated-invoice', width: 1440, height: 900 });
+  } finally {
+    await closeContext(context);
+  }
+}
+
 async function run(name, check) {
   if (process.env.QUALITY_ONLY && !name.includes(process.env.QUALITY_ONLY)) {
     const reason = `QUALITY_ONLY=${process.env.QUALITY_ONLY}`;
@@ -3128,6 +3272,7 @@ async function run(name, check) {
     await run('a supplier is created inside the price-list dialog', () => priceListSupplierDoor(browser));
     // Also writes a live row, for the same reason and with the same placement.
     await run('a feedback note is stored and a failed send says so', () => feedbackNoteChannel(browser));
+    await run('consolidated supplier invoice uploads once and exposes three RTL reconciliation channels', () => consolidatedSupplierInvoice(browser));
   } finally {
     await browser.close();
   }

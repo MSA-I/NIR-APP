@@ -88,7 +88,7 @@ export default function Reports() {
     const instants = monthInstantRange(safeMonth);
     const [rawInvoices, rawPayments, rawCredits, rawExceptions, bank] = await Promise.all([
       fetchAll((from, to) => supabase.from('invoices').select('*')
-        .gte('invoice_date', start).lt('invoice_date', end).is('deleted_at', null)
+        .eq('financial_role', 'payable').gte('invoice_date', start).lt('invoice_date', end).is('deleted_at', null)
         .order('invoice_date').order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('payments').select('*')
         .gte('paid_date', start).lt('paid_date', end).order('paid_date').order('id').range(from, to)),

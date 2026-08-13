@@ -398,6 +398,99 @@ export async function applyInterpretationDecision(
   }
 }
 
+function consolidatedProcessingClaim(
+  value: unknown,
+): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value) &&
+    (value as Record<string, unknown>).processing_mode ===
+      "consolidated_supplier_invoice";
+}
+
+// Invoice is still the stored document kind for a supplier-month anchor. The distinction is
+// therefore read from the intake relationship in Postgres, never from the worker payload or the
+// model result. A failed or malformed claim fails closed: falling through to 0077 would create a
+// second payable from a document whose only valid destination is the consolidated command.
+export async function applyInvoiceInterpretationDecision(
+  admin: DecisionRpcClient,
+  jobId: string,
+  interpretationId: string,
+  actorId: string,
+): Promise<void> {
+  try {
+    const claimed = await admin.rpc(
+      "get_consolidated_invoice_processing_claim",
+      {
+        p_job_id: jobId,
+      },
+    ).abortSignal(AbortSignal.timeout(DECISION_TIMEOUT_MS));
+    if (claimed.error) {
+      console.error(
+        "get_consolidated_invoice_processing_claim failed",
+        jobId,
+        interpretationId,
+      );
+      throw new EdgeError("service_unavailable", 503);
+    }
+    if (claimed.data === null || claimed.data === undefined) {
+      await applyInterpretationDecision(
+        admin,
+        jobId,
+        interpretationId,
+        actorId,
+      );
+      return;
+    }
+    if (!consolidatedProcessingClaim(claimed.data)) {
+      console.error(
+        "get_consolidated_invoice_processing_claim invalid",
+        jobId,
+        interpretationId,
+      );
+      throw new EdgeError("service_unavailable", 503);
+    }
+
+    const applied = await admin.rpc(
+      "apply_consolidated_invoice_interpretation",
+      {
+        p_job_id: jobId,
+        p_interpretation_id: interpretationId,
+        p_actor_id: actorId,
+      },
+    ).abortSignal(AbortSignal.timeout(DECISION_TIMEOUT_MS));
+    if (applied.error) {
+      console.error(
+        "apply_consolidated_invoice_interpretation failed",
+        jobId,
+        interpretationId,
+      );
+      throw new EdgeError("service_unavailable", 503);
+    }
+    const verdict = applied.data && typeof applied.data === "object"
+      ? applied.data as Record<string, unknown>
+      : {};
+    console.log(
+      "apply_consolidated_invoice_interpretation",
+      jobId,
+      interpretationId,
+      String(verdict.outcome ?? "unknown"),
+      String(verdict.reason_code ?? ""),
+      String(verdict.case_id ?? ""),
+      String(verdict.intake_id ?? ""),
+      String(verdict.invoice_id ?? ""),
+      String(verdict.revision_id ?? ""),
+      verdict.idempotent === true ? "true" : "false",
+    );
+  } catch (error) {
+    if (error instanceof EdgeError) throw error;
+    console.error(
+      "apply_consolidated_invoice_interpretation failed",
+      jobId,
+      interpretationId,
+    );
+    throw new EdgeError("service_unavailable", 503);
+  }
+}
+
 export function automaticInterpretationContextAllowed(
   job: JobRow,
   document: DocumentRow,
@@ -631,7 +724,7 @@ export async function decideOnInterpretation(
       ? processPriceListInterpretationDecision
       : isDeliveryNote
       ? applyDeliveryNoteInterpretationDecision
-      : applyInterpretationDecision
+      : applyInvoiceInterpretationDecision
   ))(admin, jobId, interpretationId, actorId);
 }
 
@@ -1044,17 +1137,27 @@ export async function handler(req: Request): Promise<Response> {
     });
   if (beginResult.error) return fail(cors, pgError(beginResult.error.message));
   const context = beginResult.data as BeginContext;
-  const replayed = await resumeExistingInterpretation({
-    admin,
-    isPriceList: storedKindIsPriceList,
-    // The replay path has no payload to consult -- the interpretation is already stored. The
-    // stored kind is the only evidence here, and 0090's doubled gate turns a disagreement into
-    // `not_a_delivery_note` rather than a wrong write. Same trade the price-list replay makes.
-    isDeliveryNote: storedKindIsDeliveryNote,
-    jobId: job.id,
-    actorId,
-    context,
-  });
+  let replayed: string | null;
+  try {
+    replayed = await resumeExistingInterpretation({
+      admin,
+      isPriceList: storedKindIsPriceList,
+      // The replay path has no payload to consult -- the interpretation is already stored. The
+      // stored kind is the only evidence here, and 0090's doubled gate turns a disagreement into
+      // `not_a_delivery_note` rather than a wrong write. Same trade the price-list replay makes.
+      isDeliveryNote: storedKindIsDeliveryNote,
+      jobId: job.id,
+      actorId,
+      context,
+    });
+  } catch (error) {
+    return fail(
+      cors,
+      error instanceof EdgeError
+        ? error
+        : new EdgeError("service_unavailable", 503),
+    );
+  }
   if (replayed) {
     return json(cors, {
       interpretationId: replayed,
@@ -1164,13 +1267,22 @@ export async function handler(req: Request): Promise<Response> {
       job.id,
     );
     if (existingId) {
-      await decideOnInterpretation(
-        admin,
-        storedKindIsPriceList,
-        job.id,
-        existingId,
-        actorId,
-      );
+      try {
+        await decideOnInterpretation(
+          admin,
+          storedKindIsPriceList,
+          job.id,
+          existingId,
+          actorId,
+        );
+      } catch (error) {
+        return fail(
+          cors,
+          error instanceof EdgeError
+            ? error
+            : new EdgeError("service_unavailable", 503),
+        );
+      }
       return json(cors, {
         interpretationId: existingId,
         jobId: job.id,
