@@ -1,8 +1,8 @@
 # תוכנית מקור אמת — בקרת מסמכים והסרת Trial
 
-**אושר:** 13.08.2026  
-**ענף:** `codex/document-control-trial-removal-20260813`  
-**מסמך קנוני:** `D:\משה פרוייקטים\פיתוח אתרים\NIR-APP\docs\PLAN-document-control-and-trial-removal-20260813.md`  
+**אושר:** 13.08.2026
+**ענף:** `codex/document-control-trial-removal-20260813`
+**מסמך קנוני:** `D:\משה פרוייקטים\פיתוח אתרים\NIR-APP\docs\PLAN-document-control-and-trial-removal-20260813.md`
 **Ledger חיצוני:** `C:\Users\art1\.codex\visualizations\2026\08\13\019ffb04-cbaf-72d2-a3d8-68e2e82e0aa6\document-control-trial-removal\gate-ledger.json`
 
 ## הוראת־על לכל סוכן
