@@ -1156,18 +1156,26 @@ exception when insufficient_privilege then null;
 end
 $$;
 
-do $$
-begin
-  insert into storage.objects (bucket_id, name, owner, metadata) values (
-    'documents',
-    '11000000-0000-0000-0000-000000000001/supplier/31000000-0000-0000-0000-000000000001/45000000-0000-4000-8000-000000000089/no-reservation.pdf',
-    auth.uid(),
-    jsonb_build_object('mimetype', 'application/pdf', 'size', 2048, 'eTag', repeat('f', 64))
-  );
-  raise exception 'expected unreserved supplier Storage upload rejection';
-exception when insufficient_privilege then null;
-end
-$$;
+-- Supplier remains a business entity. Office may upload a general supplier document without
+-- pretending to be a supplier persona; the reservation below belongs to the price-list workflow.
+insert into storage.objects (bucket_id, name, owner, metadata) values (
+  'documents',
+  '11000000-0000-0000-0000-000000000001/supplier/31000000-0000-0000-0000-000000000001/45000000-0000-4000-8000-000000000089/general-supplier.pdf',
+  auth.uid(),
+  jsonb_build_object('mimetype', 'application/pdf', 'size', 2048, 'eTag', repeat('f', 64))
+);
+reset role;
+select pg_temp.p1b_assert(
+  exists (
+    select 1 from storage.objects
+    where bucket_id = 'documents'
+      and name = '11000000-0000-0000-0000-000000000001/supplier/31000000-0000-0000-0000-000000000001/45000000-0000-4000-8000-000000000089/general-supplier.pdf'
+  ),
+  'office could not upload a general supplier document'
+);
+select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000003', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
 
 select reserve_supplier_price_document_upload(
   '31000000-0000-0000-0000-000000000001',
