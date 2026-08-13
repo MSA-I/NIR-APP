@@ -5,7 +5,7 @@
  * consumes these interfaces yet. A provider implementation is a later wave — #98 defers
  * the integrations screen, and §4:96 forbids provider-specific screens before a provider
  * actually exists. What keeps these contracts from rotting is the mock suite under
- * `./mock`: `npm run build` type-checks every interface and runs the specs on every gate.
+ * `./mock`: `npm run build` type-checks every interface; `npm run verify` runs the specs.
  *
  * The boundary law (§4:91-92): the mapping between an internal entity and its identity
  * at an external provider lives ONLY in `public.external_references` (0066) — the

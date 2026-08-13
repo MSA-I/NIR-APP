@@ -17,8 +17,8 @@ export type UploadBatchDelegate = <T>(
  * The Upload Center's queue (wave 6b) registers itself here at module load.
  *
  * Registration instead of a static import for one reason: this module is executed by
- * plain Node in `check:p2` (`scripts/check-p2-reliability.ts`), which cannot load the
- * Center's .tsx module. In the browser every `runUploadBatch` consumer imports
+ * Vitest in `p2Reliability.spec.ts` without loading the Upload Center's .tsx module.
+ * In the browser every `runUploadBatch` consumer imports
  * `FileUpload`, which imports `UploadCenter`, so the delegate is always registered
  * before the first call and every batch runs through the Center's queue.
  */

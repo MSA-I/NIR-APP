@@ -1,13 +1,12 @@
 ﻿import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import type {
   DocumentFeedback,
   DocumentReviewCorrection,
   DocumentTypeReviewDecision,
   ReviewSnapshot,
 } from './model';
-// @ts-expect-error Node's type-stripping test runner requires the explicit TypeScript extension.
-import { bboxDescription, confidenceLabel, confidencePercent, creditDraftFromInterpretation, deliveryNoteLines, documentRoutingSummary, invoiceDraftFromInterpretation, latestCorrections, matchDeliveryLineProduct, paymentConfirmationFacts, sameAmount, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, normalizeInvoiceDate, resolveExportTemplateWinner, resolvedText, ruleWhy, supplierMatchCaution } from './model.ts';
+import { bboxDescription, confidenceLabel, confidencePercent, creditDraftFromInterpretation, deliveryNoteLines, documentRoutingSummary, invoiceDraftFromInterpretation, latestCorrections, matchDeliveryLineProduct, paymentConfirmationFacts, sameAmount, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, normalizeInvoiceDate, resolveExportTemplateWinner, resolvedText, ruleWhy, supplierMatchCaution } from './model';
 
 const correction = (revision: number, text: string): DocumentReviewCorrection => ({
   id: `correction-${revision}`,

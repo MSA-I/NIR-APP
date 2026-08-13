@@ -1,30 +1,23 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { test } from 'vitest';
 import {
   addCalendarDays, currentMonthISO, daysInCalendarMonth, monthInstantRange, monthRange,
   shiftCalendarMonth, startOfCalendarWeek, toTimeZoneISO,
-} from '../src/lib/format.ts';
-import { fetchAll, fetchInChunks } from '../src/lib/supabasePaging.ts';
-import { createRequestGate } from '../src/lib/requestGate.ts';
-import { settleAlertScans } from '../src/lib/alertRules.ts';
-import { invoiceCheckFingerprint, paymentRequestCheckFingerprint } from '../src/lib/checkFingerprint.ts';
-import { openExternalPopup, openReservedPopup } from '../src/lib/popup.ts';
-import { mergeUploadBatchSummary, runUploadBatch } from '../src/lib/uploadBatch.ts';
-import { buildMonthlyWorkbook } from '../src/lib/monthlyReport.ts';
+} from './format';
+import { fetchAll, fetchInChunks } from './supabasePaging';
+import { createRequestGate } from './requestGate';
+import { settleAlertScans } from './alertRules';
+import { invoiceCheckFingerprint, paymentRequestCheckFingerprint } from './checkFingerprint';
+import { openExternalPopup, openReservedPopup } from './popup';
+import { mergeUploadBatchSummary, runUploadBatch } from './uploadBatch';
+import { buildMonthlyWorkbook } from './monthlyReport';
 import * as XLSX from 'xlsx';
-import { readExactCount } from '../src/lib/queryResult.ts';
+import { readExactCount } from './queryResult';
 
-if (process.argv.includes('--timezone-probe')) {
-  process.stdout.write(JSON.stringify({
-    july: monthRange('2026-07'),
-    december: monthRange('2026-12'),
-    leap: monthRange('2024-02'),
-    regular: monthRange('2025-02'),
-  }));
-  process.exit(0);
-}
-
+test('calendar, paging, reports and retry reliability contracts', async () => {
 assert.deepEqual(monthRange('2026-07'), { start: '2026-07-01', end: '2026-08-01' });
 assert.deepEqual(monthRange('2026-12'), { start: '2026-12-01', end: '2027-01-01' });
 assert.deepEqual(monthRange('2024-02'), { start: '2024-02-01', end: '2024-03-01' });
@@ -49,8 +42,17 @@ assert.equal(toTimeZoneISO(new Date('2026-06-30T20:59:59.999Z')), '2026-06-30');
 assert.equal(toTimeZoneISO(new Date('2026-06-30T21:00:00.000Z')), '2026-07-01');
 assert.equal(currentMonthISO(new Date('2026-06-30T21:00:00.000Z')), '2026-07');
 
-const script = fileURLToPath(import.meta.url);
-const probe = (tz: string) => spawnSync(process.execPath, [script, '--timezone-probe'], {
+const formatModuleUrl = pathToFileURL(join(process.cwd(), 'src', 'lib', 'format.ts')).href;
+const probeSource = `
+  const { monthRange } = await import(${JSON.stringify(formatModuleUrl)});
+  process.stdout.write(JSON.stringify({
+    july: monthRange('2026-07'),
+    december: monthRange('2026-12'),
+    leap: monthRange('2024-02'),
+    regular: monthRange('2025-02'),
+  }));
+`;
+const probe = (tz: string) => spawnSync(process.execPath, ['--input-type=module', '--eval', probeSource], {
   encoding: 'utf8', env: { ...process.env, TZ: tz },
 });
 const jerusalem = probe('Asia/Jerusalem');
@@ -169,4 +171,4 @@ assert.deepEqual(scan.alerts, [alert]);
 assert.equal(scan.complete, false);
 assert.deepEqual(scan.failures, [{ code: 'failed', label: 'failed' }]);
 
-console.log('P2 reliability checks passed');
+});

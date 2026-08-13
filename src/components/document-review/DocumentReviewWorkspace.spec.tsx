@@ -2,7 +2,7 @@
 // the "פרטים טכניים" disclosure. The owner's words: "אנחנו לא אמורים לראות את כל הprocess של ה-OCR
 // עם אחוזי תאימות וכו. המשתמשים הם לא מתכנתים והנתונים הללו רק מבלבלים עוד יותר."
 //
-// What is asserted here is the *placement*, which model.test.ts cannot see: that no percentage
+// What is asserted here is the *placement*, which model.spec.ts cannot see: that no percentage
 // reaches the two panels a reviewer actually reads, that every one of them is still present inside
 // a disclosure that starts closed, and that the supplier — the one value carried into a payee
 // field — says out loud what a middling grade obliges.

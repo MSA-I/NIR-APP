@@ -1,13 +1,6 @@
-# Package 6 (09.08.2026) — the fast CI: the same `npm run build` gate the constitution calls
-# "השער האוטומטי היחיד", on Linux, for every push/PR to main. It is the ~92-second feedback
-# loop; the heavy gate lives beside it in quality-gate.yml (the SQL suites and preflight,
-# Deno contracts, the OCR worker image and the browser scenarios — counts live in CLAUDE.md,
-# where check:counts pins them), which as of 09.08.2026 also runs on CI rather than by hand
-# on one Windows machine.
-#
-# What this covers: tsc --noEmit, the nine check:* scripts, vitest (jsdom), vite build
-# (including the PWA sw injection). What it deliberately does NOT cover: anything needing
-# Docker, a live Supabase, Deno, or a browser — quality-gate.yml covers those.
+# Fast CI. Build and verification are separate jobs so an ordinary bundle build is no longer a
+# hidden test runner, and both independent halves execute in parallel. Docker, live Supabase,
+# Deno and browser integration remain in quality-gate.yml.
 #
 # The xlsx dependency installs from cdn.sheetjs.com (a tarball URL in package.json, pinned
 # by integrity hash in package-lock.json). setup-node's npm cache keeps the tarball out of
@@ -32,8 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Node 24: the check:* scripts execute TypeScript directly (native type stripping),
-      # exactly like the local gate.
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -42,7 +33,7 @@ jobs:
       - name: Install (npm ci — lockfile is the contract)
         run: npm ci
 
-      - name: The gate — tsc + eight check:* + vitest + vite build
+      - name: Typecheck and production bundle
         run: npm run build
         # The browser client intentionally fails at module load when its public Vite
         # configuration is absent. CI does not deploy this bundle, so use explicit,
@@ -50,3 +41,17 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
           VITE_SUPABASE_ANON_KEY: ci-public-anon-placeholder
+
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install (npm ci — lockfile is the contract)
+        run: npm ci
+      - name: Static guards and Vitest
+        run: npm run verify

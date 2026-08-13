@@ -17,9 +17,8 @@ export default mergeConfig(
       },
       globals: true,
       setupFiles: ['./src/test/setup.ts'],
-      // `.spec` is vitest; `.test` stays with `node --test`. The one existing unit suite,
-      // src/components/document-review/model.test.ts, imports from 'node:test' and is run by
-      // `npm run check:review`. Two runners, two extensions, no collision and no migration.
+      // One unit-test runner. Node-only business checks live beside the code as `.spec.ts` files;
+      // browser, SQL and Edge integration contracts stay in their dedicated gates.
       include: ['src/**/*.spec.{ts,tsx}'],
       restoreMocks: true,
       clearMocks: true,
