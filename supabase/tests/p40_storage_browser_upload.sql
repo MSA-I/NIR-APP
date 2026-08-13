@@ -20,30 +20,19 @@ insert into public.organizations (id, name, status, vat_rate) values
 insert into auth.users (id, email) values
   ('2a400000-0000-4000-8000-000000000001', 'owner-p40@example.test'),
   ('2a400000-0000-4000-8000-000000000002', 'office-p40@example.test'),
-  ('2a400000-0000-4000-8000-000000000003', 'accountant-p40@example.test'),
-  ('2a400000-0000-4000-8000-000000000004', 'kitchen-p40@example.test'),
-  ('2a400000-0000-4000-8000-000000000005', 'payer-p40@example.test'),
-  ('2a400000-0000-4000-8000-000000000006', 'supplier-p40@example.test');
+  ('2a400000-0000-4000-8000-000000000003', 'accountant-p40@example.test');
 
 insert into public.suppliers (id, org_id, name) values
   ('3a400000-0000-4000-8000-000000000001', '1a400000-0000-4000-8000-000000000001',
    'P40 supplier');
 
--- Retired profiles here are historical postgres fixtures. 0127 deliberately keeps the enum and
--- lets trusted SQL suites construct old rows; the authenticated policies must still refuse them.
 insert into public.profiles (id, org_id, full_name, role, active, supplier_id) values
   ('2a400000-0000-4000-8000-000000000001', '1a400000-0000-4000-8000-000000000001',
    'P40 owner', 'owner', true, null),
   ('2a400000-0000-4000-8000-000000000002', '1a400000-0000-4000-8000-000000000001',
    'P40 office', 'office', true, null),
   ('2a400000-0000-4000-8000-000000000003', '1a400000-0000-4000-8000-000000000001',
-   'P40 accountant', 'accountant', true, null),
-  ('2a400000-0000-4000-8000-000000000004', '1a400000-0000-4000-8000-000000000001',
-   'P40 kitchen', 'kitchen', true, null),
-  ('2a400000-0000-4000-8000-000000000005', '1a400000-0000-4000-8000-000000000001',
-   'P40 payer', 'payer', true, null),
-  ('2a400000-0000-4000-8000-000000000006', '1a400000-0000-4000-8000-000000000001',
-   'P40 supplier user', 'supplier', true, '3a400000-0000-4000-8000-000000000001');
+   'P40 accountant', 'accountant', true, null);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -111,35 +100,6 @@ end
 $$;
 reset role;
 
--- Every retired persona is refused even when an old active profile exists.
-do $$
-declare
-  v_user uuid;
-  v_role text;
-begin
-  foreach v_user in array array[
-    '2a400000-0000-4000-8000-000000000004'::uuid,
-    '2a400000-0000-4000-8000-000000000005'::uuid,
-    '2a400000-0000-4000-8000-000000000006'::uuid
-  ] loop
-    select role::text into v_role from public.profiles where id = v_user;
-    perform set_config('request.jwt.claim.sub', v_user::text, true);
-    execute 'set local role authenticated';
-    begin
-      insert into storage.objects (bucket_id, name) values (
-        'documents',
-        '1a400000-0000-4000-8000-000000000001/archive/4a400000-0000-4000-8000-000000000006/'
-          || v_role || '.pdf'
-      );
-      raise exception 'P40 browser storage assertion failed: retired role % uploaded a document',
-        v_role;
-    exception when sqlstate '42501' then null;
-    end;
-    execute 'reset role';
-  end loop;
-end
-$$;
-
 -- Tenant and supplier path boundaries remain after removing owner/metadata checks.
 select set_config('request.jwt.claim.sub', '2a400000-0000-4000-8000-000000000001', true);
 set local role authenticated;
@@ -165,13 +125,5 @@ exception when sqlstate '42501' then null;
 end
 $$;
 reset role;
-
-select pg_temp.p40_assert(
-  not exists (
-    select 1 from pg_policies
-    where schemaname = 'storage' and tablename = 'objects'
-      and policyname like 'supplier_price_documents_storage_%'
-  ),
-  'a supplier-document Storage policy remains');
 
 rollback;

@@ -14,7 +14,7 @@ import { useState } from 'react';
  * pdf.js is mocked at the react-pdf module boundary: jsdom has no canvas and the suite must never
  * reach the network (MSW fails loudly on unhandled requests), so the real engine cannot run here.
  * What IS under test is the wiring around it: the page picker driving the rendered page — the
- * PLAN-00 gap, which the bare-iframe era ignored entirely.
+ * the original document-viewer gap gap, which the bare-iframe era ignored entirely.
  */
 vi.mock('./pdfWorker', () => ({}));
 

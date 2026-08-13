@@ -234,14 +234,12 @@ insert into auth.users (id, email) values
   ('c5740000-0000-0000-0000-000000000001', 'snapshot-owner-a@example.test'),
   ('c5740000-0000-0000-0000-000000000002', 'snapshot-accountant-a@example.test'),
   ('c5740000-0000-0000-0000-000000000003', 'snapshot-office-a@example.test'),
-  ('c5740000-0000-0000-0000-000000000004', 'snapshot-payer-a@example.test'),
   ('c5740000-0000-0000-0000-000000000005', 'snapshot-owner-b@example.test');
 
 insert into public.profiles (id, org_id, full_name, role) values
   ('c5740000-0000-0000-0000-000000000001', 'a5740000-0000-0000-0000-000000000001', 'Snapshot owner A', 'owner'),
   ('c5740000-0000-0000-0000-000000000002', 'a5740000-0000-0000-0000-000000000001', 'Snapshot accountant A', 'accountant'),
   ('c5740000-0000-0000-0000-000000000003', 'a5740000-0000-0000-0000-000000000001', 'Snapshot office A', 'office'),
-  ('c5740000-0000-0000-0000-000000000004', 'a5740000-0000-0000-0000-000000000001', 'Snapshot payer A', 'payer'),
   ('c5740000-0000-0000-0000-000000000005', 'a5740000-0000-0000-0000-000000000002', 'Snapshot owner B', 'owner');
 
 -- Accountant A sees only the first legal-entity subtree, not its sibling.
@@ -650,20 +648,6 @@ select pg_temp.snapshot_assert(
   (select count(*) = 0 from public.monthly_report_snapshot_deliveries),
   'office role read final snapshot deliveries'
 );
-reset role;
-
-select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000004');
-set local role authenticated;
-do $$
-begin
-  perform public.create_monthly_report_snapshot(
-    '2026-08-01', current_setting('monthly_snapshot_test.le1')::uuid
-  );
-  raise exception 'snapshot test failure: payer creation was accepted';
-exception when insufficient_privilege then
-  if sqlerrm not like '%monthly_report_snapshot_not_authorized%' then raise; end if;
-end
-$$;
 reset role;
 
 select pg_temp.snapshot_actor('c5740000-0000-0000-0000-000000000005');

@@ -1,5 +1,5 @@
 /**
- * G1 — the sentences and the links that `docs/DEAD-ENDS-AUDIT.md` bought.
+ * Regression contracts for previously measured dead-end copy and links.
  *
  * Every finding fixed in this wave is one of three shapes: a sentence that must be true, a link
  * that must exist, or a mechanism that already existed being pointed at a second screen. All three
@@ -8,7 +8,7 @@
  *
  * So the claims are pinned where they can be checked without a database: the pure helpers directly,
  * the rendered copy through the smallest component that owns it. What is NOT here is the browser
- * behaviour of the four screens that need a session (Bank, Reports, Receiving, PayerQueue) — those
+ * behaviour of the four screens that need a session (Bank, Reports, Receiving, AccountantPaymentQueue) — those
  * belong to `npm run quality`, and pretending otherwise with a mock stack deep enough to render
  * them would prove the mock, not the screen.
  */
@@ -59,8 +59,8 @@ describe('finding 7 — the FAB keeps its camera where the user is busiest', () 
   });
 
   /**
-   * The reason this is a defect and not a preference: /receiving/:orderId is where the kitchen
-   * manager stands holding both the goods and the invoice, and the screen itself admitted the
+   * The reason this is a defect and not a preference: /receiving/:orderId is where the office
+   * receiver stands holding both the goods and the invoice, and the screen itself admitted the
    * camera was gone. Capture navigates nowhere — `QuickCapture` uploads to the inbox and has no
    * `navigate` — so nothing about the suppression's original purpose is given up.
    */
@@ -80,7 +80,6 @@ describe('finding 7 — the FAB keeps its camera where the user is busiest', () 
     // accountant has no `capture` entry in QUICK_ACTIONS, so the filter must empty the bar rather
     // than leave a lone unrelated button on a form route.
     expect(quickActionsForPath('accountant', '/invoices/new')).toEqual([]);
-    expect(quickActionsForPath('payer', '/invoices/new')).toEqual([]);
   });
 });
 
@@ -117,12 +116,10 @@ describe('finding 8 — "שכפול כטיוטה" is gone, and nothing replaced 
 /* ================= finding 12 — the header rule whose premise expired ================= */
 
 describe('finding 12 — no group header over a single grouped link', () => {
-  it('shows no headers or destinations to retired product roles', () => {
-    for (const role of ['supplier', 'payer', 'kitchen'] as const) {
-      const sections = sectionsForRole(role, false);
-      expect(sections.flatMap((s) => s.items)).toHaveLength(0);
-      expect(showNavHeaders(sections)).toBe(false);
-    }
+  it('shows no tenant destinations without an active role', () => {
+    const sections = sectionsForRole(undefined, false);
+    expect(sections.flatMap((s) => s.items)).toHaveLength(0);
+    expect(showNavHeaders(sections)).toBe(false);
   });
 
   it('still shows them to every role with a real menu', () => {
@@ -133,9 +130,7 @@ describe('finding 12 — no group header over a single grouped link', () => {
 
   /**
    * The regression that reopened it: /dashboard was added for ALL roles and lives in the unnamed
-   * leading section, so it lifted supplier and payer over a threshold that counted every item —
-   * and the "רכש" header the comment describes started rendering over a vendor's own price list.
-   * Counting named sections only is what makes the rule immune to that.
+   * leading section. Counting named sections only keeps the rule independent of that entry.
    */
   it('is not moved by the unnamed leading section', () => {
     const accountant = sectionsForRole('accountant', false);

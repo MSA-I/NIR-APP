@@ -22,12 +22,12 @@ insert into public.organizations (id, name, status) values
   ('10350000-0000-4000-8000-000000000001', 'P35 tenant', 'active');
 insert into auth.users (id, email) values
   ('20350000-0000-4000-8000-000000000001', 'owner-p35@example.test'),
-  ('20350000-0000-4000-8000-000000000002', 'kitchen-p35@example.test');
+  ('20350000-0000-4000-8000-000000000002', 'accountant-p35@example.test');
 insert into public.profiles (id, org_id, full_name, role) values
   ('20350000-0000-4000-8000-000000000001', '10350000-0000-4000-8000-000000000001',
    'P35 owner', 'owner'),
   ('20350000-0000-4000-8000-000000000002', '10350000-0000-4000-8000-000000000001',
-   'P35 kitchen', 'kitchen');
+   'P35 accountant', 'accountant');
 
 insert into public.suppliers (id, org_id, name, status) values
   ('40350000-0000-4000-8000-000000000001', '10350000-0000-4000-8000-000000000001',
@@ -140,7 +140,7 @@ do $$
 begin
   perform public.set_supplier_preferred(
     '40350000-0000-4000-8000-000000000001', false, 'P35 מטבח מנסה');
-  raise exception 'P35 preference assertion failed: a kitchen manager changed a supplier '
+  raise exception 'P35 preference assertion failed: an accountant changed a supplier '
     'preference, which changes what every order screen recommends';
 exception when sqlstate '42501' then
   if sqlerrm <> 'set_supplier_preferred_not_authorized' then raise; end if;

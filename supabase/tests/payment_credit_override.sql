@@ -66,16 +66,16 @@ insert into org_units (id, org_id, parent_id, unit_type, name) values
 insert into auth.users (id, email) values
   ('17320000-0000-0000-0000-000000000001', '0073-owner-a@example.test'),
   ('17320000-0000-0000-0000-000000000002', '0073-office-a@example.test'),
-  ('17320000-0000-0000-0000-000000000003', '0073-payer-a@example.test'),
-  ('17320000-0000-0000-0000-000000000004', '0073-kitchen-a@example.test'),
+  ('17320000-0000-0000-0000-000000000003', '0073-accountant-a@example.test'),
+  ('17320000-0000-0000-0000-000000000004', '0073-office-a-2@example.test'),
   ('17320000-0000-0000-0000-000000000005', '0073-scoped-office-a@example.test'),
   ('17320000-0000-0000-0000-000000000009', '0073-owner-b@example.test');
 
 insert into profiles (id, org_id, full_name, role) values
   ('17320000-0000-0000-0000-000000000001', '17300000-0000-0000-0000-000000000001', '0073 owner A', 'owner'),
   ('17320000-0000-0000-0000-000000000002', '17300000-0000-0000-0000-000000000001', '0073 office A', 'office'),
-  ('17320000-0000-0000-0000-000000000003', '17300000-0000-0000-0000-000000000001', '0073 payer A', 'payer'),
-  ('17320000-0000-0000-0000-000000000004', '17300000-0000-0000-0000-000000000001', '0073 kitchen A', 'kitchen'),
+  ('17320000-0000-0000-0000-000000000003', '17300000-0000-0000-0000-000000000001', '0073 accountant A', 'accountant'),
+  ('17320000-0000-0000-0000-000000000004', '17300000-0000-0000-0000-000000000001', '0073 office A', 'office'),
   ('17320000-0000-0000-0000-000000000005', '17300000-0000-0000-0000-000000000001', '0073 scoped office A', 'office'),
   ('17320000-0000-0000-0000-000000000009', '17300000-0000-0000-0000-000000000002', '0073 owner B', 'owner');
 
@@ -393,19 +393,19 @@ set local role authenticated;
 select pg_temp.credit_expect_error(
   $$select public.approve_payment_request_with_credit_override(
       '17370000-0000-0000-0000-000000000003',
-      '17330000-0000-0000-0000-000000000001', 41, 'payer cannot approve'
+      '17330000-0000-0000-0000-000000000001', 41, 'accountant cannot approve'
     )$$,
   'not_authorized'
 );
 select pg_temp.credit_assert(
   not has_table_privilege('authenticated', 'public.payment_requests', 'UPDATE'),
-  'payer-visible override context must remain read-only browser data'
+  'accountant-visible override context must remain read-only browser data'
 );
 select pg_temp.credit_assert(
   (select pr.open_credit_override_reason = 'approved after reviewing open credits'
    from payment_requests pr
    where pr.id = '17370000-0000-0000-0000-000000000002'),
-  'payer may read the recorded reason on an approved request'
+  'accountant may read the recorded reason on an approved request'
 );
 
 reset role;

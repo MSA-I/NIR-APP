@@ -62,7 +62,7 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
   if (!error) window.dispatchEvent(new Event(NOTIFICATIONS_READ_EVENT));
 }
 
-/* ---------- per-event delivery preferences (migration 0068, handoff-09 §1) ---------- */
+/* ---------- per-event delivery preferences (migration 0068) ---------- */
 
 /**
  * One row per catalogued event code, always the full set.
@@ -71,7 +71,7 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
  * display information only — never a permission. The server hands back `push_enabled` and
  * `inapp_enabled` as `true` where the member stored nothing, so **an absent row reads as on** and
  * the screen must not write anything to say so: the default is opt-**in**, and today's behaviour
- * survives an installation where nobody ever opened this card (handoff-09 §1).
+ * survives an installation where nobody ever opened this card (migration 0068).
  */
 export interface NotificationPreference {
   event_code: string;

@@ -1,4 +1,4 @@
--- Roadmap database contracts: supplier portal, inventory, savings snapshots and WhatsApp.
+-- Roadmap database contracts: inventory, savings snapshots and WhatsApp.
 \set ON_ERROR_STOP on
 
 begin;
@@ -24,9 +24,8 @@ insert into organizations (id, name, status) values
 insert into auth.users (id, email) values
   ('92000000-0000-0000-0000-000000000001', 'roadmap-owner@example.test'),
   ('92000000-0000-0000-0000-000000000002', 'roadmap-office@example.test'),
-  ('92000000-0000-0000-0000-000000000003', 'roadmap-supplier@example.test'),
   ('92000000-0000-0000-0000-000000000004', 'roadmap-owner-b@example.test'),
-  ('92000000-0000-0000-0000-000000000005', 'roadmap-kitchen@example.test');
+  ('92000000-0000-0000-0000-000000000005', 'roadmap-accountant@example.test');
 
 insert into suppliers (id, org_id, name, whatsapp) values
   ('93000000-0000-0000-0000-000000000001', '91000000-0000-0000-0000-000000000001', 'Roadmap supplier A1', '+972501111111'),
@@ -38,9 +37,8 @@ insert into suppliers (id, org_id, name, whatsapp) values
 insert into profiles (id, org_id, full_name, role, supplier_id) values
   ('92000000-0000-0000-0000-000000000001', '91000000-0000-0000-0000-000000000001', 'Roadmap Owner', 'owner', null),
   ('92000000-0000-0000-0000-000000000002', '91000000-0000-0000-0000-000000000001', 'Roadmap Office', 'office', null),
-  ('92000000-0000-0000-0000-000000000003', '91000000-0000-0000-0000-000000000001', 'Roadmap Supplier Agent', 'supplier', '93000000-0000-0000-0000-000000000001'),
   ('92000000-0000-0000-0000-000000000004', '91000000-0000-0000-0000-000000000002', 'Roadmap Owner B', 'owner', null),
-  ('92000000-0000-0000-0000-000000000005', '91000000-0000-0000-0000-000000000001', 'Roadmap Kitchen', 'kitchen', null);
+  ('92000000-0000-0000-0000-000000000005', '91000000-0000-0000-0000-000000000001', 'Roadmap Accountant', 'accountant', null);
 
 insert into purchase_requests (
   id, org_id, status, created_by, editor_step
@@ -80,72 +78,6 @@ insert into price_history (
   ('91000000-0000-0000-0000-000000000001', '95000000-0000-0000-0000-000000000009', 20, current_date - 2, '92000000-0000-0000-0000-000000000001'),
   ('91000000-0000-0000-0000-000000000001', '95000000-0000-0000-0000-000000000009', 20, current_date - 1, '92000000-0000-0000-0000-000000000001');
 
--- The later P0/P1B contract permits the tenant catalog and this supplier's own offer rows.
--- Organization and supplier records remain available only through the dedicated projection.
-select set_config('request.jwt.claim.sub', '92000000-0000-0000-0000-000000000003', true);
-set local role authenticated;
-
-select pg_temp.roadmap_assert(
-  (select count(*) = 0 from organizations),
-  'supplier can read organizations directly'
-);
-select pg_temp.roadmap_assert(
-  (select count(*) = 0 from suppliers),
-  'supplier can read suppliers directly'
-);
-select pg_temp.roadmap_assert(
-  (select count(*) = 5 from products)
-  and not exists (select 1 from products where org_id <> '91000000-0000-0000-0000-000000000001'),
-  'supplier catalog visibility is incomplete or crosses tenants'
-);
-select pg_temp.roadmap_assert(
-  (select count(*) = 4 from supplier_products)
-  and not exists (
-    select 1 from supplier_products
-    where supplier_id <> '93000000-0000-0000-0000-000000000001'
-  ),
-  'supplier price visibility is incomplete or crosses suppliers'
-);
-select pg_temp.roadmap_assert(
-  supplier_portal_context()->>'organization_name' = 'Roadmap tenant A'
-  and supplier_portal_context()->'supplier'->>'id' = '93000000-0000-0000-0000-000000000001'
-  and jsonb_array_length(supplier_portal_context()->'prices') = 3,
-  'supplier portal projection is incomplete or over-broad'
-);
-
-do $$
-begin
-  perform set_supplier_product_price(
-    '95000000-0000-0000-0000-000000000001', 11, current_date, true, 'forbidden direct supplier write'
-  );
-  raise exception 'expected supplier manual price rejection';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%price_write_not_authorized%' then raise; end if;
-end
-$$;
-
-do $$
-begin
-  perform import_supplier_prices(
-    '[{"supplier_id":"93000000-0000-0000-0000-000000000001","product_id":"94000000-0000-0000-0000-000000000001","price":11,"available":true}]'::jsonb,
-    date_trunc('month', current_date)::date,
-    'forbidden legacy supplier import'
-  );
-  raise exception 'expected legacy supplier import rejection';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%price_import_not_authorized%' then raise; end if;
-end
-$$;
-
-select pg_temp.roadmap_assert(
-  to_regprocedure('public.import_supplier_prices(jsonb,date,text,uuid)') is null,
-  'legacy supplier submission RPC still exposes a second write path'
-);
-select pg_temp.roadmap_assert(
-  to_regprocedure('public.submit_supplier_price_list(uuid)') is not null,
-  'trusted supplier submission intake RPC is missing'
-);
-
 -- Supplier invitations are retired at the product boundary. The supplier-bound overload and the
 -- legacy overload must both fail before an invitation row can be created.
 reset role;
@@ -167,8 +99,8 @@ do $$
 begin
   perform create_invitation('legacy-supplier@example.test', 'supplier');
   raise exception 'expected legacy supplier invitation rejection';
-exception when sqlstate '22023' then
-  if sqlerrm not like '%supplier_invitation_requires_supplier%' then raise; end if;
+exception when sqlstate '42501' then
+  if sqlerrm <> 'account_role_retired' then raise; end if;
 end
 $$;
 select soft_delete_supplier(
@@ -211,7 +143,7 @@ select record_inventory_stocktake(
 select record_inventory_movement(
   '97000000-0000-0000-0000-000000000003',
   '94000000-0000-0000-0000-000000000001',
-  'consumption', 3, false, 'kitchen consumption'
+  'consumption', 3, false, 'owner consumption'
 );
 select record_inventory_movement(
   '97000000-0000-0000-0000-000000000004',
@@ -232,9 +164,9 @@ begin
   perform record_inventory_movement(
     '97000000-0000-0000-0000-000000000009',
     '94000000-0000-0000-0000-000000000001',
-    'adjustment', 1, false, 'kitchen adjustment must be rejected'
+    'adjustment', 1, false, 'accountant adjustment must be rejected'
   );
-  raise exception 'expected kitchen adjustment rejection';
+  raise exception 'expected accountant adjustment rejection';
 exception when sqlstate '42501' then
   if sqlerrm not like '%inventory_not_authorized%' then raise; end if;
 end
@@ -572,11 +504,11 @@ select pg_temp.roadmap_assert(
   'browser role can access WhatsApp connection secrets'
 );
 
-select set_config('request.jwt.claim.sub', '92000000-0000-0000-0000-000000000005', true);
+select set_config('request.jwt.claim.sub', '92000000-0000-0000-0000-000000000002', true);
 set local role authenticated;
 select pg_temp.roadmap_assert(
   get_whatsapp_connection_status()->>'status' = 'active',
-  'kitchen cannot read the nonsecret WhatsApp action gate'
+  'office cannot read the nonsecret WhatsApp action gate'
 );
 reset role;
 select set_config('request.jwt.claim.sub', '', true);

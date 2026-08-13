@@ -228,7 +228,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   const { profile } = useAuth();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  // The dedicated bank-details step (PLAN-04 §3.2). `suppliers.bank_details` left the direct
+  // The dedicated bank-details step (migration 0061). `suppliers.bank_details` left the direct
   // UPDATE column grant in 0061; changing it goes through `update_supplier_bank_details`
   // (step-up + mandatory reason + audit). `bankStep` holds the new value while the reason
   // dialog is up; `bankReauth` holds the confirmed reason while ReauthModal decides.
@@ -638,9 +638,7 @@ export function SupplierCard() {
 }
 
 /**
- * Price trend for one supplier. Kept local to this file — it is not used anywhere else, and a
- * similarly-named src/pages/SupplierPrices.tsx is the supplier AGENT portal (/my-prices), which
- * must not be confused with it.
+ * Price trend for one supplier. Kept local because it is not used anywhere else.
  */
 function SupplierPricesTab({ rows, history, submissions }: {
   rows: PricedProduct[];

@@ -12,7 +12,7 @@ import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/trial';
  *
  * The three suppressed paths are long forms a stray navigation would destroy, so hiding the
  * *navigating* actions is right. Hiding the whole bar also took the camera away, and the worst
- * place to lose it is `/receiving/:orderId`: the kitchen manager is standing at the truck holding
+ * place to lose it is `/receiving/:orderId`: the receiving user is standing at the truck holding
  * both the goods and the invoice, and that screen admitted it in prose — "צילום החשבונית יתאפשר
  * מיד לאחר סיום הקבלה" (Receiving.tsx:788). Capture navigates nowhere: `QuickCapture` uploads into
  * the inbox and contains no `navigate`, so it cannot cost the user the form they are filling.

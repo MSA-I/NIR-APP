@@ -26,7 +26,7 @@ export const key = (org: OrgScope, domain: string, ...rest: readonly unknown[]) 
   [...orgRoot(org), domain, ...rest] as const;
 
 /**
- * The domains migrated first, per PLAN-01. Named rather than stringly-typed at the call site so a
+ * The domains migrated first, per ADR-0003. Named rather than stringly-typed at the call site so a
  * typo becomes a compile error instead of a second, silently-never-invalidated cache entry.
  */
 export const DOMAIN = {
@@ -43,10 +43,9 @@ export const DOMAIN = {
   payments: 'payments',
   bank: 'bank-transactions',
   // Wave 9: the control-room aggregates. Named after the screen rather than a table on purpose —
-  // one dashboard entry is composed of several independent per-metric reads (PLAN-10 §3), so
-  // there is no single table whose name would describe it. Sub-key it by role
-  // (`[DOMAIN.dashboard, 'payer']`): two roles asking the same question of different RLS
-  // projections must not share a cache entry.
+  // one dashboard entry is composed of several independent per-metric reads (migrations 0068-0070), so
+  // there is no single table whose name would describe it. Sub-key it by role so two active
+  // personas asking the same question of different RLS projections never share a cache entry.
   dashboard: 'dashboard',
 } as const;
 

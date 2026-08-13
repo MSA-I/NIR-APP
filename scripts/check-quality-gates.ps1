@@ -1012,6 +1012,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\migrations\0101_supplier_purchase_order_portal.sql",
     "supabase\migrations\0102_inventory_intelligence_read_model.sql",
     "supabase\migrations\0103_tenant_offboarding_export.sql",
+    "supabase\migrations\0133_remove_retired_persona_surfaces.sql",
     "supabase\tests\smart_document_processing.sql",
     "supabase\tests\document_learning.sql",
     "supabase\tests\document_export_templates.sql",
@@ -1028,7 +1029,6 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\tests\p20_invoice_approval_concurrency.sql",
     "supabase\tests\p21_dashboard_snapshot.sql",
     "supabase\tests\p22_trial_read_only.sql",
-    "supabase\tests\p23_supplier_portal.sql",
     "supabase\tests\p24_inventory_intelligence.sql",
     "supabase\tests\p25_tenant_offboarding_export.sql",
     "supabase\tests\p26_price_baseline.sql",
@@ -1037,13 +1037,13 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\tests\p29_document_reconciliation_assessment.sql",
     "supabase\tests\p30_document_review_assessment_read.sql",
     "supabase\tests\p31_apply_reviewed_document.sql",
-    "supabase\tests\p32_kitchen_supplier_read_boundary.sql",
     "supabase\tests\p33_canonical_purchase_metrics.sql",
     "supabase\tests\p34_product_purchase_summary.sql",
     "supabase\tests\p35_preferred_supplier_tiebreak.sql",
     "supabase\tests\p36_document_removal_impact.sql",
     "supabase\tests\p37_document_overcharge_credit.sql",
     "supabase\tests\p38_export_report_templates.sql",
+    "supabase\tests\p43_active_persona_surface.sql",
     "supabase\functions\_shared\organization-access.ts",
     "supabase\functions\_shared\organization-access.test.ts",
     "supabase\functions\_shared\organization-egress.ts",
@@ -1257,7 +1257,6 @@ try {
     Invoke-SqlTest "supabase\tests\p20_invoice_three_way_match.sql" "Invoice line evidence, true three-way assessment, approval blocks, override and tenant isolation"
     Invoke-SqlTest "supabase\tests\p21_dashboard_snapshot.sql" "Management dashboard snapshot, evidence-aware metrics and tenant isolation"
     Invoke-SqlTest "supabase\tests\p22_trial_read_only.sql" "Trial lifecycle: 30-day trial, 7-day grace, then DB-authoritative read-only that platform recovery can lift"
-    Invoke-SqlTest "supabase\tests\p23_supplier_portal.sql" "Supplier purchase-order projection, acknowledgement, idempotency and supplier isolation"
     Invoke-SqlTest "supabase\tests\p24_inventory_intelligence.sql" "Inventory consumption evidence, incoming supply, suggestions, price context and tenant isolation"
     Invoke-SqlTest "supabase\tests\p25_tenant_offboarding_export.sql" "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p26_price_baseline.sql" "Contractual price baseline as of the document date, reversal ordering, undisclosed fallbacks and read-only guarantee"
@@ -1266,7 +1265,6 @@ try {
     Invoke-SqlTest "supabase\tests\p29_document_reconciliation_assessment.sql" "Four-source document assessment: baseline as of the document date, draft receipts are not arrivals, absence from a partial document is not a shortage, and assessing writes nothing"
     Invoke-SqlTest "supabase\tests\p30_document_review_assessment_read.sql" "The review screen's single door to the private resolvers: role boundary, unit scope inside a definer body, and file-stored versus data-approved kept apart"
     Invoke-SqlTest "supabase\tests\p31_apply_reviewed_document.sql" "Applying an approved document: the server recomputes the assessment rather than trusting the proposal, an invoice never receives goods, a delivery note only drafts, and a tax receipt creates no payable"
-    Invoke-SqlTest "supabase\tests\p32_kitchen_supplier_read_boundary.sql" "Kitchen narrowed without being broken: bank_details unreachable by column privilege while row access stays so PostgREST embeds keep returning the supplier name"
     Invoke-SqlTest "supabase\tests\p33_canonical_purchase_metrics.sql" "One definition per money question: the business day rather than the UTC day, snapshot prices, approved invoices only, and only credits that actually reduced a balance"
     Invoke-SqlTest "supabase\tests\p34_product_purchase_summary.sql" "One delivery counted once: the order item is the de-duplication grain, a completed receipt beats a supplier bill, and products are never merged by name"
     Invoke-SqlTest "supabase\tests\p35_preferred_supplier_tiebreak.sql" "A supplier preference breaks a tie and never wins one: price orders first, both recommendation sites carry the rule, and setting it takes a reason"
@@ -1282,6 +1280,7 @@ try {
     # while every product call still SET ROLEs to the exact browser/service role under test.
     Invoke-SqlTest "supabase\tests\p41_document_upload_registration.sql" "Idempotent document registration survives response loss without duplicate rows, object deletion, tenant crossing or export drift" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p42_document_processing_recovery.sql" "Owner recovery consumes settled provider evidence first, fences live work and creates at most one successor" "supabase_admin"
+    Invoke-SqlTest "supabase\tests\p43_active_persona_surface.sql" "Retired personas cannot authenticate or return; owner and office keep procurement while accountant keeps finance and payment-proof upload"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"
@@ -1295,12 +1294,12 @@ try {
     Invoke-SqlTest "supabase\tests\monthly_report_snapshots.sql" "Immutable legal-entity monthly accountant snapshots"
     Invoke-Preflight
     Invoke-SqlTest "supabase\tests\p1_financial_commands.sql" "P1 financial commands, rollback and idempotency"
-    # Archived 12.08.2026: supplier is no longer a product account. The historical supplier-agent
-    # harness remains in supabase/tests, while active owner/office intake is covered by p15/p38/p40
-    # and the retired-account boundary is covered by p39.
+    Invoke-SqlTest "supabase\tests\p1_price_submissions.sql" "Owner and office price-list reservation, registration, intake, review and evidence"
+    Invoke-SqlTest "supabase\tests\p1_price_submissions_concurrency.sql" "Concurrent owner and office price-list submission and idempotency" "supabase_admin"
+    Write-Gate "Reset after committed price-list concurrency fixtures"
+    Reset-LocalDatabase
     Invoke-SqlTest "supabase\tests\p2_data_reliability.sql" "P2 retry, alerts, pagination and reliability"
     Invoke-SqlTest "supabase\tests\server_list_contracts.sql" "Server list predicates, duplicate key across pages and tenant scope"
-    # Archived with the supplier-agent harness above; its only caller identity is the retired role.
     Invoke-SqlTest "supabase\tests\roadmap_db_contracts.sql" "Roadmap supplier, inventory, savings and WhatsApp contracts"
     Invoke-SqlTest "supabase\tests\p1_concurrency.sql" "P1 real concurrent sessions" "supabase_admin"
     Invoke-SqlTest "supabase\tests\payment_credit_override_concurrency.sql" "Concurrent payment replay, approval, execution and credit creation" "supabase_admin"

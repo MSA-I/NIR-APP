@@ -211,7 +211,7 @@ export async function runPaymentRequestChecks(pr: {
   return results;
 }
 
-/** Recompute an invoice's payment_status server-side (works for every role incl. payer). */
+/** Recompute an invoice's payment status through the server-authoritative command. */
 export async function refreshInvoicePaymentStatus(invoiceId: string) {
   await supabase.rpc('refresh_invoice_payment_status', { inv_id: invoiceId });
 }

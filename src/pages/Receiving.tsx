@@ -406,8 +406,7 @@ export function ReceiveOrder() {
   const { profile } = useAuth();
   const [lines, setLines] = useState<Record<string, LineState>>({});
   const [openCredits, setOpenCredits] = useState(true);
-  // #116 (decided 09.08.2026): a manual exception is an owner/office command. kitchen — the
-  // role that actually stands at the truck — reports to them; the sentence below says so.
+  // A manual exception is an owner/office command.
   const canOpenException = !!profile && ['owner', 'office'].includes(profile.role);
   const [exceptionOpen, setExceptionOpen] = useState(false);
   const [exceptionBusy, setExceptionBusy] = useState(false);
@@ -962,8 +961,7 @@ export function ReceiveOrder() {
               קוד אחרון שנסרק: <span className="num">{scan.code}</span> — לא נבחרה שורה.
               {/* G1, finding 6. An unrecognised code ended here, with no suggestion — while the
                   price-list review screen offers "יצירת מוצר חדש מהשורה" on every unmatched row
-                  (PriceListReviewConfirmation.tsx:533) and RLS lets `kitchen` add a product
-                  (0022:131-132). So this was a missing door, not a fence. The link is the step;
+                  (PriceListReviewConfirmation.tsx). The link is the step;
                   quick-create in place depends on finding 5 and is not worth it alone. The second
                   half is the honest limit: a product created now is still not on THIS order, so
                   the receipt cannot take it either. */}
@@ -996,9 +994,7 @@ export function ReceiveOrder() {
                 </div>}
             {/* #116, decided 09.08.2026 — G1 left this paragraph action-less because no manual
                 exception command existed and promising one would have lied. The command exists
-                now (open_manual_exception, 0087), owner/office only: they get the button, and
-                kitchen — the role actually standing at the truck — gets the true next step
-                (report to them) instead of a control that would refuse on submit. */}
+                now (open_manual_exception, 0087), owner/office only. */}
             {data.delivered.unmatched.length > 0 && (
               <div>
                 שורות בתעודה שלא זוהו במחירון הספק ולכן לא מולאו: {data.delivered.unmatched.join(', ')}.

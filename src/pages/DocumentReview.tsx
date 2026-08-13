@@ -8,6 +8,7 @@ import { ErrorNote, Note, PageLoader } from '../components/ui';
 import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { useDocumentProcessing } from '../lib/useDocumentProcessing';
+import { isActiveRole } from '../lib/types';
 
 // interpret-document maps every failure to a Hebrew message server-side, so the body is the
 // message. Only a transport failure needs the generic mapping.
@@ -67,15 +68,14 @@ export default function DocumentReview() {
 
   if (!documentId) return <ErrorNote message="מזהה המסמך חסר." />;
   if (processing.loading || !profile) return <PageLoader />;
+  if (!isActiveRole(profile.role)) return <ErrorNote message="התפקיד ההיסטורי אינו מורשה להשתמש במסך הזה." />;
   if (processing.error && !snapshot) return <ErrorNote message={processing.error} />;
   if (!snapshot) return <ErrorNote message="המסמך אינו זמין או שאין לך הרשאה לצפות בו." />;
-
-  const returnPath = profile.role === 'supplier' ? '/my-prices' : '/documents';
 
   return (
     <div className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <BackAction fallback={returnPath} label="חזרה למסמכים" carrySearch />
+        <BackAction fallback="/documents" label="חזרה למסמכים" carrySearch />
         {processing.fetching && (
           <span className="inline-flex min-h-11 items-center gap-2 text-sm text-ink-muted" role="status">
             <RefreshCw className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> מעדכן נתונים
@@ -116,7 +116,6 @@ export default function DocumentReview() {
 
       <DocumentReviewWorkspace
         snapshot={snapshot}
-        role={profile.role}
         actorId={profile.id}
         onRefetch={processing.refetch}
         initialPanel={params.get('panel')}

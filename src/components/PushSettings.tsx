@@ -127,7 +127,7 @@ function deliveryLine(preference: NotificationPreference): string {
  * `read_notification_preferences()` as both flags `true` with `configured = false`, so it renders
  * "on" and nothing is written until the member actually changes something. Opening this card must
  * never turn into a write — that is what would make 0068 change an installation's behaviour by
- * existing (handoff-09 §1).
+ * existing (migration 0068).
  *
  * **Muting Push does not mute the bell.** `push_enabled = false` removes the Web Push leg and
  * LEAVES the `notifications` row, because the unread badge of OPEN-DECISIONS #39 counts those rows.

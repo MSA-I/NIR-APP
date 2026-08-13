@@ -338,7 +338,7 @@ describe('fetchServerList — filters', () => {
 
     // `Invoices.tsx:92-93` reads both branches off rows already in memory: it counts duplicate keys
     // across the whole result set and checks `order_links.length === 0`. `0053` exposes each as a
-    // PostgREST computed field (`handoff/1b-server-list-contract.md` §1), so both become predicates
+    // PostgREST computed field (ADR-0007), so both become predicates
     // over the whole table rather than over whichever page happened to load.
     await fetchServerList<Row>(client, request({
       predicates: [

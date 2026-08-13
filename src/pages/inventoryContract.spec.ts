@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isRouteAllowed } from '../../qa/config/roles';
 
 const source = readFileSync(join(process.cwd(), 'src', 'pages', 'Inventory.tsx'), 'utf8');
 const app = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
@@ -9,14 +8,9 @@ const layout = readFileSync(join(process.cwd(), 'src', 'components', 'Layout.tsx
 
 describe('inventory UI contract', () => {
   it('exposes the route only to the active procurement roles', () => {
-    expect(isRouteAllowed('owner', '/inventory')).toBe(true);
-    expect(isRouteAllowed('office', '/inventory')).toBe(true);
-    expect(isRouteAllowed('kitchen', '/inventory')).toBe(false);
-    expect(isRouteAllowed('payer', '/inventory')).toBe(false);
-    expect(isRouteAllowed('accountant', '/inventory')).toBe(false);
-    expect(isRouteAllowed('supplier', '/inventory')).toBe(false);
     expect(app).toContain('path="/inventory" element={<Guard roles={STAFF}><Inventory /></Guard>}');
     expect(layout).toContain("{ to: '/inventory', label: 'מלאי'");
+    expect(app).not.toContain('roles={[\'accountant\']}><Inventory');
   });
 
   it('keeps unknown inventory distinct from a measured zero', () => {

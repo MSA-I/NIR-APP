@@ -92,7 +92,7 @@ beforeEach(() => {
   authState.session = sessionWithAge(30);
 });
 
-describe('SupplierForm — the dedicated bank-details flow (PLAN-04 §3.2)', () => {
+describe('SupplierForm — the dedicated bank-details flow (migration 0061)', () => {
   it('routes a bank change through reason + step-up to the RPC, never the direct update', async () => {
     const user = userEvent.setup();
     const patched = trackSupplierPatch();

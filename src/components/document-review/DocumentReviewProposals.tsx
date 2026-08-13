@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { reasonOr } from '../../lib/reason';
 import { useNavigate } from 'react-router';
 import { Check, FilePlus2, Info, Loader2, RotateCcw, ShieldAlert, X } from 'lucide-react';
-import type { Role } from '../../lib/types';
 import { toHebrewError } from '../../lib/errors';
 import { fmtDateTime } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
@@ -33,7 +32,6 @@ import {
 
 interface DocumentReviewProposalsProps {
   snapshot: ReviewSnapshot;
-  role: Role;
   onRefetch: () => Promise<boolean>;
 }
 
@@ -229,8 +227,7 @@ const DRAFT_ACTIONS: Partial<Record<
 /**
  * A payment confirmation is reconciled here, not executed.
  *
- * Executing is `execute_payment_request`, which only a payer may call, and a payer cannot read a
- * document interpretation at all (0046:557 grants that to owner/office/kitchen). That split is the
+ * Executing is `execute_payment_request`, which only the accountant may call. That split is the
  * separation of duties this system is built on: whoever files the paperwork is not whoever moves
  * the money. So this panel answers the question a reviewer can actually act on -- does this
  * confirmation correspond to a payment we really made? -- and says plainly where execution lives.
@@ -459,9 +456,8 @@ function FeedbackControls({ annotation, onRefetch }: {
   );
 }
 
-function RuleControls({ rule, role, onRefetch }: {
+function RuleControls({ rule, onRefetch }: {
   rule: DocumentLearningRule;
-  role: Role;
   onRefetch: () => Promise<boolean>;
 }) {
   const toast = useToast();
@@ -469,7 +465,6 @@ function RuleControls({ rule, role, onRefetch }: {
   const [label, setLabel] = useState(rule.label);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
-  const canManage = rule.user_id !== null || role === 'owner' || role === 'office';
 
   async function finish(message: string) {
     const refreshed = await onRefetch();
@@ -522,7 +517,7 @@ function RuleControls({ rule, role, onRefetch }: {
     }
   }
 
-  if (!rule.active || !canManage) return null;
+  if (!rule.active) return null;
   return (
     <form className="mt-3 border-t border-line pt-3" onSubmit={correctRule}>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -551,10 +546,9 @@ function RuleControls({ rule, role, onRefetch }: {
   );
 }
 
-export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentReviewProposalsProps) {
+export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewProposalsProps) {
   const navigate = useNavigate();
   const interpretation = snapshot.interpretation;
-  const isSupplier = role === 'supplier';
   const ruleById = useMemo(() => new Map(snapshot.learningRules.map((rule) => [rule.id, rule])), [snapshot.learningRules]);
   const feedbackByAnnotation = useMemo(
     () => latestFeedbackByAnnotation(snapshot.feedback),
@@ -626,7 +620,7 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
         )}
       </div>
 
-      <TypeReviewControls snapshot={snapshot} canDecide={!isSupplier} onRefetch={onRefetch} />
+      <TypeReviewControls snapshot={snapshot} canDecide onRefetch={onRefetch} />
 
       <div className="card card-pad">
         <h3 className="section-title">שדות מוצעים</h3>
@@ -724,7 +718,7 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
                     <p className="mt-1 break-words text-xs text-ink-muted">מבצע {actorName(snapshot, feedback.actor_id)}</p>
                   </div>
                 )}
-                {!isSupplier && !feedback && annotation.active && annotation.source !== 'user' && snapshot.job?.status === 'review' && (
+                {!feedback && annotation.active && annotation.source !== 'user' && snapshot.job?.status === 'review' && (
                   <FeedbackControls annotation={annotation} onRefetch={onRefetch} />
                 )}
               </article>
@@ -734,7 +728,7 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
         </div>
       )}
 
-      {!isSupplier && snapshot.ruleApplications.length > 0 && (
+      {snapshot.ruleApplications.length > 0 && (
         <div className="card card-pad">
           <h3 className="section-title">כללים שהופעלו</h3>
           <p className="mt-1 text-sm text-ink-muted">כל יישום מקושר לגרסה המדויקת של הכלל ולסימון שעליו פעל.</p>
@@ -751,7 +745,7 @@ export function DocumentReviewProposals({ snapshot, role, onRefetch }: DocumentR
                     </div>
                     <span className="badge-done">כלל v{application.rule_version}</span>
                   </div>
-                  {rule && snapshot.job?.status === 'review' && <RuleControls rule={rule} role={role} onRefetch={onRefetch} />}
+                  {rule && snapshot.job?.status === 'review' && <RuleControls rule={rule} onRefetch={onRefetch} />}
                 </article>
               );
             })}

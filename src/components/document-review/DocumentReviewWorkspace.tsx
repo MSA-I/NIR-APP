@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Cpu, FileCheck2, ScanText } from 'lucide-react';
-import type { Role } from '../../lib/types';
 import { supabase } from '../../lib/supabase';
 import { openReservedPopup } from '../../lib/popup';
 import { documentProcessingFailureText, documentUiStatus } from '../../lib/documentStatus';
@@ -22,14 +21,13 @@ import {
 
 interface DocumentReviewWorkspaceProps {
   snapshot: ReviewSnapshot;
-  role: Role;
   actorId: string;
   onRefetch: () => Promise<boolean>;
   initialPanel: string | null;
   readOnly?: boolean;
 }
 
-export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, initialPanel, readOnly = false }: DocumentReviewWorkspaceProps) {
+export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialPanel, readOnly = false }: DocumentReviewWorkspaceProps) {
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [openingSource, setOpeningSource] = useState(false);
@@ -58,8 +56,7 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
    * The percentages were not deleted — deleting them would take the only thread a support session
    * has when an extraction goes wrong. They moved: the review screens now say "זוהה בבירור" and the
    * arithmetic lives here, folded, one click away, alongside the evidence ids that let a number be
-   * traced back to the block it came from. Rule applications are excluded for a supplier account
-   * for the same reason the rules panel itself is: they are the tenant's learned rules.
+   * traced back to the block it came from.
    */
   const interpretationEvidence = useMemo(() => {
     const payload = snapshot.interpretation?.payload;
@@ -98,16 +95,14 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
       confidence: annotation.confidence,
       evidence: annotation.evidence_mark_ids,
     }));
-    if (role !== 'supplier') {
-      snapshot.ruleApplications.forEach((application) => rows.push({
-        key: `rule-application-${application.id}`,
-        label: `כלל שהופעל · גרסה ${application.rule_version}`,
-        confidence: application.confidence,
-        evidence: [application.target_id],
-      }));
-    }
+    snapshot.ruleApplications.forEach((application) => rows.push({
+      key: `rule-application-${application.id}`,
+      label: `כלל שהופעל · גרסה ${application.rule_version}`,
+      confidence: application.confidence,
+      evidence: [application.target_id],
+    }));
     return rows;
-  }, [snapshot.interpretation, snapshot.annotations, snapshot.ruleApplications, role]);
+  }, [snapshot.interpretation, snapshot.annotations, snapshot.ruleApplications]);
 
   const extractionEvidence = useMemo(() => {
     const payload = snapshot.extraction?.payload;
@@ -258,11 +253,7 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
                 aria-label="רמות זיהוי גולמיות של הפירוש; ניתן לגלול בתוך הטבלה"
               >
                 <table className="min-w-full bg-surface">
-                  {/* Named for what the table actually holds: a supplier account gets no rule rows,
-                      so it must not be promised any. */}
-                  <caption className="px-3 pt-2 text-start text-xs font-medium text-ink-soft">
-                    {role === 'supplier' ? 'פירוש והערות' : 'פירוש, הערות וכללים'}
-                  </caption>
+                  <caption className="px-3 pt-2 text-start text-xs font-medium text-ink-soft">פירוש, הערות וכללים</caption>
                   <thead>
                     <tr className="border-b border-line">
                       <th className="th" scope="col">פריט</th>
@@ -359,24 +350,17 @@ export function DocumentReviewWorkspace({ snapshot, role, actorId, onRefetch, in
             {readOnly ? (
               <Note tone="idle">המסמך ותוצאות העיבוד זמינים לצפייה. פעולות בדיקה ועדכון אינן זמינות במצב קריאה בלבד.</Note>
             ) : isPriceList
-              ? <PriceListReviewConfirmation snapshot={snapshot} role={role} actorId={actorId} onRefetch={onRefetch} />
+              ? <PriceListReviewConfirmation snapshot={snapshot} actorId={actorId} onRefetch={onRefetch} />
               : snapshot.interpretation && (
                 <>
-                  {/* The four-source comparison and the approval, first: it is the decision this
-                      screen exists for. The proposals panel below it stays what it has always
-                      been — the machine's reading and the learning rules — and a supplier portal
-                      account gets neither, because the assessment carries our ordered quantities
-                      and our contracted prices (0109 refuses that role outright). */}
-                  {role !== 'supplier' && (
-                    <DocumentAssessmentPanel
-                      documentId={snapshot.document.id}
-                      onApplied={() => { void onRefetch(); }}
-                    />
-                  )}
-                  <DocumentReviewProposals snapshot={snapshot} role={role} onRefetch={onRefetch} />
+                  <DocumentAssessmentPanel
+                    documentId={snapshot.document.id}
+                    onApplied={() => { void onRefetch(); }}
+                  />
+                  <DocumentReviewProposals snapshot={snapshot} onRefetch={onRefetch} />
                 </>
               )}
-            {!readOnly && snapshot.interpretation && !isPriceList && role !== 'supplier'
+            {!readOnly && snapshot.interpretation && !isPriceList
               && <DocumentExportPreview snapshot={snapshot} actorId={actorId} autoFocus={initialPanel === 'export'} />}
           </div>
         </div>

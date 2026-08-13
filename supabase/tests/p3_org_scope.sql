@@ -1,7 +1,7 @@
 -- P3 organization-scope harness for 0054-0058. Run only against an isolated local database
 -- with every migration applied. The transaction is rolled back.
 --
--- What it proves, per PLAN-03 §3.3:
+-- What it proves for the 0057 organization-scope contract:
 --   (a) the RESTRICTIVE rider denies AS AUTHENTICATED: a branch-scoped user does not see
 --       another unit's rows and does see unit_id-NULL rows;
 --   (b) the balance functions respect scope after 0057 with correct per-unit sums, and the

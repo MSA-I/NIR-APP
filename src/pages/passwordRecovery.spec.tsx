@@ -108,7 +108,7 @@ describe('/reset-password', () => {
     const jwtPayload = btoa(JSON.stringify({ sub: 'user-1', role: 'authenticated' }))
       .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     const fakeJwt = `${btoa(JSON.stringify({ alg: 'none' }))}.${jwtPayload}.x`;
-    const authUser = { id: 'user-1', aud: 'authenticated', email: 'kitchen@demo.supplyflow.local' };
+    const authUser = { id: 'user-1', aud: 'authenticated', email: 'office@demo.supplyflow.local' };
     server.use(
       http.post(`${SUPABASE_URL}/auth/v1/token`, () => HttpResponse.json({
         access_token: fakeJwt, token_type: 'bearer', expires_in: 3600,
@@ -121,7 +121,7 @@ describe('/reset-password', () => {
     );
 
     const signIn = await supabase.auth.signInWithPassword({
-      email: 'kitchen@demo.supplyflow.local', password: 'irrelevant-here',
+      email: 'office@demo.supplyflow.local', password: 'irrelevant-here',
     });
     expect(signIn.error).toBeNull();
 

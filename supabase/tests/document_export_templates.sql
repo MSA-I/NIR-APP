@@ -1,4 +1,4 @@
--- PLAN-04 reusable document export template and immutable-ledger acceptance.
+-- Reusable document export template and immutable-ledger acceptance.
 -- Run against a freshly reset disposable local database after migration 0047.
 -- Every fixture is rolled back; the test never writes business data permanently.
 \set ON_ERROR_STOP on
@@ -129,7 +129,7 @@ select document_export_test.assert(
   to_regclass('public.document_export_templates') is not null
     and to_regclass('public.document_export_template_versions') is not null
     and to_regclass('public.document_exports') is not null,
-  'one or more PLAN-04 tables are missing'
+  'one or more document-export tables are missing'
 );
 
 select document_export_test.assert(
@@ -140,7 +140,7 @@ select document_export_test.assert(
      'public.document_export_template_versions'::regclass,
      'public.document_exports'::regclass
    ])),
-  'RLS and FORCE RLS are not enabled on every PLAN-04 table'
+  'RLS and FORCE RLS are not enabled on every document-export table'
 );
 
 select document_export_test.assert(
@@ -247,14 +247,14 @@ insert into public.organizations (id, name, status) values
 insert into auth.users (id, email) values
   ('27000000-0000-4000-8000-000000000001', 'export-owner-a@example.test'),
   ('27000000-0000-4000-8000-000000000002', 'export-office-a@example.test'),
-  ('27000000-0000-4000-8000-000000000003', 'export-kitchen-a@example.test'),
+  ('27000000-0000-4000-8000-000000000003', 'export-office-a-2@example.test'),
   ('27000000-0000-4000-8000-000000000004', 'export-accountant-a@example.test'),
   ('27000000-0000-4000-8000-000000000005', 'export-owner-b@example.test');
 
 insert into public.profiles (id, org_id, full_name, role) values
   ('27000000-0000-4000-8000-000000000001', '17000000-0000-4000-8000-000000000001', 'Export owner A', 'owner'),
   ('27000000-0000-4000-8000-000000000002', '17000000-0000-4000-8000-000000000001', 'Export office A', 'office'),
-  ('27000000-0000-4000-8000-000000000003', '17000000-0000-4000-8000-000000000001', 'Export kitchen A', 'kitchen'),
+  ('27000000-0000-4000-8000-000000000003', '17000000-0000-4000-8000-000000000001', 'Export office A', 'office'),
   ('27000000-0000-4000-8000-000000000004', '17000000-0000-4000-8000-000000000001', 'Export accountant A', 'accountant'),
   ('27000000-0000-4000-8000-000000000005', '17000000-0000-4000-8000-000000000002', 'Export owner B', 'owner');
 
@@ -411,19 +411,19 @@ from public.document_export_template_versions where id = :'org_supplier_version_
 
 reset role;
 
--- Kitchen may propose, but may not approve an organization template.
-select set_config('request.jwt.claim.sub', '27000000-0000-4000-8000-000000000003', true);
+-- Accountant may read financial exports, but may not approve an organization template.
+select set_config('request.jwt.claim.sub', '27000000-0000-4000-8000-000000000004', true);
 select set_config('document_export_test.global_version_id', :'global_version_id', true);
 set local role authenticated;
 do $$
 begin
   perform public.approve_document_export_template_version(
     current_setting('document_export_test.global_version_id')::uuid,
-    'אישור אסור למשתמש מטבח'
+    'אישור אסור למשתמש הנהלת חשבונות'
   );
   raise exception 'expected organization approval denial';
 exception when sqlstate '42501' then
-  if sqlerrm <> 'document_export_org_template_not_authorized' then raise; end if;
+  if sqlerrm <> 'not_authorized' then raise; end if;
 end
 $$;
 reset role;
@@ -537,12 +537,12 @@ select document_export_test.assert(
   'the five required precedence tiers are not exact'
 );
 
--- Personal RLS hides office-owned templates and versions from kitchen and owner.
+-- Personal RLS hides office-owned templates and versions from office and owner.
 select set_config('request.jwt.claim.sub', '27000000-0000-4000-8000-000000000003', true);
 set local role authenticated;
 select count(*)::text as personal_count
 from public.document_export_templates where owner_user_id is not null
-\gset kitchen_
+\gset office_
 select set_config(
   'document_export_test.personal_supplier_template_id',
   :'personal_supplier_template_id', true
@@ -568,7 +568,7 @@ from public.document_export_templates where owner_user_id is not null
 reset role;
 
 select document_export_test.assert(
-  :'kitchen_personal_count'::integer = 0 and :'owner_personal_count'::integer = 0,
+  :'office_personal_count'::integer = 0 and :'owner_personal_count'::integer = 0,
   'personal template RLS leaked to another user or tenant owner'
 );
 
@@ -851,23 +851,23 @@ select document_export_test.assert(
   'Storage read/delete row backing or JSON MIME registration failed'
 );
 
--- Kitchen still sees the existing source-document object, but not office's personal export.
+-- Office still sees the existing source-document object, but not office's personal export.
 select set_config('request.jwt.claim.sub', '27000000-0000-4000-8000-000000000003', true);
 set local role authenticated;
 select count(*)::text as visible
 from storage.objects
 where bucket_id = 'documents'
   and name = '17000000-0000-4000-8000-000000000001/source/invoice-a.pdf'
-\gset kitchen_source_
+\gset office_source_
 select count(*)::text as visible
 from storage.objects
 where bucket_id = 'documents'
   and name = '17000000-0000-4000-8000-000000000001/exports/97000000-0000-4000-8000-000000000004/export.json'
-\gset kitchen_export_
+\gset office_export_
 reset role;
 
 select document_export_test.assert(
-  :'kitchen_source_visible'::integer = 1 and :'kitchen_export_visible'::integer = 0,
+  :'office_source_visible'::integer = 1 and :'office_export_visible'::integer = 0,
   'source-document read contract regressed or personal export Storage leaked'
 );
 

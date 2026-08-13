@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { isActiveAccountRole, type Organization, type Profile } from '../lib/types';
+import { isActiveRole, type Organization, type Profile } from '../lib/types';
 import { unwrap } from '../lib/useQuery';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import { resolveRoleLabels } from '../lib/status';
@@ -126,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const p = unwrap(
           await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
         ) as Profile | null;
-        if (p && (!p.active || !isActiveAccountRole(p.role))) {
+        if (p && (!p.active || !isActiveRole(p.role))) {
           throw new Error('account_role_retired');
         }
         const o = p
@@ -180,7 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               // The unavailable cache is reported through the normal bootstrap failure below.
             }
           }
-          if (cached && !isActiveAccountRole(cached.role)) {
+          if (cached && !isActiveRole(cached.role)) {
             setProfile(null);
             setOrg(null);
             setIsPlatformAdmin(false);

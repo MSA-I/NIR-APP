@@ -96,6 +96,27 @@ jobs:
           ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-interpret.log \
             || { echo 'Ignored or skipped cases are not acceptable in this gate.'; exit 1; }
 
+      - name: Price-list intake authorization and type contracts
+        run: |
+          set -euo pipefail
+          PRICE_ROOT=supabase/functions/submit-price-list
+          npx --yes deno test \
+            --config "$PRICE_ROOT/deno.json" \
+            --lock "$PRICE_ROOT/deno.lock" \
+            --frozen \
+            "$PRICE_ROOT/authorization.test.ts" 2>&1 | tee deno-price-list.log
+          grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-price-list.log \
+            || { echo 'No price-list authorization test completed.'; exit 1; }
+          ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-price-list.log \
+            || { echo 'Ignored or skipped price-list cases are not acceptable.'; exit 1; }
+          npx --yes deno check \
+            --allow-import \
+            --node-modules-dir=auto \
+            --config "$PRICE_ROOT/deno.json" \
+            --lock "$PRICE_ROOT/deno.lock" \
+            --frozen \
+            "$PRICE_ROOT/index.ts"
+
       - name: Document gateway and organization-boundary contracts
         run: |
           set -euo pipefail

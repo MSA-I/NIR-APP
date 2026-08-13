@@ -1,7 +1,7 @@
 -- P6b upload-reservation harness for 0065. Run only against an isolated local database
 -- with every migration applied. The transaction is rolled back.
 --
--- What it proves, per PLAN-07 §2:
+-- What it proves for the 0065 upload-reservation contract:
 --   (a) renewal extends the caller's own claim to least(now()+15min, created_at+45min):
 --       plain extension, the clamp near the lifetime deadline, and the revival of a claim
 --       past expires_at but inside the lifetime cap (the exact race the sweep grace
@@ -9,8 +9,7 @@
 --   (b) the 45-minute total-lifetime cap rejects with
 --       document_upload_reservation_lifetime_exceeded;
 --   (c) a foreign actor -- same tenant or another tenant -- sees
---       document_upload_reservation_unknown, and a supplier-role actor whose profile
---       binding disagrees with the claim's supplier is not_authorized;
+--       document_upload_reservation_unknown;
 --   (d) a REGISTERED claim rejects renewal by name (document_upload_reservation_registered
 --       -- the documented choice: success would invite re-upload, and the money rule says
 --       a stored-and-registered file is never re-uploaded), while the register path itself
@@ -107,7 +106,7 @@ insert into profiles (id, org_id, full_name, role) values
 
 insert into profiles (id, org_id, full_name, role, supplier_id) values
   ('26000000-0000-4000-8000-000000000002', '16000000-0000-0000-0000-000000000001',
-   'P6b supplier agent', 'supplier', '36000000-0000-4000-8000-000000000001');
+   'P6b office uploader', 'office', null);
 
 -- Reservations seeded at controlled clock offsets (now() is frozen inside this
 -- transaction, so every arithmetic assertion below is exact):
@@ -115,7 +114,6 @@ insert into profiles (id, org_id, full_name, role, supplier_id) values
 --   r2 near the lifetime deadline (renew clamps to created_at+45min)
 --   r3 past the lifetime deadline (renew rejects)
 --   r4 past expires_at, inside the lifetime (renew revives -- the grace race)
---   r7 supplier-binding mismatch (S2 claim held by the S1-bound supplier agent)
 insert into supplier_price_document_upload_reservations (
   document_id, org_id, actor_id, supplier_id,
   file_name, mime_type, storage_path, created_at, expires_at
@@ -146,17 +144,10 @@ insert into supplier_price_document_upload_reservations (
    '26000000-0000-4000-8000-000000000002',
    '36000000-0000-4000-8000-000000000001',
    'r4.pdf', 'application/pdf',
-   '16000000-0000-0000-0000-000000000001/supplier/36000000-0000-4000-8000-000000000001/46000000-0000-4000-8000-000000000004/r4.pdf',
-   now() - interval '20 minutes', now() - interval '5 minutes'),
-  ('46000000-0000-4000-8000-000000000007',
-   '16000000-0000-0000-0000-000000000001',
-   '26000000-0000-4000-8000-000000000002',
-   '36000000-0000-4000-8000-000000000002',
-   'r7.pdf', 'application/pdf',
-   '16000000-0000-0000-0000-000000000001/supplier/36000000-0000-4000-8000-000000000002/46000000-0000-4000-8000-000000000007/r7.pdf',
-   now() - interval '5 minutes', now() + interval '10 minutes');
+    '16000000-0000-0000-0000-000000000001/supplier/36000000-0000-4000-8000-000000000001/46000000-0000-4000-8000-000000000004/r4.pdf',
+    now() - interval '20 minutes', now() - interval '5 minutes');
 
--- ===== (a) Renewal as the owning supplier agent =====
+-- ===== (a) Renewal as the owning office uploader =====
 
 select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000002', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -203,22 +194,9 @@ exception
 end
 $$;
 
--- ===== (c) Foreign actors and the supplier binding =====
+-- ===== (c) Foreign actors =====
 
--- Supplier-role liveness: the claim names S2, the caller's profile binds S1.
-do $$
-begin
-  perform renew_supplier_price_document_upload('46000000-0000-4000-8000-000000000007');
-  raise exception 'expected supplier-binding rejection';
-exception
-  when others then
-    if sqlerrm is distinct from 'not_authorized' then
-      raise;
-    end if;
-end
-$$;
-
--- Same tenant, different actor: the owner cannot renew the supplier agent's claim.
+-- Same tenant, different actor: the owner cannot renew the office uploader's claim.
 select set_config('request.jwt.claim.sub', '26000000-0000-4000-8000-000000000001', true);
 do $$
 begin

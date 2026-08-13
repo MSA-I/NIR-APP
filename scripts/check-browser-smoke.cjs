@@ -271,7 +271,7 @@ async function assertMobileSpeedDialHidden(page, scope) {
  * This assertion replaces `mobile-action-bar count === 0`, which pinned the wrong half of the rule.
  * Suppressing NAVIGATION on /orders/new, /invoices/new and /receiving/:orderId is right: one stray
  * tap would discard a half-filled form. Suppressing the bar ENTIRELY also took the camera, and
- * /receiving/:orderId is the single worst place in the product to lose it — the kitchen manager is
+ * /receiving/:orderId is the single worst place in the product to lose it — the office receiver is
  * at the truck holding the goods in one hand and the invoice in the other, and the screen itself
  * used to admit the camera was gone. Capture cannot cost anybody their form: `QuickCapture`
  * uploads into the inbox and contains no `navigate`.
@@ -772,7 +772,7 @@ async function receivingAccessibility(browser) {
     await page.getByText('ספק בדיקת נגישות').first().click();
     await page.waitForURL((url) => url.pathname === '/receiving/p4-ui-order');
     await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור מוצר בדיקת נגישות' }).waitFor();
-    // G1, finding 7: kitchen keeps the camera here and nothing else — this is the exact person and
+    // The office receiver keeps the camera here and nothing else — this is the exact person and
     // the exact screen the change exists for.
     await assertOnlyCaptureAction(page, 'receiving detail accessibility');
     assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail lost its contextual phone taskbar');
@@ -872,7 +872,7 @@ function readOfflineStore(page, orderId = OFFLINE_ORDER_ID) {
 }
 
 /**
- * Offline goods receiving, end to end (PLAN-09 §3).
+ * Offline goods receiving, end to end (`OFFLINE-SYNC-DESIGN.md`).
  *
  * `serviceWorkers: 'block'` stays on deliberately: the queue is plain JS plus IndexedDB and owes
  * nothing to a service worker. App-shell precaching is covered by its own scenario, and this one
@@ -1083,7 +1083,7 @@ async function offlineReceiving(browser) {
 }
 
 /**
- * The barcode flag boundary and a denied camera (PLAN-09 §3, second scenario).
+ * The barcode flag boundary and a denied camera (`OFFLINE-SYNC-DESIGN.md`, second scenario).
  *
  * No real camera is exercised: the match itself is a unit-tested pure function, including the
  * ambiguity case. What is asserted here is the part only a browser can answer — that the flag being
@@ -2037,7 +2037,7 @@ async function documentOcrAcceptance(browser) {
     report.screenshots.push('ocr-credit-draft-1440.png');
 
     // A payment confirmation is reconciled, never executed: the reviewer's role cannot call
-    // execute_payment_request and the payer's role cannot read this interpretation. So the check
+    // execute_payment_request and the accountant does not review this interpretation. So the check
     // is that the panel answers "is this real money we moved?" and says where execution lives --
     // and above all that it offers no button to move money from here.
     await review.goto(`${baseURL}/documents/${OCR_PAYMENT_DOCUMENT_ID}/review`);
@@ -2137,8 +2137,7 @@ async function automaticPriceListAcceptance(browser) {
 // 'מאפ' matches two seeded suppliers ('מאפיית הלחם החם', 'מאפה זהב'), so an owner is guaranteed a
 // supplier hit and the fixture can prove the gate rather than an empty database.
 const SEARCH_TYPE_GATE_TERM = 'מאפ';
-// The three types a payer's routes cannot open: /suppliers, /products and /payments are all closed
-// to it, so a hit of these kinds should never have crossed the wire (handoff-09 §2).
+// The procurement types an accountant cannot open must never cross the wire.
 const ACCOUNTANT_FORBIDDEN_TYPES = ['supplier', 'product', 'order'];
 
 /**
@@ -2146,7 +2145,7 @@ const ACCOUNTANT_FORBIDDEN_TYPES = ['supplier', 'product', 'order'];
  *
  * Deliberately not reconstructed from env: the point is to call the RPC with **this session's own**
  * JWT, exactly as the browser would. The predicate rejects the pre-login state, where supabase-js
- * sends the anon key in both headers — an anon token would prove nothing about a payer.
+ * sends the anon key in both headers — an anon token would prove nothing about the accountant.
  */
 async function postgrestCredentials(page, navigate) {
   const pending = page.waitForRequest((request) => {
@@ -2175,12 +2174,9 @@ async function globalSearchWith(credentials, term) {
 /**
  * The type gate of migration 0069, observed from outside the app.
  *
- * Until 0069 the only thing keeping supplier / product / payment hits away from a payer was
- * `ALLOWED` in `src/components/GlobalSearch.tsx` — a table in the browser, over a function granted
- * to `authenticated` as a whole. This scenario asserts the gate where it now lives: the same term,
- * with a real session's own credentials, returns supplier hits for an owner and **nothing at all**
- * for a payer. The client half is asserted too — a payer's shell renders no search surface — but it
- * is no longer what makes the statement true.
+ * This scenario asserts the gate with real session credentials: the same term returns procurement
+ * hits for an owner while an accountant receives only the entity types reachable from the active
+ * accounting surfaces.
  */
 async function searchTypeGate(browser) {
   const ownerContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1280, height: 800 } });
@@ -2785,9 +2781,8 @@ async function offlineShellReload(browser) {
  * Package 2 (decisions #49 + #116, 09.08.2026) — the receiving screen's two new affordances,
  * asserted per role, with the same route-mock shape receivingAccessibility uses.
  *
- * Three parts: (A) kitchen with a delivery note sees the unordered-item guidance and NO
- * exception button — the command is owner/office, and a control that refuses on submit is the
- * screen-shape DEAD-ENDS-AUDIT exists to prevent; (B) kitchen completing a receipt with a
+ * Three parts: (A) office with a delivery note sees the unordered-item guidance; (B) office
+ * completing a receipt with a
  * damaged line sends p_open_credits=true and the damaged status in the payload — the DB half
  * (the credit rows themselves) is proven in p1_financial_commands.sql against the real
  * function; (C) office gets the button, and confirming the reasoned dialog posts
@@ -2821,37 +2816,37 @@ async function receivingDecisionsContract(browser) {
     context.route('**/rest/v1/supplier_products?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] })),
   ]);
 
-  // (A) + (B) — office now owns receiving after the kitchen persona retired.
-  const kitchenContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
-  const kitchenPage = await kitchenContext.newPage();
-  captureConsole(kitchenPage, 'receiving-decisions-kitchen');
+  // (A) + (B) — office receiving flow.
+  const receiverContext = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+  const receiverPage = await receiverContext.newPage();
+  captureConsole(receiverPage, 'receiving-decisions-office-mobile');
   const savePayloads = [];
   try {
-    await login(kitchenPage, 'office');
-    await routeOrder(kitchenContext);
-    await kitchenContext.route('**/rest/v1/rpc/save_goods_receipt', (route) => {
+    await login(receiverPage, 'office');
+    await routeOrder(receiverContext);
+    await receiverContext.route('**/rest/v1/rpc/save_goods_receipt', (route) => {
       savePayloads.push(route.request().postDataJSON());
       return route.fulfill({ status: 200, headers: jsonHeaders, json: { receipt_id: 'a0000000-0000-4000-8000-000000000002' } });
     });
 
-    await kitchenPage.goto(`${baseURL}/receiving/p4-d2-order?document=p4-d2-doc`);
-    await settle(kitchenPage);
-    await kitchenPage.getByText('שורות בתעודה שלא זוהו במחירון הספק').waitFor();
-    await kitchenPage.getByText('פתיחת דרישות זיכוי אוטומטית לחוסרים, לפריטים פגומים ולהחזרות').waitFor();
+    await receiverPage.goto(`${baseURL}/receiving/p4-d2-order?document=p4-d2-doc`);
+    await settle(receiverPage);
+    await receiverPage.getByText('שורות בתעודה שלא זוהו במחירון הספק').waitFor();
+    await receiverPage.getByText('פתיחת דרישות זיכוי אוטומטית לחוסרים, לפריטים פגומים ולהחזרות').waitFor();
 
     // (B) — no document param: the same flow receivingAccessibility proves, plus the damaged line.
-    await kitchenPage.goto(`${baseURL}/receiving/p4-d2-order`);
-    await settle(kitchenPage);
-    await kitchenPage.getByRole('button', { name: 'פגום עבור מוצר בדיקת החלטות' }).click();
-    await kitchenPage.getByRole('button', { name: /סיום קבלה/ }).click();
-    await kitchenPage.getByRole('heading', { name: 'הקבלה נשמרה!' }).waitFor();
+    await receiverPage.goto(`${baseURL}/receiving/p4-d2-order`);
+    await settle(receiverPage);
+    await receiverPage.getByRole('button', { name: 'פגום עבור מוצר בדיקת החלטות' }).click();
+    await receiverPage.getByRole('button', { name: /סיום קבלה/ }).click();
+    await receiverPage.getByRole('heading', { name: 'הקבלה נשמרה!' }).waitFor();
     const completion = savePayloads.find((p) => p.p_complete === true);
     assert(completion, 'no completing save_goods_receipt call was captured');
     assert.equal(completion.p_open_credits, true, 'the damaged receipt did not ask for automatic credits');
     assert(completion.p_lines.some((line) => line.status === 'damaged'),
       'the damaged line did not reach the payload as damaged');
   } finally {
-    await closeContext(kitchenContext);
+    await closeContext(receiverContext);
   }
 
   // (C) — office
@@ -2977,7 +2972,7 @@ async function passwordRecovery(browser) {
       await closeContext(coldContext);
     }
   } finally {
-    // Restore no matter where the scenario stopped: later scenarios log in as kitchen.
+    // Restore no matter where the scenario stopped: later scenarios log in as office.
     if (userId && passwordChanged) {
       const restore = await fetch(`${apiURL}/auth/v1/admin/users/${userId}`, {
         method: 'PUT', headers: adminHeaders, body: JSON.stringify({ password: account.password }),

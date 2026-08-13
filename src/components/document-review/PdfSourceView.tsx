@@ -5,7 +5,7 @@ import { Note } from '../ui';
 
 /**
  * The PDF branch of the source viewer: real in-app rendering via react-pdf instead of the old
- * bare <iframe>, whose internal viewer ignored the review's page picker entirely (the PLAN-00
+ * bare <iframe>, whose internal viewer ignored the review's page picker entirely (the the original document-viewer gap
  * gap). Here the picker state IS the rendered page: `page` goes straight into <Page pageNumber>.
  *
  * This module is imported lazily from DocumentSourceViewer so pdf.js (~1MB of engine) is paid

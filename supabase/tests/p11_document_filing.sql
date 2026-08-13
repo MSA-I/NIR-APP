@@ -24,7 +24,7 @@
 --       depend on a prop.
 --
 --   (d) The archive is not a black hole. docs_storage_read DOES gate on entity_type -- but
---       only inside its accountant arm. owner/office/kitchen, the STAFF roles that can reach
+--       only inside its accountant arm. owner/office, the STAFF roles that can reach
 --       /documents/archive (App.tsx:102,248), match an arm that never looks at entity_type,
 --       so an archived document's bytes stay downloadable and צפייה במקור keeps working.
 --       Asserted rather than reasoned about, because it is the failure nobody would notice
@@ -350,13 +350,13 @@ insert into public.organizations (id, name, status) values
 insert into auth.users (id, email) values
   ('d1f00000-0000-4000-8000-00000000000a', 'p11-owner-a@example.test'),
   ('d1f00000-0000-4000-8000-00000000000b', 'p11-office-a@example.test'),
-  ('d1f00000-0000-4000-8000-00000000000c', 'p11-kitchen-a@example.test'),
+  ('d1f00000-0000-4000-8000-00000000000c', 'p11-accountant-a@example.test'),
   ('d1f00000-0000-4000-8000-00000000000d', 'p11-owner-b@example.test');
 
 insert into public.profiles (id, org_id, full_name, role) values
   ('d1f00000-0000-4000-8000-00000000000a', 'd1f00000-0000-4000-8000-000000000001', 'P11 owner A', 'owner'),
   ('d1f00000-0000-4000-8000-00000000000b', 'd1f00000-0000-4000-8000-000000000001', 'P11 office A', 'office'),
-  ('d1f00000-0000-4000-8000-00000000000c', 'd1f00000-0000-4000-8000-000000000001', 'P11 kitchen A', 'kitchen'),
+  ('d1f00000-0000-4000-8000-00000000000c', 'd1f00000-0000-4000-8000-000000000001', 'P11 accountant A', 'accountant'),
   ('d1f00000-0000-4000-8000-00000000000d', 'd1f00000-0000-4000-8000-000000000002', 'P11 owner B', 'owner');
 
 insert into public.suppliers (id, org_id, name) values
@@ -858,9 +858,9 @@ select pg_temp.p11_assert(
   pg_temp.p11_error(
     'd1f00000-0000-4000-8000-00000000000c',
     $$select public.rescue_document_from_archive(
-        'd1f00000-0000-4000-8000-0000000000c1', 'מטבח מנסה לחלץ')$$
+        'd1f00000-0000-4000-8000-0000000000c1', 'חשבונאי מנסה לחלץ')$$
   ) like '%not_authorized%',
-  'kitchen must not rescue: filing is the same clerical responsibility as removal (0014:55-58)');
+  'accountant must not rescue: filing remains an owner/office clerical responsibility');
 
 -- An in-tenant sibling id and a cross-tenant id must be indistinguishable to the caller.
 select pg_temp.p11_assert(
@@ -941,7 +941,7 @@ select pg_temp.p11_assert(
 
 -- ===== 11. The archive is not a black hole: the file is still readable =====
 --
--- docs_storage_read gates on entity_type ONLY inside its accountant arm. owner/office/kitchen
+-- docs_storage_read gates on entity_type ONLY inside its accountant arm. owner/office
 -- -- the STAFF roles guarding /documents/archive (App.tsx:102,248) -- match an arm that never
 -- looks at entity_type. If a future edit folds entity_type into that arm, the archive screen's
 -- one remaining action (צפייה במקור) breaks silently. This is that tripwire.
@@ -955,14 +955,14 @@ select pg_temp.p11_assert(
     'd1f00000-0000-4000-8000-000000000001/p11/1.pdf') = 1
   and pg_temp.p11_visible_objects(
     'd1f00000-0000-4000-8000-00000000000c',
-    'd1f00000-0000-4000-8000-000000000001/p11/1.pdf') = 1,
-  'an archived document''s FILE must stay readable by owner/office/kitchen -- otherwise the archive is a black hole');
+    'd1f00000-0000-4000-8000-000000000001/p11/1.pdf') = 0,
+  'an archived document''s file must stay readable by owner/office and hidden from accountant');
 
--- ...and the archived ROW is readable by the same three, so screen and file agree.
+-- ...and the archived row follows the same active route boundary as the file.
 select pg_temp.p11_assert(
   pg_temp.p11_visible_documents(
-    'd1f00000-0000-4000-8000-00000000000c', 'd1f00000-0000-4000-8000-0000000000c1') = 1,
-  'an archived document row must be readable by the roles that can reach the archive screen');
+    'd1f00000-0000-4000-8000-00000000000c', 'd1f00000-0000-4000-8000-0000000000c1') = 0,
+  'an accountant must not gain the owner/office archive route through row visibility');
 
 -- The other tenant gets neither.
 select pg_temp.p11_assert(

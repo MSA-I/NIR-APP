@@ -44,7 +44,7 @@ function useResolveFlags(body: unknown, status = 200) {
 
 describe('useFeatureFlags', () => {
   it('resolves the set and answers lookups fail-closed', async () => {
-    // The contract shape, handoff-04 §4: `returns table (flag_key text, state boolean)`.
+    // The contract shape, migration 0059: `returns table (flag_key text, state boolean)`.
     useResolveFlags([
       { flag_key: 'sso.enabled', state: true },
       { flag_key: 'receiving.barcode', state: false },

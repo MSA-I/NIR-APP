@@ -384,8 +384,8 @@ insert into public.invoices (
 );
 
 -- A fourth document for the payment-confirmation panel, plus the payment it confirms. The panel
--- reconciles rather than executes -- a payer may not read an interpretation at all (0046:557) and
--- only a payer may call execute_payment_request -- so what is exercised here is the match, which
+-- reconciles rather than executes: review is an owner/office task while payment execution belongs
+-- to the accountant. What is exercised here is the match, which
 -- is the only thing a reviewer on this screen can actually act on.
 insert into public.document_extractions (
   id, org_id, job_id, document_id, engine, model, model_version,

@@ -34,8 +34,7 @@ insert into public.organizations (id, name, status, vat_rate) values
 
 insert into auth.users (id, email) values
   ('20300000-0000-4000-8000-000000000001', 'owner-p30@example.test'),
-  ('20300000-0000-4000-8000-000000000002', 'kitchen-p30@example.test'),
-  ('20300000-0000-4000-8000-000000000003', 'supplier-p30@example.test'),
+  ('20300000-0000-4000-8000-000000000002', 'office-p30@example.test'),
   ('20300000-0000-4000-8000-000000000004', 'other-owner-p30@example.test');
 
 insert into public.suppliers (id, org_id, name, tax_id, status) values
@@ -46,14 +45,11 @@ insert into public.profiles (id, org_id, full_name, role) values
   ('20300000-0000-4000-8000-000000000001', '10300000-0000-4000-8000-000000000001',
    'P30 owner', 'owner'),
   ('20300000-0000-4000-8000-000000000002', '10300000-0000-4000-8000-000000000001',
-   'P30 kitchen', 'kitchen'),
+   'P30 office', 'office'),
   ('20300000-0000-4000-8000-000000000004', '10300000-0000-4000-8000-000000000002',
    'P30 other owner', 'owner');
-insert into public.profiles (id, org_id, full_name, role, supplier_id) values
-  ('20300000-0000-4000-8000-000000000003', '10300000-0000-4000-8000-000000000001',
-   'P30 supplier portal', 'supplier', '40300000-0000-4000-8000-000000000001');
 
--- Two branches. The kitchen user is granted only the first, so the second is the unit whose
+-- Two branches. The office user is granted only the first, so the second is the unit whose
 -- document and whose order must be invisible to them.
 insert into public.org_units (id, org_id, parent_id, unit_type, name) values
   ('b0300000-0000-4000-8000-000000000001', '10300000-0000-4000-8000-000000000001',
@@ -82,7 +78,7 @@ insert into public.price_history (org_id, supplier_product_id, price, effective_
   ('10300000-0000-4000-8000-000000000001', '70300000-0000-4000-8000-000000000001', 10,
    '2026-01-01');
 
--- The order lives in the branch the kitchen user CANNOT see, and the document names its number.
+-- The order lives in the branch the office user CANNOT see, and the document names its number.
 insert into public.purchase_orders (id, org_id, supplier_id, status, unit_id, expected_date) values
   ('50300000-0000-4000-8000-000000000001', '10300000-0000-4000-8000-000000000001',
    '40300000-0000-4000-8000-000000000001', 'sent',
@@ -98,7 +94,7 @@ insert into public.documents (
   ('60300000-0000-4000-8000-000000000001', '10300000-0000-4000-8000-000000000001',
    'inbox', '10300000-0000-4000-8000-000000000001/p30-open.pdf', 'p30-open.pdf',
    'application/pdf', 'invoice', null),
-  -- Filed to the branch the kitchen user cannot see.
+  -- Filed to the branch the office user cannot see.
   ('60300000-0000-4000-8000-000000000002', '10300000-0000-4000-8000-000000000001',
    'inbox', '10300000-0000-4000-8000-000000000001/p30-scoped.pdf', 'p30-scoped.pdf',
    'application/pdf', 'invoice', 'b0300000-0000-4000-8000-000000000002'),
@@ -176,18 +172,6 @@ select pg_temp.p30_assert(
    ->> 'document_id') = '60300000-0000-4000-8000-000000000001',
   'the owner could not read a document of their own tenant');
 
-select pg_temp.p30_act('20300000-0000-4000-8000-000000000003');
-do $$
-begin
-  perform public.get_document_review_assessment('60300000-0000-4000-8000-000000000001');
-  raise exception 'P30 review-read assertion failed: A SUPPLIER PORTAL ACCOUNT READ THE '
-    'ASSESSMENT. It contains our ordered quantities, our contracted prices and what our other '
-    'documents said -- everything a supplier would need to price against us';
-exception when sqlstate '42501' then
-  if sqlerrm <> 'document_review_read_not_authorized' then raise; end if;
-end
-$$;
-
 select pg_temp.p30_act('20300000-0000-4000-8000-000000000004');
 do $$
 begin
@@ -237,7 +221,7 @@ select pg_temp.p30_assert(
    from public.get_document_review_assessment(
      '60300000-0000-4000-8000-000000000001') r),
   'the owner, whose scope covers the branch, did not get the order. If this fails while the '
-  'kitchen assertion above passes, the function is refusing everyone rather than narrowing');
+  'office assertion above passes, the function is refusing everyone rather than narrowing');
 
 -- ===== 3. The two states, which must never be one =====
 

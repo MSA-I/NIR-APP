@@ -15,10 +15,9 @@
  *   3. **Say it, do not merely place it.** The button sits next to a labelled select. Adjacency is
  *      a visual fact; the `role="group"` carrying the field's own label plus the description below
  *      are what make it a fact for someone reading with a screen reader.
- *   4. **Gate it where the suppliers screen gates it.** `Suppliers.tsx:87,152` shows its own
- *      "ספק חדש" button to `owner`/`office` only. A shortcut to that screen's action must not be a
- *      way around that screen's rule — `kitchen` reaches /invoices/new and /products, and must see
- *      the select without the button.
+ *   4. **Gate it where the suppliers screen gates it.** `Suppliers.tsx` shows its own
+ *      "ספק חדש" button to `owner`/`office` only. The accountant can use supplier context in the
+ *      bank workflow, but cannot create a supplier from there.
  *
  * Written once rather than three times because it is the same four points three times, and because
  * a fourth screen (E3's audit) is expected to want it. What is *not* here is the per-screen shape:
@@ -47,18 +46,9 @@ export const SUPPLIER_FIELD_QUICK_CREATE_HINT = 'אין ספק מתאים ברש
 export const QUICK_CREATE_SUPPLIER_HINT = 'הספק החדש ייווצר וייבחר מיד בשדה זה';
 
 /**
- * What the field says to somebody who may NOT create a supplier — G1, finding 4.
- *
- * Until now `picker.canCreate === false` rendered nothing at all: a `kitchen` user on
- * /invoices/new saw a required "ספק *" select, no create button, and not one word about why. The
- * fence is correct (RLS forbids `kitchen` from inserting a supplier — 0022:112-113), and `kitchen`
- * is otherwise allowed to file the invoice (`create_invoice`, 0023:1717) — so the person is in the
- * middle of a legitimate task with exactly one part of it closed to them. Silence turns that into a
- * wall; a sentence turns it into a next step, and it must live HERE rather than as a per-screen
- * notice, because it is the field that is stuck and every screen that mounts the field inherits it.
- *
- * Phrased as "who to ask", never as "you are not allowed": the reader needs the next action, not a
- * verdict. Mirrors PriceLists.tsx:108, the one screen that already said something.
+ * What an accountant sees when a financial workflow needs supplier context but supplier creation
+ * remains an owner/office operation. The hint names the next action instead of presenting a silent
+ * missing control.
  */
 export const SUPPLIER_FIELD_NO_CREATE_HINT =
   'אין ספק מתאים ברשימה? הוספת ספק חדש שמורה לבעלים ולמנהל המשרד — יש לבקש מהם להוסיף אותו.';
@@ -156,7 +146,7 @@ export function useQuickSupplier<T extends SupplierOption>(
  * When creation is on offer, select and button live in one `role="group"`, so the button is
  * announced as part of the field rather than as a loose control that happens to follow one. The
  * group is named *around* the field's label instead of repeating it:
- * `qa/deterministic/invoice-linked-context.spec.ts` locates this select with Playwright's
+ * The invoice-linked browser gate locates this select with Playwright's
  * `getByLabel('ספק *', { exact: true })`, and `getElementLabels` resolves `aria-labelledby` for any
  * element, not only labellable ones — a group carrying the identical name would resolve to two
  * elements and put all four of that suite's page-scoped calls into a strict-mode violation.
@@ -186,7 +176,7 @@ export function SupplierSelectField({
    * Every announcement below hangs off this one flag, and it has to, because the two ways of
    * getting it wrong are the same mistake pointed at different users:
    *
-   *   - `picker.canCreate` alone names the group "בחירה או **יצירה**" for a `kitchen` user whose
+   *   - `picker.canCreate` alone names the group "בחירה או **יצירה**" for an accountant whose
    *     button is not rendered. A sighted user sees one control and infers correctly; a screen
    *     reader user is told an affordance exists, hunts for it, and finds nothing — a dead end
    *     manufactured by the accessibility layer, in the change whose purpose is removing them.
@@ -234,9 +224,7 @@ export function SupplierSelectField({
           <span id={buttonHintId} className="sr-only">{QUICK_CREATE_SUPPLIER_HINT}</span>
         </>
       )}
-      {/* Visible, not sr-only: the sighted `kitchen` user is the one who was staring at a select
-          with no button and no explanation. It is also the select's description, so the same words
-          reach a screen reader instead of a second, differently-worded announcement. */}
+      {/* Visible and also connected to the select so the same next step reaches screen readers. */}
       {noCreate && (
         <p id={noCreateHintId} className="mt-1 text-xs text-ink-muted">
           {SUPPLIER_FIELD_NO_CREATE_HINT}

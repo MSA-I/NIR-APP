@@ -328,7 +328,7 @@ insert into public.organizations (id, name, status) values
 insert into auth.users (id, email) values
   ('28000000-0000-4000-8000-000000000001', 'owner-a-p18@example.test'),
   ('28000000-0000-4000-8000-000000000002', 'office-a-p18@example.test'),
-  ('28000000-0000-4000-8000-000000000003', 'kitchen-a-p18@example.test'),
+  ('28000000-0000-4000-8000-000000000003', 'office-a-p18-2@example.test'),
   ('29000000-0000-4000-8000-000000000001', 'owner-b-p18@example.test'),
   ('2a000000-0000-4000-8000-000000000001', 'platform-p18@example.test');
 
@@ -338,7 +338,7 @@ insert into public.profiles (id, org_id, full_name, role) values
   ('28000000-0000-4000-8000-000000000002',
    '18000000-0000-4000-8000-000000000001', 'P18 office A', 'office'),
   ('28000000-0000-4000-8000-000000000003',
-   '18000000-0000-4000-8000-000000000001', 'P18 kitchen A', 'kitchen'),
+   '18000000-0000-4000-8000-000000000001', 'P18 office A', 'office'),
   ('29000000-0000-4000-8000-000000000001',
    '19000000-0000-4000-8000-000000000001', 'P18 owner B', 'owner');
 
@@ -1118,29 +1118,29 @@ select pg_temp.p18_assert(
 rollback to savepoint p18_eligibility_gate;
 release savepoint p18_eligibility_gate;
 
-savepoint p18_empty_kitchen_shadow;
+savepoint p18_empty_office_shadow;
 select pg_temp.p18_seed_interpretation(
   4, 0.99, '[]'::jsonb,
   '28000000-0000-4000-8000-000000000003'
-) as empty_kitchen_interpretation \gset
+) as empty_office_interpretation \gset
 select set_config('request.jwt.claim.role', 'service_role', true);
 set local role service_role;
 select public.run_price_list_shadow(
   '89000000-0000-4000-8000-000000000004',
-  :'empty_kitchen_interpretation'::uuid,
+  :'empty_office_interpretation'::uuid,
   '28000000-0000-4000-8000-000000000003'
-)::text as empty_kitchen_shadow \gset
+)::text as empty_office_shadow \gset
 reset role;
 select pg_temp.p18_assert(
   (select actor_id = '28000000-0000-4000-8000-000000000003'
           and interpreted_line_count = 0
    from public.price_list_shadow_runs
-   where id = (:'empty_kitchen_shadow'::jsonb ->> 'shadow_run_id')::uuid)
+   where id = (:'empty_office_shadow'::jsonb ->> 'shadow_run_id')::uuid)
   and not exists (
     select 1 from public.price_list_shadow_lines
-    where shadow_run_id = (:'empty_kitchen_shadow'::jsonb ->> 'shadow_run_id')::uuid
+    where shadow_run_id = (:'empty_office_shadow'::jsonb ->> 'shadow_run_id')::uuid
   ),
-  'a kitchen-uploaded empty interpretation did not leave measurable zero-line shadow evidence'
+  'an office-uploaded empty interpretation did not leave measurable zero-line shadow evidence'
 );
 select set_config(
   'request.jwt.claim.sub', '28000000-0000-4000-8000-000000000001', true
@@ -1151,11 +1151,11 @@ select public.get_price_list_drift_metrics(30)::text as empty_run_drift \gset
 select pg_temp.p18_assert(
   (select count(*) = 1 and bool_and(is_empty_run)
    from public.get_price_list_calibration_queue(50)
-   where shadow_run_id = (:'empty_kitchen_shadow'::jsonb ->> 'shadow_run_id')::uuid),
+   where shadow_run_id = (:'empty_office_shadow'::jsonb ->> 'shadow_run_id')::uuid),
   'zero-line price list was absent from the human calibration corpus queue'
 );
 select public.record_price_list_empty_run_review(
-  (:'empty_kitchen_shadow'::jsonb ->> 'shadow_run_id')::uuid,
+  (:'empty_office_shadow'::jsonb ->> 'shadow_run_id')::uuid,
   '68000000-0000-4000-8000-000000000088',
   'incorrect',
   'P18 human confirmed the price rows were missed'
@@ -1172,13 +1172,13 @@ select pg_temp.p18_assert(
   and (:'empty_run_calibration'::jsonb ->> 'reviewed_zero_line_document_count')::integer = 1
   and not exists (
     select 1 from public.get_price_list_calibration_queue(50)
-    where shadow_run_id = (:'empty_kitchen_shadow'::jsonb ->> 'shadow_run_id')::uuid
+    where shadow_run_id = (:'empty_office_shadow'::jsonb ->> 'shadow_run_id')::uuid
   ),
   'zero-line human decision was not recorded in corpus progress'
 );
 reset role;
-rollback to savepoint p18_empty_kitchen_shadow;
-release savepoint p18_empty_kitchen_shadow;
+rollback to savepoint p18_empty_office_shadow;
+release savepoint p18_empty_office_shadow;
 
 select set_config(
   'request.jwt.claim.sub', '28000000-0000-4000-8000-000000000001', true

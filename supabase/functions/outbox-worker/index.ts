@@ -13,7 +13,7 @@
 // worker only ever calls the four 0064 RPCs (claim / complete / fail / replay surface),
 // which are themselves revoked from every browser role. It never touches business rows.
 //
-// Wave-7 scope (PLAN-08): targets are webhook_subscriptions rows, and resolution happens
+// Wave-7 scope (מיגרציה `0066`): targets are webhook_subscriptions rows, and resolution happens
 // in the DATABASE — claim_integration_outbox (0066) returns each row with the resolved
 // url, the deterministic body serialization, a timestamp and an HMAC-SHA256 signature
 // computed with the subscription's Vault secret. This worker never sees the secret and

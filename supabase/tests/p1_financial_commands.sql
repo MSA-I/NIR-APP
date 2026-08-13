@@ -84,17 +84,16 @@ insert into organizations (id, name, status) values
 insert into auth.users (id, email) values
   ('20000000-0000-0000-0000-000000000001', 'owner-a@example.test'),
   ('20000000-0000-0000-0000-000000000002', 'office-a@example.test'),
-  ('20000000-0000-0000-0000-000000000003', 'kitchen-a@example.test'),
-  ('20000000-0000-0000-0000-000000000004', 'payer-a@example.test'),
-  ('20000000-0000-0000-0000-000000000005', 'accountant-a@example.test'),
-  ('20000000-0000-0000-0000-000000000006', 'supplier-a@example.test'),
+  ('20000000-0000-0000-0000-000000000003', 'office-a-2@example.test'),
+  ('20000000-0000-0000-0000-000000000004', 'accountant-a@example.test'),
+  ('20000000-0000-0000-0000-000000000005', 'accountant-a-2@example.test'),
   ('20000000-0000-0000-0000-000000000007', 'owner-b@example.test');
 
 insert into profiles (id, org_id, full_name, role) values
   ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'Owner A', 'owner'),
   ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'Office A', 'office'),
-  ('20000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'Kitchen A', 'kitchen'),
-  ('20000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000001', 'Payer A', 'payer'),
+  ('20000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'Office A', 'office'),
+  ('20000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000001', 'Accountant A', 'accountant'),
   ('20000000-0000-0000-0000-000000000005', '10000000-0000-0000-0000-000000000001', 'Accountant A', 'accountant'),
   ('20000000-0000-0000-0000-000000000007', '10000000-0000-0000-0000-000000000002', 'Owner B', 'owner');
 
@@ -103,8 +102,6 @@ insert into suppliers (id, org_id, name) values
   ('30000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'Supplier A2'),
   ('30000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000002', 'Supplier B1');
 
-insert into profiles (id, org_id, full_name, role, supplier_id) values
-  ('20000000-0000-0000-0000-000000000006', '10000000-0000-0000-0000-000000000001', 'Supplier agent A1', 'supplier', '30000000-0000-0000-0000-000000000001');
 
 insert into products (id, org_id, name, unit) values
   ('40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'Product A1', 'unit'),
@@ -430,7 +427,7 @@ select pg_temp.p1_assert(
   'credit transition audit is missing its reason'
 );
 
--- Payment request: create, retry, transition and payer execution all remain atomic.
+-- Payment request: create, retry, transition and accountant execution all remain atomic.
 select pg_temp.p1_assert(
   (create_payment_request(
     '80000000-0000-0000-0000-000000000001',
@@ -457,7 +454,7 @@ select transition_payment_request(
 
 reset role;
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000004', true);
--- 0061 wires step-up into payment execution; the payer needs a fresh password AMR.
+-- 0061 wires step-up into payment execution; the accountant needs a fresh password AMR.
 select set_config('request.jwt.claims', jsonb_build_object(
   'sub', '20000000-0000-0000-0000-000000000004',
   'amr', jsonb_build_array(jsonb_build_object(
@@ -599,13 +596,13 @@ $$;
 -- Manual exceptions (#116, decided 09.08.2026): owner/office only, reasoned, entity-bound,
 -- idempotent per (entity, type) while one is still open.
 reset role;
-select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000003', true);
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000004', true);
 set local role authenticated;
 do $$
 begin
   perform open_manual_exception('purchase_orders', '70000000-0000-0000-0000-000000000001',
     'item_not_ordered', 'פריט שלא הוזמן הגיע');
-  raise exception 'kitchen must not open a manual exception';
+  raise exception 'accountant must not open a manual exception';
 exception when sqlstate '42501' then
   if sqlerrm not like '%not_authorized%' then raise; end if;
 end
@@ -767,31 +764,6 @@ begin
     (select current_price = v_before from supplier_products where id = '50000000-0000-0000-0000-000000000001'),
     'invalid price batch partially updated rows'
   );
-end
-$$;
-
--- Supplier agent price writes are limited to the monthly submission RPC.
-reset role;
-select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000006', true);
-set local role authenticated;
-do $$
-begin
-  perform set_supplier_product_price(
-  '50000000-0000-0000-0000-000000000001', 13.5, '2026-07-15', true, 'עדכון ספק'
-  );
-  raise exception 'expected supplier manual price rejection';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%price_write_not_authorized%' then raise; end if;
-end
-$$;
-do $$
-begin
-  perform set_supplier_product_price(
-    '50000000-0000-0000-0000-000000000002', 11, '2026-07-15', true, 'ניסיון ספק אחר'
-  );
-  raise exception 'expected supplier scope rejection';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%price_write_not_authorized%' then raise; end if;
 end
 $$;
 
@@ -1122,7 +1094,7 @@ select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000003
 set local role authenticated;
 select pg_temp.p1_assert(
   not (invoice_financial_check_signals('60000000-0000-0000-0000-000000000002')->>'bank_match_exists')::boolean,
-  'kitchen received a bank-match signal'
+  'office received a bank-match signal'
 );
 
 reset role;
@@ -1134,16 +1106,13 @@ select pg_temp.p1_assert(
   )->>'idempotent')::boolean = false,
   'office could not use the reasoned invoice soft-delete command'
 );
-do $$
-begin
-  perform transition_credit_request(
-    '65000000-0000-0000-0000-000000000004', 'closed', 'office attempt'
-  );
-  raise exception 'expected office credit transition rejection';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%credit_request_transition_not_authorized%' then raise; end if;
-end
-$$;
+select pg_temp.p1_assert(
+  not (transition_credit_request(
+    '65000000-0000-0000-0000-000000000004', 'offset',
+    'מנהל הרכש קיזז את הזיכוי שהתקבל'
+  )->>'idempotent')::boolean,
+  'office lost the active credit transition path'
+);
 select pg_temp.p1_assert(
   not (invoice_financial_check_signals('60000000-0000-0000-0000-000000000002')->>'bank_match_exists')::boolean,
   'office received a bank-match signal'
@@ -1305,20 +1274,6 @@ select pg_temp.p1_assert(
     where payment_request_id = '80000000-0000-0000-0000-000000000011'
   ),
   'accountant can see a request after its invoice returned to investigation'
-);
-
-reset role;
-select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000004', true);
-set local role authenticated;
-select pg_temp.p1_assert(
-  exists (
-    select 1 from payment_requests
-    where id = '80000000-0000-0000-0000-000000000011'
-  ) and exists (
-    select 1 from payment_request_invoices
-    where payment_request_id = '80000000-0000-0000-0000-000000000011'
-  ),
-  'payer visibility changed when accountant readiness was tightened'
 );
 
 reset role;

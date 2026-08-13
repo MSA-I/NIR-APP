@@ -13,13 +13,13 @@ import { TRIAL_WARNING_DAYS, trialDaysRemaining } from '../lib/trial';
 import { fmtDate } from '../lib/format';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
 import { pendingOfflineWork } from '../lib/offlineQueue';
-import type { Role } from '../lib/types';
+import { isActiveRole, type ActiveRole } from '../lib/types';
 import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/trial';
 import { isRouteFamilyActive } from '../lib/quickActions';
 
-export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: Role[] }
+export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: ActiveRole[] }
 export interface NavSection { section: string; items: NavItem[]; collapsible?: boolean }
 
 // Four work groups — מסמכים / רכש / כספים / בקרה — under two ungrouped links that need no
@@ -99,33 +99,30 @@ export const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-const DAILY_PATHS: Record<Role, readonly string[]> = {
+const DAILY_PATHS: Record<ActiveRole, readonly string[]> = {
   owner: ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
   office: ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
   accountant: ['/dashboard', '/invoices', '/pay', '/payments', '/bank'],
-  kitchen: [],
-  payer: [],
-  supplier: [],
 };
 
-const MANAGEMENT_PATHS: Partial<Record<Role, readonly string[]>> = {
+const MANAGEMENT_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
   owner: ['/inventory', '/products', '/prices', '/credits', '/payment-requests', '/payments', '/bank'],
   office: ['/inventory', '/products', '/prices', '/credits', '/payment-requests'],
   accountant: ['/credits'],
 };
 
-const CONTROL_PATHS: Partial<Record<Role, readonly string[]>> = {
+const CONTROL_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
   owner: ['/documents/operations', '/exceptions', '/expenses', '/reports', '/analytics'],
   office: ['/exceptions', '/analytics'],
   accountant: ['/exceptions', '/expenses', '/reports'],
 };
 
-function catalogItem(path: string, role: Role): NavItem | null {
+function catalogItem(path: string, role: ActiveRole): NavItem | null {
   const item = NAV_SECTIONS.flatMap((section) => section.items).find((candidate) => candidate.to === path);
   return item?.roles.includes(role) ? item : null;
 }
 
-function itemsFor(role: Role, paths: readonly string[]): NavItem[] {
+function itemsFor(role: ActiveRole, paths: readonly string[]): NavItem[] {
   return paths.map((path) => catalogItem(path, role)).filter((item): item is NavItem => item !== null);
 }
 
@@ -133,21 +130,21 @@ function itemsFor(role: Role, paths: readonly string[]): NavItem[] {
 // presentation: daily work is visible; management and control are progressively disclosed. New
 // order, alerts and archive keep their routes and page titles but enter through their contextual
 // surfaces instead of competing with modules in the sidebar.
-export function sectionsForRole(role: Role | undefined, isPlatformAdmin: boolean): NavSection[] {
+export function sectionsForRole(role: ActiveRole | undefined, isPlatformAdmin: boolean): NavSection[] {
   const roleSections: NavSection[] = role ? [
     { section: '', items: itemsFor(role, DAILY_PATHS[role]) },
     { section: 'ניהול', items: itemsFor(role, MANAGEMENT_PATHS[role] ?? []), collapsible: true },
     { section: 'בקרה', items: itemsFor(role, CONTROL_PATHS[role] ?? []), collapsible: true },
   ].filter((section) => section.items.length > 0) : [];
-  const platform = { section: 'פלטפורמה', collapsible: !!role, items: [{ to: '/admin', label: 'ניהול לקוחות', icon: Building2, roles: [] as Role[] }] };
+  const platform = { section: 'פלטפורמה', collapsible: !!role, items: [{ to: '/admin', label: 'ניהול לקוחות', icon: Building2, roles: [] as ActiveRole[] }] };
   return isPlatformAdmin ? [...roleSections, platform] : roleSections;
 }
 
-export function footerItemsForRole(role: Role | undefined): NavItem[] {
+export function footerItemsForRole(role: ActiveRole | undefined): NavItem[] {
   return role === 'owner' ? itemsFor(role, ['/onboarding', '/settings']) : [];
 }
 
-export function drawerSectionsForRole(role: Role | undefined, isPlatformAdmin: boolean): NavSection[] {
+export function drawerSectionsForRole(role: ActiveRole | undefined, isPlatformAdmin: boolean): NavSection[] {
   return sectionsForRole(role, isPlatformAdmin);
 }
 
@@ -188,7 +185,7 @@ export default function Layout() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [pendingOffline, setPendingOffline] = useState<{ actions: number; uploads: number } | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const role = profile?.role;
+  const role = isActiveRole(profile?.role) ? profile.role : undefined;
   const canSearch = canGlobalSearch(role);
   // Feedback is now a product surface for every active account, not a rollout flag that can make
   // the user's screenshot option disappear between sessions.
@@ -199,7 +196,7 @@ export default function Layout() {
   // Unfiled-documents pill (0014): counted only for staff who can act on that queue. The
   // Only procurement staff can act on the gallery queue. A known count > 0 is required,
   // so null (loading) and 0 never fabricate an all-clear or workload.
-  const inboxCount = useInboxCount(!!role && (['owner', 'office'] as Role[]).includes(role));
+  const inboxCount = useInboxCount(role === 'owner' || role === 'office');
   const orgName = org?.name ?? '';
   const orgLogoUrl = org?.logo_path
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
@@ -415,9 +412,7 @@ export default function Layout() {
       {/* Global search — desktop. Injected above <main>: the headerless desktop area is empty
           today (plan §2), and lg:ms-60 lines it up beside the fixed w-60 sidebar. z-30 keeps it
           below the sidebar (z-40); sticky works because the min-h-dvh wrapper has no overflow. */}
-      {/* The header exists when it has something to hold. Until package 0 that was the search box
-          alone, which left payer and supplier — the two roles with the most blocked tasks in
-          DEAD-ENDS-AUDIT — with no desktop slot to report from. */}
+      {/* The header exists only when it has something to hold. */}
       {(canSearch || feedbackOn) && (
         <header className="hidden lg:flex sticky top-0 z-30 lg:ms-60 h-14 items-center gap-3 border-b border-line bg-surface px-6 no-print">
           {canSearch && <GlobalSearch />}
@@ -447,7 +442,7 @@ export default function Layout() {
             viewport strands all content on the start side in RTL, leaving a dead zone on the
             end side. keyed by path so each screen change re-triggers the fade (section 11). */}
         {/* #15 shipped the soft block but nothing announced it in advance: the first thing the owner
-            learned was a full-screen stop. Owner only — a kitchen user cannot arrange the
+            learned was a full-screen stop. Owner only — other active roles cannot arrange the
             continuation, and a banner nobody can act on for a week is noise; the expired screen
             still tells everyone at the moment it matters. Wording matches that screen ("מפעיל
             השירות", "הנתונים שמורים") so the two never contradict each other. */}

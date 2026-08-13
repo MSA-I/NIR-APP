@@ -69,7 +69,7 @@ select section, scope, item, value from (
     union all select 'external_references',   count(*) from external_references   where org_id = o.id
     union all select 'integration_failures',  count(*) from integration_failures  where org_id = o.id
     -- wave 9 (0068, 0070): per-member notification preferences and the approval-policy
-    -- configuration (which has no consumer -- PLAN-10 §1 -- and governs nothing today).
+    -- configuration (which has no consumer -- הכרעה #103 -- and governs nothing today).
     union all select 'notification_preferences', count(*) from notification_preferences where org_id = o.id
     union all select 'approval_policy_configurations', count(*) from approval_policy_configurations where org_id = o.id
   ) t on true

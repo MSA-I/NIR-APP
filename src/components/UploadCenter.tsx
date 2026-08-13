@@ -1,4 +1,4 @@
-// Upload Center (ENTERPRISE-UI-PLAN.md §5, PLAN-07 wave 6b).
+// Upload Center. The live resume/offline contract is in docs/OFFLINE-SYNC-DESIGN.md.
 //
 // One global upload queue for every screen that uploads files. The store lives at module
 // level so plain libraries (`runUploadBatch`) and components alike feed the same queue;

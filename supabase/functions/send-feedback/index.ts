@@ -51,7 +51,8 @@ const MESSAGE: Record<ErrorCode, string> = {
 
 /** MIRROR, NOT AUTHORITY — the same standing as send-push's role list and send-invite's own copy.
  *  The display vocabulary lives in src/lib/status.ts:168; this file runs in Deno and cannot import
- *  it. If a label changes there, change it here in the same commit. */
+ *  it. Retired labels remain only so an already-stored historical note keeps its meaning; this map
+ *  grants no access. If a label changes there, change it here in the same commit. */
 const ROLE_LABEL: Record<string, string> = {
   owner: 'מנהל/בעלים',
   kitchen: 'מנהל מטבח',

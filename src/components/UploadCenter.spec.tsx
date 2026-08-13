@@ -1,4 +1,4 @@
-// Upload Center queue + surface (ENTERPRISE-UI-PLAN.md §5, PLAN-07 wave 6b):
+// Upload Center queue + surface; see docs/OFFLINE-SYNC-DESIGN.md:
 // the state machine incl. the money rule (stored-not-registered shows the registered
 // document and never invites a re-upload), the first progressbar in the repo with its
 // spaced aria-live announcements, and `runUploadBatch` signature compatibility.

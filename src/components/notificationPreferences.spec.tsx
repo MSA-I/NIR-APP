@@ -29,7 +29,7 @@ interface PreferenceRow {
   configured: boolean;
 }
 
-/** The reader's contract (handoff-09 §1.4): one row per catalogued code, always the full set. */
+/** The reader's contract (migration 0068): one row per catalogued code, always the full set. */
 const CATALOG = ['duplicate_invoice', 'payment_due', 'price_increase'];
 
 const defaults = (): PreferenceRow[] => CATALOG.map((event_code) => ({
@@ -88,7 +88,7 @@ function renderMatrix() {
 const switchFor = (channel: string, event: string) => screen.getByRole('switch', { name: `${channel} — ${event}` });
 const DUPLICATE = 'חשד לחשבונית כפולה';
 
-describe('NotificationMatrix — per-event delivery preferences (PLAN-10 §3, migration 0068)', () => {
+describe('NotificationMatrix — per-event delivery preferences (migration 0068)', () => {
   it('renders an absent row as ON and writes nothing for merely being opened', async () => {
     const { writes } = useNotificationRpcs();
     renderMatrix();
@@ -133,7 +133,7 @@ describe('NotificationMatrix — per-event delivery preferences (PLAN-10 §3, mi
     renderMatrix();
     await waitFor(() => expect(screen.getByText(DUPLICATE)).toBeInTheDocument());
 
-    // The delivery law of handoff-09 §1.1: push_enabled = false removes Push and LEAVES the
+    // The delivery law of migration 0068: push_enabled = false removes Push and LEAVES the
     // notification row, because OPEN-DECISIONS #39's unread badge counts those rows.
     expect(screen.getByText('מופיעה בפעמון ובמסך ההתראות; לא נשלחת דחיפה למכשיר')).toBeInTheDocument();
     expect(screen.getByText(/כיבוי הדחיפה מסיר רק את ההתראה למכשיר/)).toBeInTheDocument();

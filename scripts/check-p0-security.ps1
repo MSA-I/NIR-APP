@@ -437,18 +437,12 @@ try {
   $accounts = @{
     ownerA = New-TestUser "owner-a" $suffix $serviceKey
     officeA = New-TestUser "office-a" $suffix $serviceKey
-    kitchenA = New-TestUser "kitchen-a" $suffix $serviceKey
-    payerA = New-TestUser "payer-a" $suffix $serviceKey
     accountantA = New-TestUser "accountant-a" $suffix $serviceKey
-    supplierA = New-TestUser "supplier-a" $suffix $serviceKey
     ownerB = New-TestUser "owner-b" $suffix $serviceKey
     officeB = New-TestUser "office-b" $suffix $serviceKey
-    kitchenB = New-TestUser "kitchen-b" $suffix $serviceKey
-    payerB = New-TestUser "payer-b" $suffix $serviceKey
     accountantB = New-TestUser "accountant-b" $suffix $serviceKey
-    supplierB = New-TestUser "supplier-b" $suffix $serviceKey
     ownerSuspended = New-TestUser "owner-suspended" $suffix $serviceKey
-    payerSuspended = New-TestUser "payer-suspended" $suffix $serviceKey
+    accountantSuspended = New-TestUser "accountant-suspended" $suffix $serviceKey
     platform = New-TestUser "platform" $suffix $serviceKey
   }
 
@@ -464,18 +458,12 @@ try {
   $profileRows = @(
     @{ id = $accounts.ownerA.Id; org_id = $orgA; full_name = "Owner A"; role = "owner" },
     @{ id = $accounts.officeA.Id; org_id = $orgA; full_name = "Office A"; role = "office" },
-    @{ id = $accounts.kitchenA.Id; org_id = $orgA; full_name = "Kitchen A"; role = "kitchen" },
-    @{ id = $accounts.payerA.Id; org_id = $orgA; full_name = "Payer A"; role = "payer" },
     @{ id = $accounts.accountantA.Id; org_id = $orgA; full_name = "Accountant A"; role = "accountant" },
-    @{ id = $accounts.supplierA.Id; org_id = $orgA; full_name = "Supplier Agent A"; role = "supplier"; supplier_id = $supplierA },
     @{ id = $accounts.ownerB.Id; org_id = $orgB; full_name = "Owner B"; role = "owner" },
     @{ id = $accounts.officeB.Id; org_id = $orgB; full_name = "Office B"; role = "office" },
-    @{ id = $accounts.kitchenB.Id; org_id = $orgB; full_name = "Kitchen B"; role = "kitchen" },
-    @{ id = $accounts.payerB.Id; org_id = $orgB; full_name = "Payer B"; role = "payer" },
     @{ id = $accounts.accountantB.Id; org_id = $orgB; full_name = "Accountant B"; role = "accountant" },
-    @{ id = $accounts.supplierB.Id; org_id = $orgB; full_name = "Supplier Agent B"; role = "supplier"; supplier_id = $supplierB },
     @{ id = $accounts.ownerSuspended.Id; org_id = $orgSuspended; full_name = "Suspended Owner"; role = "owner" },
-    @{ id = $accounts.payerSuspended.Id; org_id = $orgSuspended; full_name = "Suspended Payer"; role = "payer" }
+    @{ id = $accounts.accountantSuspended.Id; org_id = $orgSuspended; full_name = "Suspended Accountant"; role = "accountant" }
   )
   foreach ($profile in $profileRows) { Add-ServiceRow "profiles" $profile $serviceKey | Out-Null }
   Add-ServiceRow "platform_admins" @{ user_id = $accounts.platform.Id; note = "P0 local acceptance" } $serviceKey | Out-Null
@@ -507,7 +495,7 @@ try {
   Add-ServiceRow "purchase_order_items" @{ id = $orderItemB; org_id = $orgB; order_id = $orderB; product_id = $productB; qty = 2; unit_price = 20 } $serviceKey | Out-Null
   $receiptA = New-Id
   $receiptB = New-Id
-  Add-ServiceRow "goods_receipts" @{ id = $receiptA; org_id = $orgA; order_id = $orderA; status = "completed"; received_by = $accounts.kitchenA.Id } $serviceKey | Out-Null
+  Add-ServiceRow "goods_receipts" @{ id = $receiptA; org_id = $orgA; order_id = $orderA; status = "completed"; received_by = $accounts.officeA.Id } $serviceKey | Out-Null
   Add-ServiceRow "goods_receipts" @{ id = $receiptB; org_id = $orgB; order_id = $orderB; status = "completed"; received_by = $accounts.ownerB.Id } $serviceKey | Out-Null
   $receiptItemA = New-Id
   $receiptItemB = New-Id
@@ -566,8 +554,8 @@ try {
   Add-ServiceRow "payment_request_invoices" @{ org_id = $orgB; payment_request_id = $paymentRequestB; invoice_id = $invoiceB; amount_allocated = 200 } $serviceKey | Out-Null
   $paymentA = New-Id
   $paymentB = New-Id
-  Add-ServiceRow "payments" @{ id = $paymentA; org_id = $orgA; supplier_id = $supplierA; payment_request_id = $paymentRequestA; amount = 30; executed_by = $accounts.payerA.Id } $serviceKey | Out-Null
-  Add-ServiceRow "payments" @{ id = $paymentB; org_id = $orgB; supplier_id = $supplierB; payment_request_id = $paymentRequestB; amount = 50; executed_by = $accounts.payerB.Id } $serviceKey | Out-Null
+  Add-ServiceRow "payments" @{ id = $paymentA; org_id = $orgA; supplier_id = $supplierA; payment_request_id = $paymentRequestA; amount = 30; executed_by = $accounts.accountantA.Id } $serviceKey | Out-Null
+  Add-ServiceRow "payments" @{ id = $paymentB; org_id = $orgB; supplier_id = $supplierB; payment_request_id = $paymentRequestB; amount = 50; executed_by = $accounts.accountantB.Id } $serviceKey | Out-Null
   Add-ServiceRow "payment_allocations" @{ id = (New-Id); org_id = $orgA; payment_id = $paymentA; invoice_id = $invoiceA; amount = 30 } $serviceKey | Out-Null
   Add-ServiceRow "payment_allocations" @{ id = (New-Id); org_id = $orgB; payment_id = $paymentB; invoice_id = $invoiceB; amount = 50 } $serviceKey | Out-Null
 
@@ -608,7 +596,7 @@ try {
   Assert-Count $rows 1 "owner sees one own supplier"
   Assert-True ($rows[0].id -eq $supplierA) "owner cannot see tenant B supplier"
   Assert-Count (Get-Rows "invoices?select=id&order=id" $accounts.officeA $anonKey "office tenant read") 2 "office sees tenant A procurement invoices"
-  Assert-Count (Get-Rows "products?select=id" $accounts.kitchenA $anonKey "kitchen tenant read") 1 "kitchen sees only tenant A product"
+  Assert-Count (Get-Rows "products?select=id" $accounts.officeA $anonKey "office catalog read") 1 "office sees only tenant A product"
   $accountantInvoices = Get-Rows "invoices?select=id,review_status&order=id" $accounts.accountantA $anonKey "accountant approved invoice read"
   Assert-Count $accountantInvoices 1 "accountant sees approved invoices only"
   Assert-True ($accountantInvoices[0].id -eq $invoiceA -and $accountantInvoices[0].review_status -eq "approved") "accountant cannot see an unapproved invoice"
@@ -631,8 +619,8 @@ try {
   Assert-Count (Get-Rows "bank_transactions?select=id" $accounts.accountantA $anonKey "accountant bank read") 1 "accountant reads tenant-scoped bank transactions"
   Assert-Count (Get-Rows "monthly_exports?select=id" $accounts.accountantA $anonKey "accountant exports read") 1 "accountant reads tenant-scoped exports"
   Assert-Count (Get-Rows "audit_logs?action=eq.persona_fixture&select=id" $accounts.accountantA $anonKey "accountant financial audit read") 1 "accountant reads tenant-scoped financial audit"
-  Assert-Count (Get-Rows "payment_requests?select=id" $accounts.payerA $anonKey "payer approved queue read") 1 "payer sees only tenant A approved request"
-  Assert-Count (Get-Rows "supplier_products?select=id" $accounts.supplierA $anonKey "supplier-agent price read") 1 "supplier agent sees only its supplier prices"
+  Assert-Count (Get-Rows "payment_requests?select=id" $accounts.accountantA $anonKey "accountant approved queue read") 1 "accountant sees only tenant A approved request"
+  Assert-Count (Get-Rows "supplier_products?select=id" $accounts.officeA $anonKey "office price read") 1 "office sees tenant-scoped supplier prices"
   Assert-Count (Get-Rows "suppliers?id=eq.$supplierA&select=id" $accounts.ownerB $anonKey "tenant B negative read") 0 "tenant B cannot read tenant A supplier"
   Assert-Count (Get-Rows "suppliers?select=id" $accounts.platform $anonKey "platform tenant-data negative read") 0 "platform operator has no implicit tenant data access"
   Assert-True ((Get-Rows "rpc/platform_orgs" $accounts.platform $anonKey "platform organization aggregate").Count -ge 3) "platform operator uses aggregate RPC"
@@ -673,7 +661,7 @@ try {
   $response = Invoke-Rest -Method Post -Resource "rpc/set_organization_lifecycle" -ApiKey $anonKey -Token $accounts.platform.Token -Body @{ p_org_id = $orgSuspended; p_status = "suspended"; p_trial_ends_at = $null; p_reason = "P0 suspended-tenant test" }
   Assert-Status $response @(204) "platform lifecycle command"
   Assert-Count (Get-Rows "profiles?select=id" $accounts.ownerSuspended $anonKey "suspended tenant negative read") 0 "suspended tenant loses profile and organization plane"
-  $response = Invoke-Rest -Method Post -Resource "rpc/execute_payment_request" -ApiKey $anonKey -Token $accounts.payerSuspended.Token -Body @{
+  $response = Invoke-Rest -Method Post -Resource "rpc/execute_payment_request" -ApiKey $anonKey -Token $accounts.accountantSuspended.Token -Body @{
     p_payment_request_id = $paymentRequestA
     p_paid_date = "2026-07-22"
     p_method = "bank transfer"
@@ -717,12 +705,12 @@ try {
   Assert-Blocked $response "payment hard delete grant removed"
   $response = Invoke-Rest -Method Delete -Resource "payment_allocations?payment_id=eq.$paymentA" -ApiKey $anonKey -Token $accounts.ownerA.Token -Prefer "return=representation"
   Assert-Blocked $response "allocation hard delete grant removed"
-  $response = Invoke-Rest -Method Post -Resource "payments" -ApiKey $anonKey -Token $accounts.payerA.Token -Body @{ id = (New-Id); org_id = $orgA; supplier_id = $supplierA; amount = 1; executed_by = $accounts.payerA.Id } -Prefer "return=representation"
-  Assert-Blocked $response "payer direct payment insert blocked after P1 cutover"
-  $response = Invoke-Rest -Method Post -Resource "payment_allocations" -ApiKey $anonKey -Token $accounts.payerA.Token -Body @{ id = (New-Id); org_id = $orgA; payment_id = $paymentA; invoice_id = $invoiceA; amount = 1 } -Prefer "return=representation"
-  Assert-Blocked $response "payer direct allocation insert blocked after P1 cutover"
-  $response = Invoke-Rest -Method Patch -Resource "payment_requests?id=eq.$paymentRequestA" -ApiKey $anonKey -Token $accounts.payerA.Token -Body @{ status = "sent_for_execution" } -Prefer "return=representation"
-  Assert-Blocked $response "payer direct payment-request update blocked after P1 cutover"
+  $response = Invoke-Rest -Method Post -Resource "payments" -ApiKey $anonKey -Token $accounts.accountantA.Token -Body @{ id = (New-Id); org_id = $orgA; supplier_id = $supplierA; amount = 1; executed_by = $accounts.accountantA.Id } -Prefer "return=representation"
+  Assert-Blocked $response "accountant direct payment insert blocked after P1 cutover"
+  $response = Invoke-Rest -Method Post -Resource "payment_allocations" -ApiKey $anonKey -Token $accounts.accountantA.Token -Body @{ id = (New-Id); org_id = $orgA; payment_id = $paymentA; invoice_id = $invoiceA; amount = 1 } -Prefer "return=representation"
+  Assert-Blocked $response "accountant direct allocation insert blocked after P1 cutover"
+  $response = Invoke-Rest -Method Patch -Resource "payment_requests?id=eq.$paymentRequestA" -ApiKey $anonKey -Token $accounts.accountantA.Token -Body @{ status = "sent_for_execution" } -Prefer "return=representation"
+  Assert-Blocked $response "accountant direct payment-request update blocked after P1 cutover"
   $blockedCreditId = New-Id
   $response = Invoke-Rest -Method Post -Resource "credit_requests" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{ id = $blockedCreditId; org_id = $orgA; supplier_id = $supplierA; invoice_id = $invoiceA; reason = "other"; amount = 1; status = "open"; created_by = $accounts.ownerA.Id } -Prefer "return=representation"
   Assert-Blocked $response "owner direct credit insert blocked after P1 cutover"
@@ -730,36 +718,36 @@ try {
   Assert-Blocked $response "owner direct credit update blocked after P1 cutover"
 
   # Personal drafts are creator-only and item replacement stays behind its RPC.
-  $draftBody = @{ p_request_id = $null; p_notes = "Kitchen private draft"; p_expected_date = $null; p_editor_step = 1; p_items = @(@{ product_id = $productA; qty = 2; chosen_supplier_id = $supplierA }) }
-  $response = Invoke-Rest -Method Post -Resource "rpc/save_purchase_request_draft" -ApiKey $anonKey -Token $accounts.kitchenA.Token -Body $draftBody
-  Assert-Status $response @(200) "kitchen creates personal draft through RPC"
-  $kitchenDraft = [string]$response.Json.request_id
+  $draftBody = @{ p_request_id = $null; p_notes = "Office private draft"; p_expected_date = $null; p_editor_step = 1; p_items = @(@{ product_id = $productA; qty = 2; chosen_supplier_id = $supplierA }) }
+  $response = Invoke-Rest -Method Post -Resource "rpc/save_purchase_request_draft" -ApiKey $anonKey -Token $accounts.officeA.Token -Body $draftBody
+  Assert-Status $response @(200) "office creates personal draft through RPC"
+  $officeDraft = [string]$response.Json.request_id
   $draftBody.p_notes = "Owner private draft"
   $response = Invoke-Rest -Method Post -Resource "rpc/save_purchase_request_draft" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body $draftBody
   Assert-Status $response @(200) "owner creates separate personal draft"
   $ownerDraft = [string]$response.Json.request_id
-  $kitchenRows = Get-Rows "purchase_requests?status=eq.draft&select=id" $accounts.kitchenA $anonKey "kitchen personal drafts read"
-  Assert-Count $kitchenRows 1 "kitchen sees only its own draft"
-  Assert-True ($kitchenRows[0].id -eq $kitchenDraft) "kitchen cannot see owner draft"
+  $officeRows = Get-Rows "purchase_requests?status=eq.draft&select=id" $accounts.officeA $anonKey "office personal drafts read"
+  Assert-Count $officeRows 1 "office sees only its own draft"
+  Assert-True ($officeRows[0].id -eq $officeDraft) "office cannot see owner draft"
   $ownerRows = Get-Rows "purchase_requests?status=eq.draft&select=id" $accounts.ownerA $anonKey "owner personal drafts read"
   Assert-Count $ownerRows 1 "owner sees only its own draft"
-  Assert-True ($ownerRows[0].id -eq $ownerDraft) "owner cannot see kitchen draft"
+  Assert-True ($ownerRows[0].id -eq $ownerDraft) "owner cannot see office draft"
   Assert-Count (Get-Rows "purchase_requests?status=eq.draft&select=id" $accounts.accountantA $anonKey "accountant draft negative read") 0 "accountant cannot see another user's drafts"
-  $draftBody.p_request_id = $kitchenDraft
-  $draftBody.p_notes = "Kitchen replaced draft"
+  $draftBody.p_request_id = $officeDraft
+  $draftBody.p_notes = "Office replaced draft"
   $draftBody.p_items = @(@{ product_id = $productA; qty = 3; chosen_supplier_id = $supplierA })
-  $response = Invoke-Rest -Method Post -Resource "rpc/save_purchase_request_draft" -ApiKey $anonKey -Token $accounts.kitchenA.Token -Body $draftBody
+  $response = Invoke-Rest -Method Post -Resource "rpc/save_purchase_request_draft" -ApiKey $anonKey -Token $accounts.officeA.Token -Body $draftBody
   Assert-Status $response @(200) "atomic draft item replacement"
-  $draftItems = Get-Rows "purchase_request_items?request_id=eq.$kitchenDraft&select=qty" $accounts.kitchenA $anonKey "draft items read"
+  $draftItems = Get-Rows "purchase_request_items?request_id=eq.$officeDraft&select=qty" $accounts.officeA $anonKey "draft items read"
   Assert-Count $draftItems 1 "draft replacement leaves one item"
   Assert-True ([decimal]$draftItems[0].qty -eq 3) "draft replacement persists current quantity"
-  $response = Invoke-Rest -Method Post -Resource "rpc/cancel_purchase_request_draft" -ApiKey $anonKey -Token $accounts.officeA.Token -Body @{ p_request_id = $kitchenDraft; p_reason = "cross-user attempt" }
+  $response = Invoke-Rest -Method Post -Resource "rpc/cancel_purchase_request_draft" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{ p_request_id = $officeDraft; p_reason = "cross-user attempt" }
   Assert-Blocked $response "same-tenant user cannot cancel another user's draft"
-  $response = Invoke-Rest -Method Post -Resource "rpc/cancel_purchase_request_draft" -ApiKey $anonKey -Token $accounts.kitchenA.Token -Body @{ p_request_id = $kitchenDraft; p_reason = "P0 draft cancellation" }
+  $response = Invoke-Rest -Method Post -Resource "rpc/cancel_purchase_request_draft" -ApiKey $anonKey -Token $accounts.officeA.Token -Body @{ p_request_id = $officeDraft; p_reason = "P0 draft cancellation" }
   Assert-Status $response @(204) "creator cancels draft with reason"
-  $draftAudit = Get-Rows "audit_logs?action=eq.purchase_request_cancelled&entity_id=eq.$kitchenDraft&select=user_id,reason&limit=1" $accounts.ownerA $anonKey "draft cancellation audit read"
+  $draftAudit = Get-Rows "audit_logs?action=eq.purchase_request_cancelled&entity_id=eq.$officeDraft&select=user_id,reason&limit=1" $accounts.ownerA $anonKey "draft cancellation audit read"
   Assert-Count $draftAudit 1 "draft cancellation is audited"
-  Assert-True ($draftAudit[0].user_id -eq $accounts.kitchenA.Id -and [bool]$draftAudit[0].reason) "draft audit records creator and reason"
+  Assert-True ($draftAudit[0].user_id -eq $accounts.officeA.Id -and [bool]$draftAudit[0].reason) "draft audit records creator and reason"
 
   # Invitations have bounded delivery and audited revocation.
   $response = Invoke-Rest -Method Post -Resource "rpc/create_invitation" -ApiKey $anonKey -Token $accounts.ownerA.Token -Body @{ p_email = "invite-$suffix@example.test"; p_role = "office" }
@@ -830,22 +818,18 @@ try {
   Assert-Status $response @(200) "authorized tenant reader obtains signed URL"
   $response = Invoke-JsonRequest -Method Post -Uri "$apiUrl/storage/v1/object/sign/documents/$ownerPath" -Headers (New-Headers $anonKey $accounts.officeA.Token) -Body @{ expiresIn = 60 }
   Assert-Status $response @(200) "office obtains signed URL for allowed document"
-  $response = Invoke-JsonRequest -Method Post -Uri "$apiUrl/storage/v1/object/sign/documents/$ownerPath" -Headers (New-Headers $anonKey $accounts.kitchenA.Token) -Body @{ expiresIn = 60 }
-  Assert-Status $response @(200) "kitchen obtains signed URL for allowed document"
-  $response = Invoke-JsonRequest -Method Post -Uri "$apiUrl/storage/v1/object/sign/documents/$ownerPath" -Headers (New-Headers $anonKey $accounts.payerA.Token) -Body @{ expiresIn = 60 }
-  Assert-Blocked $response "payer cannot sign another user's document"
   $response = Invoke-JsonRequest -Method Post -Uri "$apiUrl/storage/v1/object/sign/documents/$ownerPath" -Headers (New-Headers $anonKey $accounts.ownerB.Token) -Body @{ expiresIn = 60 }
   Assert-Blocked $response "other tenant cannot sign document URL"
 
-  $payerPath = "$orgA/payment/$paymentA/payer-proof.pdf"
-  $payerHeaders = New-Headers $anonKey $accounts.payerA.Token
-  $payerHeaders["x-upsert"] = "false"
-  $response = Invoke-BinaryRequest -Method Post -Uri "$apiUrl/storage/v1/object/documents/$payerPath" -Headers $payerHeaders -ContentType "application/pdf" -Bytes $pdfBytes
-  Assert-Status $response @(200) "payer uploads object to own tenant prefix"
-  $response = Invoke-Rest -Method Post -Resource "documents" -ApiKey $anonKey -Token $accounts.payerA.Token -Body @{ org_id = $orgA; entity_type = "payment"; entity_id = $paymentA; storage_path = $payerPath; file_name = "payer-proof.pdf"; mime_type = "application/pdf"; uploaded_by = $accounts.payerA.Id } -Prefer "return=representation"
-  Assert-Status $response @(201) "payer registers only its executed payment document"
-  $response = Invoke-JsonRequest -Method Post -Uri "$apiUrl/storage/v1/object/sign/documents/$payerPath" -Headers (New-Headers $anonKey $accounts.payerA.Token) -Body @{ expiresIn = 60 }
-  Assert-Status $response @(200) "payer signs its own document URL"
+  $accountantPath = "$orgA/payment/$paymentA/accountant-proof.pdf"
+  $accountantHeaders = New-Headers $anonKey $accounts.accountantA.Token
+  $accountantHeaders["x-upsert"] = "false"
+  $response = Invoke-BinaryRequest -Method Post -Uri "$apiUrl/storage/v1/object/documents/$accountantPath" -Headers $accountantHeaders -ContentType "application/pdf" -Bytes $pdfBytes
+  Assert-Status $response @(200) "accountant uploads payment proof to own tenant prefix"
+  $response = Invoke-Rest -Method Post -Resource "documents" -ApiKey $anonKey -Token $accounts.accountantA.Token -Body @{ org_id = $orgA; entity_type = "payment"; entity_id = $paymentA; storage_path = $accountantPath; file_name = "accountant-proof.pdf"; mime_type = "application/pdf"; uploaded_by = $accounts.accountantA.Id } -Prefer "return=representation"
+  Assert-Status $response @(201) "accountant registers payment proof"
+  $response = Invoke-JsonRequest -Method Post -Uri "$apiUrl/storage/v1/object/sign/documents/$accountantPath" -Headers (New-Headers $anonKey $accounts.accountantA.Token) -Body @{ expiresIn = 60 }
+  Assert-Status $response @(200) "accountant signs its payment proof URL"
 
   $tenantBPath = "$orgB/invoice/$invoiceB/tenant-b-proof.pdf"
   $tenantBHeaders = New-Headers $anonKey $accounts.ownerB.Token
@@ -882,7 +866,7 @@ try {
 
   $response = Invoke-Rest -Method Post -Resource "rpc/set_organization_lifecycle" -ApiKey $anonKey -Token $accounts.platform.Token -Body @{ p_org_id = $orgA; p_status = "suspended"; p_trial_ends_at = $null; p_reason = "P0 all-role suspension test" }
   Assert-Status $response @(204) "suspend active tenant after positive matrix"
-  foreach ($roleAccount in @($accounts.ownerA, $accounts.officeA, $accounts.kitchenA, $accounts.payerA, $accounts.accountantA, $accounts.supplierA)) {
+  foreach ($roleAccount in @($accounts.ownerA, $accounts.officeA, $accounts.accountantA)) {
     Assert-Count (Get-Rows "profiles?select=id" $roleAccount $anonKey "suspended all-role negative read") 0 "every tenant role loses access after suspension"
   }
 

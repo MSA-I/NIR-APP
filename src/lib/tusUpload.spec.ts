@@ -1,4 +1,4 @@
-// tus wrapper contract (PLAN-07 §1.4–1.5): mime normalization, reservation renewal
+// tus wrapper contract (migration 0065): mime normalization, reservation renewal
 // timing, and the exactly-one renew-then-resume on a 403 PATCH. tus-js-client is mocked
 // at module level and supabase is a local stub — zero network calls anywhere.
 
@@ -222,7 +222,7 @@ describe('403 during PATCH — exactly one renew-then-resume', () => {
   });
 
   it('applies the money rule when renew says the reservation is already registered', async () => {
-    // handoff/6b-upload-contract.md §1: document_upload_reservation_registered means the
+    // OPEN-DECISIONS #95: document_upload_reservation_registered means the
     // registered document already exists — the failure text must forbid a re-upload.
     supabaseState.rpc.mockResolvedValue({
       data: null,

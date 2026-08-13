@@ -332,7 +332,7 @@ set local role authenticated;
 --
 -- This asserts what the server does today, which is the documented decision, not an oversight. If
 -- it ever fails, the normalisation was changed -- and that is a business decision about what
--- "duplicate" means, not a bug fix. `docs/OPEN-DECISIONS.md` and handoff 1b are where it is argued,
+-- "duplicate" means, not a bug fix. `docs/OPEN-DECISIONS.md` and the server-list contract are where it is argued,
 -- and the same change would have to reach `p2_duplicate_invoice_group_count()` (0024:399) and
 -- `private.notify_duplicate_invoice_check()` (0017:150-168) in the same commit.
 select pg_temp.slc_assert(

@@ -214,7 +214,7 @@ describe('/invoices — server mode', () => {
     renderAt('/invoices?attention=duplicates', '/invoices', <InvoicesList />);
 
     await screen.findAllByText('N-0');
-    // The whole-table question the old per-page computation could not answer (PLAN-02 §3.2).
+    // The whole-table question the old per-page computation could not answer (ADR-0007).
     expect(seen[0].url.searchParams.get('invoice_has_duplicate')).toBe('eq.true');
     // Always sent: the 0053 indexes are partial on `deleted_at is null`.
     expect(seen[0].url.searchParams.get('deleted_at')).toBe('is.null');
@@ -267,29 +267,26 @@ describe('/bank — server mode', () => {
   });
 });
 
-describe('the payer / without-order guard (1b handoff §3 — binding)', () => {
+describe('active-persona boundaries for the without-order signal', () => {
   // Filesystem paths from the vitest root: under the jsdom transform `import.meta.url` is an
   // http URL, not a file one.
   const srcDir = join(process.cwd(), 'src');
   const appSource = readFileSync(join(srcDir, 'App.tsx'), 'utf8');
 
-  it('keeps /invoices guarded by READERS, and READERS free of payer', () => {
-    // For a payer, invoice_without_order answers a WRONG number: its RLS shows zero
-    // invoice_order_links rows, so every invoice reads as "without order". The screen may only
-    // exist behind a guard that excludes payer — these assertions pin both halves of that.
-    const readers = /const READERS: Role\[\] = \[([^\]]*)\]/.exec(appSource);
+  it('keeps /invoices behind the three-role READERS contract', () => {
+    const readers = /const READERS: readonly ActiveRole\[\] = \[([^\]]*)\]/.exec(appSource);
     expect(readers).not.toBeNull();
-    expect(readers![1]).not.toContain('payer');
+    expect(readers![1]).toContain('owner');
+    expect(readers![1]).toContain('office');
+    expect(readers![1]).toContain('accountant');
+    expect(readers![1]).not.toMatch(/kitchen|payer|supplier/);
     expect(appSource).toMatch(/path="\/invoices" element=\{<Guard roles=\{READERS\}>/);
   });
 
   /**
    * Every source file under a directory, recursively, as slash-joined relative paths.
    *
-   * Wave 10 (audit Finding 9): the previous scan was `readdirSync(pagesDir)` — one level, so
-   * it never descended into `src/pages/dashboards/`, where PayerDashboard lives, nor into
-   * `src/pages/neworder/`. A guard that cannot see the payer's own dashboard directory is not
-   * guarding the payer.
+   * The scan is recursive so a future nested screen cannot acquire the signal unnoticed.
    */
   const sourceFilesUnder = (dir: string, extensions: string[]): string[] =>
     readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -309,27 +306,15 @@ describe('the payer / without-order guard (1b handoff §3 — binding)', () => {
       .sort();
 
   it('keeps invoice_without_order out of every other screen, at any depth', () => {
-    // Exposing the predicate on a payer-reachable screen would show a payer a wrong count —
-    // the failure class this whole wave exists to prevent.
     expect(holdersOf(join(srcDir, 'pages'), ['.tsx'], 'invoice_without_order'))
       .toEqual(['Invoices.tsx']);
   });
 
   /**
-   * The RPC arm, added in wave 10 (audit Finding 9). `p2_invoice_without_order_count()` is
-   * SECURITY INVOKER, granted to `authenticated`, and its `not exists (… invoice_order_links)`
-   * INVERTS under RLS: a payer sees zero link rows, so the negation is true for every invoice
-   * and the count returns every invoice the payer can see, labelled "N invoices with no linked
-   * purchase order". The screen predicate above was guarded well; the RPC was not, and the
-   * only thing keeping it honest is a client-side role constant — in a system whose entire
-   * thesis is server-side enforcement.
-   *
-   * These assertions do NOT claim the RPC is fixed. They pin the single control that exists,
-   * so that adding a second caller, or widening FINANCE to include payer, fails here instead
-   * of shipping a wrong number. The server-side fix is a scope decision, recorded in
-   * docs/DEBT-REGISTER.md.
+   * The RPC stays behind the one active finance caller in the client. Migration 0133 independently
+   * enforces the server-side persona boundary.
    */
-  it('keeps the invoice_without_order RPC to one caller, behind a payer-free guard', () => {
+  it('keeps the invoice_without_order RPC to one caller behind the active finance guard', () => {
     const libDir = join(srcDir, 'lib');
     expect(holdersOf(libDir, ['.ts', '.tsx'], 'p2_invoice_without_order_count'))
       .toEqual(['alerts.ts']);
@@ -339,10 +324,9 @@ describe('the payer / without-order guard (1b handoff §3 — binding)', () => {
       .toEqual(['alerts.ts', 'serverList.ts']);
 
     // alerts.ts is reachable only through /alerts, and /alerts is FINANCE-only.
-    const finance = /const FINANCE: Role\[\] = \[([^\]]*)\]/.exec(appSource);
+    const finance = /const FINANCE: readonly ActiveRole\[\] = \[([^\]]*)\]/.exec(appSource);
     expect(finance).not.toBeNull();
-    expect(finance![1]).not.toContain('payer');
-    expect(finance![1]).not.toContain('supplier');
+    expect(finance![1]).not.toMatch(/kitchen|payer|supplier/);
     expect(appSource).toMatch(/path="\/alerts" element=\{<Guard roles=\{FINANCE\}>/);
   });
 });

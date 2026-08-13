@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { StatusBadge, useDialogLayer } from './ui';
 import { SUPPLIER_STATUS, PO_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, type StatusMeta } from '../lib/status';
 import { fmtMoneyExact } from '../lib/format';
-import type { Role, SearchHit, SearchEntity as EntityType } from '../lib/types';
+import { isActiveRole, type ActiveRole, type Role, type SearchHit, type SearchEntity as EntityType } from '../lib/types';
 import { useAuth } from '../auth/AuthContext';
 
 // SearchHit / SearchEntity now live in lib/types (imported above as EntityType).
@@ -22,13 +22,8 @@ const PRODUCT_STATUS: Record<string, StatusMeta> = {
 
 // --- Per-role display order (NO LONGER THE GATE) ---------------------------------------
 //
-// Until migration 0069 this table WAS the only thing stopping a payer or a supplier from
-// receiving supplier / product / payment hits — a security decision taken in the browser, over a
-// `global_search` that is granted to `authenticated` as a whole. **Since 0069 the reachable result
-// TYPES are decided on the server**, from `auth_role()`, mirroring the same App.tsx route guards
-// this table was read off (`supabase/migrations/0069_global_search_type_gate.sql`, and the
-// function comment there says so too). A payer or supplier now receives zero rows of any type,
-// and an unresolvable role fails closed.
+// Since migration 0069 the reachable result TYPES are decided on the server, from `auth_role()`,
+// mirroring the App.tsx route guards. Retired roles are blocked before this component can mount.
 //
 // So what this map still is: the **display order and the group set** for the role in front of us —
 // `GROUP_ORDER` and the group headings need it, and the placeholder hint below is built from it.
@@ -37,24 +32,15 @@ const PRODUCT_STATUS: Record<string, StatusMeta> = {
 // not be described as one. Nobody who could already see everything sees anything different.
 //
 // RLS still decides which ROWS exist. That never moved.
-const ALLOWED: Record<Role, EntityType[]> = {
+const ALLOWED: Record<ActiveRole, EntityType[]> = {
   owner:      ['supplier', 'product', 'invoice', 'order', 'payment', 'credit'],
   office:     ['supplier', 'product', 'invoice', 'order', 'credit'],
-  // 'supplier' left this row on 11.08.2026 (G2/0117): a kitchen manager no longer has
-  // /suppliers/:id, so a supplier hit was a result that looked like an answer and behaved like
-  // a broken link. The server stopped sending them in 0117; this keeps the group heading and
-  // the placeholder hint honest about what will come back.
-  kitchen:    ['product', 'invoice', 'order', 'credit'],                        // no /payments, no supplier card
   accountant: ['invoice', 'payment', 'credit'],                                // approved invoices are enforced by RLS
-  payer:      [],
-  supplier:   [],
 };
 
-/** Whether to render a search box for this role at all. Layout uses it too.
- *  Unchanged by 0069 and still correct: payer/supplier get no box, and the server would now
- *  return nothing even if one appeared. */
+/** Whether to render a search box for an active role. Layout uses it too. */
 export function canGlobalSearch(role: Role | undefined): boolean {
-  return !!role && ALLOWED[role].length > 0;
+  return isActiveRole(role) && ALLOWED[role].length > 0;
 }
 
 interface GroupMeta { label: string; icon: LucideIcon }
@@ -103,7 +89,7 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
 }) {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const allowed = useMemo(() => (profile ? ALLOWED[profile.role] : []), [profile]);
+  const allowed = useMemo(() => (profile && isActiveRole(profile.role) ? ALLOWED[profile.role] : []), [profile]);
 
   const [term, setTerm] = useState('');
   const [hits, setHits] = useState<SearchHit[] | null>(null);

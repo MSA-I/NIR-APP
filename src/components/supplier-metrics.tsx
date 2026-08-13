@@ -5,7 +5,7 @@
 //                      every other view type (types.ts convention); tsc cannot derive it, so
 //                      it MUST match the 16 select columns of 0011 exactly.
 //   Scorecard        — one card holding a compact grid of metric tiles, NOT a KpiCard grid
-//                      (see docs/nir/04-suppliers.md §4.4 for why KpiCard is wrong here).
+//                      (DESIGN.md keeps compact score metrics distinct from KPI cards).
 //   RatingStars      — read-only when onChange is omitted; interactive radiogroup otherwise.
 //   PriceSparkline   — a static, axis-less step line for the prices tab.
 //
@@ -59,7 +59,7 @@ export interface ScoreItem {
 
 /**
  * One card, one grid of compact tiles — reads as a single spec sheet, not eight competing
- * dashboard cards (docs/nir/04-suppliers.md §4.4). No divide-x: it forces physical left/right
+ * dashboard cards (DESIGN.md). No divide-x: it forces physical left/right
  * borders that break under RTL; separation is gap-based, which is direction-agnostic.
  */
 export function Scorecard({ items }: { items: ScoreItem[] }) {

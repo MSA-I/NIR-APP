@@ -63,8 +63,7 @@ insert into public.organizations (id, name, status, vat_rate) values
 
 insert into auth.users (id, email) values
   ('20310000-0000-4000-8000-000000000001', 'owner-p31@example.test'),
-  ('20310000-0000-4000-8000-000000000002', 'kitchen-p31@example.test'),
-  ('20310000-0000-4000-8000-000000000003', 'supplier-p31@example.test');
+  ('20310000-0000-4000-8000-000000000002', 'office-p31@example.test');
 
 insert into public.suppliers (id, org_id, name, status) values
   ('40310000-0000-4000-8000-000000000001', '10310000-0000-4000-8000-000000000001',
@@ -74,10 +73,7 @@ insert into public.profiles (id, org_id, full_name, role) values
   ('20310000-0000-4000-8000-000000000001', '10310000-0000-4000-8000-000000000001',
    'P31 owner', 'owner'),
   ('20310000-0000-4000-8000-000000000002', '10310000-0000-4000-8000-000000000001',
-   'P31 kitchen', 'kitchen');
-insert into public.profiles (id, org_id, full_name, role, supplier_id) values
-  ('20310000-0000-4000-8000-000000000003', '10310000-0000-4000-8000-000000000001',
-   'P31 supplier', 'supplier', '40310000-0000-4000-8000-000000000001');
+   'P31 office', 'office');
 
 insert into public.products (id, org_id, name, unit) values
   ('30310000-0000-4000-8000-000000000001', '10310000-0000-4000-8000-000000000001',
@@ -374,26 +370,10 @@ exception when sqlstate '55000' then
 end
 $$;
 
--- ===== 7. Who may approve what =====
+-- ===== 7. Active procurement review path =====
 
 select pg_temp.p31_act('20310000-0000-4000-8000-000000000002');
-do $$
-begin
-  perform public.apply_reviewed_document(
-    '60310000-0000-4000-8000-000000000008', 'b0310000-0000-4000-8000-000000000008',
-    pg_temp.p31_reviewed('invoice',
-      jsonb_build_array(pg_temp.p31_line(
-        '30310000-0000-4000-8000-000000000001', '1', 'unit', '10', '10', 'SKU-31')),
-      null, 'INV-KITCHEN', '2026-06-15', '10', '1.8', '11.8'),
-    '00000000-0000-4000-8000-000000000007', 'P31 מטבח מנסה ליצור חשבונית');
-  raise exception 'P31 apply assertion failed: a kitchen manager created a supplier invoice. '
-    'Receiving goods is their work; creating a payable is back-office work';
-exception when sqlstate '42501' then
-  if sqlerrm <> 'apply_reviewed_document_not_authorized' then raise; end if;
-end
-$$;
-
--- The same person keeps the delivery-note path, which is the whole point of the split.
+-- Office remains an active reviewer and keeps the delivery-note path.
 select pg_temp.p31_assert(
   (select r ->> 'outcome' = 'receipt_draft_created'
    from public.apply_reviewed_document(
@@ -402,23 +382,8 @@ select pg_temp.p31_assert(
        jsonb_build_array(pg_temp.p31_line(
          '30310000-0000-4000-8000-000000000001', '1', 'unit', '10', '10', 'SKU-31')),
        '50310000-0000-4000-8000-000000000001', null, '2026-06-17'),
-     '00000000-0000-4000-8000-000000000008', 'P31 מטבח מקבל סחורה') r),
-  'the kitchen manager lost the delivery-note path, which is the one they actually need');
-
-select pg_temp.p31_act('20310000-0000-4000-8000-000000000003');
-do $$
-begin
-  perform public.apply_reviewed_document(
-    '60310000-0000-4000-8000-000000000007', 'b0310000-0000-4000-8000-000000000007',
-    pg_temp.p31_reviewed('delivery_note', '[]'::jsonb,
-      '50310000-0000-4000-8000-000000000001', null, '2026-06-17'),
-    '00000000-0000-4000-8000-000000000009', 'P31 ספק מנסה לאשר');
-  raise exception 'P31 apply assertion failed: a supplier portal account applied a document '
-    'against our own order';
-exception when sqlstate '42501' then
-  if sqlerrm <> 'apply_reviewed_document_not_authorized' then raise; end if;
-end
-$$;
+     '00000000-0000-4000-8000-000000000008', 'P31 מנהל רכש מקבל סחורה') r),
+  'the office manager lost the delivery-note path, which is the one they actually need');
 
 -- ===== 8. Approving a reading that has been superseded =====
 

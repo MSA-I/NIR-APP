@@ -318,10 +318,7 @@ export function InvoicesList() {
         toolbar={
           <>
             {data.narrowed && <span className="text-xs text-await-fg" role="status">{SUPPLIER_SEARCH_NARROWED}</span>}
-            {/* `without-order` stays payer-safe by construction: /invoices is guarded by READERS
-                (App.tsx:103), which excludes 'payer'. For a payer the predicate answers a WRONG
-                number — RLS shows it zero invoice_order_links rows (1b handoff §3) — so this
-                option must never move to a payer-reachable screen. Asserted in Invoices.spec.ts. */}
+            {/* `without-order` is available only on the active invoice-reading surface. */}
             <select className="input w-auto!" aria-label="סינון חשבוניות לפי צורך בטיפול" value={attentionFilter} onChange={(e) => patchParams({ attention: e.target.value, page: '' })}>
               <option value="">כל החשבוניות</option>
               <option value="duplicates">חשד לכפילות</option>

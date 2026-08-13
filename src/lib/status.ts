@@ -161,8 +161,8 @@ export const SEVERITY: Record<string, StatusMeta> = {
 
 /**
  * Product availability shown as a status pill (§4.5). One dictionary replaces the
- * identical inline logic that was duplicated in PriceLists and SupplierPrices, so
- * both screens now colour availability from a single source through <StatusBadge>.
+ * identical inline logic that was duplicated across the manager price-list surfaces, so
+ * every surface colours availability from a single source through <StatusBadge>.
  * Colours preserve the previous ones (available=green, unavailable=red).
  */
 export const PRODUCT_AVAILABILITY: Record<'available' | 'unavailable', StatusMeta> = {

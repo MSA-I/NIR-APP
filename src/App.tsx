@@ -4,7 +4,7 @@ import { useAuth, homeFor } from './auth/AuthContext';
 import { PageLoader, useToast } from './components/ui';
 import { toHebrewError } from './lib/errors';
 import { reportError } from './lib/observability';
-import { ACTIVE_ACCOUNT_ROLES, type Role } from './lib/types';
+import { ACTIVE_ROLES, isActiveRole, type ActiveRole } from './lib/types';
 import { ACTIVE_ORGANIZATION_ACCESS } from './lib/trial';
 
 // Eager: the auth shell that must paint before (or regardless of) a resolved session.
@@ -38,7 +38,7 @@ const InvoiceNew = lazy(() => import('./pages/InvoiceNew'));
 const InvoiceDetail = lazy(() => import('./pages/InvoiceDetail'));
 const Credits = lazy(() => import('./pages/Credits'));
 const PaymentRequests = lazy(() => import('./pages/PaymentRequests'));
-const PayerQueue = lazy(() => import('./pages/PayerQueue'));
+const AccountantPaymentQueue = lazy(() => import('./pages/AccountantPaymentQueue'));
 const Payments = lazy(() => import('./pages/Payments'));
 const Bank = lazy(() => import('./pages/Bank'));
 const Exceptions = lazy(() => import('./pages/Exceptions'));
@@ -82,11 +82,11 @@ function LazyPageBoundary({ children }: { children: ReactNode }) {
   return <LazyRouteErrorBoundary key={pathname}>{children}</LazyRouteErrorBoundary>;
 }
 
-function Guard({ roles, children, write = false }: { roles: readonly Role[]; children: ReactNode; write?: boolean }) {
+function Guard({ roles, children, write = false }: { roles: readonly ActiveRole[]; children: ReactNode; write?: boolean }) {
   const { session, profile, loading, organizationAccess = ACTIVE_ORGANIZATION_ACCESS } = useAuth();
   if (loading) return <PageLoader />;
   if (!session || !profile) return <Navigate to="/login" replace />;
-  if (!roles.includes(profile.role)) return <Navigate to={homeFor(profile.role)} replace />;
+  if (!isActiveRole(profile.role) || !roles.includes(profile.role)) return <Navigate to={homeFor(profile.role)} replace />;
   if (write && !organizationAccess.canWrite) return <ReadOnlyUnavailable />;
   return <>{children}</>;
 }
@@ -121,15 +121,15 @@ function PlatformGuard({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-const STAFF: Role[] = ['owner', 'office'];
-const FINANCE: Role[] = ['owner', 'office'];
-const READERS: Role[] = ['owner', 'office', 'accountant'];
-const DOCUMENT_REVIEWERS: Role[] = ['owner', 'office'];
+const STAFF: readonly ActiveRole[] = ['owner', 'office'];
+const FINANCE: readonly ActiveRole[] = ['owner', 'office'];
+const READERS: readonly ActiveRole[] = ['owner', 'office', 'accountant'];
+const DOCUMENT_REVIEWERS: readonly ActiveRole[] = ['owner', 'office'];
 
 /** /dashboard is every role's home: finance gets the full Dashboard, others a role-tailored one. */
 function DashboardHome() {
   const { profile } = useAuth();
-  return profile && FINANCE.includes(profile.role) ? <Dashboard /> : <RoleDashboard />;
+  return profile && isActiveRole(profile.role) && FINANCE.includes(profile.role) ? <Dashboard /> : <RoleDashboard />;
 }
 
 /**
@@ -277,7 +277,7 @@ export default function App() {
         <Route element={<LazyPageBoundary><Suspense fallback={<PageLoader />}><Outlet /></Suspense></LazyPageBoundary>}>
         <Route path="/" element={loading ? <PageLoader /> : <Navigate to={homeFor(profile?.role)} replace />} />
 
-        <Route path="/dashboard" element={<Guard roles={ACTIVE_ACCOUNT_ROLES}><DashboardHome /></Guard>} />
+        <Route path="/dashboard" element={<Guard roles={ACTIVE_ROLES}><DashboardHome /></Guard>} />
 
         <Route path="/suppliers" element={<Guard roles={STAFF}><SuppliersList /></Guard>} />
         <Route path="/suppliers/:id" element={<Guard roles={STAFF}><SupplierCard /></Guard>} />
@@ -309,7 +309,7 @@ export default function App() {
         <Route path="/credits" element={<Guard roles={READERS}><Credits /></Guard>} />
         <Route path="/payment-requests" element={<Guard roles={FINANCE}><PaymentRequests /></Guard>} />
         <Route path="/payments" element={<Guard roles={['owner', 'accountant']}><Payments /></Guard>} />
-        <Route path="/pay" element={<Guard roles={['accountant']} write><PayerQueue /></Guard>} />
+        <Route path="/pay" element={<Guard roles={['accountant']} write><AccountantPaymentQueue /></Guard>} />
 
         <Route path="/bank" element={<Guard roles={['owner', 'accountant']}><Bank /></Guard>} />
         <Route path="/exceptions" element={<Guard roles={READERS}><Exceptions /></Guard>} />

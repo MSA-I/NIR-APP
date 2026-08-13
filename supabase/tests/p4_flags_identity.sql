@@ -1,7 +1,7 @@
 -- P4 flags, identity and step-up harness for 0059-0061. Run only against an isolated
 -- local database with every migration applied. The transaction is rolled back.
 --
--- What it proves, per PLAN-04 §2.5:
+-- What it proves for the 0059-0061 flags and identity contract:
 --   (a) the flag law: resolve_feature_flags() never returns a key outside the definitions
 --       (an orphan config row cannot expand the surface), a raised kill switch forces off,
 --       and the resolver is referenced from no policy and no other function;

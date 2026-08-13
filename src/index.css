@@ -168,7 +168,7 @@ body {
 
   /* Semantic badges. StatusBadge builds `badge-${tone}` from the Tone union in
      lib/status.ts, so every Tone value MUST have a class here or the tag renders
-     unstyled with no build error — see docs/nir/06-color-language.md §2.5. */
+     unstyled with no build error — see the semantic token contract in DESIGN.md. */
   .badge-done  { @apply badge bg-done-soft  text-done-on-soft; }
   .badge-await { @apply badge bg-await-soft text-await-on-soft; }
   .badge-alert { @apply badge bg-alert-soft text-alert-on-soft; }

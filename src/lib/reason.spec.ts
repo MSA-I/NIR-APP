@@ -51,10 +51,9 @@ describe('the reason box no longer blocks a button', () => {
     ['pages', 'DocumentOperations.tsx'],
     ['pages', 'Inventory.tsx'],
     ['pages', 'InvoiceNew.tsx'],
-    ['pages', 'PayerQueue.tsx'],
+    ['pages', 'AccountantPaymentQueue.tsx'],
     ['pages', 'PaymentRequests.tsx'],
     ['pages', 'PriceLists.tsx'],
-    ['pages', 'SupplierPrices.tsx'],
   ];
 
   it.each(files)('%s/%s asks for a reason without demanding one', (...parts) => {
