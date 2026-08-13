@@ -16,14 +16,14 @@ import { ShieldCheck, X } from 'lucide-react';
 import { toHebrewError } from '../lib/errors';
 import { TusUploadCancelledError } from '../lib/tusUpload';
 import {
-  DOCUMENT_USER_STATE_META,
-  documentUserState,
   useDocumentProcessing,
   type DocumentProcessingStage,
 } from '../lib/useDocumentProcessing';
+import { documentUiStatus } from '../lib/documentStatus';
 import type { StatusMeta } from '../lib/status';
 import { setUploadBatchDelegate, type UploadBatchResult } from '../lib/uploadBatch';
 import { Note, StatusBadge } from './ui';
+import { DocumentStatusBadge } from './DocumentStatusBadge';
 
 /* ================= queue model ================= */
 
@@ -545,15 +545,13 @@ const UPLOAD_STATE_META: Record<UploadCenterStatus, StatusMeta> = {
  *
  * This function merges two different facts: how far the UPLOAD got, and how far the READING got.
  * `unprocessed` is excluded from the processing branch on purpose, because on an upload surface
- * "registered but nothing was ever sent to be read" is the one distinction that matters, and
- * `documentUserState('unprocessed')` is `intake` — the same "נקלט" a queued document gets. Folding
- * the whole function into the human states would erase that. So the human vocabulary replaces the
- * pipeline labels only where a job actually exists; `נרשם` and `נרשם — העיבוד לא החל` are
- * untouched, and they are what UploadCenter.spec.tsx:251 pins.
+ * "registered but nothing was ever sent to be read" is the one distinction that matters. The
+ * upload lifecycle therefore keeps its own `נרשם` / `נרשם — העיבוד לא החל` answers; once a
+ * job exists, `documentUiStatus` owns the wording and precedence.
  */
 function displayMeta(entry: UploadCenterEntry, stage: DocumentProcessingStage | null): StatusMeta {
   if (entry.status === 'registered') {
-    if (stage && stage !== 'unprocessed') return DOCUMENT_USER_STATE_META[documentUserState(stage)];
+    if (stage && stage !== 'unprocessed') return documentUiStatus({ status: stage });
     if (entry.error) return { label: 'נרשם — העיבוד לא החל', tone: 'await' };
     return UPLOAD_STATE_META.registered;
   }
@@ -606,7 +604,9 @@ export function UploadCenter() {
   const online = useOnlineStatus();
   const registeredIds = useMemo(
     () => (owner ? [...new Set(entries
-      .filter((entry) => entry.status === 'registered' && entry.documentId && !entry.error)
+      // A lost enqueue response leaves an error on a document that may already be queued. Poll it
+      // too: once a real processing job appears, that server fact supersedes the transport error.
+      .filter((entry) => entry.status === 'registered' && entry.documentId)
       .map((entry) => entry.documentId!))] : []),
     [owner, entries],
   );
@@ -659,17 +659,25 @@ export function UploadCenter() {
       )}
       <ul className="divide-y divide-line-soft">
         {entries.map((entry) => {
-          const stage = entry.documentId ? processing.snapshots[entry.documentId]?.stage ?? null : null;
+          const snapshot = entry.documentId ? processing.snapshots[entry.documentId] : undefined;
+          const stage = snapshot?.stage ?? null;
+          const processingStatus = entry.status === 'registered' && stage && stage !== 'unprocessed'
+            ? documentUiStatus({ status: stage, job: snapshot?.job })
+            : null;
           return (
             <li key={entry.id} className="px-3 py-2.5">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="min-w-0 flex-1 truncate text-sm text-ink-mid" title={entry.fileName}>{entry.fileName}</span>
                 {entry.size > 0 && <span className="num text-xs text-ink-muted">{formatFileSize(entry.size)}</span>}
-                <StatusBadge meta={displayMeta(entry, stage)} />
-                {entry.canRetry && (
+                {processingStatus
+                  ? <DocumentStatusBadge status={processingStatus} />
+                  : <StatusBadge meta={displayMeta(entry, stage)} />}
+                {entry.canRetry && !processingStatus && (
                   <button type="button" className="btn-ghost min-h-11 px-2!"
                     onClick={() => retryUploadCenterEntry(entry.id)}>
-                    {entry.storedSafely ? 'השלמת רישום' : 'ניסיון חוזר'}
+                    {entry.status === 'registered'
+                      ? 'שליחה מחדש לעיבוד'
+                      : entry.storedSafely ? 'השלמת רישום' : 'ניסיון חוזר'}
                   </button>
                 )}
                 {entry.canCancel && (
@@ -700,8 +708,8 @@ export function UploadCenter() {
                   קובץ המקור נשמר בבטחה — אין להעלות אותו שוב; נותר רק להשלים את הרישום.
                 </div>
               )}
-              {entry.error && <div className="mt-1 text-xs text-alert-fg">{entry.error}</div>}
-              {entry.status === 'registered' && entry.documentId && entry.error && (
+              {entry.error && !processingStatus && <div className="mt-1 text-xs text-alert-fg">{entry.error}</div>}
+              {entry.status === 'registered' && entry.documentId && entry.error && !processingStatus && (
                 <Link to={`/documents/${entry.documentId}/review`} className="link text-xs">
                   מעבר למסמך הרשום
                 </Link>

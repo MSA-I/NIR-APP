@@ -1592,7 +1592,8 @@ select smart_document_processing_test.assert(
 );
 
 update public.document_processing_jobs
-set lease_until = statement_timestamp() - interval '1 second'
+set lease_until = statement_timestamp() - interval '1 second',
+    attempt_count = private.document_processing_claim_attempt_limit()
 where id = :'smart_crash_job_id'::uuid;
 update private.organization_external_egress_leases
 set reserved_at = statement_timestamp() - interval '10 minutes',
@@ -1606,7 +1607,8 @@ select public.claim_document_processing_job('worker-after-crash', 60);
 reset role;
 commit;
 select smart_document_processing_test.assert(
-  (select status = 'extracted' and attempt_count = 1
+  (select status = 'extracted'
+              and attempt_count = private.document_processing_claim_attempt_limit()
    from public.document_processing_jobs where id = :'smart_crash_job_id'::uuid)
   and exists (
     select 1 from public.document_extractions
@@ -1767,6 +1769,326 @@ select smart_document_processing_test.assert(
     where job_id = '55000000-0000-4000-8000-000000000107'
   ),
   'writable lifecycle recovery did not consume the committed OCR evidence'
+);
+
+-- No browser role can mutate the immutable queue/extraction ledgers directly.
+-- The authoritative claim circuit breaker fails an over-cap job in the claim transaction,
+-- then claims the next eligible job without incrementing the blocked row a ninth time.
+insert into public.documents (
+  id, org_id, entity_type, entity_id, storage_path, file_name, mime_type,
+  document_kind, uploaded_by
+) values
+  (
+    '45000000-0000-4000-8000-000000000012',
+    '15000000-0000-4000-8000-000000000001',
+    'inbox', null,
+    '15000000-0000-4000-8000-000000000001/smart-doc/circuit-breaker.pdf',
+    'circuit-breaker.pdf', 'application/pdf', 'other',
+    '25000000-0000-4000-8000-000000000001'
+  ),
+  (
+    '45000000-0000-4000-8000-000000000013',
+    '15000000-0000-4000-8000-000000000001',
+    'inbox', null,
+    '15000000-0000-4000-8000-000000000001/smart-doc/final-eligible.pdf',
+    'final-eligible.pdf', 'application/pdf', 'other',
+    '25000000-0000-4000-8000-000000000001'
+  );
+
+insert into public.document_processing_jobs (
+  id, org_id, document_id, requested_by, status, input_checksum,
+  contract_version, priority, attempt_count, lease_owner, lease_until,
+  processing_attempt_id, processing_attempt_started_at
+) values
+  (
+    '55000000-0000-4000-8000-000000000112',
+    '15000000-0000-4000-8000-000000000001',
+    '45000000-0000-4000-8000-000000000012',
+    '25000000-0000-4000-8000-000000000001',
+    'leased', 'etag:10101010101010101010101010101010', '1', 1000, 8,
+    'stale-worker', statement_timestamp() + interval '60 seconds',
+    '65000000-0000-4000-8000-000000000112',
+    statement_timestamp() - interval '10 minutes'
+  ),
+  (
+    '55000000-0000-4000-8000-000000000113',
+    '15000000-0000-4000-8000-000000000001',
+    '45000000-0000-4000-8000-000000000013',
+    '25000000-0000-4000-8000-000000000001',
+    'queued', 'etag:11111111111111111111111111111111', '1', 999, 7,
+    null, null, null, null
+  );
+
+begin;
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+select smart_document_processing_test.start_egress(
+  '55000000-0000-4000-8000-000000000112', 'stale-worker'
+)::text as egress
+\gset smart_cap_egress_
+reset role;
+commit;
+
+update public.document_processing_jobs
+set lease_until = statement_timestamp() - interval '1 second'
+where id = '55000000-0000-4000-8000-000000000112';
+
+begin;
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+select public.claim_document_processing_job('worker-cap', 60)::text as claim
+\gset smart_cap_claim_
+select public.fail_document_processing_job(
+  '55000000-0000-4000-8000-000000000113',
+  'worker-cap',
+  'fixture_complete',
+  'circuit breaker eligible fixture settled'
+);
+reset role;
+commit;
+
+select smart_document_processing_test.assert(
+  (:'smart_cap_claim_claim'::jsonb ->> 'job_id')::uuid
+      = '55000000-0000-4000-8000-000000000113'
+    and (:'smart_cap_claim_claim'::jsonb ->> 'attempt_count')::integer = 8
+    and exists (
+      select 1
+      from public.document_processing_jobs
+      where id = '55000000-0000-4000-8000-000000000112'
+        and status = 'failed'
+        and attempt_count = 8
+        and last_error_code = 'claim_attempt_limit_exceeded'
+    )
+    and exists (
+      select 1
+      from private.organization_external_egress_leases
+      where lease_id = (:'smart_cap_egress_egress'::jsonb ->> 'egress_lease_id')::uuid
+        and status = 'settled'
+        and outcome = 'ambiguous'
+        and evidence_code = 'job_lease_expired_before_settlement'
+    )
+    and (
+      select count(*) = 1
+      from public.audit_logs
+      where entity_type = 'document_processing_jobs'
+        and entity_id = '55000000-0000-4000-8000-000000000112'
+        and action = 'document_processing_failed'
+        and new_values ->> 'error_code' = 'claim_attempt_limit_exceeded'
+    ),
+  'claim circuit breaker incremented or reclaimed an over-cap job'
+);
+
+-- 0130: the operations screen consumes the same server-side health verdict for every attempt.
+select smart_document_processing_test.assert(
+  private.document_processing_stuck_reason(
+    'leased', 1, statement_timestamp() - interval '8 hours', statement_timestamp(),
+    statement_timestamp() + interval '1 minute', statement_timestamp()
+  ) is null
+  and private.document_processing_stuck_reason(
+    'leased', 1, statement_timestamp(), statement_timestamp(),
+    statement_timestamp() - interval '1 second', statement_timestamp()
+  ) is null
+  and private.document_processing_stuck_reason(
+    'leased', 1, statement_timestamp(), statement_timestamp(),
+    statement_timestamp() - interval '6 minutes', statement_timestamp()
+  ) = 'lease_expired'
+  and private.document_processing_stuck_reason(
+    'failed', 99, statement_timestamp() - interval '8 hours', statement_timestamp(),
+    null, statement_timestamp()
+  ) is null,
+  'server-side stuck classification drifted for live/recent leases, expired lease or terminal state'
+);
+
+begin;
+select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select is_stuck = false as stuck_is_false,
+       stuck_reason is null as stuck_reason_is_null,
+       queue_age_seconds is null as queue_age_is_null,
+       lease_until is null as lease_is_null,
+       processing_attempt_started_at is null as attempt_started_is_null
+from public.get_document_processing_attempts(
+  '45000000-0000-4000-8000-000000000012', 10
+)
+where job_id = '55000000-0000-4000-8000-000000000112'
+\gset smart_attempt_health_
+reset role;
+commit;
+
+select smart_document_processing_test.assert(
+  :'smart_attempt_health_stuck_is_false'::boolean
+    and :'smart_attempt_health_stuck_reason_is_null'::boolean
+    and :'smart_attempt_health_queue_age_is_null'::boolean
+    and :'smart_attempt_health_lease_is_null'::boolean
+    and :'smart_attempt_health_attempt_started_is_null'::boolean = false,
+  'processing attempts RPC omitted the canonical health or attempt timing shape'
+);
+
+begin;
+select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000005', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select smart_document_processing_test.assert(
+  not exists (
+    select 1 from public.get_document_processing_attempts(
+      '45000000-0000-4000-8000-000000000012', 10
+    )
+  ),
+  'processing attempts RPC crossed the tenant boundary'
+);
+reset role;
+commit;
+
+-- Stuck current jobs are a separate operations bucket. Adding one expired lease and one active
+-- row older than two hours must not increase the healthy "processing now" number.
+begin;
+select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select public.get_document_operations_metrics(30)::text as metrics
+\gset smart_health_before_
+reset role;
+commit;
+
+insert into public.documents (
+  id, org_id, entity_type, entity_id, storage_path, file_name, mime_type,
+  document_kind, uploaded_by
+) values
+  (
+    '45000000-0000-4000-8000-000000000016',
+    '15000000-0000-4000-8000-000000000001', 'inbox', null,
+    '15000000-0000-4000-8000-000000000001/smart-doc/old-active.pdf',
+    'old-active.pdf', 'application/pdf', 'other',
+    '25000000-0000-4000-8000-000000000001'
+  ),
+  (
+    '45000000-0000-4000-8000-000000000017',
+    '15000000-0000-4000-8000-000000000001', 'inbox', null,
+    '15000000-0000-4000-8000-000000000001/smart-doc/expired-lease.pdf',
+    'expired-lease.pdf', 'application/pdf', 'other',
+    '25000000-0000-4000-8000-000000000001'
+  );
+
+insert into public.document_processing_jobs (
+  id, org_id, document_id, requested_by, status, input_checksum,
+  contract_version, priority, attempt_count, lease_owner, lease_until,
+  processing_attempt_id, processing_attempt_started_at, created_at, updated_at
+) values
+  (
+    '55000000-0000-4000-8000-000000000116',
+    '15000000-0000-4000-8000-000000000001',
+    '45000000-0000-4000-8000-000000000016',
+    '25000000-0000-4000-8000-000000000001',
+    'extracted', 'etag:16161616161616161616161616161616', '1', 100, 1,
+    null, null, '65000000-0000-4000-8000-000000000116',
+    statement_timestamp() - interval '3 hours',
+    statement_timestamp() - interval '3 hours',
+    statement_timestamp() - interval '3 hours'
+  ),
+  (
+    '55000000-0000-4000-8000-000000000117',
+    '15000000-0000-4000-8000-000000000001',
+    '45000000-0000-4000-8000-000000000017',
+    '25000000-0000-4000-8000-000000000001',
+    'leased', 'etag:17171717171717171717171717171717', '1', 100, 1,
+    'expired-health-worker', statement_timestamp() - interval '6 minutes',
+    '65000000-0000-4000-8000-000000000117',
+    statement_timestamp() - interval '5 minutes',
+    statement_timestamp() - interval '5 minutes',
+    statement_timestamp() - interval '5 minutes'
+  );
+
+begin;
+select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select public.get_document_operations_metrics(30)::text as metrics
+\gset smart_health_after_
+reset role;
+commit;
+
+select smart_document_processing_test.assert(
+  (:'smart_health_after_metrics'::jsonb ->> 'documents_stuck')::integer
+      = (:'smart_health_before_metrics'::jsonb ->> 'documents_stuck')::integer + 2
+    and (:'smart_health_after_metrics'::jsonb ->> 'documents_processing')::integer
+      = (:'smart_health_before_metrics'::jsonb ->> 'documents_processing')::integer
+    and (:'smart_health_after_metrics'::jsonb ->> 'documents_waiting')::integer
+      = (:'smart_health_before_metrics'::jsonb ->> 'documents_waiting')::integer,
+  'stuck current jobs leaked into healthy waiting or processing-now metrics'
+);
+
+-- The same tenant-scoped read contract is available to every role that could already select the
+-- job table. Office sees both reasons; another tenant sees neither; accountant remains denied.
+begin;
+select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select smart_document_processing_test.assert(
+  (select count(*) = 2
+          and bool_and(is_stuck)
+          and bool_or(stuck_reason = 'active_over_two_hours')
+          and bool_or(stuck_reason = 'lease_expired')
+   from public.get_document_processing_statuses(array[
+     '45000000-0000-4000-8000-000000000016'::uuid,
+     '45000000-0000-4000-8000-000000000017'::uuid
+   ])),
+  'tenant processing status RPC disagreed with operations health metrics'
+);
+reset role;
+commit;
+
+begin;
+select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000005', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select smart_document_processing_test.assert(
+  not exists (
+    select 1 from public.get_document_processing_statuses(array[
+      '45000000-0000-4000-8000-000000000016'::uuid
+    ])
+  ),
+  'tenant processing status RPC crossed the tenant boundary'
+);
+reset role;
+commit;
+
+begin;
+select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000004', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+do $$
+begin
+  perform public.get_document_processing_statuses(null);
+  raise exception 'expected processing status role rejection';
+exception when sqlstate '42501' then null;
+end
+$$;
+reset role;
+commit;
+
+-- 0130's three browser read doors share one explicit ACL matrix: authenticated may enter the
+-- function and its body narrows the product role; anon, service_role and PUBLIC cannot execute it.
+select smart_document_processing_test.assert(
+  (
+    select bool_and(
+      has_function_privilege('authenticated', signature, 'EXECUTE')
+      and not has_function_privilege('anon', signature, 'EXECUTE')
+      and not has_function_privilege('service_role', signature, 'EXECUTE')
+      and not exists (
+        select 1
+        from pg_catalog.aclexplode(proc.proacl) acl
+        where acl.grantee = 0 and acl.privilege_type = 'EXECUTE'
+      )
+    )
+    from (values
+      ('public.get_document_operations_metrics(integer)'::regprocedure),
+      ('public.get_document_processing_statuses(uuid[])'::regprocedure),
+      ('public.get_document_processing_attempts(uuid,integer)'::regprocedure)
+    ) expected(signature)
+    join pg_catalog.pg_proc proc on proc.oid = expected.signature
+  ),
+  '0130 processing read RPC ACL matrix drifted for authenticated, anon, service role or PUBLIC'
 );
 
 -- No browser role can mutate the immutable queue/extraction ledgers directly.

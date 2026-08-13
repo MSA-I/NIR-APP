@@ -12,6 +12,9 @@ import {
   type ClaimRequest,
   type CompleteRequest,
   type FailRequest,
+  GATEWAY_CONTRACT_HEADER,
+  GATEWAY_CONTRACT_VERSION,
+  gatewayContractMatches,
   type HeartbeatRequest,
   jsonByteLength,
   MAX_EXTRACTION_BYTES,
@@ -37,6 +40,7 @@ const UUID =
 
 type ErrorCode =
   | "invalid_worker_token"
+  | "gateway_contract_mismatch"
   | "method_not_allowed"
   | "unsupported_media_type"
   | "payload_too_large"
@@ -53,6 +57,7 @@ type ErrorCode =
 
 const MESSAGE: Record<ErrorCode, string> = {
   invalid_worker_token: "Worker authentication failed.",
+  gateway_contract_mismatch: "Worker and gateway contracts do not match.",
   method_not_allowed: "POST is required.",
   unsupported_media_type: "Content-Type must be application/json.",
   payload_too_large: "Request payload is too large.",
@@ -90,6 +95,7 @@ function json(
       "Cache-Control": "no-store",
       "Content-Type": "application/json",
       "X-Content-Type-Options": "nosniff",
+      [GATEWAY_CONTRACT_HEADER]: GATEWAY_CONTRACT_VERSION,
       ...extraHeaders,
     },
   });
@@ -628,6 +634,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       )
     ) {
       throw new GatewayError("invalid_worker_token", 401);
+    }
+    // This check deliberately precedes body parsing, client construction and every RPC. A stale
+    // worker is rejected without claiming a job or incrementing its authoritative attempt count.
+    // The worker shipped first: the previous Edge version ignored this additive request header.
+    if (!gatewayContractMatches(req.headers)) {
+      throw new GatewayError("gateway_contract_mismatch", 409);
     }
 
     const body = await readJsonBody(req);

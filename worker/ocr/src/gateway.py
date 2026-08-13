@@ -15,6 +15,8 @@ from .errors import GatewayError, ProcessingError
 
 
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+GATEWAY_CONTRACT_HEADER = "x-ocr-gateway-contract-version"
+GATEWAY_CONTRACT_VERSION = "2"
 CHECKSUM_RE = re.compile(r"^etag:[0-9a-fA-F]{16,128}(?:-[0-9]+)?$")
 EVIDENCE_SHA_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
@@ -48,21 +50,32 @@ class GatewayClient:
             headers={
                 "Content-Type": "application/json",
                 "x-ocr-worker-token": self.token,
+                GATEWAY_CONTRACT_HEADER: GATEWAY_CONTRACT_VERSION,
             },
         )
         try:
             with self.opener.open(request, timeout=self.timeout_seconds) as response:
                 raw = response.read(2 * 1024 * 1024 + 1)
                 status = response.status
+                advertised_contract = response.headers.get(GATEWAY_CONTRACT_HEADER)
         except urllib.error.HTTPError as exc:
             raw = exc.read(64 * 1024)
             status = exc.code
+            advertised_contract = exc.headers.get(GATEWAY_CONTRACT_HEADER)
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise GatewayError(
                 "gateway_unavailable", "Document gateway is unavailable", retryable=True
             ) from exc
         if len(raw) > 2 * 1024 * 1024:
             raise GatewayError("gateway_response_too_large", "Gateway response is too large")
+        # The old Edge did not advertise a version, so absence remains rollout-compatible while
+        # the new worker is deployed first. Once an Edge advertises a contract it must agree.
+        if advertised_contract is not None and advertised_contract != GATEWAY_CONTRACT_VERSION:
+            raise GatewayError(
+                "gateway_contract_mismatch",
+                "Worker and document gateway contracts do not match",
+                status=status,
+            )
         try:
             envelope = json.loads(raw.decode("utf-8", "strict"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:

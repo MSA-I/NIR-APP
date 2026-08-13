@@ -1,0 +1,10 @@
+{
+  "lock": {
+    "path": "./deno.lock",
+    "frozen": true
+  },
+  "nodeModulesDir": "auto",
+  "compilerOptions": {
+    "strict": true
+  }
+}

@@ -71,6 +71,9 @@ verify_jwt = false
 [functions.interpret-document]
 verify_jwt = false
 
+[functions.recover-document-processing]
+verify_jwt = true
+
 [functions.submit-price-list]
 verify_jwt = true
 

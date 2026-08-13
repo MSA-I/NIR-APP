@@ -3,7 +3,9 @@ import { Camera, FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { Link } from 'react-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
-import { useToast, Skeleton, ConfirmDialog, ErrorNote, Note, StatusBadge } from './ui';
+import { useToast, Skeleton, ConfirmDialog, ErrorNote, Note } from './ui';
+import { DocumentStatusBadge } from './DocumentStatusBadge';
+import { documentUiStatus } from '../lib/documentStatus';
 import { ok, toHebrewError } from '../lib/errors';
 import { useQuery, unwrap } from '../lib/useQuery';
 import type { DocumentKind, DocumentRow } from '../lib/types';
@@ -15,7 +17,7 @@ import {
   type UploadBatchSummary,
 } from '../lib/uploadBatch';
 import { fetchAll } from '../lib/supabasePaging';
-import { DOCUMENT_USER_STATE_META, documentUserState, useDocumentProcessing } from '../lib/useDocumentProcessing';
+import { useDocumentProcessing } from '../lib/useDocumentProcessing';
 import { TusUploadCancelledError, TusUploadError, tusUploadToDocuments } from '../lib/tusUpload';
 import {
   claimPendingPhotos,
@@ -84,7 +86,14 @@ export const DOCUMENT_UPLOAD_ACCEPT = [
 export interface DocumentUploadResume {
   storagePath: string;
   documentId: string | null;
+  clientUploadKey: string;
 }
+
+// A retry from QuickCapture, the inbox modal, an attachment panel or the global Upload Center
+// receives the same File object. Keep its safe resume point here, at the upload boundary, so every
+// caller resumes registration/enqueue and none of them has to remember how storage was reached.
+// WeakMap deliberately does not retain files after the browser releases them.
+const documentUploadResumeByFile = new WeakMap<File, DocumentUploadResume>();
 
 class DocumentUploadError extends Error {
   constructor(
@@ -98,6 +107,98 @@ class DocumentUploadError extends Error {
 }
 
 const TRANSIENT_ERROR_PATTERN = /(?:failed to fetch|fetch failed|network|timed? ?out|temporar(?:y|ily)|service unavailable|\b(?:408|429|5\d\d)\b)/i;
+
+type RegistrationFailureInput = {
+  error: unknown;
+  status?: number;
+  statusText?: string;
+  malformedResponse?: boolean;
+};
+
+function documentRegistrationFailure(input: RegistrationFailureInput) {
+  const error = (input.error ?? {}) as {
+    code?: unknown;
+    message?: unknown;
+    details?: unknown;
+    hint?: unknown;
+    status?: unknown;
+  };
+  const code = typeof error.code === 'string' ? error.code.toUpperCase() : '';
+  const status = typeof input.status === 'number'
+    ? input.status
+    : typeof error.status === 'number' ? error.status : null;
+  const raw = [error.message, error.details, error.hint, input.statusText]
+    .filter((part): part is string => typeof part === 'string')
+    .join(' ');
+
+  if (input.malformedResponse) {
+    return {
+      retryable: false,
+      message: 'הקובץ נשמר, אך התקבלה תשובת שרת לא תקינה. אין להעלות אותו שוב; נדרשת בדיקה.',
+    };
+  }
+
+  if (code === 'PGRST202' || code === '42883' || /could not find the function|function .* does not exist/i.test(raw)) {
+    return {
+      retryable: false,
+      message: 'הקובץ נשמר, אך שירות הרישום אינו זמין בגרסת השרת. ניסיון חוזר לא יעזור כרגע; יש לפנות לתמיכה.',
+    };
+  }
+
+  if (code === 'PGRST300') {
+    return {
+      retryable: false,
+      message: 'הקובץ נשמר, אך שירות הרישום אינו מוגדר כראוי בשרת. ניסיון חוזר לא יעזור כרגע; יש לפנות לתמיכה.',
+    };
+  }
+
+  if (code === '42501' || code === 'PGRST301' || code === 'PGRST302'
+      || /not_authorized|permission|row-level security|\brls\b|jwt/i.test(raw)) {
+    return {
+      retryable: false,
+      message: 'הקובץ נשמר, אך אין הרשאה להשלים את הרישום. אין להעלות אותו שוב. יש להתחבר מחדש או לפנות למנהל.',
+    };
+  }
+
+  if (code === '23505' || /document_upload_key_(?:conflict|retired)/i.test(raw)) {
+    return {
+      retryable: false,
+      message: 'הקובץ נשמר, אך מזהה ההעלאה כבר קשור לרישום אחר או שפרש. אין להעלות אותו שוב; נדרשת בדיקת תמיכה.',
+    };
+  }
+
+  if (code === '22023' || code === '22P02' || code === '23502' || code === '23503' || code === '23514'
+      || /document_upload_key_invalid/i.test(raw)) {
+    return {
+      retryable: false,
+      message: 'הקובץ נשמר, אך פרטי הרישום אינם תקינים. אין להעלות אותו שוב; נדרשת בדיקה.',
+    };
+  }
+
+  const retryable = status === 0
+    || status === 408
+    || status === 429
+    || status === 502
+    || status === 503
+    || status === 504
+    || /^PGRST00[0-3]$/.test(code)
+    || /^08[A-Z0-9]{3}$/.test(code)
+    || /^(?:40001|40P01|55P03|57014|57P0[1-3])$/.test(code)
+    || /^53[A-Z0-9]{3}$/.test(code)
+    || /failed to fetch|fetch failed|network(?:error)?|connection (?:closed|reset)|timed? ?out/i.test(raw);
+
+  if (retryable) {
+    return {
+      retryable: true,
+      message: 'הקובץ נשמר בבטחה, אך הרישום לא הושלם בגלל תקלה זמנית. ניסיון חוזר ישלים את הרישום בלבד — אין להעלות את הקובץ שוב.',
+    };
+  }
+
+  return {
+    retryable: false,
+    message: 'הקובץ נשמר, אך רישום המסמך לא הושלם. אין להעלות אותו שוב; נדרשת בדיקה.',
+  };
+}
 
 export function documentUploadFailure(error: unknown) {
   if (error instanceof DocumentUploadError) {
@@ -199,11 +300,10 @@ const ENTITY_SOURCE_LABELS: Record<string, string> = {
  * re-filed from /inbox. The stored object never moves on re-filing — the bucket policy
  * reads only the leading org segment.
  *
- * Duplicate protection (wave 6b): the path is minted with Date.now() ONLY for a fresh
- * upload. Once the object is stored, every failure past that point carries a
- * `DocumentUploadResume`, and a retry passed back through `options.resume` redoes only
- * the failed step — insert against the same stored path, or the processing enqueue —
- * mirroring PriceListUpload's pending-registration pattern.
+ * Duplicate protection (0131): one stable client upload key is minted before TUS starts and
+ * names both the object path and the idempotent registration RPC. Once the object is stored,
+ * every failure past that point carries a `DocumentUploadResume`; retry redoes only the failed
+ * registration/enqueue step against the same key and path.
  */
 export async function uploadDocument(
   orgId: string,
@@ -219,15 +319,15 @@ export async function uploadDocument(
   const mimeType = uploadMimeType(file);
   const { data: user, error: userError } = await supabase.auth.getUser();
   if (userError || !user.user) throw new Error(userError?.message ?? 'unauthenticated');
-  const resume = options.resume ?? null;
+  const resume = options.resume ?? documentUploadResumeByFile.get(file) ?? null;
+  const clientUploadKey = resume?.clientUploadKey ?? options.objectKey ?? crypto.randomUUID();
   let path = resume?.storagePath ?? null;
   let documentId = resume?.documentId ?? null;
-  let freshUpload = false;
 
   if (!path) {
     const safeName = file.name.replace(/[^\w.\-]+/g, '_');
     // org_id must lead the path -- the bucket's RLS policy reads it to enforce tenant isolation.
-    const objectKey = options.objectKey ?? Date.now().toString();
+    const objectKey = clientUploadKey;
     path = entityId
       ? `${orgId}/${entityType}/${entityId}/${objectKey}_${safeName}`
       : `${orgId}/inbox/${objectKey}_${safeName}`;
@@ -252,69 +352,91 @@ export async function uploadDocument(
       throw uploadError;
     }
     center?.registerAbort(null);
-    freshUpload = true;
   }
-  center?.markStored(documentId);
-
   if (!documentId) {
-    const ins = await supabase.from('documents').insert({
-      org_id: orgId, entity_type: entityType, entity_id: entityId,
-      storage_path: path, file_name: file.name, mime_type: mimeType, uploaded_by: user.user.id,
-      document_kind: metadata.documentKind ?? defaultDocumentKind(entityType),
-      supplier_id: metadata.supplierId ?? null,
-      document_date: metadata.documentDate ?? null,
-    }).select('id').single();
-    if (ins.error || !ins.data) {
-      const insertMessage = ins.error?.message ?? 'document registration failed';
-      // The row never existed, so this cleanup can only target the object created above.
-      // Preserve the insert error: a cleanup failure is secondary and must not hide the cause.
-      // On a resumed attempt the object is deliberately kept — it is the thing being resumed.
-      let objectRemains = !freshUpload;
-      if (freshUpload) {
-        try {
-          const cleanup = await supabase.storage.from('documents').remove([path]);
-          if (cleanup.error) {
-            objectRemains = true;
-            console.error('[supplyflow] failed to clean up unregistered document', cleanup.error.message);
-          }
-        } catch (cleanupError) {
-          objectRemains = true;
-          console.error('[supplyflow] failed to clean up unregistered document', cleanupError);
-        }
-      }
-      if (objectRemains) {
-        // The object is durable but the registry row is not. The retry must redo ONLY the
-        // insert against the same stored path — re-uploading would duplicate the object.
-        throw new DocumentUploadError(
-          'הקובץ נשמר באחסון, אך רישום המסמך לא הושלם. ניסיון חוזר ישלים את הרישום בלי להעלות מחדש.',
-          true,
-          false,
-          { storagePath: path, documentId: null },
-        );
-      }
-      throw new Error(insertMessage);
+    let registered: {
+      data: unknown;
+      error: unknown;
+      status?: number;
+      statusText?: string;
+    };
+    try {
+      registered = await supabase.rpc('register_uploaded_document', {
+        p_client_upload_key: clientUploadKey,
+        p_entity_type: entityType,
+        p_entity_id: entityId,
+        p_storage_path: path,
+        p_file_name: file.name,
+        p_mime_type: mimeType,
+        p_document_kind: metadata.documentKind ?? defaultDocumentKind(entityType),
+        p_supplier_id: metadata.supplierId ?? null,
+        p_document_date: metadata.documentDate ?? null,
+      });
+    } catch (error) {
+      registered = { data: null, error };
     }
-    documentId = ins.data.id;
+    const registeredData = registered.data as { document_id?: unknown } | null;
+    if (registered.error || typeof registeredData?.document_id !== 'string') {
+      // The object is already durable, and an error response cannot prove whether the RPC
+      // committed before the response was lost. Never delete here. The stable key makes the
+      // next call return the committed row or create exactly one row if no commit occurred.
+      const nextResume = { storagePath: path, documentId: null, clientUploadKey };
+      documentUploadResumeByFile.set(file, nextResume);
+      center?.markStored(null);
+      const failure = documentRegistrationFailure({
+        error: registered.error,
+        status: registered.status,
+        statusText: registered.statusText,
+        malformedResponse: !registered.error && typeof registeredData?.document_id !== 'string',
+      });
+      throw new DocumentUploadError(
+        failure.message,
+        failure.retryable,
+        false,
+        nextResume,
+      );
+    }
+    documentId = registeredData.document_id;
   }
+  documentUploadResumeByFile.set(file, { storagePath: path, documentId, clientUploadKey });
   center?.markRegistered(documentId);
   if (metadata.enqueueProcessing === false) {
+    documentUploadResumeByFile.delete(file);
     return { documentId, jobId: null };
   }
-  const queued = await supabase.rpc('enqueue_document_processing', { p_document_id: documentId });
+  let queued: { data: unknown; error: { code?: string; message?: string } | null; status?: number; statusText?: string };
+  try {
+    queued = await supabase.rpc('enqueue_document_processing', { p_document_id: documentId });
+  } catch (error) {
+    queued = { data: null, error: error as { code?: string; message?: string } };
+  }
   if (queued.error && processingQueueUnavailable(queued.error)) {
+    documentUploadResumeByFile.delete(file);
     return { documentId, jobId: null };
   }
   if (queued.error || typeof queued.data !== 'string') {
-    // The source and registry row are durable now; retrying the whole upload would duplicate
-    // them. `retryable` stays false so a caller without resume-awareness never re-uploads;
-    // a resume-aware caller retries the enqueue alone through `resume`.
+    // The source and registry row are durable now. A transport failure may have committed the
+    // enqueue before losing its response, so every retry resumes at this exact document and lets
+    // enqueue_document_processing's current-job contract settle the ambiguity. Never re-upload or
+    // re-register here, including when the promise itself rejected instead of returning an error.
+    const nextResume = { storagePath: path, documentId, clientUploadKey };
+    documentUploadResumeByFile.set(file, nextResume);
+    const failure = documentRegistrationFailure({
+      error: queued.error,
+      status: queued.status,
+      statusText: queued.statusText,
+      malformedResponse: !queued.error && typeof queued.data !== 'string',
+    });
     throw new DocumentUploadError(
-      'הקובץ נשמר, אך לא נכנס לתור העיבוד. ניתן לנסות עיבוד מחדש מגלריית המסמכים.',
-      false,
+      failure.retryable
+        ? 'הקובץ נשמר ונרשם, אך לא התקבל אישור על הכניסה לתור בגלל תקלה זמנית. ניסיון חוזר ישלים רק את שליחת העיבוד.'
+        : 'הקובץ נשמר ונרשם, אך לא נכנס לתור העיבוד. ניתן לנסות עיבוד מחדש מגלריית המסמכים.',
+      failure.retryable,
       true,
-      { storagePath: path, documentId },
+      nextResume,
     );
   }
+  documentUploadResumeByFile.delete(file);
   return { documentId, jobId: queued.data };
 }
 
@@ -347,6 +469,7 @@ async function queuePendingDocumentPhoto(
   documentKind: DocumentKind,
   file: File,
   resume: DocumentUploadResume | null = null,
+  failure: { message: string; retryable: boolean } | null = null,
 ) {
   uploadMimeType(file);
   await putPendingPhoto({
@@ -355,13 +478,13 @@ async function queuePendingDocumentPhoto(
     fileName: file.name,
     blob: file,
     documentKind,
-    clientUploadId: crypto.randomUUID(),
+    clientUploadId: resume?.clientUploadKey ?? crypto.randomUUID(),
     storagePath: resume?.storagePath ?? null,
     documentId: resume?.documentId ?? null,
-    attempts: 0,
-    state: 'pending',
-    lastError: null,
-    lastAttemptAt: null,
+    attempts: failure ? 1 : 0,
+    state: failure ? (failure.retryable ? 'failed' : 'needs_attention') : 'pending',
+    lastError: failure?.message ?? null,
+    lastAttemptAt: failure ? Date.now() : null,
     createdAt: Date.now(),
   });
 }
@@ -374,14 +497,14 @@ export function receiptPhotoMustRemainQueued(
   return entityType === 'goods_receipt' && (!online || receiptPending);
 }
 
-async function runPendingDocumentPhotoSync(includeNeedsAttention: boolean) {
+async function runPendingDocumentPhotoSync() {
   const leaseOwner = crypto.randomUUID();
-  const photos = await claimPendingPhotos(leaseOwner, includeNeedsAttention);
+  const photos = await claimPendingPhotos(leaseOwner, false);
   let uploaded = 0;
   let failed = 0;
   for (const photo of photos) {
     if (photo.id == null || photo.syncVersion == null || !photo.orgId || !photo.actorUserId) { failed += 1; continue; }
-    if (photo.state === 'needs_attention' && !includeNeedsAttention) { failed += 1; continue; }
+    if (photo.state === 'needs_attention') { failed += 1; continue; }
     try {
       if (photo.entityType === 'goods_receipt'
         && await receiptPendingServerAcceptance(photo.entityId)) {
@@ -403,14 +526,16 @@ async function runPendingDocumentPhotoSync(includeNeedsAttention: boolean) {
         type: photo.blob.type,
         lastModified: photo.createdAt,
       });
+      const clientUploadKey = photo.clientUploadId ?? `legacy-${photo.id}`;
       await uploadDocument(photo.orgId, photo.entityType, photo.entityId, file, {
         ...metadata,
         enqueueProcessing: true,
       }, {
-        objectKey: photo.clientUploadId ?? `legacy-${photo.id}`,
+        objectKey: photo.clientUploadId ?? clientUploadKey,
         resume: photo.storagePath ? {
           storagePath: photo.storagePath,
           documentId: photo.documentId ?? null,
+          clientUploadKey,
         } : null,
       });
       if (await deletePendingPhoto(photo.id, leaseOwner, photo.syncVersion)) uploaded += 1;
@@ -421,7 +546,7 @@ async function runPendingDocumentPhotoSync(includeNeedsAttention: boolean) {
         storagePath: failure.resume?.storagePath ?? photo.storagePath ?? null,
         documentId: failure.resume?.documentId ?? photo.documentId ?? null,
         attempts: (photo.attempts ?? 0) + 1,
-        state: failure.retryable || failure.resume ? 'failed' : 'needs_attention',
+        state: failure.retryable ? 'failed' : 'needs_attention',
         lastError: failure.message,
         lastAttemptAt: Date.now(),
         syncLeaseOwner: null,
@@ -437,8 +562,8 @@ async function runPendingDocumentPhotoSync(includeNeedsAttention: boolean) {
 let pendingDocumentPhotoSync: ReturnType<typeof runPendingDocumentPhotoSync> | null = null;
 
 /** Uploads scoped receipt photos only after the receipt action has had a chance to sync. */
-export function syncPendingDocumentPhotos(includeNeedsAttention = false) {
-  pendingDocumentPhotoSync ??= runPendingDocumentPhotoSync(includeNeedsAttention).finally(() => {
+export function syncPendingDocumentPhotos() {
+  pendingDocumentPhotoSync ??= runPendingDocumentPhotoSync().finally(() => {
     pendingDocumentPhotoSync = null;
   });
   return pendingDocumentPhotoSync;
@@ -529,7 +654,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
             else resumeRef.current.delete(file);
             return {
               message: failure.message,
-              retryable: failure.retryable || failure.resume !== null,
+              retryable: failure.retryable,
               registered: failure.registered,
               storedSafely: failure.resume !== null || failure.registered,
               documentId: failure.resume?.documentId ?? null,
@@ -539,26 +664,35 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
       );
       for (const file of result.succeeded) resumeRef.current.delete(file);
       const failures = result.failed.map(({ item, error }) => ({ item, ...documentUploadFailure(error) }));
-      const locallyStored = new Set<File>();
+      const locallyQueuedForSync = new Set<File>();
+      const locallyNeedsAttention = new Set<File>();
       if (entityType === 'goods_receipt') {
         for (const failure of failures) {
           if (!failure.retryable && failure.resume === null) continue;
-          await queuePendingDocumentPhoto(entityType, entityId, documentKind, failure.item, failure.resume);
-          locallyStored.add(failure.item);
+          await queuePendingDocumentPhoto(
+            entityType,
+            entityId,
+            documentKind,
+            failure.item,
+            failure.resume,
+            { message: failure.message, retryable: failure.retryable },
+          );
+          if (failure.retryable) locallyQueuedForSync.add(failure.item);
+          else locallyNeedsAttention.add(failure.item);
         }
       }
-      if (locallyStored.size) {
-        setLocallyQueued((count) => count + locallyStored.size);
+      if (locallyQueuedForSync.size || locallyNeedsAttention.size) {
+        setLocallyQueued((count) => count + locallyQueuedForSync.size);
         await offlineQueue.refresh();
       }
       const failed = failures
-        .filter(({ item, retryable, resume }) => !locallyStored.has(item) && (retryable || resume !== null))
+        .filter(({ item, retryable }) => !locallyQueuedForSync.has(item) && !locallyNeedsAttention.has(item) && retryable)
         .map(({ item }) => item);
       const registered = failures.filter(({ registered: isRegistered }) => isRegistered).length;
       setRetryFiles(failed);
       const summary = mergeDocumentUploadSummary(previousSummary, files, {
         succeeded: result.succeeded,
-        failed: result.failed.filter(({ item }) => !locallyStored.has(item)),
+        failed: result.failed.filter(({ item }) => !locallyQueuedForSync.has(item)),
       });
       setUploadSummary(summary);
       if (result.succeeded.length || registered) await refetch();
@@ -566,8 +700,8 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
         const succeededLabel = canMutateDocuments ? 'הועלו וממתינים לעיבוד' : 'הועלו';
         const detail = failures[0] ? ` ${failures[0].message}` : '';
         toast(`${summary.succeeded.length} ${succeededLabel}, ${summary.failed.length} לא הושלמו.${detail}`, 'error');
-      } else if (locallyStored.size) {
-        toast(`${locallyStored.size} קבצים נשמרו במכשיר וממתינים לסנכרון.`);
+      } else if (locallyQueuedForSync.size) {
+        toast(`${locallyQueuedForSync.size} קבצים נשמרו במכשיר וממתינים לסנכרון.`);
       } else {
         toast(canMutateDocuments
           ? result.succeeded.length === 1 ? 'הועלה וממתין לעיבוד' : `${result.succeeded.length} קבצים הועלו וממתינים לעיבוד`
@@ -706,7 +840,9 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
                 {canReview && (
                   <span data-document-processing-status={stage ?? 'loading'}>
                     {stage
-                      ? <StatusBadge meta={DOCUMENT_USER_STATE_META[documentUserState(stage)]} />
+                      ? <DocumentStatusBadge status={documentUiStatus({
+                        status: stage, job: processing.snapshots[d.id]?.job, document: d,
+                      })} />
                       : <><Skeleton className="h-6 w-24" /><span className="sr-only">סטטוס העיבוד נטען</span></>}
                   </span>
                 )}

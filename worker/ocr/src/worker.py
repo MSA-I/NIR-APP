@@ -24,7 +24,7 @@ from .retry import bounded_backoff, retry_call
 from .tempfiles import job_temp_dir
 
 
-WORKER_VERSION = "1"
+WORKER_VERSION = "2"
 
 
 def _log(event: str, **fields: Any) -> None:

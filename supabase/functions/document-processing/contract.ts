@@ -3,6 +3,8 @@ export const MAX_EXTRACTION_BYTES = 25 * 1024 * 1024;
 export const MAX_SMALL_REQUEST_BYTES = 16 * 1024;
 export const MAX_RESOURCE_METADATA_BYTES = 64 * 1024;
 export const DEFAULT_LEASE_SECONDS = 120;
+export const GATEWAY_CONTRACT_HEADER = "x-ocr-gateway-contract-version";
+export const GATEWAY_CONTRACT_VERSION = "2";
 
 type JsonObject = Record<string, unknown>;
 
@@ -72,6 +74,10 @@ export class RequestValidationError extends Error {
     super(code);
     this.code = code;
   }
+}
+
+export function gatewayContractMatches(headers: Headers): boolean {
+  return headers.get(GATEWAY_CONTRACT_HEADER) === GATEWAY_CONTRACT_VERSION;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

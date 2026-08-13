@@ -42,7 +42,8 @@ describe('offline receipt photo wiring', () => {
       upload.indexOf('await deletePendingPhoto(photo.id, leaseOwner, photo.syncVersion)'),
     );
     expect(upload).toContain('await updatePendingPhoto(photo.id, {');
-    expect(upload).toContain("state: failure.retryable || failure.resume ? 'failed' : 'needs_attention'");
+    expect(upload).toContain("state: failure.retryable ? 'failed' : 'needs_attention'");
+    expect(upload).toContain("state: failure ? (failure.retryable ? 'failed' : 'needs_attention') : 'pending'");
     expect(upload).toContain('lastError: failure.message');
     expect(offlineDb).toContain("db.transaction(OFFLINE_STORES.pendingPhotos, 'readwrite')");
     expect(offlineDb).toContain('await tx.store.put({ ...row, ...patch })');
@@ -68,7 +69,8 @@ describe('offline receipt photo wiring', () => {
   it('claims photos across tabs and keeps one stable object path for every retry', () => {
     const upload = read('FileUpload.tsx');
     const offlineDb = readFileSync(join(process.cwd(), 'src', 'lib', 'offlineDb.ts'), 'utf8');
-    expect(upload).toContain('const photos = await claimPendingPhotos(leaseOwner, includeNeedsAttention)');
+    expect(upload).toContain('const photos = await claimPendingPhotos(leaseOwner, false)');
+    expect(upload).toContain("if (photo.state === 'needs_attention')");
     expect(upload).toContain('objectKey: photo.clientUploadId');
     expect(upload).toContain('await deletePendingPhoto(photo.id, leaseOwner, photo.syncVersion)');
     expect(offlineDb).toContain("db.transaction(OFFLINE_STORES.pendingPhotos, 'readwrite')");
@@ -80,8 +82,11 @@ describe('offline receipt photo wiring', () => {
     const status = read('OfflineQueueStatus.tsx');
     expect(status).toContain('offlineQueue.sync().then(() => syncPhotos())');
     expect(status.indexOf('await offlineQueue.sync()')).toBeLessThan(
-      status.indexOf('await syncPhotos(true)'),
+      status.indexOf('await syncPhotos()'),
     );
+    expect(status).not.toContain('syncPhotos(true)');
+    expect(status).toContain('העלאות דורשות טיפול');
+    expect(status).toContain('!hasSyncableWork');
     expect(status).toContain('queue.pendingActions === 0 && queue.pendingUploads === 0');
     expect(status).toContain('photo.lastError');
     expect(status).toContain("lastAutoAttempt.current = ''");

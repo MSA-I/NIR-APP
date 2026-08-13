@@ -26,10 +26,9 @@ import { CategoryDonut } from '../components/charts';
 import { toHebrewError } from '../lib/errors';
 import {
   DOCUMENT_PROCESSING_STAGE_META,
-  DOCUMENT_USER_STATE_META,
-  documentUserState,
   type DocumentProcessingStage,
 } from '../lib/useDocumentProcessing';
+import { documentUiStatus } from '../lib/documentStatus';
 
 // jsdom implements neither, and every chart goes through ChartViewport (reduced-motion +
 // first-viewport animation). Stubbed to the values a browser reports with motion allowed and
@@ -210,33 +209,27 @@ describe('retired identities — reassignment cannot look half successful', () =
 
 /* ================= finding 20 — one document, one vocabulary ================= */
 
-describe('finding 20 — the everyday surfaces speak the four human states', () => {
+describe('finding 20 — everyday surfaces use the canonical document status', () => {
   const STAGES = Object.keys(DOCUMENT_PROCESSING_STAGE_META) as DocumentProcessingStage[];
 
   /**
-   * `AttachmentsPanel`, `FileUpload` and the `registered` branch of `UploadCenter` all render
-   * `DOCUMENT_USER_STATE_META[documentUserState(stage)]`. Pinning the mapping is what makes the
-   * three call sites' single-line change checkable without mounting three screens; the browser
-   * gate already scans the documents folder itself for pipeline words.
+   * The raw seven-stage contract remains available for diagnostics, but user-facing text comes
+   * from `documentUiStatus`, including filing precedence.
    */
   it('maps every pipeline stage onto a word a person can act on', () => {
-    const human = new Set(Object.values(DOCUMENT_USER_STATE_META).map(({ label }) => label));
-    const engineering = new Set(Object.values(DOCUMENT_PROCESSING_STAGE_META).map(({ label }) => label));
     for (const stage of STAGES) {
-      const label = DOCUMENT_USER_STATE_META[documentUserState(stage)].label;
-      expect(human).toContain(label);
-      // "ממתין לפירוש" was the exact word appearing one click from "נקלט" on the same document.
-      expect(engineering.has(label)).toBe(false);
+      const label = documentUiStatus({ status: stage, document: { entity_type: 'inbox', entity_id: null } }).label;
+      expect(label).not.toMatch(/^טרם נשלח לעיבוד$|^ממתין לפירוש$|^דורש בדיקה$|^נכשל$/);
     }
   });
 
   /**
-   * The audit's own correction, and the reason `UploadCenter` was not folded in wholesale:
-   * `unprocessed` collapses into `intake` — the same "נקלט" a queued document gets — so on an
-   * upload surface, where "registered but never sent to be read" is the one distinction that
-   * matters, that stage must keep its own answer. `displayMeta` excludes it for exactly this.
+   * `unprocessed` and `queued` must remain different: one is an unassigned saved document and the
+   * other is active work. This prevents an idle upload from looking like processing.
    */
-  it('cannot distinguish "never sent to be read" from "being read" — which is why UploadCenter keeps its own branch', () => {
-    expect(documentUserState('unprocessed')).toBe(documentUserState('queued'));
+  it('distinguishes "never sent to be read" from "waiting to be read"', () => {
+    const document = { entity_type: 'inbox', entity_id: null } as const;
+    expect(documentUiStatus({ status: 'unprocessed', document }).state).toBe('unassigned');
+    expect(documentUiStatus({ status: 'queued', document }).state).toBe('processing');
   });
 });

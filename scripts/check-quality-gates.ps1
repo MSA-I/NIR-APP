@@ -811,6 +811,30 @@ function Invoke-InterpretDocumentContractTests {
   if ($testText -match '(?i)\b[1-9][0-9]*\s+(?:ignored|skipped)\b') {
     throw "Interpret-document contract tests reported ignored or skipped cases."
   }
+  $recoveryFunctionRoot = Join-Path $repoRoot "supabase\functions\recover-document-processing"
+  $recoveryLock = Join-Path $recoveryFunctionRoot "deno.lock"
+  try {
+    $ErrorActionPreference = "Continue"
+    $recoveryTestOutput = @(& npx.cmd --yes deno test `
+      --config (Join-Path $recoveryFunctionRoot "deno.json") `
+      --lock $recoveryLock `
+      --frozen `
+      --allow-read=$recoveryFunctionRoot `
+      (Join-Path $recoveryFunctionRoot "contract_test.ts") 2>&1)
+    $recoveryTestExit = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  $recoveryTestOutput | ForEach-Object { Write-Output $_ }
+  Assert-ExitCode "Document-processing recovery contract tests" $recoveryTestOutput -ExitCode $recoveryTestExit
+  $recoveryTestText = $recoveryTestOutput -join "`n"
+  if ($recoveryTestText -notmatch '(?i)\b[1-9][0-9]*\s+passed\b') {
+    throw "Document-processing recovery tests did not report any completed test."
+  }
+  if ($recoveryTestText -match '(?i)\b[1-9][0-9]*\s+(?:ignored|skipped)\b') {
+    throw "Document-processing recovery tests reported ignored or skipped cases."
+  }
   npx.cmd --yes deno check `
     --config (Join-Path $repoRoot "supabase\functions\upload-organization-logo\deno.json") `
     (Join-Path $repoRoot "supabase\functions\upload-organization-logo\index.ts")
@@ -819,6 +843,16 @@ function Invoke-InterpretDocumentContractTests {
     --config (Join-Path $repoRoot "supabase\functions\interpret-document\deno.json") `
     (Join-Path $repoRoot "supabase\functions\interpret-document\index.ts")
   if ($LASTEXITCODE -ne 0) { throw "Interpret-document Edge Function failed Deno typecheck." }
+  npx.cmd --yes deno check `
+    --config (Join-Path $repoRoot "supabase\functions\document-processing\deno.json") `
+    (Join-Path $repoRoot "supabase\functions\document-processing\index.ts")
+  if ($LASTEXITCODE -ne 0) { throw "Document-processing Edge Function failed Deno typecheck." }
+  npx.cmd --yes deno check `
+    --config (Join-Path $repoRoot "supabase\functions\recover-document-processing\deno.json") `
+    --lock (Join-Path $repoRoot "supabase\functions\recover-document-processing\deno.lock") `
+    --frozen `
+    (Join-Path $repoRoot "supabase\functions\recover-document-processing\index.ts")
+  if ($LASTEXITCODE -ne 0) { throw "Document-processing recovery Edge Function failed Deno typecheck." }
   npx.cmd --yes deno check --allow-import --node-modules-dir=auto `
     (Join-Path $repoRoot "supabase\functions\submit-price-list\index.ts")
   if ($LASTEXITCODE -ne 0) { throw "Submit-price-list Edge Function failed Deno typecheck." }
@@ -1018,6 +1052,11 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\functions\_shared\reserved-egress.test.ts",
     "supabase\functions\_shared\edge-organization-access-wiring.test.ts",
     "supabase\functions\document-processing\index.ts",
+    "supabase\functions\recover-document-processing\core.ts",
+    "supabase\functions\recover-document-processing\index.ts",
+    "supabase\functions\recover-document-processing\contract_test.ts",
+    "supabase\functions\recover-document-processing\deno.json",
+    "supabase\functions\recover-document-processing\deno.lock",
     "supabase\functions\interpret-document\index.ts",
     "supabase\functions\interpret-document\core.test.ts",
     "supabase\functions\interpret-document\authorization.test.ts",
@@ -1046,6 +1085,7 @@ function Assert-OcrPrerequisites([string]$Config) {
   $functionJwt = @{
     "document-processing" = "false"
     "interpret-document" = "false"
+    "recover-document-processing" = "true"
     "submit-price-list" = "true"
     "upload-organization-logo" = "true"
     "send-push" = "false"
@@ -1235,6 +1275,13 @@ try {
     Invoke-SqlTest "supabase\tests\p38_export_report_templates.sql" "The accountants own workbook becomes the export: the document contract validator is untouched, an approved report template has a file, and an approved file is never swapped"
     Invoke-SqlTest "supabase\tests\p39_retired_personas.sql" "Retired kitchen, payer and supplier identities preserve history but cannot be invited, activated or restored as product accounts"
     Invoke-SqlTest "supabase\tests\p40_storage_browser_upload.sql" "Browser Storage inserts work with service-populated fields absent while tenant paths and the three active product roles remain enforced"
+    # Both suites open real dblink worker sessions. Supabase's current local image makes
+    # `postgres` a non-superuser and authenticates loopback with trust, a combination dblink
+    # deliberately rejects even when a password appears in the connection string. Run these
+    # concurrency harnesses like the older smart-document suite: as the local test superuser,
+    # while every product call still SET ROLEs to the exact browser/service role under test.
+    Invoke-SqlTest "supabase\tests\p41_document_upload_registration.sql" "Idempotent document registration survives response loss without duplicate rows, object deletion, tenant crossing or export drift" "supabase_admin"
+    Invoke-SqlTest "supabase\tests\p42_document_processing_recovery.sql" "Owner recovery consumes settled provider evidence first, fences live work and creates at most one successor" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p4_purchase_order_status.sql" "P4 reasoned purchase-order status boundary"
     Invoke-SqlTest "supabase\tests\live_schema_alignment.sql" "Production/remediation schema alignment"
     Invoke-SqlTest "supabase\tests\p3_org_scope.sql" "Org scope riders, closure sync and completeness assertions"

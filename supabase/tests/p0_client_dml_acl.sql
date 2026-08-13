@@ -229,7 +229,6 @@ select pg_temp.p0_acl_assert(
   and has_column_privilege('authenticated', 'public.products', 'active', 'INSERT')
   and has_column_privilege('authenticated', 'public.products', 'name', 'UPDATE')
   and has_column_privilege('authenticated', 'public.exceptions', 'status', 'UPDATE')
-  and has_column_privilege('authenticated', 'public.documents', 'storage_path', 'INSERT')
   and has_column_privilege('authenticated', 'public.documents', 'deleted_at', 'UPDATE')
   and has_table_privilege('authenticated', 'public.push_subscriptions', 'DELETE'),
   'required browser DML privilege is missing'
@@ -265,6 +264,7 @@ select pg_temp.p0_acl_assert(
   and not has_column_privilege('authenticated', 'public.purchase_orders', 'confirmation_note', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.purchase_orders', 'expected_date', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.purchase_orders', 'org_id', 'UPDATE')
+  and not has_any_column_privilege('authenticated', 'public.documents', 'INSERT')
   and not has_column_privilege('authenticated', 'public.documents', 'storage_path', 'UPDATE')
   and not has_table_privilege('authenticated', 'public.suppliers', 'DELETE')
   and not has_table_privilege('authenticated', 'public.products', 'DELETE')
@@ -811,8 +811,8 @@ exception when insufficient_privilege then
 end
 $$;
 
--- Accountant may register proof only for a payment they executed. An existing invoice stays
--- readable but cannot receive an accountant-authored attachment.
+-- 0131 makes the stable-key RPC the mandatory registration boundary: even a payload that the
+-- documents RLS policy would accept cannot be inserted directly by an authenticated browser.
 do $$
 begin
   insert into public.documents (
@@ -820,15 +820,32 @@ begin
     document_kind, supplier_id, document_date
   ) values (
     '13000000-0000-0000-0000-000000000001',
-    'invoice',
-    '63000000-0000-0000-0000-000000000001',
-    '13000000-0000-0000-0000-000000000001/invoice/63000000-0000-0000-0000-000000000001/accountant-invoice.pdf',
-    'accountant-invoice.pdf',
+    'payment',
+    '73000000-0000-0000-0000-000000000001',
+    '13000000-0000-0000-0000-000000000001/payment/73000000-0000-0000-0000-000000000001/accountant-proof.pdf',
+    'accountant-proof.pdf',
     'application/pdf',
     '23000000-0000-0000-0000-000000000004',
-    'invoice',
+    'payment_confirmation',
     '33000000-0000-0000-0000-000000000002',
     '2026-07-23'
+  );
+  raise exception 'expected direct document registration denial';
+exception when insufficient_privilege then
+  null;
+end
+$$;
+
+-- Accountant may register proof only for a payment they executed. An existing invoice stays
+-- readable but cannot receive an accountant-authored attachment.
+do $$
+begin
+  perform public.register_uploaded_document(
+    'p0-accountant-invoice-key', 'invoice',
+    '63000000-0000-0000-0000-000000000001',
+    '13000000-0000-0000-0000-000000000001/invoice/63000000-0000-0000-0000-000000000001/accountant-invoice.pdf',
+    'accountant-invoice.pdf', 'application/pdf', 'invoice',
+    '33000000-0000-0000-0000-000000000002', '2026-07-23'
   );
   raise exception 'expected accountant invoice attachment denial';
 exception when insufficient_privilege then
@@ -836,20 +853,12 @@ exception when insufficient_privilege then
 end
 $$;
 
-insert into public.documents (
-  org_id, entity_type, entity_id, storage_path, file_name, mime_type, uploaded_by,
-  document_kind, supplier_id, document_date
-) values (
-  '13000000-0000-0000-0000-000000000001',
-  'payment',
+select public.register_uploaded_document(
+  'p0-accountant-proof-key', 'payment',
   '73000000-0000-0000-0000-000000000001',
   '13000000-0000-0000-0000-000000000001/payment/73000000-0000-0000-0000-000000000001/accountant-proof.pdf',
-  'accountant-proof.pdf',
-  'application/pdf',
-  '23000000-0000-0000-0000-000000000004',
-  'payment_confirmation',
-  '33000000-0000-0000-0000-000000000002',
-  '2026-07-23'
+  'accountant-proof.pdf', 'application/pdf', 'payment_confirmation',
+  '33000000-0000-0000-0000-000000000002', '2026-07-23'
 );
 
 select pg_temp.p0_acl_assert(

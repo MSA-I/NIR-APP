@@ -102,6 +102,7 @@ interface JobRow {
   requested_by: string;
   input_checksum: string;
   contract_version: string;
+  updated_at: string;
 }
 
 interface ExtractionRow {
@@ -431,6 +432,49 @@ export function automaticInterpretationContextAllowed(
   return document.deleted_at === null && job.org_id === document.org_id &&
     job.document_id === document.id &&
     job.requested_by === document.uploaded_by;
+}
+
+export function recoveryActorFromAudit(
+  rows: unknown,
+  job: Pick<JobRow, "id" | "status" | "updated_at">,
+): string | null {
+  if (!Array.isArray(rows)) return null;
+  const jobUpdatedAt = Date.parse(job.updated_at);
+  if (!Number.isFinite(jobUpdatedAt)) return null;
+
+  for (const value of rows) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const row = value as Record<string, unknown>;
+    const action = row.action;
+    const userId = row.user_id;
+    const next = row.new_values;
+    if (
+      typeof userId !== "string" || !UUID.test(userId) || !next ||
+      typeof next !== "object" || Array.isArray(next)
+    ) continue;
+    const details = next as Record<string, unknown>;
+    if (
+      action === "document_processing_reprocessed" &&
+      details.recovery_kind === "stuck" && details.outcome === "requeued" &&
+      typeof details.old_job_id === "string" && UUID.test(details.old_job_id) &&
+      details.old_job_id !== job.id && details.new_job_id === job.id
+    ) return userId;
+    if (action !== "document_processing_stuck_recovered") continue;
+    const resultUpdatedAt = typeof details.result_job_updated_at === "string"
+      ? Date.parse(details.result_job_updated_at)
+      : Number.NaN;
+    if (
+      details.recovery_kind === "stuck" &&
+      details.result_job_status === job.status &&
+      Number.isFinite(resultUpdatedAt) && resultUpdatedAt === jobUpdatedAt &&
+      [
+        "extraction_recovered",
+        "resume_interpretation",
+        "interpretation_recovered",
+      ].includes(String(details.outcome))
+    ) return userId;
+  }
+  return null;
 }
 
 export async function applyPriceListInterpretationDecision(
@@ -786,18 +830,20 @@ function egressRecoveryResult(value: unknown): value is EgressRecoveryResult {
     typeof row.recovered_from_failed === "boolean";
 }
 
-async function recoverInterpretationFromEgress(
-  admin: SupabaseClient,
+export async function recoverInterpretationFromEgress(
+  admin: DecisionRpcClient,
   values: {
     jobId: string;
     extractionId: string;
-    actorId: string;
+    evidenceActorId: string;
+    decisionActorId: string;
     evidenceLeaseId: string;
     evidenceSha256: string;
     isPriceList: boolean;
     // 0090's delivery-note route has to survive the egress-recovery rewrite. Without it this
     // path defaults to false and files every delivery note as an invoice.
     isDeliveryNote?: boolean;
+    apply?: ApplyDecision;
   },
 ): Promise<EgressRecoveryResult> {
   const recovered = await admin.rpc(
@@ -805,7 +851,7 @@ async function recoverInterpretationFromEgress(
     {
       p_job_id: values.jobId,
       p_extraction_id: values.extractionId,
-      p_actor_id: values.actorId,
+      p_actor_id: values.evidenceActorId,
       p_evidence_lease_id: values.evidenceLeaseId,
       p_evidence_sha256: values.evidenceSha256,
     },
@@ -819,11 +865,28 @@ async function recoverInterpretationFromEgress(
     values.isPriceList,
     values.jobId,
     recovered.data.interpretation_id,
-    values.actorId,
-    undefined,
+    values.decisionActorId,
+    values.apply,
     values.isDeliveryNote ?? false,
   );
   return recovered.data;
+}
+
+export function recoveredInterpretationDecisionContext(values: {
+  storedIsPriceList: boolean;
+  interpretedDocumentType: unknown;
+  isDeliveryNote: boolean;
+  evidenceActorId: string;
+  decisionActorId: string;
+}): { isPriceList: boolean; decisionActorId: string } {
+  const isPriceList = values.storedIsPriceList ||
+    values.interpretedDocumentType === "price_list";
+  return {
+    isPriceList,
+    decisionActorId: isPriceList || values.isDeliveryNote
+      ? values.evidenceActorId
+      : values.decisionActorId,
+  };
 }
 
 async function recoverStoredProviderEvidence(
@@ -833,7 +896,7 @@ async function recoverStoredProviderEvidence(
     orgId: string;
     jobId: string;
     extractionId: string;
-    actorId: string;
+    decisionActorId: string;
     isPriceList: boolean;
     // Replay has no payload to cross-check, so the stored kind decides alone here -- unlike the
     // live path above, where kind and the model's reading must agree.
@@ -847,23 +910,35 @@ async function recoverStoredProviderEvidence(
   });
   if (!stored) return null;
   const interpretation = stored.evidence.interpretation;
+  const evidenceActorId = stored.evidence.actor_id;
   if (
     !interpretation || typeof interpretation !== "object" ||
-    Array.isArray(interpretation)
+    Array.isArray(interpretation) || typeof evidenceActorId !== "string" ||
+    !UUID.test(evidenceActorId)
   ) {
     // A settled provider failure is terminal for this correlation. Never pay for or risk a
     // second non-idempotent interpretation merely because its evidence is not recoverable.
     throw new EdgeError("provider_unavailable", 503);
   }
+  const decisionContext = recoveredInterpretationDecisionContext({
+    storedIsPriceList: values.isPriceList,
+    interpretedDocumentType:
+      (interpretation as Record<string, unknown>).document_type,
+    isDeliveryNote: values.isDeliveryNote ?? false,
+    evidenceActorId,
+    decisionActorId: values.decisionActorId,
+  });
   return recoverInterpretationFromEgress(admin, {
     jobId: values.jobId,
     extractionId: values.extractionId,
-    actorId: values.actorId,
+    evidenceActorId,
+    // Price-list and delivery-note commands deliberately require the immutable uploader/job/
+    // interpretation actor chain. The general document command records the separately verified
+    // recovery owner as the current trigger without rewriting the provider evidence.
+    decisionActorId: decisionContext.decisionActorId,
     evidenceLeaseId: stored.lease_id,
     evidenceSha256: stored.evidence_sha256,
-    isPriceList: values.isPriceList ||
-      (interpretation as Record<string, unknown>).document_type ===
-        "price_list",
+    isPriceList: decisionContext.isPriceList,
     isDeliveryNote: values.isDeliveryNote ?? false,
   });
 }
@@ -891,6 +966,7 @@ export async function handler(req: Request): Promise<Response> {
   const cronHeader = req.headers.get("x-interpret-cron-secret");
   const serviceMode = cronHeader !== null;
   let actorId: string | null = null;
+  let recoveryActorId: string | null = null;
   let job: JobRow | null = null;
   let document: DocumentRow | null = null;
 
@@ -934,7 +1010,7 @@ export async function handler(req: Request): Promise<Response> {
   if (serviceMode) {
     const jobResult = await admin.from("document_processing_jobs")
       .select(
-        "id,org_id,document_id,status,requested_by,input_checksum,contract_version",
+        "id,org_id,document_id,status,requested_by,input_checksum,contract_version,updated_at",
       )
       .eq("id", jobId).maybeSingle();
     if (jobResult.error) {
@@ -953,10 +1029,25 @@ export async function handler(req: Request): Promise<Response> {
     if (!document || document.deleted_at !== null) {
       return fail(cors, new EdgeError("invalid_job_state", 409));
     }
-    actorId = document.uploaded_by;
     if (!automaticInterpretationContextAllowed(job, document)) {
       return fail(cors, new EdgeError("not_authorized", 403));
     }
+    const recoveryAuditResult = await admin.from("audit_logs")
+      .select("action,user_id,new_values,created_at")
+      .eq("org_id", job.org_id)
+      .eq("entity_type", "document_processing_jobs")
+      .eq("entity_id", job.id)
+      .in("action", [
+        "document_processing_stuck_recovered",
+        "document_processing_reprocessed",
+      ])
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (recoveryAuditResult.error) {
+      return fail(cors, new EdgeError("service_unavailable", 503));
+    }
+    recoveryActorId = recoveryActorFromAudit(recoveryAuditResult.data, job);
+    actorId = recoveryActorId ?? document.uploaded_by;
   }
 
   if (!actorId) return fail(cors, new EdgeError("unauthenticated", 401));
@@ -971,7 +1062,9 @@ export async function handler(req: Request): Promise<Response> {
   const profile = profileResult.data as ProfileRow | null;
   if (
     !profile?.active ||
-    !["owner", "office", "kitchen", "supplier"].includes(profile.role)
+    (recoveryActorId !== null
+      ? profile.role !== "owner"
+      : !["owner", "office", "kitchen", "supplier"].includes(profile.role))
   ) {
     return fail(cors, new EdgeError("not_authorized", 403));
   }
@@ -985,7 +1078,7 @@ export async function handler(req: Request): Promise<Response> {
   if (!job) {
     const jobResult = await admin.from("document_processing_jobs")
       .select(
-        "id,org_id,document_id,status,requested_by,input_checksum,contract_version",
+        "id,org_id,document_id,status,requested_by,input_checksum,contract_version,updated_at",
       ).eq("id", jobId)
       .eq("org_id", profile.org_id).maybeSingle();
     if (jobResult.error) {
@@ -1048,7 +1141,7 @@ export async function handler(req: Request): Promise<Response> {
       orgId: profile.org_id,
       jobId: job.id,
       extractionId: extraction.id,
-      actorId,
+      decisionActorId: actorId,
       isPriceList: storedKindIsPriceList,
       isDeliveryNote: storedKindIsDeliveryNote,
     });
@@ -1246,7 +1339,7 @@ export async function handler(req: Request): Promise<Response> {
           orgId: profile.org_id,
           jobId: job.id,
           extractionId: extraction.id,
-          actorId,
+          decisionActorId: actorId,
           isPriceList: storedKindIsPriceList,
           isDeliveryNote: storedKindIsDeliveryNote,
         });
@@ -1370,7 +1463,8 @@ export async function handler(req: Request): Promise<Response> {
     const persisted = await recoverInterpretationFromEgress(admin, {
       jobId: job.id,
       extractionId: extraction.id,
-      actorId,
+      evidenceActorId: actorId,
+      decisionActorId: actorId,
       evidenceLeaseId: egressLease.lease_id,
       evidenceSha256,
       isPriceList: storedKindIsPriceList ||

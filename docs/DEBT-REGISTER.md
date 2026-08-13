@@ -44,10 +44,9 @@
 | §34 בדיקנים מחוץ ל-CI | **פתוח ומוצהר.** חמישה בדיקנים קשורי-PowerShell לא רצים ב-CI; **תיק ירוק אינו טענה שהם עברו** | `CLAUDE.md`, ‏`.github/workflows/quality-gate.yml` |
 | §35 חריגה מצטברת לפני האישור | **פתוח ומגודר.** שער המסמך משווה מול הכמות שהוזמנה ולא מול היתרה; **החריגה המצטברת עדיין נתפסת בשער אישור החשבונית** (‏`0099`) | `0108`, ‏`p29_document_reconciliation_assessment.sql` |
 
-> **‏§18 השתנתה באותו סבב.** ההכרעה שהיא ביקשה — "האם מסך הסוקר מדבר בשפת המשתמש או בשפת
-> ה-pipeline" — **נפלה: שפת המשתמש.** ‏`DocumentReviewWorkspace` אינו מציג עוד קטעי טקסט, סימונים,
-> דרגות זיהוי, קואורדינטות או תיבות bbox מעל המסמך. שלושת המשטחים היומיומיים שהיא מונה
-> (‏`AttachmentsPanel`, ‏`FileUpload`, ‏`UploadCenter`) **עדיין פתוחים.**
+> **‏§18 נסגרה בקוד ב־12.08.2026.** מקור האמת `documentStatus.ts` מחובר לכל ששת משטחי המסמכים;
+> מצב פעיל/תקוע, בדיקה, תיוק והשלמה מוצגים לפי סולם קדימות אחד. מסמך פעיל אינו נספר או מוצג גם
+> כ״לא משויך״, ו־`DocumentReviewWorkspace` מדבר באותה שפה אנושית עם פרטים טכניים בגילוי משני בלבד.
 
 ---
 
@@ -227,15 +226,14 @@
 | **איפה ההוכחה** | ‏`supabase/migrations/0077_apply_document_interpretation.sql` (בלוק ה-`insert into public.exceptions` וההנמקה מעליו) · ‏`supabase/tests/p14_apply_interpretation.sql` סעיף (l) — שלוש טענות: החריג נפתח עם `details.code='item_not_ordered'` ועם המק"ט; השורה שכן הוזמנה **אינה** מדווחת; והשורה בלי מזהה **מדולגת** (`jsonb_array_length(details->'items') = 1`) · ‏`src/lib/status.ts:127` (התווית) · ‏`0001_init.sql:18` (ה-enum). |
 | **הצעד הזול הבא — ‏חציו בוצע 09.08.2026 (חבילה 2)** | ‏✅ **שלב (1) בוצע:** ‏`0086` הוסיפה את הערך במיגרציה משלה, ‏`status.ts` נושא את התווית `'פריט שלא הוזמן'`, והפקודה הידנית החדשה `open_manual_exception` (‏`0087`, ‏#116) משתמשת בסוג הכן מהיום הראשון. ‏🔲 **מה שנשאר:** המסלול ה**אוטומטי** (‏`apply_document_interpretation`) עדיין פותח `receipt_mismatch` עם `details.code='item_not_ordered'` — ההחלפה היא הזרקה לגוף החי של 0077 (**בעוגני-אב, לא הצהרה-מחדש**) + עדכון שלוש הטענות בסעיף (l) של p14, **בקומיט אחד**. עד אז שני חריגים על אותו אירוע-עולם עשויים לשאת שתי תוויות — הידני מדויק, האוטומטי מקורב. |
 
-## 18. ארבעה משטחים עדיין מציגים את שבעת שלבי ה-OCR — כולל המשטח שהתלונה נקבה בשמו
+## 18. שפת סטטוס המסמכים אוחדה בכל המשטחים — נסגר בקוד 12.08.2026
 
 | | |
 |---|---|
-| **מה** | משימה D1 קיפלה שבעה שלבי pipeline לארבעה מצבים אנושיים (נקלט · בבדיקה · שויך/נקרא · לא נקרא) **בתיקיית המסמכים בלבד** (`src/pages/DocumentsInbox.tsx`). **ארבעה משטחים אחרים ממשיכים להדפיס את התוויות ההנדסיות** לאותם משתמשים: ‏`src/components/AttachmentsPanel.tsx:226` (קבצים מצורפים לחשבונית/קבלה) · ‏`src/components/FileUpload.tsx:558` (רשימת הקבצים אחרי צירוף) · ‏`src/components/UploadCenter.tsx:544` (מגש ההעלאה) · ‏`src/components/document-review/DocumentReviewWorkspace.tsx:31` (מסך הבדיקה). התוצאה: אותו מסמך קורא **נקלט** בתיקייה ו**"ממתין לפירוש"** במסך שאליו התג עצמו מקשר, בקליק אחד. |
-| **למה זה חמור מ"חוסר עקביות"** | ‏(א) ‏**`UploadCenter` הוא המשטח שהבעלים תיאר מילולית** — *"כשאני מעלה מסמך אנחנו לא אמורים לראות את כל הprocess של ה-OCR"*. הוא נשאר בשפה הישנה. ‏(ב) ‏`DocumentReviewWorkspace` הוא **יעד הקישור** של התג החדש, כך שהסתירה מוצגת ברצף פעולה אחד ולא בשני מסכים מרוחקים. ‏(ג) שתי תוויות שונות לאותה עובדה מלמדות שאי אפשר לסמוך על אף אחת מהן. |
-| **למה נדחה** | ‏D1 הוקצתה לשני קבצים (`useDocumentProcessing.ts`, ‏`DocumentsInbox.tsx`) ולספק חדש, בזמן שסוכנים אחרים החזיקו `src/components/document-review/*` באותו גל. עריכת קבצים בבעלות סוכן אחר באמצע גל היא התנגשות מובטחת. **`DocumentReviewWorkspace` הוא גם המקרה היחיד שבו התווית ההנדסית אולי נכונה:** סוקר מול job תקוע צריך לדעת איזה שלב נעצר — וזו הכרעת מוצר פתוחה, לא החלה מכנית. |
-| **איפה ההוכחה** | ארבעת ה-file:line למעלה · ‏`src/lib/useDocumentProcessing.ts` (‏`DOCUMENT_USER_STATE_META`, ‏`documentUserState`) · ‏`src/lib/documentStage.spec.tsx` (‏36 בדיקות: המיפוי, חוזה ה-`data-stage`, וארבע האפשרויות של הבקרה) · אף שער אינו נשען על התוויות בארבעה המשטחים: ‏`data-document-processing-status` נקרא **רק** בתוך `AttachmentsPanel` ו-`FileUpload` עצמם, ולא ב-`scripts/` או ב-`qa/`. |
-| **הצעד הזול הבא** | שורה אחת בכל אחד משלושת המשטחים היומיומיים: ‏`DOCUMENT_USER_STATE_META[documentUserState(stage)]` במקום `DOCUMENT_PROCESSING_STAGE_META[stage]`. **‏`UploadCenter` דורש מחשבה ולא החלפה עיוורת** — ‏`displayMeta` שם **ממזג מצב העלאה עם מצב עיבוד**, ומוציא את `unprocessed` מהכלל בכוונה ("נרשם — העיבוד לא החל"), כלומר קיפול עיוור יבלע הבחנה אמיתית. ‏**`DocumentReviewWorkspace` דורש הכרעת בעלים תחילה** — האם מסך הסוקר מדבר בשפת המשתמש או בשפת ה-pipeline. |
+| **מה נסגר** | ‏`src/lib/documentStatus.ts` הוא מקור אמת אחד לקדימות: כשל/תקוע → פעיל → בדיקה → לא משויך → משויך/הושלם. ‏`DocumentStatusBadge` מציג spinner רק כשהשרת מדווח מצב פעיל, זמן אמיתי מה־timestamps, וסימון סטטי תחת `prefers-reduced-motion`. |
+| **איפה הוחל** | ‏`DocumentsInbox` · ‏`DocumentOperations` · ‏`UploadCenter` · ‏`FileUpload` · ‏`AttachmentsPanel` · ‏`DocumentReviewWorkspace`. בגלריה תג הסטטוס היחיד החליף את זוג התגים הסותרים; שיוך אוטומטי עדיין חושף לקורא מסך שלא היה אישור אדם ואת רמת הביטחון. |
+| **מה נשמר** | שלבי ה־pipeline הגולמיים לא נמחקו: `data-stage`, חוזה המסד והיסטוריית הניסיונות נשארו זמינים. `superseded_for_reprocess` הוא אירוע היסטורי ואינו הופך להתראת כשל נוכחית. |
+| **איפה ההוכחה** | ‏`src/lib/documentStatus.spec.tsx` · ‏`src/lib/documentStage.spec.tsx` · ‏`src/pages/documentOperationsContract.spec.ts` · ‏`src/pages/documentAutoActionReversal.spec.tsx`. |
 
 ## 19. אין ולו ראיה אחת שהמודל מציית לפרומפט — ‏`interpret-document-v4` נאכף בדיג׳סט, לא בהתנהגות
 
@@ -387,7 +385,7 @@
 | | |
 |---|---|
 | **מה** | ‏`check-p0-security.ps1` (‏862 שורות), ‏`check-p0-upgrade.ps1` (‏88), ‏`Invoke-PriceListEdgeSmoke`, ‏`Invoke-OcrEdgeSmoke` ו-`check-p4-integrated-journey.cjs` **אינם ב-CI**. הם קשורים ל-PowerShell של Windows ורצים רק בריצה הידנית, שהוכרזה כאסורה על מכונה זו (‏exit 3). |
-| **מה מגודר** | שלושת ה-jobs שכן רצים מכסים 45 סוויטות SQL, ‏preflight בן 44 זרועות, ‏35 תרחישי דפדפן, חוזי Deno ו-`npm audit`. הפער אינו בכיסוי ה-RLS או הכספים אלא בשכבת ה-P0 security/upgrade ובשלושת ה-smokes. |
+| **מה מגודר** | שלושת ה-jobs שכן רצים מכסים 54 סוויטות SQL, ‏preflight בן 46 זרועות, ‏35 תרחישי דפדפן, חוזי Deno ו-`npm audit`. מ־12.08 גם חוזה `document-processing`, ארבעת חוזי גבול הארגון ו־`deno check` של ה־gateway רצים אוטומטית. הפער שנותר הוא בשכבת ה-P0 security/upgrade ובשלושת ה-smokes הידניים. |
 | **למה לא חוסם** | הוצהר במפורש ב-`CLAUDE.md`: **תיק ירוק אינו טענה שהם עברו.** כל עוד ההצהרה הזאת עומדת, אין כאן ביטחון-שווא. |
 | **הצעד הבא** | ‏להמיר את `check-p0-security.ps1` ל-SQL/Node כדי שירוץ ב-runner של לינוקס, או להוסיף job של `windows-latest`. **הזול מבין השניים הוא הראשון** — ה-smokes של Edge כבר מדברים HTTP ואינם צריכים PowerShell. |
 

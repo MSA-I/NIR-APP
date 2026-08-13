@@ -320,8 +320,8 @@ select pg_temp.p9_assert(
 -- always at the end of a twenty-minute gate rather than in seconds. See the check:* script that
 -- asserts a migration touching scope_definer_exemptions also touches this file.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 78,
-  'the definer exemption registry must stay at 78 rows -- 59 minus the three 0073 drained, '
+  (select count(*) from private.scope_definer_exemptions) = 79,
+  'the definer exemption registry must stay at 79 rows -- 59 minus the three 0073 drained, '
   || 'plus the one 0075:464 added for rescue_document_from_archive (not drainable: invoker '
   || 'would require granting UPDATE on document_filings to the browser), plus the one 0077 '
   || 'added for apply_document_interpretation (not drainable: it runs with no user JWT, so '
@@ -344,7 +344,9 @@ select pg_temp.p9_assert(
   || '0103 service-only claim/bounded-snapshot/finalizer paths whose browser ACL is intentionally empty, '
   || 'plus four exact OCR evidence paths: recorder, evidence-consuming completion, extraction '
   || 'recovery and interpretation recovery, while the legacy completion bridge remains during '
-  || 'the DB-first Edge rollout; '
+  || 'the DB-first Edge rollout; plus the one 0132 owner recovery command: it is service-only, '
+  || 're-verifies the active owner inside the locked job tenant and touches private egress/evidence '
+  || 'ledgers that cannot be granted to an invoker without widening the browser boundary; '
   || 'zero silent additions');
 
 select pg_temp.p9_assert(
