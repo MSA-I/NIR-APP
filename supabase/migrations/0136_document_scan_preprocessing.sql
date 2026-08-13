@@ -1428,23 +1428,6 @@ revoke all on function public.get_document_processing_statuses(uuid[])
   from public, anon, authenticated, service_role;
 grant execute on function public.get_document_processing_statuses(uuid[]) to authenticated;
 
-do $processing_metrics_scan_patch$
-declare
-  v_procedure regprocedure := 'public.get_document_operations_metrics(integer)'::regprocedure;
-  v_definition text := replace(pg_get_functiondef(v_procedure), e'\r', '');
-  v_old text := $old$    'documents_waiting', count(*) filter (where job.status = 'queued' and job.stuck_reason is null),$old$;
-  v_new text := replace($new$    'documents_waiting_scan', count(*) filter (
-      where job.status = 'awaiting_scan'
-    ),
-    'documents_waiting', count(*) filter (where job.status = 'queued' and job.stuck_reason is null),$new$, e'\r', '');
-begin
-  if position(v_old in v_definition) = 0 then
-    raise exception '0136: document operations metrics waiting anchor moved';
-  end if;
-  execute replace(v_definition, v_old, v_new);
-end
-$processing_metrics_scan_patch$;
-
 -- The OCR gateway keeps its mature lease/evidence behavior. This wrapper changes only source
 -- selection after a claim: accepted image jobs resolve to the scan bucket and immutable checksum.
 create or replace function public.claim_document_processing_job_input(
@@ -1655,9 +1638,7 @@ from (values
   ('accept_document_scan(uuid,text)',
    '0136 locks the scan output only through its auth_org document and canonical null-or-auth_scopes unit predicate.'),
   ('enqueue_document_processing(uuid)',
-    '0136 filters the source document by auth_org and the canonical null-or-auth_scopes unit predicate before any queue write.'),
-  ('get_document_operations_metrics(integer)',
-    '0136 preserves the existing auth_org and canonical unit-scope filtering while adding the awaiting-scan aggregate.')
+    '0136 filters the source document by auth_org and the canonical null-or-auth_scopes unit predicate before any queue write.')
 ) as reviewed(function_signature, scope_proof)
 join pg_catalog.pg_proc proc
   on proc.oid = pg_catalog.to_regprocedure(reviewed.function_signature)
