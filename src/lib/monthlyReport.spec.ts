@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
-import { buildMonthlyWorkbook, neutralizeMonthlyRow, type MonthlyReportLabels } from './monthlyReport';
-import { neutralizeSpreadsheetString } from './documentExport';
+import { buildMonthlyWorkbook, type MonthlyReportLabels } from './monthlyReport';
 
 const labels: MonthlyReportLabels = {
   invoiceReview: { approved: { label: 'מאושרת' } },
@@ -70,34 +69,5 @@ describe('accountant workbook — formula injection', () => {
     const [invoice] = sheetOf('חשבוניות');
     expect(invoice['סה"כ']).toBe(118);
     expect(invoice['תאריך']).toBe('2026-08-01');
-  });
-});
-
-/**
- * monthlyReport.ts carries its own copy of the neutralizer, because scripts/check-p2-reliability.ts
- * imports that module at runtime through Node's ESM loader — which resolves only explicit
- * extensions, while TypeScript under `moduleResolution: "bundler"` rejects a `.ts` extension.
- * Neither loader can be satisfied by a relative import there, so the file must have none.
- *
- * A copy that nobody checks is a copy that drifts. This spec is bundled by vite, so it can import
- * both and hold them to the same answer over every shape that matters.
- */
-describe('the deliberate copy of the neutralizer cannot drift', () => {
-  const cases = [
-    '=1+1', '+1', '-1', '@SUM(A1)', '\tlead', '\rlead',
-    'ספק רגיל', '', 'a=b', ' =notleading', '1234',
-  ];
-
-  it('agrees with documentExport.ts on every input', () => {
-    for (const value of cases) {
-      expect(neutralizeMonthlyRow({ v: value }).v).toBe(neutralizeSpreadsheetString(value));
-    }
-  });
-
-  it('passes non-strings through untouched, in both', () => {
-    for (const value of [0, 118, -5, null, true]) {
-      expect(neutralizeMonthlyRow({ v: value }).v).toBe(value);
-      expect(neutralizeSpreadsheetString(value as never)).toBe(value);
-    }
   });
 });

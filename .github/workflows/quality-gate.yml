@@ -20,8 +20,8 @@
 #   * The P4 integrated journey (check-p4-integrated-journey.cjs).
 # Those need the same Windows-coupled helpers and are the next thing to port.
 #
-# The three jobs are independent and run in parallel: wall time is the slowest one, not
-# the sum, which is already a large win over the strictly sequential local gate.
+# A small native path classifier starts only the relevant jobs. Manual runs execute all three.
+# Jobs that do run remain independent and parallel.
 
 name: quality-gate
 
@@ -45,8 +45,56 @@ env:
   SUPABASE_CLI_VERSION: 2.98.2
 
 jobs:
+  changes:
+    name: Classify changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      contracts: ${{ steps.filter.outputs.contracts }}
+      sql: ${{ steps.filter.outputs.sql }}
+      browser: ${{ steps.filter.outputs.browser }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        name: Select relevant heavy jobs
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "contracts=true" >> "$GITHUB_OUTPUT"
+            echo "sql=true" >> "$GITHUB_OUTPUT"
+            echo "browser=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          base="$BEFORE_SHA"
+          if [ "$EVENT_NAME" = "pull_request" ]; then base="$BASE_SHA"; fi
+          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base="$(git rev-list --max-parents=0 "$HEAD_SHA")"
+          fi
+          git diff --name-only "$base" "$HEAD_SHA" > changed-files.txt
+
+          matches() { grep -Eq "$1" changed-files.txt; }
+          common='^(\.github/workflows/quality-gate\.yml|package\.json|package-lock\.json)$'
+          contracts='^(deno\.lock|docker-compose\.ocr\.yml|worker/|supabase/functions/)'
+          sql='^(supabase/(config\.toml|migrations/|tests/|demo/|seed\.sql)|scripts/(check-quality-gates\.ps1|ci-sql-suites\.mjs|ci-local-env\.mjs|create-users\.ps1|fixtures/.*\.sql))'
+          browser='^(src/|public/|index\.html|vite\.config\.ts|supabase/(config\.toml|migrations/|demo/|seed\.sql)|scripts/(check-browser-smoke\.cjs|ci-sql-suites\.mjs|ci-local-env\.mjs|create-users\.ps1|fixtures/))'
+
+          if matches "$common|$contracts"; then echo "contracts=true" >> "$GITHUB_OUTPUT"; else echo "contracts=false" >> "$GITHUB_OUTPUT"; fi
+          if matches "$common|$sql"; then echo "sql=true" >> "$GITHUB_OUTPUT"; else echo "sql=false" >> "$GITHUB_OUTPUT"; fi
+          if matches "$common|$browser"; then echo "browser=true" >> "$GITHUB_OUTPUT"; else echo "browser=false" >> "$GITHUB_OUTPUT"; fi
+
   # ---------------------------------------------------------------- contracts (no database)
   contracts:
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
     name: Deno contracts + OCR worker
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -194,6 +242,8 @@ jobs:
 
   # ---------------------------------------------------- the SQL suites + the preflight
   sql:
+    needs: changes
+    if: needs.changes.outputs.sql == 'true'
     name: SQL suites + preflight (parsed from the gate)
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -227,6 +277,8 @@ jobs:
 
   # ---------------------------------------------------------- the browser scenarios
   browser:
+    needs: changes
+    if: needs.changes.outputs.browser == 'true'
     name: Browser, keyboard, print and a11y scenarios
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -337,7 +389,7 @@ jobs:
           done
           echo 'vite preview never served /login'; exit 1
 
-      - name: The scenarios (counted in CLAUDE.md, enforced by check:counts)
+      - name: Browser scenarios
         run: node scripts/check-browser-smoke.cjs
         env:
           QUALITY_BASE_URL: http://127.0.0.1:5199

@@ -115,8 +115,9 @@ absolute path; in PowerShell use `-LiteralPath` for any delete or move.
 
 - Add or extend the suite in `supabase/tests/` that covers the new behaviour — including the
   negative case: a user from another `org_id` must not see the row.
-- `npm run build` — `check:exemptions` and `check:counts` run here.
-- `npm run quality` when the package closes: the SQL suites are where an RLS mistake surfaces.
+- `npm run check` — build, static guards (including `check:exemptions`) and Vitest.
+- Trigger `quality-gate.yml` when the package closes: the SQL job is where an RLS mistake surfaces.
+  Do not run `npm run quality` locally as part of ordinary work.
 
 Report the migration number, what it changed, where it ran, and which suite proves it. Not "the
 migration is done".

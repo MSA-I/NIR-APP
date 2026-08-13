@@ -28,25 +28,15 @@
 
 במקביל הוסרו מסכי Kitchen/Supplier, ‏`/my-prices`, רכיב הזמנות ספק, תשתית `qa/` הישנה,
 סקריפטים ותלויות ללא צרכן. `ActiveRole` משמש את קוד המוצר; `Role` הרחב נשאר רק בגבולות DB,
-נתונים היסטוריים ותצוגת audit. ‏Knip מוצמד ונכלל ב־`npm run build` כ־`check:dead-code`.
+נתונים היסטוריים ותצוגת audit. ‏Knip מוצמד ונכלל ב־`npm run verify` כ־`check:dead-code`.
 
 ## אימות קוד
 
-הספירות שמוצמדות בחוקה וב־`check:counts` הן:
+`npm run build` מבצע typecheck ובניית bundle בלבד. `npm run verify` מריץ את השומרים הסטטיים ואת
+כל בדיקות היחידה תחת Vitest אחד. `npm run check` מריץ את שניהם ברצף לשימוש מקומי.
 
-| שער | ספירה |
-|---|---:|
-| קובצי Vitest | 70 |
-| בדיקות Vitest | 651 |
-| סוויטות SQL פעילות | 57 |
-| זרועות preflight | 46 |
-| תרחישי browser | 35 |
-| בדיקות `check:review` | 22 |
-| סקריפטי `check:*` | 12 |
-
-לפני מסירה נדרשים `check:dead-code`, ‏`npm run build`, ‏`check:exemptions`, ‏`check:counts`,
-`git diff --check`, חיפוש אחר משטחי retired personas ובדיקת references. ‏`npm run quality` רץ
-ב־CI בלבד.
+אין להצמיד למסמכים ספירות של בדיקות, סוויטות או תרחישים; הפלט של ה־runner הוא מקור האמת.
+שער האינטגרציה `npm run quality` רץ ב־CI בלבד, וה־jobs הכבדים בו מסוננים לפי הנתיבים שהשתנו.
 
 ## גבול השחרור
 

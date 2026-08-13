@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { test } from 'vitest';
 import {
   resolveSplit,
   resolutionOptions,
@@ -9,8 +10,8 @@ import {
   type SplitLine,
   type SplitOffer,
   type SplitSupplier,
-} from '../src/lib/orderSplit.ts';
-import type { Product } from '../src/lib/types.ts';
+} from './orderSplit';
+import type { Product } from './types';
 
 const CHEAP = '00000000-0000-0000-0000-000000000001';
 const EXPENSIVE = '00000000-0000-0000-0000-000000000002';
@@ -63,6 +64,7 @@ const resolve = (
   supplierRows?: readonly SplitSupplier[],
 ) => resolveSplit(splitInput(lines, offers, supplierRows));
 
+test('order splitting, pins, minimums and repair options', () => {
 // 1. Auto lines split to each product's cheapest usable supplier.
 const automatic = resolve(
   [auto('a'), auto('b')],
@@ -376,4 +378,4 @@ const mixedGoneRepair = resolutionOptions(resolveSplit(mixedGonePinInput), mixed
 assert.equal(mixedGoneRepair?.kind, 'move_line');
 if (mixedGoneRepair?.kind === 'move_line') assert.equal(mixedGoneRepair.sourceStillBelow, true);
 
-console.log('order split checks passed');
+});

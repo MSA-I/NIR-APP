@@ -1,25 +1,7 @@
 import * as XLSX from 'xlsx';
+import { neutralizeSpreadsheetRow, neutralizeSpreadsheetString } from './documentExport';
 
-/**
- * The spreadsheet-injection rule, and the ONE place in this file that is a copy of something.
- *
- * It duplicates `neutralizeSpreadsheetString` in documentExport.ts, deliberately and under
- * protest. This module is imported at RUNTIME by scripts/check-p2-reliability.ts:14 through
- * Node's ESM loader, which resolves only explicit extensions; TypeScript under
- * `moduleResolution: "bundler"` rejects a `.ts` extension without `allowImportingTsExtensions`.
- * The two loaders cannot both be satisfied by a relative import here, so this file must stay
- * free of them, and the choice was a four-line copy or a repo-wide compiler-option change.
- *
- * The copy cannot drift: monthlyReport.spec.ts imports BOTH implementations and asserts they
- * agree character for character over the whole input table. Change one without the other and the
- * suite fails.
- */
-const neutralize = <T>(value: T): T =>
-  (typeof value === 'string' && /^[=+\-@\t\r]/.test(value) ? `'${value}` : value) as T;
-
-export function neutralizeMonthlyRow<T extends Record<string, unknown>>(row: T): T {
-  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, neutralize(value)])) as T;
-}
+const neutralize = neutralizeSpreadsheetString;
 
 export interface MonthlyReportData {
   invoices: { supplier: { name: string }; invoice_number: string; invoice_date: string; amount_before_vat: number; vat_amount: number; total_amount: number; review_status: string; payment_status: string }[];
@@ -120,19 +102,19 @@ export function buildMonthlyWorkbook(input: {
     ['זיכויים', data.credits.length, creditTotal],
     ['חריגים פתוחים כרגע', data.exceptions.length, null],
   ]), 'פרטי הדוח');
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.invoices.map((row) => neutralizeMonthlyRow({
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.invoices.map((row) => neutralizeSpreadsheetRow({
     'ספק': row.supplier.name, 'מספר חשבונית': row.invoice_number, 'תאריך': row.invoice_date,
     'לפני מע"מ': row.amount_before_vat, 'מע"מ': row.vat_amount, 'סה"כ': row.total_amount,
     'סטטוס בדיקה': input.labels.invoiceReview[row.review_status]?.label,
     'סטטוס תשלום': input.labels.invoicePayment[row.payment_status]?.label,
   }))), 'חשבוניות');
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.payments.map((row) => neutralizeMonthlyRow({
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.payments.map((row) => neutralizeSpreadsheetRow({
     'ספק': row.supplier.name, 'תאריך': row.paid_date, 'סכום': row.amount, 'אמצעי': row.method, 'אסמכתא': row.reference,
   }))), 'תשלומים');
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.credits.map((row) => neutralizeMonthlyRow({
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.credits.map((row) => neutralizeSpreadsheetRow({
     'ספק': row.supplier.name, 'סיבה': input.labels.creditReason[row.reason], 'סכום': row.amount, 'סטטוס': input.labels.creditStatus[row.status]?.label,
   }))), 'זיכויים');
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.exceptions.map((row) => neutralizeMonthlyRow({
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.exceptions.map((row) => neutralizeSpreadsheetRow({
     'סוג': input.labels.exceptionType[row.type], 'תיאור': row.title, 'ספק': row.supplier?.name ?? '',
   }))), 'חריגים פתוחים כרגע');
   return workbook;
@@ -203,7 +185,7 @@ export function buildLockedMonthlyWorkbook(input: {
     ['תנועות בנק', snapshot.totals.bank_transaction_count, snapshot.totals.bank_total],
   ]);
 
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(snapshot.bank_rows.map((row) => neutralizeMonthlyRow({
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(snapshot.bank_rows.map((row) => neutralizeSpreadsheetRow({
     'תאריך': row.tx_date,
     'תיאור': row.description,
     'סכום': row.amount,

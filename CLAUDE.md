@@ -52,76 +52,17 @@
 Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **Tailwind v4 CSS-first** · recharts · lucide-react
 
 - `npm run dev` — פורט **5199**
-- `npm run build` = `tsc --noEmit` + **שנים-עשר** סקריפטי ה-`check:*` + `vitest run` (‏`npm run test`) + `vite build` — **השער האוטומטי היחיד.**
-  שנים-עשר: ‏`check:exemptions` נוסף בגל 11, ‏`check:counts` בקמפיין האוטומציות, `check:money`
-  ו-`check:dead-code` בניקוי שלושת התפקידים
-  בחבילה 1 של קמפיין המוכנות. הרשימה מ-`package.json` היא
-  ‏`alerts · dashboard · orders · split · p2 · review · tokens · money · exemptions · counts · supplier-columns · dead-code`.
-  ‏`check:money` אוכף מקור אמת אחד לצורת הכסף — אפס `₪` מודבק לערך מוזרק, אפס `toLocaleString(`
-  ואפס פורמטר מטבע שני מחוץ ל-`src/lib/format.ts`; נבדק במוטציה — הפרה מושתלת מפילה אותו.
-  ‏`check:review` מריץ `node --test` על `src/components/document-review/model.test.ts` — ‏**22** בדיקות
-  (‏`ℹ tests 22` בפלט; היה רשום כאן 16, התיישן ל-21 בגל 11, והתיישן שוב ל-22 בגלי 08.08 —
-  נמדד מחדש 09.08.2026 בריצת השער של חבילה 2).
-  ‏`check:tokens` אוכף את חוק הטוקנים של `DESIGN.md` — אפס מחלקות פלטה גולמיות ואפס הקסים ב-`.tsx`.
-  ‏`check:exemptions` מצמיד את רשם חריגי ה-`SECURITY DEFINER`: הוא סופר **מטקסט המיגרציות** כמה
-  חריגים נוספו ונוקזו מעל זרע `0057` (‏59) ודורש שההצמדה ב-`p9_five_domains.sql` תסכים. זו אותה
-  טענה שכבר קיימת ב-p9 — במילישניות, במקום בדקה התשע-עשרה של שער בן עשרים דקות. **ארבעה גלים
-  רצופים גילו אותה שם.**
-  ‏`npm run test` — ‏**651** בדיקות ב-**70** קבצים (מספר הקבצים נספר מכנית ב-`check:counts`;
-  מספר הבדיקות נמדד מפלט `vitest run` הסופי של 13.08.2026, אחרי
-  חוזי שחזור עיבוד, הפרדת actor הראיה מ-owner ההחלטה, סיווג retry בהעלאה ומקור אמת יחיד לסטטוסי
-  עיבוד עם spinner נגיש ומניעת העלאה כפולה/טענת אחסון שגויה בניסיון חוזר; היה 628 אחרי
-  ‏`documentStatus.spec.tsx` ו-`uploadDocument.spec.ts`; היה 615 אחרי
-  ‏`reportTemplateExport.spec.ts` — החלת תבנית מאושרת בשלושת הייצואים ונטרול formula injection;
-  היה 607 אחרי ששני חוזי `Login.spec.tsx` הצמידו את קיצור חשבונות הדמו ל-loopback בלבד; היה 605 אחרי
-  ‏`exportTemplates.spec.ts` — מיפוי ה-placeholders, שמתאים **רק** בשוויון מדויק (‏`0126`); היה 594/68 אחרי
-  ‏`exportTemplateWorkbook.spec.ts` — קריאת חוברת התבנית ומה נדחה (‏`0123`); היה 583/67 אחרי
-  ‏`screenshotContract.spec.ts` — ההבטחות של צילום הפידבק (‏`0122`); היה 571/66 אחרי
-  ‏`reason.spec.ts` — הסיבה שהפסיקה לחסום כפתור ולא הפסיקה להיכתב ליומן (הכרעת בעלים 11.08.2026);
-  היה 547/65 אחרי
-  ‏`assessment.spec.ts` — מודל מסך הבדיקה, שמצמיד את משפטי "מה יקרה באישור" להתנהגות בפועל של
-  ‏`apply_reviewed_document` (‏`0110`); היה 536/64 אחרי
-  ‏`nameKey.spec.ts` — התאום בצד הלקוח של `private.name_match_key` מ-`0106`; היה 529/63 אחרי
-  ‏`share.spec.ts`, גיליון הסינון ב-`dataTable.spec.tsx`, הקליטה האחת ב-`documentsArchiveView.spec.tsx` ו-`monthlyReport.spec.ts`,
-  ‏514/61 אחרי `bootstrapWatchdog.spec.tsx`, ו-512/60 אחרי נרמול קמפיין ה-codex ומיזוגו).
-  ‏`check:counts` מצמיד את **המספרים שבקובץ הזה**: הוא סופר מחדש את הסוויטות, זרועות ה-preflight,
-  תרחישי הדפדפן, בדיקות `check:review`, קבצי ה-spec וסקריפטי ה-`check:*` — ודורש שכל אזכור שלהם
-  ב-`CLAUDE.md` יסכים. הוא נוסף אחרי שהסטייה חזרה **שש פעמים**, ובריצתו הראשונה תפס שבע טענות
-  שהתיישנו. **הוא אינו סופר את מספר בדיקות ה-vitest** (‏651) — אי אפשר לקרוא אותו מטקסט בלי לממש
-  אוסף בדיקות; המספר נלקח מפלט הריצה, וקבצי ה-spec כן נספרים.
-  **אם הוא נכשל — מתקנים את `CLAUDE.md`, לא את הסקריפט.**
-  **אין ESLint ואין Prettier** בריפו, למרות הערות `eslint-disable` שנשארו ב-`src/lib/useQuery.ts`.
-- `npm run quality` — השער המלא (PowerShell + Docker): מאפס ובונה מחדש את `supplyflow-p0`, מריץ **57**
-  סוויטות SQL, ‏**preflight עם 46 זרועות**, ‏`npm audit --audit-level=high`, חוזי Deno,
-  ו-**35 תרחישי דפדפן**. מספר טענות P0 מדווח בזמן ריצה (‏266 בריצה שתועדה) — הוא אינו ליטרל בקוד.
-
-  **איך נספר כל מספר כאן — כדי שהבא יספור ולא יעתיק:**
-  - **57 סוויטות** = קריאות `Invoke-SqlTest` ב-`check-quality-gates.ps1` שהארגומנט הראשון שלהן הוא
-    `supabase\tests\…`. בקובץ יש **60** מופעים של המחרוזת: אחד הוא הגדרת הפונקציה, ושניים טוענים
-    fixtures (‏`supabase\demo\demo_seed.sql`, ‏`scripts\fixtures\ocr\browser-fixture.sql`).
-    ב-`supabase/tests/` יש **58** קבצי `.sql`; הקובץ היחיד שאינו ברשימת הסוויטות הפעילה הוא
-    `p1_preflight.sql`, שרץ דרך `Invoke-Preflight`. שתי סוויטות P1B הוסבו ל-owner/office וחזרו
-    לשער בניקוי שלושת התפקידים.
-  - **46 זרועות preflight** = ‏`select '<שם>'` ב-`p1_preflight.sql` (‏1 + ‏45 `union all select '`),
-    ו-`Invoke-Preflight` **זורק** אם לא חזרו בדיוק 46 שורות.
-  - **35 תרחישים** = קריאות `await run(` ב-`check-browser-smoke.cjs` (‏35 נכון ל-10.08.2026, אחרי
-    ערוץ ההערות של חבילה 0 בקמפיין המוכנות; ‏`run(` לבדו תופס גם את הגדרת הפונקציה).
-
-  **מצב השער הנוכחי:** ‏`p23_supplier_portal.sql` ו־`p32_kitchen_supplier_read_boundary.sql`
-  הוסרו עם משטחי הפרסונות שפרשו. סוויטות P1B הפעילות הוסבו ל־`owner`/`office`, ו־
-  `p43_active_persona_surface.sql` מוכיחה את גבול שלושת התפקידים של `0133`. ‏`p39` שומרת את
-  חוזה הפרישה, ‏`p40` את גבול העלאת הדפדפן, ו־`p42` את שחזור ראיות העיבוד. הספירה המכנית נשארת
-  המצב המכני הוא **57 סוויטות SQL**, **46 זרועות preflight**, ‏**35 תרחישי דפדפן**,
-  ‏**22** ל-`check:review` ו־**12 סקריפטי `check:*`**. כל שינוי ברשימות מחייב הרצת
-  `check:counts` ועדכון המספרים מהפלט, לא מהזיכרון.
-  ### השער רץ ב-CI. **אל תריץ אותו מקומית.** (‏09.08.2026)
-
-  ‏`npm run quality` **מסרב לרוץ** על מכונה זו ויוצא עם קוד **3**. זו לא תקלה — זו ההגדרה.
-  הסיבה נמדדה: בין 23.07 ל-09.08.2026 השער רץ **415 פעמים** על מכונת הבעלים ולקח ממנה
-  **24.0 שעות**. ‏**160 מהריצות (39%) מתו בלי לכתוב אפילו ארטיפקט אחד**, ורק **80 (19%)** הגיעו
-  ל-PASS; ב-09.08 לבדו ‏149 מתוך 180 מתו על אפס. כמעט אף אחת מהן לא הייתה רגרסיה — הן היו פורט
-  תפוס, שרת dev שמחזיק חיבור כותב ל-DB עד `deadlock detected (SQLSTATE 40P01)`, וסוכן שני
-  שמחזיק את מנעול ה-QA. כל אלה נעלמים על runner שמתחיל ריק.
+- `npm run build` — typecheck ובניית bundle בלבד. Build אינו מריץ בדיקות.
+- `npm run test` — כל בדיקות היחידה והרכיבים תחת Vitest אחד.
+- `npm run verify` — Knip, שומרי הטוקנים/כסף/חריגי definer/עמודות ספק, ואז Vitest.
+- `npm run check` — build ו־verify יחד לשימוש מקומי לפני מסירה.
+  ‏`check:money` שומר מקור אמת אחד לצורת כסף; `check:tokens` שומר על טוקני העיצוב;
+  `check:exemptions` מונע הרחבה שקטה של `SECURITY DEFINER`; `check:supplier-columns` מונע
+  `select('*')` שנחסם בגלל `bank_details`. בדיקות עסקיות רגילות אינן סקריפטי gate עצמאיים.
+  **אין ESLint ואין Prettier** בריפו; TypeScript ו־Knip מכסים את השכבה הסטטית הנוכחית.
+- `npm run quality` — שער האינטגרציה הכבד: SQL ו־preflight מול Supabase מבודד, חוזי Deno,
+  OCR worker ותרחישי דפדפן. השער רץ ב־CI; אין להריץ אותו מקומית כחלק מעבודה רגילה.
+  ב־CI כל job מופעל רק כאשר הנתיבים הרלוונטיים השתנו. `workflow_dispatch` מריץ את כולם.
 
   **איך מריצים את השער עכשיו:**
   ```
@@ -130,22 +71,21 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   ```
   הראיות (צילומים, PDF, ‏`p4-browser-report.json`) עולות כארטיפקט **`browser-evidence`**.
 
-  **מה `.github/workflows/quality-gate.yml` מריץ** — שלושה jobs **במקביל**, ולכן זמן הקיר הוא
-  האיטי שבהם ולא הסכום:
+  **מה `.github/workflows/quality-gate.yml` מריץ** — מסווג נתיבים ושלושה jobs עצמאיים:
   ‏`contracts` (חוזי Deno · ‏OCR worker build + self-check · ‏`npm audit`) ·
-  ‏`sql` (‏**57 סוויטות + preflight**) · ‏`browser` (‏**35 תרחישים** + fixtures + preview).
+  ‏`sql` (סוויטות DB + preflight) · ‏`browser` (תרחישי UI + fixtures + preview).
 
   **רשימת הסוויטות אינה מועתקת ל-YAML.** ‏`scripts/ci-sql-suites.mjs` **מפרסר אותה מתוך
   `check-quality-gates.ps1`** בזמן ריצה — אותה רשימה, אותו סדר, אותם תפקידי DB. עותק שני היה
-  מקור הסטייה שש פעמים; כאן אין עותק שני.
+  מקור סטייה; כאן אין עותק שני. איפוסי DB שמופיעים בסוף השער הידני לפני Edge/browser אינם
+  מבוצעים במריץ ה־SQL של CI, מפני שאין אחריהם צרכן SQL.
 
   **מה ה-CI עדיין לא מכסה, במפורש:** ‏`check-p0-security.ps1` (‏862 שורות) ו-`check-p0-upgrade.ps1`
   (‏88), ‏`Invoke-PriceListEdgeSmoke`, ‏`Invoke-OcrEdgeSmoke` ו-`check-p4-integrated-journey.cjs`.
   אלה קשורים ל-PowerShell של Windows ורצים רק בריצה הידנית. **תיק ירוק אינו טענה שהם עברו.**
 
-  ‏`.github/workflows/build.yml` ממשיך להריץ את `npm run build` המלא (‏tsc + שנים-עשר ה-`check:*` +
-  ‏vitest + ‏vite build) על כל push/PR — הוא המשוב המהיר (‏~92 שניות), ו-`quality-gate.yml` הוא
-  השער הכבד.
+  ‏`.github/workflows/build.yml` מריץ `build` ו־`verify` כ־jobs מקבילים; `quality-gate.yml` הוא
+  שער האינטגרציה הכבד והמסונן לפי נתיבים.
 
   **ריצה מקומית — רק כמוצא אחרון**, לניפוי כשל ש-CI כבר דיווח עליו או לעבודה על הסקריפט עצמו:
   ‏`$env:SUPPLYFLOW_ALLOW_LOCAL_QUALITY = '1'; npm run quality`. לפני כן: לעצור `npm run dev`

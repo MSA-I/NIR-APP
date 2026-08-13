@@ -2,7 +2,7 @@
  * The counting logic behind the alert scans, kept free of any import so it can be exercised
  * without a database or a browser. `alerts.ts` fetches; this decides.
  *
- * Runnable check: `npm run check:alerts`
+ * Covered by `alertRules.spec.ts` under the shared Vitest runner.
  */
 
 /** Number of (supplier, invoice number) pairs that appear more than once. */

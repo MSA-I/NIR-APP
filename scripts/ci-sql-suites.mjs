@@ -60,6 +60,11 @@ for (const match of body.matchAll(lineRe)) {
   });
 }
 
+// The manual PowerShell gate performs two final resets before Edge/browser work. This runner ends
+// after SQL, so carrying those trailing resets into CI only rebuilds the same database twice with
+// no consumer. Resets between SQL suites remain part of the parsed sequence.
+while (sequence.at(-1)?.kind === 'reset') sequence.pop();
+
 const suites = sequence.filter((s) => s.kind === 'suite');
 if (suites.length === 0) throw new Error('Parsed zero SQL suites — the parser and the gate have diverged.');
 

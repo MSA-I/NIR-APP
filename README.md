@@ -60,7 +60,7 @@ npm.cmd run check:dead-code
 npm.cmd run build
 ```
 
-`npm run build` מריץ TypeScript, שנים־עשר סקריפטי `check:*`, ‏Vitest ו־Vite. ‏Knip מוגדר דרך
+`npm run build` מריץ TypeScript ובונה bundle. `npm run verify` מריץ Knip, שומרים סטטיים ו־Vitest. ‏Knip מוגדר דרך
 `knip.json` עם entrypoints מפורשים ל־SPA, בדיקות, סקריפטי שער ו־Edge Functions.
 
 `npm run quality` אינו רץ מקומית במכונה זו. השער הכבד מופעל ב־GitHub Actions על PR או באמצעות:
