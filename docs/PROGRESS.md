@@ -44,9 +44,10 @@
 
 אין להצמיד למסמכים ספירות של בדיקות, סוויטות או תרחישים; הפלט של ה־runner הוא מקור האמת.
 שער האינטגרציה `npm run quality` רץ ב־CI בלבד, וה־jobs הכבדים בו מסוננים לפי הנתיבים שהשתנו.
-גם `build` ו־`verify` מסווגים לפי צרכן: test בלבד אינו בונה bundle; migration בלבד מריץ את
-guard ה־exemptions ללא התקנת תלויות או Vitest; ‏Edge אינו מפעיל OCR; ושינוי package מפעיל
-dependency audit בלי להקים DB. מטריצת ה־rollout המחייבת נמצאת ב־`CLAUDE.md`.
+גם `build` ו־`verify` מסווגים לפי צרכן: test בלבד מריץ Knip+Vitest ללא build/guards/browser;
+migration בלבד מריץ את guard ה־exemptions ו־SQL ללא התקנת תלויות, Vitest או browser; ‏Edge
+אינו מפעיל OCR; ושינוי package מפעיל dependency audit בלי להקים DB. מטריצת ה־rollout המחייבת
+נמצאת ב־`CLAUDE.md`.
 
 ## אימות השחרור החי
 

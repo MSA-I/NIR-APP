@@ -88,7 +88,8 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   ‏`.github/workflows/build.yml` יוצר תמיד את שמות ה־checks שהגנת הענף מצפה להם, אבל מקצה runner
   רק לצרכן הרלוונטי: `build` לקלטי bundle/typecheck; ‏`verify` לקוד, tests, scripts, migrations,
   Edge ו־Knip. שינוי test בלבד אינו בונה bundle; שינוי SQL suite/fixture בלבד אינו מריץ אף אחד
-  משניהם. גם בתוך check ‏`verify` מופעלים רק תתי־הפקודות שנפגעו: migration בלבד מריץ את guard
+  משניהם. קובץ test בלבד מריץ Knip ו־Vitest בלי guards שסורקים קוד מוצר. גם בתוך check
+  ‏`verify` מופעלים רק תתי־הפקודות שנפגעו: migration בלבד מריץ את guard
   ה־exemptions ללא `npm ci` או Vitest; ‏Edge מריץ Knip ללא Vitest; שינוי `src`
   מריץ את Knip, guards הרלוונטיים ו־Vitest. `quality-gate.yml` הוא שער האינטגרציה הכבד
   והמסונן לפי נתיבים.

@@ -5,7 +5,8 @@
 > עדכון 13.08.2026: ההחלטה על Vitest, ‏MSW ו־Testing Library נשארה בתוקף, אך פריסת השערים
 > פושטה. כל בדיקות Node העסקיות אוחדו ל־Vitest; ‏`build` מבצע typecheck + bundle בלבד;
 > ‏`verify` מריץ Knip, ארבעה guards סטטיים ו־Vitest. גם שני אלה מסווגים לפי צרכן: test בלבד
-> אינו בונה bundle, migration בלבד מריץ רק את guard ה־exemptions ללא התקנה/Vitest, ו־SQL
+> מריץ רק Knip+Vitest ואינו בונה bundle או מריץ guards/browser; migration בלבד מריץ רק את
+> guard ה־exemptions ו־SQL ללא התקנה/Vitest/browser; ו־SQL
 > fixture בלבד אינו מריץ Node. שער האינטגרציה מפריד Edge, ‏OCR,
 > dependency audit, ‏SQL ו־browser; קובץ `*.spec.*` בלבד אינו מקים stack דפדפן. התיאור להלן
 > מתעד את המצב והנימוקים ביום קבלת ההחלטה.
