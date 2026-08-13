@@ -1358,8 +1358,8 @@ begin
     'etag:' || repeat('a', 64), '1'
   );
   raise exception 'expected retired supplier identity rejection';
-exception when sqlstate 'P0002' then
-  if sqlerrm <> 'document_interpretation_unknown' then raise; end if;
+exception when sqlstate '42501' then
+  if sqlerrm <> 'not_authorized' then raise; end if;
 end
 $$;
 reset role;

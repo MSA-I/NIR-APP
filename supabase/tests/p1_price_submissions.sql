@@ -449,18 +449,27 @@ select pg_temp.p1b_assert(
   'office could not delete its inactive staging orphan'
 );
 
--- The old batch RPC remains for owner/office but is no longer a supplier bypass.
+-- The old batch RPC remains for owner/office but is not a finance-role bypass.
+reset role;
+select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000005', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
 do $$
 begin
   perform import_supplier_prices(
     '[{"supplier_id":"31000000-0000-0000-0000-000000000001","product_id":"41000000-0000-0000-0000-000000000001","price":11,"available":true}]'::jsonb,
-    '2026-07-01', 'supplier attempted the legacy route'
+    '2026-07-01', 'accountant attempted the procurement route'
   );
-  raise exception 'expected legacy supplier import rejection';
+  raise exception 'expected accountant import rejection';
 exception when sqlstate '42501' then
   if sqlerrm not like '%price_import_not_authorized%' then raise; end if;
 end
 $$;
+
+reset role;
+select set_config('request.jwt.claim.sub', '21000000-0000-0000-0000-000000000003', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
 
 -- One known row commits while an unknown product receives an actionable rejection. No catalog
 -- product is created from the uploaded name.

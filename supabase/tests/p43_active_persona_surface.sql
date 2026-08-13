@@ -281,21 +281,19 @@ insert into storage.objects (bucket_id, name, owner, metadata) values (
   '10430000-0000-4000-8000-000000000001/payment/' || :'p43_payment_id' || '/proof.pdf',
   auth.uid(), jsonb_build_object('mimetype', 'application/pdf', 'size', 128)
 );
-insert into public.documents (
-  id, org_id, entity_type, entity_id, storage_path, file_name, mime_type, uploaded_by
-) values (
-  '90430000-0000-4000-8000-000000000001', '10430000-0000-4000-8000-000000000001',
-  'payment',
-  (select id from public.payments
-   where org_id = '10430000-0000-4000-8000-000000000001' and reference = 'P43-REF-1'),
+select public.register_uploaded_document(
+  'p43-accountant-proof-key', 'payment', :'p43_payment_id'::uuid,
   '10430000-0000-4000-8000-000000000001/payment/' || :'p43_payment_id' || '/proof.pdf',
-  'proof.pdf', 'application/pdf', auth.uid()
-);
+  'proof.pdf', 'application/pdf', 'payment_confirmation',
+  '30430000-0000-4000-8000-000000000001', current_date
+)::text as p43_payment_proof_result
+\gset
 select pg_temp.p43_assert(
   (select status = 'executed' from public.payment_requests
    where id = '80430000-0000-4000-8000-000000000001')
+  and not (:'p43_payment_proof_result'::jsonb ->> 'idempotent')::boolean
   and exists (select 1 from public.documents
-              where id = '90430000-0000-4000-8000-000000000001'
+              where id = (:'p43_payment_proof_result'::jsonb ->> 'document_id')::uuid
                 and entity_type = 'payment'),
   'accountant lost payment execution or payment-proof upload');
 
