@@ -48,6 +48,7 @@
 migration בלבד מריץ את guard ה־exemptions ו־SQL ללא התקנת תלויות, Vitest או browser; ‏Edge
 אינו מפעיל OCR; ושינוי package מפעיל dependency audit בלי להקים DB. מטריצת ה־rollout המחייבת
 נמצאת ב־`CLAUDE.md`.
+חריג fail-closed: migration שנוגע ב־RLS/Auth/role/grants כן מפעיל את שער הדפדפן גם ללא שינוי `src`.
 
 ## אימות השחרור החי
 

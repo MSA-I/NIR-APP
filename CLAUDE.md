@@ -92,7 +92,8 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   ‏`verify` מופעלים רק תתי־הפקודות שנפגעו: migration בלבד מריץ את guard
   ה־exemptions ללא `npm ci` או Vitest; ‏Edge מריץ Knip ללא Vitest; שינוי `src`
   מריץ את Knip, guards הרלוונטיים ו־Vitest. `quality-gate.yml` הוא שער האינטגרציה הכבד
-  והמסונן לפי נתיבים.
+  והמסונן לפי נתיבים. migration בלבד אינו מפעיל browser, אלא אם תוכנו משנה policy/RLS,
+  ‏`user_role`, פונקציות ה־auth של ה־scope או grant/revoke ל־`authenticated`/`anon`.
 
   **ריצה מקומית — רק כמוצא אחרון**, לניפוי כשל ש-CI כבר דיווח עליו או לעבודה על הסקריפט עצמו:
   ‏`$env:SUPPLYFLOW_ALLOW_LOCAL_QUALITY = '1'; npm run quality`. לפני כן: לעצור `npm run dev`
