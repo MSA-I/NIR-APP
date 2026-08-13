@@ -547,7 +547,10 @@ select pg_temp.p1b_assert(
   'checksum retry did not return the first receipt'
 );
 select pg_temp.p1b_assert(
-  (select count(*) = 1 from supplier_price_submissions),
+  (select count(*) = 1
+   from supplier_price_submissions
+   where supplier_id = '31000000-0000-0000-0000-000000000001'
+     and target_month = '2026-07-01'),
   'checksum retry created another ledger revision'
 );
 select pg_temp.p1b_assert(
@@ -572,7 +575,10 @@ select pg_temp.p1b_assert(
   'corrected file did not create revision 2'
 );
 select pg_temp.p1b_assert(
-  (select count(*) = 2 and max(revision) = 2 from supplier_price_submissions),
+  (select count(*) = 2 and max(revision) = 2
+   from supplier_price_submissions
+   where supplier_id = '31000000-0000-0000-0000-000000000001'
+     and target_month = '2026-07-01'),
   'revision history was overwritten or duplicated'
 );
 select pg_temp.p1b_assert(
