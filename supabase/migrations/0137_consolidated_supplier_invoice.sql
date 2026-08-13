@@ -1,4 +1,4 @@
--- 0136 -- One supplier, one legal entity, one calendar month, one payable anchor.
+-- 0137 -- One supplier, one legal entity, one calendar month, one payable anchor.
 --
 -- A consolidated supplier invoice is a business role, not an OCR document kind. Source bytes
 -- therefore remain ordinary `documents.document_kind = 'invoice'`, while this migration adds a
@@ -472,7 +472,7 @@ security invoker
 set search_path = public, pg_temp
 as $$
 begin
-  if current_setting('app.consolidated_invoice_writer', true) is distinct from '0136' then
+  if current_setting('app.consolidated_invoice_writer', true) is distinct from '0137' then
     raise exception 'consolidated_invoice_rpc_required' using errcode = '42501';
   end if;
   if tg_table_name in ('consolidated_invoice_revisions','consolidated_invoice_snapshots')
@@ -1086,7 +1086,7 @@ begin
     );
   end if;
 
-  perform set_config('app.consolidated_invoice_writer', '0136', true);
+  perform set_config('app.consolidated_invoice_writer', '0137', true);
   perform private.consolidated_sync_sources(v_case.id, p_trigger_kind = 'late_arrival');
   v_payload := private.consolidated_reconciliation_payload(v_case.id);
   v_warning_count := (v_payload ->> 'warning_count')::integer;
@@ -1221,7 +1221,7 @@ begin
   perform pg_advisory_xact_lock(hashtextextended(
     'consolidated-business:' || v_org::text || ':' || p_legal_entity_id::text || ':'
       || p_supplier_id::text || ':' || p_target_month::text, 0));
-  perform set_config('app.consolidated_invoice_writer', '0136', true);
+  perform set_config('app.consolidated_invoice_writer', '0137', true);
 
   select intake.* into v_intake
   from public.consolidated_invoice_intakes intake
@@ -1349,7 +1349,7 @@ begin
       'invoice', v_case.supplier_id, null
     );
     v_document_id := (v_registered ->> 'document_id')::uuid;
-    perform set_config('app.consolidated_invoice_writer', '0136', true);
+    perform set_config('app.consolidated_invoice_writer', '0137', true);
     insert into public.consolidated_invoice_intake_pages (
       org_id,intake_id,page_number,client_upload_key,document_id,storage_path,source_metadata
     ) values (
@@ -1425,7 +1425,7 @@ begin
   end if;
 
   if v_intake.completion_idempotency_key is null then
-    perform set_config('app.consolidated_invoice_writer', '0136', true);
+    perform set_config('app.consolidated_invoice_writer', '0137', true);
     update public.consolidated_invoice_intakes
     set completion_idempotency_key = p_idempotency_key,
         primary_document_id = (
@@ -1778,7 +1778,7 @@ begin
 
   if v_block_code is null then
     begin
-      perform set_config('app.consolidated_invoice_writer','0136',true);
+      perform set_config('app.consolidated_invoice_writer','0137',true);
       perform private.consolidated_sync_sources(v_case.id,false);
     exception when sqlstate '55000' then
       if sqlerrm = 'consolidated_payable_conflict' then
@@ -1808,7 +1808,7 @@ begin
       'intake_id',v_intake.id,'invoice_id',null,'revision_id',null,
       'warnings','[]'::jsonb,'idempotent',false
     );
-    perform set_config('app.consolidated_invoice_writer','0136',true);
+    perform set_config('app.consolidated_invoice_writer','0137',true);
     update public.consolidated_invoice_intakes
     set status='blocked',interpretation_id=v_interpretation.id,
         outcome='blocked',reason_code=v_block_code,result=v_result
@@ -1827,8 +1827,8 @@ begin
   end if;
 
   v_invoice_id := gen_random_uuid();
-  perform set_config('app.p1_financial_writer',coalesce(v_actor::text,'0136'),true);
-  perform set_config('app.consolidated_invoice_writer','0136',true);
+  perform set_config('app.p1_financial_writer',coalesce(v_actor::text,'0137'),true);
+  perform set_config('app.consolidated_invoice_writer','0137',true);
   insert into public.invoices (
     id,org_id,unit_id,supplier_id,invoice_number,invoice_date,received_date,
     received_by,amount_before_vat,vat_amount,total_amount,review_status,financial_role,notes
@@ -1841,7 +1841,7 @@ begin
   set anchor_invoice_id=v_invoice_id,status='reconciling',updated_at=statement_timestamp()
   where id=v_case.id;
 
-  perform set_config('app.document_filing_writer',coalesce(v_actor::text,'0136'),true);
+  perform set_config('app.document_filing_writer',coalesce(v_actor::text,'0137'),true);
   update public.documents document
   set entity_type='invoice',entity_id=v_invoice_id,supplier_id=v_case.supplier_id,document_date=v_date
   from public.consolidated_invoice_intake_pages page
@@ -2171,7 +2171,7 @@ begin
       and c.target_month=date_trunc('month',new.invoice_date)::date
       and c.anchor_invoice_id is not null and c.anchor_invoice_id<>new.id;
     if not found then return new; end if;
-    perform set_config('app.consolidated_invoice_writer','0136',true);
+    perform set_config('app.consolidated_invoice_writer','0137',true);
     perform private.consolidated_sync_sources(v_case.id,true);
     perform private.append_consolidated_invoice_revision(
       v_case.id,'late:invoice:'||new.id::text,'late_arrival','interim_invoice',new.id,auth.uid());
@@ -2188,7 +2188,7 @@ begin
       and c.target_month=date_trunc('month',v_invoice.invoice_date)::date
       and c.anchor_invoice_id is not null and c.anchor_invoice_id<>v_invoice.id;
     if not found then return new; end if;
-    perform set_config('app.consolidated_invoice_writer','0136',true);
+    perform set_config('app.consolidated_invoice_writer','0137',true);
     perform private.append_consolidated_invoice_revision(
       v_case.id,'late:evidence:'||new.id::text,'late_arrival','invoice_evidence',new.id,new.actor_id);
   elsif tg_table_name='goods_receipts' then
@@ -2204,7 +2204,7 @@ begin
         and private.consolidated_unit_descends_from(
           c.org_id,coalesce(new.unit_id,v_order.unit_id),c.legal_entity_id)
     loop
-      perform set_config('app.consolidated_invoice_writer','0136',true);
+      perform set_config('app.consolidated_invoice_writer','0137',true);
       perform private.consolidated_sync_sources(v_case.id,true);
       perform private.append_consolidated_invoice_revision(
         v_case.id,'late:receipt:'||new.id::text||':'||new.status::text,
@@ -2224,7 +2224,7 @@ begin
         and c.target_month=date_trunc('month',new.document_date)::date
         and c.anchor_invoice_id is not null
     loop
-      perform set_config('app.consolidated_invoice_writer','0136',true);
+      perform set_config('app.consolidated_invoice_writer','0137',true);
       perform private.consolidated_sync_sources(v_case.id,true);
       perform private.append_consolidated_invoice_revision(
         v_case.id,'late:document:'||new.id::text,'late_arrival',
@@ -2271,7 +2271,7 @@ begin
        and i.org_id = auth_org() and i.deleted_at is null
        and i.financial_role = 'payable'$b$;
   if position(v_anchor in v_def)=0 then
-    raise exception '0136: global_search invoice-reader anchor moved';
+    raise exception '0137: global_search invoice-reader anchor moved';
   end if;
   execute replace(v_def,v_anchor,v_replacement);
 end
@@ -2489,7 +2489,7 @@ begin
       and i.financial_role = 'payable'
       and i.invoice_date between p_from and p_to$b$;
   if position(v_anchor in v_def)=0 then
-    raise exception '0136: canonical_purchase_metrics money-reader anchor moved';
+    raise exception '0137: canonical_purchase_metrics money-reader anchor moved';
   end if;
   execute replace(v_def,v_anchor,v_replacement);
 
@@ -2499,7 +2499,7 @@ begin
   v_replacement := $b$      and i.deleted_at is null and i.review_status = 'approved'
       and i.financial_role = 'payable'$b$;
   if position(v_anchor in v_def)=0 then
-    raise exception '0136: product_purchase_summary money-reader anchor moved';
+    raise exception '0137: product_purchase_summary money-reader anchor moved';
   end if;
   execute replace(v_def,v_anchor,v_replacement);
 
@@ -2512,7 +2512,7 @@ begin
   ),
   open_orders as ($b$;
   if position(v_anchor in v_def)=0 then
-    raise exception '0136: management_dashboard_snapshot money-reader anchor moved';
+    raise exception '0137: management_dashboard_snapshot money-reader anchor moved';
   end if;
   execute replace(v_def,v_anchor,v_replacement);
 
@@ -2526,7 +2526,7 @@ begin
   ),
   payment_request_scope as materialized ($b$;
   if position(v_anchor in v_def)=0 then
-    raise exception '0136: create_monthly_report_snapshot money-reader anchor moved';
+    raise exception '0137: create_monthly_report_snapshot money-reader anchor moved';
   end if;
   execute replace(v_def,v_anchor,v_replacement);
 end
@@ -2539,11 +2539,11 @@ insert into private.scope_definer_enforcements(
 select reviewed.signature,md5(replace(proc.prosrc,e'\r','')),reviewed.kind,reviewed.proof
 from (values
   ('p0_invoice_balance_rows()','filtered_read',
-    '0136 filters balances to payable invoices and to null-or-auth_scopes legal-entity scope.'),
+    '0137 filters balances to payable invoices and to null-or-auth_scopes legal-entity scope.'),
   ('p0_supplier_balance_rows()','filtered_read',
-    '0136 derives supplier balances only from payable invoices in null-or-auth_scopes scope.'),
+    '0137 derives supplier balances only from payable invoices in null-or-auth_scopes scope.'),
   ('create_monthly_report_snapshot(date,uuid)','assert_unit',
-    '0136 preserves the legal-entity assertion and filters the final invoice ledger to payable.')
+    '0137 preserves the legal-entity assertion and filters the final invoice ledger to payable.')
 ) reviewed(signature,kind,proof)
 join pg_catalog.pg_proc proc on proc.oid=pg_catalog.to_regprocedure(reviewed.signature)
 on conflict(function_signature) do update
@@ -2582,19 +2582,19 @@ select reviewed.signature,md5(replace(proc.prosrc,e'\r','')),
   reviewed.kind,reviewed.proof
 from (values
   ('list_consolidated_invoice_legal_entities()','filtered_read',
-    '0136 filters legal-entity choices to auth_org and the caller materialized auth_scopes.'),
+    '0137 filters legal-entity choices to auth_org and the caller materialized auth_scopes.'),
   ('open_consolidated_invoice_intake(uuid,uuid,date,uuid,integer)','assert_unit',
-    '0136 verifies the tenant legal entity and asserts it is in scope before opening an intake.'),
+    '0137 verifies the tenant legal entity and asserts it is in scope before opening an intake.'),
   ('register_consolidated_invoice_page(uuid,integer,text,text,text,text)','assert_unit',
-    '0136 locks the tenant intake and asserts its persisted legal entity before registering a document.'),
+    '0137 locks the tenant intake and asserts its persisted legal entity before registering a document.'),
   ('complete_consolidated_invoice_intake(uuid,uuid)','assert_unit',
-    '0136 locks the tenant intake and asserts its persisted legal entity before completing all pages.'),
+    '0137 locks the tenant intake and asserts its persisted legal entity before completing all pages.'),
   ('list_consolidated_invoice_cases(date)','filtered_read',
-    '0136 filters every returned supplier-month case to auth_org and legal_entity_id in auth_scopes.'),
+    '0137 filters every returned supplier-month case to auth_org and legal_entity_id in auth_scopes.'),
   ('get_consolidated_invoice_workspace(uuid)','filtered_read',
-    '0136 resolves the case inside auth_org and auth_scopes, then reads only its exact anchor and sources.'),
+    '0137 resolves the case inside auth_org and auth_scopes, then reads only its exact anchor and sources.'),
   ('refresh_consolidated_invoice_reconciliation(uuid,uuid,text)','assert_unit',
-    '0136 resolves the tenant case and asserts its persisted legal entity before appending a revision.')
+    '0137 resolves the tenant case and asserts its persisted legal entity before appending a revision.')
 ) reviewed(signature,kind,proof)
 join pg_catalog.pg_proc proc on proc.oid=pg_catalog.to_regprocedure(reviewed.signature)
 on conflict(function_signature) do update
@@ -2643,12 +2643,12 @@ begin
   select string_agg(assertion||' -- '||detail,e'\n' order by assertion,detail)
     into v_violations from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0136 scope assertions failed:\n%',v_violations;
+    raise exception e'0137 scope assertions failed:\n%',v_violations;
   end if;
   select string_agg(detail,e'\n' order by detail)
     into v_violations from private.tenant_export_registry_violations();
   if v_violations is not null then
-    raise exception e'0136 tenant export assertions failed:\n%',v_violations;
+    raise exception e'0137 tenant export assertions failed:\n%',v_violations;
   end if;
 end
 $$;

@@ -324,9 +324,10 @@ set role authenticated;
 select pg_temp.p46_assert(
   public.list_consolidated_invoice_cases(:'p46_target_month'::date)='[]'::jsonb,
   'accountant saw a consolidated case before final intake');
+select set_config('p46.case_id', :'p46_case_id', true);
 do $$
 begin
-  perform public.get_consolidated_invoice_workspace(:'p46_case_id'::uuid);
+  perform public.get_consolidated_invoice_workspace(current_setting('p46.case_id')::uuid);
   raise exception 'expected accountant pre-final workspace denial';
 exception when no_data_found then null;
 end
@@ -553,13 +554,15 @@ select pg_temp.p46_actor(null);
 
 select pg_temp.p46_actor('13510000-0000-4000-8000-000000000001');
 set role authenticated;
+select set_config('p46.legal_entity_id', :'a_legal_entity', true);
+select set_config('p46.target_month', :'p46_target_month', true);
 do $$
 begin
   insert into public.consolidated_invoice_cases(
     org_id,legal_entity_id,supplier_id,target_month,created_by
   ) values(
-    '13500000-0000-4000-8000-000000000001',:'a_legal_entity',
-    '13540000-0000-4000-8000-000000000001',:'p46_target_month',
+    '13500000-0000-4000-8000-000000000001',current_setting('p46.legal_entity_id')::uuid,
+    '13540000-0000-4000-8000-000000000001',current_setting('p46.target_month')::date,
     '13510000-0000-4000-8000-000000000001');
   raise exception 'expected direct case DML denial';
 exception when insufficient_privilege then null;
@@ -608,10 +611,10 @@ $$;
 
 -- ===== Real two-session lock proof for one supplier/month tuple =====
 
-create schema consolidated_0136_concurrency_test;
-create table consolidated_0136_concurrency_test.results(
+create schema consolidated_0137_concurrency_test;
+create table consolidated_0137_concurrency_test.results(
   lane text primary key,result jsonb not null);
-create function consolidated_0136_concurrency_test.run_open(p_key uuid)
+create function consolidated_0137_concurrency_test.run_open(p_key uuid)
 returns jsonb language plpgsql as $$
 declare
   v_legal_entity uuid;
@@ -639,15 +642,15 @@ select dblink_connect_u('p46_a',format('dbname=%L user=%L application_name=%L',
 select dblink_connect_u('p46_b',format('dbname=%L user=%L application_name=%L',
   current_database(),'postgres','p46_concurrency_b'));
 select dblink_send_query('p46_a',
-  $$select consolidated_0136_concurrency_test.run_open(
+  $$select consolidated_0137_concurrency_test.run_open(
     '13590000-0000-4000-8000-000000000011')$$);
 select pg_sleep(0.05);
 select dblink_send_query('p46_b',
-  $$select consolidated_0136_concurrency_test.run_open(
+  $$select consolidated_0137_concurrency_test.run_open(
     '13590000-0000-4000-8000-000000000012')$$);
-insert into consolidated_0136_concurrency_test.results
+insert into consolidated_0137_concurrency_test.results
 select 'a',result from dblink_get_result('p46_a') as t(result jsonb);
-insert into consolidated_0136_concurrency_test.results
+insert into consolidated_0137_concurrency_test.results
 select 'b',result from dblink_get_result('p46_b') as t(result jsonb);
 select count(*) from dblink_get_result('p46_a') as t(result jsonb);
 select count(*) from dblink_get_result('p46_b') as t(result jsonb);
@@ -657,7 +660,7 @@ select dblink_disconnect('p46_b');
 select pg_temp.p46_assert(
   (select count(*) filter(where result?'intake_id')=1
         and count(*) filter(where result->>'error'='consolidated_intake_already_open')=1
-   from consolidated_0136_concurrency_test.results)
+   from consolidated_0137_concurrency_test.results)
   and (select count(*)=1
        from public.consolidated_invoice_intakes intake
        join public.consolidated_invoice_cases c
@@ -666,6 +669,6 @@ select pg_temp.p46_assert(
          and c.supplier_id='13540000-0000-4000-8000-000000000003'),
   'advisory lock did not serialize two concurrent opens into one intake');
 
-drop schema consolidated_0136_concurrency_test cascade;
+drop schema consolidated_0137_concurrency_test cascade;
 
 select 'P46 consolidated supplier invoice suite passed' as result;
