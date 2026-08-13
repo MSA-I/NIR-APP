@@ -22,15 +22,19 @@ import { openReservedPopup } from '../lib/popup';
 import { runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { DocumentStatusBadge } from '../components/DocumentStatusBadge';
-import { documentMatchesFilingFilter, documentUiStatus } from '../lib/documentStatus';
+import { UploadCenter } from '../components/UploadCenter';
+import {
+  DOCUMENT_STATUS_FILTERS,
+  documentMatchesFilingFilter,
+  documentMatchesStatusFilter,
+  documentStatusFilterFromParam,
+  documentUiStatus,
+  type DocumentStatusFilter,
+} from '../lib/documentStatus';
 import {
   DOCUMENT_PROCESSING_CHANGED_EVENT,
-  DOCUMENT_USER_STATE_FILTERS,
-  documentUserState,
-  documentUserStateFromParam,
   useDocumentProcessing,
   type DocumentProcessingStage,
-  type DocumentUserState,
 } from '../lib/useDocumentProcessing';
 
 type RefileTarget = 'invoice' | 'goods_receipt';
@@ -102,19 +106,20 @@ export function ProcessingBadge({ documentId, stage, doc }: {
 /** The state filter. Extracted so the RENDERED options can be asserted: pinning the exported array
  *  is not the same as pinning the control, and a scenario that only calls `selectOption('failed')`
  *  passes against both this list and the seven engineering stages it replaced. */
-export function ProcessingFilterSelect({ value, onChange }: {
-  value: DocumentUserState | 'all'; onChange: (value: string) => void;
+export function ProcessingFilterSelect({ value, onChange, includeAssignmentStates = true }: {
+  value: DocumentStatusFilter | 'all'; onChange: (value: string) => void;
+  includeAssignmentStates?: boolean;
 }) {
+  const options = includeAssignmentStates
+    ? DOCUMENT_STATUS_FILTERS
+    : DOCUMENT_STATUS_FILTERS.filter(({ value: option }) => option !== 'unassigned' && option !== 'assigned');
   return (
     <label>
       <span className="label">מצב המסמך</span>
       <select data-testid="documents-processing-filter" className="input" value={value}
         onChange={(event) => onChange(event.target.value)}>
         <option value="all">הכול</option>
-        {/* Four human states, not seven pipeline stages. Three of the four values are the tokens
-            the URL already carried, so `?processing=review|completed|failed` keeps meaning exactly
-            what it meant; the fourth absorbs the machine's four. */}
-        {DOCUMENT_USER_STATE_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
     </label>
   );
@@ -367,12 +372,14 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   // with it still attached would silently narrow a list whose only control for widening it
   // again is no longer on screen.
   const filing = !archive && (filingParam === 'linked' || filingParam === 'unfiled') ? filingParam : 'all';
-  // Old links, bookmarks and the Back button still carry one of the seven engineering stages here.
-  // Such a value resolves to the state that contains it — a superset of what it used to match — so
-  // it keeps filtering something meaningful instead of emptying the list with no explanation, and
-  // the select below then shows the reader which of the four is in force.
-  const processingFilter: DocumentUserState | 'all' =
-    documentUserStateFromParam(params.get('processing')) ?? 'all';
+  // The filter uses the exact same precedence result as the badge. Old raw-stage links are mapped
+  // only when their meaning remains exact; ambiguous aggregate links fall back to "all" rather
+  // than showing a control that says one thing over rows that say another.
+  const requestedProcessingFilter = documentStatusFilterFromParam(params.get('processing'));
+  const processingFilter: DocumentStatusFilter | 'all' = archive
+    && (requestedProcessingFilter === 'unassigned' || requestedProcessingFilter === 'assigned')
+    ? 'all'
+    : requestedProcessingFilter ?? 'all';
   const canWrite = organizationAccess?.canWrite ?? true;
   const canFile = canWrite && (profile?.role === 'owner' || profile?.role === 'office');
   const canUpload = canWrite && !!profile && ['owner', 'office'].includes(profile.role);
@@ -466,26 +473,63 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   // and until it is the document sits in the list looking like work is in progress when none is.
   // Asking for it here is what makes the queue drain to "דורש בדיקה" by itself. The handler is
   // idempotent and short-circuits before the paid call, so a repeat costs one round trip.
-  const interpretRequested = useRef(new Set<string>());
+  const interpretInFlight = useRef(new Set<string>());
+  const interpretAttempts = useRef(new Map<string, number>());
+  const interpretMounted = useRef(false);
+  const [interpretRetryTick, setInterpretRetryTick] = useState(0);
+  const [interpretFailure, setInterpretFailure] = useState<{ jobId: string; message: string } | null>(null);
   const { snapshots: processingSnapshots, refetch: refetchProcessing } = processing;
+  useEffect(() => {
+    // React Strict Mode runs setup -> cleanup -> setup in development. Resetting the ref in every
+    // setup keeps retry timers live after that probe while still preventing updates after unmount.
+    interpretMounted.current = true;
+    return () => { interpretMounted.current = false; };
+  }, []);
   useEffect(() => {
     const pending = Object.values(processingSnapshots)
       .map((snapshot) => snapshot.job)
-      .filter((job) => job?.status === 'extracted' && !interpretRequested.current.has(job.id));
+      .filter((job) => job?.status === 'extracted'
+        && !interpretInFlight.current.has(job.id)
+        && (interpretAttempts.current.get(job.id) ?? 0) < 3);
     if (!pending.length) return;
     let cancelled = false;
     void (async () => {
       for (const job of pending) {
         if (cancelled || !job) return;
-        interpretRequested.current.add(job.id);
+        interpretInFlight.current.add(job.id);
         // One at a time: each is a paid model call, and a gallery of twenty should not fire twenty
-        // at once. Failures stay silent here -- the review screen is where they get explained.
-        await supabase.functions.invoke('interpret-document', { body: { jobId: job.id } });
+        // at once. A failed transport/request is retried only while this exact job remains
+        // `extracted`; the Set is released on failure so a lost response cannot strand it forever.
+        let response: { error: unknown };
+        try {
+          response = await supabase.functions.invoke('interpret-document', { body: { jobId: job.id } });
+        } catch (error) {
+          response = { error };
+        }
+        interpretInFlight.current.delete(job.id);
+        if (response.error) {
+          const attempts = (interpretAttempts.current.get(job.id) ?? 0) + 1;
+          interpretAttempts.current.set(job.id, attempts);
+          await refetchProcessing();
+          if (attempts < 3) {
+            window.setTimeout(() => {
+              if (interpretMounted.current) setInterpretRetryTick((value) => value + 1);
+            }, 1000 * 2 ** (attempts - 1));
+          } else if (!cancelled) {
+            setInterpretFailure({
+              jobId: job.id,
+              message: 'החילוץ נשמר, אך שלב הפענוח לא הצליח לאחר שלושה ניסיונות. ניתן לנסות שוב בלי להפעיל OCR מחדש.',
+            });
+          }
+          continue;
+        }
+        interpretAttempts.current.delete(job.id);
+        if (interpretFailure?.jobId === job.id) setInterpretFailure(null);
       }
       if (!cancelled) await refetchProcessing();
     })();
     return () => { cancelled = true; };
-  }, [processingSnapshots, refetchProcessing]);
+  }, [processingSnapshots, refetchProcessing, interpretRetryTick, interpretFailure?.jobId]);
 
   useEffect(() => {
     const onChanged = () => { void refetch(); };
@@ -499,15 +543,14 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     const needle = q.trim().toLowerCase();
     return (data?.docs ?? []).filter((doc) => {
       const date = doc.document_date ?? doc.created_at.slice(0, 10);
-      const stage = processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed';
       const uiStatus = statusFor(doc);
       return (!needle || doc.file_name.toLowerCase().includes(needle))
         && (!supplierId || (supplierId === 'none' ? !doc.supplier_id : doc.supplier_id === supplierId))
         && (!kind || doc.document_kind === kind)
         && documentMatchesFilingFilter(uiStatus, filing)
-        // A row whose processing state could not be read matches no state filter: it is unknown,
-        // not "נקלט". The banner above the table is what explains the gap.
-        && (processingFilter === 'all' || (stage !== null && documentUserState(stage) === processingFilter))
+        // An unread processing query resolves to `unavailable`, which matches no named filter.
+        // The banner above the table explains the gap without assigning it a false state.
+        && documentMatchesStatusFilter(uiStatus, processingFilter)
         && (!from || date >= from)
         && (!to || date <= to);
     });
@@ -678,7 +721,8 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       key: 'kind', header: 'סוג', sortValue: (doc) => doc.document_kind,
       render: (doc) => {
         const stage = processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed';
-        const unread = doc.document_kind === 'other' && stage !== null && documentUserState(stage) === 'intake';
+        const unread = doc.document_kind === 'other' && stage !== null
+          && ['unprocessed', 'queued', 'processing', 'extracted'].includes(stage);
         return unread
           ? <span className="text-ink-muted" title="המערכת טרם קראה את המסמך">—</span>
           : documentKindLabel(doc.document_kind);
@@ -747,6 +791,8 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           </Link>
         </>} />
 
+      {!archive && <UploadCenter />}
+
       <section aria-label="סינון מסמכים" className="border-y border-line-soft bg-surface px-3 py-3 sm:px-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <label>
@@ -756,7 +802,8 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
               <input type="search" className="input ps-9!" value={q} onChange={(event) => setQ(event.target.value)} placeholder="חיפוש מסמך..." />
             </span>
           </label>
-          <ProcessingFilterSelect value={processingFilter} onChange={setProcessing} />
+          <ProcessingFilterSelect value={processingFilter} onChange={setProcessing}
+            includeAssignmentStates={!archive} />
         </div>
         <details className="group mt-3 border-t border-line-soft pt-2">
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm font-medium text-action hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
@@ -810,6 +857,20 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             <button data-testid="documents-processing-retry" type="button" className="btn-secondary min-h-11"
               disabled={processing.fetching} onClick={() => void processing.refetch()}>
               <RefreshCw size={16} aria-hidden="true" /> ניסיון חוזר
+            </button>
+          </div>
+        </Note>
+      )}
+      {interpretFailure && (
+        <Note tone="alert">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>{interpretFailure.message}</span>
+            <button type="button" className="btn-secondary min-h-11" onClick={() => {
+              interpretAttempts.current.delete(interpretFailure.jobId);
+              setInterpretFailure(null);
+              setInterpretRetryTick((value) => value + 1);
+            }}>
+              ניסיון פענוח נוסף
             </button>
           </div>
         </Note>

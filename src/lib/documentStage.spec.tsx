@@ -18,25 +18,20 @@ vi.mock('./supabase', () => ({
 
 import {
   DOCUMENT_PROCESSING_STAGE_META,
-  DOCUMENT_USER_STATE_FILTERS,
-  DOCUMENT_USER_STATE_META,
-  documentUserState,
-  documentUserStateDescription,
-  documentUserStateFromParam,
-  documentUserStateLabel,
-  documentUserStateUrgency,
   type DocumentProcessingStage,
-  type DocumentUserState,
 } from './useDocumentProcessing';
-import { documentUiStatus } from './documentStatus';
+import {
+  DOCUMENT_STATUS_FILTERS,
+  documentMatchesStatusFilter,
+  documentStatusFilterFromParam,
+  documentUiStatus,
+} from './documentStatus';
 import { ProcessingBadge, ProcessingFilterSelect } from '../pages/DocumentsInbox';
 
 const STAGES = Object.keys(DOCUMENT_PROCESSING_STAGE_META) as DocumentProcessingStage[];
 
 const unfiled = { entity_type: 'inbox', entity_id: null };
-const archived = { entity_type: 'archive', entity_id: null };
 const onInvoice = { entity_type: 'invoice', entity_id: '00000000-0000-4000-8000-000000000001' };
-const onReceipt = { entity_type: 'goods_receipt', entity_id: '00000000-0000-4000-8000-000000000002' };
 
 describe('שבעת השלבים שורדים מתחת לתצוגה', () => {
   // אם מישהו "יפשט" את החוזה הפנימי בעקבות המסך, נופלות איתו 29 תרחישי דפדפן, סוויטות SQL
@@ -48,126 +43,48 @@ describe('שבעת השלבים שורדים מתחת לתצוגה', () => {
   });
 });
 
-describe('שבעה שלבים → ארבעה מצבים אנושיים', () => {
-  it('כל שלב פנימי מקבל מצב, ובסך הכול יש ארבעה', () => {
-    const states = STAGES.map(documentUserState);
-    expect(states).toEqual(['intake', 'intake', 'intake', 'intake', 'review', 'completed', 'failed']);
-    expect(new Set(states).size).toBe(4);
+describe('הסינון והתג מבוססים על אותו מצב קנוני', () => {
+  it('מציג אפשרויות שאינן מאחדות מצבים סותרים', () => {
+    expect(DOCUMENT_STATUS_FILTERS.map(({ value }) => value)).toEqual([
+      'stuck', 'failed', 'processing', 'review', 'unassigned', 'assigned',
+    ]);
+    render(<ProcessingFilterSelect value="all" onChange={() => {}} />);
+    const options = [...screen.getByTestId('documents-processing-filter').querySelectorAll('option')];
+    expect(options.map((option) => option.textContent)).toEqual([
+      'הכול', 'עיבוד תקוע', 'העיבוד נכשל', 'בעיבוד או בהמתנה', 'נדרשת בדיקה', 'לא משויך', 'משויך',
+    ]);
   });
 
-  it('התוויות הן המילים של הבעלים, לא מונחי מכונה', () => {
-    expect(DOCUMENT_USER_STATE_META.intake.label).toBe('נקלט');
-    expect(DOCUMENT_USER_STATE_META.review.label).toBe('בבדיקה');
-    expect(DOCUMENT_USER_STATE_META.completed.label).toBe('שויך');
-    expect(DOCUMENT_USER_STATE_META.failed.label).toBe('לא נקרא');
-    // "פירוש", "חילוץ" ו"עיבוד" הם מה שהמשתמשים לא אמורים לפגוש.
-    const labels = Object.values(DOCUMENT_USER_STATE_META).map(({ label }) => label).join(' ');
-    expect(labels).not.toMatch(/עיבוד|פירוש|חילוץ|OCR/);
+  it('מקבל רק כתובות קנוניות ואינו מנחש משמעות לשלב ישן', () => {
+    expect(documentStatusFilterFromParam('queued')).toBeNull();
+    expect(documentStatusFilterFromParam('extracted')).toBeNull();
+    expect(documentStatusFilterFromParam('unprocessed')).toBeNull();
+    expect(documentStatusFilterFromParam('review')).toBe('review');
+    expect(documentStatusFilterFromParam('completed')).toBeNull();
+    expect(documentStatusFilterFromParam('intake')).toBeNull();
+    expect(documentStatusFilterFromParam('toString')).toBeNull();
   });
 
-  it('מסמך שנכשל לעולם אינו נקרא "נקלט"', () => {
-    expect(documentUserState('failed')).not.toBe(documentUserState('queued'));
-    expect(DOCUMENT_USER_STATE_META[documentUserState('failed')].label).toBe('לא נקרא');
-    expect(documentUserStateDescription('failed')).toContain('לא הצלחנו לקרוא');
-    // ההסבר חייב להשאיר דרך פעולה — אחרת המשתמש נתקע מול "נכשל" בלי מוצא.
-    expect(documentUserStateDescription('failed')).toContain('לשייך ידנית');
-  });
-
-  it('מסמך שמעולם לא נשלח לעיבוד לא מתואר כמסמך שקוראים אותו כרגע', () => {
-    // הקיבוץ עצמו הוא של הבעלים: `unprocessed` יושב עם השלושה. אבל המשפט "המערכת קוראת את
-    // המסמך" אינו נכון עליו — שום עבודה לא רצה — ולכן ההסבר שלו נפרד מהתווית המשותפת.
-    expect(documentUserState('unprocessed')).toBe('intake');
-    expect(documentUserStateDescription('queued')).toBe('המערכת קוראת את המסמך');
-    expect(documentUserStateDescription('unprocessed')).not.toBe(documentUserStateDescription('queued'));
-    expect(documentUserStateDescription('unprocessed')).toContain('טרם נשלח');
-  });
-
-  it('גווני התג נשארים בחמש הקטגוריות הקיימות ומתאימים למשמעות', () => {
-    const tones = new Set(Object.values(DOCUMENT_PROCESSING_STAGE_META).map(({ tone }) => tone));
-    for (const { tone } of Object.values(DOCUMENT_USER_STATE_META)) expect(tones).toContain(tone);
-    expect(DOCUMENT_USER_STATE_META.review.tone).toBe('await');
-    expect(DOCUMENT_USER_STATE_META.completed.tone).toBe('done');
-    expect(DOCUMENT_USER_STATE_META.failed.tone).toBe('alert');
-  });
-});
-
-describe('"שויך" חייב לומר את האמת על השיוך', () => {
-  it('מסמך שהעיבוד שלו הושלם ושויך אומר לאן', () => {
-    expect(documentUserStateLabel('completed', onInvoice)).toBe('שויך לחשבונית');
-    expect(documentUserStateLabel('completed', onReceipt)).toBe('שויך לקבלת סחורה');
-  });
-
-  it('מסמך שהעיבוד שלו הושלם אך לא שויך אינו מוצג כמשויך', () => {
-    // עמודת התיוק באותה שורה אומרת "לא משויך". תג עיבוד שיאמר "שויך" לצידה הופך את המסך
-    // לסתירה עצמית — וזה בדיוק המצב היחיד שמייצר `completed` היום (0048: אישור מחירון
-    // משאיר את המסמך ב-inbox).
-    expect(documentUserStateLabel('completed', unfiled)).not.toContain('שויך');
-    expect(documentUserStateLabel('completed', unfiled)).toBe('נקרא');
-    expect(documentUserStateLabel('completed', archived)).toBe('נקרא');
-  });
-
-  it('בלי שורת מסמך נופלים לתווית המצב, לא לניחוש על היעד', () => {
-    expect(documentUserStateLabel('completed', null)).toBe('שויך');
-    expect(documentUserStateLabel('review', onInvoice)).toBe('בבדיקה');
-    expect(documentUserStateLabel('unprocessed', onInvoice)).toBe('נקלט');
-  });
-});
-
-describe('הסינון מדבר באותם ארבעה מצבים', () => {
-  it('ארבע אפשרויות, באותן מילים שעל התגים', () => {
-    expect(DOCUMENT_USER_STATE_FILTERS.map(({ value }) => value))
-      .toEqual(['intake', 'review', 'completed', 'failed']);
-    expect(DOCUMENT_USER_STATE_FILTERS.map(({ label }) => label))
-      .toEqual(['נקלט', 'בבדיקה', 'שויך', 'לא נקרא']);
-  });
-
-  it('כתובת ישנה עם שלב הנדסי נשארת סינון בעל משמעות', () => {
-    // `?processing=extracted` שרד ניווט לפני השינוי הזה. הוא חייב להמשיך לסנן משהו הגיוני —
-    // הקבוצה שמכילה את השלב — ולא להציג רשימה ריקה בלי הסבר.
-    const expected: Record<DocumentProcessingStage, DocumentUserState> = {
-      unprocessed: 'intake', queued: 'intake', processing: 'intake', extracted: 'intake',
-      review: 'review', completed: 'completed', failed: 'failed',
-    };
-    for (const stage of STAGES) expect(documentUserStateFromParam(stage)).toBe(expected[stage]);
-  });
-
-  it('ערך שאינו מוכר אינו מסנן דבר', () => {
-    expect(documentUserStateFromParam('banana')).toBeNull();
-    expect(documentUserStateFromParam('')).toBeNull();
-    expect(documentUserStateFromParam(null)).toBeNull();
-  });
-
-  // `banana` נכשל נכון גם עם `in`, ולכן הבדיקה שמעליו החמיצה מחלקה שלמה: `in` מטפס על שרשרת
-  // הפרוטוטייפ, ולכן `?processing=toString` חזר כאילו היה מצב תקין — הבקרה הציגה "הכול" מעל
-  // רשימה מסוננת לאפס שורות. בקרה שמכריזה על מסנן שאינו מופעל היא בדיוק השקר שהמסך הזה נועד
-  // להפסיק.
   it.each(['toString', 'constructor', 'hasOwnProperty', 'valueOf', '__proto__', 'isPrototypeOf'])(
-    'תכונת פרוטוטייפ (%s) אינה מצב, ואינה מסננת דבר',
-    (key) => { expect(documentUserStateFromParam(key)).toBeNull(); },
+    'תכונת פרוטוטייפ (%s) אינה מצב סינון',
+    (key) => { expect(documentStatusFilterFromParam(key)).toBeNull(); },
   );
 
-  it('הבקרה עצמה מציגה ארבעה מצבים ועוד "הכול" — לא שבעה שלבים', () => {
-    // הטענה על המערך המיוצא אינה טענה על הבקרה: החלפת ה-JSX חזרה לשבעת השלבים לא הפילה דבר,
-    // ו-`selectOption('failed')` בשער הדפדפן עובר מול שתי הרשימות גם יחד.
-    render(<ProcessingFilterSelect value="all" onChange={() => {}} />);
-    const select = screen.getByTestId('documents-processing-filter');
-    const options = [...select.querySelectorAll('option')];
-    expect(options.map((option) => option.value)).toEqual(['all', 'intake', 'review', 'completed', 'failed']);
-    expect(options.map((option) => option.textContent)).toEqual(['הכול', 'נקלט', 'בבדיקה', 'שויך', 'לא נקרא']);
+  it('המסנן בודק את התוצאה הקנונית, לא את השלב הגולמי', () => {
+    const completedInbox = documentUiStatus({ status: 'completed', document: unfiled });
+    expect(completedInbox.label).toBe('לא משויך');
+    expect(documentMatchesStatusFilter(completedInbox, 'unassigned')).toBe(true);
+    expect(documentMatchesStatusFilter(completedInbox, 'assigned')).toBe(false);
   });
-});
 
-describe('סדר הדחיפות בעמודת המצב', () => {
-  // §12: המסך אמור לענות תוך שניות מה דורש טיפול. מיון לפי שם המצב נתן
-  // שויך → לא נקרא → נקלט → בבדיקה — קיבוץ נכון, דירוג חסר משמעות.
-  it('מה שממתין לאדם עולה ראשון, ומה שהסתיים אחרון', () => {
-    const ranked = [...STAGES].sort((a, b) => documentUserStateUrgency(a) - documentUserStateUrgency(b));
-    expect(ranked.map(documentUserState)).toEqual([
-      'review', 'failed', 'intake', 'intake', 'intake', 'intake', 'completed',
-    ]);
-    expect(documentUserStateUrgency('review')).toBeLessThan(documentUserStateUrgency('failed'));
-    expect(documentUserStateUrgency('failed')).toBeLessThan(documentUserStateUrgency('queued'));
-    expect(documentUserStateUrgency('queued')).toBeLessThan(documentUserStateUrgency('completed'));
+  it('מסמך בארכיון אינו לא-משויך ואינו משויך ליעד עסקי', () => {
+    const archived = documentUiStatus({
+      status: 'completed',
+      document: { entity_type: 'archive', entity_id: null },
+    });
+    expect(archived).toMatchObject({ state: 'historical', label: 'אורכב', countsAsUnassigned: false });
+    expect(documentMatchesStatusFilter(archived, 'unassigned')).toBe(false);
+    expect(documentMatchesStatusFilter(archived, 'assigned')).toBe(false);
   });
 });
 

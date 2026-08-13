@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -10,6 +10,7 @@ import { SUPABASE_URL } from '../test/msw/handlers';
 import { createAppQueryClient } from '../lib/query/client';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import { ToastProvider } from '../components/ui';
+import { enqueueUploadCenterBatch, resetUploadCenterForTests } from '../components/UploadCenter';
 
 /**
  * The gallery and the archive partition the register: an archived document belongs to exactly one
@@ -88,7 +89,7 @@ const documents = http.get(`${SUPABASE_URL}/rest/v1/documents`, ({ request }) =>
 // unstubbed endpoint would make these tests pass or fail on timing.
 const quietTraffic = [
   http.get(`${SUPABASE_URL}/rest/v1/suppliers`, () => HttpResponse.json([])),
-  http.get(`${SUPABASE_URL}/rest/v1/document_processing_jobs`, () => HttpResponse.json([])),
+  http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_processing_statuses`, () => HttpResponse.json([])),
   http.get(`${SUPABASE_URL}/rest/v1/document_auto_actions`, () => HttpResponse.json([])),
 ];
 
@@ -121,6 +122,25 @@ describe('חלוקת המסמכים בין התיקייה לארכיון', () =>
     renderGallery({});
     expect(await screen.findAllByText(FILED)).not.toHaveLength(0);
     expect(screen.queryAllByText(ARCHIVED)).toHaveLength(0);
+  });
+});
+
+describe('מרכז ההעלאות בתיקיית המסמכים', () => {
+  it('מציג רשומת תור גלובלית גם לאחר שמודאל ההעלאה נסגר', async () => {
+    resetUploadCenterForTests();
+    await act(async () => {
+      await enqueueUploadCenterBatch([
+        new File(['pdf'], 'queued-from-modal.pdf', { type: 'application/pdf' }),
+      ], async (_file, context) => {
+        context.markRegistered('doc-from-modal');
+      });
+    });
+    server.use(documents, ...quietTraffic);
+    renderGallery({});
+
+    const center = await screen.findByRole('region', { name: 'מרכז ההעלאות' });
+    expect(within(center).getByText('queued-from-modal.pdf')).toBeInTheDocument();
+    resetUploadCenterForTests();
   });
 });
 

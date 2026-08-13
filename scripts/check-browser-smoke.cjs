@@ -42,22 +42,18 @@ const OCR_DELIVERY_DOCUMENT_ID = '97000000-0000-4000-8000-000000000005';
 const OCR_CREDIT_DOCUMENT_ID = '97000000-0000-4000-8000-000000000003';
 const OCR_PAYMENT_DOCUMENT_ID = '97000000-0000-4000-8000-000000000002';
 const OCR_PRICE_LIST_DOCUMENT_ID = '97000000-0000-4000-8000-000000000007';
-// [documentId, internal stage, what a person reads]. Task D1 collapsed seven pipeline stages into
-// four human states on the badge and kept the stages themselves on `data-stage`, so this fixture
-// now measures BOTH layers: the engineering state the database really holds, and the Hebrew a
-// kitchen manager acts on. Four of the six say "נקלט"/"נקרא" where they used to name a queue
-// position — that is the change, not a regression.
-//
-// The completed row reads "נקרא" and not "שויך" because the fixture files every document as
-// 'inbox' (prepare-browser-fixture.cjs:76): the job finished, nothing was filed. The filing column
-// on that same row says "לא משויך", and the two must not contradict each other.
+// [documentId, internal stage, what a person reads]. The badge now follows the canonical document
+// status precedence rather than showing processing and filing as two competing claims. The raw
+// stage remains on `data-stage` for diagnostics; the Hebrew label says the single action-relevant
+// truth. In particular, a completed inbox row is "לא משויך", while an active row is only
+// "ממתין לעיבוד"/"בעיבוד" and never simultaneously unassigned.
 const OCR_STAGE_FIXTURES = [
-  ['97000000-0000-4000-8000-000000000001', 'unprocessed', 'נקלט'],
-  ['97000000-0000-4000-8000-000000000002', 'queued', 'נקלט'],
-  ['97000000-0000-4000-8000-000000000003', 'processing', 'נקלט'],
-  ['97000000-0000-4000-8000-000000000004', 'review', 'בבדיקה'],
-  ['97000000-0000-4000-8000-000000000005', 'completed', 'נקרא'],
-  ['97000000-0000-4000-8000-000000000006', 'failed', 'לא נקרא'],
+  ['97000000-0000-4000-8000-000000000001', 'unprocessed', 'לא משויך'],
+  ['97000000-0000-4000-8000-000000000002', 'queued', 'ממתין לעיבוד'],
+  ['97000000-0000-4000-8000-000000000003', 'processing', 'בעיבוד'],
+  ['97000000-0000-4000-8000-000000000004', 'review', 'נדרשת בדיקה'],
+  ['97000000-0000-4000-8000-000000000005', 'completed', 'לא משויך'],
+  ['97000000-0000-4000-8000-000000000006', 'failed', 'העיבוד נכשל'],
 ];
 
 const homes = {
@@ -2451,17 +2447,18 @@ async function priceListSupplierDoor(browser) {
   }
 }
 
-/** The four states a person may read, plus the three that `completed` resolves to once the row
- *  actually landed somewhere (`documentUserStateLabel`). Nothing else may appear on the badge. */
+/** The canonical labels a person may read on a document status badge. Processing and filing are
+ *  one precedence ladder here, so an active inbox document never renders a second "לא משויך" badge. */
 const DOCUMENT_HUMAN_STATE_LABELS = [
-  'נקלט', 'בבדיקה', 'שויך', 'לא נקרא', 'נקרא', 'שויך לחשבונית', 'שויך לקבלת סחורה',
+  'עיבוד תקוע', 'העיבוד נכשל', 'ממתין לעיבוד', 'בעיבוד', 'נדרשת בדיקה', 'לא משויך',
+  'שויך אוטומטית', 'משויך', 'שויך לחשבונית', 'שויך לקבלת סחורה',
 ];
 
-/** The seven engineering labels D1 took off the badge — `DOCUMENT_PROCESSING_STAGE_META`. They are
- *  still correct English-side vocabulary and still shown to whoever opens פרטים טכניים; what they
- *  may not be is what a kitchen manager reads on the documents folder. */
+/** Pipeline-only labels that still must not leak into the everyday document surface. Labels such
+ *  as "בעיבוד" are intentionally absent here now: the canonical status model uses them as the
+ *  single user-facing truth while a job is active. */
 const DOCUMENT_ENGINEERING_LABELS = [
-  'טרם נשלח לעיבוד', 'ממתין לעיבוד', 'בעיבוד', 'ממתין לפירוש', 'דורש בדיקה', 'הושלם', 'נכשל',
+  'טרם נשלח לעיבוד', 'ממתין לפירוש', 'דורש בדיקה',
 ];
 
 /**
@@ -2470,11 +2467,8 @@ const DOCUMENT_ENGINEERING_LABELS = [
  *
  * Three things are asserted that no unit test can:
  *
- *  1. The *rendered* state filter offers four human states. Pinning the exported array is not the
- *     same as pinning the control, and a check that only calls `selectOption('failed')` passes
- *     against both this list and the seven it replaced.
- *  2. Every badge on the loaded page reads one of the seven permitted words. This is the assertion
- *     that fails the moment `documentUserStateLabel` is reverted.
+ *  1. The *rendered* state filter uses the same canonical precedence groups as the badges.
+ *  2. Every badge on the loaded page reads one of the permitted canonical labels.
  *  3. The proposals panel prints no percentage, and the number is one click away and no closer.
  *
  * Deliberately NOT scanned: the raw stage tokens over the page text. Five of the six fixture
@@ -2504,8 +2498,9 @@ async function documentVocabulary(browser) {
 
     const filterOptions = (await page.locator('[data-testid="documents-processing-filter"] option').allTextContents())
       .map((label) => label.trim());
-    assert.deepEqual(filterOptions, ['הכול', 'נקלט', 'בבדיקה', 'שויך', 'לא נקרא'],
-      `the state filter still offers the machine's stages: ${JSON.stringify(filterOptions)}`);
+    assert.deepEqual(filterOptions, [
+      'הכול', 'עיבוד תקוע', 'העיבוד נכשל', 'בעיבוד או בהמתנה', 'נדרשת בדיקה', 'לא משויך', 'משויך',
+    ], `the state filter diverged from canonical document statuses: ${JSON.stringify(filterOptions)}`);
 
     const badges = (await page.locator('[data-testid="document-processing-status"]:visible').allInnerTexts())
       .map((label) => label.trim());
@@ -2598,10 +2593,10 @@ const AUTO_ACTION_REASON = 'בדיקת שער: החשבונית שנוצרה א�
  * that the row stops claiming to be filed afterwards. The server's own refusals (role, second
  * reversal, allocated money) are `p14_apply_interpretation.sql`'s subject, not a browser's.
  *
- * What the mock cannot make true, said out loud: the document row itself is still `entity_type =
- * 'inbox'` in the database, so the two manual שיוך actions stay on the menu beside the undo. In a
- * real auto-application the filing would have moved the row and they would be gone. Nothing below
- * asserts the shape of that menu — only that the undo is IN it.
+ * The document route mirrors the database transition as well as the autonomy ledger: before the
+ * reversal the row is filed to the generated invoice; after the mocked RPC it is back in `inbox`.
+ * A live auto-action beside an inbox document is impossible under migration 0077 and would make
+ * the screen's two sources contradict each other.
  */
 async function machineFiledDocument(browser) {
   const context = await browser.newContext({
@@ -2609,6 +2604,16 @@ async function machineFiledDocument(browser) {
   });
   let reverted = false;
   const revertCalls = [];
+  await context.route('**/rest/v1/documents?**', async (route) => {
+    const response = await route.fetch();
+    const rows = await response.json();
+    const documents = Array.isArray(rows) && !reverted
+      ? rows.map((row) => row.id === AUTO_ACTION_DOCUMENT_ID
+        ? { ...row, entity_type: 'invoice', entity_id: AUTO_ACTION_INVOICE_ID }
+        : row)
+      : rows;
+    return route.fulfill({ response, json: documents });
+  });
   await context.route('**/rest/v1/document_auto_actions?**', (route) => route.fulfill({
     status: 200,
     headers: jsonHeaders,
@@ -2688,10 +2693,16 @@ async function machineFiledDocument(browser) {
       return !!main && !(main.textContent || '').includes('שויך אוטומטית');
     }, null, { timeout: 20_000 })
       .catch(() => { throw new Error('the machine-filing badge survived its own reversal'); });
-    // Scoped to THAT row, not to the page: every other fixture document already reads לא משויך,
-    // so a page-wide check would pass without the reversed row having changed at all.
+    // Scoped to THAT row and wait for both refetches: the auto-action may disappear before the
+    // document query has returned the row to inbox.
     const reversedRow = page.locator('table tbody tr').filter({ hasText: AUTO_ACTION_DOCUMENT_FILE });
     assert.equal(await reversedRow.count(), 1, `the reversed document is not on exactly one table row`);
+    await page.waitForFunction((fileName) => {
+      const row = [...document.querySelectorAll('table tbody tr')]
+        .find((node) => (node.textContent || '').includes(fileName));
+      const text = row?.textContent || '';
+      return text.includes('לא משויך') && !text.includes('שויך אוטומטית');
+    }, AUTO_ACTION_DOCUMENT_FILE, { timeout: 20_000 });
     const rowText = await reversedRow.evaluate((node) => node.textContent || '');
     assert(rowText.includes('לא משויך'), `the reversed document did not return to the folder as unfiled: ${rowText}`);
     assert.equal(/ברמת ביטחון \d/.test(await page.locator('#main').evaluate((node) => node.textContent || '')), false,

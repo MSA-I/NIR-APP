@@ -24,14 +24,26 @@ import { listPendingPhotos } from '../lib/offlineDb';
 export default function OfflineQueueStatus() {
   const queue = useOfflineQueue();
   const lastAutoAttempt = useRef('');
-  const [photoProblems, setPhotoProblems] = useState<{ id: number; fileName: string; reason: string; attempts: number }[]>([]);
+  const [photoProblems, setPhotoProblems] = useState<{
+    id: number;
+    fileName: string;
+    reason: string;
+    attempts: number;
+    needsAttention: boolean;
+  }[]>([]);
 
   async function refreshPhotoProblems() {
     try {
       const photos = await listPendingPhotos();
       setPhotoProblems(photos.flatMap((photo) => (
         photo.id != null && photo.lastError
-          ? [{ id: photo.id, fileName: photo.fileName, reason: photo.lastError, attempts: photo.attempts ?? 0 }]
+          ? [{
+            id: photo.id,
+            fileName: photo.fileName,
+            reason: photo.lastError,
+            attempts: photo.attempts ?? 0,
+            needsAttention: photo.state === 'needs_attention',
+          }]
           : []
       )));
     } catch {
@@ -47,8 +59,8 @@ export default function OfflineQueueStatus() {
     void refreshPhotoProblems();
   }, [queue.pendingUploads]);
 
-  async function syncPhotos(includeNeedsAttention = false) {
-    await syncPendingDocumentPhotos(includeNeedsAttention);
+  async function syncPhotos() {
+    await syncPendingDocumentPhotos();
     await refreshPhotoProblems();
   }
 
@@ -66,9 +78,14 @@ export default function OfflineQueueStatus() {
 
   async function syncAll() {
     await offlineQueue.sync();
-    await syncPhotos(true);
+    await syncPhotos();
   }
   const failures = queue.actions.filter((action) => action.reason && action.state !== 'pending');
+  const needsAttentionUploads = photoProblems.filter((photo) => photo.needsAttention).length;
+  const syncableUploads = Math.max(0, queue.pendingUploads - needsAttentionUploads);
+  const hasSyncableWork = syncableUploads > 0 || queue.actions.some(
+    (action) => action.state !== 'conflict' && action.state !== 'needs_attention',
+  );
   const nothingToSay = queue.online
     && queue.storageAvailable
     && !queue.sessionExpired
@@ -89,9 +106,15 @@ export default function OfflineQueueStatus() {
           <span className="num" data-testid="offline-pending-actions">{queue.pendingActions}</span>
         </span>
         <span>
-          העלאות ממתינות:{' '}
-          <span className="num" data-testid="offline-pending-uploads">{queue.pendingUploads}</span>
+          העלאות ממתינות לסנכרון:{' '}
+          <span className="num" data-testid="offline-pending-uploads">{syncableUploads}</span>
         </span>
+        {needsAttentionUploads > 0 && (
+          <span className="text-alert-fg">
+            העלאות דורשות טיפול:{' '}
+            <span className="num" data-testid="offline-attention-uploads">{needsAttentionUploads}</span>
+          </span>
+        )}
         <span>
           סנכרון מוצלח אחרון:{' '}
           <span className="num" data-testid="offline-last-sync">
@@ -100,7 +123,7 @@ export default function OfflineQueueStatus() {
         </span>
         {queue.syncing && <span className="text-ink-soft">מסנכרן…</span>}
         <button type="button" className="btn-ghost ms-auto min-h-11 text-xs"
-          disabled={queue.syncing || !queue.online}
+          disabled={queue.syncing || !queue.online || !hasSyncableWork}
           onClick={() => void syncAll()}>
           <RefreshCw size={13} /> ניסיון סנכרון עכשיו
         </button>
@@ -143,7 +166,7 @@ export default function OfflineQueueStatus() {
         <ul className="mt-1.5 space-y-1">
           {photoProblems.map((photo) => (
             <li key={photo.id} className="text-alert-fg">
-              {photo.fileName}: {photo.reason}{photo.attempts > 0 && <> <span className="num">(ניסיונות: {photo.attempts})</span></>}
+              {photo.fileName}: {photo.reason}{photo.needsAttention && ' נדרשת התערבות; סנכרון כללי לא ינסה שוב.'}{photo.attempts > 0 && <> <span className="num">(ניסיונות: {photo.attempts})</span></>}
             </li>
           ))}
         </ul>

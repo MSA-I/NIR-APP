@@ -21,11 +21,30 @@ export interface DocumentUiStatus extends StatusMeta {
   elapsedSeconds: number | null;
 }
 
+export type DocumentStatusFilter =
+  | 'stuck'
+  | 'failed'
+  | 'processing'
+  | 'review'
+  | 'unassigned'
+  | 'assigned';
+
+export const DOCUMENT_STATUS_FILTERS: ReadonlyArray<{ value: DocumentStatusFilter; label: string }> = [
+  { value: 'stuck', label: 'עיבוד תקוע' },
+  { value: 'failed', label: 'העיבוד נכשל' },
+  { value: 'processing', label: 'בעיבוד או בהמתנה' },
+  { value: 'review', label: 'נדרשת בדיקה' },
+  { value: 'unassigned', label: 'לא משויך' },
+  { value: 'assigned', label: 'משויך' },
+];
+
+const DOCUMENT_STATUS_FILTER_VALUES = new Set(DOCUMENT_STATUS_FILTERS.map(({ value }) => value));
+
 type FilingDocument = Pick<DocumentRow, 'entity_type' | 'entity_id'>;
 type ProcessingJob = Pick<
   DocumentProcessingJob,
   'status' | 'attempt_count' | 'lease_until' | 'created_at' | 'updated_at' | 'last_error_code'
-> & { is_stuck?: boolean | null; stuck_reason?: string | null };
+> & { queue_age_seconds?: number | null; is_stuck?: boolean | null; stuck_reason?: string | null };
 
 export interface DocumentStatusInput {
   status?: DocumentProcessingStatus | 'unprocessed' | 'processing' | null;
@@ -76,6 +95,10 @@ function isUnassigned(document: FilingDocument | null | undefined): boolean {
   return document?.entity_type === 'inbox';
 }
 
+function isArchived(document: FilingDocument | null | undefined): boolean {
+  return document?.entity_type === 'archive';
+}
+
 function assignedLabel(document: FilingDocument | null | undefined, autoAssigned: boolean): string {
   if (autoAssigned) return 'שויך אוטומטית';
   if (document?.entity_type === 'invoice') return 'שויך לחשבונית';
@@ -115,7 +138,7 @@ function result(
 }
 
 export function isSupersededProcessingFailure(code: string | null | undefined): boolean {
-  return code === 'superseded_for_reprocess';
+  return code === 'superseded_for_reprocess' || code === 'superseded_for_stuck_recovery';
 }
 
 export function documentProcessingFailureText(
@@ -146,12 +169,21 @@ export function isDocumentProcessingStuck(input: DocumentStatusInput): boolean {
   const status = input.job?.status ?? input.status;
   if (!status || !ACTIVE_RAW_STATUSES.has(status)) return false;
   const evaluatedAt = input.evaluatedAt ?? Date.now();
-  const jobAge = input.queueAgeSeconds ?? ageSeconds(input.job?.created_at, evaluatedAt);
+  const jobAge = input.queueAgeSeconds ?? input.job?.queue_age_seconds
+    ?? ageSeconds(input.job?.created_at, evaluatedAt);
   const idleAge = ageSeconds(input.job?.updated_at, evaluatedAt);
   const leaseAge = ageSeconds(input.job?.lease_until, evaluatedAt);
   const expiredLease = !!input.job?.lease_until
     && Date.parse(input.job.lease_until) <= evaluatedAt;
   const attempts = input.job?.attempt_count ?? 0;
+
+  // Mirrors 0132's recovery grace when the server verdict is temporarily unavailable during a
+  // rollout: a live or only-recently-expired worker lease gets five minutes before age/attempt
+  // thresholds may call it stuck. The server value above still wins whenever 0130 is installed.
+  if (status === 'leased' && input.job?.lease_until) {
+    const leaseUntil = Date.parse(input.job.lease_until);
+    if (Number.isFinite(leaseUntil) && leaseUntil > evaluatedAt - 5 * 60 * 1000) return false;
+  }
 
   return attempts >= DOCUMENT_STUCK_ATTEMPT_COUNT
     || (jobAge !== null && jobAge >= DOCUMENT_STUCK_JOB_AGE_SECONDS)
@@ -169,7 +201,8 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
   }
   const status = input.job?.status ?? input.status ?? 'unprocessed';
   const evaluatedAt = input.evaluatedAt ?? Date.now();
-  const elapsed = input.queueAgeSeconds ?? ageSeconds(input.job?.created_at, evaluatedAt);
+  const elapsed = input.queueAgeSeconds ?? input.job?.queue_age_seconds
+    ?? ageSeconds(input.job?.created_at, evaluatedAt);
 
   if (status === 'failed' && isSupersededProcessingFailure(input.job?.last_error_code)) {
     return result('historical', 'הוחלף בניסיון חדש', 'idle', documentProcessingFailureText(input.job?.last_error_code));
@@ -195,6 +228,9 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
   }
   if (status === 'review') {
     return result('review', 'נדרשת בדיקה', 'await', 'העיבוד הסתיים וממתין להחלטה אנושית');
+  }
+  if (isArchived(input.document)) {
+    return result('historical', 'אורכב', 'idle', 'המסמך נקרא והועבר לארכיון ללא יעד עסקי');
   }
   if (isUnassigned(input.document)) {
     return result('unassigned', 'לא משויך', 'await', 'המסמך אינו בעיבוד פעיל ועדיין לא שויך ליעד עסקי');
@@ -224,4 +260,25 @@ export function documentMatchesFilingFilter(
   if (filing === 'all') return true;
   if (filing === 'unfiled') return status.countsAsUnassigned;
   return status.state === 'assigned' || status.state === 'completed';
+}
+
+/**
+ * Old URLs used raw pipeline stages. They are ambiguous under canonical precedence: a queued job
+ * may be stuck, a failed job may be superseded history, and an unprocessed document may already
+ * be assigned. Therefore only current canonical filter tokens survive; old tokens fall back to
+ * "all" instead of showing a control that claims a filter different from the rendered badges.
+ */
+export function documentStatusFilterFromParam(value: string | null): DocumentStatusFilter | null {
+  if (!value) return null;
+  if (DOCUMENT_STATUS_FILTER_VALUES.has(value as DocumentStatusFilter)) return value as DocumentStatusFilter;
+  return null;
+}
+
+export function documentMatchesStatusFilter(
+  status: DocumentUiStatus,
+  filter: DocumentStatusFilter | 'all',
+): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'assigned') return status.state === 'assigned' || status.state === 'completed';
+  return status.state === filter;
 }

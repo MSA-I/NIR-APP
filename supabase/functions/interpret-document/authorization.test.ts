@@ -7,6 +7,9 @@ import {
   applyPriceListInterpretationDecision,
   decideOnInterpretation,
   type DecisionRpcClient,
+  recoverInterpretationFromEgress,
+  recoveredInterpretationDecisionContext,
+  recoveryActorFromAudit,
   resumeExistingInterpretation,
   type RpcBuilder,
   type RpcResult,
@@ -28,6 +31,8 @@ const SUPPLIER = "33333333-3333-4333-8333-333333333333";
 const DOCUMENT = "44444444-4444-4444-8444-444444444444";
 const JOB = "55555555-5555-4555-8555-555555555555";
 const CHECKSUM = "etag:0123456789abcdef";
+const OWNER = "77777777-7777-4777-8777-777777777777";
+const JOB_UPDATED_AT = "2026-08-13T07:08:09.123Z";
 
 function context() {
   return {
@@ -56,6 +61,7 @@ function context() {
       requested_by: ACTOR,
       input_checksum: CHECKSUM,
       contract_version: "1",
+      updated_at: JOB_UPDATED_AT,
     },
     extraction: {
       id: "66666666-6666-4666-8666-666666666666",
@@ -226,6 +232,65 @@ function recordingApply(): { apply: ApplyDecision; calls: string[][] } {
   };
 }
 
+Deno.test("evidence recovery keeps the historical provider actor separate from the verified recovery owner", async () => {
+  const evidenceLeaseId = "88888888-8888-4888-8888-888888888888";
+  const hash = "a".repeat(64);
+  const { client, calls } = recordingClient({
+    data: {
+      interpretation_id: INTERPRETATION,
+      job_id: JOB,
+      evidence_lease_id: evidenceLeaseId,
+      evidence_sha256: hash,
+      provider_result_sha256: "b".repeat(64),
+      idempotent: true,
+      recovered_from_failed: false,
+    },
+    error: null,
+  });
+  const decision = recordingApply();
+
+  await recoverInterpretationFromEgress(client, {
+    jobId: JOB,
+    extractionId: context().extraction.id,
+    evidenceActorId: ACTOR,
+    decisionActorId: OWNER,
+    evidenceLeaseId,
+    evidenceSha256: hash,
+    isPriceList: false,
+    apply: decision.apply,
+  });
+
+  if (
+    calls.length !== 1 ||
+    calls[0][0] !== "service_recover_document_interpretation_from_egress" ||
+    calls[0][1].p_actor_id !== ACTOR
+  ) {
+    throw new Error(`provider evidence was rebound to the recovery owner: ${JSON.stringify(calls)}`);
+  }
+  if (
+    decision.calls.length !== 1 || decision.calls[0][0] !== JOB ||
+    decision.calls[0][1] !== INTERPRETATION || decision.calls[0][2] !== OWNER
+  ) {
+    throw new Error(`the verified recovery owner was not used for the decision: ${JSON.stringify(decision.calls)}`);
+  }
+});
+
+Deno.test("recovered price-list evidence uses one canonical kind and keeps its historical actor", () => {
+  const decision = recoveredInterpretationDecisionContext({
+    storedIsPriceList: false,
+    interpretedDocumentType: "price_list",
+    isDeliveryNote: false,
+    evidenceActorId: ACTOR,
+    decisionActorId: OWNER,
+  });
+
+  if (!decision.isPriceList || decision.decisionActorId !== ACTOR) {
+    throw new Error(
+      `recovered price-list decision drifted from its evidence actor: ${JSON.stringify(decision)}`,
+    );
+  }
+});
+
 Deno.test("the decision is called by name, bounded, with the interpretation and the actor", async () => {
   const { client, calls, signals } = recordingClient({
     data: { outcome: "queued_for_review", reason_code: "autonomy_disabled" },
@@ -380,6 +445,86 @@ Deno.test("automatic interpretation derives one actor from the exact job and doc
 
   value.job.requested_by = "99999999-9999-4999-8999-999999999999";
   assertFalse(automaticInterpretationContextAllowed(value.job, value.document));
+});
+
+Deno.test("stuck recovery selects the verified owner for an inactive uploader without provider evidence", () => {
+  const value = context();
+  const rows = [{
+    action: "document_processing_stuck_recovered",
+    user_id: OWNER,
+    new_values: {
+      recovery_kind: "stuck",
+      outcome: "resume_interpretation",
+      result_job_status: value.job.status,
+      result_job_updated_at: value.job.updated_at,
+    },
+  }];
+
+  if (recoveryActorFromAudit(rows, value.job) !== OWNER) {
+    throw new Error("the current recovery owner was not selected for interpretation resume");
+  }
+});
+
+Deno.test("recovery actor evidence is bound to the exact current job generation", () => {
+  const value = context();
+  const current = {
+    action: "document_processing_stuck_recovered",
+    user_id: OWNER,
+    new_values: {
+      recovery_kind: "stuck",
+      outcome: "interpretation_recovered",
+      result_job_status: value.job.status,
+      result_job_updated_at: value.job.updated_at,
+    },
+  };
+
+  const rejected = [
+    [],
+    [{ ...current, user_id: "not-a-uuid" }],
+    [{ ...current, action: "document_processing_reprocessed" }],
+    [{ ...current, new_values: { ...current.new_values, recovery_kind: "manual" } }],
+    [{ ...current, new_values: { ...current.new_values, outcome: "requeued" } }],
+    [{ ...current, new_values: { ...current.new_values, result_job_status: "review" } }],
+    [{
+      ...current,
+      new_values: {
+        ...current.new_values,
+        result_job_updated_at: "2026-08-13T07:08:09.122Z",
+      },
+    }],
+  ];
+
+  for (const rows of rejected) {
+    if (recoveryActorFromAudit(rows, value.job) !== null) {
+      throw new Error(`accepted an unbound recovery actor: ${JSON.stringify(rows)}`);
+    }
+  }
+});
+
+Deno.test("a requeued successor keeps the recovery owner across the later OCR transition", () => {
+  const value = context();
+  const oldJob = "88888888-8888-4888-8888-888888888888";
+  const rows = [{
+    action: "document_processing_reprocessed",
+    user_id: OWNER,
+    new_values: {
+      recovery_kind: "stuck",
+      outcome: "requeued",
+      old_job_id: oldJob,
+      new_job_id: value.job.id,
+      // Deliberately stale: OCR changes the successor status and timestamp after requeue.
+      result_job_status: "failed",
+      result_job_updated_at: "2026-08-13T06:00:00.000Z",
+    },
+  }];
+
+  if (recoveryActorFromAudit(rows, value.job) !== OWNER) {
+    throw new Error("the requeued successor lost its verified recovery owner");
+  }
+  rows[0].new_values.new_job_id = "99999999-9999-4999-8999-999999999999";
+  if (recoveryActorFromAudit(rows, value.job) !== null) {
+    throw new Error("accepted a recovery owner belonging to another successor");
+  }
 });
 
 Deno.test("a price list reaches its separate bounded command", async () => {

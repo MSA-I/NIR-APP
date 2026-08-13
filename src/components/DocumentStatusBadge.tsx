@@ -8,7 +8,8 @@ export function DocumentStatusBadge({ status, ...attributes }: {
   return (
     <>
       <span {...attributes} className={`badge-${status.tone} inline-flex items-center gap-1 ${attributes.className ?? ''}`.trim()}
-        title={status.description} role={status.loading ? 'status' : undefined} aria-live={status.loading ? 'polite' : undefined}>
+        title={status.description} role={status.loading ? 'status' : undefined}
+        aria-live={status.loading ? 'polite' : undefined} aria-busy={status.loading || undefined}>
         {status.loading && <LoaderCircle size={13} className="shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
         {status.state === 'stuck' && <AlertTriangle size={13} className="shrink-0" aria-hidden="true" />}
         {status.label}

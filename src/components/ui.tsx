@@ -688,7 +688,7 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
             is empty the ledger gets a sentence naming the action instead of a forced "asdf". */}
         <button className={danger ? 'btn-danger' : 'btn-primary'} disabled={busy}
           onClick={() => onConfirm(requireReason ? reasonOr(reason, title) : undefined)}>
-          {busy ? <Loader2 size={16} className="animate-spin" /> : confirmLabel}
+          {busy ? <><Loader2 size={16} className="animate-spin" aria-hidden="true" /><span>מעבד…</span></> : confirmLabel}
         </button>
       </div>
     </Modal>

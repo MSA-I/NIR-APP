@@ -334,10 +334,16 @@ export interface DocumentProcessingJob {
   attempt_count: number;
   lease_owner: string | null;
   lease_until: string | null;
+  processing_attempt_id: string | null;
+  processing_attempt_started_at: string | null;
   last_error_code: string | null;
   last_error_message: string | null;
   created_at: string;
   updated_at: string;
+  /** Server-evaluated health fields returned by get_document_processing_statuses. */
+  queue_age_seconds?: number | null;
+  is_stuck?: boolean | null;
+  stuck_reason?: string | null;
 }
 
 export interface DocumentExtraction {

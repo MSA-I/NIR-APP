@@ -1883,16 +1883,20 @@ select smart_document_processing_test.assert(
   private.document_processing_stuck_reason(
     'leased', 1, statement_timestamp() - interval '8 hours', statement_timestamp(),
     statement_timestamp() + interval '1 minute', statement_timestamp()
-  ) = 'active_over_two_hours'
+  ) is null
   and private.document_processing_stuck_reason(
     'leased', 1, statement_timestamp(), statement_timestamp(),
     statement_timestamp() - interval '1 second', statement_timestamp()
+  ) is null
+  and private.document_processing_stuck_reason(
+    'leased', 1, statement_timestamp(), statement_timestamp(),
+    statement_timestamp() - interval '6 minutes', statement_timestamp()
   ) = 'lease_expired'
   and private.document_processing_stuck_reason(
     'failed', 99, statement_timestamp() - interval '8 hours', statement_timestamp(),
     null, statement_timestamp()
   ) is null,
-  'server-side stuck classification drifted for old work, expired lease or terminal state'
+  'server-side stuck classification drifted for live/recent leases, expired lease or terminal state'
 );
 
 begin;
@@ -1935,6 +1939,157 @@ select smart_document_processing_test.assert(
 );
 reset role;
 commit;
+
+-- Stuck current jobs are a separate operations bucket. Adding one expired lease and one active
+-- row older than two hours must not increase the healthy "processing now" number.
+begin;
+select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select public.get_document_operations_metrics(30)::text as metrics
+\gset smart_health_before_
+reset role;
+commit;
+
+insert into public.documents (
+  id, org_id, entity_type, entity_id, storage_path, file_name, mime_type,
+  document_kind, uploaded_by
+) values
+  (
+    '45000000-0000-4000-8000-000000000016',
+    '15000000-0000-4000-8000-000000000001', 'inbox', null,
+    '15000000-0000-4000-8000-000000000001/smart-doc/old-active.pdf',
+    'old-active.pdf', 'application/pdf', 'other',
+    '25000000-0000-4000-8000-000000000001'
+  ),
+  (
+    '45000000-0000-4000-8000-000000000017',
+    '15000000-0000-4000-8000-000000000001', 'inbox', null,
+    '15000000-0000-4000-8000-000000000001/smart-doc/expired-lease.pdf',
+    'expired-lease.pdf', 'application/pdf', 'other',
+    '25000000-0000-4000-8000-000000000001'
+  );
+
+insert into public.document_processing_jobs (
+  id, org_id, document_id, requested_by, status, input_checksum,
+  contract_version, priority, attempt_count, lease_owner, lease_until,
+  processing_attempt_id, processing_attempt_started_at, created_at, updated_at
+) values
+  (
+    '55000000-0000-4000-8000-000000000116',
+    '15000000-0000-4000-8000-000000000001',
+    '45000000-0000-4000-8000-000000000016',
+    '25000000-0000-4000-8000-000000000001',
+    'extracted', 'etag:16161616161616161616161616161616', '1', 100, 1,
+    null, null, '65000000-0000-4000-8000-000000000116',
+    statement_timestamp() - interval '3 hours',
+    statement_timestamp() - interval '3 hours',
+    statement_timestamp() - interval '3 hours'
+  ),
+  (
+    '55000000-0000-4000-8000-000000000117',
+    '15000000-0000-4000-8000-000000000001',
+    '45000000-0000-4000-8000-000000000017',
+    '25000000-0000-4000-8000-000000000001',
+    'leased', 'etag:17171717171717171717171717171717', '1', 100, 1,
+    'expired-health-worker', statement_timestamp() - interval '6 minutes',
+    '65000000-0000-4000-8000-000000000117',
+    statement_timestamp() - interval '5 minutes',
+    statement_timestamp() - interval '5 minutes',
+    statement_timestamp() - interval '5 minutes'
+  );
+
+begin;
+select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select public.get_document_operations_metrics(30)::text as metrics
+\gset smart_health_after_
+reset role;
+commit;
+
+select smart_document_processing_test.assert(
+  (:'smart_health_after_metrics'::jsonb ->> 'documents_stuck')::integer
+      = (:'smart_health_before_metrics'::jsonb ->> 'documents_stuck')::integer + 2
+    and (:'smart_health_after_metrics'::jsonb ->> 'documents_processing')::integer
+      = (:'smart_health_before_metrics'::jsonb ->> 'documents_processing')::integer
+    and (:'smart_health_after_metrics'::jsonb ->> 'documents_waiting')::integer
+      = (:'smart_health_before_metrics'::jsonb ->> 'documents_waiting')::integer,
+  'stuck current jobs leaked into healthy waiting or processing-now metrics'
+);
+
+-- The same tenant-scoped read contract is available to every role that could already select the
+-- job table. Office sees both reasons; another tenant sees neither; accountant remains denied.
+begin;
+select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select smart_document_processing_test.assert(
+  (select count(*) = 2
+          and bool_and(is_stuck)
+          and bool_or(stuck_reason = 'active_over_two_hours')
+          and bool_or(stuck_reason = 'lease_expired')
+   from public.get_document_processing_statuses(array[
+     '45000000-0000-4000-8000-000000000016'::uuid,
+     '45000000-0000-4000-8000-000000000017'::uuid
+   ])),
+  'tenant processing status RPC disagreed with operations health metrics'
+);
+reset role;
+commit;
+
+begin;
+select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000005', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select smart_document_processing_test.assert(
+  not exists (
+    select 1 from public.get_document_processing_statuses(array[
+      '45000000-0000-4000-8000-000000000016'::uuid
+    ])
+  ),
+  'tenant processing status RPC crossed the tenant boundary'
+);
+reset role;
+commit;
+
+begin;
+select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000004', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+do $$
+begin
+  perform public.get_document_processing_statuses(null);
+  raise exception 'expected processing status role rejection';
+exception when sqlstate '42501' then null;
+end
+$$;
+reset role;
+commit;
+
+-- 0130's three browser read doors share one explicit ACL matrix: authenticated may enter the
+-- function and its body narrows the product role; anon, service_role and PUBLIC cannot execute it.
+select smart_document_processing_test.assert(
+  (
+    select bool_and(
+      has_function_privilege('authenticated', signature, 'EXECUTE')
+      and not has_function_privilege('anon', signature, 'EXECUTE')
+      and not has_function_privilege('service_role', signature, 'EXECUTE')
+      and not exists (
+        select 1
+        from pg_catalog.aclexplode(proc.proacl) acl
+        where acl.grantee = 0 and acl.privilege_type = 'EXECUTE'
+      )
+    )
+    from (values
+      ('public.get_document_operations_metrics(integer)'::regprocedure),
+      ('public.get_document_processing_statuses(uuid[])'::regprocedure),
+      ('public.get_document_processing_attempts(uuid,integer)'::regprocedure)
+    ) expected(signature)
+    join pg_catalog.pg_proc proc on proc.oid = expected.signature
+  ),
+  '0130 processing read RPC ACL matrix drifted for authenticated, anon, service role or PUBLIC'
+);
 
 -- No browser role can mutate the immutable queue/extraction ledgers directly.
 begin;

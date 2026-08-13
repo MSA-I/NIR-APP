@@ -225,6 +225,69 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
     await waitFor(() => expect(within(section).getByText('נרשם')).toBeInTheDocument());
   });
 
+  it('keeps a terminal registration failure visibly stored but disables blind retry', async () => {
+    renderCenter();
+    await act(async () => {
+      await enqueueUploadCenterBatch([file('terminal.pdf')], async () => {
+        throw Object.assign(new Error('הקובץ נשמר, אך נדרשת בדיקה.'), {
+          retryable: false,
+          resume: {
+            storagePath: 'org-1/inbox/terminal-key_terminal.pdf',
+            documentId: null,
+            clientUploadKey: 'terminal-key',
+          },
+        });
+      }, { retry: true }).catch(() => {});
+    });
+
+    const entry = entries()[0];
+    expect(entry).toMatchObject({ status: 'stored', storedSafely: true, canRetry: false });
+    const section = screen.getByRole('region', { name: 'מרכז ההעלאות' });
+    expect(within(section).getByText('הועלה אך לא נרשם')).toBeInTheDocument();
+    expect(within(section).getByText('הקובץ נשמר, אך נדרשת בדיקה.')).toBeInTheDocument();
+    expect(within(section).queryByRole('button', { name: /ניסיון חוזר|השלמת רישום|שליחה מחדש לעיבוד/ })).toBeNull();
+  });
+
+  it('labels a retryable post-registration failure as processing-only and never uploads again', async () => {
+    server.use(rest('document_processing_jobs', []));
+    renderCenter();
+    const uploadStep = vi.fn();
+    const registrationStep = vi.fn();
+    const enqueueStep = vi.fn();
+    let registered = false;
+    await act(async () => {
+      await enqueueUploadCenterBatch([file('enqueue.pdf')], async (_item, ctx) => {
+        if (!registered) {
+          uploadStep();
+          registrationStep();
+          registered = true;
+        }
+        ctx.markRegistered('doc-enqueue');
+        enqueueStep();
+        if (enqueueStep.mock.calls.length === 1) throw new TypeError('Failed to fetch');
+      }, {
+        retry: true,
+        classifyFailure: () => ({
+          message: 'הקובץ נשמר ונרשם, אך תשובת התור לא התקבלה.',
+          retryable: true,
+          registered: true,
+          documentId: 'doc-enqueue',
+        }),
+      }).catch(() => {});
+    });
+
+    const section = screen.getByRole('region', { name: 'מרכז ההעלאות' });
+    const retry = within(section).getByRole('button', { name: 'שליחה מחדש לעיבוד' });
+    expect(within(section).getByText('נרשם — העיבוד לא החל')).toBeInTheDocument();
+    await userEvent.click(retry);
+    await waitFor(() => expect(enqueueStep).toHaveBeenCalledTimes(2));
+    expect(uploadStep).toHaveBeenCalledTimes(1);
+    expect(registrationStep).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(within(section).queryByRole('button', {
+      name: 'שליחה מחדש לעיבוד',
+    })).toBeNull());
+  });
+
   it('shows the registered document (link included) when only the processing enqueue failed', async () => {
     renderCenter();
     await act(async () => {
@@ -252,7 +315,7 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
     const link = within(section).getByRole('link', { name: 'מעבר למסמך הרשום' });
     expect(link).toHaveAttribute('href', '/documents/doc-3/review');
     // No retry button (a blind retry could re-upload) — the registered document is the answer.
-    expect(within(section).queryByRole('button', { name: /ניסיון חוזר|השלמת רישום/ })).toBeNull();
+    expect(within(section).queryByRole('button', { name: /ניסיון חוזר|השלמת רישום|שליחה מחדש לעיבוד/ })).toBeNull();
   });
 
   it('marks a mixed finished batch as partially completed', async () => {

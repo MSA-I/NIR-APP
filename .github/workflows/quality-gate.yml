@@ -58,6 +58,31 @@ jobs:
           cache: npm
       - run: npm ci
 
+      - name: Recovery function keeps platform JWT verification enabled
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+
+          const lines = readFileSync('supabase/config.toml', 'utf8').split(/\r?\n/);
+          let section = '';
+          const values = [];
+          for (const line of lines) {
+            const header = line.match(/^\s*\[([^\]]+)]\s*(?:#.*)?$/);
+            if (header) {
+              section = header[1];
+              continue;
+            }
+            if (section !== 'functions.recover-document-processing') continue;
+            const assignment = line.match(/^\s*verify_jwt\s*=\s*(true|false)\s*(?:#.*)?$/i);
+            if (assignment) values.push(assignment[1].toLowerCase() === 'true');
+          }
+          if (values.length !== 1 || values[0] !== true) {
+            throw new Error(
+              '[functions.recover-document-processing] must declare exactly one verify_jwt = true',
+            );
+          }
+          NODE
+
       - name: Interpret-document prompt, provider-failure and authorization contracts
         run: |
           set -euo pipefail
@@ -94,6 +119,26 @@ jobs:
       - name: Document-processing function type contract
         working-directory: supabase/functions/document-processing
         run: npx --yes deno check --config deno.json --lock deno.lock --frozen index.ts
+
+      - name: Stuck document-processing recovery contracts
+        run: |
+          set -euo pipefail
+          RECOVERY_ROOT=supabase/functions/recover-document-processing
+          npx --yes deno test \
+            --config "$RECOVERY_ROOT/deno.json" \
+            --lock "$RECOVERY_ROOT/deno.lock" \
+            --frozen \
+            --allow-read="$RECOVERY_ROOT" \
+            "$RECOVERY_ROOT/contract_test.ts" 2>&1 | tee deno-document-recovery.log
+          grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-document-recovery.log \
+            || { echo 'No document-recovery test completed.'; exit 1; }
+          ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-document-recovery.log \
+            || { echo 'Ignored or skipped recovery cases are not acceptable.'; exit 1; }
+          npx --yes deno check \
+            --config "$RECOVERY_ROOT/deno.json" \
+            --lock "$RECOVERY_ROOT/deno.lock" \
+            --frozen \
+            "$RECOVERY_ROOT/index.ts"
 
       - name: Send-feedback function type contract
         working-directory: supabase/functions/send-feedback

@@ -37,6 +37,257 @@ revoke all on function private.document_processing_stuck_reason(
   text, integer, timestamptz, timestamptz, timestamptz, timestamptz
 ) from public, anon, authenticated, service_role;
 
+-- Keep the operations summary on the same classifier as the attempt list. A stuck current job
+-- is its own mutually-exclusive bucket; it is neither healthy queued work nor work processing
+-- "right now". The extra JSON key is additive, so existing clients keep their response shape.
+create or replace function public.get_document_operations_metrics(
+  p_window_days integer default 30
+) returns jsonb
+language plpgsql
+stable
+-- The private classifier is intentionally not executable by browser roles. This owner-only read
+-- resolver therefore crosses that boundary as definer and repeats the tenant predicate in every
+-- source CTE; RLS is not relied on inside this body.
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_since timestamptz;
+  v_result jsonb;
+begin
+  if auth_org() is null or auth.uid() is null or auth_role() <> 'owner' then
+    raise exception 'not_authorized' using errcode = '42501';
+  end if;
+  if p_window_days is null or p_window_days < 1 or p_window_days > 365 then
+    raise exception 'invalid_window_days' using errcode = '22023';
+  end if;
+  v_since := statement_timestamp() - make_interval(days => p_window_days);
+
+  with jobs as (
+    select j.*
+    from public.document_processing_jobs j
+    where j.org_id = auth_org()
+  ), current_job_rows as (
+    select distinct on (j.document_id) j.*
+    from jobs j
+    order by j.document_id, j.created_at desc, j.id desc
+  ), current_jobs as (
+    select j.*,
+           private.document_processing_stuck_reason(
+             j.status, j.attempt_count, j.created_at, j.updated_at, j.lease_until,
+             statement_timestamp()
+           ) as stuck_reason
+    from current_job_rows j
+  ), timed as (
+    select j.id as job_id, e.duration_ms as extraction_duration_ms,
+           i.duration_ms as interpretation_duration_ms,
+           case when e.duration_ms is not null and i.duration_ms is not null
+                then e.duration_ms + i.duration_ms else null end as total_duration_ms,
+           i.usage
+    from jobs j
+    left join public.document_extractions e
+      on e.org_id = j.org_id and e.job_id = j.id
+    left join public.document_interpretations i
+      on i.org_id = j.org_id and i.job_id = j.id
+    where j.created_at >= v_since
+  ), latest_failure as (
+    select j.last_error_code, j.last_error_message, j.updated_at
+    from jobs j
+    where j.status = 'failed'
+    order by j.updated_at desc, j.id desc
+    limit 1
+  ), latest_interpretation as (
+    select i.provider, i.model, i.prompt_version, i.schema_version, i.created_at
+    from public.document_interpretations i
+    where i.org_id = auth_org()
+    order by i.created_at desc, i.id desc
+    limit 1
+  ), price_counts as (
+    select count(*) filter (where d.outcome = 'auto_applied') as automatically_applied,
+           count(*) filter (where d.outcome = 'partially_applied') as partially_applied,
+           count(*) filter (where d.outcome = 'queued_for_review') as review_required,
+           count(*) filter (where d.reverted_at is not null) as reverted
+    from public.price_list_interpretation_decisions d
+    where d.org_id = auth_org() and d.created_at >= v_since
+  )
+  select jsonb_build_object(
+    'window_days', p_window_days,
+    'documents_waiting', count(*) filter (
+      where j.status = 'queued' and j.stuck_reason is null
+    ),
+    'documents_processing', count(*) filter (
+      where j.status in ('leased', 'extracted', 'interpreting')
+        and j.stuck_reason is null
+    ),
+    'documents_stuck', count(*) filter (where j.stuck_reason is not null),
+    'documents_completed', count(*) filter (where j.status = 'completed'),
+    'documents_review_required', count(*) filter (where j.status = 'review'),
+    'documents_failed', count(*) filter (where j.status = 'failed'),
+    'oldest_queue_age_seconds', (
+      select extract(epoch from (statement_timestamp() - min(created_at)))::bigint
+      from current_jobs
+      where status = 'queued' and stuck_reason is null
+    ),
+    'retry_count', (
+      select coalesce(sum(greatest(attempt_count - 1, 0)), 0)
+      from jobs where created_at >= v_since
+    ),
+    'average_processing_duration_ms', (
+      select avg(total_duration_ms) from timed where total_duration_ms is not null
+    ),
+    'last_failure', (
+      select jsonb_build_object(
+        'code', last_error_code,
+        'message', last_error_message,
+        'at', updated_at
+      ) from latest_failure
+    ),
+    'last_interpretation', (
+      select jsonb_build_object(
+        'provider', provider, 'model', model,
+        'prompt_version', prompt_version, 'schema_version', schema_version,
+        'at', created_at
+      ) from latest_interpretation
+    ),
+    'usage', jsonb_build_object(
+      'input_tokens', (
+        select sum(case when jsonb_typeof(usage -> 'input_tokens') = 'number'
+                        then (usage ->> 'input_tokens')::bigint end)
+        from timed
+      ),
+      'cached_input_tokens', (
+        select sum(case when jsonb_typeof(usage -> 'cached_input_tokens') = 'number'
+                        then (usage ->> 'cached_input_tokens')::bigint end)
+        from timed
+      ),
+      'output_tokens', (
+        select sum(case when jsonb_typeof(usage -> 'output_tokens') = 'number'
+                        then (usage ->> 'output_tokens')::bigint end)
+        from timed
+      ),
+      'cost', null
+    ),
+    'automatically_classified', (
+      select count(*) from public.audit_logs a
+      where a.org_id = auth_org()
+        and a.action = 'document_kind_classified_automatically'
+        and a.created_at >= v_since
+    ),
+    'automatically_applied_documents', (
+      select count(*) from (
+        select a.document_id
+        from public.document_auto_actions a
+        where a.org_id = auth_org() and a.created_at >= v_since
+        union
+        select d.document_id
+        from public.price_list_interpretation_decisions d
+        where d.org_id = auth_org() and d.created_at >= v_since
+          and d.outcome in ('auto_applied', 'partially_applied')
+      ) applied
+    ),
+    'reprocessed_documents', (
+      select count(*) from public.audit_logs a
+      where a.org_id = auth_org()
+        and a.action = 'document_processing_reprocessed'
+        and a.created_at >= v_since
+    ),
+    'price_list_results', (
+      select jsonb_build_object(
+        'automatically_applied', automatically_applied,
+        'partially_applied', partially_applied,
+        'review_required', review_required,
+        'reverted', reverted
+      ) from price_counts
+    ),
+    'last_processing_at', (select max(updated_at) from jobs)
+  ) into v_result
+  from current_jobs j;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_document_operations_metrics(integer)
+  from public, anon, service_role;
+grant execute on function public.get_document_operations_metrics(integer)
+  to authenticated;
+
+comment on function public.get_document_operations_metrics(integer) is
+  'Owner operations summary with mutually exclusive healthy and stuck current-job counts.';
+
+-- Tenant read model for galleries, inbox and upload surfaces. It preserves the job columns those
+-- screens already consume and adds the server verdict; callers no longer need Date.now() to decide
+-- whether an active row is healthy. Null means all rows visible under the existing table policy.
+create function public.get_document_processing_statuses(
+  p_document_ids uuid[] default null
+) returns table (
+  id uuid,
+  org_id uuid,
+  document_id uuid,
+  requested_by uuid,
+  status text,
+  input_checksum text,
+  contract_version text,
+  priority smallint,
+  attempt_count integer,
+  lease_owner text,
+  lease_until timestamptz,
+  processing_attempt_id uuid,
+  processing_attempt_started_at timestamptz,
+  last_error_code text,
+  last_error_message text,
+  created_at timestamptz,
+  updated_at timestamptz,
+  queue_age_seconds bigint,
+  is_stuck boolean,
+  stuck_reason text
+)
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if auth_org() is null or auth.uid() is null
+     or auth_role() not in ('owner', 'office', 'kitchen') then
+    raise exception 'not_authorized' using errcode = '42501';
+  end if;
+  if p_document_ids is not null and cardinality(p_document_ids) > 500 then
+    raise exception 'too_many_document_ids' using errcode = '22023';
+  end if;
+
+  return query
+  select j.id, j.org_id, j.document_id, j.requested_by, j.status,
+         j.input_checksum, j.contract_version, j.priority, j.attempt_count,
+         j.lease_owner, j.lease_until, j.processing_attempt_id,
+         j.processing_attempt_started_at, j.last_error_code, j.last_error_message,
+         j.created_at, j.updated_at,
+         case when j.status in ('queued', 'leased', 'extracted', 'interpreting')
+              then extract(epoch from (statement_timestamp() - j.created_at))::bigint
+              else null end,
+         health.stuck_reason is not null,
+         health.stuck_reason
+  from public.document_processing_jobs j
+  cross join lateral (
+    select private.document_processing_stuck_reason(
+      j.status, j.attempt_count, j.created_at, j.updated_at, j.lease_until,
+      statement_timestamp()
+    ) as stuck_reason
+  ) health
+  where j.org_id = auth_org()
+    and (p_document_ids is null or j.document_id = any(p_document_ids))
+  order by j.created_at desc, j.id desc;
+end;
+$$;
+
+revoke all on function public.get_document_processing_statuses(uuid[])
+  from public, anon, service_role;
+grant execute on function public.get_document_processing_statuses(uuid[])
+  to authenticated;
+
+comment on function public.get_document_processing_statuses(uuid[]) is
+  'Tenant-scoped owner/office/kitchen processing rows with server-evaluated queue age and stuck verdict.';
+
 drop function public.get_document_processing_attempts(uuid, integer);
 
 create function public.get_document_processing_attempts(

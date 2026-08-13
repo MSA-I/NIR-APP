@@ -17,7 +17,7 @@ import {
 } from '../components/ui';
 import { ok, toHebrewError } from '../lib/errors';
 import { fmtDateTime, fmtMoneyRounded, fmtNum } from '../lib/format';
-import { DOCUMENT_PROCESSING_CHANGED_EVENT } from '../lib/useDocumentProcessing';
+import { DOCUMENT_PROCESSING_CHANGED_EVENT, useDocumentProcessing } from '../lib/useDocumentProcessing';
 import { DocumentStatusBadge } from '../components/DocumentStatusBadge';
 import { documentProcessingFailureText, isSupersededProcessingFailure } from '../lib/documentStatus';
 import { supabase } from '../lib/supabase';
@@ -27,13 +27,17 @@ import {
   attemptUiStatus,
   calibrationReviewRpcName,
   normalizeIncorrectCalibration,
+  recoveryInvokeErrorMessage,
+  selectPrimaryOperationalIssue,
   type CalibrationAction,
+  type OperationalAttemptState,
 } from './documentOperationsModel';
 
 interface DocumentOperationsMetrics {
   window_days: number;
   documents_waiting: number;
   documents_processing: number;
+  documents_stuck: number;
   documents_completed: number;
   documents_review_required: number;
   documents_failed: number;
@@ -178,6 +182,7 @@ interface ProcessingAttempt {
   created_at: string;
   updated_at: string;
   lease_until?: string | null;
+  processing_attempt_started_at: string | null;
   queue_age_seconds: number | null;
   last_error_code: string | null;
   last_error_message: string | null;
@@ -283,6 +288,15 @@ function attemptFilterKey(attempt: AttemptRow): Exclude<AttemptFilter, 'all'> {
   return 'completed';
 }
 
+interface CurrentIssueRow extends OperationalAttemptState {
+  job_id: string;
+  document_id: string;
+  file_name: string | null;
+  updated_at: string;
+}
+
+type RecoveryTarget = Pick<CurrentIssueRow, 'job_id' | 'document_id' | 'file_name'>;
+
 function attemptResult(attempt: AttemptRow) {
   if (attempt.reversal_known && attempt.reverted) return 'בוטל לאחר החלה';
   if (attempt.price_list_outcome) return PRICE_OUTCOME_LABEL[attempt.price_list_outcome] ?? 'תוצאת מחירון זמינה בפרטים';
@@ -304,8 +318,9 @@ function newestAttempts(attempts: AttemptRow[]) {
 }
 
 export default function DocumentOperations() {
-  const { organizationAccess } = useAuth();
+  const { organizationAccess, profile } = useAuth();
   const canWrite = organizationAccess?.canWrite ?? true;
+  const canRecoverStuck = canWrite && profile?.role === 'owner';
   const navigate = useNavigate();
   const toast = useToast();
   const [windowDays, setWindowDays] = useState(30);
@@ -313,6 +328,8 @@ export default function DocumentOperations() {
   const [historyDocumentId, setHistoryDocumentId] = useState<string | null>(null);
   const [reprocessTarget, setReprocessTarget] = useState<AttemptRow | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
+  const [recoveryTarget, setRecoveryTarget] = useState<RecoveryTarget | null>(null);
+  const [recovering, setRecovering] = useState(false);
   const [calibrationTarget, setCalibrationTarget] = useState<CalibrationQueueRow | null>(null);
 
   const operations = useQuery<DocumentOperationsMetrics>(async () =>
@@ -365,6 +382,12 @@ export default function DocumentOperations() {
     }));
   });
 
+  // The ledger intentionally shows only 100 recent attempts, but the primary alert must not be
+  // chosen from that truncated window. This status hook pages through the tenant read model and
+  // already reduces every document to its newest job, so an older document's current stuck job
+  // cannot disappear merely because other documents produced more recent history rows.
+  const currentProcessing = useDocumentProcessing();
+
   const historyAttempts = useQuery<AttemptRow[]>(async () => {
     if (!historyDocumentId) return [];
     const raw = unwrap(await supabase.rpc('get_document_processing_attempts', {
@@ -399,13 +422,31 @@ export default function DocumentOperations() {
   }, [historyDocumentId]);
 
   const supplierNames = useMemo(() => new Map((suppliers.data ?? []).map((supplier) => [supplier.id, supplier.name])), [suppliers.data]);
-  const currentAttempts = useMemo(() => newestAttempts(attempts.data ?? []), [attempts.data]);
-  const currentIssue = useMemo(() => currentAttempts
-    .filter((attempt) => ['failed', 'stuck'].includes(attemptUiStatus(attempt).state))
-    .sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at))[0] ?? null,
-  [currentAttempts]);
-  const filteredAttempts = useMemo(() => currentAttempts.filter((attempt) =>
-    filter === 'all' || attemptFilterKey(attempt) === filter), [currentAttempts, filter]);
+  const listedCurrentAttempts = useMemo(() => newestAttempts(attempts.data ?? []), [attempts.data]);
+  const knownDocumentNames = useMemo(() => new Map((attempts.data ?? [])
+    .filter((attempt) => attempt.file_name)
+    .map((attempt) => [attempt.document_id, attempt.file_name!])), [attempts.data]);
+  const currentStatusAttempts = useMemo<CurrentIssueRow[]>(() => Object.values(currentProcessing.snapshots)
+    .flatMap((snapshot) => snapshot.job ? [{
+      job_id: snapshot.job.id,
+      document_id: snapshot.job.document_id,
+      file_name: knownDocumentNames.get(snapshot.job.document_id) ?? null,
+      status: snapshot.job.status,
+      price_list_outcome: null,
+      reversal_known: false,
+      reverted: null,
+      attempt_count: snapshot.job.attempt_count,
+      created_at: snapshot.job.created_at,
+      updated_at: snapshot.job.updated_at,
+      lease_until: snapshot.job.lease_until,
+      queue_age_seconds: snapshot.job.queue_age_seconds,
+      last_error_code: snapshot.job.last_error_code,
+      is_stuck: snapshot.job.is_stuck,
+      stuck_reason: snapshot.job.stuck_reason,
+    }] : []), [currentProcessing.snapshots, knownDocumentNames]);
+  const currentIssue = useMemo(() => selectPrimaryOperationalIssue(currentStatusAttempts), [currentStatusAttempts]);
+  const filteredAttempts = useMemo(() => listedCurrentAttempts.filter((attempt) =>
+    filter === 'all' || attemptFilterKey(attempt) === filter), [listedCurrentAttempts, filter]);
   const selectedHistory = historyAttempts.data ?? [];
 
   useEffect(() => {
@@ -425,7 +466,7 @@ export default function DocumentOperations() {
   async function refreshAll() {
     await Promise.all([
       operations.refetch(), attempts.refetch(), historyAttempts.refetch(), calibration.refetch(), drift.refetch(), suppliers.refetch(),
-      calibrationQueue.refetch(),
+      calibrationQueue.refetch(), currentProcessing.refetch(),
     ]);
   }
 
@@ -446,6 +487,40 @@ export default function DocumentOperations() {
       toast(toHebrewError(error), 'error');
     } finally {
       setReprocessing(false);
+    }
+  }
+
+  async function recoverStuck(reason?: string) {
+    if (!canRecoverStuck || !recoveryTarget || !reason) return;
+    setRecovering(true);
+    try {
+      const response = await supabase.functions.invoke('recover-document-processing', {
+        body: {
+          job_id: recoveryTarget.job_id,
+          request_id: crypto.randomUUID(),
+          reason,
+        },
+      });
+      if (response.error) {
+        throw new Error(await recoveryInvokeErrorMessage(response) ?? response.error.message);
+      }
+      const result = response.data as { outcome?: string; job_id?: string; idempotent?: boolean } | null;
+      const message = result?.idempotent
+        ? 'השחזור כבר בוצע קודם; מצב המסמך עודכן.'
+        : result?.outcome === 'requeued'
+        ? 'נפתח ניסיון עיבוד חדש.'
+        : result?.outcome === 'interpretation_recovered'
+          ? 'נמצאה תוצאת פענוח קיימת והמסמך הועבר להמשך טיפול.'
+          : 'החילוץ נשמר וממשיכים משלב הפענוח בלי להפעיל OCR מחדש.';
+      toast(message);
+      setRecoveryTarget(null);
+      setHistoryDocumentId(null);
+      window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
+      await Promise.all([operations.refetch(), attempts.refetch(), historyAttempts.refetch()]);
+    } catch (error) {
+      toast(toHebrewError(error), 'error');
+    } finally {
+      setRecovering(false);
     }
   }
 
@@ -497,7 +572,8 @@ export default function DocumentOperations() {
       </header>
 
       <OperationsOverview query={operations} currentIssue={currentIssue}
-        onOpenIssue={(attempt) => setHistoryDocumentId(attempt.document_id)} />
+        onOpenIssue={(attempt) => setHistoryDocumentId(attempt.document_id)}
+        onRecoverIssue={canRecoverStuck ? (attempt) => setRecoveryTarget(attempt) : null} />
 
       <section aria-labelledby="document-attempts-title">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -530,6 +606,7 @@ export default function DocumentOperations() {
             rowActions={(row) => [
               { key: 'history', label: 'ניסיונות קודמים', icon: History, onSelect: () => setHistoryDocumentId(row.document_id) },
               { key: 'review', label: 'פתיחת בדיקה', icon: Eye, hidden: !row.interpretation_id, onSelect: () => navigate(`/documents/${encodeURIComponent(row.document_id)}/review`) },
+              { key: 'recover-stuck', label: 'שחזור עיבוד', icon: RotateCcw, hidden: !canRecoverStuck || attemptUiStatus(row).state !== 'stuck', onSelect: () => setRecoveryTarget(row) },
               { key: 'reprocess', label: row.status === 'failed' ? 'ניסיון נוסף' : 'עיבוד מחדש', icon: RotateCcw, hidden: !canWrite || isActiveAttempt(row), onSelect: () => setReprocessTarget(row) },
             ]}
           />
@@ -553,6 +630,11 @@ export default function DocumentOperations() {
         title="עיבוד המסמך מחדש"
         message={`המסמך ״${reprocessTarget?.file_name ?? 'ללא שם זמין'}״ יקבל ניסיון חדש. התוצאה הקודמת והראיות נשמרות, והסיבה נרשמת ביומן הביקורת.`}
         confirmLabel="החזרה לתור" />
+      <ConfirmDialog open={canRecoverStuck && recoveryTarget !== null} onClose={() => setRecoveryTarget(null)}
+        onConfirm={(reason) => void recoverStuck(reason)} requireReason busy={recovering}
+        title="שחזור עיבוד תקוע"
+        message={`המערכת תבדוק קודם אם כבר נשמרה תוצאה למסמך ״${recoveryTarget?.file_name ?? 'ללא שם זמין'}״. רק אם אין תוצאה שמורה ייפתח ניסיון חדש. הסיבה תירשם ביומן הביקורת.`}
+        confirmLabel="שחזור עיבוד" />
       <CalibrationReviewModal row={canWrite ? calibrationTarget : null} onClose={() => setCalibrationTarget(null)}
         onSaved={async () => {
           setCalibrationTarget(null);
@@ -562,10 +644,11 @@ export default function DocumentOperations() {
   );
 }
 
-function OperationsOverview({ query, currentIssue, onOpenIssue }: {
+function OperationsOverview({ query, currentIssue, onOpenIssue, onRecoverIssue }: {
   query: ReturnType<typeof useQuery<DocumentOperationsMetrics>>;
-  currentIssue: AttemptRow | null;
-  onOpenIssue: (attempt: AttemptRow) => void;
+  currentIssue: CurrentIssueRow | null;
+  onOpenIssue: (attempt: CurrentIssueRow) => void;
+  onRecoverIssue: ((attempt: CurrentIssueRow) => void) | null;
 }) {
   const metrics = query.data;
   return (
@@ -574,12 +657,13 @@ function OperationsOverview({ query, currentIssue, onOpenIssue }: {
         <h2 id="document-operations-overview-title" className="section-title">מצב התפעול</h2>
         {query.fetching && metrics && <span className="text-xs text-ink-muted" role="status">מעדכן מדדים…</span>}
       </div>
-      {query.loading && !metrics ? <SkeletonCards count={5} cols={5} /> : query.error && !metrics ? <ErrorNote message={query.error} /> : metrics && (
+      {query.loading && !metrics ? <SkeletonCards count={6} cols={6} /> : query.error && !metrics ? <ErrorNote message={query.error} /> : metrics && (
         <>
           {query.error && <ErrorNote message={query.error} />}
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <KpiCard title="ממתינים" value={fmtNum(metrics.documents_waiting)} sub={metrics.documents_waiting > 0 ? `הוותיק ממתין ${fmtAge(metrics.oldest_queue_age_seconds)}` : 'אין מסמכים בתור'} tone={metrics.documents_waiting > 0 ? 'await' : 'idle'} />
             <KpiCard title="בעיבוד" value={fmtNum(metrics.documents_processing)} sub="עבודה פעילה עכשיו" tone={metrics.documents_processing > 0 ? 'info' : 'idle'} />
+            <KpiCard title="עיבוד תקוע" value={fmtNum(metrics.documents_stuck)} sub="נעצר ודורש טיפול" tone={metrics.documents_stuck > 0 ? 'alert' : 'idle'} />
             <KpiCard title="נדרשת בדיקה" value={fmtNum(metrics.documents_review_required)} sub="ממתין להחלטה אנושית" tone={metrics.documents_review_required > 0 ? 'await' : 'idle'} />
             <KpiCard title="נכשלו" value={fmtNum(metrics.documents_failed)} sub="המצב הנוכחי לכל מסמך" tone={metrics.documents_failed > 0 ? 'alert' : 'idle'} />
             <KpiCard title="הושלמו" value={fmtNum(metrics.documents_completed)} sub="המצב הנוכחי לכל מסמך" tone="done" />
@@ -593,9 +677,19 @@ function OperationsOverview({ query, currentIssue, onOpenIssue }: {
                   {currentIssue.file_name ?? 'מסמך ללא שם זמין'} · <span className="num">{fmtDateTime(currentIssue.updated_at)}</span>.
                   {' '}{attemptUiStatus(currentIssue).description}
                 </span>
-                <button type="button" className="btn-secondary min-h-11" onClick={() => onOpenIssue(currentIssue)}>
-                  פתיחת המסמך
-                </button>
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                  {onRecoverIssue && attemptUiStatus(currentIssue).state === 'stuck' && (
+                    <button type="button" className="btn-primary min-h-11 w-full sm:w-auto"
+                      onClick={() => onRecoverIssue(currentIssue)}>
+                      <RotateCcw size={16} aria-hidden="true" />
+                      שחזור עיבוד
+                    </button>
+                  )}
+                  <button type="button" className="btn-secondary min-h-11 w-full sm:w-auto"
+                    onClick={() => onOpenIssue(currentIssue)}>
+                    פתיחת המסמך
+                  </button>
+                </div>
               </div>
             </Note>
           )}

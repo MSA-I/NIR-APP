@@ -86,7 +86,7 @@ const rpcCalls: Array<Record<string, unknown>> = [];
 const traffic = (autoActions: unknown[] = [AUTO_ACTION]) => [
   http.get(`${SUPABASE_URL}/rest/v1/documents`, () => HttpResponse.json(DOCS)),
   http.get(`${SUPABASE_URL}/rest/v1/suppliers`, () => HttpResponse.json([])),
-  http.get(`${SUPABASE_URL}/rest/v1/document_processing_jobs`, () => HttpResponse.json([])),
+  http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_processing_statuses`, () => HttpResponse.json([])),
   http.get(`${SUPABASE_URL}/rest/v1/document_auto_actions`, () => HttpResponse.json(autoActions)),
   http.post(`${SUPABASE_URL}/rest/v1/rpc/revert_document_auto_action`, async ({ request }) => {
     rpcCalls.push(await request.json() as Record<string, unknown>);
