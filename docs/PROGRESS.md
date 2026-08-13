@@ -13,7 +13,7 @@
 
 הענף `codex/consolidated-supplier-invoice-20260813` מסונכרן עם `origin/main` מ־14.08.2026
 ומשלב את מיגרציות
-`0134`–`0135` של הסרת Trial ובקרת מסמכים. ‏`0136` מוסיפה תיק אחד לכל ארגון–ישות–ספק–חודש,
+`0134`–`0135` של הסרת Trial ובקרת מסמכים. ‏`0137` מוסיפה תיק אחד לכל ארגון–ישות–ספק–חודש,
 עוגן `payable` יחיד, מקורות `supporting_evidence`, קליטה רב־עמודית, snapshots ורוויזיות מאוחרות.
 ה־Edge מנתב לפי claim סמכותי מן ה־DB והמסלול `/documents/consolidated-invoices` מרכז צילום,
 העלאה ושלושת ערוצי ההתאמה. המסלול מופיע בניווט של שלושת התפקידים; רק `owner` ו־`office`
@@ -58,7 +58,7 @@
 ## השינויים הממתינים לשחרור
 
 `0134_retire_trial_lifecycle.sql` ו־`0135_document_control_safe_read_models.sql` הן תלויות
-קדמיות של חשבונית מרכזת. ‏`0136_consolidated_supplier_invoice.sql` ו־P45 הן השינוי החדש;
+קדמיות של חשבונית מרכזת. ‏`0137_consolidated_supplier_invoice.sql` ו־P46 הן השינוי החדש;
 הן טרם הוחלו ב־Production.
 
 ## אימות קוד

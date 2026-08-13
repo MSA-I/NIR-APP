@@ -383,100 +383,57 @@ alter table public.consolidated_invoice_revisions force row level security;
 alter table public.consolidated_invoice_snapshots enable row level security;
 alter table public.consolidated_invoice_snapshots force row level security;
 
-create policy consolidated_invoice_cases_select on public.consolidated_invoice_cases
-  for select to authenticated using (
-    org_id = auth_org()
-    and auth_role() in ('owner','office','accountant')
-    and legal_entity_id = any(auth_scopes())
-  );
-create policy consolidated_invoice_intakes_select on public.consolidated_invoice_intakes
-  for select to authenticated using (
-    org_id = auth_org()
-    and exists (
-      select 1 from public.consolidated_invoice_cases c
-      where c.org_id = consolidated_invoice_intakes.org_id
-        and c.id = consolidated_invoice_intakes.case_id
-        and c.legal_entity_id = any(auth_scopes())
-        and (
-          auth_role() in ('owner','office')
-          or (auth_role() = 'accountant' and consolidated_invoice_intakes.status in ('received','blocked'))
-        )
-    )
-  );
-create policy consolidated_invoice_intake_pages_select on public.consolidated_invoice_intake_pages
-  for select to authenticated using (
-    org_id = auth_org()
-    and exists (
-      select 1
-      from public.consolidated_invoice_intakes intake
-      join public.consolidated_invoice_cases c
-        on c.org_id = intake.org_id and c.id = intake.case_id
-      where intake.org_id = consolidated_invoice_intake_pages.org_id
-        and intake.id = consolidated_invoice_intake_pages.intake_id
-        and c.legal_entity_id = any(auth_scopes())
-        and (
-          auth_role() in ('owner','office')
-          or (auth_role() = 'accountant' and intake.status in ('received','blocked'))
-        )
-    )
-  );
-create policy consolidated_invoice_sources_select on public.consolidated_invoice_sources
-  for select to authenticated using (
-    org_id = auth_org() and auth_role() in ('owner','office','accountant')
-    and exists (
-      select 1 from public.consolidated_invoice_cases c
-      where c.org_id = consolidated_invoice_sources.org_id
-        and c.id = consolidated_invoice_sources.case_id
-        and c.legal_entity_id = any(auth_scopes())
-    )
-  );
-create policy consolidated_invoice_revisions_select on public.consolidated_invoice_revisions
-  for select to authenticated using (
-    org_id = auth_org() and auth_role() in ('owner','office','accountant')
-    and exists (
-      select 1 from public.consolidated_invoice_cases c
-      where c.org_id = consolidated_invoice_revisions.org_id
-        and c.id = consolidated_invoice_revisions.case_id
-        and c.legal_entity_id = any(auth_scopes())
-    )
-  );
-create policy consolidated_invoice_snapshots_select on public.consolidated_invoice_snapshots
-  for select to authenticated using (
-    org_id = auth_org() and auth_role() in ('owner','office','accountant')
-    and exists (
-      select 1 from public.consolidated_invoice_cases c
-      where c.org_id = consolidated_invoice_snapshots.org_id
-        and c.id = consolidated_invoice_snapshots.case_id
-        and c.legal_entity_id = any(auth_scopes())
-    )
-  );
+-- These ledgers are RPC-only for authenticated clients. FORCE RLS plus no permissive table policy
+-- keeps an accidental future column grant fail-closed; the read models below re-check tenant,
+-- active role and legal-entity scope inside SECURITY DEFINER commands.
 
 -- Accountants can open only source bytes that belong to a received/blocked consolidated intake
 -- or to a case whose anchor was received. Existing owner/office document policies remain intact.
+-- Keep the joins behind a definer helper: authenticated deliberately has no direct table grant on
+-- the consolidated ledgers, and PostgreSQL can permission-check every OR policy branch even when
+-- the caller is owner/office and the accountant role predicate is false.
+create or replace function private.can_read_consolidated_invoice_document(
+  p_org_id uuid,
+  p_document_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, private, pg_temp
+as $$
+  select p_org_id=public.auth_org() and public.auth_role()='accountant' and (
+    exists (
+      select 1
+      from public.consolidated_invoice_intake_pages page
+      join public.consolidated_invoice_intakes intake
+        on intake.org_id=page.org_id and intake.id=page.intake_id
+      join public.consolidated_invoice_cases c
+        on c.org_id=intake.org_id and c.id=intake.case_id
+      where page.org_id=p_org_id and page.document_id=p_document_id
+        and intake.status in ('received','blocked')
+        and c.legal_entity_id=any(public.auth_scopes())
+    )
+    or exists (
+      select 1
+      from public.consolidated_invoice_sources source
+      join public.consolidated_invoice_cases c
+        on c.org_id=source.org_id and c.id=source.case_id
+      where source.org_id=p_org_id and source.document_id=p_document_id
+        and c.anchor_invoice_id is not null
+        and c.legal_entity_id=any(public.auth_scopes())
+    )
+  )
+$$;
+
+revoke all on function private.can_read_consolidated_invoice_document(uuid,uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function private.can_read_consolidated_invoice_document(uuid,uuid)
+  to authenticated;
+
 create policy consolidated_invoice_documents_select on public.documents
   for select to authenticated using (
-    org_id=auth_org() and auth_role()='accountant' and (
-      exists (
-        select 1
-        from public.consolidated_invoice_intake_pages page
-        join public.consolidated_invoice_intakes intake
-          on intake.org_id=page.org_id and intake.id=page.intake_id
-        join public.consolidated_invoice_cases c
-          on c.org_id=intake.org_id and c.id=intake.case_id
-        where page.org_id=documents.org_id and page.document_id=documents.id
-          and intake.status in ('received','blocked')
-          and c.legal_entity_id=any(public.auth_scopes())
-      )
-      or exists (
-        select 1
-        from public.consolidated_invoice_sources source
-        join public.consolidated_invoice_cases c
-          on c.org_id=source.org_id and c.id=source.case_id
-        where source.org_id=documents.org_id and source.document_id=documents.id
-          and c.anchor_invoice_id is not null
-          and c.legal_entity_id=any(public.auth_scopes())
-      )
-    )
+    private.can_read_consolidated_invoice_document(documents.org_id,documents.id)
   );
 
 create policy consolidated_invoice_storage_read on storage.objects
@@ -484,28 +441,7 @@ create policy consolidated_invoice_storage_read on storage.objects
     bucket_id='documents' and auth_role()='accountant' and exists (
       select 1 from public.documents document
       where document.org_id=auth_org() and document.storage_path=storage.objects.name
-        and (
-          exists (
-            select 1
-            from public.consolidated_invoice_intake_pages page
-            join public.consolidated_invoice_intakes intake
-              on intake.org_id=page.org_id and intake.id=page.intake_id
-            join public.consolidated_invoice_cases c
-              on c.org_id=intake.org_id and c.id=intake.case_id
-            where page.org_id=document.org_id and page.document_id=document.id
-              and intake.status in ('received','blocked')
-              and c.legal_entity_id=any(public.auth_scopes())
-          )
-          or exists (
-            select 1
-            from public.consolidated_invoice_sources source
-            join public.consolidated_invoice_cases c
-              on c.org_id=source.org_id and c.id=source.case_id
-            where source.org_id=document.org_id and source.document_id=document.id
-              and c.anchor_invoice_id is not null
-              and c.legal_entity_id=any(public.auth_scopes())
-          )
-        )
+        and private.can_read_consolidated_invoice_document(document.org_id,document.id)
     )
   );
 
@@ -517,8 +453,18 @@ revoke all on table public.consolidated_invoice_cases,
   public.consolidated_invoice_snapshots
   from public, anon, authenticated, service_role;
 
--- No browser or service-role table DML. Purpose-built commands set a transaction-local latch;
--- revision/snapshot history is append-only even for a trusted role.
+-- Preserve the P0 trusted-server CRUD contract. Direct writes still fail closed below unless a
+-- purpose-built command sets the transaction-local latch; authenticated keeps no table grant.
+grant select, insert, update, delete on table public.consolidated_invoice_cases,
+  public.consolidated_invoice_intakes,
+  public.consolidated_invoice_intake_pages,
+  public.consolidated_invoice_sources,
+  public.consolidated_invoice_revisions,
+  public.consolidated_invoice_snapshots
+  to service_role;
+
+-- Purpose-built commands set a transaction-local latch; revision/snapshot history is append-only
+-- even for a trusted role that retains the repository-wide service_role CRUD grant.
 create or replace function public.consolidated_invoice_ledger_guard()
 returns trigger
 language plpgsql
@@ -2617,20 +2563,17 @@ insert into private.scope_registry(table_name,scope_class,enforced) values
 -- The two service commands deliberately resolve scope from the DB-authoritative case rather than
 -- from a worker payload. Trigger functions are row/case local and cannot widen the firing row.
 insert into private.scope_definer_exemptions(function_signature,reason,target_wave)
-select proc.oid::regprocedure::text,reviewed.reason,'0136 consolidated invoice boundary'
-from (values
-  ('get_consolidated_invoice_processing_claim','service-role-trusted-path'),
-  ('apply_consolidated_invoice_interpretation','service-role-trusted-path'),
-  ('guard_invoice_financial_role','trigger-new-old-rows'),
-  ('guard_payable_invoice_reference','trigger-new-old-rows'),
-  ('capture_consolidated_invoice_late_arrival','trigger-new-old-rows')
-) reviewed(function_name,reason)
-join pg_catalog.pg_proc proc on proc.proname=reviewed.function_name
-join pg_catalog.pg_namespace namespace on namespace.oid=proc.pronamespace
-  and namespace.nspname in ('public','private')
-where proc.prosecdef
-on conflict(function_signature) do update
-set reason=excluded.reason,target_wave=excluded.target_wave;
+values
+  ('public.get_consolidated_invoice_processing_claim(uuid)'::regprocedure::text,
+    'service-role-trusted-path','0137 consolidated invoice boundary'),
+  ('public.apply_consolidated_invoice_interpretation(uuid,uuid,uuid)'::regprocedure::text,
+    'service-role-trusted-path','0137 consolidated invoice boundary'),
+  ('public.guard_invoice_financial_role()'::regprocedure::text,
+    'trigger-new-old-rows','0137 consolidated invoice boundary'),
+  ('public.guard_payable_invoice_reference()'::regprocedure::text,
+    'trigger-new-old-rows','0137 consolidated invoice boundary'),
+  ('private.capture_consolidated_invoice_late_arrival()'::regprocedure::text,
+    'trigger-new-old-rows','0137 consolidated invoice boundary');
 
 insert into private.scope_definer_enforcements(
   function_signature,body_hash,enforcement_kind,scope_proof

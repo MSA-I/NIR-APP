@@ -73,8 +73,8 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
 
   **מה `.github/workflows/quality-gate.yml` מריץ** — מסווג נתיבים לעבודה עצמאית ומקבילית:
   ‏`contracts` מפעיל חוזי Deno רק בשינוי Edge ואת build/self-check של OCR רק בשינוי worker;
-  ‏`audit` רץ רק בשינוי `package*.json`; ‏`sql` מריץ סוויטות DB + preflight, כולל P45 של
-  חשבונית מרכזת ב־`0136`; ‏`browser` מריץ תרחישי UI + fixtures + preview. שינוי קובץ
+  ‏`audit` רץ רק בשינוי `package*.json`; ‏`sql` מריץ סוויטות DB + preflight, כולל P46 של
+  חשבונית מרכזת ב־`0137`; ‏`browser` מריץ תרחישי UI + fixtures + preview. שינוי קובץ
   `*.spec.*` בלבד אינו מקים את סביבת הדפדפן.
 
   **רשימת הסוויטות אינה מועתקת ל-YAML.** ‏`scripts/ci-sql-suites.mjs` **מפרסר אותה מתוך
