@@ -683,10 +683,17 @@ $replacement$
       v_function_signature := patch_row.function_signature;
       v_definition := replace(pg_get_functiondef(v_function_signature), e'\r', '');
     end if;
-    if position(patch_row.anchor_text in v_definition) = 0 then
+    -- pg_get_functiondef is normalized to LF above, while a migration pushed from Windows can
+    -- retain CRLF inside these dollar-quoted anchors. Normalize both sides so the fail-closed
+    -- match detects SQL drift rather than a workstation line-ending difference.
+    if position(replace(patch_row.anchor_text, e'\r', '') in v_definition) = 0 then
       raise exception '0133: retired branch anchor moved for %', patch_row.function_signature;
     end if;
-    v_definition := replace(v_definition, patch_row.anchor_text, patch_row.replacement_text);
+    v_definition := replace(
+      v_definition,
+      replace(patch_row.anchor_text, e'\r', ''),
+      replace(patch_row.replacement_text, e'\r', '')
+    );
   end loop;
   if v_function_signature is not null then
     execute v_definition;
