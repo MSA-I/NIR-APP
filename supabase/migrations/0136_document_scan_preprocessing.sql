@@ -217,6 +217,22 @@ create table public.document_scan_decisions (
     references public.profiles(org_id, id) on delete restrict
 );
 
+-- 0092 attached the tenant lifecycle write guard with a one-time schema sweep.
+-- These org-owned tables are created after that sweep, so each must opt in
+-- explicitly or an expired/offboarding tenant could still write scan evidence
+-- through the service-role preprocessing path.
+create trigger zz_organization_write_guard
+  before insert or update or delete on public.document_scan_jobs
+  for each row execute function private.organization_row_write_guard();
+
+create trigger zz_organization_write_guard
+  before insert or update or delete on public.document_scan_outputs
+  for each row execute function private.organization_row_write_guard();
+
+create trigger zz_organization_write_guard
+  before insert or update or delete on public.document_scan_decisions
+  for each row execute function private.organization_row_write_guard();
+
 create or replace function public.guard_document_scan_job()
 returns trigger
 language plpgsql
