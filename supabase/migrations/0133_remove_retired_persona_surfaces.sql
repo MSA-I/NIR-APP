@@ -424,6 +424,7 @@ $narrow_policies$;
 do $remove_retired_function_branches$
 declare
   patch_row record;
+  v_function_signature regprocedure;
   v_definition text;
 begin
   for patch_row in
@@ -675,12 +676,21 @@ $replacement$
       )
     ) as patches(function_signature, anchor_text, replacement_text)
   loop
-    v_definition := replace(pg_get_functiondef(patch_row.function_signature), e'\r', '');
+    if v_function_signature is distinct from patch_row.function_signature then
+      if v_function_signature is not null then
+        execute v_definition;
+      end if;
+      v_function_signature := patch_row.function_signature;
+      v_definition := replace(pg_get_functiondef(v_function_signature), e'\r', '');
+    end if;
     if position(patch_row.anchor_text in v_definition) = 0 then
       raise exception '0133: retired branch anchor moved for %', patch_row.function_signature;
     end if;
-    execute replace(v_definition, patch_row.anchor_text, patch_row.replacement_text);
+    v_definition := replace(v_definition, patch_row.anchor_text, patch_row.replacement_text);
   end loop;
+  if v_function_signature is not null then
+    execute v_definition;
+  end if;
 end
 $remove_retired_function_branches$;
 
