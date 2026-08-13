@@ -4,11 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { DocumentReviewWorkspace } from '../components/document-review/DocumentReviewWorkspace';
+import { DocumentScanPreview } from '../components/document-review/DocumentScanPreview';
 import { ErrorNote, Note, PageLoader } from '../components/ui';
 import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { useDocumentProcessing } from '../lib/useDocumentProcessing';
 import { isActiveRole } from '../lib/types';
+import { useDocumentScanning } from '../lib/useDocumentScanning';
 
 // interpret-document maps every failure to a Hebrew message server-side, so the body is the
 // message. Only a transport failure needs the generic mapping.
@@ -29,7 +31,9 @@ export default function DocumentReview() {
   const { profile, organizationAccess } = useAuth();
   const canWrite = organizationAccess?.canWrite ?? true;
   const processing = useDocumentProcessing(documentId ? [documentId] : [], { details: true });
+  const scanning = useDocumentScanning(documentId ? [documentId] : []);
   const snapshot = documentId ? processing.snapshots[documentId] : null;
+  const scanState = documentId ? scanning.states[documentId] : null;
 
   // Nothing else in the app calls interpret-document, so without this a job stays at 'extracted'
   // for ever. Triggering on the review screen is also the cheapest cost control there is: nobody
@@ -67,7 +71,7 @@ export default function DocumentReview() {
   }, [jobId, interpret]);
 
   if (!documentId) return <ErrorNote message="מזהה המסמך חסר." />;
-  if (processing.loading || !profile) return <PageLoader />;
+  if (processing.loading || scanning.loading || !profile) return <PageLoader />;
   if (!isActiveRole(profile.role)) return <ErrorNote message="התפקיד ההיסטורי אינו מורשה להשתמש במסך הזה." />;
   if (processing.error && !snapshot) return <ErrorNote message={processing.error} />;
   if (!snapshot) return <ErrorNote message="המסמך אינו זמין או שאין לך הרשאה לצפות בו." />;
@@ -87,6 +91,15 @@ export default function DocumentReview() {
         <Note tone="alert" role="alert" className="flex-wrap">
           <span className="min-w-0 flex-1">{processing.error} הנתונים האחרונים נשארו מוצגים.</span>
           <button type="button" className="btn-secondary" onClick={() => void processing.refetch()}>
+            ניסיון נוסף
+          </button>
+        </Note>
+      )}
+
+      {scanning.error && (
+        <Note tone="alert" role="alert" className="flex-wrap">
+          <span className="min-w-0 flex-1">{scanning.error}</span>
+          <button type="button" className="btn-secondary" onClick={() => void scanning.refetch()}>
             ניסיון נוסף
           </button>
         </Note>
@@ -114,13 +127,28 @@ export default function DocumentReview() {
         </Note>
       )}
 
-      <DocumentReviewWorkspace
-        snapshot={snapshot}
-        actorId={profile.id}
-        onRefetch={processing.refetch}
-        initialPanel={params.get('panel')}
-        readOnly={!canWrite}
-      />
+      {scanState && snapshot.document && (
+        <DocumentScanPreview
+          state={scanState}
+          originalStoragePath={snapshot.document.storage_path}
+          fileName={snapshot.document.file_name}
+          readOnly={!canWrite}
+          onChanged={async () => {
+            await Promise.all([scanning.refetch(), processing.refetch()]);
+            return true;
+          }}
+        />
+      )}
+
+      {(!scanState || scanState.accepted) && (
+        <DocumentReviewWorkspace
+          snapshot={snapshot}
+          actorId={profile.id}
+          onRefetch={processing.refetch}
+          initialPanel={params.get('panel')}
+          readOnly={!canWrite}
+        />
+      )}
     </div>
   );
 }

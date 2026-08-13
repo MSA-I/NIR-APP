@@ -151,3 +151,10 @@ The OCR worker image (`worker/ocr/`) bundles **Tesseract OCR 5.3.0** (Apache-2.0
 `heb` language artifacts, pinned by SHA-256 and verified by the image's own self-check. Document
 transcription in production is performed by the OpenAI API (`gpt-5.6-terra`) — a service, not
 bundled code; no OpenAI source is included in the product.
+
+Document-image preprocessing uses **`opencv-python-headless` 4.12.0.88** (Apache-2.0) and
+**`numpy` 2.2.6** (BSD-3-Clause), both pinned exactly in `worker/ocr/requirements.lock`.
+OpenCV provides contour detection, homography, deskew, denoising, contrast enhancement and
+adaptive thresholding. The headless build is intentional: the private worker needs no GUI stack,
+so it keeps the container smaller and avoids unused display-system dependencies. NumPy supplies
+the pixel-array and geometry operations required by OpenCV.

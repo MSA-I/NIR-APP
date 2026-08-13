@@ -32,7 +32,6 @@ import {
 } from "../_shared/organization-egress.ts";
 
 const TOKEN_HEADER = "x-ocr-worker-token";
-const DOCUMENT_BUCKET = "documents";
 const DOWNLOAD_URL_TTL_SECONDS = 120;
 const STORAGE_CONTROL_TIMEOUT_MS = 10_000;
 const UUID =
@@ -229,6 +228,7 @@ type ClaimRow = {
   processing_attempt_started_at: string;
   org_id: string;
   document_id: string;
+  storage_bucket: string;
   storage_path: string;
   mime_type: string;
   file_name: string;
@@ -247,6 +247,7 @@ function claimRow(value: unknown): value is ClaimRow {
     "job_id",
     "org_id",
     "document_id",
+    "storage_bucket",
     "storage_path",
     "mime_type",
     "file_name",
@@ -275,7 +276,7 @@ async function claim(
   storageAdmin: SupabaseClient,
   request: ClaimRequest,
 ): Promise<Response> {
-  const result = await admin.rpc("claim_document_processing_job", {
+  const result = await admin.rpc("claim_document_processing_job_input", {
     p_lease_owner: request.lease_owner,
     p_lease_seconds: request.lease_seconds,
   });
@@ -283,6 +284,7 @@ async function claim(
   if (result.data === null) return ok(null);
   if (
     !claimRow(result.data) ||
+    !["documents", "document-scans"].includes(result.data.storage_bucket) ||
     !result.data.storage_path.startsWith(`${result.data.org_id}/`) ||
     result.data.contract_version !== "1"
   ) {
@@ -308,7 +310,7 @@ async function claim(
     throw new GatewayError("download_unavailable", 409);
   }
   const downloadLease = reservation.lease;
-  const signed = await storageAdmin.storage.from(DOCUMENT_BUCKET)
+  const signed = await storageAdmin.storage.from(result.data.storage_bucket)
     .createSignedUrl(result.data.storage_path, downloadExpiresIn);
   if (signed.error || !signed.data?.signedUrl) {
     await releaseOrganizationEgress(rpc, downloadLease, {

@@ -267,7 +267,7 @@ export interface DocumentMetadata {
  * True when the processing queue simply is not installed on this database.
  *
  * The smart-document migrations ship separately from this bundle, so a frontend can legitimately
- * run against a database where `enqueue_document_processing` does not exist yet. That is not an
+ * run against a database where the current intake RPC does not exist yet. That is not an
  * upload failure: the file and its registry row are already durable by the time it is called.
  * Reporting it as a failure made a stored document look lost and invited a duplicate re-upload.
  * Any other error — permission, deleted document, bad state — still surfaces.
@@ -276,6 +276,38 @@ function processingQueueUnavailable(error: { code?: string; message?: string }):
   // PGRST202: PostgREST could not find the function. 42883: Postgres undefined_function.
   if (error.code === 'PGRST202' || error.code === '42883') return true;
   return /could not find the function|function .* does not exist/i.test(error.message ?? '');
+}
+
+type DocumentIntakeResponse = {
+  data: unknown;
+  error: { code?: string; message: string } | null;
+  status?: number;
+  statusText?: string;
+};
+
+export async function beginDocumentIntake(documentId: string): Promise<DocumentIntakeResponse> {
+  let response: DocumentIntakeResponse;
+  try {
+    response = await supabase.rpc('begin_document_intake', { p_document_id: documentId });
+  } catch (error) {
+    response = {
+      data: null,
+      error: { message: error instanceof Error ? error.message : 'unknown_document_intake_error' },
+    };
+  }
+  if (!response.error || !processingQueueUnavailable(response.error)) return response;
+
+  // Forward-only deployment compatibility: before 0136 the established enqueue RPC is still
+  // authoritative. Fall back only when the new RPC is undefined. A transport failure could have
+  // committed intake and must stay on the ordinary idempotent retry path.
+  try {
+    return await supabase.rpc('enqueue_document_processing', { p_document_id: documentId });
+  } catch (error) {
+    return {
+      data: null,
+      error: { message: error instanceof Error ? error.message : 'unknown_document_intake_error' },
+    };
+  }
 }
 
 function defaultDocumentKind(entityType: string): DocumentKind {
@@ -404,20 +436,19 @@ export async function uploadDocument(
     documentUploadResumeByFile.delete(file);
     return { documentId, jobId: null };
   }
-  let queued: { data: unknown; error: { code?: string; message?: string } | null; status?: number; statusText?: string };
-  try {
-    queued = await supabase.rpc('enqueue_document_processing', { p_document_id: documentId });
-  } catch (error) {
-    queued = { data: null, error: error as { code?: string; message?: string } };
-  }
+  const queued = await beginDocumentIntake(documentId);
   if (queued.error && processingQueueUnavailable(queued.error)) {
     documentUploadResumeByFile.delete(file);
     return { documentId, jobId: null };
   }
-  if (queued.error || typeof queued.data !== 'string') {
+  const intake = queued.data as { processing_job_id?: unknown } | null;
+  const processingJobId = typeof queued.data === 'string'
+    ? queued.data
+    : typeof intake?.processing_job_id === 'string' ? intake.processing_job_id : null;
+  if (queued.error || !processingJobId) {
     // The source and registry row are durable now. A transport failure may have committed the
     // enqueue before losing its response, so every retry resumes at this exact document and lets
-    // enqueue_document_processing's current-job contract settle the ambiguity. Never re-upload or
+    // the intake RPC's current-job contract settle the ambiguity. Never re-upload or
     // re-register here, including when the promise itself rejected instead of returning an error.
     const nextResume = { storagePath: path, documentId, clientUploadKey };
     documentUploadResumeByFile.set(file, nextResume);
@@ -425,7 +456,7 @@ export async function uploadDocument(
       error: queued.error,
       status: queued.status,
       statusText: queued.statusText,
-      malformedResponse: !queued.error && typeof queued.data !== 'string',
+      malformedResponse: !queued.error && !processingJobId,
     });
     throw new DocumentUploadError(
       failure.retryable
@@ -437,7 +468,7 @@ export async function uploadDocument(
     );
   }
   documentUploadResumeByFile.delete(file);
-  return { documentId, jobId: queued.data };
+  return { documentId, jobId: processingJobId };
 }
 
 async function entityMetadata(entityType: string, entityId: string, documentKind: DocumentKind): Promise<DocumentMetadata> {

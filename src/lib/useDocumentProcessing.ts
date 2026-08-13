@@ -358,6 +358,7 @@ const ALL_COLUMNS = '*';
 
 export function documentProcessingStage(status?: DocumentProcessingStatus): DocumentProcessingStage {
   if (!status) return 'unprocessed';
+  if (status === 'awaiting_scan') return 'queued';
   if (status === 'queued') return 'queued';
   if (status === 'extracted') return 'extracted';
   if (status === 'leased' || status === 'interpreting') return 'processing';

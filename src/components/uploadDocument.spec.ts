@@ -61,7 +61,7 @@ describe('uploadDocument registration recovery', () => {
         }
         return { data: { document_id: 'doc-1', idempotent: true }, error: null };
       }
-      return { data: 'job-1', error: null };
+      return { data: { processing_job_id: 'job-1' }, error: null };
     });
 
     const firstError = await uploadDocument(
@@ -80,7 +80,7 @@ describe('uploadDocument registration recovery', () => {
 
     expect(mocks.tusUpload).toHaveBeenCalledTimes(1);
     expect(mocks.rpc.mock.calls.filter(([name]) => name === 'register_uploaded_document')).toHaveLength(2);
-    expect(mocks.rpc.mock.calls.filter(([name]) => name === 'enqueue_document_processing')).toHaveLength(1);
+    expect(mocks.rpc.mock.calls.filter(([name]) => name === 'begin_document_intake')).toHaveLength(1);
     expect(mocks.rpc.mock.calls[0][1]).toEqual({
       p_client_upload_key: 'upload-key-0001',
       p_entity_type: 'inbox',
@@ -105,7 +105,7 @@ describe('uploadDocument registration recovery', () => {
         if (registrationCalls === 1) return { data: null, error: { message: 'gateway timeout' } };
         return { data: { document_id: 'doc-2', idempotent: false }, error: null };
       }
-      return { data: 'job-2', error: null };
+      return { data: { processing_job_id: 'job-2' }, error: null };
     });
 
     const error = await uploadDocument(
@@ -245,7 +245,7 @@ describe('uploadDocument registration recovery', () => {
       }
       enqueueCalls += 1;
       if (enqueueCalls === 1) throw new TypeError('Failed to fetch');
-      return { data: 'job-enqueue', error: null };
+      return { data: { processing_job_id: 'job-enqueue' }, error: null };
     });
 
     const error = await uploadDocument(
@@ -265,7 +265,56 @@ describe('uploadDocument registration recovery', () => {
       .resolves.toEqual({ documentId: 'doc-enqueue', jobId: 'job-enqueue' });
     expect(mocks.tusUpload).toHaveBeenCalledTimes(1);
     expect(mocks.rpc.mock.calls.filter(([name]) => name === 'register_uploaded_document')).toHaveLength(1);
-    expect(mocks.rpc.mock.calls.filter(([name]) => name === 'enqueue_document_processing')).toHaveLength(2);
+    expect(mocks.rpc.mock.calls.filter(([name]) => name === 'begin_document_intake')).toHaveLength(2);
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the legacy enqueue RPC only when the intake RPC is not installed', async () => {
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === 'register_uploaded_document') {
+        return { data: { document_id: 'doc-legacy' }, error: null };
+      }
+      if (name === 'begin_document_intake') {
+        return {
+          data: null,
+          error: { code: 'PGRST202', message: 'Could not find the function public.begin_document_intake' },
+          status: 404,
+        };
+      }
+      if (name === 'enqueue_document_processing') return { data: 'job-legacy', error: null };
+      throw new Error(`unexpected RPC ${name}`);
+    });
+
+    await expect(uploadDocument(
+      'org-1', 'inbox', null, file('legacy.pdf'), {}, { objectKey: 'legacy-key-0009' },
+    )).resolves.toEqual({ documentId: 'doc-legacy', jobId: 'job-legacy' });
+
+    expect(mocks.rpc.mock.calls.map(([name]) => name)).toEqual([
+      'register_uploaded_document',
+      'begin_document_intake',
+      'enqueue_document_processing',
+    ]);
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back after an ambiguous intake transport failure', async () => {
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === 'register_uploaded_document') {
+        return { data: { document_id: 'doc-ambiguous' }, error: null };
+      }
+      if (name === 'begin_document_intake') throw new TypeError('Failed to fetch');
+      throw new Error(`unexpected RPC ${name}`);
+    });
+
+    const error = await uploadDocument(
+      'org-1', 'inbox', null, file('ambiguous.pdf'), {}, { objectKey: 'ambiguous-key-0010' },
+    ).catch((reason) => reason);
+
+    expect(documentUploadFailure(error)).toMatchObject({ retryable: true, registered: true });
+    expect(mocks.rpc.mock.calls.map(([name]) => name)).toEqual([
+      'register_uploaded_document',
+      'begin_document_intake',
+    ]);
     expect(mocks.remove).not.toHaveBeenCalled();
   });
 });

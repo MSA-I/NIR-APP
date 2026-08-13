@@ -13,6 +13,7 @@ import type { DocumentRow } from '../lib/types';
 import {
   DOCUMENT_KIND_OPTIONS,
   DOCUMENT_UPLOAD_ACCEPT,
+  beginDocumentIntake,
   documentKindLabel,
   documentUploadFailure,
   mergeDocumentUploadSummary,
@@ -592,7 +593,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     setRetrying(true);
     try {
       ok(wasUnprocessed
-        ? await supabase.rpc('enqueue_document_processing', { p_document_id: retryDoc.id })
+        ? await beginDocumentIntake(retryDoc.id)
         : await supabase.rpc('reprocess_document', {
           p_document_id: retryDoc.id,
           p_reason: 'עיבוד מחדש ביוזמת המשתמש ממסך המסמכים',
