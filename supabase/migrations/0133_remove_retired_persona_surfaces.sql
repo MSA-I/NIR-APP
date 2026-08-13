@@ -946,7 +946,8 @@ begin
   foreach v_view_name in array array[
     'supplier_metrics',
     'inventory_balances',
-    'inventory_movement_feed'
+    'inventory_movement_feed',
+    'inventory_intelligence'
   ] loop
     v_definition := pg_get_viewdef(format('public.%I', v_view_name)::regclass, true);
     v_rewritten := regexp_replace(
