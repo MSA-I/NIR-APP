@@ -454,7 +454,7 @@ $anchor$,
       ),
       (
         'public.global_search(text,integer)'::regprocedure,
-        $anchor$    when 'kitchen'    then array['supplier', 'product', 'invoice', 'order', 'credit']
+        $anchor$    when 'kitchen'    then array['product', 'invoice', 'order', 'credit']
 $anchor$,
         ''
       ),
