@@ -20,8 +20,10 @@
 #   * The P4 integrated journey (check-p4-integrated-journey.cjs).
 # Those need the same Windows-coupled helpers and are the next thing to port.
 #
-# A small native path classifier starts only the relevant jobs. Manual runs execute all three.
-# Jobs that do run remain independent and parallel.
+# A small native path classifier starts only the relevant work. Edge contracts, the OCR image,
+# dependency audit, SQL and browser scenarios have separate triggers; test-only frontend changes
+# do not start the browser stack. Manual runs execute every area. Jobs that do run remain
+# independent and parallel.
 
 name: quality-gate
 
@@ -49,7 +51,9 @@ jobs:
     name: Classify changed paths
     runs-on: ubuntu-latest
     outputs:
-      contracts: ${{ steps.filter.outputs.contracts }}
+      edge: ${{ steps.filter.outputs.edge }}
+      ocr: ${{ steps.filter.outputs.ocr }}
+      audit: ${{ steps.filter.outputs.audit }}
       sql: ${{ steps.filter.outputs.sql }}
       browser: ${{ steps.filter.outputs.browser }}
     steps:
@@ -68,7 +72,9 @@ jobs:
           set -euo pipefail
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "contracts=true" >> "$GITHUB_OUTPUT"
+            echo "edge=true" >> "$GITHUB_OUTPUT"
+            echo "ocr=true" >> "$GITHUB_OUTPUT"
+            echo "audit=true" >> "$GITHUB_OUTPUT"
             echo "sql=true" >> "$GITHUB_OUTPUT"
             echo "browser=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -82,31 +88,39 @@ jobs:
           git diff --name-only "$base" "$HEAD_SHA" > changed-files.txt
 
           matches() { grep -Eq "$1" changed-files.txt; }
-          common='^(\.github/workflows/quality-gate\.yml|package\.json|package-lock\.json)$'
-          contracts='^(deno\.lock|docker-compose\.ocr\.yml|worker/|supabase/functions/)'
-          sql='^(supabase/(config\.toml|migrations/|tests/|demo/|seed\.sql)|scripts/(check-quality-gates\.ps1|ci-sql-suites\.mjs|ci-local-env\.mjs|create-users\.ps1|fixtures/.*\.sql))'
-          browser='^(src/|public/|index\.html|vite\.config\.ts|supabase/(config\.toml|migrations/|demo/|seed\.sql)|scripts/(check-browser-smoke\.cjs|ci-sql-suites\.mjs|ci-local-env\.mjs|create-users\.ps1|fixtures/))'
+          grep -Ev '(^|/)[^/]+\.(spec|test)\.[cm]?[jt]sx?$' changed-files.txt > product-files.txt || true
+          product_matches() { grep -Eq "$1" product-files.txt; }
 
-          if matches "$common|$contracts"; then echo "contracts=true" >> "$GITHUB_OUTPUT"; else echo "contracts=false" >> "$GITHUB_OUTPUT"; fi
-          if matches "$common|$sql"; then echo "sql=true" >> "$GITHUB_OUTPUT"; else echo "sql=false" >> "$GITHUB_OUTPUT"; fi
-          if matches "$common|$browser"; then echo "browser=true" >> "$GITHUB_OUTPUT"; else echo "browser=false" >> "$GITHUB_OUTPUT"; fi
+          workflow='^\.github/workflows/quality-gate\.yml$'
+          edge='^(deno\.lock|supabase/(config\.toml|functions/))'
+          ocr='^(docker-compose\.ocr\.yml|worker/ocr/)'
+          audit='^(package\.json|package-lock\.json)$'
+          sql='^(supabase/(config\.toml|migrations/|tests/|demo/|seed\.sql)|scripts/(check-quality-gates\.ps1|ci-sql-suites\.mjs|ci-local-env\.mjs|fixtures/.*\.sql))'
+          browser='^(src/|public/|index\.html|vite\.config\.[cm]?[jt]s|package\.json|package-lock\.json|supabase/(config\.toml|migrations/|demo/|seed\.sql)|scripts/(check-browser-smoke\.cjs|ci-sql-suites\.mjs|ci-local-env\.mjs|create-users\.ps1|fixtures/))'
+
+          if matches "$workflow|$edge"; then echo "edge=true" >> "$GITHUB_OUTPUT"; else echo "edge=false" >> "$GITHUB_OUTPUT"; fi
+          if matches "$workflow|$ocr"; then echo "ocr=true" >> "$GITHUB_OUTPUT"; else echo "ocr=false" >> "$GITHUB_OUTPUT"; fi
+          if matches "$workflow|$audit"; then echo "audit=true" >> "$GITHUB_OUTPUT"; else echo "audit=false" >> "$GITHUB_OUTPUT"; fi
+          if matches "$workflow|$sql"; then echo "sql=true" >> "$GITHUB_OUTPUT"; else echo "sql=false" >> "$GITHUB_OUTPUT"; fi
+          if product_matches "$workflow|$browser"; then echo "browser=true" >> "$GITHUB_OUTPUT"; else echo "browser=false" >> "$GITHUB_OUTPUT"; fi
 
   # ---------------------------------------------------------------- contracts (no database)
   contracts:
     needs: changes
-    if: needs.changes.outputs.contracts == 'true'
+    if: needs.changes.outputs.edge == 'true' || needs.changes.outputs.ocr == 'true'
     name: Deno contracts + OCR worker
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
+        if: needs.changes.outputs.edge == 'true'
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
 
       - name: Recovery function keeps platform JWT verification enabled
+        if: needs.changes.outputs.edge == 'true'
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync } from 'node:fs';
@@ -132,6 +146,7 @@ jobs:
           NODE
 
       - name: Interpret-document prompt, provider-failure and authorization contracts
+        if: needs.changes.outputs.edge == 'true'
         run: |
           set -euo pipefail
           npx --yes deno test \
@@ -145,6 +160,7 @@ jobs:
             || { echo 'Ignored or skipped cases are not acceptable in this gate.'; exit 1; }
 
       - name: Price-list intake authorization and type contracts
+        if: needs.changes.outputs.edge == 'true'
         run: |
           set -euo pipefail
           PRICE_ROOT=supabase/functions/submit-price-list
@@ -166,6 +182,7 @@ jobs:
             "$PRICE_ROOT/index.ts"
 
       - name: Document gateway and organization-boundary contracts
+        if: needs.changes.outputs.edge == 'true'
         run: |
           set -euo pipefail
           npx --yes deno test \
@@ -186,10 +203,12 @@ jobs:
             || { echo 'Ignored or skipped cases are not acceptable in this gate.'; exit 1; }
 
       - name: Document-processing function type contract
+        if: needs.changes.outputs.edge == 'true'
         working-directory: supabase/functions/document-processing
         run: npx --yes deno check --config deno.json --lock deno.lock --frozen index.ts
 
       - name: Stuck document-processing recovery contracts
+        if: needs.changes.outputs.edge == 'true'
         run: |
           set -euo pipefail
           RECOVERY_ROOT=supabase/functions/recover-document-processing
@@ -210,14 +229,17 @@ jobs:
             "$RECOVERY_ROOT/index.ts"
 
       - name: Send-feedback function type contract
+        if: needs.changes.outputs.edge == 'true'
         working-directory: supabase/functions/send-feedback
         run: npx --yes deno check --config deno.json --lock deno.lock --frozen index.ts
 
       - name: Send-invite function type contract
+        if: needs.changes.outputs.edge == 'true'
         working-directory: supabase/functions/send-invite
         run: npx --yes deno check --config deno.json --lock deno.lock --frozen index.ts
 
       - name: Outbox-worker delivery, header and signature contracts
+        if: needs.changes.outputs.edge == 'true'
         run: |
           set -euo pipefail
           npx --yes deno test \
@@ -229,15 +251,30 @@ jobs:
             || { echo 'Ignored or skipped cases are not acceptable in this gate.'; exit 1; }
 
       - name: OCR worker Compose validation
+        if: needs.changes.outputs.ocr == 'true'
         run: docker compose -f docker-compose.ocr.yml config --quiet
 
       - name: OCR worker image build
+        if: needs.changes.outputs.ocr == 'true'
         run: docker build --pull=false -t supplyflow-ocr-worker:acceptance worker/ocr
 
       - name: OCR worker no-GPU / no-model self-check
+        if: needs.changes.outputs.ocr == 'true'
         run: docker run --rm --network none --entrypoint python supplyflow-ocr-worker:acceptance /app/self_check.py
 
-      - name: Dependency audit
+  # --------------------------------------------------------- dependency advisory boundary
+  audit:
+    needs: changes
+    if: needs.changes.outputs.audit == 'true'
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: High-severity production dependency audit
         run: npm audit --audit-level=high
 
   # ---------------------------------------------------- the SQL suites + the preflight
@@ -252,8 +289,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
 
       - uses: supabase/setup-cli@v1
         with:

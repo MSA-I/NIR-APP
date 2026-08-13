@@ -71,9 +71,10 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   ```
   הראיות (צילומים, PDF, ‏`p4-browser-report.json`) עולות כארטיפקט **`browser-evidence`**.
 
-  **מה `.github/workflows/quality-gate.yml` מריץ** — מסווג נתיבים ושלושה jobs עצמאיים:
-  ‏`contracts` (חוזי Deno · ‏OCR worker build + self-check · ‏`npm audit`) ·
-  ‏`sql` (סוויטות DB + preflight) · ‏`browser` (תרחישי UI + fixtures + preview).
+  **מה `.github/workflows/quality-gate.yml` מריץ** — מסווג נתיבים לעבודה עצמאית ומקבילית:
+  ‏`contracts` מפעיל חוזי Deno רק בשינוי Edge ואת build/self-check של OCR רק בשינוי worker;
+  ‏`audit` רץ רק בשינוי `package*.json`; ‏`sql` מריץ סוויטות DB + preflight; ‏`browser` מריץ
+  תרחישי UI + fixtures + preview. שינוי קובץ `*.spec.*` בלבד אינו מקים את סביבת הדפדפן.
 
   **רשימת הסוויטות אינה מועתקת ל-YAML.** ‏`scripts/ci-sql-suites.mjs` **מפרסר אותה מתוך
   `check-quality-gates.ps1`** בזמן ריצה — אותה רשימה, אותו סדר, אותם תפקידי DB. עותק שני היה
@@ -84,14 +85,33 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   (‏88), ‏`Invoke-PriceListEdgeSmoke`, ‏`Invoke-OcrEdgeSmoke` ו-`check-p4-integrated-journey.cjs`.
   אלה קשורים ל-PowerShell של Windows ורצים רק בריצה הידנית. **תיק ירוק אינו טענה שהם עברו.**
 
-  ‏`.github/workflows/build.yml` מריץ `build` ו־`verify` כ־jobs מקבילים; `quality-gate.yml` הוא
-  שער האינטגרציה הכבד והמסונן לפי נתיבים.
+  ‏`.github/workflows/build.yml` יוצר תמיד את שמות ה־checks שהגנת הענף מצפה להם, אבל מקצה runner
+  רק לצרכן הרלוונטי: `build` לקלטי bundle/typecheck; ‏`verify` לקוד, tests, scripts, migrations,
+  Edge ו־Knip. שינוי test בלבד אינו בונה bundle; שינוי SQL suite/fixture בלבד אינו מריץ אף אחד
+  משניהם. גם בתוך check ‏`verify` מופעלים רק תתי־הפקודות שנפגעו: migration בלבד מריץ את guard
+  ה־exemptions ללא `npm ci` או Vitest; ‏Edge מריץ Knip ללא Vitest; שינוי `src`
+  מריץ את Knip, guards הרלוונטיים ו־Vitest. `quality-gate.yml` הוא שער האינטגרציה הכבד
+  והמסונן לפי נתיבים.
 
   **ריצה מקומית — רק כמוצא אחרון**, לניפוי כשל ש-CI כבר דיווח עליו או לעבודה על הסקריפט עצמו:
   ‏`$env:SUPPLYFLOW_ALLOW_LOCAL_QUALITY = '1'; npm run quality`. לפני כן: לעצור `npm run dev`
   (תופס את פורט 5199 וחיבור כותב ל-DB) ולוודא שאין סוכן אחר באמצע ריצה. **ריצה אחת בכל רגע במכונה.**
 
   הגנת ענף (‏required status) היא הגדרת GitHub של הבעלים.
+
+  **מטריצת rollout לייצור — מריצים את האיחוד של השורות שהשתנו, לא checklist אוניברסלי:**
+
+  | משטח שהשתנה | מה נדרש לפני merge | מה נדרש בייצור | מה לא מריצים |
+  |---|---|---|---|
+  | תיעוד / CI בלבד | classifier וה־checks של קובצי ה־workflow שנגעו בהם | אין deploy | אין build מוצר, DB, Edge או smoke חי |
+  | Frontend / נכס ציבורי | `build`; ‏`verify` כשקוד/בדיקות/guards השתנו; browser רק לשינוי מוצר | build עם env ייצור, סריקת סודות/localhost, Pages, התאמת hashes, smoke קנוני בנתיבים שהשתנו + `/`/`login` בדסקטופ ובמובייל; ב־URL הייחודי די ב־hash parity ובדיקת זמינות אחת | אין גיבוי/ledger/SQL/Edge ללא תלות מפורשת |
+  | Migration / חוזה DB | `verify` guards + ‏SQL/preflight; browser רק אם חוזה נצרך בלקוח | גיבוי schema/data/roles, dry-run+ledger, apply forward-only, postflight וספירות רלוונטיות | אין Pages או asset parity אם ה־bundle לא השתנה |
+  | Edge Function | חוזי Deno של Edge; OCR Docker רק בשינוי worker | deploy רק לפונקציה שהשתנתה, אימות secrets/JWT וקריאה חיה ממוקדת | אין Pages, גיבוי DB או OCR עבור Edge שאינו OCR |
+  | Auth / תפקידים / RLS | האיחוד של DB/Edge/browser הנוגעים לחוזה | smoke מחובר וקריאה בלבד לתפקידים שנפגעו, בדיקת חסימה לתפקידים שפרשו והוכחת אפס כתיבות עסקיות | אין מטריצת כל התפקידים לשינוי שאינו הרשאה |
+  | Dependencies | `build` + ‏`verify` + ‏`audit`; browser כי קוד runtime שנפתר השתנה | deploy frontend רק אם החבילה נכנסת ל־bundle | אין SQL או OCR אלא אם קבצי המשטח שלהם השתנו |
+
+  שינוי חוצה־משטחים מחבר את הדרישות; הוא אינו מחזיר אוטומטית את השער הידני המלא. ריצת
+  `workflow_dispatch` היא חריג מפורש שמריץ הכול. PASS היסטורי לעולם אינו מחליף check טרי על ה־SHA.
 - מיגרציות: `scripts/db-query.ps1` (Windows) / `scripts/db-query.sh` (Linux/Mac) — שניהם רצים מול
   **הפרויקט המרוחק** דרך Management API (`-SqlFile` + `-ProjectRef` חובה). ריצה מקומית של סוויטה או
   מיגרציה היא `docker exec … psql` על `supabase_db_supplyflow-p0`, הדפוס של `Invoke-SqlTest`.
