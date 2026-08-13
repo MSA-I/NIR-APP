@@ -25,14 +25,13 @@ export interface Profile {
   supplier_id: string | null; // historical supplier-agent association; never grants an active login
 }
 
-export type OrgStatus = 'trial' | 'active' | 'suspended';
+export type OrgStatus = 'active' | 'suspended';
 
 export interface Organization {
   id: string;
   name: string;
   vat_rate: number;
     status: OrgStatus;
-    trial_ends_at: string | null;
     logo_path: string | null;
     logo_updated_at: string | null;
   settings: {
@@ -70,7 +69,6 @@ export interface PlatformOrg {
   name: string;
   status: OrgStatus;
   vat_rate: number;
-  trial_ends_at: string | null;
   created_at: string;
   user_count: number;
 }

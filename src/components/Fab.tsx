@@ -5,7 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { isFocusPath, isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
 import type { Role } from '../lib/types';
 import { useQuickCapture } from './QuickCapture';
-import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/trial';
+import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/organizationAccess';
 
 /**
  * G1, finding 7 — a filter where there used to be `[]`.
@@ -42,7 +42,7 @@ export default function Fab() {
   const { pathname } = useLocation();
   const { openCapture, element, busy, retryCount } = useQuickCapture();
 
-  // A read-only tenant (trial expired, or offboarding requested) gets no write affordances. The
+  // A read-only tenant (suspended or offboarding) gets no write affordances. The
   // desktop speed-dial the campaign gated here no longer exists — it was removed by owner decision
   // on 09.08.2026 — so the gate applies to the one surface that remains.
   const mobileActions = organizationAccess.canWrite ? quickActionsForPath(profile?.role, pathname) : [];

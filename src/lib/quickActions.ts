@@ -19,7 +19,7 @@ const QUICK_ACTIONS: readonly QuickAction[] = [
   { key: 'receive', label: 'קבלת סחורה', icon: PackageCheck, kind: 'link', to: '/receiving', roles: ['owner', 'office'] },
   // Keep five items for both procurement roles so capture stays in the exact middle. Document
   // operations is owner-only; office receives the permitted document gallery in the same slot.
-  { key: 'document-operations', label: 'תפעול מסמכים', icon: Activity, kind: 'link', to: '/documents/operations', roles: ['owner'] },
+  { key: 'document-operations', label: 'בקרת מסמכים', icon: Activity, kind: 'link', to: '/documents/operations', roles: ['owner'] },
   { key: 'documents', label: 'מסמכים', icon: FolderOpen, kind: 'link', to: '/documents', roles: ['office'] },
   // "חשבונית חדשה" was removed here (G1, 10.08.2026). This application RECEIVES supplier
   // invoices; it does not issue them to anyone. The action that replaces it already sits two rows

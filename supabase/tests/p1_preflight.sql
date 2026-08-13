@@ -218,7 +218,7 @@ profiles_without_any_scope_grant as (
   from profiles p
   join organizations o on o.id = p.org_id
   where p.active
-    and o.status in ('trial', 'active')
+    and o.status = 'active'
     and not exists (
       select 1 from user_scope_grants g
       where g.org_id = p.org_id and g.user_id = p.id)

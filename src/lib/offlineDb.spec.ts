@@ -484,7 +484,7 @@ describe('minimal offline identity cache', () => {
       actorUserId: 'user-1',
       orgId: 'org-1',
       role: 'office',
-      access: { mode: 'active', canWrite: true, trialEndsAt: null, graceEndsAt: null },
+      access: { mode: 'active', canWrite: true },
       cachedAt: 1,
     });
     expect(JSON.stringify(minimal)).not.toMatch(/phone|vat_rate|bank_match|organization|profile/);
@@ -493,10 +493,10 @@ describe('minimal offline identity cache', () => {
   it('rehydrates active access but never trusts write flags for closed server modes', () => {
     const context = minimalOfflineBootstrap({
       actorUserId: 'user-1', orgId: 'org-1', role: 'office', cachedAt: 1,
-      access: { mode: 'active', canWrite: true, trialEndsAt: null, graceEndsAt: null },
+      access: { mode: 'active', canWrite: true },
     })!;
     expect(organizationAccessFromOfflineBootstrap(context, 100)).toEqual({
-      mode: 'active', graceDaysRemaining: null, canWrite: true,
+      mode: 'active', canWrite: true,
     });
     for (const mode of ['read_only', 'offboarding', 'suspended'] as const) {
       expect(organizationAccessFromOfflineBootstrap({
@@ -508,45 +508,22 @@ describe('minimal offline identity cache', () => {
     }, 100)).toMatchObject({ mode: 'read_only', canWrite: false });
   });
 
-  it('uses absolute server deadlines for trial and grace and fails closed without them', () => {
-    const day = 24 * 60 * 60 * 1000;
-    const trialEndsAt = 10 * day;
-    const graceEndsAt = 13 * day;
-    const context = minimalOfflineBootstrap({
-      actorUserId: 'user-1', orgId: 'org-1', role: 'office', cachedAt: 1,
-      access: { mode: 'trial', canWrite: true, trialEndsAt, graceEndsAt },
-    })!;
-    expect(organizationAccessFromOfflineBootstrap(context, trialEndsAt - 1)).toMatchObject({
-      mode: 'trial', canWrite: true,
-    });
-    expect(organizationAccessFromOfflineBootstrap(context, trialEndsAt)).toEqual({
-      mode: 'trial', graceDaysRemaining: null, canWrite: true,
-    });
-    expect(organizationAccessFromOfflineBootstrap(context, trialEndsAt + 1)).toEqual({
-      mode: 'grace', graceDaysRemaining: 3, canWrite: true,
-    });
-    expect(organizationAccessFromOfflineBootstrap(context, graceEndsAt)).toEqual({
-      mode: 'grace', graceDaysRemaining: 0, canWrite: true,
-    });
-    expect(organizationAccessFromOfflineBootstrap(context, graceEndsAt + 1)).toEqual({
-      mode: 'read_only', graceDaysRemaining: null, canWrite: false,
-    });
-    expect(organizationAccessFromOfflineBootstrap({
-      ...context, access: { ...context.access, trialEndsAt: null, graceEndsAt: null },
-    }, 1)).toMatchObject({ mode: 'read_only', canWrite: false });
+  it('invalidates retired cached lifecycle modes as read-only until a server refresh', () => {
+    for (const mode of ['trial', 'grace']) {
+      const context = minimalOfflineBootstrap({
+        actorUserId: 'user-1', orgId: 'org-1', role: 'office', cachedAt: 1,
+        access: { mode, canWrite: true },
+      });
+      expect(context?.access).toEqual({ mode: 'read_only', canWrite: false });
+      expect(organizationAccessFromOfflineBootstrap(context!))
+        .toEqual({ mode: 'read_only', canWrite: false });
+    }
   });
 
-  it('stores absolute trial and grace deadlines from the server projection', () => {
-    expect(offlineAccessProjectionFromServer({
-      access_mode: 'trial',
-      grace_days_remaining: null,
-      trial_ends_at: '2026-08-10T00:00:00.000Z',
-      grace_ends_at: '2026-08-13T00:00:00.000Z',
-    }, { mode: 'trial', graceDaysRemaining: null, canWrite: true })).toEqual({
-      mode: 'trial',
-      canWrite: true,
-      trialEndsAt: Date.parse('2026-08-10T00:00:00.000Z'),
-      graceEndsAt: Date.parse('2026-08-13T00:00:00.000Z'),
-    });
+  it('stores only the current server lifecycle projection', () => {
+    expect(offlineAccessProjectionFromServer(
+      { access_mode: 'active' },
+      { mode: 'active', canWrite: true },
+    )).toEqual({ mode: 'active', canWrite: true });
   });
 });

@@ -7,6 +7,7 @@ const proposals = readFileSync(join(reviewDir, 'DocumentReviewProposals.tsx'), '
 const workspace = readFileSync(join(reviewDir, 'DocumentReviewWorkspace.tsx'), 'utf8');
 const priceListReview = readFileSync(join(reviewDir, 'PriceListReviewConfirmation.tsx'), 'utf8');
 const documentsInbox = readFileSync(join(process.cwd(), 'src', 'pages', 'DocumentsInbox.tsx'), 'utf8');
+const documentReview = readFileSync(join(process.cwd(), 'src', 'pages', 'DocumentReview.tsx'), 'utf8');
 const reprocessMigration = readFileSync(join(process.cwd(), 'supabase', 'migrations', '0085_reprocess_reviewed_document.sql'), 'utf8');
 
 describe('automatic document review UX', () => {
@@ -32,5 +33,21 @@ describe('automatic document review UX', () => {
     expect(documentsInbox).not.toContain("requireReason={processing.snapshots[retryDoc?.id ?? '']?.stage !== 'unprocessed'}");
     expect(reprocessMigration).toContain("j.status in ('queued', 'leased', 'extracted', 'interpreting')");
     expect(reprocessMigration).not.toMatch(/j\.status in \([^)]*'review'/);
+  });
+
+  it('opens every document row in review while source viewing stays an explicit signed-link action', () => {
+    expect(documentsInbox).toContain('onRowClick={(doc) => review(doc)}');
+    expect(documentsInbox).toContain('navigate(`/documents/${encodeURIComponent(doc.id)}/review${query}`)');
+    expect(documentsInbox).toContain("{ key: 'view', label: 'צפייה במקור'");
+    expect(documentsInbox).toContain("supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300)");
+    expect(documentsInbox).not.toContain('onRowClick={(doc) => void open(doc)}');
+  });
+
+  it('keeps an unprocessed document in review with a clear enqueue action', () => {
+    expect(documentReview).toContain("snapshot.stage === 'unprocessed'");
+    expect(documentReview).toContain('הקובץ נשמר, אך טרם נשלח לעיבוד');
+    expect(documentReview).toContain("supabase.rpc('enqueue_document_processing'");
+    expect(documentReview).toContain('שליחה לעיבוד');
+    expect(documentReview).toContain('new Event(DOCUMENT_PROCESSING_CHANGED_EVENT)');
   });
 });

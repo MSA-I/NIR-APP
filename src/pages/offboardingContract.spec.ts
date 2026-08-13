@@ -6,14 +6,16 @@ const source = (path: string) => readFileSync(join(process.cwd(), path), 'utf8')
 const settings = source('src/pages/Settings.tsx');
 const admin = source('src/pages/Admin.tsx');
 const layout = source('src/components/Layout.tsx');
-const trial = source('src/lib/trial.ts');
+const organizationAccess = source('src/lib/organizationAccess.ts');
 const auth = source('src/auth/AuthContext.tsx');
 const exportFunction = source('supabase/functions/tenant-export/index.ts');
 
 describe('tenant offboarding UI contract', () => {
   it('renders offboarding as its own server-authoritative read-only state', () => {
-    expect(trial).toContain("'offboarding'");
-    expect(trial).toContain("mode === 'active' || mode === 'trial' || mode === 'grace'");
+    expect(organizationAccess).toContain("'offboarding'");
+    expect(organizationAccess).toContain("canWrite: mode === 'active'");
+    expect(organizationAccess).not.toContain("mode === 'trial'");
+    expect(organizationAccess).not.toContain("mode === 'grace'");
     expect(layout).toContain("organizationAccess.mode === 'offboarding'");
     expect(layout).toContain('הארגון נמצא בתהליך סיום שירות');
     expect(auth).toContain('refreshOrganizationAccess: () => Promise<void>');

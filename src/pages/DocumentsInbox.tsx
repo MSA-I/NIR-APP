@@ -880,7 +880,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       {error && !data ? <ErrorNote message={error} /> : loading ? <SkeletonTable cols={6} /> : (
         <DataTable rows={filtered} columns={columns} pageSize={20}
           rowLabel={(doc) => `מסמך ${doc.file_name}`}
-          onRowClick={(doc) => void open(doc)}
+          onRowClick={(doc) => review(doc)}
           mobileTitle={(doc) => doc.file_name}
           mobileTrailing={(doc) => (
             <span className="flex flex-wrap justify-end gap-1">

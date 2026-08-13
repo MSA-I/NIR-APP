@@ -8,9 +8,9 @@ import { DocumentScanPreview } from '../components/document-review/DocumentScanP
 import { ErrorNote, Note, PageLoader } from '../components/ui';
 import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
-import { useDocumentProcessing } from '../lib/useDocumentProcessing';
 import { isActiveRole } from '../lib/types';
 import { useDocumentScanning } from '../lib/useDocumentScanning';
+import { DOCUMENT_PROCESSING_CHANGED_EVENT, useDocumentProcessing } from '../lib/useDocumentProcessing';
 
 // interpret-document maps every failure to a Hebrew message server-side, so the body is the
 // message. Only a transport failure needs the generic mapping.
@@ -44,7 +44,25 @@ export default function DocumentReview() {
   const startedFor = useRef<string | null>(null);
   const [interpreting, setInterpreting] = useState(false);
   const [interpretError, setInterpretError] = useState<string | null>(null);
+  const [enqueuing, setEnqueuing] = useState(false);
+  const [enqueueError, setEnqueueError] = useState<string | null>(null);
   const { refetch } = processing;
+
+  const enqueue = useCallback(async () => {
+    if (!documentId || !canWrite) return;
+    setEnqueuing(true);
+    setEnqueueError(null);
+    try {
+      const result = await supabase.rpc('enqueue_document_processing', { p_document_id: documentId });
+      if (result.error) throw result.error;
+      window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
+      await refetch();
+    } catch (error) {
+      setEnqueueError(toHebrewError(error));
+    } finally {
+      setEnqueuing(false);
+    }
+  }, [canWrite, documentId, refetch]);
 
   const interpret = useCallback(async (id: string) => {
     setInterpreting(true);
@@ -102,6 +120,22 @@ export default function DocumentReview() {
           <button type="button" className="btn-secondary" onClick={() => void scanning.refetch()}>
             ניסיון נוסף
           </button>
+        </Note>
+      )}
+
+      {snapshot.stage === 'unprocessed' && (
+        <Note tone={enqueueError ? 'alert' : 'info'} role={enqueueError ? 'alert' : 'status'} className="flex-wrap">
+          <span className="min-w-0 flex-1">
+            {enqueueError ?? (canWrite
+              ? 'הקובץ נשמר, אך טרם נשלח לעיבוד. אפשר להתחיל מכאן בלי לחזור לתיקיית המסמכים.'
+              : 'הקובץ נשמר וטרם נשלח לעיבוד. במצב קריאה בלבד אי אפשר להתחיל עיבוד חדש.')}
+          </span>
+          {canWrite && (
+            <button type="button" className="btn-primary min-h-11" disabled={enqueuing} onClick={() => void enqueue()}>
+              <RefreshCw className={enqueuing ? 'animate-spin motion-reduce:animate-none' : ''} size={17} aria-hidden="true" />
+              {enqueuing ? 'שולח לעיבוד…' : 'שליחה לעיבוד'}
+            </button>
+          )}
         </Note>
       )}
 

@@ -517,7 +517,7 @@ async function complete(
   }
   if (
     !result.data.business_applied &&
-    ["active", "trial", "grace"].includes(String(result.data.access_mode))
+    String(result.data.access_mode) === "active"
   ) {
     const recovered = await admin.rpc(
       "service_recover_document_extraction_from_egress",

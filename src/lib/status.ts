@@ -12,7 +12,6 @@ export interface StatusMeta { label: string; tone: Tone }
 const m = (label: string, tone: Tone): StatusMeta => ({ label, tone });
 
 export const ORG_STATUS: Record<string, StatusMeta> = {
-  trial: m('תקופת ניסיון', 'info'),
   active: m('פעיל', 'done'),
   suspended: m('מושהה', 'alert'),
 };

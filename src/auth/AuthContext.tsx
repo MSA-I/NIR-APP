@@ -18,7 +18,7 @@ import {
   READ_ONLY_ORGANIZATION_ACCESS,
   type OrganizationAccess,
   type OrganizationAccessStateRow,
-} from '../lib/trial';
+} from '../lib/organizationAccess';
 
 export interface SignOutResult {
   error: string | null;
@@ -244,9 +244,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Open tabs re-read the canonical server clock instead of crossing trial/grace boundaries with
-  // Date.now from a potentially skewed device. The database still rejects every stale write; this
-  // poll keeps the controls/countdown aligned without pretending an offline response exists.
+  // Open tabs periodically re-read the canonical lifecycle. The database still rejects every
+  // stale write; this poll keeps suspension and offboarding controls aligned.
   useEffect(() => {
     if (!session || !profile || !org || offlineBootstrap) return;
     const refreshAccess = async () => {

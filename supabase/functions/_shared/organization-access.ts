@@ -7,5 +7,5 @@ export function organizationWriteAllowed(
   organization: OrganizationAccessRow | null,
 ): boolean {
   return organization !== null
-    && ["active", "trial", "grace"].includes(organization.access_mode);
+    && organization.access_mode === "active";
 }

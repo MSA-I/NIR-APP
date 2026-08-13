@@ -25,16 +25,16 @@ function renderAt(path: string) {
 }
 
 describe('סרגל פעולות מהירות תחתון', () => {
-  it('מחזיר לבעלים חמישה יעדים כשהצילום באמצע ותפעול מסמכים בסוף', () => {
+  it('מחזיר לבעלים חמישה יעדים כשהצילום באמצע ובקרת מסמכים בסוף', () => {
     state.role = 'owner';
     renderAt('/orders/order-1');
     const group = screen.getByRole('group', { name: 'פעולות מהירות' });
     expect([...group.querySelectorAll('.mobile-action')].map((item) => item.textContent)).toEqual([
       // 'חשבונית חדשה' left this bar in G1: an invoice is received, not created.
-      'הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'תפעול מסמכים',
+      'הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'בקרת מסמכים',
     ]);
     expect([...group.querySelectorAll('.mobile-action')][2]).toHaveAttribute('data-quick-action-key', 'capture');
-    expect(screen.getByRole('link', { name: 'תפעול מסמכים' })).toHaveAttribute('href', '/documents/operations');
+    expect(screen.getByRole('link', { name: 'בקרת מסמכים' })).toHaveAttribute('href', '/documents/operations');
     expect(screen.queryByRole('navigation', { name: 'ניווט ראשי בנייד' })).toBeNull();
   });
 

@@ -54,8 +54,8 @@ export function normalizeIncorrectCalibration(
 export interface OperationalAttemptState {
   status: string;
   price_list_outcome: string | null;
-  reversal_known: boolean;
-  reverted: boolean | null;
+  reversal_known?: boolean;
+  reverted?: boolean | null;
   attempt_count?: number;
   created_at?: string;
   updated_at?: string;
