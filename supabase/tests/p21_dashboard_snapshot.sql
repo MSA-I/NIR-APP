@@ -53,12 +53,12 @@ insert into public.suppliers (id, org_id, name) values
 -- contributing an open balance to this dashboard fixture.
 insert into public.invoices (
   id, org_id, supplier_id, invoice_number, invoice_date,
-  amount_before_vat, vat_amount, total_amount, deleted_at
+  amount_before_vat, vat_amount, total_amount
 ) values
   ('51000000-0000-4000-8000-000000000001', '21000000-0000-4000-8000-000000000001',
-   '41000000-0000-4000-8000-000000000001', 'P21-A', '2026-08-01', 7, 0, 7, now()),
+   '41000000-0000-4000-8000-000000000001', 'P21-A', '2026-08-01', 7, 0, 7),
   ('51000000-0000-4000-8000-000000000002', '21000000-0000-4000-8000-000000000002',
-   '41000000-0000-4000-8000-000000000002', 'P21-B', '2026-08-01', 70, 0, 70, now());
+   '41000000-0000-4000-8000-000000000002', 'P21-B', '2026-08-01', 70, 0, 70);
 
 insert into public.payment_requests (org_id, supplier_id, amount, due_date, status) values
   ('21000000-0000-4000-8000-000000000001', '41000000-0000-4000-8000-000000000001', 10, '2026-08-01', 'pending_approval'),
@@ -69,6 +69,15 @@ insert into public.credit_requests (org_id, supplier_id, invoice_id, reason, amo
    '51000000-0000-4000-8000-000000000001', 'other', 7, 'open'),
   ('21000000-0000-4000-8000-000000000002', '41000000-0000-4000-8000-000000000002',
    '51000000-0000-4000-8000-000000000002', 'other', 70, 'open');
+
+-- The credit is created while its payable invoice is live. A later soft delete preserves the
+-- immutable reference while excluding the invoice from the dashboard's open-balance evidence.
+update public.invoices
+set deleted_at = statement_timestamp()
+where id in (
+  '51000000-0000-4000-8000-000000000001',
+  '51000000-0000-4000-8000-000000000002'
+);
 
 select set_config('request.jwt.claim.sub', '31000000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
