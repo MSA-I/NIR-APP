@@ -88,11 +88,13 @@ Deno.test("branding rejects inactive owners and canonical read-only tenants", ()
       access_mode: "active",
     }),
   );
-  assert(
+  if (
     organizationCanManageBranding({ active: true, role: "owner" }, {
       access_mode: "grace",
-    }),
-  );
+    })
+  ) {
+    throw new Error("accepted retired grace tenant");
+  }
   if (
     organizationCanManageBranding({ active: true, role: "owner" }, {
       access_mode: "offboarding",

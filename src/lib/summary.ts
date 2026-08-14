@@ -59,7 +59,7 @@ export async function buildSummary(): Promise<Summary> {
     // 1. invoices received this week
     { key: 'received_week', label: `חשבוניות שנקלטו ב-${WEEK_DAYS} הימים האחרונים`, unit: 'count', to: '/invoices', run: () => readExactCount(
       supabase.from('invoices').select('id', { count: 'exact', head: true })
-        .is('deleted_at', null).gte('received_date', daysAgo(WEEK_DAYS)),
+        .eq('financial_role', 'payable').is('deleted_at', null).gte('received_date', daysAgo(WEEK_DAYS)),
     ) },
 
     // 2. invoices awaiting approval.
@@ -70,7 +70,7 @@ export async function buildSummary(): Promise<Summary> {
     //    a third interpretation.
     { key: 'awaiting_approval', label: 'חשבוניות הממתינות לאישור', unit: 'count', to: '/invoices', run: () => readExactCount(
       supabase.from('invoices').select('id', { count: 'exact', head: true })
-        .is('deleted_at', null).eq('review_status', 'pending_approval'),
+        .eq('financial_role', 'payable').is('deleted_at', null).eq('review_status', 'pending_approval'),
     ) },
 
     // 3. money committed on active payment requests

@@ -243,6 +243,11 @@ function uploadMimeType(file: File) {
   throw new DocumentUploadError('סוג הקובץ אינו נתמך. ניתן להעלות PDF, תמונה, Excel, Word, RTF, TXT, HTML או ODT.', false);
 }
 
+/** Shared validation for document flows that register through a dedicated intake RPC. */
+export function documentUploadMimeType(file: File): string {
+  return uploadMimeType(file);
+}
+
 export const DOCUMENT_KIND_OPTIONS: { value: DocumentKind; label: string }[] = [
   { value: 'invoice', label: 'חשבונית' },
   { value: 'delivery_note', label: 'תעודת משלוח' },
@@ -473,7 +478,8 @@ export async function uploadDocument(
 
 async function entityMetadata(entityType: string, entityId: string, documentKind: DocumentKind): Promise<DocumentMetadata> {
   if (entityType === 'invoice') {
-    const row = unwrap(await supabase.from('invoices').select('supplier_id, invoice_date').eq('id', entityId).single()) as {
+    const row = unwrap(await supabase.from('invoices').select('supplier_id, invoice_date')
+      .eq('id', entityId).eq('financial_role', 'payable').single()) as {
       supplier_id: string; invoice_date: string;
     };
     return { documentKind, supplierId: row.supplier_id, documentDate: row.invoice_date };

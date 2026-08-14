@@ -1297,7 +1297,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
                     return (
                       <th key={c.key} scope="col" className="th" aria-sort={ariaSort}>
                         {onSortClick ? (
-                          <button type="button" className="inline-flex min-h-11 items-center gap-1 hover:text-ink-mid cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+                          <button type="button" className="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-ink-mid cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
                             onClick={onSortClick}>
                             {c.header}{ariaSort === 'ascending' ? ' ↑' : ariaSort === 'descending' ? ' ↓' : ''}
                           </button>

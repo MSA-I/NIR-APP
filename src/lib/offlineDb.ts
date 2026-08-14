@@ -4,7 +4,7 @@ import type {
   OrganizationAccess,
   OrganizationAccessMode,
   OrganizationAccessStateRow,
-} from './trial';
+} from './organizationAccess';
 
 /**
  * Local store for the ONE offline path this product allows: goods receiving
@@ -64,8 +64,6 @@ export interface OfflineBootstrapContext {
 export interface OfflineAccessProjection {
   mode: OrganizationAccessMode;
   canWrite: boolean;
-  trialEndsAt: number | null;
-  graceEndsAt: number | null;
 }
 
 /**
@@ -1114,69 +1112,37 @@ const SCOPE_KEY_PREFIX = 'scope:';
 const BOOTSTRAP_KEY_PREFIX = 'bootstrap:';
 const OFFLINE_ROLES = new Set<Role>(['owner', 'office', 'accountant']);
 const OFFLINE_ACCESS_MODES = new Set<OrganizationAccessMode>([
-  'active', 'trial', 'grace', 'read_only', 'offboarding', 'suspended',
+  'active', 'read_only', 'offboarding', 'suspended',
 ]);
+const RETIRED_OFFLINE_ACCESS_MODES = new Set(['trial', 'grace']);
 
 const lastSyncKey = ({ orgId, actorUserId }: OfflineScope) => (
   `${LAST_SYNC_KEY}:${orgId}:${actorUserId}`
 );
 
-function absoluteServerDeadline(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 export function offlineAccessProjectionFromServer(
-  row: OrganizationAccessStateRow,
+  _row: OrganizationAccessStateRow,
   access: OrganizationAccess,
 ): OfflineAccessProjection {
   return {
     mode: access.mode,
     canWrite: access.canWrite,
-    trialEndsAt: absoluteServerDeadline(row.trial_ends_at),
-    graceEndsAt: absoluteServerDeadline(row.grace_ends_at),
   };
 }
 
-/**
- * Rehydrates only what the last server response proved. Time-limited write access closes at the
- * absolute server deadline; invalid/missing evidence and inconsistent canWrite flags fail closed.
- */
+/** Rehydrates only a current supported server mode. Retired cached modes fail closed. */
 export function organizationAccessFromOfflineBootstrap(
   context: OfflineBootstrapContext,
-  now = Date.now(),
+  _now = Date.now(),
 ): OrganizationAccess {
   const access = context.access;
-  const readOnly: OrganizationAccess = {
-    mode: 'read_only',
-    graceDaysRemaining: null,
-    canWrite: false,
-  };
+  const readOnly: OrganizationAccess = { mode: 'read_only', canWrite: false };
   if (!access || !OFFLINE_ACCESS_MODES.has(access.mode)) return readOnly;
   if (['read_only', 'offboarding', 'suspended'].includes(access.mode)) {
     return { ...readOnly, mode: access.mode };
   }
   if (!access.canWrite) return readOnly;
-  if (access.mode === 'active') {
-    return { mode: 'active', graceDaysRemaining: null, canWrite: true };
-  }
-  const graceEndsAt = access.graceEndsAt;
-  if (graceEndsAt === null || !Number.isFinite(graceEndsAt) || now > graceEndsAt) {
-    return readOnly;
-  }
-  if (access.mode === 'trial') {
-    const trialEndsAt = access.trialEndsAt;
-    if (trialEndsAt === null || !Number.isFinite(trialEndsAt) || trialEndsAt > graceEndsAt) {
-      return readOnly;
-    }
-    if (now <= trialEndsAt) return { mode: 'trial', graceDaysRemaining: null, canWrite: true };
-  }
-  return {
-    mode: 'grace',
-    graceDaysRemaining: Math.max(0, Math.ceil((graceEndsAt - now) / (24 * 60 * 60 * 1000))),
-    canWrite: true,
-  };
+  return access.mode === 'active' ? { mode: 'active', canWrite: true } : readOnly;
 }
 
 /**
@@ -1219,10 +1185,14 @@ export function minimalOfflineBootstrap(value: unknown): OfflineBootstrapContext
   };
   const role = candidate.role ?? candidate.profile?.role;
   const access = candidate.access ?? candidate.organizationAccess;
+  const accessMode = typeof access?.mode === 'string' ? access.mode : null;
+  const accessCanWrite = access?.canWrite;
   if (typeof candidate.actorUserId !== 'string' || typeof candidate.orgId !== 'string'
     || typeof role !== 'string' || !OFFLINE_ROLES.has(role as Role)
-    || typeof access?.mode !== 'string' || !OFFLINE_ACCESS_MODES.has(access.mode as OrganizationAccessMode)
-    || typeof access.canWrite !== 'boolean') return null;
+    || accessMode === null
+    || (!OFFLINE_ACCESS_MODES.has(accessMode as OrganizationAccessMode)
+      && !RETIRED_OFFLINE_ACCESS_MODES.has(accessMode))
+    || typeof accessCanWrite !== 'boolean') return null;
   if (candidate.profile && (
     candidate.profile.id !== candidate.actorUserId || candidate.profile.org_id !== candidate.orgId
   )) return null;
@@ -1230,16 +1200,12 @@ export function minimalOfflineBootstrap(value: unknown): OfflineBootstrapContext
     actorUserId: candidate.actorUserId,
     orgId: candidate.orgId,
     role: role as Role,
-    access: {
-      mode: access.mode as OrganizationAccessMode,
-      canWrite: access.canWrite,
-      trialEndsAt: typeof candidate.access?.trialEndsAt === 'number'
-        && Number.isFinite(candidate.access.trialEndsAt)
-        ? candidate.access.trialEndsAt : null,
-      graceEndsAt: typeof candidate.access?.graceEndsAt === 'number'
-        && Number.isFinite(candidate.access.graceEndsAt)
-        ? candidate.access.graceEndsAt : null,
-    },
+    access: RETIRED_OFFLINE_ACCESS_MODES.has(accessMode)
+      ? { mode: 'read_only', canWrite: false }
+      : {
+        mode: accessMode as OrganizationAccessMode,
+        canWrite: accessMode === 'active' && accessCanWrite,
+      },
     cachedAt: typeof candidate.cachedAt === 'number' ? candidate.cachedAt : Date.now(),
   };
 }

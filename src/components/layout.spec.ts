@@ -31,6 +31,7 @@ describe('מעטפת הניווט', () => {
     expect(visible.has('/alerts')).toBe(false);
     // The campaign's two new destinations are daily work, so they belong in the menu proper.
     expect(visible.has('/documents/operations')).toBe(true);
+    expect(visible.has('/documents/consolidated-invoices')).toBe(true);
     expect(visible.has('/inventory')).toBe(true);
     // /onboarding joined the footer (09.08.2026) and this list is pinned, so the addition has to
     // argue for itself here rather than slip in. The argument: the route existed with NO door at
@@ -56,6 +57,7 @@ describe('מעטפת הניווט', () => {
     expect(paths).toHaveLength(new Set(paths).size);
     expect(paths).toEqual(expect.arrayContaining([
       '/orders/new', '/documents/operations', '/documents/archive', '/inventory', '/alerts', '/settings',
+      '/documents/consolidated-invoices',
     ]));
   });
 
@@ -99,6 +101,8 @@ describe('התאמת משפחת מסלול', () => {
     expect(isRouteFamilyActive('/suppliers/42', '/suppliers')).toBe(true);
     expect(isRouteFamilyActive('/receiving/42', '/receiving')).toBe(true);
     expect(isRouteFamilyActive('/documents/42/review', '/documents')).toBe(true);
+    expect(isRouteFamilyActive('/documents/consolidated-invoices', '/documents')).toBe(false);
+    expect(isRouteFamilyActive('/documents/consolidated-invoices', '/documents/consolidated-invoices')).toBe(true);
     expect(isRouteFamilyActive('/documents/archive', '/documents')).toBe(false);
     expect(isRouteFamilyActive('/documents/archive', '/documents/archive')).toBe(true);
     expect(isRouteFamilyActive('/payment-requests', '/pay')).toBe(false);

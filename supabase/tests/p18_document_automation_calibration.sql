@@ -776,6 +776,21 @@ set local role authenticated;
 
 select pg_temp.p18_assert(
   (select count(*) = 1
+          and bool_and(document_id = '88000000-0000-4000-8000-000000000002')
+          and bool_and(review_key = (
+            select id::text from public.price_list_shadow_lines
+            where shadow_run_id = current_setting('p18.low_shadow_run')::uuid
+          ))
+          and min(document_line_count) = 1
+          and min(document_reviewed_count) = 0
+          and not bool_or(is_empty_run)
+   from public.get_document_control_price_review_queue(50)),
+  'the customer-safe price review queue did not return exactly the pending business decision'
+);
+
+reset role;
+select pg_temp.p18_assert(
+  (select count(*) = 1
           and bool_and(shadow_line_id = (
             select id from public.price_list_shadow_lines
             where shadow_run_id = current_setting('p18.low_shadow_run')::uuid
@@ -787,6 +802,12 @@ select pg_temp.p18_assert(
 );
 select public.get_price_list_calibration_metrics()::text as calibration_metrics \gset
 select public.get_price_list_drift_metrics(30)::text as drift_metrics \gset
+select count(*) = 2
+       and bool_and(prompt_version = 'interpret-document-v8')
+       and bool_and(usage_cost is null) as raw_attempts_match
+from public.get_document_processing_attempts(null, 100)
+\gset p18_raw_attempts_
+set local role authenticated;
 select public.get_document_operations_metrics(30)::text as operations_metrics \gset
 
 select pg_temp.p18_assert(
@@ -822,11 +843,18 @@ select pg_temp.p18_assert(
   (:'operations_metrics'::jsonb ->> 'documents_review_required')::integer = 2
   and (:'operations_metrics'::jsonb ->> 'retry_count')::integer = 2
   and (:'operations_metrics'::jsonb ->> 'average_processing_duration_ms')::numeric = 360
-  and (:'operations_metrics'::jsonb #> '{usage,cost}') = 'null'::jsonb
-  and (:'operations_metrics'::jsonb #>> '{last_interpretation,prompt_version}')
-    = 'interpret-document-v8'
-  and (select count(*) = 2 from public.get_document_processing_attempts(null, 100)),
-  'document operations read model lost status/retry/version/unknown-cost evidence'
+  and (select count(*) = 10 from jsonb_object_keys(:'operations_metrics'::jsonb))
+  and :'operations_metrics'::jsonb ?& array[
+    'window_days', 'documents_waiting', 'documents_processing', 'documents_stuck',
+    'documents_review_required', 'documents_failed', 'documents_completed', 'retry_count',
+    'average_processing_duration_ms', 'last_processing_at'
+  ]
+  and (select count(*) = 2 from public.get_document_control_attempts(null, 100)),
+  'customer-safe document operations read model lost its exact status and retry contract'
+);
+select pg_temp.p18_assert(
+  :'p18_raw_attempts_raw_attempts_match'::boolean,
+  'privileged processing telemetry lost prompt-version or unknown-cost evidence'
 );
 
 select pg_temp.p18_assert(
@@ -1147,20 +1175,37 @@ select set_config(
 );
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
+select pg_temp.p18_assert(
+  (select count(*) = 1 and bool_and(is_empty_run)
+   from public.get_document_control_price_review_queue(50)
+   where review_key = (:'empty_office_shadow'::jsonb ->> 'shadow_run_id')),
+  'zero-line price list was absent from the customer-safe review queue'
+);
+reset role;
 select public.get_price_list_drift_metrics(30)::text as empty_run_drift \gset
 select pg_temp.p18_assert(
   (select count(*) = 1 and bool_and(is_empty_run)
    from public.get_price_list_calibration_queue(50)
    where shadow_run_id = (:'empty_office_shadow'::jsonb ->> 'shadow_run_id')::uuid),
-  'zero-line price list was absent from the human calibration corpus queue'
+  'zero-line price list was absent from the privileged calibration corpus queue'
 );
+set local role authenticated;
 select public.record_price_list_empty_run_review(
   (:'empty_office_shadow'::jsonb ->> 'shadow_run_id')::uuid,
   '68000000-0000-4000-8000-000000000088',
   'incorrect',
   'P18 human confirmed the price rows were missed'
 )::text as empty_run_review \gset
+reset role;
 select public.get_price_list_calibration_metrics()::text as empty_run_calibration \gset
+select pg_temp.p18_assert(
+  not exists (
+    select 1 from public.get_price_list_calibration_queue(50)
+    where shadow_run_id = (:'empty_office_shadow'::jsonb ->> 'shadow_run_id')::uuid
+  ),
+  'zero-line human decision remained in the privileged calibration queue'
+);
+set local role authenticated;
 select pg_temp.p18_assert(
   (:'empty_run_drift'::jsonb #>> '{groups,0,current_run_count}')::integer = 3
   and (:'empty_run_drift'::jsonb #>> '{groups,0,current_rows}')::integer = 4,
@@ -1171,10 +1216,10 @@ select pg_temp.p18_assert(
   and (:'empty_run_calibration'::jsonb ->> 'zero_line_document_count')::integer = 1
   and (:'empty_run_calibration'::jsonb ->> 'reviewed_zero_line_document_count')::integer = 1
   and not exists (
-    select 1 from public.get_price_list_calibration_queue(50)
-    where shadow_run_id = (:'empty_office_shadow'::jsonb ->> 'shadow_run_id')::uuid
+    select 1 from public.get_document_control_price_review_queue(50)
+    where review_key = (:'empty_office_shadow'::jsonb ->> 'shadow_run_id')
   ),
-  'zero-line human decision was not recorded in corpus progress'
+  'zero-line human decision was not recorded in customer-safe corpus progress'
 );
 reset role;
 rollback to savepoint p18_empty_office_shadow;
@@ -1209,16 +1254,24 @@ select pg_temp.p18_assert(
 );
 do $$
 begin
-  perform public.get_price_list_calibration_metrics();
-  raise exception 'expected owner-only calibration metrics rejection';
+  perform public.get_document_operations_metrics(30);
+  raise exception 'expected owner-only document operations rejection';
 exception when sqlstate '42501' then
   if sqlerrm <> 'not_authorized' then raise; end if;
 end
 $$;
 do $$
 begin
-  perform public.get_price_list_calibration_queue(50);
-  raise exception 'expected owner-only calibration queue rejection';
+  perform public.get_document_control_price_review_queue(50);
+  raise exception 'expected owner-only price review queue rejection';
+exception when sqlstate '42501' then
+  if sqlerrm <> 'not_authorized' then raise; end if;
+end
+$$;
+do $$
+begin
+  perform public.get_document_control_attempts(null, 100);
+  raise exception 'expected owner-only document attempts rejection';
 exception when sqlstate '42501' then
   if sqlerrm <> 'not_authorized' then raise; end if;
 end
@@ -1239,24 +1292,60 @@ end
 $$;
 reset role;
 
+select pg_temp.p18_assert(
+  not has_function_privilege(
+    'authenticated', 'public.get_price_list_calibration_metrics(timestamptz,timestamptz)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'authenticated', 'public.get_price_list_calibration_queue(integer)', 'EXECUTE'
+  )
+  and not has_function_privilege(
+    'authenticated', 'public.get_price_list_drift_metrics(integer)', 'EXECUTE'
+  )
+  and not has_function_privilege(
+    'authenticated', 'public.get_document_processing_attempts(uuid,integer)', 'EXECUTE'
+  ),
+  'authenticated can execute retired calibration or processing telemetry RPCs'
+);
+
 select set_config(
   'request.jwt.claim.sub', '29000000-0000-4000-8000-000000000001', true
 );
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
-select public.get_price_list_calibration_metrics()::text as tenant_b_calibration \gset
 select public.get_document_operations_metrics(30)::text as tenant_b_operations \gset
+select count(*) as safe_queue_count
+from public.get_document_control_price_review_queue(50)
+\gset p18_tenant_b_
+select count(*) as safe_attempt_count
+from public.get_document_control_attempts(
+  '88000000-0000-4000-8000-000000000001', 100
+)
+\gset p18_tenant_b_
+reset role;
+select public.get_price_list_calibration_metrics()::text as tenant_b_calibration \gset
+select count(*) as raw_queue_count
+from public.get_price_list_calibration_queue(50)
+\gset p18_tenant_b_
+select count(*) as raw_attempt_count
+from public.get_document_processing_attempts(
+  '88000000-0000-4000-8000-000000000001', 100
+)
+\gset p18_tenant_b_
+set local role authenticated;
 select pg_temp.p18_assert(
   (select count(*) = 0 from public.price_list_shadow_runs)
-  and (select count(*) = 0 from public.get_price_list_calibration_queue(50))
+  and :'p18_tenant_b_safe_queue_count'::integer = 0
+  and :'p18_tenant_b_safe_attempt_count'::integer = 0
+  and :'p18_tenant_b_raw_queue_count'::integer = 0
+  and :'p18_tenant_b_raw_attempt_count'::integer = 0
   and (:'tenant_b_calibration'::jsonb ->> 'total_interpreted_rows')::integer = 0
   and (:'tenant_b_calibration'::jsonb -> 'accuracy') = 'null'::jsonb
   and (:'tenant_b_operations'::jsonb ->> 'documents_waiting')::integer = 0
-  and (:'tenant_b_operations'::jsonb -> 'last_failure') = 'null'::jsonb
-  and (:'tenant_b_operations'::jsonb #> '{usage,cost}') = 'null'::jsonb
-  and (select count(*) = 0 from public.get_document_processing_attempts(
-    '88000000-0000-4000-8000-000000000001', 100
-  )),
+  and (:'tenant_b_operations'::jsonb ->> 'retry_count')::integer = 0
+  and (:'tenant_b_operations'::jsonb -> 'average_processing_duration_ms') = 'null'::jsonb
+  and (:'tenant_b_operations'::jsonb -> 'last_processing_at') = 'null'::jsonb,
   'tenant B saw tenant A evidence or unknown operations data became fake zero detail'
 );
 do $$

@@ -5,7 +5,7 @@ import { PageLoader, useToast } from './components/ui';
 import { toHebrewError } from './lib/errors';
 import { reportError } from './lib/observability';
 import { ACTIVE_ROLES, isActiveRole, type ActiveRole } from './lib/types';
-import { ACTIVE_ORGANIZATION_ACCESS } from './lib/trial';
+import { ACTIVE_ORGANIZATION_ACCESS } from './lib/organizationAccess';
 
 // Eager: the auth shell that must paint before (or regardless of) a resolved session.
 // Layout is the persistent chrome around every tenant screen; Login/AcceptInvite are the
@@ -48,6 +48,7 @@ const Analytics = lazy(() => import('./pages/Analytics'));
 const Expenses = lazy(() => import('./pages/Expenses'));
 const DocumentsGallery = lazy(() => import('./pages/DocumentsInbox'));
 const DocumentOperations = lazy(() => import('./pages/DocumentOperations'));
+const ConsolidatedInvoices = lazy(() => import('./pages/ConsolidatedInvoices'));
 const DocumentReview = lazy(() => import('./pages/DocumentReview'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Admin = lazy(() => import('./pages/Admin'));
@@ -100,7 +101,7 @@ function ReadOnlyUnavailable() {
       <p className="mt-2 text-sm text-ink-soft">
         {offboarding
           ? 'הארגון נמצא בתהליך סיום שירות ולכן המערכת במצב קריאה בלבד. המידע הקיים נשמר וזמין לצפייה ולייצוא עד להשלמת התהליך.'
-          : 'תקופת הניסיון הסתיימה. המערכת נמצאת כעת במצב קריאה בלבד. כל המידע הקיים נשמר וזמין לצפייה ולייצוא. להפעלת המערכת מחדש יש לפנות למנהל השירות.'}
+          : 'הגישה לכתיבה אינה זמינה כרגע. המידע הקיים נשמר וזמין לצפייה ולייצוא; לפרטים יש לפנות למנהל המערכת.'}
       </p>
       <a className="btn-secondary mt-5" href="/dashboard">חזרה למרכז הבקרה</a>
     </div>
@@ -172,15 +173,6 @@ function AccountUnavailable() {
   );
 }
 
-/*
- * The whole-app `TrialExpired` stop screen (09.08.2026) was removed here on 10.08.2026, when
- * `0092` made the read-only floor server-authoritative. The two disagreed about what an expired
- * tenant may do: the screen stopped the app outright, while `0092` — already deployed — keeps
- * SELECT open and fails only writes, at the row. Blocking reads in the UI would have been
- * stricter than the contract the database actually enforces. Write gating now lives per route in
- * `RequireAuth` (`write && !organizationAccess.canWrite` -> `ReadOnlyUnavailable`).
- * See OPEN-DECISIONS #15.
- */
 function BootstrapUnavailable() {
   const { bootstrapError, retryBootstrap, signOut } = useAuth();
   const toast = useToast();
@@ -299,6 +291,7 @@ export default function App() {
         <Route path="/invoices/:id" element={<Guard roles={READERS}><InvoiceDetail /></Guard>} />
         <Route path="/documents" element={<Guard roles={STAFF}><DocumentsGallery /></Guard>} />
         <Route path="/documents/operations" element={<Guard roles={['owner']}><DocumentOperations /></Guard>} />
+        <Route path="/documents/consolidated-invoices" element={<Guard roles={READERS}><ConsolidatedInvoices /></Guard>} />
         {/* The same register, narrowed to what the interpretation layer could not place. A second
             component would be a second answer to "what is a document row", so the gallery takes a
             prop instead and this route is the only thing that turns it on. */}

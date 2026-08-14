@@ -28,7 +28,8 @@ export async function runInvoiceChecks(inv: {
   // 1. exact duplicate: same supplier + invoice number
   const dups = await fetchAll<{ id: string; invoice_date: string; total_amount: number; payment_status: string }>((from, to) => {
     let query = supabase.from('invoices').select('id, invoice_date, total_amount, payment_status')
-      .eq('supplier_id', inv.supplier_id).eq('invoice_number', inv.invoice_number).is('deleted_at', null);
+      .eq('supplier_id', inv.supplier_id).eq('invoice_number', inv.invoice_number)
+      .eq('financial_role', 'payable').is('deleted_at', null);
     if (inv.id) query = query.neq('id', inv.id);
     return query.order('id').range(from, to);
   });
@@ -48,6 +49,7 @@ export async function runInvoiceChecks(inv: {
       let query = supabase.from('invoices').select('id, invoice_number, invoice_date')
         .eq('supplier_id', inv.supplier_id).eq('total_amount', inv.total_amount)
         .neq('invoice_number', inv.invoice_number)
+        .eq('financial_role', 'payable')
         .gte('invoice_date', dateFrom).lte('invoice_date', dateTo)
         .is('deleted_at', null);
       if (inv.id) query = query.neq('id', inv.id);

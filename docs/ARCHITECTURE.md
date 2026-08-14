@@ -53,9 +53,10 @@ supabase/
                            0042 ACL פרופיל · 0043 פיצול הזמנה · 0044 פריטים להזמנה הבאה
                            0045–0085 עיבוד/פרשנות מסמכים, review, אוטונומיה וקליטת מחירון
                            0093–0096 reprocess, rollback, calibration, shadow והקשחת scope
-                           0097–0103 גבול ספק פיננסי, מיתוג, 3-way, dashboard, trial, portal, מלאי ו־offboarding/export
+                           0097–0103 גבול ספק פיננסי, מיתוג, 3-way, dashboard, lifecycle, portal, מלאי ו־offboarding/export
                            0104–0128 מסמך ספק שהתקבל, הסרת מסמך, צילום פידבק, תבניות ייצוא,
                                      פרישת פרסונות ותיקון העלאות Storage בדפדפן
+                           0134–0135 הסרת Trial ו־read-models מצומצמים לבקרת מסמכים
   functions/               admin-provision · send-invite · send-push · send-feedback · submit-price-list
                            interpret-document · outbox-worker · upload-organization-logo · tenant-export
                            service_role נשאר בשרת בלבד
@@ -78,7 +79,7 @@ scripts/                   כלי admin + בדיקות P0–P4 למסד מקומ
 | `/receiving`, `/receiving/:orderId` | קבלת סחורה (מובייל) | `owner`, `office` |
 | `/invoices`, `/invoices/new`, `/invoices/:id` | חשבוניות + בדיקות אוטומטיות; יצירה מקושרת מציגה מראש הקשר הזמנה/קבלה אנושי שנקרא תחת RLS ושולחת ל־`create_invoice` רק מזהים שנפתרו ואומתו | קוראים / כותבים |
 | `/documents` | גלריית מסמכים + סינון + שיוך לחשבונית/קבלת סחורה | `owner`, `office` |
-| `/documents/operations` | מרכז תפעול, ניסיונות, כשל, reprocess, calibration ו־drift | `owner` |
+| `/documents/operations` | בקרת מסמכים — דורש טיפול, עיבוד, תקלות, שחזור ותור מחירונים; ללא טלמטריית מודל | `owner` |
 | `/inbox` | הפניה ל־`/documents?filing=unfiled` | משתמשים מורשים |
 | `/credits` | זיכויים | קוראים |
 | `/payment-requests` | דרישות תשלום + אישורים | `owner`, `office` |
@@ -123,10 +124,10 @@ enum ‏`user_role` נשאר ללא שינוי; תוויות התצוגה נמצ
   משנה בעצמו רק שם/טלפון; owner מנהל `role`/`active` של חשבונות `owner`/`office`/`accountant`
   דרך `manage_profile_access`, עם סיבה ו־audit באותה טרנזקציה. `supplier_id` נשמר לקשרים
   היסטוריים בלבד ואינו ניתן להגדרה על חשבון מוצר פעיל.
-- owner משנה רק שדות ארגון שהחוזה מתיר. ‏`status` ו־`trial_ends_at` משתנים רק דרך
-  `set_organization_lifecycle` בידי platform admin, עם step-up, נעילה וסיבה. Trial הוא 30 יום,
-  אחריו 7 ימי Grace מלאים ואז read-only; Reactivation מחזיר ל־`active`. השעיה נשארת מסלול מנהלי
-  נפרד שמאפס בפועל את `auth_org()` לחברי הארגון.
+- owner משנה רק שדות ארגון שהחוזה מתיר. ארגון חדש מתחיל `active`; ‏`set_organization_lifecycle`
+  מאפשר ל־platform admin, עם step-up, נעילה וסיבה, רק מעבר בין `active` ל־`suspended`.
+  `trial_ends_at` נשארת עמודת תאימות ותמיד `null`; constraint ו־RPC חוסמים Trial עתידי.
+  השעיה נשארת מסלול מנהלי נפרד שמאפס בפועל את `auth_org()` לחברי הארגון.
 - כל קשר עסקי דיירי נאכף באמצעות `org_id` ו־FK מורכב אל `(org_id,id)` או guard פולימורפי
   מפורש. שבע טבלאות ילד/קישור שלא נשאו דייר קיבלו `org_id`; ‏`audit_logs.user_id` הוא החריג
   המתועד, מפני שפעולת platform יכולה להירשם בדייר שהמפעיל אינו חבר בו.
@@ -237,9 +238,20 @@ enum ‏`user_role` נשאר ללא שינוי; תוויות התצוגה נמצ
 
 - Service Worker שומר app shell ונכסים סטטיים בלבד; API/נתונים פיננסיים אינם נשמרים. טיוטת קבלה,
   מפתח idempotency ותמונה נשמרים ב־IndexedDB; קונפליקט עוצר לאדם והצלחה אינה מוצגת לפני RPC.
-- `0092` אוכפת Trial ‏30+7 ואז read-only ב־DB/Storage/Edge/UI. צפייה וייצוא נשארים; mutation/upload
-  נחסמים. הלקוח צורך ומרענן `organization_access_state` מן השרת ואינו מכריע פקיעה משעון המכשיר.
-  `suspended` הוא מצב נפרד. אין pricing plan שמוסתר בקוד.
+- `0134` מוציאה את Trial מחוזה המוצר: ארגונים קיימים מומרים ל־`active`, ברירת המחדל היא
+  `active`, וכתיבה מותרת רק ב־`active`. ‏`organization_access_state` שומר על צורת התשובה לתאימות
+  אך מחזיר רק `active`/`offboarding`/`suspended` ושדות המועדים בו תמיד `null`. מטמון offline ישן
+  עם Trial/Grace נכשל סגור עד רענון שרתי. אין pricing plan שמוסתר בקוד.
+- `0135` היא הדלת של „בקרת מסמכים”: שלושה read-models owner-only, מסוננים לפי דייר ויחידות גישה,
+  ללא provider/model/prompt/schema/tokens/cost/confidence/drift. הרשאת דפדפן הוסרה מה־RPC-ים
+  הטכניים הישנים שאינם נצרכים עוד בממשק.
+- `0137` מוסיפה תיק חשבונית מרכזת לכל ארגון + ישות משפטית + ספק + חודש קודם. העוגן הוא
+  `invoices.financial_role='payable'` היחיד; חשבוניות ביניים הן `supporting_evidence`, מסמכים
+  שטרם תויקו נשארים מועמדי ראיה, וקבלות שאינן `completed` מוצגות אך אינן מוכיחות כמות. הקליטה
+  שומרת כל עמוד כבייטים מקוריים תחת intake אחד; ההקשר נגזר מטבלאות intake ולא מסוג OCR חדש.
+  שלושת הערוצים — עוגן מול ביניים, עוגן מול קבלות, ביניים מול קבלות — נשמרים בנפרד ב־snapshot
+  immutable. מסמך מאוחר מוסיף revision ואינו משנה את החוב בשקט. כל קוראי הכסף סופרים רק
+  `payable`, ויעדי תשלום/זיכוי מוגנים גם בטריגר.
 - `0094` חוסמת פעילות מסחרית חדשה עם ספק inactive ומשאירה היסטוריה וסגירה פיננסית. `0097` חושפת
   projection פיננסי נפרד, ו־`0133` מצרה אותו ל־`owner`/`office`/`accountant`. משטח אישור
   ההזמנה של פרסונת הספק מ־`0101` וה־helper ‏`auth_supplier()` הוסרו; מעברי הזמנה פעילים הם

@@ -393,6 +393,11 @@ select public.claim_document_processing_job_input('p45-ocr-price-list', 120)::te
 \gset p45_price_ocr_
 select public.claim_document_processing_job_input('p45-ocr', 120)::text as result
 \gset p45_ocr_
+select coalesce(
+  public.claim_document_processing_job_input('p45-ocr-overflow', 120),
+  '{}'::jsonb
+)::text as result
+\gset p45_ocr_overflow_
 reset role;
 
 select pg_temp.p45_assert(
@@ -400,16 +405,19 @@ select pg_temp.p45_assert(
     select 1 from jsonb_array_elements(jsonb_build_array(
       :'p45_existing_ocr_result'::jsonb,
       :'p45_price_ocr_result'::jsonb,
-      :'p45_ocr_result'::jsonb
+      :'p45_ocr_result'::jsonb,
+      :'p45_ocr_overflow_result'::jsonb
     )) claim
-    where claim ->> 'storage_bucket' = 'documents'
+    where claim ->> 'job_id' = :'p45_pdf_result'::jsonb ->> 'processing_job_id'
+      and claim ->> 'storage_bucket' = 'documents'
       and claim ->> 'mime_type' = 'application/pdf'
   )
   and exists (
     select 1 from jsonb_array_elements(jsonb_build_array(
       :'p45_existing_ocr_result'::jsonb,
       :'p45_price_ocr_result'::jsonb,
-      :'p45_ocr_result'::jsonb
+      :'p45_ocr_result'::jsonb,
+      :'p45_ocr_overflow_result'::jsonb
     )) claim
     where claim ->> 'job_id' = :'p45_price_list_result'::jsonb ->> 'processing_job_id'
       and claim ->> 'storage_bucket' = 'documents'
@@ -419,7 +427,8 @@ select pg_temp.p45_assert(
     select 1 from jsonb_array_elements(jsonb_build_array(
       :'p45_existing_ocr_result'::jsonb,
       :'p45_price_ocr_result'::jsonb,
-      :'p45_ocr_result'::jsonb
+      :'p45_ocr_result'::jsonb,
+      :'p45_ocr_overflow_result'::jsonb
     )) claim
     where claim ->> 'job_id' = :'p45_accepted_result'::jsonb ->> 'processing_job_id'
       and claim ->> 'storage_bucket' = 'document-scans'

@@ -222,7 +222,7 @@ export default function InvoiceDetail() {
   const { data, loading, error, refetch } = useQuery(async () => {
     const rawInvoice = unwrap(await supabase.from('invoices')
       .select('*, orders:invoice_order_links(order_id, purchase_orders(id, number, status)), receipts:invoice_receipt_links(receipt_id, goods_receipts(id, number, received_at))')
-      .eq('id', id!).single()) as Omit<FullInvoice, 'supplier'>;
+      .eq('id', id!).eq('financial_role', 'payable').single()) as Omit<FullInvoice, 'supplier'>;
     const suppliers = await financialSupplierMap([rawInvoice.supplier_id]);
     const invoice: FullInvoice = {
       ...rawInvoice,

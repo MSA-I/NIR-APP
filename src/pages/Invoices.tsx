@@ -132,7 +132,10 @@ export function InvoicesList() {
     async () => {
       // Always sent, filter or not: the 0053 indexes are partial on `deleted_at is null`, and a
       // query that omits it cannot use them.
-      const predicates: ServerPredicate[] = [{ kind: 'is', column: 'deleted_at', value: null }];
+      const predicates: ServerPredicate[] = [
+        { kind: 'eq', column: 'financial_role', value: 'payable' },
+        { kind: 'is', column: 'deleted_at', value: null },
+      ];
       if (reviewFilter) predicates.push({ kind: 'eq', column: 'review_status', value: reviewFilter });
       if (payFilter) {
         predicates.push(payFilter === 'open'

@@ -115,6 +115,7 @@ export default function Expenses() {
     const [rawInvoices, categories, metrics] = await Promise.all([
       fetchAll<RawInvoiceRow>((fromRow, toRow) => supabase.from('invoices')
         .select('id, invoice_number, invoice_date, total_amount, payment_status, supplier_id')
+        .eq('financial_role', 'payable')
         .gte('invoice_date', from).lt('invoice_date', end)
         .is('deleted_at', null)
         .order('invoice_date', { ascending: false }).order('id').range(fromRow, toRow)),

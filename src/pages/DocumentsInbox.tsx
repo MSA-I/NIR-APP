@@ -167,7 +167,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
     if (target === 'invoice') {
       let query = supabase.from('invoices')
         .select('id, invoice_number, invoice_date, supplier:suppliers(name)')
-        .is('deleted_at', null).order('invoice_date', { ascending: false }).limit(20);
+        .eq('financial_role', 'payable').is('deleted_at', null).order('invoice_date', { ascending: false }).limit(20);
       if (dq) query = query.ilike('invoice_number', `%${dq}%`);
       const rows = unwrap(await query) as InvoicePick[];
       result = rows.map((row) => ({
@@ -880,7 +880,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       {error && !data ? <ErrorNote message={error} /> : loading ? <SkeletonTable cols={6} /> : (
         <DataTable rows={filtered} columns={columns} pageSize={20}
           rowLabel={(doc) => `מסמך ${doc.file_name}`}
-          onRowClick={(doc) => void open(doc)}
+          onRowClick={(doc) => review(doc)}
           mobileTitle={(doc) => doc.file_name}
           mobileTrailing={(doc) => (
             <span className="flex flex-wrap justify-end gap-1">

@@ -1903,6 +1903,17 @@ begin;
 select set_config('request.jwt.claim.sub', '25000000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
+select status = 'failed' as status_is_failed,
+       attempt_count = 8 as attempt_count_is_eight,
+       file_name = 'circuit-breaker.pdf' as file_name_is_safe,
+       queue_age_seconds is null as queue_age_is_null,
+       is_stuck = false as stuck_is_false
+from public.get_document_control_attempts(
+  '45000000-0000-4000-8000-000000000012', 10
+)
+where job_id = '55000000-0000-4000-8000-000000000112'
+\gset smart_control_attempt_health_
+reset role;
 select is_stuck = false as stuck_is_false,
        stuck_reason is null as stuck_reason_is_null,
        queue_age_seconds is null as queue_age_is_null,
@@ -1912,17 +1923,25 @@ from public.get_document_processing_attempts(
   '45000000-0000-4000-8000-000000000012', 10
 )
 where job_id = '55000000-0000-4000-8000-000000000112'
-\gset smart_attempt_health_
-reset role;
+\gset smart_raw_attempt_health_
 commit;
 
 select smart_document_processing_test.assert(
-  :'smart_attempt_health_stuck_is_false'::boolean
-    and :'smart_attempt_health_stuck_reason_is_null'::boolean
-    and :'smart_attempt_health_queue_age_is_null'::boolean
-    and :'smart_attempt_health_lease_is_null'::boolean
-    and :'smart_attempt_health_attempt_started_is_null'::boolean = false,
-  'processing attempts RPC omitted the canonical health or attempt timing shape'
+  :'smart_control_attempt_health_status_is_failed'::boolean
+    and :'smart_control_attempt_health_attempt_count_is_eight'::boolean
+    and :'smart_control_attempt_health_file_name_is_safe'::boolean
+    and :'smart_control_attempt_health_queue_age_is_null'::boolean
+    and :'smart_control_attempt_health_stuck_is_false'::boolean,
+  'document control attempts RPC omitted its customer-safe processing shape'
+);
+
+select smart_document_processing_test.assert(
+  :'smart_raw_attempt_health_stuck_is_false'::boolean
+    and :'smart_raw_attempt_health_stuck_reason_is_null'::boolean
+    and :'smart_raw_attempt_health_queue_age_is_null'::boolean
+    and :'smart_raw_attempt_health_lease_is_null'::boolean
+    and :'smart_raw_attempt_health_attempt_started_is_null'::boolean = false,
+  'privileged processing telemetry omitted the canonical health or attempt timing shape'
 );
 
 begin;
@@ -1931,11 +1950,11 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 select smart_document_processing_test.assert(
   not exists (
-    select 1 from public.get_document_processing_attempts(
+    select 1 from public.get_document_control_attempts(
       '45000000-0000-4000-8000-000000000012', 10
     )
   ),
-  'processing attempts RPC crossed the tenant boundary'
+  'document control attempts RPC crossed the tenant boundary'
 );
 reset role;
 commit;
@@ -2067,7 +2086,7 @@ $$;
 reset role;
 commit;
 
--- 0130's three browser read doors share one explicit ACL matrix: authenticated may enter the
+-- The active browser read models share one explicit ACL matrix: authenticated may enter each
 -- function and its body narrows the product role; anon, service_role and PUBLIC cannot execute it.
 select smart_document_processing_test.assert(
   (
@@ -2084,11 +2103,35 @@ select smart_document_processing_test.assert(
     from (values
       ('public.get_document_operations_metrics(integer)'::regprocedure),
       ('public.get_document_processing_statuses(uuid[])'::regprocedure),
-      ('public.get_document_processing_attempts(uuid,integer)'::regprocedure)
+      ('public.get_document_control_attempts(uuid,integer)'::regprocedure),
+      ('public.get_document_control_price_review_queue(integer)'::regprocedure)
     ) expected(signature)
     join pg_catalog.pg_proc proc on proc.oid = expected.signature
   ),
-  '0130 processing read RPC ACL matrix drifted for authenticated, anon, service role or PUBLIC'
+  'customer-safe processing read RPC ACL matrix drifted for authenticated, anon, service role or PUBLIC'
+);
+
+select smart_document_processing_test.assert(
+  (
+    select bool_and(
+      not has_function_privilege('authenticated', signature, 'EXECUTE')
+      and not has_function_privilege('anon', signature, 'EXECUTE')
+      and not has_function_privilege('service_role', signature, 'EXECUTE')
+      and not exists (
+        select 1
+        from pg_catalog.aclexplode(proc.proacl) acl
+        where acl.grantee = 0 and acl.privilege_type = 'EXECUTE'
+      )
+    )
+    from (values
+      ('public.get_document_processing_attempts(uuid,integer)'::regprocedure),
+      ('public.get_price_list_calibration_metrics(timestamptz,timestamptz)'::regprocedure),
+      ('public.get_price_list_calibration_queue(integer)'::regprocedure),
+      ('public.get_price_list_drift_metrics(integer)'::regprocedure)
+    ) retired(signature)
+    join pg_catalog.pg_proc proc on proc.oid = retired.signature
+  ),
+  'retired technical processing RPC remains executable by a browser or API role'
 );
 
 -- No browser role can mutate the immutable queue/extraction ledgers directly.

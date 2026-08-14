@@ -223,7 +223,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
     const inv = await fetchAll<Omit<PaymentInvoiceCandidate, 'balance' | 'allocationAmount'>>((from, to) => {
       let query = supabase.from('invoices')
         .select('id, invoice_number, invoice_date, total_amount, review_status, payment_status')
-        .eq('supplier_id', supplierId).is('deleted_at', null);
+        .eq('supplier_id', supplierId).eq('financial_role', 'payable').is('deleted_at', null);
       // Procurement may use the invoice total only while the invoice is wholly unpaid. Once
       // partial, its exact balance belongs to the owner/accounting boundary.
       query = isOwner ? query.neq('payment_status', 'paid') : query.eq('payment_status', 'unpaid');
@@ -248,7 +248,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
     let cancelled = false;
     void (async () => {
       const invoiceResult = await supabase.from('invoices').select('id, supplier_id, total_amount, payment_status')
-        .eq('id', presetInvoiceId).is('deleted_at', null).neq('payment_status', 'paid').maybeSingle();
+        .eq('id', presetInvoiceId).eq('financial_role', 'payable').is('deleted_at', null).neq('payment_status', 'paid').maybeSingle();
       if (cancelled) return;
       if (invoiceResult.error || !invoiceResult.data) {
         toast('החשבונית שבקישור אינה זמינה או שכבר שולמה.', 'error');

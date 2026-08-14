@@ -92,7 +92,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
     setBusy(true);
     try {
       const invoice = unwrap(await supabase.from('invoices').select('supplier_id, invoice_date')
-        .eq('id', invoiceId).single()) as { supplier_id: string; invoice_date: string };
+        .eq('id', invoiceId).eq('financial_role', 'payable').single()) as { supplier_id: string; invoice_date: string };
       const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, 'invoice', invoiceId, file, {
         documentKind: 'invoice', supplierId: invoice.supplier_id, documentDate: invoice.invoice_date,
       }));

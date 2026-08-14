@@ -896,12 +896,12 @@ select pg_temp.p14_assert(
     where document_id = '44000000-0000-4000-8000-000000000008'),
   'and no second filing row was written beside it');
 
--- ===== (j) the org must be trial/active (interpret-document/index.ts:356-361) =====
+-- ===== (j) the org must be active (interpret-document organization-access preflight) =====
 select pg_temp.p14_seed(
   9, '14000000-0000-4000-8000-000000000003', '24000000-0000-4000-8000-000000000003',
   pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000003', 0.99));
 
--- Suspend through the production command, exactly as an operator would: 0092's row guard now
+-- Suspend through the production command, exactly as an operator would: the row guard now
 -- fires before the command's own organization_inactive ladder, so the refusal the trusted
 -- server observes is the latch's -- at the FIRST attempted write, before any ledger row.
 select pg_temp.p14_become_fresh('24000000-0000-4000-8000-000000000010');

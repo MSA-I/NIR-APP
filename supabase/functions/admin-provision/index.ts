@@ -185,8 +185,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   try {
     // ===== 4. Organization =====
-    // status defaults to 'trial'. Migration 0092 applies the canonical 30-day end when the
-    // operator does not provide an explicit date.
+    // Status defaults to active. Lifecycle policy is owned by the database, so provisioning
+    // never accepts a client-selected status or deadline.
     const orgInsert = await admin
       .from('organizations')
       .insert({

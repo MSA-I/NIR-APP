@@ -1,5 +1,5 @@
 import { Link, Outlet, useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -8,15 +8,13 @@ import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
 import Fab from './Fab';
 import NotificationBell from './NotificationBell';
 import FeedbackButton from './FeedbackButton';
-import { ConfirmDialog, Note, useDialogLayer, useToast } from './ui';
-import { TRIAL_WARNING_DAYS, trialDaysRemaining } from '../lib/trial';
-import { fmtDate } from '../lib/format';
+import { ConfirmDialog, useDialogLayer, useToast } from './ui';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
 import { pendingOfflineWork } from '../lib/offlineQueue';
 import { isActiveRole, type ActiveRole } from '../lib/types';
 import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
-import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/trial';
+import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/organizationAccess';
 import { isRouteFamilyActive } from '../lib/quickActions';
 
 export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: ActiveRole[] }
@@ -50,7 +48,8 @@ export const NAV_SECTIONS: NavSection[] = [
     // reading belongs beside the ledgers it feeds, not inside them.
     section: 'מסמכים',
     items: [
-      { to: '/documents/operations', label: 'תפעול מסמכים', icon: Activity, roles: ['owner'] },
+      { to: '/documents/operations', label: 'בקרת מסמכים', icon: Activity, roles: ['owner'] },
+      { to: '/documents/consolidated-invoices', label: 'חשבוניות מרכזות', icon: FileCheck2, roles: ['owner', 'office', 'accountant'] },
       { to: '/documents', label: 'תיקיית המסמכים', icon: FolderOpen, roles: ['owner', 'office'] },
       { to: '/documents/archive', label: 'ארכיון', icon: Archive, roles: ['owner', 'office'] },
     ],
@@ -112,9 +111,9 @@ const MANAGEMENT_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
 };
 
 const CONTROL_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
-  owner: ['/documents/operations', '/exceptions', '/expenses', '/reports', '/analytics'],
-  office: ['/exceptions', '/analytics'],
-  accountant: ['/exceptions', '/expenses', '/reports'],
+  owner: ['/documents/operations', '/documents/consolidated-invoices', '/exceptions', '/expenses', '/reports', '/analytics'],
+  office: ['/documents/consolidated-invoices', '/exceptions', '/analytics'],
+  accountant: ['/documents/consolidated-invoices', '/exceptions', '/expenses', '/reports'],
 };
 
 function catalogItem(path: string, role: ActiveRole): NavItem | null {
@@ -166,6 +165,7 @@ const PAGE_TITLE_PATTERNS: [RegExp, string][] = [
   [/^\/receipts\/[^/]+$/, 'פרטי קבלה'],
   [/^\/invoices\/new$/, 'חשבונית חדשה'],
   [/^\/invoices\/[^/]+$/, 'פרטי חשבונית'],
+  [/^\/documents\/consolidated-invoices$/, 'חשבוניות מרכזות'],
   [/^\/documents\/[^/]+\/review$/, 'בדיקת מסמך'],
   [/^\/onboarding$/, 'הקמת המערכת'],
   [/^\/admin$/, 'ניהול פלטפורמה'],
@@ -190,9 +190,6 @@ export default function Layout() {
   // Feedback is now a product surface for every active account, not a rollout flag that can make
   // the user's screenshot option disappear between sessions.
   const feedbackOn = !!profile;
-  // null unless this is a trial with a future end date — see trialDaysRemaining for why an already
-  // expired trial answers null rather than 0.
-  const trialDays = trialDaysRemaining(org);
   // Unfiled-documents pill (0014): counted only for staff who can act on that queue. The
   // Only procurement staff can act on the gallery queue. A known count > 0 is required,
   // so null (loading) and 0 never fabricate an all-clear or workload.
@@ -288,11 +285,9 @@ export default function Layout() {
   /**
    * `expandGroups` — the desktop sidebar shows every group open (owner decision 09.08.2026).
    *
-   * The groups were born collapsed in the UX-polish campaign, on the reasoning that "ניהול" and
-   * "בקרה" are rare destinations and progressive disclosure keeps the daily list short. On a phone
-   * that still holds: the drawer is a temporary overlay competing with the content behind it, and
-   * it keeps the disclosure. On a desktop the sidebar is a permanent 240px column with room to
-   * spare — hiding six destinations behind two chevrons costs a click and buys nothing.
+   * The groups were born collapsed in the UX-polish campaign. Owner decision 13.08.2026 restores
+   * the direct list on mobile too: every permitted destination stays visible without opening a
+   * topic disclosure. Desktop and mobile now use the same open navigation contract.
    *
    * Note this renders them through the EXISTING non-collapsible branch rather than forcing
    * `<details open>`: an always-open disclosure is a control that lies about being a control.
@@ -324,7 +319,7 @@ export default function Layout() {
           <div className="truncate text-xs text-shell-ink-dim" title={orgName || undefined}>{orgName || 'ניהול רכש ותשלומים'}</div>
         </div>
       </Link>
-      <nav aria-label={navLabel} className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+      <nav aria-label={navLabel} className="scrollbar-hidden flex-1 overflow-y-auto px-3 py-3 space-y-3">
         {[...displaySections, ...(stickyFooter || footerItems.length === 0 ? [] : [{ section: 'החשבון והמערכת', items: footerItems }])].map((s, i) => (
           s.collapsible && !expandGroups ? (
             <details key={`${s.section}-${location.pathname}`} className="group" open={s.items.some((item) => isRouteFamilyActive(location.pathname, item.to)) || undefined}>
@@ -404,7 +399,7 @@ export default function Layout() {
           <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label="תפריט ראשי"
             tabIndex={-1} className="phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-shell border-e border-shell-ink/10 focus:outline-none" onClick={(e) => e.stopPropagation()}>
             <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 rounded-lg text-shell-ink-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={20} /></button>
-            {sidebar(drawerSections, 'יעדים נוספים', false, false)}
+            {sidebar(drawerSections, 'יעדים נוספים', true, false)}
           </aside>
         </div>
       )}
@@ -420,14 +415,9 @@ export default function Layout() {
           <FeedbackButton />
         </header>
       )}
-      {organizationAccess.mode === 'grace' && (
-        <div role="status" className="no-print border-b border-await-line bg-await-wash px-4 py-3 text-sm text-await-fg lg:ms-60 lg:px-6">
-          תקופת הניסיון הסתיימה. נותרו <span className="num font-semibold">{organizationAccess.graceDaysRemaining}</span> ימים להמשך שימוש מלא במערכת. לאחר מכן המערכת תעבור למצב קריאה בלבד והמידע שלך יישאר זמין לצפייה ולייצוא.
-        </div>
-      )}
       {organizationAccess.mode === 'read_only' && (
         <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:ms-60 lg:px-6">
-          תקופת הניסיון הסתיימה. המערכת נמצאת כעת במצב קריאה בלבד. כל המידע הקיים נשמר וזמין לצפייה ולייצוא. להפעלת המערכת מחדש יש לפנות למנהל השירות.
+          הגישה לכתיבה אינה זמינה כרגע. המידע הקיים נשמר וזמין לצפייה ולייצוא; לפרטים יש לפנות למנהל המערכת.
         </div>
       )}
       {organizationAccess.mode === 'offboarding' && (
@@ -441,21 +431,6 @@ export default function Layout() {
         {/* max-w column centred (mx-auto) in the space beside the sidebar — otherwise a wide
             viewport strands all content on the start side in RTL, leaving a dead zone on the
             end side. keyed by path so each screen change re-triggers the fade (section 11). */}
-        {/* #15 shipped the soft block but nothing announced it in advance: the first thing the owner
-            learned was a full-screen stop. Owner only — other active roles cannot arrange the
-            continuation, and a banner nobody can act on for a week is noise; the expired screen
-            still tells everyone at the moment it matters. Wording matches that screen ("מפעיל
-            השירות", "הנתונים שמורים") so the two never contradict each other. */}
-        {profile?.role === 'owner' && trialDays !== null && trialDays <= TRIAL_WARNING_DAYS && (
-          <div className="mx-auto mb-4 min-w-0 max-w-[1400px] px-4 no-print sm:px-6">
-            <Note tone="await">
-              תקופת הניסיון מסתיימת ב-{fmtDate(org?.trial_ends_at)}
-              {' — '}
-              {trialDays === 1 ? 'נותר יום אחד' : `נותרו ${trialDays} ימים`}. הנתונים שמורים במלואם;
-              להמשך השימוש יש להסדיר את ההמשך מול מפעיל השירות.
-            </Note>
-          </div>
-        )}
         <div key={location.pathname} className="page-fade mx-auto min-w-0 max-w-[1400px]">
           <Outlet />
         </div>

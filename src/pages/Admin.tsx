@@ -1,12 +1,11 @@
 import { useEffect, useId, useState } from 'react';
-import { reasonOr } from '../lib/reason';
 import { toHebrewError } from "../lib/errors";
 import { Building2, ShieldCheck, Plus, Copy, MessageSquare, Archive, RefreshCw, Undo2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { DataTable, StatusBadge, ConfirmDialog, Modal, useToast, ErrorNote, SkeletonTable, SkeletonList, type Column } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
-import { addCalendarDays, dateStartInstant, fmtDate, fmtDateTime, fmtNum, todayISO } from '../lib/format';
+import { fmtDate, fmtDateTime, fmtNum } from '../lib/format';
 import { ORG_STATUS, ROLE_LABEL } from '../lib/status';
 // No resetUserPassword: the campaign replaced owner-initiated password reset with self-service
 // recovery to the verified address (campaign report §15), so the function no longer exists.
@@ -54,18 +53,12 @@ const emptyForm = (): NewOrgForm => ({
   categories: '',
 });
 
-const trialEndInstant = (date: string) => new Date(
-  Date.parse(dateStartInstant(addCalendarDays(date, 1))) - 1,
-).toISOString();
-
 export default function Admin() {
   const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [handover, setHandover] = useState<{ email: string; password: string; result: ProvisionResult } | null>(null);
   const [pending, setPending] = useState<{ org: PlatformOrg; action: 'suspend' | 'reactivate'; reason?: string } | null>(null);
   const [statusReauth, setStatusReauth] = useState(false);
-  const [extension, setExtension] = useState<{ org: PlatformOrg; date: string; reason: string } | null>(null);
-  const [extensionReauth, setExtensionReauth] = useState(false);
   const [busy, setBusy] = useState(false);
   const [offboardingPending, setOffboardingPending] = useState<{
     request: PlatformOffboardingRequest;
@@ -131,7 +124,7 @@ export default function Admin() {
     const res = await supabase.rpc('set_organization_lifecycle', {
       p_org_id: org.id,
       p_status: status,
-      p_trial_ends_at: org.trial_ends_at,
+      p_trial_ends_at: null,
       p_reason: reason?.trim() ?? '',
     });
     if (res.error) { setBusy(false); setStatusReauth(false); toast(toHebrewError(res.error.message), 'error'); return; }
@@ -162,42 +155,17 @@ export default function Admin() {
     void refetch();
   }
 
-  async function extendTrial() {
-    if (!extension) return;
-    setBusy(true);
-    const res = await supabase.rpc('set_organization_lifecycle', {
-      p_org_id: extension.org.id,
-      p_status: 'trial',
-      p_trial_ends_at: trialEndInstant(extension.date),
-      p_reason: reasonOr(extension.reason, 'הארכת תקופת הניסיון'),
-    });
-    setBusy(false);
-    setExtensionReauth(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-    setExtension(null);
-    toast('תקופת הניסיון הוארכה');
-    void refetch();
-  }
-
   const columns: Column<PlatformOrg>[] = [
     { key: 'name', header: 'ארגון', sortValue: (o) => o.name, render: (o) => <span className="font-medium text-ink">{o.name}</span> },
     { key: 'status', header: 'סטטוס', sortValue: (o) => o.status, render: (o) => <StatusBadge meta={ORG_STATUS[o.status]} /> },
     { key: 'users', header: 'משתמשים', className: 'num', sortValue: (o) => o.user_count, render: (o) => fmtNum(o.user_count) },
     { key: 'vat', header: 'מע״מ', className: 'num', render: (o) => `${fmtNum(o.vat_rate)}%` },
-    { key: 'trial', header: 'סיום ניסיון', sortValue: (o) => o.trial_ends_at ?? '', render: (o) => fmtDate(o.trial_ends_at) },
     { key: 'created', header: 'נוצר', sortValue: (o) => o.created_at, render: (o) => fmtDate(o.created_at) },
     {
       key: 'actions',
       header: '',
       render: (o) => (
         <div className="flex flex-wrap justify-end gap-1">
-          {o.status === 'trial' && (
-            <button
-              className="btn-ghost py-1! text-xs"
-              onClick={() => setExtension({ org: o, date: addCalendarDays(todayISO(), 30), reason: '' })}>
-              הארכת ניסיון
-            </button>
-          )}
           <button
             className={o.status === 'suspended' ? 'btn-secondary py-1! text-xs' : 'btn-ghost py-1! text-xs text-alert-solid'}
             onClick={() => setPending({ org: o, action: o.status === 'suspended' ? 'reactivate' : 'suspend' })}>
@@ -275,47 +243,6 @@ export default function Admin() {
       <FeedbackNotes />
 
       <NewOrgModal open={creating} busy={busy} onClose={() => setCreating(false)} onSubmit={submitNewOrg} />
-      <Modal open={extension !== null} onClose={() => setExtension(null)} title={`הארכת תקופת הניסיון — ${extension?.org.name ?? ''}`} busy={busy}>
-        {extension && (
-          <div className="space-y-4">
-            <div>
-              <label className="label" htmlFor="trial-extension-date">תאריך סיום חדש *</label>
-              <input
-                id="trial-extension-date"
-                className="input"
-                type="date"
-                min={addCalendarDays(todayISO(), 1)}
-                value={extension.date}
-                onChange={(event) => setExtension({ ...extension, date: event.target.value })}
-              />
-            </div>
-            <div>
-              <label className="label" htmlFor="trial-extension-reason">סיבת ההארכה (רשות)</label>
-              <textarea
-                id="trial-extension-reason"
-                className="input min-h-24"
-                value={extension.reason}
-                onChange={(event) => setExtension({ ...extension, reason: event.target.value })}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <button className="btn-secondary" disabled={busy} onClick={() => setExtension(null)}>ביטול</button>
-              <button
-                className="btn-primary"
-                disabled={busy || !extension.date}
-                onClick={() => setExtensionReauth(true)}>
-                אימות והארכה
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
-      <ReauthModal
-        open={extensionReauth}
-        title="אימות זהות להארכת תקופת ניסיון"
-        onConfirm={() => { void extendTrial(); }}
-        onCancel={() => setExtensionReauth(false)}
-      />
 
       <section className="space-y-3" aria-labelledby="offboarding-heading">
         <div>
@@ -342,7 +269,7 @@ export default function Admin() {
             <CredentialRow label="אימייל" value={handover.email} onCopy={() => toast('הועתק')} onCopyError={() => toast('ההעתקה נכשלה — יש להעתיק ידנית', 'error')} />
             <CredentialRow label="סיסמה ראשונית" value={handover.password} onCopy={() => toast('הועתק')} onCopyError={() => toast('ההעתקה נכשלה — יש להעתיק ידנית', 'error')} />
             <div className="text-xs text-ink-muted">
-              נוצרו {fmtNum(handover.result.categories_created)} קטגוריות בסיס. הארגון נפתח בסטטוס «תקופת ניסיון».
+              נוצרו {fmtNum(handover.result.categories_created)} קטגוריות בסיס. הארגון נפתח בסטטוס פעיל.
             </div>
             <div className="flex justify-end">
               <button className="btn-primary" onClick={() => setHandover(null)}>סגירה</button>

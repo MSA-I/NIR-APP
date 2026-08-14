@@ -41,7 +41,7 @@ export default function FinancialSupplier() {
     const [invoices, credits, payments, requests, supplierBalance, bank] = await Promise.all([
       fetchAll<InvoiceRow>((from, to) => supabase.from('invoices')
         .select('id, invoice_number, invoice_date, total_amount, payment_status')
-        .eq('supplier_id', supplier.id).is('deleted_at', null).order('invoice_date', { ascending: false }).order('id').range(from, to)),
+        .eq('supplier_id', supplier.id).eq('financial_role', 'payable').is('deleted_at', null).order('invoice_date', { ascending: false }).order('id').range(from, to)),
       fetchAll<CreditRow>((from, to) => supabase.from('credit_requests')
         .select('id, number, amount, status, created_at').eq('supplier_id', supplier.id)
         .order('created_at', { ascending: false }).order('id').range(from, to)),

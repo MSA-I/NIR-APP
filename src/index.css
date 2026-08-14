@@ -415,6 +415,15 @@ body {
 @keyframes freshness-settle { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 .freshness-settle { animation: freshness-settle 0.18s ease-out both; }
 
+/* The navigation stays scrollable when its content exceeds the viewport, but the operating-system
+   track is visual noise inside the fixed sidebar. Scope this narrowly: tables and page content keep
+   their native scrollbars as an overflow affordance. */
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hidden::-webkit-scrollbar { display: none; }
+
 /* Reduced-motion coverage beyond the page fade (audit 2026-07-21). The skeleton pulse is pure
    decoration — its static slate-200 fill still reads as a placeholder — so it stops entirely.
    A spinner, by contrast, encodes live "loading" state, so it must keep turning; it is only
