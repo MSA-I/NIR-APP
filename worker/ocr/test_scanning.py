@@ -128,7 +128,7 @@ class DocumentScanningTests(unittest.TestCase):
             self.assertGreater(abs(result.rotation_degrees), 2.0)
             self.assertLess(abs(result.rotation_degrees), 4.0)
 
-    def test_phone_resolution_manual_scan_stays_within_worker_memory_limit(self) -> None:
+    def test_near_full_phone_scan_stays_within_worker_memory_limit(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             small = root / "small.jpg"
@@ -163,7 +163,7 @@ class DocumentScanningTests(unittest.TestCase):
             metadata = _run_scan(
                 source,
                 output,
-                [[0.05, 0.05], [0.95, 0.05], [0.95, 0.95], [0.05, 0.95]],
+                [[0.01, 0.01], [0.99, 0.01], [0.99, 0.99], [0.01, 0.99]],
                 "auto",
                 config,
                 root,
@@ -173,6 +173,7 @@ class DocumentScanningTests(unittest.TestCase):
 
             self.assertTrue(output.is_file())
             self.assertGreater(metadata["height"], 3000)
+            self.assertLessEqual(metadata["width"] * metadata["height"], 9_010_000)
             self.assertEqual(metadata["corners_source"], "manual")
 
 

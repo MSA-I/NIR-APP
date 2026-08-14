@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+import cv2
+
 from .errors import GatewayError, ProcessingError
 from .gateway import GatewayClient
 from .limits import DEFAULT_LIMITS, ExtractionLimits
@@ -226,6 +228,27 @@ def _scan_child(
                 "retryable": False,
             },
         }
+    except cv2.error as exc:
+        if exc.code == cv2.Error.StsNoMem or "Insufficient memory" in str(exc):
+            _log("scan_child_resource_failure", exception_type=type(exc).__name__)
+            payload = {
+                "ok": False,
+                "error": {
+                    "code": "processing_resource_failure",
+                    "message": "Document scanning exceeded a resource limit",
+                    "retryable": False,
+                },
+            }
+        else:
+            _log("scan_child_internal_error", exception_type=type(exc).__name__)
+            payload = {
+                "ok": False,
+                "error": {
+                    "code": "worker_internal_error",
+                    "message": "Document scanning failed unexpectedly",
+                    "retryable": False,
+                },
+            }
     except BaseException as exc:
         # The class and phase are operational evidence; document bytes, names and signed URLs
         # never enter the log record.
