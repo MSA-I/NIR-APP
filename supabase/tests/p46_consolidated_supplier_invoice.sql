@@ -324,7 +324,7 @@ set role authenticated;
 select pg_temp.p46_assert(
   public.list_consolidated_invoice_cases(:'p46_target_month'::date)='[]'::jsonb,
   'accountant saw a consolidated case before final intake');
-select set_config('p46.case_id', :'p46_case_id', true);
+select set_config('p46.case_id', :'p46_case_id', false);
 do $$
 begin
   perform public.get_consolidated_invoice_workspace(current_setting('p46.case_id')::uuid);
@@ -554,8 +554,8 @@ select pg_temp.p46_actor(null);
 
 select pg_temp.p46_actor('13510000-0000-4000-8000-000000000001');
 set role authenticated;
-select set_config('p46.legal_entity_id', :'a_legal_entity', true);
-select set_config('p46.target_month', :'p46_target_month', true);
+select set_config('p46.legal_entity_id', :'a_legal_entity', false);
+select set_config('p46.target_month', :'p46_target_month', false);
 do $$
 begin
   insert into public.consolidated_invoice_cases(
