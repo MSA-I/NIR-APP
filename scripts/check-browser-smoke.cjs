@@ -326,7 +326,7 @@ async function roleAndViewportMatrix(browser) {
       await login(page, role);
       assert.equal(new URL(page.url()).pathname, expectedHome, `${role}: wrong home route`);
       const hasMobileActions = ['owner', 'office', 'accountant'].includes(role);
-      assert.equal(await page.getByRole('group', { name: 'פעולות מהירות' }).count(), hasMobileActions ? 1 : 0,
+      assert.equal(await page.getByRole('group', { name: 'קיצורי דרך ופעולות' }).count(), hasMobileActions ? 1 : 0,
         `${role}: wrong mobile action group visibility`);
       assert.equal(await page.locator('.mobile-action-bar').count(), hasMobileActions ? 1 : 0,
         `${role}: wrong mobile action bar visibility`);
@@ -390,11 +390,11 @@ async function quickActionsContract(browser) {
     captureConsole(page, `mobile-action-bar:${role}`);
     try {
       await login(page, role);
-      const group = page.getByRole('group', { name: 'פעולות מהירות' });
+      const group = page.getByRole('group', { name: 'קיצורי דרך ופעולות' });
       await group.waitFor();
       const bar = page.locator('.mobile-action-bar');
       assert.equal(await bar.count(), 1, `${role}: mobile action bar is not unique`);
-      assert(await bar.evaluate((node) => node === document.querySelector('[role="group"][aria-label="פעולות מהירות"]')),
+      assert(await bar.evaluate((node) => node === document.querySelector('[role="group"][aria-label="קיצורי דרך ופעולות"]')),
         `${role}: .mobile-action-bar is not the named role=group`);
       await assertMobileSpeedDialHidden(page, `${role}/390`);
       const items = bar.locator('.mobile-action');
@@ -2309,7 +2309,7 @@ async function navigationOrderAndActiveState(browser) {
     // over the menu while it scrolled. They moved into the drawer's own flow. The daily
     // destinations below are still asserted to match the sidebar exactly — what changed is where
     // the account surface lives, not which destinations a role has.
-    assert.deepEqual(drawerGroups.map((group) => group.section).slice(0, 3), ['', 'ניהול', 'בקרה'],
+    assert.deepEqual(drawerGroups.map((group) => group.section).slice(0, 3), ['עבודה שוטפת', 'ניהול', 'בקרה'],
       'the drawer renders different progressive-disclosure groups than the desktop sidebar');
     assert.deepEqual(drawerGroups[0].items.map((item) => item.path),
       ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
