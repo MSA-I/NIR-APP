@@ -7,7 +7,7 @@ import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, PageHeader, SkeletonTable, ConfirmDialog, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
-import { fmtMoneyExact } from '../lib/format';
+import { fmtMoneyExact, formatUnit, normalizeUnitInput } from '../lib/format';
 import { useCategories } from './Suppliers';
 import type { Product } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
@@ -87,7 +87,7 @@ export default function Products() {
   const columns: Column<ProductRow>[] = [
     { key: 'name', header: 'מוצר', sortValue: (r) => r.name, render: (r) => <span className={`font-medium ${r.active ? 'text-ink' : 'text-ink-muted line-through'}`}>{r.name}</span> },
     { key: 'cat', header: 'קטגוריה', sortValue: (r) => r.category?.name ?? '', render: (r) => r.category?.name ?? '—' },
-    { key: 'unit', header: 'יחידת מידה', render: (r) => r.unit },
+    { key: 'unit', header: 'יחידת מידה', render: (r) => formatUnit(r.unit) },
     { key: 'sku', header: 'מק״ט', render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
     // Shows 0, not `—`. The dash means "no data"; a product with no supplier is a measured
     // fact and an actionable one — it cannot be ordered. Hiding it behind the same glyph as
@@ -185,7 +185,7 @@ function ProductForm({ product, initial, onClose, onSaved }: {
     if (!f.name.trim()) { toast('שם מוצר הוא שדה חובה', 'error'); return; }
     setBusy(true);
     const row = {
-      name: f.name.trim(), category_id: f.category_id || null, unit: f.unit,
+      name: f.name.trim(), category_id: f.category_id || null, unit: normalizeUnitInput(f.unit),
       sku: f.sku || null, barcode: f.barcode || null, notes: f.notes || null,
       min_stock: f.min_stock ? Number(f.min_stock) : null,
     };

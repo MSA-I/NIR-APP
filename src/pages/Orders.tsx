@@ -8,7 +8,7 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { Breadcrumbs, DataTable, StatusBadge, useToast, ConfirmDialog, LifecycleStrip, Modal, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, Note, type Column } from '../components/ui';
 import { PO_STATUS } from '../lib/status';
-import { fmtMoneyExact, fmtDate, fmtDateTime, todayISO } from '../lib/format';
+import { fmtMoneyExact, fmtDate, fmtDateTime, formatQuantity, formatUnit, todayISO } from '../lib/format';
 import { openOrderWhatsApp, orderWhatsAppLink, markOrderSentToSupplier, needsSentConfirmation } from '../lib/share';
 import { cancelOrderDraft } from '../lib/orderDrafts';
 import type { PurchaseOrder, PurchaseOrderItem, PoStatus } from '../lib/types';
@@ -433,7 +433,7 @@ export function OrderDetail() {
           {order.items.map((item) => (
             <li key={item.id} className="py-3 first:pt-0 last:pb-0">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0"><div className="font-medium text-ink-body">{item.product.name}</div><div className="mt-1 text-xs text-ink-muted">{item.qty} {item.product.unit} × <span className="num">{fmtMoneyExact(item.unit_price)}</span></div></div>
+                <div className="min-w-0"><div className="font-medium text-ink-body">{item.product.name}</div><div className="mt-1 text-xs text-ink-muted"><span className="num">{formatQuantity(item.qty, item.product.unit)}</span> × <span className="num">{fmtMoneyExact(item.unit_price)}</span></div></div>
                 <span className="num shrink-0 font-semibold">{fmtMoneyExact(item.qty * item.unit_price)}</span>
               </div>
               {order.status !== 'draft' && <div className="mt-2 text-xs text-ink-muted">התקבל: <span className={`num ${item.received_qty >= item.qty ? 'text-done-fg' : item.received_qty > 0 ? 'text-await-fg' : ''}`}>{item.received_qty}</span> מתוך <span className="num">{item.qty}</span></div>}
@@ -454,7 +454,7 @@ export function OrderDetail() {
             {order.items.map((i) => (
               <tr key={i.id}>
                 <td className="td font-medium text-ink-body">{i.product.name}</td>
-                <td className="td">{i.product.unit}</td>
+                <td className="td">{formatUnit(i.product.unit)}</td>
                 <td className="td num">{i.qty}</td>
                 <td className="td num">{fmtMoneyExact(i.unit_price)}</td>
                 <td className="td num">{fmtMoneyExact(i.qty * i.unit_price)}</td>

@@ -13,7 +13,7 @@ import {
   readSheet, autoMapColumns, mapRows, cellText, cellNumber, skipRow, nameKey, groupSkipped,
   type FieldSpec, type MapResult, type SheetData, type SheetRow,
 } from '../lib/importSheet';
-import { fmtMoneyExact, todayISO } from '../lib/format';
+import { fmtMoneyExact, formatUnit, normalizeUnitInput, todayISO } from '../lib/format';
 import type { Category } from '../lib/types';
 
 /* ================= step model ================= */
@@ -927,7 +927,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
         row: rowNumber,
         name,
         category: cellText(r, cols.category, 80),
-        unit: cellText(r, cols.unit, 40) || 'יח׳',
+        unit: normalizeUnitInput(cellText(r, cols.unit, 40) || 'יחידה'),
         sku: cellText(r, cols.sku, 60) || null,
         supplier,
         price,
@@ -961,7 +961,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
         org_id: orgId,
         name: r.name,
         category_id: r.category ? categories.get(nameKey(r.category)) ?? null : null,
-        unit: r.unit,
+        unit: normalizeUnitInput(r.unit),
         sku: r.sku,
         active: true,
       }))).select('id, name');
@@ -1013,7 +1013,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
   const columns: Column<ProductDraft>[] = [
     { key: 'name', header: 'מוצר', render: (r) => <span className="font-medium text-ink">{r.name}</span> },
     { key: 'cat', header: 'קטגוריה', render: (r) => r.category || '—' },
-    { key: 'unit', header: 'יח׳', render: (r) => r.unit },
+    { key: 'unit', header: 'יחידה', render: (r) => formatUnit(r.unit) },
     { key: 'sku', header: 'מק״ט', render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
     { key: 'supplier', header: 'ספק', render: (r) => r.supplier || '—' },
     { key: 'price', header: 'מחיר', className: 'num', render: (r) => fmtMoneyExact(r.price) },

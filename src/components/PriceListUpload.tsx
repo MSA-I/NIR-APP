@@ -15,7 +15,7 @@ import { useAuth } from '../auth/AuthContext';
 import { Modal, Note, ErrorNote, useToast } from './ui';
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow, nameKey, groupSkipped } from '../lib/importSheet';
 import { fetchAll } from '../lib/supabasePaging';
-import { fmtMoneyExact, todayISO } from '../lib/format';
+import { fmtMoneyExact, normalizeUnitInput, todayISO } from '../lib/format';
 import { canStartSupplierCommerce, NEW_COMMERCE_SUPPLIER_STATUSES } from '../lib/status';
 import type { Supplier } from '../lib/types';
 import { TusUploadCancelledError, TusUploadError, tusUploadToDocuments } from '../lib/tusUpload';
@@ -249,7 +249,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
       return {
         name,
         price,
-        unit: cellText(row, cols.unit) || 'יח׳',
+        unit: normalizeUnitInput(cellText(row, cols.unit) || 'יחידה'),
         productId: match?.id ?? null,
         ambiguous: match === null,
       } satisfies SheetPreviewRow;
@@ -317,7 +317,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
         // are folded back into the preview as "existing" BEFORE the RPC runs, so a failed import
         // never re-inserts them on the next attempt.
         const inserted = await supabase.from('products')
-          .insert(newRows.map((r) => ({ org_id: orgId, name: r.name, unit: r.unit, active: true })))
+          .insert(newRows.map((r) => ({ org_id: orgId, name: r.name, unit: normalizeUnitInput(r.unit), active: true })))
           .select('id, name');
         if (inserted.error) throw inserted.error;
         const idByName = new Map((inserted.data as { id: string; name: string }[]).map((p) => [nameKey(p.name), p.id]));

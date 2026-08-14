@@ -42,6 +42,8 @@ export default function InvoiceNew() {
     before_vat: '', vat: '', total: '', notes: '', reason: '',
   });
   const [invoiceId] = useState(() => crypto.randomUUID());
+  const [dirty, setDirty] = useState(false);
+  const [leaveTarget, setLeaveTarget] = useState<string | null>(null);
 
   /*
    * `?from=<invoiceId>` is gone (owner, 11.08.2026). It prefilled this form from an existing
@@ -82,6 +84,7 @@ export default function InvoiceNew() {
         // A file name is something a bookkeeper can recognise later; the document uuid is not.
         reason: s.reason || (fileName ? `נקלטה מהמסמך הסרוק ${fileName}` : 'נקלטה ממסמך סרוק'),
       }));
+      setDirty(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presetDocument]);
@@ -132,7 +135,10 @@ export default function InvoiceNew() {
   const canOpenProcurement = profile?.role === 'owner' || profile?.role === 'office';
 
   const vatRate = (org?.vat_rate ?? 18) / 100;
-  const set = (k: string, v: string) => setF((s) => ({ ...s, [k]: v }));
+  const set = (k: string, v: string) => {
+    setDirty(true);
+    setF((s) => ({ ...s, [k]: v }));
+  };
 
   // A supplier the list does not have used to mean abandoning a half-filled invoice for /suppliers.
   const supplierPicker = useQuickSupplier(suppliers, (supplierId) => set('supplier_id', supplierId));
@@ -140,12 +146,38 @@ export default function InvoiceNew() {
   // auto-complete VAT math from whichever field the user fills
   function onBeforeVat(v: string) {
     const n = Number(v);
+    setDirty(true);
     setF((s) => ({ ...s, before_vat: v, vat: n ? (n * vatRate).toFixed(2) : s.vat, total: n ? (n * (1 + vatRate)).toFixed(2) : s.total }));
   }
   function onTotal(v: string) {
     const n = Number(v);
+    setDirty(true);
     setF((s) => ({ ...s, total: v, before_vat: n ? (n / (1 + vatRate)).toFixed(2) : s.before_vat, vat: n ? (n - n / (1 + vatRate)).toFixed(2) : s.vat }));
   }
+
+  useEffect(() => {
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    const protectLink = (event: MouseEvent) => {
+      if (!dirty || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href]') : null;
+      if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setLeaveTarget(`${url.pathname}${url.search}${url.hash}`);
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    document.addEventListener('click', protectLink, true);
+    return () => {
+      window.removeEventListener('beforeunload', beforeUnload);
+      document.removeEventListener('click', protectLink, true);
+    };
+  }, [dirty]);
 
   const linkedOrderIds = linkedOrderId ? [linkedOrderId] : [];
   const checkFingerprint = effectiveSupplierId && f.invoice_number.trim() && Number(f.total) > 0
@@ -231,6 +263,7 @@ export default function InvoiceNew() {
       toast(inv.review_status === 'investigation'
         ? 'החשבונית נשמרה כדורשת בירור ונפתח חריג לבדיקה'
         : 'החשבונית נשמרה');
+      setDirty(false);
       navigate(`/invoices/${inv.invoice_id}`);
     } catch (e) {
       toast(toHebrewError(e), 'error');
@@ -331,7 +364,7 @@ export default function InvoiceNew() {
       )}
 
       <div className="flex justify-end gap-2">
-        <button className="btn-secondary" onClick={() => navigate(-1)}>ביטול</button>
+        <button className="btn-secondary" onClick={() => dirty ? setLeaveTarget('/invoices') : navigate('/invoices')}>ביטול</button>
         {hasCritical ? (
           <>
             <button className="btn-secondary" disabled={busy || !checksReady} onClick={() => void save()}>שמירה כ״דורשת בירור״</button>
@@ -349,6 +382,16 @@ export default function InvoiceNew() {
         title="אישור חריגה — חשד לכפילות"
         message="נמצאו ממצאים קריטיים. אישור ישמור את החשבונית כרגילה למרות האזהרות. הפעולה והסיבה יתועדו ביומן הביקורת."
         confirmLabel="אישור ושמירה" danger requireReason busy={busy} />
+      <ConfirmDialog open={leaveTarget !== null} onClose={() => setLeaveTarget(null)}
+        onConfirm={() => {
+          const target = leaveTarget;
+          setLeaveTarget(null);
+          setDirty(false);
+          if (target) navigate(target);
+        }}
+        title="יציאה מחשבונית חדשה"
+        message="הנתונים שהוזנו בחשבונית עדיין לא נשמרו. יציאה מהמסך תמחק אותם."
+        confirmLabel="יציאה ללא שמירה" danger busy={busy} />
     </div>
   );
 }

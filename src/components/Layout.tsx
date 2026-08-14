@@ -1,5 +1,5 @@
 import { Link, Outlet, useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -16,7 +16,7 @@ import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/organizationAccess';
 import { isRouteFamilyActive } from '../lib/quickActions';
-import { routePresentationTitle, staticRouteTitle, type StaticRoutePath } from '../lib/routePresentation';
+import { routeBackPresentation, routePresentationTitle, staticRouteTitle, type StaticRoutePath } from '../lib/routePresentation';
 
 export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: ActiveRole[] }
 export interface NavSection { section: string; items: NavItem[]; collapsible?: boolean }
@@ -190,6 +190,7 @@ export default function Layout() {
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
     : null;
   const currentTitle = pageTitleFor(location.pathname);
+  const routeBack = routeBackPresentation(location.pathname);
 
   const sections = sectionsForRole(role, isPlatformAdmin);
   const drawerSections = drawerSectionsForRole(role, isPlatformAdmin);
@@ -276,9 +277,8 @@ export default function Layout() {
   /**
    * `expandGroups` — the desktop sidebar shows every group open (owner decision 09.08.2026).
    *
-   * The phone drawer keeps daily work exposed and progressively discloses management/control.
-   * The active route's group opens automatically, so orientation never depends on recall.
-   * Desktop remains fully expanded because its permanent column has the scanning room.
+   * Both navigation surfaces stay fully expanded by owner decision. The phone drawer scrolls as
+   * one direct list; no destination requires opening a disclosure first.
    */
   const accountBlock = (
     <div className="px-1 pt-3">
@@ -362,11 +362,18 @@ export default function Layout() {
           {/* Only the mark is the link, not the whole block: the text beside it is the CURRENT
               page's title, and wrapping that in a "go to dashboard" link would make the screen
               name its own destination — the one place a logo home-link reliably confuses people. */}
-          <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
-            className="mobile-shell-mark flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-            <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="28" height="28"
-              className="size-7 rounded-md bg-white object-contain p-px ring-1 ring-shell-ink/15" />
-          </Link>
+          {routeBack ? (
+            <Link to={routeBack.to} aria-label={routeBack.label} title={routeBack.label}
+              className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+              <ArrowRight size={21} aria-hidden="true" />
+            </Link>
+          ) : (
+            <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
+              className="mobile-shell-mark flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+              <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="28" height="28"
+                className="size-7 rounded-md bg-white object-contain p-px ring-1 ring-shell-ink/15" />
+            </Link>
+          )}
           <div className="min-w-0 leading-tight">
             <div className="truncate text-sm font-semibold" title={currentTitle}>{currentTitle}</div>
             <div className="mobile-shell-subtitle truncate text-[11px] text-shell-ink-dim" title={orgName || APP_NAME}>{APP_NAME}{orgName ? ` · ${orgName}` : ''}</div>
@@ -387,7 +394,7 @@ export default function Layout() {
           <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label="תפריט ראשי"
             tabIndex={-1} className="phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-shell border-e border-shell-ink/10 focus:outline-none" onClick={(e) => e.stopPropagation()}>
             <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 rounded-lg text-shell-ink-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={20} /></button>
-            {sidebar(drawerSections, 'יעדים נוספים', false, false)}
+            {sidebar(drawerSections, 'יעדים נוספים', true, false)}
           </aside>
         </div>
       )}

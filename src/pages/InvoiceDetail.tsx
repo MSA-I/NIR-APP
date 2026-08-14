@@ -10,7 +10,7 @@ import { InvoiceAttachments } from '../components/AttachmentsPanel';
 import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS, CREDIT_REASON } from '../lib/status';
-import { fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
+import { fmtMoneyExact, fmtDate, formatQuantity, formatUnit, todayISO } from '../lib/format';
 import { creditDraftFromInterpretation, type CreditDraft } from '../components/document-review/model';
 import type { InterpretationContract } from '../lib/useDocumentProcessing';
 import type { Invoice, InvoiceReviewStatus, CreditReason } from '../lib/types';
@@ -121,7 +121,7 @@ function threeWayReasonDetails(reason: ThreeWayReason) {
     return `מצופה ${fmtMoneyExact(reason.expected)} · בפועל ${fmtMoneyExact(reason.actual)}`;
   }
   if (reason.invoice_unit && reason.order_unit) {
-    return `יחידה בחשבונית: ${reason.invoice_unit} · יחידה בהזמנה: ${reason.order_unit}`;
+    return `יחידה בחשבונית: ${formatUnit(reason.invoice_unit)} · יחידה בהזמנה: ${formatUnit(reason.order_unit)}`;
   }
   return null;
 }
@@ -549,7 +549,7 @@ export default function InvoiceDetail() {
                   {data.threeWay.lines.map((line) => (
                     <li key={line.id} className="px-3 py-2 text-sm flex flex-wrap justify-between gap-2">
                       <span><span className="num text-ink-muted">{line.line_number}.</span> {line.description}</span>
-                      <span className="num text-ink-muted">{line.quantity} {line.unit} × {fmtMoneyExact(line.unit_price)} = {fmtMoneyExact(line.line_total)}</span>
+                      <span className="num text-ink-muted">{formatQuantity(line.quantity, line.unit)} × {fmtMoneyExact(line.unit_price)} = {fmtMoneyExact(line.line_total)}</span>
                     </li>
                   ))}
                 </ul>

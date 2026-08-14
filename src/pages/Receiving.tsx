@@ -13,7 +13,7 @@ import ReceiptConflictDialog, {
   loadReceiptConflict, type ReceiptConflictResolution, type ReceiptConflictState,
 } from '../components/ReceiptConflictDialog';
 import { PO_STATUS, RECEIPT_LINE_STATUS, type Tone } from '../lib/status';
-import { fmtDate, fmtDateTime, todayISO } from '../lib/format';
+import { fmtDate, fmtDateTime, formatQuantity, todayISO } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import {
   claimLegacyReceiptRecovery, createReceiptDraftAutosaver, ensureReceiptKey, getOpenOrder, getReceiptDraft,
@@ -651,6 +651,34 @@ export function ReceiveOrder() {
     });
   }, [doneReceiptId, lines, openCredits, order, receiptKey, toast]);
 
+  useEffect(() => {
+    if (!order || doneReceiptId) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    const flushBeforeLink = (event: MouseEvent) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href]') : null;
+      if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void draftAutosaver.current.flush().then(() => {
+        navigate(`${url.pathname}${url.search}${url.hash}`);
+      }).catch((saveError) => {
+        toast(`${toHebrewError(saveError)} לא ניתן לעבור מסך לפני שמירת טיוטת הקבלה.`, 'error');
+      });
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    document.addEventListener('click', flushBeforeLink, true);
+    return () => {
+      window.removeEventListener('beforeunload', beforeUnload);
+      document.removeEventListener('click', flushBeforeLink, true);
+    };
+  }, [doneReceiptId, navigate, order, toast]);
+
   const progress = useMemo(() => {
     if (!order) return { done: 0, total: 0 };
     return { done: Object.keys(lines).length, total: order.items.length };
@@ -1026,8 +1054,8 @@ export function ReceiveOrder() {
               <div>
                 <div className="font-semibold text-ink">{item.product.name}</div>
                 <div className="text-xs text-ink-muted mt-0.5">
-                  הוזמן: {item.qty} {item.product.unit}
-                  {item.received_qty > 0 && ` · התקבל בעבר: ${item.received_qty}`}
+                  הוזמן: <span className="num">{formatQuantity(item.qty, item.product.unit)}</span>
+                  {item.received_qty > 0 && <> · התקבל בעבר: <span className="num">{formatQuantity(item.received_qty, item.product.unit)}</span></>}
                 </div>
               </div>
               <StatusBadge meta={RECEIPT_LINE_STATUS[line.status]} />
@@ -1043,7 +1071,7 @@ export function ReceiveOrder() {
                 value={line.qty} onChange={(e) => setLine(item.id, { qty: Math.max(0, Number(e.target.value) || 0) }, item)} />
               <button className="btn-secondary p-3!" onClick={() => setLine(item.id, { qty: line.qty + 1 }, item)} aria-label={`הגדלת הכמות שהתקבלה עבור ${item.product.name}`}><Plus size={18} /></button>
               {line.qty !== remaining && (
-                <button className="btn-ghost text-xs" aria-label={`סימון מלוא הכמות שנותרה עבור ${item.product.name}: ${remaining}`} onClick={() => setLine(item.id, { qty: remaining }, item)}>מלא ({remaining})</button>
+                <button className="btn-ghost text-xs" aria-label={`סימון מלוא הכמות שנותרה עבור ${item.product.name}: ${formatQuantity(remaining, item.product.unit)}`} onClick={() => setLine(item.id, { qty: remaining }, item)}>מלא ({formatQuantity(remaining, item.product.unit)})</button>
               )}
             </div>
 

@@ -56,3 +56,25 @@ export function routePresentationTitle(pathname: string): string | null {
   const exact = STATIC_ROUTE_TITLES[pathname as StaticRoutePath];
   return exact ?? DYNAMIC_ROUTE_TITLES.find(([pattern]) => pattern.test(pathname))?.[1] ?? null;
 }
+
+const STATIC_ROUTE_BACK: Partial<Record<StaticRoutePath, { to: string; label: string }>> = {
+  '/orders/new': { to: '/orders', label: 'חזרה להזמנות רכש' },
+  '/invoices/new': { to: '/invoices', label: 'חזרה לחשבוניות' },
+  '/reports/products': { to: '/reports', label: 'חזרה לדוח לרו״ח' },
+};
+
+const DYNAMIC_ROUTE_BACK: readonly [RegExp, { to: string; label: string }][] = [
+  [/^\/suppliers\/[^/]+$/, { to: '/suppliers', label: 'חזרה לספקים' }],
+  [/^\/finance\/suppliers\/[^/]+$/, { to: '/dashboard', label: 'חזרה למרכז הבקרה' }],
+  [/^\/orders\/[^/]+$/, { to: '/orders', label: 'חזרה להזמנות רכש' }],
+  [/^\/receiving\/[^/]+$/, { to: '/receiving', label: 'חזרה לקבלת סחורה' }],
+  [/^\/receipts\/[^/]+$/, { to: '/receiving', label: 'חזרה לקבלת סחורה' }],
+  [/^\/invoices\/[^/]+$/, { to: '/invoices', label: 'חזרה לחשבוניות' }],
+  [/^\/documents\/[^/]+\/review$/, { to: '/documents', label: 'חזרה למסמכים' }],
+];
+
+export function routeBackPresentation(pathname: string): { to: string; label: string } | null {
+  return STATIC_ROUTE_BACK[pathname as StaticRoutePath]
+    ?? DYNAMIC_ROUTE_BACK.find(([pattern]) => pattern.test(pathname))?.[1]
+    ?? null;
+}

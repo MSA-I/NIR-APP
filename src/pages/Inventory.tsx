@@ -14,7 +14,7 @@ import {
   type Column,
 } from '../components/ui';
 import { ok, toHebrewError } from '../lib/errors';
-import { fmtDate, fmtDateTime, fmtMoneyRounded, fmtNum } from '../lib/format';
+import { fmtDate, fmtDateTime, fmtMoneyRounded, fmtNum, formatQuantity, formatUnit } from '../lib/format';
 import { supabase } from '../lib/supabase';
 import { fetchAll } from '../lib/supabasePaging';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -115,24 +115,24 @@ export default function Inventory() {
     {
       key: 'quantity', header: 'כמות משוערת', className: 'num', priority: 1,
       sortValue: (row) => row.quantity_on_hand ?? Number.NEGATIVE_INFINITY,
-      render: (row) => <span className="num">{fmtNum(row.quantity_on_hand)} {row.quantity_on_hand == null ? '' : row.unit}</span>,
+      render: (row) => <span className="num">{formatQuantity(row.quantity_on_hand, row.unit)}</span>,
     },
     {
       key: 'minimum', header: 'מלאי מינימום', className: 'num',
       sortValue: (row) => row.min_stock ?? Number.NEGATIVE_INFINITY,
-      render: (row) => <span className="num">{fmtNum(row.min_stock)} {row.min_stock == null ? '' : row.unit}</span>,
+      render: (row) => <span className="num">{formatQuantity(row.min_stock, row.unit)}</span>,
     },
     {
       key: 'consumption', header: 'צריכה יומית', className: 'num', priority: 2,
       sortValue: (row) => row.average_daily_consumption ?? Number.NEGATIVE_INFINITY,
-      render: (row) => <span className="num">{fmtNum(row.average_daily_consumption)} {row.average_daily_consumption == null ? '' : row.unit}</span>,
+      render: (row) => <span className="num">{formatQuantity(row.average_daily_consumption, row.unit)}</span>,
     },
     {
       key: 'incoming', header: 'אספקה צפויה', className: 'num', priority: 2,
       sortValue: (row) => row.expected_incoming_quantity ?? Number.NEGATIVE_INFINITY,
       render: (row) => (
         <span>
-          <span className="block num">{fmtNum(row.expected_incoming_quantity)} {row.expected_incoming_quantity == null ? '' : row.unit}</span>
+          <span className="block num">{formatQuantity(row.expected_incoming_quantity, row.unit)}</span>
           {row.next_expected_incoming_date && <span className="block text-xs text-ink-muted">המועד הקרוב: {fmtDate(row.next_expected_incoming_date)}</span>}
           {!!row.incoming_without_date_quantity && row.incoming_without_date_quantity > 0 && (
             <span className="block text-xs text-ink-muted num">מתוכם {fmtNum(row.incoming_without_date_quantity)} ללא תאריך</span>
@@ -150,7 +150,7 @@ export default function Inventory() {
     {
       key: 'reorder', header: 'הצעת רכש', className: 'num', priority: 2,
       sortValue: (row) => row.suggested_reorder_quantity ?? Number.NEGATIVE_INFINITY,
-      render: (row) => <span className="num">{fmtNum(row.suggested_reorder_quantity)} {row.suggested_reorder_quantity == null ? '' : row.unit}</span>,
+      render: (row) => <span className="num">{formatQuantity(row.suggested_reorder_quantity, row.unit)}</span>,
     },
     {
       key: 'supplierPrice', header: 'מחיר ספק', priority: 2,
@@ -195,7 +195,7 @@ export default function Inventory() {
       sortValue: (row) => row.quantity_delta,
       render: (row) => (
         <span className={`num font-medium ${row.quantity_delta < 0 ? 'text-alert-fg' : 'text-done-fg'}`} dir="ltr">
-          {row.quantity_delta > 0 ? '+' : ''}{fmtNum(row.quantity_delta)} {row.unit}
+          {row.quantity_delta > 0 ? '+' : ''}{formatQuantity(row.quantity_delta, row.unit)}
         </span>
       ),
     },
@@ -371,7 +371,7 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
 
   return (
     <Modal open onClose={onClose} busy={busy} title={`${copy.title} — ${product.product_name}`}
-      description={`יתרה נוכחית: ${fmtNum(product.quantity_on_hand)}${product.quantity_on_hand == null ? '' : ` ${product.unit}`}. הפעולה תירשם ביומן הביקורת.`}
+      description={`יתרה נוכחית: ${formatQuantity(product.quantity_on_hand, product.unit)}. הפעולה תירשם ביומן הביקורת.`}
       statusMessage={busy ? 'שומר את תנועת המלאי' : undefined}>
       <div className="space-y-4">
         <div>
@@ -379,7 +379,7 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
           <div className="flex items-center gap-2">
             <input id="inventory-command-quantity" className="input num" dir="ltr" type="number" step="0.01"
               min={command === 'adjustment' ? undefined : 0} value={quantity} onChange={(event) => setQuantity(event.target.value)} />
-            <span className="shrink-0 text-sm text-ink-soft">{product.unit}</span>
+            <span className="shrink-0 text-sm text-ink-soft">{formatUnit(product.unit)}</span>
           </div>
         </div>
         <div>

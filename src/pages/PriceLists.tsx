@@ -9,7 +9,7 @@ import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, PageHeader, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
-import { fmtDate, fmtMoneyExact, fmtMoneyRounded, todayISO } from '../lib/format';
+import { fmtDate, fmtMoneyExact, fmtMoneyRounded, formatUnit, todayISO } from '../lib/format';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { chartTheme } from '../lib/theme';
 import { PRODUCT_AVAILABILITY } from '../lib/status';
@@ -76,7 +76,7 @@ export default function PriceLists() {
   const columns: Column<Row>[] = [
     { key: 'product', header: 'מוצר', priority: 3, sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-ink">{r.product.name}</span> },
     { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
-    { key: 'unit', header: 'יח׳', priority: 3, render: (r) => r.product.unit },
+    { key: 'unit', header: 'יחידה', priority: 3, render: (r) => formatUnit(r.product.unit) },
     { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
     { key: 'prev', header: 'מחיר קודם', priority: 3, className: 'num', render: (r) => fmtMoneyExact(r.previous_price) },
     {

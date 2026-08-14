@@ -53,11 +53,11 @@ describe('סרגל פעולות מהירות תחתון', () => {
     expect(isRouteFamilyActive('/orders/new', '/orders/new?fresh=1')).toBe(true);
   });
 
-  it('שומר focus mode עם צילום בלבד', () => {
+  it('שומר את כל הקיצורים גם במסך קבלה ממוקד', () => {
     state.role = 'office';
     renderAt('/receiving/order-1');
     expect(screen.queryByRole('navigation', { name: 'ניווט ראשי בנייד' })).toBeNull();
-    expect(screen.getByRole('group', { name: 'קיצורי דרך ופעולות' }).querySelectorAll('.mobile-action')).toHaveLength(1);
+    expect(screen.getByRole('group', { name: 'קיצורי דרך ופעולות' }).querySelectorAll('.mobile-action')).toHaveLength(5);
     expect(screen.getByRole('button', { name: 'צילום מסמך' })).toBeInTheDocument();
   });
 

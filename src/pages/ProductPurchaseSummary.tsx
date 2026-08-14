@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, FileSpreadsheet, Info } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { fmtDate, fmtMoneyExact, fmtNum, todayISO } from '../lib/format';
+import { fmtDate, fmtMoneyExact, fmtNum, formatUnit, todayISO } from '../lib/format';
 import { DataTable, ErrorNote, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
 import { useAuth } from '../auth/AuthContext';
 import { toHebrewError } from '../lib/errors';
@@ -80,7 +80,7 @@ export default function ProductPurchaseSummary() {
         <div>
           <div className="font-medium text-ink">{r.product_name}</div>
           <div className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-ink-muted">
-            {r.unit && <span>{r.unit}</span>}
+            {r.unit && <span>{formatUnit(r.unit)}</span>}
             {/* Provenance, not decoration. "Some of this rests on the supplier's word" is the
                 difference between a number you can quote back to them and one you cannot. */}
             {r.includes_invoice_only_quantity && <span>· חלק מהכמות לפי החשבונית בלבד</span>}
@@ -140,7 +140,7 @@ export default function ProductPurchaseSummary() {
         const book = XLSX.utils.book_new();
         const exportRows = data.products.map((row) => neutralizeSpreadsheetRow({
           'מוצר': row.product_name,
-          'יחידה': row.unit ?? '',
+          'יחידה': formatUnit(row.unit),
           'הוזמן': row.ordered_qty,
           'התקבל': row.received_qty,
           'חויב': row.invoiced_qty,

@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { toHebrewError } from './errors';
-import { fmtDate, fmtMoneyExact } from './format';
+import { fmtDate, fmtMoneyExact, formatQuantity } from './format';
 import { openExternalPopup } from './popup';
 
 /**
@@ -29,7 +29,7 @@ export function orderWhatsAppLink(order: WhatsAppOrder, orgName: string): string
     `הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`,
     order.expected_date ? `אספקה מבוקשת: ${fmtDate(order.expected_date)}` : '',
     '',
-    ...order.items.map((i) => `• ${i.product.name} — ${i.qty} ${i.product.unit}`),
+    ...order.items.map((i) => `• ${i.product.name} — ${formatQuantity(i.qty, i.product.unit)}`),
     '',
     `סה"כ משוער: ${fmtMoneyExact(total)}`,
     order.notes ? `הערות: ${order.notes}` : '',
