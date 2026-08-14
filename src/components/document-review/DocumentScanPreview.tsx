@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, CornerDownLeft, Loader2, ScanLine } from 'lucide-react';
+import { Check, CornerDownLeft, Loader2, Pencil, ScanLine } from 'lucide-react';
 import { toHebrewError } from '../../lib/errors';
 import { supabase } from '../../lib/supabase';
 import {
   acceptDocumentScan,
+  recoverDocumentScan,
   scanCornersValid,
   submitDocumentScanCorners,
   type DocumentScanState,
@@ -37,14 +38,17 @@ function scanFailureMessage(code: string | null): string {
     : 'לא ניתן ליצור סריקה נקייה. אפשר לנסות להעלות צילום ברור יותר.';
 }
 
-function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly }: {
+function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, recovery = false }: {
   sourceUrl: string;
   state: DocumentScanState;
   fileName: string;
   onChanged: () => Promise<unknown>;
   readOnly: boolean;
+  recovery?: boolean;
 }) {
-  const [corners, setCorners] = useState<ScanCorners>(state.manual_corners ?? DEFAULT_CORNERS);
+  const [corners, setCorners] = useState<ScanCorners>(
+    state.manual_corners ?? state.detected_corners ?? DEFAULT_CORNERS,
+  );
   const [saving, setSaving] = useState(false);
   const frame = useRef<HTMLDivElement>(null);
   const toast = useToast();
@@ -62,7 +66,8 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly }: {
     if (!valid || readOnly) return;
     setSaving(true);
     try {
-      await submitDocumentScanCorners(state.scan_job_id, corners);
+      if (recovery) await recoverDocumentScan(state.scan_job_id, corners);
+      else await submitDocumentScanCorners(state.scan_job_id, corners);
       toast('הפינות נשמרו. נוצרת סריקה חדשה.', 'success');
       await onChanged();
     } catch (error) {
@@ -75,7 +80,11 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly }: {
   const polygon = corners.map(([x, y]) => `${x * 100},${y * 100}`).join(' ');
   return (
     <div className="space-y-4">
-      <Note tone="await">גבולות הדף לא זוהו. מקם את ארבע הפינות על קצות המסמך ואז צור סריקה חדשה.</Note>
+      <Note tone="await">
+        {recovery
+          ? 'מקם את ארבע הפינות על הדף המלא. הסריקה הקודמת תישמר כראיה ותיווצר סריקה חדשה.'
+          : 'גבולות הדף לא זוהו. מקם את ארבע הפינות על קצות המסמך ואז צור סריקה חדשה.'}
+      </Note>
       <div ref={frame} dir="ltr" className="relative mx-auto max-w-4xl overflow-hidden rounded-lg bg-surface-sunken touch-none">
         <img src={sourceUrl} alt={`המסמך המקורי ${fileName} לבחירת גבולות`} className="block h-auto w-full select-none" draggable={false} />
         <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
@@ -127,6 +136,7 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
   const [scanUrl, setScanUrl] = useState<string | null>(null);
   const [urlError, setUrlError] = useState<string | null>(null);
   const [accepting, setAccepting] = useState(false);
+  const [editingCorners, setEditingCorners] = useState(state.status === 'failed');
   const toast = useToast();
 
   useEffect(() => {
@@ -194,40 +204,49 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
       {state.status === 'failed' && (
         <Note tone="alert" role="alert">הסריקה נכשלה. {scanFailureMessage(state.last_error_code)}</Note>
       )}
-      {state.status === 'needs_corners' && originalUrl && (
+      {(state.status === 'needs_corners' || state.status === 'failed' || (state.status === 'ready' && editingCorners)) && originalUrl && (
         <ScanCornerEditor
           sourceUrl={originalUrl}
           state={state}
           fileName={fileName}
           onChanged={onChanged}
           readOnly={readOnly}
+          recovery={state.status === 'ready' || state.status === 'failed'}
         />
       )}
-      {(state.status === 'ready' || state.status === 'accepted') && originalUrl && scanUrl && (
+      {(state.status === 'ready' || state.status === 'accepted') && !editingCorners && originalUrl && scanUrl && (
         <div className="space-y-4">
           <div className="grid min-w-0 gap-4 lg:grid-cols-2">
             <figure className="min-w-0 overflow-hidden rounded-lg border border-line bg-surface-sunken">
               <figcaption className="border-b border-line bg-surface px-3 py-2 text-sm font-medium text-ink-soft">המקור</figcaption>
-              <img src={originalUrl} alt={`המסמך המקורי ${fileName}`} className="block h-auto w-full" />
+              <img src={originalUrl} alt={`המסמך המקורי ${fileName}`} className="block max-h-[58vh] w-full object-contain lg:max-h-[72vh]" />
             </figure>
             <figure className="min-w-0 overflow-hidden rounded-lg border border-line bg-surface-sunken">
               <figcaption className="border-b border-line bg-surface px-3 py-2 text-sm font-medium text-ink-soft">
                 הסריקה המשופרת · {state.output_mode === 'black_and_white' ? 'שחור־לבן' : 'גווני אפור'}
               </figcaption>
-              <img src={scanUrl} alt={`סריקה משופרת של ${fileName}`} className="block h-auto w-full" />
+              <img src={scanUrl} alt={`סריקה משופרת של ${fileName}`} className="block max-h-[58vh] w-full object-contain lg:max-h-[72vh]" />
             </figure>
           </div>
           {state.status === 'ready' ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+            <div className="space-y-3 border-t border-line pt-4">
+              <Note tone="info">בשלב הזה הוכנה תמונת סריקה בלבד. עדיין לא חולצו מהמסמך ספק, מספר, תאריך, סכומים או שורות.</Note>
+              <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-ink-muted">
                 {readOnly
                   ? 'הארגון במצב קריאה בלבד. אפשר לצפות בסריקה, אך אי אפשר לאשר אותה לחילוץ.'
                   : 'בדוק שהדף שלם וקריא. האישור קובע שה־OCR יקרא נגזרת זו, לא את המקור.'}
               </p>
+              <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn-secondary" disabled={accepting || readOnly} onClick={() => setEditingCorners(true)}>
+                <Pencil size={17} aria-hidden="true" /> תיקון גבולות
+              </button>
               <button type="button" className="btn-primary" disabled={accepting || readOnly} onClick={() => void accept()}>
                 {accepting ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <Check size={17} aria-hidden="true" />}
                 {accepting ? 'מאשר…' : 'אישור והמשך לחילוץ'}
               </button>
+              </div>
+              </div>
             </div>
           ) : (
             <Note tone="done" role="status">הסריקה אושרה. החילוץ קורא כעת את הגרסה המשופרת.</Note>

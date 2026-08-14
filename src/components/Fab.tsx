@@ -14,7 +14,8 @@ import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/organizationAccess';
  * *navigating* actions is right. Hiding the whole bar also took the camera away, and the worst
  * place to lose it is `/receiving/:orderId`: the receiving user is standing at the truck holding
  * both the goods and the invoice, and that screen admitted it in prose — "צילום החשבונית יתאפשר
- * מיד לאחר סיום הקבלה" (Receiving.tsx:788). Capture navigates nowhere: `QuickCapture` uploads into
+ * מיד לאחר סיום הקבלה" (Receiving.tsx:788). Capture keeps an unsaved form in place; on safe routes
+ * a single successful upload opens its document review directly.
  * the inbox and contains no `navigate`, so it cannot cost the user the form they are filling.
  */
 export function quickActionsForPath(role: Role | undefined, pathname: string) {

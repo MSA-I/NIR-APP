@@ -20,6 +20,7 @@ import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 
 import { quickActionsForPath } from '../components/Fab';
+import { quickCaptureReviewTarget } from '../components/QuickCapture';
 import { quickActionsFor } from '../lib/quickActions';
 import { showNavHeaders, sectionsForRole } from '../components/Layout';
 import { CategoryDonut } from '../components/charts';
@@ -61,13 +62,23 @@ describe('finding 7 — the FAB keeps its camera where the user is busiest', () 
   /**
    * The reason this is a defect and not a preference: /receiving/:orderId is where the office
    * receiver stands holding both the goods and the invoice, and the screen itself admitted the
-   * camera was gone. Capture navigates nowhere — `QuickCapture` uploads to the inbox and has no
-   * `navigate` — so nothing about the suppression's original purpose is given up.
+   * camera was gone. A single capture opens review on safe routes, while these form routes keep
+   * the person's unsaved work in place.
    */
   it('still removes every navigating action there — the form is not at risk', () => {
     for (const path of SUPPRESSED) {
       expect(quickActionsForPath('office', path).some((action) => action.kind === 'link')).toBe(false);
     }
+  });
+
+  it('opens one captured document from a safe route but never abandons an unsaved form', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    expect(quickCaptureReviewTarget('/documents/operations', 1, 1, id))
+      .toBe(`/documents/${id}/review`);
+    for (const path of SUPPRESSED) {
+      expect(quickCaptureReviewTarget(path, 1, 1, id)).toBeNull();
+    }
+    expect(quickCaptureReviewTarget('/dashboard', 2, 2, id)).toBeNull();
   });
 
   it('changes nothing anywhere else', () => {

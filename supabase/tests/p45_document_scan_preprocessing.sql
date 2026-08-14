@@ -54,6 +54,7 @@ select pg_temp.p45_assert(
   and has_function_privilege('authenticated', 'public.get_document_scan_states(uuid[])', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.submit_document_scan_corners(uuid,jsonb)', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.accept_document_scan(uuid,text)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.recover_document_scan(uuid,jsonb,text)', 'EXECUTE')
   and not has_function_privilege('authenticated', 'public.claim_document_scan_job(text,integer)', 'EXECUTE')
   and has_function_privilege('service_role', 'public.claim_document_scan_job(text,integer)', 'EXECUTE')
   and has_function_privilege('service_role', 'public.claim_document_processing_job_input(text,integer)', 'EXECUTE'),
@@ -437,6 +438,98 @@ select pg_temp.p45_assert(
   ),
   'OCR claim did not resolve to the accepted scanned derivative'
 );
+
+-- A terminal scan can be replaced by one manually bounded successor. The old processing attempt
+-- remains failed history, and a repeated recovery call returns the same successor.
+insert into storage.objects (bucket_id, name, owner, owner_id, metadata) values (
+  'documents', '13600000-0000-4000-8000-000000000001/inbox/p45-recovery.jpg',
+  '13610000-0000-4000-8000-000000000001', '13610000-0000-4000-8000-000000000001',
+  '{"mimetype":"image/jpeg","size":8192,"eTag":"1360000000000005"}'::jsonb
+);
+insert into public.documents (
+  id, org_id, entity_type, entity_id, storage_path, file_name,
+  mime_type, document_kind, uploaded_by
+) values (
+  '13620000-0000-4000-8000-000000000005', '13600000-0000-4000-8000-000000000001',
+  'inbox', null, '13600000-0000-4000-8000-000000000001/inbox/p45-recovery.jpg',
+  'p45-recovery.jpg', 'image/jpeg', 'invoice', '13610000-0000-4000-8000-000000000001'
+);
+
+select set_config('request.jwt.claim.sub', '13610000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'p43.accepted_scan_job_id',
+  :'p45_manual_claim_result'::jsonb ->> 'job_id',
+  true
+);
+set local role authenticated;
+select public.begin_document_intake('13620000-0000-4000-8000-000000000005')::text as result
+\gset p45_recovery_intake_
+reset role;
+
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claim.role', 'service_role', true);
+update public.document_scan_jobs
+set status = 'failed', last_error_code = 'processing_resource_failure',
+    last_error_message = 'synthetic terminal failure'
+where id = (:'p45_recovery_intake_result'::jsonb ->> 'intake_job_id')::uuid;
+
+select set_config('request.jwt.claim.sub', '13610000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select public.recover_document_scan(
+  (:'p45_recovery_intake_result'::jsonb ->> 'intake_job_id')::uuid,
+  '[[0.04,0.05],[0.96,0.05],[0.95,0.96],[0.05,0.95]]'::jsonb,
+  'P45 manual recovery'
+)::text as result
+\gset p45_recovery_
+select public.recover_document_scan(
+  (:'p45_recovery_intake_result'::jsonb ->> 'intake_job_id')::uuid,
+  '[[0.04,0.05],[0.96,0.05],[0.95,0.96],[0.05,0.95]]'::jsonb,
+  'P45 idempotent recovery'
+)::text as result
+\gset p45_recovery_repeat_
+reset role;
+
+select pg_temp.p45_assert(
+  not (:'p45_recovery_result'::jsonb ->> 'idempotent')::boolean
+  and (:'p45_recovery_repeat_result'::jsonb ->> 'idempotent')::boolean
+  and :'p45_recovery_result'::jsonb ->> 'scan_job_id'
+    = :'p45_recovery_repeat_result'::jsonb ->> 'scan_job_id'
+  and exists (
+    select 1 from public.document_scan_jobs successor
+    where successor.id = (:'p45_recovery_result'::jsonb ->> 'scan_job_id')::uuid
+      and successor.recovered_from_scan_job_id
+        = (:'p45_recovery_intake_result'::jsonb ->> 'intake_job_id')::uuid
+      and successor.status = 'queued'
+      and successor.manual_corners
+        = '[[0.04,0.05],[0.96,0.05],[0.95,0.96],[0.05,0.95]]'::jsonb
+  )
+  and exists (
+    select 1 from public.document_processing_jobs
+    where id = (:'p45_recovery_intake_result'::jsonb ->> 'processing_job_id')::uuid
+      and status = 'failed' and last_error_code = 'superseded_by_scan_recovery'
+  ),
+  'scan recovery was not immutable, manually bounded and idempotent'
+);
+
+-- An accepted derivative is business evidence and can never be silently replaced.
+select set_config('request.jwt.claim.sub', '13610000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+do $$
+begin
+  perform public.recover_document_scan(
+    current_setting('p43.accepted_scan_job_id', true)::uuid,
+    '[[0.05,0.05],[0.95,0.05],[0.95,0.95],[0.05,0.95]]'::jsonb,
+    'must reject accepted evidence'
+  );
+  raise exception 'expected accepted scan recovery denial';
+exception when others then
+  if sqlerrm <> 'accepted_document_scan_immutable' then raise; end if;
+end
+$$;
+reset role;
 
 -- Tenant B cannot see or accept tenant A scan evidence.
 select set_config('request.jwt.claim.sub', '13610000-0000-4000-8000-000000000004', true);

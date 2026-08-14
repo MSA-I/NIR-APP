@@ -74,10 +74,42 @@ describe('DocumentScanPreview', () => {
 
     expect(await screen.findByAltText('המסמך המקורי invoice.jpg')).toBeInTheDocument();
     expect(screen.getByAltText('סריקה משופרת של invoice.jpg')).toBeInTheDocument();
+    expect(screen.getByText(/עדיין לא חולצו מהמסמך ספק, מספר, תאריך/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'אישור והמשך לחילוץ' }));
 
     await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith('accept_document_scan', {
       p_scan_output_id: state.output_id,
+    }));
+    expect(changed).toHaveBeenCalledOnce();
+  });
+
+  it('creates an immutable successor when a ready crop needs corrected boundaries', async () => {
+    const changed = vi.fn().mockResolvedValue(true);
+    const state: DocumentScanState = {
+      ...base,
+      status: 'ready',
+      output_id: '44444444-4444-4444-8444-444444444444',
+      output_storage_path: 'org/document/job/scan.png',
+      output_mode: 'black_and_white',
+      detected_corners: [[0.1, 0.2], [0.9, 0.2], [0.9, 0.8], [0.1, 0.8]],
+      corners_source: 'automatic',
+      rotation_degrees: 0,
+    };
+    render(<DocumentScanPreview
+      state={state}
+      originalStoragePath="org/inbox/source.jpg"
+      fileName="invoice.jpg"
+      readOnly={false}
+      onChanged={changed}
+    />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'תיקון גבולות' }));
+    await userEvent.click(screen.getByRole('button', { name: 'יצירת סריקה מהפינות' }));
+
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith('recover_document_scan', {
+      p_scan_job_id: state.scan_job_id,
+      p_corners: state.detected_corners,
+      p_reason: 'manual boundary correction after scan review',
     }));
     expect(changed).toHaveBeenCalledOnce();
   });

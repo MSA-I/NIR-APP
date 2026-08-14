@@ -12,6 +12,10 @@
  */
 
 const PATTERNS: [RegExp, string][] = [
+  [/accepted_document_scan_immutable|document_scan_superseded_by_recovery/i,
+    'הסריקה כבר אושרה או הוחלפה ואי אפשר לשנות את הראיה הקודמת. רענן את המסך כדי לראות את הגרסה הנוכחית.'],
+  [/document_scan_recovery_unavailable|document_scan_processing_state_invalid/i,
+    'מצב הסריקה השתנה ולא ניתן ליצור ממנה תיקון חדש. רענן את המסך ובדוק את הגרסה הנוכחית.'],
   [/retired_identity_requires_platform_reactivation/i,
     'זהות של תפקיד שפרש יכולה לחזור לחשבון פעיל רק דרך מנהל השירות, שמעדכן יחד את התפקיד ואת חסימת הכניסה.'],
   [/account_role_retired|role_not_invitable/i,

@@ -257,8 +257,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
     const timer = window.setInterval(() => void refreshAccess(), 60_000);
-    return () => { window.clearInterval(timer); };
-  }, [session, profile, org, offlineBootstrap]);
+    const refreshRestrictedAccess = () => {
+      if (access.mode !== 'active') void refreshAccess();
+    };
+    void refreshRestrictedAccess();
+    const onFocus = () => refreshRestrictedAccess();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refreshRestrictedAccess();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [session, profile, org, offlineBootstrap, access.mode]);
 
   async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
