@@ -370,25 +370,25 @@ export default function Layout() {
           onClick={() => setMobileOpen(true)} aria-label="פתיחת תפריט" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
           <Menu size={22} />
         </button>
-        <div className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2">
+        <div className="mobile-shell-identity flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2">
           {/* Only the mark is the link, not the whole block: the text beside it is the CURRENT
               page's title, and wrapping that in a "go to dashboard" link would make the screen
               name its own destination — the one place a logo home-link reliably confuses people. */}
           <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
-            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+            className="mobile-shell-mark flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
             <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="28" height="28"
               className="size-7 rounded-md bg-white object-contain p-px ring-1 ring-shell-ink/15" />
           </Link>
           <div className="min-w-0 leading-tight">
             <div className="truncate text-sm font-semibold" title={currentTitle}>{currentTitle}</div>
-            <div className="truncate text-[11px] text-shell-ink-dim" title={orgName || APP_NAME}>{APP_NAME}{orgName ? ` · ${orgName}` : ''}</div>
+            <div className="mobile-shell-subtitle truncate text-[11px] text-shell-ink-dim" title={orgName || APP_NAME}>{APP_NAME}{orgName ? ` · ${orgName}` : ''}</div>
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="mobile-shell-actions flex shrink-0 items-center overflow-hidden rounded-lg bg-shell-ink/5 ring-1 ring-inset ring-shell-ink/15">
           <NotificationBell onShell />
           <FeedbackButton onShell />
           {canSearch && (
-            <button className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
+            <button className="flex min-h-[44px] min-w-[44px] items-center justify-center text-shell-ink-soft transition-colors hover:bg-shell-ink/10 hover:text-shell-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
               aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={21} /></button>
           )}
         </div>

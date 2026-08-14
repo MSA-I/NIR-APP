@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-07-22T13:07:00.000+03:00",
+  "generatedAt": "2026-08-14T14:05:00.000+03:00",
   "title": "Design System: SupplyFlow — חדר בקרה פטרול",
   "extensions": {
     "colorMeta": {
@@ -172,9 +172,11 @@
       }
     ],
     "breakpoints": [
+      { "name": "xs-shell", "value": "360px — סימן הבית בטופ־בר מפנה מקום לכותרת המסך" },
       { "name": "sm", "value": "640px" },
       { "name": "md", "value": "768px" },
-      { "name": "lg", "value": "1024px — סרגל צד מופיע ובר תחתון נעלם" }
+      { "name": "lg", "value": "1024px — סרגל צד מופיע ובר תחתון נעלם" },
+      { "name": "short-landscape", "value": "גובה 480px ומטה, רוחב מתחת 1024px — מעטפת קומפקטית עם יעדי 44px" }
     ]
   },
   "components": [
@@ -265,12 +267,18 @@
         "name": "חוק העומק",
         "body": "כרטיס במנוחה מקבל shadow-card; רק כרטיס לחיץ מקבל shadow-card-hover והרמה של פיקסל אחד.",
         "section": "elevation"
+      },
+      {
+        "name": "חוק מעטפת המובייל",
+        "body": "כותרת המיקום קודמת לסימן מותג כפול ב־320px; בלנדסקייפ נמוך המעטפת מצטמצמת בלי להקטין יעד מגע מתחת ל־44px.",
+        "section": "components"
       }
     ],
     "dos": [
       "Do להשתמש רק בטוקנים ובמחלקות הסמנטיות של המערכת",
       "Do properties לוגיים בלבד ו־class num לכל תא מספרי",
       "Do טבעת focus גלויה ויעדי מגע של 44px לפחות",
+      "Do לשמור מרווח תחתון לפי מלוא מעטפת ה־puck המורם",
       "Do לבטל lift ו־press תחת prefers-reduced-motion"
     ],
     "donts": [

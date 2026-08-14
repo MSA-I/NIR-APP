@@ -264,7 +264,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 // for screen readers — SkeletonRegion is not exported, so we compose the house pattern from Skeleton.
 function DashboardSkeleton() {
   return (
-    <div role="status" aria-busy="true" className="dashboard-depth space-y-5">
+    <div role="status" aria-busy="true" className="dashboard-depth">
       <span className="sr-only">טוען</span>
 
       {/* header: page title + freshness stamp */}
@@ -273,8 +273,12 @@ function DashboardSkeleton() {
         <Skeleton className="h-4 w-24" />
       </div>
 
+      {/* Keep the loading geometry in the same responsive order as settled content: money,
+          attention, deliveries on a phone; attention, deliveries, money on desktop. */}
+      <div className="mt-5 flex flex-col gap-5">
+
       {/* deliveries card (אספקות היום ומחר): title + the two-count summary row */}
-      <div className="card overflow-hidden">
+      <div className="card order-3 overflow-hidden lg:order-2">
         <div className="px-4 py-4 sm:px-5"><Skeleton className="h-5 w-40" /></div>
         <div className="flex min-h-11 items-center gap-6 border-t border-line-soft px-4 py-3 sm:px-5">
           <Skeleton className="h-6 w-24" />
@@ -284,7 +288,7 @@ function DashboardSkeleton() {
       </div>
 
       {/* AttentionZone card: header + dense rows (badge · label · amount) */}
-      <div className="card card-pad">
+      <div className="card card-pad order-2 lg:order-1">
         <div className="flex items-center justify-between mb-2">
           <Skeleton className="h-5 w-40" />
           <Skeleton className="h-3 w-28" />
@@ -301,7 +305,7 @@ function DashboardSkeleton() {
       </div>
 
       {/* money band: one card, three compact segments */}
-      <div className="card grid grid-cols-1 sm:grid-cols-3">
+      <div className="card order-1 grid grid-cols-1 sm:grid-cols-3 lg:order-3">
         {Array.from({ length: 3 }, (_, i) => (
           <div key={i} className="min-h-20 px-4 py-3 sm:px-5 border-t sm:border-t-0 sm:border-s border-line-soft first:border-t-0 sm:first:border-s-0">
             <div className="flex items-center gap-2">
@@ -316,7 +320,7 @@ function DashboardSkeleton() {
         ))}
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card order-4 overflow-hidden">
         <div className="px-4 py-4 sm:px-5"><Skeleton className="h-5 w-24" /></div>
         <div className="grid grid-cols-1 border-t border-line-soft lg:grid-cols-12">
           <div className="p-4 lg:col-span-7 lg:border-e lg:border-line-soft sm:p-5">
@@ -334,7 +338,7 @@ function DashboardSkeleton() {
         </div>
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card order-5 overflow-hidden">
         <div className="px-4 py-4 sm:px-5"><Skeleton className="h-5 w-44" /></div>
         {Array.from({ length: 4 }, (_, i) => (
           <div key={i} className="flex min-h-11 items-center gap-3 border-t border-line-soft px-4 sm:px-5">
@@ -343,6 +347,7 @@ function DashboardSkeleton() {
             <Skeleton className="ms-auto h-3 w-28" />
           </div>
         ))}
+      </div>
       </div>
     </div>
   );
