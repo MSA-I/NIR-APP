@@ -34,6 +34,7 @@ export default function DocumentReview() {
   const scanning = useDocumentScanning(documentId ? [documentId] : []);
   const snapshot = documentId ? processing.snapshots[documentId] : null;
   const scanState = documentId ? scanning.states[documentId] : null;
+  const showExtractedResultFirst = Boolean(scanState?.accepted && snapshot?.interpretation);
 
   // Nothing else in the app calls interpret-document, so without this a job stays at 'extracted'
   // for ever. Triggering on the review screen is also the cheapest cost control there is: nobody
@@ -97,7 +98,13 @@ export default function DocumentReview() {
   return (
     <div className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <BackAction fallback="/documents" label="חזרה למסמכים" carrySearch />
+        <div className="min-w-0 space-y-2">
+          <BackAction fallback="/documents" label="חזרה למסמכים" carrySearch />
+          <div>
+            <h1 className="page-title">בדיקת מסמך</h1>
+            <p className="mt-1 break-words text-sm text-ink-muted">{snapshot.document?.file_name ?? 'מסמך שהועלה'}</p>
+          </div>
+        </div>
         {processing.fetching && (
           <span className="inline-flex min-h-11 items-center gap-2 text-sm text-ink-muted" role="status">
             <RefreshCw className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> מעדכן נתונים
@@ -161,6 +168,16 @@ export default function DocumentReview() {
         </Note>
       )}
 
+      {showExtractedResultFirst && (
+        <DocumentReviewWorkspace
+          snapshot={snapshot}
+          actorId={profile.id}
+          onRefetch={processing.refetch}
+          initialPanel={params.get('panel')}
+          readOnly={!canWrite}
+        />
+      )}
+
       {scanState && snapshot.document && (
         <DocumentScanPreview
           state={scanState}
@@ -174,7 +191,7 @@ export default function DocumentReview() {
         />
       )}
 
-      {(!scanState || scanState.accepted) && (
+      {(!scanState || (scanState.accepted && !showExtractedResultFirst)) && (
         <DocumentReviewWorkspace
           snapshot={snapshot}
           actorId={profile.id}

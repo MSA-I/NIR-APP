@@ -256,8 +256,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // the write boundary throughout.
       }
     };
+    void refreshAccess();
     const timer = window.setInterval(() => void refreshAccess(), 60_000);
-    return () => { window.clearInterval(timer); };
+    const onFocus = () => void refreshAccess();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void refreshAccess();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [session, profile, org, offlineBootstrap]);
 
   async function signIn(email: string, password: string) {

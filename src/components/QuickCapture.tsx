@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from './ui';
 import { toHebrewError } from '../lib/errors';
@@ -15,8 +16,8 @@ import { runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
  * camera/file picker, every picked file is pushed to {org_id}/inbox/... with no entity, and
  * the user re-files it from /inbox when the invoice/receipt exists. Deliberately
  * dependency-light — Dashboard mounts it in the first-screen command strip and Layout mounts
- * the same capture contract as the single global camera FAB elsewhere; busy feedback is the
- * button spinner + a toast, no extra UI.
+ * the same capture contract as the single global camera FAB elsewhere. One successful upload
+ * opens review unless the current route can contain unsaved form work.
  *
  * `element` must be rendered somewhere in the caller's tree (it is the hidden file input).
  */
@@ -25,11 +26,31 @@ import { runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
  *  inbox surfaces mounted elsewhere in the tree (nav count pill, the /inbox list) — this event
  *  is how they learn the inbox changed and refetch (adversarial review round). */
 export const INBOX_CHANGED_EVENT = 'sf:inbox-changed';
+
+const UNSAVED_FORM_ROUTES = [
+  /^\/orders\/new$/,
+  /^\/invoices\/new$/,
+  /^\/receiving\/[^/]+$/,
+];
+
+export function quickCaptureReviewTarget(
+  pathname: string,
+  pickedCount: number,
+  succeededCount: number,
+  documentId: string | null,
+): string | null {
+  if (pickedCount !== 1 || succeededCount !== 1 || !documentId
+      || UNSAVED_FORM_ROUTES.some((route) => route.test(pathname))) return null;
+  return `/documents/${encodeURIComponent(documentId)}/review`;
+}
+
 export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
   openCapture: () => void; element: ReactNode; busy: boolean; retryCount: number;
 } {
   const { profile } = useAuth();
   const toast = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [retryFiles, setRetryFiles] = useState<File[]>([]);
@@ -39,7 +60,11 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
     if (!files.length || !profile) return;
     setBusy(true);
     try {
-      const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, 'inbox', null, file));
+      const uploadedDocumentIds: string[] = [];
+      const result = await runUploadBatch(files, async (file) => {
+        const uploaded = await uploadDocument(profile.org_id, 'inbox', null, file);
+        uploadedDocumentIds.push(uploaded.documentId);
+      });
       const failures = result.failed.map(({ item, error }) => ({ item, ...documentUploadFailure(error) }));
       const failed = failures.filter(({ retryable }) => retryable).map(({ item }) => item);
       const registered = failures.filter(({ registered: isRegistered }) => isRegistered).length;
@@ -50,12 +75,8 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
        * G1, finding 16. "צילמתי את החשבונית וזהו" — and "וזהו" was wrong, silently.
        *
        * The camera drops the file into the inbox with no entity (`uploadDocument(..., 'inbox',
-       * null, ...)`) and this component contains no `navigate`, so the user stays exactly where
-       * they were. Somebody must still open /documents → בדיקת מסמך → /invoices/new?document=
-       * before `create_invoice` ever runs, and the automation that would close that loop is off by
-       * default for every tenant (DEBT-REGISTER §16). The old toast said "ממתין לעיבוד", which
-       * describes a queue rather than a person, and it was the only thing the user was told before
-       * it faded. Naming the place is a word, not architecture — the toast cannot carry a link.
+       * null, ...)`). A single safe-route capture opens review below; multi-file batches and form
+       * routes remain in place so navigation cannot discard work or hide partial failures.
        */
       if (summary.failed.length) {
         const detail = failures[0] ? ` ${failures[0].message}` : '';
@@ -70,6 +91,13 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
         window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
         await onUploaded?.();
       }
+      const reviewTarget = quickCaptureReviewTarget(
+        location.pathname,
+        files.length,
+        result.succeeded.length,
+        uploadedDocumentIds[0] ?? null,
+      );
+      if (reviewTarget) navigate(reviewTarget);
     } catch (e) {
       toast(toHebrewError(e), 'error');
     } finally {

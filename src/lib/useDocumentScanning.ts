@@ -132,6 +132,16 @@ export async function submitDocumentScanCorners(scanJobId: string, corners: Scan
   return response.data;
 }
 
+export async function recoverDocumentScan(scanJobId: string, corners: ScanCorners) {
+  const response = await supabase.rpc('recover_document_scan', {
+    p_scan_job_id: scanJobId,
+    p_corners: corners,
+    p_reason: 'manual boundary correction after scan review',
+  });
+  if (response.error) throw response.error;
+  return response.data;
+}
+
 export async function acceptDocumentScan(outputId: string) {
   const response = await supabase.rpc('accept_document_scan', { p_scan_output_id: outputId });
   if (response.error) throw response.error;

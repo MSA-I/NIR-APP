@@ -216,7 +216,20 @@ def _scan_child(
             "ok": False,
             "error": {"code": exc.code, "message": exc.safe_message, "retryable": exc.retryable},
         }
-    except BaseException:
+    except MemoryError as exc:
+        _log("scan_child_resource_failure", exception_type=type(exc).__name__)
+        payload = {
+            "ok": False,
+            "error": {
+                "code": "processing_resource_failure",
+                "message": "Document scanning exceeded a resource limit",
+                "retryable": False,
+            },
+        }
+    except BaseException as exc:
+        # The class and phase are operational evidence; document bytes, names and signed URLs
+        # never enter the log record.
+        _log("scan_child_internal_error", exception_type=type(exc).__name__)
         payload = {
             "ok": False,
             "error": {
@@ -588,7 +601,8 @@ def _process_scan_job(
         error = exc
     except GatewayError as exc:
         error = ProcessingError(exc.code, exc.safe_message, retryable=exc.retryable)
-    except BaseException:
+    except BaseException as exc:
+        _log("scan_parent_internal_error", exception_type=type(exc).__name__)
         error = ProcessingError("worker_internal_error", "Document scanning failed unexpectedly")
 
     if error is None or heartbeat_lost.is_set() or error.code == "lease_lost":

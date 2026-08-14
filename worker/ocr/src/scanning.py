@@ -22,6 +22,8 @@ from .limits import DEFAULT_LIMITS, ExtractionLimits
 
 ScanMode = Literal["auto", "grayscale", "black_and_white"]
 Point = tuple[float, float]
+MIN_AUTOMATIC_PAGE_COVERAGE = 0.45
+MAX_METRIC_SAMPLE_PIXELS = 1_000_000
 
 register_heif_opener()
 if register_avif_opener:
@@ -150,6 +152,12 @@ def detect_document_corners(image: np.ndarray) -> tuple[Point, Point, Point, Poi
             if not _polygon_is_valid(points, resized.shape[1], resized.shape[0]):
                 continue
             area_ratio = abs(cv2.contourArea(_order_points(points))) / frame_area
+            # A strong inner panel, table or coloured notice is often the cleanest rectangle in
+            # a document photograph. Treating it as the page silently discards the surrounding
+            # evidence. A candidate that does not cover most of the frame is safer to hand to the
+            # human corner editor than to present as a successful scan.
+            if area_ratio < MIN_AUTOMATIC_PAGE_COVERAGE:
+                continue
             border_distance = min(
                 points[:, 0].min(),
                 points[:, 1].min(),
@@ -273,9 +281,25 @@ def _rotate(image: np.ndarray, degrees: float) -> np.ndarray:
 def _remove_shadows(gray: np.ndarray) -> tuple[np.ndarray, float]:
     kernel_size = max(31, (min(gray.shape) // 16) | 1)
     background = cv2.GaussianBlur(gray, (kernel_size, kernel_size), 0)
-    shadow_score = float(np.std(background)) / 255.0
+    sample = _metric_sample(background)
+    _, standard_deviation = cv2.meanStdDev(sample)
+    shadow_score = float(standard_deviation[0, 0]) / 255.0
     divided = cv2.divide(gray, np.maximum(background, 1), scale=255)
     return divided, shadow_score
+
+
+def _metric_sample(image: np.ndarray) -> np.ndarray:
+    """Bound diagnostic metric memory without reducing the scan that OCR receives."""
+    height, width = image.shape[:2]
+    pixels = height * width
+    if pixels <= MAX_METRIC_SAMPLE_PIXELS:
+        return image
+    scale = math.sqrt(MAX_METRIC_SAMPLE_PIXELS / pixels)
+    return cv2.resize(
+        image,
+        (max(1, round(width * scale)), max(1, round(height * scale))),
+        interpolation=cv2.INTER_AREA,
+    )
 
 
 def _enhance(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict[str, float]]:
@@ -291,9 +315,16 @@ def _enhance(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict[str, float]
         block_size,
         13,
     )
-    ink_ratio = float(np.mean(black_and_white < 128))
-    local_contrast = float(np.std(enhanced)) / 255.0
-    sharpness = min(1.0, float(cv2.Laplacian(enhanced, cv2.CV_64F).var()) / 1500.0)
+    metric_enhanced = _metric_sample(enhanced)
+    metric_black_and_white = _metric_sample(black_and_white)
+    ink_pixels = metric_black_and_white.size - cv2.countNonZero(metric_black_and_white)
+    ink_ratio = float(ink_pixels) / float(metric_black_and_white.size)
+    _, contrast_deviation = cv2.meanStdDev(metric_enhanced)
+    local_contrast = float(contrast_deviation[0, 0]) / 255.0
+    laplacian = cv2.Laplacian(metric_enhanced, cv2.CV_32F)
+    _, sharpness_deviation = cv2.meanStdDev(laplacian)
+    sharpness_variance = float(sharpness_deviation[0, 0]) ** 2
+    sharpness = min(1.0, sharpness_variance / 1500.0)
     return enhanced, black_and_white, {
         "shadow": shadow_score,
         "ink_ratio": ink_ratio,
