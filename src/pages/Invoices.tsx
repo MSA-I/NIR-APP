@@ -87,6 +87,13 @@ const SORTABLE_COLUMNS: ReadonlySet<string> = new Set(['date']);
 /** DataTable column key → the DB column its index is built on. */
 const SORT_COLUMN: Record<string, string> = { date: 'invoice_date' };
 const DEFAULT_SORT: readonly ServerSort[] = [{ column: 'invoice_date', ascending: false }];
+const REVIEW_FILTER_OPTIONS: ReadonlyArray<readonly [string, string]> = [
+  ['', 'הכל'],
+  ...Object.entries(INVOICE_REVIEW_STATUS).map(([key, value]) => [key, value.label] as const),
+];
+// Phone quick filters are the stages that start or unblock work. Every stage remains in the
+// existing filter sheet, and a deep-linked/active secondary stage makes itself visible here.
+const MOBILE_PRIMARY_REVIEW_FILTERS = new Set(['', 'received', 'pending_approval', 'investigation']);
 
 export function InvoicesList() {
   const navigate = useNavigate();
@@ -275,10 +282,10 @@ export function InvoicesList() {
           </button>
         )} />
       <div role="group" aria-label="סינון חשבוניות לפי שלב הבדיקה" className="flex flex-wrap gap-1.5">
-        {[['', 'הכל'], ...Object.entries(INVOICE_REVIEW_STATUS).map(([key, value]) => [key, value.label])].map(([value, label]) => (
+        {REVIEW_FILTER_OPTIONS.map(([value, label]) => (
           <button key={value || 'all'} type="button" aria-pressed={reviewFilter === value}
             onClick={() => patchParams({ review: value, page: '' })}
-            className={`min-h-11 rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${reviewFilter === value ? 'border-action-line bg-action-soft text-action-on-soft' : 'border-line bg-surface text-ink-soft hover:bg-surface-sunken'}`}>
+            className={`${MOBILE_PRIMARY_REVIEW_FILTERS.has(value) || reviewFilter === value ? 'inline-flex' : 'hidden sm:inline-flex'} min-h-11 items-center rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${reviewFilter === value ? 'border-action-line bg-action-soft text-action-on-soft' : 'border-line bg-surface text-ink-soft hover:bg-surface-sunken'}`}>
             {label}
           </button>
         ))}
@@ -321,6 +328,10 @@ export function InvoicesList() {
         toolbar={
           <>
             {data.narrowed && <span className="text-xs text-await-fg" role="status">{SUPPLIER_SEARCH_NARROWED}</span>}
+            <select className="input w-auto! md:hidden" aria-label="סינון חשבוניות לפי שלב הבדיקה"
+              value={reviewFilter} onChange={(e) => patchParams({ review: e.target.value, page: '' })}>
+              {REVIEW_FILTER_OPTIONS.map(([value, label]) => <option key={value || 'all'} value={value}>{label}</option>)}
+            </select>
             {/* `without-order` is available only on the active invoice-reading surface. */}
             <select className="input w-auto!" aria-label="סינון חשבוניות לפי צורך בטיפול" value={attentionFilter} onChange={(e) => patchParams({ attention: e.target.value, page: '' })}>
               <option value="">כל החשבוניות</option>

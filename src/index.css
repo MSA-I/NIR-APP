@@ -210,7 +210,25 @@ body {
 .phone-safe-main {
   padding-inline-start: max(1rem, env(safe-area-inset-right));
   padding-inline-end: max(1rem, env(safe-area-inset-left));
-  padding-block-end: calc(var(--mobile-action-bar-size) + env(safe-area-inset-bottom) + 1rem);
+  /* Clear the raised capture puck's full envelope, not only the bar rectangle. */
+  padding-block-end: calc(var(--mobile-action-bar-size) + env(safe-area-inset-bottom) + 1.5rem);
+}
+
+/* A 320px shell cannot carry menu + home mark + two-line identity + three utilities without
+   sacrificing the current page title. The drawer still carries the product mark and the middle
+   text still names SupplyFlow; only the redundant mark yields at this narrow edge. */
+@media (max-width: 22.499rem) {
+  .phone-safe-header {
+    padding-inline-start: max(0.75rem, env(safe-area-inset-right));
+    padding-inline-end: max(0.75rem, env(safe-area-inset-left));
+  }
+
+  .mobile-shell-identity {
+    gap: 0;
+    padding-inline: 0.25rem;
+  }
+
+  .mobile-shell-mark { display: none; }
 }
 
 .phone-safe-drawer,
@@ -300,6 +318,36 @@ body {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
+}
+
+/* Wide, short phones need a shell variant just as much as narrow phones do. Targets remain at
+   least 44px; padding, leading and the raised decoration give back task context in landscape. */
+@media (orientation: landscape) and (max-height: 30rem) and (max-width: 63.999rem) {
+  :root { --mobile-action-bar-size: 3.25rem; }
+
+  .phone-safe-header {
+    padding-block-start: max(0.25rem, env(safe-area-inset-top));
+    padding-block-end: 0.25rem;
+  }
+
+  .mobile-action {
+    gap: 0;
+    padding-block: 0.125rem;
+  }
+
+  .mobile-action-raised { padding-block-end: 0.25rem; }
+
+  .mobile-action-puck {
+    inset-block-start: -0.75rem;
+    inline-size: 3rem;
+    block-size: 3rem;
+  }
+
+  .mobile-action-label {
+    line-height: 0.75rem;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
 }
 
 /* The speed-dial menu, its stagger keyframes, its items and its rotating trigger icon lived here

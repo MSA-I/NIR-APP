@@ -123,7 +123,7 @@ export default function FeedbackButton({ onShell = false }: { onShell?: boolean 
         aria-label={label} title={label}
         className={`grid size-[44px] shrink-0 place-items-center border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 ${
           onShell
-            ? 'border-shell-ink/15 text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
+            ? 'border-transparent text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
             : 'border-line text-ink-soft hover:bg-surface-sunken hover:text-ink'
         }`}>
         <MessageSquarePlus size={19} aria-hidden="true" />
