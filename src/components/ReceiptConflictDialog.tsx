@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { fmtDateTime } from '../lib/format';
+import { fmtDateTime, formatQuantity } from '../lib/format';
 import { RECEIPT_LINE_STATUS } from '../lib/status';
 import { receiptClock, type ReceiptConflictCode } from '../lib/offlineQueue';
 import type { OfflineReceiptLine, ReceiptLineStatusValue } from '../lib/offlineDb';
@@ -416,7 +416,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
                   <td className="py-2 pe-2">
                     <div className="text-ink">{line.productName}</div>
                     <div className="text-xs text-ink-muted">
-                      הוזמן <span className="num">{line.orderedQty ?? '—'}</span> {line.unit}
+                      הוזמן <span className="num">{formatQuantity(line.orderedQty, line.unit)}</span>
                     </div>
                   </td>
                   <td className="py-2 pe-2">

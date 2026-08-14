@@ -99,7 +99,7 @@ export default function DocumentReview() {
     <div className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 space-y-2">
-          <BackAction fallback="/documents" label="חזרה למסמכים" carrySearch />
+          <span className="hidden lg:inline-flex"><BackAction fallback="/documents" label="חזרה למסמכים" carrySearch /></span>
           <div>
             <h1 className="page-title">בדיקת מסמך</h1>
             <p className="mt-1 break-words text-sm text-ink-muted">{snapshot.document?.file_name ?? 'מסמך שהועלה'}</p>

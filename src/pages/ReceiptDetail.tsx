@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import { Breadcrumbs, EmptyState, ErrorNote, Note, RecordHeader, RecordSkeleton, StatusBadge } from '../components/ui';
 import { DocumentList } from '../components/FileUpload';
 import OfflineQueueStatus from '../components/OfflineQueueStatus';
-import { fmtDate, fmtNum } from '../lib/format';
+import { fmtDate, formatQuantity } from '../lib/format';
 import { isUuid } from '../lib/invoiceLinkedContext';
 import { PO_STATUS, RECEIPT_LINE_STATUS, RECEIPT_STATUS } from '../lib/status';
 import { supabase } from '../lib/supabase';
@@ -169,7 +169,7 @@ export default function ReceiptDetail() {
                   <div className="min-w-0">
                     <h3 className="break-words font-medium text-ink-body">{line.product?.name ?? 'מוצר לא זמין'}</h3>
                     <p className="mt-1 text-sm text-ink-muted">
-                      כמות שהתקבלה: <span className="num font-medium text-ink-mid">{fmtNum(line.qty_received)}</span>{line.product?.unit ? ` ${line.product.unit}` : ''}
+                      כמות שהתקבלה: <span className="num font-medium text-ink-mid">{formatQuantity(line.qty_received, line.product?.unit)}</span>
                     </p>
                   </div>
                   <StatusBadge meta={RECEIPT_LINE_STATUS[line.status]} />

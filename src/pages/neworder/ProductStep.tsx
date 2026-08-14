@@ -1,7 +1,7 @@
 import { Check, Minus, Plus, Search, ShoppingCart, X } from 'lucide-react';
 import type { NextOrderItem } from '../../lib/nextOrderItems';
 import type { Category, Product, SupplierProduct } from '../../lib/types';
-import { fmtMoneyExact } from '../../lib/format';
+import { fmtMoneyExact, formatQuantity, formatUnit } from '../../lib/format';
 
 interface ProductCartItem {
   product: Product;
@@ -39,7 +39,7 @@ export default function ProductStep({ products, categories, offersByProduct, car
           <div className="mt-3 divide-y divide-info-line border-y border-info-line">
             {nextOrderItems.map((item) => (
               <div key={item.id} className="flex flex-wrap items-center gap-2 py-2">
-                <div className="min-w-0 flex-1"><div className="font-medium text-ink-body">{item.product.name}</div><div className="text-xs">כמות <span className="num font-semibold">{item.qty}</span> {item.product.unit}</div></div>
+                <div className="min-w-0 flex-1"><div className="font-medium text-ink-body">{item.product.name}</div><div className="text-xs">כמות <span className="num font-semibold">{formatQuantity(item.qty, item.product.unit)}</span></div></div>
                 <button type="button" className="btn-secondary" disabled={nextOrderBusyId !== null} onClick={() => onAddNextOrderItem(item)}><Plus size={15} aria-hidden="true" /> הוסף להזמנה</button>
                 <button type="button" className="btn-ghost" disabled={nextOrderBusyId !== null} onClick={() => onDismissNextOrderItem(item)}><X size={15} aria-hidden="true" /> התעלם</button>
               </div>
@@ -77,7 +77,7 @@ export default function ProductStep({ products, categories, offersByProduct, car
                 aria-label={`${carted ? 'נבחר' : 'בחירת'} ${product.name}`}
                 onClick={() => { if (!carted) onAdd(product); }}>
                 <span className={`grid size-6 shrink-0 place-items-center border ${carted ? 'border-done-line bg-done-soft text-done-fg' : 'border-line text-transparent'}`} aria-hidden="true"><Check size={14} /></span>
-                <span className="min-w-0 flex-1"><span className="block break-words text-sm font-medium text-ink-body sm:truncate">{product.name}</span><span className="text-xs text-ink-muted">{product.unit}</span></span>
+                <span className="min-w-0 flex-1"><span className="block break-words text-sm font-medium text-ink-body sm:truncate">{product.name}</span><span className="text-xs text-ink-muted">{formatUnit(product.unit)}</span></span>
                 <span className={`shrink-0 text-xs text-ink-muted ${offers.length ? 'num' : ''}`}>{offers.length ? fmtMoneyExact(offers[0].current_price) : 'אין ספק'}</span>
               </button>
               {carted && (

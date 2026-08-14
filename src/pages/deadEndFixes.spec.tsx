@@ -49,13 +49,13 @@ beforeAll(() => {
 
 /* ================= finding 7 — the camera at the truck ================= */
 
-describe('finding 7 — the FAB keeps its camera where the user is busiest', () => {
-  const SUPPRESSED = ['/orders/new', '/invoices/new', '/receiving/abc-123'];
+describe('finding 7 — focused forms keep the full bar without losing capture', () => {
+  const FOCUSED = ['/orders/new', '/invoices/new', '/receiving/abc-123'];
 
-  it('keeps only the capture action on the three long-form routes', () => {
-    for (const path of SUPPRESSED) {
+  it('keeps every role action on the three long-form routes', () => {
+    for (const path of FOCUSED) {
       const actions = quickActionsForPath('office', path);
-      expect(actions.map((action) => action.kind)).toEqual(['capture']);
+      expect(actions).toEqual(quickActionsFor('office'));
     }
   });
 
@@ -65,9 +65,10 @@ describe('finding 7 — the FAB keeps its camera where the user is busiest', () 
    * camera was gone. A single capture opens review on safe routes, while these form routes keep
    * the person's unsaved work in place.
    */
-  it('still removes every navigating action there — the form is not at risk', () => {
-    for (const path of SUPPRESSED) {
-      expect(quickActionsForPath('office', path).some((action) => action.kind === 'link')).toBe(false);
+  it('keeps navigation and capture together there', () => {
+    for (const path of FOCUSED) {
+      expect(quickActionsForPath('office', path).some((action) => action.kind === 'link')).toBe(true);
+      expect(quickActionsForPath('office', path).some((action) => action.kind === 'capture')).toBe(true);
     }
   });
 
@@ -75,7 +76,7 @@ describe('finding 7 — the FAB keeps its camera where the user is busiest', () 
     const id = '11111111-1111-4111-8111-111111111111';
     expect(quickCaptureReviewTarget('/documents/operations', 1, 1, id))
       .toBe(`/documents/${id}/review`);
-    for (const path of SUPPRESSED) {
+    for (const path of FOCUSED) {
       expect(quickCaptureReviewTarget(path, 1, 1, id)).toBeNull();
     }
     expect(quickCaptureReviewTarget('/dashboard', 2, 2, id)).toBeNull();
@@ -87,10 +88,31 @@ describe('finding 7 — the FAB keeps its camera where the user is busiest', () 
     }
   });
 
-  it('gives a role with no capture action no bar at all, exactly as before', () => {
-    // accountant has no `capture` entry in QUICK_ACTIONS, so the filter must empty the bar rather
-    // than leave a lone unrelated button on a form route.
-    expect(quickActionsForPath('accountant', '/invoices/new')).toEqual([]);
+  it('does not erase a role without a capture action', () => {
+    expect(quickActionsForPath('accountant', '/invoices/new')).toEqual(quickActionsFor('accountant'));
+  });
+});
+
+describe('focused-form navigation safety', () => {
+  const source = (relativePath: string) => readFileSync(join(process.cwd(), 'src', 'pages', relativePath), 'utf8');
+
+  it('flushes the order draft before following a bar or drawer link', () => {
+    const text = source(join('neworder', 'NewOrder.tsx'));
+    expect(text).toContain('preserveBeforeLink');
+    expect(text).toContain('if (saved) navigate');
+  });
+
+  it('flushes the local receiving draft before following a link', () => {
+    const text = source('Receiving.tsx');
+    expect(text).toContain('draftAutosaver.current.flush()');
+    expect(text).toContain('לא ניתן לעבור מסך לפני שמירת טיוטת הקבלה');
+  });
+
+  it('warns before abandoning a dirty new invoice', () => {
+    const text = source('InvoiceNew.tsx');
+    expect(text).toContain('יציאה מחשבונית חדשה');
+    expect(text).toContain("document.addEventListener('click', protectLink, true)");
+    expect(text).toContain("window.addEventListener('beforeunload', beforeUnload)");
   });
 });
 
@@ -175,9 +197,11 @@ describe('finding 13 — the accountant can open a supplier balance', () => {
   });
 
   it('renders no links at all for the callers that pass nothing', () => {
-    renderDonut();
+    const { container } = renderDonut();
     expect(screen.queryAllByRole('link')).toHaveLength(0);
     expect(screen.getByText('ירקות השדה')).toBeInTheDocument();
+    expect(container.querySelector('[tabindex="0"]')).toBeNull();
+    expect(container.querySelector('.pointer-events-none')).toBeInTheDocument();
   });
 
   it('keeps the money and the share on the row that became a link', () => {

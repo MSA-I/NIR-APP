@@ -169,13 +169,13 @@ export function CategoryDonut({ slices, total, ariaLabel, emptyMessage, hrefFor,
   }
   return (
     <div className="mt-2 flex min-h-36 flex-col items-stretch gap-3 sm:min-h-44 sm:flex-row sm:items-center">
-      <ChartViewport className="relative mx-auto h-28 w-28 shrink-0 sm:h-40 sm:w-40" label={ariaLabel}>
+      <ChartViewport className="pointer-events-none relative mx-auto h-28 w-28 shrink-0 sm:h-40 sm:w-40" label={ariaLabel}>
         {(animation) => (
           <>
             <ResponsiveContainer>
-              <PieChart>
+              <PieChart accessibilityLayer={false} style={{ pointerEvents: 'none' }}>
                 <Pie data={slices} dataKey="total" nameKey="name" innerRadius="60%" outerRadius="88%"
-                  rootTabIndex={-1} paddingAngle={2} stroke="none" isAnimationActive={animation.active} animationDuration={550}
+                  rootTabIndex={-1} tabIndex={-1} paddingAngle={2} stroke="none" isAnimationActive={animation.active} animationDuration={550}
                   animationEasing="ease-out" onAnimationEnd={animation.finish}>
                   {slices.map((slice, index) => (
                     <Cell key={slice.name} fill={slice.name === 'אחר' ? t.bars[4] : t.bars[index % 4]} />

@@ -232,7 +232,7 @@
       "name": "Sidebar Nav Item",
       "kind": "nav",
       "refersTo": "navigation",
-      "description": "מסגרת פטרול עם גלולת נייר פעילה; בדסקטופ הקבוצות פתוחות, ובמובייל עבודה שוטפת גלויה וניהול/בקרה נחשפים לפי הקשר.",
+      "description": "מסגרת פטרול עם גלולת נייר פעילה; בדסקטופ ובמובייל כל קבוצות הניווט פתוחות תמיד, ללא קיפול או חשיפה לפי הקשר.",
       "html": "<nav class=\"ds-nav\" dir=\"rtl\"><a class=\"active\" href=\"#\">מרכז בקרה</a><a href=\"#\">הזמנות</a></nav>",
       "css": ".ds-nav { width:220px;background:oklch(31.81% .0517 213.09);padding:12px;border-radius:12px;font:500 14px 'IBM Plex Sans Hebrew',sans-serif; } .ds-nav a { display:block;padding:8px 12px;margin-bottom:2px;border-radius:8px;color:oklch(88% .012 85);text-decoration:none;transition:background-color 150ms,color 150ms; } .ds-nav a:hover { background:rgb(255 252 242 / .1); } .ds-nav a.active { background:oklch(97% .009 85);color:oklch(31.81% .0517 213.09); } .ds-nav a:focus-visible { outline:2px solid oklch(52.98% .0911 212.98);outline-offset:2px; }"
     }
@@ -270,7 +270,7 @@
       },
       {
         "name": "חוק מעטפת המובייל",
-        "body": "כותרת המיקום קודמת לסימן מותג כפול ב־320px; עבודה שוטפת גלויה במגירה, ניהול ובקרה נחשפים לפי הקשר; בלנדסקייפ נמוך המעטפת מצטמצמת בלי להקטין יעד מגע מתחת ל־44px.",
+        "body": "כותרת המיקום קודמת לסימן מותג כפול ב־320px; כל קבוצות הניווט פתוחות במגירה; סרגל הפעולות מציג את מלוא פעולות התפקיד גם במסכי הזמנה, חשבונית וקבלה; בלנדסקייפ נמוך המעטפת מצטמצמת בלי להקטין יעד מגע מתחת ל־44px.",
         "section": "components"
       }
     ],

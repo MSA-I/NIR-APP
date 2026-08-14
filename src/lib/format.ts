@@ -37,6 +37,78 @@ export const fmtMoneyExact = (v: number | null | undefined) => (v == null ? '—
 export const fmtMoneyRounded = (v: number | null | undefined) => (v == null ? '—' : ilsRounded.format(v));
 export const fmtMoneyCompact = (v: number | null | undefined) => (v == null ? '—' : ilsCompact.format(v));
 export const fmtNum = (v: number | null | undefined) => (v == null ? '—' : num.format(v));
+
+const UNIT_FORMS: Record<string, { singular: string; plural?: string }> = {
+  'ארגז': { singular: 'ארגז', plural: 'ארגזים' },
+  'ארגזים': { singular: 'ארגז', plural: 'ארגזים' },
+  'בקבוק': { singular: 'בקבוק', plural: 'בקבוקים' },
+  'בקבוקים': { singular: 'בקבוק', plural: 'בקבוקים' },
+  'גל': { singular: 'גליל', plural: 'גלילים' },
+  'גליל': { singular: 'גליל', plural: 'גלילים' },
+  'גלילים': { singular: 'גליל', plural: 'גלילים' },
+  'דלי': { singular: 'דלי', plural: 'דליים' },
+  'דליים': { singular: 'דלי', plural: 'דליים' },
+  'חבי': { singular: 'חבילה', plural: 'חבילות' },
+  'חבילה': { singular: 'חבילה', plural: 'חבילות' },
+  'חבילות': { singular: 'חבילה', plural: 'חבילות' },
+  'חבית': { singular: 'חבית', plural: 'חביות' },
+  'חביות': { singular: 'חבית', plural: 'חביות' },
+  'יח': { singular: 'יחידה', plural: 'יחידות' },
+  "יח'": { singular: 'יחידה', plural: 'יחידות' },
+  'יח׳': { singular: 'יחידה', plural: 'יחידות' },
+  'יחידה': { singular: 'יחידה', plural: 'יחידות' },
+  'יחידות': { singular: 'יחידה', plural: 'יחידות' },
+  'ליטר': { singular: 'ל׳' },
+  'ליטרים': { singular: 'ל׳' },
+  "ל'": { singular: 'ל׳' },
+  'ל׳': { singular: 'ל׳' },
+  'מארז': { singular: 'מארז', plural: 'מארזים' },
+  'מארזים': { singular: 'מארז', plural: 'מארזים' },
+  'מיכל': { singular: 'מיכל', plural: 'מיכלים' },
+  'מיכלים': { singular: 'מיכל', plural: 'מיכלים' },
+  'צרור': { singular: 'צרור', plural: 'צרורות' },
+  'צרורות': { singular: 'צרור', plural: 'צרורות' },
+  "ק'ג": { singular: 'ק״ג' },
+  'ק"ג': { singular: 'ק״ג' },
+  'ק״ג': { singular: 'ק״ג' },
+  'קג': { singular: 'ק״ג' },
+  'קרט': { singular: 'קרטון', plural: 'קרטונים' },
+  'קרטון': { singular: 'קרטון', plural: 'קרטונים' },
+  'קרטונים': { singular: 'קרטון', plural: 'קרטונים' },
+  'שק': { singular: 'שק', plural: 'שקים' },
+  'שקים': { singular: 'שק', plural: 'שקים' },
+  'שקית': { singular: 'שקית', plural: 'שקיות' },
+  'שקיות': { singular: 'שקית', plural: 'שקיות' },
+  'שרוול': { singular: 'שרוול', plural: 'שרוולים' },
+  'שרוולים': { singular: 'שרוול', plural: 'שרוולים' },
+  'תבנית': { singular: 'תבנית', plural: 'תבניות' },
+  'תבניות': { singular: 'תבנית', plural: 'תבניות' },
+};
+
+function cleanUnit(unit: string | null | undefined) {
+  return unit?.trim().replace(/\s+/g, ' ') ?? '';
+}
+
+/** Canonical singular storage value for known aliases; unknown business units stay untouched. */
+export function normalizeUnitInput(unit: string | null | undefined) {
+  const cleaned = cleanUnit(unit);
+  return UNIT_FORMS[cleaned]?.singular ?? cleaned;
+}
+
+/** User-facing unit. Exact quantity 1 uses singular; every other measured quantity uses plural. */
+export function formatUnit(unit: string | null | undefined, quantity?: number | null) {
+  const cleaned = cleanUnit(unit);
+  if (!cleaned) return '';
+  const form = UNIT_FORMS[cleaned];
+  if (!form) return cleaned;
+  return quantity != null && quantity !== 1 && form.plural ? form.plural : form.singular;
+}
+
+export function formatQuantity(quantity: number | null | undefined, unit: string | null | undefined) {
+  if (quantity == null) return '—';
+  const label = formatUnit(unit, quantity);
+  return `${fmtNum(quantity)}${label ? ` ${label}` : ''}`;
+}
 export const fmtDate = (v: string | Date | null | undefined) => (v ? dateFmt.format(new Date(v)) : '—');
 export const fmtDateTime = (v: string | Date | null | undefined) => (v ? dateTimeFmt.format(new Date(v)) : '—');
 export const fmtMonth = (v: string | Date) => monthFmt.format(new Date(v));

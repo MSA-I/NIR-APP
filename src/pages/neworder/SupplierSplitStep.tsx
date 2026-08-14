@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Split, Trash2 } from 'lucide-react';
-import { fmtMoneyExact, todayISO } from '../../lib/format';
+import { fmtMoneyExact, formatQuantity, formatUnit, todayISO } from '../../lib/format';
 import { centsFromUnits, lineUnits, moneyFromCents } from '../../lib/orderSavings';
 import {
   resolutionOptions,
@@ -127,8 +127,8 @@ export default function SupplierSplitStep({
             const resolved = resolvedByProduct.get(item.productId);
             return (
               <div key={item.productId} className="grid items-center gap-2 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(9rem,auto)_auto_2.75rem] sm:gap-4 sm:px-4">
-                <div className="min-w-0"><div className="break-words text-sm font-medium text-ink-body">{item.product.name}</div><div className="text-xs text-ink-muted">{item.product.unit}</div></div>
-                <div className="text-sm"><span className="text-ink-muted">כמות </span><b className="num">{item.qty}</b></div>
+                <div className="min-w-0"><div className="break-words text-sm font-medium text-ink-body">{item.product.name}</div><div className="text-xs text-ink-muted">{formatUnit(item.product.unit)}</div></div>
+                <div className="text-sm"><span className="text-ink-muted">כמות </span><b className="num">{formatQuantity(item.qty, item.product.unit)}</b></div>
                 <div className="text-xs text-ink-muted">{resolved?.supplierId ? supplierById.get(resolved.supplierId)?.name ?? 'ספק לא זמין' : 'טרם הוקצה ספק'}</div>
                 <div className="num text-sm font-semibold">{fmtMoneyExact(resolved?.lineTotal)}</div>
                 <button type="button" className="grid size-11 place-items-center text-ink-faint hover:bg-surface-sunken hover:text-alert-solid" onClick={() => onRemove(item.productId)} aria-label={`הסרת ${item.product.name}`}><Trash2 size={15} /></button>

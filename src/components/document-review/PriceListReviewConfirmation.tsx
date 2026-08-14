@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../auth/AuthContext';
 import { ConfirmDialog, Note } from '../ui';
 import { FILING_REASON_LABELS, type ReviewSnapshot } from './model';
+import { formatUnit, normalizeUnitInput } from '../../lib/format';
 
 interface PriceListReviewConfirmationProps {
   snapshot: ReviewSnapshot;
@@ -269,7 +270,7 @@ export function PriceListReviewConfirmation({
     setCreateError(null);
     try {
       const inserted = await supabase.from('products')
-        .insert({ org_id: profile.org_id, name, unit: newProductUnit.trim() || 'יח׳', active: true })
+        .insert({ org_id: profile.org_id, name, unit: normalizeUnitInput(newProductUnit || 'יחידה'), active: true })
         .select('id,name,unit,sku')
         .single();
       if (inserted.error) throw inserted.error;
@@ -567,7 +568,7 @@ export function PriceListReviewConfirmation({
                       <select className="input" value={draft.productId} onChange={(event) => updateDraft(index, { productId: event.target.value })} disabled={!draft.approved || busy || catalogLoading || !!catalogError}>
                         <option value="">בחירת מוצר</option>
                         {products.map((product) => (
-                          <option key={product.id} value={product.id}>{product.name} · {product.unit}{product.sku ? ` · ${product.sku}` : ''}</option>
+                          <option key={product.id} value={product.id}>{product.name} · {formatUnit(product.unit)}{product.sku ? ` · ${product.sku}` : ''}</option>
                         ))}
                       </select>
                     </label>

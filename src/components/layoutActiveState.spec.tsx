@@ -105,8 +105,7 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
   it('יעד בקרה נדיר גלוי בסרגל הדסקטופ בלי disclosure כלל', () => {
     // Owner decision 09.08.2026: the desktop sidebar is fully open. This used to assert that the
     // group HAPPENED to be open because a child route was active; the guarantee is now stronger —
-    // there is no <details> in the desktop nav to be open or closed. The drawer keeps its
-    // disclosure, and the test below still renders it.
+    // there is no <details> in either navigation surface to be open or closed.
     renderAt('/payments');
     const current = document.querySelector('[aria-current="page"]');
     expect(current?.textContent?.trim()).toBe('תשלומים');
@@ -130,16 +129,23 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
     expect(within(drawer).getByRole('link', { name: 'קבלת סחורה' })).toBeInTheDocument();
     expect(within(drawer).getByRole('link', { name: 'הגדרות מערכת' })).toBeInTheDocument();
     expect(within(drawer).getByText('עבודה שוטפת')).toBeInTheDocument();
-    expect(within(drawer).getByText('ניהול').closest('details')).not.toHaveAttribute('open');
-    expect(within(drawer).getByText('בקרה').closest('details')).not.toHaveAttribute('open');
+    expect(within(drawer).getByText('ניהול').closest('details')).toBeNull();
+    expect(within(drawer).getByText('בקרה').closest('details')).toBeNull();
   });
 
-  it('פותח אוטומטית במגירה את הקבוצה של המסך הפעיל', () => {
+  it('משאיר במגירה את קבוצת המסך הפעיל פתוחה ללא disclosure', () => {
     renderAt('/payments');
     fireEvent.click(screen.getByRole('button', { name: 'פתיחת תפריט' }));
     const drawer = screen.getByRole('dialog', { name: 'תפריט ראשי' });
     const current = within(drawer).getByRole('link', { name: 'תשלומים' });
     expect(current).toHaveAttribute('aria-current', 'page');
-    expect(current.closest('details')).toHaveAttribute('open');
+    expect(current.closest('details')).toBeNull();
+  });
+
+  it('מציג במסך משני חזרה קבועה לרשימת האב', () => {
+    renderAt('/invoices/abc');
+    const backLink = screen.getByRole('link', { name: 'חזרה לחשבוניות' });
+    expect(backLink).toHaveAttribute('href', '/invoices');
+    expect(backLink).not.toHaveClass('mobile-shell-mark');
   });
 });

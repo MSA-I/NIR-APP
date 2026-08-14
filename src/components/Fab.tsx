@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router';
 import type { CSSProperties } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { isFocusPath, isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
+import { isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
 import type { Role } from '../lib/types';
 import { useQuickCapture } from './QuickCapture';
 import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/organizationAccess';
@@ -10,19 +10,13 @@ import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/organizationAccess';
 /**
  * G1, finding 7 — a filter where there used to be `[]`.
  *
- * The three suppressed paths are long forms a stray navigation would destroy, so hiding the
- * *navigating* actions is right. Hiding the whole bar also took the camera away, and the worst
- * place to lose it is `/receiving/:orderId`: the receiving user is standing at the truck holding
- * both the goods and the invoice, and that screen admitted it in prose — "צילום החשבונית יתאפשר
- * מיד לאחר סיום הקבלה" (Receiving.tsx:788). Capture keeps an unsaved form in place; on safe routes
- * a single successful upload opens its document review directly.
- * the inbox and contains no `navigate`, so it cannot cost the user the form they are filling.
+ * Focused forms keep the same role-aware bar as every other phone screen. Data safety belongs to
+ * each form: NewOrder flushes its server draft, Receiving flushes IndexedDB, and InvoiceNew asks
+ * before discarding a dirty form. `isFocusPath` remains in QuickCapture for one separate reason:
+ * a successful capture must not navigate away from the form.
  */
-export function quickActionsForPath(role: Role | undefined, pathname: string) {
-  const actions = quickActionsFor(role);
-  return isFocusPath(pathname)
-    ? actions.filter((action) => action.kind === 'capture')
-    : actions;
+export function quickActionsForPath(role: Role | undefined, _pathname: string) {
+  return quickActionsFor(role);
 }
 
 /**
