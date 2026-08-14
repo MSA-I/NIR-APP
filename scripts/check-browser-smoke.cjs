@@ -266,25 +266,14 @@ async function assertMobileSpeedDialHidden(page, scope) {
 }
 
 /**
- * The three long-form routes keep the camera and lose everything else — G1, finding 7.
- *
- * This assertion replaces `mobile-action-bar count === 0`, which pinned the wrong half of the rule.
- * Suppressing NAVIGATION on /orders/new, /invoices/new and /receiving/:orderId is right: one stray
- * tap would discard a half-filled form. Suppressing the bar ENTIRELY also took the camera, and
- * /receiving/:orderId is the single worst place in the product to lose it — the office receiver is
- * at the truck holding the goods in one hand and the invoice in the other, and the screen itself
- * used to admit the camera was gone. Capture cannot cost anybody their form: `QuickCapture`
- * uploads into the inbox and contains no `navigate`.
- *
- * Stated as an exact list rather than "contains capture", so a future change that quietly puts a
- * navigating action back on a form route still fails here.
+ * Long-form routes keep the complete role-aware action bar. Form-level navigation guards own data
+ * safety: orders flush the server draft, receiving flushes IndexedDB, and invoices confirm before
+ * discarding dirty data. Stated as an exact list so a missing or reordered action still fails here.
  */
-async function assertOnlyCaptureAction(page, scope) {
+async function assertFullMobileActions(page, scope, expectedKeys) {
   const keys = await page.locator('.mobile-action-bar .mobile-action')
     .evaluateAll((nodes) => nodes.map((node) => node.dataset.quickActionKey));
-  assert.deepEqual(keys, ['capture'], `${scope}: the suppressed route offers ${JSON.stringify(keys)}, not the camera alone`);
-  assert.equal(await page.locator('.mobile-action-bar a').count(), 0,
-    `${scope}: a navigating action survived on a long-form route`);
+  assert.deepEqual(keys, expectedKeys, `${scope}: wrong mobile actions ${JSON.stringify(keys)}`);
   await assertMobileSpeedDialHidden(page, scope);
 
   /**
@@ -465,12 +454,14 @@ async function quickActionsContract(browser) {
           await page.setViewportSize({ width: 390, height: 844 });
           await page.goto(`${baseURL}${route}`);
           await settle(page);
-          await assertOnlyCaptureAction(page, route);
+          await assertFullMobileActions(page, route,
+            ['order', 'dashboard', 'capture', 'receive', 'document-operations']);
         }
 
         await page.goto(`${baseURL}/receiving/f0000000-0000-4000-8000-000000000011`);
         await settle(page);
-        await assertOnlyCaptureAction(page, 'receiving detail');
+        await assertFullMobileActions(page, 'receiving detail',
+          ['order', 'dashboard', 'capture', 'receive', 'document-operations']);
         assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail lost its contextual phone taskbar');
       }
     } finally {
@@ -772,9 +763,9 @@ async function receivingAccessibility(browser) {
     await page.getByText('ספק בדיקת נגישות').first().click();
     await page.waitForURL((url) => url.pathname === '/receiving/p4-ui-order');
     await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור מוצר בדיקת נגישות' }).waitFor();
-    // The office receiver keeps the camera here and nothing else — this is the exact person and
-    // the exact screen the change exists for.
-    await assertOnlyCaptureAction(page, 'receiving detail accessibility');
+    // The office receiver keeps the complete role-aware bar on the exact screen under audit.
+    await assertFullMobileActions(page, 'receiving detail accessibility',
+      ['order', 'dashboard', 'capture', 'receive', 'documents']);
     assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail lost its contextual phone taskbar');
     assert.equal(await page.getByText('סיבת השמירה / ההשלמה').count(), 0, 'routine receiving must not ask for a reason');
     await page.getByRole('button', { name: 'מלא עבור מוצר בדיקת נגישות' }).waitFor();
