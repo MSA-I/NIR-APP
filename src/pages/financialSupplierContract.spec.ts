@@ -5,10 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../lib/supabase', () => ({ supabase: {} }));
 
 import { financialBankStatusCounts, financialDueExposure } from './FinancialSupplier';
+import { NAV_SECTIONS } from '../components/Layout';
 
 const source = readFileSync(join(process.cwd(), 'src', 'pages', 'FinancialSupplier.tsx'), 'utf8');
 const app = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
-const layout = readFileSync(join(process.cwd(), 'src', 'components', 'Layout.tsx'), 'utf8');
 
 describe('financial supplier capability boundary', () => {
   it('ignores historical matched requests when deciding whether current due exposure is known', () => {
@@ -51,8 +51,10 @@ describe('financial supplier capability boundary', () => {
 
   it('does not route accountant into procurement supplier analytics', () => {
     expect(app).toContain("roles={['owner', 'office']}><Analytics");
-    expect(layout).toContain("to: '/analytics'");
-    expect(layout).not.toContain("to: '/analytics', label: 'ביצועי ספקים', icon: Activity, roles: ['owner', 'office', 'accountant']");
+    const navigation = NAV_SECTIONS.flatMap((section) => section.items)
+      .find((item) => item.to === '/analytics');
+    expect(navigation).toMatchObject({ label: 'ביצועי ספקים', roles: ['owner', 'office'] });
+    expect(navigation?.roles).not.toContain('accountant');
   });
 
   it('uses the server projection on every accountant-facing supplier lookup', () => {

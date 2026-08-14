@@ -16,9 +16,14 @@ import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/organizationAccess';
 import { isRouteFamilyActive } from '../lib/quickActions';
+import { routePresentationTitle, staticRouteTitle, type StaticRoutePath } from '../lib/routePresentation';
 
 export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: ActiveRole[] }
 export interface NavSection { section: string; items: NavItem[]; collapsible?: boolean }
+
+function navItem(to: StaticRoutePath, icon: typeof LayoutDashboard, roles: ActiveRole[]): NavItem {
+  return { to, label: staticRouteTitle(to), icon, roles };
+}
 
 // Four work groups — מסמכים / רכש / כספים / בקרה — under two ungrouped links that need no
 // header to explain them. The less self-evident items (מחירונים, דרישות תשלום, התאמות בנק,
@@ -38,8 +43,8 @@ export const NAV_SECTIONS: NavSection[] = [
     // כי היא הפעולה התכופה ביותר אבל לא זו שפותחים איתה את היום.
     section: '',
     items: [
-      { to: '/dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, roles: ['owner', 'office', 'accountant'] },
-      { to: '/orders/new', label: 'הזמנה חדשה', icon: ShoppingCart, roles: ['owner', 'office'] },
+      navItem('/dashboard', LayoutDashboard, ['owner', 'office', 'accountant']),
+      navItem('/orders/new', ShoppingCart, ['owner', 'office']),
     ],
   },
   {
@@ -48,52 +53,50 @@ export const NAV_SECTIONS: NavSection[] = [
     // reading belongs beside the ledgers it feeds, not inside them.
     section: 'מסמכים',
     items: [
-      { to: '/documents/operations', label: 'בקרת מסמכים', icon: Activity, roles: ['owner'] },
-      { to: '/documents/consolidated-invoices', label: 'חשבוניות מרכזות', icon: FileCheck2, roles: ['owner', 'office', 'accountant'] },
-      { to: '/documents', label: 'תיקיית המסמכים', icon: FolderOpen, roles: ['owner', 'office'] },
-      { to: '/documents/archive', label: 'ארכיון', icon: Archive, roles: ['owner', 'office'] },
+      navItem('/documents/operations', Activity, ['owner']),
+      navItem('/documents/consolidated-invoices', FileCheck2, ['owner', 'office', 'accountant']),
+      navItem('/documents', FolderOpen, ['owner', 'office']),
+      navItem('/documents/archive', Archive, ['owner', 'office']),
     ],
   },
   {
     section: 'רכש',
     items: [
-      { to: '/orders', label: 'הזמנות', icon: ClipboardList, roles: ['owner', 'office'] },
-      { to: '/receiving', label: 'קבלת סחורה', icon: PackageCheck, roles: ['owner', 'office'] },
-      { to: '/inventory', label: 'מלאי', icon: Warehouse, roles: ['owner', 'office'] },
-      { to: '/suppliers', label: 'ספקים', icon: Truck, roles: ['owner', 'office'] },
-      { to: '/products', label: 'מוצרים', icon: Package, roles: ['owner', 'office'] },
-      { to: '/prices', label: 'מחירונים', icon: Tags, roles: ['owner', 'office'] },
+      navItem('/orders', ClipboardList, ['owner', 'office']),
+      navItem('/receiving', PackageCheck, ['owner', 'office']),
+      navItem('/inventory', Warehouse, ['owner', 'office']),
+      navItem('/suppliers', Truck, ['owner', 'office']),
+      navItem('/products', Package, ['owner', 'office']),
+      navItem('/prices', Tags, ['owner', 'office']),
     ],
   },
   {
     section: 'כספים',
     items: [
-      { to: '/invoices', label: 'חשבוניות', icon: FileText, roles: ['owner', 'office', 'accountant'] },
-      { to: '/credits', label: 'זיכויים', icon: RotateCcw, roles: ['owner', 'office', 'accountant'] },
-      { to: '/payment-requests', label: 'דרישות תשלום', icon: Send, roles: ['owner', 'office'] },
-      { to: '/payments', label: 'תשלומים', icon: CreditCard, roles: ['owner', 'accountant'] },
-      { to: '/bank', label: 'התאמות בנק', icon: Landmark, roles: ['owner', 'accountant'] },
-      { to: '/pay', label: 'תשלומים לביצוע', icon: CreditCard, roles: ['accountant'] },
+      navItem('/invoices', FileText, ['owner', 'office', 'accountant']),
+      navItem('/credits', RotateCcw, ['owner', 'office', 'accountant']),
+      navItem('/payment-requests', Send, ['owner', 'office']),
+      navItem('/payments', CreditCard, ['owner', 'accountant']),
+      navItem('/bank', Landmark, ['owner', 'accountant']),
+      navItem('/pay', CreditCard, ['accountant']),
     ],
   },
   {
     section: 'בקרה',
     items: [
-      { to: '/alerts', label: 'התראות', icon: Bell, roles: ['owner', 'office'] },
-      { to: '/exceptions', label: 'חריגים', icon: AlertTriangle, roles: ['owner', 'office', 'accountant'] },
-      { to: '/expenses', label: 'ריכוז הוצאות', icon: PieChart, roles: ['owner', 'accountant'] },
-      { to: '/reports', label: 'דוח לרו״ח', icon: BarChart3, roles: ['owner', 'accountant'] },
-      { to: '/analytics', label: 'ביצועי ספקים', icon: Activity, roles: ['owner', 'office'] },
-      { to: '/settings', label: 'הגדרות', icon: Settings, roles: ['owner'] },
+      navItem('/alerts', Bell, ['owner', 'office']),
+      navItem('/exceptions', AlertTriangle, ['owner', 'office', 'accountant']),
+      navItem('/expenses', PieChart, ['owner', 'accountant']),
+      navItem('/reports', BarChart3, ['owner', 'accountant']),
+      navItem('/analytics', Activity, ['owner', 'office']),
+      navItem('/settings', Settings, ['owner']),
       // /onboarding was absent from this catalogue entirely, so nothing could route to it: not the
       // sidebar, not the drawer, not quickActions, and homeFor() always answers /dashboard. The
       // setup wizard was built to be RE-OPENED — it reads live counts on every mount so it shows
       // true completion state rather than a remembered claim (Onboarding.tsx:32-45) — and the one
       // thing missing was a door. It belongs to the owner, beside /settings, not in daily work.
-      // „הקמת המערכת”, matching PAGE_TITLE_PATTERNS' existing entry for this route rather than
-      // inventing a second name for it — pageTitleFor prefers the nav label, so a different word
-      // here would have quietly changed the browser tab title too.
-      { to: '/onboarding', label: 'הקמת המערכת', icon: ListChecks, roles: ['owner'] },
+      // The shared presentation catalogue keeps this label identical in the drawer and title bar.
+      navItem('/onboarding', ListChecks, ['owner']),
     ],
   },
 ];
@@ -135,7 +138,7 @@ export function sectionsForRole(role: ActiveRole | undefined, isPlatformAdmin: b
     { section: 'ניהול', items: itemsFor(role, MANAGEMENT_PATHS[role] ?? []), collapsible: true },
     { section: 'בקרה', items: itemsFor(role, CONTROL_PATHS[role] ?? []), collapsible: true },
   ].filter((section) => section.items.length > 0) : [];
-  const platform = { section: 'פלטפורמה', collapsible: !!role, items: [{ to: '/admin', label: 'ניהול לקוחות', icon: Building2, roles: [] as ActiveRole[] }] };
+  const platform = { section: 'פלטפורמה', collapsible: !!role, items: [{ ...navItem('/admin', Building2, []), roles: [] as ActiveRole[] }] };
   return isPlatformAdmin ? [...roleSections, platform] : roleSections;
 }
 
@@ -144,7 +147,9 @@ export function footerItemsForRole(role: ActiveRole | undefined): NavItem[] {
 }
 
 export function drawerSectionsForRole(role: ActiveRole | undefined, isPlatformAdmin: boolean): NavSection[] {
-  return sectionsForRole(role, isPlatformAdmin);
+  return sectionsForRole(role, isPlatformAdmin).map((section, index) => (
+    role && index === 0 ? { ...section, section: 'עבודה שוטפת' } : section
+  ));
 }
 
 /**
@@ -158,22 +163,8 @@ export function showNavHeaders(sections: readonly NavSection[]): boolean {
   return sections.filter((s) => s.section).reduce((n, s) => n + s.items.length, 0) > 1;
 }
 
-const PAGE_TITLE_PATTERNS: [RegExp, string][] = [
-  [/^\/suppliers\/[^/]+$/, 'כרטיס ספק'],
-  [/^\/orders\/[^/]+$/, 'פרטי הזמנה'],
-  [/^\/receiving\/[^/]+$/, 'קבלת סחורה'],
-  [/^\/receipts\/[^/]+$/, 'פרטי קבלה'],
-  [/^\/invoices\/new$/, 'חשבונית חדשה'],
-  [/^\/invoices\/[^/]+$/, 'פרטי חשבונית'],
-  [/^\/documents\/consolidated-invoices$/, 'חשבוניות מרכזות'],
-  [/^\/documents\/[^/]+\/review$/, 'בדיקת מסמך'],
-  [/^\/onboarding$/, 'הקמת המערכת'],
-  [/^\/admin$/, 'ניהול פלטפורמה'],
-];
-
 export function pageTitleFor(pathname: string): string {
-  const navTitle = NAV_SECTIONS.flatMap((section) => section.items).find((item) => item.to === pathname)?.label;
-  return navTitle ?? PAGE_TITLE_PATTERNS.find(([pattern]) => pattern.test(pathname))?.[1] ?? APP_NAME;
+  return routePresentationTitle(pathname) ?? APP_NAME;
 }
 
 export default function Layout() {
@@ -285,12 +276,9 @@ export default function Layout() {
   /**
    * `expandGroups` — the desktop sidebar shows every group open (owner decision 09.08.2026).
    *
-   * The groups were born collapsed in the UX-polish campaign. Owner decision 13.08.2026 restores
-   * the direct list on mobile too: every permitted destination stays visible without opening a
-   * topic disclosure. Desktop and mobile now use the same open navigation contract.
-   *
-   * Note this renders them through the EXISTING non-collapsible branch rather than forcing
-   * `<details open>`: an always-open disclosure is a control that lies about being a control.
+   * The phone drawer keeps daily work exposed and progressively discloses management/control.
+   * The active route's group opens automatically, so orientation never depends on recall.
+   * Desktop remains fully expanded because its permanent column has the scanning room.
    */
   const accountBlock = (
     <div className="px-1 pt-3">
@@ -399,7 +387,7 @@ export default function Layout() {
           <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label="תפריט ראשי"
             tabIndex={-1} className="phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-shell border-e border-shell-ink/10 focus:outline-none" onClick={(e) => e.stopPropagation()}>
             <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 rounded-lg text-shell-ink-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={20} /></button>
-            {sidebar(drawerSections, 'יעדים נוספים', true, false)}
+            {sidebar(drawerSections, 'יעדים נוספים', false, false)}
           </aside>
         </div>
       )}

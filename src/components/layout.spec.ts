@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_SECTIONS, drawerSectionsForRole, footerItemsForRole, sectionsForRole } from './Layout';
+import { NAV_SECTIONS, drawerSectionsForRole, footerItemsForRole, pageTitleFor, sectionsForRole } from './Layout';
 import { isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
 import type { ActiveRole } from '../lib/types';
+import { routePresentationTitle } from '../lib/routePresentation';
 
 const ACTIVE_ROLES: ActiveRole[] = ['owner', 'office', 'accountant'];
 const pathsFor = (role: ActiveRole | undefined, isPlatformAdmin = false) =>
@@ -61,6 +62,13 @@ describe('מעטפת הניווט', () => {
     ]));
   });
 
+  it('כל תווית ניווט נגזרת משם המסך הקנוני', () => {
+    for (const item of NAV_SECTIONS.flatMap((section) => section.items)) {
+      expect(item.label).toBe(routePresentationTitle(item.to));
+      expect(pageTitleFor(item.to)).toBe(item.label);
+    }
+  });
+
   it('כל מסלול מורשה מוצג או מוחרג במכוון ל-surface הקשרי', () => {
     const contextual = new Set(['/orders/new', '/documents/archive', '/alerts']);
     for (const role of ACTIVE_ROLES) {
@@ -83,9 +91,13 @@ describe('סרגל הפעולות המהירות במובייל', () => {
     expect(quickActionsFor('accountant').map((item) => item.key)).toEqual(['dashboard', 'invoices', 'pay']);
   });
 
-  it('מחזיר את כל יעדי הניווט הרגילים למגירה', () => {
+  it('מחזיר את כל יעדי הניווט למגירה תחת שכבת עבודה שוטפת', () => {
     for (const role of ACTIVE_ROLES) {
-      expect(drawerSectionsForRole(role, false)).toEqual(sectionsForRole(role, false));
+      const drawer = drawerSectionsForRole(role, false);
+      expect(drawer[0].section).toBe('עבודה שוטפת');
+      expect(drawer.flatMap((section) => section.items)).toEqual(
+        sectionsForRole(role, false).flatMap((section) => section.items),
+      );
     }
   });
 

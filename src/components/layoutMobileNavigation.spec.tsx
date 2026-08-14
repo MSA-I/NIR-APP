@@ -28,7 +28,7 @@ describe('סרגל פעולות מהירות תחתון', () => {
   it('מחזיר לבעלים חמישה יעדים כשהצילום באמצע ובקרת מסמכים בסוף', () => {
     state.role = 'owner';
     renderAt('/orders/order-1');
-    const group = screen.getByRole('group', { name: 'פעולות מהירות' });
+    const group = screen.getByRole('group', { name: 'קיצורי דרך ופעולות' });
     expect([...group.querySelectorAll('.mobile-action')].map((item) => item.textContent)).toEqual([
       // 'חשבונית חדשה' left this bar in G1: an invoice is received, not created.
       'הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'בקרת מסמכים',
@@ -41,7 +41,7 @@ describe('סרגל פעולות מהירות תחתון', () => {
   it('שומר חמישה יעדים גם למנהל רכש ומסמן את המסך הפעיל', () => {
     state.role = 'office';
     renderAt('/documents');
-    const group = screen.getByRole('group', { name: 'פעולות מהירות' });
+    const group = screen.getByRole('group', { name: 'קיצורי דרך ופעולות' });
     expect([...group.querySelectorAll('.mobile-action')].map((item) => item.textContent)).toEqual([
       'הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'מסמכים',
     ]);
@@ -57,14 +57,14 @@ describe('סרגל פעולות מהירות תחתון', () => {
     state.role = 'office';
     renderAt('/receiving/order-1');
     expect(screen.queryByRole('navigation', { name: 'ניווט ראשי בנייד' })).toBeNull();
-    expect(screen.getByRole('group', { name: 'פעולות מהירות' }).querySelectorAll('.mobile-action')).toHaveLength(1);
+    expect(screen.getByRole('group', { name: 'קיצורי דרך ופעולות' }).querySelectorAll('.mobile-action')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'צילום מסמך' })).toBeInTheDocument();
   });
 
   it('אינו מציג סרגל לתפקיד שפרש', () => {
     state.role = 'kitchen';
     renderAt('/dashboard');
-    expect(screen.queryByRole('group', { name: 'פעולות מהירות' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'קיצורי דרך ופעולות' })).toBeNull();
     expect(document.querySelector('.mobile-action-bar')).toBeNull();
   });
 });
