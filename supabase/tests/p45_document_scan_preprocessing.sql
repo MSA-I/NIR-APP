@@ -469,12 +469,10 @@ reset role;
 
 select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claim.role', 'service_role', true);
-set local role service_role;
 update public.document_scan_jobs
 set status = 'failed', last_error_code = 'processing_resource_failure',
     last_error_message = 'synthetic terminal failure'
 where id = (:'p45_recovery_intake_result'::jsonb ->> 'intake_job_id')::uuid;
-reset role;
 
 select set_config('request.jwt.claim.sub', '13610000-0000-4000-8000-000000000002', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);

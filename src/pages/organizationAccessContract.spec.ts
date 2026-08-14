@@ -30,7 +30,7 @@ describe('organization access after Trial retirement', () => {
   it('keeps server-authoritative refresh and route-level mutation guards without Trial banners', () => {
     expect(auth).toContain("supabase.rpc('organization_access_state')");
     expect(auth).toContain('refreshOrganizationAccess: () => Promise<void>');
-    expect(auth).toContain('void refreshAccess();');
+    expect(auth).toContain("if (access.mode !== 'active') void refreshAccess()");
     expect(auth).toContain("window.addEventListener('focus', onFocus)");
     expect(auth).toContain("document.addEventListener('visibilitychange', onVisibility)");
     expect(app).toContain('if (write && !organizationAccess.canWrite)');

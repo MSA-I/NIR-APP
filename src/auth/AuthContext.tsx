@@ -256,11 +256,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // the write boundary throughout.
       }
     };
-    void refreshAccess();
     const timer = window.setInterval(() => void refreshAccess(), 60_000);
-    const onFocus = () => void refreshAccess();
+    const refreshRestrictedAccess = () => {
+      if (access.mode !== 'active') void refreshAccess();
+    };
+    void refreshRestrictedAccess();
+    const onFocus = () => refreshRestrictedAccess();
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') void refreshAccess();
+      if (document.visibilityState === 'visible') refreshRestrictedAccess();
     };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisibility);
@@ -269,7 +272,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [session, profile, org, offlineBootstrap]);
+  }, [session, profile, org, offlineBootstrap, access.mode]);
 
   async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
