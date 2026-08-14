@@ -19,11 +19,15 @@ except ImportError:  # pragma: no cover - older pillow-heif fallback
 from .errors import ProcessingError
 from .limits import DEFAULT_LIMITS, ExtractionLimits
 
+cv2.setNumThreads(1)
+
 
 ScanMode = Literal["auto", "grayscale", "black_and_white"]
 Point = tuple[float, float]
 MIN_AUTOMATIC_PAGE_COVERAGE = 0.45
 MAX_METRIC_SAMPLE_PIXELS = 1_000_000
+MAX_SCAN_OUTPUT_PIXELS = 9_000_000
+MAX_NLM_DENOISE_PIXELS = 4_000_000
 
 register_heif_opener()
 if register_avif_opener:
@@ -211,6 +215,11 @@ def _perspective_transform(image: np.ndarray, corners: tuple[Point, Point, Point
         factor = 4096.0 / longest
         target_width = max(64, round(target_width * factor))
         target_height = max(64, round(target_height * factor))
+    output_pixels = target_width * target_height
+    if output_pixels > MAX_SCAN_OUTPUT_PIXELS:
+        factor = math.sqrt(MAX_SCAN_OUTPUT_PIXELS / output_pixels)
+        target_width = max(64, round(target_width * factor))
+        target_height = max(64, round(target_height * factor))
     destination = np.array(
         [
             [0, 0],
@@ -304,8 +313,17 @@ def _metric_sample(image: np.ndarray) -> np.ndarray:
 
 def _enhance(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict[str, float]]:
     shadow_free, shadow_score = _remove_shadows(gray)
-    denoised = cv2.fastNlMeansDenoising(shadow_free, None, h=8, templateWindowSize=7, searchWindowSize=21)
+    # NLM retains a large search workspace. A near-full 12 MP phone capture can then leave
+    # OpenCV unable to allocate the final threshold image under the worker's 2 GiB limit.
+    # Median filtering is bounded and preserves document edges well at large resolutions.
+    denoised = (
+        cv2.fastNlMeansDenoising(shadow_free, None, h=8, templateWindowSize=7, searchWindowSize=21)
+        if shadow_free.size <= MAX_NLM_DENOISE_PIXELS
+        else cv2.medianBlur(shadow_free, 3)
+    )
+    del shadow_free
     enhanced = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(8, 8)).apply(denoised)
+    del denoised
     block_size = max(31, min(81, ((min(enhanced.shape) // 20) | 1)))
     black_and_white = cv2.adaptiveThreshold(
         enhanced,
@@ -366,9 +384,13 @@ def scan_document(
         selected_corners = validate_corners(corners)
         corners_source = "manual"
     transformed = _perspective_transform(image, selected_corners)
+    del image
     gray = cv2.cvtColor(transformed, cv2.COLOR_BGR2GRAY)
+    del transformed
     rotation = _deskew_angle(gray)
     deskewed = _rotate(gray, rotation)
+    if deskewed is not gray:
+        del gray
     enhanced, black_and_white, metrics = _enhance(deskewed)
     output_mode = _select_mode(mode, metrics)
     output = black_and_white if output_mode == "black_and_white" else enhanced
