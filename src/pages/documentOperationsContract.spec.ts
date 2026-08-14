@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../components/ui';
+import { NAV_SECTIONS } from '../components/Layout';
 import {
   attemptStatusMeta,
   recoveryInvokeErrorMessage,
@@ -87,7 +88,6 @@ vi.mock('../lib/useQuery', () => ({
 
 const source = readFileSync(join(process.cwd(), 'src', 'pages', 'DocumentOperations.tsx'), 'utf8');
 const app = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
-const layout = readFileSync(join(process.cwd(), 'src', 'components', 'Layout.tsx'), 'utf8');
 
 const attempt = (status: string, price_list_outcome: string | null = null) => ({
   status,
@@ -97,8 +97,9 @@ const attempt = (status: string, price_list_outcome: string | null = null) => ({
 describe('document control capability and UX contract', () => {
   it('keeps the stable owner-only route while naming it בקרת מסמכים everywhere', () => {
     expect(app).toContain('path="/documents/operations" element={<Guard roles={[\'owner\']}><DocumentOperations /></Guard>}');
-    expect(layout).toContain("{ to: '/documents/operations', label: 'בקרת מסמכים'");
-    expect(layout).not.toContain("label: 'תפעול מסמכים'");
+    const navigation = NAV_SECTIONS.flatMap((section) => section.items)
+      .find((item) => item.to === '/documents/operations');
+    expect(navigation).toMatchObject({ label: 'בקרת מסמכים', roles: ['owner'] });
     expect(app).not.toContain('roles={[\'office\']}><DocumentOperations');
     expect(app).not.toContain('roles={[\'accountant\']}><DocumentOperations');
   });

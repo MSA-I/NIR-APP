@@ -124,10 +124,22 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
     fireEvent.click(screen.getByRole('button', { name: 'פתיחת תפריט' }));
     const drawer = screen.getByRole('dialog', { name: 'תפריט ראשי' });
     expect(within(drawer).getByRole('link', { name: 'מרכז הבקרה' })).toBeInTheDocument();
-    expect(within(drawer).getByRole('link', { name: 'הזמנות' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'הזמנות רכש' })).toBeInTheDocument();
     expect(within(drawer).getByRole('link', { name: 'חשבוניות' })).toBeInTheDocument();
     expect(within(drawer).getByRole('link', { name: 'ספקים' })).toHaveAttribute('aria-current', 'page');
     expect(within(drawer).getByRole('link', { name: 'קבלת סחורה' })).toBeInTheDocument();
-    expect(within(drawer).getByRole('link', { name: 'הגדרות' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'הגדרות מערכת' })).toBeInTheDocument();
+    expect(within(drawer).getByText('עבודה שוטפת')).toBeInTheDocument();
+    expect(within(drawer).getByText('ניהול').closest('details')).not.toHaveAttribute('open');
+    expect(within(drawer).getByText('בקרה').closest('details')).not.toHaveAttribute('open');
+  });
+
+  it('פותח אוטומטית במגירה את הקבוצה של המסך הפעיל', () => {
+    renderAt('/payments');
+    fireEvent.click(screen.getByRole('button', { name: 'פתיחת תפריט' }));
+    const drawer = screen.getByRole('dialog', { name: 'תפריט ראשי' });
+    const current = within(drawer).getByRole('link', { name: 'תשלומים' });
+    expect(current).toHaveAttribute('aria-current', 'page');
+    expect(current.closest('details')).toHaveAttribute('open');
   });
 });
