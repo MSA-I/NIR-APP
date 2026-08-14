@@ -100,7 +100,7 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
         {delta != null && <DeltaChip value={delta} />}
       </div>
       <div className="mt-1.5 flex items-center gap-3">
-        <div className={`shrink-0 text-xl font-semibold num sm:text-2xl ${toneCls}`} dir="ltr">{glanceMoney(value)}</div>
+        <div className={`shrink-0 kpi-value num ${toneCls}`} dir="ltr">{glanceMoney(value)}</div>
         {hasSpark && spark && sparkLabel && <TrendSparkline points={spark} label={sparkLabel} />}
       </div>
       <div className="mt-1 flex items-center justify-between gap-3 text-xs text-ink-muted">
@@ -209,7 +209,7 @@ function DeliveriesCard({ today, tomorrow, noDateCount, className = '' }: {
           {groups.map((group) => (
             <span key={group.key} className="flex items-baseline gap-1.5">
               <span className="text-xs font-medium text-ink-muted">{group.label}</span>
-              <span className={`text-xl font-semibold num sm:text-2xl ${group.suppliers > 0 ? 'text-ink' : 'text-ink-muted'}`}>{group.suppliers}</span>
+              <span className={`kpi-value num ${group.suppliers > 0 ? 'text-ink' : 'text-ink-muted'}`}>{group.suppliers}</span>
               <span className="text-xs text-ink-muted">{group.suppliers === 1 ? 'ספק' : 'ספקים'}</span>
             </span>
           ))}

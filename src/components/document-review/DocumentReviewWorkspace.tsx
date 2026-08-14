@@ -216,14 +216,14 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
               {snapshot.job && (
                 <div>
                   <dt className="font-medium text-ink-soft">מזהה משימה</dt>
-                  <dd className="mt-0.5 break-all"><span dir="ltr" className="num">{snapshot.job.id}</span></dd>
+                  <dd className="mt-0.5 break-all"><span dir="ltr" className="tech-id">{snapshot.job.id}</span></dd>
                 </div>
               )}
               {snapshot.extraction && (
                 <>
                   <div>
                     <dt className="font-medium text-ink-soft">טביעת מקור</dt>
-                    <dd className="mt-0.5 break-all"><span dir="ltr" className="num">{snapshot.extraction.input_checksum}</span></dd>
+                    <dd className="mt-0.5 break-all"><span dir="ltr" className="tech-id">{snapshot.extraction.input_checksum}</span></dd>
                   </div>
                   <div>
                     <dt className="font-medium text-ink-soft">גרסת חוזה</dt>
@@ -299,7 +299,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
                         <td className="td num">{row.page}</td>
                         <td className="td num">{confidencePercent(row.confidence)}</td>
                         <td className="td">{bboxDescription(row.bbox)}</td>
-                        <td className="td"><span dir="ltr" className="num">{row.id}</span></td>
+                        <td className="td"><span dir="ltr" className="tech-id">{row.id}</span></td>
                       </tr>
                     ))}
                   </tbody>

@@ -165,7 +165,7 @@ function ReceivingOrderCard({ order, today, localDraft, machineDraft, onOpen }: 
         <StatusBadge meta={PO_STATUS[order.status]} />
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-ink-muted">
-        <span className="num">הזמנה #{order.number}</span>
+        <span>הזמנה <span className="num">#{order.number}</span></span>
         <span className="num">{order.items.length} פריטים</span>
         {order.expected_date && <span>אספקה: {fmtDate(order.expected_date)}</span>}
       </div>
@@ -892,7 +892,7 @@ export function ReceiveOrder() {
         data-sync-state={donePendingSync ? 'pending' : 'synced'}
       >
         <CheckCircle2 size={48} className={donePendingSync ? 'text-await-solid mx-auto' : 'text-done-solid mx-auto'} />
-        <h1 className="text-xl font-bold text-ink">{donePendingSync ? 'הקבלה שמורה במכשיר' : 'הקבלה נשמרה!'}</h1>
+        <h1 className="text-xl font-semibold text-ink">{donePendingSync ? 'הקבלה שמורה במכשיר' : 'הקבלה נשמרה!'}</h1>
         <p className="text-sm text-ink-muted">{donePendingSync
           ? 'השרת עדיין לא אישר את הקבלה. היא והתמונות שתצלם יישלחו לפי הסדר כשהחיבור יחזור.'
           : 'עכשיו אפשר לצלם את החשבונית או תעודת המשלוח ולצרף אותה לקבלה.'}</p>
@@ -943,7 +943,7 @@ export function ReceiveOrder() {
           breadcrumbs={<Breadcrumbs items={[{ label: 'קבלת סחורה', to: '/receiving' }, { label: `הזמנה #${order.number}` }]} />}
           title={<span className="flex items-center gap-2"><PackageCheck size={22} /> קבלת סחורה</span>}
           status={<StatusBadge meta={PO_STATUS[order.status]} />}
-          meta={<><span>{order.supplier.name}</span><span className="num">הזמנה #{order.number}</span><span className="num">{progress.done} מתוך {progress.total} פריטים עודכנו</span></>} />
+          meta={<><span>{order.supplier.name}</span><span>הזמנה <span className="num">#{order.number}</span></span><span><span className="num">{progress.done}</span> מתוך <span className="num">{progress.total}</span> פריטים עודכנו</span></>} />
         {data?.draft && <div className="mt-1 text-xs text-await-fg">נטענה טיוטת קבלה שנשמרה קודם</div>}
         {localDraftPending && <div className="mt-1 text-xs font-medium text-alert-fg" data-testid="receiving-local-draft">טיוטה מקומית — נשמרה במכשיר וטרם סונכרנה</div>}
         {receiptKey && !receiptKey.persisted && (

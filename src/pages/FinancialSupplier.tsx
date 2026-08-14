@@ -107,10 +107,10 @@ export default function FinancialSupplier() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="card card-pad"><div className="text-sm text-ink-muted">יתרה פתוחה</div><div className="mt-1 text-2xl font-bold num">{fmtMoneyRounded(data.openBalance)}</div></div>
-        <div className="card card-pad"><div className="text-sm text-ink-muted">חשיפה שהגיעה למועד</div><div className="mt-1 text-2xl font-bold num">{fmtMoneyRounded(data.dueExposure)}</div></div>
-        <div className="card card-pad"><div className="text-sm text-ink-muted">תנועות בנק לא מותאמות</div><div className="mt-1 text-2xl font-bold num">{data.bankStatusCounts.unmatched}</div></div>
-        <div className="card card-pad"><div className="text-sm text-ink-muted">התאמות שממתינות לאישור</div><div className="mt-1 text-2xl font-bold num">{data.bankStatusCounts.suggested}</div></div>
+        <div className="card card-pad"><div className="text-sm text-ink-muted">יתרה פתוחה</div><div className="mt-1 kpi-value num">{fmtMoneyRounded(data.openBalance)}</div></div>
+        <div className="card card-pad"><div className="text-sm text-ink-muted">חשיפה שהגיעה למועד</div><div className="mt-1 kpi-value num">{fmtMoneyRounded(data.dueExposure)}</div></div>
+        <div className="card card-pad"><div className="text-sm text-ink-muted">תנועות בנק לא מותאמות</div><div className="mt-1 kpi-value num">{data.bankStatusCounts.unmatched}</div></div>
+        <div className="card card-pad"><div className="text-sm text-ink-muted">התאמות שממתינות לאישור</div><div className="mt-1 kpi-value num">{data.bankStatusCounts.suggested}</div></div>
       </div>
 
       {data.dueExposure === null && <Note tone="info">אין במערכת מועדי פירעון שמאפשרים לחשב חשיפה שהגיעה למועד; לכן מוצג — ולא אפס.</Note>}

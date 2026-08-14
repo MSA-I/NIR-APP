@@ -303,7 +303,7 @@ export default function Layout() {
         <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="40" height="40"
           className="size-10 shrink-0 rounded-lg bg-white object-contain p-0.5 ring-1 ring-shell-ink/15" />
         <div className="min-w-0">
-          <div className="text-base font-bold text-shell-ink">{APP_NAME}</div>
+          <div className="text-base font-semibold text-shell-ink">{APP_NAME}</div>
           <div className="truncate text-xs text-shell-ink-dim" title={orgName || undefined}>{orgName || 'ניהול רכש ותשלומים'}</div>
         </div>
       </Link>
@@ -318,7 +318,7 @@ export default function Layout() {
             </details>
           ) : (
             <div key={s.section || i}>
-              {s.section && <div className="px-3 pb-1 text-[11px] font-semibold text-shell-heading">{s.section}</div>}
+              {s.section && <div className="px-3 pb-1 text-xs font-semibold text-shell-heading">{s.section}</div>}
               <div className="space-y-0.5">{navLinks(s.items)}</div>
             </div>
           )
@@ -376,7 +376,7 @@ export default function Layout() {
           )}
           <div className="min-w-0 leading-tight">
             <div className="truncate text-sm font-semibold" title={currentTitle}>{currentTitle}</div>
-            <div className="mobile-shell-subtitle truncate text-[11px] text-shell-ink-dim" title={orgName || APP_NAME}>{APP_NAME}{orgName ? ` · ${orgName}` : ''}</div>
+            <div className="mobile-shell-subtitle truncate text-xs text-shell-ink-dim" title={orgName || APP_NAME}>{APP_NAME}{orgName ? ` · ${orgName}` : ''}</div>
           </div>
         </div>
         <div className="mobile-shell-actions flex shrink-0 items-center overflow-hidden rounded-lg bg-shell-ink/5 ring-1 ring-inset ring-shell-ink/15">

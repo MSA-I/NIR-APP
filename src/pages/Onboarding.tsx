@@ -1090,7 +1090,7 @@ function DoneStep({ counts, skipped, onGoToStep, onFinish }: {
         {tiles.map((t) => (
           <Link key={t.label} to={t.to} className="card card-pad card-link-hover">
             <div className="text-xs font-medium text-ink-muted">{t.label}</div>
-            <div className="text-xl font-bold num text-start text-ink mt-1">{t.value}</div>
+            <div className="kpi-value num text-start text-ink mt-1">{t.value}</div>
           </Link>
         ))}
       </div>

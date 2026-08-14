@@ -267,7 +267,7 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
         <div className="rounded-lg bg-surface-sunken border border-line px-4 py-3 text-sm">
           <div className="flex flex-wrap justify-between gap-2">
             <span>{fmtDate(tx.tx_date)} · {tx.description}</span>
-            <span className="font-bold num">{fmtMoneyExact(tx.amount)}</span>
+            <span className="font-semibold num">{fmtMoneyExact(tx.amount)}</span>
           </div>
         </div>
         <Note tone="await">הסרת ההתאמה מחזירה את תנועת הבנק לטיפול ואת דרישת התשלום לסטטוס ״בוצעה״. התשלום והקצאותיו אינם מתבטלים. התאמה ישירה לחשבונית דורשת תיקון כספי נפרד.</Note>
@@ -634,7 +634,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
         <div className="rounded-lg bg-surface-sunken border border-line px-4 py-3 text-sm">
           <div className="flex flex-wrap justify-between gap-2">
             <span>{fmtDate(tx.tx_date)} · {tx.description}</span>
-            <span className="font-bold num">{fmtMoneyExact(tx.amount)}</span>
+            <span className="font-semibold num">{fmtMoneyExact(tx.amount)}</span>
           </div>
           {tx.reference && <div className="text-xs text-ink-muted mt-1">אסמכתא: <span dir="ltr">{tx.reference}</span></div>}
         </div>
@@ -691,7 +691,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                             return next;
                           })} />
                         <span className="flex-1">חשבונית <b dir="ltr" className="num">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}</span>
-                        <span className="text-xs text-ink-muted num">יתרה {fmtMoneyExact(inv.balance)}</span>
+                        <span className="text-xs text-ink-muted">יתרה <span className="num">{fmtMoneyExact(inv.balance)}</span></span>
                         {checked && (
                           <input type="number" step="0.01" className="input w-28! num" value={chosenInvoices[inv.id]}
                             aria-label={`סכום ההקצאה לחשבונית ${inv.invoice_number} של ${supplierName} עבור ${transactionLabel}`}

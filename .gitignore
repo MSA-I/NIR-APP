@@ -1,5 +1,6 @@
 node_modules/
 dist/
+public/fonts/almoni/
 .env
 *.local
 *.log
@@ -18,6 +19,7 @@ supabase/.branches/
 .qa-runs/
 playwright-report/
 test-results/
+.tmp/
 
 # Written by root-level Deno commands. Edge functions that opt into a dedicated, reviewed lockfile
 # add an explicit exception below; the repository still does not carry a shared root lockfile.

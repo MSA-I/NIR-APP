@@ -5,6 +5,21 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   plugins: [
+    {
+      name: 'supplyflow-font-mode',
+      transformIndexHtml(html) {
+        if (process.env.VITE_FONT_MODE !== 'almoni') return html;
+        const faces = [400, 500, 600]
+          .map((weight) => `@font-face{font-family:"Almoni Neue SupplyFlow";font-style:normal;font-weight:${weight};font-display:swap;src:url("/fonts/almoni/AlmoniNeue-${weight}.woff2") format("woff2")}`)
+          .join('');
+        const preloads = [400, 500, 600]
+          .map((weight) => `<link rel="preload" href="/fonts/almoni/AlmoniNeue-${weight}.woff2" as="font" type="font/woff2" crossorigin />`)
+          .join('\n    ');
+        return html
+          .replace('<html lang="he" dir="rtl">', '<html lang="he" dir="rtl" data-font-mode="almoni">')
+          .replace('</head>', `    <style>${faces}</style>\n    ${preloads}\n  </head>`);
+      },
+    },
     react(),
     tailwindcss(),
     // App-shell precache (DEBT-REGISTER §2 / OPEN-DECISIONS #101, closed 09.08.2026).

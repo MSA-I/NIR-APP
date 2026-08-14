@@ -85,7 +85,7 @@ export default function ResetPassword() {
     <div className="min-h-dvh flex items-center justify-center bg-shell p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white">{APP_NAME}</h1>
+          <h1 className="text-3xl font-semibold text-white">{APP_NAME}</h1>
           <p className="text-shell-ink-dim mt-1 text-sm">הגדרת סיסמה חדשה</p>
         </div>
 

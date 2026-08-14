@@ -431,7 +431,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
 
         <div className="flex items-center justify-between rounded-lg bg-surface-sunken px-4 py-3">
           <span className="text-sm text-ink-soft">סכום הדרישה</span>
-          <span className="text-lg font-bold num">{fmtMoneyExact(amount)}</span>
+          <span className="kpi-value-compact num">{fmtMoneyExact(amount)}</span>
         </div>
 
         <div><label className="label" htmlFor="payment-request-notes">הערות</label><input id="payment-request-notes" className="input" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
@@ -582,7 +582,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge meta={PAYMENT_REQUEST_STATUS[pr.status]} />
-          <span className="text-lg font-bold num">{fmtMoneyExact(pr.amount)}</span>
+          <span className="kpi-value-compact num">{fmtMoneyExact(pr.amount)}</span>
           {pr.due_date && <span className="text-sm text-ink-muted">יעד: {fmtDate(pr.due_date)}</span>}
           {pr.approved_at && <span className="text-sm text-ink-muted">אושר על ידי {pr.approver?.full_name ?? 'משתמש לא זמין'} · {fmtDate(pr.approved_at)}</span>}
         </div>
