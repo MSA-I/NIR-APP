@@ -297,8 +297,8 @@ export default function InvoiceNew() {
               <dt className="text-ink-muted">{linkedContext.orderId ? 'הזמנת רכש' : 'הזמנת המקור של הקבלה'}</dt>
               <dd className="mt-0.5 flex flex-wrap items-center gap-2">
                 {canOpenProcurement
-                  ? <Link className="link num" to={`/orders/${linkedContext.order.id}`} data-testid="invoice-linked-order">הזמנה #{linkedContext.order.number}</Link>
-                  : <span className="num" data-testid="invoice-linked-order">הזמנה #{linkedContext.order.number}</span>}
+                  ? <Link className="link" to={`/orders/${linkedContext.order.id}`} data-testid="invoice-linked-order">הזמנה <span className="num">#{linkedContext.order.number}</span></Link>
+                  : <span data-testid="invoice-linked-order">הזמנה <span className="num">#{linkedContext.order.number}</span></span>}
                 <StatusBadge meta={PO_STATUS[linkedContext.order.status]} />
               </dd>
             </div>
@@ -313,7 +313,7 @@ export default function InvoiceNew() {
                         data-testid="invoice-linked-receipt"
                         aria-label={`צפייה בקבלה #${linkedContext.receipt.number}`}
                       >קבלה #{linkedContext.receipt.number}</Link>
-                    : <span className="num" data-testid="invoice-linked-receipt">קבלה #{linkedContext.receipt.number}</span>}
+                    : <span data-testid="invoice-linked-receipt">קבלה <span className="num">#{linkedContext.receipt.number}</span></span>}
                 </dd>
               </div>
             )}

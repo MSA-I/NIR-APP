@@ -98,7 +98,7 @@ export default function ReceiptDetail() {
           the order and receipt context that drives three-way matching. */}
       <RecordHeader
         breadcrumbs={<Breadcrumbs items={[{ label: 'קבלת סחורה', to: '/receiving' }, { label: `קבלה #${receipt.number}` }]} />}
-        title={<span className="num" data-testid="receipt-detail-number">קבלה #{receipt.number}</span>}
+        title={<span data-testid="receipt-detail-number">קבלה <span className="num">#{receipt.number}</span></span>}
         status={<StatusBadge meta={RECEIPT_STATUS[receipt.status]} />}
         meta={`${supplier.name} · התקבלה ב-${fmtDate(receipt.received_at)}`}
         primaryAction={canOpenOrder && (
@@ -123,8 +123,8 @@ export default function ReceiptDetail() {
             <dt className="text-ink-muted">הזמנת רכש</dt>
             <dd className="mt-0.5 flex flex-wrap items-center gap-2">
               {canOpenOrder
-                ? <Link className="link num inline-flex min-h-11 items-center" to={`/orders/${order.id}`} data-testid="receipt-detail-order">הזמנה #{order.number}</Link>
-                : <span className="num" data-testid="receipt-detail-order">הזמנה #{order.number}</span>}
+                ? <Link className="link inline-flex min-h-11 items-center" to={`/orders/${order.id}`} data-testid="receipt-detail-order">הזמנה <span className="num">#{order.number}</span></Link>
+                : <span data-testid="receipt-detail-order">הזמנה <span className="num">#{order.number}</span></span>}
               <StatusBadge meta={PO_STATUS[order.status]} />
             </dd>
           </div>

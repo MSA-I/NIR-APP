@@ -71,7 +71,7 @@ export default function AccountantPaymentQueue() {
             <button key={r.id} className="card w-full text-start p-4 hover:border-action-line transition-all" onClick={() => setSelected(r)}>
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-ink">{r.supplier.name}</span>
-                <span className="text-lg font-bold num">{fmtMoneyExact(r.amount)}</span>
+                <span className="kpi-value-compact num">{fmtMoneyExact(r.amount)}</span>
               </div>
               <div className="flex items-center gap-3 mt-1.5 text-sm text-ink-muted">
                 <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} />
@@ -187,7 +187,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
         </p>
 
         <dl className="text-sm space-y-1.5">
-          <div className="flex justify-between"><dt className="text-ink-muted">סכום מאושר</dt><dd className="font-bold num">{fmtMoneyExact(pr.amount)}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">סכום מאושר</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount)}</dd></div>
           {pr.due_date && <div className="flex justify-between"><dt className="text-ink-muted">תאריך יעד</dt><dd>{fmtDate(pr.due_date)}</dd></div>}
           <div className="flex justify-between"><dt className="text-ink-muted">חשבוניות</dt>
             <dd dir="ltr">{pr.invoices.map((i) => i.invoice?.invoice_number).filter(Boolean).join(', ') || 'לא זמינות'}</dd></div>

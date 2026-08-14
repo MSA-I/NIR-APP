@@ -81,7 +81,7 @@ export default function Login() {
         <div className="text-center mb-8 lg:mb-0 lg:flex-1 lg:text-start">
           <img src="/icons/icon-192.png" alt="" width="52" height="52"
             className="mx-auto mb-3 size-13 rounded-xl shadow-menu lg:mx-0" />
-          <h1 className="text-3xl font-bold text-white">{APP_NAME}</h1>
+          <h1 className="text-3xl font-semibold text-white">{APP_NAME}</h1>
           <p className="text-shell-ink-soft mt-1 text-sm">רכש, חשבוניות ותשלומים במקום אחד</p>
           <p className="text-shell-ink-dim mt-2 text-xs">כניסה מאובטחת לסביבת העבודה</p>
           {/* Three statements the product can actually back, not marketing: the domain it covers,

@@ -477,20 +477,20 @@ export default function Reports() {
         <div className="hidden print:block">
           {/* Printed header handed to the accountant — carries the tenant's own name. */}
           {orgLogoUrl && <img data-testid="monthly-report-logo" src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
-          <h2 className="text-xl font-bold">{`${org?.name ? `${org.name} — ` : ''}דוח חודשי ${fmtMonth(`${safeMonth}-01`)}`}</h2>
+          <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}דוח חודשי ${fmtMonth(`${safeMonth}-01`)}`}</h2>
           <p className="text-xs">נוצר {fmtDateTime(data.generatedAt)}</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}`}><div className="text-xs text-ink-muted">חשבוניות</div><div className="text-lg font-bold num">{data.invoices.length}</div></Link>
-          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.invoices)}</div></Link>
-          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(totals.vat)}</div></Link>
-          <Link className={metricLinkClass} to={`/payments?month=${safeMonth}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className={`text-lg font-bold num text-start ${totals.paid ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(totals.paid)}</div></Link>
-          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`text-lg font-bold num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Link>
-          <Link className={metricLinkClass} to={`/bank?month=${safeMonth}&status=unmatched`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`text-lg font-bold num ${totals.unmatchedBank ? 'text-alert-solid' : ''}`}>{totals.unmatchedBank}</div></Link>
-          <Link className={metricLinkClass} to={`/bank?month=${safeMonth}&status=suggested`}><div className="text-xs text-ink-muted">התאמות שממתינות לאישור</div><div className={`text-lg font-bold num ${totals.suggestedBank ? 'text-await-fg' : ''}`}>{totals.suggestedBank}</div></Link>
-          <Link className={metricLinkClass} to={`/credits?month=${safeMonth}&status=all`}><div className="text-xs text-ink-muted">זיכויים בחודש</div><div className="text-lg font-bold num">{data.credits.length}</div></Link>
-          <Link className={metricLinkClass} to="/exceptions?status=open"><div className="text-xs text-ink-muted">חריגים פתוחים</div><div className={`text-lg font-bold num ${data.exceptions.length ? 'text-await-fg' : ''}`}>{data.exceptions.length}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}`}><div className="text-xs text-ink-muted">חשבוניות</div><div className="kpi-value-compact num">{data.invoices.length}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(totals.invoices)}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(totals.vat)}</div></Link>
+          <Link className={metricLinkClass} to={`/payments?month=${safeMonth}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className={`kpi-value-compact num text-start ${totals.paid ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(totals.paid)}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`kpi-value-compact num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Link>
+          <Link className={metricLinkClass} to={`/bank?month=${safeMonth}&status=unmatched`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`kpi-value-compact num ${totals.unmatchedBank ? 'text-alert-solid' : ''}`}>{totals.unmatchedBank}</div></Link>
+          <Link className={metricLinkClass} to={`/bank?month=${safeMonth}&status=suggested`}><div className="text-xs text-ink-muted">התאמות שממתינות לאישור</div><div className={`kpi-value-compact num ${totals.suggestedBank ? 'text-await-fg' : ''}`}>{totals.suggestedBank}</div></Link>
+          <Link className={metricLinkClass} to={`/credits?month=${safeMonth}&status=all`}><div className="text-xs text-ink-muted">זיכויים בחודש</div><div className="kpi-value-compact num">{data.credits.length}</div></Link>
+          <Link className={metricLinkClass} to="/exceptions?status=open"><div className="text-xs text-ink-muted">חריגים פתוחים</div><div className={`kpi-value-compact num ${data.exceptions.length ? 'text-await-fg' : ''}`}>{data.exceptions.length}</div></Link>
         </div>
 
         {data.exceptions.length > 0 && (
@@ -527,7 +527,7 @@ export default function Reports() {
               </li>
             ))}
             {!data.invoices.length && <li className="p-4 text-center text-sm text-ink-muted">אין חשבוניות בחודש זה</li>}
-            <li className="flex min-h-11 flex-wrap items-center justify-between gap-2 bg-surface-sunken px-4 py-3 font-bold">
+            <li className="flex min-h-11 flex-wrap items-center justify-between gap-2 bg-surface-sunken px-4 py-3 font-semibold">
               <span>סה״כ</span><span className="num">{fmtMoneyExact(totals.invoices)}</span>
             </li>
           </ul>
@@ -552,8 +552,8 @@ export default function Reports() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot><tr className="border-t-2 border-line font-bold">
-                <th scope="row" className="td text-start" colSpan={3}>סה״כ</th>
+              <tfoot><tr className="border-t-2 border-line font-semibold">
+                <th scope="row" className="td text-start font-semibold" colSpan={3}>סה״כ</th>
                 <td className="td num">{fmtMoneyExact(totals.beforeVat)}</td>
                 <td className="td num">{fmtMoneyExact(totals.vat)}</td>
                 <td className="td num">{fmtMoneyExact(totals.invoices)}</td>

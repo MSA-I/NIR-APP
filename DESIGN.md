@@ -49,42 +49,75 @@ colors:
   trend-up: "rose-700"                          # התייקרות — תמיד עם חץ
   trend-down: "emerald-700"                     # הוזלה — תמיד עם חץ
 typography:
-  # IBM Plex Sans Hebrew נושאת את ה-UI; IBM Plex Mono נושאת כל מספר (.num).
-  # שתיהן מ-Google Fonts (index.html) — Sans ב-400/500/600/700, Mono ב-400/500/600.
+  # Production: Almoni Neue מורשה. Free/CI: Noto Sans Hebrew מקומי. אין תלות ב-Google Fonts.
   headline:
-    fontFamily: "IBM Plex Sans Hebrew, Heebo, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.5rem"
-    fontWeight: 700
-    lineHeight: 1.33
+    fontFamily: "Almoni Neue SupplyFlow, Noto Sans Hebrew, Arial, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "24px"
+    fontWeight: 600
+    lineHeight: 1.25
+  headline-wide:
+    fontFamily: "Almoni Neue SupplyFlow, Noto Sans Hebrew, ..."
+    fontSize: "26px"
+    fontWeight: 600
+    lineHeight: 1.25
   title:
-    fontFamily: "IBM Plex Sans Hebrew, ..."
-    fontSize: "1rem"
+    fontFamily: "Almoni Neue SupplyFlow, Noto Sans Hebrew, ..."
+    fontSize: "17px"
     fontWeight: 600
-    lineHeight: 1.5
+    lineHeight: 1.4
   body:
-    fontFamily: "IBM Plex Sans Hebrew, ..."
-    fontSize: "0.875rem"
+    fontFamily: "Almoni Neue SupplyFlow, Noto Sans Hebrew, ..."
+    fontSize: "15px"
     fontWeight: 400
-    lineHeight: 1.43
+    lineHeight: 1.5
   label:
-    fontFamily: "IBM Plex Sans Hebrew, ..."
-    fontSize: "0.875rem"
+    fontFamily: "Almoni Neue SupplyFlow, Noto Sans Hebrew, ..."
+    fontSize: "14px"
     fontWeight: 500
-    lineHeight: 1.43
+    lineHeight: 1.45
   table-header:
-    fontFamily: "IBM Plex Sans Hebrew, ..."
-    fontSize: "0.75rem"
-    fontWeight: 600
+    fontFamily: "Almoni Neue SupplyFlow, Noto Sans Hebrew, ..."
+    fontSize: "13px"
+    fontWeight: 500
     note: "ללא uppercase וללא tracking — לעברית אין רישיות; היררכיה מגודל/משקל/צבע בלבד"
   micro:
-    fontFamily: "IBM Plex Sans Hebrew, ..."
-    fontSize: "0.6875rem"
+    fontFamily: "Almoni Neue SupplyFlow, Noto Sans Hebrew, ..."
+    fontSize: "12px minimum"
+    fontWeight: 500
+    note: "12px הוא המינימום לכל ניווט, badge, chart label ומידע עסקי"
+  kpi:
+    fontFamily: "Almoni Neue SupplyFlow, Noto Sans Hebrew, ..."
+    fontSize: "26px"
     fontWeight: 600
-    note: "11px שמור לכותרות קבוצות בסרגל בלבד; אינו משמש תוכן או מידע עסקי"
+    lineHeight: 1.2
+  kpi-wide:
+    fontFamily: "Almoni Neue SupplyFlow, Noto Sans Hebrew, ..."
+    fontSize: "28px"
+    fontWeight: 600
+    lineHeight: 1.2
+  kpi-compact:
+    fontFamily: "Almoni Neue SupplyFlow, Noto Sans Hebrew, ..."
+    fontSize: "20px"
+    fontWeight: 600
+    lineHeight: 1.2
+  kpi-compact-wide:
+    fontFamily: "Almoni Neue SupplyFlow, Noto Sans Hebrew, ..."
+    fontSize: "24px"
+    fontWeight: 600
+    lineHeight: 1.2
+  mobile-input:
+    fontFamily: "Almoni Neue SupplyFlow, Noto Sans Hebrew, ..."
+    fontSize: "16px"
+    fontWeight: 400
+    note: "מונע zoom אוטומטי ב-Safari iOS; במסך רחב השדה חוזר ל-14px"
   num:
-    fontFamily: "IBM Plex Mono, ui-monospace, Consolas, monospace"
-    fontFeature: "tabular-nums"
-    note: "כל .num — סכומים, כמויות, מספרי מסמכים, ערכי KPI — במונו. חתימת הלדג'ר של המערכת"
+    fontFamily: "primary font family"
+    fontFeature: "tabular-nums lining-nums"
+    note: ".num אינו כופה LTR או Mono; tech-id שמור רק ל-UUID, hash, checksum ו-ID פנימי"
+  tech-id:
+    fontFamily: "ui-monospace, Cascadia Mono, SFMono-Regular, Consolas, monospace"
+    fontWeight: 400
+    note: "חריג מוגבל למזהי מכונה אמיתיים; תמיד isolate ובדרך כלל dir=ltr"
 rounded:
   control: "0.5rem"    # rounded-lg — כפתורים, שדות
   card: "0.75rem"      # rounded-xl — כרטיסים ומשטחי עבודה
@@ -115,13 +148,13 @@ components:
 **Creative North Star: "חדר בקרה שקט" עטוף במסגרת פטרול עמוקה.**
 
 SupplyFlow מטפל בכסף, ולכן סביבת העבודה שלו נשארת רגועה: נייר חם, טקסט כהה וספרות מיושרות
-במונו. מסגרת הפטרול — סרגל הצד, פעולות, לינקים וגרפים מבניים — נותנת למוצר זהות ברורה בלי לצבוע
+בפונט המוצר. מסגרת הפטרול — סרגל הצד, פעולות, לינקים וגרפים מבניים — נותנת למוצר זהות ברורה בלי לצבוע
 כל משטח. **צבע סטטוס עדיין שמור לטענה עסקית בלבד**; הפטרול מזהה את המוצר ואת הפעולה, לא "הצלחה"
 או "חריגה". התוצאה צריכה להרגיש כמו כלי מקצועי שנעים לעבוד בו שעות, לא תבנית אדמין ולא מסך סטרילי.
 
 **Key Characteristics:**
 - שקט כברירת מחדל; פטרול = מסגרת/פעולה, וצבעי done/await/alert/info = משמעות עסקית בלבד.
-- כל מספר במונו (`.num` → IBM Plex Mono): טורי סכומים מתיישרים כמו בפנקס.
+- מספרים משתמשים בפונט הראשי וב־tabular figures: טורי סכומים מתיישרים בלי אופי של טרמינל.
 - עברית RTL מלאה: properties לוגיים בלבד; אין uppercase.
 - עומק רך: צל פטרול עדין בכרטיס במנוחה, והרמה של פיקסל אחד רק בכרטיס לחיץ.
 - אין נתון מזויף: מדד בלי נתונים מציג `—`, לא `0`.
@@ -157,20 +190,27 @@ hover או בורר תצוגה.
 
 ## 3. Typography
 
-**UI:** IBM Plex Sans Hebrew (400/500/600/700) — עברית ולטינית באיכות זהה, אופי טכני-מקצועי.
-**מספרים:** IBM Plex Mono (400/500/600) דרך `--font-num`, מוחל אוטומטית על כל `.num` —
-סכומים, כמויות, מספרי מסמכים, ערכי KPI. זו חתימת המערכת: מערכת כספית שמספריה מיושרים כמו טרמינל.
+**Production UI:** Almoni Neue במשקלים 400/500/600 בלבד, מתוך קובצי webfont מורשים שמסופקים
+בזמן build ואינם נשמרים בריפו. **Free/CI:** Noto Sans Hebrew מקומי, ברישיון OFL, באותה היררכיה.
+Assistant ו־IBM Plex אינם חלק מחוזה ה־runtime. Noto הוא גם fallback של Almoni, ואחריו Arial ו־system UI.
+
+**מספרים:** `.num` משתמש באותה משפחה ראשית עם `tabular-nums` ו־`lining-nums`. המחלקה אינה כופה
+`direction:ltr`, אינה משנה יישור ואינה משתמשת ב־Mono. `.tech-id` הוא החריג היחיד: UUID, hash,
+checksum, job/submission ID או קוד פנימי אמיתי. מזהים אטומיים מקבלים `dir="ltr"`; סכומים, כמויות,
+אחוזים, תאריכים, טלפונים ומספרי מסמכים נשארים בפונט הראשי.
 
 ### Hierarchy
-Headline ‏700 / ‏1.25rem מובייל / ‏1.5rem רחב (`page-title`) · Title ‏600/1rem (`section-title`) ·
-Body ‏400/0.875rem · Label ‏500/0.875rem ‏ink-soft · Table header ‏600/0.75rem ‏ink-muted —
-**בלי uppercase, בלי tracking** (שריד לטיני שהוסר) · Micro ‏600/0.6875rem שמור רק לכותרות קבוצות
-בסרגל בלבד · ערכי KPI ‏600–700/1.25rem במונו.
+Page title ‏600/24px מובייל ו־26px רחב (`page-title`) · Section title ‏600/17px (`section-title`) ·
+Body ‏400/15px/1.5 · Label/control/table body ‏500 או 400/14px · Table header ‏500/13px —
+**בלי uppercase ובלי tracking דקורטיבי** · Micro/chart/badge ‏500/12px מינימום · KPI ראשי
+‏600/26px מובייל ו־28px רחב · KPI קומפקטי ‏600/20px מובייל ו־24px רחב. אין משקל 700 בממשק;
+`strong` ו־`b` נעצרים ב־600 ו־`font-synthesis` כבוי.
 
 בשדות קלט במובייל גודל הטקסט הוא לפחות `1rem`; זהו כלל שימושיות שמונע zoom אוטומטי ב־Safari iOS,
 לא שינוי בהיררכיית הטיפוגרפיה של תוכן המערכת.
 
-**חוק הספרות המיושרות:** כל תא מספרי עטוף `class="num"` ‏(LTR + ‏tabular-nums + מונו + יישור לסוף).
+**חוק הספרות המיושרות:** ערך מספרי מקבל `class="num"` עם tabular figures. המחלקה אינה עוטפת משפט
+עברי שלם. במחרוזת מעורבת עוטפים רק את הערך ב־`span.num`; מזהה טכני אטומי מקבל `tech-id` ו־`dir="ltr"`.
 
 ## 4. Elevation
 
@@ -325,7 +365,7 @@ DataTable, וממוקם מהקצה הלוגי של הטריגר (RTL-aware). ה�
 ### Dashboard — פס הכסף
 שלושת מדדי הכסף = **BandStat בתוך `.card` אחד** — מקטעים עם מפרידים לוגיים (`border-s`/`border-t`,
 לעולם לא divide-x הפיזי), לא שלושה אריחים זהים. האנטומיה הקבועה של כל BandStat היא:
-אייקון סמנטי בתוך chip שקט · תווית · ערך סופי מיידי במונו · הקשר תקופה · delta אופציונלי מול אותם
+אייקון סמנטי בתוך chip שקט · תווית · ערך סופי מיידי עם tabular figures · הקשר תקופה · delta אופציונלי מול אותם
 ימים בחודש הקודם. ל־"נרכש" ול־"שולם" בלבד נוסף ספארקליין קומפקטי של שמונה שבועות, ורק כשהערך
 הראשי קיים ולפחות שני שבועות מכילים פעילות אמיתית. "יתרת חשבוניות" מציגה את מספר החשבוניות הפתוחות
 בלבד — לעולם לא ספארקליין או מגמה מומצאים. אין טקסט הסבר ארוך בפס; במובייל כל BandStat הוא שורה

@@ -318,7 +318,7 @@ export function KpiCard({ title, value, sub, tone = 'idle', onClick }: {
       <div className="text-xs font-medium text-ink-muted">{title}</div>
       {/* .num already aligns to the logical end (text-align: end, unlayered → wins); the physical
           textAlign:right + dead text-start it replaces broke the RTL rule (audit round 2). */}
-      <div className={`text-xl font-bold mt-1 num ${toneCls}`} dir="ltr">{value}</div>
+      <div className={`kpi-value mt-1 num ${toneCls}`}>{value}</div>
       {sub && <div className="text-xs text-ink-muted mt-1">{sub}</div>}
     </>
   );
@@ -1266,7 +1266,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
               intentionally on the scroller (not the table), so arrow keys move the clipped area. */}
           {/* The cards-to-table switch stays at `lg`, matching the shell (readiness package 5):
               at `md` the desktop table rendered inside the phone frame. */}
-          <div className={mobile === 'cards' ? 'overflow-x-auto hidden lg:block' : 'overflow-x-auto'}
+          <div className={mobile === 'cards' ? 'table-scroll overflow-x-auto hidden lg:block' : 'table-scroll overflow-x-auto'}
             role="region" aria-label="טבלת נתונים — ניתן לגלול אופקית" tabIndex={0}>
             <table className="w-full">
               <thead className="bg-surface-sunken border-b border-line-soft">

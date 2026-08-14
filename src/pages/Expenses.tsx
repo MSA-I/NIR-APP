@@ -77,7 +77,7 @@ function StripStat({ title, value, context, icon: Icon }: {
         </span>
         <span className="text-xs font-medium text-ink-muted">{title}</span>
       </div>
-      <div className="mt-1.5 text-xl font-semibold num text-ink sm:text-2xl" dir="ltr">{value}</div>
+      <div className="mt-1.5 kpi-value num text-ink sm:text-2xl" dir="ltr">{value}</div>
       {context && <div className="mt-1 text-xs text-ink-muted">{context}</div>}
     </div>
   );
@@ -303,7 +303,7 @@ export default function Expenses() {
 
       {!data.invalidRange && <div className="print-area space-y-4">
         <div className="hidden print:block">
-          <h2 className="text-xl font-bold">ריכוז הוצאות {fmtDate(from)} – {fmtDate(to)}</h2>
+          <h2 className="text-xl font-semibold">ריכוז הוצאות {fmtDate(from)} – {fmtDate(to)}</h2>
         </div>
 
         <div className="grid grid-cols-1 border-y border-line-strong bg-surface sm:grid-cols-3">

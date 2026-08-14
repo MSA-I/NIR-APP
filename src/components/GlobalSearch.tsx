@@ -237,7 +237,7 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
         const Icon = g.meta.icon;
         return (
           <li key={g.entity} role="group" aria-label={g.meta.label}>
-            <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-[11px] font-semibold text-ink-muted">
+            <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-xs font-semibold text-ink-muted">
               <Icon size={13} /> {g.meta.label}
             </div>
             <ul role="presentation">

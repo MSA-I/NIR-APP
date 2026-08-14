@@ -20,7 +20,7 @@ export default function NotificationBell({ onShell = false }: { onShell?: boolea
       <Bell size={19} aria-hidden="true" />
       {!!unread && unread > 0 && (
         <span aria-hidden="true"
-          className={`absolute -end-1 -top-1 min-w-5 border px-1 py-0.5 text-center text-xs font-bold leading-none num ${
+          className={`absolute -end-1 -top-1 min-w-5 border px-1 py-0.5 text-center text-xs font-semibold leading-none num ${
             onShell ? 'border-shell bg-alert-solid text-white' : 'border-surface bg-alert-solid text-white'
           }`}>
           {unread > 99 ? '99+' : unread}

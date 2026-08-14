@@ -121,15 +121,19 @@
     "typographyMeta": {
       "headline": {
         "displayName": "כותרת דף",
-        "purpose": "כותרת אחת לדף; 1.25rem במובייל ו־1.5rem במסך רחב."
+        "purpose": "כותרת אחת לדף; 24px במובייל ו־26px במסך רחב, משקל 600."
       },
       "micro": {
         "displayName": "תווית מעטפת",
-        "purpose": "11px שמור לכותרות קבוצות בסרגל ולניווט התחתון בלבד."
+        "purpose": "12px הוא המינימום לכותרות קבוצה, ניווט, badges ותוויות גרף."
       },
       "num": {
         "displayName": "מספר פיננסי",
-        "purpose": "IBM Plex Mono עם tabular-nums לכל סכום, כמות, מסמך ו־KPI."
+        "purpose": "משפחת המוצר עם tabular-nums לכל סכום, כמות, מסמך ו־KPI; ללא Mono או LTR כפוי."
+      },
+      "tech-id": {
+        "displayName": "מזהה טכני",
+        "purpose": "Mono ו־LTR רק ל־UUID, hash, checksum, job/submission ID וקוד פנימי."
       }
     },
     "shadows": [
@@ -186,7 +190,7 @@
       "refersTo": "button-primary",
       "description": "פעולה ראשית בפטרול עם focus ו־press גלויים.",
       "html": "<button class=\"ds-btn-primary\">שמירת חשבונית</button>",
-      "css": ".ds-btn-primary { display:inline-flex;align-items:center;justify-content:center;gap:6px;background:oklch(43.08% .0701 211.43);color:#fff;padding:8px 14px;border:0;border-radius:8px;font:500 14px 'IBM Plex Sans Hebrew',sans-serif;cursor:pointer;transition:background-color 150ms,box-shadow 150ms,translate 150ms; } .ds-btn-primary:hover { background:oklch(38.06% .0625 212.45); } .ds-btn-primary:active { translate:0 1px; } .ds-btn-primary:focus-visible { outline:2px solid oklch(52.98% .0911 212.98);outline-offset:2px; }"
+      "css": ".ds-btn-primary { display:inline-flex;align-items:center;justify-content:center;gap:6px;background:oklch(43.08% .0701 211.43);color:#fff;padding:8px 14px;border:0;border-radius:8px;font:500 14px 'Noto Sans Hebrew',sans-serif;cursor:pointer;transition:background-color 150ms,box-shadow 150ms,translate 150ms; } .ds-btn-primary:hover { background:oklch(38.06% .0625 212.45); } .ds-btn-primary:active { translate:0 1px; } .ds-btn-primary:focus-visible { outline:2px solid oklch(52.98% .0911 212.98);outline-offset:2px; }"
     },
     {
       "name": "Secondary Button",
@@ -194,7 +198,7 @@
       "refersTo": "button-secondary",
       "description": "פעולת משנה על נייר עם גבול 3:1.",
       "html": "<button class=\"ds-btn-secondary\">ביטול</button>",
-      "css": ".ds-btn-secondary { display:inline-flex;align-items:center;gap:6px;background:oklch(99.2% .004 85);color:oklch(37% .022 205);padding:8px 14px;border:1px solid oklch(65% .016 78);border-radius:8px;font:500 14px 'IBM Plex Sans Hebrew',sans-serif;cursor:pointer;transition:background-color 150ms,translate 150ms; } .ds-btn-secondary:hover { background:oklch(95.2% .012 85); } .ds-btn-secondary:active { translate:0 1px; } .ds-btn-secondary:focus-visible { outline:2px solid oklch(52.98% .0911 212.98);outline-offset:2px; }"
+      "css": ".ds-btn-secondary { display:inline-flex;align-items:center;gap:6px;background:oklch(99.2% .004 85);color:oklch(37% .022 205);padding:8px 14px;border:1px solid oklch(65% .016 78);border-radius:8px;font:500 14px 'Noto Sans Hebrew',sans-serif;cursor:pointer;transition:background-color 150ms,translate 150ms; } .ds-btn-secondary:hover { background:oklch(95.2% .012 85); } .ds-btn-secondary:active { translate:0 1px; } .ds-btn-secondary:focus-visible { outline:2px solid oklch(52.98% .0911 212.98);outline-offset:2px; }"
     },
     {
       "name": "Danger Button",
@@ -202,7 +206,7 @@
       "refersTo": "button-danger",
       "description": "פעולה הרסנית מאחורי ConfirmDialog; hover כהה ונגיש.",
       "html": "<button class=\"ds-btn-danger\">מחיקת מסמך</button>",
-      "css": ".ds-btn-danger { display:inline-flex;align-items:center;gap:6px;background:oklch(51.4% .222 16.935);color:#fff;padding:8px 14px;border:0;border-radius:8px;font:500 14px 'IBM Plex Sans Hebrew',sans-serif;cursor:pointer;transition:background-color 150ms,translate 150ms; } .ds-btn-danger:hover { background:oklch(45.5% .188 13.697); } .ds-btn-danger:active { translate:0 1px; } .ds-btn-danger:focus-visible { outline:2px solid oklch(52.98% .0911 212.98);outline-offset:2px; }"
+      "css": ".ds-btn-danger { display:inline-flex;align-items:center;gap:6px;background:oklch(51.4% .222 16.935);color:#fff;padding:8px 14px;border:0;border-radius:8px;font:500 14px 'Noto Sans Hebrew',sans-serif;cursor:pointer;transition:background-color 150ms,translate 150ms; } .ds-btn-danger:hover { background:oklch(45.5% .188 13.697); } .ds-btn-danger:active { translate:0 1px; } .ds-btn-danger:focus-visible { outline:2px solid oklch(52.98% .0911 212.98);outline-offset:2px; }"
     },
     {
       "name": "Input",
@@ -210,7 +214,7 @@
       "refersTo": "input",
       "description": "שדה נייר עם גבול חזק וטבעת focus פטרול.",
       "html": "<div class=\"ds-field\" dir=\"rtl\"><label>שם ספק</label><input placeholder=\"לדוגמה: משק ירוק\"></div>",
-      "css": ".ds-field { font:14px 'IBM Plex Sans Hebrew',sans-serif;color:oklch(44% .022 205); } .ds-field label { display:block;margin-bottom:4px;font-weight:500; } .ds-field input { box-sizing:border-box;width:100%;background:oklch(99.2% .004 85);color:oklch(29% .022 205);border:1px solid oklch(65% .016 78);border-radius:8px;padding:8px 12px;font:inherit; } .ds-field input::placeholder { color:oklch(54% .019 205); } .ds-field input:focus { outline:2px solid oklch(52.98% .0911 212.98);outline-offset:1px;border-color:oklch(52.98% .0911 212.98); }"
+      "css": ".ds-field { font:14px 'Noto Sans Hebrew',sans-serif;color:oklch(44% .022 205); } .ds-field label { display:block;margin-bottom:4px;font-weight:500; } .ds-field input { box-sizing:border-box;width:100%;background:oklch(99.2% .004 85);color:oklch(29% .022 205);border:1px solid oklch(65% .016 78);border-radius:8px;padding:8px 12px;font:inherit; } .ds-field input::placeholder { color:oklch(54% .019 205); } .ds-field input:focus { outline:2px solid oklch(52.98% .0911 212.98);outline-offset:1px;border-color:oklch(52.98% .0911 212.98); }"
     },
     {
       "name": "Status Badges",
@@ -218,7 +222,7 @@
       "refersTo": "badge-*",
       "description": "ארבע משמעויות עסקיות וניטרלי; לעולם לא צבע בלבד.",
       "html": "<div class=\"ds-badges\" dir=\"rtl\"><span class=\"done\">שולמה</span><span class=\"await\">ממתינה</span><span class=\"alert\">חריגה</span><span class=\"info\">נשלחה</span><span class=\"idle\">טיוטה</span></div>",
-      "css": ".ds-badges { display:flex;gap:8px;font:500 12px 'IBM Plex Sans Hebrew',sans-serif; } .ds-badges span { border-radius:9999px;padding:2px 10px;white-space:nowrap; } .done { background:oklch(95% .052 163.051);color:oklch(43.2% .095 166.913); } .await { background:oklch(96.2% .059 95.617);color:oklch(47.3% .137 46.201); } .alert { background:oklch(94.1% .03 12.58);color:oklch(45.5% .188 13.697); } .info { background:oklch(95.1% .026 236.824);color:oklch(44.3% .11 240.79); } .idle { background:oklch(96.8% .007 247.896);color:oklch(27.9% .041 260.031); }"
+      "css": ".ds-badges { display:flex;gap:8px;font:500 12px 'Noto Sans Hebrew',sans-serif; } .ds-badges span { border-radius:9999px;padding:2px 10px;white-space:nowrap; } .done { background:oklch(95% .052 163.051);color:oklch(43.2% .095 166.913); } .await { background:oklch(96.2% .059 95.617);color:oklch(47.3% .137 46.201); } .alert { background:oklch(94.1% .03 12.58);color:oklch(45.5% .188 13.697); } .info { background:oklch(95.1% .026 236.824);color:oklch(44.3% .11 240.79); } .idle { background:oklch(96.8% .007 247.896);color:oklch(27.9% .041 260.031); }"
     },
     {
       "name": "Operational Card",
@@ -226,7 +230,7 @@
       "refersTo": "card",
       "description": "משטח נייר rounded-xl עם צל פטרול עדין.",
       "html": "<article class=\"ds-card\" dir=\"rtl\"><h3>חשבוניות פתוחות</h3><strong>₪12,480</strong><p>4 חשבוניות דורשות טיפול</p></article>",
-      "css": ".ds-card { width:240px;box-sizing:border-box;background:oklch(99.2% .004 85);border:1px solid oklch(88.5% .014 80);border-radius:12px;padding:16px;box-shadow:0 1px 2px rgb(28 37 38 / .04),0 8px 24px rgb(15 90 102 / .04);font-family:'IBM Plex Sans Hebrew',sans-serif;color:oklch(29% .022 205); } .ds-card h3 { margin:0;font-size:12px;color:oklch(50% .021 205); } .ds-card strong { display:block;margin-top:8px;font:700 20px 'IBM Plex Mono',monospace;direction:ltr;text-align:right;color:oklch(22% .025 205); } .ds-card p { margin:8px 0 0;font-size:12px;color:oklch(50% .021 205); }"
+      "css": ".ds-card { width:240px;box-sizing:border-box;background:oklch(99.2% .004 85);border:1px solid oklch(88.5% .014 80);border-radius:12px;padding:16px;box-shadow:0 1px 2px rgb(28 37 38 / .04),0 8px 24px rgb(15 90 102 / .04);font-family:'Noto Sans Hebrew',sans-serif;color:oklch(29% .022 205); } .ds-card h3 { margin:0;font-size:12px;color:oklch(50% .021 205); } .ds-card strong { display:block;margin-top:8px;font:600 26px 'Noto Sans Hebrew',sans-serif;font-variant-numeric:tabular-nums lining-nums;color:oklch(22% .025 205); } .ds-card p { margin:8px 0 0;font-size:12px;color:oklch(50% .021 205); }"
     },
     {
       "name": "Sidebar Nav Item",
@@ -234,7 +238,7 @@
       "refersTo": "navigation",
       "description": "מסגרת פטרול עם גלולת נייר פעילה; בדסקטופ ובמובייל כל קבוצות הניווט פתוחות תמיד, ללא קיפול או חשיפה לפי הקשר.",
       "html": "<nav class=\"ds-nav\" dir=\"rtl\"><a class=\"active\" href=\"#\">מרכז בקרה</a><a href=\"#\">הזמנות</a></nav>",
-      "css": ".ds-nav { width:220px;background:oklch(31.81% .0517 213.09);padding:12px;border-radius:12px;font:500 14px 'IBM Plex Sans Hebrew',sans-serif; } .ds-nav a { display:block;padding:8px 12px;margin-bottom:2px;border-radius:8px;color:oklch(88% .012 85);text-decoration:none;transition:background-color 150ms,color 150ms; } .ds-nav a:hover { background:rgb(255 252 242 / .1); } .ds-nav a.active { background:oklch(97% .009 85);color:oklch(31.81% .0517 213.09); } .ds-nav a:focus-visible { outline:2px solid oklch(52.98% .0911 212.98);outline-offset:2px; }"
+      "css": ".ds-nav { width:220px;background:oklch(31.81% .0517 213.09);padding:12px;border-radius:12px;font:500 14px 'Noto Sans Hebrew',sans-serif; } .ds-nav a { display:block;padding:8px 12px;margin-bottom:2px;border-radius:8px;color:oklch(88% .012 85);text-decoration:none;transition:background-color 150ms,color 150ms; } .ds-nav a:hover { background:rgb(255 252 242 / .1); } .ds-nav a.active { background:oklch(97% .009 85);color:oklch(31.81% .0517 213.09); } .ds-nav a:focus-visible { outline:2px solid oklch(52.98% .0911 212.98);outline-offset:2px; }"
     }
   ],
   "narrative": {
@@ -243,7 +247,7 @@
     "keyCharacteristics": [
       "מסגרת פטרול כהה סביב אזור עבודה מנייר חם",
       "פטרול לפעולה ולמבנה; done/await/alert/info למשמעות עסקית בלבד",
-      "RTL לוגי מלא ומספרים ב־IBM Plex Mono",
+      "RTL לוגי מלא ומספרים בפונט הראשי עם tabular figures",
       "צללים עדינים וצבועים; lift של פיקסל אחד רק לכרטיס לחיץ",
       "מדד ללא נתונים מציג — ולא 0"
     ],
@@ -260,7 +264,7 @@
       },
       {
         "name": "חוק הספרות המיושרות",
-        "body": "כל סכום, כמות ומספר מסמך משתמשים ב־class num עם LTR, tabular-nums ומונו.",
+        "body": "כל סכום, כמות ומספר מסמך משתמשים ב־class num עם tabular-nums בפונט הראשי; tech-id שמור למזהה מכונה אמיתי.",
         "section": "typography"
       },
       {

@@ -164,7 +164,7 @@ export function OrdersList() {
               {data.drafts.map((draft) => (
                 <div key={draft.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-3 sm:px-4">
                   <div className="min-w-0">
-                    <div className="font-medium text-ink-body num">טיוטה #{draft.number}</div>
+                    <div className="font-medium text-ink-body">טיוטה <span className="num">#{draft.number}</span></div>
                     <div className="text-xs text-ink-muted">עודכנה {fmtDateTime(draft.updated_at)} · <span className="num">{draft.items.length}</span> מוצרים · {fmtMoneyExact(draftTotal(draft))}</div>
                   </div>
                   <div className="ms-auto flex gap-2">
@@ -371,7 +371,7 @@ export function OrderDetail() {
     <div className="space-y-4">
       <RecordHeader className="no-print"
         breadcrumbs={<Breadcrumbs items={[{ label: 'הזמנות', to: '/orders' }, { label: `#${order.number}` }]} />}
-        title={<span className="num">הזמנה #{order.number}</span>}
+        title={<span>הזמנה <span className="num">#{order.number}</span></span>}
         status={<StatusBadge meta={PO_STATUS[order.status]} />}
         meta={<><span>{order.supplier.name}</span><span className="num font-semibold text-ink-body">{fmtMoneyExact(total)}</span><span>נוצרה {fmtDateTime(order.created_at)}</span>{order.sent_at && <span>נשלחה {fmtDateTime(order.sent_at)}</span>}</>}
         primaryAction={primaryAction}
@@ -426,7 +426,7 @@ export function OrderDetail() {
       {/* Printable order sheet */}
       <div className="card card-pad print-area">
         <div className="hidden print:block mb-4">
-          <h2 className="text-xl font-bold">{`הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`}</h2>
+          <h2 className="text-xl font-semibold">{`הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`}</h2>
           <div className="text-sm mt-1">ספק: {order.supplier.name} · תאריך: {fmtDate(order.created_at)} {order.expected_date && `· אספקה מבוקשת: ${fmtDate(order.expected_date)}`}</div>
         </div>
         <ul className="divide-y divide-line-soft lg:hidden print:hidden" aria-label="פריטי ההזמנה">
@@ -439,7 +439,7 @@ export function OrderDetail() {
               {order.status !== 'draft' && <div className="mt-2 text-xs text-ink-muted">התקבל: <span className={`num ${item.received_qty >= item.qty ? 'text-done-fg' : item.received_qty > 0 ? 'text-await-fg' : ''}`}>{item.received_qty}</span> מתוך <span className="num">{item.qty}</span></div>}
             </li>
           ))}
-          <li className="flex items-center justify-between pt-3 font-bold"><span>סה״כ להזמנה</span><span className="num">{fmtMoneyExact(total)}</span></li>
+          <li className="flex items-center justify-between pt-3 font-semibold"><span>סה״כ להזמנה</span><span className="num">{fmtMoneyExact(total)}</span></li>
         </ul>
         <div className="hidden overflow-x-auto lg:block print:block print:overflow-visible">
         <table className="w-full">
@@ -468,8 +468,8 @@ export function OrderDetail() {
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-line">
-              <th scope="row" className="td text-start font-bold" colSpan={4}>סה״כ להזמנה</th>
-              <td className="td num font-bold">{fmtMoneyExact(total)}</td>
+              <th scope="row" className="td text-start font-semibold" colSpan={4}>סה״כ להזמנה</th>
+              <td className="td num font-semibold">{fmtMoneyExact(total)}</td>
               {order.status !== 'draft' && <td className="no-print" />}
             </tr>
           </tfoot>

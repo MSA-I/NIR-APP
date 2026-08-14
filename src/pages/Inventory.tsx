@@ -135,7 +135,7 @@ export default function Inventory() {
           <span className="block num">{formatQuantity(row.expected_incoming_quantity, row.unit)}</span>
           {row.next_expected_incoming_date && <span className="block text-xs text-ink-muted">המועד הקרוב: {fmtDate(row.next_expected_incoming_date)}</span>}
           {!!row.incoming_without_date_quantity && row.incoming_without_date_quantity > 0 && (
-            <span className="block text-xs text-ink-muted num">מתוכם {fmtNum(row.incoming_without_date_quantity)} ללא תאריך</span>
+            <span className="block text-xs text-ink-muted">מתוכם <span className="num">{fmtNum(row.incoming_without_date_quantity)}</span> ללא תאריך</span>
           )}
         </span>
       ),

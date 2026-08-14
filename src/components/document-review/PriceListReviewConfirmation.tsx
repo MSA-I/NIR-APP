@@ -650,7 +650,7 @@ export function PriceListReviewConfirmation({
             <span className={receipt.idempotent ? 'badge-info' : 'badge-done'}>{receipt.idempotent ? 'בקשה חוזרת — ללא כפילות' : 'נקלטה הגשה חדשה'}</span>
           </div>
           <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-            <div><dt className="inline font-medium">מזהה הגשה: </dt><dd className="inline break-all num" dir="ltr">{receipt.submission_id}</dd></div>
+            <div><dt className="inline font-medium">מזהה הגשה: </dt><dd className="inline break-all tech-id" dir="ltr">{receipt.submission_id}</dd></div>
             <div><dt className="inline font-medium">גרסה: </dt><dd className="inline num">{receipt.revision}</dd></div>
             <div><dt className="inline font-medium">שורות שהתקבלו: </dt><dd className="inline num">{receipt.accepted_count}</dd></div>
             <div><dt className="inline font-medium">שורות שנדחו: </dt><dd className="inline num">{receipt.rejected_count}</dd></div>

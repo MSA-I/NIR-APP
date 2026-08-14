@@ -429,7 +429,7 @@ export default function InvoiceDetail() {
       {/* print-area on the money + details cards: shadows/borders drop in print so the sheet
           stays a clean invoice document (same convention as the Orders print sheet). */}
       <div className={`card grid overflow-hidden ${isProcurementManager ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-4'}`}>
-        <div className="p-4 print-area"><div className="text-xs text-ink-muted">סה״כ חשבונית</div><div className="text-lg font-bold num text-start">{fmtMoneyExact(inv.total_amount)}</div>
+        <div className="p-4 print-area"><div className="text-xs text-ink-muted">סה״כ חשבונית</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(inv.total_amount)}</div>
           <div className="text-xs text-ink-muted mt-0.5">לפני מע״מ {fmtMoneyExact(inv.amount_before_vat)} + מע״מ {fmtMoneyExact(inv.vat_amount)}</div></div>
         {!isProcurementManager && (
           <>
@@ -440,11 +440,11 @@ export default function InvoiceDetail() {
             {/* Tone follows the VALUE, like the balance tile below and like Suppliers.tsx:496-497.
                 done-green on a 0.00 read as "paid ✓" to anyone scanning the row — and nothing had
                 been paid. Zero is the absence of a claim, which is what `idle` means (DESIGN.md). */}
-            <div className="border-s border-line-soft p-4 print-area"><div className="text-xs text-ink-muted">שולם</div><div className={`text-lg font-bold num text-start ${data.balance?.paid_amount ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(data.balance?.paid_amount ?? null)}</div></div>
+            <div className="border-s border-line-soft p-4 print-area"><div className="text-xs text-ink-muted">שולם</div><div className={`kpi-value-compact num text-start ${data.balance?.paid_amount ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(data.balance?.paid_amount ?? null)}</div></div>
             {/* credited = already offset, a settled claim like "paid" — done, not the retired violet
                 (audit 2026-07-21) — but only once something actually was credited. */}
-            <div className="border-t border-line-soft p-4 print-area sm:border-s sm:border-t-0"><div className="text-xs text-ink-muted">זוכה</div><div className={`text-lg font-bold num text-start ${data.balance?.credited_amount ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(data.balance?.credited_amount ?? null)}</div></div>
-            <div className="border-s border-t border-line-soft p-4 print-area sm:border-t-0"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`text-lg font-bold num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
+            <div className="border-t border-line-soft p-4 print-area sm:border-s sm:border-t-0"><div className="text-xs text-ink-muted">זוכה</div><div className={`kpi-value-compact num text-start ${data.balance?.credited_amount ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(data.balance?.credited_amount ?? null)}</div></div>
+            <div className="border-s border-t border-line-soft p-4 print-area sm:border-t-0"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`kpi-value-compact num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
           </>
         )}
       </div>
@@ -528,7 +528,7 @@ export default function InvoiceDetail() {
                         <span className={`mt-1.5 size-2 rounded-full shrink-0 ${reason.severity === 'critical' || reason.severity === 'error' ? 'bg-alert-solid' : reason.severity === 'warning' ? 'bg-await-solid' : 'bg-info-solid'}`} aria-hidden="true" />
                         <div>
                           <div className="font-medium text-ink">
-                            {reason.line_number != null && <span className="num">שורה {reason.line_number}: </span>}
+                            {reason.line_number != null && <span>שורה <span className="num">{reason.line_number}</span>: </span>}
                             {THREE_WAY_REASON_LABELS[reason.code] ?? 'נמצא פער הדורש בדיקה.'}
                           </div>
                           {details && <div className="text-ink-muted num mt-0.5">{details}</div>}
