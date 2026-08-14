@@ -226,7 +226,7 @@ insert into private.scope_definer_enforcements (
   function_signature, body_hash, enforcement_kind, scope_proof
 )
 select 'recover_document_scan(uuid,jsonb,text)', md5(replace(proc.prosrc, e'\r', '')),
-       'rls-preread-single-unit',
+       'filtered_read',
        '0138 locks the source scan only through its auth_org document and canonical null-or-auth_scopes unit predicate before creating the successor.'
 from pg_catalog.pg_proc proc
 where proc.oid = 'public.recover_document_scan(uuid,jsonb,text)'::regprocedure
