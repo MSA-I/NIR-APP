@@ -6,6 +6,7 @@ export const PAYABLE_INVOICE_ROLE = 'payable' as const;
 
 export type ConsolidatedInvoiceStatus =
   | 'awaiting_anchor'
+  | 'needs_review'
   | 'reconciling'
   | 'matched'
   | 'warnings'
@@ -120,9 +121,32 @@ export interface ConsolidatedInvoiceRevision {
   created_by: string | null;
 }
 
+export interface ConsolidatedInvoiceReviewIntake {
+  intake_id: string;
+  status: 'uploading' | 'ready' | 'needs_review' | 'received' | 'blocked';
+  outcome: string | null;
+  reason_code: string | null;
+  interpretation_id: string | null;
+  completed_at: string | null;
+  received_at: string | null;
+}
+
+export interface ConsolidatedInvoiceReviewPage {
+  page_number: number;
+  document_id: string;
+  file_name: string;
+  is_primary: boolean;
+  job_id: string | null;
+  job_status: string | null;
+  interpretation_id: string | null;
+  document_type: string | null;
+}
+
 export interface ConsolidatedInvoiceWorkspace {
   case: ConsolidatedInvoiceCase;
   anchor: ConsolidatedInvoiceAnchor | null;
+  intake: ConsolidatedInvoiceReviewIntake | null;
+  pages: ConsolidatedInvoiceReviewPage[];
   sources: ConsolidatedInvoiceSource[];
   reconciliation: Record<ConsolidatedMatchChannel, ConsolidatedInvoiceMatchLine[]>;
   current_revision: ConsolidatedInvoiceRevision | null;
@@ -197,6 +221,7 @@ export function previousJerusalemMonth(now: Date = new Date()): PreviousMonth {
 export function consolidatedStatusLabel(status: ConsolidatedInvoiceStatus): string {
   return ({
     awaiting_anchor: 'ממתינה לחשבונית מרכזת',
+    needs_review: 'דורשת בדיקה',
     reconciling: 'מבצעת התאמה',
     matched: 'מותאם',
     warnings: 'נרשמה עם אזהרות',
@@ -207,7 +232,7 @@ export function consolidatedStatusLabel(status: ConsolidatedInvoiceStatus): stri
 export function consolidatedStatusTone(status: ConsolidatedInvoiceStatus): 'idle' | 'info' | 'alert' | 'await' | 'done' {
   if (status === 'matched') return 'done';
   if (status === 'blocked') return 'alert';
-  if (status === 'warnings') return 'await';
+  if (status === 'warnings' || status === 'needs_review') return 'await';
   if (status === 'reconciling') return 'info';
   return 'idle';
 }
@@ -234,6 +259,7 @@ export function matchChannelLabel(channel: ConsolidatedMatchChannel): string {
 export function consolidatedWarningLabel(code: string): string {
   return ({
     consolidated_supplier_unresolved: 'לא ניתן לזהות ספק קנוני באופן חד־משמעי.',
+    consolidated_supplier_mismatch: 'הספק שנמצא במסמך שונה מהספק שנבחר לתיק.',
     consolidated_target_month_invalid: 'תאריך החשבונית אינו שייך לחודש הקליטה הנעול.',
     consolidated_duplicate_anchor: 'כבר קיימת חשבונית מרכזת פעילה לספק, לישות ולחודש.',
     consolidated_core_fields_missing: 'חסרים מספר חשבונית, תאריך או סכומי ליבה.',
@@ -259,9 +285,14 @@ export async function listConsolidatedInvoiceCases(targetMonth: string): Promise
 }
 
 export async function getConsolidatedInvoiceWorkspace(caseId: string): Promise<ConsolidatedInvoiceWorkspace> {
-  return unwrap(await supabase.rpc('get_consolidated_invoice_workspace', {
+  const workspace = unwrap(await supabase.rpc('get_consolidated_invoice_workspace', {
     p_case_id: caseId,
   })) as ConsolidatedInvoiceWorkspace;
+  return {
+    ...workspace,
+    intake: workspace.intake ?? null,
+    pages: workspace.pages ?? [],
+  };
 }
 
 export async function openConsolidatedInvoiceIntake(input: {

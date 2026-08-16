@@ -25,6 +25,8 @@ cv2.setNumThreads(1)
 ScanMode = Literal["auto", "grayscale", "black_and_white"]
 Point = tuple[float, float]
 MIN_AUTOMATIC_PAGE_COVERAGE = 0.45
+MAX_AUTOMATIC_CROP_MARGIN = 0.20
+SMALL_TEXT_PRESERVE_PIXELS = 1_000_000
 MAX_METRIC_SAMPLE_PIXELS = 1_000_000
 MAX_SCAN_OUTPUT_PIXELS = 9_000_000
 MAX_NLM_DENOISE_PIXELS = 4_000_000
@@ -144,6 +146,7 @@ def detect_document_corners(image: np.ndarray) -> tuple[Point, Point, Point, Poi
 
     frame_area = resized.shape[0] * resized.shape[1]
     candidates: list[tuple[float, np.ndarray]] = []
+    flat_frame_fallback = False
     for contour in sorted(contours, key=cv2.contourArea, reverse=True)[:40]:
         perimeter = cv2.arcLength(contour, True)
         if perimeter <= 0:
@@ -162,6 +165,19 @@ def detect_document_corners(image: np.ndarray) -> tuple[Point, Point, Point, Poi
             # human corner editor than to present as a successful scan.
             if area_ratio < MIN_AUTOMATIC_PAGE_COVERAGE:
                 continue
+            margins = (
+                float(points[:, 0].min()) / resized.shape[1],
+                float(points[:, 1].min()) / resized.shape[0],
+                1.0 - float(points[:, 0].max()) / resized.shape[1],
+                1.0 - float(points[:, 1].max()) / resized.shape[0],
+            )
+            if max(margins) > MAX_AUTOMATIC_CROP_MARGIN:
+                # A flat supplier export has no outer paper edge, so the cleanest
+                # quadrilateral is often its internal table. Preserve the whole light
+                # canvas instead of deleting the supplier header and totals.
+                if float(np.median(gray)) >= 180.0:
+                    flat_frame_fallback = True
+                continue
             border_distance = min(
                 points[:, 0].min(),
                 points[:, 1].min(),
@@ -174,6 +190,8 @@ def detect_document_corners(image: np.ndarray) -> tuple[Point, Point, Point, Poi
             break
 
     if not candidates:
+        if flat_frame_fallback:
+            return ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
         raise ProcessingError(
             "document_not_detected",
             "Document boundaries could not be detected; manual corner selection is required",
@@ -351,11 +369,18 @@ def _enhance(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict[str, float]
     }
 
 
-def _select_mode(mode: ScanMode, metrics: dict[str, float]) -> Literal["grayscale", "black_and_white"]:
+def _select_mode(
+    mode: ScanMode,
+    metrics: dict[str, float],
+    *,
+    preserve_small_text: bool,
+) -> Literal["grayscale", "black_and_white"]:
     if mode == "grayscale":
         return "grayscale"
     if mode == "black_and_white":
         return "black_and_white"
+    if preserve_small_text:
+        return "grayscale"
     usable_ink = 0.015 <= metrics["ink_ratio"] <= 0.42
     crisp_enough = metrics["contrast"] >= 0.12 or metrics["sharpness"] >= 0.12
     strong_shadow = metrics["shadow"] >= 0.045
@@ -392,8 +417,20 @@ def scan_document(
     if deskewed is not gray:
         del gray
     enhanced, black_and_white, metrics = _enhance(deskewed)
-    output_mode = _select_mode(mode, metrics)
-    output = black_and_white if output_mode == "black_and_white" else enhanced
+    preserve_small_text = deskewed.shape[0] * deskewed.shape[1] <= SMALL_TEXT_PRESERVE_PIXELS
+    output_mode = _select_mode(
+        mode,
+        metrics,
+        preserve_small_text=preserve_small_text,
+    )
+    if output_mode == "black_and_white":
+        output = black_and_white
+    elif preserve_small_text:
+        # Contrast enhancement erased small Hebrew headers and VAT figures in the
+        # first-client corpus. Raw grayscale retains the source evidence.
+        output = deskewed
+    else:
+        output = enhanced
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(destination.name + ".tmp")
     try:

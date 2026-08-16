@@ -319,7 +319,13 @@ export default function ConsolidatedInvoices() {
       {caseId ? (
         workspace.loading && !workspace.data ? <SkeletonTable cols={6} />
           : workspace.error ? <ErrorNote message={workspace.error} />
-            : workspace.data ? <WorkspaceView workspace={workspace.data} canWrite={canWrite} refreshing={refreshing} onRefresh={() => void refreshWorkspace()} />
+            : workspace.data ? <WorkspaceView
+              workspace={workspace.data}
+              canWrite={canWrite}
+              refreshing={refreshing}
+              onRefresh={() => void refreshWorkspace()}
+              onReload={() => workspace.refetch()}
+            />
               : null
       ) : (
         <section aria-labelledby="consolidated-cases-title" className="space-y-3">
@@ -342,13 +348,16 @@ export default function ConsolidatedInvoices() {
   );
 }
 
-function WorkspaceView({ workspace, canWrite, refreshing, onRefresh }: {
+function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }: {
   workspace: ConsolidatedInvoiceWorkspace;
   canWrite: boolean;
   refreshing: boolean;
   onRefresh: () => void;
+  onReload: () => Promise<unknown>;
 }) {
   const toast = useToast();
+  const navigate = useNavigate();
+  const [retryingReview, setRetryingReview] = useState(false);
   const openDocument = async (documentId: string) => {
     try {
       const row = unwrap(await supabase.from('documents').select('storage_path')
@@ -361,6 +370,26 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh }: {
     }
   };
   const sourceRows: SourceRow[] = workspace.sources.map((source) => ({ ...source, id: `${source.source_type}:${source.source_id}` }));
+  const primaryPage = workspace.pages.find((page) => page.is_primary) ?? workspace.pages[0] ?? null;
+  const reviewReason = workspace.intake?.reason_code
+    ? consolidatedWarningLabel(workspace.intake.reason_code)
+    : 'המסמך דורש בדיקה לפני יצירת חוב.';
+  const retryReview = async () => {
+    if (!primaryPage?.job_id || retryingReview) return;
+    setRetryingReview(true);
+    try {
+      const response = await supabase.functions.invoke('interpret-document', {
+        body: { jobId: primaryPage.job_id },
+      });
+      if (response.error) throw response.error;
+      await onReload();
+      toast('המסמך נבדק מחדש מול כללי המרכזת המעודכנים.');
+    } catch (error) {
+      toast(toHebrewError(error), 'error');
+    } finally {
+      setRetryingReview(false);
+    }
+  };
   const interimTotal = workspace.sources
     .filter((source) => source.source_type === 'interim_invoice')
     .reduce((sum, source) => sum + (source.total_amount ?? 0), 0);
@@ -388,15 +417,61 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh }: {
           </div>
           <p className="mt-1 text-sm text-ink-soft">{fmtDate(workspace.case.target_month)} · גרסת התאמה <span className="num">{fmtNum(workspace.case.current_revision)}</span></p>
         </div>
-        {canWrite && (
+        {canWrite && workspace.anchor && (
           <button type="button" className="btn-secondary min-h-11" disabled={refreshing} onClick={onRefresh}>
             <RefreshCw size={16} aria-hidden="true" /> {refreshing ? 'מרענן…' : 'רענון התאמה'}
           </button>
         )}
       </div>
 
+      {workspace.case.status === 'needs_review' && (
+        <Note tone="await" role="status">
+          <p className="font-medium">המסמך נשמר, אך עדיין לא נוצר חוב.</p>
+          <p className="mt-1">{reviewReason}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {primaryPage?.job_id && canWrite && (
+              <button type="button" className="btn-primary min-h-11"
+                disabled={retryingReview} onClick={() => void retryReview()}>
+                <RefreshCw size={16} aria-hidden="true" />
+                {retryingReview ? 'בודק מחדש…' : 'בדיקה מחדש'}
+              </button>
+            )}
+            {primaryPage && (
+              <button type="button" className="btn-secondary min-h-11"
+                onClick={() => navigate(`/documents/${primaryPage.document_id}/review`)}>
+                פתיחת העמוד שדורש בדיקה
+              </button>
+            )}
+          </div>
+        </Note>
+      )}
       {workspace.case.status === 'blocked' && (
-        <Note tone="alert" role="alert">רישום החוב נעצר בגלל חסימת ליבה. יש לבדוק ספק, חודש, כפילות ושדות חשבונית חסרים.</Note>
+        <Note tone="alert" role="alert">
+          <p className="font-medium">רישום החוב נעצר בגלל סתירה עסקית.</p>
+          <p className="mt-1">{reviewReason}</p>
+        </Note>
+      )}
+      {workspace.pages.length > 0 && (
+        <section aria-labelledby="consolidated-pages-title" className="card card-pad space-y-3">
+          <h3 id="consolidated-pages-title" className="section-title">עמודי החבילה</h3>
+          <ul className="divide-y divide-line-soft">
+            {workspace.pages.map((page) => (
+              <li key={page.document_id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-medium">עמוד {fmtNum(page.page_number)} · {page.file_name}</p>
+                  <p className="mt-1 text-sm text-ink-soft">
+                    {page.is_primary ? 'עוגן החשבונית' : 'מסמך תומך'} ·
+                    {' '}{page.document_type ?? 'ממתין לזיהוי'} · {page.job_status ?? 'ממתין לעיבוד'}
+                  </p>
+                </div>
+                <button type="button" className="btn-secondary min-h-11"
+                  onClick={() => navigate(`/documents/${page.document_id}/review`)}>
+                  בדיקת העמוד
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       {workspace.warnings.length > 0 && (
         <Note tone="await" role="status">
