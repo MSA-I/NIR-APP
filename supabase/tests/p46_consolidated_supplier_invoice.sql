@@ -50,7 +50,7 @@ create function pg_temp.p46_interpretation_payload(
     'fields',jsonb_build_array(
       jsonb_build_object('key','invoice_number','value',p_number,'confidence',0.99,
         'evidence_block_ids',jsonb_build_array('block-1')),
-      jsonb_build_object('key','invoice_date','value',to_char(p_date,'YYYY-MM-DD'),'confidence',0.99,
+      jsonb_build_object('key','invoice_date','value',to_char(p_date,'DD.MM.YY'),'confidence',0.99,
         'evidence_block_ids',jsonb_build_array('block-1')),
       jsonb_build_object('key','subtotal','value',p_subtotal,'confidence',0.99,
         'evidence_block_ids',jsonb_build_array('block-2')),
@@ -134,11 +134,17 @@ select pg_temp.p46_assert(
   and not exists(select 1 from private.tenant_export_registry_violations()),
   'A1/A3/A5/A6 enterprise registries drifted');
 
--- Full blocked-replay and late-refiling fixtures would duplicate the received workflow below.
+-- Full review-retry, blocked-replay and late-refiling fixtures would duplicate the received workflow below.
 -- Pin their state-machine predicates and refiling trigger here; data behavior is covered by the
 -- shared reconciliation/source path exercised later in this suite.
 select pg_temp.p46_assert(
-  position('v_intake.status in (''received'',''blocked'')' in (
+  position('v_intake.status = ''needs_review''' in (
+    select prosrc from pg_proc
+    where oid='public.get_consolidated_invoice_processing_claim(uuid)'::regprocedure))>0
+  and position('v_intake.result->>''outcome''=''needs_review''' in (
+    select prosrc from pg_proc
+    where oid='public.get_consolidated_invoice_processing_claim(uuid)'::regprocedure))>0
+  and position('v_intake.status in (''received'',''blocked'')' in (
     select prosrc from pg_proc
     where oid='public.get_consolidated_invoice_processing_claim(uuid)'::regprocedure))>0
   and position('v_intake.result->>''outcome''=v_intake.status' in (
@@ -378,14 +384,15 @@ insert into public.document_interpretations(
   '13580000-0000-4000-8000-000000000001','13581000-0000-4000-8000-000000000001',
   :'p46_primary_document_id','13510000-0000-4000-8000-000000000001',
   'openai','fixture','p46-v1','1',pg_temp.p46_interpretation_payload(
-    '13540000-0000-4000-8000-000000000001',:'p46_invoice_date','P46-ANCHOR',0.5)),
+    '13540000-0000-4000-8000-000000000001',:'p46_invoice_date','P46-ANCHOR',1)),
 (
   '13582000-0000-4000-8000-000000000002','13500000-0000-4000-8000-000000000001',
   '13580000-0000-4000-8000-000000000002','13581000-0000-4000-8000-000000000002',
   :'p46_page2_document_id','13510000-0000-4000-8000-000000000001',
-  'openai','fixture','p46-v1','1',pg_temp.p46_interpretation_payload(
+  'openai','fixture','p46-v1','1',jsonb_set(pg_temp.p46_interpretation_payload(
     '13540000-0000-4000-8000-000000000001',(:'p46_invoice_date'::date+interval '1 month')::date,
-    'P46-WRONG-PAGE-2',0.5,999,179.82,1178.82)),
+    'P46-WRONG-PAGE-2',0.5,999,179.82,1178.82),
+    '{document_type}','"delivery_note"'::jsonb)),
 (
   '13582000-0000-4000-8000-000000000003','13500000-0000-4000-8000-000000000001',
   '13580000-0000-4000-8000-000000000003','13581000-0000-4000-8000-000000000003',
@@ -485,16 +492,12 @@ select pg_temp.p46_assert(
   'page 2 overrode authoritative header fields from primary page 1');
 
 select pg_temp.p46_assert(
-  (select count(*)=2 and array_agg(line.line_number order by line.line_number)=array[1,2]
+  (select count(*)=1 and array_agg(line.line_number order by line.line_number)=array[1]
      and bool_and(case line.line_number
        when 1 then line.raw_evidence @> jsonb_build_object(
          'source_page_number',1,
          'source_document_id',:'p46_primary_document_id'::uuid,
          'source_interpretation_id','13582000-0000-4000-8000-000000000001'::uuid)
-       when 2 then line.raw_evidence @> jsonb_build_object(
-         'source_page_number',2,
-         'source_document_id',:'p46_page2_document_id'::uuid,
-         'source_interpretation_id','13582000-0000-4000-8000-000000000002'::uuid)
        else false end)
      and sum(line.quantity)=1
    from public.invoice_lines line
@@ -505,8 +508,17 @@ select pg_temp.p46_assert(
     select 1 from public.invoice_lines line
     where line.org_id='13500000-0000-4000-8000-000000000001'
       and line.raw_evidence->>'source_interpretation_id'=
-        '13582000-0000-4000-8000-000000000003'),
-  'multi-page numbering/provenance mixed local numbers or a historical job generation');
+        '13582000-0000-4000-8000-000000000003')
+  and exists (
+    select 1 from public.consolidated_invoice_sources source
+    where source.org_id='13500000-0000-4000-8000-000000000001'
+      and source.case_id=:'p46_case_id'::uuid
+      and source.source_type='supporting_document'
+      and source.document_id=:'p46_page2_document_id'::uuid)
+  and (select entity_type<>'invoice' from public.documents
+       where org_id='13500000-0000-4000-8000-000000000001'
+         and id=:'p46_page2_document_id'::uuid),
+  'delivery-note page contaminated anchor lines or was filed as an invoice');
 
 select pg_temp.p46_assert(
   (select count(*)=3 and bool_and(job.status='completed')
@@ -529,7 +541,7 @@ select pg_temp.p46_assert(
   (select current_revision=1 and warning_count>0 and status='warnings'
    from public.consolidated_invoice_cases
    where org_id='13500000-0000-4000-8000-000000000001')
-  and (select count(*)=3 from public.consolidated_invoice_sources
+  and (select count(*)=4 from public.consolidated_invoice_sources
        where org_id='13500000-0000-4000-8000-000000000001')
   and (select payload#>>'{reconciliation,anchor_vs_interim,0,result}'='matched'
        and payload#>>'{reconciliation,anchor_vs_receipts,0,result}'='matched'
@@ -547,7 +559,8 @@ select pg_temp.p46_actor('13510000-0000-4000-8000-000000000002');
 set role authenticated;
 select pg_temp.p46_assert(
   jsonb_array_length(public.list_consolidated_invoice_cases(:'p46_target_month'::date))=1
-  and jsonb_array_length(public.get_consolidated_invoice_workspace(:'p46_case_id'::uuid)->'sources')=3,
+  and jsonb_array_length(public.get_consolidated_invoice_workspace(:'p46_case_id'::uuid)->'sources')=4
+  and jsonb_array_length(public.get_consolidated_invoice_workspace(:'p46_case_id'::uuid)->'pages')=2,
   'accountant could not read the received anchor workspace');
 reset role;
 select pg_temp.p46_actor(null);

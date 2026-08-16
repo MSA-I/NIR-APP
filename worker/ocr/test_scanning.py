@@ -96,6 +96,47 @@ class DocumentScanningTests(unittest.TestCase):
 
             self.assertEqual(context.exception.code, "document_not_detected")
 
+    def test_flat_low_resolution_invoice_preserves_header_and_full_frame(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "flat-invoice.jpg"
+            output = root / "scan.png"
+            canvas = np.full((817, 593, 3), 246, dtype=np.uint8)
+            cv2.putText(
+                canvas,
+                "SUPPLIER VAT 514389568",
+                (35, 70),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.65,
+                (20, 20, 20),
+                2,
+            )
+            cv2.putText(
+                canvas,
+                "INVOICE SI266001312",
+                (35, 120),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.65,
+                (20, 20, 20),
+                2,
+            )
+            cv2.rectangle(canvas, (12, 275), (580, 760), (25, 25, 25), 5)
+            for y in range(320, 730, 42):
+                cv2.line(canvas, (20, y), (572, y), (35, 35, 35), 3)
+            cv2.imwrite(str(source), canvas)
+
+            result = scan_document(source, output)
+
+            self.assertEqual(result.corners_source, "automatic")
+            self.assertEqual(
+                result.corners,
+                ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)),
+            )
+            self.assertEqual(result.output_mode, "grayscale")
+            self.assertEqual((result.width, result.height), (593, 817))
+            pixels = cv2.imread(str(output), cv2.IMREAD_GRAYSCALE)
+            self.assertLess(int(pixels[:150].min()), 80)
+
     def test_rejects_invalid_manual_corners(self) -> None:
         for corners in (
             [[0, 0], [1, 0], [1, 1]],

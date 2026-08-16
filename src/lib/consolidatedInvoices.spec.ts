@@ -28,5 +28,6 @@ describe('consolidated supplier invoice UI model', () => {
       'מרכזת מול חשבוניות ביניים', 'מרכזת מול קבלות שהושלמו', 'חשבוניות ביניים מול קבלות',
     ]);
     expect(consolidatedStatusLabel('blocked')).toBe('חסומה לרישום');
+    expect(consolidatedStatusLabel('needs_review')).toBe('דורשת בדיקה');
   });
 });
