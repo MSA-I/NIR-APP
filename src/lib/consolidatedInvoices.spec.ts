@@ -1,12 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { supabase } from './supabase';
 import {
   consolidatedStatusLabel,
+  getConsolidatedInvoiceWorkspace,
   matchChannelLabel,
   matchGroupLabel,
   previousJerusalemMonth,
 } from './consolidatedInvoices';
 
+vi.mock('./supabase', () => ({
+  supabase: { rpc: vi.fn() },
+}));
+
 describe('consolidated supplier invoice UI model', () => {
+  beforeEach(() => {
+    vi.mocked(supabase.rpc).mockReset();
+  });
+
   it('locks the intake to the previous Jerusalem calendar month at the year boundary', () => {
     expect(previousJerusalemMonth(new Date('2026-01-01T00:30:00.000Z'))).toEqual({
       value: '2025-12',
@@ -29,5 +39,24 @@ describe('consolidated supplier invoice UI model', () => {
     ]);
     expect(consolidatedStatusLabel('blocked')).toBe('חסומה לרישום');
     expect(consolidatedStatusLabel('needs_review')).toBe('דורשת בדיקה');
+  });
+
+  it('normalizes workspaces returned by the previous RPC shape', async () => {
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: {
+        case: { id: 'case-1' },
+        anchor: null,
+        sources: [],
+        reconciliation: {},
+        current_revision: null,
+        warnings: [],
+      },
+      error: null,
+    } as never);
+
+    const workspace = await getConsolidatedInvoiceWorkspace('case-1');
+
+    expect(workspace.intake).toBeNull();
+    expect(workspace.pages).toEqual([]);
   });
 });

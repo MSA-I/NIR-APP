@@ -285,9 +285,14 @@ export async function listConsolidatedInvoiceCases(targetMonth: string): Promise
 }
 
 export async function getConsolidatedInvoiceWorkspace(caseId: string): Promise<ConsolidatedInvoiceWorkspace> {
-  return unwrap(await supabase.rpc('get_consolidated_invoice_workspace', {
+  const workspace = unwrap(await supabase.rpc('get_consolidated_invoice_workspace', {
     p_case_id: caseId,
   })) as ConsolidatedInvoiceWorkspace;
+  return {
+    ...workspace,
+    intake: workspace.intake ?? null,
+    pages: workspace.pages ?? [],
+  };
 }
 
 export async function openConsolidatedInvoiceIntake(input: {

@@ -1238,7 +1238,7 @@ as $$
     and $1.financial_role = 'payable'
     and exists (
       select 1 from public.invoices twin
-      where twin.org_id=$1.org_id
+      where twin.org_id = $1.org_id
         and twin.supplier_id=$1.supplier_id
         and twin.id<>$1.id
         and twin.deleted_at is null
