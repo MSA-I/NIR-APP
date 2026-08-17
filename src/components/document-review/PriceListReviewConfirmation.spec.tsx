@@ -114,6 +114,10 @@ describe('אישור מחירון', () => {
     expect(screen.getByTestId('price-list-details-toggle')).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText(/אני מאשר שורה זו לקליטה/)).not.toBeInTheDocument();
     expect(screen.getByText('החודש קובע לאיזו גרסת מחירון ישויכו המחירים שנבחרו.')).toBeInTheDocument();
+    // No automatic intake ran on this document, so the screen must not describe one — and must not
+    // call a finished reading "בעיבוד" while it waits for a person.
+    expect(screen.getByText('ממתין לאישורך')).toBeInTheDocument();
+    expect(screen.queryByText(/המערכת קולטת אוטומטית שורות בטוחות/)).not.toBeInTheDocument();
   });
 
   it('פותח רק את השורות שדורשות טיפול, ומאפשר לראות את כולן', async () => {

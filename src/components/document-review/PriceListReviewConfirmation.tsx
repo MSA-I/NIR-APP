@@ -552,10 +552,26 @@ export function PriceListReviewConfirmation({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="price-list-review-title" className="section-title">תוצאות העלאת המחירון האחרונה</h2>
-          <p className="mt-1 text-sm text-ink-muted">המערכת קולטת אוטומטית שורות בטוחות ויוצרת מוצר חדש כשיש שם ומק״ט או ברקוד. רק חריגים נשארים לבדיקה.</p>
+          {/* Two different documents, two different true sentences. Describing the automatic intake
+              on a document where it never ran — the ordinary case, because the calibrated scope gate
+              of 0096 is not reachable from the product (DEBT-REGISTER §42) — told the reader the
+              system had done something it had not. */}
+          <p className="mt-1 text-sm text-ink-muted">
+            {autoDecision || receipt
+              ? 'המערכת קולטת אוטומטית שורות בטוחות ויוצרת מוצר חדש כשיש שם ומק״ט או ברקוד. רק חריגים נשארים לבדיקה.'
+              : showControls
+                ? 'המערכת קראה את המחירון והתאימה את השורות שניתן לזהות לפי מק״ט או ברקוד; שם מוצר לעולם אינו מפתח התאמה. הקליטה עצמה ממתינה לאישורך.'
+                : 'המערכת קוראת את המחירון ומתאימה את השורות. התוצאה תופיע כאן בסיום.'}
+          </p>
         </div>
-        <span className={receipt || autoDecision?.submission_id ? 'badge-done' : autoDecision ? 'badge-await' : 'badge-info'}>
-          {receipt || autoDecision?.submission_id ? 'המחירון עודכן' : autoDecision ? 'נדרשת בדיקה' : 'הקליטה בעיבוד'}
+        {/* „הקליטה בעיבוד” was shown on a document whose reading had finished and whose intake was
+            waiting for a person — a reassurance about work nobody was doing. */}
+        <span className={receipt || autoDecision?.submission_id
+          ? 'badge-done'
+          : autoDecision || showControls ? 'badge-await' : 'badge-info'}>
+          {receipt || autoDecision?.submission_id
+            ? 'המחירון עודכן'
+            : autoDecision ? 'נדרשת בדיקה' : showControls ? 'ממתין לאישורך' : 'הקליטה בעיבוד'}
         </span>
       </div>
 
