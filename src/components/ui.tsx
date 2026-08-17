@@ -261,13 +261,7 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
     ? Math.min(100, Math.max(0, Math.round((progress.done / progress.total) * 100)))
     : null;
   return (
-    // `min-w-0 overflow-hidden` below is containment, not decoration. The step row is a horizontal
-    // scroller, and a scroller whose content is wider than the viewport can still widen the
-    // DOCUMENT: the browser gate caught 33px of horizontal page overflow at 390px on the
-    // price-list review screen, which no assertion inside this component could see. Clipping at
-    // this boundary means the strip can never move the page, whatever its parent does, and the
-    // steps stay reachable because the `ol` inside keeps its own scrollbar.
-    <div className="min-w-0 overflow-hidden rounded-xl border border-line-soft bg-surface-sunken px-3 py-3">
+    <div className="rounded-xl border border-line-soft bg-surface-sunken px-3 py-3">
       <ol aria-label="שלבי התהליך" className="flex min-w-0 items-center overflow-x-auto pb-1">
         {steps.map((step, index) => {
           const isCurrent = index === currentIndex;
@@ -278,7 +272,15 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
             ? 'border-alert-line bg-alert-soft'
             : isCurrent ? 'border-info-line bg-info-soft' : isComplete ? 'border-done-line bg-done-soft' : 'border-line-strong bg-surface';
           return (
-            <li key={step.key} aria-current={isCurrent ? 'step' : undefined} className="flex min-w-fit flex-1 items-center">
+            // `relative` is load-bearing, not styling. The sr-only span below is
+            // `position: absolute`, so without a positioned ancestor inside the scroller its
+            // containing block sits ABOVE the `ol` -- and an absolutely positioned box is not
+            // clipped by a scroller that is merely its DOM ancestor. In RTL it then landed 33px past
+            // the left viewport edge and widened the whole document, which the browser gate caught
+            // at 390px as `horizontal overflow 33px`. It only showed once the LAST step became the
+            // current one (a review-stage document); with an earlier step current the same span sat
+            // 3px out and stayed inside the tolerance.
+            <li key={step.key} aria-current={isCurrent ? 'step' : undefined} className="relative flex min-w-fit flex-1 items-center">
               <span className={`flex items-center gap-1.5 text-xs font-medium ${text}`}>
                 <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${marker}`} aria-hidden="true">
                   {isStopped ? <AlertTriangle size={12} /> : isComplete ? <Check size={12} /> : index + 1}
