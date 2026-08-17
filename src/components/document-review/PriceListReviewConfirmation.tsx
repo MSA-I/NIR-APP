@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { reasonOr } from '../../lib/reason';
 import { CheckCircle2, Loader2, Plus } from 'lucide-react';
 import { Link } from 'react-router';
 import { toHebrewError } from '../../lib/errors';
 import { supabase } from '../../lib/supabase';
+import type { PriceListPredictedLine } from '../../lib/useDocumentProcessing';
 import { useAuth } from '../../auth/AuthContext';
 import { ConfirmDialog, Note } from '../ui';
 import { FILING_REASON_LABELS, type ReviewSnapshot } from './model';
@@ -75,6 +76,93 @@ function emptyDrafts(count: number): LineDraft[] {
   }));
 }
 
+const MATCHED_BY_LABELS: Record<string, string> = {
+  supplier_sku: 'מק״ט הספק',
+  sku: 'מק״ט',
+  barcode: 'ברקוד',
+};
+
+/**
+ * The newest shadow prediction per line, keyed by line index.
+ *
+ * A reprocess writes a second shadow run over the same lines and both stay readable. Taking
+ * whichever row arrived last would mix two generations of matching on one screen, so the newest
+ * (created_at, then id) wins per line — the ordering `apply_eligible_price_list_interpretation`
+ * itself uses when it picks the run to act on.
+ */
+function predictionsByLine(
+  rows: readonly PriceListPredictedLine[],
+): Map<number, PriceListPredictedLine> {
+  const byLine = new Map<number, PriceListPredictedLine>();
+  for (const row of rows) {
+    const previous = byLine.get(row.line_index);
+    if (!previous
+        || previous.created_at < row.created_at
+        || (previous.created_at === row.created_at && previous.id < row.id)) {
+      byLine.set(row.line_index, row);
+    }
+  }
+  return byLine;
+}
+
+/**
+ * Whether a prediction may fill a line in for the person, rather than only be shown to them.
+ *
+ * Three conditions, and all three are about money rather than convenience. The server's own verdict
+ * has to be `apply_existing_price` — the arm where a SKU or barcode identified exactly one product,
+ * never a name. The product has to still be in the catalogue this screen loaded, so an inactive or
+ * deleted product cannot ride in on a prefill nobody chose. And the price has to be positive finite
+ * money, because `submit-price-list` rejects anything else and a filled field that cannot be
+ * submitted is worse than an empty one.
+ *
+ * Everything that fails stays unapproved and visible. A prefill is a draft the human confirms: the
+ * server still takes the approved rows, still writes the audit reason, and still refuses a product
+ * the catalogue does not have.
+ */
+function prefillable(
+  prediction: PriceListPredictedLine | undefined,
+  catalogue: ReadonlySet<string>,
+): prediction is PriceListPredictedLine & { product_id: string; proposed_unit_price: number } {
+  return !!prediction
+    && prediction.predicted_action === 'apply_existing_price'
+    && !!prediction.product_id
+    && catalogue.has(prediction.product_id)
+    && typeof prediction.proposed_unit_price === 'number'
+    && Number.isFinite(prediction.proposed_unit_price)
+    && prediction.proposed_unit_price > 0;
+}
+
+function prefilledDrafts(
+  count: number,
+  byLine: Map<number, PriceListPredictedLine>,
+  catalogue: ReadonlySet<string>,
+): LineDraft[] {
+  return Array.from({ length: count }, (_, index) => {
+    const prediction = byLine.get(index);
+    if (!prefillable(prediction, catalogue)) {
+      return { approved: false, productId: '', priceText: '', available: true };
+    }
+    return {
+      approved: true,
+      productId: prediction.product_id,
+      priceText: String(prediction.proposed_unit_price),
+      available: true,
+    };
+  });
+}
+
+/**
+ * The month the prices land in, defaulting to the one we are in (OPEN-DECISIONS #150).
+ *
+ * A price list a supplier sends today prices today, so an empty required field was asking the
+ * reviewer to restate the obvious on every upload. It stays an ordinary editable input with its
+ * explanation beside it, because a list arriving in the last days of a month is sometimes next
+ * month's — the default has to be cheap to change, not impossible to notice.
+ */
+function currentMonth(now: Date): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
 function parseReceipt(value: unknown): SubmissionReceipt {
   if (!value || typeof value !== 'object') throw new Error('השרת לא החזיר קבלת הגשה תקינה.');
   const row = value as Record<string, unknown>;
@@ -138,6 +226,11 @@ export function PriceListReviewConfirmation({
   const lineItems = interpretation?.payload.line_items ?? [];
   const autoDecision = snapshot.priceListDecision;
   const autoLines = new Map(snapshot.priceListLines.map((line) => [line.line_index, line]));
+  // What the automation already worked out for every line, whether or not it was allowed to act.
+  const predictions = useMemo(
+    () => predictionsByLine(snapshot.priceListPredictions ?? []),
+    [snapshot.priceListPredictions],
+  );
   const ownsDocument = Boolean(
     snapshot.document
     && snapshot.document.uploaded_by === actorId
@@ -169,6 +262,12 @@ export function PriceListReviewConfirmation({
   const [revertOpen, setRevertOpen] = useState(false);
   const [revertBusy, setRevertBusy] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // Default on, and only ever seen when something actually needs a person: the point of the screen
+  // is that a fully-read list costs one button, not 338 decisions.
+  const [onlyUnmatched, setOnlyUnmatched] = useState(true);
+  // Prefill runs once per interpretation. Re-running it after somebody edited a line would silently
+  // undo their correction, which on a price is the one unacceptable outcome.
+  const prefilledFor = useRef<string | null>(null);
   const payloadMatchesCurrent = attemptedPayload?.documentId === snapshot.documentId
     && attemptedPayload.interpretationId === interpretation?.id;
   const canStart = ownsDocument
@@ -189,10 +288,37 @@ export function PriceListReviewConfirmation({
     setRefreshWarning(null);
     setRecoveryError(null);
     setRecoveryLoading(false);
-    setTargetMonth('');
+    setTargetMonth(currentMonth(new Date()));
     setReason('');
-    setDetailsOpen(canStart && lineItems.length > 0);
+    // Folded, deliberately. This used to open every line by default, which on a real 338-row price
+    // list met the reviewer with 338 empty product selects and made the automatic matching look
+    // like it had never run. The per-line form is still here, one click away, for the lines that
+    // need a person.
+    setDetailsOpen(false);
+    setOnlyUnmatched(true);
+    prefilledFor.current = null;
   }, [canStart, interpretation?.id, lineItems.length]);
+
+  // Prefill from the server's own matching, once the catalogue that validates it has arrived.
+  useEffect(() => {
+    // `products.length` is the real gate, not `catalogLoading`: that flag is false for the render
+    // before the catalogue fetch starts, and prefilling there validated every prediction against an
+    // empty catalogue, marked the interpretation done and left all 338 lines unticked.
+    if (!canStart || !interpretation || receipt || catalogLoading || catalogError) return;
+    if (!products.length || prefilledFor.current === interpretation.id) return;
+    prefilledFor.current = interpretation.id;
+    const catalogue = new Set(products.map(({ id }) => id));
+    setDrafts(prefilledDrafts(lineItems.length, predictions, catalogue));
+  }, [
+    canStart,
+    catalogError,
+    catalogLoading,
+    interpretation,
+    lineItems.length,
+    predictions,
+    products,
+    receipt,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -402,6 +528,17 @@ export function PriceListReviewConfirmation({
   const showControls = canStart;
   const selectedCount = drafts.filter((draft) => draft.approved).length;
   const returnPath = '/prices';
+  // Counted off the predictions rather than off the drafts: these two numbers state what the machine
+  // read, and they have to stay true after somebody unticks a line they want to check by hand.
+  const catalogue = new Set(products.map(({ id }) => id));
+  const readyIndexes = lineItems.flatMap((_, index) =>
+    prefillable(predictions.get(index), catalogue) ? [index] : []);
+  const unmatchedIndexes = lineItems.flatMap((_, index) =>
+    prefillable(predictions.get(index), catalogue) ? [] : [index]);
+  const predictionsMissing = showControls && lineItems.length > 0 && predictions.size === 0;
+  const visibleIndexes = showControls && onlyUnmatched && unmatchedIndexes.length > 0
+    ? unmatchedIndexes
+    : lineItems.map((_, index) => index);
   const detailsToggle = lineItems.length > 0 && (
     <button type="button" className="btn-secondary" data-testid="price-list-details-toggle"
       aria-expanded={detailsOpen} aria-controls="price-list-line-details"
@@ -474,7 +611,7 @@ export function PriceListReviewConfirmation({
         </div>
       )}
 
-      {!autoDecision && detailsToggle && (
+      {!autoDecision && !showControls && detailsToggle && (
         <div className="mt-4 flex justify-start">{detailsToggle}</div>
       )}
 
@@ -519,12 +656,89 @@ export function PriceListReviewConfirmation({
         <Note tone="alert" className="mt-4">אין מוצרים קיימים זמינים להתאמה, ולכן לא ניתן לאשר שורות.</Note>
       )}
 
+      {/* The whole decision, above the lines rather than below them: what was read, what is
+          missing, and one button. The per-line form is the exception path, not the route. */}
+      {showControls && lineItems.length > 0 && (
+        <div className="mt-4 border-t border-line pt-4" data-testid="price-list-intake-action">
+          {catalogLoading ? (
+            <p className="flex items-center gap-2 text-sm text-ink-muted" role="status">
+              <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" />
+              מתאים את השורות לקטלוג המוצרים…
+            </p>
+          ) : (
+            <p className="text-sm font-medium text-ink-body" role="status" data-testid="price-list-intake-summary">
+              <span className="num">{readyIndexes.length}</span> מתוך <span className="num">{lineItems.length}</span> שורות זוהו במלואן — מוצר קיים ומחיר
+              {unmatchedIndexes.length > 0 && (
+                <> · <span className="num">{unmatchedIndexes.length}</span> שורות דורשות טיפול</>
+              )}
+            </p>
+          )}
+          {selectedCount !== readyIndexes.length && !catalogLoading && (
+            <p className="mt-1 text-xs text-ink-muted" role="status">
+              נבחרו כרגע <span className="num">{selectedCount}</span> שורות לקליטה.
+            </p>
+          )}
+          {predictionsMissing && !catalogLoading && (
+            <Note tone="info" className="mt-3">
+              לא נמצאה התאמה אוטומטית שמורה למסמך הזה, ולכן אין מה למלא מראש. אפשר לאשר את השורות
+              ידנית תחת „פרטים נוספים”.
+            </Note>
+          )}
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label>
+              <span className="label">חודש יעד *</span>
+              <input type="month" className="input num" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} disabled={busy} />
+              <span className="mt-1 block text-xs text-ink-muted">החודש קובע לאיזו גרסת מחירון ישויכו המחירים שנבחרו.</span>
+            </label>
+            <label>
+              <span className="label">הערה ליומן הביקורת — רשות</span>
+              <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} />
+            </label>
+          </div>
+          {error && <Note tone="alert" role="alert" className="mt-3">{error}</Note>}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            {detailsToggle}
+            <button type="button" className="btn-primary" data-testid="price-list-intake-confirm"
+              disabled={busy || selectedCount === 0 || catalogLoading || !!catalogError || products.length === 0}
+              onClick={() => void confirmPriceList()}>
+              {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <CheckCircle2 size={17} aria-hidden="true" />}
+              {busy ? 'קולט את המחירון…' : <>קליטת <span className="num">{selectedCount}</span> המחירים שנבחרו</>}
+            </button>
+          </div>
+          {unmatchedIndexes.length > 0 && !catalogLoading && (
+            <Note tone="await" className="mt-3 flex-wrap">
+              <span className="min-w-0 flex-1">
+                <span className="num">{unmatchedIndexes.length}</span> שורות לא הותאמו לבד ולא ייקלטו בלחיצה הזאת — מק״ט או ברקוד חסר, לא חד־משמעי, או מחיר שלא נקרא.
+              </span>
+              <button type="button" className="btn-secondary" data-testid="price-list-show-unmatched"
+                onClick={() => { setOnlyUnmatched(true); setDetailsOpen(true); }}>
+                טיפול בשורות שנותרו
+              </button>
+            </Note>
+          )}
+        </div>
+      )}
+
       {lineItems.length === 0 && <p className="mt-4 text-sm text-ink-muted">לא זוהו שורות מחיר לאישור.</p>}
       {detailsOpen && lineItems.length > 0 && (
       <div id="price-list-line-details" className="mt-4 space-y-3">
-        {lineItems.map((item, index) => {
+        {showControls && unmatchedIndexes.length > 0 && (
+          <label className="flex min-h-11 items-center gap-3 text-sm text-ink-body">
+            <input type="checkbox" className="size-5" checked={onlyUnmatched}
+              data-testid="price-list-unmatched-filter"
+              onChange={(event) => setOnlyUnmatched(event.target.checked)} />
+            הצג רק את <span className="num">{unmatchedIndexes.length}</span> השורות שדורשות טיפול
+          </label>
+        )}
+        {visibleIndexes.map((index) => {
+          const item = lineItems[index];
           const draft = drafts[index] ?? emptyDrafts(1)[0];
           const autoLine = autoLines.get(index);
+          const prediction = predictions.get(index);
+          const matched = prefillable(prediction, catalogue);
+          const matchedProductName = matched
+            ? products.find((product) => product.id === prediction.product_id)?.name ?? null
+            : null;
           return (
             <article key={`${item.source_row ?? 'none'}-${index}`} className="rounded-lg border border-line bg-surface p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -554,6 +768,19 @@ export function PriceListReviewConfirmation({
                     <Note tone="await" className="mt-3">
                       {FILING_REASON_LABELS[autoLine.reason_code]
                         ?? 'השורה ממתינה לבדיקה ידנית.'}
+                    </Note>
+                  )}
+
+                  {/* What the machine matched, said in full: which product, by which key, at which
+                      price. The person is confirming a price, so the evidence for the prefill has
+                      to be on the same card as the checkbox — not implied by a ticked box. */}
+                  {prediction && (
+                    <Note tone={matched ? 'done' : 'await'} className="mt-3">
+                      {matched
+                        ? <>הותאם לפי {MATCHED_BY_LABELS[prediction.matched_by ?? ''] ?? 'מפתח שלא נרשם'} למוצר „{matchedProductName ?? '—'}”; המחיר שנקרא <span className="num">{prediction.proposed_unit_price}</span>{prediction.current_unit_price !== null && <> במקום <span className="num">{prediction.current_unit_price}</span></>}</>
+                        : prediction.reason_code && FILING_REASON_LABELS[prediction.reason_code]
+                          ? FILING_REASON_LABELS[prediction.reason_code]
+                          : 'המערכת לא התאימה את השורה לבד. ההכרעה כאן.'}
                     </Note>
                   )}
 
@@ -618,32 +845,6 @@ export function PriceListReviewConfirmation({
           );
         })}
       </div>
-      )}
-
-      {showControls && lineItems.length > 0 && (
-        <div className="mt-4 border-t border-line pt-4">
-          <p className="mb-3 text-sm font-medium text-ink-body" role="status">
-            <span className="num">{selectedCount}</span> מתוך <span className="num">{lineItems.length}</span> שורות נבחרו לקליטה
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label>
-              <span className="label">חודש יעד *</span>
-              <input type="month" className="input num" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} disabled={busy} />
-              <span className="mt-1 block text-xs text-ink-muted">החודש קובע לאיזו גרסת מחירון ישויכו המחירים שנבחרו.</span>
-            </label>
-            <label>
-              <span className="label">הערה ליומן הביקורת — רשות</span>
-              <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} />
-            </label>
-          </div>
-          {error && <Note tone="alert" role="alert" className="mt-3">{error}</Note>}
-          <div className="mt-3 flex justify-end">
-            <button type="button" className="btn-primary" disabled={busy || selectedCount === 0 || catalogLoading || !!catalogError || products.length === 0} onClick={() => void confirmPriceList()}>
-              {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <CheckCircle2 size={17} aria-hidden="true" />}
-              {busy ? 'קולט את המחירון…' : 'אישור וקליטת השורות שנבחרו'}
-            </button>
-          </div>
-        </div>
       )}
 
       {error && !showControls && <Note tone="alert" role="alert" className="mt-4">{error}</Note>}

@@ -14,6 +14,12 @@ export function DocumentStatusBadge({ status, ...attributes }: {
         {status.state === 'stuck' && <AlertTriangle size={13} className="shrink-0" aria-hidden="true" />}
         {status.label}
       </span>
+      {/* The page counter, wherever the badge is. The lifecycle strip that shows it lives on the
+          review screen only, so somebody watching an upload from the inbox or the upload centre saw
+          "בעיבוד · 4 דק׳" and had no way to tell a busy queue from a stalled read. */}
+      {status.progressLabel && (
+        <span className="num text-xs text-ink-muted" data-document-status-progress>· {status.progressLabel}</span>
+      )}
       {elapsed && (status.loading || status.state === 'stuck') && (
         <span className="num text-xs text-ink-muted" data-document-status-age>· {elapsed}</span>
       )}

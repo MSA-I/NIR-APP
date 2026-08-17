@@ -42,6 +42,9 @@ const OCR_DELIVERY_DOCUMENT_ID = '97000000-0000-4000-8000-000000000005';
 const OCR_CREDIT_DOCUMENT_ID = '97000000-0000-4000-8000-000000000003';
 const OCR_PAYMENT_DOCUMENT_ID = '97000000-0000-4000-8000-000000000002';
 const OCR_PRICE_LIST_DOCUMENT_ID = '97000000-0000-4000-8000-000000000007';
+// The 22-row price list that no automation was allowed to apply: the shape the confirmation screen
+// exists for, seeded with a shadow prediction covering 20 rows and leaving 2 for a person.
+const OCR_MANUAL_PRICE_LIST_DOCUMENT_ID = '97000000-0000-4000-8000-000000000008';
 // [documentId, internal stage, what a person reads]. The badge now follows the canonical document
 // status precedence rather than showing processing and filing as two competing claims. The raw
 // stage remains on `data-stage` for diagnostics; the Hebrew label says the single action-relevant
@@ -2123,6 +2126,91 @@ async function automaticPriceListAcceptance(browser) {
   }
 }
 
+/**
+ * The manual confirmation of a price list the automation read but was not allowed to apply.
+ *
+ * The screen this exercises used to open all 22 rows with an empty product select on each, and the
+ * only way forward was to fill them in one at a time — while the server had already matched twenty
+ * of them by SKU and recorded it. The scenario asserts the three things that fixed it: one primary
+ * button carrying the matched count, a folded per-line form, and the two unmatched rows reachable
+ * with their reasons. It also measures the mobile width, where the whole point is that a 338-row
+ * list must not become a 338-card scroll.
+ */
+async function manualPriceListConfirmation(browser) {
+  const context = await browser.newContext({
+    locale: 'he-IL', serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 1440, height: 1000 },
+  });
+  const page = await context.newPage();
+  captureConsole(page, 'ocr-price-list-manual');
+  try {
+    await login(page, 'owner');
+    await page.goto(`${baseURL}/documents/${OCR_MANUAL_PRICE_LIST_DOCUMENT_ID}/review`);
+    await settle(page);
+
+    const panel = page.locator('[data-testid="price-list-review-confirmation"]');
+    await panel.waitFor({ timeout: 25_000 });
+    const confirm = panel.locator('[data-testid="price-list-intake-confirm"]');
+    await confirm.waitFor({ timeout: 25_000 });
+    await page.locator('[data-testid="price-list-intake-summary"]').waitFor({ timeout: 25_000 });
+
+    assert.match(await panel.locator('[data-testid="price-list-intake-summary"]').innerText(),
+      /20 מתוך 22 שורות זוהו במלואן/,
+      'the confirmation screen did not report the twenty rows the server had already matched');
+    // Enabled with nothing touched: the prefill is what makes this a one-click intake. Waited for
+    // rather than read once, because the prefill lands only after the product catalogue arrives.
+    await page.waitForFunction(
+      () => {
+        const button = document.querySelector('[data-testid="price-list-intake-confirm"]');
+        return !!button && !button.disabled;
+      },
+      null,
+      { timeout: 25_000 },
+    ).catch(() => { throw new Error('the primary intake button never became clickable') });
+    assert.match(await confirm.innerText(), /קליטת\s*20\s*המחירים שנבחרו/,
+      'the primary button did not carry the matched row count');
+    const detailsToggle = panel.locator('[data-testid="price-list-details-toggle"]');
+    assert.equal(await detailsToggle.getAttribute('aria-expanded'), 'false',
+      'the per-line form was open by default again');
+    assert.equal(await panel.locator('#price-list-line-details article').count(), 0,
+      'per-line cards were rendered before anybody asked for them');
+
+    await auditAccessibility(page, 'ocr-price-list-manual/1440');
+    await page.screenshot({ path: path.join(outDir, 'ocr-price-list-manual-1440.png'), fullPage: true });
+    report.screenshots.push('ocr-price-list-manual-1440.png');
+
+    await panel.locator('[data-testid="price-list-show-unmatched"]').click();
+    assert.equal(await panel.locator('#price-list-line-details article').count(), 2,
+      'opening the exceptions did not show exactly the two unmatched rows');
+    const unmatchedBody = await panel.locator('#price-list-line-details').innerText();
+    assert.match(unmatchedBody, /לא נמצא מק״ט או ברקוד/,
+      'the unmatched row did not explain why the server left it alone');
+    assert.match(unmatchedBody, /לא נקרא מחיר יחידה/,
+      'the unreadable-price row did not explain why the server left it alone');
+
+    await panel.locator('[data-testid="price-list-unmatched-filter"]').click();
+    assert.equal(await panel.locator('#price-list-line-details article').count(), 22,
+      'clearing the filter did not reveal every row');
+    const matchedBody = await panel.locator('#price-list-line-details article').first().innerText();
+    assert.match(matchedBody, /הותאם לפי מק״ט/,
+      'a prefilled row did not show which key matched it');
+    await page.screenshot({ path: path.join(outDir, 'ocr-price-list-manual-expanded-1440.png'), fullPage: true });
+    report.screenshots.push('ocr-price-list-manual-expanded-1440.png');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(250);
+    await detailsToggle.click();
+    assert.equal(await panel.locator('#price-list-line-details article').count(), 0,
+      'the per-line form did not fold away again on mobile');
+    // auditAccessibility also fails on any horizontal overflow, which is the measurement that
+    // caught the sr-only label escaping this very screen at 390px earlier today.
+    await auditAccessibility(page, 'ocr-price-list-manual/390');
+    await page.screenshot({ path: path.join(outDir, 'ocr-price-list-manual-390.png'), fullPage: true });
+    report.screenshots.push('ocr-price-list-manual-390.png');
+  } finally {
+    await closeContext(context);
+  }
+}
+
 /* ===================== wave 9: the global-search type gate (0069) ===================== */
 
 // 'מאפ' matches two seeded suppliers ('מאפיית הלחם החם', 'מאפה זהב'), so an owner is guaranteed a
@@ -3248,6 +3336,7 @@ async function run(name, check) {
     await run('Admin password and Clipboard state', () => adminState(browser));
     await run('OCR documents, review, status and export', () => documentOcrAcceptance(browser));
     await run('automatic price list creates keyed products and leaves unsafe rows for review', () => automaticPriceListAcceptance(browser));
+    await run('a read price list is accepted in one click, per-line approval stays the exception', () => manualPriceListConfirmation(browser));
     await run('global search type gate: accountant receives only reachable types', () => searchTypeGate(browser));
     await run('navigation opens on the control centre and the archive is current alone', () => navigationOrderAndActiveState(browser));
     await run('documents speak human states and keep the numbers behind the disclosure', () => documentVocabulary(browser));
