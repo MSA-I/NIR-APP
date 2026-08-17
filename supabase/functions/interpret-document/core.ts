@@ -68,15 +68,35 @@ export const MAX_OUTPUT_TOKENS = 32_768;
 // Direct analogue of Anthropic's thinking:{type:"disabled"}. Raise to "minimal" only with a
 // matching MAX_OUTPUT_TOKENS increase -- reasoning tokens eat the same budget as the answer.
 export const REASONING_EFFORT = "none";
-// A live 10KB / 3-block price list exceeded 18s twice. Each attempt still gets materially more
-// than that observation, while the complete retry envelope remains below the database egress
-// lease. That invariant matters more than an individually generous timeout: offboarding waits on
-// the lease and must never treat a provider request that can still be running as expired.
-export const PROVIDER_TIMEOUT_MS = 45_000;
+// The per-attempt ceiling. 45s was derived from one observation of a 10KB / 3-block price list
+// exceeding 18s, and production then showed the ceiling was the thing being measured rather than
+// the work: document_interpretations.duration_ms for documents of 22-79 line items came back at
+// 33.9s, 38.4s, 41.7s, 43.2s, and twice at 45.0/45.1s -- rows sitting exactly on the wall. An
+// 8-page, 17KB supplier price list failed provider_timeout three separate times while a fourth
+// attempt of the same file squeaked through, which is what a budget equal to the workload looks
+// like from the outside.
+export const PROVIDER_TIMEOUT_MS = 90_000;
 export const PROVIDER_MAX_ATTEMPTS = 2;
 export const PROVIDER_RETRY_DELAY_MAX_MS = 5_000;
 export const PROVIDER_EGRESS_TTL_SECONDS = 120;
 export const PROVIDER_EGRESS_MARGIN_MS = 20_000;
+/**
+ * The ceiling that actually protects the fencing window, and the reason the per-attempt timeout
+ * could be raised at all.
+ *
+ * The old invariant multiplied the per-attempt timeout by the attempt count. That over-counts a
+ * timeout (which throws without retrying, see the `!timedOut` guard in the retry loop) and
+ * under-counts nothing, so it forced every attempt to be short enough that two of them fit.
+ * Bounding the WHOLE call instead is both safer and less restrictive: a slow-but-transient 5xx
+ * arriving at 89s followed by a full second attempt is exactly the case per-attempt arithmetic
+ * misses, and this budget catches it. Every attempt is clamped to whatever is left, so total
+ * provider wall time can never reach the lease no matter how the attempts fall.
+ *
+ * Offboarding waits on that lease and must never treat a request that can still be running as
+ * expired -- which is why this is derived from the TTL rather than written as its own number.
+ */
+export const PROVIDER_TOTAL_BUDGET_MS = PROVIDER_EGRESS_TTL_SECONDS * 1000 -
+  PROVIDER_EGRESS_MARGIN_MS;
 export const MAX_PROVIDER_PAYLOAD_BYTES = 384 * 1024;
 
 const MAX_PROVIDER_OUTPUT_BYTES = 256 * 1024;
@@ -811,6 +831,7 @@ export interface OpenAiProviderOptions {
   fetchImpl?: typeof fetch;
   sleep?: (milliseconds: number) => Promise<void>;
   timeoutMs?: number;
+  totalBudgetMs?: number;
   maxAttempts?: number;
   now?: () => number;
 }
@@ -1013,6 +1034,7 @@ export function createOpenAiProvider(
     ((milliseconds) =>
       new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
   const timeoutMs = options.timeoutMs ?? PROVIDER_TIMEOUT_MS;
+  const totalBudgetMs = options.totalBudgetMs ?? PROVIDER_TOTAL_BUDGET_MS;
   const maxAttempts = options.maxAttempts ?? PROVIDER_MAX_ATTEMPTS;
   const now = options.now ?? Date.now;
 
@@ -1046,9 +1068,22 @@ export function createOpenAiProvider(
       });
 
       let lastError: InterpretationError | null = null;
+      const startedAt = now();
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        // Clamp every attempt to whatever is left of the fenced budget, retry sleeps included --
+        // they are spent between iterations and this recomputes after them. A retry with no room
+        // left is not started at all: reporting the previous failure is honest, while issuing a
+        // request the egress lease can outlive is not.
+        const remainingMs = totalBudgetMs - (now() - startedAt);
+        if (remainingMs <= 0) {
+          throw lastError ??
+            new InterpretationError("provider_timeout", 504, true);
+        }
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        const timer = setTimeout(
+          () => controller.abort(),
+          Math.min(timeoutMs, remainingMs),
+        );
         let response: Response;
         try {
           response = await fetchImpl("https://api.openai.com/v1/responses", {

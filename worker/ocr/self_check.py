@@ -667,6 +667,53 @@ def _openai_page_concurrency_check(fixtures: Path) -> dict[str, Any]:
     return {"configured": 2, "peak": peak, "source_order": "passed", "ceiling": "passed"}
 
 
+def _openai_page_progress_check(fixtures: Path) -> dict[str, Any]:
+    """Progress counts finished pages, in completion order, and never blocks the transcription."""
+    pages = [PageImage(page, fixtures / "pixel.png", 16, 16) for page in range(1, 5)]
+    reports: list[tuple[int, int]] = []
+    adapter = OpenAiOcrAdapter(
+        "sk-self-check-000000000000",
+        qa_passes=1,
+        page_concurrency=2,
+        opener=_FakeOpener(_openai_envelope(["unused"])),
+        sleep=lambda _s: None,
+        progress=lambda done, total: reports.append((done, total)),
+    )
+    lock = threading.Lock()
+
+    def transcribe(page: PageImage, limits: ExtractionLimits) -> tuple[list[str], list[bool]]:
+        del limits
+        # Page 1 finishes last. A counter driven by the ordered result list would report "1 of 4"
+        # while three pages were already paid for and done.
+        if page.page == 1:
+            time.sleep(0.05)
+        with lock:
+            return [f"page {page.page}"], [True]
+
+    adapter._transcribe_with_consensus = transcribe  # type: ignore[method-assign]
+    payload = validate_extraction(adapter.extract(pages, DEFAULT_LIMITS), DEFAULT_LIMITS)
+    assert [block["page"] for block in payload["blocks"]] == [1, 2, 3, 4]
+    assert [done for done, _total in reports] == [1, 2, 3, 4], f"unordered_progress:{reports}"
+    assert {total for _done, total in reports} == {4}, f"unexpected_progress_total:{reports}"
+
+    # A reporter that throws is a broken status line, not a broken document.
+    exploding = OpenAiOcrAdapter(
+        "sk-self-check-000000000000",
+        qa_passes=1,
+        page_concurrency=1,
+        opener=_FakeOpener(_openai_envelope(["unused"])),
+        sleep=lambda _s: None,
+        progress=lambda _done, _total: (_ for _ in ()).throw(RuntimeError("progress sink down")),
+    )
+    exploding._transcribe_with_consensus = (  # type: ignore[method-assign]
+        lambda page, limits: ([f"page {page.page}"], [True])
+    )
+    survived = validate_extraction(exploding.extract(pages, DEFAULT_LIMITS), DEFAULT_LIMITS)
+    assert len(survived["blocks"]) == 4
+
+    return {"reports": len(reports), "completion_order": "passed", "sink_failure": "ignored"}
+
+
 def _openai_adapter_check(fixtures: Path) -> dict[str, Any]:
     page = PageImage(1, fixtures / "pixel.png", 16, 16)
     lines = ['ספק בדיקה בע"מ', "מוצר 1   ₪31.90", 'סה"כ לתשלום 31.90']
@@ -1215,6 +1262,7 @@ def main() -> int:
         openai_adapter = _openai_adapter_check(fixtures)
         openai_qa = _openai_qa_check(fixtures)
         openai_page_concurrency = _openai_page_concurrency_check(fixtures)
+        openai_page_progress = _openai_page_progress_check(fixtures)
         gateway = _gateway_e2e_check(scratch)
         evidence = _tesseract_evidence()
         print(
@@ -1232,6 +1280,7 @@ def main() -> int:
                     "openai_adapter": openai_adapter,
                     "openai_qa": openai_qa,
                     "openai_page_concurrency": openai_page_concurrency,
+                    "openai_page_progress": openai_page_progress,
                     "gateway_e2e": gateway,
                     "tesseract": evidence,
                 },

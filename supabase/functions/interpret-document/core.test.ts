@@ -18,6 +18,7 @@ import {
   PROVIDER_MAX_ATTEMPTS,
   PROVIDER_RETRY_DELAY_MAX_MS,
   PROVIDER_TIMEOUT_MS,
+  PROVIDER_TOTAL_BUDGET_MS,
   REASONING_EFFORT,
   REVIEW_FIELD_KEYS,
   REVIEW_LINE_ITEM_KEYS,
@@ -565,6 +566,33 @@ test("provider timeout fails closed without duplicating the request", async () =
   assert.equal(attempts, 1);
 });
 
+test("a retryable failure that already spent the budget is reported, not retried", async () => {
+  // The case per-attempt arithmetic could not see: a transient 5xx that is slow rather than fast.
+  // The first attempt is legitimately retryable, but there is no lease left to retry inside, so
+  // the honest outcome is the failure we already have -- not a second request the egress lease
+  // can outlive.
+  let clock = 0;
+  let attempts = 0;
+  const fetchImpl = (async () => {
+    attempts += 1;
+    clock += 120;
+    return jsonResponse({ error: "unavailable" }, 503);
+  }) as typeof fetch;
+  await assert.rejects(
+    createOpenAiProvider({
+      apiKey: "test-key",
+      fetchImpl,
+      timeoutMs: 90,
+      totalBudgetMs: 100,
+      maxAttempts: 2,
+      now: () => clock,
+      sleep: async () => {},
+    }).interpret(payload()),
+    (error) => errorCode(error) === "provider_unavailable",
+  );
+  assert.equal(attempts, 1);
+});
+
 test("429 honors Retry-After and never exceeds the configured attempt limit", async () => {
   let attempts = 0;
   const delays: number[] = [];
@@ -789,12 +817,24 @@ test("no value 0077 reads out of fields[] is left unnamed by the prompt", () => 
 });
 
 test("the complete provider retry envelope stays inside the database lease with margin", () => {
-  const worstCase = PROVIDER_TIMEOUT_MS * PROVIDER_MAX_ATTEMPTS +
-    PROVIDER_RETRY_DELAY_MAX_MS * (PROVIDER_MAX_ATTEMPTS - 1);
+  // This used to multiply the per-attempt timeout by the attempt count. That arithmetic is wrong
+  // in both directions: it over-counts a timeout, which throws without ever retrying, and it
+  // under-counts a slow transient 5xx arriving near the ceiling and then being followed by a full
+  // second attempt. Bounding the WHOLE call covers both, and the provider clamps each attempt to
+  // what is left of it -- so the envelope is this one number, whatever shape the attempts take.
   assert.ok(
-    worstCase <=
-      PROVIDER_EGRESS_TTL_SECONDS * 1000 - PROVIDER_EGRESS_MARGIN_MS,
-    `provider budget ${worstCase}ms exceeds its fenced lease`,
+    PROVIDER_TOTAL_BUDGET_MS + PROVIDER_EGRESS_MARGIN_MS <=
+      PROVIDER_EGRESS_TTL_SECONDS * 1000,
+    `provider budget ${PROVIDER_TOTAL_BUDGET_MS}ms exceeds its fenced lease`,
+  );
+  assert.ok(
+    PROVIDER_TIMEOUT_MS <= PROVIDER_TOTAL_BUDGET_MS,
+    `one attempt at ${PROVIDER_TIMEOUT_MS}ms already outlives the total budget`,
+  );
+  assert.ok(
+    PROVIDER_RETRY_DELAY_MAX_MS * (PROVIDER_MAX_ATTEMPTS - 1) <
+      PROVIDER_TOTAL_BUDGET_MS,
+    "retry sleeping alone consumes the entire budget",
   );
 });
 

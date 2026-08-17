@@ -196,17 +196,27 @@ class GatewayClient:
                 "gateway_invalid_response", "Download acknowledgement binding does not match"
             )
 
-    def heartbeat(self, job: dict[str, Any], lease_owner: str, lease_seconds: int) -> None:
-        data = self._post(
-            {
-                "action": "heartbeat",
-                "job_id": job["job_id"],
-                "lease_owner": lease_owner,
-                "download_lease_id": job["download_lease_id"],
-                "download_lease_token": job["download_lease_token"],
-                "lease_seconds": lease_seconds,
-            }
-        )
+    def heartbeat(
+        self,
+        job: dict[str, Any],
+        lease_owner: str,
+        lease_seconds: int,
+        progress: tuple[int, int] | None = None,
+    ) -> None:
+        body: dict[str, Any] = {
+            "action": "heartbeat",
+            "job_id": job["job_id"],
+            "lease_owner": lease_owner,
+            "download_lease_id": job["download_lease_id"],
+            "download_lease_token": job["download_lease_token"],
+            "lease_seconds": lease_seconds,
+        }
+        # Omitted rather than sent as null when there is nothing to report: the gateway treats an
+        # absent pair as "this worker does not report progress", which is what keeps the contract
+        # version from moving and lets an older worker keep heartbeating unchanged.
+        if progress is not None:
+            body["progress_done"], body["progress_total"] = progress
+        data = self._post(body)
         required = {
             "job_id", "processing_attempt_id", "egress_lease_id", "acknowledged_at",
             "job_lease_until", "egress_expires_at",

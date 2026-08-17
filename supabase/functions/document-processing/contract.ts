@@ -21,6 +21,15 @@ export type HeartbeatRequest = {
   download_lease_id: string;
   download_lease_token: string;
   lease_seconds: number;
+  /**
+   * Pages transcribed so far in this attempt, or null when the worker has nothing to report.
+   *
+   * Optional on the wire and additive on purpose: a worker built before this field exists keeps
+   * heartbeating exactly as it did, so the gateway contract version does not move and the pool
+   * does not have to be replaced in lockstep with the function.
+   */
+  progress_done: number | null;
+  progress_total: number | null;
 };
 
 export type AcknowledgeDownloadRequest = {
@@ -125,6 +134,32 @@ function leaseSeconds(value: unknown): number | null {
   return Number.isInteger(value) && Number(value) >= 30 && Number(value) <= 900
     ? Number(value)
     : null;
+}
+
+/**
+ * Either both counters or neither, and always inside the extraction page limit.
+ *
+ * `undefined` means "not reported" and is the healthy case for an older worker. Anything else that
+ * does not parse is rejected rather than dropped: a heartbeat carrying `done: 130, total: 27` is a
+ * worker whose page accounting is wrong, and silently discarding half of it would hide that while
+ * the screen went on showing a number.
+ */
+function pageProgress(
+  value: JsonObject,
+): { progress_done: number | null; progress_total: number | null } | null {
+  if (value.progress_done === undefined && value.progress_total === undefined) {
+    return { progress_done: null, progress_total: null };
+  }
+  const done = value.progress_done;
+  const total = value.progress_total;
+  if (
+    !Number.isInteger(done) || !Number.isInteger(total) ||
+    Number(total) < 1 || Number(total) > 100 ||
+    Number(done) < 0 || Number(done) > Number(total)
+  ) {
+    return null;
+  }
+  return { progress_done: Number(done), progress_total: Number(total) };
 }
 
 function downloadLeaseReceipt(value: JsonObject): {
@@ -305,6 +340,7 @@ export function validateActionRequest(value: unknown): ActionRequest {
   if (value.action === "heartbeat") {
     const seconds = leaseSeconds(value.lease_seconds);
     const receipt = downloadLeaseReceipt(value);
+    const progress = isRecord(value) ? pageProgress(value) : null;
     if (
       !hasExactKeys(value, [
         "action",
@@ -312,7 +348,8 @@ export function validateActionRequest(value: unknown): ActionRequest {
         "lease_owner",
         "download_lease_id",
         "download_lease_token",
-      ], ["lease_seconds"]) || !jobId || !leaseOwner || !seconds || !receipt
+      ], ["lease_seconds", "progress_done", "progress_total"]) || !jobId ||
+      !leaseOwner || !seconds || !receipt || !progress
     ) {
       throw new RequestValidationError("invalid_request");
     }
@@ -322,6 +359,7 @@ export function validateActionRequest(value: unknown): ActionRequest {
       lease_owner: leaseOwner,
       ...receipt,
       lease_seconds: seconds,
+      ...progress,
     };
   }
 

@@ -14,7 +14,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from threading import local
+from threading import Lock, local
 from typing import Any, Protocol
 
 from .errors import ProcessingError
@@ -261,6 +261,7 @@ class OpenAiOcrAdapter:
         page_concurrency: int | None = None,
         opener: Any | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        progress: Callable[[int, int], None] | None = None,
     ) -> None:
         self.api_key = api_key
         self.model = model or openai_model_name()
@@ -271,12 +272,42 @@ class OpenAiOcrAdapter:
         self.injected_opener = opener
         self.thread_local = local()
         self.sleep = sleep
+        self.progress = progress
+        self.progress_lock = Lock()
+        self.progress_done = 0
+
+    def _report_page_done(self, total: int) -> None:
+        """One more page finished. Counts COMPLETIONS, not positions.
+
+        `executor.map` yields results in source-page order, so reporting from the consumer loop
+        would make the counter lie whenever page 3 finishes before page 2 -- and understating
+        progress on a slow first page is exactly when somebody is watching it. The lock is here
+        because concurrent pages call this from different threads.
+        """
+        if self.progress is None:
+            return
+        with self.progress_lock:
+            self.progress_done += 1
+            done = min(self.progress_done, total)
+        try:
+            self.progress(done, total)
+        except Exception:
+            # A status line must never be able to fail a paid transcription.
+            pass
 
     def extract(self, pages: list[PageImage], limits: ExtractionLimits) -> dict[str, Any]:
         blocks: list[dict[str, Any]] = []
         page_text: list[str] = []
+        self.progress_done = 0
+        page_count = len(pages)
+
+        def transcribe(page: PageImage) -> tuple[list[str], list[bool]]:
+            result = self._transcribe_with_consensus(page, limits)
+            self._report_page_done(page_count)
+            return result
+
         if len(pages) < 2 or self.page_concurrency == 1:
-            transcriptions = [self._transcribe_with_consensus(page, limits) for page in pages]
+            transcriptions = [transcribe(page) for page in pages]
         else:
             # One scanned page needs two or three independent QA calls. Processing pages
             # serially made a valid 20-page packet exceed the worker's 300-second wall clock,
@@ -286,12 +317,7 @@ class OpenAiOcrAdapter:
                 max_workers=min(self.page_concurrency, len(pages)),
                 thread_name_prefix="ocr-page",
             ) as executor:
-                transcriptions = list(
-                    executor.map(
-                        lambda page: self._transcribe_with_consensus(page, limits),
-                        pages,
-                    )
-                )
+                transcriptions = list(executor.map(transcribe, pages))
         for page, (lines, reproduced) in zip(pages, transcriptions):
             total = len(lines)
             for index, text in enumerate(lines, start=1):
@@ -508,7 +534,11 @@ class OpenAiOcrAdapter:
         return result
 
 
-def create_ocr_adapter(name: str, api_key: str = "") -> OcrAdapter:
+def create_ocr_adapter(
+    name: str,
+    api_key: str = "",
+    progress: Callable[[int, int], None] | None = None,
+) -> OcrAdapter:
     normalized = name.strip().lower()
     if normalized == "disabled":
         return DisabledOcrAdapter()
@@ -519,5 +549,5 @@ def create_ocr_adapter(name: str, api_key: str = "") -> OcrAdapter:
             raise ProcessingError(
                 "worker_config_invalid", "OPENAI_API_KEY is required for the openai OCR adapter"
             )
-        return OpenAiOcrAdapter(api_key)
+        return OpenAiOcrAdapter(api_key, progress=progress)
     raise ProcessingError("ocr_adapter_invalid", "Configured OCR adapter is not supported")

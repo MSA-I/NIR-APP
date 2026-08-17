@@ -346,6 +346,16 @@ export interface DocumentProcessingJob {
   queue_age_seconds?: number | null;
   is_stuck?: boolean | null;
   stuck_reason?: string | null;
+  /**
+   * Pages transcribed so far in the attempt that is running right now, or null.
+   *
+   * Null is the common case and is not a defect: a job that is not leased, a worker that predates
+   * the telemetry, and a page that has not finished yet all report nothing. The screen must render
+   * that as an unknown, never as zero -- 0140's read model already refuses to return a stale
+   * attempt's counters, so a number here is always about work in flight.
+   */
+  progress_done?: number | null;
+  progress_total?: number | null;
 }
 
 export interface DocumentExtraction {

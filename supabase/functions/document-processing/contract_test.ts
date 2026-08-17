@@ -78,6 +78,55 @@ Deno.test("document processing request and extraction contracts", () => {
     lease_seconds: 300,
   });
   assert.equal(heartbeat.action, "heartbeat");
+  // Omitting the counters is the healthy case for a worker built before they existed, and it must
+  // stay valid without moving GATEWAY_CONTRACT_VERSION -- otherwise the running pool has to be
+  // replaced in lockstep with the function for a status line.
+  assert.equal(heartbeat.progress_done, null);
+  assert.equal(heartbeat.progress_total, null);
+
+  const reporting = validateActionRequest({
+    action: "heartbeat",
+    job_id: jobId,
+    lease_owner: "worker-1",
+    download_lease_id: downloadLeaseId,
+    download_lease_token: downloadLeaseToken,
+    lease_seconds: 300,
+    progress_done: 7,
+    progress_total: 27,
+  });
+  assert.equal(reporting.action === "heartbeat" && reporting.progress_done, 7);
+  assert.equal(reporting.action === "heartbeat" && reporting.progress_total, 27);
+
+  // Rejected, not repaired. Half a pair, a count past its own total and a total past the 100-page
+  // extraction limit all describe a worker whose page accounting is wrong; salvaging the readable
+  // half would put a number on the screen that no page ever produced.
+  for (
+    const broken of [
+      { progress_done: 7 },
+      { progress_total: 27 },
+      { progress_done: 28, progress_total: 27 },
+      { progress_done: 1, progress_total: 101 },
+      { progress_done: -1, progress_total: 27 },
+      { progress_done: 1.5, progress_total: 27 },
+    ]
+  ) {
+    assert.throws(
+      () =>
+        validateActionRequest({
+          action: "heartbeat",
+          job_id: jobId,
+          lease_owner: "worker-1",
+          download_lease_id: downloadLeaseId,
+          download_lease_token: downloadLeaseToken,
+          lease_seconds: 300,
+          ...broken,
+        }),
+      (error) =>
+        error instanceof RequestValidationError &&
+        error.code === "invalid_request",
+      `accepted a malformed progress pair: ${JSON.stringify(broken)}`,
+    );
+  }
 
   const complete = validateActionRequest({
     action: "complete",

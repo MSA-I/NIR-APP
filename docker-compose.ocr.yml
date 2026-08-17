@@ -2,8 +2,12 @@ name: supplyflow-ocr
 
 services:
   worker:
-    image: supplyflow-ocr-worker:2026-08-12-contract-v2
-    pull_policy: never
+    # A pinned literal tag plus `pull_policy: never` is how this file came to describe an image
+    # that was not the one running: the tag stayed at a build from five days earlier while the
+    # live pool had moved on, and nothing in the file could tell you so. The tag now follows
+    # whatever was last built, and the production pool is launched by `scripts/run-ocr-worker.ps1`,
+    # which tags with the git SHA and prints the settings back off the running container.
+    image: ${OCR_IMAGE:-supplyflow-ocr-worker:local}
     build:
       context: ./worker/ocr
       dockerfile: Dockerfile
