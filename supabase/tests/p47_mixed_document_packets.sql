@@ -1,6 +1,8 @@
 -- P47 -- Mixed PDFs are split only from a complete reviewed manifest into isolated child jobs.
 \set ON_ERROR_STOP on
 
+begin;
+
 create function pg_temp.p47_assert(p_condition boolean,p_message text)
 returns void language plpgsql as $$
 begin
@@ -389,3 +391,5 @@ select pg_temp.p47_assert(
   'A1/A3/A5/A6 scope or export registries drifted');
 
 select 'P47 mixed document packet suite passed' as result;
+
+rollback;

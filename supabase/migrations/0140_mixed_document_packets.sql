@@ -344,6 +344,7 @@ begin
     case when v_automatic then 'פיצול אוטומטי לפי מדיניות הארגון' end
   ) returning * into v_packet;
 
+  set constraints document_packet_segments_manifest_guard deferred;
   for v_segment in select value from jsonb_array_elements(v_manifest)
   loop
     insert into public.document_packet_segments(
@@ -356,6 +357,7 @@ begin
     );
   end loop;
   set constraints document_packet_segments_manifest_guard immediate;
+  set constraints document_packet_segments_manifest_guard deferred;
 
   return jsonb_build_object(
     'packet_id',v_packet.id,'status',v_packet.status,'manifest_hash',v_packet.manifest_hash,
@@ -402,6 +404,7 @@ begin
   end if;
   v_hash := private.document_packet_manifest_hash(p_segments);
 
+  set constraints document_packet_segments_manifest_guard deferred;
   delete from public.document_packet_segments
     where org_id=v_packet.org_id and packet_id=v_packet.id;
   for v_segment in select value from jsonb_array_elements(p_segments)
@@ -417,6 +420,7 @@ begin
     );
   end loop;
   set constraints document_packet_segments_manifest_guard immediate;
+  set constraints document_packet_segments_manifest_guard deferred;
   update public.document_packets set
     manifest_hash=v_hash,manifest_version=manifest_version+1,status='approved',
     automatic_eligible=false,approved_by=v_actor,approved_at=statement_timestamp(),
