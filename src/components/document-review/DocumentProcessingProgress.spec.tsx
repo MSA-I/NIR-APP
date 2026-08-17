@@ -90,6 +90,26 @@ describe('רצועת שלבי העיבוד', () => {
     expect(screen.getByText(/מספר העמודים טרם דווח/)).toBeTruthy();
   });
 
+  it('לא מציגה בר התקדמות לג׳וב תקוע', () => {
+    // Caught by the first screenshot of the real screen: the badge said "עיבוד תקוע" while the bar
+    // underneath it went on implying live progress on page 7 of 27. Two claims about one job, and
+    // the reassuring one was the false one.
+    render(<DocumentProcessingProgress
+      snapshot={snapshot({
+        status: 'leased',
+        attempt_count: 1,
+        progress_done: 7,
+        progress_total: 27,
+        is_stuck: true,
+        stuck_reason: 'lease_expired',
+      })}
+    />);
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(screen.queryByText('עמוד 7 מתוך 27')).toBeNull();
+    expect(currentStepLabel()).toContain('קריאת המסמך');
+    expect(screen.getByText('— השלב שנעצר', { exact: false })).toBeTruthy();
+  });
+
   it('מסמנת את שלב הפירוש כשנכשל אחרי שהחילוץ הצליח', () => {
     const withExtraction = snapshot(
       { status: 'failed', attempt_count: 1, last_error_code: 'provider_timeout' },

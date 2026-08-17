@@ -1,5 +1,5 @@
 import { LifecycleStrip, type LifecycleStep } from '../ui';
-import { documentStatusElapsedLabel } from '../../lib/documentStatus';
+import { documentStatusElapsedLabel, isDocumentProcessingStuck } from '../../lib/documentStatus';
 import type { DocumentProcessingSnapshot } from '../../lib/useDocumentProcessing';
 
 /**
@@ -57,17 +57,22 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
   // No job is not a step-zero state, it is the absence of the process this strip describes.
   if (!job) return null;
 
-  const failed = job.status === 'failed';
-  const current = failed ? stoppedStep(snapshot) : activeStep(job.status);
+  // Stuck is not "still working". The first screenshot of this strip had the badge saying
+  // "עיבוד תקוע" while the bar underneath it kept implying live progress on page 7 of 27 -- two
+  // claims about the same job on the same screen, and the reassuring one was the false one. A
+  // stuck job stops the same way a failed one does; only the wording differs, and that wording
+  // already lives in the badge and the note beside it.
+  const stopped = job.status === 'failed' || isDocumentProcessingStuck({ job });
+  const current = stopped ? stoppedStep(snapshot) : activeStep(job.status);
   if (!current) return null;
 
   const done = job.progress_done;
   const total = job.progress_total;
-  const hasProgress = current === 'reading' && !failed
+  const hasProgress = current === 'reading' && !stopped
     && typeof done === 'number' && typeof total === 'number' && total > 0;
 
   let detail: string | null = null;
-  if (failed) {
+  if (stopped) {
     detail = null;
   } else if (current === 'queued') {
     // Measured from the upload, which is what the person waiting is measuring too.
@@ -95,7 +100,7 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
     <LifecycleStrip
       steps={STEPS}
       current={current}
-      failed={failed}
+      failed={stopped}
       detail={detail}
       progress={hasProgress
         ? { done: done as number, total: total as number, label: `עמוד ${done} מתוך ${total}` }
