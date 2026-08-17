@@ -8,9 +8,11 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { http, HttpResponse } from 'msw';
 import { server } from '../test/msw/server';
-import { rest } from '../test/msw/handlers';
+import { rest, SUPABASE_URL } from '../test/msw/handlers';
 import { createAppQueryClient } from '../lib/query/client';
+import { DOCUMENT_PROCESSING_CHANGED_EVENT } from '../lib/useDocumentProcessing';
 
 /** Real supabase-js against the MSW base URL — the wire behaviour stays real. */
 vi.mock('../lib/supabase', async () => {
@@ -54,6 +56,24 @@ const renderCenter = () => render(
 );
 
 const entries = () => getUploadCenterSnapshot().entries;
+
+/** The read the surface actually performs: `useDocumentProcessing` calls this RPC, and only falls
+ *  back to the `document_processing_jobs` table on a database that predates it. */
+const jobsRpc = (rows: unknown[]) =>
+  http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_processing_statuses`, () => HttpResponse.json(rows));
+
+const queuedJob = (documentId: string) => ({
+  id: `job-${documentId}`, org_id: 'org-1', document_id: documentId, requested_by: 'owner-1',
+  status: 'queued', input_checksum: 'etag:1', contract_version: '1', priority: 0,
+  attempt_count: 0, lease_owner: null, lease_until: null,
+  processing_attempt_id: null, processing_attempt_started_at: null,
+  last_error_code: null, last_error_message: null,
+  created_at: new Date(Date.now() - 5_000).toISOString(),
+  updated_at: new Date(Date.now() - 5_000).toISOString(),
+  queue_age_seconds: 5, is_stuck: false, stuck_reason: null,
+});
+
+const uploadCenter = () => screen.getByRole('region', { name: 'מרכז ההעלאות' });
 
 beforeEach(() => {
   resetUploadCenterForTests();
@@ -318,6 +338,82 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
     expect(within(section).queryByRole('button', { name: /ניסיון חוזר|השלמת רישום|שליחה מחדש לעיבוד/ })).toBeNull();
   });
 
+  /**
+   * The row that says "do not upload this again" is the one row on this surface that could never
+   * learn it was wrong. `stored` means the object is durable and the registry row's fate is
+   * UNKNOWN — the response that would have said so was lost — and the poll beside it only ever
+   * asked about rows already marked `registered`. So the instruction stood for the rest of the
+   * session no matter what the server actually held.
+   *
+   * The protection is not weakened here, it is given a way to end: a processing job carries a
+   * foreign key to `documents`, so a job for this id is proof the registry row exists. That is the
+   * only evidence accepted. Silence from the server changes nothing.
+   */
+  it('holds the stored row until a job proves the registration landed, then shows the real state', async () => {
+    server.use(jobsRpc([]));
+    renderCenter();
+    await act(async () => {
+      await enqueueUploadCenterBatch([file('lost-response.pdf')], async (_item, ctx) => {
+        ctx.markStored('doc-9');
+        throw new Error('register_document response lost');
+      }, {
+        retry: true,
+        classifyFailure: () => ({
+          message: 'תשובת הרישום לא התקבלה.',
+          retryable: true,
+          storedSafely: true,
+          documentId: 'doc-9',
+        }),
+      }).catch(() => {});
+    });
+
+    // The server knows of no job for this document, so nothing is withdrawn.
+    expect(within(uploadCenter()).getByText('הועלה אך לא נרשם')).toBeInTheDocument();
+    expect(within(uploadCenter()).getByText(/אין להעלות אותו שוב/)).toBeInTheDocument();
+    expect(entries()[0].status).toBe('stored');
+
+    // Now it does. The lost response is settled by the server, not by a timeout or a guess.
+    server.use(jobsRpc([queuedJob('doc-9')]));
+    await act(async () => {
+      window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(within(uploadCenter()).getByText('ממתין לעיבוד')).toBeInTheDocument());
+    expect(entries()[0].status).toBe('registered');
+    expect(within(uploadCenter()).queryByText('הועלה אך לא נרשם')).toBeNull();
+    expect(within(uploadCenter()).queryByText(/אין להעלות אותו שוב/)).toBeNull();
+  });
+
+  /**
+   * "נרשם — העיבוד לא החל" is a claim about the server. A row with no document id is never polled,
+   * so nothing can ever supersede it: the transport error caught once at upload time was rendered
+   * as a live state for the rest of the session. With an id the claim stays — the case one test
+   * above ('shows the registered document (link included)…') is exactly that, and it still passes.
+   */
+  it('does not report a server state for a row it has no way to ask about', async () => {
+    renderCenter();
+    await act(async () => {
+      await enqueueUploadCenterBatch([file('no-id.pdf')], async (_item, ctx) => {
+        ctx.markRegistered();
+        throw new Error('enqueue_document_processing failed');
+      }, {
+        classifyFailure: () => ({
+          message: 'הקובץ נשמר ונרשם, אך תשובת התור לא התקבלה.',
+          retryable: false,
+          registered: true,
+        }),
+      }).catch(() => {});
+    });
+
+    const section = uploadCenter();
+    expect(entries()[0]).toMatchObject({ status: 'registered', documentId: null });
+    expect(within(section).queryByText('נרשם — העיבוד לא החל')).toBeNull();
+    // What is certainly true, plus the report of what went wrong — as a report, not as a status.
+    expect(within(section).getByText('נרשם')).toBeInTheDocument();
+    expect(within(section).getByText(/תשובת התור לא התקבלה/)).toBeInTheDocument();
+  });
+
   it('marks a mixed finished batch as partially completed', async () => {
     server.use(rest('document_processing_jobs', []));
     renderCenter();
@@ -333,5 +429,74 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
       expect(screen.getByText(/הושלמה חלקית/)).toBeInTheDocument();
     });
     expect(entries().map((entry) => entry.status)).toEqual(['registered', 'failed']);
+  });
+});
+
+/**
+ * The live region is the only surface here with no way of noticing on its own that a state ended.
+ * The visible offline note is re-evaluated against `navigator.onLine` on every render; this text
+ * just sits in the DOM until something overwrites it — so "אין חיבור לרשת. ההעלאות ממתינות" was
+ * still what a screen reader read back long after the network returned and the queue drained.
+ */
+describe('the announcement channel says what is true now', () => {
+  /** Offline, with the runner held open so the channel can be read while the transfer is running
+   *  rather than after an outcome announcement has already replaced everything. */
+  async function queueWhileOffline() {
+    const gate = deferred();
+    renderCenter();
+    let batch!: Promise<unknown>;
+    await act(async () => {
+      // No document id: nothing to poll, so this stays about the announcement alone.
+      batch = enqueueUploadCenterBatch([file('offline.pdf')], async (_item, ctx) => {
+        await gate.promise;
+        ctx.markRegistered();
+      });
+      await Promise.resolve();
+    });
+    const live = document.querySelector('[aria-live="polite"]')!;
+    await waitFor(() => expect(live.textContent).toContain('אין חיבור לרשת'));
+    return { batch, gate, live };
+  }
+
+  it('replaces the waiting-for-network sentence the moment the queue resumes', async () => {
+    const network = { online: false };
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => network.online });
+    try {
+      const { batch, gate, live } = await queueWhileOffline();
+
+      network.online = true;
+      await act(async () => { window.dispatchEvent(new Event('online')); });
+
+      // Read WHILE the upload runs. Left alone the region still said the queue was waiting for a
+      // network that had been back for however long the transfer took.
+      await waitFor(() => expect(live.textContent).toContain('החיבור חזר'));
+      expect(live.textContent).not.toContain('אין חיבור לרשת');
+
+      await act(async () => { gate.resolve(); await batch; });
+    } finally {
+      Reflect.deleteProperty(navigator, 'onLine');
+    }
+  });
+
+  it('empties the channel when the waiting file is canceled instead of resumed', async () => {
+    const network = { online: false };
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => network.online });
+    try {
+      const { batch, live } = await queueWhileOffline();
+
+      // The one path that never reaches an outcome announcement: canceled while waiting. The queue
+      // then drains with nothing left in it, and the last thing said was that it was still waiting.
+      cancelUploadCenterEntry(entries()[0].id);
+      network.online = true;
+      await act(async () => {
+        window.dispatchEvent(new Event('online'));
+        await batch;
+      });
+
+      expect(entries()[0].status).toBe('canceled');
+      expect(live.textContent).toBe('');
+    } finally {
+      Reflect.deleteProperty(navigator, 'onLine');
+    }
   });
 });

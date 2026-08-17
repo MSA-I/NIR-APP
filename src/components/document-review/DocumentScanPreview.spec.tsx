@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DocumentScanState } from '../../lib/useDocumentScanning';
 import { DocumentScanPreview } from './DocumentScanPreview';
 
@@ -142,6 +142,37 @@ describe('DocumentScanPreview', () => {
     expect(changed).toHaveBeenCalledOnce();
   });
 
+  /**
+   * `accepted` is where this card's job ends and never moves again. The note that used to render
+   * here said the reading was happening RIGHT NOW — so a document that had been read, interpreted
+   * and put in front of a reviewer still carried, at the bottom of the same screen, a sentence
+   * announcing that its extraction was in progress. Where the document actually is now belongs to
+   * the lifecycle strip in the workspace above, which reads it off the job the server reports.
+   */
+  it('makes no claim about a reading in progress once the scan has been accepted', async () => {
+    render(<DocumentScanPreview
+      state={{
+        ...base,
+        status: 'accepted',
+        accepted: true,
+        output_id: '44444444-4444-4444-8444-444444444444',
+        output_storage_path: 'org/document/job/scan.png',
+        output_mode: 'grayscale',
+      }}
+      originalStoragePath="org/inbox/source.jpg"
+      fileName="invoice.jpg"
+      readOnly={false}
+      onChanged={vi.fn()}
+    />);
+
+    // What the card still says: this scan was approved, and here is what was approved.
+    expect(await screen.findByAltText('סריקה משופרת של invoice.jpg')).toBeInTheDocument();
+    expect(screen.getByText('הסריקה אושרה')).toBeInTheDocument();
+    // What it no longer says.
+    expect(screen.queryByText(/קורא כעת/)).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('keeps scan approval and corner correction disabled in read-only mode', async () => {
     const ready: DocumentScanState = {
       ...base,
@@ -180,5 +211,121 @@ describe('DocumentScanPreview', () => {
     expect(await screen.findByRole('button', { name: /פינה שמאלית עליונה/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'יצירת סריקה מהפינות' })).toBeDisabled();
     expect(screen.getByText(/אי אפשר לשמור תיקון פינות/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * The scan card on a phone. Two full-width page images stand between the top of it and the one
+ * question it asks, so the answer travels with the reader — but only for the approval. The corner
+ * editor deliberately keeps its button inline: its two lower handles are dragged along the image's
+ * bottom edge, which is exactly the band a fixed bar would occupy.
+ */
+describe('בטלפון — אישור הסריקה מגיע לאגודל, עריכת הפינות לא', () => {
+  beforeEach(() => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: query.includes('max-width'),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    });
+  });
+  afterEach(() => { Reflect.deleteProperty(window, 'matchMedia'); });
+
+  const readyState: DocumentScanState = {
+    ...base,
+    status: 'ready',
+    output_id: '44444444-4444-4444-8444-444444444444',
+    output_storage_path: 'org/document/job/scan.png',
+    output_mode: 'black_and_white',
+    detected_corners: [[0.1, 0.2], [0.9, 0.2], [0.9, 0.8], [0.1, 0.8]],
+    corners_source: 'automatic',
+    rotation_degrees: 0,
+  };
+
+  it('מציג את "אישור והמשך לחילוץ" בסרגל מוצמד, פעם אחת, ומשאיר את תיקון הגבולות בזרימה', async () => {
+    render(<DocumentScanPreview
+      state={readyState}
+      originalStoragePath="org/inbox/source.jpg"
+      fileName="invoice.jpg"
+      readOnly={false}
+      onChanged={vi.fn().mockResolvedValue(true)}
+    />);
+
+    const cta = await screen.findByRole('button', { name: 'אישור והמשך לחילוץ' });
+    expect(screen.getAllByRole('button', { name: 'אישור והמשך לחילוץ' })).toHaveLength(1);
+    const sticky = screen.getByTestId('sticky-primary-action');
+    expect(sticky).toContainElement(cta);
+    // One control in the bar. The exception path stays beside the images it is about.
+    expect(sticky).not.toContainElement(screen.getByRole('button', { name: 'תיקון גבולות' }));
+  });
+
+  it('אינו מצמיד את "יצירת סריקה מהפינות" — שם היד עובדת על התמונה עצמה', async () => {
+    render(<DocumentScanPreview
+      state={{ ...readyState, status: 'needs_corners' }}
+      originalStoragePath="org/inbox/source.jpg"
+      fileName="invoice.jpg"
+      readOnly={false}
+      onChanged={vi.fn().mockResolvedValue(true)}
+    />);
+
+    expect(await screen.findByRole('button', { name: 'יצירת סריקה מהפינות' })).toBeInTheDocument();
+    expect(screen.queryByTestId('sticky-primary-action')).toBeNull();
+    expect(screen.queryByTestId('sticky-primary-action-clearance')).toBeNull();
+  });
+
+  it('סריקה שכבר אושרה אינה מקבלת פס פעולה ריק', async () => {
+    render(<DocumentScanPreview
+      state={{ ...readyState, status: 'accepted', accepted: true }}
+      originalStoragePath="org/inbox/source.jpg"
+      fileName="invoice.jpg"
+      readOnly={false}
+      onChanged={vi.fn().mockResolvedValue(true)}
+    />);
+
+    expect(await screen.findByAltText('המסמך המקורי invoice.jpg')).toBeInTheDocument();
+    expect(screen.queryByTestId('sticky-primary-action')).toBeNull();
+  });
+});
+
+describe('ארגון בקריאה בלבד אינו מקבל סרגל פעולה מת', () => {
+  beforeEach(() => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: query.includes('max-width'),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    });
+  });
+  afterEach(() => { Reflect.deleteProperty(window, 'matchMedia'); });
+
+  it('משאיר את הכפתור המנוטרל בזרימה, ליד המשפט שמסביר אותו', async () => {
+    render(<DocumentScanPreview
+      state={{
+        ...base,
+        status: 'ready',
+        output_id: '44444444-4444-4444-8444-444444444444',
+        output_storage_path: 'org/document/job/scan.png',
+        output_mode: 'black_and_white',
+      }}
+      originalStoragePath="org/inbox/source.jpg"
+      fileName="invoice.jpg"
+      readOnly
+      onChanged={vi.fn().mockResolvedValue(true)}
+    />);
+
+    expect(await screen.findByRole('button', { name: 'אישור והמשך לחילוץ' })).toBeDisabled();
+    // A strip across the bottom of the phone advertising a button that will never be pressable is
+    // worse than no strip: the explanation for why lives inline, and so does the button.
+    expect(screen.queryByTestId('sticky-primary-action')).toBeNull();
+    expect(screen.queryByTestId('sticky-primary-action-clearance')).toBeNull();
+    expect(screen.getByText(/אי אפשר לאשר אותה לחילוץ/)).toBeInTheDocument();
   });
 });

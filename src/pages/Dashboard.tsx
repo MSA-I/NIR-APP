@@ -111,6 +111,10 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
   );
 }
 
+// One folded operational subject. It no longer lives inside a card, so it carries no horizontal
+// padding of its own: the rows align with the page gutter and separate with a single hairline.
+// The negative-inline margin is only so the hover/active wash of the summary bleeds past the text
+// the way every other row in the system does.
 function OperationsDisclosure({ title, count, summary, empty, children }: {
   title: string;
   count: number;
@@ -120,7 +124,7 @@ function OperationsDisclosure({ title, count, summary, empty, children }: {
 }) {
   if (count === 0) {
     return (
-      <div className="flex min-h-11 items-center gap-2 border-t border-line-soft px-4 py-2.5 text-sm text-ink-muted first:border-t-0 sm:px-5">
+      <div className="flex min-h-11 items-center gap-2 border-t border-line-soft py-2.5 text-sm text-ink-muted first:border-t-0">
         <Check size={15} className="shrink-0 text-done-solid" aria-hidden="true" />
         <span>{empty}</span>
         <span className="badge-idle num ms-auto">0</span>
@@ -130,13 +134,13 @@ function OperationsDisclosure({ title, count, summary, empty, children }: {
 
   return (
     <details name="dashboard-operations" className="group border-t border-line-soft first:border-t-0">
-      <summary className="flex min-h-11 flex-wrap items-center gap-2 px-4 py-2.5 text-sm hover:bg-surface-sunken active:bg-action-wash/70 [&::-webkit-details-marker]:hidden sm:px-5">
+      <summary className="-mx-2 flex min-h-11 list-none flex-wrap items-center gap-2 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
         <span className="font-medium text-ink-body">{title}</span>
         <span className="badge-idle num">{count}</span>
         {summary && <span className="ms-auto min-w-0 text-end text-xs text-ink-muted">{summary}</span>}
         <ChevronDown size={16} className="shrink-0 text-ink-ghost transition-transform group-open:rotate-180" aria-hidden="true" />
       </summary>
-      <div className="border-t border-line-soft px-4 pb-4 pt-2 sm:px-5">{children}</div>
+      <div className="border-t border-line-soft pb-4 pt-2">{children}</div>
     </details>
   );
 }
@@ -158,7 +162,12 @@ type DeliveryOrder = {
 // detail: supplier · order number · status · expected products. purchase_orders has no
 // delivery-hour column, so no time is shown or invented. Orders with a NULL expected_date are
 // excluded from the counts and reported honestly as one quiet hint line instead.
-function DeliveriesCard({ today, tomorrow, noDateCount, className = '' }: {
+//
+// Not a card any more (density round, 18.08.2026). A heading, one hairline and the counts say
+// "this is a distinct subject" without a second border, a second radius and a second shadow around
+// a region whose whole body is one summary row. The two facts on screen — today's supplier count
+// and tomorrow's — and every row behind the fold are unchanged; only the box is gone.
+function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
   today: DeliveryOrder[];
   tomorrow: DeliveryOrder[];
   noDateCount: number;
@@ -179,14 +188,15 @@ function DeliveriesCard({ today, tomorrow, noDateCount, className = '' }: {
     </Link>
   ) : null;
 
-  // Measured zero for both days → the existing all-clear idiom (the card never hides).
-  if (total === 0) {
-    return (
-      <section className="card overflow-hidden">
-        <div className="px-4 py-4 sm:px-5">
-          <h2 className="section-title">אספקות היום ומחר</h2>
-        </div>
-        <div className="border-t border-line-soft px-4 py-2.5 sm:px-5">
+  return (
+    <section className={className} aria-labelledby="deliveries-title">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <h2 id="deliveries-title" className="section-title">אספקות היום ומחר</h2>
+        <p className="text-xs text-ink-muted">ספקים שאמורים לספק סחורה</p>
+      </div>
+      {/* Measured zero for both days → the existing all-clear idiom (the zone never hides). */}
+      {total === 0 ? (
+        <div className="mt-2 border-t border-line-soft pt-2">
           <div className="flex min-h-11 items-center gap-2 text-sm text-ink-muted">
             <Check size={15} className="shrink-0 text-done-solid" aria-hidden="true" />
             <span>אין אספקות מתוכננות להיום ומחר</span>
@@ -194,62 +204,54 @@ function DeliveriesCard({ today, tomorrow, noDateCount, className = '' }: {
           </div>
           {noDateHint}
         </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className={`card overflow-hidden ${className}`}>
-      <div className="px-4 py-4 sm:px-5">
-        <h2 className="section-title">אספקות היום ומחר</h2>
-        <p className="mt-0.5 text-xs text-ink-muted">ספקים שאמורים לספק סחורה; פירוט ההזמנות בלחיצה</p>
-      </div>
-      <details className="group border-t border-line-soft">
-        <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2 [&::-webkit-details-marker]:hidden sm:px-5">
-          {groups.map((group) => (
-            <span key={group.key} className="flex items-baseline gap-1.5">
-              <span className="text-xs font-medium text-ink-muted">{group.label}</span>
-              <span className={`kpi-value num ${group.suppliers > 0 ? 'text-ink' : 'text-ink-muted'}`}>{group.suppliers}</span>
-              <span className="text-xs text-ink-muted">{group.suppliers === 1 ? 'ספק' : 'ספקים'}</span>
-            </span>
-          ))}
-          <ChevronDown size={16} className="ms-auto shrink-0 text-ink-ghost transition-transform group-open:rotate-180" aria-hidden="true" />
-        </summary>
-        <div className="border-t border-line-soft px-4 pb-4 pt-2 sm:px-5">
-          {groups.map((group) => (
-            <div key={group.key} className="mt-3 first:mt-0">
-              <div className="mb-1 text-xs font-medium text-ink-muted">{group.label}</div>
-              {group.rows.length === 0 ? (
-                <div className="flex items-center gap-1.5 py-1 text-xs text-ink-muted">
-                  <Check size={13} className="shrink-0 text-done-solid" aria-hidden="true" /> {group.emptyLabel}
-                </div>
-              ) : (
-                <ul className="divide-y divide-line-soft">
-                  {group.rows.map((order) => (
-                    <li key={order.id}>
-                      <Link to={`/orders/${order.id}`} className="block min-h-11 rounded-lg px-2 py-2 text-sm hover:bg-surface-sunken active:bg-action-wash/70">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium text-ink-body">{order.supplier?.name ?? '—'}</span>
-                          <span className="num text-xs text-ink-muted">#{order.number}</span>
-                          <StatusBadge meta={PO_STATUS[order.status]} />
-                        </div>
-                        {order.items.length > 0 && (
-                          <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted">
-                            {order.items.map((item, index) => (
-                              <span key={index}>{item.product?.name ?? '—'} <span className="num">×{item.qty}</span></span>
-                            ))}
+      ) : (
+        <details className="group mt-2 border-t border-line-soft">
+          <summary className="-mx-2 flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-6 gap-y-1 rounded-lg px-2 py-3 hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2 [&::-webkit-details-marker]:hidden">
+            {groups.map((group) => (
+              <span key={group.key} className="flex items-baseline gap-1.5">
+                <span className="text-xs font-medium text-ink-muted">{group.label}</span>
+                <span className={`kpi-value-compact num ${group.suppliers > 0 ? 'text-ink' : 'text-ink-muted'}`}>{group.suppliers}</span>
+                <span className="text-xs text-ink-muted">{group.suppliers === 1 ? 'ספק' : 'ספקים'}</span>
+              </span>
+            ))}
+            <ChevronDown size={16} className="ms-auto shrink-0 text-ink-ghost transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          <div className="border-t border-line-soft pb-2 pt-2">
+            {groups.map((group) => (
+              <div key={group.key} className="mt-3 first:mt-0">
+                <div className="mb-1 text-xs font-medium text-ink-muted">{group.label}</div>
+                {group.rows.length === 0 ? (
+                  <div className="flex items-center gap-1.5 py-1 text-xs text-ink-muted">
+                    <Check size={13} className="shrink-0 text-done-solid" aria-hidden="true" /> {group.emptyLabel}
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-line-soft">
+                    {group.rows.map((order) => (
+                      <li key={order.id}>
+                        <Link to={`/orders/${order.id}`} className="-mx-2 block min-h-11 rounded-lg px-2 py-2 text-sm hover:bg-surface-sunken active:bg-action-wash/70">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium text-ink-body">{order.supplier?.name ?? '—'}</span>
+                            <span className="num text-xs text-ink-muted">#{order.number}</span>
+                            <StatusBadge meta={PO_STATUS[order.status]} />
                           </div>
-                        )}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ))}
-          {noDateHint && <div className="mt-3 border-t border-line-soft pt-2">{noDateHint}</div>}
-        </div>
-      </details>
+                          {order.items.length > 0 && (
+                            <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted">
+                              {order.items.map((item, index) => (
+                                <span key={index}>{item.product?.name ?? '—'} <span className="num">×{item.qty}</span></span>
+                              ))}
+                            </div>
+                          )}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+            {noDateHint && <div className="mt-3 border-t border-line-soft pt-2">{noDateHint}</div>}
+          </div>
+        </details>
+      )}
     </section>
   );
 }
@@ -277,10 +279,12 @@ function DashboardSkeleton() {
           attention, deliveries on a phone; attention, deliveries, money on desktop. */}
       <div className="mt-5 flex flex-col gap-5">
 
-      {/* deliveries card (אספקות היום ומחר): title + the two-count summary row */}
-      <div className="card order-3 overflow-hidden lg:order-2">
-        <div className="px-4 py-4 sm:px-5"><Skeleton className="h-5 w-40" /></div>
-        <div className="flex min-h-11 items-center gap-6 border-t border-line-soft px-4 py-3 sm:px-5">
+      {/* deliveries zone (אספקות היום ומחר): heading + the two-count summary row. No card —
+          the settled zone has none either, and a skeleton that promises a box the data does not
+          bring is the jump this component exists to prevent. */}
+      <div className="order-3 lg:order-2">
+        <Skeleton className="h-5 w-40" />
+        <div className="mt-2 flex min-h-11 items-center gap-6 border-t border-line-soft py-3">
           <Skeleton className="h-6 w-24" />
           <Skeleton className="h-6 w-24" />
           <Skeleton className="ms-auto h-4 w-4" />
@@ -320,33 +324,37 @@ function DashboardSkeleton() {
         ))}
       </div>
 
-      <div className="card order-4 overflow-hidden">
-        <div className="px-4 py-4 sm:px-5"><Skeleton className="h-5 w-24" /></div>
-        <div className="grid grid-cols-1 border-t border-line-soft lg:grid-cols-12">
-          <div className="p-4 lg:col-span-7 lg:border-e lg:border-line-soft sm:p-5">
+      {/* trends board: heading, one rule, three chart panels on the page itself */}
+      <div className="order-4">
+        <Skeleton className="h-5 w-24" />
+        <div className="mt-2 grid grid-cols-1 border-t border-line-soft lg:grid-cols-12">
+          <div className="py-4 lg:col-span-7 lg:border-e lg:border-line-soft lg:pe-5">
             <Skeleton className="h-4 w-36" />
             <Skeleton className="mt-3 h-48 w-full rounded-lg" />
           </div>
-          <div className="border-t border-line-soft p-4 lg:col-span-5 lg:border-t-0 sm:p-5">
+          <div className="border-t border-line-soft py-4 lg:col-span-5 lg:border-t-0 lg:ps-5">
             <Skeleton className="h-4 w-32" />
             <Skeleton className="mt-3 h-48 w-full rounded-lg" />
           </div>
-          <div className="border-t border-line-soft p-4 lg:col-span-12 sm:p-5">
+          <div className="border-t border-line-soft py-4 lg:col-span-12">
             <Skeleton className="h-4 w-44" />
             <Skeleton className="mt-3 h-48 w-full rounded-lg" />
           </div>
         </div>
       </div>
 
-      <div className="card order-5 overflow-hidden">
-        <div className="px-4 py-4 sm:px-5"><Skeleton className="h-5 w-44" /></div>
-        {Array.from({ length: 4 }, (_, i) => (
-          <div key={i} className="flex min-h-11 items-center gap-3 border-t border-line-soft px-4 sm:px-5">
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="h-6 w-8 rounded-full" />
-            <Skeleton className="ms-auto h-3 w-28" />
-          </div>
-        ))}
+      {/* operational snapshot: heading, one rule, four folded rows */}
+      <div className="order-5">
+        <Skeleton className="h-5 w-44" />
+        <div className="mt-2 border-t border-line-soft">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="flex min-h-11 items-center gap-3 border-t border-line-soft first:border-t-0">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-6 w-8 rounded-full" />
+              <Skeleton className="ms-auto h-3 w-28" />
+            </div>
+          ))}
+        </div>
       </div>
       </div>
     </div>
@@ -608,12 +616,15 @@ export default function Dashboard() {
   const categoriesAria = data ? `הוצאות לפי קטגוריה: ${categoryTotal > 0
     ? data.categories.map((category) => `${category.name} ${fmtMoneyExact(category.total)}, ${Math.round((category.total / categoryTotal) * 100)} אחוז`).join(', ')
     : categoryEmptyMessage}` : '';
-  const actionKinds = data?.attention.filter((item) => item.count != null && item.count > 0 && (item.tone === 'alert' || item.tone === 'await')).length ?? 0;
 
   return (
     <div className="dashboard-depth space-y-5">
+      {/* No `meta` line. It said "יש היום N סוגי טיפול שדורשים תשומת לב" (or "אין משימות דחופות
+          כרגע") roughly 40px above an AttentionZone whose own header says "דורש טיפול היום · N
+          סוגי טיפול" and whose own empty state says "אין משימות דחופות כרגע" — the same count and
+          the same sentence, twice, in one glance. The one that survives is the one attached to the
+          rows it counts. Nothing is lost: both branches are still rendered, by AttentionZone. */}
       <PageHeader title="מרכז הבקרה"
-        meta={actionKinds > 0 ? `יש היום ${actionKinds} סוגי טיפול שדורשים תשומת לב` : 'אין משימות דחופות כרגע'}
         actions={<div className="flex items-center gap-2 text-xs text-ink-muted">
           <span aria-live="polite" aria-atomic="true">
             {data?.fetchedAt && (
@@ -646,7 +657,7 @@ export default function Dashboard() {
           <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול"
             className="[--dash-step-mobile:1] [--dash-step:0]" />
 
-          <DeliveriesCard today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount}
+          <DeliveriesZone today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount}
             className="[--dash-step-mobile:2] [--dash-step:1]" />
 
           {/* Section 12 on a phone: the manager opens the app and sees a figure. The band used to
@@ -666,14 +677,15 @@ export default function Dashboard() {
               spark={data.weekly} sparkLabel="מגמת רכש בשמונה השבועות האחרונים" />
           </div>
 
-          <section className="card overflow-hidden [--dash-step-mobile:3] [--dash-step:3]">
-            <div className="px-4 py-4 sm:px-5">
-              <h2 className="section-title">מגמות</h2>
-              <p className="mt-0.5 text-xs text-ink-muted">רכש, תשלומים ותמהיל הוצאות במבט אחד</p>
-            </div>
+          {/* The trends board keeps its three views side by side (DESIGN.md: no tabs, all three
+              visible) but drops the card around them. A heading and hairlines already say "one
+              board, three views"; the border+radius+shadow said it a second and third time, and on
+              a phone they cost 32px of gutter that the charts could have used. */}
+          <section className="[--dash-step-mobile:3] [--dash-step:3]" aria-labelledby="trends-title">
+            <h2 id="trends-title" className="section-title">מגמות</h2>
 
-            <div className="grid grid-cols-1 border-t border-line-soft lg:grid-cols-12">
-              <section className="p-4 sm:p-5 lg:col-span-7 lg:border-e lg:border-line-soft" aria-labelledby="monthly-trend-title">
+            <div className="mt-2 grid grid-cols-1 border-t border-line-soft lg:grid-cols-12">
+              <section className="py-4 lg:col-span-7 lg:border-e lg:border-line-soft lg:pe-5" aria-labelledby="monthly-trend-title">
                 <div className="flex min-h-8 flex-wrap items-start justify-between gap-2">
                   <div>
                     <h3 id="monthly-trend-title" className="text-sm font-semibold text-ink-body">הוצאות רכש לפי חודש</h3>
@@ -690,13 +702,13 @@ export default function Dashboard() {
                   ariaLabel={monthlyAria} emptyMessage="אין נתוני חשבוניות לתקופה" />
               </section>
 
-              <section className="border-t border-line-soft p-4 sm:p-5 lg:col-span-5 lg:border-t-0" aria-labelledby="category-trend-title">
+              <section className="border-t border-line-soft py-4 lg:col-span-5 lg:border-t-0 lg:ps-5" aria-labelledby="category-trend-title">
                 <h3 id="category-trend-title" className="text-sm font-semibold text-ink-body">תמהיל הרכש החודש</h3>
                 <p className="text-xs text-ink-muted">ארבע הקטגוריות הגדולות וכל היתר</p>
                 <CategoryDonut slices={data.categories} total={categoryTotal} ariaLabel={categoriesAria} emptyMessage={categoryEmptyMessage} />
               </section>
 
-              <section className="border-t border-line-soft p-4 sm:p-5 lg:col-span-12" aria-labelledby="weekly-trend-title">
+              <section className="border-t border-line-soft py-4 lg:col-span-12" aria-labelledby="weekly-trend-title">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h3 id="weekly-trend-title" className="text-sm font-semibold text-ink-body">רכש מול תשלומים</h3>
@@ -714,12 +726,15 @@ export default function Dashboard() {
             </div>
           </section>
 
-          <section className="card overflow-hidden [--dash-step-mobile:4] [--dash-step:4]">
-            <div className="px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
-              <h2 className="section-title">תמונת מצב תפעולית</h2>
-              <p className="mt-0.5 text-xs text-ink-muted">הפירוט זמין לפי צורך; הפעולות הדחופות נשארות למעלה.</p>
-            </div>
-            <div className="border-t border-line-soft">
+          {/* Four folded subjects, still one zone under one heading (DESIGN.md: one region named
+              "תמונת מצב תפעולית", not four cards) — the card around them is what went. Each
+              disclosure already carries its own hairline, count badge and business summary, so the
+              outer box was a fourth separator around three that were already doing the job. The
+              sentence that stood here explained the disclosures rather than the business; the
+              counts on the summary rows say the same thing with data. */}
+          <section className="[--dash-step-mobile:4] [--dash-step:4]" aria-labelledby="operations-title">
+            <h2 id="operations-title" className="section-title">תמונת מצב תפעולית</h2>
+            <div className="mt-2 border-t border-line-soft">
               <OperationsDisclosure title="חריגים פתוחים" count={data.exceptionCount}
                 summary={data.queue.highExceptions ? `${data.queue.highExceptions} בחומרה גבוהה` : undefined}
                 empty="אין חריגים פתוחים כרגע">

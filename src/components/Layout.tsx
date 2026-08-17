@@ -15,7 +15,7 @@ import { isActiveRole, type ActiveRole } from '../lib/types';
 import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/organizationAccess';
-import { isRouteFamilyActive } from '../lib/quickActions';
+import { isRouteFamilyActive, sectionOf } from '../lib/quickActions';
 import { routeBackPresentation, routePresentationTitle, staticRouteTitle, type StaticRoutePath } from '../lib/routePresentation';
 
 export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: ActiveRole[] }
@@ -262,10 +262,17 @@ export default function Layout() {
 
   const navLinks = (items: readonly NavItem[]) => items.map((item) => {
     const active = isRouteFamilyActive(location.pathname, item.to);
+    // Section identity, navigation half. Only the ACTIVE item is marked, and only its icon takes
+    // the accent — the pill it sits on is paper, which is the one light surface in the shell and
+    // therefore the only place an accent clears 3:1 here. Colouring every item's icon would turn
+    // a 19-link sidebar into a swatch chart; one coloured glyph answers "which part of the
+    // business am I in" and the label beside it answers "which screen".
+    const section = active ? sectionOf(item.to) : null;
     return (
       <Link key={item.to} to={item.to} className={linkCls(active)} aria-current={active ? 'page' : undefined}
+        data-section={section ?? undefined}
         onClick={() => { if (mobileOpen) closeMobileMenu(); }}>
-        <item.icon size={17} aria-hidden="true" />
+        <item.icon size={17} aria-hidden="true" className={section ? 'section-glyph' : undefined} />
         <span className="min-w-0 flex-1 truncate">{item.label}</span>
         {item.to === '/documents' && inboxCount != null && inboxCount > 0 && (
           <span className="badge num bg-action-soft text-action-on-soft ms-auto">{inboxCount}</span>
@@ -420,8 +427,14 @@ export default function Layout() {
           הארגון נמצא בתהליך סיום שירות והמערכת במצב קריאה בלבד. המידע נשמר וזמין לצפייה ולייצוא. בעל הארגון יכול לבטל את הבקשה בתוך 30 ימים ממועד הגשתה.
         </div>
       )}
-      {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring. */}
-      <main id="main" tabIndex={-1}
+      {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring.
+          `data-section` is the paper half of the section identity and the ONLY place the accent
+          enters the working area: it resolves `--section-accent` for everything below it, which
+          today means the short rule under the page title (`.section-mark`). It is set from the
+          URL, never from data, so no screen can turn it into a status; a screen with no work
+          domain (/dashboard, the בקרה screens, settings) simply carries no attribute and the
+          mark stays hidden. */}
+      <main id="main" tabIndex={-1} data-section={sectionOf(location.pathname) ?? undefined}
         className="phone-safe-main min-w-0 lg:ms-60 pt-5 focus:outline-none">
         {/* max-w column centred (mx-auto) in the space beside the sidebar — otherwise a wide
             viewport strands all content on the start side in RTL, leaving a dead zone on the

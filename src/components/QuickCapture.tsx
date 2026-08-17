@@ -5,9 +5,13 @@ import { useToast } from './ui';
 import { toHebrewError } from '../lib/errors';
 import {
   DOCUMENT_UPLOAD_ACCEPT,
+  WeakCaptureDialog,
   documentUploadFailure,
   mergeDocumentUploadSummary,
+  pickWithoutWeak,
+  screenPickedFiles,
   uploadDocument,
+  type ScreenedPick,
 } from './FileUpload';
 import { runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
 
@@ -53,6 +57,8 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [screening, setScreening] = useState(false);
+  const [weakPick, setWeakPick] = useState<ScreenedPick | null>(null);
   const [retryFiles, setRetryFiles] = useState<File[]>([]);
   const [uploadSummary, setUploadSummary] = useState<UploadBatchSummary | null>(null);
 
@@ -106,23 +112,55 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
     }
   }
 
-  function onPick(files: FileList | null) {
-    if (files?.length) {
-      setUploadSummary(null);
-      void uploadFiles(Array.from(files));
+  /**
+   * The capture is measured here, before `uploadFiles` — the whole value of the warning is that
+   * it arrives while the person is still holding the phone in front of the document, and before
+   * the file costs a paid OCR call. Screening cannot reject: on any doubt it reports nothing and
+   * the batch takes the path it always took, with the same File objects.
+   */
+  async function onPick(files: FileList | null) {
+    if (!files?.length) return;
+    setUploadSummary(null);
+    setScreening(true);
+    let pick: ScreenedPick;
+    try {
+      pick = await screenPickedFiles(Array.from(files));
+    } finally {
+      setScreening(false);
     }
+    if (!pick.weak.length) { void uploadFiles(pick.files); return; }
+    setWeakPick(pick);
+  }
+
+  function resolveWeakPick(files: File[], reopenCamera: boolean) {
+    setWeakPick(null);
+    // Cleared before the camera reopens: an unchanged input value fires no `change` event.
+    if (inputRef.current) inputRef.current.value = '';
+    if (files.length) void uploadFiles(files);
+    if (reopenCamera) inputRef.current?.click();
   }
 
   const element = (
-    <input ref={inputRef} type="file" multiple accept={DOCUMENT_UPLOAD_ACCEPT}
-      capture="environment" className="hidden" data-document-upload-input
-      onChange={(e) => void onPick(e.target.files)} />
+    <>
+      <input ref={inputRef} type="file" multiple accept={DOCUMENT_UPLOAD_ACCEPT}
+        capture="environment" className="hidden" data-document-upload-input
+        onChange={(e) => void onPick(e.target.files)} />
+      {weakPick && (
+        <WeakCaptureDialog
+          pick={weakPick}
+          source="camera"
+          onRetake={() => resolveWeakPick(pickWithoutWeak(weakPick), true)}
+          onUploadAnyway={() => resolveWeakPick(weakPick.files, false)}
+          onDismiss={() => resolveWeakPick(pickWithoutWeak(weakPick), false)}
+        />
+      )}
+    </>
   );
 
   return {
     openCapture: () => { if (retryFiles.length) void uploadFiles(retryFiles, uploadSummary); else inputRef.current?.click(); },
     element,
-    busy,
+    busy: busy || screening,
     retryCount: retryFiles.length,
   };
 }

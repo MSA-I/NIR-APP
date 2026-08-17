@@ -31,6 +31,40 @@ MAX_METRIC_SAMPLE_PIXELS = 1_000_000
 MAX_SCAN_OUTPUT_PIXELS = 9_000_000
 MAX_NLM_DENOISE_PIXELS = 4_000_000
 
+FULL_FRAME: tuple[Point, Point, Point, Point] = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
+
+# Fraction of the frame that the detected edges must span before the whole frame may be accepted
+# as the page. Separates "the page fills the frame, so it has no outer edge to trace" from the two
+# other ways a frame can contain no page-sized rectangle: a blank capture, and a small document
+# lying on a large desk. Measured over the same 17-document corpus plus synthetic controls
+# (scripted run in the session scratchpad): every real document spans 0.595-1.000 of its frame,
+# and the six that need this fallback span 0.694-1.000; a synthetic small off-centre panel spans
+# 0.029 and a blank canvas 0.000. The 0.5 line sits in a gap of more than an order of magnitude,
+# so it is not a tuned value.
+MIN_FULL_FRAME_EDGE_SPAN = 0.50
+
+# Adaptive threshold parameters. Named once because the OCR lane's secondary pass
+# (src/second_pass.py) must binarize a page exactly the way the scan lane would have; two copies
+# of these numbers would drift.
+ADAPTIVE_BLOCK_MIN = 31
+ADAPTIVE_BLOCK_MAX = 81
+ADAPTIVE_THRESHOLD_CONSTANT = 13
+
+# `auto` binarizes only when the page is still shadow-dominated AFTER the grayscale branch has
+# already divided out the illumination background and equalised it with CLAHE. Measured on the
+# owner's 17-document corpus (17 originals plus 20 degraded variants, scripted run recorded in
+# the session scratchpad): every single document scored `shadow` >= 0.049, so the previous 0.045
+# gate was satisfied by 100% of the corpus and decided nothing -- it read as a discriminator and
+# behaved as a rubber stamp. The measured maximum was 0.266, on a flat digital export whose dark
+# banner inflates the background deviation rather than any real shadow; the worst genuine phone
+# capture reached 0.177. Nothing measured needs binarization, so the gate is set above everything
+# measured: it survives for a capture worse than any observed, and stays a named constant so it
+# can be lowered against evidence rather than taste.
+SEVERE_SHADOW_SCORE = 0.30
+# Below the floor there is no ink to threshold; above the ceiling the page is mostly ink and
+# binarizing floods it. Unchanged from the previous heuristic.
+BINARIZE_INK_RATIO_RANGE = (0.015, 0.42)
+
 register_heif_opener()
 if register_avif_opener:
     register_avif_opener()
@@ -125,6 +159,21 @@ def _right_angle_score(points: np.ndarray) -> float:
     return max(0.0, 1.0 - sum(errors) / len(errors))
 
 
+def _edge_span(edges: np.ndarray) -> float:
+    """Fraction of the frame covered by the bounding box of the edge map -- where content is.
+
+    Row/column reductions rather than `findNonZero`, which would materialise every edge pixel as
+    a coordinate pair; the answer is identical and the allocation is not.
+    """
+    rows = np.flatnonzero(edges.any(axis=1))
+    columns = np.flatnonzero(edges.any(axis=0))
+    if not rows.size or not columns.size:
+        return 0.0
+    height = int(rows[-1] - rows[0]) + 1
+    width = int(columns[-1] - columns[0]) + 1
+    return (height * width) / float(edges.shape[0] * edges.shape[1])
+
+
 def detect_document_corners(image: np.ndarray) -> tuple[Point, Point, Point, Point]:
     height, width = image.shape[:2]
     scale = min(1.0, 1600.0 / max(width, height))
@@ -147,6 +196,7 @@ def detect_document_corners(image: np.ndarray) -> tuple[Point, Point, Point, Poi
     frame_area = resized.shape[0] * resized.shape[1]
     candidates: list[tuple[float, np.ndarray]] = []
     flat_frame_fallback = False
+    page_sized_rejected = 0
     for contour in sorted(contours, key=cv2.contourArea, reverse=True)[:40]:
         perimeter = cv2.arcLength(contour, True)
         if perimeter <= 0:
@@ -164,6 +214,7 @@ def detect_document_corners(image: np.ndarray) -> tuple[Point, Point, Point, Poi
             # evidence. A candidate that does not cover most of the frame is safer to hand to the
             # human corner editor than to present as a successful scan.
             if area_ratio < MIN_AUTOMATIC_PAGE_COVERAGE:
+                page_sized_rejected += 1
                 continue
             margins = (
                 float(points[:, 0].min()) / resized.shape[1],
@@ -172,6 +223,7 @@ def detect_document_corners(image: np.ndarray) -> tuple[Point, Point, Point, Poi
                 1.0 - float(points[:, 1].max()) / resized.shape[0],
             )
             if max(margins) > MAX_AUTOMATIC_CROP_MARGIN:
+                page_sized_rejected += 1
                 # A flat supplier export has no outer paper edge, so the cleanest
                 # quadrilateral is often its internal table. Preserve the whole light
                 # canvas instead of deleting the supplier header and totals.
@@ -191,7 +243,31 @@ def detect_document_corners(image: np.ndarray) -> tuple[Point, Point, Point, Poi
 
     if not candidates:
         if flat_frame_fallback:
-            return ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
+            return FULL_FRAME
+        if not page_sized_rejected and _edge_span(edges) >= MIN_FULL_FRAME_EDGE_SPAN:
+            # No page-sized quadrilateral exists anywhere in this frame at any of the five
+            # epsilon ratios -- not one that was found and then judged untrustworthy, but none
+            # at all -- and the content fills the frame. That is the signature of a photograph
+            # in which the page IS the frame and therefore has no visible outer edge to trace,
+            # not of a detector that picked the wrong rectangle. Measured on the owner's
+            # 17-document corpus: automatic detection raised `document_not_detected` on 8 of 17.
+            # Six of those eight found 35-72 quadrilaterals and not one survived the 12% area
+            # floor in `_polygon_is_valid` (largest candidate 0.002-0.116 of the frame); their
+            # captures sit at median gray 123-198, so the existing `flat_frame_fallback` --
+            # reachable only from the margin branch and only above median 180 -- did not catch
+            # them. Sending a person to drag four corners around a photo that is entirely
+            # document is pure friction; the full frame still receives deskew and the rest of
+            # the pipeline. With this branch the corpus falls from 8 manual-corner demands to 2.
+            #
+            # Both guards keep `document_not_detected` reachable for the cases it was written
+            # for. `page_sized_rejected` covers the remaining two of those eight (largest valid
+            # candidate 0.191 and 0.387 of the frame): a real rectangle was found and lost to
+            # the 0.45 coverage gate, and there a human genuinely adds information, because
+            # accepting the frame keeps a supplier header the detector wanted to crop away while
+            # accepting the candidate deletes one. The span guard covers the other two ways a
+            # frame holds no page-sized rectangle: a blank capture, and a small document on a
+            # large desk, neither of which should be scanned whole.
+            return FULL_FRAME
         raise ProcessingError(
             "document_not_detected",
             "Document boundaries could not be detected; manual corner selection is required",
@@ -329,7 +405,49 @@ def _metric_sample(image: np.ndarray) -> np.ndarray:
     )
 
 
+def binarize(gray: np.ndarray) -> np.ndarray:
+    """Adaptive threshold, block size scaled to the page. The scan lane's only destructive step.
+
+    Exposed because the OCR lane re-applies exactly this transform when a first extraction of a
+    grayscale scan came back broken (src/second_pass.py). The parameters live in one place so the
+    recovery pass cannot silently diverge from what the scan lane would have produced.
+    """
+    block_size = max(
+        ADAPTIVE_BLOCK_MIN, min(ADAPTIVE_BLOCK_MAX, ((min(gray.shape[:2]) // 20) | 1))
+    )
+    return cv2.adaptiveThreshold(
+        gray,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        block_size,
+        ADAPTIVE_THRESHOLD_CONSTANT,
+    )
+
+
+def _capture_quality(gray: np.ndarray) -> dict[str, float]:
+    """Blur and exposure measured on the deskewed page BEFORE denoise, shadow division and CLAHE.
+
+    These are the only two metrics in this dict that can judge the PHOTOGRAPH. `sharpness` below
+    cannot: it is `min(1.0, variance / 1500)` computed after CLAHE, and it saturated at exactly
+    1.0 for every real capture in the owner's corpus, so it cannot discriminate a sharp page from
+    a blurred one. The unsaturated variance separates cleanly on the same corpus -- real documents
+    measured 345 to 8717, while Gaussian-blurred variants of those same captures fell to 6.0-75.6
+    -- and mean luma separated 137.4 to 244.8 against 58.5-65.0 for darkened variants. Recorded
+    raw so a later change can act on them; nothing in the worker reads them yet.
+    """
+    sample = _metric_sample(gray)
+    laplacian = cv2.Laplacian(sample, cv2.CV_32F)
+    _, laplacian_deviation = cv2.meanStdDev(laplacian)
+    luma_mean, _ = cv2.meanStdDev(sample)
+    return {
+        "raw_laplacian_variance": float(laplacian_deviation[0, 0]) ** 2,
+        "raw_luma_mean": float(luma_mean[0, 0]),
+    }
+
+
 def _enhance(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict[str, float]]:
+    capture_quality = _capture_quality(gray)
     shadow_free, shadow_score = _remove_shadows(gray)
     # NLM retains a large search workspace. A near-full 12 MP phone capture can then leave
     # OpenCV unable to allocate the final threshold image under the worker's 2 GiB limit.
@@ -342,15 +460,7 @@ def _enhance(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict[str, float]
     del shadow_free
     enhanced = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(8, 8)).apply(denoised)
     del denoised
-    block_size = max(31, min(81, ((min(enhanced.shape) // 20) | 1)))
-    black_and_white = cv2.adaptiveThreshold(
-        enhanced,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        block_size,
-        13,
-    )
+    black_and_white = binarize(enhanced)
     metric_enhanced = _metric_sample(enhanced)
     metric_black_and_white = _metric_sample(black_and_white)
     ink_pixels = metric_black_and_white.size - cv2.countNonZero(metric_black_and_white)
@@ -366,6 +476,7 @@ def _enhance(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict[str, float]
         "ink_ratio": ink_ratio,
         "contrast": local_contrast,
         "sharpness": sharpness,
+        **capture_quality,
     }
 
 
@@ -381,10 +492,22 @@ def _select_mode(
         return "black_and_white"
     if preserve_small_text:
         return "grayscale"
-    usable_ink = 0.015 <= metrics["ink_ratio"] <= 0.42
-    crisp_enough = metrics["contrast"] >= 0.12 or metrics["sharpness"] >= 0.12
-    strong_shadow = metrics["shadow"] >= 0.045
-    return "black_and_white" if usable_ink and (crisp_enough or strong_shadow) else "grayscale"
+    # Grayscale is the default output. Binarization throws away every intermediate tone the
+    # vision model could have used, and nothing anywhere measures whether it helped: the OCR
+    # provider never sees the original capture, only this derivative. The previous gate accepted
+    # any page whose `contrast` or `sharpness` cleared 0.12 OR whose `shadow` cleared 0.045, and
+    # on the owner's corpus that condition was true for all 17 documents -- the only thing
+    # keeping any page in grayscale was the small-text guard above. Grayscale already ships the
+    # shadow-divided, CLAHE-equalised page (`_enhance`), so uneven lighting is corrected without
+    # destroying anything; a page has to be shadow-dominated even after that correction before
+    # throwing tones away is the better trade.
+    #
+    # `requested_mode='black_and_white'` is unaffected and remains the manual override and the
+    # lever a recovery pass pulls.
+    low_ink, high_ink = BINARIZE_INK_RATIO_RANGE
+    usable_ink = low_ink <= metrics["ink_ratio"] <= high_ink
+    severe_shadow = metrics["shadow"] >= SEVERE_SHADOW_SCORE
+    return "black_and_white" if severe_shadow and usable_ink else "grayscale"
 
 
 def scan_document(

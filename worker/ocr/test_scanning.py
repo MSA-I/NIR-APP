@@ -11,7 +11,13 @@ from PIL import Image
 
 from src.errors import ProcessingError
 from src.limits import DEFAULT_LIMITS
-from src.scanning import scan_document, validate_corners
+from src.scanning import (
+    SEVERE_SHADOW_SCORE,
+    _select_mode,
+    detect_document_corners,
+    scan_document,
+    validate_corners,
+)
 from src.worker import WorkerConfig, _run_scan
 
 
@@ -32,6 +38,79 @@ def _write_document(path: Path, *, shadow: bool = True) -> None:
     mask = cv2.warpPerspective(np.full((650, 850), 255, dtype=np.uint8), matrix, (1200, 900))
     canvas[mask > 0] = warped[mask > 0]
     cv2.imwrite(str(path), canvas)
+
+
+def _write_full_frame_page(path: Path) -> None:
+    """A page that fills the frame: no desk, no paper edge, nothing to trace a rectangle around."""
+    canvas = np.full((1100, 850, 3), 244, dtype=np.uint8)
+    cv2.putText(canvas, "SUPPLIER LTD", (60, 90), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (20, 20, 20), 3)
+    for y in range(180, 1020, 45):
+        cv2.line(canvas, (55, y), (795, y), (35, 35, 35), 3)
+    cv2.imwrite(str(path), canvas)
+
+
+def _write_small_off_centre_panel(path: Path) -> None:
+    """A small document lying on a large dark surface: most of the frame is not the document."""
+    canvas = np.full((1400, 1800, 3), 70, dtype=np.uint8)
+    panel = np.full((300, 240, 3), 243, dtype=np.uint8)
+    for y in range(40, 270, 26):
+        cv2.line(panel, (20, y), (220, y), (30, 30, 30), 2)
+    canvas[120:420, 180:420] = panel
+    cv2.imwrite(str(path), canvas)
+
+
+class ScanModeSelectionTests(unittest.TestCase):
+    """`auto` hands OCR grayscale unless the page is still shadow-dominated after correction.
+
+    Binarization is the only destructive step in the scan chain and nothing measures whether it
+    helped, so the corpus evidence decides the default rather than the other way round.
+    """
+
+    @staticmethod
+    def _metrics(**overrides: float) -> dict[str, float]:
+        metrics = {"shadow": 0.17, "ink_ratio": 0.05, "contrast": 0.14, "sharpness": 1.0}
+        metrics.update(overrides)
+        return metrics
+
+    def test_auto_prefers_grayscale_across_the_measured_corpus_range(self) -> None:
+        # Every one of the 17 measured documents landed inside these bounds: shadow 0.049-0.266,
+        # ink 0.026-0.125, contrast 0.061-0.190. Under the previous heuristic all of them
+        # binarized unless the small-text guard intervened.
+        for shadow in (0.0494, 0.1149, 0.1767, 0.2479, 0.2658):
+            for ink_ratio in (0.0259, 0.0500, 0.1246):
+                with self.subTest(shadow=shadow, ink_ratio=ink_ratio):
+                    mode = _select_mode(
+                        "auto",
+                        self._metrics(shadow=shadow, ink_ratio=ink_ratio),
+                        preserve_small_text=False,
+                    )
+                    self.assertEqual(mode, "grayscale")
+
+    def test_auto_still_binarizes_a_page_beyond_every_measured_shadow(self) -> None:
+        mode = _select_mode(
+            "auto",
+            self._metrics(shadow=SEVERE_SHADOW_SCORE + 0.01),
+            preserve_small_text=False,
+        )
+        self.assertEqual(mode, "black_and_white")
+
+    def test_severe_shadow_alone_is_not_enough_without_usable_ink(self) -> None:
+        for ink_ratio in (0.001, 0.9):
+            with self.subTest(ink_ratio=ink_ratio):
+                mode = _select_mode(
+                    "auto",
+                    self._metrics(shadow=0.4, ink_ratio=ink_ratio),
+                    preserve_small_text=False,
+                )
+                self.assertEqual(mode, "grayscale")
+
+    def test_explicit_modes_are_never_overridden(self) -> None:
+        severe = self._metrics(shadow=0.4)
+        calm = self._metrics(shadow=0.01)
+        self.assertEqual(
+            _select_mode("black_and_white", calm, preserve_small_text=True), "black_and_white"
+        )
+        self.assertEqual(_select_mode("grayscale", severe, preserve_small_text=False), "grayscale")
 
 
 class DocumentScanningTests(unittest.TestCase):
@@ -136,6 +215,78 @@ class DocumentScanningTests(unittest.TestCase):
             self.assertEqual((result.width, result.height), (593, 817))
             pixels = cv2.imread(str(output), cv2.IMREAD_GRAYSCALE)
             self.assertLess(int(pixels[:150].min()), 80)
+
+    def test_shadowed_photograph_scans_to_grayscale_and_keeps_its_tones(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.jpg"
+            output = root / "scan.png"
+            _write_document(source)
+
+            result = scan_document(source, output)
+
+            self.assertEqual(result.output_mode, "grayscale")
+            self.assertGreaterEqual(result.metrics["shadow"], 0.02)
+            self.assertLess(result.metrics["shadow"], SEVERE_SHADOW_SCORE)
+            pixels = cv2.imread(str(output), cv2.IMREAD_GRAYSCALE)
+            # The whole point of the default: intermediate tones survive to the OCR provider.
+            self.assertGreater(len(np.unique(pixels)), 2)
+
+    def test_scan_metrics_record_unsaturated_capture_quality(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sharp_source = root / "sharp.png"
+            blurred_source = root / "blurred.png"
+            _write_full_frame_page(sharp_source)
+            sharp_pixels = cv2.imread(str(sharp_source))
+            cv2.imwrite(str(blurred_source), cv2.GaussianBlur(sharp_pixels, (21, 21), 0))
+            corners = [[0, 0], [1, 0], [1, 1], [0, 1]]
+
+            sharp = scan_document(sharp_source, root / "sharp-scan.png", corners=corners)
+            blurred = scan_document(blurred_source, root / "blurred-scan.png", corners=corners)
+
+            for result in (sharp, blurred):
+                self.assertIn("raw_laplacian_variance", result.metrics)
+                self.assertIn("raw_luma_mean", result.metrics)
+            # `sharpness` cannot tell these two apart at the top of its range -- it is
+            # min(1.0, variance / 1500) computed after CLAHE. The raw variance can.
+            self.assertEqual(sharp.metrics["sharpness"], 1.0)
+            self.assertGreater(sharp.metrics["raw_laplacian_variance"], 1500.0)
+            self.assertLess(
+                blurred.metrics["raw_laplacian_variance"],
+                sharp.metrics["raw_laplacian_variance"] / 5,
+            )
+            self.assertGreater(sharp.metrics["raw_luma_mean"], 100.0)
+
+    def test_full_frame_page_without_a_border_is_detected_automatically(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "full-frame.png"
+            output = root / "scan.png"
+            _write_full_frame_page(source)
+
+            result = scan_document(source, output)
+
+            self.assertEqual(result.corners_source, "automatic")
+            self.assertEqual(
+                result.corners, ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
+            )
+            self.assertTrue(output.is_file())
+
+    def test_small_off_centre_panel_still_requires_manual_corners(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "small-panel.png"
+            _write_small_off_centre_panel(source)
+
+            with self.assertRaises(ProcessingError) as context:
+                scan_document(source, root / "scan.png")
+
+            self.assertEqual(context.exception.code, "document_not_detected")
+            # And the reason is the guard, not an accident of this fixture: the detector really
+            # does find no page-sized quadrilateral here either.
+            with self.assertRaises(ProcessingError):
+                detect_document_corners(cv2.imread(str(source)))
 
     def test_rejects_invalid_manual_corners(self) -> None:
         for corners in (

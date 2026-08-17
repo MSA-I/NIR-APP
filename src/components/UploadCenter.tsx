@@ -216,11 +216,13 @@ function currentStatus(record: UploadRecord): UploadCenterStatus {
   return record.status;
 }
 
+const OFFLINE_ANNOUNCEMENT = 'אין חיבור לרשת. ההעלאות ממתינות ויימשכו אוטומטית כשהחיבור יחזור.';
+
 /** Offline: the queue waits and says so; it resumes by itself when the network returns. */
 async function waitForOnline(record: UploadRecord) {
   if (isOnline()) return;
   record.waitingForNetwork = true;
-  announce('אין חיבור לרשת. ההעלאות ממתינות ויימשכו אוטומטית כשהחיבור יחזור.');
+  announce(OFFLINE_ANNOUNCEMENT);
   await new Promise<void>((resolve) => {
     const timer = window.setInterval(check, 2_000);
     function finish() {
@@ -234,6 +236,15 @@ async function waitForOnline(record: UploadRecord) {
     window.addEventListener('online', check);
   });
   record.waitingForNetwork = false;
+  // The live region is the only surface with no way to notice on its own that a state ended: the
+  // visible offline note is re-evaluated against `navigator.onLine` on every render, while this
+  // text just sits there until something overwrites it. "אין חיבור לרשת" is a claim about NOW, so
+  // whoever put it there takes it back. Only if it is still the sentence on the channel — a later
+  // announcement is a newer truth and must not be undone by an older step finishing.
+  if (announcement === OFFLINE_ANNOUNCEMENT) {
+    announce(isOnline() && record.status !== 'canceled' ? 'החיבור חזר. ההעלאות ממשיכות.' : '');
+    return;
+  }
   emit();
 }
 
@@ -552,7 +563,14 @@ const UPLOAD_STATE_META: Record<UploadCenterStatus, StatusMeta> = {
 function displayMeta(entry: UploadCenterEntry, stage: DocumentProcessingStage | null): StatusMeta {
   if (entry.status === 'registered') {
     if (stage && stage !== 'unprocessed') return documentUiStatus({ status: stage });
-    if (entry.error) return { label: 'נרשם — העיבוד לא החל', tone: 'await' };
+    // "העיבוד לא החל" is a claim about the server, and it is only allowed where the server is
+    // actually being asked: the poll below takes document ids, so a row without one is never
+    // checked again and the transport error it carries is history the moment it is caught. Left
+    // ungated, that error was rendered as a live state for the rest of the session. With an id the
+    // claim stands until a real job supersedes it, which is the branch above. Without one the row
+    // says what is certainly true — the document was registered — and the error text underneath
+    // says what went wrong, in its own words, as a report rather than as a status.
+    if (entry.error && entry.documentId) return { label: 'נרשם — העיבוד לא החל', tone: 'await' };
     return UPLOAD_STATE_META.registered;
   }
   if (entry.status === 'queued' && entry.waitingForNetwork) return { label: 'ממתין לחיבור', tone: 'await' };
@@ -602,15 +620,40 @@ export function UploadCenter() {
     getUploadCenterSnapshot,
   );
   const online = useOnlineStatus();
-  const registeredIds = useMemo(
+  const polledIds = useMemo(
     () => (owner ? [...new Set(entries
       // A lost enqueue response leaves an error on a document that may already be queued. Poll it
       // too: once a real processing job appears, that server fact supersedes the transport error.
-      .filter((entry) => entry.status === 'registered' && entry.documentId)
+      // `stored` is polled for the same reason and it is the more important half: that row is the
+      // money state, and it was the one row on this surface with no way to ever learn it was wrong.
+      .filter((entry) => entry.documentId
+        && (entry.status === 'registered' || entry.status === 'stored'))
       .map((entry) => entry.documentId!))] : []),
     [owner, entries],
   );
-  const processing = useDocumentProcessing(registeredIds);
+  const processing = useDocumentProcessing(polledIds);
+  const { snapshots } = processing;
+
+  /**
+   * The money row, resolved by the server or not at all.
+   *
+   * `stored` means one specific thing: the object is durable and we do not know whether the
+   * registry row exists, because the response that would have said so was lost (`markStored`
+   * ran, `markRegistered` never did). The screen therefore told the person not to upload the
+   * file again — correct, and it kept telling them that for ever, because nothing on this
+   * surface ever asked the server the one question that settles it.
+   *
+   * A processing job carries a foreign key to `documents`, so a job for this id is proof the
+   * registry row exists and the registration did complete. That is the only evidence accepted
+   * here. No job — the row does not move: the instruction not to re-upload is a money-safety
+   * claim, and silence from the server is not permission to withdraw it.
+   */
+  useEffect(() => {
+    for (const entry of entries) {
+      if (entry.status !== 'stored' || !entry.documentId) continue;
+      if (snapshots[entry.documentId]?.job) markUploadCenterDocumentRegistered(entry.documentId);
+    }
+  }, [entries, snapshots]);
 
   if (!owner || !entries.length) return null;
 

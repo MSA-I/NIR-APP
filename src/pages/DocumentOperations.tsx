@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Camera, Eye, FileSearch, RefreshCw, RotateCcw, Upload } from 'lucide-react';
+import { AlertTriangle, Camera, Eye, FileSearch, RefreshCw, RotateCcw, Upload } from 'lucide-react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -276,7 +276,6 @@ export default function DocumentOperations() {
         <div className="max-w-2xl">
           <p className="mb-1 text-xs font-semibold text-action">מסמכים שדורשים החלטה</p>
           <h1 className="page-title">בקרת מסמכים</h1>
-          <p className="mt-1 text-sm text-ink-soft">תמונה ברורה של מה בעיבוד, מה נעצר ומה מחכה לך—עם פעולה ישירה לכל מסמך.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select className="input w-auto!" aria-label="טווח בקרת מסמכים" value={windowDays}
@@ -295,10 +294,7 @@ export default function DocumentOperations() {
 
       <section aria-labelledby="document-control-overview-title" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 id="document-control-overview-title" className="section-title">מה קורה עכשיו</h2>
-            <p className="mt-1 text-sm text-ink-soft">ארבעה מספרים בלבד, לפי המצב הנוכחי של כל מסמך.</p>
-          </div>
+          <h2 id="document-control-overview-title" className="section-title">מה קורה עכשיו</h2>
           {metrics && <p className="text-xs text-ink-muted">משך עיבוד ממוצע: <span className="num">{fmtDuration(metrics.average_processing_duration_ms)}</span></p>}
         </div>
         {operations.loading && !metrics ? <SkeletonCards count={4} cols={4} /> : metrics && (
@@ -330,35 +326,38 @@ export default function DocumentOperations() {
         </div>
       </section>
 
+      {/* `note-alert`, not a hand-rolled box. The previous markup asked for `border-alert/30` and
+          `text-alert`, and there is no `--color-alert` token in @theme — only the six surfaces
+          `alert-wash|line|soft|on-soft|fg|solid`. Both classes resolved to nothing, so the most
+          urgent item on the screen rendered with no border and with inherited text colour. The
+          triangle keeps the meaning off colour alone (WCAG 2.1 AA). */}
       {currentIssue && (
-        <section aria-labelledby="document-control-attention-title" className="rounded-xl border border-alert/30 bg-alert-soft p-4 sm:p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p id="document-control-attention-title" className="text-xs font-semibold text-alert">הפריט הדחוף ביותר</p>
-              <h2 className="mt-1 truncate text-lg font-semibold text-ink">{currentIssue.file_name}</h2>
-              <p className="mt-1 text-sm text-ink-soft">{attemptUiStatus(currentIssue).description}</p>
-            </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-              {canRecoverStuck && attemptUiStatus(currentIssue).state === 'stuck' && (
-                <button type="button" className="btn-primary min-h-11 w-full sm:w-auto" onClick={() => setRecoveryTarget(currentIssue)}>
-                  <RotateCcw size={16} aria-hidden="true" /> שחזור עיבוד
-                </button>
-              )}
-              <button type="button" className="btn-secondary min-h-11 w-full sm:w-auto"
-                onClick={() => navigate(`/documents/${encodeURIComponent(currentIssue.document_id)}/review`)}>
-                <Eye size={16} aria-hidden="true" /> פתיחת המסמך
+        <section aria-labelledby="document-control-attention-title"
+          className="note-alert flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p id="document-control-attention-title" className="flex items-center gap-1.5 text-xs font-semibold">
+              <AlertTriangle size={14} aria-hidden="true" /> הפריט הדחוף ביותר
+            </p>
+            <h2 className="mt-1 truncate text-lg font-semibold text-ink">{currentIssue.file_name}</h2>
+            <p className="mt-1">{attemptUiStatus(currentIssue).description}</p>
+          </div>
+          <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row">
+            {canRecoverStuck && attemptUiStatus(currentIssue).state === 'stuck' && (
+              <button type="button" className="btn-primary min-h-11 w-full sm:w-auto" onClick={() => setRecoveryTarget(currentIssue)}>
+                <RotateCcw size={16} aria-hidden="true" /> שחזור עיבוד
               </button>
-            </div>
+            )}
+            <button type="button" className="btn-secondary min-h-11 w-full sm:w-auto"
+              onClick={() => navigate(`/documents/${encodeURIComponent(currentIssue.document_id)}/review`)}>
+              <Eye size={16} aria-hidden="true" /> פתיחת המסמך
+            </button>
           </div>
         </section>
       )}
 
       <section aria-labelledby="document-control-recent-title" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 id="document-control-recent-title" className="section-title">מסמכים אחרונים</h2>
-            <p className="mt-1 text-sm text-ink-soft">לחיצה על מסמך פותחת את סביבת הבדיקה שלו.</p>
-          </div>
+          <h2 id="document-control-recent-title" className="section-title">מסמכים אחרונים</h2>
           {attempts.fetching && attempts.data && <span className="text-xs text-ink-muted" role="status">מעדכן מסמכים…</span>}
         </div>
         {attempts.loading && !attempts.data ? <SkeletonTable title={false} cols={4} /> : (
@@ -391,10 +390,7 @@ export default function DocumentOperations() {
       </section>
 
       <section aria-labelledby="document-control-price-title" className="space-y-3">
-        <div>
-          <h2 id="document-control-price-title" className="section-title">מחירונים שממתינים לבדיקה</h2>
-          <p className="mt-1 text-sm text-ink-soft">רק החלטות עסקיות פתוחות—בלי נתוני מודל או מדדי מעבדה.</p>
-        </div>
+        <h2 id="document-control-price-title" className="section-title">מחירונים שממתינים לבדיקה</h2>
         {priceReviews.loading && !priceReviews.data ? <SkeletonTable title={false} cols={4} /> : (
           <DataTable rows={priceReviews.data ?? []} columns={priceReviewColumns} pageSize={10}
             error={priceReviews.error}

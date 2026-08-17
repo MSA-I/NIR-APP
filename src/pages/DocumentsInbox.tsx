@@ -228,7 +228,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
       ) : loading ? (
         <div className="space-y-2 text-sm text-ink-muted" role="status">טוען יעדים…</div>
       ) : options?.length ? (
-        <ul className="max-h-72 overflow-y-auto rounded-lg border border-line-soft divide-y divide-line-soft">
+        <ul className="max-h-72 divide-y divide-line-soft overflow-y-auto border-y border-line-soft">
           {options.map((option) => (
             <li key={option.id}>
               <button type="button" disabled={busy} onClick={() => void assign(option)}
@@ -240,9 +240,9 @@ function RefileModal({ doc, target, onClose, onDone }: {
           ))}
         </ul>
       ) : (
-        <div className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-sm text-ink-muted">
+        <p className="py-6 text-center text-sm text-ink-muted">
           {dq ? 'לא נמצאו תוצאות' : target === 'invoice' ? 'אין חשבוניות במערכת' : 'אין קבלות סחורה במערכת'}
-        </div>
+        </p>
       )}
     </Modal>
   );
@@ -316,7 +316,9 @@ function UploadModal({ suppliers, onClose, onDone }: {
             on screen to check against. A guess made at upload time is a guess that the evidence
             extracted afterwards then has to argue with. Supplier and date stay — optional, folded
             away — as hints for a document the model cannot read. */}
-        <details className="rounded-lg border border-line-soft px-3 py-2">
+        {/* A hairline, not a box: this is one optional fold inside a dialog that is already a
+            surface, and boxing it made the form read as two forms. */}
+        <details className="border-t border-line-soft pt-1">
           <summary className="flex min-h-11 cursor-pointer list-none items-center text-sm text-action">
             פרטים ידניים (לא חובה)
           </summary>
@@ -532,6 +534,22 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   }, [processingSnapshots, refetchProcessing, interpretRetryTick, interpretFailure?.jobId]);
 
   useEffect(() => {
+    // The alert above is raised on the third failed attempt — and the loop that raised it can
+    // never take it down, because the same third attempt is what excludes this job from `pending`
+    // on every later pass. So the sentence outlived the state it described: the document could
+    // reach "דורש בדיקה" through the review screen, through a reprocess, or through a fourth
+    // attempt from another tab, and the banner still told the person their decoding had failed.
+    // The job leaving 'extracted' is the server saying that is no longer true.
+    if (!interpretFailure) return;
+    const stillWaiting = Object.values(processingSnapshots).some((snapshot) =>
+      snapshot.job?.id === interpretFailure.jobId && snapshot.job.status === 'extracted');
+    if (!stillWaiting) {
+      interpretAttempts.current.delete(interpretFailure.jobId);
+      setInterpretFailure(null);
+    }
+  }, [processingSnapshots, interpretFailure]);
+
+  useEffect(() => {
     const onChanged = () => { void refetch(); };
     window.addEventListener(INBOX_CHANGED_EVENT, onChanged);
     return () => window.removeEventListener(INBOX_CHANGED_EVENT, onChanged);
@@ -701,12 +719,18 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   // filed document unfiled. Dropping the column is the honest move — see isUnfiled's note.
   const columns: Column<GalleryDocument>[] = ([
     {
-      key: 'file', header: 'מסמך', priority: 1, sortValue: (doc) => doc.file_name,
+      // `priority: 3` — desktop only. DataTable drops the first column from the mobile detail grid
+      // ONLY when no `mobileTitle` is supplied (ui.tsx:1336), and this screen supplies one: the
+      // headline of every card was the file name, and directly beneath it stood "מסמך: <same file
+      // name>" again. Two lines per row saying one thing. The desktop column is untouched.
+      key: 'file', header: 'מסמך', priority: 3, sortValue: (doc) => doc.file_name,
+      // The icon used to sit in a 40px bordered, shaded tile — a thumbnail frame with no thumbnail
+      // in it, repeated once per row, so a page of twenty documents carried twenty little boxes and
+      // twenty extra hairlines. The icon alone still marks the column; the frame said nothing the
+      // file name did not.
       render: (doc) => (
-        <span className="flex min-w-0 items-center gap-2.5">
-          <span className="grid size-10 shrink-0 place-items-center overflow-hidden border border-line bg-surface-sunken" aria-hidden="true">
-            <FileText size={18} className="text-ink-faint" />
-          </span>
+        <span className="flex min-w-0 items-center gap-2">
+          <FileText size={16} className="shrink-0 text-ink-faint" aria-hidden="true" />
           <span className="min-w-0 truncate font-medium text-ink-body">{doc.file_name}</span>
         </span>
       ),
@@ -793,7 +817,12 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
 
       {!archive && <UploadCenter />}
 
-      <section aria-label="סינון מסמכים" className="border-y border-line-soft bg-surface px-3 py-3 sm:px-4">
+      {/* The filter row lost its banded box (`border-y bg-surface`). Below it sits the results
+          table, which IS a card — one raised surface against the page is enough to say where the
+          data starts, and a second band above it only made the screen read as two stacked panels
+          with the actual documents in the lower one. Controls, count line and the advanced fold
+          are unchanged. */}
+      <section aria-label="סינון מסמכים">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <label>
             <span className="label">שם קובץ</span>
@@ -806,7 +835,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             includeAssignmentStates={!archive} />
         </div>
         <details className="group mt-3 border-t border-line-soft pt-2">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm font-medium text-action hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+          <summary className="-mx-2 flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm font-medium text-action hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
             מסננים נוספים
             {advancedFilterCount > 0 && <span className="badge badge-info num">{advancedFilterCount}</span>}
             <ChevronDown size={16} className="ms-auto transition-transform group-open:rotate-180" aria-hidden="true" />

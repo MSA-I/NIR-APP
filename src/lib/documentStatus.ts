@@ -14,6 +14,14 @@ export type DocumentStatusState =
 
 export interface DocumentUiStatus extends StatusMeta {
   state: DocumentStatusState;
+  /**
+   * One sentence the LABEL does not already say — or an empty string.
+   *
+   * It ships as `title` and as an `sr-only` sibling on every badge, so a sentence that only
+   * rephrases the label costs a screen-reader user a second reading of the same fact and buys
+   * nothing. "המסמך שמור וממתין לתחילת העיבוד" under a badge reading "ממתין לעיבוד" was exactly
+   * that. States with nothing to add carry '' and the badge then renders neither attribute.
+   */
   description: string;
   loading: boolean;
   countsAsUnassigned: boolean;
@@ -82,19 +90,32 @@ const ACTIVE_RAW_STATUSES: ReadonlySet<string> = new Set([
   'queued', 'leased', 'extracted', 'interpreting', 'processing',
 ]);
 
+/**
+ * What happened, and what the reader can do — never which internal service said it.
+ *
+ * The reader is a bookkeeper or a business owner (PRODUCT.md). "שירות עיבוד המסמכים החזיר תשובה
+ * לא תקינה" named a component they cannot see and left them with no next step; the fact they can
+ * act on is that the file survived and the read can be run again.
+ */
 const FAILURE_TEXT: ReadonlyArray<[RegExp, string]> = [
-  [/gateway_invalid_response/i, 'שירות עיבוד המסמכים החזיר תשובה לא תקינה. הקובץ נשמר, אך העיבוד לא התקדם.'],
+  [/gateway_invalid_response/i, 'הקובץ נשמר, אך קריאת המסמך נכשלה. אפשר לנסות שוב.'],
   [/document_deleted/i, 'קובץ המקור הוסר לפני שהעיבוד הושלם.'],
-  [/provider_output_truncated/i, 'קריאת המסמך נעצרה לפני שהתקבלה תוצאה מלאה.'],
-  [/provider_|ocr_|extraction_/i, 'שירות קריאת המסמך לא הצליח להשלים את הפעולה. הקובץ המקורי נשמר.'],
+  [/provider_output_truncated/i, 'קריאת המסמך נעצרה לפני שהתקבלה תוצאה מלאה. אפשר לנסות שוב.'],
+  [/provider_|ocr_|extraction_/i, 'קריאת המסמך לא הושלמה. הקובץ נשמר ואפשר לנסות שוב.'],
 ];
 
+/**
+ * Each line ends on the same load-bearing fact: it will not resume on its own.
+ *
+ * That is the whole decision the reader has to make — keep waiting, or act. Naming the worker and
+ * its expired lease described our architecture; it did not answer the question.
+ */
 const STUCK_REASON_TEXT: Record<string, string> = {
-  claim_attempt_limit_reached: 'העיבוד נעצר לאחר מספר ניסיונות חוזרים. נדרש טיפול לפני ניסיון נוסף.',
-  claim_attempt_limit_exceeded: 'העיבוד נעצר לאחר מספר ניסיונות חוזרים. נדרש טיפול לפני ניסיון נוסף.',
-  active_over_two_hours: 'המסמך נמצא בתהליך יותר משעתיים ללא השלמה.',
-  lease_expired: 'העובד שעיבד את המסמך הפסיק להגיב וההרשאה הזמנית שלו פגה.',
-  no_progress: 'לא נרשמה התקדמות בעיבוד המסמך בזמן הצפוי.',
+  claim_attempt_limit_reached: 'העיבוד נעצר אחרי כמה ניסיונות ולא ימשיך מעצמו.',
+  claim_attempt_limit_exceeded: 'העיבוד נעצר אחרי כמה ניסיונות ולא ימשיך מעצמו.',
+  active_over_two_hours: 'המסמך בעיבוד יותר משעתיים ואינו מתקדם.',
+  lease_expired: 'העיבוד נפסק באמצע ולא התחדש.',
+  no_progress: 'העיבוד לא התקדם בזמן הצפוי.',
 };
 
 function ageSeconds(value: string | null | undefined, evaluatedAt: number): number | null {
@@ -187,8 +208,9 @@ export function documentProcessingFailureText(
 }
 
 export function documentProcessingStuckText(reason: string | null | undefined): string {
-  return (reason && STUCK_REASON_TEXT[reason])
-    ?? 'המסמך לא התקדם לפי הגיל ומספר הניסיונות שנשמרו בשרת. נדרש טיפול.';
+  // The fallback used to recite the heuristic (age, attempt count, "שנשמרו בשרת"). How we
+  // concluded it is our business; that the document has stopped and will not restart is theirs.
+  return (reason && STUCK_REASON_TEXT[reason]) ?? 'העיבוד לא התקדם ולא ימשיך מעצמו.';
 }
 
 /**
@@ -230,7 +252,7 @@ export function isDocumentProcessingStuck(input: DocumentStatusInput): boolean {
  */
 export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
   if (input.status === null && !input.job) {
-    return result('unavailable', 'סטטוס נטען', 'idle', 'מצב המסמך נטען כעת');
+    return result('unavailable', 'סטטוס נטען', 'idle', '');
   }
   const status = input.job?.status ?? input.status ?? 'unprocessed';
   const evaluatedAt = input.evaluatedAt ?? Date.now();
@@ -240,6 +262,9 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
   if (status === 'failed' && isSupersededProcessingFailure(input.job?.last_error_code)) {
     return result('historical', 'הוחלף בניסיון חדש', 'idle', documentProcessingFailureText(input.job?.last_error_code));
   }
+  // Everything below picks a label first and a description second, and the description is allowed
+  // to be empty. See DocumentUiStatus.description: a sentence that restates the badge is not
+  // information, and it is read aloud on every row.
   if (status === 'failed') {
     return result('failed', 'העיבוד נכשל', 'alert', documentProcessingFailureText(input.job?.last_error_code));
   }
@@ -254,29 +279,35 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
       'processing',
       queued ? 'ממתין לעיבוד' : 'בעיבוד',
       queued ? 'await' : 'info',
-      queued ? 'המסמך שמור וממתין לתחילת העיבוד' : 'המערכת מעבדת את המסמך',
+      // Both add the same missing fact: nobody is waiting on the reader. A queued document adds
+      // the one thing a person who just photographed an invoice wants confirmed — it is saved.
+      queued ? 'הקובץ נשמר. אין צורך בפעולה.' : 'אין צורך בפעולה. המצב יתעדכן מעצמו.',
       true,
       elapsed,
       pageProgressLabel(input.job, status),
     );
   }
   if (status === 'review') {
-    return result('review', 'נדרשת בדיקה', 'await', 'העיבוד הסתיים וממתין להחלטה אנושית');
+    return result('review', 'נדרשת בדיקה', 'await', 'הקריאה הסתיימה. צריך לאשר את הנתונים.');
   }
   if (isArchived(input.document)) {
-    return result('historical', 'אורכב', 'idle', 'המסמך נקרא והועבר לארכיון ללא יעד עסקי');
+    // `entity_type` is the schema's word for it. Nobody outside this repository files a document
+    // against a "יעד עסקי" — they attach it to an invoice or to a goods receipt.
+    return result('historical', 'אורכב', 'idle', 'אין לו שיוך לחשבונית או לקבלת סחורה.');
   }
   if (isUnassigned(input.document)) {
-    return result('unassigned', 'לא משויך', 'await', 'המסמך אינו בעיבוד פעיל ועדיין לא שויך ליעד עסקי');
+    return result('unassigned', 'לא משויך', 'await', 'צריך לשייך אותו לחשבונית או לקבלת סחורה.');
   }
   if (input.document) {
+    // The only sentence worth carrying here is the supervisory one a machine filing brings with
+    // it. "המסמך שויך ליעד עסקי" under a badge reading "שויך לחשבונית" said nothing twice.
     return result('assigned', assignedLabel(input.document, input.autoAssigned ?? false), 'done',
-      input.autoAssignmentDescription ?? 'המסמך שויך ליעד עסקי');
+      input.autoAssignmentDescription ?? '');
   }
   if (status === 'completed') {
-    return result('completed', 'הושלם', 'done', 'עיבוד המסמך הושלם');
+    return result('completed', 'הושלם', 'done', '');
   }
-  return result('unavailable', 'סטטוס לא זמין', 'idle', 'מצב המסמך אינו זמין כרגע');
+  return result('unavailable', 'סטטוס לא זמין', 'idle', '');
 }
 
 export function documentStatusElapsedLabel(seconds: number | null): string | null {

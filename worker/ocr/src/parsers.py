@@ -29,6 +29,7 @@ from .errors import ProcessingError
 from .limits import DEFAULT_LIMITS, ExtractionLimits
 from .mime import mime_matches, sniff_mime, inspect_zip
 from .ocr import DisabledOcrAdapter, OcrAdapter, PageImage
+from .second_pass import improve as improve_failed_pages
 from .tempfiles import job_temp_dir
 
 
@@ -497,7 +498,12 @@ def _render_pdf_page(path: Path, page: int, limits: ExtractionLimits) -> PageIma
     return PageImage(page, output, width, height)
 
 
-def _parse_pdf(path: Path, adapter: OcrAdapter, limits: ExtractionLimits) -> dict[str, Any]:
+def _parse_pdf(
+    path: Path,
+    adapter: OcrAdapter,
+    limits: ExtractionLimits,
+    second_pass_audit: dict[str, Any],
+) -> dict[str, Any]:
     try:
         reader = PdfReader(path, strict=True)
     except (OSError, PdfReadError, ValueError) as exc:
@@ -550,7 +556,14 @@ def _parse_pdf(path: Path, adapter: OcrAdapter, limits: ExtractionLimits) -> dic
             if not rendered:
                 return
             try:
-                ocr_payloads.append(validate_extraction(adapter.extract(rendered, limits), limits))
+                extracted = validate_extraction(adapter.extract(rendered, limits), limits)
+                # Inside the try, before the rendered pages are unlinked: the recovery pass
+                # re-binarizes these exact files rather than paying to render them again.
+                ocr_payloads.append(
+                    improve_failed_pages(
+                        extracted, rendered, adapter, limits, second_pass_audit
+                    )
+                )
             finally:
                 for rendered_page in rendered:
                     rendered_page.path.unlink(missing_ok=True)
@@ -598,12 +611,17 @@ def _parse_pdf(path: Path, adapter: OcrAdapter, limits: ExtractionLimits) -> dic
     )
 
 
-def _parse_image(path: Path, adapter: OcrAdapter, limits: ExtractionLimits) -> dict[str, Any]:
+def _parse_image(
+    path: Path,
+    adapter: OcrAdapter,
+    limits: ExtractionLimits,
+    second_pass_audit: dict[str, Any],
+) -> dict[str, Any]:
     pages = _normalize_image_pages(path, limits)
     payload = validate_extraction(adapter.extract(pages, limits), limits)
     if payload["document"]["page_count"] != len(pages):
         raise ProcessingError("invalid_extraction", "OCR page count does not match the source")
-    return payload
+    return improve_failed_pages(payload, pages, adapter, limits, second_pass_audit)
 
 
 def extract_file(
@@ -612,7 +630,13 @@ def extract_file(
     *,
     adapter: OcrAdapter | None = None,
     limits: ExtractionLimits = DEFAULT_LIMITS,
+    diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """`diagnostics`, when supplied, is filled with worker-side evidence about HOW the extraction
+    was produced. It is deliberately not part of the returned payload: that payload's shape is a
+    cross-surface contract validated key-for-key here and again in the Edge function, so the
+    worker reports this through `resource_metadata` instead.
+    """
     source = Path(path).resolve()
     detected = sniff_mime(source, claimed_mime, limits)
     if detected not in IMAGE_MIME | {
@@ -632,11 +656,12 @@ def extract_file(
     if not mime_matches(detected, claimed_mime):
         raise ProcessingError("mime_mismatch", "Source bytes do not match the declared MIME type")
     ocr = adapter or DisabledOcrAdapter()
+    second_pass_audit: dict[str, Any] = {}
 
     if detected in IMAGE_MIME:
-        payload = _parse_image(source, ocr, limits)
+        payload = _parse_image(source, ocr, limits, second_pass_audit)
     elif detected == "application/pdf":
-        payload = _parse_pdf(source, ocr, limits)
+        payload = _parse_pdf(source, ocr, limits, second_pass_audit)
     elif detected == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
         payload = _parse_xlsx(source, limits)
     elif detected == "application/vnd.ms-excel":
@@ -660,4 +685,6 @@ def extract_file(
         payload = _parse_docx(_convert_to_docx(source, limits, suffix), limits)
     else:
         raise ProcessingError("unsupported_mime", "Source type is not supported")
+    if diagnostics is not None and second_pass_audit:
+        diagnostics["second_pass"] = second_pass_audit
     return validate_extraction(payload, limits)

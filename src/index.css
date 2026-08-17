@@ -68,6 +68,25 @@
   --color-chart-3: oklch(52% 0.095 275);
   --color-chart-4: oklch(53% 0.09 305);
   --color-chart-5: oklch(52% 0.085 335);
+  /* ---- Section identity — WHERE, never WHAT (18.08.2026) ----
+     Three work domains get an accent so a daily user knows which part of the business they are
+     standing in: מסמכים · רכש · כספים. They are ALIASES of the structural chart ramp, not new
+     hues: that ramp is already declared deliberately non-semantic, its contrast against paper is
+     already in the ledger, and one ramp drifting is better than two ramps drifting apart.
+
+     Two members of the ramp are deliberately NOT used here:
+       chart-1 is `action` — petrol is the brand frame, so a domain wearing it would read as
+               "this is the action colour", and חוק המסגרת הממותגת forbids petrol carrying anything.
+       chart-2 is hue 245 — the same hue as sky/`info` (sky-700 measures 243). A domain wearing it
+               would read as the info tone, which is precisely the confusion this system must not
+               create. It stays a chart series only.
+     The three that remain sit 275/305/335, each far from the tone hues its own screens show most:
+     documents shows the most `info` (sky 243) so it takes 305; money shows the most `await`
+     (amber 49) and `done` (emerald 166) so it takes 335; procurement takes 275, far from all. */
+  --color-section-documents: var(--color-chart-4);
+  --color-section-procurement: var(--color-chart-3);
+  --color-section-money: var(--color-chart-5);
+
   --color-chart-grid: oklch(89% 0.014 80);
   --color-chart-tick: oklch(50% 0.021 205);
   --color-chart-label: oklch(44% 0.022 205);
@@ -212,6 +231,45 @@ body {
   .note-alert { @apply note bg-alert-wash border-alert-line text-alert-on-soft; }
   .note-info  { @apply note bg-info-wash  border-info-line  text-info-on-soft; }
   .note-idle  { @apply note bg-idle-wash  border-idle-line  text-idle-on-soft; }
+
+  /* ---- Section identity, the second colour language — and the wall between the two ----
+     Everything above this comment is a CLAIM about data. Everything below is a statement about
+     PLACE. They are kept apart by three rules that are checked, not merely intended
+     (`src/lib/quickActions.spec.ts`, which reads THIS FILE):
+
+       1. Different source. A tone comes from `Tone` in lib/status.ts, chosen by data. An accent
+          comes from `sectionOf(pathname)`, chosen by the URL. No component takes an accent prop,
+          so no component can express "this failed" with one.
+       2. Different surface. A tone is a FILL BEHIND TEXT (`badge-*`, `note-*`) or text itself
+          (`text-*-fg`). An accent is never either: it is a glyph and a 3px rule, and it never has
+          text on it or in it. Nothing below sets a background under a text node.
+       3. Different tokens. No rule below may reference a `--color-{done,await,alert,info,idle}-*`
+          token, and no `.badge-*`/`.note-*` rule may reference a `--color-section-*` one.
+
+     One mapping, two consumers. The accent resolves from a `data-section` attribute set in exactly
+     one file (Layout.tsx): on the active navigation item, and on `<main>` for the current screen. */
+  [data-section="documents"]   { --section-accent: var(--color-section-documents); }
+  [data-section="procurement"] { --section-accent: var(--color-section-procurement); }
+  [data-section="money"]       { --section-accent: var(--color-section-money); }
+
+  /* The section glyph — the icon of the active navigation item. It sits INSIDE the active item's
+     paper pill, never on the dark shell: the accents measure 5.0–5.7:1 on paper and only ~2.2:1
+     on `shell`, so a rail drawn straight onto the sidebar would be an invisible decoration. The
+     `currentColor` fallback means an item with no domain simply keeps the pill's ink. */
+  .section-glyph { color: var(--section-accent, currentColor); }
+
+  /* The section mark — a short rule under the page title, the paper-side half of the same cue.
+     28×3px cannot be read as a divider, and it carries no meaning the `h1` beside it does not
+     already state in words, so it adds redundancy rather than colour-only information.
+     Hidden wherever no domain is in scope, so /dashboard and the בקרה screens show nothing. */
+  .section-mark { display: none; }
+  [data-section] .section-mark {
+    display: block;
+    inline-size: 1.75rem;
+    block-size: 3px;
+    border-radius: 9999px;
+    background: var(--section-accent);
+  }
 
   /* No uppercase/tracking: Hebrew has no case — the tracked-caps table header was a
      Latin-template relic. Hierarchy comes from size, weight and color alone. */

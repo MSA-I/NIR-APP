@@ -185,13 +185,17 @@ def _extract_child(
         # still runs first so LibreOffice, pdftoppm and tesseract inherit no credential at all.
         _scrub_credential_env()
         _apply_resource_limits(job_timeout_seconds, max_memory_mb, limits)
+        diagnostics: dict[str, Any] = {}
         payload = extract_file(
             source,
             claimed_mime,
             adapter=create_ocr_adapter(adapter_name, openai_api_key, report_progress),
             limits=limits,
+            diagnostics=diagnostics,
         )
-        result: dict[str, Any] = {"ok": True, "payload": payload}
+        # Sibling of the payload, never inside it: the payload's shape is a cross-surface
+        # contract. This travels to `resource_metadata`, which is free-form by design.
+        result: dict[str, Any] = {"ok": True, "payload": payload, "diagnostics": diagnostics}
     except ProcessingError as exc:
         result = {
             "ok": False,
@@ -306,7 +310,7 @@ def _run_extraction(
     stop: threading.Event,
     limits: ExtractionLimits,
     progress_path: Path,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
     result_path = workdir / "result.json"
     context = multiprocessing.get_context("spawn")
     _scrub_credential_env()
@@ -362,7 +366,8 @@ def _run_extraction(
             error.get("message", "Document extraction failed unexpectedly"),
             retryable=error.get("retryable") is True,
         )
-    return result["payload"]
+    diagnostics = result.get("diagnostics")
+    return result["payload"], diagnostics if type(diagnostics) is dict else {}
 
 
 def _run_scan(
@@ -514,13 +519,26 @@ def _process_job(
             progress_file.append(workdir / "progress.json")
             thread.start()
             heartbeat_started = True
-            payload = _run_extraction(
+            payload, diagnostics = _run_extraction(
                 source, job["mime_type"], config, workdir, stop, limits, progress_file[0]
             )
             if heartbeat_lost.is_set():
                 raise GatewayError("lease_lost", "Document processing lease was lost")
             engine, model, model_version = _pipeline_identity(config.adapter_name)
             duration_ms = max(0, round((time.monotonic() - started) * 1_000))
+            # Extraction diagnostics first, worker identity last: a diagnostic key can never
+            # shadow the evidence of which worker produced this receipt. `second_pass` appears
+            # only when a page's first read measurably failed and the worker paid for one
+            # re-binarized retry; its absence means the document cost exactly one pass, which
+            # is the normal case and the reason this is auditable rather than assumed.
+            resource_metadata: dict[str, Any] = dict(diagnostics)
+            resource_metadata.update(
+                {
+                    "worker_version": WORKER_VERSION,
+                    "adapter": config.adapter_name,
+                    "python": platform.python_version(),
+                }
+            )
             completion = _gateway_retry(
                 lambda: client.complete(
                     job,
@@ -537,11 +555,7 @@ def _process_job(
                         "contract_version": job["contract_version"],
                         "payload": payload,
                         "duration_ms": duration_ms,
-                        "resource_metadata": {
-                            "worker_version": WORKER_VERSION,
-                            "adapter": config.adapter_name,
-                            "python": platform.python_version(),
-                        },
+                        "resource_metadata": resource_metadata,
                     }
                 )
             )

@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
 import { reasonOr } from '../lib/reason';
-import { ClipboardCheck, Minus, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, ClipboardCheck, Minus, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import {
   DataTable,
+  Disclosure,
   ErrorNote,
-  KpiCard,
   Modal,
-  Note,
-  SkeletonCards,
+  PageHeader,
+  Skeleton,
   SkeletonTable,
   useToast,
   type Column,
@@ -77,6 +77,38 @@ const COMMAND_COPY: Record<InventoryCommand, { title: string; quantity: string; 
   consumption: { title: 'רישום צריכה', quantity: 'כמות שנצרכה', submit: 'רישום הצריכה' },
   adjustment: { title: 'התאמת מלאי ידנית', quantity: 'שינוי בכמות (חיובי או שלילי)', submit: 'רישום ההתאמה' },
 };
+
+/**
+ * One segment of the stock-state band.
+ *
+ * These three counts answer a single question — how measurable is my stock right now — so they
+ * live in ONE card as segments with logical dividers, the anatomy DESIGN.md already names for the
+ * dashboard money strip, rather than as three separate `KpiCard` boxes that a phone stacks into
+ * three separate panels with three borders, three radii and three shadows. Same figures, same
+ * `—`-for-unknown rule, same click-to-filter targets, same 44px hit areas.
+ *
+ * `border-s` / `border-t` only — never `divide-x`, which is physical and inverts under RTL.
+ */
+function StockStat({ title, value, sub, tone = 'idle', onClick }: {
+  title: string; value: string; sub: string; tone?: 'idle' | 'alert'; onClick?: () => void;
+}) {
+  const body = (
+    <>
+      <div className="text-xs font-medium text-ink-muted">{title}</div>
+      <div className={`kpi-value-compact mt-1 num ${tone === 'alert' ? 'text-alert-fg' : 'text-ink'}`}>{value}</div>
+      <div className="mt-0.5 text-xs text-ink-muted">{sub}</div>
+    </>
+  );
+  const shared = 'block min-h-20 border-t border-line-soft px-4 py-3 text-start first:border-t-0 sm:border-s sm:border-t-0 sm:px-5 sm:first:border-s-0';
+  return onClick
+    ? (
+      <button type="button" onClick={onClick}
+        className={`${shared} w-full cursor-pointer transition-colors hover:bg-surface-sunken active:bg-action-wash/70`}>
+        {body}
+      </button>
+    )
+    : <div className={shared}>{body}</div>;
+}
 
 function movementBadge(type: InventoryMovement['movement_type']) {
   const tone = type === 'receipt' || type === 'stocktake'
@@ -213,47 +245,79 @@ export default function Inventory() {
   const low = balances.data?.filter((row) => row.is_low_stock === true).length ?? null;
   const uncounted = balances.data?.filter((row) => !row.is_counted).length ?? null;
 
+  const movementCount = movements.data?.length ?? null;
+  const latestMovementAt = movements.data?.[0]?.created_at ?? null;
+
   if (balances.loading && movements.loading) {
-    return <div className="space-y-5"><SkeletonCards count={3} cols={3} /><SkeletonTable cols={5} /></div>;
+    return (
+      <div role="status" aria-busy="true" className="space-y-5">
+        <span className="sr-only">טוען</span>
+        <Skeleton className="h-7 w-24" />
+        {/* One band of three segments, matching the settled shape — a three-card placeholder
+            would promise boxes the data no longer brings and the page would jump. */}
+        <div className="card grid grid-cols-1 sm:grid-cols-3">
+          {Array.from({ length: 3 }, (_, index) => (
+            <div key={index} className="min-h-20 border-t border-line-soft px-4 py-3 first:border-t-0 sm:border-s sm:border-t-0 sm:px-5 sm:first:border-s-0">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="mt-2 h-6 w-16" />
+            </div>
+          ))}
+        </div>
+        <SkeletonTable title={false} cols={5} />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="page-title">מלאי</h1>
-          <p className="mt-1 text-sm text-ink-soft">יתרה משוערת מתנועות קבלה, צריכה וספירה פיזית.</p>
-        </div>
-        <button type="button" className="btn-secondary" disabled={balances.fetching || movements.fetching}
-          onClick={() => { void balances.refetch(); void movements.refetch(); }} aria-label="רענון נתוני מלאי ותנועות">
-          <RefreshCw size={16} className={balances.fetching || movements.fetching ? 'animate-spin' : ''} aria-hidden="true" /> רענון
-        </button>
-      </header>
-
-      <Note tone="idle">
-        מוצר שלא בוצעה לו ספירה פיזית מוצג כ־<span className="num">—</span>. זהו מצב לא ידוע, לא מלאי אפס.
-      </Note>
-
-      <Note tone="info">
-        צריכה יומית מחושבת רק מתנועות צריכה שנרשמו מאז הספירה האחרונה, ועד 30 יום. צפי האזילה והצעת הרכש מסתמכים על היתרה המדודה בלבד; אספקה צפויה מוצגת בנפרד ואינה נחשבת כאילו כבר הגיעה. ההצעה אינה יוצרת הזמנה.
-      </Note>
+      {/* The one sentence that prevents a wrong purchase — a dash is an unmeasured product, and
+          reading it as zero stock is how somebody orders a pallet of what they already have — is
+          the page's reading key, so it belongs in the header's meta line. It used to sit below the
+          title in a full `Note` box: a bordered, tinted alert surface standing permanently over a
+          statement that never changes and warns of nothing. Same words, same position, no box. */}
+      <PageHeader title="מלאי" meta="מוצר שלא נספר מוצג כמקף — יתרה לא ידועה, לא אפס."
+        actions={
+          <button type="button" className="btn-secondary" disabled={balances.fetching || movements.fetching}
+            onClick={() => { void balances.refetch(); void movements.refetch(); }} aria-label="רענון נתוני מלאי ותנועות">
+            <RefreshCw size={16} className={balances.fetching || movements.fetching ? 'animate-spin' : ''} aria-hidden="true" /> רענון
+          </button>
+        } />
 
       <section aria-labelledby="inventory-overview-title">
-        <h2 id="inventory-overview-title" className="section-title mb-3">תמונת מצב</h2>
+        <h2 id="inventory-overview-title" className="section-title mb-2">תמונת מצב</h2>
         {balances.error && !balances.data ? <ErrorNote message={balances.error} /> : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <KpiCard title="מוצרים שנספרו" value={counted == null ? '—' : fmtNum(counted)} sub="עם יתרה ניתנת למדידה" />
-            <KpiCard title="מתחת למינימום" value={low == null ? '—' : fmtNum(low)} sub="דורש בדיקת רכש" tone={low && low > 0 ? 'alert' : 'idle'} onClick={low && low > 0 ? () => setFilter('low') : undefined} />
-            <KpiCard title="ממתינים לספירה" value={uncounted == null ? '—' : fmtNum(uncounted)} sub="היתרה שלהם אינה ידועה" tone={uncounted && uncounted > 0 ? 'await' : 'idle'} onClick={uncounted && uncounted > 0 ? () => setFilter('uncounted') : undefined} />
+          <div className="card grid grid-cols-1 sm:grid-cols-3">
+            <StockStat title="מוצרים שנספרו" value={counted == null ? '—' : fmtNum(counted)} sub="עם יתרה ניתנת למדידה" />
+            <StockStat title="מתחת למינימום" value={low == null ? '—' : fmtNum(low)} sub="דורש בדיקת רכש"
+              tone={low && low > 0 ? 'alert' : 'idle'} onClick={low && low > 0 ? () => setFilter('low') : undefined} />
+            {/* `idle`, matching the "טרם נספר" badge in the table below. The same set of products
+                was amber here and neutral there, on one screen. Not-counted is the ABSENCE of a
+                measurement — idle is literally "היעדר טענה" — and on a fresh tenant it is every
+                product, so amber here would stop meaning "work waiting" (the reasoning already
+                applied to INVOICE_EXPORT_STATUS.not_sent in status.ts). "מלאי נמוך" stays the one
+                coloured claim on this screen. The segment is still clickable; the filter did not move. */}
+            <StockStat title="ממתינים לספירה" value={uncounted == null ? '—' : fmtNum(uncounted)} sub="היתרה שלהם אינה ידועה"
+              onClick={uncounted && uncounted > 0 ? () => setFilter('uncounted') : undefined} />
           </div>
         )}
       </section>
 
       <section aria-labelledby="inventory-balances-title">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 id="inventory-balances-title" className="section-title">יתרות מוצרים</h2>
           {balances.fetching && balances.data && <span className="text-xs text-ink-muted" role="status">מעדכן יתרות…</span>}
         </div>
+        {/* The method note moved here from above the figures, and lost the card it was wrapped in.
+            It describes four columns of the table directly below it — צריכה יומית, צפי אזילה,
+            הצעת רכש — so this is where a person asks the question. A `Disclosure` inside a `.card`
+            was a box around a box: the summary row already carries a hairline and a chevron. */}
+        <Disclosure className="mb-3 border-y border-line-soft" title="איך המספרים כאן מחושבים">
+          <ul className="space-y-1.5 text-sm text-ink-body">
+            <li>צריכה יומית — רק תנועות צריכה מאז הספירה האחרונה, עד <span className="num">30</span> יום.</li>
+            <li>צפי אזילה והצעת רכש — לפי היתרה שנספרה בלבד. אספקה צפויה מוצגת בנפרד ואינה נחשבת כאילו הגיעה.</li>
+            <li>הצעת הרכש אינה יוצרת הזמנה.</li>
+          </ul>
+        </Disclosure>
         {balances.loading && !balances.data ? <SkeletonTable title={false} cols={5} /> : (
           <DataTable rows={rows} columns={balanceColumns} searchable pageSize={20}
             searchLabel="חיפוש מוצר במלאי"
@@ -282,17 +346,34 @@ export default function Inventory() {
         )}
       </section>
 
-      <section aria-labelledby="inventory-movements-title">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      {/* The movement feed is the LEDGER BEHIND the balances above, not a second decision surface:
+          twenty rows of it, in mobile card form, were roughly half the height of this page, sitting
+          under a heading of exactly the same weight as the table that actually drives a purchase.
+          It is folded, not dropped — DESIGN.md's חוק תיבת הדואר: what folds is evidence and detail,
+          and the count on the summary row IS the content, so "how many movements and when was the
+          last one" stays on screen while closed. A failed read is never folded away: it takes over
+          the summary row as an alert badge, and the table keeps `error` so its body can never
+          fall through to "עדיין לא נרשמו תנועות" over a load that failed (gate B30). */}
+      <details className="group border-y border-line-soft" aria-labelledby="inventory-movements-title">
+        <summary className="-mx-2 flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 rounded-lg px-2 py-2.5 hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
           <h2 id="inventory-movements-title" className="section-title">תנועות אחרונות</h2>
+          {movements.error
+            ? <span className="badge-alert">שגיאה בטעינת התנועות</span>
+            : movementCount != null && <span className="badge-idle num">{fmtNum(movementCount)}</span>}
           {movements.fetching && movements.data && <span className="text-xs text-ink-muted" role="status">מעדכן תנועות…</span>}
+          <span className="ms-auto flex items-center gap-2 text-xs text-ink-muted">
+            {latestMovementAt && <span>אחרונה: <span className="num">{fmtDateTime(latestMovementAt)}</span></span>}
+            <ChevronDown size={16} className="shrink-0 text-ink-ghost transition-transform duration-200 ease-out group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+          </span>
+        </summary>
+        <div className="border-t border-line-soft pb-4 pt-3">
+          {movements.loading && !movements.data ? <SkeletonTable title={false} toolbar={false} cols={6} /> : (
+            <DataTable rows={movements.data ?? []} columns={movementColumns} pageSize={20}
+              error={movements.error} emptyTitle="עדיין לא נרשמו תנועות מלאי"
+              emptySubtitle="ספירה פיזית ראשונה תיצור את נקודת הפתיחה למוצר." />
+          )}
         </div>
-        {movements.loading && !movements.data ? <SkeletonTable title={false} cols={6} /> : (
-          <DataTable rows={movements.data ?? []} columns={movementColumns} pageSize={20}
-            error={movements.error} emptyTitle="עדיין לא נרשמו תנועות מלאי"
-            emptySubtitle="ספירה פיזית ראשונה תיצור את נקודת הפתיחה למוצר." />
-        )}
-      </section>
+      </details>
 
       {command && (
         <InventoryCommandModal command={command.type} product={command.product}

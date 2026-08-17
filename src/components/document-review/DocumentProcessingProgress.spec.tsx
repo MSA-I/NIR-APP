@@ -73,7 +73,10 @@ describe('רצועת שלבי העיבוד', () => {
       now={NOW}
     />);
     expect(currentStepLabel()).toContain('ממתין בתור');
-    expect(screen.getByText(/ממתין 8 דק׳ לעובד פנוי/)).toBeTruthy();
+    // The measured wait, and nothing about the worker pool it is waiting on: "לעובד פנוי" named a
+    // process the reader cannot see, next to a step already labelled "ממתין בתור".
+    expect(screen.getByText(/ממתין 8 דק׳\. העבודה תתחיל מעצמה\./)).toBeTruthy();
+    expect(document.body.textContent).not.toContain('עובד פנוי');
     // The queue is not the work, so nothing here may look like measured progress.
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
@@ -98,7 +101,9 @@ describe('רצועת שלבי העיבוד', () => {
     />);
     expect(currentStepLabel()).toContain('קריאת המסמך');
     expect(screen.queryByRole('progressbar')).toBeNull();
-    expect(screen.getByText(/מספר העמודים טרם דווח/)).toBeTruthy();
+    // Still says the count is missing — DESIGN.md §5 requires it rather than silence. What went is
+    // the telemetry framing: "טרם דווח" is a field nobody reported, "עדיין לא ידוע" is the fact.
+    expect(screen.getByText('מספר העמודים עדיין לא ידוע.')).toBeTruthy();
   });
 
   it('מציגה מונה מקטעים אמיתי בזמן פירוש', () => {
@@ -122,7 +127,10 @@ describe('רצועת שלבי העיבוד', () => {
     />);
     expect(currentStepLabel()).toContain('פירוש הנתונים');
     expect(screen.queryByRole('progressbar')).toBeNull();
-    expect(screen.getByText('הנתונים מתפרשים לשדות ולשורות.')).toBeTruthy();
+    // The line under the strip may not be the step label again. "הנתונים מתפרשים לשדות ולשורות"
+    // was "פירוש הנתונים" a second time; the missing segment count is the fact it did not carry.
+    expect(screen.getByText('מספר המקטעים עדיין לא ידוע.')).toBeTruthy();
+    expect(document.body.textContent).not.toContain('מתפרשים לשדות ולשורות');
   });
 
   it('לא מציגה בר התקדמות לג׳וב תקוע', () => {

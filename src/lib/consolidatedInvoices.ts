@@ -218,15 +218,48 @@ export function previousJerusalemMonth(now: Date = new Date()): PreviousMonth {
   };
 }
 
+// One state, one string. `נדרשת בדיקה` is the canonical wording in documentStatus.ts, and a page
+// that says `דורשת בדיקה` sends the reader looking for a label the product never shows.
 export function consolidatedStatusLabel(status: ConsolidatedInvoiceStatus): string {
   return ({
     awaiting_anchor: 'ממתינה לחשבונית מרכזת',
-    needs_review: 'דורשת בדיקה',
+    needs_review: 'נדרשת בדיקה',
     reconciling: 'מבצעת התאמה',
     matched: 'מותאם',
     warnings: 'נרשמה עם אזהרות',
     blocked: 'חסומה לרישום',
   } as const)[status];
+}
+
+// The packet page list used to print `page.document_type` and `page.job_status` straight into the
+// sentence, so a Hebrew screen showed raw pipeline tokens (`queued`, `leased`, `delivery_note`).
+// Unknown values are named as unknown rather than echoed.
+export function consolidatedPageTypeLabel(documentType: string | null): string {
+  if (!documentType) return 'ממתין לזיהוי';
+  return ({
+    invoice: 'חשבונית',
+    delivery_note: 'תעודת משלוח',
+    credit_note: 'חשבונית זיכוי',
+    price_list: 'מחירון',
+    quote: 'הצעת מחיר',
+    payment_confirmation: 'אישור תשלום',
+    tax_receipt: 'קבלה',
+    other: 'מסמך אחר',
+  } as Record<string, string>)[documentType] ?? 'ממתין לזיהוי';
+}
+
+export function consolidatedPageStatusLabel(jobStatus: string | null): string {
+  if (!jobStatus) return 'ממתין לעיבוד';
+  return ({
+    awaiting_scan: 'ממתין לסריקה',
+    queued: 'ממתין לעיבוד',
+    leased: 'בעיבוד',
+    extracted: 'בעיבוד',
+    interpreting: 'בעיבוד',
+    review: 'נדרשת בדיקה',
+    completed: 'הושלם',
+    failed: 'העיבוד נכשל',
+  } as Record<string, string>)[jobStatus] ?? 'ממתין לעיבוד';
 }
 
 export function consolidatedStatusTone(status: ConsolidatedInvoiceStatus): 'idle' | 'info' | 'alert' | 'await' | 'done' {

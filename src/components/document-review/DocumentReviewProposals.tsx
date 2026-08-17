@@ -6,7 +6,7 @@ import { toHebrewError } from '../../lib/errors';
 import { fmtDateTime } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
 import type { DocumentAnnotation, DocumentFeedback, DocumentLearningRule, InterpretationContract } from '../../lib/useDocumentProcessing';
-import { Note, useToast } from '../ui';
+import { Disclosure, Note, useToast } from '../ui';
 import {
   ANNOTATION_SOURCE_LABELS,
   DOCUMENT_TYPE_LABELS,
@@ -367,9 +367,14 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
   return (
     <div className="mt-4 border-t border-line pt-4">
       <p className="text-sm text-ink-soft">{action.blurb}</p>
+      {/* Secondary, not primary. This card renders on the same screen as `DocumentAssessmentPanel`,
+          whose "אישור המסמך" already creates the supplier invoice or the draft receipt — with the
+          reason, the ledger row and the audit entry. Two petrol buttons offering two routes to the
+          same outcome asked the reviewer to pick a mechanism; the shortcut stays, its weight does
+          not. */}
       <button
         type="button"
-        className="btn-primary mt-3"
+        className="btn-secondary mt-3"
         disabled={busy}
         onClick={() => {
           if (documentType === 'invoice') navigate(`/invoices/new?document=${documentId}`);
@@ -554,7 +559,17 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
     () => latestFeedbackByAnnotation(snapshot.feedback),
     [snapshot.feedback],
   );
-  // Surfaced above the table too: a reviewer scanning 37 rows should not have to find the bad one.
+  /**
+   * The proposed-lines table builds its rows only once someone opens it.
+   *
+   * A real price list runs to 338 lines, and each row is a `<dl>` of every key the interpreter
+   * returned — roughly 1,700 elements for content nobody asked to see. A shut `<details>` still
+   * renders all of it and re-diffs it on every refetch and every feedback submit, so the fold has
+   * to gate construction, not only visibility. Same idiom as the workspace's "פרטים טכניים".
+   */
+  const [linesOpen, setLinesOpen] = useState(false);
+  // Counted whether or not the table is open, because this one stays on screen: broken arithmetic
+  // is a money claim, and a reviewer must not have to unfold anything to learn it exists.
   const inconsistentRows = useMemo(
     () => (interpretation?.payload.line_items ?? [])
       .filter((item) => lineItemArithmetic(item.values)?.consistent === false).length,
@@ -622,136 +637,146 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
 
       <TypeReviewControls snapshot={snapshot} canDecide onRefetch={onRefetch} />
 
-      <div className="card card-pad">
-        <h3 className="section-title">שדות מוצעים</h3>
-        <div className="mt-3 divide-y divide-line">
-          {interpretation.payload.fields.length === 0 && <p className="py-3 text-sm text-ink-muted">לא הוצעו שדות.</p>}
-          {interpretation.payload.fields.map((field) => (
-            <div key={field.key} className="grid gap-1 py-3 sm:grid-cols-[minmax(8rem,0.4fr)_minmax(0,1fr)] sm:gap-4">
-              <div className="font-medium text-ink-soft">{fieldKeyLabel(field.key)}</div>
-              <div className="min-w-0">
-                <div className="break-words text-ink-body">{valueText(field.value)}</div>
-                {/* Evidence block ids ("block-heading") named nothing a reviewer could act on.
-                    The evidence itself is not lost: the source viewer beside this list is where a
-                    value is checked against the document. */}
-                <div className="mt-1 text-xs text-ink-muted">{confidenceLabel(field.confidence)}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Stays on the surface, above the fold that swallows the table it refers to. Broken
+          arithmetic is a money claim, and CLAUDE.md's staged-disclosure rule folds detail, never a
+          finding. The sentence names the count and what to do, so it stands on its own. */}
+      {inconsistentRows > 0 && (
+        <Note tone="alert" role="alert">
+          <ShieldAlert className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
+          <span>
+            ב־<span className="num">{inconsistentRows}</span> שורות הכפל אינו מסתדר: כמות × מחיר ליחידה
+            אינו שווה לסכום השורה. בדוק אותן מול המסמך לפני אישור.
+          </span>
+        </Note>
+      )}
 
-      <div className="card card-pad min-w-0">
-        <h3 className="section-title">שורות מוצעות</h3>
-        {interpretation.payload.line_items.length === 0 ? (
-          <p className="mt-3 text-sm text-ink-muted">לא זוהו שורות פריט.</p>
-        ) : (
-          <>
-            {inconsistentRows > 0 && (
-              <Note tone="alert" role="alert" className="mt-3 flex items-start gap-2">
-                <ShieldAlert className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
-                <span>
-                  ב־<span className="num">{inconsistentRows}</span> שורות הכפל אינו מסתדר: כמות × מחיר ליחידה
-                  אינו שווה לסכום השורה. בדוק אותן מול המסמך לפני אישור.
-                </span>
-              </Note>
-            )}
-            <div className="mt-3 max-w-full overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label="טבלת שורות מוצעות; ניתן לגלול בתוך הטבלה">
-              <table className="min-w-full bg-surface">
-                <thead>
-                  <tr className="border-b border-line">
-                    <th className="th">שורת מקור</th>
-                    <th className="th">ערכים מוצעים</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {interpretation.payload.line_items.map((item, index) => {
-                    const arithmetic = lineItemArithmetic(item.values);
-                    return (
-                      <tr key={`${item.source_row ?? 'none'}-${index}`} className="border-b border-line last:border-b-0">
-                        <td className="td num">{item.source_row ?? '—'}</td>
-                        <td className="td">
-                          <dl className="space-y-1">{Object.entries(item.values).map(([key, value]) => <div key={key}><dt className="inline font-medium">{lineItemKeyLabel(key)}: </dt><dd className="inline">{valueText(value)}</dd></div>)}</dl>
-                          {arithmetic && !arithmetic.consistent && (
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <span className="badge-alert">הכפל אינו מסתדר</span>
-                              <span className="text-xs text-ink-muted">
-                                <span className="num">{arithmetic.quantity}</span> × <span className="num">{arithmetic.unitPrice}</span> = <span className="num">{arithmetic.expected}</span>, ובשורה <span className="num">{arithmetic.lineTotal}</span>
-                              </span>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+      {/* Everything the machine produced and is sure about, folded into one card of counted rows.
+          It is evidence to check a decision against, not the decision — so it opens on demand. */}
+      <div className="card min-w-0 overflow-hidden" data-testid="document-evidence">
+        <h3 className="section-title px-4 pt-4 sm:px-5">פירוט מהמסמך</h3>
+
+        {interpretation.payload.fields.length > 0 ? (
+          <Disclosure className="mt-2 border-t border-line-soft" title="שדות מוצעים" count={interpretation.payload.fields.length}>
+            <div className="divide-y divide-line">
+              {interpretation.payload.fields.map((field) => (
+                <div key={field.key} className="grid gap-1 py-3 first:pt-0 sm:grid-cols-[minmax(8rem,0.4fr)_minmax(0,1fr)] sm:gap-4">
+                  <div className="font-medium text-ink-soft">{fieldKeyLabel(field.key)}</div>
+                  <div className="min-w-0">
+                    <div className="break-words text-ink-body">{valueText(field.value)}</div>
+                    {/* Evidence block ids ("block-heading") named nothing a reviewer could act on.
+                        The evidence itself is not lost: the source viewer beside this list is where
+                        a value is checked against the document. */}
+                    <div className="mt-1 text-xs text-ink-muted">{confidenceLabel(field.confidence)}</div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </>
+          </Disclosure>
+        ) : (
+          <p className="mt-2 border-t border-line-soft px-3 py-3 text-sm text-ink-muted sm:px-4">לא הוצעו שדות.</p>
+        )}
+
+        {interpretation.payload.line_items.length > 0 ? (
+          <Disclosure className="border-t border-line-soft" title="שורות מוצעות"
+            count={interpretation.payload.line_items.length} onToggle={setLinesOpen}>
+            {linesOpen && (
+              <div className="max-w-full overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label="טבלת שורות מוצעות; ניתן לגלול בתוך הטבלה">
+                <table className="min-w-full bg-surface">
+                  <thead>
+                    <tr className="border-b border-line">
+                      <th className="th">שורת מקור</th>
+                      <th className="th">ערכים מוצעים</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {interpretation.payload.line_items.map((item, index) => {
+                      const arithmetic = lineItemArithmetic(item.values);
+                      return (
+                        <tr key={`${item.source_row ?? 'none'}-${index}`} className="border-b border-line last:border-b-0">
+                          <td className="td num">{item.source_row ?? '—'}</td>
+                          <td className="td">
+                            <dl className="space-y-1">{Object.entries(item.values).map(([key, value]) => <div key={key}><dt className="inline font-medium">{lineItemKeyLabel(key)}: </dt><dd className="inline">{valueText(value)}</dd></div>)}</dl>
+                            {arithmetic && !arithmetic.consistent && (
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className="badge-alert">הכפל אינו מסתדר</span>
+                                <span className="text-xs text-ink-muted">
+                                  <span className="num">{arithmetic.quantity}</span> × <span className="num">{arithmetic.unitPrice}</span> = <span className="num">{arithmetic.expected}</span>, ובשורה <span className="num">{arithmetic.lineTotal}</span>
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Disclosure>
+        ) : (
+          <p className="border-t border-line-soft px-3 py-3 text-sm text-ink-muted sm:px-4">לא זוהו שורות פריט.</p>
+        )}
+
+        {snapshot.annotations.length > 0 && (
+          <Disclosure className="border-t border-line-soft" title="הערות והחלטות" count={snapshot.annotations.length}>
+            <p className="text-sm text-ink-muted">המקור מצוין בכל רשומה; רק משוב מפורש משנה את מצב ההצעה.</p>
+            <div className="mt-3 space-y-3">
+              {snapshot.annotations.map((annotation) => {
+                const feedback = feedbackByAnnotation.get(annotation.id);
+                return (
+                  <article key={annotation.id} className="rounded-lg border border-line bg-surface p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h4 className="break-words font-semibold text-ink-body">{annotation.label}</h4>
+                        <p className="mt-1 break-words text-sm text-ink-soft">{annotation.tag_key} · {annotationTarget(snapshot, annotation)}</p>
+                        <p className="mt-1 text-xs text-ink-muted">
+                          {confidenceLabel(annotation.confidence)} · {ANNOTATION_SOURCE_LABELS[annotation.source]} · {fmtDateTime(annotation.created_at)}
+                          {annotation.rule_version ? ` · כלל v${annotation.rule_version}` : ''}
+                        </p>
+                      </div>
+                      <span className={annotation.active ? 'badge-info' : 'badge-idle'}>{annotation.active ? 'פעיל' : 'לא פעיל'}</span>
+                    </div>
+                    {feedback && (
+                      <div className="mt-3 rounded-lg bg-surface-sunken p-3 text-sm text-ink-soft">
+                        <p><strong>{FEEDBACK_LABELS[feedback.feedback_type]}</strong> · {fmtDateTime(feedback.created_at)}</p>
+                        <p className="mt-1 break-words">{feedback.reason}</p>
+                        <p className="mt-1 break-words text-xs text-ink-muted">מבצע {actorName(snapshot, feedback.actor_id)}</p>
+                      </div>
+                    )}
+                    {!feedback && annotation.active && annotation.source !== 'user' && snapshot.job?.status === 'review' && (
+                      <FeedbackControls annotation={annotation} onRefetch={onRefetch} />
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          </Disclosure>
+        )}
+
+        {snapshot.ruleApplications.length > 0 && (
+          <Disclosure className="border-t border-line-soft" title="כללים שהופעלו" count={snapshot.ruleApplications.length}>
+            <p className="text-sm text-ink-muted">כל יישום מקושר לגרסה המדויקת של הכלל ולסימון שעליו פעל.</p>
+            <div className="mt-3 space-y-3">
+              {snapshot.ruleApplications.map((application) => {
+                const rule = ruleById.get(application.rule_id);
+                return (
+                  <article key={application.id} className="rounded-lg border border-line bg-surface p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h4 className="break-words font-semibold text-ink-body">{rule ? `${rule.label} (${rule.tag_key})` : `כלל ${application.rule_id}`}</h4>
+                        <p className="mt-1 text-sm text-ink-soft">הופעל על {ruleApplicationTarget(snapshot, application.target_id)}; {confidenceLabel(application.confidence)}</p>
+                        <p className="mt-1 text-sm text-ink-muted"><strong>למה הופעל:</strong> {ruleWhy(rule)}</p>
+                      </div>
+                      <span className="badge-done">כלל v{application.rule_version}</span>
+                    </div>
+                    {rule && snapshot.job?.status === 'review' && <RuleControls rule={rule} onRefetch={onRefetch} />}
+                  </article>
+                );
+              })}
+            </div>
+          </Disclosure>
         )}
       </div>
-
-      {snapshot.annotations.length > 0 && (
-        <div className="card card-pad">
-          <h3 className="section-title">הערות והחלטות</h3>
-          <p className="mt-1 text-sm text-ink-muted">המקור מצוין בכל רשומה; רק משוב מפורש משנה את מצב ההצעה.</p>
-          <div className="mt-4 space-y-3">
-          {snapshot.annotations.map((annotation) => {
-            const feedback = feedbackByAnnotation.get(annotation.id);
-            return (
-              <article key={annotation.id} className="rounded-lg border border-line bg-surface p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h4 className="break-words font-semibold text-ink-body">{annotation.label}</h4>
-                    <p className="mt-1 break-words text-sm text-ink-soft">{annotation.tag_key} · {annotationTarget(snapshot, annotation)}</p>
-                    <p className="mt-1 text-xs text-ink-muted">
-                      {confidenceLabel(annotation.confidence)} · {ANNOTATION_SOURCE_LABELS[annotation.source]} · {fmtDateTime(annotation.created_at)}
-                      {annotation.rule_version ? ` · כלל v${annotation.rule_version}` : ''}
-                    </p>
-                  </div>
-                  <span className={annotation.active ? 'badge-info' : 'badge-idle'}>{annotation.active ? 'פעיל' : 'לא פעיל'}</span>
-                </div>
-                {feedback && (
-                  <div className="mt-3 rounded-lg bg-surface-sunken p-3 text-sm text-ink-soft">
-                    <p><strong>{FEEDBACK_LABELS[feedback.feedback_type]}</strong> · {fmtDateTime(feedback.created_at)}</p>
-                    <p className="mt-1 break-words">{feedback.reason}</p>
-                    <p className="mt-1 break-words text-xs text-ink-muted">מבצע {actorName(snapshot, feedback.actor_id)}</p>
-                  </div>
-                )}
-                {!feedback && annotation.active && annotation.source !== 'user' && snapshot.job?.status === 'review' && (
-                  <FeedbackControls annotation={annotation} onRefetch={onRefetch} />
-                )}
-              </article>
-            );
-          })}
-          </div>
-        </div>
-      )}
-
-      {snapshot.ruleApplications.length > 0 && (
-        <div className="card card-pad">
-          <h3 className="section-title">כללים שהופעלו</h3>
-          <p className="mt-1 text-sm text-ink-muted">כל יישום מקושר לגרסה המדויקת של הכלל ולסימון שעליו פעל.</p>
-          <div className="mt-4 space-y-3">
-            {snapshot.ruleApplications.map((application) => {
-              const rule = ruleById.get(application.rule_id);
-              return (
-                <article key={application.id} className="rounded-lg border border-line bg-surface p-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h4 className="break-words font-semibold text-ink-body">{rule ? `${rule.label} (${rule.tag_key})` : `כלל ${application.rule_id}`}</h4>
-                      <p className="mt-1 text-sm text-ink-soft">הופעל על {ruleApplicationTarget(snapshot, application.target_id)}; {confidenceLabel(application.confidence)}</p>
-                      <p className="mt-1 text-sm text-ink-muted"><strong>למה הופעל:</strong> {ruleWhy(rule)}</p>
-                    </div>
-                    <span className="badge-done">כלל v{application.rule_version}</span>
-                  </div>
-                  {rule && snapshot.job?.status === 'review' && <RuleControls rule={rule} onRefetch={onRefetch} />}
-                </article>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </section>
   );
 }

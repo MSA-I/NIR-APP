@@ -80,8 +80,11 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
               <span className="label">התבנית שנבחרה לפי הקדימות המאושרת</span>
               <p className="mt-1 break-words font-medium text-ink-body">{selected.contract.name} · {formatLabel[selected.contract.format]}</p>
             </div>
-            <button type="button" className="btn-primary shrink-0" onClick={() => void buildPreview()} disabled={busy}>
-              {busy ? <Loader2 className="animate-spin" size={17} aria-hidden="true" /> : <RefreshCw size={17} aria-hidden="true" />} הפקת תצוגה מקדימה
+            {/* Secondary: this card sits below the approval on the same screen, and a preview that
+                "אינה שומרת קובץ ואינה משנה נתונים" — its own words — must not carry the same
+                weight as the button that records the document. */}
+            <button type="button" className="btn-secondary shrink-0" onClick={() => void buildPreview()} disabled={busy}>
+              {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <RefreshCw size={17} aria-hidden="true" />} הפקת תצוגה מקדימה
             </button>
           </div>
 

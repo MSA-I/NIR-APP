@@ -38,6 +38,8 @@ describe('שבעת השלבים שורדים מתחת לתצוגה', () => {
   // ופונקציות מסד. הטענה הזו קיימת כדי שהניסיון ייכשל כאן קודם.
   it('טבלת השלבים הפנימית נשארת בת שבעה שלבים עם התוויות ההנדסיות שלה', () => {
     expect(STAGES).toEqual(['unprocessed', 'queued', 'processing', 'extracted', 'review', 'completed', 'failed']);
+    // נשארת שונה מהמילון הקנוני בכוונה: „ממתין לפירוש” הוא הבחנה הנדסית שהתקדימות הקנונית מכווצת
+    // ל„בעיבוד”, ולכן אין לה תווית מקבילה שאפשר להתיישר אליה.
     expect(DOCUMENT_PROCESSING_STAGE_META.extracted.label).toBe('ממתין לפירוש');
     expect(DOCUMENT_PROCESSING_STAGE_META.completed.label).toBe('הושלם');
   });
@@ -99,13 +101,22 @@ describe('חוזה התג מול שער הדפדפן', () => {
     expect(badge.className).toContain(`badge-${status.tone}`);
   });
 
+  // ההסבר הוא עובדה שנייה, לא חזרה על התווית — ולכן יש שלבים שאין להם אחת. שני הענפים נבדקים:
+  // כשיש הסבר הוא חייב להגיע גם ל-title וגם ל-sr-only; כשאין, אסור שיישלח title ריק או span ריק
+  // שקורא מסך יעצור עליו. (קודם נדרשה כאן זהות מוחלטת, כשכל שלב נשא משפט — גם כשהוא רק חזר על התג.)
   it.each(STAGES)('%s — ההסבר נגיש גם בלי ריחוף, ומחוץ לטקסט התג', (stage) => {
     const { container } = render(<ProcessingBadge documentId="doc-4" stage={stage} />);
     const badge = screen.getByTestId('document-processing-status');
     const description = documentUiStatus({ status: stage }).description;
-    expect(badge.getAttribute('title')).toBe(description);
-    // ולא ב-title בלבד: tooltip אינו קיים במגע, והתרחיש מריץ את הדף הזה ב-390px.
-    expect(container.querySelector('.sr-only')?.textContent).toBe(description);
+    if (description) {
+      expect(badge.getAttribute('title')).toBe(description);
+      // ולא ב-title בלבד: tooltip אינו קיים במגע, והתרחיש מריץ את הדף הזה ב-390px.
+      expect(container.querySelector('.sr-only')?.textContent).toBe(description);
+      expect(description).not.toContain(documentUiStatus({ status: stage }).label);
+    } else {
+      expect(badge.getAttribute('title')).toBeNull();
+      expect(container.querySelector('.sr-only')).toBeNull();
+    }
     // ומחוץ לתג — check-browser-smoke.cjs מודד את ה-innerText שלו מול תווית אחת.
     expect(badge.textContent?.trim()).toBe(documentUiStatus({ status: stage }).label);
   });

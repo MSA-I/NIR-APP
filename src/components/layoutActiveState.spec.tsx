@@ -156,6 +156,64 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
   });
 });
 
+/**
+ * The navigation half of the section-accent contract. `quickActions.spec.ts` pins the route→domain
+ * map and the wall between the two colour languages against the stylesheet; this pins the thing a
+ * user actually sees, which no amount of correct data guarantees: that the one item claiming to be
+ * the current page is also the one wearing the accent, that the accent rides its ICON and not a
+ * fill behind its label, and that a screen with no work domain wears none.
+ */
+const activeLink = () => document.querySelector<HTMLElement>('nav[aria-label="ניווט ראשי"] [aria-current="page"]');
+const mainRegion = () => document.getElementById('main');
+
+describe('מבטא האזור בסמן הניווט הפעיל', () => {
+  it.each([
+    ['/invoices/abc', 'money'],
+    ['/orders', 'procurement'],
+    ['/documents', 'documents'],
+    ['/payments', 'money'],
+  ])('%s לובש את מבטא %s על האייקון של הפריט הפעיל', (path, section) => {
+    renderAt(path);
+    const current = activeLink();
+    expect(current).toHaveAttribute('data-section', section);
+    // The glyph, not the pill: the accent clears 3:1 on the paper pill and only ~2.2:1 on the
+    // shell, and a fill behind the label would be the badge/note idiom, which belongs to tones.
+    expect(current?.querySelector('svg')).toHaveClass('section-glyph');
+    expect(mainRegion()).toHaveAttribute('data-section', section);
+  });
+
+  it('מסך שמביט על פני כל התחומים אינו לובש מבטא כלל', () => {
+    renderAt('/dashboard');
+    expect(activeLink()).not.toHaveAttribute('data-section');
+    expect(activeLink()?.querySelector('svg')).not.toHaveClass('section-glyph');
+    expect(mainRegion()).not.toHaveAttribute('data-section');
+  });
+
+  it('הגדרות אינן תחום עבודה', () => {
+    renderAt('/settings');
+    expect(mainRegion()).not.toHaveAttribute('data-section');
+  });
+
+  it('אזור העבודה יודע את התחום גם כשאין פריט תפריט פעיל', () => {
+    // /documents/archive is a contextual destination: it is deliberately absent from the sidebar,
+    // so no item is current. The domain still comes from the URL — which is the point of deriving
+    // the accent from the route rather than from whichever link happens to be highlighted.
+    renderAt('/documents/archive');
+    expect(activeLink()).toBeNull();
+    expect(mainRegion()).toHaveAttribute('data-section', 'documents');
+  });
+
+  it('פריט נושא מבטא לעולם אינו נושא גם מחלקת טון', () => {
+    // The two languages never meet on one element. If a future change gave the active item a
+    // `badge-*`/`note-*`/`text-*-fg` class, the accent would stop being unmistakably about place.
+    renderAt('/invoices/abc');
+    for (const node of document.querySelectorAll('[data-section]')) {
+      expect(node.className.toString()).not.toMatch(/\b(?:badge|note)-(?:done|await|alert|info|idle)\b/);
+      expect(node.className.toString()).not.toMatch(/\btext-(?:done|await|alert|info|idle)-fg\b/);
+    }
+  });
+});
+
 describe('מצב גישת הארגון בזמן bootstrap', () => {
   it('אינו מהבהב בהודעת קריאה בלבד לפני תשובה סמכותית או מטמון offline', () => {
     authState.organizationAccess = { mode: 'read_only', canWrite: false };

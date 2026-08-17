@@ -198,7 +198,9 @@ const PATTERNS: [RegExp, string][] = [
   [/draft_price_changed/i,
     'המחירים השתנו. הסיכום רוענן ויש לעבור עליו ולאשר שוב.'],
   [/document_already_filed/i,
-    'המסמך כבר שויך ליעד עסקי.'],
+    // "יעד עסקי" is the entity_type column talking. A bookkeeper files a document against an
+    // invoice or a goods receipt, so that is what the message names.
+    'המסמך כבר משויך לחשבונית או לקבלת סחורה.'],
   [/document_processing_active/i,
     'המסמך כבר נמצא בתור או בעיבוד. רענן את מרכז התפעול לפני ניסיון נוסף.'],
   [/document_target_unknown/i,

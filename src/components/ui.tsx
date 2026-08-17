@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, createContext, useContext, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
-import { ChevronRight, ChevronLeft, Search, X, Loader2, Inbox, Bell, Check, Columns3, SlidersHorizontal, AlertTriangle } from 'lucide-react';
+import { ChevronRight, ChevronLeft, ChevronDown, Search, X, Loader2, Inbox, Bell, Check, Columns3, SlidersHorizontal, AlertTriangle } from 'lucide-react';
 import {
   useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel,
   type ColumnDef, type SortingState,
@@ -183,6 +183,18 @@ export function Breadcrumbs({ items }: { items: readonly BreadcrumbItem[] }) {
   );
 }
 
+/**
+ * The section mark — a 28×3px rule under the page title in the accent of the work domain the
+ * screen belongs to (מסמכים · רכש · כספים). There is deliberately no prop: it reads
+ * `--section-accent`, which only `Layout`'s `<main data-section>` sets, and only from the URL. A
+ * caller cannot make it say "approved" or "overdue" because a caller cannot address it at all.
+ * On a screen with no work domain the rule is `display: none` and nothing is reserved for it.
+ * `aria-hidden` because the `h1` immediately above already names the place in words.
+ */
+function SectionMark() {
+  return <span className="section-mark" aria-hidden="true" />;
+}
+
 export function PageHeader({ title, meta, breadcrumbs, actions, className = '' }: {
   title: ReactNode;
   meta?: ReactNode;
@@ -195,6 +207,7 @@ export function PageHeader({ title, meta, breadcrumbs, actions, className = '' }
       <div className="min-w-0 space-y-1">
         {breadcrumbs}
         <h1 className="page-title break-words">{title}</h1>
+        <SectionMark />
         {meta && <div className="text-sm text-ink-muted">{meta}</div>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
@@ -222,6 +235,7 @@ export function RecordHeader({ title, status, meta, breadcrumbs, primaryAction, 
             <h1 className="page-title break-words">{title}</h1>
             {status}
           </div>
+          <SectionMark />
           {meta && <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-muted">{meta}</div>}
         </div>
         {hasActions && (
@@ -325,6 +339,50 @@ export function EmptyState({ title, subtitle, action, icon }: { title: string; s
       {subtitle && <div className="text-sm text-ink-muted mt-1">{subtitle}</div>}
       {action && <div className="mt-4">{action}</div>}
     </div>
+  );
+}
+
+/* ---------- Disclosure — the one staged-disclosure control ---------- */
+/**
+ * One folded section, in the shape the dashboard's operations card already established: a native
+ * `<details>`/`<summary>`, a 44px summary row, a count badge in the shared Tone vocabulary, and a
+ * chevron that turns. Native on purpose — the browser owns open/close, find-in-page still reaches
+ * inside a closed section, and no ARIA has to be hand-wired.
+ *
+ * `onToggle` reports the open state so a caller can build expensive children only once someone has
+ * asked for them. That matters more than it looks: a closed `<details>` still renders its children
+ * into the DOM, so collapsing alone saves paint and scroll, never React work. The precedent is
+ * DocumentReviewWorkspace's "פרטים טכניים", which gates its per-block rows on exactly this flag.
+ *
+ * DESIGN.md, חוק החשיפה המדורגת: this folds secondary detail. It never folds an error, an amount,
+ * a value the machine changed, or an irreversible action.
+ */
+export function Disclosure({ title, count, tone = 'idle', summary, name, className = '', onToggle, children }: {
+  title: string;
+  /** Rendered as a badge on the summary row. Omit when there is nothing honest to count. */
+  count?: number;
+  /** Tone of the count badge — `done|await|alert|info|idle` only, never a palette name. */
+  tone?: Tone;
+  /** Short end-aligned qualifier on the summary row. */
+  summary?: ReactNode;
+  /** A shared `name` makes sibling disclosures mutually exclusive (native accordion). */
+  name?: string;
+  className?: string;
+  /** Fires with the new open state; use it to gate a heavy child behind the fold. */
+  onToggle?: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <details name={name} className={`group ${className}`} onToggle={(event) => onToggle?.(event.currentTarget.open)}>
+      <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-sm hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden sm:px-4">
+        <span className="font-medium text-ink-body">{title}</span>
+        {count != null && <span className={`badge-${tone} num`}>{count}</span>}
+        {summary != null && <span className="ms-auto min-w-0 text-end text-xs text-ink-muted">{summary}</span>}
+        <ChevronDown size={16} aria-hidden="true"
+          className={`shrink-0 text-ink-ghost transition-transform duration-200 ease-out group-open:rotate-180 motion-reduce:transition-none ${summary == null ? 'ms-auto' : ''}`} />
+      </summary>
+      <div className="border-t border-line-soft px-3 pb-4 pt-3 sm:px-4">{children}</div>
+    </details>
   );
 }
 
@@ -449,15 +507,35 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
   const actionRows = active.filter(isAction);
   const noticeRows = active.filter((i) => !isAction(i));
   const actionTotal = actionRows.reduce((s, i) => s + (i.amount ?? 0), 0);
+  // The header's own tone, from the rows it is counting rather than from a constant. The bell used
+  // to be `text-await-fg` unconditionally, so it went on claiming "something is waiting" while the
+  // card underneath said "אין משימות דחופות כרגע" — colour asserting the opposite of the sentence
+  // beside it. `alert` wins over `await` for the same reason ATTENTION_TONE_ORDER ranks it first.
+  const headlineTone: Tone = actionRows.some((i) => i.tone === 'alert') ? 'alert' : 'await';
 
   return (
     <section className={`card card-pad ${className}`}>
+      {/* One count, one element. The heading and a separate "N סוגי טיפול" sentence were two
+          renderings of the same fact a few pixels apart; the number now rides ON the heading it
+          describes, and the end-aligned slot carries only the ₪ exposure, which is a different
+          fact. The unit stays in the accessible name so nothing is lost to a screen reader.
+          (Dashboard.tsx carried a third copy in its `meta` line; that one is already gone.) */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="section-title flex items-center gap-2"><Bell size={18} className="text-await-fg" aria-hidden="true" /> דורש טיפול היום</h2>
-        <span className="text-xs text-ink-muted">
-          {actionRows.length} סוגי טיפול
-          {actionTotal > 0 && <> · {totalLabel ? <>{totalLabel} </> : null}<span className="num">{fmtMoneyRounded(actionTotal)}</span></>}
-        </span>
+        <h2 className="section-title flex items-center gap-2">
+          <Bell size={18} aria-hidden="true"
+            className={actionRows.length === 0 ? 'text-ink-ghost' : headlineTone === 'alert' ? 'text-alert-fg' : 'text-await-fg'} />
+          דורש טיפול היום
+          {actionRows.length > 0 && (
+            <span className={`${headlineTone === 'alert' ? 'badge-alert' : 'badge-await'} num`}>
+              {actionRows.length}<span className="sr-only"> סוגי טיפול</span>
+            </span>
+          )}
+        </h2>
+        {actionTotal > 0 && (
+          <span className="text-xs text-ink-muted">
+            {totalLabel ? <>{totalLabel} </> : null}<span className="num">{fmtMoneyRounded(actionTotal)}</span>
+          </span>
+        )}
       </div>
 
       {actionRows.length > 0 ? (
@@ -513,7 +591,14 @@ export function TaskLine({ label, count, to }: { label: string; count: number; t
     <li>
       <Link to={to} className="flex min-h-11 items-center justify-between -mx-2 px-2 py-1.5 rounded-lg hover:bg-surface-sunken active:bg-action-wash/70 transition-colors">
         <span className="text-ink-soft">{label}</span>
-        <span className={`badge num ${count > 0 ? 'bg-action-soft text-action-on-soft' : 'bg-idle-soft text-ink-soft'}`}>{count}</span>
+        {/* The petrol chip is the system's COUNT chip — the same one the unfiled-documents pill in
+            the sidebar and the active-filter chip in DataTable wear. It answers "how many", never
+            "how urgent", which is what keeps it inside חוק המסגרת הממותגת.
+            The zero branch used to be `bg-idle-soft text-ink-soft`: a hand-rolled near-copy of
+            `badge-idle`, differing from it only by using the wrong text token (ink-soft instead of
+            idle-on-soft, which is also the lower contrast of the two). It now goes through the
+            shared class, so there is one definition of a neutral chip in the system. */}
+        <span className={count > 0 ? 'badge num bg-action-soft text-action-on-soft' : 'badge-idle num'}>{count}</span>
       </Link>
     </li>
   );
