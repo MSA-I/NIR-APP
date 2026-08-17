@@ -102,6 +102,10 @@ export const NOTIFICATION_EVENT_LABELS: Record<string, { label: string; detail: 
     label: 'עליית מחיר במחירון של ספק',
     detail: 'לפי המחירון — לא לפי מה שנגבה בחשבונית',
   },
+  document_processing_stalled: {
+    label: 'עיבוד המסמכים נעצר',
+    detail: 'מסמכים ממתינים בתור ואיש אינו קורא אותם — נבדק כל חמש דקות',
+  },
 };
 
 /** Reads the full preference set for the signed-in member. Throws the raw message for `toHebrewError`. */
