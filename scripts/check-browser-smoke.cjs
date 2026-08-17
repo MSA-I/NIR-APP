@@ -2156,6 +2156,12 @@ async function manualPriceListConfirmation(browser) {
     assert.match(await panel.locator('[data-testid="price-list-intake-summary"]').innerText(),
       /20 מתוך 22 שורות זוהו במלואן/,
       'the confirmation screen did not report the twenty rows the server had already matched');
+    // The screen must not claim an automatic intake on a document where none happened.
+    const headerBody = await panel.innerText();
+    assert.match(headerBody, /ממתין לאישורך/,
+      'the panel badge still reported processing on a document waiting for a person');
+    assert.doesNotMatch(headerBody, /המערכת קולטת אוטומטית שורות בטוחות/,
+      'the panel still described an automatic intake that never ran on this document');
     // Enabled with nothing touched: the prefill is what makes this a one-click intake. Waited for
     // rather than read once, because the prefill lands only after the product catalogue arrives.
     await page.waitForFunction(
