@@ -40,6 +40,39 @@ describe('documentUiStatus precedence', () => {
     ]);
   });
 
+  it('carries the reading page counter, and refuses to invent one', () => {
+    const reading = documentUiStatus({
+      job: job('leased', { progress_done: 7, progress_total: 27 }),
+      document: inbox, evaluatedAt: NOW,
+    });
+    expect(reading.progressLabel).toBe('עמוד 7 מתוך 27');
+
+    // A worker build that does not report, a job that has not been opened yet, and a job already
+    // past the pages: three different facts, one honest screen answer.
+    expect(documentUiStatus({ job: job('leased'), document: inbox, evaluatedAt: NOW }).progressLabel).toBeNull();
+    expect(documentUiStatus({
+      job: job('queued', { progress_done: 3, progress_total: 9 }),
+      document: inbox, evaluatedAt: NOW,
+    }).progressLabel).toBeNull();
+    expect(documentUiStatus({
+      job: job('interpreting', { progress_done: 9, progress_total: 9 }),
+      document: inbox, evaluatedAt: NOW,
+    }).progressLabel).toBeNull();
+    // Zero pages is not a page count; it would render as "עמוד 0 מתוך 0".
+    expect(documentUiStatus({
+      job: job('leased', { progress_done: 0, progress_total: 0 }),
+      document: inbox, evaluatedAt: NOW,
+    }).progressLabel).toBeNull();
+  });
+
+  it('shows the page counter on the badge itself', () => {
+    render(<DocumentStatusBadge status={documentUiStatus({
+      job: job('leased', { progress_done: 4, progress_total: 12 }),
+      document: inbox, evaluatedAt: NOW,
+    })} />);
+    expect(screen.getByText('· עמוד 4 מתוך 12')).toBeInTheDocument();
+  });
+
   it('keeps never-enqueued and actively queued documents distinct', () => {
     const unprocessed = documentUiStatus({ status: 'unprocessed', document: inbox, evaluatedAt: NOW });
     const queued = documentUiStatus({ status: 'queued', document: inbox, evaluatedAt: NOW });

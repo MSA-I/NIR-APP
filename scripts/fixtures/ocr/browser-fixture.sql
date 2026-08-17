@@ -394,6 +394,73 @@ select public.apply_price_list_interpretation(
 );
 reset role;
 
+-- The shadow prediction behind the MANUAL price-list document (22 rows): twenty rows the server
+-- matched by SKU to a catalogue product at a readable price, and two it could not. This is the
+-- state every real price list reaches — `run_price_list_shadow` records it whether or not the
+-- calibrated scope lets the automation act — and it is what the confirmation screen prefills from.
+-- Without it the browser scenario would only ever see the "no stored prediction" fallback.
+set local role postgres;
+insert into public.products (id, org_id, name, unit, sku)
+select
+  ('97710000-0000-4000-8000-0000000000' || lpad(row_number::text, 2, '0'))::uuid,
+  '11111111-1111-4111-8111-111111111111',
+  'מוצר מחירון לבדיקה ' || row_number, 'אריזה',
+  'OCR-MANUAL-' || lpad(row_number::text, 2, '0')
+from generate_series(1, 20) row_number;
+
+select set_config('app.price_list_shadow_writer', 'run', true);
+
+insert into public.price_list_shadow_runs (
+  id, org_id, document_id, job_id, extraction_id, interpretation_id, actor_id, supplier_id,
+  evaluator_version, policy_configured, live_policy_enabled, policy_kill_switch,
+  evaluated_min_confidence, decision_confidence, predicted_outcome, reason_code,
+  applicable_count, waiting_count, would_create_product_count,
+  provider, model, prompt_version, schema_version, document_format,
+  extraction_engine, extraction_model, extraction_model_version,
+  page_count, block_count, table_count, interpreted_line_count, layout_signature
+) values (
+  '97900000-0000-4000-8000-000000000008', '11111111-1111-4111-8111-111111111111',
+  '97000000-0000-4000-8000-000000000008', '97100000-0000-4000-8000-000000000008',
+  '97200000-0000-4000-8000-000000000008', '97300000-0000-4000-8000-000000000008',
+  :'ocr_owner_id', 'aa000000-0000-4000-8000-000000000008',
+  'fixture-shadow-v1', true, true, false,
+  0.900, 0.990, 'partially_applicable', 'shadow_scope_not_eligible',
+  20, 2, 0,
+  'openai-fixture', 'gpt-local-contract-fixture', 'interpret-document-v11', '1', 'application/pdf',
+  'private-fixture', 'ocr-acceptance-hebrew', '1.0.0',
+  1, 3, 1, 22, repeat('b', 64)
+);
+
+insert into public.price_list_shadow_lines (
+  id, org_id, shadow_run_id, document_id, interpretation_id, line_index, source_row,
+  predicted_action, reason_code, matched_by, product_id, sku, product_name, unit,
+  proposed_unit_price, product_would_be_created
+)
+select
+  ('97910000-0000-4000-8000-0000000000' || lpad(row_number::text, 2, '0'))::uuid,
+  '11111111-1111-4111-8111-111111111111',
+  '97900000-0000-4000-8000-000000000008',
+  '97000000-0000-4000-8000-000000000008',
+  '97300000-0000-4000-8000-000000000008',
+  row_number - 1, row_number,
+  case when row_number <= 20 then 'apply_existing_price' else 'review' end,
+  case row_number
+    when 21 then 'line_product_unmatched'
+    when 22 then 'line_price_unreadable'
+    else null end,
+  case when row_number <= 20 then 'sku' else null end,
+  case when row_number <= 20
+       then ('97710000-0000-4000-8000-0000000000' || lpad(row_number::text, 2, '0'))::uuid
+       else null end,
+  case when row_number <= 20 then 'OCR-MANUAL-' || lpad(row_number::text, 2, '0') else null end,
+  'מוצר מחירון לבדיקה ' || row_number, 'אריזה',
+  case when row_number <= 20 then 10 + row_number else null end,
+  false
+from generate_series(1, 22) row_number;
+
+select set_config('app.price_list_shadow_writer', '', true);
+reset role;
+
 -- An approved type decision on the review document. Without one the review screen never reaches
 -- the state where a classified invoice can be drafted, so the draft path would go unexercised.
 insert into public.document_type_review_decisions (

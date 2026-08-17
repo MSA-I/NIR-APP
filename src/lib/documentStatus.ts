@@ -19,6 +19,15 @@ export interface DocumentUiStatus extends StatusMeta {
   countsAsUnassigned: boolean;
   priority: number;
   elapsedSeconds: number | null;
+  /**
+   * "עמוד 7 מתוך 27" while a worker is reading the pages, or null.
+   *
+   * Null in three different situations that all mean the same thing on screen: the job is not
+   * reading, the worker build does not report page progress, or it has not reported yet. Printing
+   * "עמוד 0 מתוך 0" for those would be a claim about the document that nobody made — the same reason
+   * an absent metric renders — rather than 0 (CLAUDE.md).
+   */
+  progressLabel: string | null;
 }
 
 export type DocumentStatusFilter =
@@ -44,7 +53,13 @@ type FilingDocument = Pick<DocumentRow, 'entity_type' | 'entity_id'>;
 type ProcessingJob = Pick<
   DocumentProcessingJob,
   'status' | 'attempt_count' | 'lease_until' | 'created_at' | 'updated_at' | 'last_error_code'
-> & { queue_age_seconds?: number | null; is_stuck?: boolean | null; stuck_reason?: string | null };
+> & {
+  queue_age_seconds?: number | null;
+  is_stuck?: boolean | null;
+  stuck_reason?: string | null;
+  progress_done?: number | null;
+  progress_total?: number | null;
+};
 
 export interface DocumentStatusInput {
   status?: DocumentProcessingStatus | 'unprocessed' | 'processing' | null;
@@ -113,6 +128,7 @@ function result(
   description: string,
   loading = false,
   elapsedSeconds: number | null = null,
+  progressLabel: string | null = null,
 ): DocumentUiStatus {
   const priorities: Record<DocumentStatusState, number> = {
     stuck: 0,
@@ -134,7 +150,24 @@ function result(
     countsAsUnassigned: state === 'unassigned',
     priority: priorities[state],
     elapsedSeconds,
+    progressLabel,
   };
+}
+
+/**
+ * The page counter a reading worker reports, as words — or null when there is nothing to claim.
+ *
+ * Only while a worker holds the job (`leased`). A queued job has not been opened, and an extracted
+ * or interpreting one is past the pages, so carrying the last counter into those states would keep
+ * showing movement after the movement stopped.
+ */
+function pageProgressLabel(job: ProcessingJob | null | undefined, status: string): string | null {
+  if (status !== 'leased') return null;
+  const done = job?.progress_done;
+  const total = job?.progress_total;
+  if (typeof done !== 'number' || typeof total !== 'number') return null;
+  if (!Number.isFinite(done) || !Number.isFinite(total) || total <= 0 || done < 0) return null;
+  return `עמוד ${Math.min(done, total)} מתוך ${total}`;
 }
 
 export function isSupersededProcessingFailure(code: string | null | undefined): boolean {
@@ -224,6 +257,7 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
       queued ? 'המסמך שמור וממתין לתחילת העיבוד' : 'המערכת מעבדת את המסמך',
       true,
       elapsed,
+      pageProgressLabel(input.job, status),
     );
   }
   if (status === 'review') {

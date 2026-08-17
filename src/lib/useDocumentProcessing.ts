@@ -273,6 +273,45 @@ export interface PriceListInterpretationLine {
   created_at: string;
 }
 
+/**
+ * What the automation WOULD have done with each line, recorded by `run_price_list_shadow` (0096)
+ * before any price could move.
+ *
+ * Read here for one reason: the manual confirmation screen was making a person re-do work the server
+ * had already done. The shadow row holds the matched product, how it was matched and the price that
+ * was read, for every line — and the screen was opening an empty product select beside it.
+ *
+ * A shadow row is a PREDICTION and never an approval. `submit-price-list` still takes the human's
+ * approved rows, still writes the audit reason, and still refuses a product the catalogue does not
+ * have. Prefilling from it is the same act as prefilling an invoice form from an interpretation.
+ *
+ * RLS (0096) grants select to the `owner` role only, so another role reads zero rows. That costs the
+ * convenience, never correctness: an unfilled line stays unapproved and visible.
+ */
+export interface PriceListPredictedLine {
+  id: string;
+  org_id: string;
+  shadow_run_id: string;
+  document_id: string;
+  interpretation_id: string;
+  line_index: number;
+  source_row: number | null;
+  predicted_action: 'apply_existing_price' | 'create_product' | 'review' | 'rejected_by_policy';
+  reason_code: string | null;
+  matched_by: string | null;
+  product_id: string | null;
+  supplier_product_id: string | null;
+  sku: string | null;
+  barcode: string | null;
+  product_name: string | null;
+  unit: string | null;
+  proposed_unit_price: number | null;
+  current_unit_price: number | null;
+  price_change_percent: number | null;
+  product_would_be_created: boolean;
+  created_at: string;
+}
+
 export interface DocumentFeedback {
   id: string;
   org_id: string;
@@ -390,6 +429,7 @@ export interface DocumentProcessingSnapshot {
   filings: DocumentFiling[];
   priceListDecision: PriceListInterpretationDecision | null;
   priceListLines: PriceListInterpretationLine[];
+  priceListPredictions: PriceListPredictedLine[];
   feedback: DocumentFeedback[];
   exportTemplates: DocumentExportTemplateRow[];
   exportTemplateVersions: DocumentExportTemplateVersion[];
@@ -435,6 +475,7 @@ function createSnapshot(documentId: string): DocumentProcessingSnapshot {
     filings: [],
     priceListDecision: null,
     priceListLines: [],
+    priceListPredictions: [],
     feedback: [],
     exportTemplates: [],
     exportTemplateVersions: [],
@@ -594,7 +635,8 @@ async function loadProcessing(
   const currentInterpretationIds = Object.values(snapshots)
     .flatMap((snapshot) => snapshot.interpretation ? [snapshot.interpretation.id] : []);
   const [annotations, ruleApplications, reviewCorrections, typeReviewDecisions, filings,
-    priceListDecisions, priceListLines, feedback, exports, exportTemplates, packets] = await Promise.all([
+    priceListDecisions, priceListLines, priceListPredictions,
+    feedback, exports, exportTemplates, packets] = await Promise.all([
     fetchByColumnIds<DocumentAnnotation>('document_annotations', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentRuleApplication>('document_rule_applications', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentReviewCorrection>('document_review_corrections', 'interpretation_id', currentInterpretationIds),
@@ -607,6 +649,11 @@ async function loadProcessing(
     fetchByColumnIds<PriceListInterpretationLine>(
       'price_list_interpretation_lines', 'interpretation_id', currentInterpretationIds,
     ),
+    // Convenience data, so it fails soft. A role without 0096's select policy, or a database that
+    // predates the table, must cost the reviewer a prefill — never the review screen itself.
+    fetchByColumnIds<PriceListPredictedLine>(
+      'price_list_shadow_lines', 'interpretation_id', currentInterpretationIds,
+    ).catch(() => []),
     fetchByColumnIds<DocumentFeedback>('document_feedback', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentExportRow>('document_exports', 'interpretation_id', currentInterpretationIds),
     fetchAll<DocumentExportTemplateRow>((from, to) => supabase
@@ -662,6 +709,12 @@ async function loadProcessing(
     const snapshot = snapshots[line.document_id];
     if (snapshot?.interpretation?.id === line.interpretation_id) {
       snapshot.priceListLines.push(line);
+    }
+  }
+  for (const line of priceListPredictions) {
+    const snapshot = snapshots[line.document_id];
+    if (snapshot?.interpretation?.id === line.interpretation_id) {
+      snapshot.priceListPredictions.push(line);
     }
   }
   const annotationById = new Map(annotations.map((annotation) => [annotation.id, annotation]));
