@@ -342,9 +342,24 @@ export function planInterpretation(
 export async function runInterpretationPlan(
   provider: InterpretationProvider,
   plan: InterpretationPlan,
+  /**
+   * Called as each chunk lands, so the screen can say how much of the wait is left. Observation
+   * only: it is never awaited and a throw here must not reach the caller, because a status line
+   * has no business failing an interpretation that is succeeding.
+   */
+  onProgress?: (done: number, total: number) => void,
 ): Promise<MergedSplit> {
+  const total = plan.chunks?.length ?? 1;
+  let done = 0;
+  const report = () => {
+    done += 1;
+    try {
+      onProgress?.(done, total);
+    } catch { /* a counter is not worth an interpretation */ }
+  };
   if (plan.chunks === null) {
     const result = await provider.interpret(plan.payloads[0]);
+    report();
     return {
       result,
       summary: {
@@ -359,7 +374,12 @@ export async function runInterpretationPlan(
   }
   const chunks = plan.chunks;
   const results = await Promise.all(
-    plan.payloads.map((payload) => provider.interpret(payload)),
+    plan.payloads.map((payload) =>
+      provider.interpret(payload).then((result) => {
+        report();
+        return result;
+      })
+    ),
   );
   return mergeSplitResults(results.map((result, index) => ({ chunk: chunks[index], result })));
 }

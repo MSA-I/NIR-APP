@@ -101,6 +101,30 @@ describe('רצועת שלבי העיבוד', () => {
     expect(screen.getByText(/מספר העמודים טרם דווח/)).toBeTruthy();
   });
 
+  it('מציגה מונה מקטעים אמיתי בזמן פירוש', () => {
+    // The stage a price list actually waits in. A text-layer PDF needs no OCR page, so the reading
+    // counter is silent for it — and the minutes the owner watches are these provider chunks.
+    render(<DocumentProcessingProgress
+      snapshot={snapshot({ status: 'interpreting', attempt_count: 1, progress_done: 2, progress_total: 4 })}
+      now={NOW}
+    />);
+    expect(currentStepLabel()).toContain('פירוש הנתונים');
+    const bar = screen.getByRole('progressbar');
+    expect(bar.getAttribute('aria-valuenow')).toBe('2');
+    expect(bar.getAttribute('aria-valuetext')).toBe('מקטע 2 מתוך 4');
+    expect(screen.getByText(/מקטע 2 מתוך 4/)).toBeTruthy();
+  });
+
+  it('לא ממציאה בר פירוש כשהשרת לא דיווח מקטעים', () => {
+    render(<DocumentProcessingProgress
+      snapshot={snapshot({ status: 'interpreting', attempt_count: 1, progress_done: null, progress_total: null })}
+      now={NOW}
+    />);
+    expect(currentStepLabel()).toContain('פירוש הנתונים');
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(screen.getByText('הנתונים מתפרשים לשדות ולשורות.')).toBeTruthy();
+  });
+
   it('לא מציגה בר התקדמות לג׳וב תקוע', () => {
     // Caught by the first screenshot of the real screen: the badge said "עיבוד תקוע" while the bar
     // underneath it went on implying live progress on page 7 of 27. Two claims about one job, and
