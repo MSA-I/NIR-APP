@@ -536,6 +536,12 @@ def _parse_pdf(path: Path, adapter: OcrAdapter, limits: ExtractionLimits) -> dic
     if missing and not isinstance(adapter, DisabledOcrAdapter):
         # Cap the paid path before rendering, so an oversized scan costs neither renders nor calls.
         ocr_pages = missing[: limits.max_ai_pages]
+        # The adapter sees one memory-bounded batch at a time, so only here is the document's OCR
+        # page count known. Without this the progress counter reported the batch size and restarted
+        # at every flush.
+        begin_progress = getattr(adapter, "begin_progress", None)
+        if callable(begin_progress):
+            begin_progress(len(ocr_pages))
         rendered: list[PageImage] = []
         decoded_bytes = 0
 
