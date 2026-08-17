@@ -204,3 +204,26 @@ describe('the supplier match is graded like the rest and obliges more than the r
     expect(screen.queryByText(/יש לאמת את שם הספק מול המסמך/)).toBeNull();
   });
 });
+
+describe('שחזור מסמך שנכשל', () => {
+  it('מציג עיבוד מחדש ומעביר את הפעולה לבעל המסך', async () => {
+    const failed = snapshotWith(0.95);
+    failed.stage = 'failed';
+    failed.job = { ...failed.job!, status: 'failed', last_error_message: 'provider failed' };
+    const onReprocess = vi.fn();
+    render(
+      <MemoryRouter>
+        <DocumentReviewWorkspace
+          snapshot={failed}
+          actorId="actor"
+          onRefetch={async () => true}
+          initialPanel={null}
+          onReprocess={onReprocess}
+        />
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'עיבוד מחדש' }));
+    expect(onReprocess).toHaveBeenCalledOnce();
+  });
+});

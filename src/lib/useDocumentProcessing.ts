@@ -45,18 +45,27 @@ export const DOCUMENT_PROCESSING_STAGE_META: Record<
   failed: { label: 'נכשל', tone: 'alert' },
 };
 
+export type DocumentInterpretationType =
+  | 'invoice'
+  | 'delivery_note'
+  | 'credit_note'
+  | 'price_list'
+  | 'quote'
+  | 'payment_confirmation'
+  | 'tax_receipt'
+  | 'other';
+
 export type InterpretationContract = {
   schema_version: '1';
-  document_type:
-    | 'invoice'
-    | 'delivery_note'
-    | 'credit_note'
-    | 'price_list'
-    | 'quote'
-    | 'payment_confirmation'
-    | 'tax_receipt'
-    | 'other';
+  document_type: DocumentInterpretationType;
   document_type_confidence: number | null;
+  packet_segments?: Array<{
+    ordinal: number;
+    start_page: number;
+    end_page: number;
+    document_type: DocumentInterpretationType;
+    confidence: number | null;
+  }>;
   supplier: {
     suggested_id: string | null;
     suggested_name: string | null;
@@ -323,6 +332,46 @@ export interface DocumentExportRow {
   created_at: string;
 }
 
+export interface DocumentPacket {
+  id: string;
+  org_id: string;
+  unit_id: string | null;
+  parent_document_id: string;
+  source_job_id: string;
+  source_interpretation_id: string;
+  page_count: number;
+  source_partial: boolean;
+  confidence_threshold: number;
+  automatic_eligible: boolean;
+  status: 'needs_review' | 'approved' | 'materialized' | 'failed';
+  manifest_hash: string;
+  manifest_version: number;
+  created_by: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  approval_reason: string | null;
+  failure_code: string | null;
+  failure_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentPacketSegment {
+  id: string;
+  org_id: string;
+  unit_id: string | null;
+  packet_id: string;
+  ordinal: number;
+  start_page: number;
+  end_page: number;
+  document_type: DocumentInterpretationType;
+  confidence: number | null;
+  child_document_id: string | null;
+  storage_path: string | null;
+  created_at: string;
+  materialized_at: string | null;
+}
+
 export interface DocumentProcessingSnapshot {
   documentId: string;
   stage: DocumentProcessingStage;
@@ -345,6 +394,8 @@ export interface DocumentProcessingSnapshot {
   exportTemplates: DocumentExportTemplateRow[];
   exportTemplateVersions: DocumentExportTemplateVersion[];
   exports: DocumentExportRow[];
+  packet: DocumentPacket | null;
+  packetSegments: DocumentPacketSegment[];
   /**
    * actor uuid → full name, for the review layers that record who acted (corrections, type
    * decisions, annotation feedback). A missing key is the honest "not visible to you": RLS hides
@@ -388,6 +439,8 @@ function createSnapshot(documentId: string): DocumentProcessingSnapshot {
     exportTemplates: [],
     exportTemplateVersions: [],
     exports: [],
+    packet: null,
+    packetSegments: [],
     actorNames: new Map(),
   };
 }
@@ -541,7 +594,7 @@ async function loadProcessing(
   const currentInterpretationIds = Object.values(snapshots)
     .flatMap((snapshot) => snapshot.interpretation ? [snapshot.interpretation.id] : []);
   const [annotations, ruleApplications, reviewCorrections, typeReviewDecisions, filings,
-    priceListDecisions, priceListLines, feedback, exports, exportTemplates] = await Promise.all([
+    priceListDecisions, priceListLines, feedback, exports, exportTemplates, packets] = await Promise.all([
     fetchByColumnIds<DocumentAnnotation>('document_annotations', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentRuleApplication>('document_rule_applications', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentReviewCorrection>('document_review_corrections', 'interpretation_id', currentInterpretationIds),
@@ -559,9 +612,10 @@ async function loadProcessing(
     fetchAll<DocumentExportTemplateRow>((from, to) => supabase
       .from('document_export_templates').select(ALL_COLUMNS).eq('active', true)
       .order('created_at', { ascending: false }).order('id').range(from, to)),
+    fetchByColumnIds<DocumentPacket>('document_packets', 'source_interpretation_id', currentInterpretationIds, 'updated_at'),
   ]);
 
-  const [learningRules, exportTemplateVersions, actorNames] = await Promise.all([
+  const [learningRules, exportTemplateVersions, actorNames, packetSegments] = await Promise.all([
     fetchRowsByIds<DocumentLearningRule>(
       'document_learning_rules',
       [...new Set(ruleApplications.map((application) => application.rule_id))],
@@ -575,6 +629,7 @@ async function loadProcessing(
       ...typeReviewDecisions.map((decision) => decision.actor_id),
       ...feedback.map((item) => item.actor_id),
     ]),
+    fetchByColumnIds<DocumentPacketSegment>('document_packet_segments', 'packet_id', packets.map((packet) => packet.id)),
   ]);
 
   for (const annotation of annotations) {
@@ -620,6 +675,16 @@ async function loadProcessing(
     const snapshot = snapshots[item.document_id];
     if (snapshot?.interpretation?.id === item.interpretation_id) snapshot.exports.push(item);
   }
+  for (const packet of packets) {
+    const snapshot = snapshots[packet.parent_document_id];
+    if (snapshot?.interpretation?.id === packet.source_interpretation_id) snapshot.packet ??= packet;
+  }
+  for (const segment of packetSegments) {
+    const packet = packets.find((candidate) => candidate.id === segment.packet_id);
+    if (!packet) continue;
+    const snapshot = snapshots[packet.parent_document_id];
+    if (snapshot?.packet?.id === packet.id) snapshot.packetSegments.push(segment);
+  }
 
   for (const snapshot of Object.values(snapshots)) {
     const ruleIds = new Set(snapshot.ruleApplications.map((application) => application.rule_id));
@@ -628,6 +693,7 @@ async function loadProcessing(
     snapshot.exportTemplates = snapshot.interpretation ? exportTemplates : [];
     const templateIds = new Set(snapshot.exportTemplates.map((template) => template.id));
     snapshot.exportTemplateVersions = exportTemplateVersions.filter((version) => templateIds.has(version.template_id));
+    snapshot.packetSegments.sort((left, right) => left.ordinal - right.ordinal);
   }
 
   return snapshots;

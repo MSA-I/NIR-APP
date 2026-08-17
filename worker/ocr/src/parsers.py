@@ -532,38 +532,62 @@ def _parse_pdf(path: Path, adapter: OcrAdapter, limits: ExtractionLimits) -> dic
         if native_text[page_number]:
             blocks.extend(_text_blocks([native_text[page_number]], page_number, "pdf"))
 
-    ocr_payload: dict[str, Any] | None = None
+    ocr_payloads: list[dict[str, Any]] = []
     if missing and not isinstance(adapter, DisabledOcrAdapter):
         # Cap the paid path before rendering, so an oversized scan costs neither renders nor calls.
         ocr_pages = missing[: limits.max_ai_pages]
         rendered: list[PageImage] = []
         decoded_bytes = 0
-        for page in ocr_pages:
-            rendered_page = _render_pdf_page(path, page, limits)
-            decoded_bytes += rendered_page.width * rendered_page.height * 3
-            if decoded_bytes > limits.max_decompressed_bytes:
-                raise ProcessingError(
-                    "decompressed_size_limit", "Rendered PDF exceeds its safety limit"
-                )
-            rendered.append(rendered_page)
-        ocr_payload = validate_extraction(adapter.extract(rendered, limits), limits)
-        blocks.extend(ocr_payload["blocks"])
+
+        def flush_rendered() -> None:
+            nonlocal decoded_bytes
+            if not rendered:
+                return
+            try:
+                ocr_payloads.append(validate_extraction(adapter.extract(rendered, limits), limits))
+            finally:
+                for rendered_page in rendered:
+                    rendered_page.path.unlink(missing_ok=True)
+                rendered.clear()
+                decoded_bytes = 0
+
+        try:
+            for page in ocr_pages:
+                rendered_page = _render_pdf_page(path, page, limits)
+                page_bytes = rendered_page.width * rendered_page.height * 3
+                if page_bytes > limits.max_decompressed_bytes:
+                    rendered_page.path.unlink(missing_ok=True)
+                    raise ProcessingError(
+                        "decompressed_size_limit", "Rendered PDF page exceeds its safety limit"
+                    )
+                if rendered and decoded_bytes + page_bytes > limits.max_decompressed_bytes:
+                    flush_rendered()
+                rendered.append(rendered_page)
+                decoded_bytes += page_bytes
+            flush_rendered()
+        finally:
+            for rendered_page in rendered:
+                rendered_page.path.unlink(missing_ok=True)
+
+        for payload in ocr_payloads:
+            blocks.extend(payload["blocks"])
     elif missing and len(missing) == page_count:
         raise ProcessingError("ocr_model_not_selected", "Scanned PDF requires a benchmark-approved OCR model")
 
     ocr_page_text: dict[int, list[str]] = {}
-    if ocr_payload is not None:
-        for block in ocr_payload["blocks"]:
-            if block["text"]:
-                ocr_page_text.setdefault(block["page"], []).append(block["text"])
+    if ocr_payloads:
+        for payload in ocr_payloads:
+            for block in payload["blocks"]:
+                if block["text"]:
+                    ocr_page_text.setdefault(block["page"], []).append(block["text"])
     page_text = [native_text[page] or "\n".join(ocr_page_text.get(page, [])) for page in range(1, page_count + 1)]
     plain_text = "\n\n".join(page_text)
     return _contract(
         page_count,
         plain_text,
         blocks=blocks,
-        tables=[] if ocr_payload is None else ocr_payload["tables"],
-        marks=[] if ocr_payload is None else ocr_payload["marks"],
+        tables=[table for payload in ocr_payloads for table in payload["tables"]],
+        marks=[mark for payload in ocr_payloads for mark in payload["marks"]],
         partial=True,
     )
 

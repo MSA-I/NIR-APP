@@ -19,6 +19,7 @@
   "ignoreDependencies": [
     "playwright-core",
     "pdfjs-dist",
+    "pdf-lib",
     "jsr",
     "npm",
     "@noble/hashes"

@@ -85,6 +85,13 @@ function validInterpretation(): InterpretationContract {
     schema_version: "1",
     document_type: "invoice",
     document_type_confidence: 0.91,
+    packet_segments: [{
+      ordinal: 1,
+      start_page: 1,
+      end_page: 1,
+      document_type: "invoice",
+      confidence: 0.91,
+    }],
     supplier: {
       suggested_id: SUPPLIER_ID,
       suggested_name: "ספק בדיקה",
@@ -301,6 +308,13 @@ test("trusted price-list intake retries an unnumbered sample instead of storing 
   ): InterpretationContract => ({
     ...validInterpretation(),
     document_type: "price_list",
+    packet_segments: [{
+      ordinal: 1,
+      start_page: 1,
+      end_page: 1,
+      document_type: "price_list",
+      confidence: 0.91,
+    }],
     line_items: sourceRows.map((sourceRow, index) => ({
       source_row: sourceRow,
       values: {
@@ -410,6 +424,45 @@ test("raw schema uses only closed objects and normalizes line values to the v1 r
   })
     .interpret(payload());
   assert.deepEqual(result.interpretation.line_items[0].values, { total: 100 });
+});
+
+test("mixed packet manifest covers every source page exactly once", async () => {
+  const source = extraction("invoice page, delivery page, invoice page");
+  source.document.page_count = 3;
+  const mixed: InterpretationContract = {
+    ...validInterpretation(),
+    document_type: "other",
+    packet_segments: [
+      { ordinal: 1, start_page: 1, end_page: 1, document_type: "invoice", confidence: 0.96 },
+      { ordinal: 2, start_page: 2, end_page: 2, document_type: "delivery_note", confidence: 0.94 },
+      { ordinal: 3, start_page: 3, end_page: 3, document_type: "invoice", confidence: 0.97 },
+    ],
+  };
+  const payloadWithPages = buildProviderPayload(source, [{
+    id: SUPPLIER_ID,
+    name: "ספק בדיקה",
+    status: "active",
+  }], []);
+  const provider = (interpretation: InterpretationContract) => createOpenAiProvider({
+    apiKey: "test-key",
+    fetchImpl: (async () => jsonResponse(providerResponse(outputText(
+      JSON.stringify(providerWireInterpretation(interpretation)),
+    )))) as typeof fetch,
+  }).interpret(payloadWithPages);
+
+  const result = await provider(mixed);
+  assert.equal(result.interpretation.packet_segments.length, 3);
+
+  await assert.rejects(
+    provider({
+      ...mixed,
+      packet_segments: [
+        mixed.packet_segments[0],
+        { ...mixed.packet_segments[1], start_page: 3, end_page: 3 },
+      ],
+    }),
+    (error) => errorCode(error) === "provider_invalid_output",
+  );
 });
 
 test("invoice line evidence survives the closed wire schema and normalization unchanged", async () => {
@@ -959,6 +1012,8 @@ const PROMPT_DIGESTS: Record<string, string> = {
     "19b0125802fdae68640150eeda9ec1b43e78d296211c399d704453bfb3710244",
   "interpret-document-v10":
     "ce5afb034b2322d56eac4696372c5137670e2c4f3463cb00b7a50d9653b4a98e",
+  "interpret-document-v11":
+    "b1a6f4f553b20a79af057034060ead8abc2d32375f5ad8b3d4c987a4f1b78112",
 };
 
 // CRLF is folded before hashing, and the reason is a checkout hazard rather than tidiness: this

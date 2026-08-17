@@ -2,6 +2,7 @@
   "nodeModulesDir": "auto",
   "imports": {
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.91.1",
+    "pdf-lib": "npm:pdf-lib@1.17.1",
     "zod": "npm:zod@3.25.76"
   },
   "lock": {

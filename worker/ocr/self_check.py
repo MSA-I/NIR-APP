@@ -127,18 +127,30 @@ def _write_text_pdf(path: Path) -> None:
     )
 
 
-def _write_scanned_pdf(path: Path) -> None:
+def _write_scanned_pdf(path: Path, page_count: int = 1) -> None:
     image = zlib.compress(b"\xff\xff\xff")
     drawing = b"q 100 0 0 100 25 25 cm /Im0 Do Q"
+    page_objects: list[bytes] = []
+    page_refs: list[str] = []
+    for page_index in range(page_count):
+        page_object = 3 + page_index * 3
+        image_object = page_object + 1
+        drawing_object = page_object + 2
+        page_refs.append(f"{page_object} 0 R")
+        page_objects.extend(
+            [
+                f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 150 150] /Resources << /XObject << /Im0 {image_object} 0 R >> >> /Contents {drawing_object} 0 R >>".encode(),
+                f"<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length {len(image)} >>\nstream\n".encode()
+                + image
+                + b"\nendstream",
+                f"<< /Length {len(drawing)} >>\nstream\n".encode() + drawing + b"\nendstream",
+            ]
+        )
     _pdf(
         [
             b"<< /Type /Catalog /Pages 2 0 R >>",
-            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 150 150] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>",
-            f"<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length {len(image)} >>\nstream\n".encode()
-            + image
-            + b"\nendstream",
-            f"<< /Length {len(drawing)} >>\nstream\n".encode() + drawing + b"\nendstream",
+            f"<< /Type /Pages /Kids [{' '.join(page_refs)}] /Count {page_count} >>".encode(),
+            *page_objects,
         ],
         path,
     )
@@ -369,6 +381,74 @@ def _limit_checks(fixtures: Path, adapter: SyntheticOcrAdapter) -> None:
         ),
         "decompressed_size_limit",
     )
+
+
+def _pdf_batching_check(fixtures: Path) -> dict[str, Any]:
+    from src import parsers
+
+    source = fixtures / "scan-batched.pdf"
+    _write_scanned_pdf(source, page_count=3)
+    original_render = parsers._render_pdf_page
+    batches: list[list[int]] = []
+    previous_paths: list[Path] = []
+
+    class BatchAdapter:
+        def extract(self, pages: list[PageImage], limits: ExtractionLimits) -> dict[str, Any]:
+            del limits
+            if any(path.exists() for path in previous_paths):
+                raise AssertionError("pdf_batch_temp_files_not_removed")
+            batches.append([page.page for page in pages])
+            previous_paths[:] = [page.path for page in pages]
+            text = "\n".join(f"page {page.page}" for page in pages)
+            return {
+                "schema_version": "1",
+                "document": {
+                    "page_count": max(page.page for page in pages),
+                    "detected_languages": ["en"],
+                    "plain_text": text,
+                    "partial": True,
+                },
+                "blocks": [
+                    {
+                        "id": f"batch-p{page.page}",
+                        "page": page.page,
+                        "type": "text",
+                        "bbox": [0.0, 0.0, 1.0, 1.0],
+                        "text": f"page {page.page}",
+                        "confidence": None,
+                    }
+                    for page in pages
+                ],
+                "tables": [],
+                "marks": [],
+            }
+
+    def fake_render(path: Path, page: int, limits: ExtractionLimits) -> PageImage:
+        del limits
+        output = path.parent / f"fake-render-{page}.png"
+        output.write_bytes(b"rendered")
+        return PageImage(page, output, 10, 10)
+
+    parsers._render_pdf_page = fake_render
+    try:
+        limits = ExtractionLimits(max_decompressed_bytes=600)
+        payload = extract_file(source, "application/pdf", adapter=BatchAdapter(), limits=limits)
+        assert batches == [[1, 2], [3]], f"unexpected_pdf_batches:{batches}"
+        assert [block["page"] for block in payload["blocks"]] == [1, 2, 3]
+        assert not any(path.exists() for path in previous_paths)
+        _expect_processing_error(
+            lambda: extract_file(
+                source,
+                "application/pdf",
+                adapter=BatchAdapter(),
+                limits=ExtractionLimits(max_decompressed_bytes=299),
+            ),
+            "decompressed_size_limit",
+        )
+        assert not list(fixtures.glob("fake-render-*.png"))
+    finally:
+        parsers._render_pdf_page = original_render
+    return {"batches": batches, "single_page_limit": "passed", "cleanup": "passed"}
 
 
 def _macro_security_check(fixtures: Path, scratch: Path) -> None:
@@ -1084,6 +1164,7 @@ def main() -> int:
         _assert_rejected(fixtures / "invalid.txt", "text/plain")
         _assert_rejected(fixtures / "executable.txt", "text/plain")
         _limit_checks(fixtures, adapter)
+        pdf_batching = _pdf_batching_check(fixtures)
         _macro_security_check(fixtures, scratch)
         _retry_and_cleanup_check(scratch)
         hebrew_order = _hebrew_order_check()
@@ -1099,6 +1180,7 @@ def main() -> int:
                     "gateway_contract_version": GATEWAY_CONTRACT_VERSION,
                     "parsers": parser_names,
                     "limits": "passed",
+                    "pdf_batching": pdf_batching,
                     "macro_security": "passed",
                     "retry_cleanup": "passed",
                     "hebrew_order": hebrew_order,

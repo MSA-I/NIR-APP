@@ -2,6 +2,11 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 
+const authState = vi.hoisted(() => ({
+  accessStatus: 'authoritative' as 'unknown' | 'authoritative' | 'offline',
+  organizationAccess: { mode: 'active' as 'active' | 'read_only' | 'offboarding', canWrite: true },
+}));
+
 /**
  * The active-state half of the navigation contract, which `layout.spec.ts` cannot reach: that file
  * asserts the menu data, and `end` only becomes behaviour once NavLink renders it. Between the two
@@ -20,7 +25,8 @@ vi.mock('../auth/AuthContext', () => ({
     org: { name: 'ארגון בדיקה' },
     roleLabels: { owner: 'בעלים' },
     isPlatformAdmin: false,
-    organizationAccess: { mode: 'active', canWrite: true },
+    organizationAccess: authState.organizationAccess,
+    accessStatus: authState.accessStatus,
     signOut: async () => ({ error: null }),
   }),
 }));
@@ -147,5 +153,21 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
     const backLink = screen.getByRole('link', { name: 'חזרה לחשבוניות' });
     expect(backLink).toHaveAttribute('href', '/invoices');
     expect(backLink).not.toHaveClass('mobile-shell-mark');
+  });
+});
+
+describe('מצב גישת הארגון בזמן bootstrap', () => {
+  it('אינו מהבהב בהודעת קריאה בלבד לפני תשובה סמכותית או מטמון offline', () => {
+    authState.organizationAccess = { mode: 'read_only', canWrite: false };
+    authState.accessStatus = 'unknown';
+    renderAt('/dashboard');
+    expect(screen.queryByText(/הגישה לכתיבה אינה זמינה כרגע/)).toBeNull();
+  });
+
+  it('מציג את ההודעה לאחר שהמצב נעשה סמכותי', () => {
+    authState.organizationAccess = { mode: 'read_only', canWrite: false };
+    authState.accessStatus = 'authoritative';
+    renderAt('/dashboard');
+    expect(screen.getByText(/הגישה לכתיבה אינה זמינה כרגע/)).toBeInTheDocument();
   });
 });

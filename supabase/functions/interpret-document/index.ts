@@ -3,10 +3,12 @@
 // payload built in core.ts, and every result remains a review suggestion.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { PDFDocument } from "pdf-lib";
 import {
   buildProviderPayload,
   createOpenAiProvider,
   type ExtractionContract,
+  type InterpretationContract,
   InterpretationError,
   type LearningRuleSummary,
   PROMPT_VERSION,
@@ -85,6 +87,7 @@ class EdgeError extends Error {
 
 interface InterpretRequest {
   jobId?: string;
+  packetId?: string;
 }
 
 interface ProfileRow {
@@ -123,6 +126,21 @@ interface DocumentRow {
   uploaded_by: string;
   storage_path: string;
   deleted_at: string | null;
+}
+
+interface PacketRecordResult {
+  packet_id: string;
+  status: "needs_review" | "approved" | "materialized" | "failed";
+  manifest_hash: string;
+  automatic_eligible: boolean;
+  idempotent: boolean;
+}
+
+interface PacketSegmentRow {
+  id: string;
+  ordinal: number;
+  start_page: number;
+  end_page: number;
 }
 
 interface BeginContext {
@@ -255,6 +273,123 @@ function providerError(error: InterpretationError): EdgeError {
 function serviceRpc(admin: SupabaseClient): ServiceRpc {
   return (name, args) =>
     admin.rpc(name, args) as unknown as PromiseLike<ServiceRpcResult>;
+}
+
+function mixedPacket(
+  interpretation: InterpretationContract | Record<string, unknown>,
+): boolean {
+  const segments = (interpretation as { packet_segments?: unknown })
+    .packet_segments;
+  return Array.isArray(segments) && segments.length > 1;
+}
+
+function packetRecordResult(value: unknown): value is PacketRecordResult {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  return UUID.test(String(row.packet_id ?? "")) &&
+    ["needs_review", "approved", "materialized", "failed"].includes(
+      String(row.status ?? ""),
+    ) && /^[0-9a-f]{64}$/i.test(String(row.manifest_hash ?? "")) &&
+    typeof row.automatic_eligible === "boolean" &&
+    typeof row.idempotent === "boolean";
+}
+
+async function bytesSha256(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", Uint8Array.from(bytes).buffer);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function uploadPacketSegments(
+  admin: SupabaseClient,
+  packet: PacketRecordResult,
+  document: DocumentRow,
+  actorId: string,
+): Promise<void> {
+  if (packet.status !== "approved") return;
+  const [segmentsResult, sourceResult] = await Promise.all([
+    admin.from("document_packet_segments")
+      .select("id,ordinal,start_page,end_page")
+      .eq("org_id", document.org_id).eq("packet_id", packet.packet_id)
+      .order("ordinal"),
+    admin.storage.from("documents").download(document.storage_path),
+  ]);
+  if (segmentsResult.error || sourceResult.error || !sourceResult.data) {
+    throw new EdgeError("persistence_failed", 503);
+  }
+  const segments = (segmentsResult.data ?? []) as PacketSegmentRow[];
+  if (segments.length < 2) throw new EdgeError("persistence_failed", 503);
+  let source: PDFDocument;
+  try {
+    source = await PDFDocument.load(await sourceResult.data.arrayBuffer(), {
+      ignoreEncryption: false,
+      updateMetadata: false,
+    });
+  } catch {
+    throw new EdgeError("invalid_job_state", 409);
+  }
+
+  for (const segment of segments) {
+    if (
+      !UUID.test(segment.id) || !Number.isInteger(segment.ordinal) ||
+      !Number.isInteger(segment.start_page) ||
+      !Number.isInteger(segment.end_page) ||
+      segment.start_page < 1 || segment.end_page < segment.start_page ||
+      segment.end_page > source.getPageCount()
+    ) throw new EdgeError("persistence_failed", 503);
+    const child = await PDFDocument.create();
+    const indexes = Array.from(
+      { length: segment.end_page - segment.start_page + 1 },
+      (_, index) => segment.start_page - 1 + index,
+    );
+    const pages = await child.copyPages(source, indexes);
+    for (const page of pages) child.addPage(page);
+    const bytes = await child.save({ useObjectStreams: true, addDefaultPage: false });
+    const path = `${document.org_id}/document-segments/${document.id}/${segment.id}.pdf`;
+    const upload = await admin.storage.from("documents").upload(path, bytes, {
+      contentType: "application/pdf",
+      cacheControl: "31536000",
+      upsert: false,
+    });
+    if (upload.error) {
+      const existing = await admin.storage.from("documents").download(path);
+      if (existing.error || !existing.data) {
+        throw new EdgeError("persistence_failed", 503);
+      }
+      const existingBytes = new Uint8Array(await existing.data.arrayBuffer());
+      if (await bytesSha256(existingBytes) !== await bytesSha256(bytes)) {
+        throw new EdgeError("interpretation_conflict", 409);
+      }
+    }
+  }
+  const materialized = await admin.rpc("service_materialize_document_packet", {
+    p_packet_id: packet.packet_id,
+    p_expected_manifest_hash: packet.manifest_hash,
+    p_actor_id: actorId,
+  });
+  if (materialized.error) throw pgError(materialized.error.message);
+}
+
+async function processMixedPacket(
+  admin: SupabaseClient,
+  values: {
+    jobId: string;
+    interpretationId: string;
+    actorId: string;
+    document: DocumentRow;
+  },
+): Promise<PacketRecordResult> {
+  const recorded = await admin.rpc("service_record_document_packet", {
+    p_job_id: values.jobId,
+    p_interpretation_id: values.interpretationId,
+    p_actor_id: values.actorId,
+  });
+  if (recorded.error || !packetRecordResult(recorded.data)) {
+    if (recorded.error) throw pgError(recorded.error.message);
+    throw new EdgeError("persistence_failed", 503);
+  }
+  await uploadPacketSegments(admin, recorded.data, values.document, values.actorId);
+  return recorded.data;
 }
 
 async function markFailed(
@@ -877,6 +1012,7 @@ async function recoverStoredProviderEvidence(
     extractionId: string;
     decisionActorId: string;
     isPriceList: boolean;
+    document: DocumentRow;
     // Replay has no payload to cross-check, so the stored kind decides alone here -- unlike the
     // live path above, where kind and the model's reading must agree.
     isDeliveryNote?: boolean;
@@ -907,7 +1043,8 @@ async function recoverStoredProviderEvidence(
     evidenceActorId,
     decisionActorId: values.decisionActorId,
   });
-  return recoverInterpretationFromEgress(admin, {
+  const isPacket = mixedPacket(interpretation as Record<string, unknown>);
+  const recovered = await recoverInterpretationFromEgress(admin, {
     jobId: values.jobId,
     extractionId: values.extractionId,
     evidenceActorId,
@@ -919,7 +1056,17 @@ async function recoverStoredProviderEvidence(
     evidenceSha256: stored.evidence_sha256,
     isPriceList: decisionContext.isPriceList,
     isDeliveryNote: values.isDeliveryNote ?? false,
+    apply: isPacket ? async () => {} : undefined,
   });
+  if (isPacket) {
+    await processMixedPacket(admin, {
+      jobId: values.jobId,
+      interpretationId: recovered.interpretation_id,
+      actorId: evidenceActorId,
+      document: values.document,
+    });
+  }
+  return recovered;
 }
 
 export async function handler(req: Request): Promise<Response> {
@@ -979,9 +1126,14 @@ export async function handler(req: Request): Promise<Response> {
     ? Object.keys(body)
     : [];
   const jobId = body?.jobId;
+  const packetId = body?.packetId;
   if (
-    requestKeys.length !== 1 || requestKeys[0] !== "jobId" ||
-    typeof jobId !== "string" || !UUID.test(jobId)
+    requestKeys.length !== 1 ||
+    !["jobId", "packetId"].includes(requestKeys[0]) ||
+    (requestKeys[0] === "jobId" &&
+      (typeof jobId !== "string" || !UUID.test(jobId))) ||
+    (requestKeys[0] === "packetId" &&
+      (serviceMode || typeof packetId !== "string" || !UUID.test(packetId)))
   ) {
     return fail(cors, new EdgeError("invalid_request", 400));
   }
@@ -991,7 +1143,7 @@ export async function handler(req: Request): Promise<Response> {
       .select(
         "id,org_id,document_id,status,requested_by,input_checksum,contract_version,updated_at",
       )
-      .eq("id", jobId).maybeSingle();
+      .eq("id", jobId as string).maybeSingle();
     if (jobResult.error) {
       return fail(cors, new EdgeError("service_unavailable", 503));
     }
@@ -1052,11 +1204,57 @@ export async function handler(req: Request): Promise<Response> {
   );
   if (initialAccessError) return fail(cors, initialAccessError);
 
+  if (packetId) {
+    try {
+      const packetResult = await admin.from("document_packets")
+        .select(
+          "id,status,manifest_hash,automatic_eligible,parent_document_id,approved_by",
+        )
+        .eq("id", packetId).eq("org_id", profile.org_id)
+        .eq("approved_by", actorId).maybeSingle();
+      if (packetResult.error || !packetResult.data) {
+        throw new EdgeError("not_authorized", 403);
+      }
+      const row = packetResult.data as Record<string, unknown>;
+      const packet: PacketRecordResult = {
+        packet_id: String(row.id),
+        status: String(row.status) as PacketRecordResult["status"],
+        manifest_hash: String(row.manifest_hash),
+        automatic_eligible: Boolean(row.automatic_eligible),
+        idempotent: true,
+      };
+      if (!packetRecordResult(packet)) {
+        throw new EdgeError("persistence_failed", 503);
+      }
+      const documentResult = await admin.from("documents").select(
+        "id,org_id,entity_type,entity_id,supplier_id,document_kind,uploaded_by,storage_path,deleted_at",
+      ).eq("org_id", profile.org_id)
+        .eq("id", String(row.parent_document_id)).maybeSingle();
+      const packetDocument = documentResult.data as DocumentRow | null;
+      if (documentResult.error || !packetDocument || packetDocument.deleted_at) {
+        throw new EdgeError("invalid_job_state", 409);
+      }
+      await uploadPacketSegments(admin, packet, packetDocument, actorId);
+      return json(cors, {
+        packetId: packet.packet_id,
+        status: "materialized",
+        idempotent: packet.status === "materialized",
+      }, 200);
+    } catch (error) {
+      return fail(
+        cors,
+        error instanceof EdgeError
+          ? error
+          : new EdgeError("service_unavailable", 503),
+      );
+    }
+  }
+
   if (!job) {
     const jobResult = await admin.from("document_processing_jobs")
       .select(
         "id,org_id,document_id,status,requested_by,input_checksum,contract_version,updated_at",
-      ).eq("id", jobId)
+      ).eq("id", jobId as string)
       .eq("org_id", profile.org_id).maybeSingle();
     if (jobResult.error) {
       return fail(cors, new EdgeError("service_unavailable", 503));
@@ -1107,6 +1305,7 @@ export async function handler(req: Request): Promise<Response> {
       decisionActorId: actorId,
       isPriceList: storedKindIsPriceList,
       isDeliveryNote: storedKindIsDeliveryNote,
+      document,
     });
     if (recovered) {
       return json(cors, {
@@ -1137,6 +1336,28 @@ export async function handler(req: Request): Promise<Response> {
     });
   if (beginResult.error) return fail(cors, pgError(beginResult.error.message));
   const context = beginResult.data as BeginContext;
+  let replayPacketActorId: string | null = null;
+  if (context.already_interpreted && context.interpretation_id) {
+    const storedInterpretation = await admin.from("document_interpretations")
+      .select("payload,interpreted_for_user_id")
+      .eq("org_id", profile.org_id).eq("id", context.interpretation_id)
+      .maybeSingle();
+    if (storedInterpretation.error) {
+      return fail(cors, new EdgeError("service_unavailable", 503));
+    }
+    const storedPayload = storedInterpretation.data?.payload;
+    if (
+      storedPayload && typeof storedPayload === "object" &&
+      !Array.isArray(storedPayload) && mixedPacket(storedPayload)
+    ) {
+      replayPacketActorId = String(
+        storedInterpretation.data?.interpreted_for_user_id ?? "",
+      );
+      if (!UUID.test(replayPacketActorId)) {
+        return fail(cors, new EdgeError("persistence_failed", 503));
+      }
+    }
+  }
   let replayed: string | null;
   try {
     replayed = await resumeExistingInterpretation({
@@ -1149,6 +1370,7 @@ export async function handler(req: Request): Promise<Response> {
       jobId: job.id,
       actorId,
       context,
+      apply: replayPacketActorId ? async () => {} : undefined,
     });
   } catch (error) {
     return fail(
@@ -1159,6 +1381,23 @@ export async function handler(req: Request): Promise<Response> {
     );
   }
   if (replayed) {
+    if (replayPacketActorId) {
+      try {
+        await processMixedPacket(admin, {
+          jobId: job.id,
+          interpretationId: replayed,
+          actorId: replayPacketActorId,
+          document,
+        });
+      } catch (error) {
+        return fail(
+          cors,
+          error instanceof EdgeError
+            ? error
+            : new EdgeError("service_unavailable", 503),
+        );
+      }
+    }
     return json(cors, {
       interpretationId: replayed,
       jobId: job.id,
@@ -1268,13 +1507,37 @@ export async function handler(req: Request): Promise<Response> {
     );
     if (existingId) {
       try {
+        const storedInterpretation = await admin.from("document_interpretations")
+          .select("payload,interpreted_for_user_id")
+          .eq("org_id", profile.org_id).eq("id", existingId).single();
+        if (storedInterpretation.error) {
+          throw new EdgeError("service_unavailable", 503);
+        }
+        const isPacket = mixedPacket(
+          storedInterpretation.data.payload as Record<string, unknown>,
+        );
         await decideOnInterpretation(
           admin,
           storedKindIsPriceList,
           job.id,
           existingId,
           actorId,
+          isPacket ? async () => {} : undefined,
         );
+        if (isPacket) {
+          const packetActorId = String(
+            storedInterpretation.data.interpreted_for_user_id,
+          );
+          if (!UUID.test(packetActorId)) {
+            throw new EdgeError("persistence_failed", 503);
+          }
+          await processMixedPacket(admin, {
+            jobId: job.id,
+            interpretationId: existingId,
+            actorId: packetActorId,
+            document,
+          });
+        }
       } catch (error) {
         return fail(
           cors,
@@ -1299,6 +1562,7 @@ export async function handler(req: Request): Promise<Response> {
           decisionActorId: actorId,
           isPriceList: storedKindIsPriceList,
           isDeliveryNote: storedKindIsDeliveryNote,
+          document,
         });
         if (recovered) {
           return json(cors, {
@@ -1416,6 +1680,7 @@ export async function handler(req: Request): Promise<Response> {
     // Recovery is the only post-provider write path. Postgres binds the immutable evidence lease,
     // canonical evidence hash, job, actor, extraction and attempt in one transaction; the Edge
     // function never reserializes JSONB or trusts its own copy as authority.
+    const isPacket = mixedPacket(result.interpretation);
     const persisted = await recoverInterpretationFromEgress(admin, {
       jobId: job.id,
       extractionId: extraction.id,
@@ -1431,13 +1696,25 @@ export async function handler(req: Request): Promise<Response> {
       // tenant gets today. Kind alone decides only on replay, where there is no payload to ask.
       isDeliveryNote: storedKindIsDeliveryNote &&
         result.interpretation.document_type === "delivery_note",
+      apply: isPacket ? async () => {} : undefined,
     });
+    let packet: PacketRecordResult | null = null;
+    if (isPacket) {
+      packet = await processMixedPacket(admin, {
+        jobId: job.id,
+        interpretationId: persisted.interpretation_id,
+        actorId,
+        document,
+      });
+    }
     if (persisted.idempotent) {
       return json(cors, {
         interpretationId: persisted.interpretation_id,
         jobId: job.id,
         status: "review",
         idempotent: true,
+        packetId: packet?.packet_id,
+        packetStatus: packet?.status,
       }, 200);
     }
 
@@ -1449,6 +1726,8 @@ export async function handler(req: Request): Promise<Response> {
       promptVersion: PROMPT_VERSION,
       model: result.model,
       idempotent: false,
+      packetId: packet?.packet_id,
+      packetStatus: packet?.status,
     }, 200);
   } catch (error) {
     const edgeError = error instanceof InterpretationError

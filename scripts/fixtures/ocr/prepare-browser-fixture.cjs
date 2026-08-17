@@ -23,6 +23,8 @@ const documents = [
   ['97000000-0000-4000-8000-000000000005', 'ocr-05-completed.png'],
   ['97000000-0000-4000-8000-000000000006', 'ocr-06-failed.png'],
   ['97000000-0000-4000-8000-000000000007', 'ocr-07-price-list.png', `${ORG_ID}/supplier/${SUPPLIER_ID}/97000000-0000-4000-8000-000000000007/ocr-07-price-list.png`],
+  ['97000000-0000-4000-8000-000000000008', 'ocr-08-price-list-manual.png', `${ORG_ID}/supplier/${SUPPLIER_ID}/97000000-0000-4000-8000-000000000008/ocr-08-price-list-manual.png`],
+  ['97000000-0000-4000-8000-000000000009', 'ocr-09-mixed-packet.png'],
 ].map(([id, fileName, canonicalPath]) => ({
   id,
   fileName,
@@ -73,7 +75,7 @@ async function prepare() {
   }
 
   ok('insert OCR browser documents', await service.from('documents').insert(documents.map((document) => {
-    const isPriceList = document.id.endsWith('0007');
+    const isPriceList = document.id.endsWith('0007') || document.id.endsWith('0008');
     return {
       id: document.id,
       org_id: ORG_ID,
