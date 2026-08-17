@@ -623,6 +623,50 @@ def _openai_qa_check(fixtures: Path) -> dict[str, Any]:
     }
 
 
+def _openai_page_concurrency_check(fixtures: Path) -> dict[str, Any]:
+    """Multiple scanned pages run concurrently, but never beyond the configured ceiling."""
+    pages = [PageImage(page, fixtures / "pixel.png", 16, 16) for page in range(1, 6)]
+    adapter = OpenAiOcrAdapter(
+        "sk-self-check-000000000000",
+        qa_passes=1,
+        page_concurrency=2,
+        opener=_FakeOpener(_openai_envelope(["unused"])),
+        sleep=lambda _s: None,
+    )
+    lock = threading.Lock()
+    release = threading.Event()
+    active = 0
+    peak = 0
+
+    def transcribe(page: PageImage, limits: ExtractionLimits) -> tuple[list[str], list[bool]]:
+        del limits
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+            if peak == 2:
+                release.set()
+        if not release.wait(2):
+            raise AssertionError("openai_pages_were_processed_serially")
+        with lock:
+            active -= 1
+        return [f"page {page.page}"], [True]
+
+    adapter._transcribe_with_consensus = transcribe  # type: ignore[method-assign]
+    payload = validate_extraction(adapter.extract(pages, DEFAULT_LIMITS), DEFAULT_LIMITS)
+    assert peak == 2, f"unexpected_openai_page_concurrency:{peak}"
+    assert [block["page"] for block in payload["blocks"]] == [1, 2, 3, 4, 5]
+    assert payload["document"]["plain_text"].split("\n\n") == [
+        "page 1", "page 2", "page 3", "page 4", "page 5"
+    ]
+
+    _expect_processing_error(
+        lambda: OpenAiOcrAdapter("sk-self-check-000000000000", page_concurrency=5),
+        "worker_config_invalid",
+    )
+    return {"configured": 2, "peak": peak, "source_order": "passed", "ceiling": "passed"}
+
+
 def _openai_adapter_check(fixtures: Path) -> dict[str, Any]:
     page = PageImage(1, fixtures / "pixel.png", 16, 16)
     lines = ['ספק בדיקה בע"מ', "מוצר 1   ₪31.90", 'סה"כ לתשלום 31.90']
@@ -1170,6 +1214,7 @@ def main() -> int:
         hebrew_order = _hebrew_order_check()
         openai_adapter = _openai_adapter_check(fixtures)
         openai_qa = _openai_qa_check(fixtures)
+        openai_page_concurrency = _openai_page_concurrency_check(fixtures)
         gateway = _gateway_e2e_check(scratch)
         evidence = _tesseract_evidence()
         print(
@@ -1186,6 +1231,7 @@ def main() -> int:
                     "hebrew_order": hebrew_order,
                     "openai_adapter": openai_adapter,
                     "openai_qa": openai_qa,
+                    "openai_page_concurrency": openai_page_concurrency,
                     "gateway_e2e": gateway,
                     "tesseract": evidence,
                 },

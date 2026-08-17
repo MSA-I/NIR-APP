@@ -109,7 +109,10 @@ class WorkerConfig:
             _integer_env("OCR_POLL_SECONDS", 2, 1, 60),
             _integer_env("OCR_MAX_BACKOFF_SECONDS", 30, 1, 300),
             _integer_env("OCR_REQUEST_TIMEOUT_SECONDS", 15, 1, 120),
-            _integer_env("OCR_JOB_TIMEOUT_SECONDS", 300, 10, 3_600),
+            # A scanned packet can contain up to 20 paid OCR pages with 2-3 QA passes each.
+            # Page concurrency keeps normal latency low; 900 seconds remains a hard resource
+            # ceiling for a slow but healthy provider response.
+            _integer_env("OCR_JOB_TIMEOUT_SECONDS", 900, 10, 3_600),
             _integer_env("OCR_MAX_MEMORY_MB", 2_048, 256, 65_536),
             _integer_env("OCR_MAX_JOB_ATTEMPTS", 3, 1, 20),
             temp_root,
@@ -312,7 +315,9 @@ def _run_extraction(
             process.join(5)
         if stop.is_set():
             raise _WorkerStopping()
-        raise ProcessingError("processing_timeout", "Document processing exceeded its time limit", retryable=True)
+        # Restarting the whole document discards every completed paid page and repeats the same
+        # deterministic wall-clock failure. Provider calls already have their own bounded retry.
+        raise ProcessingError("processing_timeout", "Document processing exceeded its time limit")
     process.join()
     if process.exitcode != 0 or not result_path.is_file():
         raise ProcessingError("processing_resource_failure", "Document processing exceeded a resource limit", retryable=True)
