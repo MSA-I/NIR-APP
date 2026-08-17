@@ -711,7 +711,32 @@ def _openai_page_progress_check(fixtures: Path) -> dict[str, Any]:
     survived = validate_extraction(exploding.extract(pages, DEFAULT_LIMITS), DEFAULT_LIMITS)
     assert len(survived["blocks"]) == 4
 
-    return {"reports": len(reports), "completion_order": "passed", "sink_failure": "ignored"}
+    # The batched PDF path calls extract() once per memory-bounded batch. Reporting len(pages)
+    # there described the BATCH, so a four-page scan on the live site reported "page 1 of 2" and
+    # the counter restarted at every flush. begin_progress() declares the document total once.
+    batched = OpenAiOcrAdapter(
+        "sk-self-check-000000000000",
+        qa_passes=1,
+        page_concurrency=1,
+        opener=_FakeOpener(_openai_envelope(["unused"])),
+        sleep=lambda _s: None,
+        progress=lambda done, total: reports.append((done, total)),
+    )
+    batched._transcribe_with_consensus = (  # type: ignore[method-assign]
+        lambda page, limits: ([f"page {page.page}"], [True])
+    )
+    reports.clear()
+    batched.begin_progress(4)
+    for batch in ([pages[0], pages[1]], [pages[2], pages[3]]):
+        validate_extraction(batched.extract(batch, DEFAULT_LIMITS), DEFAULT_LIMITS)
+    assert reports == [(1, 4), (2, 4), (3, 4), (4, 4)], f"batched_progress_wrong:{reports}"
+
+    return {
+        "reports": 4,
+        "completion_order": "passed",
+        "sink_failure": "ignored",
+        "batched_document_total": "passed",
+    }
 
 
 def _openai_adapter_check(fixtures: Path) -> dict[str, Any]:

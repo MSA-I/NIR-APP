@@ -275,6 +275,20 @@ class OpenAiOcrAdapter:
         self.progress = progress
         self.progress_lock = Lock()
         self.progress_done = 0
+        self.progress_total: int | None = None
+
+    def begin_progress(self, total_pages: int) -> None:
+        """Declare the DOCUMENT's OCR page count before the first batch.
+
+        `extract()` cannot infer it: a PDF is rendered in memory-bounded batches, so `len(pages)`
+        there is the batch and not the document. Reporting that produced "page 1 of 2" for a
+        four-page scan on the live site, and the counter restarted at every batch -- a number that
+        was wrong about the document and appeared to go backwards. Callers that hand over the whole
+        document in one call need not use this; the fallback is still `len(pages)`.
+        """
+        with self.progress_lock:
+            self.progress_done = 0
+            self.progress_total = total_pages if total_pages > 0 else None
 
     def _report_page_done(self, total: int) -> None:
         """One more page finished. Counts COMPLETIONS, not positions.
@@ -298,8 +312,11 @@ class OpenAiOcrAdapter:
     def extract(self, pages: list[PageImage], limits: ExtractionLimits) -> dict[str, Any]:
         blocks: list[dict[str, Any]] = []
         page_text: list[str] = []
-        self.progress_done = 0
-        page_count = len(pages)
+        # Deliberately NOT reset here. On the batched PDF path this method is called once per
+        # batch, and resetting made the counter start over mid-document. `begin_progress()` owns
+        # the reset; a caller that never sets a document total gets a fresh adapter per document
+        # anyway, so the count still starts at zero.
+        page_count = self.progress_total if self.progress_total is not None else len(pages)
 
         def transcribe(page: PageImage) -> tuple[list[str], list[bool]]:
             result = self._transcribe_with_consensus(page, limits)
