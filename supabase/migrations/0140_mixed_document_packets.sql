@@ -247,6 +247,7 @@ create policy scope_rider_document_packet_segments on public.document_packet_seg
 revoke all on table public.document_packets, public.document_packet_segments
   from public, anon, authenticated, service_role;
 grant select on table public.document_packets, public.document_packet_segments to authenticated;
+grant all on table public.document_packets, public.document_packet_segments to service_role;
 
 create trigger document_packets_touch before update on public.document_packets
 for each row execute function public.set_updated_at();
