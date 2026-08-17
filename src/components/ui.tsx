@@ -261,7 +261,13 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
     ? Math.min(100, Math.max(0, Math.round((progress.done / progress.total) * 100)))
     : null;
   return (
-    <div className="rounded-xl border border-line-soft bg-surface-sunken px-3 py-3">
+    // `min-w-0 overflow-hidden` below is containment, not decoration. The step row is a horizontal
+    // scroller, and a scroller whose content is wider than the viewport can still widen the
+    // DOCUMENT: the browser gate caught 33px of horizontal page overflow at 390px on the
+    // price-list review screen, which no assertion inside this component could see. Clipping at
+    // this boundary means the strip can never move the page, whatever its parent does, and the
+    // steps stay reachable because the `ol` inside keeps its own scrollbar.
+    <div className="min-w-0 overflow-hidden rounded-xl border border-line-soft bg-surface-sunken px-3 py-3">
       <ol aria-label="שלבי התהליך" className="flex min-w-0 items-center overflow-x-auto pb-1">
         {steps.map((step, index) => {
           const isCurrent = index === currentIndex;
