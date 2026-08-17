@@ -72,8 +72,15 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
 
   const done = job.progress_done;
   const total = job.progress_total;
-  const hasProgress = current === 'reading' && !stopped
+  // Both counters come through the same two fields, and the server returns them only for the stage
+  // the job is in (0143) -- so which stage is running decides what the number is counting. Reading
+  // counts OCR pages, interpreting counts provider chunks, and a text-layer PDF simply has no
+  // reading counter to show, which is why this stage had to get one of its own.
+  const hasProgress = (current === 'reading' || current === 'interpreting') && !stopped
     && typeof done === 'number' && typeof total === 'number' && total > 0;
+  const progressLabel = current === 'reading'
+    ? `עמוד ${done} מתוך ${total}`
+    : `מקטע ${done} מתוך ${total}`;
 
   let detail: string | null = null;
   if (stopped) {
@@ -92,12 +99,14 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
     // An unknown page count stays unknown. A "0 מתוך 0" here would be a claim about the document
     // that nobody has made yet — the constitution's dash rule, applied to a counter.
     detail = hasProgress
-      ? `עמוד ${done} מתוך ${total}`
+      ? progressLabel
       : 'קריאת המסמך התחילה. מספר העמודים טרם דווח.';
   } else if (current === 'interpreting') {
-    detail = job.status === 'extracted'
-      ? 'הטקסט חולץ וממתין לפירוש הסמנטי.'
-      : 'הנתונים מתפרשים לשדות ולשורות.';
+    detail = hasProgress
+      ? `הנתונים מתפרשים לשדות ולשורות — ${progressLabel}`
+      : job.status === 'extracted'
+        ? 'הטקסט חולץ וממתין לפירוש הסמנטי.'
+        : 'הנתונים מתפרשים לשדות ולשורות.';
   }
 
   return (
@@ -107,7 +116,7 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
       failed={stopped}
       detail={detail}
       progress={hasProgress
-        ? { done: done as number, total: total as number, label: `עמוד ${done} מתוך ${total}` }
+        ? { done: done as number, total: total as number, label: progressLabel }
         : undefined}
     />
   );

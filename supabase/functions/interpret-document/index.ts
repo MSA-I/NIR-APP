@@ -451,6 +451,38 @@ async function markFailed(
   }
 }
 
+/**
+ * Report how many provider chunks have landed. Observation, never a state transition.
+ *
+ * Not awaited anywhere and it swallows everything it can go wrong with, because the only thing
+ * downstream of it is a line of text on a screen. 0143's writer is fenced on
+ * `interpretation_started_at`, so a late write from a superseded attempt updates nothing.
+ */
+async function recordInterpretationProgress(
+  admin: SupabaseClient,
+  jobId: string,
+  interpretationStartedAt: string,
+  done: number,
+  total: number,
+): Promise<void> {
+  try {
+    const recorded = await admin.rpc(
+      "service_record_document_interpretation_progress",
+      {
+        p_job_id: jobId,
+        p_interpretation_started_at: interpretationStartedAt,
+        p_done: done,
+        p_total: total,
+      },
+    );
+    if (recorded.error) {
+      console.error("interpret-document progress observation skipped");
+    }
+  } catch {
+    console.error("interpret-document progress observation skipped");
+  }
+}
+
 // The narrowest shape these helpers need, rather than SupabaseClient, so a test can hand them a
 // client that fails in each of the ways below without constructing a real one.
 //
@@ -1642,9 +1674,30 @@ export async function handler(req: Request): Promise<Response> {
       reserve: () => Promise.resolve(egressLease),
       perform: async () => {
         const startedAt = performance.now();
+        // The wait a person actually watches. Reading a text-layer PDF takes no OCR page and so
+        // reports nothing (0141); this call is the minutes. `0` first, so a counter left behind by
+        // the reading stage is replaced before it can be read as this one, and one write per chunk
+        // after that. Every write is fire-and-forget: 0143's writer ignores an attempt that has
+        // moved on, and a failed status line must never fail an interpretation that is working.
+        void recordInterpretationProgress(
+          admin,
+          job.id,
+          interpretationStartedAt,
+          0,
+          interpretationPlan.chunks?.length ?? 1,
+        );
         const merged = await runInterpretationPlan(
           createOpenAiProvider({ apiKey: providerKey }),
           interpretationPlan,
+          (done, total) => {
+            void recordInterpretationProgress(
+              admin,
+              job.id,
+              interpretationStartedAt,
+              done,
+              total,
+            );
+          },
         );
         const result = merged.result;
         const durationMs = Math.max(

@@ -7,6 +7,15 @@ import type { DocumentProcessingSnapshot, PriceListPredictedLine } from '../../l
 vi.mock('../../auth/AuthContext', () => ({
   useAuth: () => ({ profile: { id: 'owner-1', role: 'owner', org_id: 'org-1' } }),
 }));
+const mocks = vi.hoisted(() => ({
+  insert: vi.fn((rows: Array<Record<string, unknown>>) => ({
+    data: rows.map((row, index) => ({
+      id: `new-product-${index}`, name: row.name, unit: row.unit, sku: row.sku,
+    })),
+    error: null,
+  })),
+}));
+
 vi.mock('../../lib/supabase', () => ({
   supabase: {
     from: () => ({
@@ -17,6 +26,9 @@ vi.mock('../../lib/supabase', () => ({
             error: null,
           }),
         }),
+      }),
+      insert: (rows: Array<Record<string, unknown>>) => ({
+        select: async () => mocks.insert(rows),
       }),
     }),
     rpc: vi.fn(),
@@ -34,9 +46,9 @@ const UNMATCHED_LINES = 2;
  * the shape a real price list arrives in, and it is the only shape that distinguishes "one button"
  * from "one button plus the exceptions".
  */
-function predictions(): PriceListPredictedLine[] {
-  return Array.from({ length: LINE_COUNT }, (_, index) => {
-    const unmatched = index >= LINE_COUNT - UNMATCHED_LINES;
+function predictions(count = LINE_COUNT): PriceListPredictedLine[] {
+  return Array.from({ length: count }, (_, index) => {
+    const unmatched = index >= count - UNMATCHED_LINES;
     return {
       id: `shadow-line-${index}`,
       org_id: 'org-1',
@@ -47,7 +59,7 @@ function predictions(): PriceListPredictedLine[] {
       source_row: index + 1,
       predicted_action: unmatched ? 'review' : 'apply_existing_price',
       reason_code: unmatched
-        ? index === LINE_COUNT - 1 ? 'line_price_unreadable' : 'line_product_unmatched'
+        ? index === count - 1 ? 'line_price_unreadable' : 'line_product_unmatched'
         : null,
       matched_by: unmatched ? null : 'sku',
       product_id: unmatched ? null : 'product-1',
@@ -65,8 +77,11 @@ function predictions(): PriceListPredictedLine[] {
   });
 }
 
-function snapshot(priceListPredictions: PriceListPredictedLine[]): DocumentProcessingSnapshot {
-  const lineItems = Array.from({ length: LINE_COUNT }, (_, index) => ({
+function snapshot(
+  priceListPredictions: PriceListPredictedLine[],
+  count = LINE_COUNT,
+): DocumentProcessingSnapshot {
+  const lineItems = Array.from({ length: count }, (_, index) => ({
     source_row: index + 1,
     values: { description: `מוצר ${index + 1}`, unit_price: index + 10 },
     evidence_block_ids: [],
@@ -134,6 +149,74 @@ describe('אישור מחירון', () => {
 
     await userEvent.click(screen.getByTestId('price-list-unmatched-filter'));
     expect(screen.getAllByText(/אני מאשר שורה זו לקליטה/)).toHaveLength(LINE_COUNT);
+  });
+
+  it('מחלק רשימה ארוכה לעמודים ומסמן עמוד שלם בסימון אחד', async () => {
+    const LONG = 120;
+    render(
+      <MemoryRouter>
+        <PriceListReviewConfirmation snapshot={snapshot(predictions(LONG), LONG)} actorId="owner-1" onRefetch={async () => true} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('price-list-intake-confirm')).toBeEnabled());
+    await userEvent.click(screen.getByTestId('price-list-details-toggle'));
+    await userEvent.click(screen.getByTestId('price-list-unmatched-filter'));
+    // 120 lines, 50 to a page: the reviewer sees a window, not the whole list.
+    expect(screen.getAllByText(/אני מאשר שורה זו לקליטה/)).toHaveLength(50);
+    expect(screen.getAllByTestId('price-list-pager')[0].textContent).toContain('עמוד');
+
+    await userEvent.click(screen.getAllByTestId('price-list-page-next')[0]);
+    expect(screen.getAllByText(/אני מאשר שורה זו לקליטה/)).toHaveLength(50);
+
+    // Clearing a whole page, then marking it again, is one click each way.
+    const selectAll = screen.getByTestId('price-list-page-select-all');
+    expect(selectAll).toBeChecked();
+    await userEvent.click(selectAll);
+    expect(screen.getByTestId('price-list-intake-confirm'))
+      .toHaveTextContent(`קליטת ${LONG - UNMATCHED_LINES - 50} המחירים שנבחרו`);
+    await userEvent.click(selectAll);
+    expect(screen.getByTestId('price-list-intake-confirm'))
+      .toHaveTextContent(`קליטת ${LONG - UNMATCHED_LINES} המחירים שנבחרו`);
+  });
+
+  it('יוצר את המוצרים החדשים בפעולה אחת ומשאיר שם חריג לטיפול פרטני', async () => {
+    const NEW_LINES = 6;
+    // Every line is keyed and priced but absent from the catalogue — the shape of a real supplier
+    // list whose numbering nobody has entered yet. The last name is what a scan actually produced.
+    const newProducts = predictions(NEW_LINES).map((line, index) => ({
+      ...line,
+      predicted_action: 'create_product' as const,
+      reason_code: null,
+      matched_by: null,
+      product_id: null,
+      sku: `NEW-${index}`,
+      product_name: index === NEW_LINES - 1 ? '^^' : `מוצר חדש ${index + 1}`,
+      unit: 'יח׳',
+      proposed_unit_price: 10 + index,
+      product_would_be_created: true,
+    }));
+
+    render(
+      <MemoryRouter>
+        <PriceListReviewConfirmation snapshot={snapshot(newProducts, NEW_LINES)} actorId="owner-1" onRefetch={async () => true} />
+      </MemoryRouter>,
+    );
+
+    const bulk = await screen.findByTestId('price-list-bulk-create');
+    expect(bulk).toHaveTextContent(`יצירת ${NEW_LINES - 1} מוצרים חדשים`);
+    expect(screen.getByText(/שורות שהשם שנקרא בהן חריג יישארו לטיפול פרטני/)).toBeInTheDocument();
+
+    await userEvent.click(bulk);
+    await userEvent.click(screen.getByRole('button', { name: 'יצירת המוצרים' }));
+
+    await waitFor(() => expect(mocks.insert).toHaveBeenCalledTimes(1));
+    const inserted = mocks.insert.mock.calls[0][0];
+    expect(inserted).toHaveLength(NEW_LINES - 1);
+    expect(inserted.map((row) => row.sku)).not.toContain(`NEW-${NEW_LINES - 1}`);
+    // Created, linked and marked: the confirm button now commits them without a per-line form.
+    await waitFor(() => expect(screen.getByTestId('price-list-intake-confirm'))
+      .toHaveTextContent(`קליטת ${NEW_LINES - 1} המחירים שנבחרו`));
   });
 
   it('בלי תחזית שמורה אינו ממלא כלום, אומר זאת, ומשאיר את האישור הידני זמין', async () => {

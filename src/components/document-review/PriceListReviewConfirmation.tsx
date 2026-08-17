@@ -163,6 +163,39 @@ function currentMonth(now: Date): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// A real price list is 338 lines. Rendering all of them as one column of open forms is what made
+// the screen unusable; a page is a window on the same list, not a different list.
+const PAGE_SIZE = 50;
+
+// One request per 200 products. A single 338-row insert is one PostgREST body the server may
+// refuse whole, and a refusal there costs the reviewer the entire batch rather than one chunk.
+const INSERT_CHUNK = 200;
+
+/**
+ * Whether a cell reads like a printed product name, rather than like something that fell into the
+ * name column.
+ *
+ * Measured on the live 338-line list before this was written: five rows arrived as `300.000` or
+ * `^^` — a number and a scanning mark — and the other 333 carried Hebrew text. Bulk creation
+ * writes a catalogue record that outlives this document, so a row with no letter in its name is
+ * never created in bulk; it stays a single item for a person to name (owner, 17.08.2026).
+ */
+export function looksLikeProductName(value: string | null | undefined): boolean {
+  const text = (value ?? '').trim();
+  return text.length >= 2 && /[A-Za-z֐-׿]/.test(text);
+}
+
+/** A line the document keyed and priced well enough to stand as a new catalogue product. */
+function creatableLine(
+  prediction: PriceListPredictedLine | undefined,
+): prediction is PriceListPredictedLine & { sku: string; proposed_unit_price: number } {
+  return !!prediction
+    && !!prediction.sku?.trim()
+    && typeof prediction.proposed_unit_price === 'number'
+    && Number.isFinite(prediction.proposed_unit_price)
+    && prediction.proposed_unit_price > 0;
+}
+
 function parseReceipt(value: unknown): SubmissionReceipt {
   if (!value || typeof value !== 'object') throw new Error('השרת לא החזיר קבלת הגשה תקינה.');
   const row = value as Record<string, unknown>;
@@ -265,6 +298,10 @@ export function PriceListReviewConfirmation({
   // Default on, and only ever seen when something actually needs a person: the point of the screen
   // is that a fully-read list costs one button, not 338 decisions.
   const [onlyUnmatched, setOnlyUnmatched] = useState(true);
+  const [page, setPage] = useState(0);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
   // Prefill runs once per interpretation. Re-running it after somebody edited a line would silently
   // undo their correction, which on a price is the one unacceptable outcome.
   const prefilledFor = useRef<string | null>(null);
@@ -296,6 +333,8 @@ export function PriceListReviewConfirmation({
     // need a person.
     setDetailsOpen(false);
     setOnlyUnmatched(true);
+    setPage(0);
+    setBulkError(null);
     prefilledFor.current = null;
   }, [canStart, interpretation?.id, lineItems.length]);
 
@@ -536,9 +575,148 @@ export function PriceListReviewConfirmation({
   const unmatchedIndexes = lineItems.flatMap((_, index) =>
     prefillable(predictions.get(index), catalogue) ? [] : [index]);
   const predictionsMissing = showControls && lineItems.length > 0 && predictions.size === 0;
-  const visibleIndexes = showControls && onlyUnmatched && unmatchedIndexes.length > 0
-    ? unmatchedIndexes
+  // Every catalogue SKU and how many products carry it. A key on two products is an ambiguity the
+  // matcher already refused to guess, and bulk creation must not guess it either.
+  const catalogueBySku = new Map<string, string[]>();
+  for (const product of products) {
+    const key = product.sku?.trim().toLowerCase();
+    if (!key) continue;
+    catalogueBySku.set(key, [...(catalogueBySku.get(key) ?? []), product.id]);
+  }
+  // Lines still waiting for a person: unmatched, and not already given a product by hand or by a
+  // previous bulk creation.
+  const pendingIndexes = unmatchedIndexes.filter((index) => !drafts[index]?.productId);
+  const creatableIndexes = pendingIndexes.filter((index) => creatableLine(predictions.get(index)));
+  const bulkIndexes = creatableIndexes.filter((index) =>
+    looksLikeProductName(predictions.get(index)?.product_name));
+  const oddNameIndexes = creatableIndexes.filter((index) =>
+    !looksLikeProductName(predictions.get(index)?.product_name));
+  // Stated in the dialog rather than filtered out. A price of one agora is what the document
+  // printed; refusing it here would be this screen inventing a floor nobody decided on.
+  const nearZeroPriceCount = bulkIndexes.filter((index) =>
+    (predictions.get(index)?.proposed_unit_price ?? 0) <= 0.01).length;
+
+  /**
+   * Creates one catalogue product per selected line and marks those lines for intake.
+   *
+   * The same act the per-line button performs, repeated: the products exist BEFORE any confirm
+   * payload is built, so the server invariant "האישור אינו יוצר מוצרים" holds unchanged. What is
+   * created is written from the document's own reading — name, SKU, unit and the price the matcher
+   * parsed — and never from a name match.
+   */
+  async function createProductsForLines() {
+    if (!profile || !bulkIndexes.length) return;
+    setBulkBusy(true);
+    setBulkError(null);
+    const patches = new Map<number, string>();
+    const pendingBySku = new Map<string, number[]>();
+    const toInsert: Array<Record<string, unknown>> = [];
+    for (const index of bulkIndexes) {
+      const prediction = predictions.get(index);
+      if (!creatableLine(prediction)) continue;
+      const key = prediction.sku.trim().toLowerCase();
+      const existing = catalogueBySku.get(key);
+      // Exactly one active product already carries this key: reuse it instead of creating a twin.
+      if (existing?.length === 1) { patches.set(index, existing[0]); continue; }
+      if (existing) continue;
+      const queued = pendingBySku.get(key);
+      // A document that prints one key on two rows gets one product, not two.
+      if (queued) { queued.push(index); continue; }
+      pendingBySku.set(key, [index]);
+      toInsert.push({
+        org_id: profile.org_id,
+        name: (prediction.product_name ?? '').trim().slice(0, 120),
+        unit: normalizeUnitInput(prediction.unit || 'יחידה'),
+        sku: prediction.sku.trim(),
+        barcode: prediction.barcode?.trim() || null,
+        active: true,
+      });
+    }
+
+    const created: ProductOption[] = [];
+    let failure: unknown = null;
+    for (let start = 0; start < toInsert.length; start += INSERT_CHUNK) {
+      const inserted = await supabase.from('products')
+        .insert(toInsert.slice(start, start + INSERT_CHUNK))
+        .select('id,name,unit,sku');
+      if (inserted.error) { failure = inserted.error; break; }
+      created.push(...((inserted.data ?? []) as ProductOption[]));
+    }
+    // Applied even when a later chunk failed. Products that were written exist whether or not the
+    // batch finished, and leaving their lines unlinked would invite a second run that duplicates them.
+    for (const product of created) {
+      const key = product.sku?.trim().toLowerCase();
+      for (const index of (key && pendingBySku.get(key)) || []) patches.set(index, product.id);
+    }
+    if (created.length) {
+      setProducts((current) => [...current, ...created]
+        .sort((left, right) => left.name.localeCompare(right.name, 'he')));
+    }
+    if (patches.size) {
+      setDrafts((current) => current.map((draft, index) => {
+        const productId = patches.get(index);
+        if (!productId) return draft;
+        const price = predictions.get(index)?.proposed_unit_price;
+        return {
+          approved: true,
+          productId,
+          priceText: typeof price === 'number' ? String(price) : draft.priceText,
+          available: true,
+        };
+      }));
+    }
+    setBulkBusy(false);
+    setBulkOpen(false);
+    if (failure) {
+      setBulkError(`נוצרו ${created.length} מוצרים ואז הפעולה נעצרה: ${toHebrewError(failure)}`);
+    }
+  }
+  // Filtered on what is still open, not on what the machine failed to match: a line the reviewer
+  // has since given a product to — by hand or by the bulk creation below — is handled, and keeping
+  // it in the "needs you" list would send them back to work that is already done.
+  const visibleIndexes = showControls && onlyUnmatched && pendingIndexes.length > 0
+    ? pendingIndexes
     : lineItems.map((_, index) => index);
+  const pageCount = Math.max(1, Math.ceil(visibleIndexes.length / PAGE_SIZE));
+  // Clamped rather than reset: switching the filter shortens the list under a reader who was on
+  // page 5, and an out-of-range page renders an empty list that looks like lost lines.
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageStart = currentPage * PAGE_SIZE;
+  const pageIndexes = visibleIndexes.slice(pageStart, pageStart + PAGE_SIZE);
+  // A line is markable only once it carries a product and a price, because those are exactly the
+  // two things the server refuses an approved row without. Ticking the rest in bulk would build a
+  // payload that fails as a whole and takes the good lines down with it.
+  const markableOnPage = pageIndexes.filter((index) => {
+    const draft = drafts[index];
+    return !!draft?.productId && !!draft.priceText.trim();
+  });
+  const allMarkedOnPage = markableOnPage.length > 0
+    && markableOnPage.every((index) => drafts[index]?.approved);
+
+  function setApprovedOnPage(approved: boolean) {
+    const targets = new Set(markableOnPage);
+    setDrafts((current) => current.map((draft, index) =>
+      targets.has(index) ? { ...draft, approved } : draft));
+  }
+
+  const pager = pageCount > 1 && (
+    <div className="flex flex-wrap items-center justify-between gap-2" data-testid="price-list-pager">
+      <span className="text-sm text-ink-muted">
+        שורות <span className="num">{pageStart + 1}</span>–<span className="num">{pageStart + pageIndexes.length}</span>{' '}
+        מתוך <span className="num">{visibleIndexes.length}</span> · עמוד <span className="num">{currentPage + 1}</span> מתוך <span className="num">{pageCount}</span>
+      </span>
+      <div className="flex items-center gap-2">
+        <button type="button" className="btn-secondary" data-testid="price-list-page-previous"
+          disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
+          העמוד הקודם
+        </button>
+        <button type="button" className="btn-secondary" data-testid="price-list-page-next"
+          disabled={currentPage >= pageCount - 1} onClick={() => setPage(currentPage + 1)}>
+          העמוד הבא
+        </button>
+      </div>
+    </div>
+  );
   const detailsToggle = lineItems.length > 0 && (
     <button type="button" className="btn-secondary" data-testid="price-list-details-toggle"
       aria-expanded={detailsOpen} aria-controls="price-list-line-details"
@@ -684,8 +862,10 @@ export function PriceListReviewConfirmation({
           ) : (
             <p className="text-sm font-medium text-ink-body" role="status" data-testid="price-list-intake-summary">
               <span className="num">{readyIndexes.length}</span> מתוך <span className="num">{lineItems.length}</span> שורות זוהו במלואן — מוצר קיים ומחיר
+              {/* What the machine read, which stays true after a person or a bulk creation has
+                  since handled some of it. How much is still open is the note further down. */}
               {unmatchedIndexes.length > 0 && (
-                <> · <span className="num">{unmatchedIndexes.length}</span> שורות דורשות טיפול</>
+                <> · <span className="num">{unmatchedIndexes.length}</span> שורות לא זוהו אוטומטית</>
               )}
             </p>
           )}
@@ -721,10 +901,26 @@ export function PriceListReviewConfirmation({
               {busy ? 'קולט את המחירון…' : <>קליטת <span className="num">{selectedCount}</span> המחירים שנבחרו</>}
             </button>
           </div>
-          {unmatchedIndexes.length > 0 && !catalogLoading && (
+          {bulkIndexes.length > 0 && !catalogLoading && !catalogError && (
+            <Note tone="info" className="mt-3 flex-wrap">
+              <span className="min-w-0 flex-1">
+                <span className="num">{bulkIndexes.length}</span> שורות נקראו עם מק״ט, שם ומחיר, אך המוצר שלהן אינו בקטלוג. אפשר ליצור את כולן כמוצרים חדשים ולסמן אותן לקליטה בפעולה אחת.
+                {oddNameIndexes.length > 0 && (
+                  <> <span className="num">{oddNameIndexes.length}</span> שורות שהשם שנקרא בהן חריג יישארו לטיפול פרטני.</>
+                )}
+              </span>
+              <button type="button" className="btn-secondary" data-testid="price-list-bulk-create"
+                disabled={busy || bulkBusy} onClick={() => setBulkOpen(true)}>
+                {bulkBusy && <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" />}
+                יצירת <span className="num">{bulkIndexes.length}</span> מוצרים חדשים
+              </button>
+            </Note>
+          )}
+          {bulkError && <Note tone="alert" role="alert" className="mt-3">{bulkError}</Note>}
+          {pendingIndexes.length > 0 && !catalogLoading && (
             <Note tone="await" className="mt-3 flex-wrap">
               <span className="min-w-0 flex-1">
-                <span className="num">{unmatchedIndexes.length}</span> שורות לא הותאמו לבד ולא ייקלטו בלחיצה הזאת — מק״ט או ברקוד חסר, לא חד־משמעי, או מחיר שלא נקרא.
+                <span className="num">{pendingIndexes.length}</span> שורות לא הותאמו לבד ולא ייקלטו בלחיצה הזאת — מק״ט או ברקוד חסר, לא חד־משמעי, או מחיר שלא נקרא.
               </span>
               <button type="button" className="btn-secondary" data-testid="price-list-show-unmatched"
                 onClick={() => { setOnlyUnmatched(true); setDetailsOpen(true); }}>
@@ -738,15 +934,24 @@ export function PriceListReviewConfirmation({
       {lineItems.length === 0 && <p className="mt-4 text-sm text-ink-muted">לא זוהו שורות מחיר לאישור.</p>}
       {detailsOpen && lineItems.length > 0 && (
       <div id="price-list-line-details" className="mt-4 space-y-3">
-        {showControls && unmatchedIndexes.length > 0 && (
+        {showControls && pendingIndexes.length > 0 && (
           <label className="flex min-h-11 items-center gap-3 text-sm text-ink-body">
             <input type="checkbox" className="size-5" checked={onlyUnmatched}
               data-testid="price-list-unmatched-filter"
-              onChange={(event) => setOnlyUnmatched(event.target.checked)} />
-            הצג רק את <span className="num">{unmatchedIndexes.length}</span> השורות שדורשות טיפול
+              onChange={(event) => { setOnlyUnmatched(event.target.checked); setPage(0); }} />
+            הצג רק את <span className="num">{pendingIndexes.length}</span> השורות שדורשות טיפול
           </label>
         )}
-        {visibleIndexes.map((index) => {
+        {showControls && markableOnPage.length > 0 && (
+          <label className="flex min-h-11 items-center gap-3 text-sm text-ink-body">
+            <input type="checkbox" className="size-5" checked={allMarkedOnPage} disabled={busy}
+              data-testid="price-list-page-select-all"
+              onChange={(event) => setApprovedOnPage(event.target.checked)} />
+            סימון <span className="num">{markableOnPage.length}</span> השורות המוכנות בעמוד הזה
+          </label>
+        )}
+        {pager}
+        {pageIndexes.map((index) => {
           const item = lineItems[index];
           const draft = drafts[index] ?? emptyDrafts(1)[0];
           const autoLine = autoLines.get(index);
@@ -860,6 +1065,7 @@ export function PriceListReviewConfirmation({
             </article>
           );
         })}
+        {pager}
       </div>
       )}
 
@@ -883,6 +1089,21 @@ export function PriceListReviewConfirmation({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={bulkOpen}
+        busy={bulkBusy}
+        title="יצירת מוצרים חדשים מהמחירון"
+        message={`ייווצרו ${bulkIndexes.length} מוצרים חדשים בקטלוג עם השם, המק״ט והיחידה שנקראו במסמך, והשורות שלהם יסומנו לקליטה במחיר שנקרא. `
+          + (oddNameIndexes.length
+            ? `${oddNameIndexes.length} שורות שהשם שנקרא בהן חריג לא ייווצרו ויישארו לטיפול פרטני. ` : '')
+          + (nearZeroPriceCount
+            ? `${nearZeroPriceCount} מהשורות נקראו במחיר של אגורה או פחות וייקלטו כפי שנקראו. ` : '')
+          + 'הקליטה עצמה עדיין מחכה לכפתור האישור.'}
+        confirmLabel="יצירת המוצרים"
+        onClose={() => setBulkOpen(false)}
+        onConfirm={() => void createProductsForLines()}
+      />
 
       <ConfirmDialog
         open={revertOpen}
