@@ -11,8 +11,10 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from threading import local
 from typing import Any, Protocol
 
 from .errors import ProcessingError
@@ -77,6 +79,8 @@ OPENAI_USER_TEXT = "Transcribe every visible text line of this page."
 # pages for human review rather than resolving them.
 DEFAULT_QA_PASSES = 3
 MAX_QA_PASSES = 3
+DEFAULT_PAGE_CONCURRENCY = 3
+MAX_PAGE_CONCURRENCY = 4
 NUMBER_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
 
 
@@ -92,6 +96,16 @@ def openai_qa_passes() -> int:
         raise ProcessingError("worker_config_invalid", "OCR_QA_PASSES must be an integer") from None
     if not 1 <= value <= MAX_QA_PASSES:
         raise ProcessingError("worker_config_invalid", "OCR_QA_PASSES must be between 1 and 3")
+    return value
+
+
+def openai_page_concurrency() -> int:
+    try:
+        value = int(os.environ.get("OCR_PAGE_CONCURRENCY", str(DEFAULT_PAGE_CONCURRENCY)))
+    except ValueError:
+        raise ProcessingError("worker_config_invalid", "OCR_PAGE_CONCURRENCY must be an integer") from None
+    if not 1 <= value <= MAX_PAGE_CONCURRENCY:
+        raise ProcessingError("worker_config_invalid", "OCR_PAGE_CONCURRENCY must be between 1 and 4")
     return value
 
 
@@ -244,20 +258,41 @@ class OpenAiOcrAdapter:
         *,
         model: str | None = None,
         qa_passes: int | None = None,
+        page_concurrency: int | None = None,
         opener: Any | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.api_key = api_key
         self.model = model or openai_model_name()
         self.qa_passes = qa_passes if qa_passes is not None else openai_qa_passes()
-        self.opener = opener or urllib.request.build_opener(_NoRedirect())
+        self.page_concurrency = page_concurrency if page_concurrency is not None else openai_page_concurrency()
+        if not 1 <= self.page_concurrency <= MAX_PAGE_CONCURRENCY:
+            raise ProcessingError("worker_config_invalid", "OCR page concurrency must be between 1 and 4")
+        self.injected_opener = opener
+        self.thread_local = local()
         self.sleep = sleep
 
     def extract(self, pages: list[PageImage], limits: ExtractionLimits) -> dict[str, Any]:
         blocks: list[dict[str, Any]] = []
         page_text: list[str] = []
-        for page in pages:
-            lines, reproduced = self._transcribe_with_consensus(page, limits)
+        if len(pages) < 2 or self.page_concurrency == 1:
+            transcriptions = [self._transcribe_with_consensus(page, limits) for page in pages]
+        else:
+            # One scanned page needs two or three independent QA calls. Processing pages
+            # serially made a valid 20-page packet exceed the worker's 300-second wall clock,
+            # discard completed paid calls, and restart the entire document. Keep concurrency
+            # small for provider and memory safety; executor.map preserves source-page order.
+            with ThreadPoolExecutor(
+                max_workers=min(self.page_concurrency, len(pages)),
+                thread_name_prefix="ocr-page",
+            ) as executor:
+                transcriptions = list(
+                    executor.map(
+                        lambda page: self._transcribe_with_consensus(page, limits),
+                        pages,
+                    )
+                )
+        for page, (lines, reproduced) in zip(pages, transcriptions):
             total = len(lines)
             for index, text in enumerate(lines, start=1):
                 # index is 1-based; reproduced is 0-based.
@@ -396,7 +431,13 @@ class OpenAiOcrAdapter:
             },
         )
         try:
-            with self.opener.open(request, timeout=limits.tool_timeout_seconds) as response:
+            opener = self.injected_opener
+            if opener is None:
+                opener = getattr(self.thread_local, "opener", None)
+                if opener is None:
+                    opener = urllib.request.build_opener(_NoRedirect())
+                    self.thread_local.opener = opener
+            with opener.open(request, timeout=limits.tool_timeout_seconds) as response:
                 raw = response.read(OPENAI_MAX_RESPONSE_BYTES + 1)
                 status = response.status
         except urllib.error.HTTPError as exc:

@@ -28,12 +28,15 @@ services:
       # Ceiling on independent passes per scanned page; stops as soon as two agree on the numbers,
       # so a clean page costs two calls and only a disagreement pays for a third. 1 opts out.
       OCR_QA_PASSES: ${OCR_QA_PASSES:-3}
+      # Pages run in parallel while each page keeps its 2-3 sequential QA passes. This prevents a
+      # valid multi-page packet from discarding paid completed pages at the 300-second job limit.
+      OCR_PAGE_CONCURRENCY: ${OCR_PAGE_CONCURRENCY:-3}
       OCR_LEASE_SECONDS: ${OCR_LEASE_SECONDS:-120}
       OCR_HEARTBEAT_SECONDS: ${OCR_HEARTBEAT_SECONDS:-30}
       OCR_POLL_SECONDS: ${OCR_POLL_SECONDS:-2}
       OCR_MAX_BACKOFF_SECONDS: ${OCR_MAX_BACKOFF_SECONDS:-30}
       OCR_REQUEST_TIMEOUT_SECONDS: ${OCR_REQUEST_TIMEOUT_SECONDS:-15}
-      OCR_JOB_TIMEOUT_SECONDS: ${OCR_JOB_TIMEOUT_SECONDS:-300}
+      OCR_JOB_TIMEOUT_SECONDS: ${OCR_JOB_TIMEOUT_SECONDS:-900}
       OCR_MAX_MEMORY_MB: ${OCR_MAX_MEMORY_MB:-2048}
       OCR_MAX_JOB_ATTEMPTS: ${OCR_MAX_JOB_ATTEMPTS:-3}
       OCR_TEMP_ROOT: /var/tmp/supplyflow-ocr
