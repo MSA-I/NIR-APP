@@ -188,6 +188,30 @@
   יש לוודא ידנית שהמכונה ערה. אין להסתמך על `restart: unless-stopped` — הוא מכסה קריסת container,
   לא מחשב כבוי.
 
+### §42 — שער הכיול של קליטת המחירונים אינו נגיש מהמוצר
+
+- **מצב:** ‏`apply_eligible_price_list_interpretation` (‏`0096`) מחייבת רשומת
+  ‏`price_list_automation_scope_decisions` במצב `eligible` לטביעת ה-scope; בלעדיה כל מחירון חוזר
+  ‏`queued_for_review` עם `shadow_evidence_missing` או `shadow_scope_not_eligible` ו**בלי לכתוב
+  רשומת החלטה** — כלומר גם המסך אינו יכול לספר שהאוטומציה רצה. ‏`decide_price_list_automation_scope`
+  דורשת `is_platform_admin()`, אימות סיסמה טרי, ו**דירוג של כל שורת shadow כ-`correct`**
+  (‏`price_list_calibration_reviews`). **אין במוצר שום מסך שכותב את הדירוגים האלה:**
+  ‏`/document-operations` קורא את `get_document_control_price_review_queue` ומציג תור לקריאה בלבד,
+  והפעולה היחידה בו היא „פתיחת המסמך”. לכן המצב `eligible` אינו בר-השגה בפועל, והמתג
+  ‏`price_list.intake` בהגדרות אינו מספיק בעצמו.
+- **מה כן תוקן (17.08.2026):** מסך האישור קורא את `price_list_shadow_lines` וממלא מראש את השורות
+  שהשרת התאים, כך שהעלות האנושית של השער אינה 338 הכרעות אלא לחיצה אחת. **השער עצמו לא נגע.**
+- **הפער שנשאר בנוסף:** ‏`0096` מעניקה `select` על טבלאות ה-shadow ל-`owner` בלבד, ולכן משתמש
+  ‏`office` שמעלה מחירון אינו מקבל מילוי מראש — הוא נופל לאישור ידני מלא. זה חוסר נוחות, לא ערך
+  שגוי: שורה שלא מולאה נשארת בלתי-מאושרת וגלויה.
+- **ראיה:** ‏`0096_document_automation_calibration_shadow_operations.sql:2160-2166` (‏`eligible`
+  דורש `reviewed_count = line_count` ו-`correct = line_count`), ‏`:2311-2324` (הענף שמחזיר
+  ‏`shadow_scope_not_eligible`), ‏`:341-365` (הפוליסות ל-`owner`), ‏`src/pages/DocumentOperations.tsx`
+  (תור לקריאה בלבד), ‏`src/components/document-review/PriceListReviewConfirmation.tsx` (המילוי מראש).
+- **הצעד הבא:** הכרעת בעלים על מי מכשיר scope. שתי אפשרויות זולות: מסלול שבו בעל הארגון מדרג את
+  שורות ה-shadow ומכשיר את ה-scope, או הכשרה אוטומטית אחרי מחירון אחד מאותו scope שאושר ידנית
+  ובלי תיקון אף שורה. שתיהן מיגרציה + מסך; אין להרחיב את `is_platform_admin()` בשקט.
+
 ### §41 — שתי טבלאות של `0140` ללא `zz_organization_write_guard`
 
 - **מצב:** ‏`document_packets` ו-`document_packet_segments` נושאות `org_id` אך **אין עליהן** את
