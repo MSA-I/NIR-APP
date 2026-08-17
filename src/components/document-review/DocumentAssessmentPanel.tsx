@@ -4,7 +4,8 @@ import { AlertTriangle, Check, CircleCheck, Info, Loader2, ShieldAlert } from 'l
 import { supabase } from '../../lib/supabase';
 import { toHebrewError } from '../../lib/errors';
 import { fmtMoneyExact, fmtNum } from '../../lib/format';
-import { Note, useToast } from '../ui';
+import { Disclosure, Note, useToast } from '../ui';
+import { StickyPrimaryAction } from './StickyPrimaryAction';
 import {
   advisoryFindings,
   approvalEffects,
@@ -64,6 +65,15 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
   const [busy, setBusy] = useState(false);
   const [reason, setReason] = useState('');
   const [edits, setEdits] = useState<Record<number, ReviewedLineEdit>>({});
+  /**
+   * The reconciliation table builds its cells only once someone opens it.
+   *
+   * Seven columns over a 338-line document is ~2,366 cells, and a shut `<details>` still renders
+   * every one of them — so the fold has to gate construction, not only visibility. Nothing is lost
+   * by folding it: the findings above are what the server concluded FROM these rows, and they stay
+   * on the surface. This is the working, not the verdict.
+   */
+  const [linesOpen, setLinesOpen] = useState(false);
   const toast = useToast();
 
   const load = useCallback(async () => {
@@ -150,11 +160,23 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
         </Note>
       )}
 
+      {/* The exceptions, first and open. Nothing folds above this line. */}
+      {blocking.length > 0 && (
+        <Note tone="alert" role="alert">
+          <div className="min-w-0">
+            <p className="font-medium">יש לטפל לפני אישור:</p>
+            <ul className="mt-2 space-y-1">
+              {blocking.map((finding, index) => <FindingRow key={index} finding={finding} />)}
+            </ul>
+          </div>
+        </Note>
+      )}
+
       {/* Supplier and order, each with the evidence that decided it. A resolution with no
           explanation is indistinguishable from a guess. */}
       {read.supplier_resolution && (
         <div className="rounded-lg border border-line bg-surface p-4">
-          <h3 className="text-sm font-medium text-ink-strong">הספק</h3>
+          <h3 className="text-sm font-medium text-ink-soft">הספק</h3>
           <p className="mt-1 text-sm text-ink-body">
             {read.supplier_resolution.resolved
               ? `זוהה · ${resolutionLabel(read.supplier_resolution.matched_by)}`
@@ -178,7 +200,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
 
       {read.order_resolution && (
         <div className="rounded-lg border border-line bg-surface p-4">
-          <h3 className="text-sm font-medium text-ink-strong">ההזמנה</h3>
+          <h3 className="text-sm font-medium text-ink-soft">ההזמנה</h3>
           <p className="mt-1 text-sm text-ink-body">
             {read.order_resolution.resolved
               ? `זוהתה · ${resolutionLabel(read.order_resolution.matched_by)}`
@@ -200,94 +222,10 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
         </div>
       )}
 
-      {blocking.length > 0 && (
-        <Note tone="alert" role="alert">
-          <p className="font-medium">יש לטפל לפני אישור:</p>
-          <ul className="mt-2 space-y-1">
-            {blocking.map((finding, index) => <FindingRow key={index} finding={finding} />)}
-          </ul>
-        </Note>
-      )}
-
-      {advisory.length > 0 && (
-        <Note tone={SEVERITY_TONE[advisory[0].severity]} role="status">
-          <p className="font-medium">שווה לשים לב:</p>
-          <ul className="mt-2 space-y-1">
-            {advisory.map((finding, index) => <FindingRow key={index} finding={finding} />)}
-          </ul>
-        </Note>
-      )}
-
-      {assessment && assessment.lines.length > 0 && (
-        <div
-          className="max-w-full overflow-x-auto rounded-lg border border-line"
-          role="region"
-          tabIndex={0}
-          aria-label="שורות המסמך מול ההזמנה, הקבלה והמחירון; ניתן לגלול בתוך הטבלה"
-        >
-          <table className="min-w-full bg-surface">
-            <caption className="px-3 pt-2 text-start text-xs font-medium text-ink-soft">
-              כל שורה מול ארבעת המקורות. ערך שאינו ידוע מוצג כמקף, לא כאפס.
-            </caption>
-            <thead>
-              <tr className="border-b border-line">
-                <th className="th" scope="col">תיאור</th>
-                <th className="th" scope="col">כמות במסמך</th>
-                <th className="th" scope="col">הוזמן</th>
-                <th className="th" scope="col">התקבל</th>
-                <th className="th" scope="col">מחיר במסמך</th>
-                <th className="th" scope="col">מחיר מוסכם</th>
-                <th className="th" scope="col">הפרש</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assessment.lines.map((line: AssessmentLine) => {
-                const orderItem = assessment.order_items.find(
-                  (item) => item.product_id === line.product_id);
-                const difference = line.normalized_unit_price != null && line.baseline_price != null
-                  ? line.normalized_unit_price - line.baseline_price
-                  : null;
-                return (
-                  <tr key={line.line_index} className="border-b border-line last:border-b-0">
-                    <td className="td">
-                      {line.description || line.sku || line.barcode || '—'}
-                      {line.product_id === null && (
-                        <span className="block text-xs text-ink-muted">מוצר לא מזוהה — נדרש מיפוי</span>
-                      )}
-                    </td>
-                    <Cell>{fmtNum(line.quantity)}</Cell>
-                    <Cell>{orderItem ? fmtNum(orderItem.ordered_quantity) : '—'}</Cell>
-                    <Cell>{orderItem ? fmtNum(orderItem.received_quantity) : '—'}</Cell>
-                    <Cell>{fmtMoneyExact(line.unit_price)}</Cell>
-                    <Cell>{fmtMoneyExact(line.baseline_price)}</Cell>
-                    <Cell>{difference === null ? '—' : fmtMoneyExact(difference)}</Cell>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {assessment && assessment.order_items.some((item) => !item.on_this_document) && (
-        <Note tone="idle" role="status">
-          <p className="font-medium">הוזמן ואינו מופיע במסמך הזה:</p>
-          <ul className="mt-2 space-y-1 text-sm">
-            {assessment.order_items.filter((item) => !item.on_this_document).map((item) => (
-              <li key={item.purchase_order_item_id}>
-                {item.product_name} · הוזמן <span className="num">{fmtNum(item.ordered_quantity)}</span>
-              </li>
-            ))}
-          </ul>
-          {/* The server states this as a fact on every such finding; the screen must not quietly
-              turn it into a shortage. A supplier bills in instalments. */}
-          <p className="mt-2 text-sm">אין בכך טענה שהפריטים חסרים פיזית.</p>
-        </Note>
-      )}
-
-      {/* What will happen — and, just as importantly, what will not. */}
+      {/* What will happen — and, just as importantly, what will not. Immediately above the button
+          it describes, because that ordering is the whole point of the sentences (DESIGN.md §2). */}
       <div className="rounded-lg border border-line bg-surface p-4">
-        <h3 className="text-sm font-medium text-ink-strong">מה יקרה באישור</h3>
+        <h3 className="text-sm font-medium text-ink-soft">מה יקרה באישור</h3>
         <ul className="mt-2 space-y-1.5">
           {effects.map((effect, index) => (
             <li key={index} className="flex items-start gap-2 text-sm text-ink-body">
@@ -300,9 +238,13 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
         </ul>
       </div>
 
+      {/* The decision, above the folded evidence rather than below it. The reconciliation table
+          used to stand between the findings and this button — 2,366 cells of scrolling before the
+          one control on the screen, on a phone. Folding it and leaving the button here is the
+          same information in the order a decision is actually made. */}
       {editable && (
         <div className="rounded-lg border border-line bg-surface p-4">
-          <label className="block text-sm font-medium text-ink-strong" htmlFor="review-reason">
+          <label className="block text-sm font-medium text-ink-soft" htmlFor="review-reason">
             סיבה (רשות — נרשמת ביומן הביקורת ובתיק המסמך)
           </label>
           <textarea
@@ -312,24 +254,129 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
             onChange={(event) => setReason(event.target.value)}
             maxLength={1000}
           />
-          <button
-            type="button"
-            className="btn btn-primary mt-3 min-h-11"
-            disabled={busy || !canSubmit(read, supplierId)}
-            onClick={() => void submit()}
+          {/* On a phone the button moves to a bar pinned above the navigation; on desktop it stays
+              exactly where it was, between "מה יקרה באישור" and the folded working. The blocking
+              sentence is passed as the button's hint rather than left here, so wherever the button
+              is, the reason it is still enabled is beside it — never five screens up. */}
+          <StickyPrimaryAction
+            className="mt-3"
+            label="אישור המסמך שהתקבל"
+            hint={blocking.length > 0
+              /* The button stays live: the server is the gate, and it names what it refused. A
+                 client-side block would put a second decision-maker in the path and let the two
+                 drift apart. */
+              ? 'יש ממצאים חוסמים. אפשר לנסות לאשר — השרת יבדוק שוב ויסביר בדיוק מה מונע.'
+              : null}
           >
-            {busy && <Loader2 size={16} aria-hidden="true" className="animate-spin" />}
-            אישור המסמך
-          </button>
-          {blocking.length > 0 && (
-            /* The button stays live: the server is the gate, and it names what it refused. A
-               client-side block would put a second decision-maker in the path and let the two
-               drift apart. */
-            <p className="mt-2 text-sm text-ink-muted">
-              יש ממצאים חוסמים. אפשר לנסות לאשר — השרת יבדוק שוב ויסביר בדיוק מה מונע.
-            </p>
+            <button
+              type="button"
+              className="btn btn-primary min-h-11"
+              disabled={busy || !canSubmit(read, supplierId)}
+              onClick={() => void submit()}
+            >
+              {busy && <Loader2 size={16} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />}
+              אישור המסמך
+            </button>
+          </StickyPrimaryAction>
+        </div>
+      )}
+
+      {/* Below the decision: what the machine checked and settled. Folded, counted, one click
+          away — never deleted, and never a finding. */}
+      {(advisory.length > 0 || (assessment && assessment.lines.length > 0)) && (
+        <div className="overflow-hidden rounded-lg border border-line bg-surface" data-testid="assessment-detail">
+          {advisory.length > 0 && (
+            <Disclosure
+              title="שווה לשים לב"
+              count={advisory.length}
+              tone={SEVERITY_TONE[advisory.some((finding) => finding.severity === 'warning') ? 'warning' : 'info']}
+            >
+              <ul className="space-y-1">
+                {advisory.map((finding, index) => <FindingRow key={index} finding={finding} />)}
+              </ul>
+            </Disclosure>
+          )}
+
+          {assessment && assessment.lines.length > 0 && (
+            <Disclosure
+              className={advisory.length > 0 ? 'border-t border-line-soft' : ''}
+              title="שורות מול המקורות"
+              count={assessment.lines.length}
+              onToggle={setLinesOpen}
+            >
+              {linesOpen && (
+                <div
+                  className="max-w-full overflow-x-auto rounded-lg border border-line"
+                  role="region"
+                  tabIndex={0}
+                  aria-label="שורות המסמך מול ההזמנה, הקבלה והמחירון; ניתן לגלול בתוך הטבלה"
+                >
+                  <table className="min-w-full bg-surface">
+                    <caption className="px-3 pt-2 text-start text-xs font-medium text-ink-soft">
+                      כל שורה מול ארבעת המקורות. ערך שאינו ידוע מוצג כמקף, לא כאפס.
+                    </caption>
+                    <thead>
+                      <tr className="border-b border-line">
+                        <th className="th" scope="col">תיאור</th>
+                        <th className="th" scope="col">כמות במסמך</th>
+                        <th className="th" scope="col">הוזמן</th>
+                        <th className="th" scope="col">התקבל</th>
+                        <th className="th" scope="col">מחיר במסמך</th>
+                        <th className="th" scope="col">מחיר מוסכם</th>
+                        <th className="th" scope="col">הפרש</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {assessment.lines.map((line: AssessmentLine) => {
+                        const orderItem = assessment.order_items.find(
+                          (item) => item.product_id === line.product_id);
+                        const difference = line.normalized_unit_price != null && line.baseline_price != null
+                          ? line.normalized_unit_price - line.baseline_price
+                          : null;
+                        return (
+                          <tr key={line.line_index} className="border-b border-line last:border-b-0">
+                            <td className="td">
+                              {line.description || line.sku || line.barcode || '—'}
+                              {line.product_id === null && (
+                                <span className="block text-xs text-ink-muted">מוצר לא מזוהה — נדרש מיפוי</span>
+                              )}
+                            </td>
+                            <Cell>{fmtNum(line.quantity)}</Cell>
+                            <Cell>{orderItem ? fmtNum(orderItem.ordered_quantity) : '—'}</Cell>
+                            <Cell>{orderItem ? fmtNum(orderItem.received_quantity) : '—'}</Cell>
+                            <Cell>{fmtMoneyExact(line.unit_price)}</Cell>
+                            <Cell>{fmtMoneyExact(line.baseline_price)}</Cell>
+                            <Cell>{difference === null ? '—' : fmtMoneyExact(difference)}</Cell>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Disclosure>
           )}
         </div>
+      )}
+
+      {/* Stays open: it names ordered goods this document does not account for, and that is an
+          inventory statement, not detail. */}
+      {assessment && assessment.order_items.some((item) => !item.on_this_document) && (
+        <Note tone="idle" role="status">
+          <div className="min-w-0">
+            <p className="font-medium">הוזמן ואינו מופיע במסמך הזה:</p>
+            <ul className="mt-2 space-y-1 text-sm">
+              {assessment.order_items.filter((item) => !item.on_this_document).map((item) => (
+                <li key={item.purchase_order_item_id}>
+                  {item.product_name} · הוזמן <span className="num">{fmtNum(item.ordered_quantity)}</span>
+                </li>
+              ))}
+            </ul>
+            {/* The server states this as a fact on every such finding; the screen must not quietly
+                turn it into a shortage. A supplier bills in instalments. */}
+            <p className="mt-2 text-sm">אין בכך טענה שהפריטים חסרים פיזית.</p>
+          </div>
+        </Note>
       )}
 
       {/* The edits map is wired for the line editor that lands with the mapping UI; keeping it in

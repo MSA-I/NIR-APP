@@ -82,6 +82,9 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
     ? `עמוד ${done} מתוך ${total}`
     : `מקטע ${done} מתוך ${total}`;
 
+  // The step label above already names the step. This line may only add what it does not say:
+  // how long, how far, or that nothing is required of the reader. "ממתין לעובד פנוי" named a
+  // worker process, and "הנתונים מתפרשים לשדות ולשורות" was the label "פירוש הנתונים" again.
   let detail: string | null = null;
   if (stopped) {
     detail = null;
@@ -93,20 +96,21 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
     detail = job.status === 'awaiting_scan'
       ? 'הסריקה ממתינה לאישור לפני שהקריאה מתחילה.'
       : waited
-        ? `ממתין ${waited} לעובד פנוי. העבודה מתחילה מאליה.`
-        : 'ממתין לעובד פנוי. העבודה מתחילה מאליה.';
+        ? `ממתין ${waited}. העבודה תתחיל מעצמה.`
+        : 'העבודה תתחיל מעצמה.';
   } else if (current === 'reading') {
     // An unknown page count stays unknown. A "0 מתוך 0" here would be a claim about the document
-    // that nobody has made yet — the constitution's dash rule, applied to a counter.
+    // that nobody has made yet — the constitution's dash rule, applied to a counter. DESIGN.md §5
+    // requires the strip to SAY so rather than fall silent, so this branch keeps a sentence.
     detail = hasProgress
       ? progressLabel
-      : 'קריאת המסמך התחילה. מספר העמודים טרם דווח.';
+      : 'מספר העמודים עדיין לא ידוע.';
   } else if (current === 'interpreting') {
     detail = hasProgress
-      ? `הנתונים מתפרשים לשדות ולשורות — ${progressLabel}`
+      ? progressLabel
       : job.status === 'extracted'
-        ? 'הטקסט חולץ וממתין לפירוש הסמנטי.'
-        : 'הנתונים מתפרשים לשדות ולשורות.';
+        ? 'הקריאה הסתיימה. הפירוש עוד לא התחיל.'
+        : 'מספר המקטעים עדיין לא ידוע.';
   }
 
   return (

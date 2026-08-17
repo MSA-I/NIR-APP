@@ -245,11 +245,31 @@ describe('finding 20 — everyday surfaces use the canonical document status', (
   /**
    * The raw seven-stage contract remains available for diagnostics, but user-facing text comes
    * from `documentUiStatus`, including filing precedence.
+   *
+   * Only two engineering labels are still denied here. `דורש בדיקה` and `נכשל` left the list
+   * because they stopped being a second vocabulary: the stage table now spells those two states
+   * exactly as the badge does, which is the claim the test below pins.
    */
   it('maps every pipeline stage onto a word a person can act on', () => {
     for (const stage of STAGES) {
       const label = documentUiStatus({ status: stage, document: { entity_type: 'inbox', entity_id: null } }).label;
-      expect(label).not.toMatch(/^טרם נשלח לעיבוד$|^ממתין לפירוש$|^דורש בדיקה$|^נכשל$/);
+      expect(label).not.toMatch(/^טרם נשלח לעיבוד$|^ממתין לפירוש$/);
+    }
+  });
+
+  /**
+   * One state, one Hebrew name — whichever module a screen happens to import.
+   *
+   * `review` read "דורש בדיקה" in the stage table and "נדרשת בדיקה" in the canonical model, and
+   * `failed` read "נכשל" against "העיבוד נכשל". Nothing decided which a given screen showed except
+   * its import list, and there is no third place where the two are reconciled. So they are pinned
+   * as equal here. `unprocessed` and `extracted` are excluded on purpose and stay different: they
+   * are finer engineering steps that canonical precedence folds into "לא משויך" and "בעיבוד", so
+   * there is no canonical label for them to equal.
+   */
+  it('the stage table and the badge spell a shared state identically', () => {
+    for (const stage of ['queued', 'processing', 'review', 'completed', 'failed'] as const) {
+      expect(DOCUMENT_PROCESSING_STAGE_META[stage].label).toBe(documentUiStatus({ status: stage }).label);
     }
   });
 

@@ -8,7 +8,7 @@ export function DocumentStatusBadge({ status, ...attributes }: {
   return (
     <>
       <span {...attributes} className={`badge-${status.tone} inline-flex items-center gap-1 ${attributes.className ?? ''}`.trim()}
-        title={status.description} role={status.loading ? 'status' : undefined}
+        title={status.description || undefined} role={status.loading ? 'status' : undefined}
         aria-live={status.loading ? 'polite' : undefined} aria-busy={status.loading || undefined}>
         {status.loading && <LoaderCircle size={13} className="shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
         {status.state === 'stuck' && <AlertTriangle size={13} className="shrink-0" aria-hidden="true" />}
@@ -23,7 +23,9 @@ export function DocumentStatusBadge({ status, ...attributes }: {
       {elapsed && (status.loading || status.state === 'stuck') && (
         <span className="num text-xs text-ink-muted" data-document-status-age>· {elapsed}</span>
       )}
-      <span className="sr-only">{status.description}</span>
+      {/* Only when there is a second fact to carry. A state whose description merely repeated the
+          badge shipped that repetition to every screen-reader user, on every row. */}
+      {status.description ? <span className="sr-only">{status.description}</span> : null}
     </>
   );
 }

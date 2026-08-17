@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 import type { PriceListPredictedLine } from '../../lib/useDocumentProcessing';
 import { useAuth } from '../../auth/AuthContext';
 import { ConfirmDialog, Note } from '../ui';
+import { StickyPrimaryAction } from './StickyPrimaryAction';
 import { FILING_REASON_LABELS, type ReviewSnapshot } from './model';
 import { formatUnit, normalizeUnitInput } from '../../lib/format';
 
@@ -420,9 +421,47 @@ export function PriceListReviewConfirmation({
   if (!interpretation) return null;
   const currentInterpretation = interpretation;
 
+  /**
+   * A line that has just become complete is a line the reviewer meant to take.
+   *
+   * The per-line form used to disable the product select and the price field until the reviewer
+   * ticked "אני מאשר שורה זו לקליטה" — asking them to approve a line before they were allowed to
+   * say what it was. That is one tap per exception, in the wrong order, on the only part of this
+   * screen a person actually works. The fields are live now, and the tick follows the work instead
+   * of gating it.
+   *
+   * This is not a new rule about money, it is the rule this screen already ran on everywhere else:
+   * `prefilledDrafts` ticks every line the server matched, and bulk creation ticks every line it
+   * created. Nothing is submitted by ticking — the confirm button still names the count, the price
+   * stays visible and editable in its field, and the server still refuses a row whose product is
+   * not in the catalogue.
+   *
+   * It fires only on the edit that COMPLETES a line, never again: an explicit untick is the
+   * reviewer's decision, and a later price correction must not silently overturn it.
+   */
   function updateDraft(index: number, patch: Partial<LineDraft>) {
-    setDrafts((current) => current.map((draft, draftIndex) =>
-      draftIndex === index ? { ...draft, ...patch } : draft));
+    setDrafts((current) => current.map((draft, draftIndex) => {
+      if (draftIndex !== index) return draft;
+      const next = { ...draft, ...patch };
+      if ('approved' in patch) return next;
+      const wasComplete = !!draft.productId && !!draft.priceText.trim();
+      const isComplete = !!next.productId && !!next.priceText.trim();
+      return wasComplete || !isComplete ? next : { ...next, approved: true };
+    }));
+  }
+
+  /**
+   * The price this very row printed, put in the field when a product is chosen for it.
+   *
+   * The number is already on the screen — the machine read it, stored it on the prediction and the
+   * bulk-creation path submits it verbatim. Making the reviewer retype it into "מחיר ידני" was
+   * asking them to key in what the system already knew. Guarded by the same three conditions
+   * `prefillable` uses for money, and never overwrites a value someone typed.
+   */
+  function predictedPriceText(index: number, draft: LineDraft | undefined): string | null {
+    if (draft?.priceText.trim()) return null;
+    const price = predictions.get(index)?.proposed_unit_price;
+    return typeof price === 'number' && Number.isFinite(price) && price > 0 ? String(price) : null;
   }
 
   // Explicit, per-line product creation. The product exists BEFORE the confirm payload is built,
@@ -441,7 +480,8 @@ export function PriceListReviewConfirmation({
       if (inserted.error) throw inserted.error;
       const product = inserted.data as ProductOption;
       setProducts((current) => [...current, product].sort((left, right) => left.name.localeCompare(right.name, 'he')));
-      updateDraft(index, { productId: product.id });
+      const price = predictedPriceText(index, drafts[index]);
+      updateDraft(index, { productId: product.id, ...(price === null ? {} : { priceText: price }) });
       setNewProductFor(null);
     } catch (insertError) {
       setCreateError(toHebrewError(insertError));
@@ -583,10 +623,24 @@ export function PriceListReviewConfirmation({
     if (!key) continue;
     catalogueBySku.set(key, [...(catalogueBySku.get(key) ?? []), product.id]);
   }
-  // Lines still waiting for a person: unmatched, and not already given a product by hand or by a
-  // previous bulk creation.
-  const pendingIndexes = unmatchedIndexes.filter((index) => !drafts[index]?.productId);
-  const creatableIndexes = pendingIndexes.filter((index) => creatableLine(predictions.get(index)));
+  /**
+   * Lines still waiting for a person: unmatched, and not yet carrying BOTH a product and a price.
+   *
+   * It used to test the product alone, and the exception filter is what made that wrong: choosing
+   * a product removed the row from the "needs you" list *while the reviewer was still standing in
+   * it*, taking the empty price field with it. The line was then linked, unpriced and invisible —
+   * and `submit-price-list` refuses exactly that row. Product and price are the two things the
+   * server will not take an approved row without, so they are the two things that decide whether a
+   * line is still open.
+   */
+  const pendingIndexes = unmatchedIndexes.filter((index) => {
+    const draft = drafts[index];
+    return !draft?.productId || !draft.priceText.trim();
+  });
+  // Bulk creation looks only at lines with no product yet: a line already linked by hand must not
+  // get a second catalogue record written for it.
+  const creatableIndexes = pendingIndexes.filter((index) =>
+    !drafts[index]?.productId && creatableLine(predictions.get(index)));
   const bulkIndexes = creatableIndexes.filter((index) =>
     looksLikeProductName(predictions.get(index)?.product_name));
   const oddNameIndexes = creatableIndexes.filter((index) =>
@@ -749,7 +803,7 @@ export function PriceListReviewConfirmation({
           : autoDecision || showControls ? 'badge-await' : 'badge-info'}>
           {receipt || autoDecision?.submission_id
             ? 'המחירון עודכן'
-            : autoDecision ? 'נדרשת בדיקה' : showControls ? 'ממתין לאישורך' : 'הקליטה בעיבוד'}
+            : autoDecision ? 'נדרשת בדיקה' : showControls ? 'ממתין לאישורך' : 'בעיבוד'}
         </span>
       </div>
 
@@ -825,7 +879,7 @@ export function PriceListReviewConfirmation({
       )}
       {ownsDocument && !receipt && !attemptedPayload && !recoveryLoading && !recoveryError
         && snapshot.job?.status !== 'review' && snapshot.job?.status !== 'completed' && (
-        <Note tone="idle" className="mt-4">אפשר להתחיל אישור רק כאשר המשימה במצב „דורש בדיקה”.</Note>
+        <Note tone="idle" className="mt-4">אפשר לאשר רק כשהמסמך במצב „נדרשת בדיקה”.</Note>
       )}
       {attemptedPayload && !receipt && (
         <Note tone="await" className="mt-4 flex-wrap">
@@ -892,14 +946,20 @@ export function PriceListReviewConfirmation({
             </label>
           </div>
           {error && <Note tone="alert" role="alert" className="mt-3">{error}</Note>}
+          {/* The intake button follows the reviewer down the paged line list on a phone: the whole
+              point of the exception filter is that they work at the bottom of the screen, and the
+              count on the button is the running answer to what they have just done. "פרטים נוספים"
+              stays inline — a disclosure toggle is not the action this screen is for. */}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             {detailsToggle}
-            <button type="button" className="btn-primary" data-testid="price-list-intake-confirm"
-              disabled={busy || selectedCount === 0 || catalogLoading || !!catalogError || products.length === 0}
-              onClick={() => void confirmPriceList()}>
-              {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <CheckCircle2 size={17} aria-hidden="true" />}
-              {busy ? 'קולט את המחירון…' : <>קליטת <span className="num">{selectedCount}</span> המחירים שנבחרו</>}
-            </button>
+            <StickyPrimaryAction label="קליטת המחירון">
+              <button type="button" className="btn-primary" data-testid="price-list-intake-confirm"
+                disabled={busy || selectedCount === 0 || catalogLoading || !!catalogError || products.length === 0}
+                onClick={() => void confirmPriceList()}>
+                {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <CheckCircle2 size={17} aria-hidden="true" />}
+                {busy ? 'קולט את המחירון…' : <>קליטת <span className="num">{selectedCount}</span> המחירים שנבחרו</>}
+              </button>
+            </StickyPrimaryAction>
           </div>
           {bulkIndexes.length > 0 && !catalogLoading && !catalogError && (
             <Note tone="info" className="mt-3 flex-wrap">
@@ -1011,10 +1071,17 @@ export function PriceListReviewConfirmation({
                     <input type="checkbox" className="size-5" checked={draft.approved} onChange={(event) => updateDraft(index, { approved: event.target.checked })} disabled={busy} />
                     אני מאשר שורה זו לקליטה
                   </label>
+                  {/* Live regardless of the tick above: describing the line is the work, approving
+                      it is the conclusion. Choosing a product also drops in the price this row
+                      printed, so an exception line costs one control, not three. */}
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <label>
                       <span className="label">מוצר קיים *</span>
-                      <select className="input" value={draft.productId} onChange={(event) => updateDraft(index, { productId: event.target.value })} disabled={!draft.approved || busy || catalogLoading || !!catalogError}>
+                      <select className="input" value={draft.productId} disabled={busy || catalogLoading || !!catalogError}
+                        onChange={(event) => {
+                          const price = event.target.value ? predictedPriceText(index, draft) : null;
+                          updateDraft(index, { productId: event.target.value, ...(price === null ? {} : { priceText: price }) });
+                        }}>
                         <option value="">בחירת מוצר</option>
                         {products.map((product) => (
                           <option key={product.id} value={product.id}>{product.name} · {formatUnit(product.unit)}{product.sku ? ` · ${product.sku}` : ''}</option>
@@ -1023,11 +1090,14 @@ export function PriceListReviewConfirmation({
                     </label>
                     <label>
                       <span className="label">מחיר ידני *</span>
-                      <input className="input num" inputMode="decimal" maxLength={64} value={draft.priceText} onChange={(event) => updateDraft(index, { priceText: event.target.value })} disabled={!draft.approved || busy} />
+                      <input className="input num" inputMode="decimal" maxLength={64} value={draft.priceText} onChange={(event) => updateDraft(index, { priceText: event.target.value })} disabled={busy} />
                     </label>
                   </div>
-                  {draft.approved && (
-                    newProductFor === index ? (
+                  {/* No longer gated on the tick either: creating the catalogue product IS how an
+                      unmatched line gets described, so requiring approval first asked for the
+                      conclusion before the work. Creating it now also carries the price this row
+                      printed into the field, which is what completes the line in one act. */}
+                  {newProductFor === index ? (
                       <div className="mt-3 rounded-lg border border-line bg-surface-sunken p-3">
                         <div className="grid gap-3 sm:grid-cols-2">
                           <label>
@@ -1053,10 +1123,9 @@ export function PriceListReviewConfirmation({
                         onClick={() => { setNewProductFor(index); setNewProductName(guessLineName(item.values)); setNewProductUnit('יח׳'); setCreateError(null); }}>
                         <Plus size={14} aria-hidden="true" /> המוצר לא קיים בקטלוג? יצירת מוצר חדש מהשורה
                       </button>
-                    )
-                  )}
+                    )}
                   <label className="mt-3 flex min-h-11 items-center gap-3 text-sm text-ink-body">
-                    <input type="checkbox" className="size-5" checked={draft.available} onChange={(event) => updateDraft(index, { available: event.target.checked })} disabled={!draft.approved || busy} />
+                    <input type="checkbox" className="size-5" checked={draft.available} onChange={(event) => updateDraft(index, { available: event.target.checked })} disabled={busy} />
                     המוצר זמין אצל הספק
                   </label>
                     </div>

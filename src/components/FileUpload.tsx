@@ -3,7 +3,17 @@ import { Camera, FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { Link } from 'react-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
-import { useToast, Skeleton, ConfirmDialog, ErrorNote, Note } from './ui';
+import { useToast, Skeleton, ConfirmDialog, ErrorNote, Modal, Note } from './ui';
+import {
+  WEAK_CAPTURE_LABEL,
+  WEAK_CAPTURE_PROCEED_LABEL,
+  findWeakCaptures,
+  weakCaptureHint,
+  weakCaptureRetryLabel,
+  weakCaptureTitle,
+  type CaptureSource,
+  type WeakCapture,
+} from '../lib/imageQuality';
 import { DocumentStatusBadge } from './DocumentStatusBadge';
 import { documentUiStatus } from '../lib/documentStatus';
 import { ok, toHebrewError } from '../lib/errors';
@@ -606,6 +616,86 @@ export function syncPendingDocumentPhotos() {
   return pendingDocumentPhotoSync;
 }
 
+/**
+ * The picked batch, screened before a single byte is uploaded (owner's ruling: WARN, never block).
+ *
+ * `weak` names the captures the measurement is not confident about; `files` is the batch exactly
+ * as picked. The screening never rejects and never rewrites: on any doubt `findWeakCaptures`
+ * returns nothing and the batch uploads as it always did.
+ */
+export interface ScreenedPick {
+  files: File[];
+  weak: WeakCapture[];
+}
+
+export async function screenPickedFiles(files: File[]): Promise<ScreenedPick> {
+  try {
+    return { files, weak: await findWeakCaptures(files) };
+  } catch {
+    // A quality check must never be the reason an upload fails.
+    return { files, weak: [] };
+  }
+}
+
+/** The files of a screened pick minus the weak ones — the good captures, never blocked by a warning. */
+export function pickWithoutWeak(pick: ScreenedPick): File[] {
+  const weak = new Set(pick.weak.map((item) => item.file));
+  return pick.files.filter((file) => !weak.has(file));
+}
+
+/**
+ * "This one will not read well" — said while the person is still standing in front of the
+ * document, which is the only moment the information is worth anything.
+ *
+ * Three outcomes, and none of them loses a file silently:
+ *  - re-take     → the good captures upload, the weak ones are dropped, the picker reopens
+ *  - upload anyway → everything uploads, exactly as it was picked
+ *  - dismiss (Escape/backdrop/X) → the good captures upload, the weak ones are dropped
+ */
+export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDismiss }: {
+  pick: ScreenedPick;
+  source: CaptureSource;
+  onRetake: () => void;
+  onUploadAnyway: () => void;
+  onDismiss: () => void;
+}) {
+  const goodCount = pick.files.length - pick.weak.length;
+  return (
+    <Modal
+      open={pick.weak.length > 0}
+      onClose={onDismiss}
+      title={weakCaptureTitle(pick.weak)}
+      description={weakCaptureHint(pick.weak, source)}
+    >
+      {pick.files.length > 1 && (
+        <ul className="mb-3 divide-y divide-line-soft rounded-lg border border-line-soft text-sm">
+          {pick.weak.map((item, index) => (
+            <li key={`${item.file.name}-${index}`} className="flex items-center gap-2 px-3 py-2">
+              <span className="min-w-0 flex-1 truncate text-ink-body">{item.file.name}</span>
+              <span className="badge-await shrink-0">{WEAK_CAPTURE_LABEL[item.verdict]}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {goodCount > 0 && (
+        <Note tone="idle" className="mb-3">
+          {goodCount === 1
+            ? 'קובץ אחד תקין יעלה בכל מקרה.'
+            : <><span className="num">{goodCount}</span> קבצים תקינים יעלו בכל מקרה.</>}
+        </Note>
+      )}
+      <div className="flex flex-wrap justify-end gap-2">
+        <button type="button" className="btn-secondary" onClick={onUploadAnyway}>
+          {WEAK_CAPTURE_PROCEED_LABEL}
+        </button>
+        <button type="button" className="btn-primary" onClick={onRetake}>
+          {weakCaptureRetryLabel(source)}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 export function DocumentList({ entityType, entityId, canUpload = true, capture }: {
   entityType: string; entityId: string; canUpload?: boolean; capture?: boolean;
 }) {
@@ -623,6 +713,8 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   const registeredSeenRef = useRef(new Set<string>());
   const [retryFiles, setRetryFiles] = useState<File[]>([]);
   const [uploadSummary, setUploadSummary] = useState<UploadBatchSummary | null>(null);
+  const [screening, setScreening] = useState(false);
+  const [weakPick, setWeakPick] = useState<ScreenedPick | null>(null);
   const [locallyQueued, setLocallyQueued] = useState(0);
   const [pending, setPending] = useState<DocumentRow | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -759,10 +851,32 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
     }
   }
 
-  function onPick(files: FileList | null) {
+  /**
+   * Screening happens here, between the picker and `uploadFiles`, so the 10MB/MIME gate in
+   * `uploadMimeType` and the whole resume contract below it are untouched: by the time anything
+   * reaches `uploadDocument` this batch is an ordinary batch of the same File objects.
+   */
+  async function onPick(files: FileList | null) {
     if (!files?.length) return;
     setUploadSummary(null);
-    void uploadFiles(Array.from(files));
+    setScreening(true);
+    let pick: ScreenedPick;
+    try {
+      pick = await screenPickedFiles(Array.from(files));
+    } finally {
+      setScreening(false);
+    }
+    if (!pick.weak.length) { void uploadFiles(pick.files); return; }
+    setWeakPick(pick);
+  }
+
+  function resolveWeakPick(files: File[], reopenPicker: boolean) {
+    setWeakPick(null);
+    // Cleared before the picker reopens: an unchanged value fires no `change` event, so a user
+    // re-taking the same file name would otherwise get silence.
+    if (inputRef.current) inputRef.current.value = '';
+    if (files.length) void uploadFiles(files);
+    if (reopenPicker) inputRef.current?.click();
   }
 
   async function open(doc: DocumentRow) {
@@ -810,8 +924,8 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
             still seeds a value from the entity, and 0084's trigger replaces it with what the
             document says. */}
         {canUploadNow && <div className="flex flex-wrap items-center gap-2">
-          <button className="btn-secondary py-1.5!" disabled={busy || retryFiles.length > 0} onClick={() => inputRef.current?.click()}>
-              {busy ? <Loader2 size={15} className="animate-spin" /> : capture ? <Camera size={15} /> : <Paperclip size={15} />}
+          <button className="btn-secondary py-1.5!" disabled={busy || screening || retryFiles.length > 0} onClick={() => inputRef.current?.click()}>
+              {busy || screening ? <Loader2 size={15} className="animate-spin" /> : capture ? <Camera size={15} /> : <Paperclip size={15} />}
               {capture ? 'צילום / העלאה' : 'העלאת קובץ'}
           </button>
         </div>}
@@ -819,6 +933,15 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
           {...(capture ? { capture: 'environment' as const } : {})}
           onChange={(e) => void onPick(e.target.files)} />
       </div>
+      {weakPick && (
+        <WeakCaptureDialog
+          pick={weakPick}
+          source={capture ? 'camera' : 'picker'}
+          onRetake={() => resolveWeakPick(pickWithoutWeak(weakPick), true)}
+          onUploadAnyway={() => resolveWeakPick(weakPick.files, false)}
+          onDismiss={() => resolveWeakPick(pickWithoutWeak(weakPick), false)}
+        />
+      )}
       <UploadCenter />
       {locallyQueued > 0 && (
         <Note tone="await" className="mb-2">

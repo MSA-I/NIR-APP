@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
@@ -233,5 +233,136 @@ describe('אישור מחירון', () => {
 
     await userEvent.click(screen.getByTestId('price-list-details-toggle'));
     expect(screen.getAllByText(/אני מאשר שורה זו לקליטה/)).toHaveLength(LINE_COUNT);
+  });
+});
+
+/**
+ * The exception path, counted in taps.
+ *
+ * A line the matcher could not key used to cost three interactions in a fixed order: tick "אני
+ * מאשר שורה זו לקליטה" — which is what unlocked the fields — then pick a product, then retype the
+ * price the machine had already read off that very row. The tick came first because the controls
+ * were disabled without it, i.e. the reviewer approved a line before being allowed to say what it
+ * was.
+ */
+describe('שורה שדורשת טיפול — פעולה אחת, לא שלוש', () => {
+  /**
+   * The ordinary unmatched line: the document printed a price for it, the matcher just could not
+   * key it to a product. The shared fixture nulls the price on both exceptions, which collapses
+   * two different failures — "no product" and "no price" — into one shape.
+   */
+  const pricedButUnmatched = (rows: PriceListPredictedLine[]) => rows.map((row, index) =>
+    index === rows.length - UNMATCHED_LINES ? { ...row, proposed_unit_price: 42 } : row);
+
+  it('בוחרים מוצר, המחיר שנקרא נכנס לבד, והשורה מצטרפת לספירה', async () => {
+    render(
+      <MemoryRouter>
+        <PriceListReviewConfirmation snapshot={snapshot(pricedButUnmatched(predictions()))} actorId="owner-1" onRefetch={async () => true} />
+      </MemoryRouter>,
+    );
+
+    const confirm = await screen.findByTestId('price-list-intake-confirm');
+    await waitFor(() => expect(confirm).toBeEnabled());
+    await userEvent.click(screen.getByTestId('price-list-details-toggle'));
+    await userEvent.click(screen.getByTestId('price-list-unmatched-filter'));
+
+    // The line whose SKU matched nothing, but whose price the document printed. Its select is live
+    // before any tick: describing the line is the work, approving it is the conclusion.
+    const row = LINE_COUNT - UNMATCHED_LINES;
+    const select = screen.getAllByRole('combobox')[row];
+    expect(select).toBeEnabled();
+    await userEvent.selectOptions(select, 'product-1');
+
+    const price = screen.getAllByLabelText(/מחיר ידני/)[row] as HTMLInputElement;
+    expect(price.value).toBe('42');
+    expect(screen.getAllByRole('checkbox', { name: /אני מאשר שורה זו לקליטה/ })[row]).toBeChecked();
+    expect(confirm).toHaveTextContent(`קליטת ${LINE_COUNT - UNMATCHED_LINES + 1} המחירים שנבחרו`);
+  });
+
+  it('שורה שמחירה לא נקרא נשארת ב„דורשות טיפול” גם אחרי שנבחר לה מוצר', async () => {
+    render(
+      <MemoryRouter>
+        <PriceListReviewConfirmation snapshot={snapshot(predictions())} actorId="owner-1" onRefetch={async () => true} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('price-list-intake-confirm')).toBeEnabled());
+    await userEvent.click(screen.getByTestId('price-list-show-unmatched'));
+    expect(screen.getAllByRole('combobox')).toHaveLength(UNMATCHED_LINES);
+
+    // Neither exception in this fixture carries a readable price, so linking one to a product
+    // leaves it incomplete — and an incomplete line must not vanish out from under the reviewer
+    // into a list they have been told is finished.
+    await userEvent.selectOptions(screen.getAllByRole('combobox')[0], 'product-1');
+    expect(screen.getAllByRole('combobox')).toHaveLength(UNMATCHED_LINES);
+    expect(screen.getAllByRole('checkbox', { name: /אני מאשר שורה זו לקליטה/ })[0]).not.toBeChecked();
+    expect(screen.getByTestId('price-list-intake-confirm'))
+      .toHaveTextContent(`קליטת ${LINE_COUNT - UNMATCHED_LINES} המחירים שנבחרו`);
+  });
+
+  it('ביטול סימון ידני מנצח — תיקון מחיר אחריו אינו מחזיר את הסימון', async () => {
+    render(
+      <MemoryRouter>
+        <PriceListReviewConfirmation snapshot={snapshot(predictions())} actorId="owner-1" onRefetch={async () => true} />
+      </MemoryRouter>,
+    );
+
+    const confirm = await screen.findByTestId('price-list-intake-confirm');
+    await waitFor(() => expect(confirm).toBeEnabled());
+    await userEvent.click(screen.getByTestId('price-list-details-toggle'));
+    await userEvent.click(screen.getByTestId('price-list-unmatched-filter'));
+
+    // A line the server matched: complete, ticked. Untick it, then edit its price.
+    const tick = screen.getAllByRole('checkbox', { name: /אני מאשר שורה זו לקליטה/ })[0];
+    expect(tick).toBeChecked();
+    await userEvent.click(tick);
+    expect(tick).not.toBeChecked();
+
+    await userEvent.type(screen.getAllByLabelText(/מחיר ידני/)[0], '9');
+    expect(tick).not.toBeChecked();
+    expect(confirm).toHaveTextContent(`קליטת ${LINE_COUNT - UNMATCHED_LINES - 1} המחירים שנבחרו`);
+  });
+
+});
+
+describe('בטלפון — האישור נוסע עם הרשימה', () => {
+  afterEach(() => { Reflect.deleteProperty(window, 'matchMedia'); });
+
+  function phone() {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: query.includes('max-width'),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    });
+  }
+
+  it('מציג את כפתור הקליטה בסרגל המוצמד, פעם אחת, ומשאיר את "פרטים נוספים" בזרימה', async () => {
+    phone();
+    render(
+      <MemoryRouter>
+        <PriceListReviewConfirmation snapshot={snapshot(predictions())} actorId="owner-1" onRefetch={async () => true} />
+      </MemoryRouter>,
+    );
+
+    const confirm = await screen.findByTestId('price-list-intake-confirm');
+    await waitFor(() => expect(confirm).toBeEnabled());
+    expect(screen.getAllByTestId('price-list-intake-confirm')).toHaveLength(1);
+
+    const sticky = screen.getByTestId('sticky-primary-action');
+    expect(sticky).toContainElement(confirm);
+    // A disclosure toggle is not what this screen is for; it must not ride in the bar beside the
+    // one action, and it must not disappear from the page either.
+    expect(sticky).not.toContainElement(screen.getByTestId('price-list-details-toggle'));
+
+    // The paged line list ends at the bottom of the document; the spacer is what keeps its last
+    // row out from under the bar.
+    await userEvent.click(screen.getByTestId('price-list-show-unmatched'));
+    expect(document.body.lastElementChild)
+      .toBe(screen.getByTestId('sticky-primary-action-clearance'));
   });
 });

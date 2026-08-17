@@ -11,6 +11,7 @@ import {
   type ScanCorners,
 } from '../../lib/useDocumentScanning';
 import { Note, useToast } from '../ui';
+import { StickyPrimaryAction } from './StickyPrimaryAction';
 
 const DEFAULT_CORNERS: ScanCorners = [[0.05, 0.05], [0.95, 0.05], [0.95, 0.95], [0.05, 0.95]];
 const CORNER_LABELS = ['פינה שמאלית עליונה', 'פינה ימנית עליונה', 'פינה ימנית תחתונה', 'פינה שמאלית תחתונה'];
@@ -121,6 +122,10 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, rec
       </div>
       {!valid && <Note tone="alert" role="alert">ארבע הפינות חייבות ליצור מסגרת של דף בלי קווים מצטלבים.</Note>}
       {readOnly && <Note tone="await">הארגון במצב קריאה בלבד, ולכן אי אפשר לשמור תיקון פינות.</Note>}
+      {/* Deliberately NOT pinned to the bottom of the phone. The two lower corner handles are
+          dragged along the image's bottom edge, and a bar fixed over that band would sit on the
+          controls this screen exists to operate. The button is directly under the frame here,
+          which is where the hand already is. */}
       <div className="flex justify-end">
         <button type="button" className="btn-primary" disabled={saving || !valid || readOnly} onClick={() => void submit()}>
           {saving ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <ScanLine size={17} aria-hidden="true" />}
@@ -228,7 +233,13 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
               <img src={scanUrl} alt={`סריקה משופרת של ${fileName}`} className="block max-h-[58vh] w-full object-contain lg:max-h-[72vh]" />
             </figure>
           </div>
-          {state.status === 'ready' ? (
+          {/* `accepted` is where the scan job stops, and it never advances again — so a sentence
+              here that described what happens NEXT ("הקריאה קוראת כעת את הגרסה המשופרת") kept
+              being printed over a document that had long since been read, interpreted and sent to
+              review. The state this card owns is "אושרה", the badge above says exactly that, and
+              the two images say what was approved. Where the document actually is now is the
+              lifecycle strip's answer, one card below, and it stays the only one. */}
+          {state.status === 'ready' && (
             <div className="space-y-3 border-t border-line pt-4">
               <Note tone="info">בשלב הזה הוכנה תמונת סריקה בלבד. עדיין לא חולצו מהמסמך ספק, מספר, תאריך, סכומים או שורות.</Note>
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -237,19 +248,23 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
                   ? 'הארגון במצב קריאה בלבד. אפשר לצפות בסריקה, אך אי אפשר לאשר אותה לחילוץ.'
                   : 'בדוק שהדף שלם וקריא. האישור קובע שה־OCR יקרא נגזרת זו, לא את המקור.'}
               </p>
+              {/* Two full-height page images stand between the top of this card and its decision —
+                  roughly two phone screens of scrolling to reach a button whose answer the reader
+                  already had. The approval rides along; "תיקון גבולות" is the exception path and
+                  stays where the images are, so nothing competes inside the bar. */}
               <div className="flex flex-wrap gap-2">
               <button type="button" className="btn-secondary" disabled={accepting || readOnly} onClick={() => setEditingCorners(true)}>
                 <Pencil size={17} aria-hidden="true" /> תיקון גבולות
               </button>
-              <button type="button" className="btn-primary" disabled={accepting || readOnly} onClick={() => void accept()}>
-                {accepting ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <Check size={17} aria-hidden="true" />}
-                {accepting ? 'מאשר…' : 'אישור והמשך לחילוץ'}
-              </button>
+              <StickyPrimaryAction label="אישור הסריקה והמשך לחילוץ" inline={readOnly}>
+                <button type="button" className="btn-primary" disabled={accepting || readOnly} onClick={() => void accept()}>
+                  {accepting ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <Check size={17} aria-hidden="true" />}
+                  {accepting ? 'מאשר…' : 'אישור והמשך לחילוץ'}
+                </button>
+              </StickyPrimaryAction>
               </div>
               </div>
             </div>
-          ) : (
-            <Note tone="done" role="status">הסריקה אושרה. החילוץ קורא כעת את הגרסה המשופרת.</Note>
           )}
         </div>
       )}

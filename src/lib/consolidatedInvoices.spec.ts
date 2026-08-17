@@ -38,7 +38,7 @@ describe('consolidated supplier invoice UI model', () => {
       'מרכזת מול חשבוניות ביניים', 'מרכזת מול קבלות שהושלמו', 'חשבוניות ביניים מול קבלות',
     ]);
     expect(consolidatedStatusLabel('blocked')).toBe('חסומה לרישום');
-    expect(consolidatedStatusLabel('needs_review')).toBe('דורשת בדיקה');
+    expect(consolidatedStatusLabel('needs_review')).toBe('נדרשת בדיקה');
   });
 
   it('normalizes workspaces returned by the previous RPC shape', async () => {

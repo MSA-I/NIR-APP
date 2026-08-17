@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it } from 'vitest';
-import { Breadcrumbs, EmptyState, KpiCard, LifecycleStrip, PageHeader, RecordHeader } from './ui';
+import { AttentionZone, Breadcrumbs, EmptyState, KpiCard, LifecycleStrip, PageHeader, RecordHeader, type AttentionItem } from './ui';
 
 const inRouter = (content: ReactNode) => <MemoryRouter>{content}</MemoryRouter>;
 
@@ -66,5 +66,66 @@ describe('פרימיטיבי היררכיית עמוד', () => {
     render(<KpiCard title="יתרה פתוחה" value="₪8,420" />);
     expect(screen.queryByRole('button', { name: /יתרה פתוחה/ })).not.toBeInTheDocument();
     expect(screen.getByText('₪8,420')).toBeInTheDocument();
+  });
+});
+
+describe('סמן האזור בכותרות העמוד', () => {
+  // The paper half of the section identity. It takes NO prop on purpose: the accent resolves from
+  // `--section-accent`, which only Layout's `<main data-section>` sets and only from the URL, so a
+  // screen cannot make this mark say "approved" or "overdue". The assertions therefore pin the
+  // absence of an API as much as the presence of an element.
+  const mark = (container: HTMLElement) => container.querySelector('.section-mark');
+
+  it('מופיע בשתי הכותרות, ללא טקסט, ומוסתר מקוראי מסך', () => {
+    const view = render(inRouter(<PageHeader title="חשבוניות" meta="24 פתוחות" />));
+    const pageMark = mark(view.container);
+    expect(pageMark).toBeInTheDocument();
+    expect(pageMark).toHaveAttribute('aria-hidden', 'true');
+    // No text on it and none in it: a tone is a fill behind text, and this must never become one.
+    expect(pageMark?.textContent).toBe('');
+    expect(pageMark?.className).toBe('section-mark');
+
+    view.rerender(inRouter(<RecordHeader title="חשבונית 1048" status={<span>מאושרת</span>} />));
+    expect(mark(view.container)).toBeInTheDocument();
+  });
+
+  it('אינו נגזר משום prop — אותו סימן בדיוק ללא קשר לתוכן הכותרת', () => {
+    const first = render(inRouter(<PageHeader title="ספקים" />));
+    const bare = mark(first.container)?.outerHTML;
+    first.unmount();
+    const second = render(inRouter(
+      <PageHeader title="תשלומים" meta="חריגה" actions={<button type="button">פעולה</button>} />,
+    ));
+    expect(mark(second.container)?.outerHTML).toBe(bare);
+  });
+});
+
+describe('כותרת "דורש טיפול היום"', () => {
+  const row = (key: string, tone: AttentionItem['tone'], count: number): AttentionItem =>
+    ({ key, label: key, tone, count, to: `/${key}` });
+  const bell = () => screen.getByRole('heading', { level: 2 }).querySelector('svg');
+
+  it('סופר סוגי טיפול פעם אחת בלבד, ושומר את היחידה לקורא המסך', () => {
+    // Two action rows carrying 5 and 7, so the header's own "2" cannot be confused with a row
+    // count. Before this round the same 2 was rendered twice here and a third time by Dashboard.
+    render(inRouter(<AttentionZone items={[row('a', 'await', 5), row('b', 'alert', 7)]} />));
+    expect(screen.getAllByText((_, node) => node?.textContent === '2 סוגי טיפול')
+      .filter((node) => node.className.includes('badge'))).toHaveLength(1);
+    expect(screen.queryByText(/^\s*2 סוגי טיפול\s*$/)).not.toBeInTheDocument();
+  });
+
+  it('לוקח את הטון מהשורות שהוא סופר — alert גובר על await', () => {
+    render(inRouter(<AttentionZone items={[row('a', 'await', 5), row('b', 'alert', 7)]} />));
+    expect(bell()).toHaveClass('text-alert-fg');
+    expect(screen.getByRole('heading', { level: 2 }).querySelector('.badge-alert')).not.toBeNull();
+  });
+
+  it('כשאין מה לטפל בו הפעמון כבה ואין תג', () => {
+    // A permanently amber bell above "אין משימות דחופות כרגע" is colour asserting the opposite of
+    // the sentence beside it — the exact failure mode this campaign is about.
+    render(inRouter(<AttentionZone items={[row('a', 'info', 0)]} />));
+    expect(bell()).toHaveClass('text-ink-ghost');
+    expect(bell()).not.toHaveClass('text-await-fg');
+    expect(screen.getByRole('heading', { level: 2 }).querySelector('[class*="badge"]')).toBeNull();
   });
 });

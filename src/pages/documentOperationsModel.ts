@@ -83,23 +83,26 @@ export function attemptUiStatus(attempt: OperationalAttemptState): DocumentUiSta
     stuckReason: attempt.stuck_reason,
   });
   if (attempt.reversal_known && attempt.reverted) {
-    return { ...canonical, state: 'historical', label: 'בוטל', tone: 'idle', description: 'הפעולה בוטלה ונשמרה בהיסטוריה', loading: false, priority: 5 };
+    return { ...canonical, state: 'historical', label: 'בוטל', tone: 'idle', description: 'הפעולה בוטלה ונשמרה בהיסטוריה.', loading: false, priority: 5 };
   }
   if (canonical.state === 'failed' || canonical.state === 'stuck'
     || canonical.state === 'processing' || canonical.state === 'historical') {
     return canonical;
   }
   if (attempt.price_list_outcome === 'partially_applied') {
-    return { ...canonical, state: 'review', label: 'הוחל חלקית', tone: 'await', description: 'חלק מהשורות הוחלו וחלק עדיין ממתינות לבדיקה', priority: 2 };
+    return { ...canonical, state: 'review', label: 'הוחל חלקית', tone: 'await', description: 'חלק מהשורות הוחלו; השאר ממתינות לבדיקה.', priority: 2 };
   }
   if (attempt.status === 'review' || attempt.price_list_outcome === 'queued_for_review') {
-    return { ...canonical, state: 'review', label: 'נדרשת בדיקה', tone: 'await', description: 'העיבוד הסתיים וממתין להחלטה אנושית', priority: 2 };
+    // Same words as documentStatus.ts's review branch, on purpose: this screen and the inbox are
+    // looking at one state, and a second phrasing here is how the vocabulary split in the first place.
+    return { ...canonical, state: 'review', label: 'נדרשת בדיקה', tone: 'await', description: 'הקריאה הסתיימה. צריך לאשר את הנתונים.', priority: 2 };
   }
   if (attempt.price_list_outcome === 'auto_applied') {
-    return { ...canonical, state: 'completed', label: 'הוחל אוטומטית', tone: 'done', description: 'העיבוד והפעולה האוטומטית הושלמו', priority: 4 };
+    // The supervisory fact, not the pipeline's: prices moved without anyone approving them.
+    return { ...canonical, state: 'completed', label: 'הוחל אוטומטית', tone: 'done', description: 'המחירים עודכנו אוטומטית, ללא אישור אדם.', priority: 4 };
   }
   if (attempt.status === 'completed') return canonical;
-  return { ...canonical, state: 'unavailable', label: 'מצב לא ידוע', tone: 'idle', description: 'מצב הניסיון אינו זמין', priority: 6 };
+  return { ...canonical, state: 'unavailable', label: 'מצב לא ידוע', tone: 'idle', description: '', priority: 6 };
 }
 
 export function attemptStatusMeta(attempt: OperationalAttemptState): StatusMeta {

@@ -6,6 +6,7 @@ import {
   documentMatchesStatusFilter,
   documentMatchesFilingFilter,
   documentProcessingFailureText,
+  documentProcessingStuckText,
   documentStatusElapsedLabel,
   documentStatusFilterFromParam,
   documentUiStatus,
@@ -226,8 +227,22 @@ describe('documentUiStatus precedence', () => {
       job: job('leased'), document: inbox, evaluatedAt: NOW,
       isStuck: true, stuckReason: 'lease_expired',
     });
-    expect(status.description).toContain('הפסיק להגיב');
-    expect(status.description).not.toContain('lease_expired');
+    // Was pinned on "הפסיק להגיב" — the tail of "העובד שעיבד את המסמך הפסיק להגיב וההרשאה הזמנית
+    // שלו פגה", which described our worker and its lease to a bookkeeper. The claim worth pinning
+    // is the one the reader acts on: it stopped, and it is not coming back by itself.
+    expect(status.description).toContain('נפסק');
+    expect(status.description).not.toMatch(/עובד|הרשאה זמנית|lease_expired/);
+  });
+
+  it('every stuck reason ends on the fact that waiting will not help', () => {
+    // Four codes, one decision: keep waiting or act. A reason that only narrated the heuristic
+    // ("לפי הגיל ומספר הניסיונות שנשמרו בשרת") left that decision unmade.
+    for (const reason of [null, 'lease_expired', 'no_progress', 'active_over_two_hours',
+      'claim_attempt_limit_reached']) {
+      const text = documentProcessingStuckText(reason);
+      expect(text).toMatch(/לא ימשיך מעצמו|לא התחדש|אינו מתקדם|לא התקדם/);
+      expect(text).not.toMatch(/עובד|שרת|ניסיונות שנשמרו/);
+    }
   });
 
   it('an active attempt wins even if a stale superseded code leaks beside it', () => {
@@ -288,6 +303,51 @@ describe('document status filtering and filing contracts', () => {
     expect(documentStatusElapsedLabel(60)).toBe('1 דק׳');
     expect(documentStatusElapsedLabel(3_600)).toBe('1 שע׳');
     expect(documentStatusElapsedLabel(86_400)).toBe('1 ימים');
+  });
+});
+
+describe('one description carries one extra fact, or none at all', () => {
+  const cases = [
+    documentUiStatus({ job: job('queued'), document: inbox, evaluatedAt: NOW }),
+    documentUiStatus({ job: job('leased'), document: inbox, evaluatedAt: NOW }),
+    documentUiStatus({ job: job('review'), document: inbox, evaluatedAt: NOW }),
+    documentUiStatus({ job: job('failed'), document: inbox, evaluatedAt: NOW }),
+    documentUiStatus({ job: job('completed'), document: inbox, evaluatedAt: NOW }),
+    documentUiStatus({ status: 'completed', evaluatedAt: NOW }),
+    documentUiStatus({ status: 'completed', document: { entity_type: 'invoice', entity_id: 'i-1' }, evaluatedAt: NOW }),
+    documentUiStatus({ status: 'completed', document: { entity_type: 'archive', entity_id: null }, evaluatedAt: NOW }),
+  ];
+
+  it('never re-reads the label back to the reader', () => {
+    // The description ships as `title` AND as sr-only text on every row, so a sentence that
+    // rephrases the badge is the same fact twice — once for everyone, twice for a screen reader.
+    for (const status of cases) {
+      expect(status.description).not.toContain(status.label);
+    }
+  });
+
+  it('states with nothing to add carry an empty description rather than filler', () => {
+    expect(documentUiStatus({ status: 'completed', evaluatedAt: NOW }).description).toBe('');
+    expect(documentUiStatus({ status: null, evaluatedAt: NOW }).description).toBe('');
+    expect(documentUiStatus({
+      status: 'completed', document: { entity_type: 'invoice', entity_id: 'i-1' }, evaluatedAt: NOW,
+    }).description).toBe('');
+  });
+
+  it('renders neither an empty title nor an empty sr-only span for those states', () => {
+    const { container } = render(<DocumentStatusBadge status={documentUiStatus({
+      status: 'completed', document: { entity_type: 'invoice', entity_id: 'i-1' }, evaluatedAt: NOW,
+    })} />);
+    expect(container.querySelector('[title]')).toBeNull();
+    expect(container.querySelector('.sr-only')).toBeNull();
+  });
+
+  it('speaks about invoices and goods receipts, never about an entity_type', () => {
+    for (const status of cases) {
+      expect(status.description).not.toContain('יעד עסקי');
+    }
+    expect(documentUiStatus({ status: 'completed', document: inbox, evaluatedAt: NOW }).description)
+      .toBe('צריך לשייך אותו לחשבונית או לקבלת סחורה.');
   });
 });
 

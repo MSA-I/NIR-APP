@@ -16,6 +16,8 @@ import {
 } from '../components/ui';
 import {
   completeConsolidatedInvoiceIntake,
+  consolidatedPageStatusLabel,
+  consolidatedPageTypeLabel,
   consolidatedStatusLabel,
   consolidatedStatusTone,
   consolidatedWarningLabel,
@@ -373,7 +375,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
   const primaryPage = workspace.pages.find((page) => page.is_primary) ?? workspace.pages[0] ?? null;
   const reviewReason = workspace.intake?.reason_code
     ? consolidatedWarningLabel(workspace.intake.reason_code)
-    : 'המסמך דורש בדיקה לפני יצירת חוב.';
+    : 'צריך לבדוק את המסמך לפני יצירת חוב.';
   const retryReview = async () => {
     if (!primaryPage?.job_id || retryingReview) return;
     setRetryingReview(true);
@@ -461,7 +463,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
                   <p className="font-medium">עמוד {fmtNum(page.page_number)} · {page.file_name}</p>
                   <p className="mt-1 text-sm text-ink-soft">
                     {page.is_primary ? 'עוגן החשבונית' : 'מסמך תומך'} ·
-                    {' '}{page.document_type ?? 'ממתין לזיהוי'} · {page.job_status ?? 'ממתין לעיבוד'}
+                    {' '}{consolidatedPageTypeLabel(page.document_type)} · {consolidatedPageStatusLabel(page.job_status)}
                   </p>
                 </div>
                 <button type="button" className="btn-secondary min-h-11"

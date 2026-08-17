@@ -176,14 +176,19 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
   return (
     <div className="min-w-0 space-y-5" data-testid="document-review-page">
       <section className="card card-pad">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="page-title break-words">בדיקת מסמך</h1>
-              <DocumentStatusBadge status={uiStatus} data-stage={snapshot.stage} />
-            </div>
-            <p className="mt-1 break-words text-sm text-ink-muted">{snapshot.document.file_name}</p>
-          </div>
+        {/* One h1 per page, and it belongs to the page. `DocumentReview` renders "בדיקת מסמך" and
+            the file name above this card, and renders them even while a scan is still waiting and
+            this workspace does not mount at all — so the copy here was the second h1 and the
+            second file name on the same screen. This card owns one thing: where the document is. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="section-title">מצב המסמך</h2>
+          {/* The strip below is the single place this screen says how far the document got. While
+              a job is in flight the badge said it again, and `DocumentStatusBadge` carries the page
+              counter for the surfaces that have no strip (the folder, the upload centre) — so
+              "עמוד 7 מתוך 27" was rendered twice, from two code paths, a few pixels apart. The
+              badge stays for every state the strip cannot express: not sent yet, stuck, failed,
+              filed, archived. It steps aside only while the strip is telling the story. */}
+          {!uiStatus.loading && <DocumentStatusBadge status={uiStatus} data-stage={snapshot.stage} />}
         </div>
 
         {/* Above the review layers on purpose: while a document is still being read there is
@@ -192,10 +197,15 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
           <DocumentProcessingProgress snapshot={snapshot} />
         </div>
 
-        <div className="mt-4 rounded-lg bg-surface-sunken p-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-ink-soft"><FileCheck2 size={17} aria-hidden="true" /> שכבות בדיקה</div>
-          <p className="mt-1 text-sm text-ink-body"><span className="num">{snapshot.reviewCorrections.length}</span> תיקונים · <span className="num">{snapshot.annotations.length}</span> הערות</p>
-        </div>
+        {/* "0 תיקונים · 0 הערות" is the ordinary case, and it took a box on the first screen of
+            every review to say that nothing happened. The tile now appears once there is a layer
+            to report; its absence carries the same information without spending the space. */}
+        {(snapshot.reviewCorrections.length > 0 || snapshot.annotations.length > 0) && (
+          <div className="mt-4 rounded-lg bg-surface-sunken p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-ink-soft"><FileCheck2 size={17} aria-hidden="true" /> שכבות בדיקה</div>
+            <p className="mt-1 text-sm text-ink-body"><span className="num">{snapshot.reviewCorrections.length}</span> תיקונים · <span className="num">{snapshot.annotations.length}</span> הערות</p>
+          </div>
+        )}
 
         {/* Which engine read the document, the job id, the source fingerprint and the contract
             version are support/audit evidence, not decision material: knowing the model name does
@@ -334,23 +344,40 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
           )}
         </Note>
       )}
-      {uiStatus.loading && (
-        <Note tone="info" role="status">המסמך בעיבוד ומוצג כרגע לקריאה בלבד. הסטטוס מתרענן מנתוני השרת.</Note>
-      )}
+      {/* The old wording narrated the heuristic ("לפי הגיל ומספר הניסיונות שנשמרו בשרת").
+          documentUiStatus already carries the reason; the alert only has to name the next move. */}
       {uiStatus.state === 'stuck' && (
-        <Note tone="alert" role="alert">העיבוד לא התקדם לפי הגיל ומספר הניסיונות שנשמרו בשרת. יש לפתוח את מרכז תפעול המסמכים לטיפול.</Note>
+        <Note tone="alert" role="alert">העיבוד נעצר. אפשר לטפל בו במרכז תפעול המסמכים.</Note>
       )}
       {snapshot.extraction?.payload.document.partial && (
         <Note tone="await" role="status">החילוץ חלקי. יש להשוות כל ערך למקור לפני מתן משוב.</Note>
       )}
 
-      {!snapshot.job && <Note tone="idle">המסמך טרם נשלח לעיבוד.</Note>}
-      {snapshot.job && !snapshot.extraction && snapshot.stage !== 'failed' && <Note tone="info">החילוץ עדיין אינו זמין. המסך יתעדכן כאשר תתקבל תוצאה.</Note>}
-      {snapshot.extraction && !snapshot.interpretation && snapshot.stage !== 'failed' && <Note tone="info">החילוץ התקבל והפירוש הסמנטי עדיין בעיבוד.</Note>}
+      {/* Four notes stood here and none of them survived, because each one was the strip's sentence
+          said a second time — and each one outlived the state it described:
+          · "המסמך בעיבוד ומוצג כרגע לקריאה בלבד" — while a document is being read there is nothing
+            on screen to edit, so the read-only half claimed a restriction that does not exist.
+          · "המסמך טרם נשלח לעיבוד" — `DocumentReview` already says this above, with the button
+            that does something about it.
+          · "החילוץ עדיין אינו זמין. המסך יתעדכן כאשר תתקבל תוצאה." — not gated on stuck, so a job
+            that had stopped moving showed the alert AND a promise that it would update by itself.
+          · "החילוץ התקבל והפירוש הסמנטי עדיין בעיבוד." — not gated on review/completed, so a
+            document whose interpretation never arrived kept claiming work was under way.
+          The strip above answers all four from the job the server actually reports, and it is the
+          only surface on this screen that may claim work is in progress. */}
 
+      {/* Below `xl` the decision column comes first, for every document kind — not only for a price
+          list, which is how this started.
+          On a phone the two columns are one column, and the source viewer is a full-width page
+          image with no height cap: an invoice review opened onto ~750px of scan before the first
+          word about what the machine concluded. The findings, the supplier, the order and "מה יקרה
+          באישור" are what a reviewer reads first; the document is what they consult when one of
+          those makes them doubt, and it is still on the same screen, one scroll down.
+          DOM order is unchanged — only the visual order moves — so `order` is applied to the grid
+          children and the reading order a screen reader follows stays source-then-decision. */}
       {extraction && (
         <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(24rem,0.92fr)]">
-          <div className={isPriceList ? 'order-2 min-w-0 xl:order-1' : 'min-w-0'}>
+          <div className="order-2 min-w-0 xl:order-1">
             <DocumentSourceViewer
               fileName={snapshot.document.file_name}
               mimeType={snapshot.document.mime_type}
@@ -364,7 +391,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
             />
           </div>
 
-          <div className={`min-w-0 space-y-5 ${isPriceList ? 'order-1 xl:order-2' : ''}`}>
+          <div className="order-1 min-w-0 space-y-5 xl:order-2">
             {snapshot.packet ? (
               <DocumentPacketReview snapshot={snapshot} readOnly={readOnly} onRefetch={onRefetch} />
             ) : readOnly ? (

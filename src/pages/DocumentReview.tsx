@@ -44,10 +44,23 @@ export default function DocumentReview() {
     : null;
   const startedFor = useRef<string | null>(null);
   const [interpreting, setInterpreting] = useState(false);
-  const [interpretError, setInterpretError] = useState<string | null>(null);
+  /**
+   * The failed attempt, tagged with the job it was about.
+   *
+   * It used to be a bare string cleared only inside `interpret` and `reprocess`, which meant the
+   * alert belonged to no state at all: a refetch that moved the job forward took the retry button
+   * away — the old comment beside it admitted as much — and left the sentence standing over a
+   * document that had already been read. An alert has to name what it is an alert about, or there
+   * is nothing to compare against the server's answer.
+   */
+  const [interpretError, setInterpretError] = useState<{ jobId: string; message: string } | null>(null);
   const [enqueuing, setEnqueuing] = useState(false);
   const [enqueueError, setEnqueueError] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
+  /** Reprocessing failed as a request. Separate state, because it is not about a job that is
+   *  waiting to be read — clearing it on pipeline movement would erase the only report a person
+   *  gets that their button did nothing. */
+  const [reprocessError, setReprocessError] = useState<string | null>(null);
   const { refetch } = processing;
 
   const enqueue = useCallback(async () => {
@@ -69,7 +82,7 @@ export default function DocumentReview() {
   const reprocess = useCallback(async () => {
     if (!documentId || !canWrite) return;
     setReprocessing(true);
-    setInterpretError(null);
+    setReprocessError(null);
     try {
       const result = await supabase.rpc('reprocess_document', {
         p_document_id: documentId,
@@ -79,7 +92,7 @@ export default function DocumentReview() {
       window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
       await refetch();
     } catch (error) {
-      setInterpretError(toHebrewError(error));
+      setReprocessError(toHebrewError(error));
     } finally {
       setReprocessing(false);
     }
@@ -92,9 +105,9 @@ export default function DocumentReview() {
       // The handler is idempotent and short-circuits before the provider call, so a duplicate
       // invocation costs one round trip and zero tokens.
       const response = await supabase.functions.invoke('interpret-document', { body: { jobId: id } });
-      if (response.error) setInterpretError(await interpretErrorMessage(response.error));
+      if (response.error) setInterpretError({ jobId: id, message: await interpretErrorMessage(response.error) });
     } catch (error) {
-      setInterpretError(toHebrewError(error));
+      setInterpretError({ jobId: id, message: toHebrewError(error) });
     } finally {
       setInterpreting(false);
       await refetch();
@@ -109,6 +122,20 @@ export default function DocumentReview() {
     void interpret(jobId);
   }, [jobId, interpret]);
 
+  const currentJob = snapshot?.job ?? null;
+  const hasInterpretation = Boolean(snapshot?.interpretation);
+  useEffect(() => {
+    // The alert describes one attempt to read one job that was waiting at 'extracted'. The moment
+    // the server reports that job somewhere else -- a retry landed, the inbox interpreted it, it
+    // was sent back for reprocessing, or it failed and the workspace's failure note took over --
+    // the sentence is about a state the document has left. It goes with the state it belongs to.
+    if (!interpretError) return;
+    const stillWaiting = currentJob?.id === interpretError.jobId
+      && currentJob.status === 'extracted'
+      && !hasInterpretation;
+    if (!stillWaiting) setInterpretError(null);
+  }, [interpretError, currentJob, hasInterpretation]);
+
   if (!documentId) return <ErrorNote message="מזהה המסמך חסר." />;
   if (processing.loading || scanning.loading || !profile) return <PageLoader />;
   if (!isActiveRole(profile.role)) return <ErrorNote message="התפקיד ההיסטורי אינו מורשה להשתמש במסך הזה." />;
@@ -119,7 +146,11 @@ export default function DocumentReview() {
     <div className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 space-y-2">
-          <span className="hidden lg:inline-flex"><BackAction fallback="/documents" label="חזרה למסמכים" carrySearch /></span>
+          {/* Was `hidden lg:inline-flex`. Below 1024px — the primary target — that left the phone
+              with no way out of this screen but the browser's own back gesture, on the one screen
+              a person reaches by tapping a row in a list they want to return to. `btn-ghost` is a
+              44px inline target at every width, so there was nothing to hide it for. */}
+          <BackAction fallback="/documents" label="חזרה למסמכים" carrySearch />
           <div>
             <h1 className="page-title">בדיקת מסמך</h1>
             <p className="mt-1 break-words text-sm text-ink-muted">{snapshot.document?.file_name ?? 'מסמך שהועלה'}</p>
@@ -173,17 +204,19 @@ export default function DocumentReview() {
         </Note>
       )}
 
+      {reprocessError && <Note tone="alert" role="alert">{reprocessError}</Note>}
+
       {interpretError && !interpreting && (
         <Note tone="alert" role="alert" className="flex flex-wrap items-center gap-2">
-          <span className="min-w-0 flex-1">{interpretError}</span>
-          {/* A retry only makes sense while the job is still 'extracted'. Once the server has
-              recorded the failure the job is 'failed', and re-queuing it is the inbox's job. */}
-          {jobId ? (
+          <span className="min-w-0 flex-1">{interpretError.message}</span>
+          {/* The alert and its retry now live and die together: the effect above drops the alert
+              as soon as the job stops waiting, which is the same moment `jobId` becomes null. The
+              old fallback sentence — "אפשר לשלוח את המסמך לעיבוד מחדש ממסך המסמכים" — existed only
+              to cover the gap where the message outlived its button. */}
+          {jobId && (
             <button type="button" className="btn-secondary" onClick={() => void interpret(jobId)}>
               ניסיון נוסף
             </button>
-          ) : (
-            <span className="text-sm">אפשר לשלוח את המסמך לעיבוד מחדש ממסך המסמכים.</span>
           )}
         </Note>
       )}

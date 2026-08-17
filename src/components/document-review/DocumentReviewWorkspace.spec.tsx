@@ -205,6 +205,128 @@ describe('the supplier match is graded like the rest and obliges more than the r
   });
 });
 
+/**
+ * One state, one sentence.
+ *
+ * Every case below was on screen at the same time for a document that was merely queued: the
+ * lifecycle strip, the badge, a note saying the screen was read-only, and a note promising an
+ * update — four surfaces, four wordings, one fact. Two of them also outlived the fact itself,
+ * because neither was gated on the job having stopped or having finished.
+ *
+ * `created_at` is relative to `Date.now()` on purpose: `DocumentProcessingProgress` reads the wall
+ * clock when the workspace does not pass it one, and a fixed timestamp would drift across the
+ * two-hour stuck threshold and turn a green suite red at a particular time of day. That has
+ * already happened once in CI, which is why the strip takes a `now` at all.
+ */
+const secondsAgo = (seconds: number) => new Date(Date.now() - seconds * 1000).toISOString();
+
+function withJob(job: Record<string, unknown>, mutate?: (snapshot: ReviewSnapshot) => void): ReviewSnapshot {
+  const snapshot = snapshotWith(0.95);
+  snapshot.job = job as unknown as ReviewSnapshot['job'];
+  snapshot.extraction = null;
+  snapshot.interpretation = null;
+  mutate?.(snapshot);
+  return snapshot;
+}
+
+const READING = {
+  id: 'job-1',
+  status: 'leased',
+  attempt_count: 1,
+  created_at: secondsAgo(90),
+  updated_at: secondsAgo(5),
+  lease_until: new Date(Date.now() + 60_000).toISOString(),
+  last_error_code: null,
+  last_error_message: null,
+  progress_done: 3,
+  progress_total: 12,
+};
+
+const renderSnapshot = (snapshot: ReviewSnapshot) => render(
+  <MemoryRouter>
+    <DocumentReviewWorkspace snapshot={snapshot} actorId="actor" onRefetch={async () => true} initialPanel={null} />
+  </MemoryRouter>,
+);
+
+describe('a document being read makes exactly one claim that it is being read', () => {
+  it('prints the page counter once — the strip owns it, the badge does not repeat it', () => {
+    const snapshot = withJob(READING);
+    snapshot.stage = 'processing';
+    renderSnapshot(snapshot);
+
+    // The strip's own line, and the accessible name of its bar. `DocumentStatusBadge` renders the
+    // very same string from `progressLabel` for the folder and the upload centre, which have no
+    // strip; here that made "עמוד 3 מתוך 12" appear twice, a few pixels apart, from two files.
+    expect(screen.getAllByText('עמוד 3 מתוך 12')).toHaveLength(1);
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'עמוד 3 מתוך 12');
+    expect(document.querySelectorAll('[data-document-status-progress]')).toHaveLength(0);
+  });
+
+  it('leaves the strip as the only surface saying work is under way', () => {
+    const snapshot = withJob(READING);
+    snapshot.stage = 'processing';
+    renderSnapshot(snapshot);
+
+    expect(screen.getByRole('list', { name: 'שלבי התהליך' })).toBeInTheDocument();
+    // The three that used to stand beside it.
+    expect(screen.queryByText('בעיבוד')).toBeNull();
+    expect(screen.queryByText(/מוצג כרגע לקריאה בלבד/)).toBeNull();
+    expect(screen.queryByText(/החילוץ עדיין אינו זמין/)).toBeNull();
+  });
+});
+
+describe('a job that stopped is not also promised an update', () => {
+  it('shows the stuck alert without a sentence saying the screen will update by itself', () => {
+    const snapshot = withJob({
+      ...READING,
+      attempt_count: 9,
+      created_at: secondsAgo(3 * 60 * 60),
+      updated_at: secondsAgo(3 * 60 * 60),
+      lease_until: secondsAgo(60 * 60),
+      progress_done: null,
+      progress_total: null,
+    });
+    snapshot.stage = 'processing';
+    renderSnapshot(snapshot);
+
+    // The alert names the next move, not the heuristic that produced the verdict — the reason
+    // itself already reaches the badge through documentUiStatus.
+    expect(screen.getByText(/העיבוד נעצר/)).toBeInTheDocument();
+    expect(screen.getByText('עיבוד תקוע')).toBeInTheDocument();
+    // The old condition was `job && !extraction && stage !== 'failed'` — true of a stuck job, so
+    // the alert and "המסך יתעדכן כאשר תתקבל תוצאה" were rendered one under the other.
+    expect(screen.queryByText(/המסך יתעדכן כאשר תתקבל תוצאה/)).toBeNull();
+  });
+
+  it('does not claim an interpretation is under way on a document already waiting for review', () => {
+    const snapshot = snapshotWith(0.95);
+    snapshot.interpretation = null;
+    snapshot.job = { id: 'job-1', status: 'review', last_error_message: null } as unknown as ReviewSnapshot['job'];
+
+    renderSnapshot(snapshot);
+
+    // The old condition was `extraction && !interpretation && stage !== 'failed'`, which is true
+    // of a document that reached review without one — the extraction is in, nothing is running,
+    // and the sentence said the opposite.
+    expect(screen.queryByText(/הפירוש הסמנטי עדיין בעיבוד/)).toBeNull();
+    expect(screen.getByText('נדרשת בדיקה')).toBeInTheDocument();
+  });
+});
+
+describe('one level-one heading per screen', () => {
+  it('leaves the h1 to the page and names its own card instead', () => {
+    const snapshot = withJob(READING);
+    snapshot.stage = 'processing';
+    renderSnapshot(snapshot);
+
+    // `DocumentReview` renders <h1>בדיקת מסמך</h1> above this component, and renders it even while
+    // a scan is still pending and this component does not mount. Two of them on one page is a
+    // WCAG 2.1 AA defect against PRODUCT.md's target.
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+    expect(screen.getByRole('heading', { level: 2, name: 'מצב המסמך' })).toBeInTheDocument();
+  });
+});
+
 describe('שחזור מסמך שנכשל', () => {
   it('מציג עיבוד מחדש ומעביר את הפעולה לבעל המסך', async () => {
     const failed = snapshotWith(0.95);
@@ -225,5 +347,31 @@ describe('שחזור מסמך שנכשל', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'עיבוד מחדש' }));
     expect(onReprocess).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * What a phone meets first on a review screen.
+ *
+ * Below `xl` the two columns collapse into one, and the source viewer is a full-width page image
+ * with no height cap — roughly 750px of scan at 428px wide. Opening an invoice review used to mean
+ * scrolling past all of it before the first word about what the machine concluded. The decision
+ * column now comes first visually for every document kind, which is the treatment the price list
+ * already had; DOM order is untouched, so the reading order a screen reader follows is unchanged
+ * and the source is still one scroll away, on the same screen.
+ */
+describe('בצר — ההחלטה לפני הראיה', () => {
+  it('מסדר את עמודת ההחלטה ראשונה מתחת ל-xl ומחזיר את הסדר המקורי ברוחב מלא', () => {
+    renderWorkspace(0.94);
+
+    const source = screen.getByTestId('document-source-viewer').parentElement!;
+    const decision = screen.getByTestId('document-review-proposals').parentElement!;
+
+    expect(source.className).toContain('order-2');
+    expect(source.className).toContain('xl:order-1');
+    expect(decision.className).toContain('order-1');
+    expect(decision.className).toContain('xl:order-2');
+    // DOM order is the thing that did not move: source first, exactly as before.
+    expect(source.compareDocumentPosition(decision) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import pillow_heif
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from src import (
     DEFAULT_LIMITS,
@@ -804,6 +804,196 @@ def _openai_adapter_check(fixtures: Path) -> dict[str, Any]:
     return {"transcription": "passed", "failure_modes": "passed", "geometry": "synthesised"}
 
 
+def _write_grayscale_page(path: Path, *, width: int = 320, height: int = 400) -> None:
+    """A page with intermediate tones, which is what the scan lane now hands to OCR."""
+    image = Image.new("L", (width, height), 235)
+    draw = ImageDraw.Draw(image)
+    for index in range(8):
+        y = 40 + index * ((height - 80) // 8)
+        draw.line((30, y, width - 30, y), fill=40 + index * 18, width=3)
+    image.save(path, format="PNG")
+
+
+def _ocr_payload(lines_by_page: dict[int, list[tuple[str, float | None]]]) -> dict[str, Any]:
+    """The shape both OCR adapters return, with `confidence` under the caller's control.
+
+    0.0 is the consensus flag: no other transcription pass reproduced that line's numbers.
+    """
+    blocks: list[dict[str, Any]] = []
+    page_text: list[str] = []
+    for page in sorted(lines_by_page):
+        entries = lines_by_page[page]
+        total = max(1, len(entries))
+        for index, (text, confidence) in enumerate(entries, start=1):
+            blocks.append(
+                {
+                    "id": f"ocr-p{page}-l{index}",
+                    "page": page,
+                    "type": "text",
+                    "bbox": [0.0, (index - 1) / total, 1.0, index / total],
+                    "text": text,
+                    "confidence": confidence,
+                }
+            )
+        page_text.append("\n".join(text for text, _confidence in entries))
+    return {
+        "schema_version": "1",
+        "document": {
+            "page_count": max(lines_by_page),
+            "detected_languages": [],
+            "plain_text": "\n\n".join(page_text),
+            "partial": True,
+        },
+        "blocks": blocks,
+        "tables": [],
+        "marks": [],
+    }
+
+
+class _ScriptedOcrAdapter:
+    """Returns scripted payloads and records what each call was actually shown.
+
+    Model-free by construction: no provider, no network, no image model. `tones` is how the check
+    proves the recovery pass really re-binarized the page rather than resubmitting it unchanged.
+    """
+
+    def __init__(self, scripts: list[Any]) -> None:
+        self.scripts = scripts
+        self.calls: list[dict[str, Any]] = []
+
+    def extract(self, pages: list[PageImage], limits: ExtractionLimits) -> dict[str, Any]:
+        del limits
+        with Image.open(pages[0].path) as image:
+            tones = len(image.convert("L").getcolors(maxcolors=65_536) or [])
+        self.calls.append({"pages": [page.page for page in pages], "tones": tones})
+        script = self.scripts[min(len(self.calls) - 1, len(self.scripts) - 1)]
+        if isinstance(script, ProcessingError):
+            raise script
+        return script
+
+
+def _second_pass_check(fixtures: Path) -> dict[str, Any]:
+    """One re-binarized retry, only on a measurably failed page, only when it is measurably better.
+
+    Every scenario below runs against a real grayscale PNG through the real image lane, with a
+    scripted adapter in place of the paid model.
+    """
+    from src import second_pass
+
+    source = fixtures / "grayscale-page.png"
+    _write_grayscale_page(source)
+
+    def run(scripts: list[Any]) -> tuple[dict[str, Any], _ScriptedOcrAdapter, dict[str, Any]]:
+        adapter = _ScriptedOcrAdapter(scripts)
+        diagnostics: dict[str, Any] = {}
+        payload = extract_file(
+            source, "image/png", adapter=adapter, limits=DEFAULT_LIMITS, diagnostics=diagnostics
+        )
+        return payload, adapter, diagnostics
+
+    healthy = _ocr_payload({1: [(f"שורה {index} 12.50", None) for index in range(1, 7)]})
+    broken = _ocr_payload({1: []})
+    flagged = _ocr_payload(
+        {1: [("סה\"כ 1,392.00", 0.0)] * 5 + [("ספק בדיקה", None)]}
+    )
+    recovered = _ocr_payload({1: [(f"שורה {index} 12.50", None) for index in range(1, 9)]})
+
+    # 1. A healthy page never pays for a second pass.
+    payload, adapter, diagnostics = run([healthy])
+    assert len(adapter.calls) == 1, f"healthy_page_paid_twice:{adapter.calls}"
+    assert diagnostics == {}, f"healthy_page_reported_a_second_pass:{diagnostics}"
+    assert adapter.calls[0]["tones"] > 2, "the first pass must see the grayscale scan"
+    assert len(payload["blocks"]) == 6
+
+    # 2. A page that produced no text at all is an unambiguous failure.
+    payload, adapter, diagnostics = run([broken, recovered])
+    assert len(adapter.calls) == 2, f"empty_page_did_not_retry:{adapter.calls}"
+    assert adapter.calls[1]["tones"] == 2, \
+        f"the retry must be binarized, saw {adapter.calls[1]['tones']} tones"
+    assert len(payload["blocks"]) == 8, "the recovered read was not kept"
+    assert payload["document"]["plain_text"].startswith("שורה 1")
+    assert diagnostics["second_pass"] == {
+        "attempted_pages": [1],
+        "extra_extractions": 1,
+        "improved_pages": [1],
+    }, f"unexpected_audit:{diagnostics}"
+
+    # 3. A page whose numbers no pass could reproduce is the other failure signal.
+    payload, adapter, diagnostics = run([flagged, recovered])
+    assert len(adapter.calls) == 2, f"consensus_failure_did_not_retry:{adapter.calls}"
+    assert len(payload["blocks"]) == 8
+    assert diagnostics["second_pass"]["improved_pages"] == [1]
+
+    # 4. Conservative in both directions: a minority of flagged lines is not a failure, and a
+    #    short page is not judged by a ratio at all.
+    minority = _ocr_payload(
+        {1: [("סה\"כ 1,392.00", 0.0)] * 4 + [("ספק", None), ("תאריך", None)]}
+    )
+    short = _ocr_payload({1: [("סה\"כ 1,392.00", 0.0)] * 3})
+    unchecked = _ocr_payload({1: [(f"שורה {index}", None) for index in range(1, 9)]})
+    for name, first in (("minority", minority), ("short", short), ("unchecked", unchecked)):
+        _payload, adapter, diagnostics = run([first, recovered])
+        assert len(adapter.calls) == 1, f"{name}_page_paid_for_a_retry:{adapter.calls}"
+        assert diagnostics == {}, f"{name}_page_reported_a_second_pass"
+
+    # 5. A second result that is not better is discarded. Never regress a read that exists.
+    same_count = _ocr_payload({1: [(f"שורה {index}", None) for index in range(1, 7)]})
+    more_but_worse = _ocr_payload({1: [(f"שורה {index} 9.90", 0.0) for index in range(1, 10)]})
+    for name, second in (("no_gain", same_count), ("worse_consensus", more_but_worse)):
+        payload, adapter, diagnostics = run([flagged, second])
+        assert len(adapter.calls) == 2, f"{name}_did_not_attempt"
+        assert [block["text"] for block in payload["blocks"]] == [
+            block["text"] for block in flagged["blocks"]
+        ], f"{name}_replaced_a_better_first_read"
+        assert diagnostics["second_pass"] == {
+            "attempted_pages": [1],
+            "extra_extractions": 1,
+        }, f"{name}_claimed_an_improvement:{diagnostics}"
+
+    # 6. A failing recovery attempt must never fail a document that already has a read, and must
+    #    never hand the job runner a retryable error to multiply into more paid calls.
+    payload, adapter, diagnostics = run(
+        [flagged, ProcessingError("ocr_provider_unavailable", "unavailable", retryable=True)]
+    )
+    assert [block["text"] for block in payload["blocks"]] == [
+        block["text"] for block in flagged["blocks"]
+    ], "a failed retry lost the first read"
+    assert diagnostics["second_pass"]["error"] == "ocr_provider_unavailable"
+    assert "improved_pages" not in diagnostics["second_pass"]
+
+    # 7. Cost ceiling: one extra extraction per invocation, and a page budget spent PER DOCUMENT.
+    #    `_parse_pdf` calls this once per memory-bounded batch, sharing one audit; a per-call cap
+    #    would let a seven-batch document retry twenty-one pages.
+    pages = []
+    for number in range(1, 6):
+        page_path = fixtures / f"grayscale-page-{number}.png"
+        _write_grayscale_page(page_path)
+        pages.append(PageImage(number, page_path, 320, 400))
+    all_broken = _ocr_payload({number: [] for number in range(1, 6)})
+    capped = _ScriptedOcrAdapter([_ocr_payload({number: [] for number in range(1, 6)})])
+    audit: dict[str, Any] = {}
+    second_pass.improve(all_broken, pages, capped, DEFAULT_LIMITS, audit)
+    assert len(capped.calls) == 1, f"second_pass_called_more_than_once:{capped.calls}"
+    assert capped.calls[0]["pages"] == [1, 2, 3], f"page_cap_not_applied:{capped.calls}"
+    assert audit["extra_extractions"] == 1
+    # A later batch of the same document finds the budget already spent and pays nothing.
+    second_pass.improve(all_broken, pages, capped, DEFAULT_LIMITS, audit)
+    assert len(capped.calls) == 1, f"page_budget_reset_between_batches:{capped.calls}"
+    assert audit["extra_extractions"] == 1
+    assert not list(fixtures.glob("*-binarized.png")), "binarized temporaries were not removed"
+
+    return {
+        "healthy_page": "no_retry",
+        "empty_page": "retried",
+        "consensus_failure": "retried",
+        "minority_flagged": "no_retry",
+        "worse_result": "discarded",
+        "failed_retry": "first_read_kept",
+        "page_cap": second_pass.SECOND_PASS_MAX_PAGES,
+        "extra_extractions_per_call": 1,
+    }
+
+
 def _hebrew_order_check() -> dict[str, Any]:
     """Israeli PDF generators often store Hebrew in visual order; pypdf then returns every word
     backwards, silently, with the digits still correct."""
@@ -1283,6 +1473,7 @@ def main() -> int:
         pdf_batching = _pdf_batching_check(fixtures)
         _macro_security_check(fixtures, scratch)
         _retry_and_cleanup_check(scratch)
+        second_pass = _second_pass_check(fixtures)
         hebrew_order = _hebrew_order_check()
         openai_adapter = _openai_adapter_check(fixtures)
         openai_qa = _openai_qa_check(fixtures)
@@ -1301,6 +1492,7 @@ def main() -> int:
                     "pdf_batching": pdf_batching,
                     "macro_security": "passed",
                     "retry_cleanup": "passed",
+                    "second_pass": second_pass,
                     "hebrew_order": hebrew_order,
                     "openai_adapter": openai_adapter,
                     "openai_qa": openai_qa,

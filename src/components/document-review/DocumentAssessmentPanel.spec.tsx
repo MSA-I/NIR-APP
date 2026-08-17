@@ -1,0 +1,223 @@
+// The received-document check, read as an exception inbox.
+//
+// What is asserted here is placement, which assessment.spec.ts cannot see: that a blocking finding
+// and the approve button are both reachable without scrolling past the machine's working, that the
+// reconciliation table is folded AND not built while folded, and that nothing which carries a
+// business claim — a blocking finding, ordered goods missing from the document — was folded away
+// to buy the quiet.
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { AssessmentLine, DocumentReviewRead } from './assessment';
+
+const rpc = vi.hoisted(() => vi.fn());
+vi.mock('../../lib/supabase', () => ({ supabase: { rpc } }));
+
+import { DocumentAssessmentPanel } from './DocumentAssessmentPanel';
+
+function line(index: number, over: Partial<AssessmentLine> = {}): AssessmentLine {
+  return {
+    line_index: index,
+    description: `פריט ${index + 1}`,
+    sku: null, barcode: null, product_id: `product-${index}`, product_source: 'catalog',
+    quantity: 3, unit: 'יח׳', unit_price: 12, discount_amount: null, vat_rate: 17,
+    line_total: 36, normalized_quantity: 3, normalized_unit_price: 12,
+    baseline_price: 11, baseline_source: 'price_list', baseline_effective_date: '2026-06-01',
+    overcharge_amount: 3, findings: [],
+    ...over,
+  };
+}
+
+function reviewRead(over: Partial<DocumentReviewRead> = {}): DocumentReviewRead {
+  return {
+    document_id: 'doc-1',
+    file_name: 'invoice.pdf',
+    document_kind: 'invoice',
+    document_type: 'invoice',
+    document_date: '2026-08-01',
+    file_stored: true,
+    data_approved: false,
+    interpretation_id: 'interpretation-1',
+    supplier_resolution: null,
+    order_resolution: null,
+    state: 'ready_for_approval',
+    assessment: {
+      document_type: 'invoice', document_number: 'INV-9', document_date: '2026-08-01',
+      supplier_id: 'supplier-1', order_id: 'order-1',
+      sources: { document: true, ordered: true, received: true, baseline: true },
+      totals: { lines_net: 108, header_net: 108, header_vat: 18.36, header_total: 126.36, overcharge_total: 9 },
+      severity: 'warning', approval_blocked: false,
+      lines: [line(0), line(1), line(2)],
+      order_items: [],
+      findings: [
+        { code: 'price_above_baseline', severity: 'warning', message: 'מחיר גבוה מהמחירון', line_index: 0 },
+        { code: 'quantity_above_ordered', severity: 'info', message: 'כמות גבוהה מההזמנה', line_index: 1 },
+      ],
+    },
+    ...over,
+  };
+}
+
+async function renderPanel(read: DocumentReviewRead = reviewRead()) {
+  rpc.mockResolvedValue({ data: read, error: null });
+  render(<DocumentAssessmentPanel documentId="doc-1" />);
+  return screen.findByRole('button', { name: 'אישור המסמך' });
+}
+
+const linesFold = () => screen.getByText('שורות מול המקורות').closest('details') as HTMLDetailsElement;
+const advisoryFold = () => screen.getByText('שווה לשים לב').closest('details') as HTMLDetailsElement;
+
+describe('הבדיקה מקפלת את העבודה של המכונה ולא את הממצאים', () => {
+  beforeEach(() => rpc.mockReset());
+
+  it('מקפל את טבלת ההשוואה ואינו בונה את השורות לפני פתיחה', async () => {
+    await renderPanel();
+
+    expect(linesFold().open).toBe(false);
+    // Folded is not enough: 7 columns over a long document is thousands of cells, so the rows must
+    // not exist until asked for. No table means no cells were built.
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(linesFold().querySelector('summary')).toHaveTextContent('3');
+
+    await userEvent.click(screen.getByText('שורות מול המקורות'));
+    expect(linesFold().open).toBe(true);
+    expect(within(linesFold()).getByRole('table')).toBeInTheDocument();
+    expect(within(linesFold()).getByText('פריט 1')).toBeInTheDocument();
+  });
+
+  it('מקפל ממצאי מידע ואזהרה מאחורי ספירה, ומצהיר על הכמות בשורת הסיכום', async () => {
+    await renderPanel();
+
+    expect(advisoryFold().open).toBe(false);
+    expect(advisoryFold().querySelector('summary')).toHaveTextContent('שווה לשים לב');
+    expect(advisoryFold().querySelector('summary')).toHaveTextContent('2');
+    // A short finding list is cheap to build, so it is folded rather than gated — but it must be
+    // INSIDE the fold, not beside it, or the fold claims to hold something it does not.
+    expect(screen.getByText(/מחיר גבוה מהמחירון/).closest('details')).toBe(advisoryFold());
+    expect(screen.getByText(/כמות גבוהה מההזמנה/).closest('details')).toBe(advisoryFold());
+
+    await userEvent.click(screen.getByText('שווה לשים לב'));
+    expect(advisoryFold().open).toBe(true);
+  });
+
+  it('משאיר ממצא חוסם פתוח, מעל הכפתור, ולעולם לא בתוך קיפול', async () => {
+    await renderPanel(reviewRead({
+      state: 'blocked',
+      assessment: {
+        ...reviewRead().assessment!,
+        approval_blocked: true,
+        severity: 'error',
+        findings: [
+          { code: 'duplicate_document', severity: 'error', message: 'מסמך כפול', line_index: null },
+          { code: 'price_above_baseline', severity: 'warning', message: 'מחיר גבוה מהמחירון', line_index: 0 },
+        ],
+      },
+    }));
+
+    const blocking = screen.getByRole('alert');
+    expect(within(blocking).getByText(/מסמך כפול/)).toBeInTheDocument();
+    expect(blocking.closest('details')).toBeNull();
+
+    // The exception, then the decision, then the machine's working. The table used to stand
+    // between the finding and the only button on the screen.
+    const cta = screen.getByRole('button', { name: 'אישור המסמך' });
+    const detail = screen.getByTestId('assessment-detail');
+    expect(blocking.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(cta.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The button stays live even while blocked — the server is the gate (DESIGN.md).
+    expect(cta).toBeEnabled();
+  });
+
+  it('משאיר את "מה יקרה באישור" צמוד לכפתור ומחוץ לקיפול', async () => {
+    const cta = await renderPanel();
+    const effects = screen.getByText('מה יקרה באישור');
+    expect(effects.closest('details')).toBeNull();
+    expect(effects.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('אינו מקפל סחורה שהוזמנה ואינה מופיעה במסמך — זו טענת מלאי, לא פירוט', async () => {
+    await renderPanel(reviewRead({
+      assessment: {
+        ...reviewRead().assessment!,
+        order_items: [{
+          purchase_order_item_id: 'poi-1', product_id: 'product-9', product_name: 'קמח',
+          ordered_quantity: 10, received_quantity: 0, recorded_received_qty: null,
+          unit: 'ק״ג', on_this_document: false,
+        }],
+      },
+    }));
+
+    const missing = screen.getByText('הוזמן ואינו מופיע במסמך הזה:');
+    expect(missing.closest('details')).toBeNull();
+    expect(screen.getByText(/קמח/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * The same screen on a phone, which is where it is actually used.
+ *
+ * A real invoice review is ~4,900px — five and a half phone screens — and the approve button used
+ * to be somewhere in the middle of them, at a height that depended on how many findings the server
+ * returned. The button did not change: same disabled rule, same server gate, same enabled-while-
+ * blocked behaviour DESIGN.md requires. Only its position did.
+ */
+describe('בטלפון — הפעולה מגיעה לאגודל, ופעם אחת', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: query.includes('max-width'),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    });
+  });
+  afterEach(() => { Reflect.deleteProperty(window, 'matchMedia'); });
+
+  it('מציג את "אישור המסמך" בסרגל מוצמד, ולא פעמיים', async () => {
+    await renderPanel();
+
+    expect(screen.getAllByRole('button', { name: 'אישור המסמך' })).toHaveLength(1);
+    const sticky = screen.getByTestId('sticky-primary-action');
+    expect(sticky).toContainElement(screen.getByRole('button', { name: 'אישור המסמך' }));
+    // The bar floats over a page that ends in the folded working and the ordered-goods note; the
+    // spacer is what stops it standing on their last row.
+    expect(screen.getByTestId('sticky-primary-action-clearance')).toBeInTheDocument();
+  });
+
+  it('לוקח את משפט "השרת יבדוק שוב" יחד עם הכפתור, ומשאיר אותו פעיל', async () => {
+    await renderPanel(reviewRead({
+      state: 'blocked',
+      assessment: {
+        ...reviewRead().assessment!,
+        approval_blocked: true,
+        severity: 'error',
+        findings: [{ code: 'duplicate_document', severity: 'error', message: 'מסמך כפול', line_index: null }],
+      },
+    }));
+
+    const cta = screen.getByRole('button', { name: 'אישור המסמך' });
+    expect(cta).toBeEnabled();
+    const reason = screen.getByText(/השרת יבדוק שוב ויסביר בדיוק מה מונע/);
+    // One copy, and in the bar: a reason for an enabled button that lives five screens above it is
+    // not a reason anybody reads.
+    expect(screen.getAllByText(/השרת יבדוק שוב ויסביר בדיוק מה מונע/)).toHaveLength(1);
+    expect(screen.getByTestId('sticky-primary-action')).toContainElement(reason);
+    // The blocking finding itself never moved into the bar or into a fold.
+    expect(screen.getByRole('alert').closest('details')).toBeNull();
+  });
+
+  it('אין סרגל כשאין מה לאשר — מסמך שכבר אושר אינו מקבל פס פעולה ריק', async () => {
+    rpc.mockResolvedValue({ data: reviewRead({ data_approved: true }), error: null });
+    render(<DocumentAssessmentPanel documentId="doc-1" />);
+    expect(await screen.findByText('מה יקרה באישור')).toBeInTheDocument();
+
+    expect(screen.queryByRole('button', { name: 'אישור המסמך' })).toBeNull();
+    expect(screen.queryByTestId('sticky-primary-action')).toBeNull();
+    expect(screen.queryByTestId('sticky-primary-action-clearance')).toBeNull();
+  });
+});

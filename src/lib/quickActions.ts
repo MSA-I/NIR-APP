@@ -45,6 +45,49 @@ export function isFocusPath(pathname: string): boolean {
     : pathname === path);
 }
 
+/* ---------- Section identity — WHERE the user is, never WHAT the data says ---------- */
+
+/**
+ * The three work domains a daily user moves between. Not a tone, and structurally incapable of
+ * becoming one: a section is derived from the URL by `sectionOf` and there is no prop, argument or
+ * data field anywhere that can select it. `badge-await` is chosen by an invoice's status;
+ * `documents` is chosen by standing on /documents. State cannot reach this vocabulary.
+ *
+ * The keys are deliberately domain nouns, never colour names and never a `Tone` value — the two
+ * vocabularies share no member, which `quickActions.spec.ts` asserts.
+ */
+export type SectionKey = 'documents' | 'procurement' | 'money';
+
+/**
+ * Route prefixes per domain. These are the groups the navigation catalogue already uses
+ * (מסמכים · רכש · כספים in `NAV_SECTIONS`), so the accent re-states an information architecture
+ * the owner already approved rather than inventing a second one.
+ *
+ * Everything absent from this map answers `null` on purpose, and that is a design statement, not
+ * an omission: `/dashboard` and the בקרה screens (`/alerts`, `/exceptions`, `/expenses`,
+ * `/reports`, `/analytics`) look ACROSS all three domains, so they have no place of their own to
+ * mark. `/settings`, `/onboarding` and `/admin` are not work domains either.
+ */
+const SECTION_ROUTES: Readonly<Record<SectionKey, readonly string[]>> = {
+  documents: ['/documents'],
+  procurement: ['/orders', '/receiving', '/inventory', '/suppliers', '/products', '/prices'],
+  money: ['/invoices', '/credits', '/payment-requests', '/payments', '/bank', '/pay'],
+};
+
+/**
+ * The work domain a path belongs to, or `null` where none does.
+ *
+ * Matching is exact-or-child on a `/` boundary, the same discipline `isRouteFamilyActive` uses:
+ * `/payments` must not swallow `/payment-requests`, and `/pay` must not swallow either.
+ */
+export function sectionOf(pathname: string): SectionKey | null {
+  const path = pathname.split(/[?#]/, 1)[0];
+  for (const [key, prefixes] of Object.entries(SECTION_ROUTES) as [SectionKey, readonly string[]][]) {
+    if (prefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))) return key;
+  }
+  return null;
+}
+
 /** One route-family rule shared by the desktop sidebar and mobile drawer. */
 export function isRouteFamilyActive(pathname: string, to: string): boolean {
   const targetPath = to.split(/[?#]/, 1)[0];

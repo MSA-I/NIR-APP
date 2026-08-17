@@ -24,10 +24,19 @@ export type DocumentProcessingStage =
 export type DocumentStageTone = 'idle' | 'await' | 'info' | 'done' | 'alert';
 
 /**
- * The ENGINEERING labels. They stay, because the seven stages stay: the database contract, the
- * SQL suites and the browser scenarios all measure them, and a reviewer standing in front of a
- * stuck job needs to know *which* step stopped. User-facing precedence and wording live only in
- * `documentStatus.ts`; this table is the raw engineering contract behind `data-stage`.
+ * The ENGINEERING stage table. The seven stages stay, because the database contract, the SQL
+ * suites and the browser scenarios all measure them, and a reviewer standing in front of a stuck
+ * job needs to know *which* step stopped. User-facing precedence lives only in `documentStatus.ts`.
+ *
+ * **Where a stage and a canonical state name the same thing, they now carry the same string.**
+ * `review` used to read "דורש בדיקה" here and "נדרשת בדיקה" there, and `failed` "נכשל" against
+ * "העיבוד נכשל" — one state, two Hebrew names, decided by which module a screen happened to
+ * import. Two of these strings differ deliberately and only there: `unprocessed` and `extracted`
+ * are finer engineering distinctions that canonical precedence folds into "לא משויך" and "בעיבוד",
+ * so no canonical label exists to match. `deadEndFixes.spec.tsx` pins both halves of that rule.
+ *
+ * These `label`/`tone` fields have no product consumer today — every screen renders
+ * `documentUiStatus`. The key set is what is load-bearing.
  */
 export const DOCUMENT_PROCESSING_STAGE_META: Record<
   DocumentProcessingStage,
@@ -40,9 +49,9 @@ export const DOCUMENT_PROCESSING_STAGE_META: Record<
   // waiting to be requested. Showing "בעיבוד" told people to wait for something that had already
   // stopped, which is the one thing a status badge must never do.
   extracted: { label: 'ממתין לפירוש', tone: 'info' },
-  review: { label: 'דורש בדיקה', tone: 'await' },
+  review: { label: 'נדרשת בדיקה', tone: 'await' },
   completed: { label: 'הושלם', tone: 'done' },
-  failed: { label: 'נכשל', tone: 'alert' },
+  failed: { label: 'העיבוד נכשל', tone: 'alert' },
 };
 
 export type DocumentInterpretationType =
