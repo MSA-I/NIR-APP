@@ -135,6 +135,40 @@ returns jsonb language sql immutable as $$
   )
 $$;
 
+create function pg_temp.ocr_manual_price_list_payload()
+returns jsonb language sql immutable as $$
+  select jsonb_build_object(
+    'schema_version','1','document_type','price_list','document_type_confidence',0.99,
+    'supplier',jsonb_build_object(
+      'suggested_id','aa000000-0000-4000-8000-000000000008',
+      'suggested_name','משקאות אור בע״מ','confidence',0.99,
+      'evidence_block_ids',jsonb_build_array('block-heading')),
+    'fields','[]'::jsonb,
+    'line_items',(select jsonb_agg(jsonb_build_object(
+      'source_row',row_number,
+      'values',jsonb_build_object(
+        'sku','OCR-MANUAL-'||lpad(row_number::text,2,'0'),
+        'product_name','מוצר מחירון לבדיקה '||row_number,
+        'unit','אריזה','unit_price',10+row_number),
+      'evidence_block_ids',jsonb_build_array('block-total')) order by row_number)
+      from generate_series(1,22) row_number),
+    'suggested_annotations','[]'::jsonb)
+$$;
+
+create function pg_temp.ocr_packet_payload()
+returns jsonb language sql immutable as $$
+  select jsonb_build_object(
+    'schema_version','1','document_type','other','document_type_confidence',0.99,
+    'supplier',jsonb_build_object('suggested_id',null,'suggested_name',null,
+      'confidence',null,'evidence_block_ids','[]'::jsonb),
+    'fields','[]'::jsonb,'line_items','[]'::jsonb,'suggested_annotations','[]'::jsonb,
+    'packet_segments',jsonb_build_array(
+      jsonb_build_object('ordinal',1,'start_page',1,'end_page',2,
+        'document_type','delivery_note','confidence',0.94),
+      jsonb_build_object('ordinal',2,'start_page',3,'end_page',4,
+        'document_type','invoice','confidence',0.96)))
+$$;
+
 -- Six truthful stages: no job, queued, leased (displayed as processing), review,
 -- completed and failed.
 insert into public.document_processing_jobs (
@@ -193,6 +227,19 @@ select
   'review', public.smart_document_source_checksum(d.org_id, d.storage_path, d.mime_type, d.uploaded_by),
   :'ocr_owner_id', now()
 from public.documents d where d.id = '97000000-0000-4000-8000-000000000007';
+
+insert into public.document_processing_jobs (
+  id, org_id, document_id, requested_by, status, input_checksum,
+  interpretation_actor_id, interpretation_started_at
+)
+select fixture.job_id,d.org_id,d.id,:'ocr_owner_id','review',
+  public.smart_document_source_checksum(d.org_id,d.storage_path,d.mime_type,d.uploaded_by),
+  :'ocr_owner_id',now()
+from public.documents d
+join (values
+  ('97000000-0000-4000-8000-000000000008'::uuid,'97100000-0000-4000-8000-000000000008'::uuid),
+  ('97000000-0000-4000-8000-000000000009'::uuid,'97100000-0000-4000-8000-000000000009'::uuid)
+) fixture(document_id,job_id) on fixture.document_id=d.id;
 
 insert into public.document_extractions (
   id, org_id, job_id, document_id, engine, model, model_version,
@@ -274,6 +321,56 @@ values (
   'openai-fixture', 'gpt-local-contract-fixture', 'interpret-document-v6', '1',
   pg_temp.ocr_price_list_payload(), jsonb_build_object('fixture', true), 304
 );
+
+insert into public.document_extractions (
+  id,org_id,job_id,document_id,engine,model,model_version,input_checksum,
+  contract_version,payload,duration_ms,resource_metadata
+)
+select fixture.extraction_id,j.org_id,j.id,j.document_id,
+  'private-fixture','ocr-acceptance-hebrew','1.0.0',j.input_checksum,j.contract_version,
+  pg_temp.ocr_extraction_payload(fixture.title),700,
+  jsonb_build_object('fixture',true,'source','local-storage')
+from public.document_processing_jobs j
+join (values
+  ('97100000-0000-4000-8000-000000000008'::uuid,'97200000-0000-4000-8000-000000000008'::uuid,'מחירון ידני עם 22 שורות'),
+  ('97100000-0000-4000-8000-000000000009'::uuid,'97200000-0000-4000-8000-000000000009'::uuid,'חבילת מסמכים מעורבת')
+) fixture(job_id,extraction_id,title) on fixture.job_id=j.id;
+
+insert into public.document_interpretations (
+  id,org_id,job_id,extraction_id,document_id,interpreted_for_user_id,
+  provider,model,prompt_version,schema_version,payload,usage,duration_ms
+) values
+(
+  '97300000-0000-4000-8000-000000000008','11111111-1111-4111-8111-111111111111',
+  '97100000-0000-4000-8000-000000000008','97200000-0000-4000-8000-000000000008',
+  '97000000-0000-4000-8000-000000000008',:'ocr_owner_id',
+  'openai-fixture','gpt-local-contract-fixture','interpret-document-v11','1',
+  pg_temp.ocr_manual_price_list_payload(),jsonb_build_object('fixture',true),301
+),
+(
+  '97300000-0000-4000-8000-000000000009','11111111-1111-4111-8111-111111111111',
+  '97100000-0000-4000-8000-000000000009','97200000-0000-4000-8000-000000000009',
+  '97000000-0000-4000-8000-000000000009',:'ocr_owner_id',
+  'openai-fixture','gpt-local-contract-fixture','interpret-document-v11','1',
+  pg_temp.ocr_packet_payload(),jsonb_build_object('fixture',true),302
+);
+
+insert into public.document_packets(
+  id,org_id,parent_document_id,source_job_id,source_interpretation_id,page_count,
+  source_partial,confidence_threshold,automatic_eligible,status,manifest_hash,created_by
+) values(
+  '97400000-0000-4000-8000-000000000009','11111111-1111-4111-8111-111111111111',
+  '97000000-0000-4000-8000-000000000009','97100000-0000-4000-8000-000000000009',
+  '97300000-0000-4000-8000-000000000009',4,false,0.900,false,'needs_review',repeat('a',64),
+  :'ocr_owner_id'
+);
+insert into public.document_packet_segments(
+  id,org_id,packet_id,ordinal,start_page,end_page,document_type,confidence
+) values
+  ('97500000-0000-4000-8000-000000000091','11111111-1111-4111-8111-111111111111',
+   '97400000-0000-4000-8000-000000000009',1,1,2,'delivery_note',0.94),
+  ('97500000-0000-4000-8000-000000000092','11111111-1111-4111-8111-111111111111',
+   '97400000-0000-4000-8000-000000000009',2,3,4,'invoice',0.96);
 
 insert into public.org_autonomy_policies (
   org_id, policy_key, autonomy_enabled, min_confidence

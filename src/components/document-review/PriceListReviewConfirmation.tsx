@@ -191,8 +191,8 @@ export function PriceListReviewConfirmation({
     setRecoveryLoading(false);
     setTargetMonth('');
     setReason('');
-    setDetailsOpen(false);
-  }, [interpretation?.id, lineItems.length]);
+    setDetailsOpen(canStart && lineItems.length > 0);
+  }, [canStart, interpretation?.id, lineItems.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -400,6 +400,7 @@ export function PriceListReviewConfirmation({
   }
 
   const showControls = canStart;
+  const selectedCount = drafts.filter((draft) => draft.approved).length;
   const returnPath = '/prices';
   const detailsToggle = lineItems.length > 0 && (
     <button type="button" className="btn-secondary" data-testid="price-list-details-toggle"
@@ -621,19 +622,23 @@ export function PriceListReviewConfirmation({
 
       {showControls && lineItems.length > 0 && (
         <div className="mt-4 border-t border-line pt-4">
+          <p className="mb-3 text-sm font-medium text-ink-body" role="status">
+            <span className="num">{selectedCount}</span> מתוך <span className="num">{lineItems.length}</span> שורות נבחרו לקליטה
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label>
               <span className="label">חודש יעד *</span>
               <input type="month" className="input num" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} disabled={busy} />
+              <span className="mt-1 block text-xs text-ink-muted">החודש קובע לאיזו גרסת מחירון ישויכו המחירים שנבחרו.</span>
             </label>
             <label>
-              <span className="label">סיבת האישור (רשות)</span>
+              <span className="label">הערה ליומן הביקורת — רשות</span>
               <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} />
             </label>
           </div>
           {error && <Note tone="alert" role="alert" className="mt-3">{error}</Note>}
           <div className="mt-3 flex justify-end">
-            <button type="button" className="btn-primary" disabled={busy || catalogLoading || !!catalogError || products.length === 0} onClick={() => void confirmPriceList()}>
+            <button type="button" className="btn-primary" disabled={busy || selectedCount === 0 || catalogLoading || !!catalogError || products.length === 0} onClick={() => void confirmPriceList()}>
               {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <CheckCircle2 size={17} aria-hidden="true" />}
               {busy ? 'קולט את המחירון…' : 'אישור וקליטת השורות שנבחרו'}
             </button>

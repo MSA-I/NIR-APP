@@ -47,6 +47,7 @@ export default function DocumentReview() {
   const [interpretError, setInterpretError] = useState<string | null>(null);
   const [enqueuing, setEnqueuing] = useState(false);
   const [enqueueError, setEnqueueError] = useState<string | null>(null);
+  const [reprocessing, setReprocessing] = useState(false);
   const { refetch } = processing;
 
   const enqueue = useCallback(async () => {
@@ -62,6 +63,25 @@ export default function DocumentReview() {
       setEnqueueError(toHebrewError(error));
     } finally {
       setEnqueuing(false);
+    }
+  }, [canWrite, documentId, refetch]);
+
+  const reprocess = useCallback(async () => {
+    if (!documentId || !canWrite) return;
+    setReprocessing(true);
+    setInterpretError(null);
+    try {
+      const result = await supabase.rpc('reprocess_document', {
+        p_document_id: documentId,
+        p_reason: 'עיבוד מחדש ממסך בדיקת המסמך לאחר כשל',
+      });
+      if (result.error) throw result.error;
+      window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
+      await refetch();
+    } catch (error) {
+      setInterpretError(toHebrewError(error));
+    } finally {
+      setReprocessing(false);
     }
   }, [canWrite, documentId, refetch]);
 
@@ -175,6 +195,8 @@ export default function DocumentReview() {
           onRefetch={processing.refetch}
           initialPanel={params.get('panel')}
           readOnly={!canWrite}
+          reprocessing={reprocessing}
+          onReprocess={() => void reprocess()}
         />
       )}
 
@@ -198,6 +220,8 @@ export default function DocumentReview() {
           onRefetch={processing.refetch}
           initialPanel={params.get('panel')}
           readOnly={!canWrite}
+          reprocessing={reprocessing}
+          onReprocess={() => void reprocess()}
         />
       )}
     </div>

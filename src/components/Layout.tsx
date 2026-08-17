@@ -168,7 +168,7 @@ export function pageTitleFor(pathname: string): string {
 }
 
 export default function Layout() {
-  const { profile, org, roleLabels, isPlatformAdmin, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, signOut } = useAuth();
+  const { profile, org, roleLabels, isPlatformAdmin, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, accessStatus = 'unknown', signOut } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const location = useLocation();
@@ -410,12 +410,12 @@ export default function Layout() {
           <FeedbackButton />
         </header>
       )}
-      {organizationAccess.mode === 'read_only' && (
+      {accessStatus !== 'unknown' && organizationAccess.mode === 'read_only' && (
         <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:ms-60 lg:px-6">
           הגישה לכתיבה אינה זמינה כרגע. המידע הקיים נשמר וזמין לצפייה ולייצוא; לפרטים יש לפנות למנהל המערכת.
         </div>
       )}
-      {organizationAccess.mode === 'offboarding' && (
+      {accessStatus !== 'unknown' && organizationAccess.mode === 'offboarding' && (
         <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:ms-60 lg:px-6">
           הארגון נמצא בתהליך סיום שירות והמערכת במצב קריאה בלבד. המידע נשמר וזמין לצפייה ולייצוא. בעל הארגון יכול לבטל את הבקשה בתוך 30 ימים ממועד הגשתה.
         </div>

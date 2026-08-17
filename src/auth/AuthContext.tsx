@@ -44,6 +44,7 @@ interface AuthState {
   bootstrapError: string | null;
   offlineBootstrap: boolean;
   organizationAccess: OrganizationAccess;
+  accessStatus: 'unknown' | 'authoritative' | 'offline';
   /**
    * Platform operator, a separate axis from `profile.role` — an operator administers
    * tenants, a role administers within one. Checked against `platform_admins`, whose
@@ -74,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [offlineBootstrap, setOfflineBootstrap] = useState(false);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const [access, setAccess] = useState<OrganizationAccess>(READ_ONLY_ORGANIZATION_ACCESS);
+  const [accessStatus, setAccessStatus] = useState<AuthState['accessStatus']>('unknown');
   const sessionUserId = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
@@ -86,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsPlatformAdmin(false);
         setOfflineBootstrap(false);
         setAccess(READ_ONLY_ORGANIZATION_ACCESS);
+        setAccessStatus('unknown');
         setBootstrapError(null);
         setLoading(!!next);
       }
@@ -151,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsPlatformAdmin(!!admin);
           setOfflineBootstrap(false);
           setAccess(serverAccess);
+          setAccessStatus('authoritative');
           setBootstrapError(null);
           if (p && o) {
             try {
@@ -186,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setIsPlatformAdmin(false);
             setOfflineBootstrap(false);
             setAccess(READ_ONLY_ORGANIZATION_ACCESS);
+            setAccessStatus('unknown');
             setBootstrapError(toHebrewError('account_role_retired'));
           } else if (cached) {
             // IndexedDB holds only scope keys, role and the server access projection. A minimal
@@ -203,6 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setIsPlatformAdmin(false);
             setOfflineBootstrap(true);
             setAccess(organizationAccessFromOfflineBootstrap(cached, Date.now()));
+            setAccessStatus('offline');
             setBootstrapError(null);
           } else {
             setProfile(null);
@@ -210,6 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setIsPlatformAdmin(false);
             setOfflineBootstrap(false);
             setAccess(READ_ONLY_ORGANIZATION_ACCESS);
+            setAccessStatus('unknown');
             setBootstrapError(toHebrewError(error));
           }
         }
@@ -231,6 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (rows?.length !== 1) throw new Error('organization_access_state_unavailable');
     const serverAccess = organizationAccessFromServer(rows[0]);
     setAccess(serverAccess);
+    setAccessStatus('authoritative');
     try {
       await rememberOfflineBootstrap({
         actorUserId: session.user.id,
@@ -293,7 +301,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, profile, org, loading, bootstrapError, offlineBootstrap, organizationAccess: access, isPlatformAdmin, roleLabels, signIn, signOut, retryBootstrap, refreshOrganizationAccess }}>
+    <AuthContext.Provider value={{ session, profile, org, loading, bootstrapError, offlineBootstrap, organizationAccess: access, accessStatus, isPlatformAdmin, roleLabels, signIn, signOut, retryBootstrap, refreshOrganizationAccess }}>
       {/* Every cache key opens with this value. It is deliberately `org?.id ?? null` and not the
           profile's org_id: a suspended organisation makes auth_org() return null server-side, and
           the cache root must move with it so rows read under the live tenant are not served after

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Cpu, FileCheck2, ScanText } from 'lucide-react';
+import { Cpu, FileCheck2, RefreshCw, ScanText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { openReservedPopup } from '../../lib/popup';
 import { documentProcessingFailureText, documentUiStatus } from '../../lib/documentStatus';
@@ -7,6 +7,7 @@ import { Note, useToast } from '../ui';
 import { DocumentStatusBadge } from '../DocumentStatusBadge';
 import { DocumentAssessmentPanel } from './DocumentAssessmentPanel';
 import { DocumentExportPreview } from './DocumentExportPreview';
+import { DocumentPacketReview } from './DocumentPacketReview';
 import { DocumentReviewProposals } from './DocumentReviewProposals';
 import { DocumentSourceViewer } from './DocumentSourceViewer';
 import { PriceListReviewConfirmation } from './PriceListReviewConfirmation';
@@ -25,9 +26,11 @@ interface DocumentReviewWorkspaceProps {
   onRefetch: () => Promise<boolean>;
   initialPanel: string | null;
   readOnly?: boolean;
+  reprocessing?: boolean;
+  onReprocess?: () => void;
 }
 
-export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialPanel, readOnly = false }: DocumentReviewWorkspaceProps) {
+export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialPanel, readOnly = false, reprocessing = false, onReprocess }: DocumentReviewWorkspaceProps) {
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [openingSource, setOpeningSource] = useState(false);
@@ -311,9 +314,17 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
       </section>
 
       {snapshot.stage === 'failed' && (
-        <Note tone="alert" role="alert">
-          <strong>העיבוד נכשל.</strong>{' '}
-          {documentProcessingFailureText(snapshot.job?.last_error_code, snapshot.job?.last_error_message)} אפשר לחזור לגלריה ולשלוח את המסמך מחדש לתור.
+        <Note tone="alert" role="alert" className="flex-wrap">
+          <span className="min-w-0 flex-1">
+            <strong>העיבוד נכשל.</strong>{' '}
+            {documentProcessingFailureText(snapshot.job?.last_error_code, snapshot.job?.last_error_message)}
+          </span>
+          {!readOnly && onReprocess && (
+            <button type="button" className="btn-secondary" disabled={reprocessing} onClick={onReprocess}>
+              <RefreshCw className={reprocessing ? 'animate-spin motion-reduce:animate-none' : ''} size={17} aria-hidden="true" />
+              {reprocessing ? 'שולח מחדש…' : 'עיבוד מחדש'}
+            </button>
+          )}
         </Note>
       )}
       {uiStatus.loading && (
@@ -347,7 +358,9 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
           </div>
 
           <div className={`min-w-0 space-y-5 ${isPriceList ? 'order-1 xl:order-2' : ''}`}>
-            {readOnly ? (
+            {snapshot.packet ? (
+              <DocumentPacketReview snapshot={snapshot} readOnly={readOnly} onRefetch={onRefetch} />
+            ) : readOnly ? (
               <Note tone="idle">המסמך ותוצאות העיבוד זמינים לצפייה. פעולות בדיקה ועדכון אינן זמינות במצב קריאה בלבד.</Note>
             ) : isPriceList
               ? <PriceListReviewConfirmation snapshot={snapshot} actorId={actorId} onRefetch={onRefetch} />
