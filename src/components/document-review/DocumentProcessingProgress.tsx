@@ -62,7 +62,11 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
   // claims about the same job on the same screen, and the reassuring one was the false one. A
   // stuck job stops the same way a failed one does; only the wording differs, and that wording
   // already lives in the badge and the note beside it.
-  const stopped = job.status === 'failed' || isDocumentProcessingStuck({ job });
+  // `evaluatedAt: now` is not test scaffolding. Without it this call reads the wall clock while
+  // everything else on the strip reads the injected one, so the same snapshot renders differently
+  // depending on when it is rendered -- which is how CI caught it: two cases passed locally at
+  // 13:53 UTC and failed at 14:09, when a fixture job crossed the two-hour stuck threshold.
+  const stopped = job.status === 'failed' || isDocumentProcessingStuck({ job, evaluatedAt: now });
   const current = stopped ? stoppedStep(snapshot) : activeStep(job.status);
   if (!current) return null;
 
