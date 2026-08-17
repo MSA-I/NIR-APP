@@ -5,7 +5,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { PDFDocument } from "pdf-lib";
 import {
-  buildProviderPayload,
   createOpenAiProvider,
   type ExtractionContract,
   type InterpretationContract,
@@ -16,6 +15,11 @@ import {
   SCHEMA_VERSION,
   type SupplierCandidate,
 } from "./core.ts";
+import {
+  type InterpretationPlan,
+  planInterpretation,
+  runInterpretationPlan,
+} from "./split.ts";
 import { organizationWriteAllowed } from "../_shared/organization-access.ts";
 import {
   getOrganizationEgressEvidence,
@@ -27,6 +31,40 @@ import {
 import { runReservedEgress } from "../_shared/reserved-egress.ts";
 
 const PROVIDER = "openai";
+
+/**
+ * One truncation record for a plan of any size, in the shape a single call already produced.
+ *
+ * 0103 carries this verbatim onto `document_interpretations.usage`, so a reviewer comparing two
+ * documents should not have to know that one of them happened to be split into page ranges.
+ */
+function mergedTruncation(plan: InterpretationPlan) {
+  const parts = plan.payloads.map((payload) => payload.truncation);
+  if (parts.length === 1) return parts[0];
+  const total = (
+    section: "original" | "included",
+    key: "blocks" | "tables" | "marks",
+  ) => parts.reduce((sum, part) => sum + part[section][key], 0);
+  return {
+    text_truncated: parts.some((part) => part.text_truncated),
+    original: {
+      blocks: total("original", "blocks"),
+      tables: total("original", "tables"),
+      marks: total("original", "marks"),
+      // The supplier catalogue and the rule set are identical in every chunk. Summing them would
+      // report four copies of one list as though the document had four times the context.
+      suppliers: parts[0].original.suppliers,
+      rules: parts[0].original.rules,
+    },
+    included: {
+      blocks: total("included", "blocks"),
+      tables: total("included", "tables"),
+      marks: total("included", "marks"),
+      suppliers: parts[0].included.suppliers,
+      rules: parts[0].included.rules,
+    },
+  };
+}
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -1427,7 +1465,7 @@ export async function handler(req: Request): Promise<Response> {
     return fail(cors, new EdgeError("unsupported_extraction_contract", 409));
   }
 
-  let providerPayload: ReturnType<typeof buildProviderPayload>;
+  let interpretationPlan: InterpretationPlan;
   try {
     let suppliersQuery = admin.from("suppliers").select("id,name,status").eq(
       "org_id",
@@ -1465,7 +1503,7 @@ export async function handler(req: Request): Promise<Response> {
         tag_key: rule.tag_key,
         tag_label: rule.label,
       }));
-    providerPayload = buildProviderPayload(
+    interpretationPlan = planInterpretation(
       context.extraction_payload,
       suppliers,
       rules,
@@ -1604,8 +1642,11 @@ export async function handler(req: Request): Promise<Response> {
       reserve: () => Promise.resolve(egressLease),
       perform: async () => {
         const startedAt = performance.now();
-        const result = await createOpenAiProvider({ apiKey: providerKey })
-          .interpret(providerPayload);
+        const merged = await runInterpretationPlan(
+          createOpenAiProvider({ apiKey: providerKey }),
+          interpretationPlan,
+        );
+        const result = merged.result;
         const durationMs = Math.max(
           0,
           Math.round(performance.now() - startedAt),
@@ -1620,9 +1661,14 @@ export async function handler(req: Request): Promise<Response> {
           prompt_version: PROMPT_VERSION,
           schema_version: SCHEMA_VERSION,
           provider_request_id: result.provider_request_id,
-          usage: result.usage,
+          // The split summary rides inside `usage`, which 0103 already carries verbatim onto
+          // `document_interpretations.usage`. A reviewer looking at a merged price list can see
+          // that it was cut, where, and whether the merge had to drop rows at the schema ceiling.
+          usage: interpretationPlan.chunks === null
+            ? result.usage
+            : { ...result.usage, split: merged.summary },
           duration_ms: durationMs,
-          input_truncation: providerPayload.truncation,
+          input_truncation: mergedTruncation(interpretationPlan),
           interpretation: result.interpretation,
         };
         return {

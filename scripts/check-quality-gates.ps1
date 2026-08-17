@@ -790,6 +790,7 @@ function Invoke-InterpretDocumentContractTests {
       --config (Join-Path $repoRoot "supabase\functions\interpret-document\deno.json") `
       --allow-read=$repoRoot `
       (Join-Path $repoRoot "supabase\functions\interpret-document\core.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\interpret-document\split.test.ts") `
       (Join-Path $repoRoot "supabase\functions\interpret-document\authorization.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\organization-access.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\organization-egress.test.ts") `

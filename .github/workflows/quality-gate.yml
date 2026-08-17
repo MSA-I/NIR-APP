@@ -169,6 +169,7 @@ jobs:
           npx --yes deno test \
             --config supabase/functions/interpret-document/deno.json \
             supabase/functions/interpret-document/core.test.ts \
+            supabase/functions/interpret-document/split.test.ts \
             supabase/functions/interpret-document/authorization.test.ts 2>&1 | tee deno-interpret.log
           # The gate does not accept a run that asserted nothing, or that skipped a case.
           grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-interpret.log \

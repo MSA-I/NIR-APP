@@ -157,9 +157,29 @@ def _extract_child(
     max_memory_mb: int,
     limits: ExtractionLimits,
     result_path: str,
+    progress_path: str,
 ) -> None:
     output = Path(result_path)
     temporary = output.with_suffix(".tmp")
+    progress_file = Path(progress_path)
+    progress_temporary = progress_file.with_suffix(".tmp")
+
+    def report_progress(done: int, total: int) -> None:
+        """The whole IPC channel: a two-number file the parent's heartbeat thread reads.
+
+        A pipe or a Queue would mean the parent holding a handle into a process it must be able to
+        terminate at the wall clock, and a shared counter would mean shared memory across a spawn
+        boundary. Neither is worth it for a status line. Written through a temporary and renamed so
+        a heartbeat can never observe half a number.
+        """
+        try:
+            progress_temporary.write_text(
+                json.dumps({"done": done, "total": total}, separators=(",", ":")), encoding="utf-8"
+            )
+            os.replace(progress_temporary, progress_file)
+        except OSError:
+            pass
+
     try:
         # The key arrives as an argument, so it lives only in this process's memory. Scrubbing
         # still runs first so LibreOffice, pdftoppm and tesseract inherit no credential at all.
@@ -168,7 +188,7 @@ def _extract_child(
         payload = extract_file(
             source,
             claimed_mime,
-            adapter=create_ocr_adapter(adapter_name, openai_api_key),
+            adapter=create_ocr_adapter(adapter_name, openai_api_key, report_progress),
             limits=limits,
         )
         result: dict[str, Any] = {"ok": True, "payload": payload}
@@ -285,6 +305,7 @@ def _run_extraction(
     workdir: Path,
     stop: threading.Event,
     limits: ExtractionLimits,
+    progress_path: Path,
 ) -> dict[str, Any]:
     result_path = workdir / "result.json"
     context = multiprocessing.get_context("spawn")
@@ -300,6 +321,7 @@ def _run_extraction(
             config.max_memory_mb,
             limits,
             str(result_path),
+            str(progress_path),
         ),
         daemon=False,
     )
@@ -439,12 +461,32 @@ def _process_job(
     job_id = job["job_id"]
     heartbeat_done = threading.Event()
     heartbeat_lost = threading.Event()
+    # Populated once the working directory exists, which is after this closure is defined but
+    # before the thread that reads it starts.
+    progress_file: list[Path] = []
+
+    def read_progress() -> tuple[int, int] | None:
+        if not progress_file:
+            return None
+        try:
+            raw = json.loads(progress_file[0].read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        done, total = raw.get("done"), raw.get("total")
+        if type(done) is not int or type(total) is not int:
+            return None
+        if total < 1 or done < 0 or done > total:
+            return None
+        return done, total
 
     def heartbeat() -> None:
         while not heartbeat_done.wait(config.heartbeat_seconds):
             try:
+                progress = read_progress()
                 _gateway_retry(
-                    lambda: client.heartbeat(job, config.worker_id, config.lease_seconds)
+                    lambda: client.heartbeat(
+                        job, config.worker_id, config.lease_seconds, progress
+                    )
                 )
             except (GatewayError, ProcessingError):
                 heartbeat_lost.set()
@@ -469,9 +511,12 @@ def _process_job(
                     job, config.worker_id, config.lease_seconds
                 )
             )
+            progress_file.append(workdir / "progress.json")
             thread.start()
             heartbeat_started = True
-            payload = _run_extraction(source, job["mime_type"], config, workdir, stop, limits)
+            payload = _run_extraction(
+                source, job["mime_type"], config, workdir, stop, limits, progress_file[0]
+            )
             if heartbeat_lost.is_set():
                 raise GatewayError("lease_lost", "Document processing lease was lost")
             engine, model, model_version = _pipeline_identity(config.adapter_name)

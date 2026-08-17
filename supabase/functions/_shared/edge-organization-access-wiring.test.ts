@@ -31,11 +31,16 @@ Deno.test("interpret-document reserves once, persists provider evidence, then se
   assertOrdered(handler, [
     "recoverStoredProviderEvidence",
     "const beginResult = await admin.rpc",
-    "providerPayload = buildProviderPayload",
+    // The plan is built BEFORE the reservation, exactly as the single payload was: deciding how
+    // many provider calls a document needs reads only the stored extraction, and doing it inside
+    // the fenced window would spend lease time on arithmetic.
+    "interpretationPlan = planInterpretation",
     "reservation = await reserveOrganizationEgress",
     "if (egressLease.idempotent)",
     "const providerAttempt = await runReservedEgress",
-    "const result = await createOpenAiProvider",
+    // Whether the plan is one call or four, every one of them is issued inside the reservation.
+    "const merged = await runInterpretationPlan",
+    "createOpenAiProvider({ apiKey: providerKey })",
     "await releaseOrganizationEgress",
     "await recoverInterpretationFromEgress",
   ]);

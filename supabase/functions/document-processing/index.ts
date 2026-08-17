@@ -421,6 +421,31 @@ async function heartbeat(
   ) {
     throw new GatewayError("service_unavailable", 503);
   }
+  // Page progress rides the heartbeat the worker already sends rather than a second call, and the
+  // attempt it belongs to comes from the heartbeat's own answer -- the worker never has to name it,
+  // so it cannot name the wrong one. Deliberately after the lease renewal and deliberately unable
+  // to fail it: the lease keeps a document alive, progress only describes it, and losing a status
+  // line must never cost a job that is working.
+  if (request.progress_done !== null && request.progress_total !== null) {
+    const progress = await admin.rpc(
+      "service_record_document_processing_progress",
+      {
+        p_job_id: request.job_id,
+        p_lease_owner: request.lease_owner,
+        p_processing_attempt_id: result.data.processing_attempt_id,
+        p_done: request.progress_done,
+        p_total: request.progress_total,
+      },
+    );
+    if (progress.error) {
+      console.error(
+        JSON.stringify({
+          event: "document_processing_progress_rejected",
+          job_id: request.job_id,
+        }),
+      );
+    }
+  }
   return ok(result.data);
 }
 

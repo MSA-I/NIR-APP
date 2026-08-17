@@ -8,6 +8,7 @@ import { DocumentStatusBadge } from '../DocumentStatusBadge';
 import { DocumentAssessmentPanel } from './DocumentAssessmentPanel';
 import { DocumentExportPreview } from './DocumentExportPreview';
 import { DocumentPacketReview } from './DocumentPacketReview';
+import { DocumentProcessingProgress } from './DocumentProcessingProgress';
 import { DocumentReviewProposals } from './DocumentReviewProposals';
 import { DocumentSourceViewer } from './DocumentSourceViewer';
 import { PriceListReviewConfirmation } from './PriceListReviewConfirmation';
@@ -183,6 +184,12 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
             </div>
             <p className="mt-1 break-words text-sm text-ink-muted">{snapshot.document.file_name}</p>
           </div>
+        </div>
+
+        {/* Above the review layers on purpose: while a document is still being read there is
+            nothing to review, and "where is it now" is the only question the screen can answer. */}
+        <div className="mt-4">
+          <DocumentProcessingProgress snapshot={snapshot} />
         </div>
 
         <div className="mt-4 rounded-lg bg-surface-sunken p-3">

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, createContext, useContext, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
-import { ChevronRight, ChevronLeft, Search, X, Loader2, Inbox, Bell, Check, Columns3, SlidersHorizontal } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Search, X, Loader2, Inbox, Bell, Check, Columns3, SlidersHorizontal, AlertTriangle } from 'lucide-react';
 import {
   useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel,
   type ColumnDef, type SortingState,
@@ -241,32 +241,73 @@ export interface LifecycleStep {
   label: string;
 }
 
-export function LifecycleStrip({ steps, current, nextAction }: {
+export function LifecycleStrip({ steps, current, nextAction, failed = false, detail, progress }: {
   steps: readonly LifecycleStep[];
   current: string;
   nextAction?: ReactNode;
+  /** The current step stopped instead of continuing. Recolours that one marker alert. */
+  failed?: boolean;
+  /** What the current step is doing, in the caller's words. */
+  detail?: ReactNode;
+  /**
+   * A determinate bar for the current step. Omit it entirely when nothing real is known —
+   * a zero-width bar and a looping indeterminate one are both claims the data does not support
+   * (DESIGN.md: "אנימציה שאינה מצב — אסור בחוקה").
+   */
+  progress?: { done: number; total: number; label: string };
 }) {
   const currentIndex = steps.findIndex((step) => step.key === current);
+  const percent = progress && progress.total > 0
+    ? Math.min(100, Math.max(0, Math.round((progress.done / progress.total) * 100)))
+    : null;
   return (
     <div className="rounded-xl border border-line-soft bg-surface-sunken px-3 py-3">
       <ol aria-label="שלבי התהליך" className="flex min-w-0 items-center overflow-x-auto pb-1">
         {steps.map((step, index) => {
           const isCurrent = index === currentIndex;
           const isComplete = currentIndex >= 0 && index < currentIndex;
+          const isStopped = isCurrent && failed;
+          const text = isStopped ? 'text-alert-fg' : isCurrent ? 'text-info-fg' : isComplete ? 'text-done-fg' : 'text-ink-muted';
+          const marker = isStopped
+            ? 'border-alert-line bg-alert-soft'
+            : isCurrent ? 'border-info-line bg-info-soft' : isComplete ? 'border-done-line bg-done-soft' : 'border-line-strong bg-surface';
           return (
-            <li key={step.key} aria-current={isCurrent ? 'step' : undefined} className="flex min-w-fit flex-1 items-center">
-              <span className={`flex items-center gap-1.5 text-xs font-medium ${isCurrent ? 'text-info-fg' : isComplete ? 'text-done-fg' : 'text-ink-muted'}`}>
-                <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${isCurrent ? 'border-info-line bg-info-soft' : isComplete ? 'border-done-line bg-done-soft' : 'border-line-strong bg-surface'}`} aria-hidden="true">
-                  {isComplete ? <Check size={12} /> : index + 1}
+            // `relative` is load-bearing, not styling. The sr-only span below is
+            // `position: absolute`, so without a positioned ancestor inside the scroller its
+            // containing block sits ABOVE the `ol` -- and an absolutely positioned box is not
+            // clipped by a scroller that is merely its DOM ancestor. In RTL it then landed 33px past
+            // the left viewport edge and widened the whole document, which the browser gate caught
+            // at 390px as `horizontal overflow 33px`. It only showed once the LAST step became the
+            // current one (a review-stage document); with an earlier step current the same span sat
+            // 3px out and stayed inside the tolerance.
+            <li key={step.key} aria-current={isCurrent ? 'step' : undefined} className="relative flex min-w-fit flex-1 items-center">
+              <span className={`flex items-center gap-1.5 text-xs font-medium ${text}`}>
+                <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${marker}`} aria-hidden="true">
+                  {isStopped ? <AlertTriangle size={12} /> : isComplete ? <Check size={12} /> : index + 1}
                 </span>
                 {step.label}
-                {isCurrent && <span className="sr-only"> — השלב הנוכחי</span>}
+                {isCurrent && <span className="sr-only">{isStopped ? ' — השלב שנעצר' : ' — השלב הנוכחי'}</span>}
               </span>
               {index < steps.length - 1 && <ChevronLeft size={14} className="mx-2 shrink-0 text-ink-ghost" aria-hidden="true" />}
             </li>
           );
         })}
       </ol>
+      {progress && percent !== null && (
+        <div
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={progress.total}
+          aria-valuenow={progress.done}
+          aria-valuetext={progress.label}
+          className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line"
+        >
+          {/* Petrol is structure here, never a verdict: the fill says how much, not whether it
+              went well. Width only, so reduced-motion cancels it with the shared transition rule. */}
+          <div className="h-full rounded-full bg-action transition-[width] duration-200 ease-out" style={{ width: `${percent}%` }} />
+        </div>
+      )}
+      {detail && <div className="mt-2 text-xs text-ink-soft">{detail}</div>}
       {nextAction && (
         <div className="mt-2 border-t border-line-soft pt-2 text-sm text-ink-body">
           <span className="font-semibold">הפעולה הבאה:</span> {nextAction}
