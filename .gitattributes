@@ -1,1 +1,5 @@
 supabase/migrations/*.sql text eol=lf
+
+# Shell scripts run on Linux hosts. A CRLF checkout fails there with
+# "bad interpreter: /usr/bin/env bash^M", which is a confusing way to learn about line endings.
+*.sh text eol=lf
