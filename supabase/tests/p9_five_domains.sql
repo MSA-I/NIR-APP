@@ -128,11 +128,19 @@ select pg_temp.p9_assert(
   'both wave-9 public tables must be registered org_global / not enforced');
 
 -- The seeded vocabularies.
+--
+-- Four codes since 0142. The count is pinned rather than open-ended for the same reason the definer
+-- exemption registry is: every entry here becomes a row users can be notified about and a toggle in
+-- push settings, so adding one has to be a deliberate act that updates this line in the same commit
+-- instead of a catalog that grows unnoticed. `document_processing_stalled` is the operational one --
+-- it fires when the OCR queue stops moving (DEBT-REGISTER §43).
 select pg_temp.p9_assert(
-  (select count(*) from private.notification_event_definitions) = 3
+  (select count(*) from private.notification_event_definitions) = 4
     and (select count(*) from private.notification_event_definitions
-         where event_code in ('price_increase', 'duplicate_invoice', 'payment_due')) = 3,
-  'the notification catalog must hold exactly the three live event codes');
+         where event_code in (
+           'price_increase', 'duplicate_invoice', 'payment_due',
+           'document_processing_stalled')) = 4,
+  'the notification catalog must hold exactly the four live event codes');
 
 select pg_temp.p9_assert(
   (select count(*) from private.approval_policy_definitions
