@@ -21,6 +21,7 @@ from .errors import GatewayError, ProcessingError
 from .gateway import GatewayClient
 from .limits import DEFAULT_LIMITS, ExtractionLimits
 from .ocr import TesseractOcrAdapter, create_ocr_adapter, openai_model_name
+from .ocr_mistral import DEFAULT_MISTRAL_MODEL
 from .parsers import extract_file
 from .retry import bounded_backoff, retry_call
 from .scan_gateway import ScanGatewayClient
@@ -62,7 +63,8 @@ class WorkerConfig:
     temp_root: Path
     # Held in the config, never left in the environment: _scrub_credential_env removes it before
     # any subprocess can inherit it, and it reaches the extraction child as an argument instead.
-    openai_api_key: str = ""
+    # One adapter runs per worker, so this is that adapter's key and no other vendor's.
+    provider_api_key: str = ""
     max_ai_pages: int = DEFAULT_LIMITS.max_ai_pages
 
     @classmethod
@@ -90,10 +92,10 @@ class WorkerConfig:
         if not worker_id.strip() or len(worker_id) > 200:
             raise ProcessingError("worker_config_invalid", "OCR_WORKER_ID is invalid")
         adapter_name = os.environ.get("OCR_ADAPTER", "disabled").strip().lower()
-        openai_api_key = os.environ.get("OPENAI_API_KEY", "")
+        provider_api_key = _provider_api_key(adapter_name)
         # Fail fast at startup rather than on the first document: this also validates that a
         # provider-backed adapter actually has a key.
-        create_ocr_adapter(adapter_name, openai_api_key)
+        create_ocr_adapter(adapter_name, provider_api_key)
         lease_seconds = _integer_env("OCR_LEASE_SECONDS", 120, 30, 900)
         heartbeat_seconds = _integer_env("OCR_HEARTBEAT_SECONDS", 30, 5, 450)
         if heartbeat_seconds * 2 > lease_seconds:
@@ -116,14 +118,29 @@ class WorkerConfig:
             _integer_env("OCR_MAX_MEMORY_MB", 2_048, 256, 65_536),
             _integer_env("OCR_MAX_JOB_ATTEMPTS", 3, 1, 20),
             temp_root,
-            openai_api_key,
+            provider_api_key,
             _integer_env("OCR_MAX_AI_PAGES", DEFAULT_LIMITS.max_ai_pages, 1, 100),
         )
+
+
+def _provider_api_key(adapter_name: str) -> str:
+    """The API key for the configured adapter, read under that vendor's own variable name.
+
+    Deliberately not one shared variable: the two keys are different secrets with different blast
+    radii, and a worker configured for one vendor must not be able to start on the other's key
+    just because it happens to be present in the environment.
+    """
+    if adapter_name == "openai":
+        return os.environ.get("OPENAI_API_KEY", "")
+    if adapter_name == "mistral":
+        return os.environ.get("MISTRAL_API_KEY", "")
+    return ""
 
 
 def _scrub_credential_env() -> None:
     os.environ.pop("OCR_WORKER_TOKEN", None)
     os.environ.pop("OPENAI_API_KEY", None)
+    os.environ.pop("MISTRAL_API_KEY", None)
     for name in tuple(os.environ):
         if name.startswith("SUPABASE_"):
             os.environ.pop(name, None)
@@ -152,7 +169,7 @@ def _extract_child(
     source: str,
     claimed_mime: str,
     adapter_name: str,
-    openai_api_key: str,
+    provider_api_key: str,
     job_timeout_seconds: int,
     max_memory_mb: int,
     limits: ExtractionLimits,
@@ -189,7 +206,7 @@ def _extract_child(
         payload = extract_file(
             source,
             claimed_mime,
-            adapter=create_ocr_adapter(adapter_name, openai_api_key, report_progress),
+            adapter=create_ocr_adapter(adapter_name, provider_api_key, report_progress),
             limits=limits,
             diagnostics=diagnostics,
         )
@@ -320,7 +337,7 @@ def _run_extraction(
             str(source),
             claimed_mime,
             config.adapter_name,
-            config.openai_api_key,
+            config.provider_api_key,
             config.job_timeout_seconds,
             config.max_memory_mb,
             limits,
@@ -453,6 +470,10 @@ def _pipeline_identity(adapter_name: str) -> tuple[str, str, str]:
         # The exact snapshot is only known per response; the alias plus the API surface is what
         # this worker can honestly assert about the whole extraction.
         return "supplyflow-native+openai", openai_model_name(), "v1/responses"
+    if adapter_name == "mistral":
+        # Same reasoning as above. `mistral-ocr-latest` is an alias; the served snapshot is
+        # reported per response and recorded by the adapter, not asserted for the document.
+        return "supplyflow-native+mistral", DEFAULT_MISTRAL_MODEL, "v1/ocr"
     raise ProcessingError("ocr_adapter_invalid", "Configured OCR adapter is not supported")
 
 

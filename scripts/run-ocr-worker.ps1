@@ -16,10 +16,16 @@
 # Usage:
 #   .\scripts\run-ocr-worker.ps1                     # 2 workers against production, image = HEAD
 #   .\scripts\run-ocr-worker.ps1 -Replicas 3
+#   .\scripts\run-ocr-worker.ps1 -Canary mistral   # replica 1 on mistral, the rest on -Adapter
+#   .\scripts\run-ocr-worker.ps1 -Adapter mistral  # the whole pool on mistral
 #   .\scripts\run-ocr-worker.ps1 -Status             # report what is running, change nothing
 [CmdletBinding()]
 param(
   [ValidateRange(1, 8)][int]$Replicas = 2,
+  [ValidateSet("openai", "mistral")][string]$Adapter = "openai",
+  # A canary is only evidence while another worker still runs the old engine on the same queue,
+  # so it is a separate switch from -Adapter rather than a value of it.
+  [ValidateSet("", "openai", "mistral")][string]$Canary = "",
   [string]$SupabaseUrl = "https://rkftlbctohswhbbiaqin.supabase.co",
   [string]$DocsRoot,
   [string]$Tag,
@@ -78,14 +84,33 @@ if (-not $Tag) {
 if (-not $Tag) { throw "Empty image tag." }
 $image = "supplyflow-ocr-worker:$Tag"
 
+if ($Canary -and $Replicas -lt 2) {
+  # A canary that is the entire pool is not a canary; it is a deploy without a control.
+  throw "-Canary needs at least 2 replicas so one worker keeps running $Adapter."
+}
+$engines = @($Adapter); if ($Canary) { $engines += $Canary }
+
 $tokenPath = Join-Path $DocsRoot "NIR-OCR-WORKER-TOKEN.txt"
 $openAiPath = Join-Path $DocsRoot "NIR-API-OPENAI.txt"
-foreach ($path in @($tokenPath, $openAiPath)) {
+# The file name is the one that exists on this machine, typo and all; renaming it here would
+# only move the failure to a different line.
+$mistralPath = Join-Path $DocsRoot "NIR-AP-MISTRAL.txt"
+# Only the keys the configured engines actually need, so a pool that has finished moving off one
+# vendor is not blocked by that vendor's missing file.
+$required = @($tokenPath)
+if ($engines -contains "openai") { $required += $openAiPath }
+if ($engines -contains "mistral") { $required += $mistralPath }
+foreach ($path in $required) {
   if (-not (Test-Path -LiteralPath $path)) { throw "Credential file not found: $path" }
 }
 $workerToken = (Get-Content -LiteralPath $tokenPath -Raw).Trim()
-$openAiKey = (Get-Content -LiteralPath $openAiPath -Raw).Trim()
-if (-not $workerToken -or -not $openAiKey) { throw "A credential file is empty." }
+$openAiKey = ""
+if ($engines -contains "openai") { $openAiKey = (Get-Content -LiteralPath $openAiPath -Raw).Trim() }
+$mistralKey = ""
+if ($engines -contains "mistral") { $mistralKey = (Get-Content -LiteralPath $mistralPath -Raw).Trim() }
+if (-not $workerToken) { throw "A credential file is empty." }
+if (($engines -contains "openai") -and -not $openAiKey) { throw "A credential file is empty." }
+if (($engines -contains "mistral") -and -not $mistralKey) { throw "A credential file is empty." }
 
 Write-Host "Building $image ..."
 Invoke-Docker @("build", "--tag", $image, (Join-Path $repoRoot "worker\ocr")) | Out-Null
@@ -103,7 +128,11 @@ for ($index = 1; $index -le $Replicas; $index += 1) {
   $name = "$namePrefix-$index"
   # The worker id is written into job leases, so it has to say which build and which replica --
   # the previous pool reported supplyflow-prod-c1b4490, a commit that had not been running in days.
-  $workerId = "supplyflow-$Tag-$index"
+  # Replica 1 carries the canary when one is asked for; every other replica runs the pool default.
+  $engine = if ($index -eq 1 -and $Canary) { $Canary } else { $Adapter }
+  # The engine is part of the worker id because the id is what job leases record. Without it a
+  # canary produces two populations of documents that cannot be told apart afterwards.
+  $workerId = "supplyflow-$Tag-$index-$engine"
   $runArgs = @(
     "run", "--detach", "--name", $name,
     "--init", "--restart", "unless-stopped", "--stop-timeout", "45",
@@ -115,8 +144,9 @@ for ($index = 1; $index -le $Replicas; $index += 1) {
     "--env", "SUPABASE_URL=$SupabaseUrl",
     "--env", "OCR_WORKER_TOKEN=$workerToken",
     "--env", "OPENAI_API_KEY=$openAiKey",
+    "--env", "MISTRAL_API_KEY=$mistralKey",
     "--env", "OCR_WORKER_ID=$workerId",
-    "--env", "OCR_ADAPTER=openai",
+    "--env", "OCR_ADAPTER=$engine",
     "--env", "OCR_OPENAI_MODEL=gpt-5.6-terra",
     "--env", "OCR_QA_PASSES=3",
     "--env", "OCR_PAGE_CONCURRENCY=3",

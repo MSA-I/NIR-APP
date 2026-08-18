@@ -50,12 +50,29 @@ cat > /etc/supplyflow/ocr.env <<'EOF'
 SUPABASE_URL=https://rkftlbctohswhbbiaqin.supabase.co
 OCR_WORKER_TOKEN=...
 OPENAI_API_KEY=...
+MISTRAL_API_KEY=...
 EOF
 chmod 600 /etc/supplyflow/ocr.env
 
 # 6. הרמה
 ./scripts/run-ocr-worker.sh --replicas 2
 ```
+
+**מפתחות לפי המנוע שנבחר.** הסקריפט דורש `OPENAI_API_KEY` רק כשמנוע כלשהו בפול הוא `openai`,
+ו-`MISTRAL_API_KEY` רק כשמנוע כלשהו הוא `mistral`. פול שסיים לעבור ספק אינו נחסם בגלל קובץ מפתח
+של ספק שאינו בשימוש.
+
+### בחירת מנוע וקנרי
+
+```bash
+./scripts/run-ocr-worker.sh --canary mistral    # replica 1 על mistral, השאר על openai
+./scripts/run-ocr-worker.sh --adapter mistral   # כל הפול על mistral
+```
+
+‏`--canary` דורש לפחות שתי replicas: קנרי שהוא כל הפול אינו קנרי אלא פריסה בלי ביקורת. מזהה
+ה-worker נושא את שם המנוע (`supplyflow-<tag>-<index>-<adapter>`), מפני שהמזהה הוא מה שנרשם
+ב-lease של הג'וב — בלעדיו שתי אוכלוסיות המסמכים אינן ניתנות להפרדה בדיעבד, וזה כל מה שקנרי אמור
+לאפשר. הבחירה בין המנועים נשענת על `NIR-APP-DOCS/ocr-ab/20260818/triage-outcome.md`.
 
 הסקריפט מסרב לרוץ אם `ocr.env` אינו `600`, ואם חסר בו טוקן. קובץ עם מפתח OpenAI שקריא לכולם הוא
 כל המתקפה — לכן זו דחייה ולא אזהרה.

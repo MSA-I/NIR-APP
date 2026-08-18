@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -28,6 +29,7 @@ from src import (
     ExtractionLimits,
     GatewayClient,
     GatewayError,
+    MistralOcrAdapter,
     OpenAiOcrAdapter,
     PageImage,
     ProcessingError,
@@ -42,7 +44,12 @@ from src import (
     validate_extraction,
 )
 from src.gateway import GATEWAY_CONTRACT_HEADER, GATEWAY_CONTRACT_VERSION
-from src.worker import WORKER_VERSION
+from src.worker import (
+    WORKER_VERSION,
+    _pipeline_identity,
+    _provider_api_key,
+    _scrub_credential_env,
+)
 
 
 def _contract(page_count: int, text: str) -> dict[str, Any]:
@@ -1041,6 +1048,223 @@ class _ScriptedOcrAdapter:
         return script
 
 
+class _RejectingOpener:
+    """An opener that answers every request with one HTTP status, so retry and cost policy can be
+    checked without a network. `urllib` reports a non-2xx through HTTPError, which is the path the
+    adapters actually take."""
+
+    def __init__(self, status: int) -> None:
+        self.status = status
+        self.calls = 0
+
+    def open(self, request: Any, timeout: float | None = None) -> Any:
+        del request, timeout
+        self.calls += 1
+        raise urllib.error.HTTPError(
+            "https://provider.invalid", self.status, "rejected", {}, io.BytesIO(b"{}")
+        )
+
+
+def _mistral_envelope(
+    blocks: list[dict[str, Any]] | None = None,
+    markdown: str | None = None,
+    dimensions: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    page: dict[str, Any] = {
+        "index": 0,
+        "dimensions": dimensions if dimensions is not None else {"width": 1000, "height": 2000},
+    }
+    if blocks is not None:
+        page["blocks"] = blocks
+    if markdown is not None:
+        page["markdown"] = markdown
+    return {
+        "model": "mistral-ocr-2026-05-01",
+        "usage_info": {"pages_processed": 1},
+        "pages": [page],
+    }
+
+
+def _mistral_block(
+    content: str,
+    *,
+    kind: str = "text",
+    corners: tuple[int, int, int, int] | None = (100, 200, 900, 260),
+    confidence: float | None = 0.93,
+) -> dict[str, Any]:
+    block: dict[str, Any] = {"type": kind, "content": content}
+    if corners is not None:
+        block.update(
+            {
+                "top_left_x": corners[0],
+                "top_left_y": corners[1],
+                "bottom_right_x": corners[2],
+                "bottom_right_y": corners[3],
+            }
+        )
+    if confidence is not None:
+        block["confidence_scores"] = {"average_content_confidence_score": confidence}
+    return block
+
+
+def _mistral_adapter_check(fixtures: Path) -> dict[str, Any]:
+    """The production reader, offline. Selected on ocr-ab/20260818; see triage-outcome.md.
+
+    Covers the two things this adapter claims and the OpenAI one cannot: geometry it measured
+    rather than synthesised, and a confidence the provider graded rather than the adapter inferred.
+    Both must survive `validate_extraction`, and neither may appear when the provider omits it.
+    """
+    page = PageImage(1, fixtures / "pixel.png", 16, 16)
+    envelope = _mistral_envelope(
+        [
+            _mistral_block('ספק בדיקה בע"מ', kind="title"),
+            _mistral_block("מוצר 1   ₪31.90", corners=(100, 300, 900, 360), confidence=0.41),
+            # No geometry and no grade: the adapter must synthesise the band and leave confidence
+            # unknown rather than fill either one in with a plausible number.
+            _mistral_block('סה"כ לתשלום 31.90', corners=None, confidence=None),
+        ]
+    )
+    opener = _FakeOpener(envelope)
+    adapter = MistralOcrAdapter("mistral-self-check-0000000000", opener=opener, sleep=lambda _s: None)
+    payload = validate_extraction(adapter.extract([page], DEFAULT_LIMITS), DEFAULT_LIMITS)
+    blocks = payload["blocks"]
+    assert len(blocks) == 3, f"block_count:{len(blocks)}"
+    assert blocks[0]["type"] == "heading", f"block_type:{blocks[0]['type']}"
+    assert blocks[0]["bbox"] == [0.1, 0.1, 0.9, 0.13], f"measured_bbox:{blocks[0]['bbox']}"
+    assert blocks[1]["confidence"] == 0.41, f"graded_confidence:{blocks[1]['confidence']}"
+    # Synthesised band: full width, third of three.
+    assert blocks[2]["bbox"] == [0.0, 2 / 3, 1.0, 1.0], f"synthesised_bbox:{blocks[2]['bbox']}"
+    assert blocks[2]["confidence"] is None, f"invented_confidence:{blocks[2]['confidence']}"
+    assert 'סה"כ לתשלום 31.90' in payload["document"]["plain_text"]
+    assert payload["document"]["partial"] is False
+    assert adapter.observed_models == ["mistral-ocr-2026-05-01"], adapter.observed_models
+    assert len(opener.requests) == 1, f"billed_calls:{len(opener.requests)}"
+
+    # A markdown-only page (no blocks) still yields content rather than an error.
+    markdown_only = MistralOcrAdapter(
+        "mistral-self-check-0000000000",
+        opener=_FakeOpener(_mistral_envelope(markdown="| כמות | פריט |\n| --- | --- |\n| 2 | מלח |")),
+        sleep=lambda _s: None,
+    )
+    from_markdown = validate_extraction(markdown_only.extract([page], DEFAULT_LIMITS), DEFAULT_LIMITS)
+    assert from_markdown["tables"], "markdown_table_dropped"
+
+    # A page with neither blocks nor markdown is a provider fault, not an empty document.
+    empty = MistralOcrAdapter(
+        "mistral-self-check-0000000000",
+        opener=_FakeOpener({"model": "mistral-ocr-2026-05-01", "pages": []}),
+        sleep=lambda _s: None,
+    )
+    try:
+        empty.extract([page], DEFAULT_LIMITS)
+    except ProcessingError as exc:
+        assert exc.code == "ocr_invalid_output", exc.code
+    else:  # pragma: no cover - the assertion above is the check
+        raise AssertionError("empty_pages_accepted")
+
+    # Same cost ceiling as the OpenAI adapter: the adapter retried, so the job runner must not.
+    rate_limited = MistralOcrAdapter(
+        "mistral-self-check-0000000000",
+        opener=_RejectingOpener(429),
+        sleep=lambda _s: None,
+    )
+    try:
+        rate_limited.extract([page], DEFAULT_LIMITS)
+    except ProcessingError as exc:
+        assert exc.code == "ocr_provider_rate_limited", exc.code
+        assert exc.retryable is False, "paid_retry_multiplied"
+    else:  # pragma: no cover
+        raise AssertionError("rate_limit_accepted")
+
+    # A key too short to be real must fail at construction, not at the first paid call.
+    try:
+        MistralOcrAdapter("short")
+    except ProcessingError as exc:
+        assert exc.code == "worker_config_invalid", exc.code
+    else:  # pragma: no cover
+        raise AssertionError("short_key_accepted")
+
+    return {
+        "measured_geometry": "passed",
+        "graded_confidence": "passed",
+        "synthesised_band": "passed",
+        "markdown_fallback": "passed",
+        "provider_faults": "passed",
+        "billed_calls_per_page": 1,
+    }
+
+
+def _mistral_page_progress_check(fixtures: Path) -> dict[str, Any]:
+    """The live page counter. `begin_progress` declares the DOCUMENT total, not the batch's."""
+    pages = [PageImage(page, fixtures / "pixel.png", 16, 16) for page in range(1, 5)]
+    reports: list[tuple[int, int]] = []
+    adapter = MistralOcrAdapter(
+        "mistral-self-check-0000000000",
+        opener=_FakeOpener(_mistral_envelope([_mistral_block("שורה")])),
+        sleep=lambda _s: None,
+        progress=lambda done, total: reports.append((done, total)),
+    )
+    adapter.begin_progress(4)
+    for batch in ([pages[0], pages[1]], [pages[2], pages[3]]):
+        validate_extraction(adapter.extract(batch, DEFAULT_LIMITS), DEFAULT_LIMITS)
+    assert reports == [(1, 4), (2, 4), (3, 4), (4, 4)], f"batched_progress_wrong:{reports}"
+
+    # A reporter that throws is a broken status line, not a broken document.
+    exploding = MistralOcrAdapter(
+        "mistral-self-check-0000000000",
+        opener=_FakeOpener(_mistral_envelope([_mistral_block("שורה")])),
+        sleep=lambda _s: None,
+        progress=lambda _done, _total: (_ for _ in ()).throw(RuntimeError("progress sink down")),
+    )
+    survived = validate_extraction(exploding.extract(pages, DEFAULT_LIMITS), DEFAULT_LIMITS)
+    assert len(survived["blocks"]) == 4, f"pages_lost:{len(survived['blocks'])}"
+
+    return {"batched_document_total": "passed", "sink_failure": "ignored"}
+
+
+def _mistral_worker_wiring_check() -> dict[str, Any]:
+    """The factory, the identity written to `document_extractions`, and the key path.
+
+    A worker configured for one vendor must not start on the other's key: the two are different
+    secrets, and silently reading the wrong one is how a canary ends up measuring nothing.
+    """
+    adapter = create_ocr_adapter("mistral", "mistral-self-check-0000000000")
+    assert type(adapter).__name__ == "MistralOcrAdapter", type(adapter).__name__
+    assert _pipeline_identity("mistral") == (
+        "supplyflow-native+mistral",
+        "mistral-ocr-latest",
+        "v1/ocr",
+    ), _pipeline_identity("mistral")
+
+    try:
+        create_ocr_adapter("mistral", "")
+    except ProcessingError as exc:
+        assert exc.code == "worker_config_invalid", exc.code
+    else:  # pragma: no cover
+        raise AssertionError("keyless_mistral_adapter_accepted")
+
+    previous = {name: os.environ.get(name) for name in ("OPENAI_API_KEY", "MISTRAL_API_KEY")}
+    try:
+        os.environ["OPENAI_API_KEY"] = "sk-openai-key-000000000000"
+        os.environ.pop("MISTRAL_API_KEY", None)
+        assert _provider_api_key("mistral") == "", "openai_key_leaked_into_mistral_worker"
+        os.environ["MISTRAL_API_KEY"] = "mistral-key-0000000000000000"
+        assert _provider_api_key("mistral") == "mistral-key-0000000000000000"
+        assert _provider_api_key("openai") == "sk-openai-key-000000000000"
+        assert _provider_api_key("tesseract") == ""
+        _scrub_credential_env()
+        assert os.environ.get("MISTRAL_API_KEY") is None, "mistral_key_left_in_environment"
+        assert os.environ.get("OPENAI_API_KEY") is None, "openai_key_left_in_environment"
+    finally:
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+    return {"factory": "passed", "pipeline_identity": "passed", "key_isolation": "passed"}
+
+
 def _second_pass_check(fixtures: Path) -> dict[str, Any]:
     """One re-binarized retry, only on a measurably failed page, only when it is measurably better.
 
@@ -1652,6 +1876,9 @@ def main() -> int:
         _retry_and_cleanup_check(scratch)
         second_pass = _second_pass_check(fixtures)
         hebrew_order = _hebrew_order_check()
+        mistral_adapter = _mistral_adapter_check(fixtures)
+        mistral_page_progress = _mistral_page_progress_check(fixtures)
+        mistral_worker_wiring = _mistral_worker_wiring_check()
         openai_adapter = _openai_adapter_check(fixtures)
         openai_qa = _openai_qa_check(fixtures)
         openai_page_concurrency = _openai_page_concurrency_check(fixtures)
@@ -1672,6 +1899,9 @@ def main() -> int:
                     "retry_cleanup": "passed",
                     "second_pass": second_pass,
                     "hebrew_order": hebrew_order,
+                    "mistral_adapter": mistral_adapter,
+                    "mistral_page_progress": mistral_page_progress,
+                    "mistral_worker_wiring": mistral_worker_wiring,
                     "openai_adapter": openai_adapter,
                     "openai_qa": openai_qa,
                     "openai_page_concurrency": openai_page_concurrency,

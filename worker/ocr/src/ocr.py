@@ -578,4 +578,14 @@ def create_ocr_adapter(
                 "worker_config_invalid", "OPENAI_API_KEY is required for the openai OCR adapter"
             )
         return OpenAiOcrAdapter(api_key, progress=progress)
+    if normalized == "mistral":
+        if len(api_key) < 20:
+            raise ProcessingError(
+                "worker_config_invalid", "MISTRAL_API_KEY is required for the mistral OCR adapter"
+            )
+        # Imported inside the factory and not at module scope: `ocr_mistral` imports
+        # `PageImage` from this module, so a top-level import would be circular.
+        from .ocr_mistral import MistralOcrAdapter
+
+        return MistralOcrAdapter(api_key, progress=progress)
     raise ProcessingError("ocr_adapter_invalid", "Configured OCR adapter is not supported")
