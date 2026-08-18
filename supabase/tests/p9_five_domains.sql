@@ -456,6 +456,16 @@ insert into purchase_orders (id, org_id, supplier_id, status, created_by) values
   ('79000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
    '39000000-0000-4000-8000-000000000001', 'draft', '29000000-0000-4000-8000-000000000001');
 
+-- 0145: a personal purchase-request draft, owned by the OFFICE profile on purpose -- the draft
+-- search branch is creator-fenced, and the owner assertions below prove the fence by NOT
+-- seeing this row. Its note carries its own term so the P9SEARCH exact-array probes above it
+-- stay byte-identical; its item reuses the P9SEARCH product to prove item-name matching.
+insert into purchase_requests (id, org_id, status, notes, created_by) values
+  ('b9000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
+   'draft', 'P9DRAFT resume me', '29000000-0000-4000-8000-000000000002');
+insert into purchase_request_items (request_id, product_id, qty) values
+  ('b9000000-0000-4000-8000-000000000001', '59000000-0000-4000-8000-000000000001', 1);
+
 insert into payments (id, org_id, supplier_id, amount, paid_date, method, reference) values
   ('89000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
    '39000000-0000-4000-8000-000000000001', 250, current_date, '׳”׳¢׳‘׳¨׳” ׳‘׳ ׳§׳׳™׳×', 'P9SEARCH-REF');
@@ -678,6 +688,50 @@ select pg_temp.p9_assert(
 select pg_temp.p9_assert(
   pg_temp.p9_search_entities(null) = '{}'::text[],
   'an unresolvable role must receive nothing -- the gate fails closed');
+
+-- ===== (c2) drafts in the search (0145): personal, creator-fenced =====
+-- Same harness-role rationale as (c): the subject is the branch's own created_by fence, which
+-- must hold even where RLS does not bind.
+
+create function pg_temp.p9_search_entities_term(p_sub uuid, p_term text)
+returns text[]
+language plpgsql
+as $$
+declare
+  v_entities text[];
+begin
+  perform pg_temp.p9_claims(p_sub);
+  select coalesce(array_agg(distinct g.entity order by g.entity), '{}'::text[])
+    into v_entities
+  from global_search(p_term, 5) g;
+  perform pg_temp.p9_claims(null);
+  return v_entities;
+end
+$$;
+
+select pg_temp.p9_assert(
+  pg_temp.p9_search_entities_term('29000000-0000-4000-8000-000000000002', 'P9DRAFT')
+    = array['draft'],
+  'office must find its own draft by its note text');
+
+select pg_temp.p9_assert(
+  pg_temp.p9_search_entities('29000000-0000-4000-8000-000000000002') && array['draft'],
+  'office must find its own draft through a product name inside it');
+
+select pg_temp.p9_assert(
+  pg_temp.p9_search_entities_term('29000000-0000-4000-8000-000000000001', 'P9DRAFT')
+    = '{}'::text[],
+  'a draft is personal: even the owner must not receive another creator''s draft');
+
+select pg_temp.p9_assert(
+  pg_temp.p9_search_entities_term('29000000-0000-4000-8000-000000000005', 'P9DRAFT')
+    = '{}'::text[],
+  'an accountant must receive no draft hits -- /orders/new is a staff route');
+
+select pg_temp.p9_assert(
+  pg_temp.p9_search_entities_term('29000000-0000-4000-8000-000000000002', 'טיוטה')
+    && array['draft'],
+  'searching the word "טיוטה" itself must surface the caller''s drafts');
 
 -- ===== (d) the approval policy =====
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/msw/server';
 import { SUPABASE_URL } from '../test/msw/handlers';
@@ -33,6 +33,7 @@ import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
 const HITS = [
   { entity: 'credit', id: 'cr-1', title: '#41', subtitle: 'מאפה זהב', status: 'open', amount: 90, occurred_at: '2026-05-04', rank: 1 },
   { entity: 'payment', id: 'pm-1', title: '#7', subtitle: 'מאפה זהב', status: null, amount: 120, occurred_at: '2026-05-03', rank: 1 },
+  { entity: 'draft', id: 'req-1', title: '#88', subtitle: 'טיוטת הזמנה · להשלים מחר', status: 'draft', amount: null, occurred_at: '2026-05-05', rank: 1 },
   { entity: 'supplier', id: 'sup-1', title: 'מאפה זהב', subtitle: 'אורי גולן', status: 'active', amount: null, occurred_at: null, rank: 1 },
   { entity: 'order', id: 'po-1', title: '#12', subtitle: 'מאפה זהב', status: 'sent', amount: null, occurred_at: '2026-05-02', rank: 2 },
   { entity: 'product', id: 'prod-1', title: 'לחמניה', subtitle: 'מאפים', status: 'active', amount: null, occurred_at: null, rank: 2 },
@@ -54,9 +55,19 @@ function renderSearch() {
   return render(<MemoryRouter><GlobalSearch /></MemoryRouter>);
 }
 
+/** Where did useNavigate land — MemoryRouter keeps the URL out of jsdom, so read the router. */
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="probe-location">{location.pathname + location.search}</div>;
+}
+
 const groupNames = () => screen.getAllByRole('group').map((node) => node.getAttribute('aria-label'));
 
-beforeEach(() => { authState.role = 'owner'; });
+beforeEach(() => {
+  authState.role = 'owner';
+  // jsdom has no scrollIntoView; hovering an option calls it to keep the active row visible.
+  Element.prototype.scrollIntoView = () => {};
+});
 
 describe('GlobalSearch — ALLOWED is display order, not the gate (migration 0069)', () => {
   it('renders every type an owner can reach, in the map order and not the wire order', async () => {
@@ -70,9 +81,21 @@ describe('GlobalSearch — ALLOWED is display order, not the gate (migration 006
 
     // The map's job now: the group set and their order. The server answered scrambled.
     await waitFor(() => expect(groupNames()).toEqual(
-      ['ספקים', 'מוצרים', 'חשבוניות', 'הזמנות', 'תשלומים', 'זיכויים'],
+      ['ספקים', 'מוצרים', 'חשבוניות', 'הזמנות', 'טיוטות הזמנה', 'תשלומים', 'זיכויים'],
     ));
     expect(screen.getAllByRole('option')).toHaveLength(HITS.length);
+  });
+
+  it('routes a draft hit to the resume screen, not to an order page', async () => {
+    const user = userEvent.setup();
+    useGlobalSearch();
+    render(<MemoryRouter><GlobalSearch /><LocationProbe /></MemoryRouter>);
+
+    await user.type(screen.getByRole('combobox', { name: 'חיפוש כללי' }), 'טיוט');
+    const draftOption = await screen.findByRole('option', { name: /טיוטת הזמנה/ });
+    await user.click(draftOption);
+    // The draft resumes only through NewOrder's ?draft= loader — 0145's contract.
+    await waitFor(() => expect(screen.getByTestId('probe-location')).toHaveTextContent('/orders/new?draft=req-1'));
   });
 
   it('keeps the client filter as defence in depth for a role the server would now already stop', async () => {
