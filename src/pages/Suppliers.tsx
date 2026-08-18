@@ -625,10 +625,14 @@ export function SupplierCard() {
       {tab === 'invoices' && (
         <div role="tabpanel" id="supplier-panel-invoices" aria-labelledby="supplier-tab-invoices" className="space-y-3">
         {data.consolidatedCount > 0 && (
+          /* One wrapper span: a Note body may mix elements with each other, never with bare
+             prose (noteProse.spec — .note is a flex row and shreds raw text into columns). */
           <Note tone="info">
-            <span className="num">{data.consolidatedCount}</span> מסמכי חשבונית של ספק זה אוחדו לחשבונית
-            מרכזת ואינם מוצגים כאן —{' '}
-            <button className="underline" onClick={() => navigate('/documents/consolidated-invoices')}>לחשבוניות המרכזות</button>
+            <span>
+              <span className="num">{data.consolidatedCount}</span> מסמכי חשבונית של ספק זה אוחדו לחשבונית
+              מרכזת ואינם מוצגים כאן —{' '}
+              <button className="underline" onClick={() => navigate('/documents/consolidated-invoices')}>לחשבוניות המרכזות</button>
+            </span>
           </Note>
         )}
         <DataTable rows={data.invoices} columns={[
