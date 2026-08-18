@@ -94,7 +94,7 @@ export interface SupplierMetrics {
   last_price_change: string | null;
 }
 
-export type SearchEntity = 'supplier' | 'product' | 'invoice' | 'order' | 'payment' | 'credit';
+export type SearchEntity = 'supplier' | 'product' | 'invoice' | 'order' | 'payment' | 'credit' | 'draft';
 
 /** One row of the global_search() RPC (migration 0011). */
 export interface SearchHit {
