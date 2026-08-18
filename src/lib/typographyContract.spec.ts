@@ -25,4 +25,14 @@ describe('typography contract', () => {
     expect(techRule).toContain('ui-monospace');
     expect(techRule).toContain('unicode-bidi: isolate');
   });
+
+  it('isolates user-entered names with the native element, not a new CSS class', () => {
+    const design = readFileSync('DESIGN.md', 'utf8');
+    // The name-isolation law lives in DESIGN.md and rides <bdi>/bidiIsolate — deliberately no
+    // .bidi-isolate utility: a second isolate class would be a second way to do the same thing.
+    expect(design).toContain('חוק בידוד השמות');
+    expect(design).toContain('<bdi>');
+    expect(design).toContain('bidiIsolate');
+    expect(css).not.toContain('.bidi-isolate');
+  });
 });

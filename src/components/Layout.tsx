@@ -285,8 +285,14 @@ export default function Layout() {
 
   // Route changes announce themselves through the tab title and move keyboard focus past the
   // persistent navigation shell. Query-only filter changes keep focus where the user left it.
+  // The focus move fires only on an actual pathname change: the title also re-renders when
+  // orgName resolves (moments after login) and when currentTitle settles, and stealing focus
+  // then blanks the global-search panel mid-typing (its panel lives on :focus).
+  const focusedPathRef = useRef<string | null>(null); // null → the mount still focuses #main once
   useEffect(() => {
     document.title = `${currentTitle} — ${orgName ? `${orgName} · ` : ''}${APP_NAME}`;
+    if (focusedPathRef.current === location.pathname) return;
+    focusedPathRef.current = location.pathname;
     const frame = requestAnimationFrame(() => document.getElementById('main')?.focus({ preventScroll: true }));
     return () => cancelAnimationFrame(frame);
   }, [location.pathname, currentTitle, orgName]);

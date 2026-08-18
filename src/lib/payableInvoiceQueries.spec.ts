@@ -18,7 +18,12 @@ describe('payable invoice browser-query boundary', () => {
       let cursor = 0;
       while ((cursor = source.indexOf(".from('invoices')", cursor)) !== -1) {
         const query = source.slice(cursor, cursor + 800);
-        if (!query.includes(".eq('financial_role', 'payable')")) missing.push(file);
+        // One sanctioned exception: a HEAD count of supporting_evidence rows. It reads no row
+        // content — it exists to EXPLAIN the absence 0137 creates (the supplier card's "אוחדו
+        // לחשבונית מרכזת" line). A query that selects such rows as invoices is still refused.
+        const consolidatedCountProbe =
+          query.includes(".eq('financial_role', 'supporting_evidence')") && query.includes('head: true');
+        if (!query.includes(".eq('financial_role', 'payable')") && !consolidatedCountProbe) missing.push(file);
         cursor += 17;
       }
     }

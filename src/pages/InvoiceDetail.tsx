@@ -548,7 +548,7 @@ export default function InvoiceDetail() {
                 <ul className="mt-2 divide-y divide-line-soft border border-line-soft rounded-lg">
                   {data.threeWay.lines.map((line) => (
                     <li key={line.id} className="px-3 py-2 text-sm flex flex-wrap justify-between gap-2">
-                      <span><span className="num text-ink-muted">{line.line_number}.</span> {line.description}</span>
+                      <span><span className="num text-ink-muted">{line.line_number}.</span> <bdi>{line.description}</bdi></span>
                       <span className="num text-ink-muted">{formatQuantity(line.quantity, line.unit)} × {fmtMoneyExact(line.unit_price)} = {fmtMoneyExact(line.line_total)}</span>
                     </li>
                   ))}

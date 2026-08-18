@@ -3,6 +3,7 @@ from .errors import GatewayError, ProcessingError
 from .gateway import GatewayClient
 from .limits import DEFAULT_LIMITS, ExtractionLimits
 from .mime import sniff_mime
+from .ocr_mistral import MistralOcrAdapter
 from .ocr import (
     DisabledOcrAdapter,
     OcrAdapter,
@@ -25,6 +26,7 @@ __all__ = [
     "GatewayError",
     "GatewayClient",
     "OcrAdapter",
+    "MistralOcrAdapter",
     "OpenAiOcrAdapter",
     "PageImage",
     "ProcessingError",

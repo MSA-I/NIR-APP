@@ -305,7 +305,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
                           {order.items.length > 0 && (
                             <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted">
                               {order.items.map((item, index) => (
-                                <span key={index}>{item.product?.name ?? '—'} <span className="num">×{item.qty}</span></span>
+                                <span key={index}><bdi>{item.product?.name ?? '—'}</bdi> <span className="num">×{item.qty}</span></span>
                               ))}
                             </div>
                           )}
@@ -952,7 +952,7 @@ export default function Dashboard() {
                     <li key={index}>
                       <Link to={`/prices?product=${price.product.id}`} className="flex min-h-11 flex-col items-stretch gap-2 rounded-lg px-2 py-2 text-sm hover:bg-action-wash active:bg-action-wash/70 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <span className="min-w-0 break-words sm:truncate">
-                          <span className="font-medium text-ink-body">{price.product.name}</span>
+                          <bdi className="font-medium text-ink-body">{price.product.name}</bdi>
                           <span className="ms-2 text-xs text-ink-muted">{price.supplier.name}</span>
                         </span>
                         <span className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 sm:justify-start">

@@ -9,7 +9,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { ConfirmDialog, Note } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
 import { FILING_REASON_LABELS, type ReviewSnapshot } from './model';
-import { formatUnit, normalizeUnitInput } from '../../lib/format';
+import { bidiIsolate, formatUnit, normalizeUnitInput } from '../../lib/format';
 
 interface PriceListReviewConfirmationProps {
   snapshot: ReviewSnapshot;
@@ -1087,7 +1087,7 @@ export function PriceListReviewConfirmation({
                         }}>
                         <option value="">בחירת מוצר</option>
                         {products.map((product) => (
-                          <option key={product.id} value={product.id}>{product.name} · {formatUnit(product.unit)}{product.sku ? ` · ${product.sku}` : ''}</option>
+                          <option key={product.id} value={product.id}>{bidiIsolate(product.name)} · {formatUnit(product.unit)}{product.sku ? ` · ${product.sku}` : ''}</option>
                         ))}
                       </select>
                     </label>

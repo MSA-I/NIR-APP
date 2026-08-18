@@ -85,7 +85,7 @@ export default function Products() {
   }
 
   const columns: Column<ProductRow>[] = [
-    { key: 'name', header: 'מוצר', sortValue: (r) => r.name, render: (r) => <span className={`font-medium ${r.active ? 'text-ink' : 'text-ink-muted line-through'}`}>{r.name}</span> },
+    { key: 'name', header: 'מוצר', sortValue: (r) => r.name, render: (r) => <bdi className={`font-medium ${r.active ? 'text-ink' : 'text-ink-muted line-through'}`}>{r.name}</bdi> },
     { key: 'cat', header: 'קטגוריה', sortValue: (r) => r.category?.name ?? '', render: (r) => r.category?.name ?? '—' },
     { key: 'unit', header: 'יחידת מידה', render: (r) => formatUnit(r.unit) },
     { key: 'sku', header: 'מק״ט', render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
@@ -95,7 +95,15 @@ export default function Products() {
     { key: 'suppliers', header: 'ספקים', className: 'num', sortValue: (r) => r.supplierCount ?? 0, render: (r) => r.supplierCount ?? 0 },
     {
       key: 'best', header: 'מחיר מיטבי', className: 'num', sortValue: (r) => r.bestPrice ?? 0,
-      render: (r) => fmtMoneyExact(r.bestPrice),
+      // The price is exactly the value that invites comparison — it links straight to the
+      // cross-supplier view. stopPropagation: the row click underneath opens the edit modal.
+      render: (r) => r.bestPrice != null ? (
+        <button type="button" className="text-action underline underline-offset-2"
+          title={`השוואת מחירי ${r.name}`}
+          onClick={(event) => { event.stopPropagation(); navigate(`/prices?product=${r.id}`); }}>
+          {fmtMoneyExact(r.bestPrice)}
+        </button>
+      ) : fmtMoneyExact(r.bestPrice),
     },
   ];
 
@@ -127,9 +135,9 @@ export default function Products() {
           /* G1, finding 19. "האם המחיר של המוצר הזה עלה?" is answered well — a history model with
              a chart — and it lived only at /prices. The screen named after the question had no
              link to it, and `?product=` was already implemented there (PriceLists.tsx:40,:68) with
-             exactly one emitter in the entire codebase (Dashboard.tsx:752). Worse, a global search
-             hit on a product lands on /products?id= (GlobalSearch.tsx:72), i.e. the one screen
-             with no way onward. Both ends of the wire existed; this is the emitter. */
+             exactly one emitter in the entire codebase (Dashboard.tsx:752). Since 18.08.2026 the
+             global search product hit also lands on /prices?product= (the comparison), and the
+             best-price cell above links there too; this row action stays as the named path. */
           { key: 'prices', label: 'מחירים והיסטוריה', icon: History, onSelect: () => navigate(`/prices?product=${r.id}`) },
           { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setEditing(r) },
           { key: 'duplicate', label: 'שכפול', icon: Copy, onSelect: () => setClone({ ...r, name: `${r.name} (עותק)` }) },
