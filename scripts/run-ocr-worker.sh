@@ -13,6 +13,8 @@
 # Usage:
 #   ./scripts/run-ocr-worker.sh                 # 2 workers against production, image = HEAD
 #   ./scripts/run-ocr-worker.sh --replicas 3
+#   ./scripts/run-ocr-worker.sh --canary mistral   # replica 1 on mistral, the rest on --adapter
+#   ./scripts/run-ocr-worker.sh --adapter mistral  # the whole pool on mistral
 #   ./scripts/run-ocr-worker.sh --status        # report what is running, change nothing
 #   ./scripts/run-ocr-worker.sh --stop          # stop the pool, change nothing else
 #
@@ -20,6 +22,10 @@
 set -euo pipefail
 
 REPLICAS=2
+# The pool default and the optional single-replica canary. Kept separate because a canary is only
+# evidence while something else is still running the old engine on the same queue.
+ADAPTER="openai"
+CANARY_ADAPTER=""
 SUPABASE_URL_DEFAULT="https://rkftlbctohswhbbiaqin.supabase.co"
 ENV_FILE="${OCR_ENV_FILE:-/etc/supplyflow/ocr.env}"
 NAME_PREFIX="supplyflow-ocr-live"
@@ -31,6 +37,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 while [ $# -gt 0 ]; do
   case "$1" in
     --replicas) REPLICAS="$2"; shift 2 ;;
+    --adapter)  ADAPTER="$2"; shift 2 ;;
+    --canary)   CANARY_ADAPTER="$2"; shift 2 ;;
     --tag)      TAG="$2"; shift 2 ;;
     --env-file) ENV_FILE="$2"; shift 2 ;;
     --status)   ACTION="status"; shift ;;
@@ -80,6 +88,16 @@ case "$REPLICAS" in
   ''|*[!0-9]*) die "--replicas must be a whole number" ;;
 esac
 [ "$REPLICAS" -ge 1 ] && [ "$REPLICAS" -le 8 ] || die "--replicas must be between 1 and 8"
+for name in "$ADAPTER" ${CANARY_ADAPTER:+"$CANARY_ADAPTER"}; do
+  case "$name" in
+    openai|mistral) : ;;
+    *) die "adapter must be openai or mistral, got: $name" ;;
+  esac
+done
+if [ -n "$CANARY_ADAPTER" ] && [ "$REPLICAS" -lt 2 ]; then
+  # A canary that is the entire pool is not a canary; it is a deploy without a control.
+  die "--canary needs at least 2 replicas so one worker keeps running $ADAPTER"
+fi
 
 command -v docker >/dev/null || die "docker is not installed"
 docker info >/dev/null 2>&1 || die "cannot talk to the docker daemon (is your user in the docker group?)"
@@ -102,7 +120,14 @@ esac
 # shellcheck disable=SC1090
 set -a; . "$ENV_FILE"; set +a
 : "${OCR_WORKER_TOKEN:?OCR_WORKER_TOKEN missing from $ENV_FILE}"
-: "${OPENAI_API_KEY:?OPENAI_API_KEY missing from $ENV_FILE}"
+# Only the keys the configured adapters actually need. Demanding both would block a pool that has
+# finished moving off one vendor.
+case "$ADAPTER $CANARY_ADAPTER" in
+  *openai*)  : "${OPENAI_API_KEY:?OPENAI_API_KEY missing from $ENV_FILE}" ;;
+esac
+case "$ADAPTER $CANARY_ADAPTER" in
+  *mistral*) : "${MISTRAL_API_KEY:?MISTRAL_API_KEY missing from $ENV_FILE}" ;;
+esac
 SUPABASE_URL="${SUPABASE_URL:-$SUPABASE_URL_DEFAULT}"
 
 echo "== Building $IMAGE"
@@ -123,7 +148,16 @@ for index in $(seq 1 "$REPLICAS"); do
   # The worker id is written into job leases, so it has to say which build and which replica. Two
   # workers sharing an id can renew each other's hold on a document, which is how a job goes
   # missing mid-flight -- and it is why `docker compose up --scale` is not enough here.
-  worker_id="supplyflow-${TAG}-${index}"
+  # Replica 1 carries the canary when one is asked for; every other replica runs the pool default.
+  if [ "$index" = "1" ] && [ -n "$CANARY_ADAPTER" ]; then
+    adapter="$CANARY_ADAPTER"
+  else
+    adapter="$ADAPTER"
+  fi
+  # The engine is part of the worker id because the id is what job leases record. Without it a
+  # canary produces two populations of documents that cannot be told apart afterwards, which is
+  # the one thing a canary exists to do.
+  worker_id="supplyflow-${TAG}-${index}-${adapter}"
   docker run --detach --name "$name" \
     --init --restart unless-stopped --stop-timeout 45 \
     --read-only --cap-drop ALL --security-opt no-new-privileges:true \
@@ -133,16 +167,17 @@ for index in $(seq 1 "$REPLICAS"); do
     --log-driver local --log-opt max-size=10m --log-opt max-file=3 \
     --env "SUPABASE_URL=${SUPABASE_URL}" \
     --env "OCR_WORKER_TOKEN=${OCR_WORKER_TOKEN}" \
-    --env "OPENAI_API_KEY=${OPENAI_API_KEY}" \
+    --env "OPENAI_API_KEY=${OPENAI_API_KEY:-}" \
+    --env "MISTRAL_API_KEY=${MISTRAL_API_KEY:-}" \
     --env "OCR_WORKER_ID=${worker_id}" \
-    --env "OCR_ADAPTER=openai" \
+    --env "OCR_ADAPTER=${adapter}" \
     --env "OCR_OPENAI_MODEL=${OCR_OPENAI_MODEL:-gpt-5.6-terra}" \
     --env "OCR_QA_PASSES=${OCR_QA_PASSES:-3}" \
     --env "OCR_PAGE_CONCURRENCY=${OCR_PAGE_CONCURRENCY:-3}" \
     --env "OCR_JOB_TIMEOUT_SECONDS=${OCR_JOB_TIMEOUT_SECONDS:-900}" \
     --env "OCR_TEMP_ROOT=/var/tmp/supplyflow-ocr" \
     "$IMAGE" >/dev/null
-  echo "Started $name as $worker_id"
+  echo "Started $name as $worker_id (adapter: $adapter)"
 done
 
 # Read the settings back off the running containers instead of repeating what was requested. The
