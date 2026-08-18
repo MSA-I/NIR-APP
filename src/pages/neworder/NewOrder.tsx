@@ -29,6 +29,7 @@ import { fmtMoneyExact } from '../../lib/format';
 import { NEW_COMMERCE_SUPPLIER_STATUSES } from '../../lib/status';
 import { markOrderSentToSupplier } from '../../lib/share';
 import { WhatsAppSendDialog } from '../../components/WhatsAppSendDialog';
+import { QuickCreateProduct } from '../../components/QuickCreateProduct';
 import type { Product, PurchaseOrder, Supplier, SupplierProduct } from '../../lib/types';
 import ProductStep from './ProductStep';
 import SupplierSplitStep from './SupplierSplitStep';
@@ -119,11 +120,19 @@ export default function NewOrder() {
   const explicitDraftId = params.get('draft');
   const startFresh = params.get('fresh') === '1';
   const loadKey = fromOrderId ? `from:${fromOrderId}` : explicitDraftId ? `draft:${explicitDraftId}` : startFresh ? 'fresh' : 'latest';
-  const { profile, org } = useAuth();
+  const { profile, org, organizationAccess } = useAuth();
   const toast = useToast();
   const { data: categories } = useCategories();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
+  const [createProductOpen, setCreateProductOpen] = useState(false);
+  /**
+   * The catalogue's own rule, not a new one: `/products` gates "מוצר חדש" on owner/office
+   * (`Products.tsx`), RLS allows the INSERT for the same two roles (`0022:131-132`), and this
+   * route is already STAFF-only. Stated here so the button and the write agree.
+   */
+  const canCreateProduct = organizationAccess.canWrite
+    && (profile?.role === 'owner' || profile?.role === 'office');
   const [state, dispatch] = useReducer(splitReducer, EMPTY_CART);
   const cart = useMemo(() => state.order.flatMap((productId) => {
     const line = state.byId[productId];
@@ -761,7 +770,8 @@ export default function NewOrder() {
           onAdd={(product) => dispatch({ type: 'ADD_PRODUCT', product })}
           onQty={(productId, qty) => dispatch(qty > 0 ? { type: 'SET_QTY', productId, qty } : { type: 'REMOVE_PRODUCT', productId })}
           onContinue={() => setStep(2)} nextOrderItems={nextOrderItems} nextOrderBusyId={nextOrderBusyId}
-          onAddNextOrderItem={(item) => void addNextOrderItem(item)} onDismissNextOrderItem={(item) => void dismissNextItem(item)} />
+          onAddNextOrderItem={(item) => void addNextOrderItem(item)} onDismissNextOrderItem={(item) => void dismissNextItem(item)}
+          onCreateProduct={canCreateProduct ? () => setCreateProductOpen(true) : null} />
       ) : step === 2 ? (
         <SupplierSplitStep cart={cart} offersByProduct={offersByProduct} supplierById={supplierById} split={split} input={splitInput}
           notes={notes} setNotes={setNotes} expectedDate={expectedDate} setExpectedDate={setExpectedDate} busy={busy}
@@ -780,6 +790,23 @@ export default function NewOrder() {
       )}
 
       <PriceDiffModal report={priceDiff} onClose={() => setPriceDiff(null)} />
+
+      {createProductOpen && (
+        <QuickCreateProduct suppliers={data?.suppliers ?? []} initialName={q}
+          onClose={() => setCreateProductOpen(false)}
+          onCreated={async (product) => {
+            setCreateProductOpen(false);
+            // Refetch BEFORE adding to the cart: `offersByProduct` is derived from this query, and
+            // a line whose offer has not arrived yet resolves to `no_offers` and lands in the
+            // blocked list on step 2. Awaiting keeps the product's one offer present the whole
+            // time, so no pin is needed — resolveSplit picks the only supplier there is.
+            await refetch();
+            dispatch({ type: 'ADD_PRODUCT', product });
+            // The search that found nothing would now hide the row that answers it.
+            setQ('');
+            setCat('');
+          }} />
+      )}
 
       <WhatsAppSendDialog order={waTarget} orgName={org?.name ?? ''}
         onClose={(openedText) => {

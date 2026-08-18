@@ -109,7 +109,13 @@ select pg_temp.p46_assert(
   and position('financial_role = ''payable''' in (
     select prosrc from pg_proc where oid='private.product_purchase_summary(uuid,date,date,uuid)'::regprocedure))>0
   and position('financial_role = ''payable''' in (
-    select prosrc from pg_proc where oid='public.create_monthly_report_snapshot(date,uuid)'::regprocedure))>0,
+    select prosrc from pg_proc where oid='public.create_monthly_report_snapshot(date,uuid)'::regprocedure))>0
+  -- 0146. soft_delete_supplier was missing from this inventory and drifted: it summed invoices in
+  -- every financial_role, so a supplier whose interim invoices had all been consolidated showed
+  -- ₪0 on the screen and still raised supplier_has_open_balance. A guard that decides on money is
+  -- a money reader.
+  and position('financial_role = ''payable''' in (
+    select prosrc from pg_proc where oid='public.soft_delete_supplier(uuid,text)'::regprocedure))>0,
   'a canonical money/report reader does not filter to payable');
 
 select pg_temp.p46_assert(

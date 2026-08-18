@@ -155,6 +155,7 @@ export async function runPaymentRequestChecks(pr: {
     amount_matches_open_balance: boolean;
     similar_bank_transfer_check: 'unavailable';
     open_credit_total: number;
+    over_allocated_invoice_count: number;
   };
   if (financial.visible_invoice_count !== financial.requested_invoice_count) {
     results.push({ code: 'invoice_visibility', severity: 'critical', message: 'לא ניתן לאמת את כל החשבוניות המקושרות לדרישה' });
@@ -164,6 +165,18 @@ export async function runPaymentRequestChecks(pr: {
   }
   if (financial.unapproved_invoice_count > 0) {
     results.push({ code: 'invoice_unapproved', severity: 'critical', message: 'הדרישה כוללת חשבונית שטרם אושרה לתשלום' });
+  }
+  // 0146. amount_allocated is fixed when the request is created and never recomputed, so a credit
+  // that was offset afterwards leaves the request allocating more than the invoice still owes.
+  // The server rejects that at approval AND at execution and there is no screen that can edit an
+  // allocation — so the only honest instruction is to cancel and re-open. Said here, before the
+  // button, instead of as a refusal the user cannot act on.
+  if (financial.over_allocated_invoice_count > 0) {
+    results.push({
+      code: 'allocation_vs_balance',
+      severity: 'critical',
+      message: `${financial.over_allocated_invoice_count === 1 ? 'חשבונית מקושרת אחת מוקצית' : `${financial.over_allocated_invoice_count} מהחשבוניות המקושרות מוקצות`} מעל היתרה שנותרה — ככל הנראה בעקבות זיכוי שקוזז אחרי יצירת הדרישה. יש לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן`,
+    });
   }
   if (!financial.amount_matches_open_balance) {
     results.push({

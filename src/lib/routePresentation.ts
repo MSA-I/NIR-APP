@@ -32,6 +32,7 @@ export const STATIC_ROUTE_TITLES = {
   '/reports': 'דוח לרו״ח',
   '/reports/products': 'סיכום רכישות מוצרים',
   '/analytics': 'ביצועי ספקים',
+  '/supplier-log': 'יומן עדכון ספקים',
   '/settings': 'הגדרות מערכת',
   '/onboarding': 'הקמת המערכת',
 } as const;

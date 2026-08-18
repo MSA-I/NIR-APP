@@ -341,7 +341,12 @@ insert into public.profiles (id, org_id, full_name, role) values
 insert into public.suppliers (id, org_id, name) values
   ('33000000-0000-0000-0000-000000000001', '13000000-0000-0000-0000-000000000001', 'P0 ACL deletable supplier'),
   ('33000000-0000-0000-0000-000000000002', '13000000-0000-0000-0000-000000000001', 'P0 ACL active supplier'),
-  ('33000000-0000-0000-0000-000000000003', '13000000-0000-0000-0000-000000000002', 'P0 ACL tenant B supplier');
+  ('33000000-0000-0000-0000-000000000003', '13000000-0000-0000-0000-000000000002', 'P0 ACL tenant B supplier'),
+  -- 0146 deletion-predicate fixtures. Each carries exactly one reason to be judged, so a failure
+  -- names which half of the guard moved.
+  ('33000000-0000-0000-0000-000000000004', '13000000-0000-0000-0000-000000000001', 'P0 ACL evidence-only supplier'),
+  ('33000000-0000-0000-0000-000000000005', '13000000-0000-0000-0000-000000000001', 'P0 ACL draft-order supplier'),
+  ('33000000-0000-0000-0000-000000000006', '13000000-0000-0000-0000-000000000001', 'P0 ACL live-order supplier');
 
 insert into public.products (id, org_id, name, unit) values
   ('43000000-0000-0000-0000-000000000001', '13000000-0000-0000-0000-000000000001', 'P0 ACL product A', 'unit'),
@@ -349,7 +354,10 @@ insert into public.products (id, org_id, name, unit) values
 
 insert into public.purchase_orders (id, org_id, supplier_id, status, created_by) values
   ('53000000-0000-0000-0000-000000000001', '13000000-0000-0000-0000-000000000001', '33000000-0000-0000-0000-000000000002', 'ready', '23000000-0000-0000-0000-000000000002'),
-  ('53000000-0000-0000-0000-000000000002', '13000000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000003', 'ready', '23000000-0000-0000-0000-000000000006');
+  ('53000000-0000-0000-0000-000000000002', '13000000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000003', 'ready', '23000000-0000-0000-0000-000000000006'),
+  -- 0146: a draft is an intention and must not block deletion; 'ready' onward must.
+  ('53000000-0000-0000-0000-000000000003', '13000000-0000-0000-0000-000000000001', '33000000-0000-0000-0000-000000000005', 'draft', '23000000-0000-0000-0000-000000000002'),
+  ('53000000-0000-0000-0000-000000000004', '13000000-0000-0000-0000-000000000001', '33000000-0000-0000-0000-000000000006', 'ready', '23000000-0000-0000-0000-000000000002');
 
 insert into public.invoices (
   id, org_id, supplier_id, invoice_number, invoice_date,
@@ -359,6 +367,19 @@ insert into public.invoices (
   '13000000-0000-0000-0000-000000000001',
   '33000000-0000-0000-0000-000000000002',
   'P0-ACL-EXISTING', '2026-07-23', 100, 18, 118, 'received'
+);
+
+-- 0146: an interim invoice consolidated under an anchor keeps its total_amount and gains no
+-- allocation and no credit — it is evidence, not debt. Every money reader filters it out
+-- (0137:2449); soft_delete_supplier did not, which is the bug the owner reported.
+insert into public.invoices (
+  id, org_id, supplier_id, invoice_number, invoice_date,
+  amount_before_vat, vat_amount, total_amount, review_status, financial_role
+) values (
+  '63000000-0000-0000-0000-000000000002',
+  '13000000-0000-0000-0000-000000000001',
+  '33000000-0000-0000-0000-000000000004',
+  'P0-ACL-EVIDENCE', '2026-07-23', 500, 90, 590, 'received', 'supporting_evidence'
 );
 
 insert into public.payments (
@@ -623,6 +644,40 @@ begin
   raise exception 'expected supplier open-balance rejection';
 exception when sqlstate 'P0001' then
   if sqlerrm not like '%supplier_has_open_balance%' then raise; end if;
+end
+$$;
+
+-- 0146 -- the three deletion outcomes, one supplier each.
+--
+-- (a) Only supporting-evidence invoices: not money owed. This is the owner-reported failure --
+-- /suppliers reads p0_supplier_balance_rows (payable-only) and shows ₪0, while this command used
+-- to sum every financial_role and refuse. The screen and the guard now answer one question.
+select pg_temp.p0_acl_assert(
+  (public.soft_delete_supplier(
+    '33000000-0000-0000-0000-000000000004', 'consolidated evidence is not an open balance'
+  )->>'idempotent')::boolean = false,
+  'supporting-evidence invoices still block supplier deletion'
+);
+
+-- (b) A purchase order that was never sent commits the business to nothing (owner decision,
+-- 19.08.2026). src/pages/Suppliers.tsx carries the same status list.
+select pg_temp.p0_acl_assert(
+  (public.soft_delete_supplier(
+    '33000000-0000-0000-0000-000000000005', 'an unsent draft is not an active order'
+  )->>'idempotent')::boolean = false,
+  'a draft purchase order still blocks supplier deletion'
+);
+
+-- (c) 'ready' onward is a live commitment and must still refuse -- and must say so in its own
+-- name, not through the open-balance sentence the two guards used to share.
+do $$
+begin
+  perform public.soft_delete_supplier(
+    '33000000-0000-0000-0000-000000000006', 'must fail with a live order'
+  );
+  raise exception 'expected supplier active-order rejection';
+exception when sqlstate 'P0001' then
+  if sqlerrm not like '%supplier_has_active_orders%' then raise; end if;
 end
 $$;
 

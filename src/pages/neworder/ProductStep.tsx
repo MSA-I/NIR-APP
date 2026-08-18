@@ -24,9 +24,15 @@ interface ProductStepProps {
   nextOrderBusyId: string | null;
   onAddNextOrderItem: (item: NextOrderItem) => void;
   onDismissNextOrderItem: (item: NextOrderItem) => void;
+  /**
+   * Opens the quick-create dialog, or null when this user may not create products (the catalogue's
+   * own owner/office rule). Null renders no button and no promise of one — the empty state stays
+   * honest rather than offering a door that is not there.
+   */
+  onCreateProduct: (() => void) | null;
 }
 
-export default function ProductStep({ products, categories, offersByProduct, cart, q, setQ, cat, setCat, onAdd, onQty, onContinue, nextOrderItems, nextOrderBusyId, onAddNextOrderItem, onDismissNextOrderItem }: ProductStepProps) {
+export default function ProductStep({ products, categories, offersByProduct, cart, q, setQ, cat, setCat, onAdd, onQty, onContinue, nextOrderItems, nextOrderBusyId, onAddNextOrderItem, onDismissNextOrderItem, onCreateProduct }: ProductStepProps) {
   const filteredProducts = products.filter((product) =>
     (!cat || product.category_id === cat) && (!q || product.name.toLowerCase().includes(q.toLowerCase())));
   const cartByProduct = new Map(cart.map((item) => [item.product.id, item]));
@@ -52,7 +58,14 @@ export default function ProductStep({ products, categories, offersByProduct, car
       <div className="space-y-3 border-b border-line-soft p-3 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 id="product-picker-title" className="section-title">בחירת מוצרים</h2>
-          <span className="text-sm text-ink-muted"><span className="num font-semibold text-ink">{cart.length}</span> מוצרים נבחרו</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-ink-muted"><span className="num font-semibold text-ink">{cart.length}</span> מוצרים נבחרו</span>
+            {onCreateProduct && (
+              <button type="button" className="btn-secondary" onClick={onCreateProduct}>
+                <Plus size={15} aria-hidden="true" /> מוצר חדש
+              </button>
+            )}
+          </div>
         </div>
         <div className="relative">
           <Search size={15} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint" aria-hidden="true" />
@@ -90,7 +103,21 @@ export default function ProductStep({ products, categories, offersByProduct, car
             </div>
           );
         })}
-        {!filteredProducts.length && <div className="px-4 py-10 text-center text-sm text-ink-muted">לא נמצאו מוצרים</div>}
+        {/* The dead end the owner reported: this used to be the sentence and nothing else, so an
+            item the system had never been taught could not be ordered at all. */}
+        {!filteredProducts.length && (
+          <div className="px-4 py-10 text-center text-sm text-ink-muted">
+            <p>לא נמצאו מוצרים</p>
+            {onCreateProduct && (
+              <>
+                <p className="mt-1">אפשר להוסיף את המוצר עכשיו, לבחור לו ספק ומחיר, ולהמשיך בהזמנה.</p>
+                <button type="button" className="btn-primary mt-3" onClick={onCreateProduct}>
+                  <Plus size={15} aria-hidden="true" /> מוצר חדש{q.trim() ? ` — ${q.trim()}` : ''}
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-strong px-3 py-3 sm:px-4">
         <div className="text-sm text-ink-muted">{cart.length ? <><span className="num">{cart.length}</span> מוצרים מוכנים · המערכת תפצל את ההזמנה לפי הספק הזול לכל מוצר</> : 'בחר לפחות מוצר אחד'}</div>
