@@ -1,21 +1,19 @@
-// Which regions of מרכז הבקרה are still cards, and which stopped being cards.
+// Which regions of מרכז הבקרה are cards, which are bare, and where the dark tile lives (T7).
 //
-// The control room had grown five stacked panels: attention, deliveries, the money strip, the
-// trends board and the operational snapshot — each with its own border, radius, padded header,
-// explanatory caption and dashboard shadow. When every region is a card, being a card stops saying
-// anything, and the two surfaces that genuinely carry a decision — "what needs handling" and "what
-// the money looks like" — read exactly as loudly as a chart board and a stack of folded detail.
-//
-// So the boxes came off the three secondary zones, and nothing else moved: same headings, same
-// order, same rows, same counts. What is pinned here is precisely that:
+// The T7 owner redesign (18.08.2026, Crextio-reference layout) redrew the division: the money
+// strip lost its card and its three hero figures sit straight on the wheat canvas; the working
+// tiles — attention, deliveries, each trend chart, the operational snapshot — are borderless
+// cards; and the role queues moved out of the folded snapshot into the dashboard's single dark
+// Onyx card. What is pinned here is precisely that:
 //
 //   1. The heading order the browser gate measures (`#main .dash-enter h2`) is unchanged, so a
 //      future refactor cannot quietly reorder the zones and only find out in CI.
-//   2. The money strip is still one card holding its three segments.
-//   3. The trends board, the deliveries zone and the operational snapshot are NOT inside a card,
-//      and are still on the page under their own headings — unwrapped, not deleted.
+//   2. The money strip is NOT a card any more — three bare segments, separation by spacing.
+//   3. Attention and deliveries are cards; the trends and snapshot headings sit on the canvas
+//      with their content in cards below them.
 //   4. The page header no longer repeats the attention count that AttentionZone's own header
 //      already carries roughly 40px below it.
+//   5. "משימות לפי תפקיד" renders exactly once, inside the dark shell card — not in the fold.
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -126,29 +124,50 @@ describe('מרכז הבקרה — מה עדיין כרטיס ומה כבר לא'
     expect(headings[1]).toContain('אספקות היום ומחר');
   });
 
-  it('פס הכסף נשאר כרטיס אחד המחזיק את שלושת המקטעים', async () => {
+  it('פס הכסף הוא שלושה כרטיסים נפרדים — אחד לכל מדד (T7.3c)', async () => {
     server.use(...traffic);
     renderDashboard();
 
-    const band = (await screen.findByText('יתרת חשבוניות פתוחות')).closest('.card');
-    expect(band).not.toBeNull();
-    expect(band!.textContent).toContain('שולם לספקים החודש');
-    expect(band!.textContent).toContain('נרכש החודש');
-    expect(band!.querySelectorAll('.card')).toHaveLength(0);
+    // On a phone they stack as three tiles (owner report: one merged block read as a bug);
+    // on desktop they are the reference's stat-card row. Each figure owns its card.
+    const first = (await screen.findByText('יתרת חשבוניות פתוחות')).closest('.card');
+    expect(first).not.toBeNull();
+    expect(first!.textContent).not.toContain('שולם לספקים החודש');
+    expect((await screen.findByText('שולם לספקים החודש')).closest('.card')).not.toBeNull();
+    expect((await screen.findByText('נרכש החודש')).closest('.card')).not.toBeNull();
   });
 
-  it('אזורי האספקות, המגמות והתמונה התפעולית נשארים על המסך — בלי כרטיס סביבם', async () => {
+  it('אריחי העבודה הם כרטיסים; כותרות המגמות והתמונה התפעולית יושבות על הקנבס', async () => {
     server.use(...traffic);
     renderDashboard();
 
-    for (const title of ['אספקות היום ומחר', 'מגמות', 'תמונת מצב תפעולית']) {
+    // Region headings on the canvas, content in cards below them.
+    for (const title of ['מגמות', 'תמונת מצב תפעולית']) {
       const heading = await screen.findByText(title);
       expect(heading).toBeVisible();
       expect(heading.closest('.card')).toBeNull();
     }
-
-    // The zone that still earns its box: "דורש טיפול היום" is the screen's decision surface.
+    // The decision surfaces carry their box: attention and deliveries are cards.
     expect((await screen.findByText(/דורש טיפול היום/)).closest('.card')).not.toBeNull();
+    expect((await screen.findByText('אספקות היום ומחר')).closest('.card')).not.toBeNull();
+    // Each trend chart is its own card tile.
+    expect((await screen.findByText('הוצאות רכש לפי חודש')).closest('.card')).not.toBeNull();
+    expect((await screen.findByText('תמהיל הרכש החודש')).closest('.card')).not.toBeNull();
+    // The folded snapshot rows live inside one card under the bare heading.
+    expect((await screen.findByText('אין חריגים פתוחים כרגע')).closest('.card')).not.toBeNull();
+  });
+
+  it('משימות לפי תפקיד מרונדרות פעם אחת — בכרטיס הכהה, לא בקיפול התפעולי', async () => {
+    server.use(...traffic);
+    renderDashboard();
+
+    const heading = await screen.findByText('משימות לפי תפקיד');
+    const darkCard = heading.closest('section');
+    expect(darkCard).not.toBeNull();
+    expect(darkCard!.className).toContain('bg-shell');
+    // The queues render once: their labels exist only inside the dark card.
+    expect(screen.getAllByText('משימות לפי תפקיד')).toHaveLength(1);
+    expect(screen.getByText('דרישות לאישור הנהלה').closest('section')).toBe(darkCard);
   });
 
   it('כותרת הדף אינה חוזרת על ספירת הטיפול שכבר מופיעה מתחתיה', async () => {
@@ -161,15 +180,15 @@ describe('מרכז הבקרה — מה עדיין כרטיס ומה כבר לא'
     expect(screen.getByText(/סוגי טיפול/)).toBeVisible();
   });
 
-  it('ארבעת אזורי הפירוט עדיין קיימים תחת כותרת אחת', async () => {
+  it('שלושת אזורי הפירוט עדיין קיימים תחת כותרת אחת', async () => {
     server.use(...traffic);
     renderDashboard();
     await screen.findByText('תמונת מצב תפעולית');
 
-    // Three subjects are all-clear against this fixture and say so by name; the fourth has two
-    // waiting payment requests, so it renders as a counted, folded row. Either face proves the
-    // subject survived the unwrapping.
-    for (const label of ['אין חריגים פתוחים כרגע', 'אין התייקרויות אחרונות', 'אין יתרות פתוחות', 'משימות לפי תפקיד']) {
+    // All three folded subjects are all-clear against this fixture and say so by name — proof the
+    // subjects survived T7. The fourth former subject (role queues) is asserted above, in the
+    // dark-card test, so nothing here counts it twice.
+    for (const label of ['אין חריגים פתוחים כרגע', 'אין התייקרויות אחרונות', 'אין יתרות פתוחות']) {
       expect(screen.getByText(label)).toBeVisible();
     }
   });

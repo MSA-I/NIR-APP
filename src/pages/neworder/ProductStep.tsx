@@ -59,9 +59,9 @@ export default function ProductStep({ products, categories, offersByProduct, car
           <input className="input ps-9!" aria-label="חיפוש מוצר" placeholder="חיפוש מוצר..." value={q} onChange={(event) => setQ(event.target.value)} />
         </div>
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="סינון לפי קטגוריה">
-          <button type="button" aria-pressed={!cat} className={`min-h-11 border px-3 text-xs font-medium ${!cat ? 'border-action bg-action text-white' : 'border-line text-ink-soft hover:bg-surface-sunken'}`} onClick={() => setCat('')}>הכול</button>
+          <button type="button" aria-pressed={!cat} className={`chip-filter ${!cat ? 'chip-filter-active' : ''}`} onClick={() => setCat('')}>הכול</button>
           {categories.map((category) => (
-            <button type="button" key={category.id} aria-pressed={cat === category.id} className={`min-h-11 border px-3 text-xs font-medium ${cat === category.id ? 'border-action bg-action text-white' : 'border-line text-ink-soft hover:bg-surface-sunken'}`} onClick={() => setCat(category.id)}>{category.name}</button>
+            <button type="button" key={category.id} aria-pressed={cat === category.id} className={`chip-filter ${cat === category.id ? 'chip-filter-active' : ''}`} onClick={() => setCat(category.id)}>{category.name}</button>
           ))}
         </div>
       </div>
@@ -72,7 +72,7 @@ export default function ProductStep({ products, categories, offersByProduct, car
           const carted = cartByProduct.get(product.id);
           return (
             <div key={product.id} className={`flex min-h-14 items-center ${carted ? 'bg-action-wash/45' : ''}`}>
-              <button type="button" className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-start hover:bg-surface-sunken sm:px-4"
+              <button type="button" className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-start hover:bg-action-wash sm:px-4"
                 aria-pressed={!!carted}
                 aria-label={`${carted ? 'נבחר' : 'בחירת'} ${product.name}`}
                 onClick={() => { if (!carted) onAdd(product); }}>
@@ -82,9 +82,9 @@ export default function ProductStep({ products, categories, offersByProduct, car
               </button>
               {carted && (
                 <div className="me-3 flex shrink-0 items-center border border-line-strong bg-surface sm:me-4" role="group" aria-label={`כמות ${product.name}`}>
-                  <button type="button" className="grid size-11 place-items-center hover:bg-surface-sunken" aria-label={`הפחתת כמות ${product.name}`} onClick={() => onQty(product.id, carted.qty - 1)}><Minus size={14} /></button>
+                  <button type="button" className="grid size-11 place-items-center hover:bg-action-wash" aria-label={`הפחתת כמות ${product.name}`} onClick={() => onQty(product.id, carted.qty - 1)}><Minus size={14} /></button>
                   <span className="min-w-10 border-x border-line py-2 text-center text-sm font-semibold num">{carted.qty}</span>
-                  <button type="button" className="grid size-11 place-items-center hover:bg-surface-sunken" aria-label={`הוספת כמות ${product.name}`} onClick={() => onQty(product.id, carted.qty + 1)}><Plus size={14} /></button>
+                  <button type="button" className="grid size-11 place-items-center hover:bg-action-wash" aria-label={`הוספת כמות ${product.name}`} onClick={() => onQty(product.id, carted.qty + 1)}><Plus size={14} /></button>
                 </div>
               )}
             </div>

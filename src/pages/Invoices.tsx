@@ -285,7 +285,7 @@ export function InvoicesList() {
         {REVIEW_FILTER_OPTIONS.map(([value, label]) => (
           <button key={value || 'all'} type="button" aria-pressed={reviewFilter === value}
             onClick={() => patchParams({ review: value, page: '' })}
-            className={`${MOBILE_PRIMARY_REVIEW_FILTERS.has(value) || reviewFilter === value ? 'inline-flex' : 'hidden sm:inline-flex'} min-h-11 items-center rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${reviewFilter === value ? 'border-action-line bg-action-soft text-action-on-soft' : 'border-line bg-surface text-ink-soft hover:bg-surface-sunken'}`}>
+            className={`${MOBILE_PRIMARY_REVIEW_FILTERS.has(value) || reviewFilter === value ? '' : 'max-sm:hidden'} chip-filter ${reviewFilter === value ? 'chip-filter-active' : ''}`}>
             {label}
           </button>
         ))}

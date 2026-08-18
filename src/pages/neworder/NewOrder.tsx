@@ -738,18 +738,20 @@ export default function NewOrder() {
         </div>
       </div>
 
-      <nav aria-label="שלבי הזמנה" className="grid grid-cols-3 border-y border-line-strong bg-surface">
+      {/* T7.3: the wizard steps speak the floating-pill language — a white pill strip with the
+          active step as a solid oceanic pill, replacing the ruled underline tabs. */}
+      <nav aria-label="שלבי הזמנה" className="flex w-fit max-w-full flex-wrap items-center gap-1 rounded-full bg-surface/90 p-1.5 shadow-card">
         <button type="button" onClick={() => setStep(1)} aria-current={step === 1 ? 'step' : undefined}
-          className={`flex min-h-14 items-center gap-2 border-b-2 px-4 text-start transition-colors ${step === 1 ? 'border-action bg-action-wash/50 text-ink' : 'border-transparent text-ink-muted hover:bg-surface-sunken'}`}>
-          <span className="num text-xs">01</span><span className="text-sm font-semibold">מוצרים וכמויות</span>
+          className={`chip-filter gap-2 ${step === 1 ? 'chip-filter-active' : ''}`}>
+          <span className="num text-xs">01</span><span className="font-semibold">מוצרים וכמויות</span>
         </button>
         <button type="button" disabled={!cart.length} onClick={() => setStep(2)} aria-current={step === 2 ? 'step' : undefined}
-          className={`flex min-h-14 items-center gap-2 border-b-2 border-s border-line-soft px-4 text-start transition-colors disabled:opacity-50 ${step === 2 ? 'border-b-action bg-action-wash/50 text-ink' : 'border-b-transparent text-ink-muted hover:bg-surface-sunken'}`}>
-          <span className="num text-xs">02</span><span className="text-sm font-semibold">ספקים וחלוקה</span>
+          className={`chip-filter gap-2 disabled:cursor-not-allowed disabled:opacity-50 ${step === 2 ? 'chip-filter-active' : ''}`}>
+          <span className="num text-xs">02</span><span className="font-semibold">ספקים וחלוקה</span>
         </button>
         <button type="button" disabled={!cart.length || split.blocked.length > 0} onClick={() => void goToSummary()} aria-current={step === 3 ? 'step' : undefined}
-          className={`flex min-h-14 items-center gap-2 border-b-2 border-s border-line-soft px-4 text-start transition-colors disabled:opacity-50 ${step === 3 ? 'border-b-action bg-action-wash/50 text-ink' : 'border-b-transparent text-ink-muted hover:bg-surface-sunken'}`}>
-          <span className="num text-xs">03</span><span className="text-sm font-semibold">סיכום ואישור</span>
+          className={`chip-filter gap-2 disabled:cursor-not-allowed disabled:opacity-50 ${step === 3 ? 'chip-filter-active' : ''}`}>
+          <span className="num text-xs">03</span><span className="font-semibold">סיכום ואישור</span>
         </button>
       </nav>
 

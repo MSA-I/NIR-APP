@@ -451,7 +451,7 @@ export function OrderDetail() {
         </ul>
         <div className="hidden overflow-x-auto lg:block print:block print:overflow-visible">
         <table className="w-full">
-          <thead className="bg-surface-sunken border-b border-line-soft">
+          <thead className="table-head border-b border-line-soft">
             <tr>
               <th scope="col" className="th">מוצר</th><th scope="col" className="th">יח׳</th><th scope="col" className="th">כמות</th>
               <th scope="col" className="th">מחיר יח׳ (בעת ההזמנה)</th><th scope="col" className="th">סה״כ</th>

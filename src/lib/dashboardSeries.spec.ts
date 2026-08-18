@@ -32,7 +32,11 @@ describe('dashboard series', () => {
     expect(result.at(-1)?.total).toBe(17.5);
   });
 
-  it('keeps measured zero, nulls empty buckets and includes unmatched weeks', () => {
+  it('אפס-חלון-מלא: דלי ריק הוא 0 נמדד, שבוע נעדר מסדרה נשאר null, וסך מזוהם לעולם לא מחלחל', () => {
+    // T7.2 policy: the window is fetched in full, so a PRESENT bucket with count 0 is a true
+    // measured zero → 0 (continuous line). A week a series never bucketed (absent) is not a
+    // measurement of it → null. The count-0 bucket carries total 900 on purpose: the policy must
+    // emit ITS zero, never the bucket's garbage total.
     expect(mergeWeeklyComparison(
       [
         { week: '01/07', total: 0, count: 1 },
@@ -44,7 +48,7 @@ describe('dashboard series', () => {
       ],
     )).toEqual([
       { week: '01/07', purchases: 0, payments: 500 },
-      { week: '08/07', purchases: null, payments: null },
+      { week: '08/07', purchases: 0, payments: null },
       { week: '15/07', purchases: null, payments: 700 },
     ]);
   });

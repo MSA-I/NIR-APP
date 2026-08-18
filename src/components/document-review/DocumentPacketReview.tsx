@@ -111,7 +111,7 @@ function SegmentGroup({ id, testId, title, count, tone, summary, open, onOpenCha
       className="group mt-3 overflow-hidden rounded-lg border border-line"
       onToggle={(event) => onOpenChange(event.currentTarget.open)}
     >
-      <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-sm hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden sm:px-4">
+      <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-sm hover:bg-action-wash active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden sm:px-4">
         <span className="font-medium text-ink-body">{title}</span>
         <span className={`badge-${tone} num`}>{count}</span>
         <span className="ms-auto min-w-0 text-end text-xs text-ink-muted">{summary}</span>

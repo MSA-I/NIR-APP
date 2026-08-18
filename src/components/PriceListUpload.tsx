@@ -413,7 +413,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
           )}
           <div className="max-h-64 overflow-y-auto border border-line-soft rounded-lg">
             <table className="w-full">
-              <thead className="bg-surface-sunken sticky top-0"><tr><th scope="col" className="th">מוצר</th><th scope="col" className="th">מחיר</th><th scope="col" className="th">התאמה</th></tr></thead>
+              <thead className="table-head sticky top-0"><tr><th scope="col" className="th">מוצר</th><th scope="col" className="th">מחיר</th><th scope="col" className="th">התאמה</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {preview.rows.slice(0, 100).map((r, i) => (
                   <tr key={i}>

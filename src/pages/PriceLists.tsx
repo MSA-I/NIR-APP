@@ -287,7 +287,7 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
            this had not shown up yet. */
         <div className="overflow-x-auto">
         <table className="w-full">
-          <thead><tr><th className="th">תאריך</th><th className="th">מחיר</th></tr></thead>
+          <thead className="table-head"><tr><th className="th">תאריך</th><th className="th">מחיר</th></tr></thead>
           <tbody className="divide-y divide-line-soft">
             {data.map((h) => (
               <tr key={h.id}><td className="td">{fmtDate(h.effective_date)}</td><td className="td num">{fmtMoneyExact(h.price)}</td></tr>
@@ -412,7 +412,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           <div className="text-sm text-ink-soft">{preview.length} שורות זוהו. ההתאמה מתבצעת לפי שם ספק ושם מוצר מדויקים.</div>
           <div className="max-h-64 overflow-y-auto border border-line-soft rounded-lg">
             <table className="w-full">
-              <thead className="bg-surface-sunken sticky top-0"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">מוצר</th><th scope="col" className="th">מחיר</th></tr></thead>
+              <thead className="table-head sticky top-0"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">מוצר</th><th scope="col" className="th">מחיר</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {preview.slice(0, 100).map((r, i) => (
                   <tr key={i}><td className="td">{r.supplier}</td><td className="td">{r.product}</td><td className="td num">{fmtMoneyExact(r.price)}</td></tr>

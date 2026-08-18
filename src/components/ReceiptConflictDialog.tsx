@@ -400,7 +400,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <caption className="sr-only">השוואת הכמויות בין המכשיר לשרת</caption>
-            <thead>
+            <thead className="table-head">
               <tr className="border-b border-line text-start text-xs text-ink-soft">
                 <th scope="col" className="py-2 text-start font-medium">פריט</th>
                 <th scope="col" className="py-2 text-start font-medium">במכשיר</th>
@@ -444,7 +444,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
                             className={`rounded-lg border min-h-11 px-3 text-xs font-medium transition-colors ${
                               choice[line.orderItemId] === value
                                 ? 'bg-action text-white border-action'
-                                : 'border-line text-ink-soft hover:bg-surface-sunken'}`}
+                                : 'border-line text-ink-soft hover:bg-action-wash'}`}
                             aria-pressed={choice[line.orderItemId] === value}
                             aria-label={`${label} עבור ${line.productName}`}
                             onClick={() => setChoice((current) => ({ ...current, [line.orderItemId]: value }))}>

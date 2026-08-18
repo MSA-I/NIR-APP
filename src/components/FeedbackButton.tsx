@@ -121,10 +121,10 @@ export default function FeedbackButton({ onShell = false }: { onShell?: boolean 
     <>
       <button type="button" onClick={() => void openWithCapture()} disabled={cooling || capturing}
         aria-label={label} title={label}
-        className={`grid size-[44px] shrink-0 place-items-center border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 ${
+        className={`grid size-[44px] shrink-0 place-items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 ${
           onShell
-            ? 'border-transparent text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
-            : 'border-line text-ink-soft hover:bg-surface-sunken hover:text-ink'
+            ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
+            : 'text-ink-soft hover:bg-action-wash hover:text-ink'
         }`}>
         <MessageSquarePlus size={19} aria-hidden="true" />
       </button>

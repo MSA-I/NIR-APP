@@ -1,0 +1,15 @@
+version: 1
+slug: inplace
+name: InPlace
+one_liner: "A calm procurement-to-payment control system where everything has its place and the next action is clear."
+industry: "B2B procurement-to-payment software"
+archetype: "trusted controller"
+created: "2026-08-18"
+updated: "2026-08-18"   # palette synced to the owner's Onyx/Wheat/Oceanic decision (T7)
+status: "identity-concept"
+artifacts:
+  context: true
+  audience: true
+  positioning: true
+  identity: true
+  brand_board: true

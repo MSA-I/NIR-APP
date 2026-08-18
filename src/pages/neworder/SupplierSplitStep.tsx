@@ -131,7 +131,7 @@ export default function SupplierSplitStep({
                 <div className="text-sm"><span className="text-ink-muted">כמות </span><b className="num">{formatQuantity(item.qty, item.product.unit)}</b></div>
                 <div className="text-xs text-ink-muted">{resolved?.supplierId ? supplierById.get(resolved.supplierId)?.name ?? 'ספק לא זמין' : 'טרם הוקצה ספק'}</div>
                 <div className="num text-sm font-semibold">{fmtMoneyExact(resolved?.lineTotal)}</div>
-                <button type="button" className="grid size-11 place-items-center text-ink-faint hover:bg-surface-sunken hover:text-alert-solid" onClick={() => onRemove(item.productId)} aria-label={`הסרת ${item.product.name}`}><Trash2 size={15} /></button>
+                <button type="button" className="grid size-11 place-items-center text-ink-faint hover:bg-action-wash hover:text-alert-solid" onClick={() => onRemove(item.productId)} aria-label={`הסרת ${item.product.name}`}><Trash2 size={15} /></button>
               </div>
             );
           })}

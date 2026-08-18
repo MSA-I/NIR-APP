@@ -373,7 +373,7 @@ export function ReceivingList() {
           {remaining.length > 0 && (
             <>
               <details className="group sm:hidden">
-                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-2 text-sm font-medium text-action hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-2 text-sm font-medium text-action hover:bg-action-wash active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
                   הצג הכל ({filtered.length})
                   <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
                 </summary>
@@ -1082,7 +1082,7 @@ export function ReceiveOrder() {
             <div className="grid grid-cols-5 gap-1.5 mt-3">
               {statusButtons.map((b) => (
                 <button key={b.key}
-                  className={`rounded-lg border min-h-11 flex items-center justify-center text-xs font-medium transition-colors ${line.status === b.key ? SOLID[RECEIPT_LINE_STATUS[b.key].tone] : 'border-line text-ink-soft hover:bg-surface-sunken'}`}
+                  className={`rounded-lg border min-h-11 flex items-center justify-center text-xs font-medium transition-colors ${line.status === b.key ? SOLID[RECEIPT_LINE_STATUS[b.key].tone] : 'border-line text-ink-soft hover:bg-action-wash'}`}
                   aria-label={`${b.label} עבור ${item.product.name}`}
                   aria-pressed={line.status === b.key}
                   onClick={() => setLine(item.id, { status: b.key, ...(b.key === 'missing' ? { qty: 0 } : {}) })}>
@@ -1108,7 +1108,8 @@ export function ReceiveOrder() {
           credit is the full unusable quantity at the order's snapshot price. */}
       <p className="px-1 text-xs text-ink-muted">פריט פגום או שהוחזר אינו נספר כאספקה תקינה; כשהתיבה מסומנת נפתחת עליו דרישת זיכוי אוטומטית לפי מחיר ההזמנה.</p>
       {/* sticky action bar */}
-      <div className="phone-taskbar fixed inset-x-0 lg:ms-60 bg-surface border-t border-line p-3 flex gap-2 z-30">
+      {/* lg:ms-60 cleared with the sidebar (T7.1 top navigation): the bar spans the full width. */}
+      <div className="phone-taskbar fixed inset-x-0 bg-surface border-t border-line p-3 flex gap-2 z-30">
         {busy && <span className="sr-only" role="status" aria-live="polite">שומר את הקבלה</span>}
         {/* Rewritten with finding 7: the camera is no longer suppressed on this route, so "צילום
             החשבונית יתאפשר מיד לאחר סיום הקבלה" became false the moment the FAB kept its capture

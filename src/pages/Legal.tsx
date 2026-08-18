@@ -19,7 +19,7 @@ export const TERMS_VERSION = '2026-08-09';
 
 function LegalShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh bg-shell py-8 px-4">
+    <div className="min-h-dvh bg-action py-8 px-4">
       <div className="max-w-2xl mx-auto space-y-4">
         <div className="text-center">
           <h1 className="text-2xl font-semibold text-white">{APP_NAME}</h1>

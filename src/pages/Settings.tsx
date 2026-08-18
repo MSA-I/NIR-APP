@@ -542,7 +542,7 @@ export default function Settings() {
           tabIndex={0}
         >
         <table className="w-full">
-          <thead className="bg-surface-sunken"><tr><th scope="col" className="th">שם</th><th scope="col" className="th">תפקיד</th><th scope="col" className="th">טלפון</th><th scope="col" className="th">סטטוס</th><th scope="col" className="th"><span className="sr-only">פעולות</span></th></tr></thead>
+          <thead className="table-head"><tr><th scope="col" className="th">שם</th><th scope="col" className="th">תפקיד</th><th scope="col" className="th">טלפון</th><th scope="col" className="th">סטטוס</th><th scope="col" className="th"><span className="sr-only">פעולות</span></th></tr></thead>
           <tbody className="divide-y divide-line-soft">
             {users?.map((u) => (
               <tr key={u.id}>

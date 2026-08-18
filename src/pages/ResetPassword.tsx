@@ -82,7 +82,7 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-shell p-4">
+    <div className="min-h-dvh flex items-center justify-center bg-action p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-semibold text-white">{APP_NAME}</h1>

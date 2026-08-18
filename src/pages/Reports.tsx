@@ -183,7 +183,7 @@ export default function Reports() {
       // The name has to say whose report it is; a fixed tenant name would break multi-tenancy.
       // Strip only what filesystems object to; Hebrew names are fine and are the whole point.
       const slug = org.name.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
-      const fileName = `${slug || 'supplyflow'}-report-${safeMonth}.xlsx`;
+      const fileName = `${slug || 'inplace'}-report-${safeMonth}.xlsx`;
       const templated = await renderConfiguredReportTemplate({
         exportKey: 'accountant_monthly_report', orgId: org.id, values,
       });
@@ -214,7 +214,7 @@ export default function Reports() {
       const unitSlug = snapshot.legal_entity_name.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
       XLSX.writeFile(
         workbook,
-        `${orgSlug || 'supplyflow'}-${unitSlug || 'legal-entity'}-final-report-${snapshot.report_month.slice(0, 7)}-v${snapshot.version}.xlsx`,
+        `${orgSlug || 'inplace'}-${unitSlug || 'legal-entity'}-final-report-${snapshot.report_month.slice(0, 7)}-v${snapshot.version}.xlsx`,
       );
       toast(`גרסה ${snapshot.version} הורדה מה-snapshot הנעול`);
     } catch (e) {
@@ -536,7 +536,7 @@ export default function Reports() {
           </ul>
           <div className="report-table-wrap hidden overflow-x-auto xl:block print:block">
             <table className="report-invoices w-full">
-              <thead className="bg-surface-sunken"><tr>
+              <thead className="table-head"><tr>
                 <th scope="col" className="th">ספק</th><th scope="col" className="th">מס׳</th><th scope="col" className="th">תאריך</th>
                 <th scope="col" className="th">לפני מע״מ</th><th scope="col" className="th">מע״מ</th><th scope="col" className="th">סה״כ</th>
                 <th scope="col" className="th">בדיקה</th><th scope="col" className="th">תשלום</th>
@@ -580,7 +580,7 @@ export default function Reports() {
             </ul>
             <div className="report-table-wrap hidden overflow-x-auto xl:block print:block">
             <table className="w-full">
-              <thead className="bg-surface-sunken"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סכום ששולם</th></tr></thead>
+              <thead className="table-head"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סכום ששולם</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {paymentsBySupplier.map(([name, sum]) => (
                   <tr key={name}><td className="td">{name}</td><td className="td num font-medium">{fmtMoneyExact(sum)}</td></tr>
@@ -610,7 +610,7 @@ export default function Reports() {
             </ul>
             <div className="report-table-wrap hidden overflow-x-auto xl:block print:block">
             <table className="w-full">
-              <thead className="bg-surface-sunken"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סיבה</th><th scope="col" className="th">סכום</th><th scope="col" className="th">סטטוס</th></tr></thead>
+              <thead className="table-head"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סיבה</th><th scope="col" className="th">סכום</th><th scope="col" className="th">סטטוס</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {data.credits.map((c) => (
                   <tr key={c.number}>
