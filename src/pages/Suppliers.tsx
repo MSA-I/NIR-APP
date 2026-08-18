@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
 import { useAuth } from '../auth/AuthContext';
-import { Breadcrumbs, DataTable, StatusBadge, useToast, Modal, ErrorNote, ConfirmDialog, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, type Column } from '../components/ui';
+import { Breadcrumbs, DataTable, StatusBadge, useToast, Modal, ErrorNote, Note, ConfirmDialog, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, type Column } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { PriceListUploadModal, SUBMISSION_STATUS, submissionMonthLabel } from '../components/PriceListUpload';
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
@@ -26,7 +26,7 @@ type SupplierRow = Supplier & {
 type PricedProduct = SupplierProduct & { product: { id: string; name: string; unit: string } };
 
 interface SupplierWithBalance extends SupplierRow {
-  open_balance?: number;
+  open_balance?: number | null; // null = the balance reader is owner-gated for this caller
   categories?: string[];
   metrics?: SupplierMetrics;
 }
@@ -66,6 +66,11 @@ export function SuppliersList() {
   const [deleteTarget, setDeleteTarget] = useState<SupplierWithBalance | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
 
+  // p0_supplier_balance_rows stops at owner (0137) on this STAFF page. For office the view
+  // answers an empty 200, and rendering that as ₪0.00 is a false measurement — so the query is
+  // skipped and every balance cell says — instead (constitution: אפס הוא גם טענה על המציאות).
+  const financial = profile?.role === 'owner';
+
   const { data, loading, error, refetch } = useQuery(async () => {
     // Same shape as the card query (Promise.all): suppliers + balances + metrics in parallel,
     // merged through Maps. The list answers "who needs my attention"; the card answers "why".
@@ -77,7 +82,9 @@ export function SuppliersList() {
       supabase.from('suppliers')
         .select('id, org_id, name, tax_id, contact_name, phone, whatsapp, email, address, delivery_days, cutoff_time, min_order_amount, payment_terms, notes, status, deleted_at, created_at, updated_at, rating, rating_updated_at, rating_note, supplier_categories(category_id, categories(name))')
         .is('deleted_at', null).order('name'),
-      supabase.from('supplier_balances').select('*'),
+      financial
+        ? supabase.from('supplier_balances').select('*')
+        : Promise.resolve({ data: [], error: null }),
       supabase.from('supplier_metrics').select('*'),
     ]);
     const suppliers = unwrap(supRes) as (SupplierRow & { supplier_categories: { categories: { name: string } }[] })[];
@@ -87,11 +94,11 @@ export function SuppliersList() {
     const metMap = new Map(metrics.map((m) => [m.supplier_id, m]));
     return suppliers.map((s) => ({
       ...s,
-      open_balance: balMap.get(s.id) ?? 0,
+      open_balance: financial ? (balMap.get(s.id) ?? 0) : null,
       categories: s.supplier_categories?.map((c) => c.categories?.name).filter(Boolean),
       metrics: metMap.get(s.id),
     }));
-  });
+  }, [financial]);
 
   const canWrite = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
 
@@ -109,6 +116,13 @@ export function SuppliersList() {
   // merge): the supplier_balances view for open money, purchase_orders outside the terminal
   // statuses (received/cancelled) for in-flight activity.
   async function requestDelete(s: SupplierWithBalance) {
+    // The balance reader is owner-gated (0137): for any other role it answers an empty 200,
+    // which this guard would mistake for "no money owed" and let the supplier vanish while
+    // invoices are open. Unprovable = refuse, same as a failed check.
+    if (!financial) {
+      toast('מחיקת ספק דורשת אימות יתרה פתוחה — זמין לבעלים בלבד', 'error');
+      return;
+    }
     const [balRes, poRes] = await Promise.all([
       supabase.from('supplier_balances').select('open_balance').eq('supplier_id', s.id).maybeSingle(),
       supabase.from('purchase_orders').select('id', { count: 'exact', head: true })
@@ -161,7 +175,9 @@ export function SuppliersList() {
   return (
     <div className="space-y-4">
       <PageHeader title="ספקים"
-        meta={`${data?.length ?? 0} ספקים · ${(data ?? []).filter((supplier) => (supplier.open_balance ?? 0) > 0).length} עם יתרה פתוחה`}
+        meta={financial
+          ? `${data?.length ?? 0} ספקים · ${(data ?? []).filter((supplier) => (supplier.open_balance ?? 0) > 0).length} עם יתרה פתוחה`
+          : `${data?.length ?? 0} ספקים`}
         actions={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> ספק חדש</button>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.contact_name ?? '').toLowerCase().includes(q) || (r.tax_id ?? '').toLowerCase().includes(q)}
@@ -440,12 +456,25 @@ export function SupplierCard() {
     // supplier_price_submissions RLS grants SELECT to owner/office (or the supplier itself) —
     // other staff roles skip the query instead of reading an empty result as "no history".
     const staff = profile?.role === 'owner' || profile?.role === 'office';
-    const [orders, invoices, payments, credits, balance, metrics, sps, submissions] = await Promise.all([
+    // payments_select (0133) and p0_supplier_balance_rows (0137) both stop at owner on this
+    // page (accountant never reaches it — the route is STAFF). For office the queries would
+    // return empty 200s, and an RLS-emptied result rendered as "0 payments / ₪0.00" is a false
+    // claim about the business, not a permission message. Skip, and render — with the reason.
+    const financial = profile?.role === 'owner';
+    const [orders, invoices, consolidated, payments, credits, balance, metrics, sps, submissions] = await Promise.all([
       supabase.from('purchase_orders').select('*').eq('supplier_id', id!).order('created_at', { ascending: false }).limit(50),
       supabase.from('invoices').select('*').eq('supplier_id', id!).eq('financial_role', 'payable').is('deleted_at', null).order('invoice_date', { ascending: false }).limit(50),
-      supabase.from('payments').select('*').eq('supplier_id', id!).order('paid_date', { ascending: false }).limit(50),
+      // Not rows — one count. Invoices a consolidated case demoted to supporting_evidence are
+      // deliberately absent from the table (0137: "not an ordinary invoice anywhere"), but their
+      // absence must be explained or the tab reads as out of sync with the documents gallery.
+      supabase.from('invoices').select('id', { count: 'exact', head: true }).eq('supplier_id', id!).eq('financial_role', 'supporting_evidence').is('deleted_at', null),
+      financial
+        ? supabase.from('payments').select('*').eq('supplier_id', id!).order('paid_date', { ascending: false }).limit(50)
+        : Promise.resolve({ data: null as Payment[] | null, error: null }),
       supabase.from('credit_requests').select('*').eq('supplier_id', id!).order('created_at', { ascending: false }).limit(50),
-      supabase.from('supplier_balances').select('*').eq('supplier_id', id!).maybeSingle(),
+      financial
+        ? supabase.from('supplier_balances').select('*').eq('supplier_id', id!).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
       supabase.from('supplier_metrics').select('*').eq('supplier_id', id!).maybeSingle(), // maybeSingle: a role-guarded view may return no row
       supabase.from('supplier_products').select('*, product:products(id,name,unit)').eq('supplier_id', id!).order('updated_at', { ascending: false }),
       staff
@@ -462,9 +491,12 @@ export function SupplierCard() {
       supplier,
       orders: unwrap(orders) as PurchaseOrder[],
       invoices: unwrap(invoices) as Invoice[],
-      payments: unwrap(payments) as Payment[],
+      consolidatedCount: consolidated.count ?? 0,
+      // null = this role may not read payments/balance — a different claim than "none exist",
+      // and the render below keeps the two apart (constitution: אפס הוא גם טענה על המציאות).
+      payments: financial ? (unwrap(payments) as Payment[]) : null,
       credits: unwrap(credits) as CreditRequest[],
-      balance: (balance.data as { open_balance: number } | null)?.open_balance ?? 0,
+      balance: financial ? ((balance.data as { open_balance: number } | null)?.open_balance ?? 0) : null,
       metrics: (metrics.data as SupplierMetrics | null) ?? null,
       prices,
       history,
@@ -486,7 +518,8 @@ export function SupplierCard() {
   const tabs = useMemo(() => ([
     { key: 'orders' as const, label: `הזמנות (${data?.orders.length ?? 0})` },
     { key: 'invoices' as const, label: `חשבוניות (${data?.invoices.length ?? 0})` },
-    { key: 'payments' as const, label: `תשלומים (${data?.payments.length ?? 0})` },
+    // — and not 0: a role that may not read payments has no count to claim.
+    { key: 'payments' as const, label: `תשלומים (${data?.payments ? data.payments.length : '—'})` },
     { key: 'credits' as const, label: `זיכויים (${data?.credits.length ?? 0})` },
     { key: 'prices' as const, label: `מחירים (${data?.prices.length ?? 0})` },
   ]), [data]);
@@ -511,7 +544,11 @@ export function SupplierCard() {
   // One card, one grid — the spec sheet (§4.4). Balance + honest metrics; OTD renders — (never
   // 0%) when no promised delivery date was ever recorded (open decision #28, not yet answered).
   const scoreItems: ScoreItem[] = [
-    { label: 'יתרה פתוחה', value: fmtMoneyExact(data.balance), tone: data.balance > 0 ? 'await' : 'done' },
+    // balance === null means the balance reader is owner-gated for this caller, and a green
+    // ₪0.00 there would be a fabricated measurement, not a permission message.
+    data.balance === null
+      ? { label: 'יתרה פתוחה', value: '—', sub: 'זמין לבעלים בלבד', tone: 'idle' }
+      : { label: 'יתרה פתוחה', value: fmtMoneyExact(data.balance), tone: data.balance > 0 ? 'await' : 'done' },
     {
       label: 'עמידה בזמנים',
       value: m && m.otd_samples > 0 ? fmtPct(m.on_time_pct) : '—',
@@ -586,7 +623,14 @@ export function SupplierCard() {
         </div>
       )}
       {tab === 'invoices' && (
-        <div role="tabpanel" id="supplier-panel-invoices" aria-labelledby="supplier-tab-invoices">
+        <div role="tabpanel" id="supplier-panel-invoices" aria-labelledby="supplier-tab-invoices" className="space-y-3">
+        {data.consolidatedCount > 0 && (
+          <Note tone="info">
+            <span className="num">{data.consolidatedCount}</span> מסמכי חשבונית של ספק זה אוחדו לחשבונית
+            מרכזת ואינם מוצגים כאן —{' '}
+            <button className="underline" onClick={() => navigate('/documents/consolidated-invoices')}>לחשבוניות המרכזות</button>
+          </Note>
+        )}
         <DataTable rows={data.invoices} columns={[
           { key: 'num', header: 'מס׳ חשבונית', className: 'num', render: (r: Invoice) => r.invoice_number },
           { key: 'date', header: 'תאריך', sortValue: (r: Invoice) => r.invoice_date, render: (r: Invoice) => fmtDate(r.invoice_date) },
@@ -598,12 +642,16 @@ export function SupplierCard() {
       )}
       {tab === 'payments' && (
         <div role="tabpanel" id="supplier-panel-payments" aria-labelledby="supplier-tab-payments">
-        <DataTable rows={data.payments} columns={[
-          { key: 'date', header: 'תאריך', sortValue: (r: Payment) => r.paid_date, render: (r: Payment) => fmtDate(r.paid_date) },
-          { key: 'amount', header: 'סכום', className: 'num', sortValue: (r: Payment) => r.amount, render: (r: Payment) => fmtMoneyExact(r.amount) },
-          { key: 'method', header: 'אמצעי', render: (r: Payment) => r.method ?? '—' },
-          { key: 'ref', header: 'אסמכתא', className: 'num', render: (r: Payment) => <span dir="ltr">{r.reference ?? '—'}</span> },
-        ]} emptyTitle="אין תשלומים לספק זה" />
+        {data.payments ? (
+          <DataTable rows={data.payments} columns={[
+            { key: 'date', header: 'תאריך', sortValue: (r: Payment) => r.paid_date, render: (r: Payment) => fmtDate(r.paid_date) },
+            { key: 'amount', header: 'סכום', className: 'num', sortValue: (r: Payment) => r.amount, render: (r: Payment) => fmtMoneyExact(r.amount) },
+            { key: 'method', header: 'אמצעי', render: (r: Payment) => r.method ?? '—' },
+            { key: 'ref', header: 'אסמכתא', className: 'num', render: (r: Payment) => <span dir="ltr">{r.reference ?? '—'}</span> },
+          ]} emptyTitle="אין תשלומים לספק זה" />
+        ) : (
+          <Note tone="info">צפייה בתשלומים וביתרה הפתוחה של ספק זמינה לבעלים בלבד.</Note>
+        )}
         </div>
       )}
       {tab === 'credits' && (
