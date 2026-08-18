@@ -11,7 +11,7 @@ import {
   type ScanCorners,
 } from '../../lib/useDocumentScanning';
 import { Note, useToast } from '../ui';
-import { StickyPrimaryAction } from './StickyPrimaryAction';
+import { PrimaryDecision } from './PrimaryDecision';
 
 const DEFAULT_CORNERS: ScanCorners = [[0.05, 0.05], [0.95, 0.05], [0.95, 0.95], [0.05, 0.95]];
 const CORNER_LABELS = ['פינה שמאלית עליונה', 'פינה ימנית עליונה', 'פינה ימנית תחתונה', 'פינה שמאלית תחתונה'];
@@ -248,20 +248,21 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
                   ? 'הארגון במצב קריאה בלבד. אפשר לצפות בסריקה, אך אי אפשר לאשר אותה לחילוץ.'
                   : 'בדוק שהדף שלם וקריא. האישור קובע שה־OCR יקרא נגזרת זו, לא את המקור.'}
               </p>
-              {/* Two full-height page images stand between the top of this card and its decision —
-                  roughly two phone screens of scrolling to reach a button whose answer the reader
-                  already had. The approval rides along; "תיקון גבולות" is the exception path and
-                  stays where the images are, so nothing competes inside the bar. */}
+              {/* The decision stays AFTER the two page images, and that is the exception to the
+                  head-of-evidence placement `PrimaryDecision` documents: here the evidence is the
+                  object of the decision, not optional detail — the sentence above literally asks
+                  the reader to check that the page is complete and legible first. "תיקון גבולות"
+                  is the exception path and sits beside it. */}
               <div className="flex flex-wrap gap-2">
               <button type="button" className="btn-secondary" disabled={accepting || readOnly} onClick={() => setEditingCorners(true)}>
                 <Pencil size={17} aria-hidden="true" /> תיקון גבולות
               </button>
-              <StickyPrimaryAction label="אישור הסריקה והמשך לחילוץ" inline={readOnly}>
+              <PrimaryDecision label="אישור הסריקה והמשך לחילוץ">
                 <button type="button" className="btn-primary" disabled={accepting || readOnly} onClick={() => void accept()}>
                   {accepting ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <Check size={17} aria-hidden="true" />}
                   {accepting ? 'מאשר…' : 'אישור והמשך לחילוץ'}
                 </button>
-              </StickyPrimaryAction>
+              </PrimaryDecision>
               </div>
               </div>
             </div>

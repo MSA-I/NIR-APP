@@ -3,14 +3,21 @@ from __future__ import annotations
 import tempfile
 import threading
 import unittest
+import zipfile
+import zlib
 from pathlib import Path
+from typing import Any
 
 import cv2
 import numpy as np
 from PIL import Image
 
+from src import parsers
+from src.contract import validate_extraction
 from src.errors import ProcessingError
-from src.limits import DEFAULT_LIMITS
+from src.limits import DEFAULT_LIMITS, ExtractionLimits
+from src.ocr import PageImage
+from src.parsers import extract_file
 from src.scanning import (
     SEVERE_SHADOW_SCORE,
     _select_mode,
@@ -367,6 +374,471 @@ class DocumentScanningTests(unittest.TestCase):
             self.assertGreater(metadata["height"], 3000)
             self.assertLessEqual(metadata["width"] * metadata["height"], 9_010_000)
             self.assertEqual(metadata["corners_source"], "manual")
+
+
+# =============================================================================================
+# `document.partial` -- the coverage flag, and the only thing standing between a page nobody
+# read and an automatic decision taken about it.
+#
+# These live in this file rather than a new one because the worker image runs exactly two
+# unittest modules (see `Dockerfile` and the `-m unittest` line in quality-gate.yml). A third
+# file would be a test nobody runs. Nothing below reaches a network or a model.
+# =============================================================================================
+
+
+def _build_pdf(objects: list[bytes], path: Path) -> None:
+    body = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = [0]
+    for number, value in enumerate(objects, start=1):
+        offsets.append(len(body))
+        body.extend(f"{number} 0 obj\n".encode())
+        body.extend(value)
+        body.extend(b"\nendobj\n")
+    xref = len(body)
+    body.extend(f"xref\n0 {len(offsets)}\n".encode())
+    body.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        body.extend(f"{offset:010d} 00000 n \n".encode())
+    body.extend(
+        f"trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    )
+    path.write_bytes(body)
+
+
+def _write_scanned_pdf(path: Path, page_count: int) -> None:
+    """A PDF with no text layer at all: `extract_text()` returns nothing for every page."""
+    image = zlib.compress(b"\xff\xff\xff")
+    drawing = b"q 100 0 0 100 25 25 cm /Im0 Do Q"
+    page_objects: list[bytes] = []
+    page_refs: list[str] = []
+    for page_index in range(page_count):
+        page_object = 3 + page_index * 3
+        image_object = page_object + 1
+        drawing_object = page_object + 2
+        page_refs.append(f"{page_object} 0 R")
+        page_objects.extend(
+            [
+                f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 150 150] /Resources "
+                f"<< /XObject << /Im0 {image_object} 0 R >> >> "
+                f"/Contents {drawing_object} 0 R >>".encode(),
+                f"<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceRGB "
+                f"/BitsPerComponent 8 /Filter /FlateDecode /Length {len(image)} >>\nstream\n".encode()
+                + image
+                + b"\nendstream",
+                f"<< /Length {len(drawing)} >>\nstream\n".encode() + drawing + b"\nendstream",
+            ]
+        )
+    _build_pdf(
+        [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            f"<< /Type /Pages /Kids [{' '.join(page_refs)}] /Count {page_count} >>".encode(),
+            *page_objects,
+        ],
+        path,
+    )
+
+
+def _write_text_pdf(path: Path) -> None:
+    """A PDF that needs no OCR at all: its one page carries its own text layer."""
+    stream = b"BT /F1 14 Tf 40 100 Td (Invoice 123) Tj ET"
+    _build_pdf(
+        [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 150] /Resources "
+            b"<< /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            f"<< /Length {len(stream)} >>\nstream\n".encode() + stream + b"\nendstream",
+        ],
+        path,
+    )
+
+
+def _write_mixed_pdf(path: Path) -> None:
+    """Page 1 carries a text layer, page 2 is an image. Only page 2 needs OCR."""
+    text_stream = b"BT /F1 14 Tf 40 100 Td (Invoice 123) Tj ET"
+    image = zlib.compress(b"\xff\xff\xff")
+    drawing = b"q 100 0 0 100 25 25 cm /Im0 Do Q"
+    _build_pdf(
+        [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 150] /Resources "
+            b"<< /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            f"<< /Length {len(text_stream)} >>\nstream\n".encode() + text_stream + b"\nendstream",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 150 150] /Resources "
+            b"<< /XObject << /Im0 7 0 R >> >> /Contents 8 0 R >>",
+            f"<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceRGB "
+            f"/BitsPerComponent 8 /Filter /FlateDecode /Length {len(image)} >>\nstream\n".encode()
+            + image
+            + b"\nendstream",
+            f"<< /Length {len(drawing)} >>\nstream\n".encode() + drawing + b"\nendstream",
+        ],
+        path,
+    )
+
+
+WORD_NAMESPACE = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+
+
+def _write_minimal_docx(
+    path: Path, body_xml: str, extra_parts: dict[str, str] | None = None
+) -> None:
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.'
+            'relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.'
+            'openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+        )
+        archive.writestr(
+            "_rels/.rels",
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/'
+            'relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+        )
+        archive.writestr(
+            "word/document.xml",
+            f'<?xml version="1.0" encoding="UTF-8"?><w:document {WORD_NAMESPACE}>'
+            f"<w:body>{body_xml}</w:body></w:document>",
+        )
+        for name, inner in (extra_parts or {}).items():
+            archive.writestr(name, f'<?xml version="1.0" encoding="UTF-8"?>{inner}')
+
+
+class _RecordingAdapter:
+    """Transcribes every page it is handed, and records which pages those were.
+
+    Model-free by construction. What it proves is a boundary rather than a transcription: which
+    pages the PDF path chose to pay for, and therefore which pages it never read at all.
+    """
+
+    def __init__(self, silent_pages: set[int] | None = None) -> None:
+        self.silent_pages = silent_pages or set()
+        self.seen: list[int] = []
+
+    def extract(self, pages: list[PageImage], limits: ExtractionLimits) -> dict[str, Any]:
+        del limits
+        self.seen.extend(page.page for page in pages)
+        blocks = [
+            {
+                "id": f"ocr-p{page.page}-l1",
+                "page": page.page,
+                "type": "text",
+                "bbox": [0.0, 0.0, 1.0, 1.0],
+                "text": f"page {page.page}",
+                "confidence": None,
+            }
+            for page in pages
+            if page.page not in self.silent_pages
+        ]
+        page_text = [
+            "" if page.page in self.silent_pages else f"page {page.page}" for page in pages
+        ]
+        return {
+            "schema_version": "1",
+            "document": {
+                "page_count": max(page.page for page in pages),
+                "detected_languages": ["en"],
+                "plain_text": "\n\n".join(page_text),
+                "partial": any(not text for text in page_text),
+            },
+            "blocks": blocks,
+            "tables": [],
+            "marks": [],
+        }
+
+
+class ExtractionPartialFlagTests(unittest.TestCase):
+    """`partial` must mean "this extraction did not capture the whole document", and nothing else.
+
+    Every arm is a page or an archive part the worker provably did not read, asserted against the
+    line that decides it.
+    """
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+
+    @staticmethod
+    def _fake_render(path: Path, page: int, limits: ExtractionLimits) -> PageImage:
+        del limits
+        output = path.parent / f"fake-render-{page}.png"
+        output.write_bytes(b"rendered")
+        return PageImage(page, output, 10, 10)
+
+    def _extract_pdf(
+        self, source: Path, adapter: Any, limits: ExtractionLimits
+    ) -> dict[str, Any]:
+        original = parsers._render_pdf_page
+        parsers._render_pdf_page = self._fake_render
+        try:
+            return extract_file(source, "application/pdf", adapter=adapter, limits=limits)
+        finally:
+            parsers._render_pdf_page = original
+
+    # --- the paid-OCR page cap: `missing[: limits.max_ai_pages]` in parsers._parse_pdf ---
+
+    def test_pages_dropped_by_the_ai_page_cap_make_the_extraction_partial(self) -> None:
+        source = self.root / "scan-over-cap.pdf"
+        _write_scanned_pdf(source, page_count=4)
+        adapter = _RecordingAdapter()
+
+        payload = self._extract_pdf(
+            source, adapter, ExtractionLimits(max_ai_pages=2, max_decompressed_bytes=10_000)
+        )
+
+        # The cap is the whole point: pages 3 and 4 were never rendered and never paid for, so
+        # nothing in this system knows what is on them.
+        self.assertEqual(adapter.seen, [1, 2])
+        self.assertTrue(payload["document"]["partial"])
+        self.assertEqual(payload["document"]["page_count"], 4)
+        self.assertEqual([block["page"] for block in payload["blocks"]], [1, 2])
+
+    def test_the_same_scan_within_the_cap_is_not_partial(self) -> None:
+        """The paired proof: nothing about the document changed, only whether the cap bit."""
+        source = self.root / "scan-within-cap.pdf"
+        _write_scanned_pdf(source, page_count=4)
+        adapter = _RecordingAdapter()
+
+        payload = self._extract_pdf(
+            source, adapter, ExtractionLimits(max_ai_pages=4, max_decompressed_bytes=10_000)
+        )
+
+        self.assertEqual(adapter.seen, [1, 2, 3, 4])
+        self.assertFalse(payload["document"]["partial"])
+
+    def test_an_attempted_page_that_came_back_empty_is_not_partial(self) -> None:
+        """The deliberate non-arm. `partial` answers "did we fail to LOOK at part of this".
+
+        Page 2 was rendered, sent and read; it simply yielded nothing. A blank verso and a failed
+        read are indistinguishable here without pixel analysis, so calling it a coverage gap would
+        mark most scanned packets partial for having a blank back side -- the always-true flag
+        this work removed, with a smaller blast radius. The failed-read half of that ambiguity has
+        its own path: `second_pass.improve` retries a page that produced zero lines.
+        """
+        source = self.root / "scan-silent-page.pdf"
+        _write_scanned_pdf(source, page_count=3)
+        adapter = _RecordingAdapter(silent_pages={2})
+
+        payload = self._extract_pdf(
+            source, adapter, ExtractionLimits(max_ai_pages=20, max_decompressed_bytes=10_000)
+        )
+
+        self.assertEqual(adapter.seen, [1, 2, 3])
+        self.assertFalse(payload["document"]["partial"])
+
+    def test_a_scan_with_no_adapter_configured_still_fails_loudly(self) -> None:
+        """Unchanged by this work, and asserted so the honest flag is not mistaken for the guard."""
+        source = self.root / "no-adapter.pdf"
+        _write_scanned_pdf(source, page_count=2)
+
+        with self.assertRaises(ProcessingError) as caught:
+            extract_file(source, "application/pdf", limits=DEFAULT_LIMITS)
+
+        self.assertEqual(caught.exception.code, "ocr_model_not_selected")
+
+    def test_a_partly_scanned_pdf_with_no_adapter_is_partial_rather_than_fatal(self) -> None:
+        """The quiet case: `_parse_pdf` only raises when EVERY page is missing.
+
+        With OCR disabled and one page of two carrying a text layer, extraction succeeds and page
+        2 is simply never read by anything. Before the flag was derived, that document claimed the
+        same `partial` as a perfect read -- which is to say it claimed nothing.
+        """
+        source = self.root / "mixed-no-adapter.pdf"
+        _write_mixed_pdf(source)
+
+        payload = extract_file(source, "application/pdf", limits=DEFAULT_LIMITS)
+
+        self.assertEqual(payload["document"]["page_count"], 2)
+        self.assertIn("Invoice 123", payload["document"]["plain_text"])
+        self.assertTrue(payload["document"]["partial"])
+
+    def test_a_full_text_layer_pdf_is_complete(self) -> None:
+        """The production complaint: a clean PDF must stop claiming it was only half read."""
+        source = self.root / "text.pdf"
+        _write_text_pdf(source)
+
+        payload = extract_file(
+            source, "application/pdf", adapter=_RecordingAdapter(), limits=DEFAULT_LIMITS
+        )
+
+        self.assertFalse(payload["document"]["partial"])
+        self.assertIn("Invoice 123", payload["document"]["plain_text"])
+
+    # --- html: what `_parse_html` can and cannot see ---
+
+    def test_html_text_is_read_in_full_and_reports_complete(self) -> None:
+        source = self.root / "page.html"
+        source.write_text(
+            "<!doctype html><p>Supplier 123</p><script>ignore me</script>", encoding="utf-8"
+        )
+
+        payload = extract_file(source, "text/html", limits=DEFAULT_LIMITS)
+
+        self.assertFalse(payload["document"]["partial"])
+        self.assertNotIn("ignore me", payload["document"]["plain_text"])
+
+    def test_html_wrapping_an_image_is_partial(self) -> None:
+        source = self.root / "wrapper.html"
+        source.write_text(
+            '<!doctype html><p>Invoice attached</p><img src="scan.png">', encoding="utf-8"
+        )
+
+        payload = extract_file(source, "text/html", limits=DEFAULT_LIMITS)
+
+        self.assertTrue(payload["document"]["partial"])
+
+    # --- docx: one archive part opened by name, two body child types handled ---
+
+    def test_a_paragraph_and_table_docx_reports_complete(self) -> None:
+        source = self.root / "plain.docx"
+        _write_minimal_docx(
+            source, "<w:p><w:r><w:t>Supplier document 123</w:t></w:r></w:p><w:sectPr/>"
+        )
+
+        payload = extract_file(
+            source,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            limits=DEFAULT_LIMITS,
+        )
+
+        # `w:sectPr` is a skipped body child that carries no text, so it must not count as a gap.
+        self.assertFalse(payload["document"]["partial"])
+        self.assertIn("Supplier document 123", payload["document"]["plain_text"])
+
+    def test_a_docx_header_is_extracted_rather_than_flagged(self) -> None:
+        """A letterhead is document content, so it is read -- and then there is no gap to report."""
+        source = self.root / "headed.docx"
+        _write_minimal_docx(
+            source,
+            "<w:p><w:r><w:t>Body line</w:t></w:r></w:p>",
+            extra_parts={
+                "word/header1.xml": f"<w:hdr {WORD_NAMESPACE}>"
+                "<w:p><w:r><w:t>512345678</w:t></w:r></w:p></w:hdr>"
+            },
+        )
+
+        payload = extract_file(
+            source,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            limits=DEFAULT_LIMITS,
+        )
+
+        self.assertIn("512345678", payload["document"]["plain_text"])
+        self.assertIn("512345678", [block["text"] for block in payload["blocks"]])
+        self.assertFalse(payload["document"]["partial"])
+
+    def test_a_footer_page_number_does_not_make_a_word_document_partial(self) -> None:
+        """The ubiquity case. Nearly every Word file has one, so flagging it flags everything."""
+        source = self.root / "footered.docx"
+        _write_minimal_docx(
+            source,
+            "<w:p><w:r><w:t>Supplier invoice body</w:t></w:r></w:p>",
+            extra_parts={
+                "word/footer1.xml": f"<w:ftr {WORD_NAMESPACE}>"
+                "<w:p><w:r><w:t>Page 1 of 3</w:t></w:r></w:p></w:ftr>"
+            },
+        )
+
+        payload = extract_file(
+            source,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            limits=DEFAULT_LIMITS,
+        )
+
+        self.assertFalse(payload["document"]["partial"])
+        self.assertIn("Page 1 of 3", payload["document"]["plain_text"])
+        # Body first, ancillary parts after: the parser already appends table text this way and
+        # does not model which page a footer prints on.
+        text = payload["document"]["plain_text"]
+        self.assertLess(text.index("Supplier invoice body"), text.index("Page 1 of 3"))
+
+    def test_a_printed_part_that_will_not_open_is_still_a_coverage_gap(self) -> None:
+        source = self.root / "broken-header.docx"
+        _write_minimal_docx(
+            source,
+            "<w:p><w:r><w:t>Body line</w:t></w:r></w:p>",
+            extra_parts={"word/header1.xml": "<w:hdr><not closed"},
+        )
+
+        payload = extract_file(
+            source,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            limits=DEFAULT_LIMITS,
+        )
+
+        # The body read perfectly, so the document is not lost -- but something printed on it was
+        # genuinely never extracted, and that is exactly what the flag is for.
+        self.assertTrue(payload["document"]["partial"])
+        self.assertIn("Body line", payload["document"]["plain_text"])
+
+    def test_a_separator_only_footnotes_part_contributes_nothing(self) -> None:
+        """LibreOffice writes one into most converted files; a separator is not lost content."""
+        source = self.root / "footnoted.docx"
+        _write_minimal_docx(
+            source,
+            "<w:p><w:r><w:t>Body line</w:t></w:r></w:p>",
+            extra_parts={
+                "word/footnotes.xml": f"<w:footnotes {WORD_NAMESPACE}>"
+                '<w:footnote w:type="separator" w:id="-1">'
+                "<w:p><w:r><w:separator/></w:r></w:p></w:footnote></w:footnotes>"
+            },
+        )
+
+        payload = extract_file(
+            source,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            limits=DEFAULT_LIMITS,
+        )
+
+        self.assertFalse(payload["document"]["partial"])
+
+    def test_a_body_content_control_carrying_text_is_reported(self) -> None:
+        source = self.root / "content-control.docx"
+        _write_minimal_docx(
+            source,
+            "<w:p><w:r><w:t>Body line</w:t></w:r></w:p>"
+            "<w:sdt><w:sdtContent><w:p><w:r><w:t>Total 1392.00</w:t></w:r></w:p>"
+            "</w:sdtContent></w:sdt>",
+        )
+
+        payload = extract_file(
+            source,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            limits=DEFAULT_LIMITS,
+        )
+
+        self.assertTrue(payload["document"]["partial"])
+        self.assertNotIn("1392.00", payload["document"]["plain_text"])
+
+    # --- the field's shape is unchanged, so this is not a cross-surface contract change ---
+
+    def test_the_contract_still_accepts_both_values_unchanged(self) -> None:
+        for expected in (True, False):
+            with self.subTest(partial=expected):
+                payload = validate_extraction(
+                    {
+                        "schema_version": "1",
+                        "document": {
+                            "page_count": 1,
+                            "detected_languages": ["he"],
+                            "plain_text": "x",
+                            "partial": expected,
+                        },
+                        "blocks": [],
+                        "tables": [],
+                        "marks": [],
+                    },
+                    DEFAULT_LIMITS,
+                )
+                self.assertIs(payload["document"]["partial"], expected)
 
 
 if __name__ == "__main__":

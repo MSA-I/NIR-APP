@@ -133,7 +133,13 @@ select 'documents','14700000-0000-4000-8000-000000000001/p47/'||fixture.label||'
 from (values
   ('baseline','1470000000000001'),('partial','1470000000000002'),
   ('long','1470000000000003'),('low','1470000000000004'),
-  ('automatic','1470000000000005')) fixture(label,etag);
+  ('automatic','1470000000000005'),
+  -- 0144 moved the automatic ceiling from 20 to 40. `ceiling` sits exactly on it and `long` sits
+  -- one page past it, so the boundary is asserted from both sides. `partial-ceiling` is inside
+  -- the ceiling but incompletely read -- the 21-40 page SCAN that the worker's paid-OCR cap of
+  -- 20 pages still cannot finish, and which must therefore stay with a human.
+  ('ceiling','1470000000000006'),('partial-ceiling','1470000000000007'))
+  fixture(label,etag);
 
 insert into public.documents(
   id,org_id,unit_id,entity_type,entity_id,storage_path,file_name,mime_type,
@@ -147,7 +153,9 @@ from (values
   ('14720000-0000-4000-8000-000000000002'::uuid,'partial'),
   ('14720000-0000-4000-8000-000000000003'::uuid,'long'),
   ('14720000-0000-4000-8000-000000000004'::uuid,'low'),
-  ('14720000-0000-4000-8000-000000000005'::uuid,'automatic')
+  ('14720000-0000-4000-8000-000000000005'::uuid,'automatic'),
+  ('14720000-0000-4000-8000-000000000006'::uuid,'ceiling'),
+  ('14720000-0000-4000-8000-000000000007'::uuid,'partial-ceiling')
 ) fixture(document_id,label);
 
 insert into public.document_processing_jobs(
@@ -162,7 +170,9 @@ join (values
   ('14720000-0000-4000-8000-000000000002'::uuid,'14730000-0000-4000-8000-000000000002'::uuid,'1470000000000002'),
   ('14720000-0000-4000-8000-000000000003'::uuid,'14730000-0000-4000-8000-000000000003'::uuid,'1470000000000003'),
   ('14720000-0000-4000-8000-000000000004'::uuid,'14730000-0000-4000-8000-000000000004'::uuid,'1470000000000004'),
-  ('14720000-0000-4000-8000-000000000005'::uuid,'14730000-0000-4000-8000-000000000005'::uuid,'1470000000000005')
+  ('14720000-0000-4000-8000-000000000005'::uuid,'14730000-0000-4000-8000-000000000005'::uuid,'1470000000000005'),
+  ('14720000-0000-4000-8000-000000000006'::uuid,'14730000-0000-4000-8000-000000000006'::uuid,'1470000000000006'),
+  ('14720000-0000-4000-8000-000000000007'::uuid,'14730000-0000-4000-8000-000000000007'::uuid,'1470000000000007')
 ) fixture(document_id,job_id,etag) on fixture.document_id=document.id;
 
 insert into public.document_extractions(
@@ -175,9 +185,13 @@ from public.document_processing_jobs job
 join (values
   ('14730000-0000-4000-8000-000000000001'::uuid,'14740000-0000-4000-8000-000000000001'::uuid,4,false),
   ('14730000-0000-4000-8000-000000000002'::uuid,'14740000-0000-4000-8000-000000000002'::uuid,4,true),
-  ('14730000-0000-4000-8000-000000000003'::uuid,'14740000-0000-4000-8000-000000000003'::uuid,21,false),
+  -- One page past the 0144 ceiling. Was 21 while the ceiling was 20; raising the ceiling without
+  -- moving this fixture would have quietly turned the suite's over-length case into a passing one.
+  ('14730000-0000-4000-8000-000000000003'::uuid,'14740000-0000-4000-8000-000000000003'::uuid,41,false),
   ('14730000-0000-4000-8000-000000000004'::uuid,'14740000-0000-4000-8000-000000000004'::uuid,4,false),
-  ('14730000-0000-4000-8000-000000000005'::uuid,'14740000-0000-4000-8000-000000000005'::uuid,4,false)
+  ('14730000-0000-4000-8000-000000000005'::uuid,'14740000-0000-4000-8000-000000000005'::uuid,4,false),
+  ('14730000-0000-4000-8000-000000000006'::uuid,'14740000-0000-4000-8000-000000000006'::uuid,40,false),
+  ('14730000-0000-4000-8000-000000000007'::uuid,'14740000-0000-4000-8000-000000000007'::uuid,40,true)
 ) fixture(job_id,extraction_id,page_count,partial) on fixture.job_id=job.id;
 
 insert into public.document_interpretations(
@@ -192,9 +206,11 @@ from public.document_extractions extraction
 join (values
   ('14740000-0000-4000-8000-000000000001'::uuid,'14750000-0000-4000-8000-000000000001'::uuid,4,0.99::numeric),
   ('14740000-0000-4000-8000-000000000002'::uuid,'14750000-0000-4000-8000-000000000002'::uuid,4,0.99::numeric),
-  ('14740000-0000-4000-8000-000000000003'::uuid,'14750000-0000-4000-8000-000000000003'::uuid,21,0.99::numeric),
+  ('14740000-0000-4000-8000-000000000003'::uuid,'14750000-0000-4000-8000-000000000003'::uuid,41,0.99::numeric),
   ('14740000-0000-4000-8000-000000000004'::uuid,'14750000-0000-4000-8000-000000000004'::uuid,4,0.89::numeric),
-  ('14740000-0000-4000-8000-000000000005'::uuid,'14750000-0000-4000-8000-000000000005'::uuid,4,0.99::numeric)
+  ('14740000-0000-4000-8000-000000000005'::uuid,'14750000-0000-4000-8000-000000000005'::uuid,4,0.99::numeric),
+  ('14740000-0000-4000-8000-000000000006'::uuid,'14750000-0000-4000-8000-000000000006'::uuid,40,0.99::numeric),
+  ('14740000-0000-4000-8000-000000000007'::uuid,'14750000-0000-4000-8000-000000000007'::uuid,40,0.99::numeric)
 ) fixture(extraction_id,interpretation_id,page_count,confidence) on fixture.extraction_id=extraction.id;
 
 -- Baseline is disabled even for a complete high-confidence packet.
@@ -211,7 +227,8 @@ select pg_temp.p47_assert(
   :'p47_baseline_result'::jsonb @> '{"status":"needs_review","automatic_eligible":false,"idempotent":false}'::jsonb,
   'an existing organization auto-approved under the default-off baseline');
 
--- Turn the organization on at the documented floor. Partial, long and low confidence remain human.
+-- Turn the organization on at the documented floor. Partial, over-length and low confidence
+-- remain human.
 insert into public.org_autonomy_policies(org_id,policy_key,autonomy_enabled,min_confidence)
 values('14700000-0000-4000-8000-000000000001','document.packet_split',true,0.900);
 
@@ -227,6 +244,13 @@ select public.service_record_document_packet(
   '14730000-0000-4000-8000-000000000004','14750000-0000-4000-8000-000000000004',
   '14710000-0000-4000-8000-000000000001');
 select public.service_record_document_packet(
+  '14730000-0000-4000-8000-000000000007','14750000-0000-4000-8000-000000000007',
+  '14710000-0000-4000-8000-000000000001');
+select public.service_record_document_packet(
+  '14730000-0000-4000-8000-000000000006','14750000-0000-4000-8000-000000000006',
+  '14710000-0000-4000-8000-000000000001') as ceiling_result
+\gset p47_
+select public.service_record_document_packet(
   '14730000-0000-4000-8000-000000000005','14750000-0000-4000-8000-000000000005',
   '14710000-0000-4000-8000-000000000001') as automatic_result
 \gset p47_
@@ -238,16 +262,36 @@ reset role;
 select pg_temp.p47_actor(null);
 
 select pg_temp.p47_assert(
-  (select count(*)=3 and bool_and(status='needs_review')
+  (select count(*)=4 and bool_and(status='needs_review')
    from public.document_packets where source_job_id in (
      '14730000-0000-4000-8000-000000000002',
      '14730000-0000-4000-8000-000000000003',
-     '14730000-0000-4000-8000-000000000004'))
+     '14730000-0000-4000-8000-000000000004',
+     '14730000-0000-4000-8000-000000000007'))
   and :'p47_automatic_result'::jsonb @> '{"status":"approved","automatic_eligible":true}'::jsonb
   and :'p47_replay_result'::jsonb @> '{"idempotent":true}'::jsonb
-  and (select count(*)=5 from public.document_packets
+  and (select count(*)=7 from public.document_packets
        where org_id='14700000-0000-4000-8000-000000000001'),
-  'partial, >20-page, low-confidence or idempotent record behavior drifted');
+  'partial, over-length, low-confidence or idempotent record behavior drifted');
+
+-- 0144 moved the automatic ceiling from 20 pages to 40, and moved NOTHING else. Both sides of the
+-- new boundary are asserted, and so is the case the raised ceiling deliberately does not help: a
+-- 40-page document the extraction did not finish reading. The worker's paid-OCR cap
+-- (`ExtractionLimits.max_ai_pages`) stays at 20, so a scanned packet of 21-40 pages arrives here
+-- with `partial = true` and must still reach a human.
+select pg_temp.p47_assert(
+  :'p47_ceiling_result'::jsonb @> '{"status":"approved","automatic_eligible":true}'::jsonb
+  and (select page_count=40 and not source_partial and status='approved'
+       from public.document_packets
+       where source_job_id='14730000-0000-4000-8000-000000000006')
+  and (select page_count=41 and not automatic_eligible and status='needs_review'
+       from public.document_packets
+       where source_job_id='14730000-0000-4000-8000-000000000003')
+  and (select page_count=40 and source_partial and not automatic_eligible
+         and status='needs_review'
+       from public.document_packets
+       where source_job_id='14730000-0000-4000-8000-000000000007'),
+  '40 pages must be eligible, 41 must not, and a partial extraction must be refused inside the ceiling');
 
 select id as baseline_packet_id,manifest_hash as baseline_hash
 from public.document_packets where source_job_id='14730000-0000-4000-8000-000000000001'

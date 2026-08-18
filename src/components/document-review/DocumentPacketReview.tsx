@@ -1,15 +1,19 @@
-import { CheckCircle2, FileStack, Loader2 } from 'lucide-react';
+import {
+  CheckCircle2, ChevronDown, ChevronsDownUp, ChevronsUpDown, FileStack, Loader2,
+} from 'lucide-react';
 import { Link } from 'react-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toHebrewError } from '../../lib/errors';
 import { reasonOr } from '../../lib/reason';
 import type {
   DocumentInterpretationType, DocumentPacket, DocumentPacketSegment, DocumentProcessingSnapshot,
 } from '../../lib/useDocumentProcessing';
-import { Disclosure, Note } from '../ui';
-import { StickyPrimaryAction } from './StickyPrimaryAction';
+import type { Tone } from '../../lib/status';
+import { Note } from '../ui';
+import { PrimaryDecision } from './PrimaryDecision';
 import { confidenceLabel, DOCUMENT_TYPE_LABELS } from './model';
+import { AUTOMATIC_SPLIT_PAGE_CEILING, PAID_OCR_PAGE_CAP } from './serverLimits';
 
 interface Props {
   snapshot: DocumentProcessingSnapshot;
@@ -38,14 +42,22 @@ function manifestValid(segments: SegmentDraft[], pageCount: number): boolean {
 }
 
 /**
- * Why a part still needs a person, in the packet's own words — or null when the machine was sure.
+ * Why THIS part still needs a person, in the packet's own words — or null when the machine was sure.
  *
  * Every clause is read off the stored contract rather than a feeling about the number:
  * `confidence_threshold` is the value this packet carries for exactly this decision (it is per
- * packet, not a constant here), `source_partial` says the extraction did not see the whole file so
- * no split derived from it can be trusted, and `other` is the classifier declining to classify —
- * which is a question, not an answer. A confidence that is absent or non-finite is unknown, and
- * unknown is not "confident": it is the reason to look.
+ * packet, not a constant here), and `other` is the classifier declining to classify — which is a
+ * question, not an answer. A confidence that is absent or non-finite is unknown, and unknown is not
+ * "confident": it is the reason to look.
+ *
+ * **`source_partial` is deliberately NOT here (owner report, 18.08.2026).** It used to be the first
+ * test, which made every part of every packet an exception — the flag is true on every document the
+ * worker has produced so far, so nothing was ever confident and the fold added the day before never
+ * appeared: a 24-part packet at 0.99/0.98/0.98/0.99 rendered 24 open editors. The category error is
+ * older than the bad flag, though: a partial extraction is a fact about the WHOLE file, not about
+ * part 17. Printing it as a per-part badge says the same sentence N times, defeats every fold, and
+ * still does not tell the reader which part is short. It is now one statement at the top of the
+ * panel, where a fact about the packet belongs — see `PACKET_PARTIAL_NOTE` below.
  *
  * Graded against the STORED segment, never the live draft. A reviewer who corrects a type must not
  * have the row he is editing vanish into the folded group under his cursor.
@@ -54,7 +66,6 @@ function segmentAttentionReason(
   segment: DocumentPacketSegment | undefined,
   packet: DocumentPacket,
 ): string | null {
-  if (packet.source_partial) return 'החילוץ חלקי';
   if (!segment) return 'החלק לא נקרא';
   if (!segment.document_type || segment.document_type === 'other') return 'הסוג לא זוהה';
   if (segment.confidence == null || !Number.isFinite(segment.confidence)) return 'הזיהוי לא נמדד';
@@ -64,6 +75,52 @@ function segmentAttentionReason(
 
 function pageSpan(segment: { start_page: number; end_page: number }): number {
   return Math.max(0, segment.end_page - segment.start_page + 1);
+}
+
+/**
+ * One group of parts — the exceptions, or everything the classifier settled — under this panel's
+ * own control.
+ *
+ * Why not `Disclosure` from `ui.tsx`: that component is an uncontrolled `<details>` on purpose, and
+ * this panel needs two things it cannot give. The exception group must start OPEN, which a native
+ * `<details>` will not do unless it is told; and both groups must answer to one „fold everything”
+ * button, which needs their state to live here. The anatomy below is `Disclosure`'s, line for line
+ * — a 44px summary row, a count badge in the `status.ts` tone vocabulary, a chevron that respects
+ * `motion-reduce` — so this is the same fold in the same visual language, not a second one.
+ *
+ * The children are not built while the group is shut. A shut `<details>` still renders everything
+ * inside it, so folding alone would buy paint and not work; on a 24-part packet the difference is
+ * 24 editors and 192 `<option>`s that are never constructed.
+ */
+function SegmentGroup({ id, testId, title, count, tone, summary, open, onOpenChange, children }: {
+  id: string;
+  testId: string;
+  title: string;
+  count: number;
+  tone: Tone;
+  summary: ReactNode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <details
+      id={id}
+      data-testid={testId}
+      open={open}
+      className="group mt-3 overflow-hidden rounded-lg border border-line"
+      onToggle={(event) => onOpenChange(event.currentTarget.open)}
+    >
+      <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-sm hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden sm:px-4">
+        <span className="font-medium text-ink-body">{title}</span>
+        <span className={`badge-${tone} num`}>{count}</span>
+        <span className="ms-auto min-w-0 text-end text-xs text-ink-muted">{summary}</span>
+        <ChevronDown size={16} aria-hidden="true"
+          className="shrink-0 text-ink-ghost transition-transform duration-200 ease-out group-open:rotate-180 motion-reduce:transition-none" />
+      </summary>
+      <div className="border-t border-line-soft px-3 pb-4 pt-3 sm:px-4">{open && children}</div>
+    </details>
+  );
 }
 
 /** One editable part. Identical anatomy whether it is open on top or folded below — the only
@@ -120,14 +177,26 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /**
-   * The folded parts are not rendered until asked for.
+   * What is open, and who decided.
    *
-   * A 42-page packet is ~294 form containers and 336 `<option>`s, and a shut `<details>` still
-   * renders every one of them into the DOM — collapsing alone would buy paint, not work. The
-   * manifest is unaffected: it is built from `drafts`, which holds every part whether or not its
-   * editor is on screen, so an unopened part is still submitted exactly as the machine read it.
+   * The default is the exception-inbox law: what needs a person is open, what the machine settled
+   * is a counted summary line. On top of the default the reviewer gets one explicit control over
+   * the whole list — the automatic behaviour is the point, but somebody looking at 24 parts must be
+   * able to fold them without hunting for a toggle on every row, and must be able to unfold them
+   * all when he wants to read the machine's whole answer.
+   *
+   * Neither state is reset by a refetch: a poll that returns the same packet must not reopen a list
+   * the reviewer just folded.
+   *
+   * The manifest is unaffected by any of it. It is built from `drafts`, which holds every part
+   * whether or not its editor is on screen, so a part nobody unfolded is still submitted exactly as
+   * the machine read it, under the same `manifest_hash`.
    */
+  const [attentionOpen, setAttentionOpen] = useState(true);
   const [classifiedOpen, setClassifiedOpen] = useState(false);
+  const groupId = useId();
+  const attentionGroupId = `${groupId}-attention`;
+  const classifiedGroupId = `${groupId}-classified`;
 
   useEffect(() => {
     setDrafts(draftsFromSnapshot(snapshot));
@@ -160,6 +229,19 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
   // Said on the summary line rather than only behind it: documents the machine actually created
   // are a change to the business, and a change is never something a person has to unfold to learn.
   const classifiedCreated = classified.filter((index) => snapshot.packetSegments[index]?.child_document_id).length;
+  // "Anything open" rather than "everything open": from the default — exceptions open, settled
+  // parts folded — one press folds the list, and the next press opens all of it.
+  const anyGroupOpen = (needsAttention.length > 0 && attentionOpen) || (classified.length > 0 && classifiedOpen);
+  const groupIds = [
+    needsAttention.length > 0 ? attentionGroupId : null,
+    classified.length > 0 ? classifiedGroupId : null,
+  ].filter((id): id is string => id !== null).join(' ');
+
+  function toggleAllGroups() {
+    const next = !anyGroupOpen;
+    setAttentionOpen(next);
+    setClassifiedOpen(next);
+  }
 
   function update(index: number, patch: Partial<SegmentDraft>) {
     setDrafts((current) => current.map((draft, draftIndex) => draftIndex === index ? { ...draft, ...patch } : draft));
@@ -244,60 +326,112 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
         {attentionPages > 0 && <>{' · '}<span className="num">{attentionPages}</span> דורשים בדיקה</>}
       </p>
 
-      {(packet.source_partial || packet.page_count > 20) && (
-        <Note tone="await" className="mt-4">החילוץ חלקי או ארוך מ־20 עמודי OCR, ולכן הפיצול דורש אישור אדם.</Note>
+      {/* Two facts about the FILE, said once each, at the top — and deliberately NOT in one
+          sentence. They used to share a line („החילוץ חלקי או ארוך מ־20 עמודי OCR”), which the
+          owner read as a claim about reading quality on a document that had been read perfectly.
+          They are different situations with different limits behind them (`serverLimits.ts`), and
+          since 0144 they are not even the same number. `source_partial` was also graded per part,
+          which said the same sentence on every row and left nothing to fold. */}
+      {currentPacket.source_partial && (
+        <Note tone="await" className="mt-4">
+          לא כל הקובץ נקרא: לפחות עמוד אחד לא הניב טקסט. קריאת OCR בתשלום מוגבלת
+          ל־<span className="num">{PAID_OCR_PAGE_CAP}</span> עמודים למסמך, ולכן בסריקה ארוכה יותר
+          העמודים שמעבר לכך אינם נקראים כלל. טווחי העמודים למטה נגזרו ממה שכן נקרא, ולכן החבילה
+          כולה דורשת אישור אדם — לא חלק מסוים בה.
+        </Note>
       )}
 
-      {needsAttention.length > 0 && (
-        <div className="mt-4 space-y-3" data-testid="packet-attention">
-          {needsAttention.map(renderSegment)}
-        </div>
+      {currentPacket.page_count > AUTOMATIC_SPLIT_PAGE_CEILING && (
+        <Note tone="idle" className="mt-4">
+          הקובץ ארוך מ־<span className="num">{AUTOMATIC_SPLIT_PAGE_CEILING}</span> עמודים — מעל
+          תקרת הפיצול האוטומטי, ולכן הפיצול נשאר לאישור אדם גם כשהמדיניות מופעלת וגם כשכל החלקים
+          זוהו בביטחון. זו אמירה על אורך הקובץ, לא על איכות הקריאה.
+        </Note>
       )}
 
-      {classified.length > 0 && (
-        <div className="mt-4 overflow-hidden rounded-lg border border-line">
-          <Disclosure
-            title="עמודים מסווגים"
-            count={classifiedPages}
-            summary={<>
-              <span className="num">{classified.length}</span> חלקים
-              {classifiedCreated > 0 && <>{' · '}<span className="num">{classifiedCreated}</span> נוצרו</>}
-            </>}
-            onToggle={setClassifiedOpen}
-          >
-            {classifiedOpen && <div className="space-y-3">{classified.map(renderSegment)}</div>}
-          </Disclosure>
-        </div>
-      )}
-
+      {/* The decision, at the head of the parts rather than after them (see `PrimaryDecision`).
+          `editable` and `canMaterialize` are mutually exclusive packet statuses, so only one of the
+          two is ever on screen. */}
       {editable && (
-        <div className="mt-4 border-t border-line pt-4">
+        <div className="mt-4 border-t border-line pt-4" data-testid="packet-decision">
           <label>
             <span className="label">הערה ליומן הביקורת — רשות</span>
             <textarea className="input" rows={2} maxLength={1000} value={reason} disabled={busy}
               onChange={(event) => setReason(event.target.value)} />
           </label>
-          {/* The parts are a form the reviewer scrolls through; the one button that ends the job
-              rides along on a phone. `editable` and `canMaterialize` are mutually exclusive packet
-              statuses, so only one of the two ever reaches the bar. */}
-          <StickyPrimaryAction className="mt-3 flex justify-end" label="אישור פיצול החבילה">
+          <PrimaryDecision className="mt-3" label="אישור פיצול החבילה">
             <button type="button" className="btn-primary" disabled={busy} onClick={() => void approve()}>
               {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <CheckCircle2 size={17} aria-hidden="true" />}
               {busy ? 'יוצר מסמכים נפרדים…' : 'אישור הפיצול ויצירת המסמכים'}
             </button>
-          </StickyPrimaryAction>
+          </PrimaryDecision>
         </div>
       )}
 
       {canMaterialize && (
-        <StickyPrimaryAction className="mt-4 flex justify-end" label="יצירת המסמכים הנפרדים">
-          <button type="button" className="btn-primary" disabled={busy} onClick={() => void retryMaterialization()}>
-            {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <FileStack size={17} aria-hidden="true" />}
-            {busy ? 'יוצר מסמכים נפרדים…' : 'יצירת המסמכים הנפרדים'}
-          </button>
-        </StickyPrimaryAction>
+        <div className="mt-4 border-t border-line pt-4" data-testid="packet-decision">
+          <PrimaryDecision label="יצירת המסמכים הנפרדים">
+            <button type="button" className="btn-primary" disabled={busy} onClick={() => void retryMaterialization()}>
+              {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <FileStack size={17} aria-hidden="true" />}
+              {busy ? 'יוצר מסמכים נפרדים…' : 'יצירת המסמכים הנפרדים'}
+            </button>
+          </PrimaryDecision>
+        </div>
       )}
+      {/* Beside the button that produced it: the manifest error is the answer to the press. */}
       {error && <Note tone="alert" role="alert" className="mt-3">{error}</Note>}
+
+      {snapshot.packetSegments.length > 0 && (
+        <div className="mt-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="section-title">חלקי הקובץ</h3>
+            {/* The reviewer's own control over the whole list, next to its heading rather than on
+                any row. It changes what is on screen and nothing about what is submitted. */}
+            <button type="button" className="btn-ghost" onClick={toggleAllGroups}
+              aria-expanded={anyGroupOpen} aria-controls={groupIds} data-testid="packet-fold-all">
+              {anyGroupOpen
+                ? <ChevronsDownUp size={17} aria-hidden="true" />
+                : <ChevronsUpDown size={17} aria-hidden="true" />}
+              {anyGroupOpen ? 'קיפול כל החלקים' : 'פתיחת כל החלקים'}
+            </button>
+          </div>
+
+          {needsAttention.length > 0 && (
+            <SegmentGroup
+              id={attentionGroupId}
+              testId="packet-attention"
+              // Both groups count PAGES on the badge and PARTS on the summary, in that order — the
+              // same two units, in the same places, as the count line at the top of the panel.
+              title="עמודים דורשים בדיקה"
+              count={attentionPages}
+              tone="await"
+              summary={<><span className="num">{needsAttention.length}</span> חלקים</>}
+              open={attentionOpen}
+              onOpenChange={setAttentionOpen}
+            >
+              <div className="space-y-3">{needsAttention.map(renderSegment)}</div>
+            </SegmentGroup>
+          )}
+
+          {classified.length > 0 && (
+            <SegmentGroup
+              id={classifiedGroupId}
+              testId="packet-classified"
+              title="עמודים מסווגים"
+              count={classifiedPages}
+              tone="idle"
+              summary={<>
+                <span className="num">{classified.length}</span> חלקים
+                {classifiedCreated > 0 && <>{' · '}<span className="num">{classifiedCreated}</span> נוצרו</>}
+              </>}
+              open={classifiedOpen}
+              onOpenChange={setClassifiedOpen}
+            >
+              <div className="space-y-3">{classified.map(renderSegment)}</div>
+            </SegmentGroup>
+          )}
+        </div>
+      )}
     </section>
   );
 }

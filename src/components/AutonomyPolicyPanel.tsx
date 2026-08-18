@@ -1,11 +1,44 @@
 import { useId, useState } from 'react';
-import { BrainCircuit, ListChecks, Loader2, PackageCheck } from 'lucide-react';
+import { BrainCircuit, ListChecks, Loader2, PackageCheck, Scissors } from 'lucide-react';
+import {
+  AUTOMATIC_SPLIT_PAGE_CEILING, PAID_OCR_PAGE_CAP,
+} from './document-review/serverLimits';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
 import { ConfirmDialog, ErrorNote, Note, useToast } from './ui';
 
+/**
+ * The organization's autonomy switches, in the order a file meets them: a mixed PDF is split
+ * first, and only then is each part interpreted, matched to a price list or turned into a
+ * receiving draft.
+ *
+ * `document.packet_split` (migration 0140) was live for weeks with no row in this list, so an
+ * owner who read "everything is enabled in my settings" was reading a true sentence about three
+ * policies and an invisible fourth. A switch that exists in the database and not in the product is
+ * a setting nobody chose.
+ */
 const POLICIES = [
+  {
+    key: 'document.packet_split',
+    title: 'פיצול קובץ שיש בו כמה מסמכים',
+    description: 'מעל הסף, קובץ PDF שהמודל קרא בו כמה מסמכים נחתך למסמכי בת נפרדים, וכל אחד מהם נכנס לעיבוד בפני עצמו.',
+    // What it does NOT do is the load-bearing half: this switch moves paper, never money. The
+    // remaining conditions are named because a switch that looks like it will work and then does
+    // not is worse than no switch — and the last sentence is the case the owner will actually hit.
+    // Both numbers come from `serverLimits.ts`, where they are declared side by side: they are
+    // different limits that happened to be the same number until migration 0144.
+    warning: <>
+      הפיצול אינו כותב שום דבר כספי: כל מסמך בת עובר קריאה, בדיקה ואישור בנפרד, בדיוק כמו מסמך
+      שצולם לבדו. גם כשהמתג פועל הפיצול נשאר ידני כשלא כל הקובץ נקרא, כשהקובץ ארוך
+      מ־<span className="num">{AUTOMATIC_SPLIT_PAGE_CEILING}</span> עמודים, או כשחלק כלשהו בקובץ
+      נקרא מתחת לסף. בפועל: קובץ <strong>סרוק</strong> נקרא עד
+      <span className="num"> {PAID_OCR_PAGE_CAP} </span>עמודים בלבד, ולכן סריקה ארוכה מכך תמיד
+      נשארת לאישור אדם — תקרת ה־<span className="num">{AUTOMATIC_SPLIT_PAGE_CEILING}</span> נוגעת
+      לקובץ PDF שנושא שכבת טקסט משלו.
+    </>,
+    icon: Scissors,
+  },
   {
     key: 'document.interpretation',
     title: 'יצירת חשבוניות אוטומטית',

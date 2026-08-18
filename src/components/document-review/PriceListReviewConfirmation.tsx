@@ -7,7 +7,7 @@ import { supabase } from '../../lib/supabase';
 import type { PriceListPredictedLine } from '../../lib/useDocumentProcessing';
 import { useAuth } from '../../auth/AuthContext';
 import { ConfirmDialog, Note } from '../ui';
-import { StickyPrimaryAction } from './StickyPrimaryAction';
+import { PrimaryDecision } from './PrimaryDecision';
 import { FILING_REASON_LABELS, type ReviewSnapshot } from './model';
 import { formatUnit, normalizeUnitInput } from '../../lib/format';
 
@@ -946,20 +946,22 @@ export function PriceListReviewConfirmation({
             </label>
           </div>
           {error && <Note tone="alert" role="alert" className="mt-3">{error}</Note>}
-          {/* The intake button follows the reviewer down the paged line list on a phone: the whole
-              point of the exception filter is that they work at the bottom of the screen, and the
-              count on the button is the running answer to what they have just done. "פרטים נוספים"
-              stays inline — a disclosure toggle is not the action this screen is for. */}
+          {/* The button stays here, at the head of the lines, at every width — the placement this
+              block's own comment above already chose. It used to be lifted into a floating bar on a
+              phone so it would follow the reviewer down the paged list; the bar came to rest in the
+              middle of the list rather than at its edge (see `PrimaryDecision`), and the count it
+              carries is also printed here, above the lines. "פרטים נוספים" stays inline — a
+              disclosure toggle is not the action this screen is for. */}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             {detailsToggle}
-            <StickyPrimaryAction label="קליטת המחירון">
+            <PrimaryDecision label="קליטת המחירון">
               <button type="button" className="btn-primary" data-testid="price-list-intake-confirm"
                 disabled={busy || selectedCount === 0 || catalogLoading || !!catalogError || products.length === 0}
                 onClick={() => void confirmPriceList()}>
                 {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <CheckCircle2 size={17} aria-hidden="true" />}
                 {busy ? 'קולט את המחירון…' : <>קליטת <span className="num">{selectedCount}</span> המחירים שנבחרו</>}
               </button>
-            </StickyPrimaryAction>
+            </PrimaryDecision>
           </div>
           {bulkIndexes.length > 0 && !catalogLoading && !catalogError && (
             <Note tone="info" className="mt-3 flex-wrap">

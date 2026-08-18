@@ -157,12 +157,14 @@ describe('הבדיקה מקפלת את העבודה של המכונה ולא א�
 /**
  * The same screen on a phone, which is where it is actually used.
  *
- * A real invoice review is ~4,900px — five and a half phone screens — and the approve button used
- * to be somewhere in the middle of them, at a height that depended on how many findings the server
- * returned. The button did not change: same disabled rule, same server gate, same enabled-while-
- * blocked behaviour DESIGN.md requires. Only its position did.
+ * The approve button sits between „מה יקרה באישור” and the folded working — above the evidence,
+ * where this screen chose to put it — at every width. It briefly travelled into a bar fixed above
+ * the navigation on a phone; that bar came to rest ~6rem off the bottom edge with content scrolling
+ * underneath it, which reads as a slab dropped into the list rather than as a bottom bar (owner
+ * report, 18.08.2026). What is asserted here is that there is exactly ONE button, that it stays in
+ * the page's own flow, and that nothing is portalled to `<body>` to make room for it.
  */
-describe('בטלפון — הפעולה מגיעה לאגודל, ופעם אחת', () => {
+describe('בטלפון — הפעולה נשארת במקומה בזרימה, ופעם אחת', () => {
   beforeEach(() => {
     rpc.mockReset();
     Object.defineProperty(window, 'matchMedia', {
@@ -178,15 +180,17 @@ describe('בטלפון — הפעולה מגיעה לאגודל, ופעם אחת
   });
   afterEach(() => { Reflect.deleteProperty(window, 'matchMedia'); });
 
-  it('מציג את "אישור המסמך" בסרגל מוצמד, ולא פעמיים', async () => {
+  it('מציג את "אישור המסמך" במקומו בזרימה, פעם אחת, בלי סרגל צף ובלי מרווח מושתל', async () => {
     await renderPanel();
 
     expect(screen.getAllByRole('button', { name: 'אישור המסמך' })).toHaveLength(1);
-    const sticky = screen.getByTestId('sticky-primary-action');
-    expect(sticky).toContainElement(screen.getByRole('button', { name: 'אישור המסמך' }));
-    // The bar floats over a page that ends in the folded working and the ordered-goods note; the
-    // spacer is what stops it standing on their last row.
-    expect(screen.getByTestId('sticky-primary-action-clearance')).toBeInTheDocument();
+    const decision = screen.getByTestId('primary-decision');
+    expect(decision).toContainElement(screen.getByRole('button', { name: 'אישור המסמך' }));
+    // In the card it was written in — not fixed, and not portalled out of it.
+    expect(decision.closest('[data-testid="assessment-detail"]')).toBeNull();
+    expect(decision.parentElement).not.toBe(document.body);
+    expect(screen.queryByTestId('sticky-primary-action')).toBeNull();
+    expect(screen.queryByTestId('sticky-primary-action-clearance')).toBeNull();
   });
 
   it('לוקח את משפט "השרת יבדוק שוב" יחד עם הכפתור, ומשאיר אותו פעיל', async () => {
@@ -203,21 +207,20 @@ describe('בטלפון — הפעולה מגיעה לאגודל, ופעם אחת
     const cta = screen.getByRole('button', { name: 'אישור המסמך' });
     expect(cta).toBeEnabled();
     const reason = screen.getByText(/השרת יבדוק שוב ויסביר בדיוק מה מונע/);
-    // One copy, and in the bar: a reason for an enabled button that lives five screens above it is
-    // not a reason anybody reads.
+    // One copy, beside the button and BEFORE it: a reason read after the press is not a reason.
     expect(screen.getAllByText(/השרת יבדוק שוב ויסביר בדיוק מה מונע/)).toHaveLength(1);
-    expect(screen.getByTestId('sticky-primary-action')).toContainElement(reason);
+    expect(screen.getByTestId('primary-decision')).toContainElement(reason);
+    expect(reason.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The blocking finding itself never moved into the bar or into a fold.
     expect(screen.getByRole('alert').closest('details')).toBeNull();
   });
 
-  it('אין סרגל כשאין מה לאשר — מסמך שכבר אושר אינו מקבל פס פעולה ריק', async () => {
+  it('אין אזור פעולה כשאין מה לאשר — מסמך שכבר אושר אינו מקבל פס פעולה ריק', async () => {
     rpc.mockResolvedValue({ data: reviewRead({ data_approved: true }), error: null });
     render(<DocumentAssessmentPanel documentId="doc-1" />);
     expect(await screen.findByText('מה יקרה באישור')).toBeInTheDocument();
 
     expect(screen.queryByRole('button', { name: 'אישור המסמך' })).toBeNull();
-    expect(screen.queryByTestId('sticky-primary-action')).toBeNull();
-    expect(screen.queryByTestId('sticky-primary-action-clearance')).toBeNull();
+    expect(screen.queryByTestId('primary-decision')).toBeNull();
   });
 });

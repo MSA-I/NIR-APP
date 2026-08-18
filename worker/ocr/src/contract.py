@@ -11,6 +11,23 @@ from .limits import DEFAULT_LIMITS, ExtractionLimits
 BLOCK_TYPES = {"text", "heading", "table", "image", "handwriting"}
 MARK_KINDS = {"circle", "check", "cross", "underline", "star", "custom", "unknown"}
 
+# WHAT `document.partial` MEANS. One rule, because every consumer reads the same field:
+#
+#   True  <=>  this extraction did not LOOK at part of the source.
+#
+# It is a coverage claim, never a quality claim. A page that was rendered, sent and came back
+# empty is COMPLETE, not partial -- a blank verso and a failed read are indistinguishable without
+# pixel analysis, and the failed read has its own recovery path in `second_pass.improve`. A page
+# nobody rendered is PARTIAL however clean the rest of the document was.
+#
+# Each parser derives it from what it can prove it skipped, and nothing hardcodes it: see
+# `parsers._parse_pdf` (the paid-OCR page cap), `parsers._parse_html` (embedded, non-text
+# content) and `parsers._parse_docx` (archive parts that would not open). Parsers that refuse an
+# oversized source rather than truncating it are complete by construction and report False.
+#
+# `service_record_document_packet` refuses an automatic packet split unless this is False, so a
+# flag that is always True disables that gate entirely and a flag that is always False removes it.
+
 
 def _object(value: Any, keys: set[str], name: str) -> dict[str, Any]:
     if type(value) is not dict or set(value) != keys:

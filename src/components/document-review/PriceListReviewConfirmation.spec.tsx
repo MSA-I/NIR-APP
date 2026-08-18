@@ -341,7 +341,7 @@ describe('בטלפון — האישור נוסע עם הרשימה', () => {
     });
   }
 
-  it('מציג את כפתור הקליטה בסרגל המוצמד, פעם אחת, ומשאיר את "פרטים נוספים" בזרימה', async () => {
+  it('מציג את כפתור הקליטה פעם אחת, מעל השורות, ומשאיר את "פרטים נוספים" לצדו', async () => {
     phone();
     render(
       <MemoryRouter>
@@ -353,16 +353,18 @@ describe('בטלפון — האישור נוסע עם הרשימה', () => {
     await waitFor(() => expect(confirm).toBeEnabled());
     expect(screen.getAllByTestId('price-list-intake-confirm')).toHaveLength(1);
 
-    const sticky = screen.getByTestId('sticky-primary-action');
-    expect(sticky).toContainElement(confirm);
-    // A disclosure toggle is not what this screen is for; it must not ride in the bar beside the
-    // one action, and it must not disappear from the page either.
-    expect(sticky).not.toContainElement(screen.getByTestId('price-list-details-toggle'));
+    const decision = screen.getByTestId('primary-decision');
+    expect(decision).toContainElement(confirm);
+    // A disclosure toggle is not what this screen is for; it must not ride inside the one action,
+    // and it must not disappear from the page either.
+    expect(decision).not.toContainElement(screen.getByTestId('price-list-details-toggle'));
 
-    // The paged line list ends at the bottom of the document; the spacer is what keeps its last
-    // row out from under the bar.
+    // Nothing is fixed to the phone's bottom edge and nothing is portalled to `<body>` to make room
+    // for it: the button sits at the head of the lines, where the summary it answers is printed.
     await userEvent.click(screen.getByTestId('price-list-show-unmatched'));
-    expect(document.body.lastElementChild)
-      .toBe(screen.getByTestId('sticky-primary-action-clearance'));
+    expect(screen.queryByTestId('sticky-primary-action')).toBeNull();
+    expect(screen.queryByTestId('sticky-primary-action-clearance')).toBeNull();
+    const summary = screen.getByTestId('price-list-intake-summary');
+    expect(summary.compareDocumentPosition(confirm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

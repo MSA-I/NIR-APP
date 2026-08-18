@@ -78,12 +78,29 @@ function renderPacket(snapshot = packetSnapshot(), onRefetch = vi.fn(async () =>
   };
 }
 
-/** The one fold on this panel: everything the classifier was sure about. */
-const classifiedFold = () => screen.getByText('עמודים מסווגים').closest('details') as HTMLDetailsElement;
+/** Everything the classifier was sure about — folded to a counted line by default. */
+const classifiedFold = () => screen.getByTestId('packet-classified') as HTMLDetailsElement;
+/** What still needs a person — open by default, and foldable by the reviewer himself. */
+const attentionFold = () => screen.getByTestId('packet-attention') as HTMLDetailsElement;
 
 async function openClassified() {
   await userEvent.click(screen.getByText('עמודים מסווגים'));
   return classifiedFold();
+}
+
+/** Twenty-four parts the machine was sure about — the owner's packet, in the shape he sent it. */
+function confidentSegments(count: number): DocumentPacketSegment[] {
+  return Array.from({ length: count }, (_, index) =>
+    segment(index + 1, { start_page: index + 1, end_page: index + 1, confidence: 0.99 }));
+}
+
+/** What the panel actually builds: one editor is two number fields and one 8-option select. */
+function census() {
+  return {
+    editors: screen.queryAllByRole('combobox').length,
+    numberFields: screen.queryAllByRole('spinbutton').length,
+    options: document.querySelectorAll('option').length,
+  };
 }
 
 describe('בדיקת חבילת מסמכים מעורבת', () => {
@@ -205,7 +222,10 @@ describe('החלוקה בין מה שהמערכת סגרה למה שדורש א�
     expect(screen.getAllByRole('combobox')).toHaveLength(1);
   });
 
-  it('פותח את כל החלקים כשהחילוץ חלקי — אין מה לקפל כשלא נקרא כל הקובץ', () => {
+  // CHANGED DELIBERATELY (owner report, 18.08.2026). `source_partial` used to be the first
+  // attention test, so it graded every part as an exception and no packet ever folded. It is a fact
+  // about the FILE: it is now said once, at the top, and the parts are graded on their own reading.
+  it('אומר שהחילוץ חלקי פעם אחת בראש הפאנל, ולא כתג על כל חלק', () => {
     renderPacket(packetSnapshot({
       sourcePartial: true,
       pageCount: 4,
@@ -214,10 +234,48 @@ describe('החלוקה בין מה שהמערכת סגרה למה שדורש א�
         segment(2, { start_page: 3, end_page: 4, confidence: 0.99 }),
       ],
     }));
-    expect(screen.queryByText('עמודים מסווגים')).toBeNull();
-    expect(screen.getAllByRole('combobox')).toHaveLength(2);
-    expect(screen.getAllByText('החילוץ חלקי')).toHaveLength(2);
-    expect(screen.getByTestId('packet-counts')).toHaveTextContent('4 דורשים בדיקה');
+
+    expect(screen.getAllByText(/לא כל הקובץ נקרא/)).toHaveLength(1);
+    expect(screen.queryByTestId('packet-attention')).toBeNull();
+    expect(classifiedFold().open).toBe(false);
+    expect(screen.queryAllByRole('combobox')).toHaveLength(0);
+    expect(screen.getByTestId('packet-counts')).not.toHaveTextContent('דורשים בדיקה');
+  });
+
+  /**
+   * Two limits, two sentences, and they are no longer the same number.
+   *
+   * The single sentence they shared — „החילוץ חלקי או ארוך מ־20 עמודי OCR” — was read by the owner
+   * as a claim about reading quality on a document that had been read perfectly, and after
+   * migration 0144 it was also simply wrong: it refused a 21–40 page packet the server accepts.
+   */
+  it('חבילה של 24 עמודים אינה מקבלת יותר אזהרת אורך — 0144 העלה את התקרה ל-40', () => {
+    renderPacket(packetSnapshot({ pageCount: 24, segments: confidentSegments(24) }));
+
+    expect(screen.queryByText(/מעל.*תקרת הפיצול האוטומטי/)).toBeNull();
+    expect(screen.queryByText(/עמודי OCR/)).toBeNull();
+    expect(screen.getByTestId('packet-counts')).toHaveTextContent('24 עמודים');
+  });
+
+  it('קובץ ארוך מ-40 עמודים מקבל אמירה על אורך בלבד — לא על איכות הקריאה', () => {
+    renderPacket(packetSnapshot({ pageCount: 48, segments: confidentSegments(48) }));
+
+    const length = screen.getByText(/מעל.*תקרת הפיצול האוטומטי/);
+    expect(length).toHaveTextContent('40');
+    expect(length).toHaveTextContent('זו אמירה על אורך הקובץ, לא על איכות הקריאה');
+    expect(screen.queryByText(/לא כל הקובץ נקרא/)).toBeNull();
+  });
+
+  it('כששני התנאים חלים — שתי אמירות נפרדות, שני מספרים שונים', () => {
+    renderPacket(packetSnapshot({ pageCount: 48, segments: confidentSegments(48), sourcePartial: true }));
+
+    // Coverage: the paid-OCR cap, which did NOT move in 0144.
+    const coverage = screen.getByText(/לא כל הקובץ נקרא/);
+    expect(coverage).toHaveTextContent('20');
+    // Length: the split ceiling, which did.
+    const length = screen.getByText(/מעל.*תקרת הפיצול האוטומטי/);
+    expect(length).toHaveTextContent('40');
+    expect(coverage).not.toBe(length);
   });
 
   it('שולח גם חלק שנשאר מקופל אחרי עריכה של חלק פתוח', async () => {
@@ -247,11 +305,135 @@ describe('החלוקה בין מה שהמערכת סגרה למה שדורש א�
 });
 
 /**
- * The split screen on a phone: N part editors, each with two number fields and a type select, and
- * one button at the end of them that finishes the job. `editable` and `canMaterialize` are two
- * different packet statuses, so the bar never holds two actions at once.
+ * The owner's packet: 24 parts, every one of them read at 0.99. What he got was 24 open editors,
+ * because `source_partial` — true on every document the worker has produced — was graded per part.
+ *
+ * The counts below are measured, not assumed. Before this round, with `source_partial` true and all
+ * 24 parts confident, the panel built 24 editors, 48 number fields and 192 `<option>`s. The numbers
+ * asserted here are what it builds now.
  */
-describe('בטלפון — הכפתור שמסיים את הפיצול נוסע עם החלקים', () => {
+describe('חבילה בת 24 חלקים — מה נבנה בפועל', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    invoke.mockReset();
+  });
+
+  for (const sourcePartial of [false, true]) {
+    it(`נפתחת מקופלת ובונה אפס עורכים (source_partial=${sourcePartial})`, () => {
+      renderPacket(packetSnapshot({ pageCount: 24, segments: confidentSegments(24), sourcePartial }));
+
+      expect(census()).toEqual({ editors: 0, numberFields: 0, options: 0 });
+      expect(classifiedFold().open).toBe(false);
+      // The fold is not an erasure: the summary carries what the list would have said.
+      expect(classifiedFold().querySelector('summary')).toHaveTextContent('עמודים מסווגים');
+      expect(classifiedFold().querySelector('summary')).toHaveTextContent('24 חלקים');
+    });
+  }
+
+  it('פתיחה מלאה בונה את כל 24 העורכים, וקיפול חוזר מפרק אותם', async () => {
+    renderPacket(packetSnapshot({ pageCount: 24, segments: confidentSegments(24) }));
+
+    await userEvent.click(screen.getByTestId('packet-fold-all'));
+    // 24 editors × (2 number fields + one 8-option select).
+    expect(census()).toEqual({ editors: 24, numberFields: 48, options: 192 });
+
+    await userEvent.click(screen.getByTestId('packet-fold-all'));
+    expect(census()).toEqual({ editors: 0, numberFields: 0, options: 0 });
+  });
+
+  it('שולח את כל 24 החלקים גם כשאיש לא פתח אותם, עם אותו manifest_hash', async () => {
+    rpc.mockResolvedValueOnce({ data: { status: 'approved' }, error: null });
+    invoke.mockResolvedValueOnce({ data: { status: 'materialized' }, error: null });
+    renderPacket(packetSnapshot({ pageCount: 24, segments: confidentSegments(24) }));
+
+    expect(census().editors).toBe(0);
+    await userEvent.click(screen.getByRole('button', { name: 'אישור הפיצול ויצירת המסמכים' }));
+
+    await waitFor(() => expect(rpc).toHaveBeenCalledWith('approve_document_packet', expect.objectContaining({
+      p_expected_manifest_hash: 'a'.repeat(64),
+    })));
+    expect(rpc.mock.calls[0][1].p_segments).toHaveLength(24);
+    expect(rpc.mock.calls[0][1].p_segments[23])
+      .toEqual({ ordinal: 24, start_page: 24, end_page: 24, document_type: 'invoice', confidence: 0.99 });
+  });
+});
+
+/**
+ * The reviewer's own control over the list, on top of the automatic behaviour rather than instead
+ * of it: exceptions still open themselves, and a person looking at 24 parts can still fold or
+ * unfold the whole thing without hunting for a toggle on every row.
+ */
+describe('קיפול ופתיחה ביוזמת הבודק', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    invoke.mockReset();
+  });
+
+  const mixed = () => packetSnapshot({
+    pageCount: 6,
+    segments: [
+      segment(1, { start_page: 1, end_page: 2, confidence: 0.97 }),
+      segment(2, { start_page: 3, end_page: 4, confidence: 0.42 }),
+      segment(3, { start_page: 5, end_page: 6, confidence: 0.99 }),
+    ],
+  });
+
+  it('מקפל את הכל בלחיצה אחת, כולל מה שדורש בדיקה, ופותח הכל בלחיצה הבאה', async () => {
+    renderPacket(mixed());
+    const control = screen.getByTestId('packet-fold-all');
+
+    expect(attentionFold().open).toBe(true);
+    expect(classifiedFold().open).toBe(false);
+    expect(control).toHaveTextContent('קיפול כל החלקים');
+    expect(control).toHaveAttribute('aria-expanded', 'true');
+
+    await userEvent.click(control);
+    expect(attentionFold().open).toBe(false);
+    expect(classifiedFold().open).toBe(false);
+    expect(census().editors).toBe(0);
+    expect(control).toHaveTextContent('פתיחת כל החלקים');
+    expect(control).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(control);
+    expect(attentionFold().open).toBe(true);
+    expect(classifiedFold().open).toBe(true);
+    expect(census().editors).toBe(3);
+  });
+
+  it('מצביע על שתי הקבוצות שהוא שולט בהן', () => {
+    renderPacket(mixed());
+    const controls = screen.getByTestId('packet-fold-all').getAttribute('aria-controls')!.split(' ');
+    expect(controls).toHaveLength(2);
+    expect(controls).toContain(attentionFold().id);
+    expect(controls).toContain(classifiedFold().id);
+  });
+
+  it('קיפול ידני אינו משנה את מה שנשלח', async () => {
+    rpc.mockResolvedValueOnce({ data: { status: 'approved' }, error: null });
+    invoke.mockResolvedValueOnce({ data: { status: 'materialized' }, error: null });
+    renderPacket(mixed());
+
+    await userEvent.click(screen.getByTestId('packet-fold-all'));
+    expect(census().editors).toBe(0);
+    await userEvent.click(screen.getByRole('button', { name: 'אישור הפיצול ויצירת המסמכים' }));
+
+    await waitFor(() => expect(rpc).toHaveBeenCalledWith('approve_document_packet', expect.objectContaining({
+      p_expected_manifest_hash: 'a'.repeat(64),
+      p_segments: [
+        { ordinal: 1, start_page: 1, end_page: 2, document_type: 'invoice', confidence: 0.97 },
+        { ordinal: 2, start_page: 3, end_page: 4, document_type: 'invoice', confidence: 0.42 },
+        { ordinal: 3, start_page: 5, end_page: 6, document_type: 'invoice', confidence: 0.99 },
+      ],
+    })));
+  });
+});
+
+/**
+ * Where the button that ends the job lives: at the head of the parts, in the flow, at every width.
+ * It briefly rode in a bar fixed above the phone navigation; that bar came to rest ~6rem off the
+ * bottom edge with the list still scrolling underneath it (owner report, 18.08.2026).
+ */
+describe('מיקום הכפתור שמסיים את הפיצול', () => {
   beforeEach(() => {
     rpc.mockReset();
     invoke.mockReset();
@@ -268,29 +450,54 @@ describe('בטלפון — הכפתור שמסיים את הפיצול נוסע 
   });
   afterEach(() => { Reflect.deleteProperty(window, 'matchMedia'); });
 
-  it('מציג את "אישור הפיצול" בסרגל מוצמד, פעם אחת, מעל מרווח בסוף המסמך', () => {
-    renderPacket();
+  it('יושב לפני רשימת החלקים, פעם אחת, בלי סרגל צף ובלי מרווח מושתל', () => {
+    renderPacket(packetSnapshot({ pageCount: 24, segments: confidentSegments(24) }));
 
     const cta = screen.getByRole('button', { name: 'אישור הפיצול ויצירת המסמכים' });
     expect(screen.getAllByRole('button', { name: 'אישור הפיצול ויצירת המסמכים' })).toHaveLength(1);
-    expect(screen.getByTestId('sticky-primary-action')).toContainElement(cta);
-    expect(document.body.lastElementChild)
-      .toBe(screen.getByTestId('sticky-primary-action-clearance'));
+    expect(screen.getByTestId('primary-decision')).toContainElement(cta);
+    // Before the list, after the counts: the decision the summary line already answered.
+    expect(screen.getByTestId('packet-counts').compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(cta.compareDocumentPosition(classifiedFold()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Nothing fixed over the page, and nothing appended to `<body>` to make room for it.
+    expect(screen.queryByTestId('sticky-primary-action')).toBeNull();
+    expect(screen.queryByTestId('sticky-primary-action-clearance')).toBeNull();
+    expect(document.querySelector('.phone-taskbar')).toBeNull();
   });
 
-  it('בחבילה שכבר אושרה הסרגל נושא את יצירת המסמכים — ולא שתי פעולות', () => {
+  it('אינו מכסה את השורה האחרונה — הקבוצה האחרונה היא האלמנט האחרון בפאנל', async () => {
+    renderPacket(mixedForOverlap());
+
+    await userEvent.click(screen.getByTestId('packet-fold-all'));
+    const panel = screen.getByTestId('primary-decision').closest('section')!;
+    expect(panel.lastElementChild).toContainElement(classifiedFold());
+    expect(panel.lastElementChild).not.toContainElement(screen.getByTestId('primary-decision'));
+  });
+
+  it('בחבילה שכבר אושרה אזור ההכרעה נושא את יצירת המסמכים — ולא שתי פעולות', () => {
     renderPacket(packetSnapshot({ status: 'approved' }));
 
-    const sticky = screen.getByTestId('sticky-primary-action');
-    expect(within(sticky).getAllByRole('button')).toHaveLength(1);
-    expect(within(sticky).getByRole('button', { name: 'יצירת המסמכים הנפרדים' })).toBeInTheDocument();
+    const decision = screen.getByTestId('primary-decision');
+    expect(within(decision).getAllByRole('button')).toHaveLength(1);
+    expect(within(decision).getByRole('button', { name: 'יצירת המסמכים הנפרדים' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'אישור הפיצול ויצירת המסמכים' })).toBeNull();
   });
 
-  it('חבילה שהפיצול שלה הושלם אינה מקבלת פס פעולה ריק', () => {
+  it('חבילה שהפיצול שלה הושלם אינה מקבלת אזור פעולה ריק', () => {
     renderPacket(packetSnapshot({ status: 'materialized' }));
 
+    expect(screen.queryByTestId('primary-decision')).toBeNull();
     expect(screen.queryByTestId('sticky-primary-action')).toBeNull();
-    expect(screen.queryByTestId('sticky-primary-action-clearance')).toBeNull();
   });
 });
+
+function mixedForOverlap() {
+  return packetSnapshot({
+    pageCount: 6,
+    segments: [
+      segment(1, { start_page: 1, end_page: 2, confidence: 0.97 }),
+      segment(2, { start_page: 3, end_page: 4, confidence: 0.42 }),
+      segment(3, { start_page: 5, end_page: 6, confidence: 0.99 }),
+    ],
+  });
+}

@@ -258,10 +258,19 @@ def _parse_csv(path: Path, limits: ExtractionLimits) -> dict[str, Any]:
     return _spreadsheet_contract([("", rows)], limits)
 
 
+# Elements that hold part of the document somewhere other than in this file's text. `_parse_html`
+# has no image, plugin or frame handling anywhere in it -- it reads markup and nothing else -- so
+# whatever these point at is content the extraction demonstrably did not capture.
+# script/style/noscript are excluded on purpose below and are program text, not document content,
+# so they are deliberately absent from this set.
+EMBEDDED_CONTENT_TAGS = {"img", "object", "embed", "iframe", "frame"}
+
+
 class _DocumentHtmlParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.ignored = 0
+        self.embedded = 0
         self.text: list[str] = []
         self.tables: list[list[list[str]]] = []
         self.table: list[list[str]] | None = None
@@ -270,6 +279,10 @@ class _DocumentHtmlParser(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         del attrs
+        # Counted before the chain below, and separately from it: `<img>` is a void element, so
+        # `handle_startendtag` routes both `<img>` and `<img/>` through here.
+        if not self.ignored and tag in EMBEDDED_CONTENT_TAGS:
+            self.embedded += 1
         if tag in {"script", "style", "noscript"}:
             self.ignored += 1
         elif not self.ignored and tag == "table":
@@ -330,23 +343,93 @@ def _parse_html(path: Path, limits: ExtractionLimits) -> dict[str, Any]:
                 "rows": [[_cell(value) for value in row] for row in raw_rows],
             }
         )
-    return _contract(1, plain_text, blocks=_text_blocks(parser.text, prefix="html"), tables=tables, partial=True)
+    # `partial=True` used to be unconditional here and meant nothing. What this parser can and
+    # cannot see is decidable: `_read_utf8` refuses an oversized source rather than truncating it,
+    # and every text node outside script/style/noscript is collected, so the markup itself is read
+    # in full. The one thing that escapes is content that is not text in this file -- the bytes
+    # behind an <img>, <object>, <embed> or <iframe>, which nothing here fetches or decodes. A
+    # scanned invoice mailed as an HTML wrapper around one <img> is exactly that case, and it is
+    # the case worth reporting.
+    return _contract(
+        1,
+        plain_text,
+        blocks=_text_blocks(parser.text, prefix="html"),
+        tables=tables,
+        partial=parser.embedded > 0,
+    )
+
+
+WORDPROCESSING_NAMESPACE = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+# Parts that print as part of the page but are NOT `word/document.xml`, which is the only part
+# `_parse_docx` opens. Comments are excluded on purpose: they are review annotations that do not
+# render with the document, so leaving them unread is not a coverage gap.
+DOCX_PRINTED_TEXT_PARTS = re.compile(r"^word/(header\d*|footer\d*|footnotes|endnotes)\.xml$")
+
+
+def _docx_ancillary_text(archive: zipfile.ZipFile) -> tuple[list[str], list[str]]:
+    """Paragraph text from the printed parts that are not `word/document.xml`.
+
+    Headers, footers, footnotes and endnotes print with the page but live in their own archive
+    parts, and `_parse_docx` opens exactly one part by name. Reading them here is what keeps a
+    supplier's letterhead -- company name, VAT number, address -- from being silently dropped,
+    and it is also what stops a page-number footer from marking every Word document partial.
+    Excluding them from the flag instead would have made the flag lie in the other direction.
+
+    Placement is deliberately NOT reconstructed. Which header belongs to which page is a function
+    of section properties and pagination that nothing here renders, so no `r:id` relationship is
+    resolved and no interleaving is attempted: the text is appended in a stable part-name order.
+    That is not a new liberty -- `_parse_docx` already appends all table text after all
+    paragraphs, so "after the body" is this parser's existing convention for content whose
+    position it does not model.
+
+    `word/comments.xml` is excluded on purpose: review annotations do not render with the
+    document, so they are not part of it. Returns the extracted paragraphs, and the names of any
+    parts that could not be opened at all. `inspect_zip` has already bounded this archive's entry
+    count, decompressed size and compression ratio.
+    """
+    paragraphs: list[str] = []
+    unreadable: list[str] = []
+    for name in sorted(archive.namelist()):
+        if not DOCX_PRINTED_TEXT_PARTS.match(name):
+            continue
+        try:
+            with archive.open(name) as part:
+                root = SafeET.parse(part).getroot()
+        except (OSError, KeyError, zipfile.BadZipFile, SafeET.ParseError):
+            # A part this parser cannot open is a part it certainly did not extract, which is a
+            # real coverage gap. Recording it is honest; raising would throw away a document whose
+            # body read perfectly because its footer is malformed.
+            unreadable.append(name)
+            continue
+        for paragraph in root.iter(f"{WORDPROCESSING_NAMESPACE}p"):
+            # `iter` recurses, so a paragraph inside a header table is picked up too. Footnote
+            # separators are paragraphs with no `w:t` text and fall out here.
+            text = "".join(
+                node.text or "" for node in paragraph.iter(f"{WORDPROCESSING_NAMESPACE}t")
+            ).strip()
+            if text:
+                paragraphs.append(text)
+    return paragraphs, unreadable
 
 
 def _parse_docx(path: Path, limits: ExtractionLimits) -> dict[str, Any]:
     inspect_zip(path, limits)
     try:
-        with zipfile.ZipFile(path) as archive, archive.open("word/document.xml") as document_xml:
-            root = SafeET.parse(document_xml).getroot()
+        with zipfile.ZipFile(path) as archive:
+            with archive.open("word/document.xml") as document_xml:
+                root = SafeET.parse(document_xml).getroot()
+            ancillary, unreadable_parts = _docx_ancillary_text(archive)
     except (OSError, KeyError, zipfile.BadZipFile, SafeET.ParseError) as exc:
         raise ProcessingError("corrupt_document", "Word document is corrupt") from exc
-    namespace = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    namespace = WORDPROCESSING_NAMESPACE
     body = root.find(f"{namespace}body")
     if body is None:
         raise ProcessingError("corrupt_document", "Word document body is missing")
     paragraphs: list[str] = []
     tables: list[dict[str, Any]] = []
     total_rows = 0
+    skipped_body_text = False
     for child in body:
         if child.tag == f"{namespace}p":
             text = "".join(node.text or "" for node in child.iter(f"{namespace}t")).strip()
@@ -370,11 +453,28 @@ def _parse_docx(path: Path, limits: ExtractionLimits) -> dict[str, Any]:
             tables.append(
                 {"id": f"docx-table-{len(tables) + 1}", "page": 1, "bbox": FULL_BBOX.copy(), "rows": rows}
             )
+        elif any((node.text or "").strip() for node in child.iter(f"{namespace}t")):
+            # The two branches above are the whole of this loop: a body child that is neither a
+            # paragraph nor a table -- a content control (`w:sdt`), say -- is dropped on the floor.
+            # Dropping one that carries text is a coverage gap; `w:sectPr` and bookmark markers
+            # carry none and are therefore never counted here.
+            skipped_body_text = True
     table_text = ["\n".join("\t".join(cell["text"] for cell in row) for row in table["rows"]) for table in tables]
-    plain_text = "\n\n".join(paragraphs + table_text)
+    plain_text = "\n\n".join(paragraphs + table_text + ancillary)
     if len(plain_text) > limits.max_text_chars:
         raise ProcessingError("text_length_limit", "Extracted text exceeds the text limit")
-    return _contract(1, plain_text, blocks=_text_blocks(paragraphs, prefix="docx"), tables=tables, partial=True)
+    # `partial=True` used to be unconditional here too, and said nothing about any particular file.
+    # What is left after the headers and footers are actually READ is a short, honest list: a body
+    # child the loop above skipped while carrying text, and a printed part that would not open. An
+    # ordinary supplier document -- paragraphs, a table, a letterhead and a page number -- now
+    # reports False, and everything on it appears in `plain_text`.
+    return _contract(
+        1,
+        plain_text,
+        blocks=_text_blocks(paragraphs + ancillary, prefix="docx"),
+        tables=tables,
+        partial=skipped_body_text or bool(unreadable_parts),
+    )
 
 
 def _convert_to_docx(path: Path, limits: ExtractionLimits, source_suffix: str) -> Path:
@@ -539,9 +639,13 @@ def _parse_pdf(
             blocks.extend(_text_blocks([native_text[page_number]], page_number, "pdf"))
 
     ocr_payloads: list[dict[str, Any]] = []
+    # Pages nothing in this function will look at. Assigned in every branch below so the coverage
+    # claim at the end reads one variable instead of re-deriving it from the output.
+    unattempted: list[int] = []
     if missing and not isinstance(adapter, DisabledOcrAdapter):
         # Cap the paid path before rendering, so an oversized scan costs neither renders nor calls.
         ocr_pages = missing[: limits.max_ai_pages]
+        unattempted = missing[limits.max_ai_pages :]
         # The adapter sees one memory-bounded batch at a time, so only here is the document's OCR
         # page count known. Without this the progress counter reported the batch size and restarted
         # at every flush.
@@ -592,6 +696,11 @@ def _parse_pdf(
             blocks.extend(payload["blocks"])
     elif missing and len(missing) == page_count:
         raise ProcessingError("ocr_model_not_selected", "Scanned PDF requires a benchmark-approved OCR model")
+    else:
+        # Either every page carried a text layer -- `missing` is empty and so is this -- or OCR is
+        # switched off while at least one page did carry one. That second case is not fatal by
+        # design, but it does mean the image-only pages are read by nothing at all.
+        unattempted = missing
 
     ocr_page_text: dict[int, list[str]] = {}
     if ocr_payloads:
@@ -607,7 +716,20 @@ def _parse_pdf(
         blocks=blocks,
         tables=[table for payload in ocr_payloads for table in payload["tables"]],
         marks=[mark for payload in ocr_payloads for mark in payload["marks"]],
-        partial=True,
+        # A coverage claim and only that: these are pages this run never rendered and never sent
+        # anywhere -- dropped by the `missing[: limits.max_ai_pages]` cap, or left behind because
+        # no OCR adapter is configured. Nothing in this system knows what is on them.
+        #
+        # Deliberately NOT "a page that produced no text". A page that WAS sent and came back
+        # empty is ambiguous: a blank verso and a failed read are indistinguishable without pixel
+        # analysis, and inventing that heuristic is not something this parser should do. Counting
+        # it would mark most scanned packets partial for having a blank back side, which is the
+        # always-true flag this replaced wearing a smaller blast radius. That case is covered on
+        # its own path -- `second_pass.improve` retries a page that produced zero lines.
+        #
+        # A PDF whose every page carried a text layer never enters the OCR branch at all and comes
+        # out False, which is the whole point: it was read in full.
+        partial=bool(unattempted),
     )
 
 
