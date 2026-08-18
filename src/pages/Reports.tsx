@@ -10,7 +10,7 @@ import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_RE
 import { addCalendarDays, currentMonthISO, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import { fetchAll } from '../lib/supabasePaging';
-import { buildLockedMonthlyWorkbook, buildMonthlyWorkbook, type MonthlyReportLabels, type MonthlyReportSnapshot } from '../lib/monthlyReport';
+import { buildLockedMonthlyWorkbook, buildStyledMonthlyWorkbook, type MonthlyReportLabels, type MonthlyReportSnapshot } from '../lib/monthlyReport';
 import * as XLSX from 'xlsx';
 import { financialSupplierMap } from '../lib/financialSuppliers';
 import {
@@ -190,9 +190,12 @@ export default function Reports() {
       if (templated) {
         downloadRenderedWorkbook(templated, fileName);
       } else {
-        const wb = buildMonthlyWorkbook({
+        // No custom template configured → the styled built-in default (18.08.2026). A BROKEN
+        // custom template still throws above rather than landing here — that contract is
+        // renderConfiguredReportTemplate's, untouched.
+        const wb = buildStyledMonthlyWorkbook({
           orgName: org.name, month: safeMonth, generatedAt: data.generatedAt, data,
-          labels: reportLabels,
+          labels: reportLabels, summary: values,
         });
         XLSX.writeFile(wb, fileName);
       }

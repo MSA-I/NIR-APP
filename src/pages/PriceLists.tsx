@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router';
 import { reasonOr } from '../lib/reason';
 import { useParamState } from '../lib/useParamState';
 import { toHebrewError } from "../lib/errors";
@@ -64,20 +65,62 @@ export default function PriceLists() {
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'he'));
   }, [data]);
 
-  const rows = (data ?? []).filter((r) =>
-    (!supplierFilter || r.supplier_id === supplierFilter) &&
-    (!productFilter || r.product_id === productFilter) &&
-    (!onlyIncreases || (r.previous_price != null && r.current_price > r.previous_price)));
+  // With ?product= this screen IS the cross-supplier comparison (user decision 18.08.2026):
+  // cheapest first, the gap to the runner-up named. Computed from rows already in memory —
+  // reusing the inventory_intelligence view would add a round trip to derive a min and a delta.
+  // The eligibility rule mirrors that view (0102): available, from a supplier still traded with.
+  const comparison = useMemo(() => {
+    if (!productFilter || !data) return null;
+    const productRows = data.filter((r) => r.product_id === productFilter);
+    if (!productRows.length) return null;
+    const offers = productRows
+      .filter((r) => r.available && ['active', 'problematic'].includes(r.supplier.status))
+      .sort((a, b) => a.current_price - b.current_price);
+    const cheapest = offers[0] ?? null;
+    const next = offers[1] ?? null;
+    return {
+      product: productRows[0].product,
+      supplierCount: productRows.length,
+      cheapest,
+      delta: cheapest && next ? next.current_price - cheapest.current_price : null,
+      deltaPct: cheapest && next && cheapest.current_price > 0
+        ? ((next.current_price - cheapest.current_price) / cheapest.current_price) * 100
+        : null,
+    };
+  }, [data, productFilter]);
+
+  const rows = useMemo(() => {
+    const filtered = (data ?? []).filter((r) =>
+      (!supplierFilter || r.supplier_id === supplierFilter) &&
+      (!productFilter || r.product_id === productFilter) &&
+      (!onlyIncreases || (r.previous_price != null && r.current_price > r.previous_price)));
+    if (!productFilter) return filtered;
+    // Comparison order: offers first, cheapest to dearest; unavailable rows sink to the bottom.
+    return [...filtered].sort((a, b) => Number(b.available) - Number(a.available) || a.current_price - b.current_price);
+  }, [data, supplierFilter, productFilter, onlyIncreases]);
 
   const activeProductName = productFilter ? data?.find((r) => r.product_id === productFilter)?.product.name : null;
 
   const changePct = (r: Row) => r.previous_price ? ((r.current_price - r.previous_price) / r.previous_price) * 100 : 0;
 
   const columns: Column<Row>[] = [
-    { key: 'product', header: 'מוצר', priority: 3, sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-ink">{r.product.name}</span> },
+    { key: 'product', header: 'מוצר', priority: 3, sortValue: (r) => r.product.name, render: (r) => <bdi className="font-medium text-ink">{r.product.name}</bdi> },
     { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
     { key: 'unit', header: 'יחידה', priority: 3, render: (r) => formatUnit(r.product.unit) },
     { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
+    // Comparison-only column: how far each offer stands from the cheapest eligible one.
+    ...(productFilter ? [{
+      key: 'delta', header: 'הפרש מהזול', className: 'num',
+      render: (r: Row) => {
+        const cheapest = comparison?.cheapest;
+        if (!cheapest || !r.available) return <span className="text-ink-faint">—</span>;
+        if (r.id === cheapest.id) return <StatusBadge meta={{ label: 'הזול ביותר', tone: 'done' }} />;
+        const diff = r.current_price - cheapest.current_price;
+        if (diff <= 0) return <span className="text-ink-faint">—</span>;
+        const pct = cheapest.current_price > 0 ? (diff / cheapest.current_price) * 100 : null;
+        return <span className="text-trend-up-fg">‎+{fmtMoneyExact(diff)}{pct != null ? ` (+${pct.toFixed(1)}%)` : ''}</span>;
+      },
+    } satisfies Column<Row>] : []),
     { key: 'prev', header: 'מחיר קודם', priority: 3, className: 'num', render: (r) => fmtMoneyExact(r.previous_price) },
     {
       key: 'change', header: 'שינוי', sortValue: changePct,
@@ -111,11 +154,39 @@ export default function PriceLists() {
              one. One role, one word. */
           <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמנהל הרכש בלבד.</span>
         )} />
+
+      {comparison && (
+        <section className="card card-pad" aria-label={`השוואת מחירים — ${comparison.product.name}`}>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="text-sm text-ink-muted">
+              <bdi className="text-base font-semibold text-ink">{comparison.product.name}</bdi>
+              {' '}· {formatUnit(comparison.product.unit)} · <span className="num">{comparison.supplierCount}</span> ספקים
+            </div>
+            {canWrite && <Link className="text-sm text-action underline" to={`/products?id=${comparison.product.id}`}>עריכת מוצר</Link>}
+          </div>
+          <div className="mt-2 text-sm text-ink-body">
+            {comparison.cheapest ? (
+              <>
+                הזול ביותר: <bdi className="font-medium">{comparison.cheapest.supplier.name}</bdi>
+                {' — '}<span className="num font-semibold">{fmtMoneyExact(comparison.cheapest.current_price)}</span>
+                {comparison.delta != null && comparison.delta > 0 && (
+                  <> · זול ב-<span className="num">{fmtMoneyExact(comparison.delta)}</span>
+                    {comparison.deltaPct != null ? ` (${comparison.deltaPct.toFixed(1)}%)` : ''} מהמחיר הבא</>
+                )}
+                {comparison.delta === 0 && <> · המחיר הבא זהה</>}
+              </>
+            ) : (
+              // No eligible offer is a fact worth stating, not an empty header.
+              <>אין כרגע הצעה זמינה למוצר זה מספק פעיל</>
+            )}
+          </div>
+        </section>
+      )}
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q) || r.supplier.name.toLowerCase().includes(q)}
         searchLabel="חיפוש במחירונים"
         rowLabel={(r) => `${r.product.name} אצל ${r.supplier.name}`}
-        mobileTitle={(r) => <>{r.product.name} · {r.supplier.name}</>}
+        mobileTitle={(r) => <><bdi>{r.product.name}</bdi> · <bdi>{r.supplier.name}</bdi></>}
         mobileTrailing={(r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} />}
         rowActions={(r) => [
           { key: 'history', label: 'היסטוריית מחירים', icon: History, onSelect: () => setHistoryFor(r) },

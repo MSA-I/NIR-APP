@@ -78,7 +78,7 @@ export default function ProductPurchaseSummary() {
       key: 'product', header: 'מוצר', sortValue: (r) => r.product_name,
       render: (r) => (
         <div>
-          <div className="font-medium text-ink">{r.product_name}</div>
+          <div className="font-medium text-ink"><bdi>{r.product_name}</bdi></div>
           <div className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-ink-muted">
             {r.unit && <span>{formatUnit(r.unit)}</span>}
             {/* Provenance, not decoration. "Some of this rests on the supplier's word" is the

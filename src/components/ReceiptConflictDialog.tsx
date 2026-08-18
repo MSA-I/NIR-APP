@@ -414,7 +414,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
               {conflict.lines.map((line) => (
                 <tr key={line.orderItemId} className="border-b border-line-soft align-top">
                   <td className="py-2 pe-2">
-                    <div className="text-ink">{line.productName}</div>
+                    <div className="text-ink"><bdi>{line.productName}</bdi></div>
                     <div className="text-xs text-ink-muted">
                       הוזמן <span className="num">{formatQuantity(line.orderedQty, line.unit)}</span>
                     </div>

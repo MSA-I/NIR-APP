@@ -9,13 +9,14 @@ import { useAuth } from '../auth/AuthContext';
 import { Breadcrumbs, DataTable, StatusBadge, useToast, ConfirmDialog, LifecycleStrip, Modal, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, Note, type Column } from '../components/ui';
 import { PO_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, formatQuantity, formatUnit, todayISO } from '../lib/format';
-import { openOrderWhatsApp, orderWhatsAppLink, markOrderSentToSupplier, needsSentConfirmation } from '../lib/share';
+import { orderWhatsAppLink, markOrderSentToSupplier, needsSentConfirmation } from '../lib/share';
+import { WhatsAppSendDialog } from '../components/WhatsAppSendDialog';
 import { cancelOrderDraft } from '../lib/orderDrafts';
 import type { PurchaseOrder, PurchaseOrderItem, PoStatus } from '../lib/types';
 
 type OrderRow = PurchaseOrder & {
   supplier: { name: string; phone: string | null; whatsapp: string | null };
-  items: { qty: number; unit_price: number; product: { name: string; unit: string } }[];
+  items: { qty: number; unit_price: number; product: { name: string; unit: string; sku: string | null } }[];
 };
 
 type DraftListRow = {
@@ -56,13 +57,14 @@ export function OrdersList() {
   const [cancelTarget, setCancelTarget] = useState<OrderRow | null>(null);
   const [draftCancelTarget, setDraftCancelTarget] = useState<DraftListRow | null>(null);
   const [sentConfirmTarget, setSentConfirmTarget] = useState<OrderRow | null>(null);
+  const [waTarget, setWaTarget] = useState<OrderRow | null>(null);
   const [busy, setBusy] = useState(false);
   const canWrite = organizationAccess.canWrite && !!profile && ['owner', 'office'].includes(profile.role);
 
   const { data, loading, error, refetch } = useQuery(async () => {
     const [orders, drafts] = await Promise.all([
       supabase.from('purchase_orders')
-        .select('*, supplier:suppliers(name, phone, whatsapp), items:purchase_order_items(qty, unit_price, product:products(name, unit))')
+        .select('*, supplier:suppliers(name, phone, whatsapp), items:purchase_order_items(qty, unit_price, product:products(name, unit, sku))')
         .order('created_at', { ascending: false }),
       canWrite
         ? supabase.from('purchase_requests')
@@ -98,10 +100,7 @@ export function OrdersList() {
   }
 
   function sendWhatsApp(r: OrderRow) {
-    const res = openOrderWhatsApp(r, org?.name ?? '');
-    if (res.error) { toast(res.error, 'error'); return; }
-    // The window is open; whether the message left is the operator's to say.
-    if (needsSentConfirmation(r.status)) setSentConfirmTarget(r);
+    setWaTarget(r); // the two-step dialog (text + image); confirmation follows on close
   }
 
   async function confirmSent() {
@@ -220,6 +219,13 @@ export function OrdersList() {
         emptyTitle="עדיין אין הזמנות רכש" emptySubtitle="אפשר ליצור טיוטה חדשה כדי להתחיל את תהליך הרכש"
         emptyAction={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={15} /> טיוטה חדשה</button>} />
 
+      <WhatsAppSendDialog order={waTarget} orgName={org?.name ?? ''}
+        onClose={(openedText) => {
+          const target = waTarget;
+          setWaTarget(null);
+          // The window is open; whether the message left is the operator's to say.
+          if (openedText && target && needsSentConfirmation(target.status)) setSentConfirmTarget(target);
+        }} />
       <ConfirmDialog open={!!sentConfirmTarget} onClose={() => setSentConfirmTarget(null)}
         onConfirm={() => void confirmSent()}
         title="סימון ההזמנה כנשלחה לספק"
@@ -242,7 +248,7 @@ export function OrdersList() {
 
 type FullOrder = PurchaseOrder & {
   supplier: { id: string; name: string; phone: string | null; whatsapp: string | null; email: string | null; min_order_amount: number | null };
-  items: (PurchaseOrderItem & { product: { name: string; unit: string } })[];
+  items: (PurchaseOrderItem & { product: { name: string; unit: string; sku: string | null } })[];
 };
 
 export function OrderDetail() {
@@ -256,6 +262,7 @@ export function OrderDetail() {
   const [confirm, setConfirm] = useState<{ status: PoStatus; label: string } | null>(null);
   const [supplierConfirmOpen, setSupplierConfirmOpen] = useState(false);
   const [sentConfirmOpen, setSentConfirmOpen] = useState(false);
+  const [waOpen, setWaOpen] = useState(false);
   const [confirmNote, setConfirmNote] = useState('');
   const [confirmExpected, setConfirmExpected] = useState('');  // optional: set/correct אספקה מבוקשת at confirmation
   const [busy, setBusy] = useState(false);
@@ -264,7 +271,7 @@ export function OrderDetail() {
 
   const { data: order, loading, error, refetch } = useQuery(async () =>
     unwrap(await supabase.from('purchase_orders')
-      .select('*, supplier:suppliers(id, name, phone, whatsapp, email, min_order_amount), items:purchase_order_items(*, product:products(name, unit))')
+      .select('*, supplier:suppliers(id, name, phone, whatsapp, email, min_order_amount), items:purchase_order_items(*, product:products(name, unit, sku))')
       .eq('id', id!).single()) as Promise<FullOrder>, [id]);
 
   // ?print=1 (Orders list "הדפסה" action): print once when the data is on screen, then strip
@@ -318,12 +325,11 @@ export function OrderDetail() {
   }
 
   // Link building and the wa.me open live in lib/share.ts, shared with the Orders list row
-  // actions. Opening the window is all it does — the status follows a human confirmation.
+  // actions. The dialog opens the window and offers the order image — the status still follows
+  // a human confirmation after it closes.
   function sendWhatsApp() {
     if (!order) return;
-    const res = openOrderWhatsApp(order, orgName);
-    if (res.error) { toast(res.error, 'error'); return; }
-    if (needsSentConfirmation(order.status)) setSentConfirmOpen(true);
+    setWaOpen(true);
   }
 
   async function confirmSent() {
@@ -435,7 +441,7 @@ export function OrderDetail() {
           {order.items.map((item) => (
             <li key={item.id} className="py-3 first:pt-0 last:pb-0">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0"><div className="font-medium text-ink-body">{item.product.name}</div><div className="mt-1 text-xs text-ink-muted"><span className="num">{formatQuantity(item.qty, item.product.unit)}</span> × <span className="num">{fmtMoneyExact(item.unit_price)}</span></div></div>
+                <div className="min-w-0"><div className="font-medium text-ink-body"><bdi>{item.product.name}</bdi></div><div className="mt-1 text-xs text-ink-muted"><span className="num">{formatQuantity(item.qty, item.product.unit)}</span> × <span className="num">{fmtMoneyExact(item.unit_price)}</span></div></div>
                 <span className="num shrink-0 font-semibold">{fmtMoneyExact(item.qty * item.unit_price)}</span>
               </div>
               {order.status !== 'draft' && <div className="mt-2 text-xs text-ink-muted">התקבל: <span className={`num ${item.received_qty >= item.qty ? 'text-done-fg' : item.received_qty > 0 ? 'text-await-fg' : ''}`}>{item.received_qty}</span> מתוך <span className="num">{item.qty}</span></div>}
@@ -455,7 +461,7 @@ export function OrderDetail() {
           <tbody className="divide-y divide-line-soft">
             {order.items.map((i) => (
               <tr key={i.id}>
-                <td className="td font-medium text-ink-body">{i.product.name}</td>
+                <td className="td font-medium text-ink-body"><bdi>{i.product.name}</bdi></td>
                 <td className="td">{formatUnit(i.product.unit)}</td>
                 <td className="td num">{i.qty}</td>
                 <td className="td num">{fmtMoneyExact(i.unit_price)}</td>
@@ -483,6 +489,12 @@ export function OrderDetail() {
       <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)}
         onConfirm={(reason) => confirm && void cancelOrder(reason)}
         title={confirm?.label ?? ''} message="האם לבטל את ההזמנה? הפעולה תתועד ביומן הביקורת." danger requireReason busy={busy} />
+
+      <WhatsAppSendDialog order={waOpen ? order : null} orgName={orgName}
+        onClose={(openedText) => {
+          setWaOpen(false);
+          if (openedText && needsSentConfirmation(order.status)) setSentConfirmOpen(true);
+        }} />
 
       {/* The one place `sent` is recorded from this screen. wa.me hands the message to WhatsApp
           and tells us nothing afterwards, so the app asks instead of assuming. */}
