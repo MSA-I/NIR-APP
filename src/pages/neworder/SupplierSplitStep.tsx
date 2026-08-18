@@ -127,7 +127,7 @@ export default function SupplierSplitStep({
             const resolved = resolvedByProduct.get(item.productId);
             return (
               <div key={item.productId} className="grid items-center gap-2 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(9rem,auto)_auto_2.75rem] sm:gap-4 sm:px-4">
-                <div className="min-w-0"><div className="break-words text-sm font-medium text-ink-body">{item.product.name}</div><div className="text-xs text-ink-muted">{formatUnit(item.product.unit)}</div></div>
+                <div className="min-w-0"><div className="break-words text-sm font-medium text-ink-body"><bdi>{item.product.name}</bdi></div><div className="text-xs text-ink-muted">{formatUnit(item.product.unit)}</div></div>
                 <div className="text-sm"><span className="text-ink-muted">כמות </span><b className="num">{formatQuantity(item.qty, item.product.unit)}</b></div>
                 <div className="text-xs text-ink-muted">{resolved?.supplierId ? supplierById.get(resolved.supplierId)?.name ?? 'ספק לא זמין' : 'טרם הוקצה ספק'}</div>
                 <div className="num text-sm font-semibold">{fmtMoneyExact(resolved?.lineTotal)}</div>
@@ -223,7 +223,7 @@ function BlockedSurface({ blocked, cartByProduct, offersByProduct, supplierById,
           return (
             <div key={line.productId} className={`flex flex-wrap items-center gap-2 px-2 py-3 ${line.status === 'pin_below_min_qty' ? 'bg-await-wash text-await-fg' : ''}`}>
               <div className="min-w-0 flex-1">
-                <div className="font-medium">{item.product.name}</div>
+                <div className="font-medium"><bdi>{item.product.name}</bdi></div>
                 <div className="mt-0.5 text-xs">{blockedReason(line.status, pinnedSupplierId ? supplierById.get(pinnedSupplierId)?.name ?? null : null)}</div>
                 {line.status === 'pin_below_min_qty' && requiredQty != null && <span className="badge-await mt-1">הצמדה לא תקפה · מינימום <span className="num ms-1">{requiredQty}</span></span>}
               </div>
@@ -277,7 +277,7 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, onChoo
           const offers = offersByProduct.get(item.productId) ?? [];
           return (
             <div key={item.productId} className="px-3 py-3 text-sm sm:px-4">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div className="font-medium text-ink-body">{item.product.name}</div><div className="text-xs text-ink-muted">כמות <span className="num">{item.qty}</span></div></div>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div className="font-medium text-ink-body"><bdi>{item.product.name}</bdi></div><div className="text-xs text-ink-muted">כמות <span className="num">{item.qty}</span></div></div>
               {offers.length ? <div className="divide-y divide-line-soft border-y border-line-soft">
                 {offers.map((offer) => {
                   const adjustedQty = offer.min_qty != null && item.qty < offer.min_qty ? offer.min_qty : item.qty;

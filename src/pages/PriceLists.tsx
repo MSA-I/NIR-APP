@@ -74,7 +74,7 @@ export default function PriceLists() {
   const changePct = (r: Row) => r.previous_price ? ((r.current_price - r.previous_price) / r.previous_price) * 100 : 0;
 
   const columns: Column<Row>[] = [
-    { key: 'product', header: 'מוצר', priority: 3, sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-ink">{r.product.name}</span> },
+    { key: 'product', header: 'מוצר', priority: 3, sortValue: (r) => r.product.name, render: (r) => <bdi className="font-medium text-ink">{r.product.name}</bdi> },
     { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
     { key: 'unit', header: 'יחידה', priority: 3, render: (r) => formatUnit(r.product.unit) },
     { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
@@ -115,7 +115,7 @@ export default function PriceLists() {
         searchFn={(r, q) => r.product.name.toLowerCase().includes(q) || r.supplier.name.toLowerCase().includes(q)}
         searchLabel="חיפוש במחירונים"
         rowLabel={(r) => `${r.product.name} אצל ${r.supplier.name}`}
-        mobileTitle={(r) => <>{r.product.name} · {r.supplier.name}</>}
+        mobileTitle={(r) => <><bdi>{r.product.name}</bdi> · <bdi>{r.supplier.name}</bdi></>}
         mobileTrailing={(r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} />}
         rowActions={(r) => [
           { key: 'history', label: 'היסטוריית מחירים', icon: History, onSelect: () => setHistoryFor(r) },

@@ -727,7 +727,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
   }, [rows]);
 
   const columns: Column<PricedProduct>[] = [
-    { key: 'product', header: 'מוצר', sortValue: (r) => r.product.name, render: (r) => <span className="font-medium text-ink">{r.product.name}</span> },
+    { key: 'product', header: 'מוצר', sortValue: (r) => r.product.name, render: (r) => <bdi className="font-medium text-ink">{r.product.name}</bdi> },
     { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
     { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => fmtMoneyExact(r.previous_price) },
     {

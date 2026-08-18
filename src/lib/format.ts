@@ -38,6 +38,14 @@ export const fmtMoneyRounded = (v: number | null | undefined) => (v == null ? '�
 export const fmtMoneyCompact = (v: number | null | undefined) => (v == null ? '—' : ilsCompact.format(v));
 export const fmtNum = (v: number | null | undefined) => (v == null ? '—' : num.format(v));
 
+/**
+ * First-strong bidi isolation for PLAIN-TEXT contexts (WhatsApp messages, <option> labels) —
+ * the string twin of <bdi>. A user-entered name mixing Hebrew with digits/'*'/'/' reorders
+ * against its neighbours unless the whole name is fenced as one run (DESIGN.md, חוק בידוד
+ * השמות). Markup contexts wrap with <bdi> instead; this exists only where markup cannot go.
+ */
+export const bidiIsolate = (s: string): string => `⁨${s}⁩`; // FSI … PDI
+
 const UNIT_FORMS: Record<string, { singular: string; plural?: string }> = {
   'ארגז': { singular: 'ארגז', plural: 'ארגזים' },
   'ארגזים': { singular: 'ארגז', plural: 'ארגזים' },

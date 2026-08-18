@@ -257,7 +257,7 @@ export default function DocumentOperations() {
     },
     {
       key: 'product', header: 'מוצר', priority: 2,
-      render: (row) => <span>{row.matched_product_name ?? row.product_name ?? 'לא זוהה מוצר'}{row.sku && <span className="block text-xs text-ink-muted num">{row.sku}</span>}</span>,
+      render: (row) => <span><bdi>{row.matched_product_name ?? row.product_name ?? 'לא זוהה מוצר'}</bdi>{row.sku && <span className="block text-xs text-ink-muted num">{row.sku}</span>}</span>,
     },
     {
       key: 'price', header: 'מחיר נוכחי ← מוצע', priority: 2, className: 'num',
