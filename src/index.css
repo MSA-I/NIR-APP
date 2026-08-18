@@ -466,6 +466,13 @@ body {
  * puck protrudes 1.25rem above the bar, so bar-height alone would leave it overlapping this bar's
  * lower edge. `.mobile-action-bar` is `lg:hidden`, so from 64rem up there is nothing to clear and
  * the taskbar returns to the bottom edge with its own safe-area padding.
+ *
+ * ONE consumer: `Receiving.tsx`. The document-review screens borrowed this class for their approve
+ * button and gave it back on 18.08.2026 — the same 2rem that keeps the camera off "סיום קבלה" put
+ * their bar ~6rem above the bottom edge with the review list still scrolling in the gap, which
+ * reads as a slab dropped into the list rather than as a bottom bar (owner report). Their decision
+ * is in the page flow now (`PrimaryDecision`, DESIGN.md §5). Receiving is unchanged: it has one
+ * screen-long form and a genuine save/finish bar, and its geometry here was never the complaint.
  */
 .phone-taskbar {
   inset-block-end: calc(var(--mobile-action-bar-size) + env(safe-area-inset-bottom) + 2rem);

@@ -246,7 +246,7 @@ describe('בטלפון — אישור הסריקה מגיע לאגודל, ערי
     rotation_degrees: 0,
   };
 
-  it('מציג את "אישור והמשך לחילוץ" בסרגל מוצמד, פעם אחת, ומשאיר את תיקון הגבולות בזרימה', async () => {
+  it('מציג את "אישור והמשך לחילוץ" פעם אחת, אחרי התמונות, ולבדו באזור ההכרעה', async () => {
     render(<DocumentScanPreview
       state={readyState}
       originalStoragePath="org/inbox/source.jpg"
@@ -257,10 +257,13 @@ describe('בטלפון — אישור הסריקה מגיע לאגודל, ערי
 
     const cta = await screen.findByRole('button', { name: 'אישור והמשך לחילוץ' });
     expect(screen.getAllByRole('button', { name: 'אישור והמשך לחילוץ' })).toHaveLength(1);
-    const sticky = screen.getByTestId('sticky-primary-action');
-    expect(sticky).toContainElement(cta);
-    // One control in the bar. The exception path stays beside the images it is about.
-    expect(sticky).not.toContainElement(screen.getByRole('button', { name: 'תיקון גבולות' }));
+    const decision = screen.getByTestId('primary-decision');
+    expect(decision).toContainElement(cta);
+    // One control in the decision. The exception path stays beside the images it is about — and on
+    // this screen the images stay ABOVE the button, because they are what is being approved.
+    expect(decision).not.toContainElement(screen.getByRole('button', { name: 'תיקון גבולות' }));
+    const original = screen.getByAltText('המסמך המקורי invoice.jpg');
+    expect(original.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('אינו מצמיד את "יצירת סריקה מהפינות" — שם היד עובדת על התמונה עצמה', async () => {
@@ -273,8 +276,7 @@ describe('בטלפון — אישור הסריקה מגיע לאגודל, ערי
     />);
 
     expect(await screen.findByRole('button', { name: 'יצירת סריקה מהפינות' })).toBeInTheDocument();
-    expect(screen.queryByTestId('sticky-primary-action')).toBeNull();
-    expect(screen.queryByTestId('sticky-primary-action-clearance')).toBeNull();
+    expect(screen.queryByTestId('primary-decision')).toBeNull();
   });
 
   it('סריקה שכבר אושרה אינה מקבלת פס פעולה ריק', async () => {
@@ -287,11 +289,11 @@ describe('בטלפון — אישור הסריקה מגיע לאגודל, ערי
     />);
 
     expect(await screen.findByAltText('המסמך המקורי invoice.jpg')).toBeInTheDocument();
-    expect(screen.queryByTestId('sticky-primary-action')).toBeNull();
+    expect(screen.queryByTestId('primary-decision')).toBeNull();
   });
 });
 
-describe('ארגון בקריאה בלבד אינו מקבל סרגל פעולה מת', () => {
+describe('ארגון בקריאה בלבד — הכפתור המת נשאר ליד ההסבר שלו', () => {
   beforeEach(() => {
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
@@ -321,11 +323,13 @@ describe('ארגון בקריאה בלבד אינו מקבל סרגל פעולה
       onChanged={vi.fn().mockResolvedValue(true)}
     />);
 
-    expect(await screen.findByRole('button', { name: 'אישור והמשך לחילוץ' })).toBeDisabled();
-    // A strip across the bottom of the phone advertising a button that will never be pressable is
-    // worse than no strip: the explanation for why lives inline, and so does the button.
+    const cta = await screen.findByRole('button', { name: 'אישור והמשך לחילוץ' });
+    expect(cta).toBeDisabled();
+    // Nothing is fixed to the phone's bottom edge on this screen any more, pressable or not: the
+    // button and the sentence that explains it are one block, in the flow, together.
     expect(screen.queryByTestId('sticky-primary-action')).toBeNull();
     expect(screen.queryByTestId('sticky-primary-action-clearance')).toBeNull();
+    expect(screen.getByTestId('primary-decision')).toContainElement(cta);
     expect(screen.getByText(/אי אפשר לאשר אותה לחילוץ/)).toBeInTheDocument();
   });
 });

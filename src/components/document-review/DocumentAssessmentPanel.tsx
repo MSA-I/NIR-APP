@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { toHebrewError } from '../../lib/errors';
 import { fmtMoneyExact, fmtNum } from '../../lib/format';
 import { Disclosure, Note, useToast } from '../ui';
-import { StickyPrimaryAction } from './StickyPrimaryAction';
+import { PrimaryDecision } from './PrimaryDecision';
 import {
   advisoryFindings,
   approvalEffects,
@@ -254,11 +254,10 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
             onChange={(event) => setReason(event.target.value)}
             maxLength={1000}
           />
-          {/* On a phone the button moves to a bar pinned above the navigation; on desktop it stays
-              exactly where it was, between "מה יקרה באישור" and the folded working. The blocking
-              sentence is passed as the button's hint rather than left here, so wherever the button
-              is, the reason it is still enabled is beside it — never five screens up. */}
-          <StickyPrimaryAction
+          {/* The button stays exactly where it was written, at every width: between "מה יקרה
+              באישור" and the folded working. The blocking sentence is passed as the button's hint
+              rather than left here, so it is read before the press and not five screens up. */}
+          <PrimaryDecision
             className="mt-3"
             label="אישור המסמך שהתקבל"
             hint={blocking.length > 0
@@ -277,7 +276,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
               {busy && <Loader2 size={16} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />}
               אישור המסמך
             </button>
-          </StickyPrimaryAction>
+          </PrimaryDecision>
         </div>
       )}
 

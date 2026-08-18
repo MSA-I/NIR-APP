@@ -156,7 +156,8 @@ def _write_scanned_pdf(path: Path, page_count: int = 1) -> None:
     )
 
 
-def _write_docx(path: Path) -> None:
+def _write_docx(path: Path, header_text: str | None = None) -> None:
+    """`header_text` writes a `word/header1.xml`, the part `_parse_docx` used to never open."""
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr(
             "[Content_Types].xml",
@@ -170,6 +171,12 @@ def _write_docx(path: Path) -> None:
             "word/document.xml",
             '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Supplier document 123</w:t></w:r></w:p><w:sectPr/></w:body></w:document>',
         )
+        if header_text is not None:
+            archive.writestr(
+                "word/header1.xml",
+                '<?xml version="1.0" encoding="UTF-8"?><w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                f"<w:p><w:r><w:t>{header_text}</w:t></w:r></w:p></w:hdr>",
+            )
 
 
 def _write_xlsx(path: Path) -> None:
@@ -449,6 +456,153 @@ def _pdf_batching_check(fixtures: Path) -> dict[str, Any]:
     finally:
         parsers._render_pdf_page = original_render
     return {"batches": batches, "single_page_limit": "passed", "cleanup": "passed"}
+
+
+def _partial_flag_check(fixtures: Path) -> dict[str, Any]:
+    """`document.partial` says whether anything was left unlooked-at, and now has to earn it.
+
+    The flag gates `service_record_document_packet`, which refuses an automatic split unless the
+    extraction was complete. While it was hardcoded `True` that gate could never open for any
+    document at all, and every review screen told every reviewer their clean PDF was half read.
+    Both directions are asserted here on the same file, with only the cap changed -- and so is the
+    case that must NOT set it: a page that was sent and came back empty.
+
+    Model-free and offline: page rendering is stubbed and the adapter is a local stand-in.
+    """
+    from src import parsers
+
+    source = fixtures / "scan-page-cap.pdf"
+    _write_scanned_pdf(source, page_count=4)
+    seen: list[int] = []
+
+    class TranscribingAdapter:
+        def __init__(self, silent_pages: set[int] | None = None) -> None:
+            self.silent_pages = silent_pages or set()
+
+        def extract(self, pages: list[PageImage], limits: ExtractionLimits) -> dict[str, Any]:
+            del limits
+            seen.extend(page.page for page in pages)
+            read = [page for page in pages if page.page not in self.silent_pages]
+            return {
+                "schema_version": "1",
+                "document": {
+                    "page_count": max(page.page for page in pages),
+                    "detected_languages": ["en"],
+                    "plain_text": "\n\n".join(f"page {page.page}" for page in read),
+                    # Every page in `pages` was looked at, including a silent one.
+                    "partial": False,
+                },
+                "blocks": [
+                    {
+                        "id": f"cap-p{page.page}",
+                        "page": page.page,
+                        "type": "text",
+                        "bbox": [0.0, 0.0, 1.0, 1.0],
+                        "text": f"page {page.page}",
+                        "confidence": None,
+                    }
+                    for page in read
+                ],
+                "tables": [],
+                "marks": [],
+            }
+
+    def fake_render(path: Path, page: int, limits: ExtractionLimits) -> PageImage:
+        del limits
+        output = path.parent / f"cap-render-{page}.png"
+        output.write_bytes(b"rendered")
+        return PageImage(page, output, 10, 10)
+
+    original_render = parsers._render_pdf_page
+    parsers._render_pdf_page = fake_render
+    try:
+        seen.clear()
+        capped = extract_file(
+            source,
+            "application/pdf",
+            adapter=TranscribingAdapter(),
+            limits=ExtractionLimits(max_ai_pages=2, max_decompressed_bytes=10_000),
+        )
+        assert seen == [1, 2], f"the page cap did not bound the paid path: {seen}"
+        assert capped["document"]["page_count"] == 4
+        assert capped["document"]["partial"] is True, \
+            "pages dropped by max_ai_pages were reported as read"
+
+        seen.clear()
+        whole = extract_file(
+            source,
+            "application/pdf",
+            adapter=TranscribingAdapter(),
+            limits=ExtractionLimits(max_ai_pages=4, max_decompressed_bytes=10_000),
+        )
+        assert seen == [1, 2, 3, 4], f"the uncapped run skipped a page: {seen}"
+        assert whole["document"]["partial"] is False, \
+            "a scan whose every page was transcribed still claimed a gap"
+
+        # The arm that is deliberately absent. Page 2 was rendered, sent and read, and yielded
+        # nothing -- indistinguishable from a blank verso without pixel analysis. Counting it
+        # would mark most scanned packets partial for having a blank back side.
+        seen.clear()
+        empty_page = extract_file(
+            source,
+            "application/pdf",
+            adapter=TranscribingAdapter(silent_pages={2}),
+            limits=ExtractionLimits(max_ai_pages=4, max_decompressed_bytes=10_000),
+        )
+        assert seen == [1, 2, 3, 4], f"the empty-page run skipped a page: {seen}"
+        assert empty_page["document"]["partial"] is False, \
+            "an attempted page that came back empty was reported as never read"
+    finally:
+        parsers._render_pdf_page = original_render
+        for leftover in fixtures.glob("cap-render-*.png"):
+            leftover.unlink(missing_ok=True)
+
+    # A PDF with a text layer on every page never enters the OCR branch, and a spreadsheet cannot
+    # be truncated at all -- `_parse_xlsx` refuses an oversized file rather than cutting it. Both
+    # must therefore report a complete read.
+    text_layer = extract_file(fixtures / "text.pdf", "application/pdf", limits=DEFAULT_LIMITS)
+    assert text_layer["document"]["partial"] is False, "a full text-layer PDF reported a gap"
+    spreadsheet = extract_file(
+        fixtures / "prices.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        limits=DEFAULT_LIMITS,
+    )
+    assert spreadsheet["document"]["partial"] is False, "a fully parsed spreadsheet reported a gap"
+
+    # HTML and DOCX are decided by what those parsers structurally cannot see, not by a constant.
+    wrapper = fixtures / "image-wrapper.html"
+    wrapper.write_text('<!doctype html><p>Invoice</p><img src="scan.png">', encoding="utf-8")
+    assert extract_file(wrapper, "text/html", limits=DEFAULT_LIMITS)["document"]["partial"] is True
+    assert extract_file(
+        fixtures / "page.html", "text/html", limits=DEFAULT_LIMITS
+    )["document"]["partial"] is False
+
+    # A Word header is read rather than flagged. Anything else would mark every file that carries
+    # a letterhead or a page number partial, which is the defect this work exists to remove.
+    headed = fixtures / "headed.docx"
+    _write_docx(headed, header_text='ח.פ. 512345678')
+    headed_payload = extract_file(
+        headed,
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        limits=DEFAULT_LIMITS,
+    )
+    assert "512345678" in headed_payload["document"]["plain_text"], "the header was not extracted"
+    assert headed_payload["document"]["partial"] is False, "an extracted header was still flagged"
+    assert extract_file(
+        fixtures / "document.docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        limits=DEFAULT_LIMITS,
+    )["document"]["partial"] is False
+
+    return {
+        "ai_page_cap": "partial",
+        "same_scan_uncapped": "complete",
+        "attempted_but_empty_page": "complete",
+        "text_layer_pdf": "complete",
+        "spreadsheet": "complete",
+        "html_image_wrapper": "partial",
+        "docx_header": "extracted",
+    }
 
 
 def _macro_security_check(fixtures: Path, scratch: Path) -> None:
@@ -755,7 +909,19 @@ def _openai_adapter_check(fixtures: Path) -> dict[str, Any]:
     tops = [block["bbox"][1] for block in blocks]
     assert tops == sorted(tops)
     assert blocks[0]["bbox"][1] == 0.0 and blocks[-1]["bbox"][3] == 1.0
-    assert payload["document"]["partial"] is True
+    # An adapter attempts every page it is handed, so it never has a coverage gap to report --
+    # including for a page that came back with nothing, which was looked at and found empty. This
+    # assertion used to read `is True` and passed only because the adapter hardcoded it there.
+    assert payload["document"]["partial"] is False, "a fully transcribed page reported a gap"
+    empty = OpenAiOcrAdapter(
+        "sk-self-check-000000000000",
+        qa_passes=1,
+        opener=_FakeOpener(_openai_envelope([])),
+        sleep=lambda _s: None,
+    )
+    silent = validate_extraction(empty.extract([page], DEFAULT_LIMITS), DEFAULT_LIMITS)
+    assert silent["document"]["partial"] is False, \
+        "an empty read is a quality question, not a coverage one"
     assert payload["tables"] == [] and payload["marks"] == []
     for line in lines:
         assert line in payload["document"]["plain_text"]
@@ -842,7 +1008,10 @@ def _ocr_payload(lines_by_page: dict[int, list[tuple[str, float | None]]]) -> di
             "page_count": max(lines_by_page),
             "detected_languages": [],
             "plain_text": "\n\n".join(page_text),
-            "partial": True,
+            # What both real adapters now report, for the reason they report it: this stand-in is
+            # handed pages and transcribes all of them, so it never leaves one unlooked-at. A page
+            # with zero lines below is a page that was read and came back empty.
+            "partial": False,
         },
         "blocks": blocks,
         "tables": [],
@@ -905,6 +1074,12 @@ def _second_pass_check(fixtures: Path) -> dict[str, Any]:
     assert adapter.calls[0]["tones"] > 2, "the first pass must see the grayscale scan"
     assert len(payload["blocks"]) == 6
 
+    # The two signals are orthogonal, which is why this lane cannot be built on `document.partial`
+    # in either direction: the page below WAS looked at -- coverage complete, flag false -- and it
+    # is still exactly the page this module exists to retry.
+    assert broken["document"]["partial"] is False, \
+        "a page that was read and came back empty is not a coverage gap"
+
     # 2. A page that produced no text at all is an unambiguous failure.
     payload, adapter, diagnostics = run([broken, recovered])
     assert len(adapter.calls) == 2, f"empty_page_did_not_retry:{adapter.calls}"
@@ -912,6 +1087,7 @@ def _second_pass_check(fixtures: Path) -> dict[str, Any]:
         f"the retry must be binarized, saw {adapter.calls[1]['tones']} tones"
     assert len(payload["blocks"]) == 8, "the recovered read was not kept"
     assert payload["document"]["plain_text"].startswith("שורה 1")
+    assert payload["document"]["partial"] is False, "recovery must not invent a coverage gap"
     assert diagnostics["second_pass"] == {
         "attempted_pages": [1],
         "extra_extractions": 1,
@@ -1470,6 +1646,7 @@ def main() -> int:
         _assert_rejected(fixtures / "invalid.txt", "text/plain")
         _assert_rejected(fixtures / "executable.txt", "text/plain")
         _limit_checks(fixtures, adapter)
+        partial_flag = _partial_flag_check(fixtures)
         pdf_batching = _pdf_batching_check(fixtures)
         _macro_security_check(fixtures, scratch)
         _retry_and_cleanup_check(scratch)
@@ -1489,6 +1666,7 @@ def main() -> int:
                     "gateway_contract_version": GATEWAY_CONTRACT_VERSION,
                     "parsers": parser_names,
                     "limits": "passed",
+                    "partial_flag": partial_flag,
                     "pdf_batching": pdf_batching,
                     "macro_security": "passed",
                     "retry_cleanup": "passed",

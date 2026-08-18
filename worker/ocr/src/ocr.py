@@ -235,7 +235,13 @@ class TesseractOcrAdapter:
                 "page_count": max((page.page for page in pages), default=1),
                 "detected_languages": [],
                 "plain_text": plain_text,
-                "partial": True,
+                # An adapter is handed a batch of pages, never a document, so it cannot answer a
+                # question about the document's coverage -- and on the PDF path `_parse_pdf` calls
+                # this once per memory-bounded batch and discards this value anyway. What it can
+                # state for itself is true: the loop above visits every page it was given and
+                # there is no branch that skips one, so nothing here went unlooked-at. A page that
+                # was read and yielded no text is complete, not partial (see contract.py).
+                "partial": False,
             },
             "blocks": blocks,
             "tables": [],
@@ -366,7 +372,12 @@ class OpenAiOcrAdapter:
                 "page_count": max((page.page for page in pages), default=1),
                 "detected_languages": [],
                 "plain_text": plain_text,
-                "partial": True,
+                # Same reasoning as TesseractOcrAdapter: `transcribe` runs for every page in
+                # `pages` -- serially or through `executor.map`, and a failure raises rather than
+                # skipping -- so this adapter never leaves a page unlooked-at. A page the provider
+                # returned no lines for is a page that was read and found empty, which is a
+                # quality question, not a coverage one; `second_pass.improve` is what retries it.
+                "partial": False,
             },
             "blocks": blocks,
             "tables": [],

@@ -27,10 +27,12 @@ from .scanning import binarize
 
 # WHAT COUNTS AS "THE FIRST PASS FAILED".
 #
-# Deliberately NOT `document.partial`: both OCR adapters hardcode `"partial": True` on every
-# payload they return (ocr.py, TesseractOcrAdapter and OpenAiOcrAdapter alike), so in this lane the
-# flag is a constant and a trigger built on it would fire on every page of every scan. It describes
-# the extraction method, not the extraction's health.
+# Still deliberately NOT `document.partial`, and now for a sharper reason than "it is hardcoded".
+# The two are ORTHOGONAL BY DEFINITION. `partial` records pages nobody looked at; this lane judges
+# a page that WAS looked at and came back unusable. Every page this module can act on therefore
+# has `partial = false` for its own account, and every page `partial` describes was never rendered
+# and so has no image here to retry. A trigger built on that flag would fire on exactly the pages
+# this module cannot help and stay silent on the ones it exists for.
 #
 # Two signals remain, and both are things the worker already measured rather than opinions:
 #
@@ -196,6 +198,9 @@ def improve(
         )
         merged = {
             "schema_version": payload["schema_version"],
+            # `document.partial` is carried through untouched, deliberately. It records which
+            # pages were never looked at, and this function changes what was READ on a page that
+            # was already looked at -- it can neither create nor close a coverage gap.
             "document": {**payload["document"], "plain_text": plain_text},
             "blocks": ordered,
             "tables": payload["tables"],
