@@ -1,5 +1,7 @@
 import * as XLSX from 'xlsx';
 import { neutralizeSpreadsheetRow, neutralizeSpreadsheetString } from './documentExport';
+import { exportDefinition } from './exportTemplates';
+import type { ReportTemplateValues } from './reportTemplateExport';
 
 const neutralize = neutralizeSpreadsheetString;
 
@@ -117,6 +119,87 @@ export function buildMonthlyWorkbook(input: {
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.exceptions.map((row) => neutralizeSpreadsheetRow({
     'סוג': input.labels.exceptionType[row.type], 'תיאור': row.title, 'ספק': row.supplier?.name ?? '',
   }))), 'חריגים פתוחים כרגע');
+  return workbook;
+}
+
+const MONEY_FORMAT = '#,##0.00';
+
+/** Column widths + a money number-format pass — the styling SheetJS CE writes reliably. */
+function styleSheet(sheet: XLSX.WorkSheet | undefined, widths: number[], moneyCols: number[]) {
+  if (!sheet) return;
+  sheet['!cols'] = widths.map((wch) => ({ wch }));
+  if (!sheet['!ref']) return;
+  const range = XLSX.utils.decode_range(sheet['!ref']);
+  for (let row = range.s.r + 1; row <= range.e.r; row++) {
+    for (const col of moneyCols) {
+      const cell = sheet[XLSX.utils.encode_cell({ r: row, c: col })];
+      if (cell && cell.t === 'n') cell.z = MONEY_FORMAT;
+    }
+  }
+}
+
+/**
+ * The BUILT-IN styled default for the monthly accountant report (owner decision 18.08.2026):
+ * used when no custom template is configured, replacing the bare fallback workbook.
+ *
+ * Styled IN CODE, not from a template file, on purpose. A shipped .xlsx asset would rest on
+ * SheetJS CE preserving cell styles through a read→write round trip — exactly the unproven debt
+ * DEBT-REGISTER §37 tracks. This builder uses only what CE writes reliably: RTL views (the
+ * documentExport.ts:242 recipe), merges, column widths and number formats. The summary sheet
+ * presents the same figures a custom template maps, labeled from the EXPORT_DEFINITIONS
+ * registry, so both paths speak one vocabulary.
+ *
+ * The locked snapshot (buildLockedMonthlyWorkbook) deliberately does NOT use this: a version is
+ * an evidence artifact, and re-downloading version N must produce the workbook the accountant
+ * already archived — restyling it would make identical versions visibly differ.
+ */
+export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthlyWorkbook>[0] & {
+  summary: ReportTemplateValues;
+}): XLSX.WorkBook {
+  const workbook = buildMonthlyWorkbook(input);
+  workbook.Workbook = { Views: [{ RTL: true }] };
+
+  const { data, summary } = input;
+  const definition = exportDefinition('accountant_monthly_report');
+  const commonKeys = new Set(['org_name', 'period_label', 'period_from', 'period_to', 'generated_at']);
+  const moneyKeys = new Set(['net_total', 'vat_total', 'gross_total', 'credits_recognized', 'net_expense']);
+  // A missing value stays an empty cell — never 0 (constitution: אפס הוא גם טענה על המציאות).
+  const fieldRows = (definition?.fields ?? [])
+    .filter((field) => !commonKeys.has(field.key))
+    .map((field) => [field.label, summary[field.key] ?? null]);
+
+  const sheet = XLSX.utils.aoa_to_sheet([
+    [`דוח חודשי לרו״ח — ${neutralize(input.orgName ?? '—')}`],
+    [`${summary.period_label ?? input.month} · ${summary.period_from ?? ''}–${summary.period_to ?? ''} · הופק ${summary.generated_at ?? input.generatedAt.toISOString()}`],
+    [],
+    ['נתון', 'ערך'],
+    ...fieldRows,
+    [],
+    ['מדד', 'מספר רשומות'],
+    ['חשבוניות', data.invoices.length],
+    ['תשלומים', data.payments.length],
+    ['זיכויים', data.credits.length],
+    ['חריגים פתוחים כרגע', data.exceptions.length],
+    [],
+    ['הערה', 'הקובץ משקף את הנתונים שהושלמו בזמן המצוין; הוא אינו snapshot טרנזקציוני.'],
+  ]);
+  sheet['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 2 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 2 } },
+  ];
+  sheet['!cols'] = [{ wch: 28 }, { wch: 20 }, { wch: 16 }];
+  fieldRows.forEach(([label], index) => {
+    const field = definition?.fields.find((candidate) => candidate.label === label);
+    if (!field || !moneyKeys.has(field.key)) return;
+    const cell = sheet[XLSX.utils.encode_cell({ r: 4 + index, c: 1 })];
+    if (cell && cell.t === 'n') cell.z = MONEY_FORMAT;
+  });
+  workbook.Sheets['פרטי הדוח'] = sheet;
+
+  styleSheet(workbook.Sheets['חשבוניות'], [24, 16, 12, 14, 12, 14, 14, 14], [3, 4, 5]);
+  styleSheet(workbook.Sheets['תשלומים'], [24, 12, 14, 14, 18], [2]);
+  styleSheet(workbook.Sheets['זיכויים'], [24, 16, 14, 14], [2]);
+  styleSheet(workbook.Sheets['חריגים פתוחים כרגע'], [16, 40, 24], []);
   return workbook;
 }
 

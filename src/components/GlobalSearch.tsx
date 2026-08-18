@@ -62,7 +62,10 @@ function targetFor(hit: SearchHit): string {
     case 'order':    return `/orders/${hit.id}`;
     // A draft resumes only for its creator; the server fences the hit to created_by (0145).
     case 'draft':    return `/orders/new?draft=${hit.id}`;
-    case 'product':  return `/products?id=${hit.id}`;
+    // The price comparison, not the edit modal (18.08.2026): someone searching a product is
+    // asking "who sells it and for how much" far more often than "let me rename it". The edit
+    // path stays one click away — the comparison header links back to /products?id=.
+    case 'product':  return `/prices?product=${hit.id}`;
     case 'payment':  return `/payments?id=${hit.id}`;
     case 'credit':   return `/credits?id=${hit.id}`;
   }
