@@ -463,8 +463,12 @@ insert into purchase_orders (id, org_id, supplier_id, status, created_by) values
 insert into purchase_requests (id, org_id, status, notes, created_by) values
   ('b9000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
    'draft', 'P9DRAFT resume me', '29000000-0000-4000-8000-000000000002');
-insert into purchase_request_items (request_id, product_id, qty) values
-  ('b9000000-0000-4000-8000-000000000001', '59000000-0000-4000-8000-000000000001', 1);
+-- org_id explicit, not defaulted: this block runs without a subject (p9_claims null), so the
+-- auth_org() column default resolves NULL and the 0092 write guard refuses the row — the same
+-- reason the payment_request_invoices fixture below names it.
+insert into purchase_request_items (org_id, request_id, product_id, qty) values
+  ('19000000-0000-4000-8000-000000000001',
+   'b9000000-0000-4000-8000-000000000001', '59000000-0000-4000-8000-000000000001', 1);
 
 insert into payments (id, org_id, supplier_id, amount, paid_date, method, reference) values
   ('89000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
