@@ -1817,6 +1817,9 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
   captureConsole(page, `push:${name}`, [/HTTP 500 .*push_subscriptions/]);
   try {
     await login(page, 'owner');
+    // T7.3: the desktop shell is the floating pill nav — signing out lives inside the account
+    // menu behind the avatar, not on a permanent sidebar strip. Open it, then sign out.
+    await page.getByRole('button', { name: /^תפריט החשבון של/ }).click();
     await page.getByRole('button', { name: 'התנתקות' }).click();
     await page.waitForURL((url) => url.pathname === '/login', { timeout: 25_000 });
     await page.waitForTimeout(250);
