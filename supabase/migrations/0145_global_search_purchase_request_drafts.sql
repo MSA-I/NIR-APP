@@ -62,8 +62,10 @@ begin
     raise exception '0145: public.global_search is gone.';
   end if;
 
-  -- Idempotent (the 0117:44-50 lesson): re-running must recognise its own result.
-  if position('''draft''' in v_def) > 0 then
+  -- Idempotent (the 0117:44-50 lesson): re-running must recognise ITS OWN result — the exact
+  -- owner row it writes, not any 'draft' literal a later patch might introduce for another
+  -- reason (a bare-literal probe would then skip this migration silently).
+  if position(v_owner_new in v_def) > 0 then
     return;
   end if;
 
