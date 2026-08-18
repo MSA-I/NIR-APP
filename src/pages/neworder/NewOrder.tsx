@@ -27,7 +27,8 @@ import { centsFromUnits, hundredths, lineUnits, moneyFromCents } from '../../lib
 import { deferProduct, dismissNextOrderItem, listNextOrderItems, type NextOrderItem } from '../../lib/nextOrderItems';
 import { fmtMoneyExact } from '../../lib/format';
 import { NEW_COMMERCE_SUPPLIER_STATUSES } from '../../lib/status';
-import { openOrderWhatsApp, markOrderSentToSupplier } from '../../lib/share';
+import { markOrderSentToSupplier } from '../../lib/share';
+import { WhatsAppSendDialog } from '../../components/WhatsAppSendDialog';
 import type { Product, PurchaseOrder, Supplier, SupplierProduct } from '../../lib/types';
 import ProductStep from './ProductStep';
 import SupplierSplitStep from './SupplierSplitStep';
@@ -59,7 +60,7 @@ interface SourceOrder {
 
 type QueueOrder = PurchaseOrder & {
   supplier: { name: string; phone: string | null; whatsapp: string | null };
-  items: { qty: number; unit_price: number; product: { name: string; unit: string } }[];
+  items: { qty: number; unit_price: number; product: { name: string; unit: string; sku: string | null } }[];
 };
 
 interface DraftSnapshot {
@@ -143,6 +144,7 @@ export default function NewOrder() {
   const [sendingId, setSendingId] = useState<string | null>(null);
   // Orders whose WhatsApp window we opened. Not "sent" — only the operator can say that.
   const [openedInWhatsApp, setOpenedInWhatsApp] = useState<ReadonlySet<string>>(new Set());
+  const [waTarget, setWaTarget] = useState<QueueOrder | null>(null);
   const [nextOrderItems, setNextOrderItems] = useState<NextOrderItem[]>([]);
   const [nextOrderBusyId, setNextOrderBusyId] = useState<string | null>(null);
   const [pendingNextOrderAdd, setPendingNextOrderAdd] = useState<NextOrderItem | null>(null);
@@ -647,7 +649,7 @@ export default function NewOrder() {
       const finalized = await finalizeOrderDraft(requestId, savings.splitTotal);
       finalizedRef.current = true;
       const orders = unwrap(await supabase.from('purchase_orders')
-        .select('*, supplier:suppliers(name, phone, whatsapp), items:purchase_order_items(qty, unit_price, product:products(name, unit))')
+        .select('*, supplier:suppliers(name, phone, whatsapp), items:purchase_order_items(qty, unit_price, product:products(name, unit, sku))')
         .in('id', finalized.order_ids).order('number')) as QueueOrder[];
       setSendQueue(orders);
       toast(`נוצרו ${finalized.order_count} הזמנות ספק`);
@@ -688,11 +690,7 @@ export default function NewOrder() {
   }
 
   function sendQueuedOrder(order: QueueOrder) {
-    const result = openOrderWhatsApp(order, org?.name ?? '');
-    if (result.error) { toast(result.error, 'error'); return; }
-    if (!result.opened) return;
-    // Opening the window is not sending. The row now offers the confirmation instead.
-    setOpenedInWhatsApp((ids) => new Set(ids).add(order.id));
+    setWaTarget(order); // two-step dialog; the row offers the confirmation after it closes
   }
 
   async function confirmQueuedOrderSent(order: QueueOrder) {
@@ -781,10 +779,18 @@ export default function NewOrder() {
 
       <PriceDiffModal report={priceDiff} onClose={() => setPriceDiff(null)} />
 
+      <WhatsAppSendDialog order={waTarget} orgName={org?.name ?? ''}
+        onClose={(openedText) => {
+          const target = waTarget;
+          setWaTarget(null);
+          // Opening the window is not sending. The row now offers the confirmation instead.
+          if (openedText && target) setOpenedInWhatsApp((ids) => new Set(ids).add(target.id));
+        }} />
+
       <Modal open={sendQueue !== null} onClose={() => navigate('/orders')} title="שליחת הזמנות לספקים" busy={sendingId !== null} statusMessage={sendingId ? 'מעדכן את סטטוס ההזמנה' : undefined}>
         <p className="mb-3 text-sm text-ink-soft">
-          פתיחת WhatsApp מכינה את ההודעה — היא אינה שולחת אותה. אחרי שההודעה נשלחה בפועל יש לסמן זאת כאן,
-          ורק אז ההזמנה תירשם כנשלחה לספק.
+          לכל ספק נשלחות שתי הודעות: הודעת טקסט ותמונת הזמנה מפורטת. פתיחת WhatsApp מכינה את ההודעה —
+          היא אינה שולחת אותה. אחרי שההודעות נשלחו בפועל יש לסמן זאת כאן, ורק אז ההזמנה תירשם כנשלחה לספק.
         </p>
         <div className="divide-y divide-line-soft border-y border-line-strong">
           {sendQueue?.map((order) => {
