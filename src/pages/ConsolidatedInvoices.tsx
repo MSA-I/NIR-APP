@@ -545,7 +545,7 @@ function ReconciliationTable({ channel, lines }: { channel: ConsolidatedMatchCha
       key: 'product', header: 'מוצר וזהות', priority: 1,
       render: (row) => (
         <div className="min-w-40">
-          <div className="font-medium">{row.product_name ?? 'מוצר לא מזוהה'}</div>
+          <div className="font-medium"><bdi>{row.product_name ?? 'מוצר לא מזוהה'}</bdi></div>
           <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-ink-muted" dir="ltr">
             {row.supplier_sku && <span>SKU {row.supplier_sku}</span>}
             {row.barcode && <span>{row.barcode}</span>}

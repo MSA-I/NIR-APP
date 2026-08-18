@@ -435,7 +435,7 @@ export function OrderDetail() {
           {order.items.map((item) => (
             <li key={item.id} className="py-3 first:pt-0 last:pb-0">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0"><div className="font-medium text-ink-body">{item.product.name}</div><div className="mt-1 text-xs text-ink-muted"><span className="num">{formatQuantity(item.qty, item.product.unit)}</span> × <span className="num">{fmtMoneyExact(item.unit_price)}</span></div></div>
+                <div className="min-w-0"><div className="font-medium text-ink-body"><bdi>{item.product.name}</bdi></div><div className="mt-1 text-xs text-ink-muted"><span className="num">{formatQuantity(item.qty, item.product.unit)}</span> × <span className="num">{fmtMoneyExact(item.unit_price)}</span></div></div>
                 <span className="num shrink-0 font-semibold">{fmtMoneyExact(item.qty * item.unit_price)}</span>
               </div>
               {order.status !== 'draft' && <div className="mt-2 text-xs text-ink-muted">התקבל: <span className={`num ${item.received_qty >= item.qty ? 'text-done-fg' : item.received_qty > 0 ? 'text-await-fg' : ''}`}>{item.received_qty}</span> מתוך <span className="num">{item.qty}</span></div>}
@@ -455,7 +455,7 @@ export function OrderDetail() {
           <tbody className="divide-y divide-line-soft">
             {order.items.map((i) => (
               <tr key={i.id}>
-                <td className="td font-medium text-ink-body">{i.product.name}</td>
+                <td className="td font-medium text-ink-body"><bdi>{i.product.name}</bdi></td>
                 <td className="td">{formatUnit(i.product.unit)}</td>
                 <td className="td num">{i.qty}</td>
                 <td className="td num">{fmtMoneyExact(i.unit_price)}</td>

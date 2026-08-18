@@ -398,7 +398,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
             <ul className="mt-2 space-y-1 text-sm">
               {assessment.order_items.filter((item) => !item.on_this_document).map((item) => (
                 <li key={item.purchase_order_item_id}>
-                  {item.product_name} · הוזמן <span className="num">{fmtNum(item.ordered_quantity)}</span>
+                  <bdi>{item.product_name}</bdi> · הוזמן <span className="num">{fmtNum(item.ordered_quantity)}</span>
                 </li>
               ))}
             </ul>

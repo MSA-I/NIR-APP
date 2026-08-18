@@ -1056,7 +1056,7 @@ export function ReceiveOrder() {
           <div key={item.id} className={`card p-4 border-2 ${CARD[RECEIPT_LINE_STATUS[line.status].tone]} ${scanned ? 'ring-2 ring-action-line' : ''}`}>
             <div className="flex items-start justify-between gap-2">
               <div>
-                <div className="font-semibold text-ink">{item.product.name}</div>
+                <div className="font-semibold text-ink"><bdi>{item.product.name}</bdi></div>
                 <div className="text-xs text-ink-muted mt-0.5">
                   הוזמן: <span className="num">{formatQuantity(item.qty, item.product.unit)}</span>
                   {item.received_qty > 0 && <> · התקבל בעבר: <span className="num">{formatQuantity(item.received_qty, item.product.unit)}</span></>}

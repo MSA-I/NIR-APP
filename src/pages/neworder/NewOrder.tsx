@@ -833,7 +833,7 @@ function PriceDiffModal({ report, onClose }: { report: PriceDiffReport | null; o
         <div className="divide-y divide-line-strong border-y border-line-strong">
           {report.lines.map((line) => (
             <div key={line.productId} className="px-3 py-3 text-sm">
-              <div className="flex flex-wrap items-start justify-between gap-2"><strong className="text-ink-body">{line.productName}</strong><span className={line.assignmentMode === 'pinned' ? 'badge-info' : 'badge-idle'}>{line.assignmentMode === 'pinned' ? 'ספק מוצמד — ההצמדה נשמרה' : line.newSupplierId !== line.supplierId ? 'בחירה אוטומטית — הספק השתנה' : 'בחירה אוטומטית'}</span></div>
+              <div className="flex flex-wrap items-start justify-between gap-2"><strong className="text-ink-body"><bdi>{line.productName}</bdi></strong><span className={line.assignmentMode === 'pinned' ? 'badge-info' : 'badge-idle'}>{line.assignmentMode === 'pinned' ? 'ספק מוצמד — ההצמדה נשמרה' : line.newSupplierId !== line.supplierId ? 'בחירה אוטומטית — הספק השתנה' : 'בחירה אוטומטית'}</span></div>
               <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-center">
                 <div><span className="block text-xs text-ink-muted">לפני · {line.supplierName}</span><span className="num font-semibold">{fmtMoneyExact(line.oldUnitPrice)}</span> ליחידה</div>
                 <span className="text-ink-faint" aria-hidden="true">←</span>

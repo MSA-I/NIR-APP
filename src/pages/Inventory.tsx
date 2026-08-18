@@ -142,7 +142,7 @@ export default function Inventory() {
   const balanceColumns: Column<InventoryBalance & { id: string }>[] = [
     {
       key: 'product', header: 'מוצר', priority: 1, sortValue: (row) => row.product_name,
-      render: (row) => <span className="font-medium text-ink">{row.product_name}</span>,
+      render: (row) => <bdi className="font-medium text-ink">{row.product_name}</bdi>,
     },
     {
       key: 'quantity', header: 'כמות משוערת', className: 'num', priority: 1,
@@ -219,7 +219,7 @@ export default function Inventory() {
     },
     {
       key: 'product', header: 'מוצר', priority: 1, sortValue: (row) => row.product_name,
-      render: (row) => <span className="font-medium text-ink">{row.product_name}</span>,
+      render: (row) => <bdi className="font-medium text-ink">{row.product_name}</bdi>,
     },
     { key: 'type', header: 'פעולה', priority: 1, render: (row) => movementBadge(row.movement_type) },
     {

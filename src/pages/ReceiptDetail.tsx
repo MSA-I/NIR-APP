@@ -167,7 +167,7 @@ export default function ReceiptDetail() {
               <li key={line.id} className="p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h3 className="break-words font-medium text-ink-body">{line.product?.name ?? 'מוצר לא זמין'}</h3>
+                    <h3 className="break-words font-medium text-ink-body"><bdi>{line.product?.name ?? 'מוצר לא זמין'}</bdi></h3>
                     <p className="mt-1 text-sm text-ink-muted">
                       כמות שהתקבלה: <span className="num font-medium text-ink-mid">{formatQuantity(line.qty_received, line.product?.unit)}</span>
                     </p>
