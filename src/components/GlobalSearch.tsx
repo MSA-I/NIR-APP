@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Search, Loader2, X, Truck, Package, FileText, ClipboardList, CreditCard, RotateCcw, type LucideIcon } from 'lucide-react';
+import { Search, Loader2, X, Truck, Package, FileText, ClipboardList, CreditCard, RotateCcw, FilePen, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { StatusBadge, useDialogLayer } from './ui';
 import { SUPPLIER_STATUS, PO_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, type StatusMeta } from '../lib/status';
@@ -33,8 +33,8 @@ const PRODUCT_STATUS: Record<string, StatusMeta> = {
 //
 // RLS still decides which ROWS exist. That never moved.
 const ALLOWED: Record<ActiveRole, EntityType[]> = {
-  owner:      ['supplier', 'product', 'invoice', 'order', 'payment', 'credit'],
-  office:     ['supplier', 'product', 'invoice', 'order', 'credit'],
+  owner:      ['supplier', 'product', 'invoice', 'order', 'draft', 'payment', 'credit'],
+  office:     ['supplier', 'product', 'invoice', 'order', 'draft', 'credit'],
   accountant: ['invoice', 'payment', 'credit'],                                // approved invoices are enforced by RLS
 };
 
@@ -49,16 +49,19 @@ const GROUPS: Record<EntityType, GroupMeta> = {
   product:  { label: 'מוצרים', icon: Package },
   invoice:  { label: 'חשבוניות', icon: FileText },
   order:    { label: 'הזמנות', icon: ClipboardList },
+  draft:    { label: 'טיוטות הזמנה', icon: FilePen },
   payment:  { label: 'תשלומים', icon: CreditCard },
   credit:   { label: 'זיכויים', icon: RotateCcw },
 };
-const GROUP_ORDER: EntityType[] = ['supplier', 'product', 'invoice', 'order', 'payment', 'credit'];
+const GROUP_ORDER: EntityType[] = ['supplier', 'product', 'invoice', 'order', 'draft', 'payment', 'credit'];
 
 function targetFor(hit: SearchHit): string {
   switch (hit.entity) {
     case 'supplier': return `/suppliers/${hit.id}`;
     case 'invoice':  return `/invoices/${hit.id}`;
     case 'order':    return `/orders/${hit.id}`;
+    // A draft resumes only for its creator; the server fences the hit to created_by (0145).
+    case 'draft':    return `/orders/new?draft=${hit.id}`;
     case 'product':  return `/products?id=${hit.id}`;
     case 'payment':  return `/payments?id=${hit.id}`;
     case 'credit':   return `/credits?id=${hit.id}`;
@@ -72,6 +75,7 @@ function metaFor(hit: SearchHit): StatusMeta | undefined {
     case 'product':  return PRODUCT_STATUS[hit.status];
     case 'invoice':  return INVOICE_PAYMENT_STATUS[hit.status];
     case 'order':    return PO_STATUS[hit.status];
+    case 'draft':    return PO_STATUS[hit.status]; // server emits 'draft' — the PO vocabulary's own word
     case 'credit':   return CREDIT_STATUS[hit.status];
     default:         return undefined;
   }
@@ -80,7 +84,7 @@ function metaFor(hit: SearchHit): StatusMeta | undefined {
 // Numbers (invoice numbers, #order/#payment/#credit) read wrong under RTL — pin them LTR,
 // matching Invoices.tsx:64 / Credits.tsx:34.
 const LTR_TITLE: Record<EntityType, boolean> = {
-  supplier: false, product: false, invoice: true, order: true, payment: true, credit: true,
+  supplier: false, product: false, invoice: true, order: true, draft: true, payment: true, credit: true,
 };
 
 export default function GlobalSearch({ variant = 'desktop', onClose }: {
