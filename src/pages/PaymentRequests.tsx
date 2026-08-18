@@ -589,9 +589,11 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         {pr.notes && <div className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-3 py-2">{pr.notes}</div>}
         {pr.open_credit_override_total != null && (
           <Note tone="alert">
-            <strong>הדרישה אושרה באישור חריג ללא קיזוז הזיכוי.</strong>{' '}
-            בעת האישור היו זיכויים פתוחים בסך <span className="num">{fmtMoneyExact(pr.open_credit_override_total)}</span>, והם לא קוזזו אוטומטית.
-            <span className="block mt-1">סיבת אישור החריגה: {pr.open_credit_override_reason}</span>
+            <span className="min-w-0 flex-1">
+              <strong>הדרישה אושרה באישור חריג ללא קיזוז הזיכוי.</strong>{' '}
+              בעת האישור היו זיכויים פתוחים בסך <span className="num">{fmtMoneyExact(pr.open_credit_override_total)}</span>, והם לא קוזזו אוטומטית.
+              <span className="block mt-1">סיבת אישור החריגה: {pr.open_credit_override_reason}</span>
+            </span>
           </Note>
         )}
 

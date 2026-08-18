@@ -419,7 +419,9 @@ export function OrderDetail() {
 
       {underMin && (
         <Note tone="await" className="no-print">
-          שים לב: סכום ההזמנה ({fmtMoneyExact(total)}) נמוך ממינימום ההזמנה של הספק ({fmtMoneyExact(order.supplier.min_order_amount!)}).
+          <span className="min-w-0 flex-1">
+            שים לב: סכום ההזמנה ({fmtMoneyExact(total)}) נמוך ממינימום ההזמנה של הספק ({fmtMoneyExact(order.supplier.min_order_amount!)}).
+          </span>
         </Note>
       )}
 

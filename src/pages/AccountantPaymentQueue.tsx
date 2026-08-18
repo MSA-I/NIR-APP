@@ -197,9 +197,11 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           {pr.notes && <Note tone="await">{pr.notes}</Note>}
           {pr.open_credit_override_total != null && (
             <Note tone="alert">
-              <strong>אושר באישור חריג ללא קיזוז הזיכוי.</strong>{' '}
-              הזיכויים הפתוחים בסך <span className="num">{fmtMoneyExact(pr.open_credit_override_total)}</span> לא קוזזו אוטומטית.
-              <span className="block mt-1">סיבת אישור החריגה: {pr.open_credit_override_reason}</span>
+              <span className="min-w-0 flex-1">
+                <strong>אושר באישור חריג ללא קיזוז הזיכוי.</strong>{' '}
+                הזיכויים הפתוחים בסך <span className="num">{fmtMoneyExact(pr.open_credit_override_total)}</span> לא קוזזו אוטומטית.
+                <span className="block mt-1">סיבת אישור החריגה: {pr.open_credit_override_reason}</span>
+              </span>
             </Note>
           )}
         </dl>

@@ -12,12 +12,14 @@ import {
   blockingFindings,
   canSubmit,
   findingLabel,
+  formatLineRanges,
+  groupFindings,
   resolutionLabel,
   reviewedProposal,
   storageAndApprovalSentences,
-  type AssessmentFinding,
   type AssessmentLine,
   type DocumentReviewRead,
+  type FindingGroup,
   type FindingSeverity,
   type ReviewedLineEdit,
 } from './assessment';
@@ -38,11 +40,15 @@ const SEVERITY_TONE: Record<FindingSeverity, 'alert' | 'await' | 'info' | 'idle'
  * used here for every number on this screen. A missing baseline price rendered as ₪0.00 is a claim
  * that the supplier agreed to give it away.
  */
+/** Above this many distinct complaints the tail folds; five fits a phone without scrolling. */
+const VISIBLE_BLOCKING_GROUPS = 5;
+
 function Cell({ children }: { children: React.ReactNode }) {
   return <td className="td num">{children}</td>;
 }
 
-function FindingRow({ finding }: { finding: AssessmentFinding }) {
+function FindingRow({ group }: { group: FindingGroup }) {
+  const { finding, lines } = group;
   const Icon = finding.severity === 'warning' ? AlertTriangle
     : finding.severity === 'info' ? Info : ShieldAlert;
   return (
@@ -50,8 +56,13 @@ function FindingRow({ finding }: { finding: AssessmentFinding }) {
       <Icon size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
       <span>
         {findingLabel(finding)}
-        {finding.line_index != null && (
-          <span className="text-ink-muted"> · שורה <span className="num">{finding.line_index + 1}</span></span>
+        {lines.length === 1 && (
+          <span className="text-ink-muted"> · שורה <span className="num">{lines[0]}</span></span>
+        )}
+        {lines.length > 1 && (
+          <span className="text-ink-muted">
+            {' · '}<span className="num">{lines.length}</span> שורות: <span className="num">{formatLineRanges(lines)}</span>
+          </span>
         )}
       </span>
     </li>
@@ -99,6 +110,10 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
 
   const blocking = useMemo(() => blockingFindings(read?.assessment ?? null), [read]);
   const advisory = useMemo(() => advisoryFindings(read?.assessment ?? null), [read]);
+  // Grouped, because a document whose every line failed the same check produced 18 identical
+  // sentences and buried the two problems that were not identical.
+  const blockingGroups = useMemo(() => groupFindings(blocking), [blocking]);
+  const advisoryGroups = useMemo(() => groupFindings(advisory), [advisory]);
   const effects = useMemo(
     () => approvalEffects(read?.document_type ?? null, Boolean(orderId)),
     [read?.document_type, orderId]);
@@ -166,8 +181,24 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
           <div className="min-w-0">
             <p className="font-medium">יש לטפל לפני אישור:</p>
             <ul className="mt-2 space-y-1">
-              {blocking.map((finding, index) => <FindingRow key={index} finding={finding} />)}
+              {blockingGroups.slice(0, VISIBLE_BLOCKING_GROUPS).map((group, index) => (
+                <FindingRow key={index} group={group} />
+              ))}
             </ul>
+            {/* Only the tail folds. What is above the fold is still the whole work list when the
+                document has the handful of problems a document usually has. */}
+            {blockingGroups.length > VISIBLE_BLOCKING_GROUPS && (
+              <details className="group mt-2">
+                <summary className="min-h-11 cursor-pointer list-none py-2 text-sm font-medium underline underline-offset-4 [&::-webkit-details-marker]:hidden">
+                  עוד <span className="num">{blockingGroups.length - VISIBLE_BLOCKING_GROUPS}</span> סוגי חריגה
+                </summary>
+                <ul className="mt-2 space-y-1">
+                  {blockingGroups.slice(VISIBLE_BLOCKING_GROUPS).map((group, index) => (
+                    <FindingRow key={index} group={group} />
+                  ))}
+                </ul>
+              </details>
+            )}
           </div>
         </Note>
       )}
@@ -287,11 +318,11 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
           {advisory.length > 0 && (
             <Disclosure
               title="שווה לשים לב"
-              count={advisory.length}
+              count={advisoryGroups.length}
               tone={SEVERITY_TONE[advisory.some((finding) => finding.severity === 'warning') ? 'warning' : 'info']}
             >
               <ul className="space-y-1">
-                {advisory.map((finding, index) => <FindingRow key={index} finding={finding} />)}
+                {advisoryGroups.map((group, index) => <FindingRow key={index} group={group} />)}
               </ul>
             </Disclosure>
           )}

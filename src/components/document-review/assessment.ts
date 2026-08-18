@@ -200,6 +200,48 @@ export function blockingFindings(assessment: DocumentAssessment | null): Assessm
     .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 }
 
+/** One finding, plus every line that raised the same complaint. */
+export interface FindingGroup {
+  finding: AssessmentFinding;
+  /** 1-based line numbers, in the order the server reported them. Empty for a document-level finding. */
+  lines: number[];
+}
+
+/**
+ * The same complaint about 18 lines is one thing to fix, not 18 things to read.
+ *
+ * A production document raised "לא ניתן לזהות איזה מוצר זה" on 18 of its 23 lines, and the panel
+ * printed the sentence 18 times — a screen the reviewer scrolls instead of reads, and one that
+ * hides the two OTHER problems among the repeats. Grouping keeps every line number; it only stops
+ * repeating the sentence that is identical for all of them. Order is first-appearance, so the
+ * severity sort of `blockingFindings` survives.
+ */
+export function groupFindings(findings: AssessmentFinding[]): FindingGroup[] {
+  const groups = new Map<string, FindingGroup>();
+  for (const finding of findings) {
+    const key = `${finding.code}|${findingLabel(finding)}`;
+    const existing = groups.get(key);
+    const group = existing ?? { finding, lines: [] };
+    if (!existing) groups.set(key, group);
+    if (finding.line_index != null) group.lines.push(finding.line_index + 1);
+  }
+  return [...groups.values()];
+}
+
+/** `[1,2,3,5,7,8]` reads as `1–3, 5, 7–8` — the same fact, one line instead of six. */
+export function formatLineRanges(lines: number[]): string {
+  const sorted = [...new Set(lines)].sort((a, b) => a - b);
+  const parts: string[] = [];
+  let start = 0;
+  while (start < sorted.length) {
+    let end = start;
+    while (end + 1 < sorted.length && sorted[end + 1] === sorted[end] + 1) end += 1;
+    parts.push(end > start ? `${sorted[start]}–${sorted[end]}` : String(sorted[start]));
+    start = end + 1;
+  }
+  return parts.join(', ');
+}
+
 export function advisoryFindings(assessment: DocumentAssessment | null): AssessmentFinding[] {
   if (!assessment) return [];
   return assessment.findings.filter(

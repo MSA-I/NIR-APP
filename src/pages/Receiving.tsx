@@ -315,8 +315,10 @@ export function ReceivingList() {
       <OfflineQueueStatus />
       {data?.fromDevice && (
         <Note tone={data.stale ? 'alert' : 'await'}>
-          הרשימה מוצגת מהמכשיר, לא מהשרת. נקראה לאחרונה ב<span className="num">{fmtDateTime(data.readAt ? new Date(data.readAt) : null)}</span>
-          {data.stale && ' — הנתונים מיושנים (מעל 24 שעות)'}. מופיעות כאן רק הזמנות שנפתחו במכשיר הזה בעבר.
+          <span className="min-w-0 flex-1">
+            הרשימה מוצגת מהמכשיר, לא מהשרת. נקראה לאחרונה ב<span className="num">{fmtDateTime(data.readAt ? new Date(data.readAt) : null)}</span>
+            {data.stale && ' — הנתונים מיושנים (מעל 24 שעות)'}. מופיעות כאן רק הזמנות שנפתחו במכשיר הזה בעבר.
+          </span>
         </Note>
       )}
       {documentId && (
@@ -974,8 +976,10 @@ export function ReceiveOrder() {
 
       {data?.fromDevice && (
         <Note tone={data.stale ? 'alert' : 'await'}>
-          ההזמנה מוצגת מהמכשיר. נקראה ב<span className="num">{fmtDateTime(data.readAt ? new Date(data.readAt) : null)}</span>
-          {data.stale && ' — מעל 24 שעות, ייתכן שהכמויות בשרת השתנו מאז'}. הקבלה תישלח כשיהיה חיבור.
+          <span className="min-w-0 flex-1">
+            ההזמנה מוצגת מהמכשיר. נקראה ב<span className="num">{fmtDateTime(data.readAt ? new Date(data.readAt) : null)}</span>
+            {data.stale && ' — מעל 24 שעות, ייתכן שהכמויות בשרת השתנו מאז'}. הקבלה תישלח כשיהיה חיבור.
+          </span>
         </Note>
       )}
 

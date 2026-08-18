@@ -945,7 +945,9 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
       <UploadCenter />
       {locallyQueued > 0 && (
         <Note tone="await" className="mb-2">
-          <span className="num">{locallyQueued}</span> קבצים שמורים במכשיר וממתינים לסנכרון.
+          <span className="min-w-0 flex-1">
+            <span className="num">{locallyQueued}</span> קבצים שמורים במכשיר וממתינים לסנכרון.
+          </span>
         </Note>
       )}
       {uploadSummary && (

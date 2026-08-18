@@ -4,6 +4,8 @@ import {
   blockingFindings,
   canSubmit,
   findingLabel,
+  formatLineRanges,
+  groupFindings,
   resolutionLabel,
   reviewedProposal,
   storageAndApprovalSentences,
@@ -223,5 +225,51 @@ describe('resolutionLabel', () => {
     expect(resolutionLabel('a_tier_this_build_has_not_met')).toBe('a_tier_this_build_has_not_met');
     expect(resolutionLabel(null)).toBeNull();
     expect(resolutionLabel('')).toBeNull();
+  });
+});
+
+describe('grouping the same complaint about many lines', () => {
+  const finding = (code: string, line: number | null, message?: string) => ({
+    code, severity: 'error' as const, line_index: line, ...(message ? { message } : {}),
+  });
+
+  it('keeps every line number while saying the sentence once', () => {
+    const groups = groupFindings([
+      finding('product_unmatched', 0),
+      finding('product_unmatched', 1),
+      finding('price_above_agreement', 8),
+      finding('product_unmatched', 3),
+    ]);
+    expect(groups).toHaveLength(2);
+    expect(groups[0].lines).toEqual([1, 2, 4]);
+    expect(groups[1].lines).toEqual([9]);
+  });
+
+  it('orders groups by first appearance, so the severity sort above it survives', () => {
+    const groups = groupFindings([finding('b', 0), finding('a', 1), finding('b', 2)]);
+    expect(groups.map((group) => group.finding.code)).toEqual(['b', 'a']);
+  });
+
+  it('separates two findings that share a code but not a message', () => {
+    const groups = groupFindings([
+      finding('line_math', 0, 'סכום השורה אינו שווה לכמות × מחיר'),
+      finding('line_math', 1, 'סכום השורה חורג מהעגלה'),
+    ]);
+    expect(groups).toHaveLength(2);
+  });
+
+  it('holds a document-level finding with no line at all', () => {
+    const groups = groupFindings([finding('supplier_missing', null)]);
+    expect(groups[0].lines).toEqual([]);
+  });
+
+  it('reads consecutive lines as a range and singles as themselves', () => {
+    expect(formatLineRanges([1, 2, 3, 5, 7, 8])).toBe('1–3, 5, 7–8');
+    expect(formatLineRanges([4])).toBe('4');
+    expect(formatLineRanges([])).toBe('');
+  });
+
+  it('sorts and de-duplicates before it counts a run', () => {
+    expect(formatLineRanges([3, 1, 2, 2])).toBe('1–3');
   });
 });

@@ -865,7 +865,8 @@ export function PriceListReviewConfirmation({
 
       {recoveryLoading && !receipt && (
         <Note tone="info" role="status" className="mt-4">
-          <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> בודק אם כבר נשמרה קבלת הגשה לפירוש הזה.
+          <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" />
+          <span className="min-w-0 flex-1">בודק אם כבר נשמרה קבלת הגשה לפירוש הזה.</span>
         </Note>
       )}
       {recoveryError && !receipt && (

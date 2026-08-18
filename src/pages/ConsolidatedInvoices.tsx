@@ -303,12 +303,14 @@ export default function ConsolidatedInvoices() {
             {busy ? `מעלה ${fmtNum(selectedFiles.length)} עמודים תחת חשבונית מרכזת אחת…` : null}
           </div>
           {uploadError && (
-            <Note tone="alert" role="alert" className="space-y-3">
-              <p>{uploadError}</p>
-              {activeIntake && selectedFiles.length > 0 && (
-                <button type="button" className="btn-secondary min-h-11" disabled={busy}
-                  onClick={() => void runIntake(selectedFiles, activeIntake)}>ניסיון נוסף מאותה נקודה</button>
-              )}
+            <Note tone="alert" role="alert">
+              <div className="min-w-0 flex-1 space-y-3">
+                <p>{uploadError}</p>
+                {activeIntake && selectedFiles.length > 0 && (
+                  <button type="button" className="btn-secondary min-h-11" disabled={busy}
+                    onClick={() => void runIntake(selectedFiles, activeIntake)}>ניסיון נוסף מאותה נקודה</button>
+                )}
+              </div>
             </Note>
           )}
         </section>
@@ -428,22 +430,24 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
 
       {workspace.case.status === 'needs_review' && (
         <Note tone="await" role="status">
-          <p className="font-medium">המסמך נשמר, אך עדיין לא נוצר חוב.</p>
-          <p className="mt-1">{reviewReason}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {primaryPage?.job_id && canWrite && (
-              <button type="button" className="btn-primary min-h-11"
-                disabled={retryingReview} onClick={() => void retryReview()}>
-                <RefreshCw size={16} aria-hidden="true" />
-                {retryingReview ? 'בודק מחדש…' : 'בדיקה מחדש'}
-              </button>
-            )}
-            {primaryPage && (
-              <button type="button" className="btn-secondary min-h-11"
-                onClick={() => navigate(`/documents/${primaryPage.document_id}/review`)}>
-                פתיחת העמוד שדורש בדיקה
-              </button>
-            )}
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">המסמך נשמר, אך עדיין לא נוצר חוב.</p>
+            <p className="mt-1">{reviewReason}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {primaryPage?.job_id && canWrite && (
+                <button type="button" className="btn-primary min-h-11"
+                  disabled={retryingReview} onClick={() => void retryReview()}>
+                  <RefreshCw size={16} aria-hidden="true" />
+                  {retryingReview ? 'בודק מחדש…' : 'בדיקה מחדש'}
+                </button>
+              )}
+              {primaryPage && (
+                <button type="button" className="btn-secondary min-h-11"
+                  onClick={() => navigate(`/documents/${primaryPage.document_id}/review`)}>
+                  פתיחת העמוד שדורש בדיקה
+                </button>
+              )}
+            </div>
           </div>
         </Note>
       )}
@@ -477,10 +481,12 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
       )}
       {workspace.warnings.length > 0 && (
         <Note tone="await" role="status">
-          <p className="font-medium">נמצאו {fmtNum(workspace.warnings.length)} אזהרות. הן גלויות אך אינן חוסמות חוב תקין.</p>
-          <ul className="mt-2 list-disc space-y-1 ps-5">
-            {workspace.warnings.map((warning, index) => <li key={`${warning.code}:${warning.source_id ?? index}`}>{consolidatedWarningLabel(warning.code)}</li>)}
-          </ul>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">נמצאו {fmtNum(workspace.warnings.length)} אזהרות. הן גלויות אך אינן חוסמות חוב תקין.</p>
+            <ul className="mt-2 list-disc space-y-1 ps-5">
+              {workspace.warnings.map((warning, index) => <li key={`${warning.code}:${warning.source_id ?? index}`}>{consolidatedWarningLabel(warning.code)}</li>)}
+            </ul>
+          </div>
         </Note>
       )}
 

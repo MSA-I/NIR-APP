@@ -558,7 +558,9 @@ export default function InvoiceDetail() {
 
             {data.threeWay.override_active && data.threeWay.override && (
               <Note tone="await" role="status">
-                החסימה נעקפה על ידי בעלים לאחר אימות זהות. סיבה: {data.threeWay.override.reason}
+                <span className="min-w-0 flex-1">
+                  החסימה נעקפה על ידי בעלים לאחר אימות זהות. סיבה: {data.threeWay.override.reason}
+                </span>
               </Note>
             )}
 
