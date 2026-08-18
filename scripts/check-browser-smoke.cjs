@@ -1506,6 +1506,24 @@ async function orderSupplierComparison(browser) {
     // prepares a message; only the operator knows whether it was actually sent, so marking the
     // order sent is a second, explicit confirmation rather than a side effect of a link opening.
     await sendQueue.getByRole('button', { name: 'פתיחת WhatsApp' }).waitFor();
+    // Two-message flow (18.08.2026): the row button now opens a numbered two-step dialog. The
+    // image step is exercised for real — this is the only place the offscreen html2canvas render
+    // meets an actual layout engine, so the PNG must exist and be non-trivial. Step 1 is only
+    // asserted present: clicking it would open wa.me in a new tab, which a smoke has no use for.
+    await sendQueue.getByRole('button', { name: 'פתיחת WhatsApp' }).first().click();
+    const waDialog = page.getByRole('dialog', { name: /שליחת הזמנה #\d+ ב-WhatsApp/ });
+    await waDialog.waitFor({ timeout: 25_000 });
+    await waDialog.getByRole('button', { name: '1. שליחת הודעת הטקסט' }).waitFor();
+    const orderImageButton = waDialog.getByRole('button', { name: '2. הורדת תמונת ההזמנה' });
+    const downloadEvent = page.waitForEvent('download', { timeout: 25_000 });
+    await orderImageButton.click(); // auto-waits for the render to enable the button
+    const orderImageDownload = await downloadEvent;
+    assert(orderImageDownload.suggestedFilename().endsWith('.png'),
+      `order image download is not a PNG (${orderImageDownload.suggestedFilename()})`);
+    const orderImageBytes = require('node:fs').statSync(await orderImageDownload.path()).size;
+    assert(orderImageBytes > 20_000, `order image PNG suspiciously small (${orderImageBytes} bytes)`);
+    await waDialog.getByRole('button', { name: 'סיום' }).click();
+    await sendQueue.getByRole('button', { name: 'פתיחת WhatsApp' }).first().waitFor();
   } finally {
     try {
       await qualitySupplierPrice(58.5);

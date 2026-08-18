@@ -22,7 +22,7 @@ vi.mock('./popup', () => ({
   },
 }));
 
-import { openOrderWhatsApp, markOrderSentToSupplier, needsSentConfirmation, type WhatsAppOrder } from './share';
+import { openOrderWhatsApp, orderWhatsAppText, markOrderSentToSupplier, needsSentConfirmation, type WhatsAppOrder } from './share';
 
 const order: WhatsAppOrder = {
   id: 'order-1',
@@ -31,8 +31,8 @@ const order: WhatsAppOrder = {
   status: 'ready',
   expected_date: '2026-08-12',
   notes: null,
-  supplier: { phone: '050-1234567', whatsapp: null },
-  items: [{ qty: 2, unit_price: 10, product: { name: 'עגבניות', unit: 'ק״ג' } }],
+  supplier: { name: 'ירקות השדה', phone: '050-1234567', whatsapp: null },
+  items: [{ qty: 2, unit_price: 10, product: { name: 'עגבניות שרי 500 גרם', unit: 'ק״ג', sku: null } }],
 };
 
 beforeEach(() => {
@@ -67,7 +67,7 @@ describe('WhatsApp order send', () => {
   });
 
   it('refuses a supplier with no reachable number', () => {
-    const result = openOrderWhatsApp({ ...order, supplier: { phone: null, whatsapp: null } }, 'המסעדה');
+    const result = openOrderWhatsApp({ ...order, supplier: { name: 'ירקות השדה', phone: null, whatsapp: null } }, 'המסעדה');
 
     expect(result).toEqual({ opened: false, error: 'לספק אין מספר WhatsApp זמין' });
     expect(openedUrls).toEqual([]);
@@ -94,6 +94,19 @@ describe('WhatsApp order send', () => {
 
     expect(result.error).toBeTruthy();
     expect(result.error).not.toContain('purchase_order_status_transition_not_allowed');
+  });
+
+  it('carries no price and points at the image message (owner decision 18.08.2026)', () => {
+    const text = orderWhatsAppText(order, 'המסעדה');
+
+    expect(text).not.toContain('סה"כ');
+    expect(text).not.toContain('₪');
+    expect(text).toContain('נשלח כתמונה בהודעה הבאה');
+    expect(text).toContain('פריטים (1):');
+    // Product names ride FSI…PDI so mixed Hebrew/digit names don't reorder in WhatsApp.
+    expect(text).toContain('⁨עגבניות שרי 500 גרם⁩');
+    // Conditional lines collapse instead of leaving blank lines (the old join-'' wart).
+    expect(orderWhatsAppText({ ...order, expected_date: null, notes: null }, '')).not.toMatch(/\n\n\n/);
   });
 
   it('asks for confirmation only while the order is still on our side', () => {
