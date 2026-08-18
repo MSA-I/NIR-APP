@@ -1,5 +1,5 @@
 import { Link, Outlet, useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight, ScrollText } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -74,12 +74,15 @@ const NAV_SHORT_LABELS: Partial<Record<string, string>> = {
 // procurement/finance/control reading puts them.
 // None of it invents business meaning.
 //
-// יומן ביקורת was here until 10.08.2026. The LEDGER did not go anywhere — audit_logs, its
+// יומן ביקורת was here until 10.08.2026 — a page-sized table of raw mutation rows for the whole
+// system, which answered no question a business owner actually asks. That screen is NOT coming
+// back. What came back on 19.08.2026, by owner decision, is the one question it did answer and
+// nothing else: יומן עדכון ספקים (/supplier-log) — `suppliers` and `supplier_products` only, with
+// the price read as before→after instead of raw JSON, because "מי שינה את המחיר של המוצר" had no
+// surface at all. Owner only: the ledger is owner+accountant while the names in it are
+// owner+office, so an accountant would read UUIDs. The LEDGER itself never moved — audit_logs, its
 // server-side triggers, the reason on every sensitive command and the immutability rules are what
-// make this a financial system and they are untouched. What went is the customer-facing SCREEN:
-// a page-sized table of raw mutation rows that answered no question a business owner actually
-// asks, and that no other surface ever linked to. Privileged inspection stays where it belongs,
-// in the platform console and in the database.
+// make this a financial system and they are untouched.
 export const NAV_SECTIONS: NavSection[] = [
   {
     // מרכז הבקרה ראשון: הוא התשובה לסעיף 12 — מה דורש טיפול, עכשיו. הזמנה חדשה אחריו,
@@ -132,6 +135,7 @@ export const NAV_SECTIONS: NavSection[] = [
       navItem('/expenses', PieChart, ['owner', 'accountant']),
       navItem('/reports', BarChart3, ['owner', 'accountant']),
       navItem('/analytics', Activity, ['owner', 'office']),
+      navItem('/supplier-log', ScrollText, ['owner']),
       navItem('/settings', Settings, ['owner']),
       // /onboarding was absent from this catalogue entirely, so nothing could route to it: not the
       // sidebar, not the drawer, not quickActions, and homeFor() always answers /dashboard. The
@@ -157,7 +161,7 @@ const MANAGEMENT_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
 };
 
 const CONTROL_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
-  owner: ['/documents/operations', '/documents/consolidated-invoices', '/exceptions', '/expenses', '/reports', '/analytics'],
+  owner: ['/documents/operations', '/documents/consolidated-invoices', '/exceptions', '/expenses', '/reports', '/analytics', '/supplier-log'],
   office: ['/documents/consolidated-invoices', '/exceptions', '/analytics'],
   accountant: ['/documents/consolidated-invoices', '/exceptions', '/expenses', '/reports'],
 };

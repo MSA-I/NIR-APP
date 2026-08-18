@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { reasonOr } from '../lib/reason';
 import { useParamState } from '../lib/useParamState';
 import { toHebrewError } from "../lib/errors";
-import { TrendingUp, TrendingDown, Upload, History, Pencil, X, FileCheck2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Upload, History, Pencil, X, FileCheck2, ScrollText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -32,6 +32,14 @@ const monthLabel = (value: string) => new Intl.DateTimeFormat('he-IL', {
 export default function PriceLists() {
   const { profile, organizationAccess } = useAuth();
   const canWrite = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
+  /**
+   * "מי שינה את המחיר" lives in יומן עדכון ספקים, and that screen is owner-only — `audit_logs` is
+   * owner+accountant while the names it resolves are owner+office. Offering the row action to
+   * office would send them to a Guard that turns them away, so the door is shown to the role that
+   * can walk through it.
+   */
+  const canReadSupplierLog = profile?.role === 'owner';
+  const navigate = useNavigate();
   const toast = useToast();
   const [supplierFilter, setSupplierFilter] = useState('');
   // '1' via ?increases=1 (from the dashboard price-increase card); re-syncs on navigation.
@@ -190,6 +198,10 @@ export default function PriceLists() {
         mobileTrailing={(r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} />}
         rowActions={(r) => [
           { key: 'history', label: 'היסטוריית מחירים', icon: History, onSelect: () => setHistoryFor(r) },
+          {
+            key: 'log', label: 'מי עדכן', icon: ScrollText, hidden: !canReadSupplierLog,
+            onSelect: () => navigate(`/supplier-log?entity=supplier_products&supplier=${r.supplier_id}`),
+          },
           { key: 'edit', label: 'עדכון מחיר', icon: Pencil, hidden: !canWrite, onSelect: () => setEditFor(r) },
         ]}
         activeFilters={[supplierFilter, productFilter, onlyIncreases ? '1' : ''].filter(Boolean).length}

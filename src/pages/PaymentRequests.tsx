@@ -533,6 +533,14 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         setChecks(freshChecks);
         setCheckError(null);
         freshOpenCreditTotal = freshChecks.find((check) => check.code === 'open_credit')?.amount ?? 0;
+        // 0146: re-read on the fresh signals, not the rendered ones. A credit offset between
+        // opening the modal and pressing approve lands here, and the server would answer with a
+        // bare payment_request_checks_failed.
+        if (freshChecks.some((check) => check.code === 'allocation_vs_balance')) {
+          setBusy(false);
+          toast('ההקצאה לחשבונית גבוהה מהיתרה שנותרה בה. יש לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן.', 'error');
+          return;
+        }
       } catch (failure) {
         setChecks(null);
         setCheckError('בדיקות האישור נכשלו. הדרישה לא אושרה.');
@@ -576,6 +584,11 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
 
   const hasCritical = checks?.some((c) => c.severity === 'critical') ?? false;
   const checksReady = checks != null && !checking && !checkError && !linksError;
+  // 0146. Not one more warning to approve past: the server rejects this request at approval
+  // (payment_request_checks_failed) and again at execution (allocation_exceeds_balance), and no
+  // screen can repair an allocation. Both approval routes are closed here so the refusal arrives
+  // with its reason attached instead of as a server error the user cannot act on.
+  const overAllocated = checks?.some((c) => c.code === 'allocation_vs_balance') ?? false;
 
   return (
     <Modal open onClose={onClose} title={`דרישת תשלום #${pr.number} — ${pr.supplier.name}`} wide busy={busy} statusMessage={busy ? 'מעדכן את דרישת התשלום' : undefined}>
@@ -623,7 +636,18 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
           )}
         </div>
 
-        {openCreditTotal > 0 && (
+        {overAllocated && (
+          <Note tone="alert">
+            <span className="min-w-0 flex-1">
+              <strong>לא ניתן לאשר את הדרישה במצבה הנוכחי.</strong>{' '}
+              הסכום שהוקצה לחשבונית מקושרת גבוה מהיתרה שנותרה בה — ככל הנראה משום שזיכוי קוזז אחרי
+              שהדרישה נוצרה. סכום ההקצאה נקבע ביצירת הדרישה ואינו מתעדכן מעצמו, ולכן יש
+              <strong> לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן</strong>.
+            </span>
+          </Note>
+        )}
+
+        {openCreditTotal > 0 && !overAllocated && (
           <Note tone="alert">
             <div className="space-y-3">
               <p className="font-semibold">לספק קיימים זיכויים פתוחים שטרם קוזזו. אישור זה אינו מקזז את הזיכויים ואינו משנה את סכום הדרישה.</p>
@@ -648,7 +672,11 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
               <button className="btn-primary" disabled={busy} onClick={() => setTransitionTarget('pending_approval')}><Send size={15} /> שליחה לאישור</button>
             )}
             {['pending_approval', 'suspected_duplicate', 'investigation'].includes(pr.status) && (
-              openCreditTotal > 0 ? (
+              overAllocated ? (
+                <button className="btn-secondary" disabled aria-label="אישור חסום — ההקצאה גבוהה מהיתרה שנותרה">
+                  <CheckCircle2 size={15} /> אישור הדרישה
+                </button>
+              ) : openCreditTotal > 0 ? (
                 <>
                   <button className="btn-secondary" disabled aria-label="אישור רגיל חסום בגלל זיכויים פתוחים">
                     <CheckCircle2 size={15} /> אישור הדרישה

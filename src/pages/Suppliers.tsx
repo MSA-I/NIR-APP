@@ -114,7 +114,12 @@ export function SuppliersList() {
   // while money is still owed to them or goods are still on their way — the open balance and
   // the in-flight orders would go dark. Both checks run FRESH (not off the possibly-stale list
   // merge): the supplier_balances view for open money, purchase_orders outside the terminal
-  // statuses (received/cancelled) for in-flight activity.
+  // statuses for in-flight activity.
+  //
+  // 'draft' counts as terminal here (owner decision, 19.08.2026) and the same list lives in
+  // soft_delete_supplier (0146): an order that was never sent commits the business to nothing.
+  // The two rejections also stopped sharing one sentence — a forgotten draft used to be reported
+  // as an open balance, which is what sent the owner looking for money that was not there.
   async function requestDelete(s: SupplierWithBalance) {
     // The balance reader is owner-gated (0137): for any other role it answers an empty 200,
     // which this guard would mistake for "no money owed" and let the supplier vanish while
@@ -126,14 +131,18 @@ export function SuppliersList() {
     const [balRes, poRes] = await Promise.all([
       supabase.from('supplier_balances').select('open_balance').eq('supplier_id', s.id).maybeSingle(),
       supabase.from('purchase_orders').select('id', { count: 'exact', head: true })
-        .eq('supplier_id', s.id).not('status', 'in', '(received,cancelled)'),
+        .eq('supplier_id', s.id).not('status', 'in', '(draft,received,cancelled)'),
     ]);
     const err = balRes.error ?? poRes.error;
     // If the check itself failed we cannot prove the supplier is safe to delete — refuse.
     if (err) { toast(toHebrewError(err.message), 'error'); return; }
     const openBalance = (balRes.data as { open_balance: number } | null)?.open_balance ?? 0;
-    if (openBalance > 0 || (poRes.count ?? 0) > 0) {
-      toast('לא ניתן למחוק ספק עם יתרה פתוחה או הזמנות פעילות', 'error');
+    if (openBalance > 0) {
+      toast('לא ניתן למחוק ספק שיש לו יתרה פתוחה. יש לסגור את היתרה לפני המחיקה.', 'error');
+      return;
+    }
+    if ((poRes.count ?? 0) > 0) {
+      toast('לא ניתן למחוק ספק שיש לו הזמנה פעילה. יש לסיים או לבטל את ההזמנה לפני המחיקה.', 'error');
       return;
     }
     setDeleteTarget(s);

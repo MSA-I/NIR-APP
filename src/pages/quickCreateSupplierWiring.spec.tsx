@@ -436,6 +436,7 @@ describe('PaymentRequests — the same door', () => {
           requested_invoice_count: 1, visible_invoice_count: 1, paid_invoice_count: 0,
           unapproved_invoice_count: 0, amount_matches_open_balance: true,
           similar_bank_transfer_check: 'unavailable', open_credit_total: 0,
+          over_allocated_invoice_count: 0,
         })),
     );
   };

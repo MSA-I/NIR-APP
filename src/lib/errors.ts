@@ -123,8 +123,12 @@ const PATTERNS: [RegExp, string][] = [
     'לא ניתן למחוק חשבונית שמקושרת לדרישת תשלום, תשלום, זיכוי, התאמת בנק או דוח שנשלח. יש לטפל בקשר הכספי במסך המתאים.'],
   [/invoice_not_found/i,
     'החשבונית אינה זמינה עוד.'],
-  [/supplier_has_open_balance|supplier_has_active_orders/i,
-    'לא ניתן למחוק ספק עם יתרה פתוחה או הזמנות פעילות.'],
+  // Two guards, two sentences (0146). They shared one line until the owner hit it: a supplier with
+  // a forgotten draft order and no money owed was told he had an open balance.
+  [/supplier_has_open_balance/i,
+    'לא ניתן למחוק ספק שיש לו יתרה פתוחה. יש לסגור את היתרה לפני המחיקה.'],
+  [/supplier_has_active_orders/i,
+    'לא ניתן למחוק ספק שיש לו הזמנה פעילה. יש לסיים או לבטל את ההזמנה לפני המחיקה.'],
   [/supplier_not_found|product_not_found/i,
     'הרשומה אינה זמינה עוד. רענן את המסך.'],
   [/purchase_order_cancel_invalid/i,

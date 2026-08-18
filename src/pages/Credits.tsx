@@ -103,11 +103,13 @@ export default function Credits() {
         <CreditDetail credit={selected} onClose={() => setSelected(null)}
           onChanged={() => { setSelected(null); void refetch(); }}
           onOpenInvoice={(id) => navigate(`/invoices/${id}`)}
-          canWrite={organizationAccess.canWrite && !!profile && (
-            ['owner', 'office'].includes(profile.role)
-            || (profile.role === 'accountant'
-              && (selected.invoice_id == null || selected.invoice?.review_status === 'approved'))
-          )} />
+          /* owner/office only, mirroring the server. transition_credit_request rejects accountant
+             outright (0024:286-288, `v_role not in ('owner','office','kitchen')`), so an
+             accountant was shown enabled lifecycle buttons — "קוזז בתשלום" among them — that
+             always came back credit_request_transition_not_authorized. Widening the RPC instead
+             would be granting a role a financial command, which is the owner's call, not a
+             rendering fix. */
+          canWrite={organizationAccess.canWrite && !!profile && ['owner', 'office'].includes(profile.role)} />
       )}
     </div>
   );

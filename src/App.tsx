@@ -45,6 +45,7 @@ const Exceptions = lazy(() => import('./pages/Exceptions'));
 const Reports = lazy(() => import('./pages/Reports'));
 const ProductPurchaseSummary = lazy(() => import('./pages/ProductPurchaseSummary'));
 const Analytics = lazy(() => import('./pages/Analytics'));
+const SupplierLog = lazy(() => import('./pages/SupplierLog'));
 const Expenses = lazy(() => import('./pages/Expenses'));
 const DocumentsGallery = lazy(() => import('./pages/DocumentsInbox'));
 const DocumentOperations = lazy(() => import('./pages/DocumentOperations'));
@@ -314,6 +315,10 @@ export default function App() {
             own role check rather than being wider than it. */}
         <Route path="/reports/products" element={<Guard roles={['owner', 'office', 'accountant']}><ProductPurchaseSummary /></Guard>} />
         <Route path="/analytics" element={<Guard roles={['owner', 'office']}><Analytics /></Guard>} />
+        {/* owner only, and not by preference: audit_logs is owner+accountant (0031:208) while the
+            supplier, price-row and product names it has to resolve are owner+office (0133:128-172).
+            The intersection is one role, and an accountant would read a wall of UUIDs. */}
+        <Route path="/supplier-log" element={<Guard roles={['owner']}><SupplierLog /></Guard>} />
         <Route path="/settings" element={<Guard roles={['owner']}><Settings /></Guard>} />
         <Route path="/onboarding" element={<Guard roles={['owner']} write><Onboarding /></Guard>} />
         <Route path="/admin" element={<PlatformGuard><Admin /></PlatformGuard>} />
