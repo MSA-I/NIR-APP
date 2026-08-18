@@ -190,7 +190,7 @@ const INVALID_MESSAGE: Record<string, string> = {
 
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-shell p-4">
+    <div className="min-h-dvh flex items-center justify-center bg-action p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <img src="/icons/icon-192.png" alt="" width="52" height="52"

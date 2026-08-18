@@ -5,4 +5,4 @@
 // (the login screen, the static <title> in index.html, the first paint of the shell).
 // Everything a signed-in user sees inside the app carries the tenant's own name,
 // which comes from `organizations.name` via AuthContext.
-export const APP_NAME = 'SupplyFlow';
+export const APP_NAME = 'InPlace';

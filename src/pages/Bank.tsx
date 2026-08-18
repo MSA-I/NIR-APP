@@ -413,7 +413,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
                   DESIGN.md reserves 11px for sidebar group headings, explicitly not for content.
                   The wrapper above already scrolls in both axes, so the canonical scale costs
                   nothing but a wider table. */}
-              <thead className="bg-surface-sunken sticky top-0"><tr>{headers.map((h) => <th key={h} scope="col" className="th">{h}</th>)}</tr></thead>
+              <thead className="table-head sticky top-0"><tr>{headers.map((h) => <th key={h} scope="col" className="th">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {rawRows.slice(0, 6).map((r, i) => (
                   <tr key={i}>{headers.map((h) => <td key={h} className="td">{String(r[h] ?? '')}</td>)}</tr>

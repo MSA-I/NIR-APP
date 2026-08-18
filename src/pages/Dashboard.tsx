@@ -1,9 +1,9 @@
 import { Link } from 'react-router';
 import { type ReactNode } from 'react';
-import { Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RotateCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
+import { ArrowUpLeft, Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RotateCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { unwrap, useQuery } from '../lib/useQuery';
-import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, TaskLine, type AttentionItem } from '../components/ui';
+import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, type AttentionItem } from '../components/ui';
 import { EXCEPTION_TYPE, PO_STATUS, SEVERITY } from '../lib/status';
 import {
   addCalendarDays, BUSINESS_TIME_ZONE, dateStartInstant, daysInCalendarMonth,
@@ -12,8 +12,9 @@ import {
 } from '../lib/format';
 import { chartTheme } from '../lib/theme';
 import { mergeWeeklyComparison, topCategoriesWithOther } from '../lib/dashboardSeries';
-import { CategoryDonut, ComparisonLineChart, money, moneyShort, SpendBarChart, TrendSparkline } from '../components/charts';
+import { CategoryDonut, ComparisonLineChart, CoverageRing, money, moneyShort, SpendBarChart, TrendSparkline } from '../components/charts';
 import { fetchAll } from '../lib/supabasePaging';
+import { useAuth } from '../auth/AuthContext';
 
 // audit round 2: glance values are whole-shekel by convention — the three money-strip tiles round to
 // whole ₪ so they read consistently at a glance (₪8,131 not ₪14,842.6). Tables elsewhere keep exact
@@ -43,24 +44,31 @@ type ManagementDashboardSnapshot = {
   topBalances: { id: string; name: string; balance: number }[];
 };
 
+// T7.3 — the reference's delta idiom: bare arrow + figure in ink, no gray pill box. The color
+// stays neutral on purpose: more purchasing is not "good" or "bad", so the trend hues (which are
+// business claims) do not apply here.
 function DeltaChip({ value }: { value: number }) {
   const rounded = Math.round(value);
   const Icon = rounded > 0 ? TrendingUp : rounded < 0 ? TrendingDown : null;
   return (
     <span
-      className="ms-auto inline-flex items-center gap-1 rounded-full bg-idle-soft px-2 py-0.5 text-xs font-medium text-idle-on-soft"
+      className="ms-auto inline-flex items-center gap-1 text-xs font-medium text-ink-mid"
       title="מול אותם ימים בחודש הקודם"
     >
-      {Icon && <Icon size={12} aria-hidden="true" />}
+      {Icon && <Icon size={13} aria-hidden="true" />}
       <span className="num" dir="ltr">{rounded > 0 ? '+' : ''}{rounded}%</span>
       <span className="sr-only">מול אותם ימים בחודש הקודם</span>
     </span>
   );
 }
 
-// One segment of the money band. Segments live in a single .card and separate with logical
-// borders (border-t stacked / border-s side-by-side) — never divide-x, which is physical
-// left/right and breaks under RTL (see supplier-metrics.tsx).
+/* CoveragePills (the reference's capsule row) lived here for one round (T7.3) and was removed by
+   owner decision — "לא רלוונטי". Deleted rather than left dormant. */
+
+// One hero money stat. T7 (Crextio-reference layout): the strip lost its card and its logical
+// borders — the three figures sit straight on the wheat canvas, Crextio-style, and separate by
+// spacing alone. Each stat keeps its full anatomy: icon chip · label · hero figure · delta ·
+// sparkline · context line.
 function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, delta, spark, sparkLabel }: {
   title: string;
   value: number | null;
@@ -73,12 +81,9 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
   spark?: WeeklyPoint[];
   sparkLabel?: string;
 }) {
+  // T7.2 (Crextio strip): the icon sits flat beside the label — no chip box; the tone lives on
+  // the figure alone.
   const toneCls = { done: 'text-done-fg', await: 'text-await-fg', idle: 'text-ink' }[tone];
-  const chipCls = {
-    done: 'bg-done-wash text-done-fg',
-    await: 'bg-await-wash text-await-fg',
-    idle: 'bg-idle-wash text-idle-fg',
-  }[tone];
   const hasSpark = value != null && spark != null && spark.filter((point) => point.count > 0).length >= 2;
   const linkLabel = [
     `${title}: ${glanceMoney(value)}`,
@@ -90,22 +95,24 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
     <Link
       to={to}
       aria-label={linkLabel}
-      className="block min-h-20 border-t border-line-soft px-4 py-3 transition-colors first:border-t-0 hover:bg-surface-sunken active:bg-action-wash/70 sm:border-s sm:border-t-0 sm:px-5 sm:first:border-s-0"
+      className="card card-link-hover block min-h-24 px-4 py-3.5 sm:px-5"
     >
       <div className="flex items-center gap-2">
-        <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${chipCls}`} aria-hidden="true">
-          <Icon size={16} />
-        </span>
+        <Icon size={17} className="shrink-0 text-ink-muted" aria-hidden="true" />
         <span className="text-xs font-medium text-ink-muted">{title}</span>
         {delta != null && <DeltaChip value={delta} />}
       </div>
-      <div className="mt-1.5 flex items-center gap-3">
-        <div className={`shrink-0 kpi-value num ${toneCls}`} dir="ltr">{glanceMoney(value)}</div>
+      <div className="mt-2 flex items-center gap-3">
+        <div className={`shrink-0 kpi-hero num ${toneCls}`} dir="ltr">{glanceMoney(value)}</div>
         {hasSpark && spark && sparkLabel && <TrendSparkline points={spark} label={sparkLabel} />}
       </div>
+      {/* One context line, never the same sentence twice: the start slot names the period (or the
+          delta's baseline), the end slot exists only when it adds a DIFFERENT fact. */}
       <div className="mt-1 flex items-center justify-between gap-3 text-xs text-ink-muted">
         <span>{delta != null ? 'מול אותם ימים בחודש הקודם' : context}</span>
-        <span className="min-w-0 text-end leading-snug">{aux ?? (hasSpark ? 'מגמת 8 שבועות' : context)}</span>
+        {(aux ?? (hasSpark ? 'מגמת 8 שבועות' : null)) && (
+          <span className="min-w-0 text-end leading-snug">{aux ?? 'מגמת 8 שבועות'}</span>
+        )}
       </div>
     </Link>
   );
@@ -134,7 +141,7 @@ function OperationsDisclosure({ title, count, summary, empty, children }: {
 
   return (
     <details name="dashboard-operations" className="group border-t border-line-soft first:border-t-0">
-      <summary className="-mx-2 flex min-h-11 list-none flex-wrap items-center gap-2 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+      <summary className="-mx-2 flex min-h-11 list-none flex-wrap items-center gap-2 rounded-lg px-2 py-2.5 text-sm hover:bg-action-wash active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
         <span className="font-medium text-ink-body">{title}</span>
         <span className="badge-idle num">{count}</span>
         {summary && <span className="ms-auto min-w-0 text-end text-xs text-ink-muted">{summary}</span>}
@@ -142,6 +149,67 @@ function OperationsDisclosure({ title, count, summary, empty, children }: {
       </summary>
       <div className="border-t border-line-soft pb-4 pt-2">{children}</div>
     </details>
+  );
+}
+
+// T7 (Crextio-reference layout): the role queues moved out of the folded operational snapshot into
+// the dashboard's single dark surface — the Onyx contrast card, the analogue of the reference's
+// dark report tile. Same six queues, same counts, same links; only the container changed, so
+// nothing is duplicated (the disclosure that held them was removed). The count pill wears the
+// neutral shell surface, not a tone: it answers "how many", never "how urgent" (חוק צ'יפ הספירה
+// applies; on the dark shell the petrol count chip is unreadable, so the shell-ink pill is the
+// dark-surface rendering of the same neutral claim).
+function RoleQueueCard({ queue, total, className = '' }: {
+  queue: {
+    receiving: number; invoicesToReview: number; prDrafts: number;
+    prPendingApproval: number; highExceptions: number; notSentToAccountant: number;
+  };
+  total: number;
+  className?: string;
+}) {
+  const rows = [
+    { label: 'הזמנות ממתינות לקבלת סחורה (ניר)', count: queue.receiving, to: '/orders?status=open' },
+    { label: 'חשבוניות לבדיקה (מזכירות)', count: queue.invoicesToReview, to: '/invoices?review=received' },
+    { label: 'טיוטות דרישת תשלום (מזכירות)', count: queue.prDrafts, to: '/payment-requests' },
+    { label: 'דרישות לאישור הנהלה', count: queue.prPendingApproval, to: '/payment-requests?status=pending_approval' },
+    { label: 'חריגים בחומרה גבוהה (הנהלה)', count: queue.highExceptions, to: '/exceptions?status=open&severity=high' },
+    { label: 'חשבוניות שטרם הועברו לרו״ח', count: queue.notSentToAccountant, to: '/invoices?export=not_sent' },
+  ];
+  // The reference's dot-matrix rendering, on TRUE data: one dot per open task in the queue,
+  // capped at 12 (the number beside carries the exact count; the dots are aria-hidden texture).
+  const DOT_CAP = 12;
+  return (
+    <section className={`relative rounded-3xl bg-shell p-4 text-shell-ink shadow-dashboard sm:p-5 ${className}`} aria-labelledby="role-queues-title">
+      {/* The reference's corner circle-chip: a round paper-on-dark arrow to the full queue. */}
+      <Link to="/alerts" aria-label="לכל ההתראות והמשימות"
+        className="absolute end-4 top-4 grid size-9 place-items-center rounded-full bg-shell-ink/10 text-shell-ink transition-colors hover:bg-shell-ink/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+        <ArrowUpLeft size={16} aria-hidden="true" />
+      </Link>
+      <h2 id="role-queues-title" className="section-title pe-10 text-shell-ink">משימות לפי תפקיד</h2>
+      <div className="mt-1.5 flex items-baseline gap-2">
+        <span className="kpi-hero num text-shell-ink">{total}</span>
+        <span className="text-xs text-shell-ink-dim">משימות פתוחות בכל התורים</span>
+      </div>
+      <ul className="mt-3 space-y-0.5 text-sm">
+        {rows.map((row) => (
+          <li key={row.label}>
+            <Link to={row.to}
+              className="-mx-2 flex min-h-11 items-center gap-3 rounded-lg px-2 py-1.5 text-shell-ink-soft transition-colors hover:bg-shell-ink/10 hover:text-shell-ink active:bg-shell-ink/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+              <span className="min-w-0 flex-1 leading-snug">{row.label}</span>
+              {row.count > 0 && (
+                <span className="flex max-w-24 flex-wrap items-center justify-end gap-1" aria-hidden="true">
+                  {Array.from({ length: Math.min(row.count, DOT_CAP) }, (_, i) => (
+                    <span key={i} className="size-1.5 rounded-full bg-shell-ink/80" />
+                  ))}
+                  {row.count > DOT_CAP && <span className="text-xs text-shell-ink-dim">+</span>}
+                </span>
+              )}
+              <span className="num inline-flex min-w-8 shrink-0 items-center justify-center rounded-full bg-shell-ink/10 px-2.5 py-0.5 text-xs font-medium text-shell-ink">{row.count}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -206,7 +274,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
         </div>
       ) : (
         <details className="group mt-2 border-t border-line-soft">
-          <summary className="-mx-2 flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-6 gap-y-1 rounded-lg px-2 py-3 hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2 [&::-webkit-details-marker]:hidden">
+          <summary className="-mx-2 flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-6 gap-y-1 rounded-lg px-2 py-3 hover:bg-action-wash active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2 [&::-webkit-details-marker]:hidden">
             {groups.map((group) => (
               <span key={group.key} className="flex items-baseline gap-1.5">
                 <span className="text-xs font-medium text-ink-muted">{group.label}</span>
@@ -228,7 +296,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
                   <ul className="divide-y divide-line-soft">
                     {group.rows.map((order) => (
                       <li key={order.id}>
-                        <Link to={`/orders/${order.id}`} className="-mx-2 block min-h-11 rounded-lg px-2 py-2 text-sm hover:bg-surface-sunken active:bg-action-wash/70">
+                        <Link to={`/orders/${order.id}`} className="-mx-2 block min-h-11 rounded-lg px-2 py-2 text-sm hover:bg-action-wash active:bg-action-wash/70">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-medium text-ink-body">{order.supplier?.name ?? '—'}</span>
                             <span className="num text-xs text-ink-muted">#{order.number}</span>
@@ -275,24 +343,28 @@ function DashboardSkeleton() {
         <Skeleton className="h-4 w-24" />
       </div>
 
-      {/* Keep the loading geometry in the same responsive order as settled content: money,
-          attention, deliveries on a phone; attention, deliveries, money on desktop. */}
-      <div className="mt-5 flex flex-col gap-5">
+      {/* Keep the loading geometry in the same responsive shape as settled content (T7 grid):
+          hero money strip first, then attention / deliveries / dark queue tiles, then charts. */}
+      <div className="mt-5 flex flex-col gap-5 lg:grid lg:grid-cols-12 lg:gap-6">
 
-      {/* deliveries zone (אספקות היום ומחר): heading + the two-count summary row. No card —
-          the settled zone has none either, and a skeleton that promises a box the data does not
-          bring is the jump this component exists to prevent. */}
-      <div className="order-3 lg:order-2">
-        <Skeleton className="h-5 w-40" />
-        <div className="mt-2 flex min-h-11 items-center gap-6 border-t border-line-soft py-3">
-          <Skeleton className="h-6 w-24" />
-          <Skeleton className="h-6 w-24" />
-          <Skeleton className="ms-auto h-4 w-4" />
-        </div>
+      {/* hero money strip: three separate stat cards (T7.3c) */}
+      <div className="order-first grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 lg:order-1 lg:col-span-12">
+        {Array.from({ length: 3 }, (_, i) => (
+          <div key={i} className="card min-h-24 px-4 py-3.5 sm:px-5">
+            <div className="flex items-center gap-2">
+              <Skeleton className="size-4 rounded" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <Skeleton className="h-8 w-32" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* AttentionZone card: header + dense rows (badge · label · amount) */}
-      <div className="card card-pad order-2 lg:order-1">
+      <div className="card card-pad order-2 lg:col-span-6">
         <div className="flex items-center justify-between mb-2">
           <Skeleton className="h-5 w-40" />
           <Skeleton className="h-3 w-28" />
@@ -308,46 +380,64 @@ function DashboardSkeleton() {
         </div>
       </div>
 
-      {/* money band: one card, three compact segments */}
-      <div className="card order-1 grid grid-cols-1 sm:grid-cols-3 lg:order-3">
-        {Array.from({ length: 3 }, (_, i) => (
-          <div key={i} className="min-h-20 px-4 py-3 sm:px-5 border-t sm:border-t-0 sm:border-s border-line-soft first:border-t-0 sm:first:border-s-0">
-            <div className="flex items-center gap-2">
-              <Skeleton className="size-8 rounded-lg" />
-              <Skeleton className="h-3 w-24" />
-            </div>
-            <div className="mt-2 flex items-end justify-between gap-3">
-              <Skeleton className="h-7 w-28" />
-              <Skeleton className="h-3 w-20" />
-            </div>
-          </div>
-        ))}
+      {/* deliveries card: heading + the two-count summary row */}
+      <div className="card card-pad order-3 lg:col-span-3">
+        <Skeleton className="h-5 w-40" />
+        <div className="mt-2 flex min-h-11 items-center gap-6 py-3">
+          <Skeleton className="h-6 w-20" />
+          <Skeleton className="h-6 w-20" />
+          <Skeleton className="ms-auto h-4 w-4" />
+        </div>
       </div>
 
-      {/* trends board: heading, one rule, three chart panels on the page itself */}
-      <div className="order-4">
+      {/* the dark role-queue tile — promised quiet (sunken), not dark, while loading */}
+      <div className="order-4 rounded-3xl bg-surface-sunken p-4 sm:p-5 lg:col-span-3">
+        <Skeleton className="h-5 w-36" />
+        <Skeleton className="mt-2 h-8 w-16" />
+        <div className="mt-3 space-y-2">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="flex min-h-9 items-center justify-between gap-3">
+              <Skeleton className={`h-3.5 ${['w-44', 'w-36', 'w-40', 'w-32'][i]}`} />
+              <Skeleton className="h-5 w-8 rounded-full" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* trends board: heading + four chart cards (bar 5 / donut 4 / ring 3 / comparison 12) */}
+      <div className="order-5 lg:col-span-12">
         <Skeleton className="h-5 w-24" />
-        <div className="mt-2 grid grid-cols-1 border-t border-line-soft lg:grid-cols-12">
-          <div className="py-4 lg:col-span-7 lg:border-e lg:border-line-soft lg:pe-5">
+        <div className="mt-3 grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
+          <div className="card card-pad lg:col-span-5">
             <Skeleton className="h-4 w-36" />
             <Skeleton className="mt-3 h-48 w-full rounded-lg" />
           </div>
-          <div className="border-t border-line-soft py-4 lg:col-span-5 lg:border-t-0 lg:ps-5">
+          <div className="card card-pad lg:col-span-4">
             <Skeleton className="h-4 w-32" />
-            <Skeleton className="mt-3 h-48 w-full rounded-lg" />
+            <Skeleton className="mx-auto mt-4 size-36 rounded-full" />
+            <div className="mx-auto mt-3 flex justify-center gap-3">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-16" />
+            </div>
           </div>
-          <div className="border-t border-line-soft py-4 lg:col-span-12">
+          <div className="card card-pad lg:col-span-3">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="mx-auto mt-4 size-28 rounded-full" />
+            <Skeleton className="mx-auto mt-3 h-3 w-28" />
+          </div>
+          <div className="card card-pad lg:col-span-12">
             <Skeleton className="h-4 w-44" />
             <Skeleton className="mt-3 h-48 w-full rounded-lg" />
           </div>
         </div>
       </div>
 
-      {/* operational snapshot: heading, one rule, four folded rows */}
-      <div className="order-5">
+      {/* operational snapshot: heading + one card of folded rows */}
+      <div className="order-6 lg:col-span-12">
         <Skeleton className="h-5 w-44" />
-        <div className="mt-2 border-t border-line-soft">
-          {Array.from({ length: 4 }, (_, i) => (
+        <div className="card card-pad mt-3">
+          {Array.from({ length: 3 }, (_, i) => (
             <div key={i} className="flex min-h-11 items-center gap-3 border-t border-line-soft first:border-t-0">
               <Skeleton className="h-4 w-40" />
               <Skeleton className="h-6 w-8 rounded-full" />
@@ -362,6 +452,7 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
+  const { profile } = useAuth();
   const { data, loading, error, refetch, fetching } = useQuery(async () => {
     const now = new Date();
     const todayISO = businessTodayISO();
@@ -500,6 +591,12 @@ export default function Dashboard() {
     const momChange = curMonthBucket && prevMonthBucket && prevMonthBucket.total > 0
       ? ((curMonthBucket.total - prevMonthBucket.total) / prevMonthBucket.total) * 100
       : null;
+    // The bar card's two header cells (reference anatomy). null = the month has no invoices — the
+    // cell simply doesn't render; no fake 0.
+    const headline = {
+      current: curMonthBucket ? curMonthBucket.total : null,
+      previous: prevMonthBucket ? prevMonthBucket.total : null,
+    };
 
     // ── weekly magnitude series: buckets carry a row count so an artificial zero bucket is never
     // mistaken for an observed point. The same helper powers purchases and supplier payments.
@@ -579,7 +676,7 @@ export default function Dashboard() {
       },
       attention,
       money: { openBalance, openInvoiceCount, paidMonth, paidDelta, purchasedMonth, purchasedDelta, monthKey },
-      monthly, weekly, paidWeekly, momChange, categories, savings, savingsPct,
+      monthly, weekly, paidWeekly, momChange, headline, categories, savings, savingsPct,
       priceIncreases: priceIncreases.slice(0, 6),
       priceIncreaseCount: priceIncreases.length,
       topBalances,
@@ -595,14 +692,42 @@ export default function Dashboard() {
         highExceptions,
         notSentToAccountant: snapshot.invoices.notSent,
       },
+      // Due-date coverage for the radial ring (T7.1): a TRUE numerator/denominator — active
+      // payment requests that carry a manual due date, out of all active requests (0100 RPC).
+      coverage: {
+        covered: snapshot.paymentRequests.dueDateCoverage,
+        active: snapshot.paymentRequests.activeCount,
+      },
     };
   });
 
   if (loading) return <DashboardSkeleton />;
 
   const t = chartTheme();
+  // T7.1 greeting-as-title (reference layout): time-of-day + first name. The screen NAME stays
+  // "מרכז הבקרה" — in the meta line here and, via routePresentation, in navigation and the
+  // browser title — so the greeting never desyncs the wayfinding catalogue. full_name can be ''
+  // during offline bootstrap; a nameless greeting falls back to the plain screen name.
+  const businessHour = Number(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: BUSINESS_TIME_ZONE }).format(new Date()));
+  const dayGreeting = businessHour < 5 ? 'לילה טוב' : businessHour < 12 ? 'בוקר טוב' : businessHour < 18 ? 'צהריים טובים' : 'ערב טוב';
+  const firstName = profile?.full_name?.trim().split(/\s+/)[0] ?? '';
+  const pageTitle = firstName ? `${dayGreeting}, ${firstName}` : 'מרכז הבקרה';
   const taskTotal = data ? Object.values(data.queue).reduce((sum, count) => sum + count, 0) : 0;
-  const weeklyComparison = data ? mergeWeeklyComparison(data.weekly, data.paidWeekly) : [];
+  const weeklyComparison = (() => {
+    if (!data) return [];
+    const rows = mergeWeeklyComparison(data.weekly, data.paidWeekly);
+    // Trim the measured-zero TAIL to one week: a long flat run after the last activity is honest
+    // but tells nothing — one trailing zero says "and then it stopped", the rest is dead ink.
+    const lastActive = Math.max(
+      data.weekly.reduce((last, point, i) => (point.count > 0 ? i : last), -1),
+      data.paidWeekly.reduce((last, point, i) => (point.count > 0 ? i : last), -1),
+    );
+    return lastActive >= 0 ? rows.slice(0, Math.min(rows.length, lastActive + 2)) : rows;
+  })();
+  // Zero-policy guard: continuous zero lines are real only when the window holds SOME activity.
+  const weeklyHasActivity = data
+    ? data.weekly.some((point) => point.count > 0) || data.paidWeekly.some((point) => point.count > 0)
+    : false;
   const categoryTotal = data?.categories.reduce((sum, category) => sum + category.total, 0) ?? 0;
   const monthlyAria = data ? `הוצאות רכש לפי חודש: ${data.monthly.length
     ? data.monthly.map((point) => `${point.month} ${point.count ? fmtMoneyExact(point.total) : 'אין חשבוניות'}`).join(', ')
@@ -624,7 +749,7 @@ export default function Dashboard() {
           סוגי טיפול" and whose own empty state says "אין משימות דחופות כרגע" — the same count and
           the same sentence, twice, in one glance. The one that survives is the one attached to the
           rows it counts. Nothing is lost: both branches are still rendered, by AttentionZone. */}
-      <PageHeader title="מרכז הבקרה"
+      <PageHeader title={<span className="font-normal">{pageTitle}</span>} meta={firstName ? 'מרכז הבקרה' : undefined}
         actions={<div className="flex items-center gap-2 text-xs text-ink-muted">
           <span aria-live="polite" aria-atomic="true">
             {data?.fetchedAt && (
@@ -639,6 +764,9 @@ export default function Dashboard() {
           </button>
         </div>} />
 
+      {/* The capsule strip lived here briefly (T7.3) and was removed by owner decision
+          ("לא רלוונטי") — the coverage ring and the money strip already carry the day's ratios. */}
+
       {/* Truth-reporting (CLAUDE.md): a failed load/refetch shows an inline note WITH retry and keeps
           whatever data we still hold on screen — it never blanks the sections that did load. */}
       {error && (
@@ -652,19 +780,25 @@ export default function Dashboard() {
           reordered at all. Each zone declares its own entrance step for both viewports — see the
           `--dash-step` rules in index.css — because below lg the money band moves to the top and
           DOM position stops describing what the eye sees. */}
+      {/* T7 Crextio-reference grid: below lg this is still one calm column (money first); from
+          lg up it becomes the reference division — hero money strip across the top, then the
+          attention card beside the deliveries card beside the dark role-queue card, then the
+          trend cards. DOM order is unchanged on purpose — the quality gate pins the heading
+          order (attention h2 first, deliveries h2 second), so placement is CSS `order` only. */}
       {data && (
-        <div className="dash-enter flex flex-col gap-5">
+        <div className="dash-enter flex flex-col gap-5 lg:grid lg:grid-cols-12 lg:gap-6">
           <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול"
-            className="[--dash-step-mobile:1] [--dash-step:0]" />
+            className="lg:order-2 lg:col-span-6 [--dash-step-mobile:1] [--dash-step:1]" />
 
           <DeliveriesZone today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount}
-            className="[--dash-step-mobile:2] [--dash-step:1]" />
+            className="card card-pad lg:order-3 lg:col-span-3 [--dash-step-mobile:2] [--dash-step:2]" />
 
-          {/* Section 12 on a phone: the manager opens the app and sees a figure. The band used to
-              sit below two cards, so the first fold at 390 held no money at all. It is FIRST on
-              screen below lg and third from lg up, where all three zones fit the fold anyway.
-              DOM order is unchanged on purpose — the quality gate pins the heading order. */}
-          <div className="card grid grid-cols-1 sm:grid-cols-3 order-first lg:order-none [--dash-step-mobile:0] [--dash-step:2]">
+          {/* Section 12 on a phone: the manager opens the app and sees a figure. The strip is
+              FIRST on screen below lg; from lg it is the full-width hero row of the grid.
+              T7.3c (owner, mobile report): THREE SEPARATE CARDS — on a phone they stack as three
+              tiles, on desktop they sit as the reference's stat-card row. Each BandStat is its
+              own card now. */}
+          <div className="order-first grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 lg:order-1 lg:col-span-12 [--dash-step-mobile:0] [--dash-step:0]">
             <BandStat title="יתרת חשבוניות פתוחות" value={data.money.openBalance} tone="await" to="/invoices?pay=unpaid"
               icon={ReceiptText} context="נכון לעכשיו"
               aux={data.money.openBalance == null ? 'אין נתונים זמינים' : `${data.money.openInvoiceCount} חשבוניות פתוחות`} />
@@ -677,64 +811,96 @@ export default function Dashboard() {
               spark={data.weekly} sparkLabel="מגמת רכש בשמונה השבועות האחרונים" />
           </div>
 
-          {/* The trends board keeps its three views side by side (DESIGN.md: no tabs, all three
-              visible) but drops the card around them. A heading and hairlines already say "one
-              board, three views"; the border+radius+shadow said it a second and third time, and on
-              a phone they cost 32px of gutter that the charts could have used. */}
-          <section className="[--dash-step-mobile:3] [--dash-step:3]" aria-labelledby="trends-title">
+          <RoleQueueCard queue={data.queue} total={taskTotal}
+            className="lg:order-4 lg:col-span-3 [--dash-step-mobile:3] [--dash-step:3]" />
+
+          {/* The trends board keeps its three views visible together (DESIGN.md: no tabs), and
+              under T7 each view is its own borderless card — the reference's chart tiles. The
+              board heading still names the region; separation inside it is card + spacing, not
+              hairlines. */}
+          <section className="lg:order-5 lg:col-span-12 [--dash-step-mobile:4] [--dash-step:4]" aria-labelledby="trends-title">
             <h2 id="trends-title" className="section-title">מגמות</h2>
 
-            <div className="mt-2 grid grid-cols-1 border-t border-line-soft lg:grid-cols-12">
-              <section className="py-4 lg:col-span-7 lg:border-e lg:border-line-soft lg:pe-5" aria-labelledby="monthly-trend-title">
-                <div className="flex min-h-8 flex-wrap items-start justify-between gap-2">
+            <div className="mt-3 grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
+              <section className="card card-pad lg:col-span-5" aria-labelledby="monthly-trend-title">
+                {/* Reference header anatomy (image 3): title at the start, two summary CELLS at the
+                    end — this month beside last month, separated by a logical hairline; the MoM
+                    percent rides the current-month cell. Both figures come from byMonth, so the
+                    monthly claim survives the on-bar labels' removal. */}
+                <div className="flex min-h-8 flex-wrap items-start justify-between gap-x-4 gap-y-2">
                   <div>
                     <h3 id="monthly-trend-title" className="text-sm font-semibold text-ink-body">הוצאות רכש לפי חודש</h3>
                     <p className="text-xs text-ink-muted">חשבוניות שהתקבלו בארבעת החודשים האחרונים</p>
                   </div>
-                  {data.momChange != null && (
-                    <span className={`text-xs font-medium ${data.momChange > 0 ? 'text-alert-fg' : 'text-done-fg'}`} dir="ltr">
-                      {data.momChange > 0 ? '+' : ''}{data.momChange.toFixed(0)}% מול חודש קודם
-                    </span>
+                  {data.headline.current != null && (
+                    <div className="flex items-start text-xs">
+                      <div className="pe-3 text-end">
+                        <div className="text-ink-muted">החודש</div>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="num text-sm font-semibold text-ink">{glanceMoney(data.headline.current)}</span>
+                          {data.momChange != null && (
+                            <span className={`num text-xs font-medium ${data.momChange > 0 ? 'text-alert-fg' : 'text-done-fg'}`} dir="ltr">
+                              {data.momChange > 0 ? '+' : ''}{data.momChange.toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {data.headline.previous != null && (
+                        <div className="border-s border-line-soft ps-3 text-end">
+                          <div className="text-ink-muted">חודש קודם</div>
+                          <div className="num text-sm font-semibold text-ink-mid">{glanceMoney(data.headline.previous)}</div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
+                {/* teal-mid, not the deep brand hue — the ring beside this card is deep, and two
+                    neighboring charts in one color read as one chart (owner, T7.3c). */}
                 <SpendBarChart
                   points={data.monthly.map((point) => ({ key: point.month, label: point.label, total: point.total }))}
                   ariaLabel={monthlyAria} emptyMessage="אין נתוני חשבוניות לתקופה" />
               </section>
 
-              <section className="border-t border-line-soft py-4 lg:col-span-5 lg:border-t-0 lg:ps-5" aria-labelledby="category-trend-title">
+              <section className="card card-pad lg:col-span-4" aria-labelledby="category-trend-title">
                 <h3 id="category-trend-title" className="text-sm font-semibold text-ink-body">תמהיל הרכש החודש</h3>
                 <p className="text-xs text-ink-muted">ארבע הקטגוריות הגדולות וכל היתר</p>
                 <CategoryDonut slices={data.categories} total={categoryTotal} ariaLabel={categoriesAria} emptyMessage={categoryEmptyMessage} />
               </section>
 
-              <section className="border-t border-line-soft py-4 lg:col-span-12" aria-labelledby="weekly-trend-title">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h3 id="weekly-trend-title" className="text-sm font-semibold text-ink-body">רכש מול תשלומים</h3>
-                    <p className="text-xs text-ink-muted">שמונה השבועות האחרונים</p>
-                  </div>
-                  <div className="flex items-center gap-4 text-xs text-ink-muted" aria-hidden="true">
-                    <span className="inline-flex items-center gap-1.5"><span className="w-6 border-t-2" style={{ borderColor: t.bars[0] }} />רכש</span>
-                    <span className="inline-flex items-center gap-1.5"><span className="w-6 border-t-2 border-dashed" style={{ borderColor: t.bars[2] }} />תשלומים</span>
-                  </div>
-                </div>
-                <ComparisonLineChart points={weeklyComparison} xKey="week" legend={false}
-                  series={[{ key: 'purchases', name: 'רכש', color: t.bars[0] }, { key: 'payments', name: 'תשלומים', color: t.bars[2], dashed: true }]}
+              {/* The reference's radial-progress tile, on the one honest ratio the snapshot
+                  already measures: dated active payment requests out of all active requests.
+                  Zero active requests → the empty sentence, never a fake 0% or 100%. */}
+              <section className="card card-pad lg:col-span-3" aria-labelledby="coverage-ring-title">
+                <h3 id="coverage-ring-title" className="text-sm font-semibold text-ink-body">כיסוי תאריכי פירעון</h3>
+                <p className="text-xs text-ink-muted">דרישות תשלום פעילות עם תאריך</p>
+                <CoverageRing covered={data.coverage.covered} total={data.coverage.active}
+                  label="כיסוי תאריכי פירעון"
+                  sentence={`מתוך ${data.coverage.active} דרישות פעילות`}
+                  emptyMessage="אין דרישות תשלום פעילות" />
+              </section>
+
+              <section className="card card-pad lg:col-span-12" aria-labelledby="weekly-trend-title">
+                <h3 id="weekly-trend-title" className="text-sm font-semibold text-ink-body">רכש מול תשלומים</h3>
+                <p className="text-xs text-ink-muted">שמונה השבועות האחרונים</p>
+                {/* The series names ride the ends of their own lines now — no legend row. The
+                    zero policy keeps the lines continuous, so a window with NO activity at all is
+                    passed as [] to keep the honest empty state (two flat zero lines are not data). */}
+                {/* T7.3g: purchases = OCEANIC solid, payments = ONYX dashed — the two system
+                    darks, told apart by the dash (owner sketch), never by hue. */}
+                <ComparisonLineChart points={weeklyHasActivity ? weeklyComparison : []} xKey="week"
+                  series={[{ key: 'purchases', name: 'רכש', color: t.bars[0] }, { key: 'payments', name: 'תשלומים', color: t.bars[3], dash: true }]}
                   ariaLabel={weeklyAria} emptyMessage="אין רכש או תשלומים בשמונת השבועות האחרונים" />
               </section>
             </div>
           </section>
 
-          {/* Four folded subjects, still one zone under one heading (DESIGN.md: one region named
-              "תמונת מצב תפעולית", not four cards) — the card around them is what went. Each
-              disclosure already carries its own hairline, count badge and business summary, so the
-              outer box was a fourth separator around three that were already doing the job. The
-              sentence that stood here explained the disclosures rather than the business; the
-              counts on the summary rows say the same thing with data. */}
-          <section className="[--dash-step-mobile:4] [--dash-step:4]" aria-labelledby="operations-title">
+          {/* Three folded subjects, still one zone under one heading (DESIGN.md: one region named
+              "תמונת מצב תפעולית", not separate cards). T7 gives the zone one borderless card so it
+              reads as a tile of the reference grid; the role queues left this fold for the dark
+              card above, so nothing here is said twice. */}
+          <section className="lg:order-6 lg:col-span-12 [--dash-step-mobile:5] [--dash-step:5]" aria-labelledby="operations-title">
             <h2 id="operations-title" className="section-title">תמונת מצב תפעולית</h2>
-            <div className="mt-2 border-t border-line-soft">
+            <div className="card card-pad mt-3">
               <OperationsDisclosure title="חריגים פתוחים" count={data.exceptionCount}
                 summary={data.queue.highExceptions ? `${data.queue.highExceptions} בחומרה גבוהה` : undefined}
                 empty="אין חריגים פתוחים כרגע">
@@ -744,7 +910,7 @@ export default function Dashboard() {
                 <ul className="divide-y divide-line-soft">
                   {data.exceptions.map((exception) => (
                     <li key={exception.id}>
-                      <Link to={`/exceptions?id=${exception.id}`} className="block min-h-11 rounded-lg px-2 py-2 text-sm hover:bg-surface-sunken active:bg-action-wash/70">
+                      <Link to={`/exceptions?id=${exception.id}`} className="block min-h-11 rounded-lg px-2 py-2 text-sm hover:bg-action-wash active:bg-action-wash/70">
                         <div className="flex items-center gap-2">
                           <StatusBadge meta={SEVERITY[exception.severity]} />
                           <span className="text-xs text-ink-muted">{EXCEPTION_TYPE[exception.type]}</span>
@@ -784,7 +950,7 @@ export default function Dashboard() {
                 <ul className="divide-y divide-line-soft">
                   {data.priceIncreases.map((price, index) => (
                     <li key={index}>
-                      <Link to={`/prices?product=${price.product.id}`} className="flex min-h-11 flex-col items-stretch gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface-sunken active:bg-action-wash/70 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                      <Link to={`/prices?product=${price.product.id}`} className="flex min-h-11 flex-col items-stretch gap-2 rounded-lg px-2 py-2 text-sm hover:bg-action-wash active:bg-action-wash/70 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <span className="min-w-0 break-words sm:truncate">
                           <span className="font-medium text-ink-body">{price.product.name}</span>
                           <span className="ms-2 text-xs text-ink-muted">{price.supplier.name}</span>
@@ -810,25 +976,12 @@ export default function Dashboard() {
                 <ul className="divide-y divide-line-soft">
                   {data.topBalances.map((balance) => (
                     <li key={balance.id}>
-                      <Link to={`/suppliers/${balance.id}`} className="flex min-h-11 items-center justify-between rounded-lg px-2 py-2 text-sm hover:bg-surface-sunken active:bg-action-wash/70">
+                      <Link to={`/suppliers/${balance.id}`} className="flex min-h-11 items-center justify-between rounded-lg px-2 py-2 text-sm hover:bg-action-wash active:bg-action-wash/70">
                         <span className="text-ink-mid">{balance.name}</span>
                         <span className="font-semibold text-await-fg num">{fmtMoneyExact(balance.balance)}</span>
                       </Link>
                     </li>
                   ))}
-                </ul>
-              </OperationsDisclosure>
-
-              <OperationsDisclosure title="משימות לפי תפקיד" count={taskTotal}
-                summary={`${Object.values(data.queue).filter((count) => count > 0).length} תורים פעילים`}
-                empty="אין משימות פתוחות לפי תפקיד">
-                <ul className="space-y-1 text-sm">
-                  <TaskLine label="הזמנות ממתינות לקבלת סחורה (ניר)" count={data.queue.receiving} to="/orders?status=open" />
-                  <TaskLine label="חשבוניות לבדיקה (מזכירות)" count={data.queue.invoicesToReview} to="/invoices?review=received" />
-                  <TaskLine label="טיוטות דרישת תשלום (מזכירות)" count={data.queue.prDrafts} to="/payment-requests" />
-                  <TaskLine label="דרישות לאישור הנהלה" count={data.queue.prPendingApproval} to="/payment-requests?status=pending_approval" />
-                  <TaskLine label="חריגים בחומרה גבוהה (הנהלה)" count={data.queue.highExceptions} to="/exceptions?status=open&severity=high" />
-                  <TaskLine label="חשבוניות שטרם הועברו לרו״ח" count={data.queue.notSentToAccountant} to="/invoices?export=not_sent" />
                 </ul>
               </OperationsDisclosure>
             </div>

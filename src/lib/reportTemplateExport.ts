@@ -205,7 +205,7 @@ export async function renderConfiguredReportTemplate(input: {
 }
 
 export function downloadRenderedWorkbook(bytes: Uint8Array, fileName: string): void {
-  const safeName = fileName.replace(/[\\/:*?"<>|]/g, '').trim() || 'supplyflow-export.xlsx';
+  const safeName = fileName.replace(/[\\/:*?"<>|]/g, '').trim() || 'inplace-export.xlsx';
   const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   const url = URL.createObjectURL(new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

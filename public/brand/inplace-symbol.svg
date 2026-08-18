@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">InPlace Place Bay symbol</title>
+  <desc id="desc">An L-shaped bay of two square-cut arms defining a place, with one solid square block seated in it.</desc>
+  <path d="M11.5 8V52.5H56" fill="none" stroke="#0A171D" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
+  <rect x="20" y="20" width="24" height="24" fill="#0A171D"/>
+</svg>

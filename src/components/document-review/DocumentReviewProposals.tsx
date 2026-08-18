@@ -686,7 +686,7 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
             {linesOpen && (
               <div className="max-w-full overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label="טבלת שורות מוצעות; ניתן לגלול בתוך הטבלה">
                 <table className="min-w-full bg-surface">
-                  <thead>
+                  <thead className="table-head">
                     <tr className="border-b border-line">
                       <th className="th">שורת מקור</th>
                       <th className="th">ערכים מוצעים</th>

@@ -67,8 +67,8 @@ export function SkeletonTable({ rows = 8, cols = 5, title = true, toolbar = true
             <Skeleton className="h-9 w-full max-w-xs" />
           </div>
         )}
-        <div className="bg-surface-sunken border-b border-line-soft flex gap-3 px-3 py-2.5">
-          {Array.from({ length: cols }, (_, i) => <Skeleton key={i} className={`h-3 ${widths[i % widths.length]}`} />)}
+        <div className="table-head border-b border-line-soft flex gap-3 px-3 py-2.5">
+          {Array.from({ length: cols }, (_, i) => <Skeleton key={i} className={`h-3 opacity-40 ${widths[i % widths.length]}`} />)}
         </div>
         <div className="divide-y divide-line-soft">
           {Array.from({ length: rows }, (_, r) => (
@@ -374,7 +374,7 @@ export function Disclosure({ title, count, tone = 'idle', summary, name, classNa
 }) {
   return (
     <details name={name} className={`group ${className}`} onToggle={(event) => onToggle?.(event.currentTarget.open)}>
-      <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-sm hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden sm:px-4">
+      <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-sm hover:bg-action-wash active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden sm:px-4">
         <span className="font-medium text-ink-body">{title}</span>
         {count != null && <span className={`badge-${tone} num`}>{count}</span>}
         {summary != null && <span className="ms-auto min-w-0 text-end text-xs text-ink-muted">{summary}</span>}
@@ -453,13 +453,16 @@ const ATTENTION_TONE_ORDER: Record<Tone, number> = { alert: 0, await: 1, info: 2
 // One row, shared by both tiers so the action rows and the muted "לידיעה" rows keep identical
 // anatomy: tone badge · label (+hint) · optional ₪ · chevron. `muted` only quiets the label/amount
 // weight; the badge already carries the tone's own soft colour (audit round 2).
+// T7.3: the row CLUSTERS at the logical start instead of stretching content to both edges — a
+// wide card no longer leaves a chevron orphaned across an empty gulf (owner report). The hover
+// wash still spans the full row, so the tap surface did not shrink.
 function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean }) {
   const measured = item.count != null;
   return (
     <li>
-      <Link to={item.to} className="flex min-h-11 items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg hover:bg-surface-sunken active:bg-action-wash/70 transition-colors">
+      <Link to={item.to} className="flex min-h-11 items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg hover:bg-action-wash active:bg-action-wash/70 transition-colors">
         <span className={`${measured ? `badge-${item.tone}` : 'badge-idle'} num justify-center min-w-8`}>{item.count ?? '—'}</span>
-        <span className="min-w-0 flex-1 leading-snug">
+        <span className="min-w-0 leading-snug">
           <span className={muted ? 'text-ink-soft' : 'text-ink-body font-medium'}>{item.label}</span>
           {item.hint && <span className="ms-2 text-xs text-ink-muted max-sm:block max-sm:ms-0 max-sm:mt-0.5">{item.hint}</span>}
         </span>
@@ -546,7 +549,9 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
       </div>
 
       {actionRows.length > 0 ? (
-        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+        /* T7: one column. The zone now lives in a half-width tile of the dashboard grid (the
+           reference's side list), where two columns of long Hebrew labels wrapped every row. */
+        <ul className="grid grid-cols-1">
           {actionRows.map((i) => <AttentionRow key={i.key} item={i} />)}
         </ul>
       ) : noticeRows.length === 0 && unknownRows.length === 0 ? (
@@ -555,10 +560,11 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
 
       {(noticeRows.length > 0 || unknownRows.length > 0 || clear.length > 0) && (
         <details className="group mt-2 border-t border-line-soft">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm text-ink-muted hover:bg-surface-sunken active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm text-ink-muted hover:bg-action-wash active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
             <ChevronLeft size={16} className="shrink-0 transition-transform group-open:-rotate-90" aria-hidden="true" />
             <span className="font-medium text-ink-soft">מידע נוסף</span>
-            <span className="num ms-auto">{noticeRows.length + unknownRows.length + clear.length}</span>
+            {/* The count rides its label — a badge orphaned at the far edge reads as debris. */}
+            <span className="badge-idle num">{noticeRows.length + unknownRows.length + clear.length}</span>
           </summary>
 
           {noticeRows.length > 0 && (
@@ -592,24 +598,9 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
   );
 }
 
-/* ---------- TaskLine — role-routed queue row (promoted from Dashboard, now a <Link>) ---------- */
-export function TaskLine({ label, count, to }: { label: string; count: number; to: string }) {
-  return (
-    <li>
-      <Link to={to} className="flex min-h-11 items-center justify-between -mx-2 px-2 py-1.5 rounded-lg hover:bg-surface-sunken active:bg-action-wash/70 transition-colors">
-        <span className="text-ink-soft">{label}</span>
-        {/* The petrol chip is the system's COUNT chip — the same one the unfiled-documents pill in
-            the sidebar and the active-filter chip in DataTable wear. It answers "how many", never
-            "how urgent", which is what keeps it inside חוק המסגרת הממותגת.
-            The zero branch used to be `bg-idle-soft text-ink-soft`: a hand-rolled near-copy of
-            `badge-idle`, differing from it only by using the wrong text token (ink-soft instead of
-            idle-on-soft, which is also the lower contrast of the two). It now goes through the
-            shared class, so there is one definition of a neutral chip in the system. */}
-        <span className={count > 0 ? 'badge num bg-action-soft text-action-on-soft' : 'badge-idle num'}>{count}</span>
-      </Link>
-    </li>
-  );
-}
+/* TaskLine lived here until T7 (18.08.2026): the role queues it rendered moved into the
+   dashboard's dark Onyx card (RoleQueueCard in Dashboard.tsx), its only consumer. Deleted rather
+   than left exported — dead code is how a removed surface comes back by accident. */
 
 /* ---------- Modal ---------- */
 // One dialog stack for Modal, the mobile drawer and mobile search. A nested layer owns Escape
@@ -1031,7 +1022,7 @@ function ColumnChecklist({ options }: { options: ColumnPickerOption[] }) {
     <div role="group" aria-label="בחירת עמודות" className="flex flex-col">
       {options.map((o) => (
         <label key={o.key}
-          className={`flex min-h-11 items-center gap-2.5 rounded-lg px-2 text-sm ${o.disabled ? 'text-ink-faint cursor-default' : 'text-ink-body cursor-pointer hover:bg-surface-sunken'}`}>
+          className={`flex min-h-11 items-center gap-2.5 rounded-lg px-2 text-sm ${o.disabled ? 'text-ink-faint cursor-default' : 'text-ink-body cursor-pointer hover:bg-action-wash'}`}>
           <input type="checkbox" className="size-4 shrink-0 accent-action" checked={o.visible} disabled={o.disabled}
             onChange={(event) => o.onToggle(event.target.checked)} />
           {o.header}
@@ -1402,7 +1393,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
           <div className={mobile === 'cards' ? 'table-scroll overflow-x-auto hidden lg:block' : 'table-scroll overflow-x-auto'}
             role="region" aria-label="טבלת נתונים — ניתן לגלול אופקית" tabIndex={0}>
             <table className="w-full">
-              <thead className="bg-surface-sunken border-b border-line-soft">
+              <thead className="table-head border-b border-line-soft">
                 <tr>
                   {visibleColumns.map((c) => {
                     // Sortable headers are real <button>s (audit 2026-07-21): keyboard focus,
@@ -1430,7 +1421,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
                     return (
                       <th key={c.key} scope="col" className="th" aria-sort={ariaSort}>
                         {onSortClick ? (
-                          <button type="button" className="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-ink-mid cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+                          <button type="button" className="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
                             onClick={onSortClick}>
                             {c.header}{ariaSort === 'ascending' ? ' ↑' : ariaSort === 'descending' ? ' ↓' : ''}
                           </button>

@@ -99,14 +99,19 @@ describe('הקיר בין שתי שפות הצבע', () => {
     }
   });
 
-  it('מבטא אזור נגזר מהרמפה המבנית ולא מטוקן סמנטי', () => {
+  it('מבטא אזור הוא ליטרל קפוא — אוקיאני אחיד מאז T7.3, ולעולם לא כינוי', () => {
+    // T7.1 froze the accents as three distinct literals (275/305/335). In T7.3 the owner retired
+    // hue-wayfinding — the purple underline read as "a color with no meaning" — so all three
+    // domains carry the SAME oceanic value: the mark still says "you are in a work domain",
+    // derived from the URL only, but the color is simply the brand. Pinning the exact literal
+    // keeps a re-theme from silently repainting navigation; pinning "no var() at all" keeps any
+    // future alias — chart, semantic, or otherwise — out in one stroke.
+    const OCEANIC = 'oklch(33.66% 0.058 209)';
     for (const key of SECTION_KEYS) {
       const declaration = rules.match(new RegExp(`--color-section-${key}:\\s*([^;]+);`))?.[1].trim();
-      expect(declaration, key).toMatch(/^var\(--color-chart-[345]\)$/);
+      expect(declaration, key).toBe(OCEANIC);
+      expect(declaration, key).not.toContain('var(');
     }
-    // chart-1 is `action` (the brand frame) and chart-2 sits on the same hue as sky/info.
-    // Either one as a domain accent would read as a colour that already means something else.
-    expect(rules).not.toMatch(/--color-section-[a-z]+:\s*var\(--color-chart-[12]\)/);
   });
 
   it('אף כלל מבטא אינו נוגע בטוקן סמנטי, ואף badge/note אינו נוגע במבטא', () => {

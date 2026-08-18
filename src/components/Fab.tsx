@@ -52,7 +52,7 @@ export default function Fab() {
     <>
       <div role="group" aria-label="קיצורי דרך ופעולות"
         style={{ '--mobile-action-count': mobileActions.length } as CSSProperties}
-        className="mobile-action-bar fixed z-40 border-t border-line bg-surface shadow-menu no-print lg:hidden">
+        className="mobile-action-bar fixed z-40 border-t border-line-soft bg-topbar/75 backdrop-blur-sm shadow-menu no-print lg:hidden">
         {mobileActions.map(({ key, label, icon: Icon, kind, to }) => {
           const content = (
             <>

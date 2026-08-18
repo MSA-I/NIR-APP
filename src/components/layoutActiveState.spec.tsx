@@ -105,7 +105,9 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
 
   it('בתיקיית המסמכים מסומנת תיקיית המסמכים', () => {
     renderAt('/documents');
-    expect(currentLabels()).toEqual(['תיקיית המסמכים']);
+    // T7.2: the floating pill shows the SHORT navigation label ("מסמכים"); the full name stays in
+    // the drawer, the page title and the routePresentation catalogue.
+    expect(currentLabels()).toEqual(['מסמכים']);
   });
 
   it('יעד בקרה נדיר גלוי בסרגל הדסקטופ בלי disclosure כלל', () => {
@@ -121,7 +123,7 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
 
   it('כותרת הדפדפן מפרידה מסך, דייר ומוצר', async () => {
     renderAt('/orders/abc');
-    await waitFor(() => expect(document.title).toBe('פרטי הזמנה — ארגון בדיקה · SupplyFlow'));
+    await waitFor(() => expect(document.title).toBe('פרטי הזמנה — ארגון בדיקה · InPlace'));
   });
 
   it('המגירה מרנדרת שוב את כל יעדי הניווט כי הסרגל התחתון מכיל פעולות', () => {
@@ -172,20 +174,24 @@ describe('מבטא האזור בסמן הניווט הפעיל', () => {
     ['/orders', 'procurement'],
     ['/documents', 'documents'],
     ['/payments', 'money'],
-  ])('%s לובש את מבטא %s על האייקון של הפריט הפעיל', (path, section) => {
+  ])('%s נושא את תחום %s, והמבטא הוויזואלי חי בכותרת העמוד בלבד', (path, section) => {
     renderAt(path);
     const current = activeLink();
+    // The DATA contract is unchanged: the active item and <main> carry the URL-derived domain.
     expect(current).toHaveAttribute('data-section', section);
-    // The glyph, not the pill: the accent clears 3:1 on the paper pill and only ~2.2:1 on the
-    // shell, and a fill behind the label would be the badge/note idiom, which belongs to tones.
-    expect(current?.querySelector('svg')).toHaveClass('section-glyph');
     expect(mainRegion()).toHaveAttribute('data-section', section);
+    // T7.3: the owner removed the accent UNDERLINE from the navigation pill (it read as an
+    // unexplained color) — no nav item may render `.section-mark`; that class belongs to page
+    // titles only. The icon glyph is a different matter: pill items are text-only so it cannot
+    // appear there, and inside the dropdown panels / drawer the active paper pill may still
+    // color its icon.
+    expect(current?.querySelector('.section-mark')).toBeNull();
   });
 
   it('מסך שמביט על פני כל התחומים אינו לובש מבטא כלל', () => {
     renderAt('/dashboard');
     expect(activeLink()).not.toHaveAttribute('data-section');
-    expect(activeLink()?.querySelector('svg')).not.toHaveClass('section-glyph');
+    expect(activeLink()?.querySelector('.section-mark')).toBeNull();
     expect(mainRegion()).not.toHaveAttribute('data-section');
   });
 

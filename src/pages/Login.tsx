@@ -71,7 +71,7 @@ export default function Login() {
   }
 
   return (
-    <main className="min-h-dvh flex items-center justify-center bg-shell p-4">
+    <main className="min-h-dvh flex items-center justify-center bg-action p-4">
       {/* One column on a phone, exactly as before. Two from `lg`, because the desktop login was a
           380px card floating in a full-viewport petrol field — and an empty decorative expanse is
           on this product's own anti-reference list (PRODUCT.md). */}

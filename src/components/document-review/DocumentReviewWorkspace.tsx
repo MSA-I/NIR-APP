@@ -274,7 +274,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
               >
                 <table className="min-w-full bg-surface">
                   <caption className="px-3 pt-2 text-start text-xs font-medium text-ink-soft">פירוש, הערות וכללים</caption>
-                  <thead>
+                  <thead className="table-head">
                     <tr className="border-b border-line">
                       <th className="th" scope="col">פריט</th>
                       <th className="th" scope="col">רמת זיהוי</th>
@@ -303,7 +303,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
               >
                 <table className="min-w-full bg-surface">
                   <caption className="px-3 pt-2 text-start text-xs font-medium text-ink-soft">קטעים וסימונים בחילוץ</caption>
-                  <thead>
+                  <thead className="table-head">
                     <tr className="border-b border-line">
                       <th className="th" scope="col">פריט</th>
                       <th className="th" scope="col">עמוד</th>

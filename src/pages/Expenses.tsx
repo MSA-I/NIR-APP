@@ -280,7 +280,7 @@ export default function Expenses() {
             const r = presetRange(p.key);
             const active = from === r.from && to === r.to;
             return (
-              <button key={p.key} className={`min-h-11 border px-3 text-sm font-medium transition-colors sm:min-h-9 ${active ? 'border-action bg-action-solid text-white' : 'border-line-soft bg-surface text-ink-soft hover:bg-surface-sunken'}`}
+              <button key={p.key} className={`chip-filter sm:min-h-9 ${active ? 'chip-filter-active' : ''}`}
                 aria-pressed={active} onClick={() => setRange(r.from, r.to)}>
                 {p.label}
               </button>
@@ -328,7 +328,7 @@ export default function Expenses() {
               <div className="divide-y divide-line-soft border-y border-line-strong bg-surface lg:hidden">
                 {data.bySupplier.map((supplier) => (
                   <button key={supplier.id} type="button" onClick={() => setDrill(supplier)}
-                    className="flex min-h-16 w-full items-center gap-3 px-3 py-2.5 text-start hover:bg-surface-sunken active:bg-action-wash/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus">
+                    className="flex min-h-16 w-full items-center gap-3 px-3 py-2.5 text-start hover:bg-action-wash active:bg-action-wash/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus">
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium text-ink-body">{supplier.name}</span>
                       <span className="mt-0.5 block text-xs text-ink-muted">
@@ -394,7 +394,7 @@ export default function Expenses() {
             {drillInvoices.map((inv) => (
               <li key={inv.id}>
                 <Link to={`/invoices/${inv.id}`}
-                  className="flex min-h-11 items-center gap-3 rounded-lg px-2 py-2 hover:bg-surface-sunken active:bg-action-wash/70 transition-colors">
+                  className="flex min-h-11 items-center gap-3 rounded-lg px-2 py-2 hover:bg-action-wash active:bg-action-wash/70 transition-colors">
                   <span className="num text-sm font-medium" dir="ltr">{inv.invoice_number}</span>
                   <span className="text-xs text-ink-muted">{fmtDate(inv.invoice_date)}</span>
                   <span className="ms-auto flex shrink-0 items-center gap-3">

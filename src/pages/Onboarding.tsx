@@ -238,7 +238,7 @@ function Stepper({ current, doneByData, skipped, onSelect }: {
               aria-current={active ? 'step' : undefined}
               aria-pressed={active}
               className={`w-full flex items-center gap-2.5 px-4 py-3 text-start transition-colors cursor-pointer
-                ${active ? 'bg-action-wash/60' : 'hover:bg-surface-sunken'}`}>
+                ${active ? 'bg-action-wash/60' : 'hover:bg-action-wash'}`}>
               <span className={`flex size-8 shrink-0 items-center justify-center rounded-full
                 ${done ? 'bg-done-soft text-done-fg' : active ? 'bg-action text-white' : 'bg-idle-soft text-ink-faint'}`}>
                 {done ? <Check size={16} /> : <Icon size={16} />}
@@ -458,7 +458,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
           <div className="flex flex-wrap gap-1.5">
             {suggestions.map((s) => (
               <button key={s} aria-label={`הוספת הקטגוריה ${s}`} onClick={() => add(s)}
-                className="rounded-lg border border-line-strong px-2.5 py-1.5 text-xs text-ink-soft hover:bg-surface-sunken cursor-pointer">
+                className="rounded-lg border border-line-strong px-2.5 py-1.5 text-xs text-ink-soft hover:bg-action-wash cursor-pointer">
                 <Plus size={12} className="inline -mt-px me-1" />{s}
               </button>
             ))}
@@ -650,7 +650,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
 
         <div className="overflow-x-auto border border-line rounded-lg">
           <table className="w-full">
-            <thead className="bg-surface-sunken"><tr>{sheet.headers.map((h) => <th key={h} scope="col" className="th">{h}</th>)}</tr></thead>
+            <thead className="table-head"><tr>{sheet.headers.map((h) => <th key={h} scope="col" className="th">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-line-soft">
               {sheet.rows.slice(0, 5).map((r, i) => (
                 <tr key={i}>{sheet.headers.map((h) => <td key={h} className="td text-ink-muted">{cellText(r, h, 60) || '—'}</td>)}</tr>

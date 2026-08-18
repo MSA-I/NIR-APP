@@ -354,7 +354,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
             {days.map((d, i) => (
               <button type="button" key={i}
                 aria-pressed={f.delivery_days.includes(i)}
-                className={`rounded-lg border px-2.5 py-1.5 text-xs ${f.delivery_days.includes(i) ? 'bg-action-solid text-white border-action-solid' : 'border-line-strong text-ink-soft hover:bg-surface-sunken'}`}
+                className={`rounded-lg border px-2.5 py-1.5 text-xs ${f.delivery_days.includes(i) ? 'bg-action-solid text-white border-action-solid' : 'border-line-strong text-ink-soft hover:bg-action-wash'}`}
                 onClick={() => set('delivery_days', f.delivery_days.includes(i) ? f.delivery_days.filter((x) => x !== i) : [...f.delivery_days, i].sort())}>
                 {d}
               </button>

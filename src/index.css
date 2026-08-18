@@ -26,81 +26,93 @@
   /* One family carries Hebrew, Latin and ordinary figures. Alignment comes from OpenType tnum. */
   --font-sans: "Noto Sans Hebrew", Arial, ui-sans-serif, system-ui, sans-serif;
 
-  /* ---- Structural tokens — deep-petrol control room (T6 2026-07-21) ----
-     Warm paper keeps long operational sessions inviting; petrol frames the product and
-     identifies action without borrowing a status hue. Semantic colors below still carry
-     business meaning exclusively. */
-  --color-canvas: oklch(96.8% 0.01 85);            /* body background — warm paper */
-  --color-surface: oklch(99.2% 0.004 85);          /* cards, tables, modals, inputs */
-  --color-surface-sunken: oklch(95.2% 0.012 85);   /* thead, disabled inputs, quiet strips */
+  /* ---- Structural tokens — Onyx / Wheat / Oceanic (T7 2026-08-18, owner reference palette) ----
+     Wheat paper keeps long operational sessions inviting; Oceanic identifies the brand and the
+     action without borrowing a status hue; Onyx is both the strongest ink and the dark frame.
+     Semantic colors below still carry business meaning exclusively. */
+  /* T7.3k (owner): the big canvas is a neutral light GRAY — #F4F5F3 — not cream. The wheat
+     cream did not leave the language: it survives in the pointed spots only (surface-sunken
+     strips, the dark tooltip's shell-ink lettering, selected/empty accents). */
+  --color-canvas: oklch(96.88% 0.0028 128);        /* body background — #F4F5F3 */
+  --color-surface: oklch(99.2% 0.006 80);          /* cards, tables, modals, inputs */
+  /* T7.3: chroma halved — the deep-wheat strip read as orange (owner); it is now a neutral
+     cream that recedes instead of glowing warm. */
+  --color-surface-sunken: oklch(95.4% 0.012 80);   /* thead, disabled inputs, quiet strips */
 
-  --color-line: oklch(88.5% 0.014 80);             /* card borders, dividers vs canvas */
-  --color-line-soft: oklch(93.2% 0.011 82);        /* row separators, inner dividers */
-  --color-line-strong: oklch(65% 0.016 78);        /* input + secondary-button borders — 3:1 */
+  --color-line: oklch(89.5% 0.022 78);             /* dividers vs canvas (cards carry none) */
+  --color-line-soft: oklch(93.5% 0.017 78);        /* row separators, inner dividers */
+  --color-line-strong: oklch(65% 0.018 78);        /* input + secondary-button borders — 3:1 */
 
-  --color-ink: oklch(22% 0.025 205);               /* page titles, strongest text */
-  --color-ink-body: oklch(29% 0.022 205);          /* body text */
-  --color-ink-mid: oklch(37% 0.022 205);           /* table cells */
-  --color-ink-soft: oklch(44% 0.022 205);          /* labels, ghost buttons */
-  --color-ink-muted: oklch(50% 0.021 205);         /* column headers, secondary text */
-  --color-ink-faint: oklch(54% 0.019 205);         /* placeholders and hints — AA on canvas */
-  --color-ink-ghost: oklch(75.5% 0.012 85);        /* disabled icons, decorative marks */
+  --color-ink: oklch(19.6% 0.022 229);             /* page titles, strongest text — Onyx #0A171D */
+  --color-ink-body: oklch(28% 0.021 229);          /* body text */
+  --color-ink-mid: oklch(36.5% 0.021 229);         /* table cells */
+  --color-ink-soft: oklch(43.5% 0.021 229);        /* labels, ghost buttons */
+  /* T7.3f: deepened 49.5→47 so secondary text holds 4.5:1 inside the pointer wash's darkest
+     overlap on the wheat canvas (measured 4.75 at the deepest spot). */
+  --color-ink-muted: oklch(47% 0.02 229);          /* column headers, secondary text */
+  --color-ink-faint: oklch(53.5% 0.019 229);       /* placeholders and hints — AA on canvas */
+  --color-ink-ghost: oklch(75.5% 0.014 80);        /* disabled icons, decorative marks */
 
-  /* Brand petrol is structural, never a status. White text remains AA on every solid. */
-  --color-action: oklch(43.08% 0.0701 211.43);     /* #0f5a66 — primary action + links */
-  --color-action-hover: oklch(38.06% 0.0625 212.45);
-  --color-action-solid: oklch(47.64% 0.0772 210.72);
-  --color-action-soft: oklch(93.41% 0.0182 205.32);
-  --color-action-on-soft: oklch(38.19% 0.0588 211.94);
-  --color-action-wash: oklch(96.69% 0.0086 188.11);
-  --color-action-line: oklch(64.32% 0.0541 205.4);
-  --color-focus: oklch(52.98% 0.0911 212.98);
+  /* Brand oceanic is structural, never a status. White text remains AA on every solid. */
+  --color-action: oklch(33.66% 0.058 209);         /* #003F47 — primary action + links */
+  --color-action-hover: oklch(29.5% 0.048 210);
+  --color-action-solid: oklch(39% 0.062 208);
+  --color-action-soft: oklch(93% 0.022 200);
+  --color-action-on-soft: oklch(32% 0.05 209);
+  --color-action-wash: oklch(96.6% 0.011 195);
+  --color-action-line: oklch(62% 0.055 205);
+  --color-focus: oklch(50% 0.085 207);
 
   /* The dark shell is the brand frame; the working canvas stays quiet and warm. */
-  --color-shell: oklch(31.81% 0.0517 213.09);      /* #073942 */
-  --color-shell-ink: oklch(97% 0.009 85);
-  --color-shell-ink-soft: oklch(88% 0.012 85);
-  --color-shell-ink-dim: oklch(73% 0.015 85);
-  --color-shell-heading: oklch(72% 0.016 85);
+  /* T7.3i (owner): the desktop top bar is a cool GRAY on every screen — he preferred the
+     grayish look the bar had over the old dark band to the cream it shows over wheat.
+     Onyx-hued at high lightness, used at /75 with backdrop-blur. */
+  --color-topbar: oklch(94.5% 0.008 229);
 
+  --color-shell: oklch(19.57% 0.022 229);          /* Onyx #0A171D */
+  --color-shell-ink: oklch(97.5% 0.012 80);
+  --color-shell-ink-soft: oklch(88% 0.014 80);
+  --color-shell-ink-dim: oklch(73% 0.016 80);
+  --color-shell-heading: oklch(72% 0.017 80);
+
+  /* ---- Chart ramp — the SYSTEM COLORS themselves (T7.3g, owner: "לפי צבעי המערכת") ----
+     No derived teals, no bronze: OCEANIC #003F47 and its solid mixes over the card surface
+     (72% / 48% / 26% — measured hexes #477479 #85A1A3 #BDCBCA) plus ONYX as the contrast
+     series. Monochrome-sequential by design: neighbor separation is LIGHTNESS (CVD-immune),
+     and identity still never rests on color alone (legends, 2px donut gaps, dash, labels). */
   --color-chart-1: var(--color-action);
-  --color-chart-2: oklch(49% 0.09 245);
-  --color-chart-3: oklch(52% 0.095 275);
-  --color-chart-4: oklch(53% 0.09 305);
-  --color-chart-5: oklch(52% 0.085 335);
-  /* ---- Section identity — WHERE, never WHAT (18.08.2026) ----
-     Three work domains get an accent so a daily user knows which part of the business they are
-     standing in: מסמכים · רכש · כספים. They are ALIASES of the structural chart ramp, not new
-     hues: that ramp is already declared deliberately non-semantic, its contrast against paper is
-     already in the ledger, and one ramp drifting is better than two ramps drifting apart.
+  --color-chart-2: oklch(52.84% 0.0501 205);
+  --color-chart-3: oklch(68.84% 0.0313 202);
+  --color-chart-4: var(--color-shell);
+  --color-chart-5: oklch(83.11% 0.0153 192);
+  /* ---- Section identity — WHERE, never WHAT (retired hue-wayfinding, T7.3) ----
+     Until T7.3 the three work domains carried three DISTINCT hues (275/305/335). The owner saw
+     the purple underline and read it as "a color with no meaning" — the hue-distance wayfinding
+     never earned its explanation, and off-palette hues fought the three-color mandate. All three
+     accents are now the SAME oceanic value: the mark still says "you are in a work domain" (and
+     still never encodes data — the whole plumbing stays: URL-derived, Layout-only writer, glyph +
+     28×3px rule only), but the color is simply the brand. Screens with no domain still show
+     nothing. If distinct hues ever return, this is a three-literal change + the spec map. */
+  --color-section-documents: oklch(33.66% 0.058 209);
+  --color-section-procurement: oklch(33.66% 0.058 209);
+  --color-section-money: oklch(33.66% 0.058 209);
 
-     Two members of the ramp are deliberately NOT used here:
-       chart-1 is `action` — petrol is the brand frame, so a domain wearing it would read as
-               "this is the action colour", and חוק המסגרת הממותגת forbids petrol carrying anything.
-       chart-2 is hue 245 — the same hue as sky/`info` (sky-700 measures 243). A domain wearing it
-               would read as the info tone, which is precisely the confusion this system must not
-               create. It stays a chart series only.
-     The three that remain sit 275/305/335, each far from the tone hues its own screens show most:
-     documents shows the most `info` (sky 243) so it takes 305; money shows the most `await`
-     (amber 49) and `done` (emerald 166) so it takes 335; procurement takes 275, far from all. */
-  --color-section-documents: var(--color-chart-4);
-  --color-section-procurement: var(--color-chart-3);
-  --color-section-money: var(--color-chart-5);
+  --color-chart-grid: oklch(90% 0.02 78);
+  --color-chart-tick: oklch(49.5% 0.02 229);
+  --color-chart-label: oklch(43.5% 0.021 229);
+  --color-chart-tick-strong: oklch(36.5% 0.021 229);
 
-  --color-chart-grid: oklch(89% 0.014 80);
-  --color-chart-tick: oklch(50% 0.021 205);
-  --color-chart-label: oklch(44% 0.022 205);
-  --color-chart-tick-strong: oklch(37% 0.022 205);
-
-  /* Tinted elevation: physical depth without generic black drop shadows. */
-  --shadow-card: 0 1px 2px rgb(28 37 38 / 0.04), 0 8px 24px rgb(15 90 102 / 0.04);
-  --shadow-card-hover: 0 2px 4px rgb(28 37 38 / 0.06), 0 12px 28px rgb(15 90 102 / 0.08);
-  --shadow-dashboard: 0 1px 2px rgb(28 37 38 / 0.06), 0 16px 36px -22px rgb(15 90 102 / 0.24);
+  /* Elevation (T7.3f — owner: "צריך להשחיר את הצל שיש מתחת לכל ה-CARDים"): with a borderless
+     card on bright wheat everywhere, the visible dark drop IS the separation, as in the cards
+     reference. Onyx-based, soft and wide — deliberate reversal of T7.2's near-zero whisper. */
+  --shadow-card: 0 2px 4px rgb(10 23 29 / 0.07), 0 12px 28px rgb(10 23 29 / 0.13);
+  --shadow-card-hover: 0 3px 6px rgb(10 23 29 / 0.09), 0 16px 34px rgb(10 23 29 / 0.17);
+  --shadow-dashboard: 0 2px 4px rgb(10 23 29 / 0.07), 0 14px 32px rgb(10 23 29 / 0.14);
   /* Floating row-action menu (ActionMenu): between card-hover and the toast/modal tier. */
-  --shadow-menu: 0 2px 6px rgb(28 37 38 / 0.08), 0 16px 32px -12px rgb(15 90 102 / 0.18);
+  --shadow-menu: 0 2px 6px rgb(10 23 29 / 0.08), 0 16px 32px -12px rgb(0 63 71 / 0.2);
   /* The raised capture puck in the mobile action bar: one step past shadow-menu — the strongest
-     petrol tint in the set. It was the desktop FAB's shadow too, until that surface was removed. */
-  --shadow-fab: 0 3px 8px rgb(28 37 38 / 0.1), 0 20px 40px -12px rgb(15 90 102 / 0.28);
+     oceanic tint in the set. It was the desktop FAB's shadow too, until that surface was removed. */
+  --shadow-fab: 0 3px 8px rgb(10 23 29 / 0.1), 0 20px 40px -12px rgb(0 63 71 / 0.3);
 
   --color-star: var(--color-amber-400);            /* rating stars: decoration, not status */
   --color-star-hover: var(--color-amber-300);
@@ -176,6 +188,13 @@ body {
   line-height: 1.5;
   min-inline-size: 0;
   max-inline-size: 100%;
+  /* T7.3k: a hair of breath inside the new neutral gray itself (body-level over the full
+     document height, so tall pages never expose a band — the T7.3c lesson stays). No cream,
+     no cyan: the only moving color is the single oceanic pointer orb on .app-glow. */
+  background-image: linear-gradient(180deg,
+    oklch(97.5% 0.002 128),
+    oklch(96.9% 0.003 128) 55%,
+    oklch(95.9% 0.004 128) 100%);
 }
 
 #root { min-inline-size: 0; }
@@ -196,13 +215,17 @@ body {
 }
 
 @layer components {
-  /* Warm paper surfaces carry a restrained, petrol-tinted elevation. Only interactive cards
-     rise further, so depth still communicates behavior rather than decoration. */
-  .card { @apply bg-surface rounded-xl border border-line shadow-card; }
-  .card-pad { @apply p-4 sm:p-5; }
+  /* T7: cards carry NO border. Separation comes from the tonal step (surface vs wheat canvas),
+     a near-absent oceanic-tinted shadow and spacing — never from a dark outline (owner directive,
+     18.08.2026). T7.2: 24px corners app-wide, per the reference's very-round tiles. */
+  .card { @apply bg-surface rounded-3xl shadow-card; }
+  .card-pad { @apply p-4 sm:p-6; }
 
   .btn-primary { @apply btn bg-action text-white hover:bg-action-hover; }
-  .btn-secondary { @apply btn bg-surface text-ink-mid border border-line-strong hover:bg-surface-sunken; }
+  /* T7.1: tonal, borderless — a dark outline was the exact separation the owner banned; the
+     wash surface + the label carry the affordance, the focus ring stays from `btn`.
+     T7.3: the wash is oceanic — the warm sunken rest state read orange (owner). */
+  .btn-secondary { @apply btn bg-action-wash text-ink-mid hover:bg-action-soft; }
   .btn-danger { @apply btn bg-alert-solid text-white hover:bg-alert-on-soft; }
   .btn-ghost { @apply btn text-ink-soft hover:bg-canvas; }
 
@@ -213,7 +236,24 @@ body {
   /* Shared interaction patterns — every page hover/link points here, never at a raw hue. */
   .link { @apply text-action font-medium hover:underline; }
   .row-hover { @apply hover:bg-action-wash/40 active:bg-action-wash/70 transition-colors; }
-  .card-link-hover { @apply hover:border-action-line hover:shadow-card-hover hover:-translate-y-px active:translate-y-0 transition-[border-color,box-shadow,translate] duration-200 ease-out; }
+  /* Borderless cards signal "clickable" with lift + deeper shadow alone (T7). */
+  .card-link-hover { @apply hover:shadow-card-hover hover:-translate-y-px active:translate-y-0 transition-[box-shadow,translate] duration-200 ease-out; }
+
+  /* Quick-filter chip (T7.2; T7.3 rest state went oceanic-wash — the warm sunken read orange):
+     tonal rest, solid oceanic when pressed. Segmented STATE pickers inside forms (receiving line
+     status, conflict choices) are inputs, keep their bounded look, and do not use this. */
+  .chip-filter { @apply inline-flex min-h-11 items-center justify-center rounded-full px-3.5 text-sm font-medium transition-colors bg-action-wash text-ink-mid hover:bg-action-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus; }
+  .chip-filter-active { @apply bg-action text-white hover:bg-action-hover; }
+
+  /* Hatched capsule fill (T7.3) — the reference's striped progress pill. 45° oceanic hairlines
+     over the wash; text on it stays ink (the stripes are texture, not a status claim). */
+  .pill-hatched {
+    background-image: repeating-linear-gradient(
+      45deg,
+      var(--color-action-soft) 0 6px,
+      var(--color-action-wash) 6px 12px
+    );
+  }
 
   /* Semantic badges. StatusBadge builds `badge-${tone}` from the Tone union in
      lib/status.ts, so every Tone value MUST have a class here or the tag renders
@@ -271,6 +311,13 @@ body {
     background: var(--section-accent);
   }
 
+  /* T7.3b (owner): EVERY table header strip is the dark band with light letters — one idiom,
+     everywhere a table has a header row. Print gets paper back.
+     T7.3g (owner, image #15): the band is OCEANIC, not Onyx — "שנה את הפס השחור לכחול".
+     shell-ink-soft on action measures 8.13:1 (ledger). */
+  .table-head { @apply bg-action; }
+  .table-head .th { @apply text-shell-ink-soft; }
+
   /* No uppercase/tracking: Hebrew has no case — the tracked-caps table header was a
      Latin-template relic. Hierarchy comes from size, weight and color alone. */
   .th { @apply px-3 py-2.5 text-start font-medium text-ink-muted whitespace-nowrap; font-size: 13px; line-height: 1.35; }
@@ -284,16 +331,32 @@ body {
   .section-title { @apply font-semibold text-ink-body; font-size: 17px; line-height: 1.4; }
   .kpi-value { @apply font-semibold text-ink; font-size: 26px; line-height: 1.2; }
   .kpi-value-compact { @apply font-semibold text-ink; font-size: 20px; line-height: 1.2; }
+  /* T7: the dashboard money strip lost its card, so the figures themselves carry the weight —
+     one size past kpi-value, dashboard hero only. T7.2: weight 500 — the reference's big numbers
+     are light, and the strip sits bare on the canvas. */
+  .kpi-hero { @apply font-medium text-ink; font-size: 30px; line-height: 1.1; }
 
   @media (min-width: 40rem) {
     .page-title { font-size: 26px; }
     .kpi-value { font-size: 28px; }
     .kpi-value-compact { font-size: 24px; }
+    .kpi-hero { font-size: 34px; }
   }
 
   /* The control centre gets one extra breath of separation; the selector is deliberately
-     scoped so this dashboard round does not deepen operational cards elsewhere. */
-  .dashboard-depth .card { box-shadow: var(--shadow-dashboard); }
+     scoped so this dashboard round does not deepen operational cards elsewhere.
+     T7.1 (owner decision): dashboard tiles are SEMI-TRANSPARENT — the ambient glow breathes
+     through them, like the reference. 72% surface + blur keeps text contrast measured and safe;
+     operational screens (tables, forms, money entry) stay fully opaque, and the dark Onyx tile
+     is opaque by construction (it sets bg-shell, not .card). Print strips it back to paper. */
+  .dashboard-depth .card {
+    box-shadow: var(--shadow-dashboard);
+    /* T7.3h: OPAQUE. The 86%+blur translucency (a T7.3 owner tune) turned murky green-gray the
+       moment the cards sat on the deep hero band — the owner flagged that haze twice
+       ("עדיין יש את הדבר הזה"). Dashboard cards are now plain paper like every other card;
+       only the deeper dashboard shadow distinguishes them. */
+    background-color: var(--color-surface);
+  }
   .dashboard-depth summary { @apply cursor-pointer; }
   .dashboard-depth :is(a, button, summary):focus-visible { @apply outline-none ring-2 ring-focus ring-offset-2 ring-offset-canvas; }
 }
@@ -566,6 +629,48 @@ body {
 .page-fade { animation: page-fade 0.15s ease-out; }
 @media (prefers-reduced-motion: reduce) { .page-fade { animation: none; } }
 
+/* ---- Ambient glow (T7) — the wheat canvas carries two very soft radial washes, one warm and
+   one oceanic, that drift toward the pointer. The registered properties make the drift ease
+   instead of snap; browsers without @property simply move it instantly, and touch devices and
+   reduced-motion users get the static default position (Layout attaches no listener there).
+   Intensity is deliberately low: this is atmosphere on a financial control room, not an effect.
+   It is not a status and never carries information — separation between surfaces comes from the
+   tonal step + shadow of .card, per the borderless-card rule. */
+@property --glow-x { syntax: '<percentage>'; inherits: true; initial-value: 72%; }
+@property --glow-y { syntax: '<percentage>'; inherits: true; initial-value: 12%; }
+/* T7.3e: 0.45s — at 0.7s with viewport-size washes the drift was imperceptible ("גרדיאנט
+   סטטי", owner); the tighter spotlights plus a faster ease make the pointer response legible. */
+html { transition: --glow-x 0.45s ease-out, --glow-y 0.45s ease-out; }
+/* T7.3f — the moving color lives on the BACKGROUND, exactly as the owner approved in T7.3c,
+   minus the static cyan base that sat under it ("הוספת רקע סטטי ועל זה את האפקט") and minus
+   any card spotlight ("ממש לא רציתי"). Two washes only, both from the three-color mandate:
+   the pointer carries OCEANIC #003F47 itself (owner: "הצבע הכחול יהיה רק OCEANIC"), and a
+   quiet deep-wheat counter-wash drifts opposite — the reference's "changing colors" feel
+   without leaving the palette. Ink-muted was deepened to 47% so the darkest overlap spot
+   keeps secondary text ≥ 4.5:1 (measured). */
+.app-glow {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  /* T7.3h: ONE orb (owner: "צריך שזה יהיה כדור אחד") — the deep-wheat counter-wash is gone. */
+  background:
+    radial-gradient(46rem circle at var(--glow-x) var(--glow-y),
+      oklch(33.66% 0.058 209 / 0.15), transparent 68%);
+}
+@media (prefers-reduced-motion: reduce) { html { transition: none; } }
+
+/* ---- Dashboard hero band (T7.3d, owner choice bg-C-hero-band 18.08.2026) ----
+   One deep-oceanic band behind the top nav, greeting and money cards on מרכז הבקרה ONLY — the
+   only place the brand blue appears at full depth on the canvas. Absolute, not fixed: it
+   belongs to the top of the document and scrolls away with it.
+   The fade ends in the band's own hue at alpha 0 — fading to `transparent` would drag the
+   gradient through gray. Every bare text inside the band flips to shell ink (.dash-hero-head);
+   print drops the band and restores dark ink. */
+/* T7.3i tombstone: the dashboard hero band (T7.3d "bg-C", hard-edged in T7.3g) is GONE —
+   the owner ultimately read the split as "שני החצאים של הצבע" and asked the dashboard to
+   match every other screen: full wheat canvas + the single pointer orb, nothing else. */
+
 /* Five decision regions settle once when real data replaces the skeleton. Manual refetch keeps
    this subtree mounted, so the sequence cannot replay or distract during operational use. */
 @keyframes dash-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
@@ -614,8 +719,15 @@ body {
 @media print {
   .no-print { display: none !important; }
   body { background: white; }
+  .table-head { background: white !important; }
+  .table-head .th { color: black !important; }
   .print-area { box-shadow: none !important; border: none !important; }
-  .dashboard-depth .card { box-shadow: none !important; }
+  .dashboard-depth .card {
+    box-shadow: none !important;
+    background: white !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
   .monthly-report { page: monthly-report; width: 100%; font-size: 9pt; }
   .monthly-report .report-table-wrap { overflow: visible !important; }
   .monthly-report table { width: 100% !important; table-layout: auto; }

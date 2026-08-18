@@ -107,7 +107,7 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
                   name was silently dropped by screen readers and the scroll container arrived unnamed. */}
               <div className="mt-3 max-w-full overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label="תצוגת טבלת הייצוא; ניתן לגלול בתוך הטבלה">
                 <table className="min-w-full bg-surface">
-                  <thead>
+                  <thead className="table-head">
                     <tr className="border-b border-line">
                       {result.columns.map((column) => <th key={column.key} className="th">{column.label}</th>)}
                     </tr>

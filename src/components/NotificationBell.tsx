@@ -12,10 +12,10 @@ export default function NotificationBell({ onShell = false }: { onShell?: boolea
   const label = unread && unread > 0 ? `${unread} התראות חדשות` : 'התראות';
   return (
     <Link to="/alerts" aria-label={label} title={label}
-      className={`relative grid size-[44px] shrink-0 place-items-center border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
+      className={`relative grid size-[44px] shrink-0 place-items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
         onShell
-          ? 'border-transparent text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
-          : 'border-line text-ink-soft hover:bg-surface-sunken hover:text-ink'
+          ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
+          : 'text-ink-soft hover:bg-action-wash hover:text-ink'
       }`}>
       <Bell size={19} aria-hidden="true" />
       {!!unread && unread > 0 && (

@@ -249,7 +249,7 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
                   aria-selected={index === activeIndex}
                   onMouseDown={(e) => { e.preventDefault(); open(hit); }}
                   onMouseEnter={() => setActiveIndex(index)}
-                  className={`flex items-center gap-3 px-3 py-2 cursor-pointer ${index === activeIndex ? 'bg-action-wash' : 'hover:bg-surface-sunken'}`}
+                  className={`flex items-center gap-3 px-3 py-2 cursor-pointer ${index === activeIndex ? 'bg-action-wash' : 'hover:bg-action-wash'}`}
                 >
                   <Icon size={15} className="shrink-0 text-ink-faint" />
                   <div className="min-w-0 flex-1">

@@ -21,9 +21,52 @@ import { routeBackPresentation, routePresentationTitle, staticRouteTitle, type S
 export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: ActiveRole[] }
 export interface NavSection { section: string; items: NavItem[]; collapsible?: boolean }
 
+/* T7.3f pointer atmosphere: --glow-x/y drive the background's oceanic wash (.app-glow) and
+   the hero band's inner light (index.css). The canvas base itself is static pure wheat.
+   Mouse-only by design — attach nothing on touch devices or under reduced-motion, so those
+   users keep the static default position. rAF-throttled; the CSS `--glow-x/y` transition
+   supplies the easing, so React never re-renders on mouse move. */
+function useGlowPointer() {
+  useEffect(() => {
+    if (!window.matchMedia('(pointer: fine)').matches) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let raf = 0;
+    let x = 0;
+    let y = 0;
+    const onMove = (event: PointerEvent) => {
+      x = event.clientX;
+      y = event.clientY;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const style = document.documentElement.style;
+        style.setProperty('--glow-x', `${((x / window.innerWidth) * 100).toFixed(1)}%`);
+        style.setProperty('--glow-y', `${((y / window.innerHeight) * 100).toFixed(1)}%`);
+      });
+    };
+    window.addEventListener('pointermove', onMove, { passive: true });
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      if (raf) cancelAnimationFrame(raf);
+      document.documentElement.style.removeProperty('--glow-x');
+      document.documentElement.style.removeProperty('--glow-y');
+    };
+  }, []);
+}
+
 function navItem(to: StaticRoutePath, icon: typeof LayoutDashboard, roles: ActiveRole[]): NavItem {
   return { to, label: staticRouteTitle(to), icon, roles };
 }
+
+/* T7.2 pill navigation: the floating pill is one slim row of TEXT items (the reference's), and
+   the full Hebrew titles do not fit it. These shorter forms exist for the PILL ONLY — the drawer,
+   the dropdown panels, the page titles and the routePresentation catalogue keep the full names,
+   so nothing desyncs. A path with no entry here simply shows its full label. */
+const NAV_SHORT_LABELS: Partial<Record<string, string>> = {
+  '/orders': 'הזמנות',
+  '/receiving': 'קבלה',
+  '/documents': 'מסמכים',
+};
 
 // Four work groups — מסמכים / רכש / כספים / בקרה — under two ungrouped links that need no
 // header to explain them. The less self-evident items (מחירונים, דרישות תשלום, התאמות בנק,
@@ -168,12 +211,17 @@ export function pageTitleFor(pathname: string): string {
 }
 
 export default function Layout() {
+  useGlowPointer();
   const { profile, org, roleLabels, isPlatformAdmin, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, accessStatus = 'unknown', signOut } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  /* T7.1 top navigation: which desktop dropdown group is open (one at a time; null = none).
+     Disclosure-nav pattern — aria-expanded button + a list of real links, no menu roles. */
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const topNavRef = useRef<HTMLElement>(null);
   const [pendingOffline, setPendingOffline] = useState<{ actions: number; uploads: number } | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const role = isActiveRole(profile?.role) ? profile.role : undefined;
@@ -213,6 +261,27 @@ export default function Layout() {
       desktop.removeEventListener('change', sync);
     };
   }, []);
+
+  // An open top-nav dropdown closes on outside pointer, on Escape (focus returns to its
+  // trigger), and on any route change. One listener set, mounted only while a group is open.
+  useEffect(() => {
+    if (!openGroup) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!topNavRef.current?.contains(event.target as Node)) setOpenGroup(null);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      document.getElementById(`top-nav-group-${openGroup}`)?.focus();
+      setOpenGroup(null);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [openGroup]);
+  useEffect(() => { setOpenGroup(null); }, [location.pathname]);
 
   // Route changes announce themselves through the tab title and move keyboard focus past the
   // persistent navigation shell. Query-only filter changes keep focus where the user left it.
@@ -255,28 +324,47 @@ export default function Layout() {
     if (result.pushWarning) toast(result.pushWarning, 'error');
   }
 
-  const linkCls = (isActive: boolean) =>
-    `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
+  /* Three navigation surfaces, one vocabulary: the dark mobile drawer keeps the paper-pill
+     active state; the light floating pill and the LIGHT dropdown panels (T7.3h, owner: "להפוך
+     את הצבעים" — panels flipped from deep oceanic to paper) both mark the active item with the
+     small OCEANIC pill — the blue is the marker, the surface is bright. */
+  const linkCls = (isActive: boolean, surface: 'shell' | 'pill' | 'panel' = 'shell') => (surface === 'shell'
+    ? `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
       isActive ? 'bg-shell-ink text-shell font-medium' : 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
-    }`;
+    }`
+    : surface === 'panel'
+      ? `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
+        isActive ? 'bg-action text-white font-medium' : 'text-ink-body hover:bg-action-wash hover:text-ink'
+      }`
+      : `relative flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
+        isActive ? 'bg-action text-white font-medium' : 'text-ink-soft hover:bg-action-wash hover:text-ink'
+      }`);
 
-  const navLinks = (items: readonly NavItem[]) => items.map((item) => {
+  /* Section identity in navigation (T7.2). The floating pill is TEXT-only (the reference's), so
+     the accent cannot ride an icon there; the active pill-item carries the SAME `.section-mark`
+     rule the page titles use — a 28×3px accent underline, sitting on the pill's paper surface
+     (the accents clear 5:1 on paper, and fail on Onyx, which is why the mark hangs BELOW the dark
+     active pill rather than inside it). On the dark surfaces (drawer/panels) the icon still takes
+     `.section-glyph` exactly as before. Both consumers are the two the CSS contract already pins. */
+  const navLinks = (items: readonly NavItem[], opts?: { surface?: 'shell' | 'pill' | 'panel' }) => items.map((item) => {
+    const surface = opts?.surface ?? 'shell';
     const active = isRouteFamilyActive(location.pathname, item.to);
-    // Section identity, navigation half. Only the ACTIVE item is marked, and only its icon takes
-    // the accent — the pill it sits on is paper, which is the one light surface in the shell and
-    // therefore the only place an accent clears 3:1 here. Colouring every item's icon would turn
-    // a 19-link sidebar into a swatch chart; one coloured glyph answers "which part of the
-    // business am I in" and the label beside it answers "which screen".
     const section = active ? sectionOf(item.to) : null;
+    const pillLabel = NAV_SHORT_LABELS[item.to] ?? item.label;
     return (
-      <Link key={item.to} to={item.to} className={linkCls(active)} aria-current={active ? 'page' : undefined}
-        data-section={section ?? undefined}
-        onClick={() => { if (mobileOpen) closeMobileMenu(); }}>
-        <item.icon size={17} aria-hidden="true" className={section ? 'section-glyph' : undefined} />
-        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      <Link key={item.to} to={item.to} className={linkCls(active, surface)} aria-current={active ? 'page' : undefined}
+        data-section={section ?? undefined} title={surface === 'pill' && pillLabel !== item.label ? item.label : undefined}
+        onClick={() => { if (mobileOpen) closeMobileMenu(); setOpenGroup(null); }}>
+        {/* Light panel (T7.3h): the icon inherits — a section-glyph accent would vanish on the
+            active item's oceanic pill (accent == pill color). */}
+        {surface !== 'pill' && <item.icon size={17} aria-hidden="true" className={surface === 'shell' && section ? 'section-glyph' : undefined} />}
+        <span className="min-w-0 flex-1 truncate">{surface === 'pill' ? pillLabel : item.label}</span>
         {item.to === '/documents' && inboxCount != null && inboxCount > 0 && (
           <span className="badge num bg-action-soft text-action-on-soft ms-auto">{inboxCount}</span>
         )}
+        {/* T7.3: no accent underline in the pill — the owner read it as an unexplained color.
+            The active oceanic pill alone carries "you are here"; the page-title mark remains
+            the accent surface. */}
       </Link>
     );
   });
@@ -289,9 +377,9 @@ export default function Layout() {
    */
   const accountBlock = (
     <div className="px-1 pt-3">
-      <div className="text-sm text-shell-ink font-medium">{profile?.full_name}</div>
-      <div className="text-xs text-shell-ink-dim mb-2">{role ? roleLabels[role] : ''}</div>
-      <button className="flex min-h-11 items-center gap-1.5 rounded-lg text-xs text-shell-ink-dim hover:text-shell-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => void handleSignOut()}>
+      <div className="text-sm text-ink font-medium">{profile?.full_name}</div>
+      <div className="text-xs text-ink-muted mb-2">{role ? roleLabels[role] : ''}</div>
+      <button className="flex min-h-11 items-center gap-1.5 rounded-lg text-xs text-ink-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => void handleSignOut()}>
         <LogOut size={13} /> התנתקות
       </button>
     </div>
@@ -306,27 +394,27 @@ export default function Layout() {
           link, and repeating it would make a screen reader say the brand twice. */}
       <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
         onClick={() => { if (mobileOpen) closeMobileMenu(); }}
-        className="flex items-center gap-3 border-b border-shell-ink/10 px-4 py-4 pe-12 hover:bg-shell-ink/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset lg:pe-4">
+        className="flex items-center gap-3 border-b border-line-soft px-4 py-4 pe-12 hover:bg-action-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset lg:pe-4">
         <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="40" height="40"
-          className="size-10 shrink-0 rounded-lg bg-white object-contain p-0.5 ring-1 ring-shell-ink/15" />
+          className="size-10 shrink-0 rounded-lg bg-white object-contain p-0.5 ring-1 ring-line-soft" />
         <div className="min-w-0">
-          <div className="text-base font-semibold text-shell-ink">{APP_NAME}</div>
-          <div className="truncate text-xs text-shell-ink-dim" title={orgName || undefined}>{orgName || 'ניהול רכש ותשלומים'}</div>
+          <div className="text-base font-semibold text-ink">{APP_NAME}</div>
+          <div className="truncate text-xs text-ink-muted" title={orgName || undefined}>{orgName || 'ניהול רכש ותשלומים'}</div>
         </div>
       </Link>
       <nav aria-label={navLabel} className="scrollbar-hidden flex-1 overflow-y-auto px-3 py-3 space-y-3">
         {[...displaySections, ...(stickyFooter || footerItems.length === 0 ? [] : [{ section: 'החשבון והמערכת', items: footerItems }])].map((s, i) => (
           s.collapsible && !expandGroups ? (
             <details key={`${s.section}-${location.pathname}`} className="group" open={s.items.some((item) => isRouteFamilyActive(location.pathname, item.to)) || undefined}>
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-3 text-xs font-semibold text-shell-heading hover:bg-shell-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-3 text-xs font-semibold text-ink-muted hover:bg-action-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
                 {s.section}<ChevronDown size={15} aria-hidden="true" className="transition-transform group-open:rotate-180" />
               </summary>
-              <div className="mt-0.5 space-y-0.5">{navLinks(s.items)}</div>
+              <div className="mt-0.5 space-y-0.5">{navLinks(s.items, { surface: 'panel' })}</div>
             </details>
           ) : (
             <div key={s.section || i}>
-              {s.section && <div className="px-3 pb-1 text-xs font-semibold text-shell-heading">{s.section}</div>}
-              <div className="space-y-0.5">{navLinks(s.items)}</div>
+              {s.section && <div className="px-3 pb-1 text-xs font-semibold text-ink-muted">{s.section}</div>}
+              <div className="space-y-0.5">{navLinks(s.items, { surface: 'panel' })}</div>
             </div>
           )
         ))}
@@ -338,28 +426,131 @@ export default function Layout() {
         {!stickyFooter && accountBlock}
       </nav>
       {stickyFooter && (
-        <div className="border-t border-shell-ink/10 px-3 py-3">
-          {footerItems.length > 0 && <div className="mb-2 space-y-0.5">{navLinks(footerItems)}</div>}
+        <div className="border-t border-line-soft px-3 py-3">
+          {footerItems.length > 0 && <div className="mb-2 space-y-0.5">{navLinks(footerItems, { surface: 'panel' })}</div>}
           {accountBlock}
         </div>
       )}
     </div>
   );
 
+  /* ---- T7.1 desktop top navigation (owner decision, reference layout) ----
+     The fixed sidebar became a top bar: brand at the logical start, navigation in the middle,
+     search / bell / feedback / account at the end. The 19 owner destinations do not fit one row,
+     so each named NAV_SECTIONS group becomes a disclosure dropdown (aria-expanded button + the
+     same navLinks inside a dark panel); the unnamed first group's links stay top-level. The
+     active LINK keeps the paper pill + section glyph — same language as before; a group that
+     contains the active screen marks its trigger. Mobile (<lg) is untouched. */
+  const groupContainsActive = (items: readonly NavItem[]) =>
+    items.some((item) => isRouteFamilyActive(location.pathname, item.to));
+  /* Pill-surface group trigger (T7.3): the group holding the active screen wears the same small
+     OCEANIC pill as an active item. T7.3i (owner, image #21): an OPEN group wears the deep
+     oceanic pill too — the trigger of the opened panel is the blue marker. */
+  const groupTriggerCls = (active: boolean, open: boolean) =>
+    `relative flex min-h-10 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
+      active || open ? 'bg-action text-white font-medium' : 'text-ink-soft hover:bg-action-wash hover:text-ink'
+    }`;
+  const topNavGroup = (s: NavSection) => {
+    const open = openGroup === s.section;
+    const active = groupContainsActive(s.items);
+    const holdsInboxLink = s.items.some((item) => item.to === '/documents');
+    return (
+      <div key={s.section} className="relative">
+        <button type="button" id={`top-nav-group-${s.section}`} aria-expanded={open}
+          className={groupTriggerCls(active, open)}
+          onClick={() => setOpenGroup(open ? null : s.section)}>
+          <span className="whitespace-nowrap">{s.section}</span>
+          {holdsInboxLink && inboxCount != null && inboxCount > 0 && (
+            <span className="badge num bg-action-soft text-action-on-soft">{inboxCount}</span>
+          )}
+          <ChevronDown size={14} aria-hidden="true" className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+        {/* Mounted always, hidden when closed: the active link keeps existing in the DOM (the
+            accessibility contract in layoutActiveState.spec queries it), and reopening costs
+            nothing. `hidden` removes it from the a11y tree and the tab order while closed.
+            T7.3h (owner, image #18): the panel is LIGHT paper — dark ink items, the active one
+            marked by the small oceanic pill ("בהיר עם סימון כחול"). */}
+        <div hidden={!open} className="absolute start-0 top-full z-50 mt-2 w-64 rounded-2xl bg-surface p-2 shadow-menu ring-1 ring-line-soft">
+          <div className="space-y-0.5">{navLinks(s.items, { surface: 'panel' })}</div>
+        </div>
+      </div>
+    );
+  };
+  const accountOpen = openGroup === 'account';
+  // The reference's account affordance: an avatar circle on the background. Initials on an
+  // OCEANIC disc (T7.3 — the blue leads); the menu is the same deep-oceanic panel.
+  const initials = (profile?.full_name ?? '').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('') || '·';
+  const topAccountMenu = (
+    <div className="relative">
+      <button type="button" id="top-nav-group-account" aria-expanded={accountOpen}
+        aria-label={`תפריט החשבון של ${profile?.full_name || 'המשתמש'}`}
+        className={`grid size-10 place-items-center rounded-full bg-action text-sm font-medium text-white shadow-card transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${accountOpen ? 'scale-95' : 'hover:scale-105'}`}
+        onClick={() => setOpenGroup(accountOpen ? null : 'account')}>
+        <span aria-hidden="true">{initials}</span>
+      </button>
+      {/* Mounted always, hidden when closed — same reasoning as the nav groups: the settings
+          link must exist for the active-state contract even while the menu is shut.
+          T7.3h: light paper panel, same as the nav dropdowns. */}
+      <div hidden={!accountOpen} className="absolute end-0 top-full z-50 mt-2 w-64 rounded-2xl bg-surface p-3 shadow-menu ring-1 ring-line-soft">
+        <div className="text-sm font-medium text-ink">{profile?.full_name}</div>
+        <div className="text-xs text-ink-muted">{role ? roleLabels[role] : ''}{orgName ? ` · ${orgName}` : ''}</div>
+        {footerItems.length > 0 && <div className="mt-2 space-y-0.5">{navLinks(footerItems, { surface: 'panel' })}</div>}
+        <button className="mt-2 flex min-h-11 w-full items-center gap-1.5 rounded-lg px-3 text-sm text-ink-soft hover:bg-action-wash hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          onClick={() => void handleSignOut()}>
+          <LogOut size={14} /> התנתקות
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-dvh min-w-0">
+      {/* T7.3f: the pointer's oceanic wash drifts on the background itself (.app-glow, fixed,
+          z -1) over a static pure-wheat canvas — no static color base under it, no card
+          spotlights. T7.3i: the dashboard hero band is gone — every screen shares this. */}
+      <div aria-hidden="true" className="app-glow no-print" />
       {/* Skip-to-content (audit round 2): the first focusable element, so a keyboard user can
-          jump past the ~19 sidebar links straight to the page. Hidden until focused, then styled
-          like a primary button at the logical start, z-above the sidebar (z-40). */}
+          jump past the navigation bar straight to the page. Hidden until focused, then styled
+          like a primary button at the logical start, z-above the top bar (z-40). */}
       <a href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:start-3 focus:z-50 focus:rounded-lg focus:bg-action focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-action-line">
         דלג לתוכן
       </a>
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:block fixed inset-y-0 start-0 w-60 bg-shell border-e border-shell-ink/10 z-40 no-print">{sidebar(sections, 'ניווט ראשי', true)}</aside>
+      {/* Desktop navigation (T7.2, reference layout) — no bar. Floating pills on the glowing
+          canvas: an outlined logo pill at the start, a centered WHITE pill holding the text-only
+          navigation (active item = small dark pill + accent underline), and at the end the search
+          pill, bell, feedback and the avatar disc — sitting straight on the background. */}
+      <header ref={topNavRef} className="hidden lg:block sticky top-0 z-40 bg-topbar/75 backdrop-blur-sm no-print">
+        <div className="mx-auto flex min-h-[4.25rem] max-w-[1400px] items-center gap-3 px-4 py-2">
+          <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
+            className="flex shrink-0 items-center gap-2 rounded-full bg-surface/85 py-1 ps-1.5 pe-3 shadow-card ring-1 ring-line-soft transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus xl:pe-4">
+            <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="32" height="32"
+              className="size-8 shrink-0 rounded-full bg-white object-contain p-0.5" />
+            <span className="hidden text-sm font-semibold text-ink xl:block">{APP_NAME}</span>
+          </Link>
+          <div className="flex min-w-0 flex-1 justify-center">
+            <nav aria-label="ניווט ראשי"
+              className="flex items-center gap-0.5 rounded-full bg-surface/90 p-1.5 shadow-card ring-1 ring-line-soft backdrop-blur">
+              {sections.map((s) => (
+                s.section
+                  ? topNavGroup(s)
+                  : <div key="primary" className="flex items-center gap-0.5">{navLinks(s.items, { surface: 'pill' })}</div>
+              ))}
+            </nav>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {canSearch && <div className="w-44 xl:w-64 [&_input]:rounded-full [&_input]:bg-surface/90"><GlobalSearch /></div>}
+            <NotificationBell />
+            {feedbackOn && <FeedbackButton />}
+            {topAccountMenu}
+          </div>
+        </div>
+      </header>
 
       {/* Mobile top bar */}
-      <header className="phone-safe-header lg:hidden sticky top-0 z-40 bg-shell text-shell-ink border-b border-shell-ink/10 flex min-w-0 items-center no-print">
+      {/* T7.3j: the phone shell joins the desktop language — cool-gray translucent bar, paper
+          drawer with the oceanic active pill. */}
+      <header className="phone-safe-header lg:hidden sticky top-0 z-40 bg-topbar/75 backdrop-blur-sm text-ink border-b border-line-soft flex min-w-0 items-center no-print">
         <button ref={menuButtonRef} type="button"
           className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           onClick={() => setMobileOpen(true)} aria-label="פתיחת תפריט" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
@@ -386,44 +577,41 @@ export default function Layout() {
             <div className="mobile-shell-subtitle truncate text-xs text-shell-ink-dim" title={orgName || APP_NAME}>{APP_NAME}{orgName ? ` · ${orgName}` : ''}</div>
           </div>
         </div>
-        <div className="mobile-shell-actions flex shrink-0 items-center overflow-hidden rounded-lg bg-shell-ink/5 ring-1 ring-inset ring-shell-ink/15">
-          <NotificationBell onShell />
-          <FeedbackButton onShell />
+        {/* T7.3k (owner, images #33-34 "אתה רואה את ההבדלים בשפה?"): the desktop language —
+            bare round icon targets in dark ink straight on the bar, no boxed cluster. */}
+        <div className="mobile-shell-actions flex shrink-0 items-center gap-0.5">
+          <NotificationBell />
+          <FeedbackButton />
           {canSearch && (
-            <button className="flex min-h-[44px] min-w-[44px] items-center justify-center text-shell-ink-soft transition-colors hover:bg-shell-ink/10 hover:text-shell-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
+            <button className="grid size-[44px] shrink-0 place-items-center rounded-full text-ink-soft transition-colors hover:bg-action-wash hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
               aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={21} /></button>
           )}
         </div>
       </header>
       {searchOpen && <GlobalSearch variant="mobile" onClose={() => setSearchOpen(false)} />}
+      {/* T7.3k (owner, image #35): neutral dark scrim — the oceanic one read as a strange
+          blue tint over the page. */}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-shell/60 no-print" onClick={() => closeMobileMenu()}>
+        <div className="lg:hidden fixed inset-0 z-50 bg-shell/50 no-print" onClick={() => closeMobileMenu()}>
+          {/* T7.3k fix (owner, image #29): OPAQUE light gray — translucency here sat over the
+              dark backdrop and the page behind it, and the blend read as a murky blue tint.
+              The top bar can stay translucent because only the light canvas scrolls under it. */}
           <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label="תפריט ראשי"
-            tabIndex={-1} className="phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-shell border-e border-shell-ink/10 focus:outline-none" onClick={(e) => e.stopPropagation()}>
-            <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 rounded-lg text-shell-ink-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={20} /></button>
+            tabIndex={-1} className="phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-topbar border-e border-line-soft focus:outline-none" onClick={(e) => e.stopPropagation()}>
+            <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 rounded-lg text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={20} /></button>
             {sidebar(drawerSections, 'יעדים נוספים', true, false)}
           </aside>
         </div>
       )}
 
-      {/* Global search — desktop. Injected above <main>: the headerless desktop area is empty
-          today (plan §2), and lg:ms-60 lines it up beside the fixed w-60 sidebar. z-30 keeps it
-          below the sidebar (z-40); sticky works because the min-h-dvh wrapper has no overflow. */}
-      {/* The header exists only when it has something to hold. */}
-      {(canSearch || feedbackOn) && (
-        <header className="hidden lg:flex sticky top-0 z-30 lg:ms-60 h-14 items-center gap-3 border-b border-line bg-surface px-6 no-print">
-          {canSearch && <GlobalSearch />}
-          <NotificationBell />
-          <FeedbackButton />
-        </header>
-      )}
+      {/* The utility header merged into the top bar (T7.1); search/bell/feedback live there now. */}
       {accessStatus !== 'unknown' && organizationAccess.mode === 'read_only' && (
-        <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:ms-60 lg:px-6">
+        <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:px-6">
           הגישה לכתיבה אינה זמינה כרגע. המידע הקיים נשמר וזמין לצפייה ולייצוא; לפרטים יש לפנות למנהל המערכת.
         </div>
       )}
       {accessStatus !== 'unknown' && organizationAccess.mode === 'offboarding' && (
-        <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:ms-60 lg:px-6">
+        <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:px-6">
           הארגון נמצא בתהליך סיום שירות והמערכת במצב קריאה בלבד. המידע נשמר וזמין לצפייה ולייצוא. בעל הארגון יכול לבטל את הבקשה בתוך 30 ימים ממועד הגשתה.
         </div>
       )}
@@ -435,10 +623,10 @@ export default function Layout() {
           domain (/dashboard, the בקרה screens, settings) simply carries no attribute and the
           mark stays hidden. */}
       <main id="main" tabIndex={-1} data-section={sectionOf(location.pathname) ?? undefined}
-        className="phone-safe-main min-w-0 lg:ms-60 pt-5 focus:outline-none">
-        {/* max-w column centred (mx-auto) in the space beside the sidebar — otherwise a wide
-            viewport strands all content on the start side in RTL, leaving a dead zone on the
-            end side. keyed by path so each screen change re-triggers the fade (section 11). */}
+        className="phone-safe-main min-w-0 pt-5 focus:outline-none">
+        {/* max-w column centred (mx-auto) under the top bar — the same 1400px measure the bar
+            itself uses, so navigation and content share one grid. keyed by path so each screen
+            change re-triggers the fade (section 11). */}
         <div key={location.pathname} className="page-fade mx-auto min-w-0 max-w-[1400px]">
           <Outlet />
         </div>

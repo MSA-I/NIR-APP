@@ -137,7 +137,7 @@ export function ActionMenu({ items, label = 'פעולות' }: { items: ActionMen
               className={`flex min-h-11 w-full items-center gap-2 px-3 py-2 text-sm text-start transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus ${
                 it.disabled
                   ? 'text-ink-ghost cursor-default'
-                  : `${it.tone === 'danger' ? 'text-alert-fg' : 'text-ink-body'} hover:bg-surface-sunken focus:bg-surface-sunken active:bg-surface-sunken cursor-pointer`
+                  : `${it.tone === 'danger' ? 'text-alert-fg' : 'text-ink-body'} hover:bg-action-wash focus:bg-surface-sunken active:bg-surface-sunken cursor-pointer`
               }`}
               onClick={() => {
                 if (it.disabled) return;

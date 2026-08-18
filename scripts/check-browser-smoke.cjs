@@ -627,7 +627,7 @@ async function goldenScreens(browser) {
   captureConsole(loginPage, 'golden:login');
   try {
     await loginPage.goto(`${baseURL}/login`);
-    await loginPage.getByRole('heading', { name: 'SupplyFlow' }).waitFor();
+    await loginPage.getByRole('heading', { name: 'InPlace' }).waitFor();
     for (const [label, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844]]) {
       await loginPage.setViewportSize({ width, height });
       await auditAccessibility(loginPage, `golden:login:${label}`);
@@ -2346,35 +2346,57 @@ async function navigationOrderAndActiveState(browser) {
     await settle(page);
     await page.getByRole('heading', { name: 'ארכיון מסמכים' }).waitFor({ timeout: 25_000 });
 
-    const sidebar = page.locator('aside:visible').locator('nav');
-    await sidebar.first().waitFor();
-    assert.equal(await sidebar.count(), 1, 'the desktop shell rendered more than one visible sidebar nav');
-    const groups = await readSidebar(sidebar);
-    const links = groups.flatMap((group) => group.items);
+    // T7.1: desktop navigation is a TOP BAR (owner decision, reference layout) — daily links at
+    // top level, ניהול/בקרה as disclosure dropdowns whose panels stay in the DOM while hidden.
+    const topNav = page.locator('header nav[aria-label="ניווט ראשי"]:visible');
+    await topNav.first().waitFor();
+    assert.equal(await topNav.count(), 1, 'the desktop shell rendered more than one visible top navigation');
+    const nav = await topNav.evaluate((node) => {
+      const readLinks = (hiddenOk) => [...node.querySelectorAll('a')]
+        .filter((link) => hiddenOk || !link.closest('[hidden]'))
+        .map((link) => ({
+          label: (link.querySelector('span')?.textContent || '').trim(),
+          path: new URL(link.href).pathname,
+          current: link.getAttribute('aria-current'),
+        }));
+      return {
+        topLevel: readLinks(false),
+        all: readLinks(true),
+        groups: [...node.querySelectorAll('button[aria-expanded]')].map((b) => (b.textContent || '').trim()),
+      };
+    });
 
     // FIRST, not merely present. The control centre is section 12's answer to "what needs me now",
     // and a link that is somewhere in the menu is not the same claim as the one the plan made.
     assert.deepEqual(
-      { label: links[0] && links[0].label, path: links[0] && links[0].path },
+      { label: nav.topLevel[0] && nav.topLevel[0].label, path: nav.topLevel[0] && nav.topLevel[0].path },
       { label: 'מרכז הבקרה', path: '/dashboard' },
-      `the first sidebar link is not the control centre: ${JSON.stringify(links.slice(0, 2))}`,
+      `the first navigation link is not the control centre: ${JSON.stringify(nav.topLevel.slice(0, 2))}`,
     );
-    assert.equal(groups[0].section, '', 'the control centre was pushed under a group header');
 
-    // Daily work stays visible. Management and control remain available without making all of
-    // their modules compete with the daily routes.
-    const sections = groups.map((group) => group.section);
-    assert.deepEqual(sections, ['', 'ניהול', 'בקרה'],
-      `wrong sidebar groups or group order: ${JSON.stringify(sections)}`);
-    assert.deepEqual(groups[0].items.map((item) => item.path),
+    // Daily work stays visible at top level. Management and control remain available behind
+    // dropdowns without making all of their modules compete with the daily routes.
+    assert.deepEqual(nav.topLevel.map((item) => item.path),
       ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
-      `wrong owner daily navigation: ${JSON.stringify(groups[0].items)}`);
-    assert.equal(links.some((item) => item.path === '/documents/archive'), false,
+      `wrong owner daily navigation: ${JSON.stringify(nav.topLevel)}`);
+    assert.deepEqual(nav.groups, ['ניהול', 'בקרה'],
+      `wrong navigation dropdown groups or order: ${JSON.stringify(nav.groups)}`);
+    assert.equal(nav.all.some((item) => item.path === '/documents/archive'), false,
       'the low-frequency archive still competes in the main navigation');
-    assert.equal(await sidebar.locator('details[open]').count(), 0,
-      'a low-frequency navigation group opened without containing the current route');
-    assert.equal(links.filter((item) => item.current === 'page').length, 0,
-      'the archive incorrectly marked a different sidebar destination as current');
+    assert.equal(nav.all.filter((item) => item.current === 'page').length, 0,
+      'the archive incorrectly marked a different navigation destination as current');
+
+    // Dropdown behaviour, measured: opening ניהול reveals its destinations; Escape closes it.
+    const visibleLinkCount = () => topNav.locator('a:visible').count();
+    const closedCount = await visibleLinkCount();
+    await page.getByRole('button', { name: /^ניהול/ }).click();
+    await page.waitForFunction((base) =>
+      document.querySelectorAll('header nav[aria-label="ניווט ראשי"] a:not([hidden])').length >= base,
+    closedCount, { timeout: 5_000 });
+    assert((await visibleLinkCount()) > closedCount, 'opening the ניהול dropdown revealed no destinations');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+    assert.equal(await visibleLinkCount(), closedCount, 'Escape did not close the navigation dropdown');
 
     await auditAccessibility(page, 'documents-archive/1440');
     await page.screenshot({ path: path.join(outDir, 'navigation-archive-1440.png') });

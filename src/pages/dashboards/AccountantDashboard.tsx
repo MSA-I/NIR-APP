@@ -5,7 +5,7 @@ import { useQuery } from '../../lib/useQuery';
 import { fetchAll } from '../../lib/supabasePaging';
 import { AttentionZone, SkeletonCards, ErrorNote, type AttentionItem } from '../../components/ui';
 import { Scorecard, type ScoreItem } from '../../components/supplier-metrics';
-import { CategoryDonut, ComparisonLineChart, SpendBarChart, money, type LinePoint } from '../../components/charts';
+import { CategoryDonut, GroupedBarChart, SpendBarChart, money, type LinePoint } from '../../components/charts';
 import { chartTheme } from '../../lib/theme';
 import { topCategoriesWithOther } from '../../lib/dashboardSeries';
 import { fmtMonth, fmtMoneyRounded, fmtNum, monthlyBuckets, shiftCalendarMonth, todayISO, weeklyBuckets } from '../../lib/format';
@@ -85,11 +85,15 @@ export default function AccountantDashboard() {
 
     const paidW = weeklyBuckets(payments.map((p) => ({ date: p.paid_date, value: p.amount })), { todayISO: today });
     const debitW = weeklyBuckets(bank.filter((b) => b.is_debit).map((b) => ({ date: b.tx_date, value: Math.abs(b.amount) })), { todayISO: today });
+    // T7.2 zero policy: both series bucket the same fully-fetched window, so a rowless week is a
+    // measured ₪0 — bars simply have zero height. A truly all-quiet window renders the empty
+    // state instead (weeklyActive guard below), never a fabricated chart.
     const weekly: LinePoint[] = paidW.map((p, i) => ({
       week: p.week,
-      payments: p.count > 0 ? p.total : null,
-      bank: (debitW[i]?.count ?? 0) > 0 ? debitW[i].total : null,
+      payments: p.count > 0 ? p.total : 0,
+      bank: (debitW[i]?.count ?? 0) > 0 ? debitW[i].total : 0,
     }));
+    const weeklyActive = paidW.some((p) => p.count > 0) || debitW.some((b) => b.count > 0);
 
     const supplierSlices = topCategoriesWithOther(
       supBal.map((b) => ({ name: suppliers.get(b.supplier_id) ?? '—', total: b.open_balance })),
@@ -100,7 +104,7 @@ export default function AccountantDashboard() {
       .map((row) => ({ ...row, name: suppliers.get(row.supplier_id) ?? '—' }))
       .sort((a, b) => b.open_balance - a.open_balance)
       .slice(0, 5);
-    return { kpis, attention, monthly, weekly, supplierSlices, supplierTotal, supplierBalances };
+    return { kpis, attention, monthly, weekly, weeklyActive, supplierSlices, supplierTotal, supplierBalances };
   });
 
   if (loading) return <SkeletonCards count={5} cols={5} title />;
@@ -146,9 +150,11 @@ export default function AccountantDashboard() {
             </Link>)}
           </div>}
         </ChartCard>
+        {/* T7.2: the reference's paired-bars rendering — each week gets a payments bar beside a
+            bank-debits bar, round caps, dot legend below. */}
         <ChartCard title="תשלומים מול חיובי בנק" subtitle="שמונה השבועות האחרונים" className="lg:col-span-2">
-          <ComparisonLineChart points={data.weekly} xKey="week" legend
-            series={[{ key: 'payments', name: 'תשלומים', color: t.bars[0] }, { key: 'bank', name: 'חיובי בנק', color: t.bars[2], dashed: true }]}
+          <GroupedBarChart points={data.weeklyActive ? data.weekly : []} xKey="week"
+            series={[{ key: 'payments', name: 'תשלומים', color: t.bars[0] }, { key: 'bank', name: 'חיובי בנק', color: t.bars[2] }]}
             ariaLabel="השוואת תשלומים שבוצעו מול חיובי בנק, שמונה שבועות"
             emptyMessage="אין תשלומים או תנועות בנק בשמונת השבועות האחרונים" />
         </ChartCard>

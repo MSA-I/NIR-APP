@@ -345,7 +345,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
                     <caption className="px-3 pt-2 text-start text-xs font-medium text-ink-soft">
                       כל שורה מול ארבעת המקורות. ערך שאינו ידוע מוצג כמקף, לא כאפס.
                     </caption>
-                    <thead>
+                    <thead className="table-head">
                       <tr className="border-b border-line">
                         <th className="th" scope="col">תיאור</th>
                         <th className="th" scope="col">כמות במסמך</th>
