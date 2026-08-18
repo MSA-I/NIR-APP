@@ -334,18 +334,22 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
           which said the same sentence on every row and left nothing to fold. */}
       {currentPacket.source_partial && (
         <Note tone="await" className="mt-4">
-          לא כל הקובץ נקרא: לפחות עמוד אחד לא הניב טקסט. קריאת OCR בתשלום מוגבלת
-          ל־<span className="num">{PAID_OCR_PAGE_CAP}</span> עמודים למסמך, ולכן בסריקה ארוכה יותר
-          העמודים שמעבר לכך אינם נקראים כלל. טווחי העמודים למטה נגזרו ממה שכן נקרא, ולכן החבילה
-          כולה דורשת אישור אדם — לא חלק מסוים בה.
+          <span className="min-w-0 flex-1">
+            לא כל הקובץ נקרא: לפחות עמוד אחד לא הניב טקסט. קריאת OCR בתשלום מוגבלת
+            ל־<span className="num">{PAID_OCR_PAGE_CAP}</span> עמודים למסמך, ולכן בסריקה ארוכה יותר
+            העמודים שמעבר לכך אינם נקראים כלל. טווחי העמודים למטה נגזרו ממה שכן נקרא, ולכן החבילה
+            כולה דורשת אישור אדם — לא חלק מסוים בה.
+          </span>
         </Note>
       )}
 
       {currentPacket.page_count > AUTOMATIC_SPLIT_PAGE_CEILING && (
         <Note tone="idle" className="mt-4">
-          הקובץ ארוך מ־<span className="num">{AUTOMATIC_SPLIT_PAGE_CEILING}</span> עמודים — מעל
-          תקרת הפיצול האוטומטי, ולכן הפיצול נשאר לאישור אדם גם כשהמדיניות מופעלת וגם כשכל החלקים
-          זוהו בביטחון. זו אמירה על אורך הקובץ, לא על איכות הקריאה.
+          <span className="min-w-0 flex-1">
+            הקובץ ארוך מ־<span className="num">{AUTOMATIC_SPLIT_PAGE_CEILING}</span> עמודים — מעל
+            תקרת הפיצול האוטומטי, ולכן הפיצול נשאר לאישור אדם גם כשהמדיניות מופעלת וגם כשכל החלקים
+            זוהו בביטחון. זו אמירה על אורך הקובץ, לא על איכות הקריאה.
+          </span>
         </Note>
       )}
 

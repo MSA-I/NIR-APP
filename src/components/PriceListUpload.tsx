@@ -392,9 +392,11 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
       ) : preview ? (
         <div className="space-y-4">
           <Note tone={newRows.length || ambiguousRows.length ? 'await' : 'info'}>
-            זוהו <span className="num">{preview.rows.length}</span> שורות עבור {supplierName}: <span className="num">{matchedRows.length}</span> הותאמו למוצרים קיימים,
-            {' '}<span className="num">{newRows.length}</span> מוצרים חדשים{ambiguousRows.length ? <>, <span className="num">{ambiguousRows.length}</span> שמות לא חד־משמעיים (ידולגו)</> : null}.
-            {preview.skipped.length ? <> {preview.skipped.length} שורות דולגו.</> : null}
+            <span className="min-w-0 flex-1">
+              זוהו <span className="num">{preview.rows.length}</span> שורות עבור {supplierName}: <span className="num">{matchedRows.length}</span> הותאמו למוצרים קיימים,
+              {' '}<span className="num">{newRows.length}</span> מוצרים חדשים{ambiguousRows.length ? <>, <span className="num">{ambiguousRows.length}</span> שמות לא חד־משמעיים (ידולגו)</> : null}.
+              {preview.skipped.length ? <> {preview.skipped.length} שורות דולגו.</> : null}
+            </span>
           </Note>
           {preview.skipped.length > 0 && (
             <details className="text-sm">

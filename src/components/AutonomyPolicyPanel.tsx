@@ -121,8 +121,10 @@ function PolicyCard({
 
       <p className="text-sm text-ink-body">{definition.description}</p>
       <Note tone={policy.autonomy_enabled ? 'await' : 'info'}>
-        סף <span className="num">0.900</span> הוא ברירת מחדל שלא כוילה מול 50 מסמכים אמיתיים.
-        אפשר רק להחמיר אותו. {definition.warning}
+        <span className="min-w-0 flex-1">
+          סף <span className="num">0.900</span> הוא ברירת מחדל שלא כוילה מול 50 מסמכים אמיתיים.
+          אפשר רק להחמיר אותו. {definition.warning}
+        </span>
       </Note>
 
       <label>

@@ -114,15 +114,17 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
 
           {impact.blockers.length > 0 && (
             <Note tone="alert" role="status">
-              <p className="font-medium">לא ניתן לבטל את מה שנוצר מהמסמך:</p>
-              <ul className="mt-2 space-y-1">
-                {impact.blockers.map((blocker, index) => (
-                  <li key={index} className="flex items-start gap-2 text-sm">
-                    <ShieldAlert size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
-                    <span>{blocker.description}</span>
-                  </li>
-                ))}
-              </ul>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">לא ניתן לבטל את מה שנוצר מהמסמך:</p>
+                <ul className="mt-2 space-y-1">
+                  {impact.blockers.map((blocker, index) => (
+                    <li key={index} className="flex items-start gap-2 text-sm">
+                      <ShieldAlert size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+                      <span>{blocker.description}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </Note>
           )}
 

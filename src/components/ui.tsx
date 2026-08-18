@@ -276,7 +276,7 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
     : null;
   return (
     <div className="rounded-xl border border-line-soft bg-surface-sunken px-3 py-3">
-      <ol aria-label="שלבי התהליך" className="flex min-w-0 items-center overflow-x-auto pb-1">
+      <ol aria-label="שלבי התהליך" className="flex min-w-0 flex-wrap items-center gap-y-2 overflow-x-auto pb-1">
         {steps.map((step, index) => {
           const isCurrent = index === currentIndex;
           const isComplete = currentIndex >= 0 && index < currentIndex;
@@ -294,7 +294,7 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
             // at 390px as `horizontal overflow 33px`. It only showed once the LAST step became the
             // current one (a review-stage document); with an earlier step current the same span sat
             // 3px out and stayed inside the tolerance.
-            <li key={step.key} aria-current={isCurrent ? 'step' : undefined} className="relative flex min-w-fit flex-1 items-center">
+            <li key={step.key} aria-current={isCurrent ? 'step' : undefined} className="relative flex min-w-fit items-center sm:flex-1">
               <span className={`flex items-center gap-1.5 text-xs font-medium ${text}`}>
                 <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${marker}`} aria-hidden="true">
                   {isStopped ? <AlertTriangle size={12} /> : isComplete ? <Check size={12} /> : index + 1}
@@ -390,6 +390,13 @@ export function Disclosure({ title, count, tone = 'idle', summary, name, classNa
 // One box for the notice colours. `.note-*` lives in index.css so the whole system's
 // success/warning/info/error boxes recolour from a single place. The four semantic tones plus
 // `idle` for a neutral notice — a statement with no claim (audit round 2); `violet` is gone.
+/**
+ * A toned notice box. It is a flex ROW, so every child is a flex item -- including each run of
+ * raw text between two inline tags. Prose passed straight in is therefore shredded into
+ * one-word columns (measured on the settings screen at 390px, four columns of single words).
+ * Pass prose as a SINGLE child: `<Note tone="info"><span className="min-w-0 flex-1">…</span></Note>`.
+ * The row itself is for the icon / text / action layout the ~15 call sites that use it rely on.
+ */
 export function Note({ tone, children, className = '', role }: {
   tone: 'done' | 'await' | 'alert' | 'info' | 'idle'; children: ReactNode; className?: string; role?: 'alert' | 'status';
 }) {

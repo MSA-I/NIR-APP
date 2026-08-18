@@ -296,14 +296,18 @@ function PaymentConfirmationMatch({ interpretation }: {
         <div className="mt-3 space-y-2 text-sm">
           {matchedPayments.length > 0 && (
             <Note tone="done">
-              נמצא תשלום רשום תואם: {matchedPayments.map((payment) => `#${payment.number} מ־${payment.paid_date}`).join(', ')}.
-              המסמך הוא אסמכתא לתשלום שכבר קיים במערכת.
+              <span className="min-w-0 flex-1">
+                נמצא תשלום רשום תואם: {matchedPayments.map((payment) => `#${payment.number} מ־${payment.paid_date}`).join(', ')}.
+                המסמך הוא אסמכתא לתשלום שכבר קיים במערכת.
+              </span>
             </Note>
           )}
           {matchedPayments.length === 0 && matchedRequests.length > 0 && (
             <Note tone="await">
-              אין תשלום רשום בסכום הזה, אך יש דרישת תשלום מאושרת תואמת: {matchedRequests.map((request) => `#${request.number}`).join(', ')}.
-              ייתכן שההעברה בוצעה ועדיין לא נרשמה.
+              <span className="min-w-0 flex-1">
+                אין תשלום רשום בסכום הזה, אך יש דרישת תשלום מאושרת תואמת: {matchedRequests.map((request) => `#${request.number}`).join(', ')}.
+                ייתכן שההעברה בוצעה ועדיין לא נרשמה.
+              </span>
             </Note>
           )}
           {matchedPayments.length === 0 && matchedRequests.length === 0 && (

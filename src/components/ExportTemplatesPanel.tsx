@@ -227,8 +227,10 @@ export function ExportTemplatesPanel({ orgId }: { orgId: string }) {
 
             {draft.mapping.length === 0 ? (
               <Note tone="await" role="status">
-                לא נמצא אף סימון <span dir="ltr">{'{{שדה}}'}</span> בקובץ. סמנו בתאים שאתם רוצים
-                שיתמלאו — למשל <span dir="ltr">{'{{net_total}}'}</span> — והעלו שוב.
+                <span className="min-w-0 flex-1">
+                  לא נמצא אף סימון <span dir="ltr">{'{{שדה}}'}</span> בקובץ. סמנו בתאים שאתם רוצים
+                  שיתמלאו — למשל <span dir="ltr">{'{{net_total}}'}</span> — והעלו שוב.
+                </span>
               </Note>
             ) : (
               <div>

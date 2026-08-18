@@ -203,11 +203,11 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
       {(state.status === 'queued' || state.status === 'processing') && (
         <Note tone="info" role="status" className="flex items-center gap-2">
           <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" />
-          מזהה גבולות, מיישר פרספקטיבה ומסיר צללים ורעש. החילוץ יתחיל רק לאחר אישור התצוגה.
+          <span className="min-w-0 flex-1">מזהה גבולות, מיישר פרספקטיבה ומסיר צללים ורעש. החילוץ יתחיל רק לאחר אישור התצוגה.</span>
         </Note>
       )}
       {state.status === 'failed' && (
-        <Note tone="alert" role="alert">הסריקה נכשלה. {scanFailureMessage(state.last_error_code)}</Note>
+        <Note tone="alert" role="alert"><span className="min-w-0 flex-1">הסריקה נכשלה. {scanFailureMessage(state.last_error_code)}</span></Note>
       )}
       {(state.status === 'needs_corners' || state.status === 'failed' || (state.status === 'ready' && editingCorners)) && originalUrl && (
         <ScanCornerEditor

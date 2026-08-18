@@ -203,7 +203,7 @@ function ExceptionDetail({ row, canWrite, canOpenProcurement, onClose, onChanged
           </ul>
         )}
         {row.resolution_note && (
-          <Note tone="done">סיכום: {row.resolution_note}</Note>
+          <Note tone="done"><span className="min-w-0 flex-1">סיכום: {row.resolution_note}</span></Note>
         )}
         {links.length > 0 && (
           <div className="flex flex-wrap gap-2">
