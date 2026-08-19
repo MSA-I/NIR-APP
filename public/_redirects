@@ -1,5 +1,17 @@
-# The operator console is a second HTML entry in the same deploy. Named explicitly and ABOVE
-# the SPA catch-all so /operator can never be swallowed into the tenant shell by the rewrite.
-/operator /operator.html 200
-/operator/* /operator.html 200
+# The operator console is a second HTML entry in the same deploy, and it needs NO rule here.
+#
+# Cloudflare Pages serves `operator.html` at `/operator` by itself, and it redirects `/operator.html`
+# to `/operator` (308) to keep one canonical URL per page. A `200` rewrite whose target is that
+# `.html` file therefore lands on the redirect and comes straight back: measured on the live host on
+# 19.08.2026, `/operator` answered `308 -> /operator`, forever. The console was unreachable in
+# production from the moment it shipped, and the rule written to protect it was the cause.
+#
+# The fear the rule was answering -- that the SPA catch-all below swallows `/operator` into the
+# tenant shell -- does not happen: a request that matches a file in `dist` is served from `dist`,
+# which is the same reason `/assets/*.js` is not answered with `index.html`. Measured on a preview
+# deployment of this exact build: `/operator` serves `assets/operator-*.js`, `/` and `/login` serve
+# `assets/index-*.js`, and `/suppliers` still falls through to the tenant shell.
+#
+# Sub-routes need nothing either: src/operator/main.tsx mounts a HashRouter, so every operator route
+# lives after the `#` and never reaches the server.
 /* /index.html 200
