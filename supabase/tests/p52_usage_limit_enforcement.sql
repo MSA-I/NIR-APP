@@ -393,6 +393,71 @@ select pg_temp.p52_assert(
       and metric_key = 'ocr_pages.monthly') = 7,
   'a failed job clawed back pages the provider had already charged for');
 
+-- ===== The page quota refuses at upload, on pages the server already owns (0162) =====
+-- The new document's own page count is unknown until the provider reads it, so the check is on
+-- what has ALREADY been read this period. That bounds the overshoot to one document, which the
+-- worker caps at ExtractionLimits.max_ai_pages = 20 whatever the file contains.
+update plan_entitlements set unlimited = false, numeric_limit = 5
+where plan_key = (select plan_key from organization_subscriptions
+                  where org_id = '52000000-0000-4000-8000-000000000001')
+  and entitlement_key = 'ocr_pages.monthly';
+
+-- The extraction earlier in this suite already recorded 7 pages, which is over the limit of 5.
+select pg_temp.p52_assert(
+  (select quantity from private.usage_counters
+    where org_id = '52000000-0000-4000-8000-000000000001'
+      and metric_key = 'ocr_pages.monthly') = 7,
+  'the fixture does not start from the recorded pages');
+
+-- Give the document quota room back, so the refusal that follows can only be the page one.
+update plan_entitlements set unlimited = true, numeric_limit = null
+where plan_key = (select plan_key from organization_subscriptions
+                  where org_id = '52000000-0000-4000-8000-000000000001')
+  and entitlement_key = 'documents.monthly';
+
+select pg_temp.p52_as('62000000-0000-4000-8000-000000000001');
+set local role authenticated;
+do $$
+declare v_doc uuid; v_before integer; v_after integer;
+begin
+  select id into v_doc from public.documents
+  where org_id = '52000000-0000-4000-8000-000000000001' and file_name = 'second.pdf';
+  select count(*) into v_before from public.document_processing_jobs
+  where org_id = '52000000-0000-4000-8000-000000000001';
+  begin
+    perform public.enqueue_document_processing(v_doc);
+    raise exception 'expected the page quota to refuse a new document';
+  exception when raise_exception then
+    if sqlerrm <> 'plan_limit_reached' then raise; end if;
+  end;
+  select count(*) into v_after from public.document_processing_jobs
+  where org_id = '52000000-0000-4000-8000-000000000001';
+  if v_after <> v_before then
+    raise exception 'a page-refused enqueue still created % job row(s)', v_after - v_before;
+  end if;
+end
+$$;
+reset role;
+
+-- Back under the page quota, and the same document is accepted -- the refusal was the quota, not
+-- the document.
+update plan_entitlements set unlimited = true, numeric_limit = null
+where plan_key = (select plan_key from organization_subscriptions
+                  where org_id = '52000000-0000-4000-8000-000000000001')
+  and entitlement_key = 'ocr_pages.monthly';
+
+select pg_temp.p52_as('62000000-0000-4000-8000-000000000001');
+set local role authenticated;
+do $$
+declare v_doc uuid;
+begin
+  select id into v_doc from public.documents
+  where org_id = '52000000-0000-4000-8000-000000000001' and file_name = 'second.pdf';
+  perform public.enqueue_document_processing(v_doc);
+end
+$$;
+reset role;
+
 rollback;
 
 \echo 'p52_usage_limit_enforcement_passed'

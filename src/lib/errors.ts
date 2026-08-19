@@ -16,7 +16,7 @@ const PATTERNS: [RegExp, string][] = [
   // other says "nobody has told the system what you have", which is our problem, not the
   // customer's, and sending them to buy an upgrade for it would be wrong.
   [/plan_limit_reached/i,
-    'הגעתם למכסת המסמכים של החודש במסלול הנוכחי. המסמכים הקיימים והדוחות נשארים זמינים; לעיבוד מסמך חדש יש לשדרג מסלול או להמתין לתחילת תקופת החיוב הבאה.'],
+    'הגעתם למכסת החודש במסלול הנוכחי — מסמכים או עמודי סריקה. המסמכים הקיימים והדוחות נשארים זמינים; לעיבוד מסמך חדש יש לשדרג מסלול או להמתין לתחילת תקופת החיוב הבאה.'],
   [/plan_limit_unknown/i,
     'לא הוגדרה מכסת מסמכים למסלול של הארגון, ולכן העיבוד נעצר מחשש לחיוב לא מבוקר. זו הגדרה במערכת ולא חריגה שלכם — יש לפנות לתמיכה.'],
   [/not_platform_capability/i,
