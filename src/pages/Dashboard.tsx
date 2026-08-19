@@ -471,7 +471,7 @@ export default function Dashboard() {
 
     const [
       ordersRes, invoicesRes, paymentsRes, exceptionsRes, poItemsRes, priceUpRes,
-      reqItemsRes, offersRes, deliveriesRes, snapshotRes,
+      reqItemsRes, offersRes, deliveriesRes, snapshotRes, supplierCountRes,
     ] = await Promise.all([
       // recent orders (8 weeks) — purchased today/week/month + the weekly series. created_at is the
       // time axis, non-draft/cancelled the filter, at snapshot prices (OPEN-DECISIONS #4, locked).
@@ -492,6 +492,12 @@ export default function Dashboard() {
       // expected_date rows are excluded by the gte and surfaced as a count from openPos instead.
       fetchAll((from, to) => supabase.from('purchase_orders').select('id, number, status, expected_date, supplier_id, supplier:suppliers(name), items:purchase_order_items(qty, product:products(name))').in('status', ['sent', 'confirmed', 'partial']).gte('expected_date', todayISO).lte('expected_date', tomorrowISO).order('expected_date').order('id').range(from, to)),
       supabase.rpc('management_dashboard_snapshot', { p_today: todayISO }),
+      // First run or a working business? Zero suppliers is the honest test: no order, invoice,
+      // price or receipt can exist without one, and the setup wizard itself puts suppliers before
+      // products. Deriving emptiness from "all KPIs are zero" would also flag a real business in
+      // a quiet month. HEAD + exact count — no rows cross the wire, and it rides the same
+      // Promise.all, so it costs no extra round trip.
+      supabase.from('suppliers').select('id', { count: 'exact', head: true }).is('deleted_at', null),
     ]);
 
     const orders = ordersRes as unknown as { created_at: string; items: { qty: number; unit_price: number }[] }[];
@@ -667,6 +673,7 @@ export default function Dashboard() {
 
     return {
       fetchedAt: new Date(),   // query-completion time → drives the "עודכן ב-" stamp
+      firstRun: (supplierCountRes.count ?? 0) === 0,
       // אספקות היום ומחר — split by day here so the card only renders. noDateCount comes from
       // openPos (already fetched): open orders that carry no expected_date at all.
       deliveries: {
@@ -773,6 +780,22 @@ export default function Dashboard() {
         <Note tone="alert" className="flex items-center justify-between gap-3">
           <span>{error}</span>
           <button className="btn-ghost min-h-11 shrink-0 whitespace-nowrap" onClick={() => void refetch()}>נסה שוב</button>
+        </Note>
+      )}
+
+      {/* First run. The setup wizard has always existed, but its only doors were the account menu
+          and Settings — where a person looks for settings, not for "how do I start". A brand-new
+          owner used to land on an empty control centre with nothing telling them why it is empty
+          or what to do next. Owner only: /onboarding is Guard roles={['owner']}, so office must
+          not see a link it cannot open. It sits OUTSIDE the .dash-enter grid on purpose — the
+          quality gate pins the heading order inside it. */}
+      {data?.firstRun && profile?.role === 'owner' && (
+        <Note tone="info" className="flex flex-wrap items-center justify-between gap-3">
+          <span className="min-w-0 flex-1">
+            עדיין לא הוגדרו ספקים, ולכן המסכים שלמטה ריקים. אשף ההקמה ממלא קטגוריות, ספקים, מוצרים
+            ומחירון — ידנית או מקובץ Excel קיים — ואפשר לעצור ולהמשיך בכל שלב.
+          </span>
+          <Link to="/onboarding" className="btn-primary min-h-11 shrink-0 whitespace-nowrap">פתיחת אשף ההקמה</Link>
         </Note>
       )}
 
