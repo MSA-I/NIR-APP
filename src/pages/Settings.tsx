@@ -6,7 +6,7 @@ import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageHeader, SkeletonCards, useToast, ErrorNote, Note, DataTable, StatusBadge, ConfirmDialog, Modal, type Column } from '../components/ui';
+import { PageHeader, SkeletonCards, useToast, ErrorNote, Note, DataTable, Disclosure, StatusBadge, ConfirmDialog, Modal, type Column } from '../components/ui';
 import { ExportTemplatesPanel } from '../components/ExportTemplatesPanel';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVITATION_STATUS } from '../lib/status';
@@ -286,8 +286,12 @@ export default function Settings() {
   }
 
   function openRoleChange(u: Profile) {
-    if (!isActiveRole(u.role)) return;
-    setNextRole(u.role);
+    // A roster row opens on its own role, exactly as before. A historical row has no assignable
+    // role to preselect, so it opens on the default — otherwise the attention strip's "move to an
+    // active role" would be a button that does nothing, which is worse than no strip at all.
+    // `manage_profile_access` stays the boundary either way: it refuses any p_role outside the
+    // three active ones, and refuses a supplier-linked profile whatever the requested role.
+    setNextRole(isActiveRole(u.role) ? u.role : 'office');
     setRoleReason('');
     setRoleTarget(u);
   }
@@ -399,8 +403,51 @@ export default function Settings() {
     },
   ];
 
+  /**
+   * The two row actions, defined once and rendered by both the roster and the attention strip.
+   * The gates are the existing ones, unchanged: only an owner acting on somebody else sees them,
+   * a deactivated row loses "שינוי תפקיד", and re-activation is offered only for a role the
+   * product still assigns — which is what keeps a retired account from being switched back on.
+   */
+  function rowActions(u: Profile) {
+    if (!canWrite || u.id === profile?.id) return null;
+    return (
+      <div className="flex flex-wrap gap-1">
+        {u.active && (
+          <button className="btn-ghost py-1! text-xs" onClick={() => openRoleChange(u)}>שינוי תפקיד</button>
+        )}
+        {(u.active || (isActiveRole(u.role) && ASSIGNABLE_ROLES.includes(u.role))) && (
+          <button className="btn-ghost py-1! text-xs" onClick={() => setAccessTarget(u)}>{u.active ? 'השבתה' : 'הפעלה'}</button>
+        )}
+      </div>
+    );
+  }
+
   if (loading) return <SkeletonCards count={3} cols={3} title />;
   if (error) return <ErrorNote message={error} />;
+
+  /**
+   * One profiles query, three surfaces — and the archive predicate is deliberately a pair of
+   * columns the system already has, not a new `archived_at`.
+   *
+   * `0133` makes the fourth quadrant — `active = true` with a retired role — unrepresentable:
+   * `manage_profile_access` raises `account_role_retired` on any attempt to activate such a
+   * profile, `create_invitation` and `accept_invitation` refuse the role outright, and
+   * `auth_role()` resolves it to NULL so the sign-in is refused besides. With that quadrant
+   * closed, `!isActiveRole(role) && !active` IS "archived". An `archived_at` column would be a
+   * second answer to a question the enum guard already settles, and two answers drift: the day
+   * they disagree, nobody can say which one the roster should believe. `profiles` carries no
+   * soft-delete column at all — `active` is the whole lifecycle it stores.
+   */
+  const roster = users?.filter((u) => isActiveRole(u.role)) ?? [];
+  /**
+   * Empty against today's data — every retired-role profile in production is already inactive —
+   * and kept anyway. This is the one state an owner has to resolve by hand, so a screen that
+   * dropped it would hide the defect rather than report it, and a tenant could still arrive here
+   * from a profile row written before `0133` closed the door.
+   */
+  const historicalActive = users?.filter((u) => !isActiveRole(u.role) && u.active) ?? [];
+  const archived = users?.filter((u) => !isActiveRole(u.role) && !u.active) ?? [];
 
   return (
     <div className="space-y-5 max-w-3xl">
@@ -541,30 +588,63 @@ export default function Settings() {
         <table className="w-full">
           <thead className="table-head"><tr><th scope="col" className="th">שם</th><th scope="col" className="th">תפקיד</th><th scope="col" className="th">טלפון</th><th scope="col" className="th">סטטוס</th><th scope="col" className="th"><span className="sr-only">פעולות</span></th></tr></thead>
           <tbody className="divide-y divide-line-soft">
-            {users?.map((u) => (
+            {roster.map((u) => (
               <tr key={u.id}>
                 <td className="td font-medium">{u.full_name}{u.id === profile?.id && <span className="text-xs text-ink-muted ms-2">(אתה)</span>}</td>
                 <td className="td">{roleLabels[u.role]}</td>
                 <td className="td" dir="ltr">{u.phone ?? '—'}</td>
                 <td className="td">{u.active ? <span className="badge-done">פעיל</span> : <span className="badge-idle">מושבת</span>}</td>
-                  <td className="td">
-                    {canWrite && u.id !== profile?.id && (
-                      <div className="flex flex-wrap gap-1">
-                        {u.active && (
-                          <button className="btn-ghost py-1! text-xs" onClick={() => openRoleChange(u)}>שינוי תפקיד</button>
-                        )}
-                        {(u.active || (isActiveRole(u.role) && ASSIGNABLE_ROLES.includes(u.role))) && (
-                          <button className="btn-ghost py-1! text-xs" onClick={() => setAccessTarget(u)}>{u.active ? 'השבתה' : 'הפעלה'}</button>
-                        )}
-                      </div>
-                    )}
-                </td>
+                <td className="td">{rowActions(u)}</td>
               </tr>
             ))}
           </tbody>
         </table>
         </div>
+        {historicalActive.length > 0 && (
+          <div className="border-t border-line-soft p-4">
+            <Note tone="await" role="status">
+              <span className="min-w-0 flex-1">
+                תפקיד היסטורי — יש להעביר לתפקיד פעיל או להשבית. החשבונות האלה אינם יכולים להיכנס למערכת, והם נשארים כאן עד שיוכרעו.
+              </span>
+            </Note>
+            <ul className="mt-3 divide-y divide-line-soft">
+              {historicalActive.map((u) => (
+                <li key={u.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                  <span className="font-medium text-ink">{u.full_name}</span>
+                  <span className="text-sm text-ink-muted">{roleLabels[u.role] ?? u.role}</span>
+                  <span className="ms-auto">{rowActions(u)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
+
+      {/* חוק החשיפה המדורגת: an account that closed is history, and history is read-only. The
+          fold keeps it out of the roster's way while leaving it findable — including by
+          find-in-page, which a native <details> still answers. */}
+      {archived.length > 0 && (
+        <div className="card overflow-hidden">
+          <Disclosure title="ארכיון משתמשים" count={archived.length}
+            summary="תפקידים שפרשו מהמוצר — לקריאה בלבד">
+            <div className="overflow-x-auto [contain:layout]" role="region" aria-label="טבלת ארכיון משתמשים" tabIndex={0}>
+              <table className="w-full">
+                <thead className="table-head"><tr><th scope="col" className="th">שם</th><th scope="col" className="th">תפקיד</th><th scope="col" className="th">טלפון</th><th scope="col" className="th">סטטוס</th></tr></thead>
+                <tbody className="divide-y divide-line-soft">
+                  {archived.map((u) => (
+                    <tr key={u.id}>
+                      <td className="td font-medium">{u.full_name}</td>
+                      <td className="td">{roleLabels[u.role] ?? u.role}</td>
+                      <td className="td" dir="ltr">{u.phone ?? '—'}</td>
+                      <td className="td"><span className="badge-idle">מושבת</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Disclosure>
+        </div>
+      )}
 
       {canWrite && <div className="card card-pad space-y-4">
         <div>
