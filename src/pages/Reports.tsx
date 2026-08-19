@@ -581,7 +581,7 @@ export default function Reports() {
                   at 9mm margins leaves 279mm, and left to itself the browser hands ספק half of it
                   and squeezes every figure. On screen the columns stay auto. */}
               <colgroup>
-                <col className="print:w-[17%]" /><col className="print:w-[8%]" /><col className="print:w-[7%]" />
+                <col className="print:w-[16%]" /><col className="print:w-[9%]" /><col className="print:w-[7%]" />
                 <col className="print:w-[8%]" /><col className="print:w-[9%]" /><col className="print:w-[8%]" />
                 <col className="print:w-[9%]" /><col className="print:w-[9%]" /><col className="print:w-[9%]" />
                 <col className="print:w-[8%]" /><col className="print:w-[8%]" />
