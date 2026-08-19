@@ -738,7 +738,7 @@ export default function NewOrder() {
         </div>
         <div className="flex flex-col items-stretch gap-1 sm:items-end">
           <div className="flex flex-wrap gap-2">
-            {(draftId || cart.length > 0) && <button type="button" className="btn-ghost text-alert-solid" disabled={busy} onClick={() => setCancelOpen(true)}><XCircle size={15} /> ביטול טיוטה</button>}
+            {(draftId || cart.length > 0) && <button type="button" className="btn-ghost text-alert-fg" disabled={busy} onClick={() => setCancelOpen(true)}><XCircle size={15} /> ביטול טיוטה</button>}
             <button type="button" className="btn-primary" disabled={busy || !cart.length || split.blocked.length > 0} onClick={() => void goToSummary()}>
               <CheckCircle2 size={15} /> סקירה ואישור
             </button>

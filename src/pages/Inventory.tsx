@@ -103,7 +103,7 @@ function StockStat({ title, value, sub, tone = 'idle', onClick }: {
   return onClick
     ? (
       <button type="button" onClick={onClick}
-        className={`${shared} w-full cursor-pointer transition-colors hover:bg-action-wash active:bg-action-wash/70`}>
+        className={`${shared} w-full cursor-pointer transition-colors hover:bg-surface-hover active:bg-surface-selected`}>
         {body}
       </button>
     )
@@ -355,7 +355,7 @@ export default function Inventory() {
           the summary row as an alert badge, and the table keeps `error` so its body can never
           fall through to "עדיין לא נרשמו תנועות" over a load that failed (gate B30). */}
       <details className="group border-y border-line-soft" aria-labelledby="inventory-movements-title">
-        <summary className="-mx-2 flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 rounded-lg px-2 py-2.5 hover:bg-action-wash active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+        <summary className="-mx-2 flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 rounded-lg px-2 py-2.5 hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
           <h2 id="inventory-movements-title" className="section-title">תנועות אחרונות</h2>
           {movements.error
             ? <span className="badge-alert">שגיאה בטעינת התנועות</span>

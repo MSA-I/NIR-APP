@@ -11,9 +11,10 @@
 //
 // Colors: the metric-tile value colors map to the settled semantic tokens, and since the 2026-08-02
 // polish sweep the tiles are also *keyed* by that vocabulary (ScoreTone = status.ts's Tone) rather
-// than by colour names. The star glyphs (RatingStars) and the price trend line (PriceSparkline) stay
-// on raw utilities/hex on purpose: they are a rating affordance and a direction-of-change, not status
-// claims, so the semantic tokens would misrepresent them.
+// than by colour names. The star glyphs (RatingStars) and the price trend line (PriceSparkline) still
+// stay off the tone vocabulary on purpose — they are a rating affordance and a direction-of-change,
+// not status claims — but neither leans on hue any more: the unfilled star carries a 3:1 outline and
+// the sparkline states its direction in an aria-label (colour-system sweep, 19.08.2026).
 
 import { LineChart, Line } from 'recharts';
 import { Star } from 'lucide-react';
@@ -81,6 +82,15 @@ export function Scorecard({ items }: { items: ScoreItem[] }) {
 }
 
 /**
+ * An unfilled star is a graphical control boundary, so it needs 3:1 like any other (WCAG 1.4.11).
+ * On ink-ghost it measured 2.14 against the card, and the filled-vs-unfilled step was 1.27 — under
+ * deuteranopia, amber against warm gray at that distance is one shape repeated five times.
+ * line-strong measures 3.42 / 3.20 / 3.06 on card, canvas and sunken, and the state now separates
+ * by FILL rather than by hue: solid amber against an outline is legible without colour at all.
+ */
+const EMPTY_STAR = 'text-line-strong';
+
+/**
  * Rating display / editor. Read-only when `onChange` is omitted (one amber glyph per filled
  * star). Interactive variant is a keyboard-accessible radiogroup; the "נקה" button and star 0
  * both mean "clear" — the caller maps 0 to null.
@@ -96,8 +106,11 @@ export function RatingStars({ value, onChange, label = 'דירוג ספק' }: { 
         title={value != null ? `דירוג ${value} מתוך 5` : 'לא דורג'}>
         {stars.map((n) => (
           <Star key={n} size={15} aria-hidden="true"
-            className={value != null && n <= value ? 'fill-star text-star' : 'text-ink-ghost'} />
+            className={value != null && n <= value ? 'fill-star text-star' : EMPTY_STAR} />
         ))}
+        {/* The figure in plain sight, not only in the aria-label: five glyphs is a counting task,
+            and "4 vs 5 filled" is the slowest possible way to read a number the row already knows. */}
+        {value != null && <span className="num ms-1 text-xs text-ink-muted" aria-hidden="true">{value}</span>}
       </span>
     );
   }
@@ -105,11 +118,11 @@ export function RatingStars({ value, onChange, label = 'דירוג ספק' }: { 
   return (
     <span role="radiogroup" aria-label={label} className="inline-flex items-center gap-0.5">
       {stars.map((n) => (
-        <label key={n} className="cursor-pointer rounded-sm p-0.5 leading-none focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-action">
+        <label key={n} className="cursor-pointer rounded-sm p-0.5 leading-none focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus">
           <input className="sr-only" type="radio" name={groupName} value={n} checked={value === n}
             aria-label={`${n} כוכבים`} onChange={() => onChange(n)} />
           <Star size={20} aria-hidden="true"
-            className={value != null && n <= value ? 'fill-star text-star' : 'text-ink-ghost hover:text-star-hover'} />
+            className={value != null && n <= value ? 'fill-star text-star' : `${EMPTY_STAR} hover:text-star-hover`} />
         </label>
       ))}
       {value != null && (
@@ -138,8 +151,16 @@ export function PriceSparkline({ points }: { points: number[] }) {
   const t = chartTheme();
   const stroke = last > first ? t.trendUp : last < first ? t.trendDown : t.flat;
   const data = points.map((price, i) => ({ i, price }));
+  // The stroke hue was the ONLY carrier of "this went up": 96×28 with no axes, no dots, no
+  // tooltip and no label. Rose against emerald is the classic red-green pair, and this one had
+  // no fallback at all — so the direction is now stated in words, like every other chart's
+  // aria-label. Percent, not currency: the component receives bare numbers by design.
+  const pct = first > 0 ? ((last - first) / first) * 100 : null;
+  const direction = last > first ? 'עלה' : last < first ? 'ירד' : 'ללא שינוי';
+  const magnitude = pct != null && Math.abs(pct) >= 0.05 ? ` ב-${Math.abs(pct).toFixed(1)}%` : '';
   return (
-    <span dir="ltr" className="inline-block align-middle">
+    <span dir="ltr" className="inline-block align-middle" role="img"
+      aria-label={`מגמת מחיר: ${direction}${magnitude} לאורך ${points.length} שינויי מחיר`}>
       <LineChart width={96} height={28} data={data} margin={{ top: 4, right: 2, bottom: 4, left: 2 }}>
         <Line type="stepAfter" dataKey="price" stroke={stroke} strokeWidth={1.5} dot={false} isAnimationActive={false} />
       </LineChart>

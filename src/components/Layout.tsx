@@ -344,10 +344,10 @@ export default function Layout() {
     }`
     : surface === 'panel'
       ? `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
-        isActive ? 'bg-action text-white font-medium' : 'text-ink-body hover:bg-action-wash hover:text-ink'
+        isActive ? 'bg-action text-on-solid font-medium' : 'text-ink-body hover:bg-surface-hover hover:text-ink'
       }`
       : `relative flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
-        isActive ? 'bg-action text-white font-medium' : 'text-ink-soft hover:bg-action-wash hover:text-ink'
+        isActive ? 'bg-action text-on-solid font-medium' : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
       }`);
 
   /* Section identity in navigation (T7.2). The floating pill is TEXT-only (the reference's), so
@@ -404,7 +404,7 @@ export default function Layout() {
           link, and repeating it would make a screen reader say the brand twice. */}
       <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
         onClick={() => { if (mobileOpen) closeMobileMenu(); }}
-        className="flex items-center gap-3 border-b border-line-soft px-4 py-4 pe-12 hover:bg-action-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset lg:pe-4">
+        className="flex items-center gap-3 border-b border-line-soft px-4 py-4 pe-12 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset lg:pe-4">
         <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="40" height="40"
           className="size-10 shrink-0 rounded-lg bg-white object-contain p-0.5 ring-1 ring-line-soft" />
         <div className="min-w-0">
@@ -416,7 +416,7 @@ export default function Layout() {
         {[...displaySections, ...(stickyFooter || footerItems.length === 0 ? [] : [{ section: 'החשבון והמערכת', items: footerItems }])].map((s, i) => (
           s.collapsible && !expandGroups ? (
             <details key={`${s.section}-${location.pathname}`} className="group" open={s.items.some((item) => isRouteFamilyActive(location.pathname, item.to)) || undefined}>
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-3 text-xs font-semibold text-ink-muted hover:bg-action-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-3 text-xs font-semibold text-ink-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
                 {s.section}<ChevronDown size={15} aria-hidden="true" className="transition-transform group-open:rotate-180" />
               </summary>
               <div className="mt-0.5 space-y-0.5">{navLinks(s.items, { surface: 'panel' })}</div>
@@ -458,7 +458,7 @@ export default function Layout() {
      oceanic pill too — the trigger of the opened panel is the blue marker. */
   const groupTriggerCls = (active: boolean, open: boolean) =>
     `relative flex min-h-10 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
-      active || open ? 'bg-action text-white font-medium' : 'text-ink-soft hover:bg-action-wash hover:text-ink'
+      active || open ? 'bg-action text-on-solid font-medium' : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
     }`;
   const topNavGroup = (s: NavSection) => {
     const open = openGroup === s.section;
@@ -494,7 +494,7 @@ export default function Layout() {
     <div className="relative">
       <button type="button" id="top-nav-group-account" aria-expanded={accountOpen}
         aria-label={`תפריט החשבון של ${profile?.full_name || 'המשתמש'}`}
-        className={`grid size-10 place-items-center rounded-full bg-action text-sm font-medium text-white shadow-card transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${accountOpen ? 'scale-95' : 'hover:scale-105'}`}
+        className={`grid size-10 place-items-center rounded-full bg-action text-sm font-medium text-on-solid shadow-card transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${accountOpen ? 'scale-95' : 'hover:scale-105'}`}
         onClick={() => setOpenGroup(accountOpen ? null : 'account')}>
         <span aria-hidden="true">{initials}</span>
       </button>
@@ -505,7 +505,7 @@ export default function Layout() {
         <div className="text-sm font-medium text-ink">{profile?.full_name}</div>
         <div className="text-xs text-ink-muted">{role ? roleLabels[role] : ''}{orgName ? ` · ${orgName}` : ''}</div>
         {footerItems.length > 0 && <div className="mt-2 space-y-0.5">{navLinks(footerItems, { surface: 'panel' })}</div>}
-        <button className="mt-2 flex min-h-11 w-full items-center gap-1.5 rounded-lg px-3 text-sm text-ink-soft hover:bg-action-wash hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        <button className="mt-2 flex min-h-11 w-full items-center gap-1.5 rounded-lg px-3 text-sm text-ink-soft hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           onClick={() => void handleSignOut()}>
           <LogOut size={14} /> התנתקות
         </button>
@@ -523,7 +523,7 @@ export default function Layout() {
           jump past the navigation bar straight to the page. Hidden until focused, then styled
           like a primary button at the logical start, z-above the top bar (z-40). */}
       <a href="#main"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:start-3 focus:z-50 focus:rounded-lg focus:bg-action focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-action-line">
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:start-3 focus:z-50 focus:rounded-lg focus:bg-action focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-on-solid focus:shadow-menu focus:outline-none focus:ring-2 focus:ring-focus">
         דלג לתוכן
       </a>
       {/* Desktop navigation (T7.2, reference layout) — no bar. Floating pills on the glowing
@@ -593,7 +593,7 @@ export default function Layout() {
           <NotificationBell />
           <FeedbackButton />
           {canSearch && (
-            <button className="grid size-[44px] shrink-0 place-items-center rounded-full text-ink-soft transition-colors hover:bg-action-wash hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
+            <button className="grid size-[44px] shrink-0 place-items-center rounded-full text-ink-soft transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
               aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={21} /></button>
           )}
         </div>

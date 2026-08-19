@@ -91,13 +91,13 @@ export default function Login() {
             <div className="relative z-10 flex h-full flex-col justify-between p-6 lg:p-10">
               <div className="flex items-center gap-2.5">
                 <img src="/brand/inplace-symbol-paper.svg" alt="" width="28" height="28" className="size-7" />
-                <h1 className="text-xl font-semibold text-white">{APP_NAME}</h1>
+                <h1 className="text-xl font-semibold text-on-solid">{APP_NAME}</h1>
               </div>
               <div>
                 {/* shell-ink, never -soft or -dim: on the ramp's brightest stop those measure
                     3.62:1 and worse, while shell-ink holds 4.83:1. */}
                 <p className="text-shell-ink text-xs">כניסה מאובטחת לסביבת העבודה</p>
-                <p className="mt-2 text-2xl leading-tight font-semibold text-white lg:text-3xl">
+                <p className="mt-2 text-2xl leading-tight font-semibold text-on-solid lg:text-3xl">
                   רכש, חשבוניות ותשלומים במקום אחד
                 </p>
               </div>

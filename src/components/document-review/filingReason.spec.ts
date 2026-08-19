@@ -13,8 +13,15 @@ import type { ReviewSnapshot } from './model';
 
 const migrationsDir = join(process.cwd(), 'supabase', 'migrations');
 
-/** Every `v_reason_code := '<code>'` the apply command can assign, read from the SQL itself. */
-function ladderCodes(): string[] {
+/**
+ * Every `v_reason_code := '<code>'` the apply command can assign, read from the SQL itself.
+ *
+ * Scanned ONCE, at module load, into a constant — not per assertion. The directory is ~150 SQL
+ * files, this file called it four times, and a whole scan inside an `it()` counts against the 5s
+ * testTimeout: with the full suite running it measured 12s and failed on time, not on content.
+ * The SQL cannot change mid-run, so this is a fixture, and a fixture belongs outside the clock.
+ */
+function readLadderCodes(): string[] {
   const codes = new Set<string>();
   for (const file of readdirSync(migrationsDir).filter((f) => f.endsWith('.sql'))) {
     const sql = readFileSync(join(migrationsDir, file), 'utf8');
@@ -24,6 +31,9 @@ function ladderCodes(): string[] {
   }
   return [...codes].sort();
 }
+
+const LADDER_CODES = readLadderCodes();
+const ladderCodes = () => LADDER_CODES;
 
 const snapshotWith = (filings: ReviewSnapshot['filings']) =>
   ({ filings } as unknown as ReviewSnapshot);

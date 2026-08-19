@@ -85,7 +85,7 @@ export default function Alerts() {
           // Deliberately not a row of zeros: "nothing found" is a different statement from
           // "we measured seven things and they were all zero", and only the first is true.
           <div className="card card-pad flex items-center gap-3 text-sm text-ink-soft">
-            <ShieldCheck size={18} className="text-done-solid shrink-0" />
+            <ShieldCheck size={18} className="text-done-fg shrink-0" />
             לא נמצאו התראות פתוחות בבדיקות שהמערכת יודעת להריץ.
           </div>
         ) : shown.length > 0 ? (

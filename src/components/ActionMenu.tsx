@@ -137,7 +137,10 @@ export function ActionMenu({ items, label = 'פעולות' }: { items: ActionMen
               className={`flex min-h-11 w-full items-center gap-2 px-3 py-2 text-sm text-start transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus ${
                 it.disabled
                   ? 'text-ink-ghost cursor-default'
-                  : `${it.tone === 'danger' ? 'text-alert-fg' : 'text-ink-body'} hover:bg-action-wash focus:bg-surface-sunken active:bg-surface-sunken cursor-pointer`
+                  // Keyboard focus IS the chosen item here, so it wears the selected rung rather
+                  // than the sunken cream: with hover now tinted, a cream focus and a tinted hover
+                  // sat at the same lightness in different hues and read as one state.
+                  : `${it.tone === 'danger' ? 'text-alert-fg' : 'text-ink-body'} hover:bg-surface-hover focus:bg-surface-selected active:bg-surface-selected cursor-pointer`
               }`}
               onClick={() => {
                 if (it.disabled) return;

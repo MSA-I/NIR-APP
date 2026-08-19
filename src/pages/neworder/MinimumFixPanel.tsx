@@ -62,7 +62,7 @@ export default function MinimumFixPanel({
               <button
                 type="button"
                 key={optionKey(option, index)}
-                className="flex min-h-11 w-full items-center justify-between gap-3 border border-line px-3 py-2 text-start hover:bg-action-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
+                className="flex min-h-11 w-full items-center justify-between gap-3 border border-line px-3 py-2 text-start hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
                 onClick={() => onChoose(option)}
               >
                 <span className="min-w-0 text-sm font-medium text-ink-body">

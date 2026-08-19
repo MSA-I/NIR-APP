@@ -198,12 +198,16 @@ export function SpendBarChart({
 
 export type CategorySlice = { name: string; total: number };
 
-/* T7.1: the ramp is palette-derived, and its two teal steps are the closest pair — so adjacent
-   donut slices are assigned in the order [deep-teal, teal-mid, slate, teal-light]: the slate
-   step separates the two teals, and every adjacent pair crosses a family or a large lightness
-   band. "אחר" keeps bars[4] (bronze). ONE definition, used by both the arc Cell and the legend
-   swatch — the duplicated expression they had before was an unchecked contract. */
-const DONUT_ORDER = [0, 1, 3, 2] as const;
+/* Adjacent slices are assigned so that no neighbouring pair sits close in lightness. The ramp is
+   monochrome-sequential by owner decision (T7.3g, "לפי צבעי המערכת"), so lightness distance is the
+   only separation there is, and the order is the only lever that does not touch a single hue.
+   The previous order dated from T7.1's mixed ramp (a slate and a bronze step, since retired) and
+   left the last two neighbours at 1.65:1 — visually one wedge with a 2px gap in it.
+   Measured neighbour contrast, in draw order chart-1 → chart-3 → chart-4 → chart-2 → "אחר":
+     4.23 · 6.61 · 3.50 · 3.11 — every pair now clears 3:1.
+   "אחר" keeps bars[4]. ONE definition, used by both the arc Cell and the legend swatch — the
+   duplicated expression they had before was an unchecked contract. */
+const DONUT_ORDER = [0, 2, 3, 1] as const;
 function sliceColor(bars: string[], name: string, index: number) {
   return name === 'אחר' ? bars[4] : bars[DONUT_ORDER[index % DONUT_ORDER.length]];
 }
@@ -267,7 +271,7 @@ export function CategoryDonut({ slices, total, ariaLabel, emptyMessage, hrefFor,
             <li key={slice.name}>
               {href ? (
                 <Link to={href} aria-label={hrefLabel?.(slice) ?? slice.name} title={fmtMoneyExact(slice.total)}
-                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-1.5 text-action hover:bg-action-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-1.5 text-action hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
                   {swatch}
                   <span className="max-w-32 truncate">{slice.name}</span>
                   <span className="num text-ink-muted">{pct}%</span>

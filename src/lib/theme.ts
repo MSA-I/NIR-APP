@@ -8,7 +8,6 @@ type ChartTheme = {
   grid: string;
   tick: string;
   label: string;
-  tickStrong: string;
   trendUp: string;
   trendDown: string;
   flat: string;
@@ -27,7 +26,6 @@ export function chartTheme() {
       grid: v('--color-chart-grid'),
       tick: v('--color-chart-tick'),
       label: v('--color-chart-label'),
-      tickStrong: v('--color-chart-tick-strong'),
       trendUp: v('--color-trend-up-fg'),
       trendDown: v('--color-trend-down-fg'),
       flat: v('--color-ink-faint'),

@@ -167,7 +167,7 @@ export default function Admin() {
       render: (o) => (
         <div className="flex flex-wrap justify-end gap-1">
           <button
-            className={o.status === 'suspended' ? 'btn-secondary py-1! text-xs' : 'btn-ghost py-1! text-xs text-alert-solid'}
+            className={o.status === 'suspended' ? 'btn-secondary py-1! text-xs' : 'btn-ghost py-1! text-xs text-alert-fg'}
             onClick={() => setPending({ org: o, action: o.status === 'suspended' ? 'reactivate' : 'suspend' })}>
             {o.status === 'suspended' ? 'הפעלה מחדש' : 'השהיה'}
           </button>
