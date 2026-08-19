@@ -801,9 +801,23 @@ html { transition: --glow-x 0.45s ease-out, --glow-y 0.45s ease-out; }
   }
   .monthly-report { page: monthly-report; width: 100%; font-size: 9pt; }
   .monthly-report .report-table-wrap { overflow: visible !important; }
-  .monthly-report table { width: 100% !important; table-layout: auto; }
+  /* `fixed`, not `auto`: the invoice grid carries eleven columns on 279mm of A4 landscape, and
+     the auto algorithm sizes to content — it hands ספק whatever it asks for and crushes the
+     figures. Fixed makes the <colgroup> percentages in Reports.tsx binding. Print only; on
+     screen the same tables stay `auto`. */
+  .monthly-report table { width: 100% !important; table-layout: fixed; }
   .monthly-report th, .monthly-report td { white-space: normal !important; padding: 1.5mm 1.8mm !important; }
   .monthly-report .report-invoices { font-size: 8pt; }
+  /* A status pill is a screen affordance. On paper its padding and rounded fill spend width the
+     numbers need, and the fill may not print at all — so the status degrades to plain text.
+     No colour is set here: the badge simply inherits the row's ink. */
+  .monthly-report [class^='badge-'], .monthly-report [class*=' badge-'] {
+    background: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    font-size: inherit !important;
+    color: inherit !important;
+  }
   .monthly-report .card, .monthly-report table, .monthly-report tr { break-inside: avoid; }
 }
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { FileSpreadsheet, Printer, Send, CheckCircle2, LockKeyhole, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -6,11 +6,11 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { StatusBadge, useToast, ConfirmDialog, ErrorNote, PageHeader, SkeletonCards, Note, Modal } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
-import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
+import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
 import { addCalendarDays, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange, safeMonthISO } from '../lib/format';
 import { useParamState } from '../lib/useParamState';
 import { toHebrewError } from '../lib/errors';
-import { fetchAll } from '../lib/supabasePaging';
+import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { buildLockedMonthlyWorkbook, buildStyledMonthlyWorkbook, type MonthlyReportLabels, type MonthlyReportSnapshot } from '../lib/monthlyReport';
 import * as XLSX from 'xlsx';
 import { financialSupplierMap } from '../lib/financialSuppliers';
@@ -19,6 +19,18 @@ import {
   monthlyReportTemplateValues,
   renderConfiguredReportTemplate,
 } from '../lib/reportTemplateExport';
+
+/**
+ * What `invoice_balances` returns per invoice. Every one of these is COMPUTED at read time from
+ * the allocation tables — the constitution's rule that a balance is never stored. The row is read
+ * and displayed; it is never re-derived in the browser from payments or credits.
+ */
+interface InvoiceBalanceRow {
+  invoice_id: string;
+  paid_amount: number;
+  credited_amount: number;
+  balance: number;
+}
 
 function toSnapshotHebrewError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
@@ -103,13 +115,28 @@ export default function Reports() {
     ]);
     type SupplierLinked = { supplier_id: string | null };
     const linkedRows = [...rawInvoices, ...rawPayments, ...rawCredits, ...rawExceptions] as unknown as SupplierLinked[];
-    const suppliers = await financialSupplierMap(linkedRows.flatMap((row) => row.supplier_id ? [row.supplier_id] : []));
+    const invoiceIds = (rawInvoices as unknown as { id: string }[]).map((row) => row.id);
+    // שולם · זוכה · יתרה. The accountant reconciling a month needs to see what is still OPEN per
+    // invoice, and the balance is never a stored column: `invoice_balances` (0022) is the view over
+    // `p0_invoice_balance_rows()`, granted to `authenticated`, and the function itself scopes rows
+    // by `auth_org()` and `auth_role()` — so this returns exactly what the signed-in reader may
+    // see, nothing wider. Chunked because `.in()` has a URL-length ceiling.
+    // An invoice with no balance row keeps `null` and prints `—`; it never prints 0.
+    const [suppliers, balanceRows] = await Promise.all([
+      financialSupplierMap(linkedRows.flatMap((row) => row.supplier_id ? [row.supplier_id] : [])),
+      invoiceIds.length
+        ? fetchInChunks(invoiceIds, (chunk) => fetchAll<InvoiceBalanceRow>((from, to) => supabase.from('invoice_balances')
+          .select('invoice_id, paid_amount, credited_amount, balance')
+          .in('invoice_id', chunk).order('invoice_id').range(from, to)))
+        : Promise.resolve<InvoiceBalanceRow[]>([]),
+    ]);
+    const balances = new Map(balanceRows.map((row) => [row.invoice_id, row]));
     const supplier = (supplierId: string | null) => ({
       name: supplierId ? suppliers.get(supplierId)?.name ?? '—' : '—',
     });
     return {
-      invoices: (rawInvoices as unknown as (SupplierLinked & { id: string; invoice_number: string; invoice_date: string; total_amount: number; amount_before_vat: number; vat_amount: number; review_status: string; payment_status: string; export_status: string })[])
-        .map((row) => ({ ...row, supplier: supplier(row.supplier_id) })),
+      invoices: (rawInvoices as unknown as (SupplierLinked & { id: string; invoice_number: string; invoice_date: string; received_date: string | null; total_amount: number; amount_before_vat: number; vat_amount: number; review_status: string; payment_status: string; export_status: string; notes: string | null })[])
+        .map((row) => ({ ...row, supplier: supplier(row.supplier_id), balance: balances.get(row.id) ?? null })),
       payments: (rawPayments as unknown as (SupplierLinked & { id: string; number: number; paid_date: string; amount: number; method: string | null; reference: string | null })[])
         .map((row) => ({ ...row, supplier: supplier(row.supplier_id) })),
       credits: (rawCredits as unknown as (SupplierLinked & { id: string; number: number; reason: string; amount: number; status: string })[])
@@ -272,11 +299,18 @@ export default function Reports() {
   if (error && !data) return <ErrorNote message={error} />;
   if (!data) return <ErrorNote message="שגיאה" />;
 
+  // A column total is a claim that it sums the column. If even one invoice came back without a
+  // balance row, the sum would be a smaller number presented as the whole — so it becomes `—`.
+  const balancesComplete = data.invoices.every((i) => i.balance !== null);
   const totals = {
     invoices: data.invoices.reduce((s, i) => s + i.total_amount, 0),
     beforeVat: data.invoices.reduce((s, i) => s + i.amount_before_vat, 0),
     vat: data.invoices.reduce((s, i) => s + i.vat_amount, 0),
     paid: data.payments.reduce((s, p) => s + p.amount, 0),
+    // Distinct from `paid` above: that is money that LEFT this month, this is what has been
+    // allocated against these invoices whenever it was paid.
+    allocated: balancesComplete ? data.invoices.reduce((s, i) => s + (i.balance?.paid_amount ?? 0), 0) : null,
+    openBalance: balancesComplete ? data.invoices.reduce((s, i) => s + (i.balance?.balance ?? 0), 0) : null,
     unpaidCount: data.invoices.filter((i) => i.payment_status !== 'paid').length,
     unmatchedBank: data.bank.filter((b) => b.status === 'unmatched').length,
     suggestedBank: data.bank.filter((b) => b.status === 'suggested').length,
@@ -521,14 +555,19 @@ export default function Reports() {
                   </div>
                   <div className="num shrink-0 font-semibold text-ink-body">{fmtMoneyExact(i.total_amount)}</div>
                 </div>
+                {/* Four figures, not eleven. The wide grid below is where a month is reconciled;
+                    a phone card that grew to match it would be a table with extra steps. */}
                 <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                   <div><dt className="text-xs text-ink-muted">לפני מע״מ</dt><dd className="num mt-0.5">{fmtMoneyExact(i.amount_before_vat)}</dd></div>
                   <div><dt className="text-xs text-ink-muted">מע״מ</dt><dd className="num mt-0.5">{fmtMoneyExact(i.vat_amount)}</dd></div>
+                  <div><dt className="text-xs text-ink-muted">שולם</dt><dd className="num mt-0.5">{fmtMoneyExact(i.balance?.paid_amount)}</dd></div>
+                  <div><dt className="text-xs text-ink-muted">יתרה לתשלום</dt><dd className="num mt-0.5">{fmtMoneyExact(i.balance?.balance)}</dd></div>
                 </dl>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <StatusBadge meta={INVOICE_REVIEW_STATUS[i.review_status]} />
                   <StatusBadge meta={INVOICE_PAYMENT_STATUS[i.payment_status]} />
                 </div>
+                {i.notes && <p className="mt-3 break-words text-xs text-ink-muted">{i.notes}</p>}
               </li>
             ))}
             {!data.invoices.length && <li className="p-4 text-center text-sm text-ink-muted">אין חשבוניות בחודש זה</li>}
@@ -538,30 +577,73 @@ export default function Reports() {
           </ul>
           <div className="report-table-wrap hidden overflow-x-auto xl:block print:block">
             <table className="report-invoices w-full">
+              {/* Widths apply in PRINT only, where the table is `table-layout: fixed`: A4 landscape
+                  at 9mm margins leaves 279mm, and left to itself the browser hands ספק half of it
+                  and squeezes every figure. On screen the columns stay auto. */}
+              <colgroup>
+                <col className="print:w-[17%]" /><col className="print:w-[8%]" /><col className="print:w-[7%]" />
+                <col className="print:w-[8%]" /><col className="print:w-[9%]" /><col className="print:w-[8%]" />
+                <col className="print:w-[9%]" /><col className="print:w-[9%]" /><col className="print:w-[9%]" />
+                <col className="print:w-[8%]" /><col className="print:w-[8%]" />
+              </colgroup>
               <thead className="table-head"><tr>
                 <th scope="col" className="th">ספק</th><th scope="col" className="th">מס׳</th><th scope="col" className="th">תאריך</th>
+                <th scope="col" className="th">תאריך קליטה</th>
                 <th scope="col" className="th">לפני מע״מ</th><th scope="col" className="th">מע״מ</th><th scope="col" className="th">סה״כ</th>
+                <th scope="col" className="th">שולם</th><th scope="col" className="th">יתרה</th>
                 <th scope="col" className="th">בדיקה</th><th scope="col" className="th">תשלום</th>
               </tr></thead>
               <tbody className="divide-y divide-line-soft">
-                {data.invoices.map((i) => (
-                  <tr key={i.id}>
-                    <td className="td">{i.supplier.name}</td>
-                    <td className="td num" dir="ltr">{i.invoice_number}</td>
-                    <td className="td">{fmtDate(i.invoice_date)}</td>
-                    <td className="td num">{fmtMoneyExact(i.amount_before_vat)}</td>
-                    <td className="td num">{fmtMoneyExact(i.vat_amount)}</td>
-                    <td className="td num font-medium">{fmtMoneyExact(i.total_amount)}</td>
-                    <td className="td"><StatusBadge meta={INVOICE_REVIEW_STATUS[i.review_status]} /></td>
-                    <td className="td"><StatusBadge meta={INVOICE_PAYMENT_STATUS[i.payment_status]} /></td>
-                  </tr>
-                ))}
+                {data.invoices.map((i) => {
+                  const credited = i.balance?.credited_amount ?? 0;
+                  return (
+                    <Fragment key={i.id}>
+                      <tr>
+                        <td className="td">{i.supplier.name}</td>
+                        <td className="td">
+                          <span className="num" dir="ltr">{i.invoice_number}</span>
+                          {/* A mark, not a twelfth column: "הועברה לרו״ח" is one bit per invoice and
+                              a whole column of it would cost width the figures need. */}
+                          {i.export_status === 'sent' && (
+                            <span className="ms-1 text-done-fg" title={INVOICE_EXPORT_STATUS.sent.label}>
+                              <span aria-hidden="true">✓</span>
+                              <span className="sr-only">{INVOICE_EXPORT_STATUS.sent.label}</span>
+                            </span>
+                          )}
+                        </td>
+                        <td className="td">{fmtDate(i.invoice_date)}</td>
+                        <td className="td">{fmtDate(i.received_date)}</td>
+                        <td className="td num">{fmtMoneyExact(i.amount_before_vat)}</td>
+                        <td className="td num">{fmtMoneyExact(i.vat_amount)}</td>
+                        <td className="td num font-medium">{fmtMoneyExact(i.total_amount)}</td>
+                        <td className="td num">{fmtMoneyExact(i.balance?.paid_amount)}</td>
+                        <td className="td num">{fmtMoneyExact(i.balance?.balance)}</td>
+                        <td className="td"><StatusBadge meta={INVOICE_REVIEW_STATUS[i.review_status]} /></td>
+                        <td className="td"><StatusBadge meta={INVOICE_PAYMENT_STATUS[i.payment_status]} /></td>
+                      </tr>
+                      {/* Print-only second line. הערות is free text of any length — inside the grid it
+                          would either be truncated or take a column from the numbers. זוכה joins it
+                          when there is one, because without it סה״כ − שולם ≠ יתרה on the printed page
+                          and the accountant is left reconciling a sum that does not close. */}
+                      {(i.notes || credited > 0) && (
+                        <tr className="hidden print:table-row">
+                          <td className="td text-ink-muted" colSpan={11}>
+                            {credited > 0 && <span className="me-4">זוכה <span className="num">{fmtMoneyExact(credited)}</span></span>}
+                            {i.notes && <span className="break-words">הערות: {i.notes}</span>}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
               <tfoot><tr className="border-t-2 border-line font-semibold">
-                <th scope="row" className="td text-start font-semibold" colSpan={3}>סה״כ</th>
+                <th scope="row" className="td text-start font-semibold" colSpan={4}>סה״כ</th>
                 <td className="td num">{fmtMoneyExact(totals.beforeVat)}</td>
                 <td className="td num">{fmtMoneyExact(totals.vat)}</td>
                 <td className="td num">{fmtMoneyExact(totals.invoices)}</td>
+                <td className="td num">{fmtMoneyExact(totals.allocated)}</td>
+                <td className="td num">{fmtMoneyExact(totals.openBalance)}</td>
                 <td colSpan={2} />
               </tr></tfoot>
             </table>
