@@ -1236,7 +1236,7 @@ async function orderSupplierComparison(browser) {
     await goldPick.click();
     assert((await pinSave).ok(), 'pinning the cheapest supplier was not saved');
     await waitForSaved();
-    await comparison.getByRole('button', { name: 'בטל הצמדה' }).waitFor();
+    await comparison.getByRole('button', { name: 'חזרה לבחירה אוטומטית' }).waitFor();
     const draftUrl = page.url();
 
     await page.reload();
@@ -1245,7 +1245,7 @@ async function orderSupplierComparison(browser) {
     const supplierStep = page.getByRole('button', { name: /02.*ספקים וחלוקה/ });
     assert.equal(await supplierStep.getAttribute('aria-current'), 'step', 'draft did not restore supplier step');
     comparison = page.locator('section[aria-labelledby="supplier-comparison-title"]');
-    await comparison.getByRole('button', { name: 'בטל הצמדה' }).waitFor();
+    await comparison.getByRole('button', { name: 'חזרה לבחירה אוטומטית' }).waitFor();
     assert.equal(await comparison.getByRole('button', { name: `בחירת מאפה זהב עבור ${product}` }).getAttribute('aria-pressed'), 'true',
       'pinned cheapest supplier did not survive reload');
 
@@ -1261,12 +1261,12 @@ async function orderSupplierComparison(browser) {
     assert.match(await blocked.innerText(), /הצמדה לא תקפה · מינימום\s*2/, 'broken pin did not expose min_qty 2');
     const growBrokenPin = blocked.getByRole('button', { name: /^הגדל ל-\s*2/ });
     assert((await growBrokenPin.innerText()).includes('58.50'), 'broken-pin increase did not show the exact added cost');
-    await blocked.getByRole('button', { name: 'בטל הצמדה' }).waitFor();
+    await blocked.getByRole('button', { name: 'חזרה לבחירה אוטומטית' }).waitFor();
     assert(await page.getByRole('button', { name: /03.*סיכום ואישור/ }).isDisabled(), 'broken pin did not gate summary step');
     await captureOrderState('blocked-pin');
 
     const unpinSave = waitForDraftSave();
-    await blocked.getByRole('button', { name: 'בטל הצמדה' }).click();
+    await blocked.getByRole('button', { name: 'חזרה לבחירה אוטומטית' }).click();
     assert((await unpinSave).ok(), 'unpinning the broken supplier was not saved');
     await waitForSaved();
     await blocked.waitFor({ state: 'hidden' });
@@ -1361,7 +1361,7 @@ async function orderSupplierComparison(browser) {
     assert.equal(await bakeryPick.getAttribute('aria-pressed'), 'true', 'move-line did not pin the alternative supplier');
 
     const restoreAutomaticSave = waitForDraftSave();
-    await comparison.getByRole('button', { name: 'בטל הצמדה' }).click();
+    await comparison.getByRole('button', { name: 'חזרה לבחירה אוטומטית' }).click();
     assert((await restoreAutomaticSave).ok(), 'returning the moved line to automatic assignment was not saved');
     await waitForSaved();
     await splitSection.getByText('מאפה זהב', { exact: true }).waitFor();
