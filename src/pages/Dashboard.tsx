@@ -10,7 +10,7 @@ import {
   fmtMoneyExact, fmtMoneyRounded, fmtMonth, localDateKey, shiftCalendarMonth, startOfCalendarWeek,
   todayISO as businessTodayISO,
 } from '../lib/format';
-import { chartTheme } from '../lib/theme';
+import { comparisonSeries } from '../lib/theme';
 import { mergeWeeklyComparison, topCategoriesWithOther } from '../lib/dashboardSeries';
 import { CategoryDonut, ComparisonLineChart, CoverageRing, money, moneyShort, SpendBarChart, TrendSparkline } from '../components/charts';
 import { fetchAll } from '../lib/supabasePaging';
@@ -710,7 +710,6 @@ export default function Dashboard() {
 
   if (loading) return <DashboardSkeleton />;
 
-  const t = chartTheme();
   // T7.1 greeting-as-title (reference layout): time-of-day + first name. The screen NAME stays
   // "מרכז הבקרה" — in the meta line here and, via routePresentation, in navigation and the
   // browser title — so the greeting never desyncs the wayfinding catalogue. full_name can be ''
@@ -912,10 +911,12 @@ export default function Dashboard() {
                 {/* The series names ride the ends of their own lines now — no legend row. The
                     zero policy keeps the lines continuous, so a window with NO activity at all is
                     passed as [] to keep the honest empty state (two flat zero lines are not data). */}
-                {/* T7.3g: purchases = OCEANIC solid, payments = ONYX dashed — the two system
-                    darks, told apart by the dash (owner sketch), never by hue. */}
+                {/* The pairing lives in comparisonSeries(), not here. It used to be the two system
+                    darks (chart-1 + chart-4) told apart by the dash alone — 1.56:1 between the two
+                    lines, which is to say the colour contributed nothing and the dash carried the
+                    whole distinction. Owner decision 19.08.2026: spend both carriers. */}
                 <ComparisonLineChart points={weeklyHasActivity ? weeklyComparison : []} xKey="week"
-                  series={[{ key: 'purchases', name: 'רכש', color: t.bars[0] }, { key: 'payments', name: 'תשלומים', color: t.bars[3], dash: true }]}
+                  series={comparisonSeries({ key: 'purchases', name: 'רכש' }, { key: 'payments', name: 'תשלומים' })}
                   ariaLabel={weeklyAria} emptyMessage="אין רכש או תשלומים בשמונת השבועות האחרונים" />
               </section>
             </div>

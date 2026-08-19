@@ -19,6 +19,12 @@
  *      `rgb()`/`hsl()` are barred everywhere in the file — the palette is oklch, and the five
  *      shadow tokens were hand-transcribed Onyx/Oceanic in exactly that notation.
  *
+ *   3. Elevation, same rule one layer over. Tailwind's stock `shadow-{sm..2xl}` are neutral black
+ *      and are NOT tokens: the modal panel and the toast wore them while every other raised
+ *      surface derived its shadow from `--color-shell`/`--color-action`, so a brand repaint would
+ *      have left the two highest surfaces in the product behind. `shadow-none` stays legal — it
+ *      removes a shadow rather than inventing one.
+ *
  * Third-party CSS (pdfjs's shipped stylesheet, THIRD_PARTY_NOTICES.md) stays outside the rule.
  */
 import { readdirSync, readFileSync } from 'node:fs';
@@ -34,6 +40,13 @@ const RAW_PALETTE =
 
 /** DESIGN.md:361 — zero hex literals in product source; charts read tokens via chartTheme(). */
 const HEX_LITERAL = /#[0-9a-fA-F]{6}\b/g;
+
+/**
+ * Stock Tailwind elevation. The project ships seven named shadow tokens (card, card-hover,
+ * dashboard, menu, toast, dialog, fab) and every one of them is a color-mix over a brand token.
+ * A bare `shadow-lg` opts that surface out of the repaint contract without saying so.
+ */
+const STOCK_SHADOW = /shadow-(?:sm|md|lg|xl|2xl|inner)/g;
 
 /** Inside index.css a 3-digit hex is a colour too (`color: #fff`); in .ts `#106` is an issue ref. */
 const CSS_COLOUR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\boklch\(/g;
@@ -63,15 +76,15 @@ for (const file of walkSource(srcRoot)) {
   scanned += 1;
   const lines = readFileSync(file, 'utf8').split(/\r?\n/);
   lines.forEach((text, index) => {
-    for (const pattern of [RAW_PALETTE, HEX_LITERAL]) {
+    const checks: [RegExp, string][] = [
+      [RAW_PALETTE, 'raw colour in product source — use an @theme token'],
+      [HEX_LITERAL, 'raw colour in product source — use an @theme token'],
+      [STOCK_SHADOW, "stock Tailwind elevation — use a --shadow-* token (card/card-hover/dashboard/menu/toast/dialog/fab)"],
+    ];
+    for (const [pattern, why] of checks) {
       pattern.lastIndex = 0;
       for (const found of text.matchAll(pattern)) {
-        violations.push({
-          file: relative(srcRoot, file),
-          line: index + 1,
-          match: found[0],
-          why: 'raw colour in product source — use an @theme token',
-        });
+        violations.push({ file: relative(srcRoot, file), line: index + 1, match: found[0], why });
       }
     }
   });
@@ -148,6 +161,7 @@ if (violations.length > 0) {
 }
 
 console.log(
-  `check:tokens passed: ${scanned} .ts/.tsx files with zero raw palette classes and zero hex literals; ` +
+  `check:tokens passed: ${scanned} .ts/.tsx files with zero raw palette classes, zero hex literals ` +
+    'and zero stock Tailwind shadows; ' +
     'src/index.css keeps every colour literal inside @theme and uses no rgb()/hsl().',
 );
