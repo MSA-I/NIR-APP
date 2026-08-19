@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -182,7 +182,24 @@ describe('visual order', () => {
  * intention. `display_name` is a column; a screen reads the column. The moment a page or a
  * component imports this module, the canonical name becomes a function of today's parser again,
  * and every screen silently starts showing whatever it currently believes.
+ *
+ * ONE FILE IS ALLOWED, AND THE ALLOWANCE IS THE RULE'S OWN SECOND CLAUSE.
+ *
+ * The rule has always said *intake or APPROVAL*. `pages/ProductNameReview.tsx` is the approval
+ * half — the screen this module's own docblock names ("The review screen is where that gets
+ * settled") and the only caller `proposeDisplayName` was ever written to have. Nothing it prints
+ * is a product's name: it renders a proposal awaiting a decision, and the value that reaches the
+ * column is the one a person pressed a button on. Stated as a blanket directory ban, the guard
+ * caught the hazard and its own sanctioned caller with it, so it is stated as an allowlist
+ * instead — which is also the version a reviewer can audit, unlike a differently-named
+ * intermediate module that would have satisfied the regex while defeating the rule.
+ *
+ * `pages/Products.tsx` is deliberately NOT on the list. It renders a column of product names in
+ * a table, which is exactly the hazard; it reaches the parser only through the component above,
+ * so a future edit there cannot start normalising names at render without failing this test.
  */
+const APPROVAL_SURFACES = new Set(['pages/ProductNameReview.tsx']);
+
 describe('the no-render-import rule', () => {
   // `process.cwd()`, the idiom noteProse.spec.ts already uses for the same job. Deriving the root
   // from `import.meta.url` does not work here: under vitest that is not a file:// URL, and this
@@ -199,19 +216,33 @@ describe('the no-render-import rule', () => {
     }
   }
 
-  it('is not imported by any page or component', () => {
-    const importsIt = /(?:from|import)\s*\(?\s*['"][^'"]*productDisplayName['"]/;
-    const offenders: string[] = [];
+  const importsIt = /(?:from|import)\s*\(?\s*['"][^'"]*productDisplayName['"]/;
 
+  /** Posix-shaped, so the allowlist reads the same on Windows as it does in CI. */
+  function importers(): string[] {
+    const found: string[] = [];
     for (const dir of ['pages', 'components']) {
       for (const file of walk(join(srcRoot, dir))) {
         if (importsIt.test(readFileSync(file, 'utf8'))) {
-          offenders.push(relative(srcRoot, file));
+          found.push(relative(srcRoot, file).split(sep).join('/'));
         }
       }
     }
+    return found;
+  }
 
-    expect(offenders).toEqual([]);
+  it('is not imported by any page or component outside the approval surfaces', () => {
+    expect(importers().filter((file) => !APPROVAL_SURFACES.has(file))).toEqual([]);
+  });
+
+  it('every allowlisted surface exists and actually imports it', () => {
+    // An exemption for a file that is gone, or for one that stopped calling the parser, is a hole
+    // with nothing behind it. The list has to shrink when its reason does, not sit there widening
+    // the rule for whoever creates that path next.
+    for (const surface of APPROVAL_SURFACES) {
+      expect(existsSync(join(srcRoot, surface))).toBe(true);
+    }
+    expect([...APPROVAL_SURFACES].filter((surface) => !importers().includes(surface))).toEqual([]);
   });
 
   it('is actually looking at files', () => {

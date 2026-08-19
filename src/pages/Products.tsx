@@ -11,6 +11,7 @@ import { fmtMoneyExact, formatUnit, normalizeUnitInput } from '../lib/format';
 import { useCategories } from './Suppliers';
 import type { Product } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
+import { ProductNameReview } from './ProductNameReview';
 
 interface ProductRow extends Product {
   supplierCount?: number;
@@ -28,6 +29,13 @@ export default function Products() {
   const [busyToggle, setBusyToggle] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [catFilter, setCatFilter] = useState('');
+  // A mode of this screen, not a route (0149 / defect 16). The naming backlog is a chore that
+  // empties itself — a permanent entry on the app's map for a temporary queue is how dead admin
+  // screens accumulate, and nobody sends anyone a link to "the naming backlog". Keeping it here
+  // also keeps one fetch, one refetch path, and the catalogue one press away for comparison.
+  const [reviewMode, setReviewMode] = useState(false);
+  /** Ids named through the review queue, so the count stays true without refetching per row. */
+  const [namedThisSession, setNamedThisSession] = useState<ReadonlySet<string>>(() => new Set());
   const { data: categories } = useCategories();
 
   const { data, loading, fetching, error, refetch } = useQuery(async () => {
@@ -53,6 +61,19 @@ export default function Products() {
   // Narrower than canWrite: the price-import RPC and the document reservation are owner/office only.
   const canUploadPrices = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
   const rows = (data ?? []).filter((p) => !catFilter || p.category_id === catFilter);
+  // `null`, never an empty array, while the catalogue is unknown: a backlog nobody has counted is
+  // not a backlog of zero. The review screen renders that distinction rather than an empty queue.
+  const awaitingName = data
+    ? data.filter((p) => p.display_name === null && !namedThisSession.has(p.id))
+    : null;
+
+  // Leaving the queue is the one place a refetch is worth its cost: the rows named in between are
+  // already gone from the queue locally, and a round trip per approval would refetch the whole
+  // catalogue plus every supplier price a few hundred times.
+  function showCatalogue() {
+    setReviewMode(false);
+    if (namedThisSession.size > 0) void refetch();
+  }
 
   // Open the product editor straight from a global-search result (?id=). Read-only roles never
   // reach this route, but guard on canWrite anyway; clear the param once consumed.
@@ -114,7 +135,10 @@ export default function Products() {
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
-      <PageHeader title="מוצרים" meta={`${rows.length} מוצרים בתצוגה`}
+      <PageHeader title="מוצרים"
+        meta={reviewMode
+          ? `${awaitingName ? awaitingName.length : '—'} שמות ממתינים לאישור`
+          : `${rows.length} מוצרים בתצוגה`}
         actions={<>
           {/* The same owner/office boundary used by the price-list screen. */}
           {canUploadPrices
@@ -122,6 +146,27 @@ export default function Products() {
             : <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמנהל הרכש בלבד.</span>}
           {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> מוצר חדש</button>}
         </>} />
+
+      {/* Only owner/office can call set_product_display_name (0149), so nobody else is offered a
+          queue they cannot act on. The count is a measurement, not a placeholder: `—` when the
+          catalogue is unknown, and a real 0 when the work is genuinely finished — the same
+          distinction the ספקים column below already draws. */}
+      {canWrite && (
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="תצוגת מסך המוצרים">
+          <button type="button" aria-pressed={!reviewMode} onClick={showCatalogue}
+            className={`chip-filter ${reviewMode ? '' : 'chip-filter-active'}`}>קטלוג</button>
+          <button type="button" aria-pressed={reviewMode} onClick={() => setReviewMode(true)}
+            className={`chip-filter ${reviewMode ? 'chip-filter-active' : ''}`}
+            data-testid="name-review-toggle">
+            שמות לאישור ({awaitingName ? awaitingName.length : '—'})
+          </button>
+        </div>
+      )}
+
+      {canWrite && reviewMode ? (
+        <ProductNameReview queue={awaitingName}
+          onApproved={(id) => setNamedThisSession((current) => new Set(current).add(id))} />
+      ) : (
       <DataTable rows={rows} columns={columns} searchable
         emptyTitle="אין מוצרים עדיין"
         emptySubtitle={canUploadPrices
@@ -149,6 +194,7 @@ export default function Products() {
             {categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         } />
+      )}
       {(editing || clone) && (
         <ProductForm product={editing && editing !== 'new' ? editing : null} initial={clone ?? undefined}
           onClose={() => { setEditing(null); setClone(null); }}
