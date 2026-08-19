@@ -775,7 +775,12 @@ export default function NewOrder() {
               <button key={entry.number} type="button" disabled={entry.disabled} onClick={entry.go}
                 aria-current={active ? 'step' : undefined}
                 className={`grid size-11 shrink-0 place-items-center rounded-full text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${active ? 'bg-action text-on-solid' : 'bg-action-wash text-ink-mid'}`}>
-                <span className="num" aria-hidden="true">{entry.number}</span>
+                {/* The number is NOT aria-hidden, and that is the point: this button and its
+                    desktop twin below are the same control, so they must announce the same name.
+                    Hiding the digit here left a phone user hearing "מוצרים וכמויות" where a desktop
+                    user hears "01 מוצרים וכמויות" — a step control that drops its step number on
+                    the one viewport where the label is the only thing on screen. */}
+                <span className="num">{entry.number}</span>
                 <span className="sr-only">{entry.label}</span>
               </button>
             );
