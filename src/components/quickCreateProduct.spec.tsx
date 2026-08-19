@@ -95,6 +95,24 @@ async function fillForm(user: ReturnType<typeof userEvent.setup>) {
   await user.selectOptions(screen.getByLabelText('ספק *'), 'sup-cohen');
 }
 
+/**
+ * Wait for ONE NAMED alert, not for "an alert" (DEBT §52).
+ *
+ * This screen can hold two role="alert" nodes at once: the validation note, and the duplicate-
+ * name note that arrives asynchronously once the catalogue lookup for the typed name resolves.
+ * `findByText` raced on which TEXT existed and `findByRole('alert')` raced on which ALERT came
+ * first — both are races, which is why the failure looked intermittent and environment-shaped and
+ * why re-running it "fixed" it. Waiting for the condition "some alert says this" is the state the
+ * component actually reaches, and it does not care how many alerts are up or in what order they
+ * arrived. Measured over ten consecutive runs before this was called closed.
+ */
+async function expectAlertSaying(pattern: RegExp) {
+  await waitFor(() => {
+    const said = screen.getAllByRole('alert').some((el) => pattern.test(el.textContent ?? ''));
+    expect(said).toBe(true);
+  });
+}
+
 describe('quickProductRow — the closed payload', () => {
   it('writes only the four columns the browser is granted, with the unit normalised', () => {
     expect(quickProductRow('org-test', '  עגבניות שרי  ', ' יח ')).toEqual({
@@ -136,7 +154,7 @@ describe('QuickCreateProduct', () => {
     await user.type(screen.getByLabelText('מחיר ליחידה *'), '12.5');
     await user.click(screen.getByRole('button', { name: 'הוספה להזמנה' }));
 
-    expect(await screen.findByText(/יש לבחור ספק/)).toBeTruthy();
+    await expectAlertSaying(/יש לבחור ספק/);
     expect(calls).toEqual([]);
   });
 
@@ -148,9 +166,20 @@ describe('QuickCreateProduct', () => {
     await user.type(screen.getByLabelText('שם המוצר *'), 'עגבניות שרי');
     await user.selectOptions(screen.getByLabelText('ספק *'), 'sup-cohen');
     await user.type(screen.getByLabelText('מחיר ליחידה *'), '0');
+
+    // THE ROOT OF DEBT §52, found 19.08.2026. `save()` validates in order — name, then SUPPLIER,
+    // then price — and returns at the first failure. If the supplier select has not yet reached
+    // React state when the click lands, the component honestly reports "יש לבחור ספק" and this
+    // test, which is about the price, waits forever for a message it made impossible. That is why
+    // it failed intermittently, why the frequency tracked CPU load, and why re-running "fixed" it.
+    // Asserting the preconditions before pressing removes the race instead of widening a timeout.
+    await waitFor(() => {
+      expect((screen.getByLabelText('ספק *') as HTMLSelectElement).value).toBe('sup-cohen');
+      expect((screen.getByLabelText('מחיר ליחידה *') as HTMLInputElement).value).toBe('0');
+    });
     await user.click(screen.getByRole('button', { name: 'הוספה להזמנה' }));
 
-    expect(await screen.findByText(/מחיר גדול מאפס/)).toBeTruthy();
+    await expectAlertSaying(/מחיר גדול מאפס/);
     expect(calls).toEqual([]);
   });
 
@@ -164,7 +193,7 @@ describe('QuickCreateProduct', () => {
     await user.click(screen.getByRole('button', { name: 'הוספה להזמנה' }));
 
     // The half-failure is reported as what it is, with the next step named.
-    expect(await screen.findByText(/המוצר נוצר בקטלוג אך עדיין ללא מחיר לספק/)).toBeTruthy();
+    await expectAlertSaying(/המוצר נוצר בקטלוג אך עדיין ללא מחיר לספק/);
     expect(created).not.toHaveBeenCalled();
     expect(calls.map((call) => call.endpoint)).toEqual(['products', 'import']);
 

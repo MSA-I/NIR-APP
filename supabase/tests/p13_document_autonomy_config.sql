@@ -464,6 +464,95 @@ select pg_temp.p13_assert(
   and pg_temp.p13_evaluate('23000000-0000-4000-8000-000000000002') = 'false|false|null|false',
   'tenant A''s autonomy must never resolve, or be visible, for tenant B');
 
+-- ===== The operator read door (0147) -- platform_get_autonomy_policies =====
+-- The read mirror of the write command: the operator console names the organization
+-- explicitly, because evaluate_autonomy_policy resolves auth_org() -- the CALLER's
+-- organization, which for an operator is NULL or their own tenant, never the administered one.
+-- Same guard as the write, same resolution as every other door.
+
+-- The answer for one (actor, organization, key), flattened exactly as p13_evaluate flattens
+-- the tenant door, so the two doors can be compared as strings.
+create function pg_temp.p13_operator_policy(p_sub uuid, p_org uuid, p_key text)
+returns text
+language plpgsql
+as $$
+declare
+  v_row record;
+  v_out text;
+begin
+  perform pg_temp.p13_become_operator(p_sub);
+  select * into v_row
+  from public.platform_get_autonomy_policies(p_org) answer
+  where answer.policy_key = p_key;
+  v_out := coalesce(v_row.configured::text, '?') || '|'
+        || coalesce(v_row.autonomy_enabled::text, '?') || '|'
+        || coalesce(v_row.min_confidence::text, 'null') || '|'
+        || coalesce(v_row.kill_switch::text, '?');
+  perform pg_temp.p13_untrusted_off();
+  return v_out;
+end
+$$;
+
+-- A tenant owner is refused by the same name as on the write door. A cross-tenant read --
+-- which organizations run autonomously, and above which threshold -- is platform work.
+select pg_temp.p13_assert(
+  pg_temp.p13_error(
+    '23000000-0000-4000-8000-000000000001',
+    $$select * from public.platform_get_autonomy_policies(
+        '13000000-0000-4000-8000-000000000001')$$
+  ) like '%not_platform_admin%',
+  'a tenant owner must not read another organization''s autonomy through the operator door');
+
+select pg_temp.p13_assert(
+  not has_function_privilege(
+        'anon', 'public.platform_get_autonomy_policies(uuid)', 'EXECUTE'),
+  'anon must hold no EXECUTE on the operator read door');
+
+-- NULL and unknown organizations are refused by name, never resolved to "the unconfigured
+-- answer for nobody" -- four healthy-looking OFF switches for an organization that was never
+-- named is exactly the silent reading the explicit parameter exists to prevent.
+select pg_temp.p13_assert(
+  pg_temp.p13_error(
+    '23000000-0000-4000-8000-000000000010',
+    $$select * from public.platform_get_autonomy_policies(null)$$, true
+  ) like '%autonomy_policy_invalid%',
+  'a NULL organization must be refused by name on the operator read door');
+
+select pg_temp.p13_assert(
+  pg_temp.p13_error(
+    '23000000-0000-4000-8000-000000000010',
+    $$select * from public.platform_get_autonomy_policies(
+        '13000000-0000-4000-8000-00000000dead')$$, true
+  ) like '%organization_unknown%',
+  'an unknown organization must be refused by name on the operator read door');
+
+-- One row per DEFINED policy key -- the vocabulary drives the answer, so a policy added by a
+-- later migration appears in the console with no client or function edit.
+select pg_temp.p13_become_operator('23000000-0000-4000-8000-000000000010');
+select pg_temp.p13_assert(
+  (select count(*) from public.platform_get_autonomy_policies(
+     '13000000-0000-4000-8000-000000000001'))
+    = (select count(*) from private.autonomy_policy_definitions),
+  'the operator read door must answer once per defined policy key');
+select pg_temp.p13_untrusted_off();
+
+-- The operator door and the tenant evaluator agree on the configured tenant: one resolver,
+-- three doors. And an org the operator never configured reads unconfigured/disabled/NULL --
+-- a mark, not a zero, exactly as on the other two doors.
+select pg_temp.p13_assert(
+  pg_temp.p13_operator_policy(
+    '23000000-0000-4000-8000-000000000010',
+    '13000000-0000-4000-8000-000000000001', 'document.interpretation')
+    = pg_temp.p13_evaluate('23000000-0000-4000-8000-000000000001'),
+  'the operator read door must answer exactly what the tenant evaluator answers for tenant A');
+
+select pg_temp.p13_assert(
+  pg_temp.p13_operator_policy(
+    '23000000-0000-4000-8000-000000000010',
+    '13000000-0000-4000-8000-000000000002', 'document.interpretation')
+    = 'false|false|null|false',
+  'the operator read door must answer unconfigured/disabled/NULL for the unconfigured tenant');
+
 -- ===== The trusted-server door -- what the automation will actually call =====
 -- apply_document_interpretation runs as a definer granted to service_role, invoked with no
 -- user JWT: auth_org() is NULL for it. A tenant-scoped reader alone would have answered

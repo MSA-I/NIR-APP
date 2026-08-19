@@ -1236,7 +1236,7 @@ async function orderSupplierComparison(browser) {
     await goldPick.click();
     assert((await pinSave).ok(), 'pinning the cheapest supplier was not saved');
     await waitForSaved();
-    await comparison.getByRole('button', { name: 'בטל הצמדה' }).waitFor();
+    await comparison.getByRole('button', { name: 'חזרה לבחירה אוטומטית' }).waitFor();
     const draftUrl = page.url();
 
     await page.reload();
@@ -1245,7 +1245,7 @@ async function orderSupplierComparison(browser) {
     const supplierStep = page.getByRole('button', { name: /02.*ספקים וחלוקה/ });
     assert.equal(await supplierStep.getAttribute('aria-current'), 'step', 'draft did not restore supplier step');
     comparison = page.locator('section[aria-labelledby="supplier-comparison-title"]');
-    await comparison.getByRole('button', { name: 'בטל הצמדה' }).waitFor();
+    await comparison.getByRole('button', { name: 'חזרה לבחירה אוטומטית' }).waitFor();
     assert.equal(await comparison.getByRole('button', { name: `בחירת מאפה זהב עבור ${product}` }).getAttribute('aria-pressed'), 'true',
       'pinned cheapest supplier did not survive reload');
 
@@ -1261,12 +1261,12 @@ async function orderSupplierComparison(browser) {
     assert.match(await blocked.innerText(), /הצמדה לא תקפה · מינימום\s*2/, 'broken pin did not expose min_qty 2');
     const growBrokenPin = blocked.getByRole('button', { name: /^הגדל ל-\s*2/ });
     assert((await growBrokenPin.innerText()).includes('58.50'), 'broken-pin increase did not show the exact added cost');
-    await blocked.getByRole('button', { name: 'בטל הצמדה' }).waitFor();
+    await blocked.getByRole('button', { name: 'חזרה לבחירה אוטומטית' }).waitFor();
     assert(await page.getByRole('button', { name: /03.*סיכום ואישור/ }).isDisabled(), 'broken pin did not gate summary step');
     await captureOrderState('blocked-pin');
 
     const unpinSave = waitForDraftSave();
-    await blocked.getByRole('button', { name: 'בטל הצמדה' }).click();
+    await blocked.getByRole('button', { name: 'חזרה לבחירה אוטומטית' }).click();
     assert((await unpinSave).ok(), 'unpinning the broken supplier was not saved');
     await waitForSaved();
     await blocked.waitFor({ state: 'hidden' });
@@ -1361,7 +1361,7 @@ async function orderSupplierComparison(browser) {
     assert.equal(await bakeryPick.getAttribute('aria-pressed'), 'true', 'move-line did not pin the alternative supplier');
 
     const restoreAutomaticSave = waitForDraftSave();
-    await comparison.getByRole('button', { name: 'בטל הצמדה' }).click();
+    await comparison.getByRole('button', { name: 'חזרה לבחירה אוטומטית' }).click();
     assert((await restoreAutomaticSave).ok(), 'returning the moved line to automatic assignment was not saved');
     await waitForSaved();
     await splitSection.getByText('מאפה זהב', { exact: true }).waitFor();
@@ -1772,7 +1772,15 @@ async function reportsAndPdf(browser) {
     const table = page.locator('table.report-invoices');
     await table.waitFor();
     const headings = (await table.locator('thead th').allTextContents()).map((value) => value.trim());
-    assert.equal(headings.length, 8, `monthly print report has ${headings.length}/8 columns`);
+    // Eleven since 19.08.2026 (owner review, defect 12): the printed sheet promised eight columns
+    // while the screen showed more, so the accountant was reconciling from a narrower page than the
+    // one they had been looking at. תאריך קליטה, שולם and יתרה joined the grid; הערות went to a
+    // print-only second row per invoice rather than a twelfth column, because twelve columns across
+    // 279mm of A4 landscape leaves 23mm each and breaks the supplier name.
+    assert.equal(headings.length, 11, `monthly print report has ${headings.length}/11 columns`);
+    for (const required of ['שולם', 'יתרה', 'תאריך קליטה']) {
+      assert.ok(headings.includes(required), `printed report lost the ${required} column: ${headings.join(' · ')}`);
+    }
     // The screen defaults to the CURRENT month, and the demo fixture's invoices are dated June-July,
     // so on this tenant the printed sheet is usually an empty month. This assertion used to demand a
     // totals row unconditionally and therefore pinned a `סה״כ ₪0.00 ₪0.00 ₪0.00` line standing over
@@ -1869,6 +1877,9 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
 }
 
 async function adminState(browser) {
+  // The console left the tenant application (defect 14): /admin no longer exists there, and the
+  // operator surface is the second Vite entry served at /operator. The platform membership is
+  // mocked, so this exercises the operator app's guard and screens with a real signed-in session.
   const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1024, height: 900 } });
   await context.route('**/rest/v1/platform_admins?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: { user_id: 'p4-platform-admin' } }));
   await context.route('**/rest/v1/rpc/is_platform_admin*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: true }));
@@ -1881,7 +1892,7 @@ async function adminState(browser) {
   captureConsole(page, 'admin-state');
   try {
     await login(page, 'owner');
-    await page.goto(`${baseURL}/admin`);
+    await page.goto(`${baseURL}/operator`);
     await page.getByRole('heading', { name: 'ניהול פלטפורמה' }).waitFor({ timeout: 20_000 });
     const opener = page.getByRole('button', { name: 'ארגון חדש' });
     await opener.click();
@@ -1913,6 +1924,34 @@ async function adminState(browser) {
     await opener.click();
     dialog = page.getByRole('dialog', { name: 'הקמת ארגון חדש' });
     assert.notEqual(await dialog.locator('#new-org-password').inputValue(), 'P4-success-reset-check!', 'admin form retained password after success');
+  } finally {
+    await closeContext(context);
+  }
+}
+
+async function operatorRefusal(browser) {
+  // The other half of the operator boundary: a signed-in tenant who is NOT a platform admin
+  // (no platform_admins mock — the live table answers false) lands on /operator and is handed
+  // back to the tenant application by a full document navigation, seeing nothing of the console.
+  // The build separation is not the security boundary — the platform RPCs refuse server-side —
+  // but the guard must still never RENDER the console to a tenant.
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  captureConsole(page, 'operator-refusal');
+  try {
+    await login(page, 'accountant');
+    await page.goto(`${baseURL}/operator`);
+    await page.waitForFunction(() => location.pathname === '/dashboard', null, { timeout: 25_000 });
+    await page.locator('#main').waitFor({ state: 'visible', timeout: 25_000 });
+    assert(!(await page.content()).includes('תפעול פלטפורמה'), 'a tenant without platform membership reached the operator console');
+
+    // And the other direction: /admin is not merely un-navigable, it is not a route in the tenant
+    // application any more. A bundle grep proves the code is absent; only a real navigation proves
+    // the PATH is. It falls through the catch-all to the tenant home, which is what "the routes and
+    // the imports left the tenant app" has to mean in practice.
+    await page.goto(`${baseURL}/admin`);
+    await page.waitForFunction(() => location.pathname === '/dashboard', null, { timeout: 25_000 });
+    assert(!(await page.content()).includes('תפעול פלטפורמה'), '/admin still resolves to the operator console inside the tenant app');
   } finally {
     await closeContext(context);
   }
@@ -3396,7 +3435,8 @@ async function run(name, check) {
     await run('Push logout server failure', () => pushLogout(browser, 'server-failure', false, true));
     await run('Push logout browser failure', () => pushLogout(browser, 'browser-failure', true, false));
     await run('Push logout double failure', () => pushLogout(browser, 'double-failure', false, false));
-    await run('Admin password and Clipboard state', () => adminState(browser));
+    await run('operator console: platform admin lands on /operator, password and clipboard state', () => adminState(browser));
+    await run('operator console refuses a tenant who is not a platform admin', () => operatorRefusal(browser));
     await run('OCR documents, review, status and export', () => documentOcrAcceptance(browser));
     await run('automatic price list creates keyed products and leaves unsafe rows for review', () => automaticPriceListAcceptance(browser));
     await run('a read price list is accepted in one click, per-line approval stays the exception', () => manualPriceListConfirmation(browser));

@@ -62,6 +62,38 @@ describe('פרימיטיבי היררכיית עמוד', () => {
     expect(screen.getByRole('button', { name: 'ספק חדש' })).toBeInTheDocument();
   });
 
+  it('רצועת השלבים מציגה מד התקדמות רק כשיש done/total אמיתיים', () => {
+    // The restyle is allowed to move the bar and thin it; it is NOT allowed to invent one. A strip
+    // without a page count must stay silent about "how far", and the step itself must still be
+    // announced. Both halves are pinned here so a future styling pass cannot quietly add a
+    // zero-width or indeterminate bar to fill the space.
+    const steps = [
+      { key: 'received', label: 'התקבל' },
+      { key: 'reading', label: 'קריאה' },
+      { key: 'interpreting', label: 'פירוש' },
+    ];
+    const view = render(<LifecycleStrip steps={steps} current="reading" detail="מספר העמודים עדיין לא ידוע." />);
+
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    const marked = view.container.querySelector('li[aria-current="step"]');
+    expect(marked).toHaveTextContent('קריאה — השלב הנוכחי');
+
+    view.rerender(
+      <LifecycleStrip
+        steps={steps}
+        current="reading"
+        progress={{ done: 7, total: 27, label: 'עמוד 7 מתוך 27' }}
+      />,
+    );
+
+    expect(screen.getAllByRole('progressbar')).toHaveLength(1);
+    const bar = screen.getByRole('progressbar');
+    expect(bar).toHaveAttribute('aria-valuenow', '7');
+    expect(bar).toHaveAttribute('aria-valuemax', '27');
+    expect(bar).toHaveAttribute('aria-valuetext', 'עמוד 7 מתוך 27');
+    expect(view.container.querySelector('li[aria-current="step"]')).not.toBeNull();
+  });
+
   it('מציג מדד לא פעולה כמידע ולא ככפתור מושבת', () => {
     render(<KpiCard title="יתרה פתוחה" value="₪8,420" />);
     expect(screen.queryByRole('button', { name: /יתרה פתוחה/ })).not.toBeInTheDocument();

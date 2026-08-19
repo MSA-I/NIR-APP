@@ -12,6 +12,10 @@
 // row comes back when it is opened. DESIGN.md's חוק תיבת הדואר is the rule being enforced: what
 // folds is evidence and detail, the count on the summary row is the content, and a failed read is
 // never folded away.
+//
+// They also pin the band's PROMISE: three counts that look alike must behave alike. "מוצרים שנספרו"
+// used to be the one segment that never filtered, so the row a user read as a control did nothing
+// when clicked, and the two that did filter went dead whenever their count was zero.
 
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
@@ -136,6 +140,36 @@ describe('מלאי — הכרטיסים שנשארו והכרטיסים שהוס
     expect(method.closest('.card')).toBeNull();
     // …and it now belongs to the balances section, whose columns it explains.
     expect(method.closest('section')?.getAttribute('aria-labelledby')).toBe('inventory-balances-title');
+  });
+});
+
+describe('רצועת המלאי — כל שלושת המדדים מסננים את הטבלה', () => {
+  it('לחיצה על "מוצרים שנספרו" מסננת לנספרים בלבד, ולחיצה חוזרת מנקה את הסינון', async () => {
+    server.use(...inventoryTraffic);
+    renderInventory();
+
+    const title = await screen.findByText('מוצרים שנספרו');
+    // The segment is a real control, not decoration — it was the one card with no onClick at all.
+    const segment = () => title.closest('button');
+    expect(segment()).not.toBeNull();
+    expect(segment()).toHaveAttribute('aria-pressed', 'false');
+
+    // Scoped to the balances section: 'קמח לבן' also appears in the movement feed below, so an
+    // unscoped query would report the feed's row as if the table had kept it.
+    const balances = () => screen.getByRole('region', { name: 'יתרות מוצרים' });
+    expect(within(balances()).getAllByText('סוכר').length).toBeGreaterThan(0);
+
+    await userEvent.click(segment()!);
+
+    expect(segment()).toHaveAttribute('aria-pressed', 'true');
+    expect(within(balances()).getAllByText('קמח לבן').length).toBeGreaterThan(0);
+    // 'סוכר' is the uncounted product; filtering to the counted ones must drop it.
+    expect(within(balances()).queryAllByText('סוכר')).toHaveLength(0);
+
+    await userEvent.click(segment()!);
+
+    expect(segment()).toHaveAttribute('aria-pressed', 'false');
+    expect(within(balances()).getAllByText('סוכר').length).toBeGreaterThan(0);
   });
 });
 

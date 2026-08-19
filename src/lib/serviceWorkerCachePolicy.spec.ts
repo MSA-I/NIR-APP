@@ -24,4 +24,16 @@ describe('service worker cache boundary', () => {
     expect(source).not.toContain('html.matchAll');
     expect(source).not.toMatch(/caches\.match\([^)]*(supabase|\/rest\/v1|\/functions\/v1)/i);
   });
+
+  it('never answers the operator console from the tenant shell cache', () => {
+    // The operator console (operator.html, a second Vite entry on the same origin) is inside
+    // this worker's scope. Serving it the cached TENANT shell would swap one application for
+    // another silently — so the worker refuses /operator navigations outright, and the build
+    // keeps operator.html and its entry chunk out of the precache manifest.
+    expect(source).toContain('isOperatorNavigation');
+    expect(source).toContain("url.pathname === '/operator'");
+    expect(source).toContain('if (isOperatorNavigation(url)) return;');
+    expect(viteConfig).toContain("'**/operator.html'");
+    expect(viteConfig).toContain("'**/assets/operator-*'");
+  });
 });

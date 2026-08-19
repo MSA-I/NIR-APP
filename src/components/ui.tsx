@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, createContext, useContext, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { ChevronRight, ChevronLeft, ChevronDown, Search, X, Loader2, Inbox, Bell, Check, Columns3, SlidersHorizontal, AlertTriangle } from 'lucide-react';
 import {
   useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel,
@@ -10,6 +10,7 @@ import type { StatusMeta, Tone } from '../lib/status';
 import type { ServerSort } from '../lib/serverList';
 import { fmtMoneyRounded } from '../lib/format';
 import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
+import { routePresentationDescription } from '../lib/routePresentation';
 import { ActionMenu, type ActionMenuItem } from './ActionMenu';
 
 /* ---------- StatusBadge ---------- */
@@ -195,20 +196,27 @@ function SectionMark() {
   return <span className="section-mark" aria-hidden="true" />;
 }
 
-export function PageHeader({ title, meta, breadcrumbs, actions, className = '' }: {
+export function PageHeader({ title, description, meta, breadcrumbs, actions, className = '' }: {
   title: ReactNode;
+  description?: ReactNode;
   meta?: ReactNode;
   breadcrumbs?: ReactNode;
   actions?: ReactNode;
   className?: string;
 }) {
+  // Omitting the prop opts INTO the catalogue; `description={null}` is the explicit opt-out. JSX
+  // cannot tell an absent prop from `description={undefined}`, so the opt-out has to be a value
+  // that is not `undefined` — hence the identity check rather than a falsy one.
+  const { pathname } = useLocation();
+  const resolvedDescription = description === undefined ? routePresentationDescription(pathname) : description;
   return (
     <header className={`flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between ${className}`}>
       <div className="min-w-0 space-y-1">
         {breadcrumbs}
         <h1 className="page-title break-words">{title}</h1>
         <SectionMark />
-        {meta && <div className="text-sm text-ink-muted">{meta}</div>}
+        {resolvedDescription && <div className="text-sm text-ink-muted">{resolvedDescription}</div>}
+        {meta && <div className="text-sm text-ink-soft">{meta}</div>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </header>
@@ -275,16 +283,20 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
     ? Math.min(100, Math.max(0, Math.round((progress.done / progress.total) * 100)))
     : null;
   return (
-    <div className="rounded-xl border border-line-soft bg-surface-sunken px-3 py-3">
+    <div className="rounded-2xl bg-surface-sunken p-3">
       <ol aria-label="שלבי התהליך" className="flex min-w-0 flex-wrap items-center gap-y-2 overflow-x-auto pb-1">
         {steps.map((step, index) => {
           const isCurrent = index === currentIndex;
           const isComplete = currentIndex >= 0 && index < currentIndex;
           const isStopped = isCurrent && failed;
-          const text = isStopped ? 'text-alert-fg' : isCurrent ? 'text-info-fg' : isComplete ? 'text-done-fg' : 'text-ink-muted';
+          // One hue on the strip instead of three. The current step is the only SOLID mark, so it
+          // already says "here" -- repeating that in a third label colour beside it only competes
+          // with the marker. Done and future therefore share the quiet label; the marker (check vs
+          // number) carries the difference, so meaning never rests on hue alone.
+          const text = isStopped ? 'text-alert-fg' : isCurrent ? 'text-ink-body' : 'text-ink-muted';
           const marker = isStopped
             ? 'border-alert-line bg-alert-soft'
-            : isCurrent ? 'border-info-line bg-info-soft' : isComplete ? 'border-done-line bg-done-soft' : 'border-line-strong bg-surface';
+            : isCurrent ? 'border-transparent bg-info-solid text-on-solid' : isComplete ? 'border-done-line bg-done-soft' : 'border-line-strong bg-surface text-ink-muted';
           return (
             // `relative` is load-bearing, not styling. The sr-only span below is
             // `position: absolute`, so without a positioned ancestor inside the scroller its
@@ -296,7 +308,7 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
             // 3px out and stayed inside the tolerance.
             <li key={step.key} aria-current={isCurrent ? 'step' : undefined} className="relative flex min-w-fit items-center sm:flex-1">
               <span className={`flex items-center gap-1.5 text-xs font-medium ${text}`}>
-                <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${marker}`} aria-hidden="true">
+                <span className={`flex size-6 shrink-0 items-center justify-center rounded-full border ${marker}`} aria-hidden="true">
                   {isStopped ? <AlertTriangle size={12} /> : isComplete ? <Check size={12} /> : index + 1}
                 </span>
                 {step.label}
@@ -307,6 +319,8 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
           );
         })}
       </ol>
+      {detail && <div className="mt-2 text-xs text-ink-soft">{detail}</div>}
+      {/* Below `detail` on purpose, so the strip reads step -> what it is doing -> how far. */}
       {progress && percent !== null && (
         <div
           role="progressbar"
@@ -314,17 +328,17 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
           aria-valuemax={progress.total}
           aria-valuenow={progress.done}
           aria-valuetext={progress.label}
-          className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line"
+          className="mt-2 h-1 w-full overflow-hidden rounded-full bg-line"
         >
           {/* Petrol is structure here, never a verdict: the fill says how much, not whether it
               went well. Width only, so reduced-motion cancels it with the shared transition rule. */}
           <div className="h-full rounded-full bg-action transition-[width] duration-200 ease-out" style={{ width: `${percent}%` }} />
         </div>
       )}
-      {detail && <div className="mt-2 text-xs text-ink-soft">{detail}</div>}
       {nextAction && (
         <div className="mt-2 border-t border-line-soft pt-2 text-sm text-ink-body">
-          <span className="font-semibold">הפעולה הבאה:</span> {nextAction}
+          {/* The label steps back; the action itself keeps the body ink from the wrapper. */}
+          <span className="font-medium text-ink-muted">הפעולה הבאה:</span> {nextAction}
         </div>
       )}
     </div>

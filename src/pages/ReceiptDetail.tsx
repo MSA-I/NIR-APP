@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import { Breadcrumbs, EmptyState, ErrorNote, Note, RecordHeader, RecordSkeleton, StatusBadge } from '../components/ui';
 import { DocumentList } from '../components/FileUpload';
 import OfflineQueueStatus from '../components/OfflineQueueStatus';
-import { fmtDate, formatQuantity } from '../lib/format';
+import { fmtDate, formatQuantity, productLabel } from '../lib/format';
 import { isUuid } from '../lib/invoiceLinkedContext';
 import { PO_STATUS, RECEIPT_LINE_STATUS, RECEIPT_STATUS } from '../lib/status';
 import { supabase } from '../lib/supabase';
@@ -14,7 +14,7 @@ import { useQuery } from '../lib/useQuery';
 type ReceiptRow = Pick<GoodsReceipt, 'id' | 'number' | 'order_id' | 'status' | 'received_at' | 'notes'>;
 type ReceiptOrder = Pick<PurchaseOrder, 'id' | 'number' | 'supplier_id' | 'status'>;
 type ReceiptLine = Pick<GoodsReceiptItem, 'id' | 'product_id' | 'qty_received' | 'status' | 'notes'> & {
-  product: Pick<Product, 'id' | 'name' | 'unit'> | null;
+  product: Pick<Product, 'id' | 'name' | 'display_name' | 'unit'> | null;
 };
 
 interface ReceiptDetailData {
@@ -56,12 +56,12 @@ export default function ReceiptDetail() {
       if (supplierResult.error || !supplierResult.data) return null;
 
       const productIds = [...new Set(rawLines.map(({ product_id }) => product_id))];
-      let products: Array<Pick<Product, 'id' | 'name' | 'unit'>> = [];
+      let products: Array<Pick<Product, 'id' | 'name' | 'display_name' | 'unit'>> = [];
       if (productIds.length > 0) {
-        const productsResult = await supabase.from('products').select('id, name, unit')
+        const productsResult = await supabase.from('products').select('id, name, display_name, unit')
           .eq('org_id', orgId).in('id', productIds).order('id');
         if (productsResult.error) return null;
-        products = (productsResult.data ?? []) as Array<Pick<Product, 'id' | 'name' | 'unit'>>;
+        products = (productsResult.data ?? []) as Array<Pick<Product, 'id' | 'name' | 'display_name' | 'unit'>>;
       }
       const productsById = new Map(products.map((product) => [product.id, product]));
 
@@ -167,7 +167,7 @@ export default function ReceiptDetail() {
               <li key={line.id} className="p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h3 className="break-words font-medium text-ink-body"><bdi>{line.product?.name ?? 'מוצר לא זמין'}</bdi></h3>
+                    <h3 className="break-words font-medium text-ink-body"><bdi>{line.product ? productLabel(line.product) : 'מוצר לא זמין'}</bdi></h3>
                     <p className="mt-1 text-sm text-ink-muted">
                       כמות שהתקבלה: <span className="num font-medium text-ink-mid">{formatQuantity(line.qty_received, line.product?.unit)}</span>
                     </p>

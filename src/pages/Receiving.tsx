@@ -13,7 +13,7 @@ import ReceiptConflictDialog, {
   loadReceiptConflict, type ReceiptConflictResolution, type ReceiptConflictState,
 } from '../components/ReceiptConflictDialog';
 import { PO_STATUS, RECEIPT_LINE_STATUS, type Tone } from '../lib/status';
-import { fmtDate, fmtDateTime, formatQuantity, todayISO } from '../lib/format';
+import { fmtDate, fmtDateTime, formatQuantity, productLabel, todayISO } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import {
   claimLegacyReceiptRecovery, createReceiptDraftAutosaver, ensureReceiptKey, getOpenOrder, getReceiptDraft,
@@ -34,7 +34,15 @@ import type { ReceiptLineStatus } from '../lib/types';
  * `expected_date`, and the never-cache rule (:36) is a hard boundary. The receiving screen never
  * displays a price anyway, so nothing is lost by refusing to keep one.
  */
-interface ReceivingProduct { id: string; name: string; unit: string; sku: string | null; barcode: string | null }
+interface ReceivingProduct {
+  id: string;
+  /** The raw catalogue name. Matching a delivery-note line reads THIS, never the approved one. */
+  name: string;
+  display_name: string | null;
+  unit: string;
+  sku: string | null;
+  barcode: string | null;
+}
 interface ReceivingItem { id: string; product_id: string; qty: number; received_qty: number; product: ReceivingProduct }
 interface ReceivingOrder {
   id: string;
@@ -50,7 +58,7 @@ type ServerOrder = {
   supplier: { id: string; name: string };
   items: {
     id: string; product_id: string; qty: number; received_qty: number;
-    product: { id: string; name: string; unit: string; sku: string | null; barcode: string | null };
+    product: { id: string; name: string; display_name: string | null; unit: string; sku: string | null; barcode: string | null };
   }[];
 };
 
@@ -67,7 +75,7 @@ function toReceivingOrder(order: ServerOrder): ReceivingOrder {
       qty: item.qty,
       received_qty: item.received_qty,
       product: {
-        id: item.product.id, name: item.product.name, unit: item.product.unit,
+        id: item.product.id, name: item.product.name, display_name: item.product.display_name, unit: item.product.unit,
         sku: item.product.sku, barcode: item.product.barcode,
       },
     })),
@@ -445,7 +453,7 @@ export function ReceiveOrder() {
   const { data, loading, error, refetch } = useQuery(async () => {
     try {
       const order = toReceivingOrder(unwrap(await supabase.from('purchase_orders')
-        .select('*, supplier:suppliers(id, name), items:purchase_order_items(*, product:products(id, name, unit, sku, barcode))')
+        .select('*, supplier:suppliers(id, name), items:purchase_order_items(*, product:products(id, name, display_name, unit, sku, barcode))')
         .eq('id', orderId!).single()) as ServerOrder);
       const draft = unwrap(await supabase.from('goods_receipts')
         .select('*, items:goods_receipt_items(*)').eq('order_id', orderId!).eq('status', 'draft').maybeSingle()) as
@@ -473,6 +481,9 @@ export function ReceiveOrder() {
             ((catalogue.data ?? []) as { product_id: string; supplier_sku: string | null }[])
               .map((row) => [row.product_id, row.supplier_sku]),
           );
+          // MATCHING, not display. The name here is compared against what the delivery note says,
+          // and a note says whatever the supplier wrote. The raw name is what that was ever
+          // matched against; an approved name we composed would only stop matching.
           const entries = order.items.map((item) => ({
             productId: item.product_id,
             supplierSku: supplierSkus.get(item.product_id) ?? null,
@@ -581,7 +592,7 @@ export function ReceiveOrder() {
         setConflictQueueRef({ id: queuedConflict.id, syncVersion: queuedConflict.syncVersion });
         const conflictLines = local?.lines ?? toOfflineLines(data.order.items, init);
         const products = new Map(data.order.items.map((item) => [
-          item.id, { name: item.product.name, unit: item.product.unit },
+          item.id, { label: productLabel(item.product), unit: item.product.unit },
         ]));
         const hydratedConflict = await loadReceiptConflict({
           orderId: data.order.id,
@@ -600,7 +611,7 @@ export function ReceiveOrder() {
           receiptId: resolution.receiptId,
           lines: conflictLines.map((line) => ({
             orderItemId: line.order_item_id,
-            productName: products.get(line.order_item_id)?.name ?? '—',
+            productName: products.get(line.order_item_id)?.label ?? '—',
             unit: products.get(line.order_item_id)?.unit ?? '',
             localQty: line.qty_received,
             localStatus: line.status,
@@ -819,7 +830,7 @@ export function ReceiveOrder() {
           orderNumber: order.number,
           supplierName: order.supplier.name,
           localLines: payloadLines,
-          products: new Map(order.items.map((item) => [item.id, { name: item.product.name, unit: item.product.unit }])),
+          products: new Map(order.items.map((item) => [item.id, { label: productLabel(item.product), unit: item.product.unit }])),
           localObservedAt: observedAt,
           code: outcome.code,
         }));
@@ -1056,7 +1067,7 @@ export function ReceiveOrder() {
           <div key={item.id} className={`card p-4 border-2 ${CARD[RECEIPT_LINE_STATUS[line.status].tone]} ${scanned ? 'ring-2 ring-action-line' : ''}`}>
             <div className="flex items-start justify-between gap-2">
               <div>
-                <div className="font-semibold text-ink"><bdi>{item.product.name}</bdi></div>
+                <div className="font-semibold text-ink"><bdi>{productLabel(item.product)}</bdi></div>
                 <div className="text-xs text-ink-muted mt-0.5">
                   הוזמן: <span className="num">{formatQuantity(item.qty, item.product.unit)}</span>
                   {item.received_qty > 0 && <> · התקבל בעבר: <span className="num">{formatQuantity(item.received_qty, item.product.unit)}</span></>}
@@ -1067,15 +1078,15 @@ export function ReceiveOrder() {
 
             <div className="flex items-center gap-2 mt-3">
               <span className="text-sm text-ink-soft w-16">התקבל:</span>
-              <button className="btn-secondary p-3!" onClick={() => setLine(item.id, { qty: Math.max(0, line.qty - 1) }, item)} aria-label={`הפחתת הכמות שהתקבלה עבור ${item.product.name}`}><Minus size={18} /></button>
+              <button className="btn-secondary p-3!" onClick={() => setLine(item.id, { qty: Math.max(0, line.qty - 1) }, item)} aria-label={`הפחתת הכמות שהתקבלה עבור ${productLabel(item.product)}`}><Minus size={18} /></button>
               <input type="number" min={0} step="any" inputMode="decimal"
                 ref={(element) => { qtyInputs.current[item.id] = element; }}
                 className="input w-24! num text-center text-lg! py-2.5! font-semibold"
-                aria-label={`כמות שהתקבלה עבור ${item.product.name}`}
+                aria-label={`כמות שהתקבלה עבור ${productLabel(item.product)}`}
                 value={line.qty} onChange={(e) => setLine(item.id, { qty: Math.max(0, Number(e.target.value) || 0) }, item)} />
-              <button className="btn-secondary p-3!" onClick={() => setLine(item.id, { qty: line.qty + 1 }, item)} aria-label={`הגדלת הכמות שהתקבלה עבור ${item.product.name}`}><Plus size={18} /></button>
+              <button className="btn-secondary p-3!" onClick={() => setLine(item.id, { qty: line.qty + 1 }, item)} aria-label={`הגדלת הכמות שהתקבלה עבור ${productLabel(item.product)}`}><Plus size={18} /></button>
               {line.qty !== remaining && (
-                <button className="btn-ghost text-xs" aria-label={`סימון מלוא הכמות שנותרה עבור ${item.product.name}: ${formatQuantity(remaining, item.product.unit)}`} onClick={() => setLine(item.id, { qty: remaining }, item)}>מלא ({formatQuantity(remaining, item.product.unit)})</button>
+                <button className="btn-ghost text-xs" aria-label={`סימון מלוא הכמות שנותרה עבור ${productLabel(item.product)}: ${formatQuantity(remaining, item.product.unit)}`} onClick={() => setLine(item.id, { qty: remaining }, item)}>מלא ({formatQuantity(remaining, item.product.unit)})</button>
               )}
             </div>
 
@@ -1083,7 +1094,7 @@ export function ReceiveOrder() {
               {statusButtons.map((b) => (
                 <button key={b.key}
                   className={`rounded-lg border min-h-11 flex items-center justify-center text-xs font-medium transition-colors ${line.status === b.key ? SOLID[RECEIPT_LINE_STATUS[b.key].tone] : 'border-line text-ink-soft hover:bg-surface-hover'}`}
-                  aria-label={`${b.label} עבור ${item.product.name}`}
+                  aria-label={`${b.label} עבור ${productLabel(item.product)}`}
                   aria-pressed={line.status === b.key}
                   onClick={() => setLine(item.id, { status: b.key, ...(b.key === 'missing' ? { qty: 0 } : {}) })}>
                   {b.label}
@@ -1093,7 +1104,7 @@ export function ReceiveOrder() {
 
             {line.status !== 'full' && (
               <input className="input mt-2.5" placeholder="הערה (למשל: הגיע מופשר, אריזה קרועה...)"
-                aria-label={`הערה לקבלת ${item.product.name}`}
+                aria-label={`הערה לקבלת ${productLabel(item.product)}`}
                 value={line.notes} onChange={(e) => setLine(item.id, { notes: e.target.value })} />
             )}
           </div>

@@ -17,6 +17,14 @@ const isApiRequest = (url) =>
   url.pathname.startsWith('/storage/') || url.pathname.startsWith('/functions/') ||
   url.pathname.startsWith('/realtime/');
 
+// The operator console (operator.html, a second Vite entry) shares this origin, so this worker
+// — whose scope is '/' — controls its pages too. Its navigations must NEVER be answered with
+// the cached tenant shell: online they pass through untouched, offline they fail honestly.
+// The console is also excluded from the precache (vite.config.ts globIgnores).
+const isOperatorNavigation = (url) =>
+  url.pathname === '/operator' || url.pathname === '/operator.html' ||
+  url.pathname.startsWith('/operator/');
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -43,6 +51,7 @@ self.addEventListener('fetch', (event) => {
 
   // Navigations use the network first; the cached shell is only an offline fallback.
   if (event.request.mode === 'navigate') {
+    if (isOperatorNavigation(url)) return;
     event.respondWith(
       fetch(event.request).catch(() =>
         caches.match('/index.html', { cacheName: CACHE_NAME }).then((hit) => hit || Response.error())),

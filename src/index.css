@@ -818,9 +818,34 @@ html { transition: --glow-x 0.45s ease-out, --glow-y 0.45s ease-out; }
   }
   .monthly-report { page: monthly-report; width: 100%; font-size: 9pt; }
   .monthly-report .report-table-wrap { overflow: visible !important; }
-  .monthly-report table { width: 100% !important; table-layout: auto; }
-  .monthly-report th, .monthly-report td { white-space: normal !important; padding: 1.5mm 1.8mm !important; }
-  .monthly-report .report-invoices { font-size: 8pt; }
+  /* `fixed`, not `auto`: the invoice grid carries eleven columns on 279mm of A4 landscape, and
+     the auto algorithm sizes to content — it hands ספק whatever it asks for and crushes the
+     figures. Fixed makes the <colgroup> percentages in Reports.tsx binding. Print only; on
+     screen the same tables stay `auto`. */
+  .monthly-report table { width: 100% !important; table-layout: fixed; }
+  /* The size belongs on the CELL, not on the table. `.td` and `.th` set font-size on themselves
+     (14px / 13px), so `font-size` declared on `.monthly-report` or on the table was inherited by
+     nothing and the report printed at ~10.5pt while claiming 9pt. Measured on the eleven-column
+     grid: at 14px a real invoice number wrapped to three lines inside its column. */
+  .monthly-report th, .monthly-report td {
+    white-space: normal !important;
+    padding: 1.5mm 1.8mm !important;
+    font-size: 9pt !important;
+    line-height: 1.35 !important;
+  }
+  .monthly-report .report-invoices th, .monthly-report .report-invoices td { font-size: 8pt !important; }
+  /* A status pill is a screen affordance. On paper its padding and rounded fill spend width the
+     numbers need, and the fill may not print at all — so the status degrades to plain text.
+     `nowrap` goes with it: kept, a two-word status would overflow its column instead of wrapping.
+     No colour is set here: the badge simply inherits the row's ink. */
+  .monthly-report [class^='badge-'], .monthly-report [class*=' badge-'] {
+    background: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    font-size: inherit !important;
+    white-space: normal !important;
+    color: inherit !important;
+  }
   .monthly-report .card, .monthly-report table, .monthly-report tr { break-inside: avoid; }
 }
 

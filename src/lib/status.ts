@@ -6,6 +6,8 @@
 //   idle  = ניטרלי (היעדר טענה)
 // The transitional `violet` is gone: the 3 statuses that held it (PO.sent, receipt.returned,
 // payment.sent_for_execution) were resolved to info/alert/await (OPEN-DECISIONS #33).
+import type { ActiveRole, Role } from './types';
+
 export type Tone = 'done' | 'await' | 'alert' | 'info' | 'idle';
 export interface StatusMeta { label: string; tone: Tone }
 
@@ -170,27 +172,49 @@ export const PRODUCT_AVAILABILITY: Record<'available' | 'unavailable', StatusMet
 };
 
 /**
- * Default role labels. The `user_role` enum values themselves are frozen — they are
- * baked into 77 RLS policies — so a tenant whose vocabulary differs (a garage has no
- * "מנהל מטבח") overrides the *display* label only. Defaults stay events-venue-neutral
- * where they can, and are simply the fallback where they cannot.
+ * Default role labels for the three personas the product can still assign. The `user_role`
+ * enum values themselves are frozen — they are baked into 77 RLS policies — so a tenant whose
+ * vocabulary differs (a garage does not call its buyer "מנהל רכש") overrides the *display*
+ * label only. Defaults stay events-venue-neutral where they can, and are simply the fallback
+ * where they cannot.
  */
-export const ROLE_LABEL: Record<string, string> = {
+export const ACTIVE_ROLE_LABEL: Record<ActiveRole, string> = {
   owner: 'מנהל/בעלים',
-  kitchen: 'מנהל מטבח',
   office: 'מנהל רכש',
-  payer: 'מבצע העברות',
   accountant: 'הנהלת חשבונות',
-  supplier: 'ספק',
 };
+
+/**
+ * The three personas that retired from the product (`0133`). A profile still carrying one is
+ * history, not a job somebody holds today — `auth_role()` resolves it to NULL, sign-in is
+ * refused, and `manage_profile_access` raises `account_role_retired` on any attempt to make one
+ * active again. The suffix is what makes an archive row read as a record of the past
+ * instead of as a roster entry that quietly stopped working.
+ *
+ * `Exclude<Role, ActiveRole>` on purpose: the two dictionaries have to partition the enum, and
+ * the compiler is a better guard of that than a comment is.
+ */
+export const HISTORICAL_ROLE_LABEL: Record<Exclude<Role, ActiveRole>, string> = {
+  kitchen: 'מנהל מטבח (היסטורי)',
+  payer: 'מבצע העברות (היסטורי)',
+  supplier: 'ספק (היסטורי)',
+};
+
+/** The union of both, so an archived row still renders a name rather than a raw enum value. */
+export const ROLE_LABEL: Record<string, string> = { ...ACTIVE_ROLE_LABEL, ...HISTORICAL_ROLE_LABEL };
 
 /**
  * Per-tenant role labels, resolved from `organizations.settings.role_labels`.
  *
  * `settings` is a jsonb column, so its contents are untrusted at the type level — this
  * reads it defensively and accepts a string override only for a role that actually
- * exists in ROLE_LABEL. Unknown keys are dropped: a settings blob can rename a role,
+ * exists in ACTIVE_ROLE_LABEL. Unknown keys are dropped: a settings blob can rename a role,
  * never invent one. Any role the tenant has not customized keeps its Hebrew default.
+ *
+ * The loop reads ACTIVE_ROLE_LABEL rather than ROLE_LABEL, which tightens that same rule by
+ * one turn: a tenant may rename a role they can actually assign, but not one that retired from
+ * the product. Renaming `payer` would put a tenant's chosen job title on an archive row and
+ * make a closed account look like a current one — and there is no live account left to name.
  *
  * Prefer `useAuth().roleLabels` in components; this is the pure function underneath.
  */
@@ -199,7 +223,7 @@ export function resolveRoleLabels(orgSettings: unknown): Record<string, string> 
   if (!raw || typeof raw !== 'object') return ROLE_LABEL;
   const overrides = raw as Record<string, unknown>;
   const resolved = { ...ROLE_LABEL };
-  for (const role of Object.keys(ROLE_LABEL)) {
+  for (const role of Object.keys(ACTIVE_ROLE_LABEL)) {
     const value = overrides[role];
     if (typeof value === 'string' && value.trim()) resolved[role] = value.trim();
   }

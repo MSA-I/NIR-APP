@@ -9,6 +9,8 @@ import { Breadcrumbs, useToast, StatusBadge, LifecycleStrip, Modal, ConfirmDialo
 import { InvoiceAttachments } from '../components/AttachmentsPanel';
 import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
+import { reasonOr } from '../lib/reason';
+import { reasonDemandFor } from '../lib/transitionIntent';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS, CREDIT_REASON } from '../lib/status';
 import { fmtMoneyExact, fmtDate, formatQuantity, formatUnit, todayISO } from '../lib/format';
 import { creditDraftFromInterpretation, type CreditDraft } from '../components/document-review/model';
@@ -148,6 +150,17 @@ export const INVOICE_REVIEW_ACTIONS: { to: InvoiceReviewStatus; label: string }[
   { to: 'approved', label: 'אישור לתשלום' },
   { to: 'investigation', label: 'סימון לבירור' },
 ];
+
+/**
+ * The label the audit line carries when the reviewer typed nothing.
+ *
+ * Same copy as the button that was pressed, so the ledger sentence reads as the action a person
+ * would recognise. `received` is not an action this screen offers — the graph never returns it —
+ * so it falls back to the screen's own name rather than inventing a verb for it.
+ */
+function reviewActionLabel(status: InvoiceReviewStatus): string {
+  return INVOICE_REVIEW_ACTIONS.find((action) => action.to === status)?.label ?? 'עדכון סטטוס בדיקת חשבונית';
+}
 
 export type InvoicePrimaryAction = InvoiceReviewStatus | 'payment-request';
 
@@ -327,13 +340,29 @@ export default function InvoiceDetail() {
     const res = await supabase.rpc('set_invoice_review_status', {
       p_invoice_id: inv.id,
       p_status: status,
-      p_reason: reason?.trim() || null,
+      // Never `null`. The command rejects a blank reason outright — `invoice_review_fields_required`,
+      // 0023:1907 — and the transitions that no longer open a dialog arrive here with nothing typed.
+      // `reasonOr` writes the honest line instead: the action, and that nobody added a note.
+      p_reason: reasonOr(reason, reviewActionLabel(status)),
     });
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     setReviewTarget(null);
     toast('הסטטוס עודכן');
     void refetch();
+  }
+
+  /**
+   * The single door every review button goes through.
+   *
+   * A move up the ladder is the work, not a decision to defend, so it fires straight away and says
+   * so with a toast. Only the moves that undo or divert — investigation, and anything backwards —
+   * stop to ask. Both paths write a reason to `audit_logs`; only one of them interrupts a person.
+   */
+  function requestReview(to: InvoiceReviewStatus) {
+    if (!inv) return;
+    if (reasonDemandFor('invoice_review', inv.review_status, to)) { setReviewTarget(to); return; }
+    void setReviewStatus(to);
   }
 
   async function overrideThreeWayMatch() {
@@ -370,7 +399,7 @@ export default function InvoiceDetail() {
   const primaryAction = !isOffice ? null : primaryKey === 'payment-request' ? (
     <button className="btn-primary" onClick={() => navigate(`/payment-requests?new=${inv.id}`)}><Send size={15} /> יצירת דרישת תשלום</button>
   ) : primaryTransition ? (
-    <button className="btn-primary" disabled={busy} onClick={() => setReviewTarget(primaryTransition.to)}>
+    <button className="btn-primary" disabled={busy} onClick={() => requestReview(primaryTransition.to)}>
       {primaryTransition.to === 'approved' ? <CheckCircle2 size={15} /> : <Send size={15} />}{primaryTransition.label}
     </button>
   ) : null;
@@ -390,7 +419,7 @@ export default function InvoiceDetail() {
         secondaryActions={<>
           {isOffice && transitions.filter((transition) => transition.to !== primaryKey).map((transition) => (
             <button key={transition.to} className="btn-secondary" disabled={busy || graphUnavailable}
-              onClick={() => setReviewTarget(transition.to)}>
+              onClick={() => requestReview(transition.to)}>
               {transition.to === 'investigation' ? <SearchCheck size={15} /> : transition.to === 'approved' ? <CheckCircle2 size={15} /> : <Send size={15} />}{transition.label}
             </button>
           ))}

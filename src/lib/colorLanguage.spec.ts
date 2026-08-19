@@ -82,6 +82,17 @@ describe('color language', () => {
     expect(mixed).toEqual([]);
   });
 
+  it('בורר המוצרים אינו מדבר בטון "הושלם" — בחירה אינה השלמה', () => {
+    // The selection box wore border-done-line/bg-done-soft/text-done-fg. Choosing a product is a
+    // choice; the done family says a step finished, and a picker has nothing finished on it. The
+    // two read the same to anyone who knows the language, so only a rule keeps them apart. The
+    // file lookup is asserted first: a rename must fail here, not quietly pass on an empty scan.
+    const picker = sources.find(([file]) => file === 'pages/neworder/ProductStep.tsx');
+    expect(picker, 'pages/neworder/ProductStep.tsx').toBeDefined();
+    const surfaces = ['wash', 'line', 'soft', 'on-soft', 'fg', 'solid'].join('|');
+    expect([...picker![1].matchAll(new RegExp(`\\bdone-(?:${surfaces})\\b`, 'g'))].map((m) => m[0])).toEqual([]);
+  });
+
   it('כל טון חושף בדיוק את שישה המשטחים, ולכל אחד יש מחלקה', () => {
     // badge-${tone} and note-${tone} are built by string interpolation (ui.tsx, DocumentStatusBadge),
     // so a Tone with no class renders unstyled and no build fails. This is that build failure.

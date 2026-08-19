@@ -103,58 +103,6 @@ export function monthlyReportScreenTotals(data: {
   };
 }
 
-export function buildMonthlyWorkbook(input: {
-  orgName: string | null | undefined;
-  month: string;
-  generatedAt: Date;
-  data: MonthlyReportData;
-  labels: MonthlyReportLabels;
-}) {
-  const { data } = input;
-  const invoiceTotal = data.invoices.reduce((sum, row) => sum + row.total_amount, 0);
-  const beforeVatTotal = data.invoices.reduce((sum, row) => sum + row.amount_before_vat, 0);
-  const vatTotal = data.invoices.reduce((sum, row) => sum + row.vat_amount, 0);
-  const paymentTotal = data.payments.reduce((sum, row) => sum + row.amount, 0);
-  const creditTotal = data.credits.reduce((sum, row) => sum + row.amount, 0);
-  const workbook = XLSX.utils.book_new();
-
-  // Everything below that is not a number goes through neutralizeSpreadsheetRow. This workbook
-  // LEAVES THE BUILDING — it is the file the accountant opens — and it carries supplier names,
-  // exception titles, payment references and payment methods straight from tenant data. A value
-  // starting `=` or `@` is a formula to Excel regardless of what we meant by it, and until now
-  // this file neutralized nothing while documentExport.ts, which never leaves the app, did.
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
-    ['שם ארגון', neutralize(input.orgName ?? '—')],
-    ['חודש', input.month],
-    ['נוצר בתאריך', input.generatedAt.toISOString()],
-    ['הערה', 'הקובץ משקף את הנתונים שהושלמו בזמן המצוין; הוא אינו snapshot טרנזקציוני.'],
-    [],
-    ['מדד', 'מספר רשומות', 'סכום'],
-    ['חשבוניות', data.invoices.length, invoiceTotal],
-    ['לפני מע״מ', data.invoices.length, beforeVatTotal],
-    ['מע״מ', data.invoices.length, vatTotal],
-    ['תשלומים', data.payments.length, paymentTotal],
-    ['זיכויים', data.credits.length, creditTotal],
-    ['חריגים פתוחים כרגע', data.exceptions.length, null],
-  ]), 'פרטי הדוח');
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.invoices.map((row) => neutralizeSpreadsheetRow({
-    'ספק': row.supplier.name, 'מספר חשבונית': row.invoice_number, 'תאריך': row.invoice_date,
-    'לפני מע"מ': row.amount_before_vat, 'מע"מ': row.vat_amount, 'סה"כ': row.total_amount,
-    'סטטוס בדיקה': input.labels.invoiceReview[row.review_status]?.label,
-    'סטטוס תשלום': input.labels.invoicePayment[row.payment_status]?.label,
-  }))), 'חשבוניות');
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.payments.map((row) => neutralizeSpreadsheetRow({
-    'ספק': row.supplier.name, 'תאריך': row.paid_date, 'סכום': row.amount, 'אמצעי': row.method, 'אסמכתא': row.reference,
-  }))), 'תשלומים');
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.credits.map((row) => neutralizeSpreadsheetRow({
-    'ספק': row.supplier.name, 'סיבה': input.labels.creditReason[row.reason], 'סכום': row.amount, 'סטטוס': input.labels.creditStatus[row.status]?.label,
-  }))), 'זיכויים');
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.exceptions.map((row) => neutralizeSpreadsheetRow({
-    'סוג': input.labels.exceptionType[row.type], 'תיאור': row.title, 'ספק': row.supplier?.name ?? '',
-  }))), 'חריגים פתוחים כרגע');
-  return workbook;
-}
-
 const MONEY_FORMAT = '#,##0.00';
 
 /** Column widths + a money number-format pass — the styling SheetJS CE writes reliably. */
@@ -172,25 +120,120 @@ function styleSheet(sheet: XLSX.WorkSheet | undefined, widths: number[], moneyCo
 }
 
 /**
+ * The two merged heading rows above a key/value block. Merges are in the measured
+ * writes-reliably set; cell fills and fonts are NOT — see DEBT-REGISTER §37.
+ */
+function mergeTitleRows(sheet: XLSX.WorkSheet, lastCol: number) {
+  sheet['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: lastCol } },
+  ];
+}
+
+export function buildMonthlyWorkbook(input: {
+  orgName: string | null | undefined;
+  month: string;
+  generatedAt: Date;
+  data: MonthlyReportData;
+  labels: MonthlyReportLabels;
+}) {
+  const { data } = input;
+  const invoiceTotal = data.invoices.reduce((sum, row) => sum + row.total_amount, 0);
+  const beforeVatTotal = data.invoices.reduce((sum, row) => sum + row.amount_before_vat, 0);
+  const vatTotal = data.invoices.reduce((sum, row) => sum + row.vat_amount, 0);
+  const paymentTotal = data.payments.reduce((sum, row) => sum + row.amount, 0);
+  const creditTotal = data.credits.reduce((sum, row) => sum + row.amount, 0);
+  const workbook = XLSX.utils.book_new();
+
+  // The heading rows are new (owner review 19.08.2026): the summary sheet opened straight into a
+  // bare key/value dump, which is what an export looks like when nobody decided how it should
+  // read. The machine-readable rows below it are unchanged — the title is added above them, not
+  // instead of them.
+  const summarySheet = XLSX.utils.aoa_to_sheet([
+    [`דוח חודשי לרו״ח — ${neutralize(input.orgName ?? '—')}`],
+    [`${input.month} · הופק ${input.generatedAt.toISOString()}`],
+    [],
+    ['שם ארגון', neutralize(input.orgName ?? '—')],
+    ['חודש', input.month],
+    ['נוצר בתאריך', input.generatedAt.toISOString()],
+    ['הערה', 'הקובץ משקף את הנתונים שהושלמו בזמן המצוין; הוא אינו snapshot טרנזקציוני.'],
+    [],
+    ['מדד', 'מספר רשומות', 'סכום'],
+    ['חשבוניות', data.invoices.length, invoiceTotal],
+    ['לפני מע״מ', data.invoices.length, beforeVatTotal],
+    ['מע״מ', data.invoices.length, vatTotal],
+    ['תשלומים', data.payments.length, paymentTotal],
+    ['זיכויים', data.credits.length, creditTotal],
+    ['חריגים פתוחים כרגע', data.exceptions.length, null],
+  ]);
+
+  // Everything below that is not a number goes through neutralizeSpreadsheetRow. This workbook
+  // LEAVES THE BUILDING — it is the file the accountant opens — and it carries supplier names,
+  // exception titles, payment references and payment methods straight from tenant data. A value
+  // starting `=` or `@` is a formula to Excel regardless of what we meant by it, and until now
+  // this file neutralized nothing while documentExport.ts, which never leaves the app, did.
+  XLSX.utils.book_append_sheet(workbook, summarySheet, 'פרטי הדוח');
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.invoices.map((row) => neutralizeSpreadsheetRow({
+    'ספק': row.supplier.name, 'מספר חשבונית': row.invoice_number, 'תאריך': row.invoice_date,
+    'לפני מע"מ': row.amount_before_vat, 'מע"מ': row.vat_amount, 'סה"כ': row.total_amount,
+    'סטטוס בדיקה': input.labels.invoiceReview[row.review_status]?.label,
+    'סטטוס תשלום': input.labels.invoicePayment[row.payment_status]?.label,
+  }))), 'חשבוניות');
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.payments.map((row) => neutralizeSpreadsheetRow({
+    'ספק': row.supplier.name, 'תאריך': row.paid_date, 'סכום': row.amount, 'אמצעי': row.method, 'אסמכתא': row.reference,
+  }))), 'תשלומים');
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.credits.map((row) => neutralizeSpreadsheetRow({
+    'ספק': row.supplier.name, 'סיבה': input.labels.creditReason[row.reason], 'סכום': row.amount, 'סטטוס': input.labels.creditStatus[row.status]?.label,
+  }))), 'זיכויים');
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.exceptions.map((row) => neutralizeSpreadsheetRow({
+    'סוג': input.labels.exceptionType[row.type], 'תיאור': row.title, 'ספק': row.supplier?.name ?? '',
+  }))), 'חריגים פתוחים כרגע');
+
+  /**
+   * RTL is set HERE, in the one builder every path routes through, and not in each caller.
+   * The locked snapshot download (Reports.tsx `downloadSnapshot`) shipped a LEFT-to-right
+   * workbook to a Hebrew accountant because it was the one path that never got this line.
+   *
+   * This reverses the earlier decision to keep the locked workbook untouched, deliberately.
+   * `RTL` is a VIEW attribute: it changes no cell value, and `snapshot.content_hash` is computed
+   * server-side over the snapshot ROWS, never over the xlsx bytes. The evidence contract is a
+   * claim about values, and the values are exactly what they were.
+   *
+   * Measured on the pinned xlsx@0.20.3: a single `Views[0]` entry writes `rightToLeft="1"` into
+   * every `xl/worksheets/sheetN.xml` — there is no per-sheet array to fill in.
+   */
+  workbook.Workbook = { Views: [{ RTL: true }] };
+
+  mergeTitleRows(summarySheet, 2);
+  styleSheet(summarySheet, [30, 22, 16], [2]);
+  styleSheet(workbook.Sheets['חשבוניות'], [24, 16, 12, 14, 12, 14, 14, 14], [3, 4, 5]);
+  styleSheet(workbook.Sheets['תשלומים'], [24, 12, 14, 14, 18], [2]);
+  styleSheet(workbook.Sheets['זיכויים'], [24, 16, 14, 14], [2]);
+  styleSheet(workbook.Sheets['חריגים פתוחים כרגע'], [16, 40, 24], []);
+  return workbook;
+}
+
+/**
  * The BUILT-IN styled default for the monthly accountant report (owner decision 18.08.2026):
  * used when no custom template is configured, replacing the bare fallback workbook.
  *
  * Styled IN CODE, not from a template file, on purpose. A shipped .xlsx asset would rest on
  * SheetJS CE preserving cell styles through a read→write round trip — exactly the unproven debt
- * DEBT-REGISTER §37 tracks. This builder uses only what CE writes reliably: RTL views (the
- * documentExport.ts:242 recipe), merges, column widths and number formats. The summary sheet
- * presents the same figures a custom template maps, labeled from the EXPORT_DEFINITIONS
- * registry, so both paths speak one vocabulary.
+ * DEBT-REGISTER §37 tracks. Every builder here uses only what CE writes reliably: RTL views,
+ * merges, column widths and number formats — measured, not assumed. Cell fills and fonts are
+ * discarded on write, so brand colour in the workbook is not on the table (§37 again). What this
+ * builder adds on top of the base is the summary sheet: the same figures a custom template maps,
+ * labeled from the EXPORT_DEFINITIONS registry, so both paths speak one vocabulary.
  *
- * The locked snapshot (buildLockedMonthlyWorkbook) deliberately does NOT use this: a version is
- * an evidence artifact, and re-downloading version N must produce the workbook the accountant
- * already archived — restyling it would make identical versions visibly differ.
+ * The locked snapshot (buildLockedMonthlyWorkbook) shares the BASE builder's presentation — RTL
+ * views, widths, number formats, a heading block — because none of it touches a cell value. It
+ * does not share this summary sheet: a version is an evidence artifact and its figures come only
+ * from the frozen snapshot rows, never from today's registry or today's live data.
  */
 export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthlyWorkbook>[0] & {
   summary: ReportTemplateValues;
 }): XLSX.WorkBook {
   const workbook = buildMonthlyWorkbook(input);
-  workbook.Workbook = { Views: [{ RTL: true }] };
 
   const { data, summary } = input;
   const definition = exportDefinition('accountant_monthly_report');
@@ -216,10 +259,7 @@ export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthly
     [],
     ['הערה', 'הקובץ משקף את הנתונים שהושלמו בזמן המצוין; הוא אינו snapshot טרנזקציוני.'],
   ]);
-  sheet['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 2 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 2 } },
-  ];
+  mergeTitleRows(sheet, 2);
   sheet['!cols'] = [{ wch: 28 }, { wch: 20 }, { wch: 16 }];
   fieldRows.forEach(([label], index) => {
     const field = definition?.fields.find((candidate) => candidate.label === label);
@@ -227,12 +267,8 @@ export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthly
     const cell = sheet[XLSX.utils.encode_cell({ r: 4 + index, c: 1 })];
     if (cell && cell.t === 'n') cell.z = MONEY_FORMAT;
   });
+  // The data sheets are already styled by the base builder; only the summary sheet is replaced.
   workbook.Sheets['פרטי הדוח'] = sheet;
-
-  styleSheet(workbook.Sheets['חשבוניות'], [24, 16, 12, 14, 12, 14, 14, 14], [3, 4, 5]);
-  styleSheet(workbook.Sheets['תשלומים'], [24, 12, 14, 14, 18], [2]);
-  styleSheet(workbook.Sheets['זיכויים'], [24, 16, 14, 14], [2]);
-  styleSheet(workbook.Sheets['חריגים פתוחים כרגע'], [16, 40, 24], []);
   return workbook;
 }
 
@@ -241,6 +277,11 @@ export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthly
  *
  * No live query result, external link or formula is consulted here. Re-downloading a version
  * therefore produces equivalent workbook values even when the operational tables later change.
+ *
+ * Presentation is a different question from values. This workbook inherits the base builder's
+ * RTL views, column widths and number formats and adds the same heading block, because none of
+ * those reads a value or changes one — and a snapshot the accountant cannot read left-to-right
+ * is not better evidence for being plain.
  */
 export function buildLockedMonthlyWorkbook(input: {
   snapshot: MonthlyReportSnapshot;
@@ -278,7 +319,10 @@ export function buildLockedMonthlyWorkbook(input: {
     labels: frozenLabels,
   });
 
-  workbook.Sheets['פרטי הדוח'] = XLSX.utils.aoa_to_sheet([
+  const summarySheet = XLSX.utils.aoa_to_sheet([
+    [`דוח סופי נעול — ${neutralize(snapshot.organization_name)} · ${neutralize(snapshot.legal_entity_name)}`],
+    [`${snapshot.report_month.slice(0, 7)} · גרסה ${snapshot.version} · נוצר ${snapshot.created_at}`],
+    [],
     ['סוג הדוח', 'דוח סופי נעול'],
     ['שם ארגון', neutralize(snapshot.organization_name)],
     ['ישות משפטית', neutralize(snapshot.legal_entity_name)],
@@ -300,6 +344,9 @@ export function buildLockedMonthlyWorkbook(input: {
     ['חריגים פתוחים בעת היצירה', snapshot.totals.exception_count, null],
     ['תנועות בנק', snapshot.totals.bank_transaction_count, snapshot.totals.bank_total],
   ]);
+  mergeTitleRows(summarySheet, 2);
+  styleSheet(summarySheet, [30, 34, 16], [2]);
+  workbook.Sheets['פרטי הדוח'] = summarySheet;
 
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(snapshot.bank_rows.map((row) => neutralizeSpreadsheetRow({
     'תאריך': row.tx_date,
@@ -309,6 +356,7 @@ export function buildLockedMonthlyWorkbook(input: {
     'אסמכתא': row.reference,
     'סטטוס': row.status_label ?? row.status,
   }))), 'תנועות בנק');
+  styleSheet(workbook.Sheets['תנועות בנק'], [12, 40, 14, 10, 18, 14], [2]);
 
   return workbook;
 }

@@ -17,7 +17,8 @@ import { Modal, Note, useToast } from './ui';
  * phone mode and on desktop without colliding with the bottom action bar or the speed dial.
  *
  * ponytail: a 30-second cooldown after a send, no queue and no retry. The row is the record and
- * /admin is the fallback view; wire a real retry in only if notes start getting lost.
+ * the operator console is the fallback view; wire a real retry in only if notes start getting
+ * lost. (That console left the tenant app on 19.08.2026 — it is `/operator`, not `/admin`.)
  *
  * THE SCREENSHOT IS TAKEN BEFORE THE DIALOG OPENS (package L, owner decision 11.08.2026), and the
  * order is the whole trick. Capturing after would photograph the feedback box sitting on top of the

@@ -1,5 +1,5 @@
-import { Link, Outlet, useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight, ScrollText } from 'lucide-react';
+import { Link, Outlet, useNavigate, useLocation, useSearchParams } from 'react-router';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, Menu, X, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight, ScrollText } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -20,6 +20,19 @@ import { routeBackPresentation, routePresentationTitle, staticRouteTitle, type S
 
 export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: ActiveRole[] }
 export interface NavSection { section: string; items: NavItem[]; collapsible?: boolean }
+
+/* "The menu is open" is a place, not a component state (owner, 19.08.2026: the iPhone back gesture
+   left the application instead of returning to the menu the screen was chosen from). Opening the
+   drawer PUSHES `?menu=1` onto the router's history; picking a destination navigates to a URL
+   without it, so the drawer derives itself shut and the marker entry stays behind for `back` to
+   land on. Escape / backdrop / X consume that entry with `navigate(-1)` instead, so closing never
+   walks the user out of the application.
+   The marker rides the search string rather than the hash because `setSearchParams` resolves an
+   empty hash away, and several screens write params from effects while mounted.
+   CAUTION for future param writers: this only survives because every writer in the codebase builds
+   its next value from `new URLSearchParams(current)`. A writer that passes a fresh object literal
+   drops the marker and silently closes the drawer under the user. */
+const MENU_PARAM = 'menu';
 
 /* T7.3f pointer atmosphere: --glow-x/y drive the background's oceanic wash (.app-glow) and
    the hero band's inner light (index.css). The canvas base itself is static pure wheat.
@@ -70,7 +83,7 @@ const NAV_SHORT_LABELS: Partial<Record<string, string>> = {
 
 // Four work groups — מסמכים / רכש / כספים / בקרה — under two ungrouped links that need no
 // header to explain them. The less self-evident items (מחירונים, דרישות תשלום, התאמות בנק,
-// הגדרות, and the focused /pay and /admin routes) sit where the plain
+// הגדרות, and the focused /pay route) sit where the plain
 // procurement/finance/control reading puts them.
 // None of it invents business meaning.
 //
@@ -179,22 +192,24 @@ function itemsFor(role: ActiveRole, paths: readonly string[]): NavItem[] {
 // presentation: daily work is visible; management and control are progressively disclosed. New
 // order, alerts and archive keep their routes and page titles but enter through their contextual
 // surfaces instead of competing with modules in the sidebar.
-export function sectionsForRole(role: ActiveRole | undefined, isPlatformAdmin: boolean): NavSection[] {
-  const roleSections: NavSection[] = role ? [
+export function sectionsForRole(role: ActiveRole | undefined): NavSection[] {
+  // The 'פלטפורמה' section that used to be appended here for a platform admin is gone with the
+  // operator console itself (19.08.2026): /admin now lives in the separate operator application
+  // (operator.html, src/operator/), and the tenant shell offers no door to it. This catalogue is
+  // tenant navigation only.
+  return role ? [
     { section: '', items: itemsFor(role, DAILY_PATHS[role]) },
     { section: 'ניהול', items: itemsFor(role, MANAGEMENT_PATHS[role] ?? []), collapsible: true },
     { section: 'בקרה', items: itemsFor(role, CONTROL_PATHS[role] ?? []), collapsible: true },
   ].filter((section) => section.items.length > 0) : [];
-  const platform = { section: 'פלטפורמה', collapsible: !!role, items: [{ ...navItem('/admin', Building2, []), roles: [] as ActiveRole[] }] };
-  return isPlatformAdmin ? [...roleSections, platform] : roleSections;
 }
 
 export function footerItemsForRole(role: ActiveRole | undefined): NavItem[] {
   return role === 'owner' ? itemsFor(role, ['/onboarding', '/settings']) : [];
 }
 
-export function drawerSectionsForRole(role: ActiveRole | undefined, isPlatformAdmin: boolean): NavSection[] {
-  return sectionsForRole(role, isPlatformAdmin).map((section, index) => (
+export function drawerSectionsForRole(role: ActiveRole | undefined): NavSection[] {
+  return sectionsForRole(role).map((section, index) => (
     role && index === 0 ? { ...section, section: 'עבודה שוטפת' } : section
   ));
 }
@@ -216,11 +231,19 @@ export function pageTitleFor(pathname: string): string {
 
 export default function Layout() {
   useGlowPointer();
-  const { profile, org, roleLabels, isPlatformAdmin, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, accessStatus = 'unknown', signOut } = useAuth();
+  const { profile, org, roleLabels, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, accessStatus = 'unknown', signOut } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const location = useLocation();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchParams] = useSearchParams();
+  // Derived, never stored: the URL is the single source of truth for the drawer, which is what
+  // makes reload, a pasted `?menu=1` link and the back gesture all agree without extra handling.
+  const mobileOpen = searchParams.has(MENU_PARAM);
+  // Whether THIS session pushed the marker entry (as opposed to arriving on one), which decides
+  // whether closing consumes a history entry or rewrites the current one.
+  const pushedMenuRef = useRef(false);
+  const mobileOpenRef = useRef(mobileOpen);
+  mobileOpenRef.current = mobileOpen;
   const [searchOpen, setSearchOpen] = useState(false);
   /* T7.1 top navigation: which desktop dropdown group is open (one at a time; null = none).
      Disclosure-nav pattern — aria-expanded button + a list of real links, no menu roles. */
@@ -244,27 +267,61 @@ export default function Layout() {
   const currentTitle = pageTitleFor(location.pathname);
   const routeBack = routeBackPresentation(location.pathname);
 
-  const sections = sectionsForRole(role, isPlatformAdmin);
-  const drawerSections = drawerSectionsForRole(role, isPlatformAdmin);
+  const sections = sectionsForRole(role);
+  const drawerSections = drawerSectionsForRole(role);
   const footerItems = footerItemsForRole(role);
+
+  // The current screen with a rewritten query — the pathname and hash are carried through so the
+  // marker never doubles as a navigation.
+  const hereWith = (params: URLSearchParams) => {
+    const search = params.toString();
+    return { pathname: location.pathname, search: search ? `?${search}` : '', hash: location.hash };
+  };
+
+  function openMobileMenu() {
+    const next = new URLSearchParams(searchParams);
+    next.set(MENU_PARAM, '1');
+    pushedMenuRef.current = true;
+    navigate(hereWith(next)); // a PUSH — this entry is what the back gesture returns to
+  }
 
   const { panelRef: drawerRef, requestClose: closeMobileMenu } = useDialogLayer<HTMLElement>({
     open: mobileOpen,
-    onClose: () => setMobileOpen(false),
+    // Every deliberate close — Escape, the backdrop, the X, a resize into desktop — arrives here.
+    onClose: () => {
+      const next = new URLSearchParams(searchParams);
+      next.delete(MENU_PARAM);
+      if (pushedMenuRef.current) {
+        pushedMenuRef.current = false;
+        navigate(-1); // consume the entry we pushed rather than stack a second one on top of it
+      } else {
+        // Reload, or a link someone pasted with the marker already in it: there is no entry of
+        // ours to consume, and stepping back would leave the application.
+        navigate(hereWith(next), { replace: true });
+      }
+    },
     initialFocus: (panel) => panel.querySelector<HTMLElement>('[aria-current="page"]')
       ?? panel.querySelector<HTMLElement>('button, a'),
   });
 
+  // Choosing a destination is not a close: the link navigates to a URL without the marker, the
+  // drawer derives itself shut, and useDialogLayer's cleanup releases the scroll lock and focus
+  // exactly as a manual close would — while the marker entry survives behind the new screen.
+  useEffect(() => { if (!mobileOpen) pushedMenuRef.current = false; }, [mobileOpen]);
+
   // Crossing into desktop closes the mobile layer so its scroll lock cannot survive a resize.
+  // Guarded on the drawer actually being open: this also runs once on mount, and a desktop
+  // viewport must not rewrite the URL of every page load. `closeMobileMenu` is stable, so the
+  // listener is registered once and reads the live state through the ref.
   useEffect(() => {
     const desktop = window.matchMedia('(min-width: 64rem)');
-    const sync = () => { if (desktop.matches) setMobileOpen(false); };
+    const sync = () => { if (desktop.matches && mobileOpenRef.current) closeMobileMenu(); };
     desktop.addEventListener('change', sync);
     sync();
     return () => {
       desktop.removeEventListener('change', sync);
     };
-  }, []);
+  }, [closeMobileMenu]);
 
   // An open top-nav dropdown closes on outside pointer, on Escape (focus returns to its
   // trigger), and on any route change. One listener set, mounted only while a group is open.
@@ -364,7 +421,7 @@ export default function Layout() {
     return (
       <Link key={item.to} to={item.to} className={linkCls(active, surface)} aria-current={active ? 'page' : undefined}
         data-section={section ?? undefined} title={surface === 'pill' && pillLabel !== item.label ? item.label : undefined}
-        onClick={() => { if (mobileOpen) closeMobileMenu(); setOpenGroup(null); }}>
+        onClick={() => setOpenGroup(null)}>
         {/* Light panel (T7.3h): the icon inherits — a section-glyph accent would vanish on the
             active item's oceanic pill (accent == pill color). */}
         {surface !== 'pill' && <item.icon size={17} aria-hidden="true" className={surface === 'shell' && section ? 'section-glyph' : undefined} />}
@@ -403,7 +460,6 @@ export default function Layout() {
           honours a middle click; the image stays alt="" because the accessible name belongs to the
           link, and repeating it would make a screen reader say the brand twice. */}
       <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
-        onClick={() => { if (mobileOpen) closeMobileMenu(); }}
         className="flex items-center gap-3 border-b border-line-soft px-4 py-4 pe-12 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset lg:pe-4">
         <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="40" height="40"
           className="size-10 shrink-0 rounded-lg bg-white object-contain p-0.5 ring-1 ring-line-soft" />
@@ -563,7 +619,7 @@ export default function Layout() {
       <header className="phone-safe-header lg:hidden sticky top-0 z-40 bg-topbar/75 backdrop-blur-sm text-ink border-b border-line-soft flex min-w-0 items-center no-print">
         <button ref={menuButtonRef} type="button"
           className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-          onClick={() => setMobileOpen(true)} aria-label="פתיחת תפריט" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
+          onClick={openMobileMenu} aria-label="פתיחת תפריט" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
           <Menu size={22} />
         </button>
         <div className="mobile-shell-identity flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2">

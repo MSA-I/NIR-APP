@@ -7,12 +7,13 @@ import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, type AttentionI
 import { EXCEPTION_TYPE, PO_STATUS, SEVERITY } from '../lib/status';
 import {
   addCalendarDays, BUSINESS_TIME_ZONE, dateStartInstant, daysInCalendarMonth,
-  fmtMoneyExact, fmtMoneyRounded, fmtMonth, localDateKey, shiftCalendarMonth, startOfCalendarWeek,
+  fmtMoneyExact, fmtMoneyRounded, fmtMonth, localDateKey, productLabel, shiftCalendarMonth,
+  startOfCalendarWeek,
   todayISO as businessTodayISO,
 } from '../lib/format';
 import { comparisonSeries } from '../lib/theme';
 import { mergeWeeklyComparison, topCategoriesWithOther } from '../lib/dashboardSeries';
-import { CategoryDonut, ComparisonLineChart, CoverageRing, money, moneyShort, SpendBarChart, TrendSparkline } from '../components/charts';
+import { CategoryDonut, ComparisonLineChart, money, moneyShort, SpendBarChart, TrendSparkline } from '../components/charts';
 import { fetchAll } from '../lib/supabasePaging';
 import { useAuth } from '../auth/AuthContext';
 
@@ -35,6 +36,12 @@ type ManagementDashboardSnapshot = {
     activeCount: number;
     overdue: number | null;
     dueToday: number | null;
+    // 0148 — the due-window money. All four figures below ride the same evidence guard as
+    // `overdue`/`dueToday`: null means "no active request carries a due date at all", while 0
+    // means "dated requests exist and none of them fall here". Never conflate the two.
+    overdueAmount: number | null;
+    dueWithin7Amount: number | null;
+    dueWithin7Count: number | null;
   };
   credits: { count: number; sum: number | null };
   bank: { unmatched: number; suggested: number };
@@ -221,7 +228,7 @@ type DeliveryOrder = {
   expected_date: string;
   supplier_id: string;
   supplier: { name: string } | null;
-  items: { qty: number; product: { name: string } | null }[];
+  items: { qty: number; product: { name: string; display_name: string | null } | null }[];
 };
 
 // אספקות היום ומחר — the morning check-in strip (section 12): which suppliers should show up at
@@ -305,7 +312,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
                           {order.items.length > 0 && (
                             <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted">
                               {order.items.map((item, index) => (
-                                <span key={index}><bdi>{item.product?.name ?? '—'}</bdi> <span className="num">×{item.qty}</span></span>
+                                <span key={index}><bdi>{item.product ? productLabel(item.product) : '—'}</bdi> <span className="num">×{item.qty}</span></span>
                               ))}
                             </div>
                           )}
@@ -482,7 +489,7 @@ export default function Dashboard() {
       fetchAll((from, to) => supabase.from('purchase_order_items').select('id, qty, unit_price, product:products(category:categories(name)), order:purchase_orders!inner(created_at, status)').gte('order.created_at', chartsFromTimestamp).lte('order.created_at', now.toISOString()).not('order.status', 'in', '(draft,cancelled)').order('id').range(from, to)),
       // price increases — now bounded to the last 30 days (was a full unbounded scan): matches the
       // "מוצרים שהתייקרו לאחרונה" label and the alerts window (OPEN-DECISIONS #26).
-      fetchAll((from, to) => supabase.from('supplier_products').select('id, current_price, previous_price, price_effective_date, product:products(id, name), supplier:suppliers(name)').gte('price_effective_date', last30dISO).not('previous_price', 'is', null).order('price_effective_date', { ascending: false }).order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('supplier_products').select('id, current_price, previous_price, price_effective_date, product:products(id, name, display_name), supplier:suppliers(name)').gte('price_effective_date', last30dISO).not('previous_price', 'is', null).order('price_effective_date', { ascending: false }).order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('purchase_request_items').select('id, qty, unit_price, product_id, request:purchase_requests!inner(created_at, status)').gte('request.created_at', monthStartTimestamp).lte('request.created_at', now.toISOString()).eq('request.status', 'split').order('id').range(from, to)),
       // available offers for the savings estimate — kept minimal (2 cols) but cannot be date-bounded:
       // savings needs the max CURRENT available offer per product regardless of when it was set.
@@ -490,7 +497,7 @@ export default function Dashboard() {
       // deliveries due today/tomorrow — open POs (sent/confirmed/partial) whose expected_date is
       // today or tomorrow (OPEN-DECISIONS: a delivery = open order + expected_date). NULL
       // expected_date rows are excluded by the gte and surfaced as a count from openPos instead.
-      fetchAll((from, to) => supabase.from('purchase_orders').select('id, number, status, expected_date, supplier_id, supplier:suppliers(name), items:purchase_order_items(qty, product:products(name))').in('status', ['sent', 'confirmed', 'partial']).gte('expected_date', todayISO).lte('expected_date', tomorrowISO).order('expected_date').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('purchase_orders').select('id, number, status, expected_date, supplier_id, supplier:suppliers(name), items:purchase_order_items(qty, product:products(name, display_name))').in('status', ['sent', 'confirmed', 'partial']).gte('expected_date', todayISO).lte('expected_date', tomorrowISO).order('expected_date').order('id').range(from, to)),
       supabase.rpc('management_dashboard_snapshot', { p_today: todayISO }),
       // First run or a working business? Zero suppliers is the honest test: no order, invoice,
       // price or receipt can exist without one, and the setup wizard itself puts suppliers before
@@ -505,7 +512,7 @@ export default function Dashboard() {
     const payments = paymentsRes as unknown as { amount: number; paid_date: string }[];
     const exceptions = exceptionsRes as unknown as ({ id: string; type: string; severity: 'low' | 'medium' | 'high'; title: string; created_at: string; supplier: { name: string } | null })[];
     const poItems = poItemsRes as unknown as { qty: number; unit_price: number; product: { category: { name: string } | null } | null; order: { created_at: string } }[];
-    const priceRows = priceUpRes as unknown as { current_price: number; previous_price: number | null; price_effective_date: string; product: { id: string; name: string }; supplier: { name: string } }[];
+    const priceRows = priceUpRes as unknown as { current_price: number; previous_price: number | null; price_effective_date: string; product: { id: string; name: string; display_name: string | null }; supplier: { name: string } }[];
     const reqItems = reqItemsRes as unknown as { qty: number; unit_price: number | null; product_id: string }[];
     const offers = offersRes as unknown as { product_id: string; current_price: number }[];
     const deliveries = deliveriesRes as unknown as DeliveryOrder[];
@@ -699,12 +706,21 @@ export default function Dashboard() {
         highExceptions,
         notSentToAccountant: snapshot.invoices.notSent,
       },
-      // Due-date coverage for the radial ring (T7.1): a TRUE numerator/denominator — active
-      // payment requests that carry a manual due date, out of all active requests (0100 RPC).
-      coverage: {
-        covered: snapshot.paymentRequests.dueDateCoverage,
-        active: snapshot.paymentRequests.activeCount,
-      },
+      // The week's obligations (0148). The RPC guards all four figures behind the same "at least
+      // one active request carries a due date" condition, so they are known together or unknown
+      // together — folding them into ONE nullable object says that in the type, instead of asking
+      // the tile to re-derive the same guard four times and risk printing ₪0 next to a "—".
+      dueWindow: (() => {
+        const pr = snapshot.paymentRequests;
+        if (pr.overdueAmount == null || pr.dueWithin7Amount == null
+          || pr.overdue == null || pr.dueWithin7Count == null) return null;
+        return {
+          overdueAmount: pr.overdueAmount,
+          overdueCount: pr.overdue,
+          dueWithin7Amount: pr.dueWithin7Amount,
+          dueWithin7Count: pr.dueWithin7Count,
+        };
+      })(),
     };
   });
 
@@ -771,7 +787,7 @@ export default function Dashboard() {
         </div>} />
 
       {/* The capsule strip lived here briefly (T7.3) and was removed by owner decision
-          ("לא רלוונטי") — the coverage ring and the money strip already carry the day's ratios. */}
+          ("לא רלוונטי") — the money strip and the due-window tile already carry the day's figures. */}
 
       {/* Truth-reporting (CLAUDE.md): a failed load/refetch shows an inline note WITH retry and keeps
           whatever data we still hold on screen — it never blanks the sections that did load. */}
@@ -893,16 +909,38 @@ export default function Dashboard() {
                 <CategoryDonut slices={data.categories} total={categoryTotal} ariaLabel={categoriesAria} emptyMessage={categoryEmptyMessage} />
               </section>
 
-              {/* The reference's radial-progress tile, on the one honest ratio the snapshot
-                  already measures: dated active payment requests out of all active requests.
-                  Zero active requests → the empty sentence, never a fake 0% or 100%. */}
-              <section className="card card-pad lg:col-span-3" aria-labelledby="coverage-ring-title">
-                <h3 id="coverage-ring-title" className="text-sm font-semibold text-ink-body">כיסוי תאריכי פירעון</h3>
-                <p className="text-xs text-ink-muted">דרישות תשלום פעילות עם תאריך</p>
-                <CoverageRing covered={data.coverage.covered} total={data.coverage.active}
-                  label="כיסוי תאריכי פירעון"
-                  sentence={`מתוך ${data.coverage.active} דרישות פעילות`}
-                  emptyMessage="אין דרישות תשלום פעילות" />
+              {/* Owner review, defect 11: this slot used to hold a radial ring over "כיסוי תאריכי
+                  פירעון" — how many active requests carry a due date. That is data hygiene, not a
+                  decision: the manager cannot pay a percentage. The tile now answers the question
+                  the week actually asks — how much money has to move — and a ring cannot say it.
+                  A ring encodes a part of a WHOLE; here the "whole" is a seven-day window we
+                  chose, so a percentage of it would be arithmetic about our own choice while
+                  hiding the only figure that matters. Two lines under one total instead.
+                  The word באיחור carries the meaning; the alert ink only repeats it. */}
+              <section className="card card-pad lg:col-span-3" aria-labelledby="due-window-title">
+                <h3 id="due-window-title" className="text-sm font-semibold text-ink-body">לתשלום בשבוע הקרוב</h3>
+                <p className="text-xs text-ink-muted">דרישות תשלום פעילות, כולל מה שכבר באיחור</p>
+                {data.dueWindow == null ? (
+                  <p className="mt-4 flex min-h-24 items-center text-sm text-ink-muted sm:min-h-40">
+                    אין דרישות תשלום פעילות עם תאריך פירעון
+                  </p>
+                ) : (
+                  <div className="mt-2 flex min-h-32 flex-col justify-center gap-4 sm:min-h-40">
+                    <div className="kpi-hero num text-ink" dir="ltr">
+                      {glanceMoney(data.dueWindow.overdueAmount + data.dueWindow.dueWithin7Amount)}
+                    </div>
+                    <div className="flex flex-col gap-1.5 text-sm">
+                      <p className="text-alert-fg">
+                        מתוכם באיחור <span className="num" dir="ltr">{glanceMoney(data.dueWindow.overdueAmount)}</span>
+                        {' · '}<span className="num">{data.dueWindow.overdueCount}</span> דרישות
+                      </p>
+                      <p className="text-ink-mid">
+                        לפירעון בשבעת הימים הקרובים <span className="num" dir="ltr">{glanceMoney(data.dueWindow.dueWithin7Amount)}</span>
+                        {' · '}<span className="num">{data.dueWindow.dueWithin7Count}</span> דרישות
+                      </p>
+                    </div>
+                  </div>
+                )}
               </section>
 
               <section className="card card-pad lg:col-span-12" aria-labelledby="weekly-trend-title">
@@ -980,7 +1018,7 @@ export default function Dashboard() {
                     <li key={index}>
                       <Link to={`/prices?product=${price.product.id}`} className="flex min-h-11 flex-col items-stretch gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface-hover active:bg-surface-selected sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <span className="min-w-0 break-words sm:truncate">
-                          <bdi className="font-medium text-ink-body">{price.product.name}</bdi>
+                          <bdi className="font-medium text-ink-body">{productLabel(price.product)}</bdi>
                           <span className="ms-2 text-xs text-ink-muted">{price.supplier.name}</span>
                         </span>
                         <span className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 sm:justify-start">

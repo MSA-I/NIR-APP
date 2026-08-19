@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { routeBackPresentation, routePresentationTitle, STATIC_ROUTE_TITLES } from './routePresentation';
+import {
+  DYNAMIC_ROUTE_DESCRIPTIONS,
+  DYNAMIC_ROUTE_TITLES,
+  routeBackPresentation,
+  routePresentationDescription,
+  routePresentationTitle,
+  STATIC_ROUTE_DESCRIPTIONS,
+  STATIC_ROUTE_TITLES,
+} from './routePresentation';
 
 const DYNAMIC_ROUTES = [
   ['/finance/suppliers/supplier-1', 'כרטיס ספק פיננסי'],
@@ -43,5 +51,33 @@ describe('קטלוג שמות מסכים', () => {
 
   it('אינו מציג חזרה במסך רשימה ראשי', () => {
     expect(routeBackPresentation('/invoices')).toBeNull();
+  });
+});
+
+describe('קטלוג תיאורי מסכים', () => {
+  it.each(Object.keys(STATIC_ROUTE_TITLES))('%s מקבל תיאור שאינו חזרה על השם', (path) => {
+    const description = routePresentationDescription(path);
+    expect(description).toBeTruthy();
+    expect(description?.trim()).not.toBe('');
+    expect(description).not.toBe(routePresentationTitle(path));
+  });
+
+  it.each(DYNAMIC_ROUTES)('%s מקבל תיאור שאינו חזרה על השם', (path, title) => {
+    const description = routePresentationDescription(path);
+    expect(description).toBeTruthy();
+    expect(description).not.toBe(title);
+  });
+
+  it('לכל תבנית דינמית של שם יש תבנית תיאור מקבילה', () => {
+    expect(DYNAMIC_ROUTE_DESCRIPTIONS.map(([pattern]) => pattern.source))
+      .toEqual(DYNAMIC_ROUTE_TITLES.map(([pattern]) => pattern.source));
+  });
+
+  it('שני הקטלוגים הסטטיים מכסים בדיוק את אותם מסלולים', () => {
+    expect(Object.keys(STATIC_ROUTE_DESCRIPTIONS).sort()).toEqual(Object.keys(STATIC_ROUTE_TITLES).sort());
+  });
+
+  it('אינו ממציא תיאור למסלול לא מוכר', () => {
+    expect(routePresentationDescription('/not-a-real-route')).toBeNull();
   });
 });

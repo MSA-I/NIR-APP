@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
@@ -165,5 +166,78 @@ describe('InvoiceDetail — the server owns the review graph (migration 0070)', 
   it('reads null — not a fallback matrix — when the RPC fails', async () => {
     useInvoiceScreen('in_review', { status: 403 });
     expect(await readAllowedInvoiceTransitions('in_review')).toBeNull();
+  });
+});
+
+/**
+ * Owner review, defect 5: "every status change opens a reason dialog".
+ *
+ * The rule these cases pin down is the one in `src/lib/transitionIntent.ts` — a step up the ladder
+ * is the work and goes through on one tap; a diversion out of it still stops to ask. The second
+ * half of the rule matters just as much as the first: the silent path is silent towards the
+ * *user*, never towards `audit_logs`. The last case covers what the dialog was accidentally doing
+ * before — standing between an impatient tap and a second command.
+ */
+describe('InvoiceDetail — a dialog only where a sentence is owed', () => {
+  function captureReviewCommand(holdMs = 0) {
+    const bodies: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(`${SUPABASE_URL}/rest/v1/rpc/set_invoice_review_status`, async ({ request }) => {
+        bodies.push((await request.json()) as Record<string, unknown>);
+        if (holdMs) await new Promise((resolve) => setTimeout(resolve, holdMs));
+        return HttpResponse.json({ invoice_id: INVOICE_ID, review_status: 'pending_approval', idempotent: false });
+      }),
+    );
+    return bodies;
+  }
+
+  it('sends an invoice to approval on one tap — no dialog — and still writes a reason to the ledger', async () => {
+    useInvoiceScreen('in_review', ['pending_approval', 'approved', 'investigation']);
+    const bodies = captureReviewCommand();
+    renderDetail();
+    await heading();
+
+    await userEvent.click(await screen.findByRole('button', { name: /העברה לאישור/ }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0].p_status).toBe('pending_approval');
+    // Never null: the command rejects a blank reason (`invoice_review_fields_required`, 0023:1907),
+    // and an audit line that says nobody explained the step is a true line, not an empty one.
+    expect(bodies[0].p_reason).toMatch(/ללא הערה מהמשתמש/);
+  });
+
+  it('still asks before marking an invoice for investigation', async () => {
+    useInvoiceScreen('in_review', ['pending_approval', 'investigation']);
+    const bodies = captureReviewCommand();
+    renderDetail();
+    await heading();
+
+    await userEvent.click(await screen.findByRole('button', { name: /סימון לבירור/ }));
+
+    // Diverting an invoice out of the flow is exactly the line an auditor will want a sentence
+    // next to, so the dialog opens and nothing is sent until it is confirmed.
+    expect(await screen.findByRole('dialog')).toHaveTextContent('עדכון סטטוס בדיקת חשבונית');
+    expect(bodies).toEqual([]);
+  });
+
+  it('fires once when the button is tapped three times before the command answers', async () => {
+    // The dialog used to be an accidental confirm step. Without it the only thing standing between
+    // an impatient double-tap and two commands is `busy`, so that claim is measured rather than
+    // assumed: the request is held open while three clicks land in the same tick.
+    useInvoiceScreen('in_review', ['pending_approval', 'approved', 'investigation']);
+    const bodies = captureReviewCommand(50);
+    renderDetail();
+    await heading();
+
+    const send = await screen.findByRole('button', { name: /העברה לאישור/ });
+    fireEvent.click(send);
+    fireEvent.click(send);
+    fireEvent.click(send);
+
+    expect(send).toBeDisabled();
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(bodies).toHaveLength(1);
   });
 });

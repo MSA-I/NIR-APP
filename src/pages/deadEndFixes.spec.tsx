@@ -150,14 +150,14 @@ describe('finding 8 — "שכפול כטיוטה" is gone, and nothing replaced 
 
 describe('finding 12 — no group header over a single grouped link', () => {
   it('shows no tenant destinations without an active role', () => {
-    const sections = sectionsForRole(undefined, false);
+    const sections = sectionsForRole(undefined);
     expect(sections.flatMap((s) => s.items)).toHaveLength(0);
     expect(showNavHeaders(sections)).toBe(false);
   });
 
   it('still shows them to every role with a real menu', () => {
     for (const role of ['owner', 'office', 'accountant'] as const) {
-      expect(showNavHeaders(sectionsForRole(role, false))).toBe(true);
+      expect(showNavHeaders(sectionsForRole(role))).toBe(true);
     }
   });
 
@@ -166,7 +166,7 @@ describe('finding 12 — no group header over a single grouped link', () => {
    * leading section. Counting named sections only keeps the rule independent of that entry.
    */
   it('is not moved by the unnamed leading section', () => {
-    const accountant = sectionsForRole('accountant', false);
+    const accountant = sectionsForRole('accountant');
     expect(accountant[0]?.section).toBe('');
     expect(showNavHeaders(accountant)).toBe(true);
   });

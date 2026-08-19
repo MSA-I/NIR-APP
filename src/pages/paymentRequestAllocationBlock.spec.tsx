@@ -113,10 +113,23 @@ describe('PaymentRequestDetail — an allocation that no longer fits', () => {
     renderDetail();
 
     expect(await screen.findByText(/לא ניתן לאשר את הדרישה במצבה הנוכחי/)).toBeTruthy();
-    // Twice on purpose: once as the pre-approval check row, once as the panel above the buttons.
-    // Neither is decoration — the check list is where a user looks for WHY, the panel is where
-    // they look for WHAT NOW, and a refusal that appears in only one of them gets missed.
-    expect(screen.getAllByText(/לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן/)).toHaveLength(2);
+    // ONCE — and this reverses a decision that used to be pinned here, so read before restoring it.
+    //
+    // This assertion used to demand exactly two, and the reason was not laziness: the check list is
+    // where a user looks for WHY, the panel above the buttons is where they look for WHAT NOW, and
+    // a refusal appearing in only one of them can be missed. What that reasoning missed is that the
+    // two boxes carried the SAME sentence, and a third copy arrived as a toast on approve. The
+    // owner saw all three on 19.08.2026 and ruled that one summary states it: what blocks, what is
+    // only a warning, what action is required — with the per-check detail behind a disclosure.
+    //
+    // So WHY and WHAT NOW still both appear; they appear in one box instead of two. `CheckSummary`
+    // mounts `CheckList` only after the fold is opened, because a shut `<details>` still holds its
+    // children in the DOM and a second copy hidden there would be the same stack, folded. Restoring
+    // "2" here would restore the defect, not fix a regression.
+    expect(screen.getAllByText(/לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן/)).toHaveLength(1);
+    // The count line is the part that replaces the stack: one blocking finding, and the open credit
+    // plus the unavailable bank probe as warnings that do not block.
+    expect(screen.getByText('חסימה אחת · 2 אזהרות')).toBeTruthy();
 
     const approve = screen.getByRole('button', { name: 'אישור חסום — ההקצאה גבוהה מהיתרה שנותרה' });
     expect(approve.hasAttribute('disabled')).toBe(true);

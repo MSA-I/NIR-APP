@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { reasonOr } from '../lib/reason';
+import { reasonDemandFor } from '../lib/transitionIntent';
 import { toHebrewError } from '../lib/errors';
 import { useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
@@ -7,9 +8,10 @@ import { Plus, Loader2, Send, CheckCircle2, ShieldAlert, XCircle, Pencil } from 
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ConfirmDialog, ErrorNote, Note, PageHeader, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ConfirmDialog, Disclosure, ErrorNote, Note, PageHeader, SkeletonTable, type Column } from '../components/ui';
 import { CheckList } from './Invoices';
 import { runPaymentRequestChecks, type CheckResult } from '../lib/checks';
+import { summarizeChecks, type ChecksSummary } from '../lib/checkSummary';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
 import { addCalendarDays, fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
 import type { PaymentRequest, PaymentRequestStatus } from '../lib/types';
@@ -454,6 +456,100 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
   );
 }
 
+/**
+ * The label the audit line carries when the approver typed nothing — the same words as the button
+ * that was pressed, so the ledger sentence reads as an action a person would recognise.
+ *
+ * Only the destinations this screen's buttons can actually reach are listed. `investigation` and
+ * `suspected_duplicate` are legal server-side but no button here goes to them, so naming a verb for
+ * them would be inventing copy for a path that does not exist.
+ */
+const PAYMENT_REQUEST_ACTION_LABEL: Record<string, string> = {
+  pending_approval: 'שליחה לאישור',
+  approved: 'אישור הדרישה',
+  sent_for_execution: 'העברה לגורם המבצע',
+  cancelled: 'ביטול דרישת תשלום',
+};
+
+const paymentRequestActionLabel = (status: PaymentRequestStatus) =>
+  PAYMENT_REQUEST_ACTION_LABEL[status] ?? 'עדכון דרישת תשלום';
+
+/**
+ * One summary of the pre-approval checks, in place of the stack the owner reported (19.08.2026):
+ * the full check list, then a panel repeating its one critical row underneath it, then a toast
+ * repeating it a third time on approve. Three boxes, one fact.
+ *
+ * What stays in the open: the state in one sentence, how many findings of each kind, every
+ * blocking sentence, and the step that clears it. What folds: the per-check detail, through the
+ * shared `Disclosure` — DESIGN.md's staged-disclosure law folds secondary detail and never folds
+ * an error, so the criticals are above the fold and the advisory rows are behind it.
+ *
+ * `CheckList` is rendered unchanged inside the fold and is MOUNTED ONLY ONCE OPENED. That is not
+ * an optimisation: a shut `<details>` still holds its children in the DOM, so a blocking sentence
+ * sitting inside it, directly under the same sentence above it, would be the same stack the fold
+ * was supposed to remove. The precedent is DocumentReviewWorkspace's "פרטים טכניים", which gates
+ * its rows on the same `onToggle` flag.
+ *
+ * Local to this screen on purpose. `CheckList` has four consumers and only this one repeated
+ * itself; reshaping the shared component would push a fix onto three screens nobody complained about.
+ */
+function CheckSummary({ summary, checks }: { summary: ChecksSummary; checks: CheckResult[] }) {
+  const [detailOpen, setDetailOpen] = useState(false);
+  const blocked = summary.blocking.length > 0;
+
+  const counts: string[] = [];
+  if (summary.blocking.length) {
+    counts.push(summary.blocking.length === 1 ? 'חסימה אחת' : `${summary.blocking.length} חסימות`);
+  }
+  if (summary.warnings.length) {
+    counts.push(summary.warnings.length === 1 ? 'אזהרה אחת' : `${summary.warnings.length} אזהרות`);
+  }
+  if (summary.info.length) {
+    counts.push(summary.info.length === 1 ? 'הערה אחת' : `${summary.info.length} הערות`);
+  }
+
+  // Tone carries the state a second time, never the first: every line below says it in words too,
+  // because a summary whose meaning lives in a colour has no meaning for a colour-blind approver.
+  const tone = blocked ? 'alert' : summary.warnings.length ? 'await' : 'done';
+  const headline = blocked
+    ? 'לא ניתן לאשר את הדרישה במצבה הנוכחי.'
+    : summary.warnings.length
+      ? 'אין ממצא חוסם. יש אזהרות שכדאי לעבור עליהן לפני האישור.'
+      : checks.length
+        ? 'אין ממצא חוסם. הבדיקות החזירו הערות מידע בלבד.'
+        : 'כל הבדיקות האוטומטיות עברו ללא ממצאים.';
+
+  // The action gets its own line only when no blocking sentence already ends with it.
+  // `allocation_vs_balance` carries its remedy inside its own message (checks.ts:174-180), and
+  // printing it again under "פעולה נדרשת" would rebuild — inside one box this time — the exact
+  // repetition this summary exists to remove.
+  const action = summary.action;
+  const unsaidAction = action != null && !summary.blocking.some((check) => check.message.includes(action))
+    ? action
+    : null;
+
+  return (
+    <Note tone={tone}>
+      <div className="min-w-0 flex-1 space-y-2">
+        <p className="font-semibold">{headline}</p>
+        {counts.length > 0 && <p className="text-xs">{counts.join(' · ')}</p>}
+        {blocked && (
+          <ul className="space-y-1">
+            {summary.blocking.map((check, index) => <li key={index}>{check.message}</li>)}
+          </ul>
+        )}
+        {unsaidAction && <p><span className="font-medium">פעולה נדרשת:</span> {unsaidAction}</p>}
+        {checks.length > 0 && (
+          <Disclosure title="פירוט הבדיקות" count={checks.length} tone={tone}
+            className="-mx-4 -mb-3 mt-2 border-t border-line-soft" onToggle={setDetailOpen}>
+            {detailOpen ? <CheckList checks={checks} /> : null}
+          </Disclosure>
+        )}
+      </div>
+    </Note>
+  );
+}
+
 /* ---------- detail + approval flow ---------- */
 export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
   pr: Row; isOffice: boolean; onClose: () => void; onChanged: () => void;
@@ -536,9 +632,14 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         // 0146: re-read on the fresh signals, not the rendered ones. A credit offset between
         // opening the modal and pressing approve lands here, and the server would answer with a
         // bare payment_request_checks_failed.
+        //
+        // The toast reports the EVENT — the checks moved under you and approval is now closed —
+        // and stops there. `setChecks(freshChecks)` above has already re-rendered the summary,
+        // which states the rule and the required action; reciting them here too was the third
+        // copy of one sentence the owner asked us to stop printing (19.08.2026).
         if (freshChecks.some((check) => check.code === 'allocation_vs_balance')) {
           setBusy(false);
-          toast('ההקצאה לחשבונית גבוהה מהיתרה שנותרה בה. יש לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן.', 'error');
+          toast('בדיקות הדרישה עודכנו — האישור נחסם', 'error');
           return;
         }
       } catch (failure) {
@@ -561,17 +662,24 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         return;
       }
     }
+    // Never `null` on either arm. `p1_transition_payment_request` rejects a blank transition reason
+    // (`payment_request_transition_invalid`, 0073:575) and a blank override reason
+    // (`payment_request_credit_override_invalid`), and the ordinary forward steps now arrive here
+    // with nothing typed. `reasonOr` writes the honest line: the action, and that nobody explained it.
+    const auditReason = reasonOr(reason, withCreditOverride
+      ? 'אישור חריג ללא קיזוז הזיכוי'
+      : paymentRequestActionLabel(status));
     const res = withCreditOverride
       ? await supabase.rpc('approve_payment_request_with_credit_override', {
         p_payment_request_id: pr.id,
         p_supplier_id: pr.supplier_id,
         p_expected_open_credit_total: freshOpenCreditTotal,
-        p_override_reason: reason?.trim() || null,
+        p_override_reason: auditReason,
       })
       : await supabase.rpc('transition_payment_request', {
         p_payment_request_id: pr.id,
         p_target_status: status,
-        p_reason: reason?.trim() || null,
+        p_reason: auditReason,
       });
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
@@ -582,13 +690,30 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
     onChanged();
   }
 
-  const hasCritical = checks?.some((c) => c.severity === 'critical') ?? false;
+  /**
+   * The single door every transition button goes through.
+   *
+   * Sending a draft for approval, approving a clean request, handing an approved one to the payer —
+   * these are the work, and they now fire straight away with a toast. Cancelling, returning from an
+   * investigation or a duplicate suspicion, and approving past a warning still stop to ask, because
+   * those are the lines an auditor will actually want a sentence next to.
+   *
+   * Both paths land in `setStatus`, so the pre-approval freshness re-read happens either way — a
+   * silent approval is not an unchecked one.
+   */
+  function requestTransition(to: PaymentRequestStatus, exceptional = false) {
+    if (reasonDemandFor('payment_request', pr.status, to, { exceptional })) { setTransitionTarget(to); return; }
+    void setStatus(to);
+  }
+
+  const summary = useMemo(() => (checks ? summarizeChecks(checks) : null), [checks]);
+  const hasCritical = (summary?.blocking.length ?? 0) > 0;
   const checksReady = checks != null && !checking && !checkError && !linksError;
   // 0146. Not one more warning to approve past: the server rejects this request at approval
   // (payment_request_checks_failed) and again at execution (allocation_exceeds_balance), and no
   // screen can repair an allocation. Both approval routes are closed here so the refusal arrives
   // with its reason attached instead of as a server error the user cannot act on.
-  const overAllocated = checks?.some((c) => c.code === 'allocation_vs_balance') ?? false;
+  const overAllocated = summary?.blocking.some((c) => c.code === 'allocation_vs_balance') ?? false;
 
   return (
     <Modal open onClose={onClose} title={`דרישת תשלום #${pr.number} — ${pr.supplier.name}`} wide busy={busy} statusMessage={busy ? 'מעדכן את דרישת התשלום' : undefined}>
@@ -629,23 +754,12 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         <div>
           <div className="text-sm font-medium text-ink-soft mb-1.5">בדיקות לפני אישור</div>
           {(checkError || linksError) && <Note tone="alert">{checkError ?? linksError}</Note>}
-          {checks ? <CheckList checks={checks} /> : checking && (
+          {checks && summary ? <CheckSummary summary={summary} checks={checks} /> : checking && (
             <div role="status" className="flex items-center gap-2 text-sm text-ink-muted">
               <Loader2 size={16} className="animate-spin text-ink-faint" aria-hidden="true" /> בודק את הדרישה…
             </div>
           )}
         </div>
-
-        {overAllocated && (
-          <Note tone="alert">
-            <span className="min-w-0 flex-1">
-              <strong>לא ניתן לאשר את הדרישה במצבה הנוכחי.</strong>{' '}
-              הסכום שהוקצה לחשבונית מקושרת גבוה מהיתרה שנותרה בה — ככל הנראה משום שזיכוי קוזז אחרי
-              שהדרישה נוצרה. סכום ההקצאה נקבע ביצירת הדרישה ואינו מתעדכן מעצמו, ולכן יש
-              <strong> לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן</strong>.
-            </span>
-          </Note>
-        )}
 
         {openCreditTotal > 0 && !overAllocated && (
           <Note tone="alert">
@@ -669,7 +783,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         {isOffice && (
           <div className="flex flex-wrap justify-end gap-2 pt-1">
             {['draft'].includes(pr.status) && (
-              <button className="btn-primary" disabled={busy} onClick={() => setTransitionTarget('pending_approval')}><Send size={15} /> שליחה לאישור</button>
+              <button className="btn-primary" disabled={busy} onClick={() => requestTransition('pending_approval')}><Send size={15} /> שליחה לאישור</button>
             )}
             {['pending_approval', 'suspected_duplicate', 'investigation'].includes(pr.status) && (
               overAllocated ? (
@@ -688,16 +802,16 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
                 </>
               ) : (
                 <button className={hasCritical ? 'btn-danger' : 'btn-primary'} disabled={busy || !checksReady}
-                  onClick={() => setTransitionTarget('approved')}>
+                  onClick={() => requestTransition('approved', hasCritical)}>
                   <CheckCircle2 size={15} /> {hasCritical ? 'אישור למרות האזהרות' : 'אישור הדרישה'}
                 </button>
               )
             )}
             {['approved'].includes(pr.status) && (
-              <button className="btn-primary" disabled={busy} onClick={() => setTransitionTarget('sent_for_execution')}><Send size={15} /> העברה לגורם המבצע</button>
+              <button className="btn-primary" disabled={busy} onClick={() => requestTransition('sent_for_execution')}><Send size={15} /> העברה לגורם המבצע</button>
             )}
             {!['cancelled', 'executed', 'matched'].includes(pr.status) && (
-              <button className="btn-ghost text-alert-fg" disabled={busy} onClick={() => setTransitionTarget('cancelled')}><XCircle size={15} /> ביטול</button>
+              <button className="btn-ghost text-alert-fg" disabled={busy} onClick={() => requestTransition('cancelled')}><XCircle size={15} /> ביטול</button>
             )}
           </div>
         )}

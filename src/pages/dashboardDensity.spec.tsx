@@ -83,7 +83,12 @@ beforeAll(() => {
  *  the count was greater than zero. */
 const SNAPSHOT = {
   money: { openBalance: 1200, openInvoiceCount: 3 },
-  paymentRequests: { pendingApproval: 2, drafts: 0, dueDateCoverage: 0, activeCount: 2, overdue: null, dueToday: null },
+  // No active request carries a due date here, so every due-date figure — counts and money
+  // alike — is unknown rather than zero, and the due-window tile renders its sentence.
+  paymentRequests: {
+    pendingApproval: 2, drafts: 0, dueDateCoverage: 0, activeCount: 2, overdue: null, dueToday: null,
+    overdueAmount: null, dueWithin7Amount: null, dueWithin7Count: null,
+  },
   credits: { count: 0, sum: null },
   bank: { unmatched: 0, suggested: 0 },
   invoices: { pendingApproval: 1, toReview: 0, notSent: 0 },

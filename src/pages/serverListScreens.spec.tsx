@@ -1,5 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
@@ -12,6 +13,7 @@ import { createAppQueryClient } from '../lib/query/client';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import { ToastProvider } from '../components/ui';
 import { PAGE_NO_LONGER_EXISTS, SUPPLIER_SEARCH_ID_CAP, SUPPLIER_SEARCH_NARROWED } from '../lib/serverList';
+import { fmtMoneyExact } from '../lib/format';
 
 /**
  * The screens under test import the app's supabase client, which throws at module load without
@@ -127,10 +129,24 @@ function renderAt(path: string, route: string, element: ReactNode) {
   );
 }
 
+/**
+ * The house money shape, put through the same normalizer testing-library applies to the DOM.
+ * he-IL currency joins the figure to ₪ with a NBSP; the queries collapse that to a plain space
+ * on the element side only, so the expected string has to make the same trip to compare equal.
+ */
+const money = (v: number) => fmtMoneyExact(v).replace(/\s+/g, ' ');
+
 const payment = (i: number) => ({
   id: `pay-${i}`, number: i + 1, amount: 100, paid_date: '2026-05-10', method: null,
   reference: `ref-${i}`, notes: null, supplier_id: `sup-${i}`,
-  supplier: { name: `ספק ${i}` }, allocations: [], executor: null,
+  supplier: { name: `ספק ${i}` },
+  // One readable allocation and one whose invoice RLS/soft-delete hid: both are money, so both
+  // must reach the detail card.
+  allocations: [
+    { amount: 60, invoice: { id: `inv-${i}`, invoice_number: `N-${i}` } },
+    { amount: 40, invoice: null },
+  ],
+  executor: { full_name: `מבצע ${i}` },
 });
 const invoiceRow = (i: number) => ({
   id: `inv-${i}`, invoice_number: `N-${i}`, invoice_date: '2026-05-10', total_amount: 100,
@@ -192,6 +208,39 @@ describe('/payments — server mode', () => {
     const last = seen[seen.length - 1];
     expect(last.url.searchParams.get('id')).toBeNull();
     expect(last.url.searchParams.getAll('paid_date')).toEqual(['gte.2026-05-01', 'lt.2026-06-01']);
+  });
+
+  it('opens a payment card on a row click, with the performer and every allocation', async () => {
+    useJsonTable('payments', [payment(0)]);
+
+    renderAt('/payments', '/payments', <Payments />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'פתיחת תשלום #1' }));
+
+    const card = await screen.findByRole('dialog');
+    expect(within(card).getByText('ספק 0')).toBeInTheDocument();
+    expect(within(card).getByText(money(100))).toBeInTheDocument();
+    // `payments` carries the performer, not an approver — this is the question the card answers.
+    expect(within(card).getByText('בוצע על ידי')).toBeInTheDocument();
+    expect(within(card).getByText('מבצע 0')).toBeInTheDocument();
+
+    // The readable allocation is a way in to the invoice it paid.
+    expect(within(card).getByRole('link', { name: /N-0/ })).toHaveAttribute('href', '/invoices/inv-0');
+    expect(within(card).getByText(money(60))).toBeInTheDocument();
+
+    // The unreadable one is named and its money still counted — dropping it would understate
+    // what this payment covered.
+    expect(within(card).getByText('חשבונית שאינה זמינה לצפייה')).toBeInTheDocument();
+    expect(within(card).getByText(money(40))).toBeInTheDocument();
+  });
+
+  it('lands a ?id= link straight on the card, without a further click', async () => {
+    useJsonTable('payments', Array.from({ length: 3 }, (_, i) => payment(i)));
+
+    renderAt('/payments?id=pay-1', '/payments', <Payments />);
+
+    const card = await screen.findByRole('dialog');
+    expect(within(card).getByRole('heading', { name: 'תשלום #2 — ספק 1' })).toBeInTheDocument();
   });
 });
 

@@ -3,6 +3,7 @@
   "include": ["files", "dependencies", "unlisted", "binaries"],
   "entry": [
     "src/main.tsx",
+    "src/operator/main.tsx",
     "vite.config.ts",
     "vitest.config.ts",
     "src/**/*.spec.{ts,tsx}",

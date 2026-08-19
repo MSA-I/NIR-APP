@@ -157,7 +157,12 @@ interface ConflictReadInput {
   orderNumber: number | null;
   supplierName: string;
   localLines: OfflineReceiptLine[];
-  products: Map<string, { name: string; unit: string }>;
+  /**
+   * Per order item, the name to SHOW and the unit. Called `label` and not `name` on purpose: the
+   * caller has already chosen between the approved canonical name and the raw one, and a field
+   * spelled like the raw column invites this dialog to make that choice a second time.
+   */
+  products: Map<string, { label: string; unit: string }>;
   localObservedAt: number;
   code: ReceiptConflictCode;
 }
@@ -251,7 +256,7 @@ export async function loadReceiptConflict(input: ConflictReadInput): Promise<Rec
     const serverReceivedQty = item?.received_qty ?? null;
     return {
       orderItemId: line.order_item_id,
-      productName: product?.name ?? '—',
+      productName: product?.label ?? '—',
       unit: product?.unit ?? '',
       localQty: line.qty_received,
       localStatus: line.status,
