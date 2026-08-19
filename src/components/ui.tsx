@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, createContext, useContext, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { ChevronRight, ChevronLeft, ChevronDown, Search, X, Loader2, Inbox, Bell, Check, Columns3, SlidersHorizontal, AlertTriangle } from 'lucide-react';
 import {
   useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel,
@@ -10,6 +10,7 @@ import type { StatusMeta, Tone } from '../lib/status';
 import type { ServerSort } from '../lib/serverList';
 import { fmtMoneyRounded } from '../lib/format';
 import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
+import { routePresentationDescription } from '../lib/routePresentation';
 import { ActionMenu, type ActionMenuItem } from './ActionMenu';
 
 /* ---------- StatusBadge ---------- */
@@ -195,20 +196,27 @@ function SectionMark() {
   return <span className="section-mark" aria-hidden="true" />;
 }
 
-export function PageHeader({ title, meta, breadcrumbs, actions, className = '' }: {
+export function PageHeader({ title, description, meta, breadcrumbs, actions, className = '' }: {
   title: ReactNode;
+  description?: ReactNode;
   meta?: ReactNode;
   breadcrumbs?: ReactNode;
   actions?: ReactNode;
   className?: string;
 }) {
+  // Omitting the prop opts INTO the catalogue; `description={null}` is the explicit opt-out. JSX
+  // cannot tell an absent prop from `description={undefined}`, so the opt-out has to be a value
+  // that is not `undefined` — hence the identity check rather than a falsy one.
+  const { pathname } = useLocation();
+  const resolvedDescription = description === undefined ? routePresentationDescription(pathname) : description;
   return (
     <header className={`flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between ${className}`}>
       <div className="min-w-0 space-y-1">
         {breadcrumbs}
         <h1 className="page-title break-words">{title}</h1>
         <SectionMark />
-        {meta && <div className="text-sm text-ink-muted">{meta}</div>}
+        {resolvedDescription && <div className="text-sm text-ink-muted">{resolvedDescription}</div>}
+        {meta && <div className="text-sm text-ink-soft">{meta}</div>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </header>
