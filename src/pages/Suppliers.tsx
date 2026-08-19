@@ -11,7 +11,7 @@ import { ReauthModal } from '../components/ReauthModal';
 import { PriceListUploadModal, SUBMISSION_STATUS, submissionMonthLabel } from '../components/PriceListUpload';
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
 import { canStartSupplierCommerce, SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
-import { fmtMoneyExact, fmtNum, fmtDate, fmtDays } from '../lib/format';
+import { fmtMoneyExact, fmtNum, fmtDate, fmtDays, productLabel } from '../lib/format';
 import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission } from '../lib/types';
 import { SUPPLIER_COLUMNS } from '../lib/supplierColumns';
 
@@ -23,7 +23,9 @@ type SupplierRow = Supplier & {
   rating_note: string | null;
 };
 
-type PricedProduct = SupplierProduct & { product: { id: string; name: string; unit: string } };
+type PricedProduct = SupplierProduct & {
+  product: { id: string; name: string; display_name: string | null; unit: string };
+};
 
 interface SupplierWithBalance extends SupplierRow {
   open_balance?: number | null; // null = the balance reader is owner-gated for this caller
@@ -483,7 +485,7 @@ export function SupplierCard() {
         ? supabase.from('supplier_balances').select('*').eq('supplier_id', id!).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
       supabase.from('supplier_metrics').select('*').eq('supplier_id', id!).maybeSingle(), // maybeSingle: a role-guarded view may return no row
-      supabase.from('supplier_products').select('*, product:products(id,name,unit)').eq('supplier_id', id!).order('updated_at', { ascending: false }),
+      supabase.from('supplier_products').select('*, product:products(id,name,display_name,unit)').eq('supplier_id', id!).order('updated_at', { ascending: false }),
       staff
         ? supabase.from('supplier_price_submissions').select('*').eq('supplier_id', id!)
           .order('target_month', { ascending: false }).order('revision', { ascending: false }).limit(12)
@@ -734,7 +736,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
   }, [rows]);
 
   const columns: Column<PricedProduct>[] = [
-    { key: 'product', header: 'מוצר', sortValue: (r) => r.product.name, render: (r) => <bdi className="font-medium text-ink">{r.product.name}</bdi> },
+    { key: 'product', header: 'מוצר', sortValue: (r) => productLabel(r.product), render: (r) => <bdi className="font-medium text-ink">{productLabel(r.product)}</bdi> },
     { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
     { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => fmtMoneyExact(r.previous_price) },
     {
@@ -769,7 +771,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
         <span className="text-ink-soft">שינוי חציוני: <b className="num">{summary.median == null ? '—' : `${summary.median > 0 ? '+' : ''}${summary.median.toFixed(1)}%`}</b></span>
       </div>
       <DataTable rows={rows} columns={columns} searchable
-        searchFn={(r, q) => r.product.name.toLowerCase().includes(q)}
+        searchFn={(r, q) => productLabel(r.product).toLowerCase().includes(q) || r.product.name.toLowerCase().includes(q)}
         searchLabel="חיפוש במחירון הספק"
         emptyTitle="אין מחירון לספק זה" />
 

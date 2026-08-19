@@ -7,7 +7,8 @@ import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, type AttentionI
 import { EXCEPTION_TYPE, PO_STATUS, SEVERITY } from '../lib/status';
 import {
   addCalendarDays, BUSINESS_TIME_ZONE, dateStartInstant, daysInCalendarMonth,
-  fmtMoneyExact, fmtMoneyRounded, fmtMonth, localDateKey, shiftCalendarMonth, startOfCalendarWeek,
+  fmtMoneyExact, fmtMoneyRounded, fmtMonth, localDateKey, productLabel, shiftCalendarMonth,
+  startOfCalendarWeek,
   todayISO as businessTodayISO,
 } from '../lib/format';
 import { chartTheme } from '../lib/theme';
@@ -227,7 +228,7 @@ type DeliveryOrder = {
   expected_date: string;
   supplier_id: string;
   supplier: { name: string } | null;
-  items: { qty: number; product: { name: string } | null }[];
+  items: { qty: number; product: { name: string; display_name: string | null } | null }[];
 };
 
 // אספקות היום ומחר — the morning check-in strip (section 12): which suppliers should show up at
@@ -311,7 +312,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
                           {order.items.length > 0 && (
                             <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted">
                               {order.items.map((item, index) => (
-                                <span key={index}><bdi>{item.product?.name ?? '—'}</bdi> <span className="num">×{item.qty}</span></span>
+                                <span key={index}><bdi>{item.product ? productLabel(item.product) : '—'}</bdi> <span className="num">×{item.qty}</span></span>
                               ))}
                             </div>
                           )}
@@ -488,7 +489,7 @@ export default function Dashboard() {
       fetchAll((from, to) => supabase.from('purchase_order_items').select('id, qty, unit_price, product:products(category:categories(name)), order:purchase_orders!inner(created_at, status)').gte('order.created_at', chartsFromTimestamp).lte('order.created_at', now.toISOString()).not('order.status', 'in', '(draft,cancelled)').order('id').range(from, to)),
       // price increases — now bounded to the last 30 days (was a full unbounded scan): matches the
       // "מוצרים שהתייקרו לאחרונה" label and the alerts window (OPEN-DECISIONS #26).
-      fetchAll((from, to) => supabase.from('supplier_products').select('id, current_price, previous_price, price_effective_date, product:products(id, name), supplier:suppliers(name)').gte('price_effective_date', last30dISO).not('previous_price', 'is', null).order('price_effective_date', { ascending: false }).order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('supplier_products').select('id, current_price, previous_price, price_effective_date, product:products(id, name, display_name), supplier:suppliers(name)').gte('price_effective_date', last30dISO).not('previous_price', 'is', null).order('price_effective_date', { ascending: false }).order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('purchase_request_items').select('id, qty, unit_price, product_id, request:purchase_requests!inner(created_at, status)').gte('request.created_at', monthStartTimestamp).lte('request.created_at', now.toISOString()).eq('request.status', 'split').order('id').range(from, to)),
       // available offers for the savings estimate — kept minimal (2 cols) but cannot be date-bounded:
       // savings needs the max CURRENT available offer per product regardless of when it was set.
@@ -496,7 +497,7 @@ export default function Dashboard() {
       // deliveries due today/tomorrow — open POs (sent/confirmed/partial) whose expected_date is
       // today or tomorrow (OPEN-DECISIONS: a delivery = open order + expected_date). NULL
       // expected_date rows are excluded by the gte and surfaced as a count from openPos instead.
-      fetchAll((from, to) => supabase.from('purchase_orders').select('id, number, status, expected_date, supplier_id, supplier:suppliers(name), items:purchase_order_items(qty, product:products(name))').in('status', ['sent', 'confirmed', 'partial']).gte('expected_date', todayISO).lte('expected_date', tomorrowISO).order('expected_date').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('purchase_orders').select('id, number, status, expected_date, supplier_id, supplier:suppliers(name), items:purchase_order_items(qty, product:products(name, display_name))').in('status', ['sent', 'confirmed', 'partial']).gte('expected_date', todayISO).lte('expected_date', tomorrowISO).order('expected_date').order('id').range(from, to)),
       supabase.rpc('management_dashboard_snapshot', { p_today: todayISO }),
     ]);
 
@@ -505,7 +506,7 @@ export default function Dashboard() {
     const payments = paymentsRes as unknown as { amount: number; paid_date: string }[];
     const exceptions = exceptionsRes as unknown as ({ id: string; type: string; severity: 'low' | 'medium' | 'high'; title: string; created_at: string; supplier: { name: string } | null })[];
     const poItems = poItemsRes as unknown as { qty: number; unit_price: number; product: { category: { name: string } | null } | null; order: { created_at: string } }[];
-    const priceRows = priceUpRes as unknown as { current_price: number; previous_price: number | null; price_effective_date: string; product: { id: string; name: string }; supplier: { name: string } }[];
+    const priceRows = priceUpRes as unknown as { current_price: number; previous_price: number | null; price_effective_date: string; product: { id: string; name: string; display_name: string | null }; supplier: { name: string } }[];
     const reqItems = reqItemsRes as unknown as { qty: number; unit_price: number | null; product_id: string }[];
     const offers = offersRes as unknown as { product_id: string; current_price: number }[];
     const deliveries = deliveriesRes as unknown as DeliveryOrder[];
@@ -993,7 +994,7 @@ export default function Dashboard() {
                     <li key={index}>
                       <Link to={`/prices?product=${price.product.id}`} className="flex min-h-11 flex-col items-stretch gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface-hover active:bg-surface-selected sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <span className="min-w-0 break-words sm:truncate">
-                          <bdi className="font-medium text-ink-body">{price.product.name}</bdi>
+                          <bdi className="font-medium text-ink-body">{productLabel(price.product)}</bdi>
                           <span className="ms-2 text-xs text-ink-muted">{price.supplier.name}</span>
                         </span>
                         <span className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 sm:justify-start">

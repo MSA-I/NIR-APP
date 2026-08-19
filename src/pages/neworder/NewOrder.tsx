@@ -25,7 +25,7 @@ import {
 } from '../../lib/orderSplit';
 import { centsFromUnits, hundredths, lineUnits, moneyFromCents } from '../../lib/orderSavings';
 import { deferProduct, dismissNextOrderItem, listNextOrderItems, type NextOrderItem } from '../../lib/nextOrderItems';
-import { fmtMoneyExact } from '../../lib/format';
+import { fmtMoneyExact, productLabel } from '../../lib/format';
 import { NEW_COMMERCE_SUPPLIER_STATUSES } from '../../lib/status';
 import { markOrderSentToSupplier } from '../../lib/share';
 import { WhatsAppSendDialog } from '../../components/WhatsAppSendDialog';
@@ -387,7 +387,10 @@ export default function NewOrder() {
         prices.set(priceKey(line.productId, group.supplier.id), line.unitPrice);
         lines.push({
           productId: line.productId,
-          productName: state.products[line.productId]?.name ?? 'מוצר',
+          productName: (() => {
+            const product = state.products[line.productId];
+            return product ? productLabel(product) : 'מוצר';
+          })(),
           supplierId: group.supplier.id,
           supplierName: group.supplier.name,
           qty: line.qty,

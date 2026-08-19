@@ -25,7 +25,13 @@ export interface OrderImageModel {
   rows: { index: number; name: string; qty: string; sku: string | null }[];
 }
 
-/** Pure data mapping — the unit-testable half of the render. */
+/**
+ * Pure data mapping — the unit-testable half of the render.
+ *
+ * `name` is the RAW catalogue name, deliberately. This image is sent to the supplier, who picks
+ * the goods by their own wording; see the `WhatsAppOrder` docblock in ./share.ts and `productLabel`
+ * in ./format.ts. `productLabel.spec.ts` fails the build if this file ever reaches for it.
+ */
 export function orderImageModel(order: WhatsAppOrder, orgName: string): OrderImageModel {
   return {
     title: `הזמנת רכש #${order.number}`,

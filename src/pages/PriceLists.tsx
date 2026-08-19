@@ -10,13 +10,16 @@ import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, PageHeader, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
-import { fmtDate, fmtMoneyExact, fmtMoneyRounded, formatUnit, todayISO } from '../lib/format';
+import { fmtDate, fmtMoneyExact, fmtMoneyRounded, formatUnit, productLabel, todayISO } from '../lib/format';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { chartTheme } from '../lib/theme';
 import { PRODUCT_AVAILABILITY } from '../lib/status';
 import type { SupplierProduct, Supplier, PriceHistory, SupplierPriceSubmission } from '../lib/types';
 
-type Row = SupplierProduct & { supplier: Supplier; product: { id: string; name: string; unit: string } };
+type Row = SupplierProduct & {
+  supplier: Supplier;
+  product: { id: string; name: string; display_name: string | null; unit: string };
+};
 type ManagerSubmission = SupplierPriceSubmission & { supplier: Pick<Supplier, 'id' | 'name'> };
 
 const SUBMISSION_STATUS = {
@@ -55,7 +58,7 @@ export default function PriceLists() {
 
   const { data, loading, error, refetch } = useQuery(async () =>
     unwrap(await supabase.from('supplier_products')
-      .select('*, supplier:suppliers(id, name, status), product:products(id, name, unit)')
+      .select('*, supplier:suppliers(id, name, status), product:products(id, name, display_name, unit)')
       .order('updated_at', { ascending: false })) as Promise<Row[]>);
 
   const { data: submissions, loading: submissionsLoading, error: submissionsError } = useQuery(async () => {
@@ -107,12 +110,13 @@ export default function PriceLists() {
     return [...filtered].sort((a, b) => Number(b.available) - Number(a.available) || a.current_price - b.current_price);
   }, [data, supplierFilter, productFilter, onlyIncreases]);
 
-  const activeProductName = productFilter ? data?.find((r) => r.product_id === productFilter)?.product.name : null;
+  const activeProductRow = productFilter ? data?.find((r) => r.product_id === productFilter) : null;
+  const activeProductName = activeProductRow ? productLabel(activeProductRow.product) : null;
 
   const changePct = (r: Row) => r.previous_price ? ((r.current_price - r.previous_price) / r.previous_price) * 100 : 0;
 
   const columns: Column<Row>[] = [
-    { key: 'product', header: 'מוצר', priority: 3, sortValue: (r) => r.product.name, render: (r) => <bdi className="font-medium text-ink">{r.product.name}</bdi> },
+    { key: 'product', header: 'מוצר', priority: 3, sortValue: (r) => productLabel(r.product), render: (r) => <bdi className="font-medium text-ink">{productLabel(r.product)}</bdi> },
     { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
     { key: 'unit', header: 'יחידה', priority: 3, render: (r) => formatUnit(r.product.unit) },
     { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
@@ -164,10 +168,10 @@ export default function PriceLists() {
         )} />
 
       {comparison && (
-        <section className="card card-pad" aria-label={`השוואת מחירים — ${comparison.product.name}`}>
+        <section className="card card-pad" aria-label={`השוואת מחירים — ${productLabel(comparison.product)}`}>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div className="text-sm text-ink-muted">
-              <bdi className="text-base font-semibold text-ink">{comparison.product.name}</bdi>
+              <bdi className="text-base font-semibold text-ink">{productLabel(comparison.product)}</bdi>
               {' '}· {formatUnit(comparison.product.unit)} · <span className="num">{comparison.supplierCount}</span> ספקים
             </div>
             {canWrite && <Link className="text-sm text-action underline" to={`/products?id=${comparison.product.id}`}>עריכת מוצר</Link>}
@@ -191,10 +195,16 @@ export default function PriceLists() {
         </section>
       )}
       <DataTable rows={rows} columns={columns} searchable
-        searchFn={(r, q) => r.product.name.toLowerCase().includes(q) || r.supplier.name.toLowerCase().includes(q)}
+        searchFn={(r, q) => (
+          // The raw name too: a price list arrives under the supplier's wording, and somebody
+          // checking a line against this screen types what the sheet said.
+          productLabel(r.product).toLowerCase().includes(q)
+          || r.product.name.toLowerCase().includes(q)
+          || r.supplier.name.toLowerCase().includes(q)
+        )}
         searchLabel="חיפוש במחירונים"
-        rowLabel={(r) => `${r.product.name} אצל ${r.supplier.name}`}
-        mobileTitle={(r) => <><bdi>{r.product.name}</bdi> · <bdi>{r.supplier.name}</bdi></>}
+        rowLabel={(r) => `${productLabel(r.product)} אצל ${r.supplier.name}`}
+        mobileTitle={(r) => <><bdi>{productLabel(r.product)}</bdi> · <bdi>{r.supplier.name}</bdi></>}
         mobileTrailing={(r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} />}
         rowActions={(r) => [
           { key: 'history', label: 'היסטוריית מחירים', icon: History, onSelect: () => setHistoryFor(r) },
@@ -270,7 +280,7 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
   const { data } = useQuery<PriceHistory[]>(async () =>
     unwrap(await supabase.from('price_history').select('*').eq('supplier_product_id', row.id).order('effective_date', { ascending: false })), [row.id]);
   return (
-    <Modal open onClose={onClose} title={`היסטוריית מחירים — ${row.product.name} (${row.supplier.name})`}>
+    <Modal open onClose={onClose} title={`היסטוריית מחירים — ${productLabel(row.product)} (${row.supplier.name})`}>
       {data && data.length >= 2 && (() => {
         const t = chartTheme();
         const asc = [...data].reverse();
@@ -337,7 +347,7 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
   }
 
   return (
-    <Modal open onClose={onClose} title={`עדכון מחיר — ${row.product.name} (${row.supplier.name})`} busy={busy} statusMessage={busy ? 'שומר את המחיר' : undefined}>
+    <Modal open onClose={onClose} title={`עדכון מחיר — ${productLabel(row.product)} (${row.supplier.name})`} busy={busy} statusMessage={busy ? 'שומר את המחיר' : undefined}>
       <div className="space-y-4">
         <div><label className="label" htmlFor="price-list-price">מחיר חדש (₪)</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
         <div><label className="label" htmlFor="price-list-date">בתוקף מתאריך</label><input id="price-list-date" type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
@@ -388,6 +398,9 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
     setBusy(true);
     try {
       const suppliers = unwrap(await supabase.from('suppliers').select('id, name')) as { id: string; name: string }[];
+      // MATCHING, not display: the sheet the user is importing carries the supplier's own wording,
+      // and the raw `name` is what that wording was ever compared against. `display_name` is a
+      // name we composed, so a row would stop resolving the moment somebody approved one.
       const products = unwrap(await supabase.from('products').select('id, name')) as { id: string; name: string }[];
       const unresolved: number[] = [];
       const rows = preview.flatMap((row, index) => {

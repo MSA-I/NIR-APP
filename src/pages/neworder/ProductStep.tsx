@@ -1,7 +1,7 @@
 import { Check, Minus, Plus, Search, ShoppingCart, X } from 'lucide-react';
 import type { NextOrderItem } from '../../lib/nextOrderItems';
 import type { Category, Product, SupplierProduct } from '../../lib/types';
-import { fmtMoneyExact, formatQuantity, formatUnit } from '../../lib/format';
+import { fmtMoneyExact, formatQuantity, formatUnit, productLabel } from '../../lib/format';
 
 interface ProductCartItem {
   product: Product;
@@ -40,8 +40,13 @@ interface ProductStepProps {
 }
 
 export default function ProductStep({ products, categories, offersByProduct, cart, q, setQ, cat, setCat, onAdd, onRemove, onQty, onContinue, nextOrderItems, nextOrderBusyId, onAddNextOrderItem, onDismissNextOrderItem, onCreateProduct }: ProductStepProps) {
-  const filteredProducts = products.filter((product) =>
-    (!cat || product.category_id === cat) && (!q || product.name.toLowerCase().includes(q.toLowerCase())));
+  const filteredProducts = products.filter((product) => (
+    (!cat || product.category_id === cat)
+    // Both names: the row now shows the approved one, and somebody ordering from a supplier's
+    // sheet types what the sheet says. Searching more can only find more.
+    && (!q || productLabel(product).toLowerCase().includes(q.toLowerCase())
+      || product.name.toLowerCase().includes(q.toLowerCase()))
+  ));
   const cartByProduct = new Map(cart.map((item) => [item.product.id, item]));
 
   return (
@@ -52,7 +57,7 @@ export default function ProductStep({ products, categories, offersByProduct, car
           <div className="mt-3 divide-y divide-info-line border-y border-info-line">
             {nextOrderItems.map((item) => (
               <div key={item.id} className="flex flex-wrap items-center gap-2 py-2">
-                <div className="min-w-0 flex-1"><div className="font-medium text-ink-body"><bdi>{item.product.name}</bdi></div><div className="text-xs">כמות <span className="num font-semibold">{formatQuantity(item.qty, item.product.unit)}</span></div></div>
+                <div className="min-w-0 flex-1"><div className="font-medium text-ink-body"><bdi>{productLabel(item.product)}</bdi></div><div className="text-xs">כמות <span className="num font-semibold">{formatQuantity(item.qty, item.product.unit)}</span></div></div>
                 <button type="button" className="btn-secondary" disabled={nextOrderBusyId !== null} onClick={() => onAddNextOrderItem(item)}><Plus size={15} aria-hidden="true" /> הוסף להזמנה</button>
                 <button type="button" className="btn-ghost" disabled={nextOrderBusyId !== null} onClick={() => onDismissNextOrderItem(item)}><X size={15} aria-hidden="true" /> התעלם</button>
               </div>
@@ -94,7 +99,7 @@ export default function ProductStep({ products, categories, offersByProduct, car
             <div key={product.id} className={`flex min-h-14 items-center ${carted ? 'bg-surface-selected' : ''}`}>
               <button type="button" className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-start hover:bg-surface-hover sm:px-4"
                 aria-pressed={!!carted}
-                aria-label={`${carted ? 'ביטול בחירת' : 'בחירת'} ${product.name}`}
+                aria-label={`${carted ? 'ביטול בחירת' : 'בחירת'} ${productLabel(product)}`}
                 onClick={() => { if (carted) onRemove(product.id); else onAdd(product); }}>
                 {/* Choosing is not completing. This box wore the done family, which claims a step
                     finished; a picker has nothing finished on it. The action family is what the
@@ -104,16 +109,16 @@ export default function ProductStep({ products, categories, offersByProduct, car
                     the glyph appears only when carted, aria-pressed sits on the parent, the label
                     names the action, and the quantity stepper exists only for a chosen product. */}
                 <span className={`grid size-6 shrink-0 place-items-center rounded-lg border ${carted ? 'border-action bg-action text-on-solid' : 'border-line text-transparent'}`} aria-hidden="true"><Check size={14} /></span>
-                <span className="min-w-0 flex-1"><bdi className="block break-words text-sm font-medium text-ink-body sm:truncate">{product.name}</bdi><span className="text-xs text-ink-muted">{formatUnit(product.unit)}</span></span>
+                <span className="min-w-0 flex-1"><bdi className="block break-words text-sm font-medium text-ink-body sm:truncate">{productLabel(product)}</bdi><span className="text-xs text-ink-muted">{formatUnit(product.unit)}</span></span>
                 <span className={`shrink-0 text-xs text-ink-muted ${offers.length ? 'num' : ''}`}>{offers.length ? fmtMoneyExact(offers[0].current_price) : 'אין ספק'}</span>
               </button>
               {/* overflow-hidden is load-bearing: the group carries the radius and clips its two
                   square size-11 children, which would otherwise poke out of the rounded box. */}
               {carted && (
-                <div className="me-3 flex shrink-0 items-center overflow-hidden rounded-lg border border-line-strong bg-surface sm:me-4" role="group" aria-label={`כמות ${product.name}`}>
-                  <button type="button" className="grid size-11 place-items-center hover:bg-surface-hover" aria-label={`הפחתת כמות ${product.name}`} onClick={() => onQty(product.id, carted.qty - 1)}><Minus size={14} /></button>
+                <div className="me-3 flex shrink-0 items-center overflow-hidden rounded-lg border border-line-strong bg-surface sm:me-4" role="group" aria-label={`כמות ${productLabel(product)}`}>
+                  <button type="button" className="grid size-11 place-items-center hover:bg-surface-hover" aria-label={`הפחתת כמות ${productLabel(product)}`} onClick={() => onQty(product.id, carted.qty - 1)}><Minus size={14} /></button>
                   <span className="min-w-10 border-x border-line py-2 text-center text-sm font-semibold num">{carted.qty}</span>
-                  <button type="button" className="grid size-11 place-items-center hover:bg-surface-hover" aria-label={`הוספת כמות ${product.name}`} onClick={() => onQty(product.id, carted.qty + 1)}><Plus size={14} /></button>
+                  <button type="button" className="grid size-11 place-items-center hover:bg-surface-hover" aria-label={`הוספת כמות ${productLabel(product)}`} onClick={() => onQty(product.id, carted.qty + 1)}><Plus size={14} /></button>
                 </div>
               )}
             </div>

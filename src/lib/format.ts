@@ -46,6 +46,41 @@ export const fmtNum = (v: number | null | undefined) => (v == null ? '—' : num
  */
 export const bidiIsolate = (s: string): string => `⁨${s}⁩`; // FSI … PDI
 
+/**
+ * The name to SHOW for a product: the canonical one a person approved (0149), or the raw one
+ * until somebody has. `display_name IS NULL` is the normal state — nothing was backfilled — so
+ * every call site keeps rendering exactly what it rendered before this helper existed, and starts
+ * showing a canonical name only for the rows an owner has actually reviewed.
+ *
+ * WHY A FUNCTION AND NOT `?? name` AT TWENTY CALL SITES. The interesting question about a product
+ * name is not how to fall back, it is WHICH SIDE OF THE LINE a given screen is on. A grep for this
+ * function returns the display half of the answer; the list below is the other half, and it is
+ * the half that breaks silently if somebody is helpful in the wrong place.
+ *
+ * THESE MUST NEVER CALL IT, and `productLabel.spec.ts` fails the build if they do:
+ *
+ *   * MATCHING. `nameKey(product.name)` decides which spreadsheet row is which catalogue row —
+ *     `PriceListUpload.tsx`, `QuickCreateProduct.tsx`, `Onboarding.tsx`, and the SQL twin
+ *     `private.name_match_key`. Canonicalising here changes which rows are treated as the same
+ *     product, which is a data outcome, not a display one.
+ *   * SUPPLIER-FACING. `share.ts` (the WhatsApp order) and `orderImage.ts` (the order image). The
+ *     supplier recognises THEIR name for the item; a name we composed arrives at someone who has
+ *     never seen it and cannot act on it.
+ *   * AUDIT. `audit_logs` and `/supplier-log` say what the record said, at the time it said it.
+ *   * THE PROPOSAL SCREEN. `ProductNameReview.tsx` exists to show the raw name against a proposal.
+ *
+ * The parameter deliberately requires `display_name` rather than accepting it as optional: a
+ * query that forgot to select the column then fails typecheck, instead of quietly rendering the
+ * raw name forever on a screen everyone believes was switched.
+ *
+ * The blank guard is belt-and-braces — `products_display_name_shape` makes `''` unrepresentable
+ * in the column — but rows also get built client-side (the duplicate-product prefill), and one
+ * spelling of "no canonical name" is worth more than a second one nobody remembers.
+ */
+export function productLabel(product: { name: string; display_name: string | null }): string {
+  return product.display_name?.trim() || product.name;
+}
+
 const UNIT_FORMS: Record<string, { singular: string; plural?: string }> = {
   'ארגז': { singular: 'ארגז', plural: 'ארגזים' },
   'ארגזים': { singular: 'ארגז', plural: 'ארגזים' },

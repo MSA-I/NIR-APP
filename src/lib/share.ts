@@ -6,6 +6,12 @@ import { openExternalPopup } from './popup';
 /**
  * The slice of a purchase order the WhatsApp share needs. Both the Orders list rows and the
  * OrderDetail record satisfy it structurally — this module owns the one send flow they share.
+ *
+ * `product` carries the RAW catalogue name and nothing else, and that is the contract, not an
+ * omission: everything in this file is read by the supplier, who recognises their own wording for
+ * an item. A canonical name the business approved for its own screens would arrive at somebody
+ * who has never seen it and cannot act on it. `productLabel` in ./format.ts states the whole
+ * rule, and `productLabel.spec.ts` fails the build if this file ever reaches for it.
  */
 export interface WhatsAppOrder {
   id: string;

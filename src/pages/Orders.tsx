@@ -8,12 +8,17 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { Breadcrumbs, DataTable, StatusBadge, useToast, ConfirmDialog, LifecycleStrip, Modal, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, Note, type Column } from '../components/ui';
 import { PO_STATUS } from '../lib/status';
-import { fmtMoneyExact, fmtDate, fmtDateTime, formatQuantity, formatUnit, todayISO } from '../lib/format';
+import { fmtMoneyExact, fmtDate, fmtDateTime, formatQuantity, formatUnit, productLabel, todayISO } from '../lib/format';
 import { orderWhatsAppLink, markOrderSentToSupplier, needsSentConfirmation } from '../lib/share';
 import { WhatsAppSendDialog } from '../components/WhatsAppSendDialog';
 import { cancelOrderDraft } from '../lib/orderDrafts';
 import type { PurchaseOrder, PurchaseOrderItem, PoStatus } from '../lib/types';
 
+/**
+ * The list row. Its items are never rendered here — they feed the line total and the WhatsApp
+ * payload — so this shape deliberately carries the raw name only. The supplier reads their own
+ * wording; see `productLabel` in lib/format.ts for the whole rule.
+ */
 type OrderRow = PurchaseOrder & {
   supplier: { name: string; phone: string | null; whatsapp: string | null };
   items: { qty: number; unit_price: number; product: { name: string; unit: string; sku: string | null } }[];
@@ -248,7 +253,9 @@ export function OrdersList() {
 
 type FullOrder = PurchaseOrder & {
   supplier: { id: string; name: string; phone: string | null; whatsapp: string | null; email: string | null; min_order_amount: number | null };
-  items: (PurchaseOrderItem & { product: { name: string; unit: string; sku: string | null } })[];
+  items: (PurchaseOrderItem & {
+    product: { name: string; display_name: string | null; unit: string; sku: string | null };
+  })[];
 };
 
 export function OrderDetail() {
@@ -271,7 +278,7 @@ export function OrderDetail() {
 
   const { data: order, loading, error, refetch } = useQuery(async () =>
     unwrap(await supabase.from('purchase_orders')
-      .select('*, supplier:suppliers(id, name, phone, whatsapp, email, min_order_amount), items:purchase_order_items(*, product:products(name, unit, sku))')
+      .select('*, supplier:suppliers(id, name, phone, whatsapp, email, min_order_amount), items:purchase_order_items(*, product:products(name, display_name, unit, sku))')
       .eq('id', id!).single()) as Promise<FullOrder>, [id]);
 
   // ?print=1 (Orders list "הדפסה" action): print once when the data is on screen, then strip
@@ -441,7 +448,7 @@ export function OrderDetail() {
           {order.items.map((item) => (
             <li key={item.id} className="py-3 first:pt-0 last:pb-0">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0"><div className="font-medium text-ink-body"><bdi>{item.product.name}</bdi></div><div className="mt-1 text-xs text-ink-muted"><span className="num">{formatQuantity(item.qty, item.product.unit)}</span> × <span className="num">{fmtMoneyExact(item.unit_price)}</span></div></div>
+                <div className="min-w-0"><div className="font-medium text-ink-body"><bdi>{productLabel(item.product)}</bdi></div><div className="mt-1 text-xs text-ink-muted"><span className="num">{formatQuantity(item.qty, item.product.unit)}</span> × <span className="num">{fmtMoneyExact(item.unit_price)}</span></div></div>
                 <span className="num shrink-0 font-semibold">{fmtMoneyExact(item.qty * item.unit_price)}</span>
               </div>
               {order.status !== 'draft' && <div className="mt-2 text-xs text-ink-muted">התקבל: <span className={`num ${item.received_qty >= item.qty ? 'text-done-fg' : item.received_qty > 0 ? 'text-await-fg' : ''}`}>{item.received_qty}</span> מתוך <span className="num">{item.qty}</span></div>}
@@ -461,7 +468,7 @@ export function OrderDetail() {
           <tbody className="divide-y divide-line-soft">
             {order.items.map((i) => (
               <tr key={i.id}>
-                <td className="td font-medium text-ink-body"><bdi>{i.product.name}</bdi></td>
+                <td className="td font-medium text-ink-body"><bdi>{productLabel(i.product)}</bdi></td>
                 <td className="td">{formatUnit(i.product.unit)}</td>
                 <td className="td num">{i.qty}</td>
                 <td className="td num">{fmtMoneyExact(i.unit_price)}</td>

@@ -6,6 +6,11 @@
 -- and every call leaves an audit row. It also pins the fact the whole design rests on -- that a
 -- browser session has no direct write path to the column at all, so the command is not merely the
 -- preferred route but the only one.
+--
+-- Sections 8 and 9 pin the other half, added with 0150: the read models that SHOW a product name
+-- render the approved one when it exists and the raw one until then. Section 8 is the one that
+-- matters most, because it is the state of the entire live catalogue -- nothing was backfilled, so
+-- the switch is a strict no-op until a person acts.
 \set ON_ERROR_STOP on
 
 begin;
@@ -40,6 +45,33 @@ insert into public.products (id, org_id, name, unit)
 values (
   '68000000-0000-4000-8000-000000000002',
   '48000000-0000-4000-8000-000000000002', 'P48 foreign product', 'יח׳'
+);
+
+-- The minimum that makes the read models switched by 0150 return this product at all: one counted
+-- movement, so both inventory projections have a row, and one purchase-order line, so the product
+-- reaches the purchase summary's rollup. None of it is about naming; sections 8 and 9 are.
+insert into public.suppliers (id, org_id, name, status)
+values (
+  '78000000-0000-4000-8000-000000000001',
+  '48000000-0000-4000-8000-000000000001', 'P48 ספק', 'active'
+);
+insert into public.inventory_movements (
+  id, org_id, product_id, movement_type, quantity_delta, counted_quantity,
+  negative_override, reason, created_by
+) values (
+  '88000000-0000-4000-8000-000000000001', '48000000-0000-4000-8000-000000000001',
+  '68000000-0000-4000-8000-000000000001', 'stocktake', 6, 6,
+  false, 'P48 initial count', '58000000-0000-4000-8000-000000000001'
+);
+insert into public.purchase_orders (id, org_id, supplier_id, status, created_at)
+values (
+  '98000000-0000-4000-8000-000000000001', '48000000-0000-4000-8000-000000000001',
+  '78000000-0000-4000-8000-000000000001', 'sent', timestamptz '2026-08-03 09:00+03'
+);
+insert into public.purchase_order_items (id, org_id, order_id, product_id, qty, unit_price)
+values (
+  'a8000000-0000-4000-8000-000000000001', '48000000-0000-4000-8000-000000000001',
+  '98000000-0000-4000-8000-000000000001', '68000000-0000-4000-8000-000000000001', 4, 12
 );
 
 -- ===== 1. The column itself refuses a blank canonical name =====
@@ -248,6 +280,96 @@ begin
       and new_values->>'display_name' is null
   ) <> 1 then
     raise exception 'the clear was not audited with the name it removed';
+  end if;
+end
+$$;
+
+-- ===== 8. The read models switched by 0150 fall back to the raw name =====
+-- Section 7 left display_name NULL, which is the state of the ENTIRE live catalogue: 0149
+-- backfilled nothing and never will. So this section is the assertion that 0150 changed nothing
+-- anybody can see, and it is the case that matters most -- a switch that is a no-op until a person
+-- acts is a switch that can ship before anybody has acted.
+select set_config('request.jwt.claim.sub', '58000000-0000-4000-8000-000000000001', true);
+set local role authenticated;
+do $$
+begin
+  if (
+    select product_name from public.inventory_balances
+    where product_id = '68000000-0000-4000-8000-000000000001'
+  ) is distinct from 'שמן קנולה 100 מ״ל חברת דגן' then
+    raise exception 'inventory_balances must render the raw name while none has been approved';
+  end if;
+
+  if (
+    select product_name from public.inventory_movement_feed
+    where product_id = '68000000-0000-4000-8000-000000000001'
+  ) is distinct from 'שמן קנולה 100 מ״ל חברת דגן' then
+    raise exception 'inventory_movement_feed must render the raw name while none has been approved';
+  end if;
+end
+$$;
+reset role;
+
+-- Called directly, the way p34 calls it: `private` is revoked from every browser role, and the
+-- public door adds only the role gate and the window validation this suite is not about.
+do $$
+begin
+  if (
+    select p ->> 'product_name'
+    from jsonb_array_elements(
+      private.product_purchase_summary(
+        '48000000-0000-4000-8000-000000000001', '2026-08-01', '2026-08-31', null) -> 'products') p
+    where p ->> 'product_id' = '68000000-0000-4000-8000-000000000001'
+  ) is distinct from 'שמן קנולה 100 מ״ל חברת דגן' then
+    raise exception 'product_purchase_summary must render the raw name while none has been approved';
+  end if;
+end
+$$;
+
+-- ===== 9. Once a person approves a name, every switched projection shows it =====
+select set_config('request.jwt.claim.sub', '58000000-0000-4000-8000-000000000001', true);
+set local role authenticated;
+select public.set_product_display_name(
+  '68000000-0000-4000-8000-000000000001', 'שמן קנולה — 100 מ״ל', 'P48 approved for the read models');
+do $$
+begin
+  if (
+    select product_name from public.inventory_balances
+    where product_id = '68000000-0000-4000-8000-000000000001'
+  ) is distinct from 'שמן קנולה — 100 מ״ל' then
+    raise exception 'inventory_balances did not follow the approved canonical name';
+  end if;
+
+  if (
+    select product_name from public.inventory_movement_feed
+    where product_id = '68000000-0000-4000-8000-000000000001'
+  ) is distinct from 'שמן קנולה — 100 מ״ל' then
+    raise exception 'inventory_movement_feed did not follow the approved canonical name';
+  end if;
+end
+$$;
+reset role;
+
+do $$
+begin
+  if (
+    select p ->> 'product_name'
+    from jsonb_array_elements(
+      private.product_purchase_summary(
+        '48000000-0000-4000-8000-000000000001', '2026-08-01', '2026-08-31', null) -> 'products') p
+    where p ->> 'product_id' = '68000000-0000-4000-8000-000000000001'
+  ) is distinct from 'שמן קנולה — 100 מ״ל' then
+    raise exception 'product_purchase_summary did not follow the approved canonical name';
+  end if;
+
+  -- The raw name is what matching reads and what the supplier-facing order message sends. A
+  -- display switch that quietly rewrote it would break both, and neither would fail loudly.
+  if not exists (
+    select 1 from public.products
+    where id = '68000000-0000-4000-8000-000000000001'
+      and name = 'שמן קנולה 100 מ״ל חברת דגן'
+  ) then
+    raise exception 'switching the display sites must not touch the raw name';
   end if;
 end
 $$;

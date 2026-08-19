@@ -7,7 +7,7 @@ import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, PageHeader, SkeletonTable, ConfirmDialog, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
-import { fmtMoneyExact, formatUnit, normalizeUnitInput } from '../lib/format';
+import { fmtMoneyExact, formatUnit, normalizeUnitInput, productLabel } from '../lib/format';
 import { useCategories } from './Suppliers';
 import type { Product } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
@@ -106,7 +106,9 @@ export default function Products() {
   }
 
   const columns: Column<ProductRow>[] = [
-    { key: 'name', header: 'מוצר', sortValue: (r) => r.name, render: (r) => <bdi className={`font-medium ${r.active ? 'text-ink' : 'text-ink-muted line-through'}`}>{r.name}</bdi> },
+    // The catalogue table shows the approved name; the edit modal below goes on showing the raw
+    // one, because that is the field it edits and the one matching and the supplier read.
+    { key: 'name', header: 'מוצר', sortValue: (r) => productLabel(r), render: (r) => <bdi className={`font-medium ${r.active ? 'text-ink' : 'text-ink-muted line-through'}`}>{productLabel(r)}</bdi> },
     { key: 'cat', header: 'קטגוריה', sortValue: (r) => r.category?.name ?? '', render: (r) => r.category?.name ?? '—' },
     { key: 'unit', header: 'יחידת מידה', render: (r) => formatUnit(r.unit) },
     { key: 'sku', header: 'מק״ט', render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
@@ -120,7 +122,7 @@ export default function Products() {
       // cross-supplier view. stopPropagation: the row click underneath opens the edit modal.
       render: (r) => r.bestPrice != null ? (
         <button type="button" className="text-action underline underline-offset-2"
-          title={`השוואת מחירי ${r.name}`}
+          title={`השוואת מחירי ${productLabel(r)}`}
           onClick={(event) => { event.stopPropagation(); navigate(`/prices?product=${r.id}`); }}>
           {fmtMoneyExact(r.bestPrice)}
         </button>
@@ -167,33 +169,42 @@ export default function Products() {
         <ProductNameReview queue={awaitingName}
           onApproved={(id) => setNamedThisSession((current) => new Set(current).add(id))} />
       ) : (
-      <DataTable rows={rows} columns={columns} searchable
-        emptyTitle="אין מוצרים עדיין"
-        emptySubtitle={canUploadPrices
-          ? 'הדרך המהירה היא העלאת מחירון — הוא יוצר את המוצרים ואת המחירים יחד.'
-          : 'הוספת מוצרים והעלאת מחירונים זמינות לבעלים ולמנהל הרכש.'}
-        searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.sku ?? '').toLowerCase().includes(q)}
-        searchLabel="חיפוש במוצרים"
-        rowLabel={(r) => `מוצר ${r.name}`}
-        onRowClick={canWrite ? (r) => setEditing(r) : undefined}
-        rowActions={canWrite ? (r) => [
-          /* G1, finding 19. "האם המחיר של המוצר הזה עלה?" is answered well — a history model with
-             a chart — and it lived only at /prices. The screen named after the question had no
-             link to it, and `?product=` was already implemented there (PriceLists.tsx:40,:68) with
-             exactly one emitter in the entire codebase (Dashboard.tsx:752). Since 18.08.2026 the
-             global search product hit also lands on /prices?product= (the comparison), and the
-             best-price cell above links there too; this row action stays as the named path. */
-          { key: 'prices', label: 'מחירים והיסטוריה', icon: History, onSelect: () => navigate(`/prices?product=${r.id}`) },
-          { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setEditing(r) },
-          { key: 'duplicate', label: 'שכפול', icon: Copy, onSelect: () => setClone({ ...r, name: `${r.name} (עותק)` }) },
-          { key: 'toggle', label: r.active ? 'השבתה' : 'הפעלה', icon: Power, onSelect: () => setToggleTarget(r) },
-        ] : undefined}
-        toolbar={
-          <select className="input w-auto!" aria-label="סינון מוצרים לפי קטגוריה" value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>
-            <option value="">כל הקטגוריות</option>
-            {categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        } />
+        <DataTable rows={rows} columns={columns} searchable
+          emptyTitle="אין מוצרים עדיין"
+          emptySubtitle={canUploadPrices
+            ? 'הדרך המהירה היא העלאת מחירון — הוא יוצר את המוצרים ואת המחירים יחד.'
+            : 'הוספת מוצרים והעלאת מחירונים זמינות לבעלים ולמנהל הרכש.'}
+          searchFn={(r, q) => (
+            // Both names, deliberately. The raw one is what a supplier invoice and an uploaded
+            // price list say, so somebody typing what they are holding still finds the row; the
+            // approved one is what the table now shows. Searching more can only find more.
+            productLabel(r).toLowerCase().includes(q)
+            || r.name.toLowerCase().includes(q)
+            || (r.sku ?? '').toLowerCase().includes(q)
+          )}
+          searchLabel="חיפוש במוצרים"
+          rowLabel={(r) => `מוצר ${productLabel(r)}`}
+          onRowClick={canWrite ? (r) => setEditing(r) : undefined}
+          rowActions={canWrite ? (r) => [
+            /* G1, finding 19. "האם המחיר של המוצר הזה עלה?" is answered well — a history model with
+               a chart — and it lived only at /prices. The screen named after the question had no
+               link to it, and `?product=` was already implemented there (PriceLists.tsx:40,:68) with
+               exactly one emitter in the entire codebase (Dashboard.tsx:752). Since 18.08.2026 the
+               global search product hit also lands on /prices?product= (the comparison), and the
+               best-price cell above links there too; this row action stays as the named path. */
+            { key: 'prices', label: 'מחירים והיסטוריה', icon: History, onSelect: () => navigate(`/prices?product=${r.id}`) },
+            { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setEditing(r) },
+            // A copy starts with no canonical name of its own: it is a different product, and the
+            // name it will be shown under is a decision nobody has made about it yet.
+            { key: 'duplicate', label: 'שכפול', icon: Copy, onSelect: () => setClone({ ...r, name: `${r.name} (עותק)`, display_name: null }) },
+            { key: 'toggle', label: r.active ? 'השבתה' : 'הפעלה', icon: Power, onSelect: () => setToggleTarget(r) },
+          ] : undefined}
+          toolbar={
+            <select className="input w-auto!" aria-label="סינון מוצרים לפי קטגוריה" value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>
+              <option value="">כל הקטגוריות</option>
+              {categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          } />
       )}
       {(editing || clone) && (
         <ProductForm product={editing && editing !== 'new' ? editing : null} initial={clone ?? undefined}
@@ -208,8 +219,8 @@ export default function Products() {
         onConfirm={(reason) => void toggleActive(reason)}
         title={toggleTarget?.active ? 'השבתת מוצר' : 'הפעלת מוצר'}
         message={toggleTarget?.active
-          ? `המוצר ״${toggleTarget?.name}״ לא יופיע יותר בהזמנות חדשות. הפעולה תתועד ביומן הביקורת.`
-          : `המוצר ״${toggleTarget?.name}״ יחזור להיות זמין להזמנות. הפעולה תתועד ביומן הביקורת.`}
+          ? `המוצר ״${toggleTarget ? productLabel(toggleTarget) : ''}״ לא יופיע יותר בהזמנות חדשות. הפעולה תתועד ביומן הביקורת.`
+          : `המוצר ״${toggleTarget ? productLabel(toggleTarget) : ''}״ יחזור להיות זמין להזמנות. הפעולה תתועד ביומן הביקורת.`}
         confirmLabel={toggleTarget?.active ? 'השבתה' : 'הפעלה'}
         requireReason busy={busyToggle} />
     </div>
