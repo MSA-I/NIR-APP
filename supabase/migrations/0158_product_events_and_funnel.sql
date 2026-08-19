@@ -315,6 +315,8 @@ $assert_0158$;
 do $anchor_0158$
 declare
   v_unmeasured integer;
+  v_body       text;
+  v_metric     text;
 begin
   if not exists (
     select 1 from pg_proc
@@ -324,21 +326,41 @@ begin
     raise exception '0158: the quota crossing is not recorded anywhere';
   end if;
 
-  -- An event name outside the allowlist must be impossible, not merely discouraged.
-  begin
-    perform private.record_product_event(
-      (select id from organizations order by created_at limit 1),
-      null, 'not.defined', '{}'::jsonb, '0158-anchor');
-    raise exception '0158: an undefined product event was accepted';
-  exception when foreign_key_violation then null;
-  end;
+  -- An event name outside the allowlist must be impossible, not merely discouraged. Asserted on
+  -- the constraint instead of by attempting a write, because a migration must not assume the
+  -- database holds any data: on a fresh one there are no organizations, a null org_id fails the
+  -- NOT NULL check FIRST, and the resulting not_null_violation both escapes a
+  -- foreign_key_violation handler and proves nothing about the allowlist either way.
+  if not exists (
+    select 1 from pg_catalog.pg_constraint
+    where conrelid = 'private.product_events'::regclass
+      and confrelid = 'private.product_event_definitions'::regclass
+      and contype = 'f'
+  ) then
+    raise exception '0158: product events are not constrained to the defined allowlist';
+  end if;
 
   -- The three stages this system cannot see must be present AND flagged, not quietly missing.
-  select count(*) into v_unmeasured from (
-    select unnest(array['visitor_to_signup', 'checkout_started', 'returned_after_first_session'])
-  ) as expected(metric_key);
+  -- Read off the function's own body: the metric list is a VALUES literal, and the function
+  -- returns no rows at all without a platform JWT, so there is nothing to query back here.
+  select proc.prosrc into v_body from pg_catalog.pg_proc proc
+  where proc.oid = pg_catalog.to_regprocedure(
+    'public.platform_funnel_metrics(timestamptz,timestamptz)');
+
+  foreach v_metric in array
+    array['visitor_to_signup', 'checkout_started', 'returned_after_first_session']
+  loop
+    if position('''' || v_metric || '''' in v_body) = 0 then
+      raise exception '0158: the unmeasurable funnel stage % stopped being reported', v_metric;
+    end if;
+  end loop;
+
+  -- Exactly three metrics may answer "not measured". Fewer means one of them grew a number
+  -- nobody can source -- the zero this file exists to prevent.
+  v_unmeasured := (length(v_body) - length(replace(v_body, 'null::numeric, false', '')))
+                  / length('null::numeric, false');
   if v_unmeasured <> 3 then
-    raise exception '0158: the unmeasurable funnel stages changed shape';
+    raise exception '0158: % funnel stages are flagged unmeasured, expected 3', v_unmeasured;
   end if;
 end
 $anchor_0158$;

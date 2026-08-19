@@ -573,10 +573,16 @@ begin
     raise exception '0156: not_started became a storable state -- it is the absence of a decision';
   end if;
 
-  -- Health fails closed with no JWT subject, like every other operator read.
-  if public.platform_customer_health(
-       (select id from organizations order by created_at limit 1)) is not null then
-    raise exception '0156: platform_customer_health answered with no JWT subject';
+  -- Health fails closed, like every other operator read. Asserted on the body rather than by
+  -- calling it: with no JWT the call returns null, but so does a call for an organization that
+  -- does not exist -- and on a fresh database none do. A check that passes for the wrong reason
+  -- is not a check.
+  if not exists (
+    select 1 from pg_catalog.pg_proc
+    where oid = pg_catalog.to_regprocedure('public.platform_customer_health(uuid)')
+      and prosrc like '%is_platform_admin()%'
+  ) then
+    raise exception '0156: platform_customer_health lost its operator guard';
   end if;
 end
 $anchor_0156$;
