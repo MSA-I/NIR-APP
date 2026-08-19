@@ -1929,6 +1929,60 @@ async function adminState(browser) {
   }
 }
 
+async function operatorCustomers(browser) {
+  // The customer list, and the two things about it that are easy to get wrong:
+  //   * a customer that never acted must read as an em dash, not a date and not a zero;
+  //   * an operator without customer.view must be told so, because platform_customers() answers
+  //     that caller with zero rows and an empty table would claim the platform has no customers.
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1280, height: 900 } });
+  await context.route('**/rest/v1/platform_admins?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: { user_id: 'p4-platform-admin' } }));
+  await context.route('**/rest/v1/rpc/is_platform_admin*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: true }));
+  await context.route('**/rest/v1/rpc/platform_offboarding_requests*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
+
+  let capabilities = ['customer.view', 'org.lifecycle'];
+  await context.route('**/rest/v1/rpc/platform_my_capabilities*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: capabilities }));
+  await context.route('**/rest/v1/rpc/platform_customers*', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: [
+      {
+        id: 'p4-customer-active', name: 'לקוח פעיל בבדיקה', status: 'active', vat_rate: 18,
+        created_at: '2026-02-01T08:00:00.000Z', active_user_count: 4,
+        last_activity_at: '2026-08-18T09:30:00.000Z', offboarding_status: null, total_count: 2,
+      },
+      {
+        id: 'p4-customer-silent', name: 'לקוח ללא פעילות בבדיקה', status: 'active', vat_rate: 18,
+        created_at: '2026-03-01T08:00:00.000Z', active_user_count: 0,
+        last_activity_at: null, offboarding_status: null, total_count: 2,
+      },
+    ],
+  }));
+
+  const page = await context.newPage();
+  captureConsole(page, 'operator-customers');
+  try {
+    await login(page, 'owner');
+    await page.goto(`${baseURL}/operator#/admin/customers`);
+    await page.getByRole('heading', { name: 'לקוחות' }).waitFor({ timeout: 20_000 });
+    await page.getByText('לקוח ללא פעילות בבדיקה').first().waitFor({ timeout: 20_000 });
+
+    // The dash belongs to the customer that never acted, and only to it.
+    const dashes = await page.locator('td, .num').filter({ hasText: /^—$/ }).count();
+    assert(dashes > 0, 'a customer with no recorded activity rendered something other than an em dash');
+    assert(!(await page.content()).includes('לקוח ללא פעילות בבדיקה: 0'), 'a never-active customer reported a zero');
+
+    await auditAccessibility(page, 'operator-customers');
+
+    // Now the same screen for an operator who may not read customers at all.
+    capabilities = [];
+    await page.reload();
+    await page.getByText('הרשאת צפייה בלקוחות').waitFor({ timeout: 20_000 });
+    assert(!(await page.content()).includes('אין לקוחות'), 'a refused operator was shown the empty-customer-base state');
+  } finally {
+    await closeContext(context);
+  }
+}
+
 async function operatorRefusal(browser) {
   // The other half of the operator boundary: a signed-in tenant who is NOT a platform admin
   // (no platform_admins mock — the live table answers false) lands on /operator and is handed
@@ -3436,6 +3490,7 @@ async function run(name, check) {
     await run('Push logout browser failure', () => pushLogout(browser, 'browser-failure', true, false));
     await run('Push logout double failure', () => pushLogout(browser, 'double-failure', false, false));
     await run('operator console: platform admin lands on /operator, password and clipboard state', () => adminState(browser));
+    await run('operator console: the customer list gates on capability and never invents activity', () => operatorCustomers(browser));
     await run('operator console refuses a tenant who is not a platform admin', () => operatorRefusal(browser));
     await run('OCR documents, review, status and export', () => documentOcrAcceptance(browser));
     await run('automatic price list creates keyed products and leaves unsafe rows for review', () => automaticPriceListAcceptance(browser));
