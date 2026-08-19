@@ -72,12 +72,28 @@ select pg_temp.p51_assert(
   and (select unlimited from plan_entitlements
     where plan_key = 'legacy' and entitlement_key = 'documents.monthly'),
   'a limit was applied to a plan that promises none');
+-- Page quotas are the document quota times the hard 20-page-per-document ceiling the worker
+-- already enforces (0163). Pinning the RELATIONSHIP rather than the two numbers is what catches a
+-- later edit that moves one and forgets the other, which would refuse a customer who stayed
+-- inside the document quota they were sold.
+select pg_temp.p51_assert(
+  (select numeric_limit from plan_entitlements
+    where plan_key = 'free' and entitlement_key = 'ocr_pages.monthly') = 25 * 20
+  and (select numeric_limit from plan_entitlements
+    where plan_key = 'pro' and entitlement_key = 'ocr_pages.monthly') = 300 * 20,
+  'the page quotas are no longer the document quota times the per-document page ceiling');
+select pg_temp.p51_assert(
+  (select unlimited from plan_entitlements
+    where plan_key = 'business' and entitlement_key = 'ocr_pages.monthly')
+  and (select unlimited from plan_entitlements
+    where plan_key = 'legacy' and entitlement_key = 'ocr_pages.monthly'),
+  'a page quota was applied to a plan that limits no documents');
 select pg_temp.p51_assert(
   not exists (
     select 1 from plan_entitlements
-    where entitlement_key <> 'documents.monthly'
+    where entitlement_key not in ('documents.monthly', 'ocr_pages.monthly')
       and ((kind = 'numeric' and not unlimited) or (kind = 'boolean' and boolean_value is not true))),
-  'an entitlement beyond the decided document limit became restrictive without a decision');
+  'an entitlement beyond the two decided limits became restrictive without a decision');
 
 -- ===== Fixture =====
 insert into public.organizations (id, name, status, created_at) values
