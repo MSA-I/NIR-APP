@@ -14,6 +14,7 @@ import { canStartSupplierCommerce, SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_ST
 import { fmtMoneyExact, fmtNum, fmtDate, fmtDays, productLabel } from '../lib/format';
 import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission } from '../lib/types';
 import { SUPPLIER_COLUMNS } from '../lib/supplierColumns';
+import { SupplierCommunicationCard } from '../components/SupplierCommunicationCard';
 
 // suppliers.rating* are added in migration 0011. The hand-written Supplier type (types.ts) is
 // read-only this wave and does not carry them yet, so extend it locally.
@@ -610,6 +611,10 @@ export function SupplierCard() {
       <Scorecard items={scoreItems} />
 
       {s.notes && <div className="card card-pad text-sm text-ink-soft">{s.notes}</div>}
+
+      <SupplierCommunicationCard supplierId={s.id} supplierEmail={s.email}
+        supplierPhone={s.whatsapp || s.phone} canWrite={!!canWrite} />
+
 
       <div role="tablist" aria-label={`מידע עבור ${s.name}`} className="flex gap-1 border-b border-line no-print overflow-x-auto">
         {tabs.map((t) => (

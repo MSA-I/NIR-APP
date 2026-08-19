@@ -6,7 +6,8 @@ export type OrganizationEgressKind =
   | "document_signed_url"
   | "whatsapp_reminder"
   | "organization_logo_storage"
-  | "assistant";
+  | "assistant"
+  | "supplier_order_email";
 
 export type OrganizationEgressOutcome =
   | "delivered"
@@ -77,6 +78,7 @@ const KINDS = new Set<OrganizationEgressKind>([
   "whatsapp_reminder",
   "organization_logo_storage",
   "assistant",
+  "supplier_order_email",
 ]);
 
 function leaseRow(
