@@ -1277,6 +1277,7 @@ try {
     Invoke-SqlTest "supabase\tests\p46_consolidated_supplier_invoice.sql" "One supplier-month payable anchor, immutable supporting evidence, three reconciliation channels and concurrent intake fencing" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p47_mixed_document_packets.sql" "Mixed PDFs split only from a complete reviewed manifest into isolated child documents and jobs" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p48_product_display_name.sql" "Canonical product names: owner/office only, reason mandatory, blank unrepresentable, no direct column write, every rename audited, and the switched read models render the approved name only once one exists"
+    Invoke-SqlTest "supabase\tests\p49_platform_capabilities.sql" "Platform capabilities narrow operator authority: a tenant reads none of it, an operator without customer.view reads nothing, and the customer list filters, pages and counts activity without counting the console itself"
     Invoke-SqlTest "supabase\tests\p24_inventory_intelligence.sql" "Inventory consumption evidence, incoming supply, suggestions, price context and tenant isolation"
     Invoke-SqlTest "supabase\tests\p25_tenant_offboarding_export.sql" "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p26_price_baseline.sql" "Contractual price baseline as of the document date, reversal ordering, undisclosed fallbacks and read-only guarantee"
