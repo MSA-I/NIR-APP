@@ -25,6 +25,13 @@ const isOperatorNavigation = (url) =>
   url.pathname === '/operator' || url.pathname === '/operator.html' ||
   url.pathname.startsWith('/operator/');
 
+// The supplier portal (portal.html, a third Vite entry) gets the same treatment for a sharper
+// reason: its visitors are suppliers holding a bearer token, and they must never be answered
+// with the cached tenant shell. Online it passes through untouched; offline it fails honestly.
+const isPortalNavigation = (url) =>
+  url.pathname === '/portal' || url.pathname === '/portal.html' ||
+  url.pathname.startsWith('/portal/');
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -51,7 +58,7 @@ self.addEventListener('fetch', (event) => {
 
   // Navigations use the network first; the cached shell is only an offline fallback.
   if (event.request.mode === 'navigate') {
-    if (isOperatorNavigation(url)) return;
+    if (isOperatorNavigation(url) || isPortalNavigation(url)) return;
     event.respondWith(
       fetch(event.request).catch(() =>
         caches.match('/index.html', { cacheName: CACHE_NAME }).then((hit) => hit || Response.error())),

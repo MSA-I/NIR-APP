@@ -67,7 +67,7 @@ jobs:
           product_matches() { grep -Eq "$1" product-files.txt; }
 
           build_common='^(\.github/workflows/build\.yml|package\.json|package-lock\.json|tsconfig[^/]*\.json|vite\.config\.[cm]?[jt]s)$'
-          build_inputs='^(src/|public/|index\.html$|operator\.html$)'
+          build_inputs='^(src/|public/|index\.html$|operator\.html$|portal\.html$)'
           workflow='^\.github/workflows/build\.yml$'
           knip_config='^(package\.json|package-lock\.json|knip\.json|tsconfig[^/]*\.json|vite\.config\.[cm]?[jt]s)$'
           vitest_config='^(package\.json|package-lock\.json|tsconfig[^/]*\.json|vite\.config\.[cm]?[jt]s|vitest\.config\.[cm]?[jt]s)$'

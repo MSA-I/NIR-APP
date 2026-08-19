@@ -33,7 +33,7 @@ export interface WhatsAppOrder {
  * never attaches the image the closing line promises. Product names ride FSI/PDI so mixed
  * Hebrew/digit names don't reorder inside WhatsApp (חוק בידוד השמות).
  */
-export function orderWhatsAppText(order: WhatsAppOrder, orgName: string): string {
+export function orderWhatsAppText(order: WhatsAppOrder, orgName: string, portalUrl?: string | null): string {
   return [
     `הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`,
     ...(order.expected_date ? [`אספקה מבוקשת: ${fmtDate(order.expected_date)}`] : []),
@@ -42,18 +42,24 @@ export function orderWhatsAppText(order: WhatsAppOrder, orgName: string): string
     `פריטים (${order.items.length}):`,
     ...order.items.map((i) => `• ${bidiIsolate(i.product.name)} — ${formatQuantity(i.qty, i.product.unit)}`),
     '',
+    // The portal link (0167) rides the message when the operator issued one: the supplier can
+    // approve or propose changes there instead of answering in free text. The closing lines
+    // adjust — with a portal there is a button to press, without one we ask for a reply.
+    ...(portalUrl
+      ? [`לאישור ההזמנה או להצעת שינויים: ${portalUrl}`, '']
+      : []),
     '📎 פירוט מלא של ההזמנה נשלח כתמונה בהודעה הבאה.',
-    'נא לאשר את קבלת ההזמנה 🙏',
+    ...(portalUrl ? [] : ['נא לאשר את קבלת ההזמנה 🙏']),
   ].join('\n');
 }
 
 /** wa.me deep link with the order text prefilled (no WhatsApp Business API needed). */
-export function orderWhatsAppLink(order: WhatsAppOrder, orgName: string): string | null {
+export function orderWhatsAppLink(order: WhatsAppOrder, orgName: string, portalUrl?: string | null): string | null {
   const raw = order.supplier.whatsapp || order.supplier.phone;
   if (!raw) return null;
   let digits = raw.replace(/\D/g, '');
   if (digits.startsWith('0')) digits = '972' + digits.slice(1);
-  return `https://wa.me/${digits}?text=${encodeURIComponent(orderWhatsAppText(order, orgName))}`;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(orderWhatsAppText(order, orgName, portalUrl))}`;
 }
 
 /**
@@ -69,8 +75,8 @@ export function orderWhatsAppLink(order: WhatsAppOrder, orgName: string): string
  * `needsSentConfirmation` below decides whether to ASK afterwards; `markOrderSentToSupplier` is
  * the answer. Automatic confirmation waits for a verified WhatsApp Business delivery webhook.
  */
-export function openOrderWhatsApp(order: WhatsAppOrder, orgName: string): { opened: boolean; error?: string } {
-  const link = orderWhatsAppLink(order, orgName);
+export function openOrderWhatsApp(order: WhatsAppOrder, orgName: string, portalUrl?: string | null): { opened: boolean; error?: string } {
+  const link = orderWhatsAppLink(order, orgName, portalUrl);
   if (!link) return { opened: false, error: 'לספק אין מספר WhatsApp זמין' };
   if (openExternalPopup(link) !== 'opened') {
     return { opened: false, error: 'הדפדפן חסם את חלון WhatsApp. יש לאפשר חלונות קופצים ולנסות שוב.' };
