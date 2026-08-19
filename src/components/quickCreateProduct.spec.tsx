@@ -166,6 +166,17 @@ describe('QuickCreateProduct', () => {
     await user.type(screen.getByLabelText('שם המוצר *'), 'עגבניות שרי');
     await user.selectOptions(screen.getByLabelText('ספק *'), 'sup-cohen');
     await user.type(screen.getByLabelText('מחיר ליחידה *'), '0');
+
+    // THE ROOT OF DEBT §52, found 19.08.2026. `save()` validates in order — name, then SUPPLIER,
+    // then price — and returns at the first failure. If the supplier select has not yet reached
+    // React state when the click lands, the component honestly reports "יש לבחור ספק" and this
+    // test, which is about the price, waits forever for a message it made impossible. That is why
+    // it failed intermittently, why the frequency tracked CPU load, and why re-running "fixed" it.
+    // Asserting the preconditions before pressing removes the race instead of widening a timeout.
+    await waitFor(() => {
+      expect((screen.getByLabelText('ספק *') as HTMLSelectElement).value).toBe('sup-cohen');
+      expect((screen.getByLabelText('מחיר ליחידה *') as HTMLInputElement).value).toBe('0');
+    });
     await user.click(screen.getByRole('button', { name: 'הוספה להזמנה' }));
 
     await expectAlertSaying(/מחיר גדול מאפס/);
