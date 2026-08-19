@@ -190,7 +190,9 @@ body {
   max-inline-size: 100%;
   /* T7.3k: a hair of breath inside the new neutral gray itself (body-level over the full
      document height, so tall pages never expose a band — the T7.3c lesson stays). No cream,
-     no cyan: the only moving color is the single oceanic pointer orb on .app-glow. */
+     no cyan: inside the signed-in app the only moving color is the single oceanic pointer orb
+     on .app-glow. The login panel's aurora (.aurora-pane + lib/loginAurora.ts) is the one
+     deliberate exception, and it is outside Layout — see DESIGN.md §2. */
   background-image: linear-gradient(180deg,
     oklch(97.5% 0.002 128),
     oklch(96.9% 0.003 128) 55%,
@@ -220,6 +222,43 @@ body {
      18.08.2026). T7.2: 24px corners app-wide, per the reference's very-round tiles. */
   .card { @apply bg-surface rounded-3xl shadow-card; }
   .card-pad { @apply p-4 sm:p-6; }
+
+  /* Login only. Two jobs in one class: the still base the WebGL aurora is composited over, and
+     the entire visual when there is no WebGL2 at all (jsdom, --disable-gpu, old hardware) — so
+     the panel is never a blank rectangle on a machine that cannot run the shader. The four stops
+     are the four the shader ramps between, in the same order, so the degraded picture is the
+     animated one held still rather than a second design.
+
+     The ramp's ceiling is chart-2 (#477479) and that is a measurement, not a taste: white on it
+     is 5.20:1 and shell-ink 4.83:1, both AA. The next stop up, chart-3 (#85A1A3), measures
+     2.75:1 under white — any frame that surfaced it would put the pane's own lettering below AA.
+     Bounding the ramp is what makes legibility a property of the palette instead of a property
+     of which second of the loop you happened to screenshot. */
+  .aurora-pane {
+    position: relative;
+    isolation: isolate;
+    background-color: var(--color-shell);
+    background-image:
+      radial-gradient(120% 90% at 85% 85%, var(--color-chart-2) 0%, transparent 55%),
+      radial-gradient(100% 80% at 20% 15%, var(--color-action-solid) 0%, transparent 60%),
+      linear-gradient(160deg, var(--color-action) 0%, var(--color-shell) 100%);
+  }
+  /* The scrim sits above the canvas and below the copy. White text has to clear 4.5:1 at every
+     phase of a ~25s loop, and the brightest lobe of a moving gradient is not something a static
+     contrast reading can pin down — so the guarantee is structural rather than measured once.
+     A gradient on this element, deliberately not `backdrop-filter`: glassmorphism is banned. */
+  .aurora-pane::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background-image: linear-gradient(to bottom,
+      color-mix(in oklab, var(--color-shell) 32%, transparent) 0%,
+      transparent 38%,
+      transparent 58%,
+      color-mix(in oklab, var(--color-shell) 42%, transparent) 100%);
+  }
 
   .btn-primary { @apply btn bg-action text-white hover:bg-action-hover; }
   /* T7.1: tonal, borderless — a dark outline was the exact separation the owner banned; the

@@ -342,6 +342,14 @@ export type LineSeries = { key: string; name: string; color: string; dash?: bool
  *  arbitrarily-keyed points and still pass them by value (no per-shape interface needed). */
 export type LinePoint = Record<string, string | number | null>;
 
+/** Minimum vertical distance between two series-name end labels. Measured, not guessed: the text
+ *  box is 17px tall at fontSize 12, so 16 still left the boxes 1px into each other. 18 clears them
+ *  with a hairline to spare, and nothing wider is used — every extra pixel drags a label further
+ *  from the line it names. */
+const END_LABEL_GAP = 18;
+/** Top of the plot area: `margin.top` is 8, and a 12px baseline puts the glyph fully inside it. */
+const END_LABEL_MIN_Y = 12;
+
 /** 1–2 smooth layered areas over a shared x-axis — the reference's "Sale Activity" rendering
  *  (T7.2): NO grid, NO dots, a soft gradient wash under each line (~28% at the stroke fading
  *  to 0; `dash` series draw dashed per T7.3g), and the series NAME as a small ink label at the line's end —
@@ -366,6 +374,13 @@ export function ComparisonLineChart({
   const gradientBase = `cmpArea${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const hasData = points.length > 0 && points.some((point) => series.some((s) => point[s.key] != null));
   const lastIndex = points.length - 1;
+  // Recharts renders each series' LabelList in series order, so by the time series N draws its end
+  // label the earlier ones have already recorded theirs — which is all it takes to step a colliding
+  // one clear. This replaces a fixed `- index * 14` offset that only ever helped when two lines
+  // ended on the SAME value, and actively caused the collision when they ended ~14px apart: the
+  // offset cancelled the real separation exactly. Measured on /dashboard at 390px before the fix —
+  // "רכש" and "תשלומים" 3px apart with intersecting boxes.
+  const endLabelY = useRef<(number | null)[]>([]);
   return (
     <>
       {legend && (
@@ -401,13 +416,28 @@ export function ComparisonLineChart({
                   fill={`url(#${gradientBase}${index})`} dot={false} connectNulls={false}
                   isAnimationActive={animation.active} animationDuration={550} animationEasing="ease-out" onAnimationEnd={animation.finish}>
                   {/* The series name rides the END of its own line, in ink (never the series hue).
-                      The per-series dy stagger keeps the two labels apart when both lines end at
-                      the same value — e.g. a shared measured-zero tail. */}
-                  <LabelList dataKey={s.key} content={({ x, y, index: pointIndex }) => (
-                    pointIndex === lastIndex && typeof x === 'number' && typeof y === 'number' ? (
-                      <text x={x + 8} y={y + 4 - index * 14} fontSize={12} fontWeight={500} fill={t.label} textAnchor="start">{s.name}</text>
-                    ) : null
-                  )} />
+                      A label only moves off its own line when an earlier one is already sitting
+                      there, and it moves in the direction it was already heading, so the lower
+                      line keeps the lower label. */}
+                  <LabelList dataKey={s.key} content={({ x, y, index: pointIndex }) => {
+                    if (pointIndex !== lastIndex) return null;
+                    if (typeof x !== 'number' || typeof y !== 'number') {
+                      endLabelY.current[index] = null;
+                      return null;
+                    }
+                    let labelY = y + 4;
+                    for (let earlier = 0; earlier < index; earlier += 1) {
+                      const taken = endLabelY.current[earlier];
+                      if (taken == null || Math.abs(labelY - taken) >= END_LABEL_GAP) continue;
+                      // Upward by preference: below the last line is the x-axis tick row, and a
+                      // label pushed down lands on the dates. Downward only when up would leave
+                      // the plot, which needs both lines to end hard against the top.
+                      const up = taken - END_LABEL_GAP;
+                      labelY = up >= END_LABEL_MIN_Y ? up : taken + END_LABEL_GAP;
+                    }
+                    endLabelY.current[index] = labelY;
+                    return <text x={x + 8} y={labelY} fontSize={12} fontWeight={500} fill={t.label} textAnchor="start">{s.name}</text>;
+                  }} />
                 </Area>
               ))}
             </AreaChart>
