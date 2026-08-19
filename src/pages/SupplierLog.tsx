@@ -36,7 +36,8 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useParamState } from '../lib/useParamState';
 import { DataTable, ErrorNote, Modal, PageHeader, SkeletonTable, type Column } from '../components/ui';
-import { fmtDate, fmtDateTime, fmtMoneyExact } from '../lib/format';
+import { fmtDateTime } from '../lib/format';
+import { fieldChanges, renderValue } from '../lib/supplierLogChanges';
 import type { AuditLog } from '../lib/types';
 
 /** The two entity types this log covers. Everything else stays out of the customer-facing app. */
@@ -83,69 +84,9 @@ const price = (values: Record<string, unknown> | null | undefined) => {
   return typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : null;
 };
 
-/**
- * The fields a person asks about, and how to say each one. Everything absent from this map is
- * absent from the screen — ids, org_id, timestamps and `*_by` columns are how the database keeps
- * its books, not what changed about a supplier or a price. `money` and `date` also decide the
- * formatting, so a price never renders as `420` and a date never as an ISO string.
- */
-const FIELD_LABELS: Record<string, { label: string; kind?: 'money' | 'date' | 'bool' }> = {
-  // supplier_products
-  current_price: { label: 'מחיר נוכחי', kind: 'money' },
-  previous_price: { label: 'מחיר קודם', kind: 'money' },
-  price_effective_date: { label: 'בתוקף מ־', kind: 'date' },
-  available: { label: 'זמינות', kind: 'bool' },
-  min_qty: { label: 'כמות מינימום' },
-  package_size: { label: 'גודל אריזה' },
-  supplier_sku: { label: 'מק״ט ספק' },
-  // suppliers
-  name: { label: 'שם' },
-  status: { label: 'סטטוס' },
-  tax_id: { label: 'ח.פ / עוסק' },
-  contact_name: { label: 'איש קשר' },
-  phone: { label: 'טלפון' },
-  whatsapp: { label: 'וואטסאפ' },
-  email: { label: 'אימייל' },
-  address: { label: 'כתובת' },
-  payment_terms: { label: 'תנאי תשלום' },
-  delivery_days: { label: 'ימי אספקה' },
-  cutoff_time: { label: 'שעת סגירה' },
-  min_order_amount: { label: 'מינימום להזמנה', kind: 'money' },
-  rating: { label: 'דירוג' },
-  rating_note: { label: 'הערת דירוג' },
-  notes: { label: 'הערות' },
-  deleted_at: { label: 'נמחק', kind: 'date' },
-};
-
-function renderValue(raw: unknown, kind?: 'money' | 'date' | 'bool') {
-  if (raw === null || raw === undefined || raw === '') return '—';
-  if (kind === 'bool') return raw ? 'זמין' : 'לא זמין';
-  if (kind === 'money') {
-    const amount = typeof raw === 'number' ? raw : Number(raw);
-    return Number.isFinite(amount) ? fmtMoneyExact(amount) : String(raw);
-  }
-  if (kind === 'date') return fmtDate(String(raw));
-  if (Array.isArray(raw)) return raw.length ? raw.join(', ') : '—';
-  return String(raw);
-}
-
-/** Every tracked field whose value actually moved. Unchanged fields are not news. */
-function fieldChanges(
-  before: Record<string, unknown> | null,
-  after: Record<string, unknown> | null,
-) {
-  return Object.entries(FIELD_LABELS).flatMap(([field, meta]) => {
-    const oldRaw = before?.[field] ?? null;
-    const newRaw = after?.[field] ?? null;
-    if (JSON.stringify(oldRaw) === JSON.stringify(newRaw)) return [];
-    return [{
-      field,
-      label: meta.label,
-      before: renderValue(oldRaw, meta.kind),
-      after: renderValue(newRaw, meta.kind),
-    }];
-  });
-}
+// The tracked-field catalogue, `renderValue` and `fieldChanges` live in
+// `src/lib/supplierLogChanges.ts`: the diff of an audit row is pure logic over two plain objects,
+// and testing it should not require supabase and react-router inside jsdom.
 
 export default function SupplierLog() {
   const [selected, setSelected] = useState<Row | null>(null);
@@ -253,19 +194,35 @@ export default function SupplierLog() {
     },
     {
       key: 'change', header: 'שינוי', className: 'num',
+      // Every branch says what it means in words. The cell used to read `12.50 ← 14.00` and `—`,
+      // which put the entire claim on an arrow and a dash: a reader had to know which side of the
+      // arrow was the new price, and a dash never said whether the field was cleared or never set.
+      // `—` remains the app-wide "no data" glyph everywhere else — this is scoped to the
+      // before/after diff on this screen, so please do not "restore consistency" here.
       render: (r) => {
         const before = price(r.old_values);
         const after = price(r.new_values);
-        if (before == null && after == null) return <span className="text-ink-faint">—</span>;
-        if (before == null) return <span className="font-medium">{fmtMoneyExact(after ?? 0)}</span>;
-        if (after == null || before === after) return <span className="text-ink-muted">{fmtMoneyExact(before)}</span>;
+        if (before == null && after == null) return <span className="text-ink-faint">אין נתוני מחיר</span>;
+        if (after == null || before === after) {
+          return (
+            <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-ink-muted">
+              <span className="text-xs">ללא שינוי</span>
+              <bdi>{renderValue(before, 'money')}</bdi>
+            </span>
+          );
+        }
         // No dir override: fmtMoneyExact already emits ₪ on the correct side, and forcing LTR here
         // moved the sign to the end of the number. `bdi` keeps each amount atomic instead.
         return (
-          <span className="inline-flex items-center gap-1">
-            <bdi className="text-ink-muted">{fmtMoneyExact(before)}</bdi>
-            <span aria-hidden="true">←</span>
-            <bdi className="font-semibold">{fmtMoneyExact(after)}</bdi>
+          <span className="inline-flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <span className="inline-flex items-baseline gap-1 text-ink-muted">
+              <span className="text-xs">לפני</span>
+              <bdi className={before == null ? 'text-ink-faint' : undefined}>{renderValue(before, 'money')}</bdi>
+            </span>
+            <span className="inline-flex items-baseline gap-1 text-ink">
+              <span className="text-xs">אחרי</span>
+              <bdi className="font-semibold">{renderValue(after, 'money')}</bdi>
+            </span>
           </span>
         );
       },
@@ -276,7 +233,7 @@ export default function SupplierLog() {
     },
     {
       key: 'reason', header: 'סיבה', priority: 3,
-      render: (r) => <span className="text-ink-muted">{r.reason ?? '—'}</span>,
+      render: (r) => <span className="text-ink-muted">{r.reason ?? 'לא נרשמה סיבה'}</span>,
     },
   ];
 
@@ -355,12 +312,19 @@ export default function SupplierLog() {
               return (
                 <dl className="divide-y divide-line-soft border-y border-line-soft text-sm">
                   {changes.map((change) => (
-                    <div key={change.field} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                    // Column on a phone so a long value never squeezes the field label off its line.
+                    <div key={change.field}
+                      className="flex flex-col gap-1 py-2 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
                       <dt className="text-ink-muted">{change.label}</dt>
-                      <dd className="flex items-center gap-2">
-                        <bdi className="text-ink-muted">{change.before}</bdi>
-                        <span aria-hidden="true">←</span>
-                        <bdi className="font-medium text-ink">{change.after}</bdi>
+                      <dd className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                        <span className="inline-flex items-baseline gap-1 text-ink-muted">
+                          <span className="text-xs">לפני</span>
+                          <bdi>{change.before}</bdi>
+                        </span>
+                        <span className="inline-flex items-baseline gap-1 text-ink">
+                          <span className="text-xs">אחרי</span>
+                          <bdi className="font-medium">{change.after}</bdi>
+                        </span>
                       </dd>
                     </div>
                   ))}
