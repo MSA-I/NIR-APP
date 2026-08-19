@@ -337,6 +337,62 @@ select pg_temp.p52_assert(
   'the operator usage read did not report which period definition produced the number');
 reset role;
 
+-- ===== A failed job gives the quota back (0160, owner decision 19.08.2026) =====
+-- Measured in production: 15 of 67 jobs failed in the design partner's first sixteen days. Without
+-- this, roughly one in five of a customer's quota is spent on our own unreliability.
+select pg_temp.p52_as('62000000-0000-4000-8000-000000000001');
+set local role authenticated;
+select pg_temp.p52_assert(
+  (select used from public.organization_usage_snapshot() where metric_key = 'documents.monthly') = 1,
+  'the fixture does not start from the one counted document');
+reset role;
+
+-- Through the states the job guard actually allows (0045:485-493): queued -> leased -> failed.
+-- A direct jump to failed is refused, and a fixture that forced it would be proving the refund
+-- against a transition the product cannot produce.
+update public.document_processing_jobs
+   set status = 'leased', lease_owner = 'p52-worker', lease_until = now() + interval '5 minutes'
+ where id = current_setting('p52.first_job')::uuid;
+update public.document_processing_jobs
+   set status = 'failed', lease_owner = null, lease_until = null,
+       last_error_code = 'p52_simulated_failure',
+       last_error_message = 'P52: the failure the refund is measured against'
+ where id = current_setting('p52.first_job')::uuid;
+
+select pg_temp.p52_as('62000000-0000-4000-8000-000000000001');
+set local role authenticated;
+select pg_temp.p52_assert(
+  (select used from public.organization_usage_snapshot() where metric_key = 'documents.monthly') = 0,
+  'a failed job still consumed the customer''s quota');
+reset role;
+
+-- The event is stamped rather than deleted: the attempt happened, and the stamp is what stops a
+-- second transition refunding twice.
+select pg_temp.p52_assert(
+  (select refunded_at from private.usage_events
+    where org_id = '52000000-0000-4000-8000-000000000001'
+      and metric_key = 'documents.monthly'
+      and idempotency_key = current_setting('p52.first_job')) is not null,
+  'the refunded usage event was deleted instead of stamped');
+
+-- A retried transition into failed must not refund again. The trigger only fires on the
+-- transition, and the stamp catches anything that reaches the function anyway.
+select private.refund_usage_event(
+  '52000000-0000-4000-8000-000000000001', 'documents.monthly',
+  current_setting('p52.first_job'));
+select pg_temp.p52_assert(
+  (select quantity from private.usage_counters
+    where org_id = '52000000-0000-4000-8000-000000000001'
+      and metric_key = 'documents.monthly') = 0,
+  'a second refund drove the counter below what was actually used');
+
+-- OCR pages are NOT refunded: they were really read and really billed by the provider.
+select pg_temp.p52_assert(
+  (select quantity from private.usage_counters
+    where org_id = '52000000-0000-4000-8000-000000000001'
+      and metric_key = 'ocr_pages.monthly') = 7,
+  'a failed job clawed back pages the provider had already charged for');
+
 rollback;
 
 \echo 'p52_usage_limit_enforcement_passed'

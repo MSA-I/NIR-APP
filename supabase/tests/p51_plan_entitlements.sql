@@ -56,9 +56,28 @@ select pg_temp.p51_assert(
    where space.nspname = 'public' and procedure.proname = 'my_entitlements') = 0,
   'my_entitlements() grew a parameter -- the tenant must come from auth_org() alone');
 
+-- Until 19.08.2026 this asserted that NO plan carried a numeric limit, because the numbers were
+-- an open owner decision and a seeded limit would have been an invented one. The owner decided
+-- (#157), so the guard now pins what was decided rather than the absence of a decision: Free
+-- below Pro, both stated, and nothing else restrictive.
 select pg_temp.p51_assert(
-  not exists (select 1 from plan_entitlements where kind = 'numeric' and not unlimited),
-  'a seeded plan carries a numeric limit -- the numbers are an owner decision, not a migration');
+  (select numeric_limit from plan_entitlements
+    where plan_key = 'free' and entitlement_key = 'documents.monthly') = 25
+  and (select numeric_limit from plan_entitlements
+    where plan_key = 'pro' and entitlement_key = 'documents.monthly') = 300,
+  'the decided monthly document limits moved without a decision');
+select pg_temp.p51_assert(
+  (select unlimited from plan_entitlements
+    where plan_key = 'business' and entitlement_key = 'documents.monthly')
+  and (select unlimited from plan_entitlements
+    where plan_key = 'legacy' and entitlement_key = 'documents.monthly'),
+  'a limit was applied to a plan that promises none');
+select pg_temp.p51_assert(
+  not exists (
+    select 1 from plan_entitlements
+    where entitlement_key <> 'documents.monthly'
+      and ((kind = 'numeric' and not unlimited) or (kind = 'boolean' and boolean_value is not true))),
+  'an entitlement beyond the decided document limit became restrictive without a decision');
 
 -- ===== Fixture =====
 insert into public.organizations (id, name, status, created_at) values
