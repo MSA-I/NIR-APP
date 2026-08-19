@@ -6,7 +6,7 @@ import { fetchAll } from '../../lib/supabasePaging';
 import { AttentionZone, SkeletonCards, ErrorNote, type AttentionItem } from '../../components/ui';
 import { Scorecard, type ScoreItem } from '../../components/supplier-metrics';
 import { CategoryDonut, GroupedBarChart, SpendBarChart, money, type LinePoint } from '../../components/charts';
-import { chartTheme } from '../../lib/theme';
+import { comparisonSeries } from '../../lib/theme';
 import { topCategoriesWithOther } from '../../lib/dashboardSeries';
 import { fmtMonth, fmtMoneyRounded, fmtNum, monthlyBuckets, shiftCalendarMonth, todayISO, weeklyBuckets } from '../../lib/format';
 import { DashboardFrame, ChartCard } from './parts';
@@ -110,7 +110,6 @@ export default function AccountantDashboard() {
   if (loading) return <SkeletonCards count={5} cols={5} title />;
   if (error) return <ErrorNote message={error} />;
   if (!data) return null;
-  const t = chartTheme();
 
   return (
     <DashboardFrame title="מרכז הבקרה — הנהלת חשבונות" actions={<>
@@ -154,7 +153,7 @@ export default function AccountantDashboard() {
             bank-debits bar, round caps, dot legend below. */}
         <ChartCard title="תשלומים מול חיובי בנק" subtitle="שמונה השבועות האחרונים" className="lg:col-span-2">
           <GroupedBarChart points={data.weeklyActive ? data.weekly : []} xKey="week"
-            series={[{ key: 'payments', name: 'תשלומים', color: t.bars[0] }, { key: 'bank', name: 'חיובי בנק', color: t.bars[2] }]}
+            series={comparisonSeries({ key: 'payments', name: 'תשלומים' }, { key: 'bank', name: 'חיובי בנק' })}
             ariaLabel="השוואת תשלומים שבוצעו מול חיובי בנק, שמונה שבועות"
             emptyMessage="אין תשלומים או תנועות בנק בשמונת השבועות האחרונים" />
         </ChartCard>

@@ -95,23 +95,27 @@ describe('הקיר בין שתי שפות הצבע', () => {
   it('לכל תחום יש מיפוי ב-index.css — מחלקה חסרה אינה שגיאת build', () => {
     for (const key of SECTION_KEYS) {
       expect(css, key).toContain(`[data-section="${key}"]`);
-      expect(css, key).toContain(`--color-section-${key}`);
+    }
+    // Every domain resolves the accent, and they all resolve the SAME one. A fourth domain added
+    // to SECTION_KEYS without a rule fails above; a domain quietly given its own token fails here.
+    for (const body of ruleBodies(/^\[data-section=/)) {
+      expect(body).toContain('--section-accent: var(--color-section-accent)');
     }
   });
 
-  it('מבטא אזור הוא ליטרל קפוא — אוקיאני אחיד מאז T7.3, ולעולם לא כינוי', () => {
-    // T7.1 froze the accents as three distinct literals (275/305/335). In T7.3 the owner retired
-    // hue-wayfinding — the purple underline read as "a color with no meaning" — so all three
-    // domains carry the SAME oceanic value: the mark still says "you are in a work domain",
-    // derived from the URL only, but the color is simply the brand. Pinning the exact literal
-    // keeps a re-theme from silently repainting navigation; pinning "no var() at all" keeps any
-    // future alias — chart, semantic, or otherwise — out in one stroke.
+  it('מבטא אזור הוא ליטרל קפוא, טוקן אחד, ולעולם לא כינוי', () => {
+    // T7.1 froze the accents as three distinct literals (275/305/335). T7.3 retired
+    // hue-wayfinding — the purple underline read as "a color with no meaning" — and left three
+    // token names holding one value. On 19.08.2026 the owner collapsed them: a name is a claim,
+    // and three names claimed a per-domain treatment no screen could show. Pinning the exact
+    // literal keeps a re-theme from silently repainting navigation; pinning "no var() at all"
+    // keeps any future alias out in one stroke; and pinning the COUNT is what stops the three
+    // names from creeping back one at a time.
     const OCEANIC = 'oklch(33.66% 0.058 209)';
-    for (const key of SECTION_KEYS) {
-      const declaration = rules.match(new RegExp(`--color-section-${key}:\\s*([^;]+);`))?.[1].trim();
-      expect(declaration, key).toBe(OCEANIC);
-      expect(declaration, key).not.toContain('var(');
-    }
+    const declared = [...rules.matchAll(/--color-section-([\w-]+):\s*([^;]+);/g)];
+    expect(declared.map((match) => match[1])).toEqual(['accent']);
+    expect(declared[0][2].trim()).toBe(OCEANIC);
+    expect(declared[0][2]).not.toContain('var(');
   });
 
   it('אף כלל מבטא אינו נוגע בטוקן סמנטי, ואף badge/note אינו נוגע במבטא', () => {

@@ -218,3 +218,19 @@ describe('פיד התנועות מקופל — ולא נמחק', () => {
     expect(await screen.findByText('שגיאה בטעינת התנועות')).toBeVisible();
   });
 });
+
+describe('מלאי — קטלוג ריק', () => {
+  it('אומר מה חסר ולאן ללכת, במקום „אין נתונים להצגה" הגנרי', async () => {
+    // inventory_balances is one row per ACTIVE PRODUCT — an empty table means the catalogue is
+    // empty, not that nothing was counted. The copy has to say the true one of those two.
+    server.use(
+      http.get(`${SUPABASE_URL}/rest/v1/inventory_intelligence`, () => HttpResponse.json([])),
+      http.get(`${SUPABASE_URL}/rest/v1/inventory_movement_feed`, () => HttpResponse.json([])),
+    );
+    renderInventory();
+
+    expect(await screen.findByText('עדיין אין מוצרים פעילים')).toBeVisible();
+    expect(screen.queryByText('אין נתונים להצגה')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'מעבר למוצרים' })).toHaveAttribute('href', '/products');
+  });
+});

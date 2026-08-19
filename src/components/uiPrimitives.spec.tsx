@@ -133,7 +133,7 @@ describe('סמן האזור בכותרות העמוד', () => {
 });
 
 describe('כותרת "דורש טיפול היום"', () => {
-  const row = (key: string, tone: AttentionItem['tone'], count: number): AttentionItem =>
+  const row = (key: string, tone: AttentionItem['tone'], count: number | null): AttentionItem =>
     ({ key, label: key, tone, count, to: `/${key}` });
   const bell = () => screen.getByRole('heading', { level: 2 }).querySelector('svg');
 
@@ -159,5 +159,18 @@ describe('כותרת "דורש טיפול היום"', () => {
     expect(bell()).toHaveClass('text-ink-ghost');
     expect(bell()).not.toHaveClass('text-await-fg');
     expect(screen.getByRole('heading', { level: 2 }).querySelector('[class*="badge"]')).toBeNull();
+  });
+
+  it('כשהכל נמדד ואין דחוף — המשפט הירוק', () => {
+    render(inRouter(<AttentionZone items={[row('a', 'info', 0), row('b', 'idle', 3)]} />));
+    expect(screen.getByText('אין משימות דחופות כרגע')).toBeInTheDocument();
+  });
+
+  it('כשמדד אחד אינו ניתן למדידה — משפט ניטרלי, ולא all-clear כוזב', () => {
+    // A brand-new organization is exactly this shape: measured zeros plus the two payment rows
+    // the snapshot returns as null. Before this fix the card body rendered nothing at all.
+    render(inRouter(<AttentionZone items={[row('a', 'info', 0), row('b', 'alert', null)]} />));
+    expect(screen.getByText(/אין משימות דחופות מבין המדדים שנמדדו/)).toBeInTheDocument();
+    expect(screen.queryByText('אין משימות דחופות כרגע')).not.toBeInTheDocument();
   });
 });

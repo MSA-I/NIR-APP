@@ -11,7 +11,7 @@ import { addCalendarDays, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthIn
 import { useParamState } from '../lib/useParamState';
 import { toHebrewError } from '../lib/errors';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
-import { buildLockedMonthlyWorkbook, buildStyledMonthlyWorkbook, type MonthlyReportLabels, type MonthlyReportSnapshot } from '../lib/monthlyReport';
+import { buildLockedMonthlyWorkbook, buildStyledMonthlyWorkbook, monthlyReportScreenTotals, type MonthlyReportLabels, type MonthlyReportSnapshot } from '../lib/monthlyReport';
 import * as XLSX from 'xlsx';
 import { financialSupplierMap } from '../lib/financialSuppliers';
 import {
@@ -299,21 +299,13 @@ export default function Reports() {
   if (error && !data) return <ErrorNote message={error} />;
   if (!data) return <ErrorNote message="שגיאה" />;
 
-  // A column total is a claim that it sums the column. If even one invoice came back without a
-  // balance row, the sum would be a smaller number presented as the whole — so it becomes `—`.
   const balancesComplete = data.invoices.every((i) => i.balance !== null);
   const totals = {
-    invoices: data.invoices.reduce((s, i) => s + i.total_amount, 0),
-    beforeVat: data.invoices.reduce((s, i) => s + i.amount_before_vat, 0),
-    vat: data.invoices.reduce((s, i) => s + i.vat_amount, 0),
-    paid: data.payments.reduce((s, p) => s + p.amount, 0),
-    // Distinct from `paid` above: that is money that LEFT this month, this is what has been
-    // allocated against these invoices whenever it was paid.
+    ...monthlyReportScreenTotals(data),
+    // Distinct from `paid`: that is money that LEFT this month, this is what has been allocated
+    // against these invoices whenever it was paid.
     allocated: balancesComplete ? data.invoices.reduce((s, i) => s + (i.balance?.paid_amount ?? 0), 0) : null,
     openBalance: balancesComplete ? data.invoices.reduce((s, i) => s + (i.balance?.balance ?? 0), 0) : null,
-    unpaidCount: data.invoices.filter((i) => i.payment_status !== 'paid').length,
-    unmatchedBank: data.bank.filter((b) => b.status === 'unmatched').length,
-    suggestedBank: data.bank.filter((b) => b.status === 'suggested').length,
   };
 
   // payments grouped by supplier
@@ -571,9 +563,13 @@ export default function Reports() {
               </li>
             ))}
             {!data.invoices.length && <li className="p-4 text-center text-sm text-ink-muted">אין חשבוניות בחודש זה</li>}
-            <li className="flex min-h-11 flex-wrap items-center justify-between gap-2 bg-surface-sunken px-4 py-3 font-semibold">
-              <span>סה״כ</span><span className="num">{fmtMoneyExact(totals.invoices)}</span>
-            </li>
+            {/* A total row standing over no rows is not information — the empty sentence above
+                already said everything there is to say about this month. */}
+            {totals.hasInvoices && (
+              <li className="flex min-h-11 flex-wrap items-center justify-between gap-2 bg-surface-sunken px-4 py-3 font-semibold">
+                <span>סה״כ</span><span className="num">{fmtMoneyExact(totals.invoices)}</span>
+              </li>
+            )}
           </ul>
           <div className="report-table-wrap hidden overflow-x-auto xl:block print:block">
             <table className="report-invoices w-full">
@@ -636,7 +632,13 @@ export default function Reports() {
                     </Fragment>
                   );
                 })}
+                {/* This table is also the printed sheet the accountant receives. Without this row
+                    a first month printed a header, an empty body and a ₪0.00 total line. */}
+                {!data.invoices.length && (
+                  <tr><td className="td py-6 text-center text-ink-muted" colSpan={11}>אין חשבוניות בחודש זה</td></tr>
+                )}
               </tbody>
+              {totals.hasInvoices && (
               <tfoot><tr className="border-t-2 border-line font-semibold">
                 <th scope="row" className="td text-start font-semibold" colSpan={4}>סה״כ</th>
                 <td className="td num">{fmtMoneyExact(totals.beforeVat)}</td>
@@ -646,6 +648,7 @@ export default function Reports() {
                 <td className="td num">{fmtMoneyExact(totals.openBalance)}</td>
                 <td colSpan={2} />
               </tr></tfoot>
+              )}
             </table>
           </div>
         </div>

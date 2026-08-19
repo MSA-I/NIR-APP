@@ -568,9 +568,16 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
         <ul className="grid grid-cols-1">
           {actionRows.map((i) => <AttentionRow key={i.key} item={i} />)}
         </ul>
-      ) : noticeRows.length === 0 && unknownRows.length === 0 ? (
+      ) : unknownRows.length > 0 ? (
+        /* Not everything could be measured, so the green all-clear is a claim we are not entitled
+           to make (an undated payment request may well be overdue) — but silence was worse: a
+           brand-new organization has two unmeasurable rows by design, so the largest card on its
+           first screen used to render a heading above nothing at all. Neutral ink, and no number:
+           the count already rides the disclosure badge four lines below. */
+        <div className="text-sm text-ink-soft py-1">אין משימות דחופות מבין המדדים שנמדדו — מדדים שאין להם נתונים מרוכזים תחת „מידע נוסף”.</div>
+      ) : (
         <div className="text-sm text-done-fg py-1">אין משימות דחופות כרגע</div>
-      ) : null}
+      )}
 
       {(noticeRows.length > 0 || unknownRows.length > 0 || clear.length > 0) && (
         <details className="group mt-2 border-t border-line-soft">
@@ -782,7 +789,7 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
     <div className="dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-shell/50 p-0 sm:p-4" onClick={() => requestClose()}>
       <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined} aria-busy={busy || undefined} tabIndex={-1}
-        className={`dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-xl w-full ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'} flex flex-col focus:outline-none`}
+        className={`dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'} flex flex-col focus:outline-none`}
         onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-line-soft">
           <h3 ref={titleRef} id={titleId} tabIndex={-1} className="font-semibold text-ink focus:outline-none">{title}</h3>
@@ -857,7 +864,7 @@ export function ToastProvider({ children, bottomNotice }: { children: ReactNode;
               <div key={t.id}
                 role={t.tone === 'error' ? 'alert' : 'status'}
                 aria-live={t.tone === 'error' ? 'assertive' : 'polite'}
-                className={`rounded-lg px-4 py-2.5 text-sm text-on-solid shadow-lg ${t.tone === 'success' ? 'bg-ink-body' : 'bg-alert-solid'}`}>
+                className={`rounded-lg px-4 py-2.5 text-sm text-on-solid shadow-toast ${t.tone === 'success' ? 'bg-ink-body' : 'bg-alert-solid'}`}>
                 {t.message}
               </div>
             ))}

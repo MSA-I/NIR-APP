@@ -1773,7 +1773,21 @@ async function reportsAndPdf(browser) {
     await table.waitFor();
     const headings = (await table.locator('thead th').allTextContents()).map((value) => value.trim());
     assert.equal(headings.length, 8, `monthly print report has ${headings.length}/8 columns`);
-    assert((await table.locator('tfoot').innerText()).trim(), 'monthly print report has no totals row');
+    // The screen defaults to the CURRENT month, and the demo fixture's invoices are dated June-July,
+    // so on this tenant the printed sheet is usually an empty month. This assertion used to demand a
+    // totals row unconditionally and therefore pinned a `סה״כ ₪0.00 ₪0.00 ₪0.00` line standing over
+    // an empty body — straight onto the PDF the accountant receives. Assert what the screen actually
+    // promises in each state instead: totals when there is something to total, and a named empty row
+    // with NO totals when there is not.
+    const invoiceRows = await table.locator('tbody tr').count();
+    const emptyRow = table.locator('tbody tr', { hasText: 'אין חשבוניות בחודש זה' });
+    if (await emptyRow.count()) {
+      assert.equal(invoiceRows, 1, 'empty monthly report renders rows beside its empty sentence');
+      assert.equal(await table.locator('tfoot').count(), 0, 'monthly report totals a month with no invoices');
+    } else {
+      assert(invoiceRows > 0, 'monthly print report has neither invoice rows nor an empty sentence');
+      assert((await table.locator('tfoot').innerText()).trim(), 'monthly print report has no totals row');
+    }
     await page.emulateMedia({ media: 'print' });
     await page.screenshot({ path: path.join(outDir, 'reports-print.png'), fullPage: true });
     report.screenshots.push('reports-print.png');

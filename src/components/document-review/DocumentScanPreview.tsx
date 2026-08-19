@@ -95,7 +95,7 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, rec
           <button
             key={CORNER_LABELS[index]}
             type="button"
-            className="absolute grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-action bg-surface text-action shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            className="absolute grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-action bg-surface text-action shadow-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
             style={{ insetInlineStart: `${x * 100}%`, insetBlockStart: `${y * 100}%` }}
             aria-label={`${CORNER_LABELS[index]}. חצים מזיזים בחצי אחוז; Shift וחץ בשני אחוזים.`}
             disabled={readOnly}

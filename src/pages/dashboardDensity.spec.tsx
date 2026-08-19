@@ -102,6 +102,12 @@ const SNAPSHOT = {
 const traffic = [
   http.get(`${SUPABASE_URL}/rest/v1/:table`, () => HttpResponse.json([])),
   http.post(`${SUPABASE_URL}/rest/v1/rpc/management_dashboard_snapshot`, () => HttpResponse.json(SNAPSHOT)),
+  // The first-run probe is a HEAD count — the total rides Content-Range, no rows come back.
+  // 22 keeps this fixture describing a live tenant, so the setup-wizard note stays out of the
+  // layout assertions below; the empty-org case gets its own suite with `*/0`.
+  http.head(`${SUPABASE_URL}/rest/v1/suppliers`, () => new HttpResponse(null, {
+    headers: { 'Content-Range': '*/22' },
+  })),
 ];
 
 function renderDashboard() {
@@ -196,5 +202,47 @@ describe('מרכז הבקרה — מה עדיין כרטיס ומה כבר לא'
     for (const label of ['אין חריגים פתוחים כרגע', 'אין התייקרויות אחרונות', 'אין יתרות פתוחות']) {
       expect(screen.getByText(label)).toBeVisible();
     }
+  });
+});
+
+// The screen a paying trial customer sees in their first five seconds. Nothing here is about
+// density — it is about a brand-new organization not looking broken: the largest card must say
+// something, and the screen must name the next step.
+describe('ארגון ריק — הריצה הראשונה', () => {
+  const EMPTY_SNAPSHOT = {
+    ...SNAPSHOT,
+    money: { openBalance: null, openInvoiceCount: 0 },
+    // The two rows the RPC cannot measure with no due-dated request in the org (0100:126-134).
+    // They are what used to make the attention card render an empty body.
+    paymentRequests: { pendingApproval: 0, drafts: 0, dueDateCoverage: 0, activeCount: 0, overdue: null, dueToday: null },
+    invoices: { pendingApproval: 0, toReview: 0, notSent: 0 },
+  };
+  const emptyTraffic = (supplierCount: number) => [
+    http.get(`${SUPABASE_URL}/rest/v1/:table`, () => HttpResponse.json([])),
+    http.post(`${SUPABASE_URL}/rest/v1/rpc/management_dashboard_snapshot`, () => HttpResponse.json(EMPTY_SNAPSHOT)),
+    http.head(`${SUPABASE_URL}/rest/v1/suppliers`, () => new HttpResponse(null, {
+      headers: { 'Content-Range': `*/${supplierCount}` },
+    })),
+  ];
+
+  it('כרטיס „דורש טיפול” אומר משהו, ומסך הבית מפנה לאשף ההקמה', async () => {
+    server.use(...emptyTraffic(0));
+    renderDashboard();
+
+    // The card body: neutral, not a green all-clear it is not entitled to claim.
+    expect(await screen.findByText(/אין משימות דחופות מבין המדדים שנמדדו/)).toBeVisible();
+    expect(screen.queryByText('אין משימות דחופות כרגע')).not.toBeInTheDocument();
+
+    // …and the next step is on the screen, not buried in the account menu.
+    const wizard = screen.getByRole('link', { name: /אשף ההקמה/ });
+    expect(wizard).toHaveAttribute('href', '/onboarding');
+  });
+
+  it('עסק שכבר יש בו ספקים אינו רואה את הפנייה לאשף', async () => {
+    server.use(...emptyTraffic(22));
+    renderDashboard();
+    await screen.findByText('אספקות היום ומחר');
+
+    expect(screen.queryByRole('link', { name: /אשף ההקמה/ })).not.toBeInTheDocument();
   });
 });

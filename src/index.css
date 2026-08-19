@@ -104,14 +104,17 @@
   /* ---- Section identity — WHERE, never WHAT (retired hue-wayfinding, T7.3) ----
      Until T7.3 the three work domains carried three DISTINCT hues (275/305/335). The owner saw
      the purple underline and read it as "a color with no meaning" — the hue-distance wayfinding
-     never earned its explanation, and off-palette hues fought the three-color mandate. All three
-     accents are now the SAME oceanic value: the mark still says "you are in a work domain" (and
-     still never encodes data — the whole plumbing stays: URL-derived, Layout-only writer, glyph +
-     28×3px rule only), but the color is simply the brand. Screens with no domain still show
-     nothing. If distinct hues ever return, this is a three-literal change + the spec map. */
-  --color-section-documents: oklch(33.66% 0.058 209);
-  --color-section-procurement: oklch(33.66% 0.058 209);
-  --color-section-money: oklch(33.66% 0.058 209);
+     never earned its explanation, and off-palette hues fought the three-color mandate. The mark
+     still says "you are in a work domain" (and still never encodes data — the whole plumbing
+     stays: URL-derived, Layout-only writer, glyph + 28×3px rule only), but the color is simply
+     the brand. Screens with no domain still show nothing.
+
+     ONE token, not three. Until now `--color-section-{documents,procurement,money}` held the same
+     literal three times: three names promising a distinction that no screen could show. A name is
+     a claim, and these three claimed a per-domain treatment that does not exist. Owner decision
+     19.08.2026: collapse to the role the value actually plays. If distinct hues ever return, this
+     is the expansion point — three literals, three `[data-section]` rules, and the spec map. */
+  --color-section-accent: oklch(33.66% 0.058 209);
 
   --color-chart-grid: oklch(90% 0.02 78);
   --color-chart-tick: oklch(49.5% 0.02 229);
@@ -141,6 +144,20 @@
   --shadow-fab:
     0 3px 8px color-mix(in oklab, var(--color-shell) 10%, transparent),
     0 20px 40px -12px color-mix(in oklab, var(--color-action) 30%, transparent);
+  /* The top of the ladder, and the two rungs that were missing from it. A light UI cannot raise
+     a surface by LIGHTNESS — the card already sits at 99.2%, so an "elevated" step above it would
+     be white-on-white and invisible on paper. Elevation here is shadow, and therefore the shadow
+     IS the token: until now the modal and the toast wore Tailwind's stock shadow-xl/shadow-lg,
+     which are neutral black and would have survived a brand repaint unchanged — the one thing
+     every other shadow in this block was rewritten to prevent. */
+  --shadow-toast:
+    0 2px 6px color-mix(in oklab, var(--color-shell) 12%, transparent),
+    0 12px 24px -8px color-mix(in oklab, var(--color-shell) 24%, transparent);
+  /* The modal panel — the highest surface in the product, and the one a payment is approved on.
+     Deeper spread than the toast because it is a held state, not a passing message. */
+  --shadow-dialog:
+    0 4px 10px color-mix(in oklab, var(--color-shell) 10%, transparent),
+    0 24px 48px -12px color-mix(in oklab, var(--color-shell) 22%, transparent);
 
   --color-star: var(--color-amber-400);            /* rating stars: decoration, not status */
   --color-star-hover: var(--color-amber-300);
@@ -348,9 +365,9 @@ body {
 
      One mapping, two consumers. The accent resolves from a `data-section` attribute set in exactly
      one file (Layout.tsx): on the active navigation item, and on `<main>` for the current screen. */
-  [data-section="documents"]   { --section-accent: var(--color-section-documents); }
-  [data-section="procurement"] { --section-accent: var(--color-section-procurement); }
-  [data-section="money"]       { --section-accent: var(--color-section-money); }
+  [data-section="documents"],
+  [data-section="procurement"],
+  [data-section="money"] { --section-accent: var(--color-section-accent); }
 
   /* The section glyph — the icon of the active navigation item. It sits INSIDE the active item's
      paper pill, never on the dark shell: the accents measure 5.0–5.7:1 on paper and only ~2.2:1

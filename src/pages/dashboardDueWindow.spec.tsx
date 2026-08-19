@@ -100,6 +100,12 @@ function snapshotWith(paymentRequests: PaymentRequestFacts) {
 function renderWith(paymentRequests: PaymentRequestFacts) {
   server.use(
     http.get(`${SUPABASE_URL}/rest/v1/:table`, () => HttpResponse.json([])),
+    // A live tenant, so the setup-wizard door stays shut and the money tile is what renders. The
+    // dashboard counts suppliers with a HEAD request; without this the whole screen fails to load
+    // and the tile is missing for a reason that has nothing to do with the tile.
+    http.head(`${SUPABASE_URL}/rest/v1/suppliers`, () => new HttpResponse(null, {
+      headers: { 'Content-Range': '*/22' },
+    })),
     http.post(
       `${SUPABASE_URL}/rest/v1/rpc/management_dashboard_snapshot`,
       () => HttpResponse.json(snapshotWith(paymentRequests)),
