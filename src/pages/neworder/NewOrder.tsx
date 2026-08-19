@@ -768,6 +768,7 @@ export default function NewOrder() {
         <ProductStep products={data?.products ?? []} categories={categories ?? []} offersByProduct={offersByProduct}
           cart={cart} q={q} setQ={setQ} cat={cat} setCat={setCat}
           onAdd={(product) => dispatch({ type: 'ADD_PRODUCT', product })}
+          onRemove={(productId) => dispatch({ type: 'REMOVE_PRODUCT', productId })}
           onQty={(productId, qty) => dispatch(qty > 0 ? { type: 'SET_QTY', productId, qty } : { type: 'REMOVE_PRODUCT', productId })}
           onContinue={() => setStep(2)} nextOrderItems={nextOrderItems} nextOrderBusyId={nextOrderBusyId}
           onAddNextOrderItem={(item) => void addNextOrderItem(item)} onDismissNextOrderItem={(item) => void dismissNextItem(item)}

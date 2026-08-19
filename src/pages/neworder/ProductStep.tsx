@@ -18,6 +18,13 @@ interface ProductStepProps {
   cat: string;
   setCat: (value: string) => void;
   onAdd: (product: Product) => void;
+  /**
+   * Drops the product from the cart. The row carries `aria-pressed`, so it promises a toggle;
+   * before this it only ever added, and a second press on a chosen product did nothing at all
+   * (owner report, 19.08.2026). Removing also clears the line's quantity and supplier pin —
+   * `REMOVE_PRODUCT` deletes the line, and re-adding re-seeds it at qty 1 in `auto` mode.
+   */
+  onRemove: (productId: string) => void;
   onQty: (productId: string, qty: number) => void;
   onContinue: () => void;
   nextOrderItems: readonly NextOrderItem[];
@@ -32,7 +39,7 @@ interface ProductStepProps {
   onCreateProduct: (() => void) | null;
 }
 
-export default function ProductStep({ products, categories, offersByProduct, cart, q, setQ, cat, setCat, onAdd, onQty, onContinue, nextOrderItems, nextOrderBusyId, onAddNextOrderItem, onDismissNextOrderItem, onCreateProduct }: ProductStepProps) {
+export default function ProductStep({ products, categories, offersByProduct, cart, q, setQ, cat, setCat, onAdd, onRemove, onQty, onContinue, nextOrderItems, nextOrderBusyId, onAddNextOrderItem, onDismissNextOrderItem, onCreateProduct }: ProductStepProps) {
   const filteredProducts = products.filter((product) =>
     (!cat || product.category_id === cat) && (!q || product.name.toLowerCase().includes(q.toLowerCase())));
   const cartByProduct = new Map(cart.map((item) => [item.product.id, item]));
@@ -87,8 +94,8 @@ export default function ProductStep({ products, categories, offersByProduct, car
             <div key={product.id} className={`flex min-h-14 items-center ${carted ? 'bg-surface-selected' : ''}`}>
               <button type="button" className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-start hover:bg-surface-hover sm:px-4"
                 aria-pressed={!!carted}
-                aria-label={`${carted ? 'נבחר' : 'בחירת'} ${product.name}`}
-                onClick={() => { if (!carted) onAdd(product); }}>
+                aria-label={`${carted ? 'ביטול בחירת' : 'בחירת'} ${product.name}`}
+                onClick={() => { if (carted) onRemove(product.id); else onAdd(product); }}>
                 <span className={`grid size-6 shrink-0 place-items-center border ${carted ? 'border-done-line bg-done-soft text-done-fg' : 'border-line text-transparent'}`} aria-hidden="true"><Check size={14} /></span>
                 <span className="min-w-0 flex-1"><bdi className="block break-words text-sm font-medium text-ink-body sm:truncate">{product.name}</bdi><span className="text-xs text-ink-muted">{formatUnit(product.unit)}</span></span>
                 <span className={`shrink-0 text-xs text-ink-muted ${offers.length ? 'num' : ''}`}>{offers.length ? fmtMoneyExact(offers[0].current_price) : 'אין ספק'}</span>
