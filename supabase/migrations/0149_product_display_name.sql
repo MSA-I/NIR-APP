@@ -201,6 +201,24 @@ begin
 end
 $display_name_acl$;
 
+-- The tenant export registry pins a column list and a schema hash per exported table, so a new
+-- column on `products` makes the recorded hash wrong until it is recomputed here -- which is what
+-- A6 caught on this file's first run against a database. `display_name` is ordinary tenant data
+-- and is EXPORTED: it is the name the business chose for its own catalogue, and a tenant leaving
+-- with an export that carries the raw names but not the ones they approved would be handed back
+-- less than they put in. Nothing is added to `excluded_columns`.
+update private.tenant_export_registry registry
+set exported_columns=(select array_agg(column_info.column_name order by column_info.ordinal_position)
+    from information_schema.columns column_info where column_info.table_schema='public'
+      and column_info.table_name=registry.table_name
+      and not (column_info.column_name=any(registry.excluded_columns))),
+    schema_hash=(select md5(string_agg(
+      column_info.column_name||':'||column_info.data_type||':'||column_info.is_nullable,
+      '|' order by column_info.ordinal_position))
+    from information_schema.columns column_info where column_info.table_schema='public'
+      and column_info.table_name=registry.table_name)
+where registry.table_name = 'products';
+
 -- ===== Re-assert A1 / A3 / A5 (the 0058:207-218 idiom; required of every post-0057 file) =====
 do $$
 declare
