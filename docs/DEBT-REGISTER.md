@@ -485,25 +485,16 @@
 `0133` וה־frontend של ניקוי הפרסונות יכולים להיות מוזגים לריפו בלי להיפרס. Production אינה נקייה
 עד rollout עתידי ומאומת. זהו גבול שחרור, לא חוב מוצר חדש.
 
-### §51 — `0146` מוזגה ל־main ולא הוחלה בייצור
+### §52 — `quickCreateProduct.spec.tsx` נכשלת לסירוגין ב־CI
 
-- **מצב:** ‏`0146_supplier_deletion_predicate_and_allocation_signal.sql` מוזגה ב־PR #72 (19.08.2026)
-  אחרי ששני שערי ה־CI עברו על סטאק מבודד. **ראש המיגרציות בייצור נמדד באותו יום: `0145`**
-  (‏`select max(version) … supabase_migrations.schema_migrations` דרך Management API; ‏144 שורות
-  מוחלות). כלומר ה־frontend החדש והמיגרציה שהוא נשען עליה אינם באותו מצב בייצור.
-- **סיכון — שתי התנהגויות שונות באותו מוצר עד שה־apply ירוץ:**
-  ‏(א) **מחיקת ספק בייצור עדיין רצה על הפרדיקט הישן** — היא סוכמת חשבוניות בכל
-  `financial_role`, ולכן ספק שכל חשבוניות הביניים שלו אוחדו ימשיך לקבל `supplier_has_open_balance`
-  בעוד שהמסך מציג ₪0. זה בדיוק הבאג שדווח, והוא **חי בייצור עד ה־apply**. ‏(ב) `draft` עדיין
-  חוסם מחיקה בשרת (הלקוח כבר לא סופר אותו — הצד המחמיר הוא השרת, ולכן אין כאן פתיחת פרצה).
-  ‏(ג) **`payment_request_financial_check_signals` בייצור אינה מחזירה
-  `over_allocated_invoice_count`**, ולכן `runPaymentRequestChecks` יקרא `undefined`; הבדיקה
-  ‏`allocation_vs_balance` פשוט לא תיווצר (‏`undefined > 0` הוא `false`) — המסך יתנהג כמו לפני
-  השינוי ולא יקרוס, אבל **החסימה המוסברת לא תופיע** והמשתמש יחזור לראות את הסירוב הסתום מהשרת.
-- **ראיה:** ‏PR #72 · ‏`gh run 32193383724` ו־`32193383848` (שניהם success; ‏SQL suites הריצו את
-  `p0_client_dml_acl` ואת `p46` על DB שנבנה מהמיגרציות) · מדידת ראש הייצור מ־19.08.2026.
-- **הצעד הבא — שורת "Migration / חוזה DB" במטריצת ה־rollout, במלואה:** גיבוי schema/data/roles,
-  ‏dry-run + ledger, ‏apply forward-only, ‏postflight, **ורישום ידני של השורה ב־`schema_migrations`**
-  (‏`db-query.ps1` מחיל SQL ואינו רושם ledger — הלקח כבר עלה לנו פעם). אין צורך ב־Pages אם
-  ה־bundle לא השתנה מאז הפריסה האחרונה; כאן הוא כן השתנה, ולכן פריסת ה־frontend נדרשת גם היא —
-  ורצוי **אחרי** ה־apply, כדי ששני חצאי (ג) לא יתקיימו בכיוון ההפוך.
+- **מצב:** התרחיש "retries the PRICE after a failed price command, never a second product row" נכשל
+  ב־`verify` על PR #73 — שהכיל **תיעוד ו־SQL בלבד ולא נגע בקוד מוצר או בבדיקה** — ושוב על PR #74.
+  בשני המקרים הרצה חוזרת ללא שינוי קוד עברה, ו־`main` ירוק עם אותו קובץ. מקומית הוא עובר בבידוד.
+  ההודעה: `Unable to find an element with the text: /המוצר נוצר בקטלוג אך עדיין ללא מחיר לספק/`.
+- **סיכון:** שער אדום שאינו מדידה של הקוד מאמן את הקורא ללחוץ "הרץ שוב" — בדיוק ההרגל שסעיף
+  "אבחון כישלונות" בחוקה אוסר. ככל שזה יחזור, הסיכון הוא שכשל אמיתי ייקרא כ־flake.
+- **ראיה:** ‏`src/components/quickCreateProduct.spec.tsx:167`, ‏`src/components/QuickCreateProduct.tsx:171`
+  (הטקסט נבנה מ־`toHebrewError(failure)` ולכן תלוי בהשלמת ה־await של הכשל), ריצות
+  ‏`32200337272` (‏fail ואז pass באותו SHA) ו־ריצת ה־verify של PR #73.
+- **הצעד הבא:** להחליף את ה־`findByText` על מחרוזת מורכבת ב־assertion על המצב שהרכיב מגיע אליו
+  (‏`role="alert"` או test id ייעודי), ואז למדוד עשר הרצות רצופות לפני שמכריזים שנסגר.
