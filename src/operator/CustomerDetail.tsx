@@ -12,10 +12,12 @@ import {
 } from '../lib/status';
 import {
   addInternalNote, fetchCustomerContacts, fetchCustomerDetail, fetchCustomerNotes,
-  fetchCustomerTimeline, fetchMyCapabilities, fetchPlatformOperators, removeCustomerContact,
+  fetchCustomerTimeline, fetchMyCapabilities, fetchOrgEntitlements, fetchOrgSubscription,
+  fetchPlatformOperators, fetchSubscriptionPlans, removeCustomerContact,
   resolveFollowUp, setCustomerAccount, upsertCustomerContact,
   type CustomerContact, type CustomerNote, type PlatformCapability,
 } from '../lib/platform';
+import CustomerSubscription from './CustomerSubscription';
 
 const CONTACT_KINDS = ['primary', 'billing', 'technical'] as const;
 
@@ -44,16 +46,27 @@ export default function CustomerDetail() {
     async () => {
       const capabilities = await fetchMyCapabilities();
       if (!capabilities.includes('customer.view')) {
-        return { capabilities, detail: null, contacts: [], notes: [], timeline: [], operators: [] };
+        return {
+          capabilities, detail: null, contacts: [], notes: [], timeline: [], operators: [],
+          subscription: null, entitlements: [], plans: [],
+        };
       }
-      const [detail, contacts, timeline, operators, notes] = await Promise.all([
-        fetchCustomerDetail(orgId),
-        fetchCustomerContacts(orgId),
-        fetchCustomerTimeline(orgId),
-        fetchPlatformOperators(),
-        capabilities.includes('notes.view') ? fetchCustomerNotes(orgId) : Promise.resolve([]),
-      ]);
-      return { capabilities, detail, contacts, notes, timeline, operators };
+      const billing = capabilities.includes('billing.view');
+      const [detail, contacts, timeline, operators, notes, subscription, entitlements, plans]
+        = await Promise.all([
+          fetchCustomerDetail(orgId),
+          fetchCustomerContacts(orgId),
+          fetchCustomerTimeline(orgId),
+          fetchPlatformOperators(),
+          capabilities.includes('notes.view') ? fetchCustomerNotes(orgId) : Promise.resolve([]),
+          billing ? fetchOrgSubscription(orgId) : Promise.resolve(null),
+          billing ? fetchOrgEntitlements(orgId) : Promise.resolve([]),
+          billing ? fetchSubscriptionPlans() : Promise.resolve([]),
+        ]);
+      return {
+        capabilities, detail, contacts, notes, timeline, operators,
+        subscription, entitlements, plans,
+      };
     },
     [orgId],
   );
@@ -143,9 +156,21 @@ export default function CustomerDetail() {
         {/* Waves 3-5 own plan, usage, onboarding and health. Saying so beats an empty card that
             looks like a measurement returning nothing. */}
         <p className="text-xs text-ink-muted">
-          תוכנית, שימוש מול מגבלות, השלמת onboarding ומצב בריאות אינם נמדדים עדיין ואינם מוצגים.
+          שימוש מול מגבלות, השלמת onboarding ומצב בריאות אינם נמדדים עדיין ואינם מוצגים.
         </p>
       </section>
+
+      {may('billing.view') && (
+        <CustomerSubscription
+          orgId={orgId}
+          subscription={data?.subscription ?? null}
+          entitlements={data?.entitlements ?? []}
+          plans={data?.plans ?? []}
+          may={may}
+          busy={busy}
+          run={(action, done) => void run(action, done)}
+        />
+      )}
 
       <section className="card card-pad space-y-3" aria-labelledby="contacts-heading">
         <h2 id="contacts-heading" className="section-title">אנשי קשר</h2>

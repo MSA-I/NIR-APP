@@ -274,3 +274,103 @@ export function addInternalNote(input: {
 export function resolveFollowUp(noteId: string, resolution: string): Promise<unknown> {
   return rpc('platform_resolve_follow_up', { p_note_id: noteId, p_resolution: resolution });
 }
+
+/* ---------- Wave 3: plans and entitlements (0154) ---------- */
+
+export interface SubscriptionPlan {
+  plan_key: string;
+  label: string;
+  tier_order: number;
+  active: boolean;
+}
+
+export interface OrgSubscription {
+  org_id: string;
+  plan_key: string;
+  plan_label: string;
+  plan_active: boolean;
+  tier_order: number;
+  status: 'active' | 'past_due' | 'canceled' | 'paused';
+  billing_interval: 'monthly' | 'yearly';
+  started_at: string;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  renews_at: string | null;
+  canceled_at: string | null;
+  provider: string;
+  has_provider_link: boolean;
+}
+
+/**
+ * One resolved entitlement. `measured` is the field that matters: false means the platform cannot
+ * state what this customer is entitled to — which is a different claim from "entitled to zero",
+ * and the screen must render it as an em dash rather than a number.
+ */
+export interface OrgEntitlement {
+  entitlement_key: string;
+  kind: 'numeric' | 'boolean';
+  measure: 'per_period' | 'current';
+  unit: string | null;
+  label: string;
+  source: 'override' | 'plan' | 'unavailable';
+  unlimited: boolean;
+  numeric_limit: number | null;
+  boolean_value: boolean | null;
+  measured: boolean;
+  override_id: string | null;
+  override_expires_at: string | null;
+}
+
+/** The catalogue is directly readable by any signed-in user (0154): a customer has to be able to
+    see what their plan includes, and the alternative is pricing hardcoded in the client. */
+export async function fetchSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+  const { data, error } = await supabase
+    .from('subscription_plans')
+    .select('plan_key, label, tier_order, active')
+    .order('tier_order');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as SubscriptionPlan[];
+}
+
+export function fetchOrgSubscription(orgId: string): Promise<OrgSubscription | null> {
+  return rpc<OrgSubscription | null>('platform_org_subscription', { p_org_id: orgId });
+}
+
+export async function fetchOrgEntitlements(orgId: string): Promise<OrgEntitlement[]> {
+  return (await rpc<OrgEntitlement[]>('platform_org_entitlements', { p_org_id: orgId })) ?? [];
+}
+
+export function setOrgSubscription(input: {
+  orgId: string; planKey: string; status: string; interval: string; reason: string;
+}): Promise<unknown> {
+  return rpc('platform_set_org_subscription', {
+    p_org_id: input.orgId,
+    p_plan_key: input.planKey,
+    p_status: input.status,
+    p_interval: input.interval,
+    p_reason: input.reason,
+  });
+}
+
+export function grantEntitlementOverride(input: {
+  orgId: string; entitlementKey: string; unlimited: boolean;
+  numericLimit: number | null; booleanValue: boolean | null;
+  expiresAt: string | null; reason: string;
+}): Promise<unknown> {
+  return rpc('platform_grant_entitlement_override', {
+    p_org_id: input.orgId,
+    p_entitlement_key: input.entitlementKey,
+    p_unlimited: input.unlimited,
+    p_numeric_limit: input.numericLimit,
+    p_boolean_value: input.booleanValue,
+    p_expires_at: input.expiresAt,
+    p_reason: input.reason,
+  });
+}
+
+export function revokeEntitlementOverride(overrideId: string, reason: string): Promise<unknown> {
+  return rpc('platform_revoke_entitlement_override', {
+    p_override_id: overrideId,
+    p_reason: reason,
+  });
+}

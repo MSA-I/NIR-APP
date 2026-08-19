@@ -46,6 +46,18 @@ export const PLATFORM_EVENT_ACTION: Record<string, string> = {
   customer_contact_removed: 'הסרת איש קשר',
   customer_internal_note_added: 'הערה פנימית נוספה',
   customer_follow_up_resolved: 'מעקב נסגר',
+  subscription_set: 'שינוי מנוי',
+  entitlement_override_granted: 'חריג הרשאה ניתן',
+  entitlement_override_revoked: 'חריג הרשאה בוטל',
+};
+
+// `past_due` is a claim that money is owed, not a neutral state; `paused` and `canceled` say the
+// relationship stopped without implying which side stopped it.
+export const SUBSCRIPTION_STATUS: Record<string, StatusMeta> = {
+  active: m('פעיל', 'done'),
+  past_due: m('בפיגור תשלום', 'alert'),
+  paused: m('מוקפא', 'await'),
+  canceled: m('בוטל', 'idle'),
 };
 
 export const ORG_STATUS: Record<string, StatusMeta> = {
