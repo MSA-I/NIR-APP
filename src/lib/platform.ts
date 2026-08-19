@@ -3,9 +3,73 @@
 // map lives in ./status, which is where the admin screen imports it from.
 
 import { supabase } from './supabase';
-import type { OrgStatus, PlatformOrg } from './types';
+import type { OrgStatus, PlatformCustomer, PlatformOrg } from './types';
 
-export type { OrgStatus, PlatformOrg };
+export type { OrgStatus, PlatformCustomer, PlatformOrg };
+
+/**
+ * The capability vocabulary, mirroring private.platform_capability_definitions (0151). This is a
+ * display mirror only: the console renders an action when the capability is present, but the
+ * refusal that matters happens inside the SECURITY DEFINER command, which asks the database the
+ * same question. A capability missing from this union simply never gates anything in the UI.
+ */
+export type PlatformCapability =
+  | 'customer.view'
+  | 'usage.view'
+  | 'billing.view'
+  | 'notes.view'
+  | 'notes.add'
+  | 'incidents.view'
+  | 'onboarding.edit'
+  | 'subscription.edit'
+  | 'entitlement.override'
+  | 'org.lifecycle'
+  | 'offboarding.handle'
+  | 'platform.export';
+
+/** Attention filters accepted by platform_customers(). An unknown value is rejected by the
+    server rather than quietly returning nothing, so this union is the whole set. */
+export type CustomerAttention = 'offboarding' | 'suspended' | 'no_users' | 'dormant';
+
+export interface CustomerListRequest {
+  search: string;
+  status: readonly OrgStatus[];
+  attention: CustomerAttention | null;
+  page: number;
+  pageSize: number;
+}
+
+export interface CustomerListResult {
+  rows: PlatformCustomer[];
+  total: number;
+}
+
+/**
+ * The operator's own capability set, in one round trip. It exists so the console can tell "you
+ * may not do this" apart from "there is nothing here" — a zero-row list read cannot say which.
+ */
+export async function fetchMyCapabilities(): Promise<PlatformCapability[]> {
+  const { data, error } = await supabase.rpc('platform_my_capabilities');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PlatformCapability[];
+}
+
+export async function fetchPlatformCustomers(
+  request: CustomerListRequest,
+): Promise<CustomerListResult> {
+  const { data, error } = await supabase.rpc('platform_customers', {
+    p_search: request.search.trim() || null,
+    p_status: request.status.length ? request.status : null,
+    p_attention: request.attention,
+    p_limit: request.pageSize,
+    p_offset: request.page * request.pageSize,
+  });
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as PlatformCustomer[];
+  // total_count rides on every row and is absent from an empty page; an empty page IS a total of
+  // zero for the current filter, which is exactly what the pager should then show.
+  return { rows, total: rows[0]?.total_count ?? 0 };
+}
 
 export interface ProvisionPayload {
   name: string;

@@ -5,6 +5,7 @@ import { PageLoader } from '../components/ui';
 import Admin from '../pages/Admin';
 import OperatorShell from './OperatorShell';
 import AutonomyPolicies from './AutonomyPolicies';
+import Customers from './Customers';
 
 /**
  * SECURITY NOTE — read before treating "separate app" as "isolated".
@@ -49,6 +50,7 @@ export default function OperatorRoutes() {
       <Routes>
         <Route element={<OperatorShell />}>
           <Route path="/admin" element={<Admin />} />
+          <Route path="/admin/customers" element={<Customers />} />
           <Route path="/admin/autonomy" element={<AutonomyPolicies />} />
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Route>

@@ -73,6 +73,26 @@ export interface PlatformOrg {
   user_count: number;
 }
 
+/**
+ * One row of the platform_customers() RPC (migration 0151) — the operator customer list, with
+ * server-side search, filtering and paging.
+ *
+ * `last_activity_at` is null for a customer that has never done anything, and the screen must
+ * render that as `—`. A date would be a claim; zero would be a different claim. `total_count` is
+ * the filtered count BEFORE paging, repeated on every row so the pager needs no second request.
+ */
+export interface PlatformCustomer {
+  id: string;
+  name: string;
+  status: OrgStatus;
+  vat_rate: number;
+  created_at: string;
+  active_user_count: number;
+  last_activity_at: string | null;
+  offboarding_status: string | null;
+  total_count: number;
+}
+
 /** One row of the supplier_metrics view (migration 0012). on_time_pct/avg_lead_days are
  *  null (never 0) when there are no promised-date samples. */
 export interface SupplierMetrics {

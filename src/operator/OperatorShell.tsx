@@ -13,6 +13,7 @@ import { toHebrewError } from '../lib/errors';
  * of this application today.
  */
 const NAV = [
+  { to: '/admin/customers', label: 'לקוחות', end: false },
   { to: '/admin', label: 'ניהול פלטפורמה', end: true },
   { to: '/admin/autonomy', label: 'אוטונומיית מסמכים', end: false },
 ] as const;

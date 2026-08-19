@@ -3,13 +3,13 @@ import { toHebrewError } from "../lib/errors";
 import { Building2, ShieldCheck, Plus, Copy, MessageSquare, Archive, RefreshCw, Undo2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { DataTable, StatusBadge, ConfirmDialog, Modal, useToast, ErrorNote, SkeletonTable, SkeletonList, type Column } from '../components/ui';
+import { DataTable, Modal, useToast, ErrorNote, SkeletonTable, SkeletonList, type Column } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { fmtDate, fmtDateTime, fmtNum } from '../lib/format';
-import { ORG_STATUS, ROLE_LABEL } from '../lib/status';
+import { ROLE_LABEL } from '../lib/status';
 // No resetUserPassword: the campaign replaced owner-initiated password reset with self-service
 // recovery to the verified address (campaign report §15), so the function no longer exists.
-import { provisionOrg, generatePassword, type PlatformOrg, type ProvisionResult } from '../lib/platform';
+import { provisionOrg, generatePassword, type ProvisionResult } from '../lib/platform';
 
 interface NewOrgForm {
   name: string;
@@ -57,8 +57,6 @@ export default function Admin() {
   const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [handover, setHandover] = useState<{ email: string; password: string; result: ProvisionResult } | null>(null);
-  const [pending, setPending] = useState<{ org: PlatformOrg; action: 'suspend' | 'reactivate'; reason?: string } | null>(null);
-  const [statusReauth, setStatusReauth] = useState(false);
   const [busy, setBusy] = useState(false);
   const [offboardingPending, setOffboardingPending] = useState<{
     request: PlatformOffboardingRequest;
@@ -69,17 +67,11 @@ export default function Admin() {
     const isPlatformAdmin = unwrap(await supabase.rpc('is_platform_admin')) as boolean;
     if (!isPlatformAdmin) return {
       isPlatformAdmin,
-      orgs: [] as PlatformOrg[],
       offboarding: [] as PlatformOffboardingRequest[],
     };
-    const [orgs, offboarding] = await Promise.all([
-      supabase.rpc('platform_orgs'),
-      supabase.rpc('platform_offboarding_requests'),
-    ]);
     return {
       isPlatformAdmin,
-      orgs: unwrap(orgs) as PlatformOrg[],
-      offboarding: unwrap(offboarding) as PlatformOffboardingRequest[],
+      offboarding: unwrap(await supabase.rpc('platform_offboarding_requests')) as PlatformOffboardingRequest[],
     };
   });
 
@@ -118,24 +110,6 @@ export default function Admin() {
     }
   }
 
-  async function applyStatus(org: PlatformOrg, action: 'suspend' | 'reactivate', reason?: string) {
-    const status = action === 'suspend' ? 'suspended' : 'active';
-    setBusy(true);
-    const res = await supabase.rpc('set_organization_lifecycle', {
-      p_org_id: org.id,
-      p_status: status,
-      p_trial_ends_at: null,
-      p_reason: reason?.trim() ?? '',
-    });
-    if (res.error) { setBusy(false); setStatusReauth(false); toast(toHebrewError(res.error.message), 'error'); return; }
-
-    setBusy(false);
-    setStatusReauth(false);
-    setPending(null);
-    toast(action === 'suspend' ? 'הארגון הושהה — הגישה נחסמה' : 'הארגון הופעל מחדש');
-    void refetch();
-  }
-
   async function submitNewOrg(form: NewOrgForm) {
     setBusy(true);
     const categories = form.categories.split(',').map((c) => c.trim()).filter(Boolean);
@@ -154,27 +128,6 @@ export default function Admin() {
     setHandover({ email: form.ownerEmail.trim(), password: form.password, result: res.result });
     void refetch();
   }
-
-  const columns: Column<PlatformOrg>[] = [
-    { key: 'name', header: 'ארגון', sortValue: (o) => o.name, render: (o) => <span className="font-medium text-ink">{o.name}</span> },
-    { key: 'status', header: 'סטטוס', sortValue: (o) => o.status, render: (o) => <StatusBadge meta={ORG_STATUS[o.status]} /> },
-    { key: 'users', header: 'משתמשים', className: 'num', sortValue: (o) => o.user_count, render: (o) => fmtNum(o.user_count) },
-    { key: 'vat', header: 'מע״מ', className: 'num', render: (o) => `${fmtNum(o.vat_rate)}%` },
-    { key: 'created', header: 'נוצר', sortValue: (o) => o.created_at, render: (o) => fmtDate(o.created_at) },
-    {
-      key: 'actions',
-      header: '',
-      render: (o) => (
-        <div className="flex flex-wrap justify-end gap-1">
-          <button
-            className={o.status === 'suspended' ? 'btn-secondary py-1! text-xs' : 'btn-ghost py-1! text-xs text-alert-fg'}
-            onClick={() => setPending({ org: o, action: o.status === 'suspended' ? 'reactivate' : 'suspend' })}>
-            {o.status === 'suspended' ? 'הפעלה מחדש' : 'השהיה'}
-          </button>
-        </div>
-      ),
-    },
-  ];
 
   const offboardingColumns: Column<PlatformOffboardingRequest>[] = [
     { key: 'organization', header: 'ארגון', render: (r) => <span className="font-medium text-ink">{r.organization_name}</span>, sortValue: (r) => r.organization_name },
@@ -220,25 +173,16 @@ export default function Admin() {
 
   return (
     <div className="space-y-4">
-      <h1 className="page-title flex items-center gap-2"><ShieldCheck size={22} /> ניהול פלטפורמה</h1>
-
-      <DataTable
-        rows={data.orgs}
-        columns={columns}
-        searchable
-        searchFn={(o, q) => o.name.toLowerCase().includes(q)}
-        searchLabel="חיפוש בארגונים"
-        rowLabel={(o) => `ארגון ${o.name}`}
-        emptyTitle="אין ארגונים במערכת"
-        emptySubtitle="לקוח חדש נפתח כאן — הרשמה עצמית אינה קיימת במערכת"
-        toolbar={
-          <div className="ms-auto flex flex-wrap items-center gap-2">
-            <button className="btn-primary flex items-center gap-1.5" onClick={() => setCreating(true)}>
-              <Plus size={16} /> ארגון חדש
-            </button>
-          </div>
-        }
-      />
+      {/* The organization list moved to /admin/customers (0151): that screen filters, pages and
+          counts on the server, and shows the columns this one never could. A second table of the
+          same rows here would be two answers to one question. Provisioning stays -- it is an
+          action, not a list. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="page-title flex items-center gap-2"><ShieldCheck size={22} /> ניהול פלטפורמה</h1>
+        <button className="btn-primary ms-auto flex items-center gap-1.5" onClick={() => setCreating(true)}>
+          <Plus size={16} /> ארגון חדש
+        </button>
+      </div>
 
       <FeedbackNotes />
 
@@ -278,35 +222,6 @@ export default function Admin() {
         </Modal>
       )}
 
-      <ConfirmDialog
-        open={!!pending && !statusReauth}
-        busy={busy}
-        danger={pending?.action === 'suspend'}
-        requireReason
-        title={pending?.action === 'suspend' ? `השהיית ${pending.org.name}` : `הפעלת ${pending?.org.name ?? ''} מחדש`}
-        message={
-          pending?.action === 'suspend'
-            ? 'כל משתמשי הארגון יאבדו גישה לנתונים באופן מיידי — החסימה נאכפת בבסיס הנתונים, לא במסך בלבד.'
-            : 'הארגון יחזור לסטטוס «פעיל» וגישת המשתמשים תשוחזר.'
-        }
-        confirmLabel={pending?.action === 'suspend' ? 'השהיה' : 'הפעלה מחדש'}
-        onClose={() => setPending(null)}
-        onConfirm={(reason) => {
-          if (!pending) return;
-          if (pending.action === 'reactivate') {
-            setPending({ ...pending, reason });
-            setStatusReauth(true);
-            return;
-          }
-          void applyStatus(pending.org, pending.action, reason);
-        }}
-      />
-      <ReauthModal
-        open={statusReauth}
-        title="אימות זהות להפעלת ארגון מחדש"
-        onConfirm={() => { if (pending) void applyStatus(pending.org, pending.action, pending.reason); }}
-        onCancel={() => setStatusReauth(false)}
-      />
       <ReauthModal
         open={offboardingPending !== null}
         title={offboardingPending?.action === 'reactivate'
