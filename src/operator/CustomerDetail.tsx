@@ -13,11 +13,12 @@ import {
 import {
   addInternalNote, fetchCustomerContacts, fetchCustomerDetail, fetchCustomerNotes,
   fetchCustomerTimeline, fetchMyCapabilities, fetchOrgEntitlements, fetchOrgSubscription,
-  fetchPlatformOperators, fetchSubscriptionPlans, removeCustomerContact,
+  fetchOrgUsage, fetchPlatformOperators, fetchSubscriptionPlans, removeCustomerContact,
   resolveFollowUp, setCustomerAccount, upsertCustomerContact,
   type CustomerContact, type CustomerNote, type PlatformCapability,
 } from '../lib/platform';
 import CustomerSubscription from './CustomerSubscription';
+import CustomerUsage from './CustomerUsage';
 
 const CONTACT_KINDS = ['primary', 'billing', 'technical'] as const;
 
@@ -48,11 +49,11 @@ export default function CustomerDetail() {
       if (!capabilities.includes('customer.view')) {
         return {
           capabilities, detail: null, contacts: [], notes: [], timeline: [], operators: [],
-          subscription: null, entitlements: [], plans: [],
+          subscription: null, entitlements: [], plans: [], usage: [],
         };
       }
       const billing = capabilities.includes('billing.view');
-      const [detail, contacts, timeline, operators, notes, subscription, entitlements, plans]
+      const [detail, contacts, timeline, operators, notes, subscription, entitlements, plans, usage]
         = await Promise.all([
           fetchCustomerDetail(orgId),
           fetchCustomerContacts(orgId),
@@ -62,10 +63,11 @@ export default function CustomerDetail() {
           billing ? fetchOrgSubscription(orgId) : Promise.resolve(null),
           billing ? fetchOrgEntitlements(orgId) : Promise.resolve([]),
           billing ? fetchSubscriptionPlans() : Promise.resolve([]),
+          capabilities.includes('usage.view') ? fetchOrgUsage(orgId) : Promise.resolve([]),
         ]);
       return {
         capabilities, detail, contacts, notes, timeline, operators,
-        subscription, entitlements, plans,
+        subscription, entitlements, plans, usage,
       };
     },
     [orgId],
@@ -156,7 +158,7 @@ export default function CustomerDetail() {
         {/* Waves 3-5 own plan, usage, onboarding and health. Saying so beats an empty card that
             looks like a measurement returning nothing. */}
         <p className="text-xs text-ink-muted">
-          שימוש מול מגבלות, השלמת onboarding ומצב בריאות אינם נמדדים עדיין ואינם מוצגים.
+          השלמת onboarding ומצב בריאות אינם נמדדים עדיין ואינם מוצגים.
         </p>
       </section>
 
@@ -171,6 +173,8 @@ export default function CustomerDetail() {
           run={(action, done) => void run(action, done)}
         />
       )}
+
+      {may('usage.view') && <CustomerUsage rows={data?.usage ?? []} />}
 
       <section className="card card-pad space-y-3" aria-labelledby="contacts-heading">
         <h2 id="contacts-heading" className="section-title">אנשי קשר</h2>

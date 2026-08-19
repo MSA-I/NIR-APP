@@ -12,6 +12,25 @@
  */
 
 const PATTERNS: [RegExp, string][] = [
+  // Two different refusals that must never read the same. One says "you used what you have"; the
+  // other says "nobody has told the system what you have", which is our problem, not the
+  // customer's, and sending them to buy an upgrade for it would be wrong.
+  [/plan_limit_reached/i,
+    'הגעתם למכסת המסמכים של החודש במסלול הנוכחי. המסמכים הקיימים והדוחות נשארים זמינים; לעיבוד מסמך חדש יש לשדרג מסלול או להמתין לתחילת תקופת החיוב הבאה.'],
+  [/plan_limit_unknown/i,
+    'לא הוגדרה מכסת מסמכים למסלול של הארגון, ולכן העיבוד נעצר מחשש לחיוב לא מבוקר. זו הגדרה במערכת ולא חריגה שלכם — יש לפנות לתמיכה.'],
+  [/not_platform_capability/i,
+    'הפעולה הזו אינה כלולה בהרשאות המפעיל שלך. ההרשאות מוקצות מחוץ למוצר.'],
+  [/platform_filter_unknown/i,
+    'הסינון שנשלח אינו מוכר. רענן את המסך ובחר סינון מהרשימה.'],
+  [/entitlement_override_exists/i,
+    'כבר קיים חריג פעיל להרשאה הזו. יש לבטל אותו לפני שמגדירים חריג חדש.'],
+  [/subscription_plan_inactive/i,
+    'המסלול הזה אינו מוצע ללקוחות חדשים ואי אפשר להעביר אליו ארגון.'],
+  [/internal_note_already_resolved/i,
+    'משימת המעקב כבר נסגרה. פתיחה מחדש נעשית ברשומה חדשה, כדי שהסגירה הקודמת תישאר מתועדת.'],
+  [/internal_note_immutable|platform_lifecycle_event_immutable/i,
+    'רשומות פנימיות ויומן הפלטפורמה אינם ניתנים לעריכה או למחיקה לאחר השמירה.'],
   [/accepted_document_scan_immutable|document_scan_superseded_by_recovery/i,
     'הסריקה כבר אושרה או הוחלפה ואי אפשר לשנות את הראיה הקודמת. רענן את המסך כדי לראות את הגרסה הנוכחית.'],
   [/document_scan_recovery_unavailable|document_scan_processing_state_invalid/i,

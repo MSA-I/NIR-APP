@@ -374,3 +374,30 @@ export function revokeEntitlementOverride(overrideId: string, reason: string): P
     p_reason: reason,
   });
 }
+
+/* ---------- Wave 4: usage (0155) ---------- */
+
+/**
+ * One metered row. `measured` is two independent facts at once: we know the entitlement AND
+ * something actually counts the usage. When it is false, `used` is null — never zero, which would
+ * assert the customer has used none of it rather than that we do not meter it.
+ */
+export interface UsageRow {
+  metric_key: string;
+  label: string;
+  unit: string | null;
+  measure: 'per_period' | 'current';
+  used: number | null;
+  usage_limit: number | null;
+  unlimited: boolean;
+  measured: boolean;
+  remaining: number | null;
+  percent_used: number | null;
+  period_start: string | null;
+  period_end: string | null;
+  period_source: 'subscription' | 'calendar_month';
+}
+
+export async function fetchOrgUsage(orgId: string): Promise<UsageRow[]> {
+  return (await rpc<UsageRow[]>('platform_org_usage', { p_org_id: orgId })) ?? [];
+}
