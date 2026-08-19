@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Split, Trash2 } from 'lucide-react';
 import { fmtMoneyExact, formatQuantity, formatUnit, todayISO } from '../../lib/format';
+import { compareLine, summarizeComparison, type LineComparison } from '../../lib/orderComparison';
 import { centsFromUnits, lineUnits, moneyFromCents } from '../../lib/orderSavings';
 import {
   resolutionOptions,
@@ -234,7 +235,7 @@ function BlockedSurface({ blocked, cartByProduct, offersByProduct, supplierById,
               )}
               {line.status === 'no_usable_offer' && requiredQty != null && <button type="button" className="btn-secondary text-xs" onClick={() => onQty(line.productId, requiredQty)}>הגדל ל-<span className="num">{requiredQty}</span></button>}
               {line.status === 'pin_supplier_gone' && pinnedSupplierId && <button type="button" className="btn-secondary text-xs" onClick={() => onAlternatives(pinnedSupplierId)}>הצג ספקים חלופיים</button>}
-              {(line.status === 'pin_below_min_qty' || line.status === 'pin_supplier_gone') && <button type="button" className="btn-ghost text-xs" onClick={() => onUnpin(line.productId)}>בטל הצמדה</button>}
+              {(line.status === 'pin_below_min_qty' || line.status === 'pin_supplier_gone') && <button type="button" className="btn-ghost text-xs" onClick={() => onUnpin(line.productId)}>חזרה לבחירה אוטומטית</button>}
               <button type="button" className="btn-ghost text-xs" onClick={() => onRemove(line.productId)}>הסר</button>
             </div>
           );
@@ -260,24 +261,39 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, onChoo
     const cheapest = usable[0] ?? null;
     const selectedSupplierId = item.assignment.mode === 'pinned' ? item.assignment.supplierId : chosen?.supplierId;
     const selected = selectedSupplierId ? offers.find((offer) => offer.supplier_id === selectedSupplierId) ?? null : null;
-    const delta = selected && cheapest
-      ? Math.max(0, moneyDifference(exactLineTotal(item.qty, selected.current_price), exactLineTotal(item.qty, cheapest.current_price)))
-      : 0;
-    return { item, selected, cheapest, delta };
+    const comparison = compareLine(
+      item.qty,
+      offers.map((offer) => ({ supplierId: offer.supplier_id, unitPrice: offer.current_price, minQty: offer.min_qty })),
+      selectedSupplierId ?? null,
+    );
+    return { item, selected, cheapest, comparison };
   });
-  const saving = rows.reduce((sum, row) => sum + row.delta, 0);
+  // What the choices already bought, and — kept apart from it — what a choice still costs.
+  const { saved, extra } = summarizeComparison(rows.map((row) => row.comparison));
   return (
     <section aria-labelledby="supplier-comparison-title" className="border-y border-line-strong bg-surface">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line-soft px-3 py-3 sm:px-4">
         <div><h2 id="supplier-comparison-title" className="section-title">השוואת מחיר לכל מוצר</h2><p className="mt-0.5 text-xs text-ink-muted">לחצו על ספק כדי להצמיד אותו למוצר. ספק עם מינימום כמות יגדיל את הכמות באותה לחיצה.</p></div>
-        <div className="text-start sm:text-end"><span className="block text-xs text-ink-muted">חיסכון אפשרי בבחירה הזולה</span><strong className={`num text-base ${saving > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(saving)}</strong></div>
+        <div className="text-start sm:text-end">
+          <span className="block text-xs text-ink-muted">נחסך מול האפשרות הזולה הבאה</span>
+          {/* `—` and never ₪0.00: with nothing in the basket holding a runner-up there is no
+              comparison to report, and a zero would be a claim about the money rather than the
+              absence of one. */}
+          <strong className={`num text-base ${saved != null && saved > 0 ? 'text-done-fg' : 'text-ink'}`}>{saved == null ? '—' : fmtMoneyExact(saved)}</strong>
+          {extra != null && (
+            <span className="mt-0.5 block text-xs text-await-fg">תוספת של <span className="num">{fmtMoneyExact(extra)}</span> מול הזול ביותר</span>
+          )}
+        </div>
       </div>
       <div className="divide-y divide-line-soft">
-        {rows.map(({ item, selected, cheapest }) => {
+        {rows.map(({ item, selected, cheapest, comparison }) => {
           const offers = offersByProduct.get(item.productId) ?? [];
           return (
             <div key={item.productId} className="px-3 py-3 text-sm sm:px-4">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div className="font-medium text-ink-body"><bdi>{item.product.name}</bdi></div><div className="text-xs text-ink-muted">כמות <span className="num">{item.qty}</span></div></div>
+              <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0"><div className="font-medium text-ink-body"><bdi>{item.product.name}</bdi></div><LineComparisonNote comparison={comparison} /></div>
+                <div className="text-xs text-ink-muted">כמות <span className="num">{item.qty}</span></div>
+              </div>
               {offers.length ? <div className="divide-y divide-line-soft border-y border-line-soft">
                 {offers.map((offer) => {
                   const adjustedQty = offer.min_qty != null && item.qty < offer.min_qty ? offer.min_qty : item.qty;
@@ -305,7 +321,11 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, onChoo
                                 : <SignedAmount value={difference} />}
                         </div>
                       </button>
-                      {isPinned && <button type="button" className="btn-ghost m-1 shrink-0 text-xs" onClick={() => onUnpin(item.productId)}>בטל הצמדה</button>}
+                      {/* Named for where it lands, not for what it cancels: unpinning re-runs the
+                          auto assignment, which may legitimately land on this same supplier. The
+                          badge beside it then flips 'מוצמד' → 'בחירה אוטומטית', so the pair still
+                          reads as one true sentence instead of a button that did nothing. */}
+                      {isPinned && <button type="button" className="btn-ghost m-1 shrink-0 text-xs" onClick={() => onUnpin(item.productId)}>חזרה לבחירה אוטומטית</button>}
                     </div>
                   );
                 })}
@@ -342,8 +362,21 @@ function exactLineTotal(qty: number, unitPrice: number): number {
   return moneyFromCents(centsFromUnits(lineUnits(qty, unitPrice)));
 }
 
-function moneyDifference(value: number, baseline: number): number {
-  return moneyFromCents(BigInt(Math.round((value - baseline) * 100)));
+/**
+ * One sentence per product, in the tone of what it is: a saving already banked reads `done`, an
+ * avoidable extra reads `await`, and a line with nothing to compare against says so rather than
+ * showing a figure it cannot support.
+ */
+function LineComparisonNote({ comparison }: { comparison: LineComparison }) {
+  if (comparison.status === 'saved') {
+    return <p className="mt-0.5 text-xs text-done-fg">נחסכו <span className="num">{fmtMoneyExact(comparison.savedVsNext)}</span> מול האפשרות הזולה הבאה</p>;
+  }
+  if (comparison.status === 'overpaying') {
+    return <p className="mt-0.5 text-xs text-await-fg">תוספת של <span className="num">{fmtMoneyExact(comparison.extraVsCheapest)}</span> מול הזול ביותר</p>;
+  }
+  if (comparison.status === 'same_price') return <p className="mt-0.5 text-xs text-ink-muted">אותו מחיר גם באפשרות הבאה</p>;
+  if (comparison.status === 'single_offer') return <p className="mt-0.5 text-xs text-ink-muted">הצעה יחידה — אין בסיס להשוואה</p>;
+  return <p className="mt-0.5 text-xs text-ink-muted num">—</p>;
 }
 
 function SignedAmount({ value }: { value: number }) {
