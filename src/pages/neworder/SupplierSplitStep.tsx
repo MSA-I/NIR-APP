@@ -131,7 +131,7 @@ export default function SupplierSplitStep({
                 <div className="text-sm"><span className="text-ink-muted">כמות </span><b className="num">{formatQuantity(item.qty, item.product.unit)}</b></div>
                 <div className="text-xs text-ink-muted">{resolved?.supplierId ? supplierById.get(resolved.supplierId)?.name ?? 'ספק לא זמין' : 'טרם הוקצה ספק'}</div>
                 <div className="num text-sm font-semibold">{fmtMoneyExact(resolved?.lineTotal)}</div>
-                <button type="button" className="grid size-11 place-items-center text-ink-faint hover:bg-action-wash hover:text-alert-solid" onClick={() => onRemove(item.productId)} aria-label={`הסרת ${item.product.name}`}><Trash2 size={15} /></button>
+                <button type="button" className="grid size-11 place-items-center text-ink-faint hover:bg-surface-hover hover:text-alert-fg" onClick={() => onRemove(item.productId)} aria-label={`הסרת ${item.product.name}`}><Trash2 size={15} /></button>
               </div>
             );
           })}
@@ -289,7 +289,7 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, onChoo
                   const isSelected = selected?.supplier_id === offer.supplier_id;
                   const isPinned = isSelected && item.assignment.mode === 'pinned' && item.assignment.supplierId === offer.supplier_id;
                   return (
-                    <div key={offer.id} className={`flex items-stretch ${isSelected ? 'bg-action-wash/45' : ''}`}>
+                    <div key={offer.id} className={`flex items-stretch ${isSelected ? 'bg-surface-selected' : ''}`}>
                       <button type="button" onClick={() => onChoose(item, offer)} aria-pressed={isSelected}
                         aria-label={`בחירת ${supplierById.get(offer.supplier_id)?.name ?? 'ספק'} עבור ${item.product.name}`}
                         className="grid min-h-11 min-w-0 flex-1 gap-1 px-2 py-2 text-start row-hover cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-4">

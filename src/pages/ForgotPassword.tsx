@@ -46,7 +46,7 @@ export default function ForgotPassword() {
     <div className="min-h-dvh flex items-center justify-center bg-action p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-semibold text-white">{APP_NAME}</h1>
+          <h1 className="text-3xl font-semibold text-on-solid">{APP_NAME}</h1>
           <p className="text-shell-ink-dim mt-1 text-sm">איפוס סיסמה</p>
         </div>
         {sent ? (
@@ -70,7 +70,7 @@ export default function ForgotPassword() {
               <input id="email" type="email" className="input" dir="ltr" autoComplete="username"
                 value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
-            {error && <div role="alert" className="text-sm text-alert-solid">{error}</div>}
+            {error && <div role="alert" className="text-sm text-alert-fg">{error}</div>}
             <button type="submit" className="btn-primary w-full" disabled={busy || !email.trim()}>
               {busy ? <Loader2 size={16} className="animate-spin" /> : <MailQuestion size={15} />}
               שליחת קישור איפוס

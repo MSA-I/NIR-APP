@@ -249,7 +249,7 @@ export function InvoicesList() {
     { key: 'payment', header: 'תשלום', priority: 3, render: (r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
   ];
   if (!isProcurementManager) {
-    columns.splice(4, 0, { key: 'balance', header: 'יתרה', className: 'num', render: (r) => (r.balance != null && r.balance > 0 ? <span className="text-await-fg">{fmtMoneyExact(r.balance)}</span> : <span className="text-done-solid">—</span>) });
+    columns.splice(4, 0, { key: 'balance', header: 'יתרה', className: 'num', render: (r) => (r.balance != null && r.balance > 0 ? <span className="text-await-fg">{fmtMoneyExact(r.balance)}</span> : <span className="text-done-fg">—</span>) });
   }
   if (canViewExport) {
     columns.push({ key: 'export', header: 'רו״ח', priority: 3, render: (r) => <StatusBadge meta={INVOICE_EXPORT_STATUS[r.export_status]} /> });

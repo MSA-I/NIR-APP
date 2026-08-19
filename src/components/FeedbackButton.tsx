@@ -124,7 +124,7 @@ export default function FeedbackButton({ onShell = false }: { onShell?: boolean 
         className={`grid size-[44px] shrink-0 place-items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 ${
           onShell
             ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
-            : 'text-ink-soft hover:bg-action-wash hover:text-ink'
+            : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
         }`}>
         <MessageSquarePlus size={19} aria-hidden="true" />
       </button>

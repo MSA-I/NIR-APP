@@ -374,7 +374,7 @@ export function Disclosure({ title, count, tone = 'idle', summary, name, classNa
 }) {
   return (
     <details name={name} className={`group ${className}`} onToggle={(event) => onToggle?.(event.currentTarget.open)}>
-      <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-sm hover:bg-action-wash active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden sm:px-4">
+      <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-sm hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden sm:px-4">
         <span className="font-medium text-ink-body">{title}</span>
         {count != null && <span className={`badge-${tone} num`}>{count}</span>}
         {summary != null && <span className="ms-auto min-w-0 text-end text-xs text-ink-muted">{summary}</span>}
@@ -460,7 +460,7 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
   const measured = item.count != null;
   return (
     <li>
-      <Link to={item.to} className="flex min-h-11 items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg hover:bg-action-wash active:bg-action-wash/70 transition-colors">
+      <Link to={item.to} className="flex min-h-11 items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg hover:bg-surface-hover active:bg-surface-selected transition-colors">
         <span className={`${measured ? `badge-${item.tone}` : 'badge-idle'} num justify-center min-w-8`}>{item.count ?? '—'}</span>
         <span className="min-w-0 leading-snug">
           <span className={muted ? 'text-ink-soft' : 'text-ink-body font-medium'}>{item.label}</span>
@@ -567,7 +567,7 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
 
       {(noticeRows.length > 0 || unknownRows.length > 0 || clear.length > 0) && (
         <details className="group mt-2 border-t border-line-soft">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm text-ink-muted hover:bg-action-wash active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm text-ink-muted hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
             <ChevronLeft size={16} className="shrink-0 transition-transform group-open:-rotate-90" aria-hidden="true" />
             <span className="font-medium text-ink-soft">מידע נוסף</span>
             {/* The count rides its label — a badge orphaned at the far edge reads as debris. */}
@@ -595,7 +595,7 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
           {clear.length > 0 && (
             <div className="mt-2 pt-2 border-t border-line-soft flex flex-wrap gap-x-4 gap-y-1.5 pb-1 text-xs text-ink-muted">
               {clear.map((i) => (
-                <span key={i.key} className="inline-flex items-center gap-1"><Check size={13} className="text-done-solid shrink-0" aria-hidden="true" /> {i.clearLabel ?? i.label}</span>
+                <span key={i.key} className="inline-flex items-center gap-1"><Check size={13} className="text-done-fg shrink-0" aria-hidden="true" /> {i.clearLabel ?? i.label}</span>
               ))}
             </div>
           )}
@@ -850,7 +850,7 @@ export function ToastProvider({ children, bottomNotice }: { children: ReactNode;
               <div key={t.id}
                 role={t.tone === 'error' ? 'alert' : 'status'}
                 aria-live={t.tone === 'error' ? 'assertive' : 'polite'}
-                className={`rounded-lg px-4 py-2.5 text-sm text-white shadow-lg ${t.tone === 'success' ? 'bg-ink-body' : 'bg-alert-solid'}`}>
+                className={`rounded-lg px-4 py-2.5 text-sm text-on-solid shadow-lg ${t.tone === 'success' ? 'bg-ink-body' : 'bg-alert-solid'}`}>
                 {t.message}
               </div>
             ))}
@@ -1029,7 +1029,7 @@ function ColumnChecklist({ options }: { options: ColumnPickerOption[] }) {
     <div role="group" aria-label="בחירת עמודות" className="flex flex-col">
       {options.map((o) => (
         <label key={o.key}
-          className={`flex min-h-11 items-center gap-2.5 rounded-lg px-2 text-sm ${o.disabled ? 'text-ink-faint cursor-default' : 'text-ink-body cursor-pointer hover:bg-action-wash'}`}>
+          className={`flex min-h-11 items-center gap-2.5 rounded-lg px-2 text-sm ${o.disabled ? 'text-ink-faint cursor-default' : 'text-ink-body cursor-pointer hover:bg-surface-hover'}`}>
           <input type="checkbox" className="size-4 shrink-0 accent-action" checked={o.visible} disabled={o.disabled}
             onChange={(event) => o.onToggle(event.target.checked)} />
           {o.header}

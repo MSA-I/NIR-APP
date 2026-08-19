@@ -724,7 +724,7 @@ export function UploadCenter() {
                   </button>
                 )}
                 {entry.canCancel && (
-                  <button type="button" className="btn-ghost min-h-11 min-w-11 p-1.5! text-ink-faint hover:text-alert-solid"
+                  <button type="button" className="btn-ghost min-h-11 min-w-11 p-1.5! text-ink-faint hover:text-alert-fg"
                     aria-label={`ביטול העלאת ${entry.fileName}`}
                     onClick={() => cancelUploadCenterEntry(entry.id)}>
                     <X size={14} />

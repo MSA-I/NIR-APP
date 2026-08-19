@@ -256,7 +256,10 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
                   aria-selected={index === activeIndex}
                   onMouseDown={(e) => { e.preventDefault(); open(hit); }}
                   onMouseEnter={() => setActiveIndex(index)}
-                  className={`flex items-center gap-3 px-3 py-2 cursor-pointer ${index === activeIndex ? 'bg-action-wash' : 'hover:bg-action-wash'}`}
+                  // aria-selected and the eye must agree. The active option used to wear the very
+                  // class the other rows show on hover, so "what Enter will open" and "what the
+                  // pointer is over" were the same pixel — with a keyboard, indistinguishable.
+                  className={`flex items-center gap-3 px-3 py-2 cursor-pointer ${index === activeIndex ? 'bg-surface-selected' : 'hover:bg-surface-hover'}`}
                 >
                   <Icon size={15} className="shrink-0 text-ink-faint" />
                   <div className="min-w-0 flex-1">

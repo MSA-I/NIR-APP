@@ -835,7 +835,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             includeAssignmentStates={!archive} />
         </div>
         <details className="group mt-3 border-t border-line-soft pt-2">
-          <summary className="-mx-2 flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm font-medium text-action hover:bg-action-wash focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+          <summary className="-mx-2 flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm font-medium text-action hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
             מסננים נוספים
             {advancedFilterCount > 0 && <span className="badge badge-info num">{advancedFilterCount}</span>}
             <ChevronDown size={16} className="ms-auto transition-transform group-open:rotate-180" aria-hidden="true" />

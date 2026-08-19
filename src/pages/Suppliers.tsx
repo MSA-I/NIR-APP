@@ -41,8 +41,6 @@ function otdTone(m: SupplierMetrics | null | undefined): ScoreTone {
 }
 
 // The one decision-support column: open exceptions + open credits, empty (calm) when clean.
-// Raw utility pills rather than badge-* classes — index.css is mid-rewrite by another agent this
-// wave; these are visually identical to the app's soft badges but immune to that churn.
 function RiskCell({ m }: { m?: SupplierMetrics }) {
   const ex = m?.open_exceptions ?? 0;
   const cr = m?.open_credits ?? 0;
@@ -51,8 +49,8 @@ function RiskCell({ m }: { m?: SupplierMetrics }) {
     <span className="flex items-center gap-1">
       {/* Singular is not a rounding error in Hebrew: the plural form read "1 חריגים" on every
           supplier that had exactly one, in both the table and the mobile card. */}
-      {ex > 0 && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-alert-soft text-alert-on-soft whitespace-nowrap">{ex} {ex === 1 ? 'חריג' : 'חריגים'}</span>}
-      {cr > 0 && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-await-soft text-await-on-soft whitespace-nowrap">{cr} {cr === 1 ? 'זיכוי' : 'זיכויים'}</span>}
+      {ex > 0 && <span className="badge-alert">{ex} {ex === 1 ? 'חריג' : 'חריגים'}</span>}
+      {cr > 0 && <span className="badge-await">{cr} {cr === 1 ? 'זיכוי' : 'זיכויים'}</span>}
     </span>
   );
 }
@@ -379,7 +377,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
             {days.map((d, i) => (
               <button type="button" key={i}
                 aria-pressed={f.delivery_days.includes(i)}
-                className={`rounded-lg border px-2.5 py-1.5 text-xs ${f.delivery_days.includes(i) ? 'bg-action-solid text-white border-action-solid' : 'border-line-strong text-ink-soft hover:bg-action-wash'}`}
+                className={`rounded-lg border px-2.5 py-1.5 text-xs ${f.delivery_days.includes(i) ? 'bg-action-solid text-on-solid border-action-solid' : 'border-line-strong text-ink-soft hover:bg-surface-hover'}`}
                 onClick={() => set('delivery_days', f.delivery_days.includes(i) ? f.delivery_days.filter((x) => x !== i) : [...f.delivery_days, i].sort())}>
                 {d}
               </button>
@@ -744,10 +742,13 @@ function SupplierPricesTab({ rows, history, submissions }: {
       render: (r) => {
         const pct = changePct(r);
         if (!r.previous_price || pct === 0) return <span className="text-ink-faint">—</span>;
-        // Same treatment as PriceLists.tsx:50-56 (LRM keeps the sign on the correct side in RTL).
+        // Same treatment as PriceLists.tsx:50-56 (LRM keeps the sign on the correct side in RTL),
+        // and the same TOKENS: this is a direction of change, not a status claim, so it speaks
+        // trend-*. It used to say alert-solid/done-fg — identical values today, which is exactly
+        // why the mismatch survived unseen; the two vocabularies stay apart (DESIGN.md §2).
         return pct > 0
-          ? <span className="inline-flex items-center gap-1 text-alert-solid font-medium"><TrendingUp size={14} />{'‎'}+{pct.toFixed(1)}%</span>
-          : <span className="inline-flex items-center gap-1 text-done-fg font-medium"><TrendingDown size={14} />{'‎'}{pct.toFixed(1)}%</span>;
+          ? <span className="inline-flex items-center gap-1 text-trend-up-fg font-medium"><TrendingUp size={14} />{'‎'}+{pct.toFixed(1)}%</span>
+          : <span className="inline-flex items-center gap-1 text-trend-down-fg font-medium"><TrendingDown size={14} />{'‎'}{pct.toFixed(1)}%</span>;
       },
     },
     {
@@ -763,8 +764,8 @@ function SupplierPricesTab({ rows, history, submissions }: {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-4 text-sm">
-        <span className="text-ink-soft">התייקרו: <b className="text-alert-solid">{summary.up}</b></span>
-        <span className="text-ink-soft">הוזלו: <b className="text-done-fg">{summary.down}</b></span>
+        <span className="text-ink-soft">התייקרו: <b className="text-trend-up-fg">{summary.up}</b></span>
+        <span className="text-ink-soft">הוזלו: <b className="text-trend-down-fg">{summary.down}</b></span>
         <span className="text-ink-soft">שינוי חציוני: <b className="num">{summary.median == null ? '—' : `${summary.median > 0 ? '+' : ''}${summary.median.toFixed(1)}%`}</b></span>
       </div>
       <DataTable rows={rows} columns={columns} searchable

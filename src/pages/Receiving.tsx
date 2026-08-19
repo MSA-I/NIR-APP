@@ -373,7 +373,7 @@ export function ReceivingList() {
           {remaining.length > 0 && (
             <>
               <details className="group sm:hidden">
-                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-2 text-sm font-medium text-action hover:bg-action-wash active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-2 text-sm font-medium text-action hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
                   הצג הכל ({filtered.length})
                   <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
                 </summary>
@@ -893,7 +893,7 @@ export function ReceiveOrder() {
         data-testid="receiving-completion"
         data-sync-state={donePendingSync ? 'pending' : 'synced'}
       >
-        <CheckCircle2 size={48} className={donePendingSync ? 'text-await-solid mx-auto' : 'text-done-solid mx-auto'} />
+        <CheckCircle2 size={48} className={donePendingSync ? 'text-await-fg mx-auto' : 'text-done-fg mx-auto'} />
         <h1 className="text-xl font-semibold text-ink">{donePendingSync ? 'הקבלה שמורה במכשיר' : 'הקבלה נשמרה!'}</h1>
         <p className="text-sm text-ink-muted">{donePendingSync
           ? 'השרת עדיין לא אישר את הקבלה. היא והתמונות שתצלם יישלחו לפי הסדר כשהחיבור יחזור.'
@@ -925,11 +925,11 @@ export function ReceiveOrder() {
   // a status there recolours both the selected button and the card border here (§4.5).
   // The old amber-500 shade folds into await-solid, away from the off-by-one shade (§3.6ה).
   const SOLID: Record<Tone, string> = {
-    done: 'bg-done-solid text-white border-done-solid',
-    await: 'bg-await-solid text-white border-await-solid',
-    alert: 'bg-alert-solid text-white border-alert-solid',
-    info: 'bg-info-solid text-white border-info-solid',
-    idle: 'bg-idle-solid text-white border-idle-solid',
+    done: 'bg-done-solid text-on-solid border-done-solid',
+    await: 'bg-await-solid text-on-solid border-await-solid',
+    alert: 'bg-alert-solid text-on-solid border-alert-solid',
+    info: 'bg-info-solid text-on-solid border-info-solid',
+    idle: 'bg-idle-solid text-on-solid border-idle-solid',
   };
   const CARD: Record<Tone, string> = {
     done: 'border-done-line', await: 'border-await-line', alert: 'border-alert-line',
@@ -1082,7 +1082,7 @@ export function ReceiveOrder() {
             <div className="grid grid-cols-5 gap-1.5 mt-3">
               {statusButtons.map((b) => (
                 <button key={b.key}
-                  className={`rounded-lg border min-h-11 flex items-center justify-center text-xs font-medium transition-colors ${line.status === b.key ? SOLID[RECEIPT_LINE_STATUS[b.key].tone] : 'border-line text-ink-soft hover:bg-action-wash'}`}
+                  className={`rounded-lg border min-h-11 flex items-center justify-center text-xs font-medium transition-colors ${line.status === b.key ? SOLID[RECEIPT_LINE_STATUS[b.key].tone] : 'border-line text-ink-soft hover:bg-surface-hover'}`}
                   aria-label={`${b.label} עבור ${item.product.name}`}
                   aria-pressed={line.status === b.key}
                   onClick={() => setLine(item.id, { status: b.key, ...(b.key === 'missing' ? { qty: 0 } : {}) })}>

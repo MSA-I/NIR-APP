@@ -2,32 +2,50 @@
  * check:tokens — the design-token rule as a gate instead of a sentence in prose.
  *
  * DESIGN.md ("חוק הטוקנים", §6 Runbook) requires the enforcement grep to return zero rows over
- * every .tsx file under src: no raw Tailwind palette classes and no hex colour literals — every
- * colour goes through an `@theme` token in `src/index.css`, and charts go through `chartTheme()`.
+ * the product source: no raw Tailwind palette classes and no hex colour literals — every colour
+ * goes through an `@theme` token in `src/index.css`, and charts go through `chartTheme()`.
  * Until this script, the grep lived only in documentation and depended on someone running it.
  *
- * Scope is deliberately `.tsx` only, exactly as DESIGN.md:359 states it: third-party CSS (e.g.
- * pdfjs's shipped stylesheet, THIRD_PARTY_NOTICES.md) is outside the rule, and `src/index.css`
- * is where the tokens themselves are defined.
+ * Two scopes, because the rule means something different in each:
+ *
+ *   1. Product source (`.ts` + `.tsx` under src) — zero palette classes, zero hex literals.
+ *      `.ts` is in scope because `src/lib/orderImage.ts` builds a whole styled HTML document
+ *      and would otherwise be the one file able to regress to a literal unwatched.
+ *
+ *   2. `src/index.css` itself — it DEFINES the tokens, so a literal inside `@theme` is the
+ *      point. Outside `@theme` it is a leak: the pointer glow and the body gradient each spelled
+ *      an `@theme` value out a second time, so a retheme repainted the tokens and left the
+ *      atmosphere behind. Outside the block, colour may only arrive through `var()`/`color-mix()`.
+ *      `rgb()`/`hsl()` are barred everywhere in the file — the palette is oklch, and the five
+ *      shadow tokens were hand-transcribed Onyx/Oceanic in exactly that notation.
+ *
+ * Third-party CSS (pdfjs's shipped stylesheet, THIRD_PARTY_NOTICES.md) stays outside the rule.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const srcRoot = fileURLToPath(new URL('../src', import.meta.url));
+const cssPath = join(srcRoot, 'index.css');
 
 /** DESIGN.md:359 verbatim. A new palette name or utility prefix goes into DESIGN.md first. */
 const RAW_PALETTE =
   /\b(?:bg|text|border|ring|fill|stroke|divide|outline|decoration|placeholder|accent|caret|shadow)-(?:slate|gray|zinc|indigo|violet|blue|emerald|green|amber|yellow|orange|rose|red|sky|cyan|teal)-[0-9]{2,3}\b/g;
 
-/** DESIGN.md:361 — zero hex literals in tsx; charts read tokens via chartTheme(). */
-const HEX_LITERAL = /#[0-9a-fA-F]{6}/g;
+/** DESIGN.md:361 — zero hex literals in product source; charts read tokens via chartTheme(). */
+const HEX_LITERAL = /#[0-9a-fA-F]{6}\b/g;
 
-function* walkTsx(dir: string): Generator<string> {
+/** Inside index.css a 3-digit hex is a colour too (`color: #fff`); in .ts `#106` is an issue ref. */
+const CSS_COLOUR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\boklch\(/g;
+
+/** The palette is oklch. An rgb()/hsl() anywhere in the stylesheet is a hand-copied token. */
+const LEGACY_NOTATION = /\brgba?\(|\bhsla?\(/g;
+
+function* walkSource(dir: string): Generator<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) yield* walkTsx(path);
-    else if (entry.isFile() && entry.name.endsWith('.tsx')) yield path;
+    if (entry.isDirectory()) yield* walkSource(path);
+    else if (entry.isFile() && /\.tsx?$/.test(entry.name)) yield path;
   }
 }
 
@@ -35,28 +53,101 @@ interface Violation {
   file: string;
   line: number;
   match: string;
+  why: string;
 }
 
 const violations: Violation[] = [];
 let scanned = 0;
 
-for (const file of walkTsx(srcRoot)) {
+for (const file of walkSource(srcRoot)) {
   scanned += 1;
   const lines = readFileSync(file, 'utf8').split(/\r?\n/);
   lines.forEach((text, index) => {
     for (const pattern of [RAW_PALETTE, HEX_LITERAL]) {
       pattern.lastIndex = 0;
       for (const found of text.matchAll(pattern)) {
-        violations.push({ file: relative(srcRoot, file), line: index + 1, match: found[0] });
+        violations.push({
+          file: relative(srcRoot, file),
+          line: index + 1,
+          match: found[0],
+          why: 'raw colour in product source — use an @theme token',
+        });
       }
     }
   });
 }
 
-if (violations.length > 0) {
-  console.error('check:tokens FAILED — raw colour in .tsx. Use an @theme token (src/index.css + DESIGN.md together):');
-  for (const v of violations) console.error(`  src/${v.file.replace(/\\/g, '/')}:${v.line}  ${v.match}`);
+/**
+ * Blank a region out instead of slicing it, so every surviving line keeps its original number.
+ * Comments go the same way: prose in a comment must never satisfy or trip an assertion.
+ */
+function blank(source: string, from: number, to: number) {
+  return (
+    source.slice(0, from) +
+    source.slice(from, to).replace(/[^\n]/g, ' ') +
+    source.slice(to)
+  );
+}
+
+const rawCss = readFileSync(cssPath, 'utf8');
+let css = rawCss.replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '));
+
+const themeStart = css.indexOf('@theme');
+if (themeStart === -1) {
+  console.error('check:tokens FAILED — src/index.css has no @theme block. The token layer is the gate.');
   process.exit(1);
 }
 
-console.log(`check:tokens passed: ${scanned} .tsx files, zero raw palette classes, zero hex literals.`);
+// Find the matching close brace so the block boundary is real, not a guess at indentation.
+let depth = 0;
+let themeEnd = -1;
+for (let i = css.indexOf('{', themeStart); i < css.length; i += 1) {
+  if (css[i] === '{') depth += 1;
+  else if (css[i] === '}') {
+    depth -= 1;
+    if (depth === 0) {
+      themeEnd = i + 1;
+      break;
+    }
+  }
+}
+if (themeEnd === -1) {
+  console.error('check:tokens FAILED — the @theme block in src/index.css is unbalanced.');
+  process.exit(1);
+}
+
+const cssLineOf = (index: number) => css.slice(0, index).split('\n').length;
+
+LEGACY_NOTATION.lastIndex = 0;
+for (const found of css.matchAll(LEGACY_NOTATION)) {
+  violations.push({
+    file: 'index.css',
+    line: cssLineOf(found.index ?? 0),
+    match: found[0],
+    why: 'rgb()/hsl() in the stylesheet — the palette is oklch; derive with color-mix(… var(--token) …)',
+  });
+}
+
+const outsideTheme = blank(css, themeStart, themeEnd);
+CSS_COLOUR_LITERAL.lastIndex = 0;
+for (const found of outsideTheme.matchAll(CSS_COLOUR_LITERAL)) {
+  violations.push({
+    file: 'index.css',
+    line: cssLineOf(found.index ?? 0),
+    match: found[0].trim(),
+    why: 'colour literal outside @theme — a rule body may only reach colour through var()/color-mix()',
+  });
+}
+
+if (violations.length > 0) {
+  console.error('check:tokens FAILED. Every colour goes through an @theme token (src/index.css + DESIGN.md together):');
+  for (const v of violations) {
+    console.error(`  src/${v.file.replace(/\\/g, '/')}:${v.line}  ${v.match}  — ${v.why}`);
+  }
+  process.exit(1);
+}
+
+console.log(
+  `check:tokens passed: ${scanned} .ts/.tsx files with zero raw palette classes and zero hex literals; ` +
+    'src/index.css keeps every colour literal inside @theme and uses no rgb()/hsl().',
+);

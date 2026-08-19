@@ -8,15 +8,23 @@ colors:
   # לנקודות בלבד (רקע האייקון, sunken, אותיות ה-tooltip, הדגשות עדינות).
   canvas: "oklch(96.88% 0.0028 128)"            # רקע הגוף — ‏#F4F5F3 (בעלים, T7.3k)
   surface: "oklch(99.2% 0.006 80)"              # כרטיסים, טבלאות, מודאלים, שדות
-  surface-sunken: "oklch(95.4% 0.024 78)"       # thead, שדות disabled, רצועות שקטות
+  surface-sunken: "oklch(95.4% 0.012 80)"       # thead, שדות disabled, רצועות שקטות
+  # שתי מדרגות האינטראקציה (19.08.2026). קודם לכן `action-wash` נשא שני תפקידים — גוון-מותג רך
+  # וגם "העכבר כאן" — ונמדד 1.07:1 מול הכרטיס, מוגש ב-40% מזה ב-.row-hover. „נבחר” לא היה קיים
+  # כטוקן כלל, ולכן האפשרות הפעילה בחיפוש הגלובלי לבשה את מחלקת ה-hover עצמה.
+  surface-hover: "oklch(95.6% 0.018 200)"       # ריחוף על שורה/פריט/summary — ‏ΔL 3.6 מהכרטיס
+  surface-selected: "oklch(91.5% 0.028 202)"    # אפשרות נבחרת, ניווט פעיל, מצב לחוץ — ‏ΔL 4.1 מ-hover
   line: "oklch(89.5% 0.022 78)"                 # מפרידים מול canvas (לכרטיסים אין גבול — T7)
   line-soft: "oklch(93.5% 0.017 78)"            # מפרידי שורות פנימיים
-  line-strong: "oklch(65% 0.018 78)"            # גבול שדות/כפתור משני — 3.17:1
+  # 65%→63% (19.08.2026): ‏1.4.11 דורש 3:1 לגבול שדה, ו-65% נמדד 3.16 מול הכרטיס אך 2.96 מול
+  # הקנבס ו-2.83 מול רצועת sunken — שני המשטחים שעליהם שדה יושב לרוב. המסמך ציטט את ערך
+  # הכרטיס כאילו היה כללי. ‏63% נמדד 3.42 / 3.20 / 3.06.
+  line-strong: "oklch(63% 0.018 78)"            # גבול שדות/כפתור משני — 3.06:1 במקרה הגרוע
   ink: "oklch(19.6% 0.022 229)"                 # כותרות דף, הטקסט החזק ביותר — Onyx
   ink-body: "oklch(28% 0.021 229)"              # טקסט גוף
   ink-mid: "oklch(36.5% 0.021 229)"             # תאי טבלה
   ink-soft: "oklch(43.5% 0.021 229)"            # תוויות, כפתורי ghost
-  ink-muted: "oklch(49.5% 0.02 229)"            # כותרות עמודה, טקסט משני
+  ink-muted: "oklch(47% 0.02 229)"              # כותרות עמודה, טקסט משני (הועמק ב-T7.3f)
   ink-faint: "oklch(53.5% 0.019 229)"           # placeholder ורמזים — 4.78:1 על canvas
   ink-ghost: "oklch(75.5% 0.014 80)"            # אייקונים כבויים, סימנים דקורטיביים
   # פעולה = מותג אוקיאני; היא מבנית בלבד ולעולם אינה מחליפה סטטוס.
@@ -25,15 +33,17 @@ colors:
   action-solid: "oklch(39% 0.062 208)"           # צ'יפים מלאים, מילויי בחירה
   action-soft: "oklch(93% 0.022 200)"            # badge ספירה
   action-on-soft: "oklch(32% 0.05 209)"
-  action-wash: "oklch(96.6% 0.011 195)"         # hover שורה
+  action-wash: "oklch(96.6% 0.011 195)"         # גוון-מותג רך: כפתור משני, צ'יפ סינון, פאנל שקט
   action-line: "oklch(62% 0.055 205)"            # גבול שדה/מסגרות דקות — 3.48:1
-  focus: "oklch(50% 0.085 207)"                  # טבעת פוקוס — 5.53:1
+  focus: "oklch(50% 0.085 207)"                  # טבעת פוקוס — 5.65:1
+  # טקסט על משטח מותג/סטטוס מלא. היה המילה `white` ב-24 מקומות — שם של צבע, לא של תפקיד;
+  # הבהרה עתידית של המותג הייתה שוברת את כולם בשקט.
+  on-solid: "#ffffff"                            # ‏.btn-primary, ‏.btn-danger, ‏toast, ‏puck
   # shell כהה: המסגרת הממותגת של המוצר — Onyx; אזור העבודה נשאר נייר חיטה.
   shell: "oklch(19.57% 0.022 229)"               # #0A171D
   shell-ink: "oklch(97.5% 0.012 80)"
   shell-ink-soft: "oklch(88% 0.014 80)"
   shell-ink-dim: "oklch(73% 0.016 80)"
-  shell-heading: "oklch(72% 0.017 80)"
   # גרפים — צבעי המערכת עצמם (T7.3g, בעלים: "לפי צבעי המערכת"): אוקיאני + שלושה מיקסים
   # אטומים שלו על surface + אוניקס. מונוכרום-סדרתי; הפרדת שכנים בבהירות (חסין CVD),
   # והזהות ממילא לעולם לא על צבע לבד (מקרא, רווחי דונאט, קווקוו, תוויות).
@@ -53,8 +63,7 @@ colors:
   chart-grid: "oklch(90% 0.02 78)"
   chart-tick: "oklch(49.5% 0.02 229)"
   chart-label: "oklch(43.5% 0.021 229)"
-  chart-tick-strong: "oklch(36.5% 0.021 229)"
-  star: "amber-400"                             # כוכבי דירוג: קישוט, לא סטטוס
+  star: "amber-400"                             # כוכב מלא. הכוכב הריק הוא line-strong (3:1)
   star-hover: "amber-300"
   # ---- שפת הצבעים הסמנטית — העוגנים ללא שינוי ----
   # done=הושלם (emerald) · await=ממתין (amber) · alert=חריגה (rose) · info=מידע (sky) · idle=ניטרלי (slate)
@@ -149,10 +158,10 @@ spacing:
   lg: "16px"
   xl: "20px"
 components:
-  button-primary: { backgroundColor: "{colors.action}", textColor: "#ffffff", rounded: "{rounded.control}", padding: "8px 14px" }
+  button-primary: { backgroundColor: "{colors.action}", textColor: "{colors.on-solid}", rounded: "{rounded.control}", padding: "8px 14px" }
   button-primary-hover: { backgroundColor: "{colors.action-hover}" }
-  button-secondary: { backgroundColor: "{colors.surface-sunken}", textColor: "{colors.ink-mid}", border: "none — T7.1 tonal", rounded: "{rounded.control}", hover: "{colors.line-soft}" }
-  button-danger: { backgroundColor: "alert-solid", textColor: "#ffffff" }
+  button-secondary: { backgroundColor: "{colors.action-wash}", textColor: "{colors.ink-mid}", border: "none — T7.1 tonal", rounded: "{rounded.control}", hover: "{colors.action-soft}" }
+  button-danger: { backgroundColor: "alert-solid", textColor: "{colors.on-solid}" }
   button-ghost: { textColor: "{colors.ink-soft}", hoverBackground: "{colors.canvas}" }
   input: { backgroundColor: "{colors.surface}", border: "{colors.line-strong}", focusRing: "{colors.focus}", rounded: "{rounded.control}" }
   card: { backgroundColor: "{colors.surface}", border: "none — T7", rounded: "{rounded.card}", shadow: "onyx soft-wide (T7.3f)", note: "הפרדה מצל נראה + הפרש גוון מול canvas + ריווח, לעולם לא ממסגרת כהה" }
@@ -297,7 +306,21 @@ SupplyFlow מטפל בכסף, ולכן סביבת העבודה שלו נשארת
 **כמה דחוף** — ולכן הוא נשאר פטרול ואינו מפר את חוק המסגרת. ספירה שכן טוענת דחיפות לובשת
 ‏`badge-*` מהמילון, כמו הספירה שעל כותרת „דורש טיפול היום”.
 **חוק הטוקנים:** אפס מחלקות פלטה גולמיות (`slate-*`, `indigo-*`...) ב-tsx — נאכף בגרפ שב־Runbook להלן.
-צבע או צל חדש = טוקן חדש ב־@theme + עדכון המסמך הזה יחד.
+צבע או צל חדש = טוקן חדש ב־@theme + עדכון המסמך הזה יחד. **גם מחוץ ל-`@theme` באותו קובץ** אין
+ליטרל: כלל CSS מגיע לצבע דרך `var()` או `color-mix(… var(--token) …)` בלבד.
+**חוק המשטח והמצב (19.08.2026):** ‏`canvas` (רקע הגוף) → `surface-sunken` (באר שקטה) →
+`surface` (כרטיס) → `surface-hover` (העכבר כאן) → `surface-selected` (זה שנבחר, וגם מצב לחוץ).
+**עומק הוא צל, לא משטח שישי** — סולם `shadow-card → -dashboard → -menu → -fab` הוא ההיררכיה,
+בהתאם לחוק הכרטיס חסר-הגבול. ‏`action-wash`/`action-soft` נשארים גוון-מותג רך ואינם מצב.
+**חוק ה-`solid`:** ‏`{tone}-solid` הוא **מילוי פקד**. טקסט או אייקון בטון לובשים `{tone}-fg`;
+טקסט על משטח מלא לובש `on-solid`. שלושת הערכים זהים היום, ולכן רק spec יכול להחזיק את ההבחנה —
+‏`src/lib/colorLanguage.spec.ts`.
+**חוק כיוון השינוי:** התייקרות/הוזלה הן `trend-up-fg`/`trend-down-fg` **תמיד עם חץ**, ולעולם לא
+`alert`/`done`. שינוי שאין עליו שיפוט עסקי (רכש חודש מול חודש) הוא דיו ניטרלי — `ink-mid`,
+כמו `DeltaChip`. חץ מגמה וטון סטטוס לא חולקים אלמנט.
+**חוק אי-הסתמכות על גוון:** רמפת הגרפים מספקת **שלושה** צעדים מובחנים בפועל (ראו הפנקס), ולכן
+סדרה רביעית ומעלה חייבת `dash`/marker/תבנית. כל גרף, sparkline או פקד שמקודד משמעות בגוון נושא
+גם `aria-label` או תווית — כולל `PriceSparkline` וכוכבי הדירוג.
 **חוק החשיפה המדורגת:** בדשבורד הפעולה הבאה, הסכומים הראשיים והמגמות המרכזיות גלויים מיד; פירוט
 תפעולי משני נשאר זמין ב־disclosure. אין למחוק נתון כדי להפחית עומס, ואין להסתיר פעולה קריטית מאחורי
 hover או בורר תצוגה.
@@ -391,7 +414,8 @@ markup אסור — ‏`bidiIsolate` מ־`src/lib/format.ts` עוטף ב־FSI/PD
 אייקונים עגולים חשופים בדיו כהה (בלי קופסה — "אתה רואה את ההבדלים בשפה?"); מגירה **אטומה**
 ‏`topbar` (שקיפות שם ישבה על ה-scrim הכהה ונקראה כחלחל) עם הפריט הפעיל בגלולה האוקיאנית;
 סרגל הפעולות התחתון ‏`topbar/75`+blur; ‏scrim המגירה והמודאל ‏`shell/50` ניטרלי — לא אוקיאני.
-‏theme-color ב־index.html = ‏Onyx ‏`#0A171D`.
+‏theme-color ב־index.html = ‏OCEANIC ‏`#003F47` (וכך גם ב-`public/manifest.webmanifest`; המסמך
+טען כאן Onyx עד 19.08.2026 — הקוד אמר אוקיאני מאז T7).
 
 הטופ־בר במובייל **אינו** נושא מבטא: הכותרת שם יושבת על `shell` הכהה, שבו הרמפה מודדת ~2.2:1. במסך
 טלפון סמן העמוד שב־`PageHeader` הוא נושא הרמז, והוא בתוך אזור העבודה הבהיר.
@@ -576,7 +600,8 @@ prop**: הוא קורא את `--section-accent`, ש-`Layout` בלבד קובע �
 אל `/alerts` — ה-affordance של הרפרנס, עם יעד אמיתי.
 
 (קפסולות הדופק חיו כאן סבב אחד — T7.3 — והוסרו בהכרעת בעלים: "לא רלוונטי". ‏`.pill-hatched`
-נשאר ב-index.css כמרקם זמין; אין לו צרכן כרגע.)
+נשאר אחריהן ב-index.css כמרקם זמין בלי צרכן, ונמחק ב-19.08.2026: כלל CSS שאיש אינו קורא הוא
+טענה שהמערכת עושה משהו שהיא אינה עושה. אם המרקם יידרש שוב, הוא שבע שורות.)
 
 ### Dashboard — פס הכסף
 שלושת מדדי הכסף = **שלושה כרטיסי stat נפרדים (T7.3c)** — בטלפון הם נערמים כשלושה אריחים
@@ -659,7 +684,9 @@ trendUp/trendDown/flat). ‏`bars` הוא מערך `chart-1`–`chart-5`; אפס
   קווי-אפס שמפוברקים גרף; שבוע שסדרה כלל לא כיסתה נשאר null.
 - **‏donut עבה** (‏inner ‏55% / ‏outer ‏92%): סה"כ גדול במרכז; **המקרא הוא צ'יפים מתחת** —
   ‏●צבע + שם + ‏% (ה-₪ המדויק ב-title וב-tooltip), צ'יפ מקושר נשאר Link וה-% בתוכו. ‏slices
-  בסדר `DONUT_ORDER = [0,1,3,2]` דרך `sliceColor` יחיד (קשתות + צ'יפים). „אחר” תמיד `chart-5`.
+  בסדר `DONUT_ORDER = [0, 2, 3, 1]` דרך `sliceColor` יחיד (קשתות + צ'יפים). „אחר” תמיד `chart-5`.
+  הסדר נקבע במדידה: ברמפה מונוכרומטית ההפרדה היחידה היא בהירות, והסדר הקודם (מזמן הרמפה
+  המעורבת של T7.1) השאיר את שני השכנים האחרונים ב-1.65:1. עכשיו כל צמד שכנים ≥3.11 — ראו הפנקס.
 - **‏GroupedBarChart** (רו"ח — תשלומים מול חיובי בנק): זוגות עמודות דקות מעוגלות-מלא,
   ‏bars[0]/bars[2], מקרא נקודות מתחת. חריג דו-גוני מנוסח: זיהוי ממקרא+ARIA+פער בהירות
   (‏11.39:1 מול ‏3.38:1), לא מגוון בלבד.
@@ -835,41 +862,107 @@ buckets שבועיים נושאים `label`, סכום ומספר רשומות. *
 
 ### Retheme Runbook + אכיפה
 
-**רה-תמה סטטית עתידית = שלושה קבצים:** ‏(1) בלוק ה־@theme ב־`src/index.css` · ‏(2) ‏`index.html`
-ל־theme-color/פונטים · ‏(3) המסמך הזה. מעבר שמשנה את *קוטביות* ה־shell (בהיר↔כהה) מחייב בנוסף audit
-לצרכני `bg-shell` כדי לוודא שהם משתמשים ב־`shell-ink-*`, כפי שנעשה ב־Login/AcceptInvite בסבב T6.
+**רה-תמה סטטית עתידית = שישה קבצים** (המסמך אמר „שלושה" עד 19.08.2026, וזו הייתה הבטחה גדולה
+ממה שהקוד קיים — הצללים, כתם ה-glow וגרדיאנט ה-body העתיקו ערכי טוקן ביד ולא היו משתנים):
 
-**גרפ האכיפה** (חייב להחזיר אפס שורות על `src --include='*.tsx'`):
-```
-\b(bg|text|border|ring|fill|stroke|divide|outline|decoration|placeholder|accent|caret|shadow)-(slate|gray|zinc|indigo|violet|blue|emerald|green|amber|yellow|orange|rose|red|sky|cyan|teal)-[0-9]{2,3}\b
-```
-וכן `#[0-9a-fA-F]{6}` — אפס הקסים ב-tsx (הגרפים דרך chartTheme).
+1. **בלוק ה-`@theme` ב-`src/index.css`** — כל ערך צבע בקובץ יושב בתוכו. מחוץ לבלוק צבע מגיע רק
+   דרך `var()` או `color-mix(… var(--token) …)`; ‏`check:tokens` נופל אחרת.
+2. `index.html` — ‏`<meta name="theme-color">` והפונטים.
+3. `public/manifest.webmanifest` — ‏`theme_color` ו-`background_color`.
+4. `public/brand/inplace-symbol.svg` — ‏Onyx ‏`#0A171D`.
+5. `public/brand/inplace-symbol-paper.svg` — ‏`#FBF6EE`, גרסת הנייר של הסמל. **ערך הקרם הזה אינו
+   טוקן ואינו זהה ל-WHEAT ‏`#FFF6E9`** — הוא של הסמל בלבד, ומי שמזיז את הקרם צריך להזיז גם אותו.
+6. המסמך הזה.
 
-**Contrast ledger (נמדד 18.08.2026 — ‏T7.1, סקריפט OKLCH→sRGB ב-scratchpad):**
-סדרת הגרפים החדשה מול surface (`#fffcf8`): chart-1 ‏`#003f47` — ‏11.39:1 · chart-2 ‏`#27767c`
-— ‏5.17:1 · chart-3 ‏`#469698` — ‏3.38:1 (גרפיקה בלבד, לעולם לא טקסט) · chart-4 ‏`#3d5059` —
-‏8.25:1 · chart-5 ‏`#8a6c41` — ‏4.77:1. כולם בתוך gamut ועוברים את רף 3:1. ‏validator
-‏(dataviz): ‏CVD בסדר ה-donut ‏`[0,1,3,2]` — ‏ΔE מינימלי 10.1 ≥ 8 עובר; ‏ΔE נורמלי מינימלי
-11.5 < 15 — החריג בעל-השם של הרמפה המותגית (מיתונים ב-§5 Charts).
-‏glow ‏T7.1: הנקודה הכהה של ה-wash החם — ‏ink-faint ‏4.52, ‏ink-muted ‏5.39; של הקריר —
-‏ink-faint ‏4.55; כרטיס שקוף (72%) מעל הנקודה הכהה — ‏ink-faint ‏4.78, ‏ink-body ‏13.57.
+מעבר שמשנה את *קוטביות* ה־shell (בהיר↔כהה) מחייב בנוסף audit לצרכני `bg-shell` כדי לוודא שהם
+משתמשים ב־`shell-ink-*`, כפי שנעשה ב־Login/AcceptInvite בסבב T6.
 
-**מבטאי האזור (נמדד 18.08.2026 על משטחי T7).** ליטרלים קפואים מאז T7.1 — אותם ערכים שהיו
-לכינויים, נמדדים מול המשטחים החדשים. הרף הרלוונטי הוא **3:1 (רכיב לא-טקסטואלי)**:
-‏section-documents = ‏chart-4 ‏`#785e96` — ‏shell-ink ‏5.08 · ‏canvas ‏5.11 · ‏surface ‏5.35 ·
-‏surface-sunken ‏4.77 · ‏shell ‏3.33.
-‏section-procurement = ‏chart-3 ‏`#59649f` — ‏shell-ink ‏5.21 · ‏canvas ‏5.23 · ‏surface ‏5.48 ·
-‏surface-sunken ‏4.89 · ‏shell ‏3.25.
-‏section-money = ‏chart-5 ‏`#87567c` — ‏shell-ink ‏5.34 · ‏canvas ‏5.37 · ‏surface ‏5.62 ·
-‏surface-sunken ‏5.01 · ‏shell ‏3.17.
-על ה-shell של Onyx המבטאים עוברים עכשיו 3:1 בקושי (3.17–3.33) — **הכלל לא משתנה**: מבטא מופיע
-על נייר בלבד (גלולת הניווט הפעיל וסמן העמוד); שוליים של 0.2 מעל הרף אינם עוגן לעיצוב.
-‏`chart-2` נשאר מוחרג מהמבטאים (אותו גוון כמו sky/info) ונשאר סדרת גרף בלבד.
-ink/canvas ‏17.01 · ‏ink-body/surface ‏14.21 · ‏ink-mid ‏10.33 · ‏ink-soft ‏7.66 · ‏ink-muted ‏5.97 ·
-‏ink-faint/surface ‏5.01 · ‏ink-faint/canvas ‏4.78 · לבן על action ‏11.65 · על action-hover ‏13.67 ·
-על action-solid ‏9.37 · ‏focus/surface ‏5.53 · ‏line-strong/surface ‏3.17 · ‏action-line/surface ‏3.48 ·
-‏shell-ink/shell ‏16.93 · ‏shell-soft ‏12.70 · ‏shell-dim ‏7.62 · ‏shell-heading ‏7.35.
-מילויי הסטטוס בדרגת 700 עם לבן לא הוחלפו: המינימום הוא await ‏5.05; trend-up/down עוברים 5.2.
+**ליטרלים ששורדים בכוונה, ואינם דליפה:** ‏`bg-white` בארבעה מקומות — לוח לבן אטום מתחת ללוגו
+שהדייר מעלה (`Layout.tsx` ×3, ‏`Settings.tsx`). לוגו עשוי להיות PNG שקוף, ולבן טהור הוא ההחלטה.
+כל טקסט על משטח מלא עובר `--color-on-solid`, לא `text-white`.
+
+**האכיפה** — ‏`scripts/check-design-tokens.ts` ‏(`npm run check:tokens`) בשני היקפים:
+
+- **`src/**/*.ts` ו-`*.tsx`** — אפס מחלקות פלטה גולמיות, אפס `#RRGGBB`. ‏`.ts` נכלל מ-19.08.2026
+  מפני ש-`src/lib/orderImage.ts` בונה מסמך HTML מעוצב שלם והיה הקובץ היחיד שיכול היה לסגת לליטרל
+  בלי רשת. הגרפ:
+  ```
+  \b(bg|text|border|ring|fill|stroke|divide|outline|decoration|placeholder|accent|caret|shadow)-(slate|gray|zinc|indigo|violet|blue|emerald|green|amber|yellow|orange|rose|red|sky|cyan|teal)-[0-9]{2,3}\b
+  ```
+- **`src/index.css`** — אין `rgb()`/`hsl()` בשום מקום בקובץ (הפלטה היא oklch; חמשת טוקני הצל
+  היו אוניקס/אוקיאני מועתקים ביד בדיוק בסימון הזה), ואין `#hex` או `oklch(` **מחוץ** לבלוק
+  ה-`@theme`.
+
+בנוסף, ‏`src/lib/colorLanguage.spec.ts` מצמיד את **המשמעות** במקום שבו הערכים כבר זהים:
+‏`text-{tone}-solid` אסור (‏`solid` הוא מילוי פקד), ‏`text-white` אסור, חץ מגמה לעולם לא חולק
+אלמנט עם טון סטטוס, ולכל טון יש שישה משטחים ומחלקת `badge-`/`note-`.
+
+**Contrast ledger — נמדד מחדש 19.08.2026** ‏(oklch → sRGB → luminance יחסית → WCAG 2.x).
+הפנקס הקודם ציטט hex-ים מ-T7.1 — ‏`surface #fffcf8`, ‏`chart-2 #27767c`, ‏`chart-5 #8a6c41`
+ומבטאי אזור `#785e96`/`#59649f`/`#87567c` — שאף אחד מהם אינו טוקן חי מאז T7.3. **הפנקס הזה הוא
+של הערכים שבקוד.**
+
+**טקסט (רף 4.5:1) — הכול עובר.**
+
+| חזית | רקע | יחס |
+|---|---|---|
+| `ink` | canvas / surface | 16.64 / 17.78 |
+| `ink-body` | canvas / surface | 13.28 / 14.19 |
+| `ink-mid` | surface / surface-sunken | 10.34 / 9.25 |
+| `ink-soft` | surface / canvas | 7.71 / 7.21 |
+| `ink-muted` | surface / canvas / sunken / topbar-75 | 6.63 / 6.20 / 5.93 / 5.89 |
+| `ink-faint` | surface / canvas / surface-hover | 5.02 / **4.70** / 4.55 |
+| `ink-faint` | topbar/75 מעל canvas | **4.46 — גבולי, נופל ב-0.04** |
+| `action` (לינק) | surface / canvas | 11.39 / 10.65 |
+| `on-solid` | action / -hover / -solid | 11.65 / 13.65 / 9.36 |
+| `on-solid` | ‏`{tone}-solid` | ‏5.05 (await) עד 10.34 |
+| `{tone}-fg` | surface | ‏4.94 (await) עד 10.11 |
+| `{tone}-on-soft` | ‏`{tone}-soft` / `{tone}-wash` | 6.41–13.37 / 6.88–14.00 |
+| `trend-up-fg` / `trend-down-fg` | surface | 5.92 / 5.24 |
+| `shell-ink` / `-soft` / `-dim` | shell | 16.93 / 12.68 / 7.61 |
+| `chart-tick` / `chart-label` | surface | 5.95 / 7.71 |
+| `shell-ink` / `on-solid` | ‏`chart-2` (‏DarkTooltip) | 4.83 / 5.20 |
+| `ink-body` / `ink-muted` | `surface-selected` | 11.40 / 5.32 |
+
+**רכיבי ממשק לא-טקסטואליים (רף 3:1).**
+
+| רכיב | מול | יחס |
+|---|---|---|
+| `line-strong` (גבול `.input`) | surface / canvas / sunken | 3.42 / 3.20 / 3.06 |
+| `action-line` | surface / canvas | 3.48 / 3.25 |
+| `focus` | surface / canvas | 5.65 / 5.29 |
+| כוכב ריק (`line-strong`) | surface / canvas / sunken | 3.42 / 3.20 / 3.06 |
+| `CoverageRing`: קשת `chart-2` מול טראק `chart-5` | — | 3.11 |
+
+**פטורים בעלי-שם:** ‏`ink-ghost` (2.14 מול surface) — ‏disabled וקישוט בלבד, פטור 1.4.3;
+‏`chart-grid` (1.32) — קווי רשת, אינם אובייקט מידע; ‏`star` המלא (1.68) — הבחנתו היא **מילוי
+מול מתאר**, והמתאר הוא `line-strong` שעובר 3:1; ‏`chart-3`/`chart-5` מול surface (2.69 / 1.63) —
+לכל גרף legend, ‏tooltip, ‏ARIA וערכים מספריים, ולכן הצבע אינו "נדרש להבנת התוכן" (1.4.11).
+
+**מגבלה מתועדת:** ‏`line-strong` מול `surface-selected` = 2.75. שדה קלט אינו יושב על שורה
+נבחרת באף מסך היום; אם ישב אי-פעם, זו נקודת המדידה. הוא הדין ב-`ink-faint` על
+`surface-selected` (4.03) — placeholder על שורה נבחרת אינו קיים ואינו מותר.
+
+**מדרגות המשטח:** ‏surface↔hover 1.104 (‏ΔL 3.6) · hover↔selected 1.13 (‏ΔL 4.1) ·
+surface↔selected 1.245 (‏ΔL 7.7). ‏`action-on-soft` על `surface-selected` — 9.77.
+
+**רמפת הגרפים — הפרדת שכנים** (ההפרדה היחידה שיש לרמפה מונוכרומטית):
+‏chart-1↔chart-2 2.24 · chart-1↔chart-3 4.23 · chart-1↔chart-4 **1.56** · chart-1↔chart-5 6.97 ·
+chart-2↔chart-3 1.89 · chart-2↔chart-4 3.50 · chart-2↔chart-5 3.11 · chart-3↔chart-4 6.61 ·
+chart-3↔chart-5 **1.65** · chart-4↔chart-5 10.89.
+**המסקנה המדידה: הרמפה מספקת שלושה צעדים מובחנים, לא חמישה** — ‏chart-1 ו-chart-4 הם 1.56
+זה מזה, וכך גם chart-3 ו-chart-5 ב-1.65. לכן סדר הדונאט הוא `[0, 2, 3, 1]` ‏(19.08.2026, היה
+`[0,1,3,2]` מזמן הרמפה המעורבת של T7.1): בסדר הציור chart-1 → chart-3 → chart-4 → chart-2 →
+"אחר"=chart-5 כל צמד שכנים מודד 4.23 · 6.61 · 3.50 · 3.11 — כולם מעל 3:1, בלי לגעת בגוון.
+**סדרה רביעית ומעלה חייבת מבדיל שאינו צבע** (`dash`, marker, תבנית) — לא צעד נוסף ברמפה.
+
+‏`glow` (מחושב, לא נמדד חי): בשיא הכתם `ink-muted` ≈5.36 ו-`ink-faint` ≈4.06. הראשון עובר
+בפער; השני נוגע **רק** לטקסט שיושב ישירות על ה-body ולא בתוך כרטיס אטום — ‏`.app-glow` הוא
+`z-index:-1` מתחת לכל משטח. ‏T7.3f העמיק את `ink-muted` ל-47% בדיוק בגלל המדידה החיה הזו (4.75).
+
+**מבטאי האזור:** שלושתם ליטרל אוקיאני יחיד `#003F47` מאז T7.3 — ‏canvas 10.65 · surface 11.39 ·
+sunken ~10.1. הכלל לא השתנה: מבטא מופיע על נייר בלבד (גלולת הניווט הפעיל וסמן העמוד), לעולם
+לא על ה-shell הכהה.
 
 **סיכוני תחזוקה:** ‏`badge-${tone}`/`note-${tone}` נבנות דינמית — כל ערך Tone חייב מחלקה ב-index.css
 (אין שגיאת build אם חסרה). ‏Tailwind v4: מחלקה מותאמת = ‏@apply על utilities אמיתיים בלבד; קומפוזיציה

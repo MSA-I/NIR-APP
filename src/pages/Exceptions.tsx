@@ -110,7 +110,7 @@ export default function Exceptions() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title={<span className="flex items-center gap-2"><AlertTriangle size={22} className="text-await-solid" /> חריגים</span>}
+      <PageHeader title={<span className="flex items-center gap-2"><AlertTriangle size={22} className="text-await-fg" /> חריגים</span>}
         meta={`${rows.length} חריגים בתצוגה`} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.title.toLowerCase().includes(q) || (r.supplier?.name ?? '').toLowerCase().includes(q)}
