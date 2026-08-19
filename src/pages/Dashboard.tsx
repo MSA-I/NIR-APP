@@ -12,7 +12,7 @@ import {
 } from '../lib/format';
 import { chartTheme } from '../lib/theme';
 import { mergeWeeklyComparison, topCategoriesWithOther } from '../lib/dashboardSeries';
-import { CategoryDonut, ComparisonLineChart, CoverageRing, money, moneyShort, SpendBarChart, TrendSparkline } from '../components/charts';
+import { CategoryDonut, ComparisonLineChart, money, moneyShort, SpendBarChart, TrendSparkline } from '../components/charts';
 import { fetchAll } from '../lib/supabasePaging';
 import { useAuth } from '../auth/AuthContext';
 
@@ -35,6 +35,12 @@ type ManagementDashboardSnapshot = {
     activeCount: number;
     overdue: number | null;
     dueToday: number | null;
+    // 0148 — the due-window money. All four figures below ride the same evidence guard as
+    // `overdue`/`dueToday`: null means "no active request carries a due date at all", while 0
+    // means "dated requests exist and none of them fall here". Never conflate the two.
+    overdueAmount: number | null;
+    dueWithin7Amount: number | null;
+    dueWithin7Count: number | null;
   };
   credits: { count: number; sum: number | null };
   bank: { unmatched: number; suggested: number };
@@ -692,12 +698,21 @@ export default function Dashboard() {
         highExceptions,
         notSentToAccountant: snapshot.invoices.notSent,
       },
-      // Due-date coverage for the radial ring (T7.1): a TRUE numerator/denominator — active
-      // payment requests that carry a manual due date, out of all active requests (0100 RPC).
-      coverage: {
-        covered: snapshot.paymentRequests.dueDateCoverage,
-        active: snapshot.paymentRequests.activeCount,
-      },
+      // The week's obligations (0148). The RPC guards all four figures behind the same "at least
+      // one active request carries a due date" condition, so they are known together or unknown
+      // together — folding them into ONE nullable object says that in the type, instead of asking
+      // the tile to re-derive the same guard four times and risk printing ₪0 next to a "—".
+      dueWindow: (() => {
+        const pr = snapshot.paymentRequests;
+        if (pr.overdueAmount == null || pr.dueWithin7Amount == null
+          || pr.overdue == null || pr.dueWithin7Count == null) return null;
+        return {
+          overdueAmount: pr.overdueAmount,
+          overdueCount: pr.overdue,
+          dueWithin7Amount: pr.dueWithin7Amount,
+          dueWithin7Count: pr.dueWithin7Count,
+        };
+      })(),
     };
   });
 
@@ -765,7 +780,7 @@ export default function Dashboard() {
         </div>} />
 
       {/* The capsule strip lived here briefly (T7.3) and was removed by owner decision
-          ("לא רלוונטי") — the coverage ring and the money strip already carry the day's ratios. */}
+          ("לא רלוונטי") — the money strip and the due-window tile already carry the day's figures. */}
 
       {/* Truth-reporting (CLAUDE.md): a failed load/refetch shows an inline note WITH retry and keeps
           whatever data we still hold on screen — it never blanks the sections that did load. */}
@@ -871,16 +886,38 @@ export default function Dashboard() {
                 <CategoryDonut slices={data.categories} total={categoryTotal} ariaLabel={categoriesAria} emptyMessage={categoryEmptyMessage} />
               </section>
 
-              {/* The reference's radial-progress tile, on the one honest ratio the snapshot
-                  already measures: dated active payment requests out of all active requests.
-                  Zero active requests → the empty sentence, never a fake 0% or 100%. */}
-              <section className="card card-pad lg:col-span-3" aria-labelledby="coverage-ring-title">
-                <h3 id="coverage-ring-title" className="text-sm font-semibold text-ink-body">כיסוי תאריכי פירעון</h3>
-                <p className="text-xs text-ink-muted">דרישות תשלום פעילות עם תאריך</p>
-                <CoverageRing covered={data.coverage.covered} total={data.coverage.active}
-                  label="כיסוי תאריכי פירעון"
-                  sentence={`מתוך ${data.coverage.active} דרישות פעילות`}
-                  emptyMessage="אין דרישות תשלום פעילות" />
+              {/* Owner review, defect 11: this slot used to hold a radial ring over "כיסוי תאריכי
+                  פירעון" — how many active requests carry a due date. That is data hygiene, not a
+                  decision: the manager cannot pay a percentage. The tile now answers the question
+                  the week actually asks — how much money has to move — and a ring cannot say it.
+                  A ring encodes a part of a WHOLE; here the "whole" is a seven-day window we
+                  chose, so a percentage of it would be arithmetic about our own choice while
+                  hiding the only figure that matters. Two lines under one total instead.
+                  The word באיחור carries the meaning; the alert ink only repeats it. */}
+              <section className="card card-pad lg:col-span-3" aria-labelledby="due-window-title">
+                <h3 id="due-window-title" className="text-sm font-semibold text-ink-body">לתשלום בשבוע הקרוב</h3>
+                <p className="text-xs text-ink-muted">דרישות תשלום פעילות, כולל מה שכבר באיחור</p>
+                {data.dueWindow == null ? (
+                  <p className="mt-4 flex min-h-24 items-center text-sm text-ink-muted sm:min-h-40">
+                    אין דרישות תשלום פעילות עם תאריך פירעון
+                  </p>
+                ) : (
+                  <div className="mt-2 flex min-h-32 flex-col justify-center gap-4 sm:min-h-40">
+                    <div className="kpi-hero num text-ink" dir="ltr">
+                      {glanceMoney(data.dueWindow.overdueAmount + data.dueWindow.dueWithin7Amount)}
+                    </div>
+                    <div className="flex flex-col gap-1.5 text-sm">
+                      <p className="text-alert-fg">
+                        מתוכם באיחור <span className="num" dir="ltr">{glanceMoney(data.dueWindow.overdueAmount)}</span>
+                        {' · '}<span className="num">{data.dueWindow.overdueCount}</span> דרישות
+                      </p>
+                      <p className="text-ink-mid">
+                        לפירעון בשבעת הימים הקרובים <span className="num" dir="ltr">{glanceMoney(data.dueWindow.dueWithin7Amount)}</span>
+                        {' · '}<span className="num">{data.dueWindow.dueWithin7Count}</span> דרישות
+                      </p>
+                    </div>
+                  </div>
+                )}
               </section>
 
               <section className="card card-pad lg:col-span-12" aria-labelledby="weekly-trend-title">

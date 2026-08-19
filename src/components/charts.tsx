@@ -291,53 +291,6 @@ export function CategoryDonut({ slices, total, ariaLabel, emptyMessage, hrefFor,
   );
 }
 
-/**
- * CoverageRing (T7.1) — the reference's radial-progress rendering, for a TRUE numerator/denominator
- * only. Plain SVG arc (ponytail: recharts RadialBarChart is a dependency-shaped hammer for one
- * circle): a quiet track in the grid color, a brand-color arc for the covered share, the percent
- * in the center and the honest count sentence beside it. `total === 0` renders the empty message —
- * a coverage claim over nothing is not 0% and not 100%.
- */
-export function CoverageRing({ covered, total, label, emptyMessage, sentence }: {
-  covered: number;
-  total: number;
-  label: string;
-  emptyMessage: string;
-  /** The honest wording under the ring, e.g. "12 מתוך 15 דרישות פעילות". */
-  sentence: string;
-}) {
-  const t = chartTheme();
-  if (total <= 0) {
-    return <div className="flex h-24 items-center justify-center text-center text-sm text-ink-muted sm:h-40">{emptyMessage}</div>;
-  }
-  const pct = Math.round((covered / total) * 100);
-  const radius = 44;
-  const circumference = 2 * Math.PI * radius;
-  const arc = (Math.min(covered, total) / total) * circumference;
-  // T7.3j (owner, image #23 "Total Visitors Chart - Shape"): thick ring, a pale system-ramp
-  // track under a mid-oceanic arc, a BIG value + tiny label in the center, and a two-line
-  // caption below — a semibold headline line and the muted honest count under it.
-  return (
-    <div className="mt-2 flex min-h-36 flex-col items-center justify-center gap-3 sm:min-h-44" role="img" aria-label={`${label}: ${sentence}, ${pct} אחוז`}>
-      <div className="relative size-28 sm:size-36">
-        <svg viewBox="0 0 112 112" className="size-full -rotate-90" aria-hidden="true">
-          <circle cx="56" cy="56" r={radius} fill="none" stroke={t.bars[4]} strokeWidth="14" />
-          <circle cx="56" cy="56" r={radius} fill="none" stroke={t.bars[1]} strokeWidth="14" strokeLinecap="round"
-            strokeDasharray={`${arc} ${circumference - arc}`} />
-        </svg>
-        <div className="absolute inset-0 grid place-content-center text-center" aria-hidden="true">
-          <span className="num text-3xl font-semibold text-ink sm:text-4xl">{covered}</span>
-          <span className="text-xs text-ink-muted">עם תאריך</span>
-        </div>
-      </div>
-      <div className="text-center" aria-hidden="true">
-        <p className="text-sm font-semibold text-ink-body"><span className="num" dir="ltr">{pct}%</span> מהדרישות עם תאריך</p>
-        <p className="text-xs text-ink-muted">{sentence}</p>
-      </div>
-    </div>
-  );
-}
-
 /* `dash` (T7.3g, owner sketch on image #16): the secondary series draws dashed — with a
    system-colors-only ramp both lines are dark, so the dash carries the identity distinction
    that hue no longer can. */

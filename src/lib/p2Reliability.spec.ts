@@ -104,7 +104,9 @@ const invoiceRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(reopenedRe
 assert.equal(invoiceRows.length, 1501, 'XLSX must retain every row above the PostgREST cap');
 assert.equal(invoiceRows.reduce((sum, row) => sum + Number(row['סה"כ']), 0), 1501 * 118);
 const reportMeta = XLSX.utils.sheet_to_json<unknown[]>(reopenedReport.Sheets['פרטי הדוח'], { header: 1 });
-assert.deepEqual(reportMeta[0], ['שם ארגון', 'ארגון בדיקה']);
+// Found by label, not by index: the summary sheet gained a merged heading block above the
+// key/value rows (defect 12), and the claim here is that the org name reaches the sheet.
+assert.deepEqual(reportMeta.find((row) => row[0] === 'שם ארגון'), ['שם ארגון', 'ארגון בדיקה']);
 
 const invoiceFingerprint = invoiceCheckFingerprint({
   supplierId: 'supplier-a', invoiceNumber: ' 42 ', invoiceDate: '2026-07-22', totalAmount: 100,
