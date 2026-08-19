@@ -7,6 +7,7 @@ import OperatorShell from './OperatorShell';
 import AutonomyPolicies from './AutonomyPolicies';
 import Customers from './Customers';
 import CustomerDetail from './CustomerDetail';
+import Funnel from './Funnel';
 
 /**
  * SECURITY NOTE — read before treating "separate app" as "isolated".
@@ -53,6 +54,7 @@ export default function OperatorRoutes() {
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/customers" element={<Customers />} />
           <Route path="/admin/customers/:orgId" element={<CustomerDetail />} />
+          <Route path="/admin/funnel" element={<Funnel />} />
           <Route path="/admin/autonomy" element={<AutonomyPolicies />} />
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Route>

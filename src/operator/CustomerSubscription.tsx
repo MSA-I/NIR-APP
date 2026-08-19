@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { Pencil, ShieldPlus, Undo2 } from 'lucide-react';
 import { Modal, StatusBadge, ConfirmDialog } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
-import { fmtDate, fmtNum } from '../lib/format';
+import { fmtDate, fmtDateTime, fmtNum } from '../lib/format';
 import { SUBSCRIPTION_STATUS } from '../lib/status';
 import {
   grantEntitlementOverride, revokeEntitlementOverride, setOrgSubscription,
-  type OrgEntitlement, type OrgSubscription, type PlatformCapability, type SubscriptionPlan,
+  type BillingEventRow, type OrgEntitlement, type OrgSubscription, type PlatformCapability,
+  type SubscriptionPlan,
 } from '../lib/platform';
 
 const BILLING_INTERVAL: Record<string, string> = { monthly: 'חודשי', yearly: 'שנתי' };
@@ -28,12 +29,13 @@ function entitlementValue(row: OrgEntitlement): { text: string; muted: boolean }
 }
 
 export default function CustomerSubscription({
-  orgId, subscription, entitlements, plans, may, busy, run,
+  orgId, subscription, entitlements, plans, billingEvents, may, busy, run,
 }: {
   orgId: string;
   subscription: OrgSubscription | null;
   entitlements: OrgEntitlement[];
   plans: SubscriptionPlan[];
+  billingEvents: BillingEventRow[];
   may: (capability: PlatformCapability) => boolean;
   busy: boolean;
   run: (action: () => Promise<unknown>, done: string) => void;
@@ -121,6 +123,23 @@ export default function CustomerSubscription({
           );
         })}
       </ul>
+
+      {/* Evidence that the provider spoke, never what it said: the payload is a payment
+          processor's dump of a customer's details and has no business in a console. */}
+      {billingEvents.length > 0 && (
+        <div className="space-y-1 border-t border-line-soft pt-3">
+          <h3 className="text-sm font-medium text-ink-body">אירועים מספק החיוב</h3>
+          <ul className="space-y-1">
+            {billingEvents.map((event) => (
+              <li key={event.id} className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-ink-body">{event.event_type}</span>
+                <span className="text-xs text-ink-muted">{event.provider}</span>
+                <span className="ms-auto text-xs text-ink-muted">{fmtDateTime(event.received_at)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {editingPlan && subscription && (
         <PlanModal

@@ -60,6 +60,7 @@ const renderSection = (
         subscription={sub}
         entitlements={entitlements}
         plans={plans}
+        billingEvents={[]}
         may={(capability) => capabilities.includes(capability)}
         busy={false}
         run={() => {}}

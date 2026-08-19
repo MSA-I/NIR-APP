@@ -464,3 +464,48 @@ export function setOnboardingStep(input: {
     p_reason: input.reason,
   });
 }
+
+/* ---------- Wave 6: billing boundary and funnel (0157, 0158) ---------- */
+
+/** Deliberately no payload field: the operator reads that an event arrived, not a payment
+    processor's dump of a customer's details. */
+export interface BillingEventRow {
+  id: string;
+  provider: string;
+  event_type: string;
+  status: 'stored' | 'dead_letter';
+  received_at: string;
+  correlation_id: string | null;
+}
+
+export interface BillingDeadLetter {
+  id: string;
+  provider: string;
+  event_type: string;
+  provider_customer_id: string | null;
+  dead_letter_reason: string;
+  received_at: string;
+}
+
+/** `measured: false` with a `note` is a stage this system cannot see. It is reported rather than
+    omitted, because a missing row invites somebody to add a zero later and call it a number. */
+export interface FunnelMetric {
+  metric_key: string;
+  label: string;
+  value: number | null;
+  measured: boolean;
+  note: string | null;
+}
+
+export async function fetchBillingEvents(orgId: string): Promise<BillingEventRow[]> {
+  return (await rpc<BillingEventRow[]>('platform_billing_events', { p_org_id: orgId })) ?? [];
+}
+
+export async function fetchBillingDeadLetters(): Promise<BillingDeadLetter[]> {
+  return (await rpc<BillingDeadLetter[]>('platform_billing_dead_letters', {})) ?? [];
+}
+
+export async function fetchFunnelMetrics(days: number): Promise<FunnelMetric[]> {
+  const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  return (await rpc<FunnelMetric[]>('platform_funnel_metrics', { p_from: from })) ?? [];
+}

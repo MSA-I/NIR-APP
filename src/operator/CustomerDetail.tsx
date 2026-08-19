@@ -13,7 +13,7 @@ import {
 import {
   addInternalNote, fetchCustomerContacts, fetchCustomerDetail, fetchCustomerNotes,
   fetchCustomerTimeline, fetchMyCapabilities, fetchOrgEntitlements, fetchOrgSubscription,
-  fetchCustomerHealth, fetchCustomerOnboarding,
+  fetchBillingEvents, fetchCustomerHealth, fetchCustomerOnboarding,
   fetchOrgUsage, fetchPlatformOperators, fetchSubscriptionPlans, removeCustomerContact,
   resolveFollowUp, setCustomerAccount, upsertCustomerContact,
   type CustomerContact, type CustomerNote, type PlatformCapability,
@@ -53,12 +53,12 @@ export default function CustomerDetail() {
         return {
           capabilities, detail: null, contacts: [], notes: [], timeline: [], operators: [],
           subscription: null, entitlements: [], plans: [], usage: [],
-          onboarding: [], health: null,
+          onboarding: [], health: null, billingEvents: [],
         };
       }
       const billing = capabilities.includes('billing.view');
       const [detail, contacts, timeline, operators, notes, subscription, entitlements, plans,
-             usage, onboarding, health]
+             usage, onboarding, health, billingEvents]
         = await Promise.all([
           fetchCustomerDetail(orgId),
           fetchCustomerContacts(orgId),
@@ -71,10 +71,11 @@ export default function CustomerDetail() {
           capabilities.includes('usage.view') ? fetchOrgUsage(orgId) : Promise.resolve([]),
           fetchCustomerOnboarding(orgId),
           fetchCustomerHealth(orgId),
+          billing ? fetchBillingEvents(orgId) : Promise.resolve([]),
         ]);
       return {
         capabilities, detail, contacts, notes, timeline, operators,
-        subscription, entitlements, plans, usage, onboarding, health,
+        subscription, entitlements, plans, usage, onboarding, health, billingEvents,
       };
     },
     [orgId],
@@ -185,6 +186,7 @@ export default function CustomerDetail() {
           subscription={data?.subscription ?? null}
           entitlements={data?.entitlements ?? []}
           plans={data?.plans ?? []}
+          billingEvents={data?.billingEvents ?? []}
           may={may}
           busy={busy}
           run={(action, done) => void run(action, done)}
