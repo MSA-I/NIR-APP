@@ -275,16 +275,20 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
     ? Math.min(100, Math.max(0, Math.round((progress.done / progress.total) * 100)))
     : null;
   return (
-    <div className="rounded-xl border border-line-soft bg-surface-sunken px-3 py-3">
+    <div className="rounded-2xl bg-surface-sunken p-3">
       <ol aria-label="שלבי התהליך" className="flex min-w-0 flex-wrap items-center gap-y-2 overflow-x-auto pb-1">
         {steps.map((step, index) => {
           const isCurrent = index === currentIndex;
           const isComplete = currentIndex >= 0 && index < currentIndex;
           const isStopped = isCurrent && failed;
-          const text = isStopped ? 'text-alert-fg' : isCurrent ? 'text-info-fg' : isComplete ? 'text-done-fg' : 'text-ink-muted';
+          // One hue on the strip instead of three. The current step is the only SOLID mark, so it
+          // already says "here" -- repeating that in a third label colour beside it only competes
+          // with the marker. Done and future therefore share the quiet label; the marker (check vs
+          // number) carries the difference, so meaning never rests on hue alone.
+          const text = isStopped ? 'text-alert-fg' : isCurrent ? 'text-ink-body' : 'text-ink-muted';
           const marker = isStopped
             ? 'border-alert-line bg-alert-soft'
-            : isCurrent ? 'border-info-line bg-info-soft' : isComplete ? 'border-done-line bg-done-soft' : 'border-line-strong bg-surface';
+            : isCurrent ? 'border-transparent bg-info-solid text-on-solid' : isComplete ? 'border-done-line bg-done-soft' : 'border-line-strong bg-surface text-ink-muted';
           return (
             // `relative` is load-bearing, not styling. The sr-only span below is
             // `position: absolute`, so without a positioned ancestor inside the scroller its
@@ -296,7 +300,7 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
             // 3px out and stayed inside the tolerance.
             <li key={step.key} aria-current={isCurrent ? 'step' : undefined} className="relative flex min-w-fit items-center sm:flex-1">
               <span className={`flex items-center gap-1.5 text-xs font-medium ${text}`}>
-                <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${marker}`} aria-hidden="true">
+                <span className={`flex size-6 shrink-0 items-center justify-center rounded-full border ${marker}`} aria-hidden="true">
                   {isStopped ? <AlertTriangle size={12} /> : isComplete ? <Check size={12} /> : index + 1}
                 </span>
                 {step.label}
@@ -307,6 +311,8 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
           );
         })}
       </ol>
+      {detail && <div className="mt-2 text-xs text-ink-soft">{detail}</div>}
+      {/* Below `detail` on purpose, so the strip reads step -> what it is doing -> how far. */}
       {progress && percent !== null && (
         <div
           role="progressbar"
@@ -314,17 +320,17 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
           aria-valuemax={progress.total}
           aria-valuenow={progress.done}
           aria-valuetext={progress.label}
-          className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line"
+          className="mt-2 h-1 w-full overflow-hidden rounded-full bg-line"
         >
           {/* Petrol is structure here, never a verdict: the fill says how much, not whether it
               went well. Width only, so reduced-motion cancels it with the shared transition rule. */}
           <div className="h-full rounded-full bg-action transition-[width] duration-200 ease-out" style={{ width: `${percent}%` }} />
         </div>
       )}
-      {detail && <div className="mt-2 text-xs text-ink-soft">{detail}</div>}
       {nextAction && (
         <div className="mt-2 border-t border-line-soft pt-2 text-sm text-ink-body">
-          <span className="font-semibold">הפעולה הבאה:</span> {nextAction}
+          {/* The label steps back; the action itself keeps the body ink from the wrapper. */}
+          <span className="font-medium text-ink-muted">הפעולה הבאה:</span> {nextAction}
         </div>
       )}
     </div>
