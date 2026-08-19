@@ -723,6 +723,17 @@ export default function NewOrder() {
         : saveStatus === 'error' ? 'השמירה נכשלה'
           : 'יישמר אוטומטית עם הוספת מוצר';
 
+  /**
+   * One source for the three steps. The two renderings below — phone dots and desktop chip strip —
+   * read the same labels, the same enablement rules and the same go-handlers, so the wizard cannot
+   * enable a step on one width and refuse it on the other.
+   */
+  const steps = [
+    { number: '01', label: 'מוצרים וכמויות', disabled: false, go: () => setStep(1) },
+    { number: '02', label: 'ספקים וחלוקה', disabled: !cart.length, go: () => setStep(2) },
+    { number: '03', label: 'סיכום ואישור', disabled: !cart.length || split.blocked.length > 0, go: () => void goToSummary() },
+  ];
+
   return (
     <div className="mx-auto max-w-5xl space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -748,20 +759,35 @@ export default function NewOrder() {
       </div>
 
       {/* T7.3: the wizard steps speak the floating-pill language — a white pill strip with the
-          active step as a solid oceanic pill, replacing the ruled underline tabs. */}
-      <nav aria-label="שלבי הזמנה" className="flex w-fit max-w-full flex-wrap items-center gap-1 rounded-full bg-surface/90 p-1.5 shadow-card">
-        <button type="button" onClick={() => setStep(1)} aria-current={step === 1 ? 'step' : undefined}
-          className={`chip-filter gap-2 ${step === 1 ? 'chip-filter-active' : ''}`}>
-          <span className="num text-xs">01</span><span className="font-semibold">מוצרים וכמויות</span>
-        </button>
-        <button type="button" disabled={!cart.length} onClick={() => setStep(2)} aria-current={step === 2 ? 'step' : undefined}
-          className={`chip-filter gap-2 disabled:cursor-not-allowed disabled:opacity-50 ${step === 2 ? 'chip-filter-active' : ''}`}>
-          <span className="num text-xs">02</span><span className="font-semibold">ספקים וחלוקה</span>
-        </button>
-        <button type="button" disabled={!cart.length || split.blocked.length > 0} onClick={() => void goToSummary()} aria-current={step === 3 ? 'step' : undefined}
-          className={`chip-filter gap-2 disabled:cursor-not-allowed disabled:opacity-50 ${step === 3 ? 'chip-filter-active' : ''}`}>
-          <span className="num text-xs">03</span><span className="font-semibold">סיכום ואישור</span>
-        </button>
+          active step as a solid oceanic pill, replacing the ruled underline tabs.
+          Two renderings, one nav: the pill strip needs room for three worded chips, and at phone
+          width it wrapped onto a second line, turning the rounded-full plate into a blurred
+          ellipse (owner screenshot). `hidden` is display:none, so exactly one rendering is in the
+          accessibility tree at a time — no aria-hidden, no six-button announcement. */}
+      <nav aria-label="שלבי הזמנה">
+        <div className="flex items-center gap-2 sm:hidden">
+          {steps.map((entry, index) => {
+            const active = step === index + 1;
+            return (
+              <button key={entry.number} type="button" disabled={entry.disabled} onClick={entry.go}
+                aria-current={active ? 'step' : undefined}
+                className={`grid size-11 shrink-0 place-items-center rounded-full text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${active ? 'bg-action text-on-solid' : 'bg-action-wash text-ink-mid'}`}>
+                <span className="num" aria-hidden="true">{entry.number}</span>
+                <span className="sr-only">{entry.label}</span>
+              </button>
+            );
+          })}
+          <span className="min-w-0 truncate text-sm font-semibold text-ink-body">{steps[step - 1].label}</span>
+        </div>
+        <div className="hidden w-fit max-w-full flex-wrap items-center gap-1 rounded-full bg-surface/90 p-1.5 shadow-card sm:flex">
+          {steps.map((entry, index) => (
+            <button key={entry.number} type="button" disabled={entry.disabled} onClick={entry.go}
+              aria-current={step === index + 1 ? 'step' : undefined}
+              className={`chip-filter gap-2 disabled:cursor-not-allowed disabled:opacity-50 ${step === index + 1 ? 'chip-filter-active' : ''}`}>
+              <span className="num text-xs">{entry.number}</span><span className="font-semibold">{entry.label}</span>
+            </button>
+          ))}
+        </div>
       </nav>
 
       {step === 1 ? (

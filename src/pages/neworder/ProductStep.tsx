@@ -96,12 +96,21 @@ export default function ProductStep({ products, categories, offersByProduct, car
                 aria-pressed={!!carted}
                 aria-label={`${carted ? 'ביטול בחירת' : 'בחירת'} ${product.name}`}
                 onClick={() => { if (carted) onRemove(product.id); else onAdd(product); }}>
-                <span className={`grid size-6 shrink-0 place-items-center border ${carted ? 'border-done-line bg-done-soft text-done-fg' : 'border-line text-transparent'}`} aria-hidden="true"><Check size={14} /></span>
+                {/* Choosing is not completing. This box wore the done family, which claims a step
+                    finished; a picker has nothing finished on it. The action family is what the
+                    house already uses for a chosen option — `.chip-filter-active` above is the
+                    same bg-action/text-on-solid pair, and the row's own bg-surface-selected is
+                    documented as "chosen option". Meaning does not rest on the hue either way:
+                    the glyph appears only when carted, aria-pressed sits on the parent, the label
+                    names the action, and the quantity stepper exists only for a chosen product. */}
+                <span className={`grid size-6 shrink-0 place-items-center rounded-lg border ${carted ? 'border-action bg-action text-on-solid' : 'border-line text-transparent'}`} aria-hidden="true"><Check size={14} /></span>
                 <span className="min-w-0 flex-1"><bdi className="block break-words text-sm font-medium text-ink-body sm:truncate">{product.name}</bdi><span className="text-xs text-ink-muted">{formatUnit(product.unit)}</span></span>
                 <span className={`shrink-0 text-xs text-ink-muted ${offers.length ? 'num' : ''}`}>{offers.length ? fmtMoneyExact(offers[0].current_price) : 'אין ספק'}</span>
               </button>
+              {/* overflow-hidden is load-bearing: the group carries the radius and clips its two
+                  square size-11 children, which would otherwise poke out of the rounded box. */}
               {carted && (
-                <div className="me-3 flex shrink-0 items-center border border-line-strong bg-surface sm:me-4" role="group" aria-label={`כמות ${product.name}`}>
+                <div className="me-3 flex shrink-0 items-center overflow-hidden rounded-lg border border-line-strong bg-surface sm:me-4" role="group" aria-label={`כמות ${product.name}`}>
                   <button type="button" className="grid size-11 place-items-center hover:bg-surface-hover" aria-label={`הפחתת כמות ${product.name}`} onClick={() => onQty(product.id, carted.qty - 1)}><Minus size={14} /></button>
                   <span className="min-w-10 border-x border-line py-2 text-center text-sm font-semibold num">{carted.qty}</span>
                   <button type="button" className="grid size-11 place-items-center hover:bg-surface-hover" aria-label={`הוספת כמות ${product.name}`} onClick={() => onQty(product.id, carted.qty + 1)}><Plus size={14} /></button>
