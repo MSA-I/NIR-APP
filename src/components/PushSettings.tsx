@@ -196,8 +196,8 @@ export function NotificationMatrix() {
             const busy = pending === preference.event_code;
             return (
               <li key={preference.event_code} className="py-3 first:pt-0 last:pb-0">
-                <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-                  <div className="min-w-0 flex-1">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-x-4 sm:gap-y-2">
+                  <div className="min-w-0 sm:flex-1">
                     <div className="text-sm font-medium text-ink-body">
                       {copy?.label ?? preference.event_code}
                     </div>
@@ -207,7 +207,14 @@ export function NotificationMatrix() {
                       <div className="text-xs text-ink-faint mt-0.5">ברירת המחדל — לא שינית כאן דבר</div>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  {/* ONE column below `sm`, not two — measured, not a preference. The row's content
+                      box is 256px at 320px wide (viewport − 2×16 main − 2×16 card-pad), so a
+                      two-column grid would hand each switch 124px while "התראה במערכת · פעיל" needs
+                      166px, wrapping every switch to two lines. One column gives the full 256px and
+                      nothing wraps. `.btn` is `inline-flex`, which a grid blockifies and stretches —
+                      no `w-full` needed, and `min-h-11` (the 44px touch target) is untouched. From
+                      `sm` up this is byte-for-byte the previous desktop row. */}
+                  <div className="grid gap-2 sm:flex sm:flex-wrap">
                     {(['inapp', 'push'] as Channel[]).map((channel) => {
                       const on = channel === 'push' ? preference.push_enabled : preference.inapp_enabled;
                       return (

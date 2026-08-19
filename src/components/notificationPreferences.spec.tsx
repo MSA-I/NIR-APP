@@ -168,4 +168,29 @@ describe('NotificationMatrix — per-event delivery preferences (migration 0068)
     // A refused write must not leave the UI claiming the mute happened.
     expect(switchFor('דחיפה למכשיר', DUPLICATE)).toHaveAttribute('aria-checked', 'true');
   });
+
+  /**
+   * The phone layout (owner review, 428px): the row used to be one `flex-wrap` container holding a
+   * `flex-1` text block and ~300px of switches, and at that width it came apart. The fix is
+   * structural — the switches own a one-column grid that stacks them full-width below `sm` — so the
+   * assertion is structural too. jsdom has no layout engine; a pixel expectation here would be a
+   * claim this file cannot make.
+   */
+  it('keeps the two switches in their own grid, a sibling of the label rather than its ancestor', async () => {
+    useNotificationRpcs();
+    renderMatrix();
+    await waitFor(() => expect(screen.getByText(DUPLICATE)).toBeInTheDocument());
+
+    const group = switchFor('התראה במערכת', DUPLICATE).parentElement;
+    // Both switches hang off one container...
+    expect(switchFor('דחיפה למכשיר', DUPLICATE).parentElement).toBe(group);
+    // ...that container is a grid, which is what gives each switch a full-width line on a phone...
+    expect(group?.className).toContain('grid');
+
+    // ...and it sits BESIDE the text, not around it: a label swallowed by the stretching control
+    // would be the same collapse in a new shape.
+    const label = screen.getByText(DUPLICATE);
+    expect(group?.contains(label)).toBe(false);
+    expect(group?.parentElement).toBe(label.parentElement?.parentElement);
+  });
 });
