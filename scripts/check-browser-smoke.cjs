@@ -2052,7 +2052,11 @@ async function operatorCustomers(browser) {
     await login(page, 'owner');
     await page.goto(`${baseURL}/operator#/admin/customers`);
     await page.getByRole('heading', { name: 'לקוחות' }).waitFor({ timeout: 20_000 });
-    await page.getByText('לקוח ללא פעילות בבדיקה').first().waitFor({ timeout: 20_000 });
+    // By cell role, not by text: DataTable keeps BOTH layouts mounted and hides one in CSS
+    // (ui.tsx:1009). `getByText(...).first()` picks the mobile card, which at this width is
+    // display:none, so it is found and never becomes visible. Only the desktop table has cells.
+    await page.getByRole('cell', { name: 'לקוח ללא פעילות בבדיקה' })
+      .first().waitFor({ timeout: 20_000 });
 
     // The dash belongs to the customer that never acted, and only to it.
     const dashes = await page.locator('td, .num').filter({ hasText: /^—$/ }).count();
@@ -2063,7 +2067,7 @@ async function operatorCustomers(browser) {
 
     // The row opens the customer card, and the card says what it cannot yet measure rather than
     // showing an empty panel that reads like a measurement returning nothing.
-    await page.getByText('לקוח פעיל בבדיקה').first().click();
+    await page.getByRole('cell', { name: 'לקוח פעיל בבדיקה' }).first().click();
     await page.getByRole('heading', { level: 1, name: /לקוח פעיל בבדיקה/ }).waitFor({ timeout: 20_000 });
     await page.getByText('אינם נמדדים עדיין').waitFor({ timeout: 20_000 });
     assert(

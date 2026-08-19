@@ -173,7 +173,13 @@ describe('QuickCreateProduct', () => {
     // test, which is about the price, waits forever for a message it made impossible. That is why
     // it failed intermittently, why the frequency tracked CPU load, and why re-running "fixed" it.
     // Asserting the preconditions before pressing removes the race instead of widening a timeout.
+    // 20.08.2026: the NAME is waited on too, and first. CI evidence (PR #85) showed the alert on
+    // screen was "שם מוצר הוא שדה חובה" with the name input still value="" seconds later, while
+    // supplier and price were both set -- so the interaction that vanished is the FIRST user.type
+    // after render(), on the one field this precondition did not cover. Whether waiting recovers
+    // it or merely fails precisely, "expected false to be true" named the wrong thing.
     await waitFor(() => {
+      expect((screen.getByLabelText('שם המוצר *') as HTMLInputElement).value).toBe('עגבניות שרי');
       expect((screen.getByLabelText('ספק *') as HTMLSelectElement).value).toBe('sup-cohen');
       expect((screen.getByLabelText('מחיר ליחידה *') as HTMLInputElement).value).toBe('0');
     });
