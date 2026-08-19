@@ -698,6 +698,15 @@ html { transition: --glow-x 0.45s ease-out, --glow-y 0.45s ease-out; }
       oklch(33.66% 0.058 209 / 0.15), transparent 68%);
 }
 @media (prefers-reduced-motion: reduce) { html { transition: none; } }
+/* Phone and tablet: flat canvas, no atmosphere at all (owner, 19.08.2026). The orb exists to
+   follow a pointer, and a touch device has none — it degrades to a static blob parked at its
+   initial 72%/12%, which is decoration with no reason. The body gradient goes with it: over a
+   short viewport its three stops compress into a visible smudge rather than a breath. Below
+   64rem the background is the canvas token and nothing else. */
+@media (max-width: 63.999rem) {
+  body { background-image: none; }
+  .app-glow { display: none; }
+}
 
 /* ---- Dashboard hero band (T7.3d, owner choice bg-C-hero-band 18.08.2026) ----
    One deep-oceanic band behind the top nav, greeting and money cards on מרכז הבקרה ONLY — the
