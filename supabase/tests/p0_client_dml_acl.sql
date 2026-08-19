@@ -47,6 +47,12 @@ as $$
       || 'the mandatory reason'::text
     ),
     (
+      'org_assistant_policies'::text,
+      'assistant permission policy (0164): the only legitimate writer is a SECURITY DEFINER owned '
+      || 'by postgres, so the grant buys nothing and costs a bypass of the mandatory reason and '
+      || 'the audit row to the target organization'::text
+    ),
+    (
       'price_list_shadow_runs'::text,
       'immutable automation evidence (0096): writes require the bounded shadow RPC and its '
       || 'document/job/interpretation chain; direct service DML could forge or erase evidence'::text
@@ -114,11 +120,14 @@ select pg_temp.p0_acl_assert(
 );
 
 -- The latch, in the spirit of p9_five_domains.sql's exemption-count pin: the exception list
--- stays at exactly six entries. An agent that revokes the grant on another table must edit THIS
+-- stays at exactly seven entries. An agent that revokes the grant on another table must edit THIS
 -- line and argue for it, rather than appending a row and watching the suite stay green.
+-- The seventh is org_assistant_policies (0164), and the argument is the one 0076 already made and
+-- measured: the switch that lets a confirmed assistant proposal execute may only be moved by a
+-- reasoned, audited platform command, so a service_role grant buys nothing and costs that guarantee.
 select pg_temp.p0_acl_assert(
-  (select count(*) from pg_temp.p0_service_role_write_exceptions()) = 6,
-  'the service_role write-exception list must stay at exactly six command-only tables; a new '
+  (select count(*) from pg_temp.p0_service_role_write_exceptions()) = 7,
+  'the service_role write-exception list must stay at exactly seven command-only tables; a new '
   || 'exception is a security decision, not an append'
 );
 

@@ -6,6 +6,7 @@ import { useInboxCount } from '../lib/useInboxCount';
 import { APP_NAME } from '../lib/branding';
 import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
 import Fab from './Fab';
+import AssistantPanel from './AssistantPanel';
 import NotificationBell from './NotificationBell';
 import FeedbackButton from './FeedbackButton';
 import { ConfirmDialog, useDialogLayer, useToast } from './ui';
@@ -606,6 +607,8 @@ export default function Layout() {
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             {canSearch && <div className="w-44 xl:w-64 [&_input]:rounded-full [&_input]:bg-surface/90"><GlobalSearch /></div>}
+            {/* Self-gated on assistant.ui (fail-closed); renders nothing while the flag is off. */}
+            <AssistantPanel />
             <NotificationBell />
             {feedbackOn && <FeedbackButton />}
             {topAccountMenu}
@@ -646,6 +649,7 @@ export default function Layout() {
         {/* T7.3k (owner, images #33-34 "אתה רואה את ההבדלים בשפה?"): the desktop language —
             bare round icon targets in dark ink straight on the bar, no boxed cluster. */}
         <div className="mobile-shell-actions flex shrink-0 items-center gap-0.5">
+          <AssistantPanel />
           <NotificationBell />
           <FeedbackButton />
           {canSearch && (

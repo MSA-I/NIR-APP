@@ -1,0 +1,205 @@
+// Tool 10 -- find_entity: turns what a human says out loud ("חשבונית 4471", "אחים כהן") into an
+// id the other tools can take. Backed by public.global_search(q, per_type) (0011/0069/0137/0145):
+// SECURITY INVOKER, tenant-scoped, and the reachable result TYPES are decided server-side from
+// auth_role(). Returns id + label + route only. Supplier subtitles (contact name, phone) are
+// personal_contact and are never surfaced; payment subtitles (method, reference) are dropped too.
+import { z } from "zod";
+import type {
+  EvidenceEntity,
+  Fact,
+  SourceReference,
+} from "../../../../src/lib/assistant/contracts.ts";
+import type { AssistantTool, ToolContext } from "./registry.ts";
+import {
+  failure,
+  list,
+  num,
+  record,
+  sanitizeText,
+  str,
+  UNTRUSTED_TEXT_WARNING,
+} from "./shared.ts";
+
+const KINDS = [
+  "any",
+  "invoice",
+  "supplier",
+  "order",
+  "product",
+  "payment",
+  "credit",
+] as const;
+
+const inputSchema = z
+  .object({
+    query: z.string().trim().min(2).max(80),
+    kind: z.enum(KINDS).default("any"),
+  })
+  .strict();
+
+interface EntityMapping {
+  evidence: EvidenceEntity;
+  route: (id: string) => string | null;
+  /** Whether the subtitle (always a supplier name for these types) is safe to show. */
+  keepSubtitle: boolean;
+  kindName: (typeof KINDS)[number];
+}
+
+// 'draft' (purchase request drafts, 0145) is deliberately absent: it has no evidence entity, and
+// a resolver hit the other tools cannot act on is noise.
+const ENTITY_MAP: Record<string, EntityMapping> = {
+  supplier: {
+    evidence: "supplier",
+    route: (id) => `/suppliers/${id}`,
+    keepSubtitle: false, // contact name + phone -- personal_contact
+    kindName: "supplier",
+  },
+  product: {
+    evidence: "product",
+    route: () => "/products",
+    keepSubtitle: false, // category + sku: harmless but not needed for resolution
+    kindName: "product",
+  },
+  invoice: {
+    evidence: "invoice",
+    route: (id) => `/invoices/${id}`,
+    keepSubtitle: true, // the supplier's name
+    kindName: "invoice",
+  },
+  order: {
+    evidence: "purchase_order",
+    route: (id) => `/orders/${id}`,
+    keepSubtitle: true,
+    kindName: "order",
+  },
+  payment: {
+    evidence: "payment",
+    route: () => "/payments",
+    keepSubtitle: false, // supplier · method · reference -- reference stays inside
+    kindName: "payment",
+  },
+  credit: {
+    evidence: "credit_note",
+    route: () => "/credits",
+    keepSubtitle: true,
+    kindName: "credit",
+  },
+};
+
+export const findEntity: AssistantTool = {
+  name: "find_entity",
+  description:
+    "מאתר ישות במערכת לפי טקסט חופשי — מספר חשבונית, שם ספק, מספר הזמנה, שם מוצר, מספר תשלום " +
+    "או זיכוי — ומחזיר מזהה, תווית ומסך יעד, כדי שכלים אחרים יוכלו לפעול על מה שהמשתמש נקב " +
+    "בשמו. סוגי התוצאה מוגבלים בשרת לפי התפקיד. זהו איתור, לא תשובה: הערכים הכספיים של הישות " +
+    "נמדדים בכלי הייעודי שלה.",
+  inputSchema,
+  inputJsonSchema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        minLength: 2,
+        maxLength: 80,
+        description: "מה שהמשתמש נקב בשמו: מספר מסמך, שם ספק או מוצר",
+      },
+      kind: {
+        type: "string",
+        enum: [...KINDS],
+        description: "צמצום לסוג ישות מסוים (ברירת מחדל: הכול)",
+      },
+    },
+    required: ["query"],
+    additionalProperties: false,
+  },
+  requiredRoles: ["owner", "office", "accountant"],
+  classification: "tenant_standard",
+  async run(ctx: ToolContext, input: unknown) {
+    const { query, kind } = inputSchema.parse(input);
+    const asOf = ctx.now().toISOString();
+    const filters = { query: sanitizeText(query, 80), kind };
+
+    const result = await ctx.db.rpc("global_search", {
+      q: query,
+      per_type: 5,
+    });
+    if (result.error) {
+      return failure(ctx, "entity_search_failed", "החיפוש נכשל", filters);
+    }
+
+    const hits = list(result.data)
+      .map((entry) => record(entry))
+      .filter((entry): entry is Record<string, unknown> => entry !== null);
+
+    const sources: SourceReference[] = [];
+    const dataRows: {
+      entity: EvidenceEntity;
+      id: string;
+      label: string;
+      route: string | null;
+    }[] = [];
+    for (const hit of hits) {
+      const mapping = ENTITY_MAP[str(hit.entity) ?? ""];
+      if (!mapping) continue;
+      if (kind !== "any" && mapping.kindName !== kind) continue;
+      const id = str(hit.id);
+      if (!id) continue;
+      const title = sanitizeText(hit.title, 60);
+      const subtitle = mapping.keepSubtitle ? sanitizeText(hit.subtitle, 40) : "";
+      const label = subtitle ? `${title} — ${subtitle}` : title;
+      const route = mapping.route(id);
+      dataRows.push({ entity: mapping.evidence, id, label, route });
+      sources.push(ctx.evidence.source({
+        entity: mapping.evidence,
+        entity_id: id,
+        label,
+        route,
+        classification: "tenant_standard",
+      }));
+    }
+
+    const facts: Fact[] = [ctx.evidence.fact({
+      kind: "metric.count",
+      subject: null,
+      label: "תוצאות שנמצאו לחיפוש",
+      value: dataRows.length,
+      unit: "count",
+      tool: findEntity.name,
+      as_of: asOf,
+      classification: "tenant_standard",
+    })];
+
+    // amount rides on invoice/payment/credit hits; it is already computed server-side and citable.
+    for (const hit of hits) {
+      const mapping = ENTITY_MAP[str(hit.entity) ?? ""];
+      if (!mapping || mapping.evidence !== "invoice") continue;
+      if (kind !== "any" && mapping.kindName !== kind) continue;
+      const id = str(hit.id);
+      const amount = num(hit.amount);
+      if (!id || amount === null) continue;
+      facts.push(ctx.evidence.fact({
+        kind: "invoice.total",
+        subject: { entity: "invoice", id },
+        label: `סכום החשבונית — ${sanitizeText(hit.title, 40)}`,
+        value: amount,
+        unit: "ils",
+        tool: findEntity.name,
+        as_of: asOf,
+        classification: "financial_sensitive",
+      }));
+    }
+
+    return {
+      data: dataRows,
+      complete: true,
+      failures: [],
+      filters,
+      as_of: asOf,
+      result_count: dataRows.length,
+      has_more: false,
+      facts,
+      sources,
+      warnings: dataRows.length > 0 ? [UNTRUSTED_TEXT_WARNING] : [],
+    };
+  },
+};

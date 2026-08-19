@@ -11,7 +11,20 @@
  * can raise.
  */
 
+// Imported from the dependency-free half of the assistant contracts on purpose: this file is
+// pulled in by most of the app, and `./assistant/contracts` carries Zod for its schemas.
+import { ASSISTANT_ERROR_CODES, ASSISTANT_ERROR_MESSAGES } from './assistant/errorCodes';
+
 const PATTERNS: [RegExp, string][] = [
+  // Assistant codes (contracts §8), generated from the canonical map so a failure reads
+  // identically whether it surfaced from the Edge function or from a direct RPC — one wording,
+  // not two. FIRST in the list on purpose: the generic /timeout|timed out/ pattern below would
+  // otherwise swallow assistant_provider_timeout, and /not_authorized/ sits below for the same
+  // reason notification_preference_not_authorized does.
+  ...ASSISTANT_ERROR_CODES.map((code): [RegExp, string] => [
+    new RegExp(code, 'i'),
+    ASSISTANT_ERROR_MESSAGES[code],
+  ]),
   // Two different refusals that must never read the same. One says "you used what you have"; the
   // other says "nobody has told the system what you have", which is our problem, not the
   // customer's, and sending them to buy an upgrade for it would be wrong.

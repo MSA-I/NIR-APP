@@ -1,0 +1,146 @@
+// Tool 4 -- get_purchase_metrics: the canonical purchase-money figures for a trailing window,
+// from public.get_purchase_metrics(p_from, p_to) (0113; live gross reader carries 0137's payable
+// fence). The window anchors on the current business day in Asia/Jerusalem and uses the product's
+// own trailing definition (0165: `>= today - N`). Committed and gross are never netted against
+// each other, and gross buckets by invoice_date -- the day the supplier billed, not intake day.
+import { z } from "zod";
+import {
+  type Fact,
+  TIME_WINDOW_DAYS,
+  TIME_WINDOW_LABELS,
+  TIME_WINDOWS,
+} from "../../../../src/lib/assistant/contracts.ts";
+import { addCalendarDays, toZoneISO } from "../time.ts";
+import type { AssistantTool, ToolContext } from "./registry.ts";
+import { failure, num, record } from "./shared.ts";
+
+const inputSchema = z
+  .object({ window: z.enum(TIME_WINDOWS).default("last_30_days") })
+  .strict();
+
+export const getPurchaseMetrics: AssistantTool = {
+  name: "get_purchase_metrics",
+  description:
+    "מדדי הרכש הקנוניים לחלון נגרר (7/30/90 יום אחורה מהיום העסקי): התחייבות — הזמנות שאינן " +
+    "טיוטה ולא בוטלו, במחירי הרגע שבו הוזמנו, לפי יום היצירה העסקי; הוצאה ברוטו — חשבוניות ספק " +
+    "מאושרות בלבד, לפי תאריך החשבונית (מתי הספק חייב) ולא לפי מועד הקליטה; זיכויים שהוכרו — " +
+    "offset/closed בלבד; זיכויים ממתינים בנפרד; ונטו = ברוטו פחות זיכויים שהוכרו. " +
+    "ערך שמקורו ריק מוחזר null, לא אפס. התחייבות והוצאה הם שני מובנים שונים ואין לחבר אותם.",
+  inputSchema,
+  inputJsonSchema: {
+    type: "object",
+    properties: {
+      window: {
+        type: "string",
+        enum: [...TIME_WINDOWS],
+        description: "החלון הנגרר למדידה (ברירת מחדל: 30 הימים האחרונים)",
+      },
+    },
+    required: [],
+    additionalProperties: false,
+  },
+  requiredRoles: ["owner", "office", "accountant"],
+  classification: "financial_sensitive",
+  async run(ctx: ToolContext, input: unknown) {
+    const { window } = inputSchema.parse(input);
+    const asOf = ctx.now().toISOString();
+    const to = toZoneISO(ctx.now());
+    const from = addCalendarDays(to, -TIME_WINDOW_DAYS[window]);
+    const windowLabel = TIME_WINDOW_LABELS[window];
+    const filters: Record<string, string | number | boolean | null> = {
+      window,
+      from,
+      to,
+      time_zone: "Asia/Jerusalem",
+    };
+
+    const result = await ctx.db.rpc("get_purchase_metrics", {
+      p_from: from,
+      p_to: to,
+    });
+    if (result.error) {
+      const message = result.error.message ?? "";
+      if (message.includes("not_authorized")) {
+        return failure(ctx, "not_permitted", "אין הרשאה למדדי הרכש", filters);
+      }
+      return failure(ctx, "purchase_metrics_failed", "שליפת מדדי הרכש נכשלה", filters);
+    }
+    const metrics = record(result.data);
+    if (!metrics) {
+      return failure(
+        ctx,
+        "purchase_metrics_malformed",
+        "מדדי הרכש לא התקבלו במבנה תקין",
+        filters,
+      );
+    }
+    // OPEN-DECISIONS #147: the product's own definition of "net" is RELAYED, never restated.
+    // The RPC names it; the answer quotes it from here rather than the model composing one.
+    const netDefinition = typeof metrics.net_definition === "string"
+      ? metrics.net_definition
+      : null;
+    filters.net_definition = netDefinition;
+
+    const facts: Fact[] = [];
+    const money = (key: string, label: string) => {
+      facts.push(ctx.evidence.fact({
+        kind: "metric.money",
+        subject: null,
+        label: `${label} — ${windowLabel}`,
+        value: num(metrics[key]),
+        unit: "ils",
+        tool: getPurchaseMetrics.name,
+        as_of: asOf,
+        classification: "financial_sensitive",
+      }));
+    };
+    const count = (key: string, label: string) => {
+      facts.push(ctx.evidence.fact({
+        kind: "metric.count",
+        subject: null,
+        label: `${label} — ${windowLabel}`,
+        value: num(metrics[key]),
+        unit: "count",
+        tool: getPurchaseMetrics.name,
+        as_of: asOf,
+        classification: "tenant_standard",
+      }));
+    };
+    money("committed", "התחייבות בהזמנות (במחירי הזמנה, לפי יום יצירה עסקי)");
+    count("committed_order_count", "מספר ההזמנות שנמדדו להתחייבות");
+    money("gross_expense", "הוצאה ברוטו (חשבוניות מאושרות, לפי תאריך החשבונית)");
+    count("gross_invoice_count", "מספר החשבוניות המאושרות שנמדדו");
+    money("credits_recognised", "זיכויים שהוכרו (offset/closed בלבד)");
+    money("credits_pending", "זיכויים שסוכמו וטרם קוזזו");
+    money("net_expense", "הוצאה נטו (ברוטו פחות זיכויים שהוכרו)");
+
+    // /expenses is an owner+accountant route; office reads these same figures on the dashboard.
+    // A source must point at a screen its reader can actually open.
+    const officeActor = ctx.actor.role === "office";
+    const source = ctx.evidence.source({
+      entity: "organization",
+      entity_id: ctx.actor.orgId,
+      label: officeActor ? "מרכז הבקרה" : "מסך ההוצאות",
+      route: officeActor ? "/dashboard" : "/expenses",
+      classification: "financial_sensitive",
+    });
+
+    return {
+      data: [metrics],
+      complete: true,
+      failures: [],
+      filters,
+      as_of: asOf,
+      result_count: 1,
+      has_more: false,
+      facts,
+      sources: [source],
+      warnings: [
+        "התחייבות (הזמנות) והוצאה (חשבוניות) הם שני מובנים שונים של אותו חלון — אין לחבר או לקזז ביניהם.",
+        netDefinition
+          ? `הגדרת הנטו של המוצר עצמו (יש לצטט אותה, לא לנסח מחדש): ${netDefinition}`
+          : "השרת לא החזיר את הגדרת הנטו (net_definition) — אין להמציא הגדרה במקומה.",
+      ],
+    };
+  },
+};

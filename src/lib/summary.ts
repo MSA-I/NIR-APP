@@ -1,7 +1,6 @@
 import { supabase } from './supabase';
 import { scanAlerts, type Alert } from './alerts';
-import { addCalendarDays, todayISO } from './format';
-import { readExactCount } from './queryResult';
+import { SUMMARY_METRIC_LINES, type SummaryUnit } from './assistant/summaryLines.ts';
 
 /**
  * Business summary (סעיף 10).
@@ -15,10 +14,19 @@ import { readExactCount } from './queryResult';
  * no API key, no per-call cost. The "recommendations" line is the alert scan, which is the
  * honest version of the same idea: conditions that actually hold, not generated prose.
  *
+ * Since 0165 the METRIC DEFINITIONS live in SQL — `p2_business_summary_rows()` — because the
+ * summary now has two consumers: this screen and the assistant tool `get_business_summary`.
+ * One server-side definition is the only arrangement under which they cannot silently
+ * diverge; this module keeps the labels, routes and the null-vs-zero discipline, and
+ * `summary.spec.ts` fails the build if a direct table query for these metrics ever returns
+ * here. The per-metric failure isolation that Promise.allSettled used to provide is now the
+ * function's own exception blocks: a failed metric arrives as `measured: false` and never
+ * blanks its four neighbours.
+ *
  * ponytail: swap in a language model only when the questions stop being countable.
  */
 
-export type SummaryUnit = 'count' | 'currency';
+export type { SummaryUnit } from './assistant/summaryLines.ts';
 
 export interface SummaryLine {
   key: string;
@@ -29,21 +37,28 @@ export interface SummaryLine {
   to: string;
 }
 
-const WEEK_DAYS = 7;
-const PRICE_INCREASE_WINDOW_DAYS = 30;
+// The wording, unit and route per metric live in ./assistant/summaryLines.ts — a dependency-free
+// module, because the assistant Edge function consumes the same table and cannot import this
+// file (it pulls in the Supabase browser client).
 
-function daysAgo(n: number): string {
-  return addCalendarDays(todayISO(), -n);
+interface SummaryMetricRow {
+  metric_key: string;
+  value: number | string | null;
+  measured: boolean;
 }
 
-async function rpcNumber(
-  request: PromiseLike<{ data: unknown; error: { message: string } | null }>,
-): Promise<number> {
-  const { data, error } = await request;
-  if (error) throw new Error(error.message);
-  const value = Number(data);
-  if (!Number.isFinite(value) || value < 0) throw new Error('metric_unavailable');
-  return value;
+/** One round-trip for all five metrics. null means the call itself failed — every metric is unknown. */
+async function fetchMetricRows(): Promise<Map<string, SummaryMetricRow> | null> {
+  const { data, error } = await supabase.rpc('p2_business_summary_rows');
+  if (error || !Array.isArray(data)) return null;
+  return new Map((data as SummaryMetricRow[]).map((row) => [row.metric_key, row]));
+}
+
+/** Same guard the per-metric rpcNumber applied: a non-finite or negative figure is no figure. */
+function metricValue(row: SummaryMetricRow | undefined): number | null {
+  if (!row || !row.measured || row.value == null) return null;
+  const value = Number(row.value);
+  return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 export interface Summary {
@@ -55,51 +70,12 @@ export interface Summary {
 }
 
 export async function buildSummary(): Promise<Summary> {
-  const definitions: (Omit<SummaryLine, 'value'> & { run: () => Promise<number> })[] = [
-    // 1. invoices received this week
-    { key: 'received_week', label: `חשבוניות שנקלטו ב-${WEEK_DAYS} הימים האחרונים`, unit: 'count', to: '/invoices', run: () => readExactCount(
-      supabase.from('invoices').select('id', { count: 'exact', head: true })
-        .eq('financial_role', 'payable').is('deleted_at', null).gte('received_date', daysAgo(WEEK_DAYS)),
-    ) },
-
-    // 2. invoices awaiting approval.
-    //    Reads invoices.review_status literally, because the line says "חשבוניות".
-    //    Dashboard.tsx:124 counts `received|in_review` for its own card, which is a different
-    //    set — that divergence is open decision #1 in docs/OPEN-DECISIONS.md and is owned by the
-    //    sections 1-6 work. When it is settled, this constant follows it rather than forking
-    //    a third interpretation.
-    { key: 'awaiting_approval', label: 'חשבוניות הממתינות לאישור', unit: 'count', to: '/invoices', run: () => readExactCount(
-      supabase.from('invoices').select('id', { count: 'exact', head: true })
-        .eq('financial_role', 'payable').is('deleted_at', null).eq('review_status', 'pending_approval'),
-    ) },
-
-    // 3. money committed on active payment requests
-    { key: 'expected_payments', label: 'סכום פתוח בדרישות תשלום', unit: 'currency', to: '/payment-requests', run: () => rpcNumber(
-      supabase.rpc('p2_active_payment_request_total'),
-    ) },
-
-    // 4. distinct suppliers who raised a catalogue price in the window
-    { key: 'suppliers_raised', label: `ספקים שהעלו מחיר ב-${PRICE_INCREASE_WINDOW_DAYS} הימים האחרונים`, unit: 'count', to: '/prices', run: () => rpcNumber(
-      supabase.rpc('p2_suppliers_with_price_increase_since', {
-        p_since: daysAgo(PRICE_INCREASE_WINDOW_DAYS),
-      }),
-    ) },
-
-    // 5. exceptions still needing a decision
-    { key: 'open_exceptions', label: 'חריגים פתוחים', unit: 'count', to: '/exceptions', run: () => readExactCount(
-      supabase.from('exceptions').select('id', { count: 'exact', head: true }).in('status', ['open', 'in_progress']),
-    ) },
-  ];
-  const [settled, alertScan] = await Promise.all([
-    Promise.allSettled(definitions.map((definition) => definition.run())),
-    scanAlerts(),
-  ]);
+  const [rows, alertScan] = await Promise.all([fetchMetricRows(), scanAlerts()]);
   const failures: { code: string; label: string }[] = [...alertScan.failures];
-  const lines = definitions.map(({ run: _run, ...definition }, index): SummaryLine => {
-    const result = settled[index];
-    if (result.status === 'fulfilled') return { ...definition, value: result.value };
-    failures.push({ code: definition.key, label: definition.label });
-    return { ...definition, value: null };
+  const lines = SUMMARY_METRIC_LINES.map((definition): SummaryLine => {
+    const value = metricValue(rows?.get(definition.key));
+    if (value == null) failures.push({ code: definition.key, label: definition.label });
+    return { ...definition, value };
   });
 
   return { lines, alerts: alertScan.alerts, complete: failures.length === 0, failures, generatedAt: new Date() };

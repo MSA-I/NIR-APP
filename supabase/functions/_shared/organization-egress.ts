@@ -5,7 +5,8 @@ export type OrganizationEgressKind =
   | "integration_webhook"
   | "document_signed_url"
   | "whatsapp_reminder"
-  | "organization_logo_storage";
+  | "organization_logo_storage"
+  | "assistant";
 
 export type OrganizationEgressOutcome =
   | "delivered"
@@ -75,6 +76,7 @@ const KINDS = new Set<OrganizationEgressKind>([
   "document_signed_url",
   "whatsapp_reminder",
   "organization_logo_storage",
+  "assistant",
 ]);
 
 function leaseRow(

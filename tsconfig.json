@@ -13,6 +13,11 @@
     "esModuleInterop": true,
     "isolatedModules": true,
     "noEmit": true,
+    // The assistant contracts are one file read by two runtimes: Vite for the browser and Deno for
+    // the Edge function. Deno cannot resolve an extension-less relative import, so the shared files
+    // spell the extension out. Legal here because nothing is emitted and resolution is the
+    // bundler's.
+    "allowImportingTsExtensions": true,
     "types": ["vite/client"]
   },
   "include": ["src"]

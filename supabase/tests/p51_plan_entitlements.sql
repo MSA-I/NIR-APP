@@ -88,12 +88,24 @@ select pg_temp.p51_assert(
   and (select unlimited from plan_entitlements
     where plan_key = 'legacy' and entitlement_key = 'ocr_pages.monthly'),
   'a page quota was applied to a plan that limits no documents');
+-- The pin below was one assertion until 0164 introduced a metric whose limit nobody has decided
+-- yet. Splitting it keeps both teeth rather than blunting one: a STATED number outside the two
+-- decided limits still fails, and the unknown-that-refuses state is pinned to exactly the one key
+-- allowed to hold it. A single relaxed assertion would have let any future metric ship as
+-- "unknown" and read as green.
 select pg_temp.p51_assert(
   not exists (
     select 1 from plan_entitlements
     where entitlement_key not in ('documents.monthly', 'ocr_pages.monthly')
-      and ((kind = 'numeric' and not unlimited) or (kind = 'boolean' and boolean_value is not true))),
+      and ((kind = 'numeric' and not unlimited and numeric_limit is not null)
+        or (kind = 'boolean' and boolean_value is not true))),
   'an entitlement beyond the two decided limits became restrictive without a decision');
+select pg_temp.p51_assert(
+  not exists (
+    select 1 from plan_entitlements
+    where entitlement_key <> 'assistant_runs.monthly'
+      and kind = 'numeric' and not unlimited and numeric_limit is null),
+  'an entitlement beyond the assistant run quota entered the unknown-that-refuses state without a decision');
 
 -- ===== Fixture =====
 insert into public.organizations (id, name, status, created_at) values
