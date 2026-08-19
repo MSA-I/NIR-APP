@@ -1,11 +1,11 @@
 import { CreditCard, X } from 'lucide-react';
-import { useCallback, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
 import { useParamState } from '../lib/useParamState';
-import { DataTable, ErrorNote, PageHeader, SkeletonTable, useToast, type ServerColumn } from '../components/ui';
+import { DataTable, ErrorNote, Modal, PageHeader, SkeletonTable, useToast, type ServerColumn } from '../components/ui';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import type { Payment } from '../lib/types';
 import {
@@ -24,9 +24,11 @@ import {
 } from '../lib/serverList';
 import { financialSupplierMap } from '../lib/financialSuppliers';
 
+/** `invoice` is nullable on purpose: an allocation whose invoice is soft-deleted or unreadable
+    under RLS still carries money, and the detail card names it instead of dropping it. */
 type Row = Omit<Payment, 'supplier'> & {
   supplier: { name: string };
-  allocations: { amount: number; invoice: { invoice_number: string } | null }[];
+  allocations: { amount: number; invoice: { id: string; invoice_number: string } | null }[];
   executor: { full_name: string } | null;
 };
 
@@ -61,6 +63,7 @@ export default function Payments() {
 
   const page = pageFromParam(pageParam);
   const uiSort = parseSortParam(sortParam, SORTABLE_COLUMNS);
+  const [selected, setSelected] = useState<Row | null>(null);
 
   const { data, loading, fetching, error } = useQuery(
     async () => {
@@ -81,7 +84,7 @@ export default function Payments() {
       }
       const result = await fetchServerList<Row>(supabase, {
         table: 'payments',
-        select: '*, allocations:payment_allocations(amount, invoice:invoices(invoice_number)), executor:profiles!p0_payments_actor_tenant_fk(full_name)',
+        select: '*, allocations:payment_allocations(amount, invoice:invoices(id, invoice_number)), executor:profiles!p0_payments_actor_tenant_fk(full_name)',
         predicates,
         sort: uiSort
           ? [{ column: SORT_COLUMN[uiSort[0].column], ascending: uiSort[0].ascending }]
@@ -111,6 +114,18 @@ export default function Payments() {
     if (data.rows.length === 0) patchParams({ id: '' });
   }, [idFilter, fetching, data, patchParams]);
 
+  // ?id= already pins one payment, so a shared link should land on the card, not on a one-row
+  // table the reader still has to click. Keyed on the id that was opened: a background refetch
+  // hands back a fresh `data` object, and that must not reopen a card the reader closed.
+  const autoOpened = useRef<string | null>(null);
+  useEffect(() => {
+    if (!idFilter || fetching || !data || data.rows.length !== 1) return;
+    const only = data.rows[0];
+    if (autoOpened.current === only.id) return;
+    autoOpened.current = only.id;
+    setSelected(only);
+  }, [idFilter, fetching, data]);
+
   const handledReset = useRef<ServerListPageReset | null>(null);
   useEffect(() => {
     const reset = data?.pageReset ?? null;
@@ -129,9 +144,11 @@ export default function Payments() {
     { key: 'ref', header: 'אסמכתא', render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
     { key: 'executor', header: 'בוצע על ידי', priority: 3, render: (r) => r.executor?.full_name ?? '—' },
     {
+      // Every allocation is listed, hidden invoices included: filtering them away turned a
+      // payment whose invoices are all unreadable into '—', which reads as "covered nothing".
       key: 'invoices', header: 'חשבוניות', priority: 3, render: (r) => (
         <span className="text-ink-muted" dir="ltr">
-          {r.allocations.filter((a) => a.invoice).map((a) => a.invoice!.invoice_number).join(', ') || '—'}
+          {r.allocations.map((a) => a.invoice?.invoice_number ?? 'לא זמינה').join(', ') || '—'}
         </span>
       ),
     },
@@ -152,6 +169,8 @@ export default function Payments() {
         meta={`${data.total} תשלומים שנרשמו${activeFilters ? ' · תצוגה מסוננת' : ''}`} />
       <DataTable rows={data.rows} columns={columns}
         error={error}
+        onRowClick={(row) => setSelected(row)}
+        rowLabel={(r) => `תשלום #${r.number}`}
         server={{
           total: data.total,
           page,
@@ -180,6 +199,60 @@ export default function Payments() {
           </>
         }
         emptyTitle="טרם בוצעו תשלומים" emptySubtitle="תשלומים שבוצעו יופיעו כאן כיומן כספי." />
+      {selected && <PaymentDetail payment={selected} onClose={() => setSelected(null)} />}
     </div>
+  );
+}
+
+/**
+ * Everything on this card is already on the loaded row, so it is a modal and not a route.
+ *
+ * The two questions it cannot answer are named rather than guessed at: `payments` carries
+ * `executed_by` (the performer, shown here) but no approver and no approval time — who approved
+ * lives in `payment_requests` and `audit_logs` — and `payment_request_id` is on the row but
+ * /payment-requests has no ?id= deep link to send it to.
+ */
+function PaymentDetail({ payment, onClose }: { payment: Row; onClose: () => void }) {
+  return (
+    <Modal open onClose={onClose} title={`תשלום #${payment.number} — ${payment.supplier.name}`}>
+      <div className="space-y-4">
+        <dl className="grid gap-3 text-sm sm:grid-cols-2">
+          <div><dt className="text-ink-muted">ספק</dt><dd className="font-medium">{payment.supplier.name}</dd></div>
+          <div><dt className="text-ink-muted">סכום</dt><dd className="font-semibold num">{fmtMoneyExact(payment.amount)}</dd></div>
+          <div><dt className="text-ink-muted">תאריך תשלום</dt><dd className="num">{fmtDate(payment.paid_date)}</dd></div>
+          <div><dt className="text-ink-muted">אמצעי תשלום</dt><dd>{payment.method ?? '—'}</dd></div>
+          <div><dt className="text-ink-muted">אסמכתא</dt><dd dir="ltr">{payment.reference ?? '—'}</dd></div>
+          <div><dt className="text-ink-muted">בוצע על ידי</dt><dd>{payment.executor?.full_name ?? '—'}</dd></div>
+        </dl>
+
+        {payment.notes && <div className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-3 py-2">{payment.notes}</div>}
+
+        <div>
+          <div className="text-sm font-medium text-ink-soft mb-1.5">חשבוניות שכוסו בתשלום</div>
+          {payment.allocations.length ? (
+            <ul className="divide-y divide-line-soft border border-line-soft rounded-lg text-sm">
+              {payment.allocations.map((allocation, index) => (
+                <li key={allocation.invoice?.id ?? `unavailable-${index}`}>
+                  {allocation.invoice ? (
+                    <Link to={`/invoices/${allocation.invoice.id}`} onClick={onClose}
+                      className="row-hover flex min-h-11 items-center justify-between gap-3 px-3 py-2">
+                      <span>חשבונית <b dir="ltr" className="num">{allocation.invoice.invoice_number}</b></span>
+                      <span className="num font-medium">{fmtMoneyExact(allocation.amount)}</span>
+                    </Link>
+                  ) : (
+                    // Kept, never filtered: this row carries money, and a detail card that hides
+                    // part of the sum tells the reader the payment is smaller than it is.
+                    <div className="flex min-h-11 items-center justify-between gap-3 px-3 py-2">
+                      <span className="text-await-fg">חשבונית שאינה זמינה לצפייה</span>
+                      <span className="num font-medium">{fmtMoneyExact(allocation.amount)}</span>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : <div className="text-sm text-await-fg">התשלום אינו מקושר לחשבוניות</div>}
+        </div>
+      </div>
+    </Modal>
   );
 }
