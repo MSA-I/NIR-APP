@@ -15,6 +15,8 @@ const fetchCustomerContacts = vi.fn();
 const fetchCustomerNotes = vi.fn();
 const fetchCustomerTimeline = vi.fn();
 const fetchPlatformOperators = vi.fn();
+const fetchCustomerOnboarding = vi.fn();
+const fetchCustomerHealth = vi.fn();
 
 vi.mock('../lib/platform', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/platform')>()),
@@ -24,6 +26,8 @@ vi.mock('../lib/platform', async (importOriginal) => ({
   fetchCustomerNotes: () => fetchCustomerNotes(),
   fetchCustomerTimeline: () => fetchCustomerTimeline(),
   fetchPlatformOperators: () => fetchPlatformOperators(),
+  fetchCustomerOnboarding: () => fetchCustomerOnboarding(),
+  fetchCustomerHealth: () => fetchCustomerHealth(),
 }));
 
 const detail = (over: Partial<Detail> = {}): Detail => ({
@@ -89,6 +93,8 @@ beforeEach(() => {
   fetchCustomerNotes.mockResolvedValue([note()]);
   fetchCustomerTimeline.mockResolvedValue([]);
   fetchPlatformOperators.mockResolvedValue([{ user_id: 'op-1', email: 'ops@inplace.test', note: null, roles: ['customer_ops'] }]);
+  fetchCustomerOnboarding.mockResolvedValue([]);
+  fetchCustomerHealth.mockResolvedValue(null);
 });
 
 describe('כרטיס הלקוח של מסוף התפעול', () => {
@@ -96,7 +102,9 @@ describe('כרטיס הלקוח של מסוף התפעול', () => {
     renderScreen();
     await screen.findByRole('heading', { level: 1, name: /מסעדת הגפן/ });
 
-    expect(screen.getByText(/אינם נמדדים עדיין/)).toBeInTheDocument();
+    // The card names its own blind spot rather than leaving an empty panel that reads like a
+    // measurement returning nothing. The sentence moved as waves landed; the claim did not.
+    expect(screen.getByText(/אינן ניתנות למדידה/)).toBeInTheDocument();
     // A customer with no start date recorded shows a dash, not today's date and not a zero.
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });

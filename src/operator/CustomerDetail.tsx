@@ -13,12 +13,15 @@ import {
 import {
   addInternalNote, fetchCustomerContacts, fetchCustomerDetail, fetchCustomerNotes,
   fetchCustomerTimeline, fetchMyCapabilities, fetchOrgEntitlements, fetchOrgSubscription,
+  fetchCustomerHealth, fetchCustomerOnboarding,
   fetchOrgUsage, fetchPlatformOperators, fetchSubscriptionPlans, removeCustomerContact,
   resolveFollowUp, setCustomerAccount, upsertCustomerContact,
   type CustomerContact, type CustomerNote, type PlatformCapability,
 } from '../lib/platform';
 import CustomerSubscription from './CustomerSubscription';
 import CustomerUsage from './CustomerUsage';
+import CustomerHealth from './CustomerHealth';
+import CustomerOnboarding from './CustomerOnboarding';
 
 const CONTACT_KINDS = ['primary', 'billing', 'technical'] as const;
 
@@ -50,10 +53,12 @@ export default function CustomerDetail() {
         return {
           capabilities, detail: null, contacts: [], notes: [], timeline: [], operators: [],
           subscription: null, entitlements: [], plans: [], usage: [],
+          onboarding: [], health: null,
         };
       }
       const billing = capabilities.includes('billing.view');
-      const [detail, contacts, timeline, operators, notes, subscription, entitlements, plans, usage]
+      const [detail, contacts, timeline, operators, notes, subscription, entitlements, plans,
+             usage, onboarding, health]
         = await Promise.all([
           fetchCustomerDetail(orgId),
           fetchCustomerContacts(orgId),
@@ -64,10 +69,12 @@ export default function CustomerDetail() {
           billing ? fetchOrgEntitlements(orgId) : Promise.resolve([]),
           billing ? fetchSubscriptionPlans() : Promise.resolve([]),
           capabilities.includes('usage.view') ? fetchOrgUsage(orgId) : Promise.resolve([]),
+          fetchCustomerOnboarding(orgId),
+          fetchCustomerHealth(orgId),
         ]);
       return {
         capabilities, detail, contacts, notes, timeline, operators,
-        subscription, entitlements, plans, usage,
+        subscription, entitlements, plans, usage, onboarding, health,
       };
     },
     [orgId],
@@ -158,9 +165,19 @@ export default function CustomerDetail() {
         {/* Waves 3-5 own plan, usage, onboarding and health. Saying so beats an empty card that
             looks like a measurement returning nothing. */}
         <p className="text-xs text-ink-muted">
-          השלמת onboarding ומצב בריאות אינם נמדדים עדיין ואינם מוצגים.
+          חלק מאבני הדרך אינן ניתנות למדידה בסכימה הזו ומסומנות ככאלה במקום להיראות כלא-בוצעו.
         </p>
       </section>
+
+      <CustomerHealth health={data?.health ?? null} />
+
+      <CustomerOnboarding
+        orgId={orgId}
+        steps={data?.onboarding ?? []}
+        may={may}
+        busy={busy}
+        run={(action, done) => void run(action, done)}
+      />
 
       {may('billing.view') && (
         <CustomerSubscription

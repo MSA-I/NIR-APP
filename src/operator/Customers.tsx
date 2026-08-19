@@ -44,6 +44,8 @@ const ATTENTION_FILTERS: { key: string; label: string; value: CustomerAttention 
   { key: 'offboarding', label: 'בתהליך סיום שירות', value: 'offboarding' },
   { key: 'no_users', label: 'ללא משתמשים פעילים', value: 'no_users' },
   { key: 'dormant', label: 'ללא פעילות 30 יום', value: 'dormant' },
+  { key: 'onboarding_stalled', label: 'הקמה נתקעה', value: 'onboarding_stalled' },
+  { key: 'processing_failures', label: 'כשלי עיבוד מסמכים', value: 'processing_failures' },
 ];
 
 export default function Customers() {

@@ -30,7 +30,9 @@ export type PlatformCapability =
 
 /** Attention filters accepted by platform_customers(). An unknown value is rejected by the
     server rather than quietly returning nothing, so this union is the whole set. */
-export type CustomerAttention = 'offboarding' | 'suspended' | 'no_users' | 'dormant';
+export type CustomerAttention =
+  | 'offboarding' | 'suspended' | 'no_users' | 'dormant'
+  | 'onboarding_stalled' | 'processing_failures';
 
 export interface CustomerListRequest {
   search: string;
@@ -400,4 +402,65 @@ export interface UsageRow {
 
 export async function fetchOrgUsage(orgId: string): Promise<UsageRow[]> {
   return (await rpc<UsageRow[]>('platform_org_usage', { p_org_id: orgId })) ?? [];
+}
+
+/* ---------- Wave 5: activation, onboarding, health (0156) ---------- */
+
+/** `measured: false` means this schema holds no evidence either way — never "not yet done". */
+export interface ActivationMilestone {
+  milestone_key: string;
+  label: string;
+  sort_order: number;
+  achieved_at: string | null;
+  measured: boolean;
+  source: 'audit_ledger' | 'direct' | 'unavailable';
+}
+
+export interface OnboardingStep {
+  step_key: string;
+  label: string;
+  sort_order: number;
+  state: 'completed' | 'in_progress' | 'blocked' | 'skipped' | 'not_started';
+  source: 'product_event' | 'operator_manual' | 'none';
+  achieved_at: string | null;
+  reason: string | null;
+  recorded_by_email: string | null;
+  recorded_at: string | null;
+}
+
+export interface HealthSignal {
+  code: string;
+  severity: 'alert' | 'warn' | 'good';
+  detail: string;
+}
+
+export interface CustomerHealth {
+  org_id: string;
+  status: 'healthy' | 'needs_attention' | 'at_risk' | 'unknown';
+  evaluated_at: string;
+  last_activity_at: string | null;
+  signals: HealthSignal[];
+}
+
+export async function fetchCustomerActivation(orgId: string): Promise<ActivationMilestone[]> {
+  return (await rpc<ActivationMilestone[]>('platform_customer_activation', { p_org_id: orgId })) ?? [];
+}
+
+export async function fetchCustomerOnboarding(orgId: string): Promise<OnboardingStep[]> {
+  return (await rpc<OnboardingStep[]>('platform_customer_onboarding', { p_org_id: orgId })) ?? [];
+}
+
+export function fetchCustomerHealth(orgId: string): Promise<CustomerHealth | null> {
+  return rpc<CustomerHealth | null>('platform_customer_health', { p_org_id: orgId });
+}
+
+export function setOnboardingStep(input: {
+  orgId: string; stepKey: string; state: string; reason: string;
+}): Promise<unknown> {
+  return rpc('platform_set_onboarding_step', {
+    p_org_id: input.orgId,
+    p_step_key: input.stepKey,
+    p_state: input.state,
+    p_reason: input.reason,
+  });
 }

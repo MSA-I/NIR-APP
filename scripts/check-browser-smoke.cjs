@@ -1959,6 +1959,27 @@ async function operatorCustomers(browser) {
   await context.route('**/rest/v1/rpc/platform_customer_contacts*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/rpc/platform_customer_notes*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/rpc/platform_customer_timeline*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
+  await context.route('**/rest/v1/rpc/platform_customer_onboarding*', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: [
+      { step_key: 'suppliers_imported', label: 'ספקים הוזנו', sort_order: 20, state: 'completed',
+        source: 'product_event', achieved_at: '2026-02-05T08:00:00.000Z', reason: null,
+        recorded_by_email: null, recorded_at: null },
+      { step_key: 'team_invited', label: 'הצוות הוזמן', sort_order: 50, state: 'not_started',
+        source: 'none', achieved_at: null, reason: null, recorded_by_email: null, recorded_at: null },
+    ],
+  }));
+  await context.route('**/rest/v1/rpc/platform_customer_health*', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: {
+      org_id: 'p4-customer-active', status: 'needs_attention',
+      evaluated_at: '2026-08-19T18:00:00.000Z', last_activity_at: '2026-08-05T10:00:00.000Z',
+      signals: [{ code: 'activity_slowing', severity: 'warn',
+                  detail: 'הפעילות האחרונה הייתה לפני יותר משבועיים' }],
+    },
+  }));
   await context.route('**/rest/v1/rpc/platform_customers*', (route) => route.fulfill({
     status: 200,
     headers: jsonHeaders,
@@ -2000,6 +2021,15 @@ async function operatorCustomers(browser) {
       !(await page.content()).includes('הערות פנימיות'),
       'the notes panel rendered for an operator holding no notes.view',
     );
+    // Health shows the reason, never a score; a step the product completed offers no manual
+    // record, because there is nothing to record.
+    await page.getByText('דורש תשומת לב').first().waitFor({ timeout: 20_000 });
+    await page.getByText('לפני יותר משבועיים').first().waitFor({ timeout: 20_000 });
+    assert(
+      (await page.getByText('לפי פעולה במוצר').count()) > 0,
+      'a step completed by a product event did not say so',
+    );
+
     await auditAccessibility(page, 'operator-customer-detail');
     await page.goto(`${baseURL}/operator#/admin/customers`);
     await page.getByRole('heading', { name: 'לקוחות' }).waitFor({ timeout: 20_000 });
