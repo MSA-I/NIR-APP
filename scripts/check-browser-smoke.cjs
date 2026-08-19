@@ -1922,6 +1922,14 @@ async function operatorRefusal(browser) {
     await page.waitForFunction(() => location.pathname === '/dashboard', null, { timeout: 25_000 });
     await page.locator('#main').waitFor({ state: 'visible', timeout: 25_000 });
     assert(!(await page.content()).includes('תפעול פלטפורמה'), 'a tenant without platform membership reached the operator console');
+
+    // And the other direction: /admin is not merely un-navigable, it is not a route in the tenant
+    // application any more. A bundle grep proves the code is absent; only a real navigation proves
+    // the PATH is. It falls through the catch-all to the tenant home, which is what "the routes and
+    // the imports left the tenant app" has to mean in practice.
+    await page.goto(`${baseURL}/admin`);
+    await page.waitForFunction(() => location.pathname === '/dashboard', null, { timeout: 25_000 });
+    assert(!(await page.content()).includes('תפעול פלטפורמה'), '/admin still resolves to the operator console inside the tenant app');
   } finally {
     await closeContext(context);
   }

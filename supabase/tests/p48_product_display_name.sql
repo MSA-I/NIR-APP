@@ -166,7 +166,12 @@ end
 $$;
 
 -- ===== 6. Accountant may read the catalogue but may not rename it =====
+-- Identity is swapped from outside the role, the p16 idiom: setting a request claim while already
+-- inside `authenticated` works today but depends on GUC permissions rather than on the contract
+-- under test, and a suite should not rest on that.
+reset role;
 select set_config('request.jwt.claim.sub', '58000000-0000-4000-8000-000000000002', true);
+set local role authenticated;
 do $$
 begin
   perform public.set_product_display_name(
