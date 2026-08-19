@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { reasonOr } from '../lib/reason';
+import { reasonDemandFor } from '../lib/transitionIntent';
 import { toHebrewError } from '../lib/errors';
 import { useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
@@ -454,6 +455,24 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
   );
 }
 
+/**
+ * The label the audit line carries when the approver typed nothing — the same words as the button
+ * that was pressed, so the ledger sentence reads as an action a person would recognise.
+ *
+ * Only the destinations this screen's buttons can actually reach are listed. `investigation` and
+ * `suspected_duplicate` are legal server-side but no button here goes to them, so naming a verb for
+ * them would be inventing copy for a path that does not exist.
+ */
+const PAYMENT_REQUEST_ACTION_LABEL: Record<string, string> = {
+  pending_approval: 'שליחה לאישור',
+  approved: 'אישור הדרישה',
+  sent_for_execution: 'העברה לגורם המבצע',
+  cancelled: 'ביטול דרישת תשלום',
+};
+
+const paymentRequestActionLabel = (status: PaymentRequestStatus) =>
+  PAYMENT_REQUEST_ACTION_LABEL[status] ?? 'עדכון דרישת תשלום';
+
 /* ---------- detail + approval flow ---------- */
 export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
   pr: Row; isOffice: boolean; onClose: () => void; onChanged: () => void;
@@ -561,17 +580,24 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         return;
       }
     }
+    // Never `null` on either arm. `p1_transition_payment_request` rejects a blank transition reason
+    // (`payment_request_transition_invalid`, 0073:575) and a blank override reason
+    // (`payment_request_credit_override_invalid`), and the ordinary forward steps now arrive here
+    // with nothing typed. `reasonOr` writes the honest line: the action, and that nobody explained it.
+    const auditReason = reasonOr(reason, withCreditOverride
+      ? 'אישור חריג ללא קיזוז הזיכוי'
+      : paymentRequestActionLabel(status));
     const res = withCreditOverride
       ? await supabase.rpc('approve_payment_request_with_credit_override', {
         p_payment_request_id: pr.id,
         p_supplier_id: pr.supplier_id,
         p_expected_open_credit_total: freshOpenCreditTotal,
-        p_override_reason: reason?.trim() || null,
+        p_override_reason: auditReason,
       })
       : await supabase.rpc('transition_payment_request', {
         p_payment_request_id: pr.id,
         p_target_status: status,
-        p_reason: reason?.trim() || null,
+        p_reason: auditReason,
       });
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
@@ -580,6 +606,22 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
     setCreditOverrideAcknowledged(false);
     toast('הסטטוס עודכן');
     onChanged();
+  }
+
+  /**
+   * The single door every transition button goes through.
+   *
+   * Sending a draft for approval, approving a clean request, handing an approved one to the payer —
+   * these are the work, and they now fire straight away with a toast. Cancelling, returning from an
+   * investigation or a duplicate suspicion, and approving past a warning still stop to ask, because
+   * those are the lines an auditor will actually want a sentence next to.
+   *
+   * Both paths land in `setStatus`, so the pre-approval freshness re-read happens either way — a
+   * silent approval is not an unchecked one.
+   */
+  function requestTransition(to: PaymentRequestStatus, exceptional = false) {
+    if (reasonDemandFor('payment_request', pr.status, to, { exceptional })) { setTransitionTarget(to); return; }
+    void setStatus(to);
   }
 
   const hasCritical = checks?.some((c) => c.severity === 'critical') ?? false;
@@ -669,7 +711,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         {isOffice && (
           <div className="flex flex-wrap justify-end gap-2 pt-1">
             {['draft'].includes(pr.status) && (
-              <button className="btn-primary" disabled={busy} onClick={() => setTransitionTarget('pending_approval')}><Send size={15} /> שליחה לאישור</button>
+              <button className="btn-primary" disabled={busy} onClick={() => requestTransition('pending_approval')}><Send size={15} /> שליחה לאישור</button>
             )}
             {['pending_approval', 'suspected_duplicate', 'investigation'].includes(pr.status) && (
               overAllocated ? (
@@ -688,16 +730,16 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
                 </>
               ) : (
                 <button className={hasCritical ? 'btn-danger' : 'btn-primary'} disabled={busy || !checksReady}
-                  onClick={() => setTransitionTarget('approved')}>
+                  onClick={() => requestTransition('approved', hasCritical)}>
                   <CheckCircle2 size={15} /> {hasCritical ? 'אישור למרות האזהרות' : 'אישור הדרישה'}
                 </button>
               )
             )}
             {['approved'].includes(pr.status) && (
-              <button className="btn-primary" disabled={busy} onClick={() => setTransitionTarget('sent_for_execution')}><Send size={15} /> העברה לגורם המבצע</button>
+              <button className="btn-primary" disabled={busy} onClick={() => requestTransition('sent_for_execution')}><Send size={15} /> העברה לגורם המבצע</button>
             )}
             {!['cancelled', 'executed', 'matched'].includes(pr.status) && (
-              <button className="btn-ghost text-alert-fg" disabled={busy} onClick={() => setTransitionTarget('cancelled')}><XCircle size={15} /> ביטול</button>
+              <button className="btn-ghost text-alert-fg" disabled={busy} onClick={() => requestTransition('cancelled')}><XCircle size={15} /> ביטול</button>
             )}
           </div>
         )}
