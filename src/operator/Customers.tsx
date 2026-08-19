@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Building2, PauseCircle, PlayCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
@@ -47,6 +48,7 @@ const ATTENTION_FILTERS: { key: string; label: string; value: CustomerAttention 
 
 export default function Customers() {
   const toast = useToast();
+  const navigate = useNavigate();
   const [statusKey, setStatusKey] = useState('all');
   const [attentionKey, setAttentionKey] = useState('none');
   const [search, setSearch] = useState('');
@@ -164,6 +166,7 @@ export default function Customers() {
           search: { value: search, onChange: (value) => { setSearch(value); setPage(0); } },
           fetching,
         }}
+        onRowClick={(row) => navigate(`/admin/customers/${row.id}`)}
         searchLabel="חיפוש בלקוחות"
         rowLabel={(row) => `לקוח ${row.name}`}
         mobileTitle={(row) => row.name}

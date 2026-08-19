@@ -15,6 +15,7 @@ export type { OrgStatus, PlatformCustomer, PlatformOrg };
  */
 export type PlatformCapability =
   | 'customer.view'
+  | 'customer.edit'
   | 'usage.view'
   | 'billing.view'
   | 'notes.view'
@@ -131,4 +132,145 @@ export function generatePassword(length = 16): string {
   const bytes = new Uint32Array(length);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => PASSWORD_ALPHABET[b % PASSWORD_ALPHABET.length]).join('');
+}
+
+/* ---------- Wave 2: the customer record (0152) ---------- */
+
+/** `platform_customer_detail()`. Every field a later wave owns — plan, usage, health — is simply
+    absent rather than zero; the screen renders nothing for what it cannot yet measure. */
+export interface CustomerDetail {
+  org_id: string;
+  name: string;
+  status: OrgStatus;
+  vat_rate: number;
+  created_at: string;
+  access_mode: string;
+  active_user_count: number;
+  last_activity_at: string | null;
+  internal_owner: string | null;
+  internal_owner_email: string | null;
+  customer_since: string | null;
+  open_follow_up_count: number;
+  offboarding_status: string | null;
+}
+
+export interface CustomerContact {
+  id: string;
+  kind: 'primary' | 'billing' | 'technical';
+  name: string;
+  title: string | null;
+  email: string | null;
+  phone: string | null;
+  preferred_channel: 'email' | 'phone' | 'whatsapp' | null;
+  updated_at: string;
+}
+
+export interface CustomerNote {
+  id: string;
+  kind: 'note' | 'support' | 'follow_up';
+  body: string;
+  author_email: string | null;
+  created_at: string;
+  follow_up_due_at: string | null;
+  resolved_at: string | null;
+  resolved_by_email: string | null;
+  resolution: string | null;
+  total_count: number;
+}
+
+export interface PlatformTimelineEvent {
+  id: string;
+  occurred_at: string;
+  actor_email: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  old_values: unknown;
+  new_values: unknown;
+  reason: string;
+  correlation_id: string | null;
+  total_count: number;
+}
+
+async function rpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.rpc(name, args);
+  if (error) throw new Error(error.message);
+  return data as T;
+}
+
+export interface PlatformOperator {
+  user_id: string;
+  email: string;
+  note: string | null;
+  roles: string[];
+}
+
+/** The operator roster (0153) — strictly the platform_admins intersection of auth.users, so the
+    account-owner picker can never become a directory of the tenants' users. */
+export async function fetchPlatformOperators(): Promise<PlatformOperator[]> {
+  return (await rpc<PlatformOperator[]>('platform_operators', {})) ?? [];
+}
+
+export function fetchCustomerDetail(orgId: string): Promise<CustomerDetail | null> {
+  return rpc<CustomerDetail | null>('platform_customer_detail', { p_org_id: orgId });
+}
+
+export async function fetchCustomerContacts(orgId: string): Promise<CustomerContact[]> {
+  return (await rpc<CustomerContact[]>('platform_customer_contacts', { p_org_id: orgId })) ?? [];
+}
+
+export async function fetchCustomerNotes(orgId: string): Promise<CustomerNote[]> {
+  return (await rpc<CustomerNote[]>('platform_customer_notes', { p_org_id: orgId })) ?? [];
+}
+
+export async function fetchCustomerTimeline(orgId: string): Promise<PlatformTimelineEvent[]> {
+  return (await rpc<PlatformTimelineEvent[]>('platform_customer_timeline', { p_org_id: orgId })) ?? [];
+}
+
+export function setCustomerAccount(input: {
+  orgId: string; internalOwner: string | null; customerSince: string | null; reason: string;
+}): Promise<unknown> {
+  return rpc('platform_set_customer_account', {
+    p_org_id: input.orgId,
+    p_internal_owner: input.internalOwner,
+    p_customer_since: input.customerSince,
+    p_reason: input.reason,
+  });
+}
+
+export function upsertCustomerContact(input: {
+  orgId: string; kind: string; name: string; title: string | null;
+  email: string | null; phone: string | null; preferredChannel: string | null; reason: string;
+}): Promise<unknown> {
+  return rpc('platform_upsert_customer_contact', {
+    p_org_id: input.orgId,
+    p_kind: input.kind,
+    p_name: input.name,
+    p_title: input.title,
+    p_email: input.email,
+    p_phone: input.phone,
+    p_preferred_channel: input.preferredChannel,
+    p_reason: input.reason,
+  });
+}
+
+export function removeCustomerContact(contactId: string, reason: string): Promise<unknown> {
+  return rpc('platform_remove_customer_contact', { p_contact_id: contactId, p_reason: reason });
+}
+
+/** No reason argument, deliberately: the note body IS the reason, and demanding a second
+    sentence to justify writing the first is how "asdf" ends up in a ledger. */
+export function addInternalNote(input: {
+  orgId: string; kind: string; body: string; followUpDueAt: string | null;
+}): Promise<unknown> {
+  return rpc('platform_add_internal_note', {
+    p_org_id: input.orgId,
+    p_kind: input.kind,
+    p_body: input.body,
+    p_follow_up_due_at: input.followUpDueAt,
+  });
+}
+
+export function resolveFollowUp(noteId: string, resolution: string): Promise<unknown> {
+  return rpc('platform_resolve_follow_up', { p_note_id: noteId, p_resolution: resolution });
 }

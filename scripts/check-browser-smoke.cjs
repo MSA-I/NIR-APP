@@ -1941,6 +1941,24 @@ async function operatorCustomers(browser) {
 
   let capabilities = ['customer.view', 'org.lifecycle'];
   await context.route('**/rest/v1/rpc/platform_my_capabilities*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: capabilities }));
+  await context.route('**/rest/v1/rpc/platform_operators*', (route) => route.fulfill({
+    status: 200, headers: jsonHeaders,
+    json: [{ user_id: 'p4-operator', email: 'ops@inplace.invalid', note: null, roles: ['customer_ops'] }],
+  }));
+  await context.route('**/rest/v1/rpc/platform_customer_detail*', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: {
+      org_id: 'p4-customer-active', name: 'לקוח פעיל בבדיקה', status: 'active', vat_rate: 18,
+      created_at: '2026-02-01T08:00:00.000Z', access_mode: 'active', active_user_count: 4,
+      last_activity_at: '2026-08-18T09:30:00.000Z', internal_owner: null,
+      internal_owner_email: null, customer_since: null, open_follow_up_count: 0,
+      offboarding_status: null,
+    },
+  }));
+  await context.route('**/rest/v1/rpc/platform_customer_contacts*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
+  await context.route('**/rest/v1/rpc/platform_customer_notes*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
+  await context.route('**/rest/v1/rpc/platform_customer_timeline*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/rpc/platform_customers*', (route) => route.fulfill({
     status: 200,
     headers: jsonHeaders,
@@ -1972,6 +1990,19 @@ async function operatorCustomers(browser) {
     assert(!(await page.content()).includes('לקוח ללא פעילות בבדיקה: 0'), 'a never-active customer reported a zero');
 
     await auditAccessibility(page, 'operator-customers');
+
+    // The row opens the customer card, and the card says what it cannot yet measure rather than
+    // showing an empty panel that reads like a measurement returning nothing.
+    await page.getByText('לקוח פעיל בבדיקה').first().click();
+    await page.getByRole('heading', { level: 1, name: /לקוח פעיל בבדיקה/ }).waitFor({ timeout: 20_000 });
+    await page.getByText('אינם נמדדים עדיין').waitFor({ timeout: 20_000 });
+    assert(
+      !(await page.content()).includes('הערות פנימיות'),
+      'the notes panel rendered for an operator holding no notes.view',
+    );
+    await auditAccessibility(page, 'operator-customer-detail');
+    await page.goto(`${baseURL}/operator#/admin/customers`);
+    await page.getByRole('heading', { name: 'לקוחות' }).waitFor({ timeout: 20_000 });
 
     // Now the same screen for an operator who may not read customers at all.
     capabilities = [];

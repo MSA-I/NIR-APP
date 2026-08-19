@@ -13,6 +13,41 @@ export interface StatusMeta { label: string; tone: Tone }
 
 const m = (label: string, tone: Tone): StatusMeta => ({ label, tone });
 
+/* ---------- Customer Operations (0152) — the operator console's vocabulary ---------- */
+
+export const CUSTOMER_CONTACT_KIND: Record<string, string> = {
+  primary: 'איש קשר ראשי',
+  billing: 'איש קשר לחיוב',
+  technical: 'איש קשר טכני',
+};
+
+export const CONTACT_CHANNEL: Record<string, string> = {
+  email: 'אימייל',
+  phone: 'טלפון',
+  whatsapp: 'וואטסאפ',
+};
+
+// A follow-up is a promise with a date on it, so it claims attention until it is closed; a
+// support interaction is information; a plain note asserts nothing.
+export const CUSTOMER_NOTE_KIND: Record<string, StatusMeta> = {
+  note: m('הערה', 'idle'),
+  support: m('פנייה', 'info'),
+  follow_up: m('מעקב', 'await'),
+};
+
+/**
+ * Hebrew for the actions recorded in `platform_lifecycle_events`. A reader that met an unknown
+ * action must show the raw string rather than an empty cell — the ledger is evidence, and an
+ * action this map has not caught up with is still something that happened.
+ */
+export const PLATFORM_EVENT_ACTION: Record<string, string> = {
+  customer_account_set: 'עדכון פרטי החשבון',
+  customer_contact_set: 'עדכון איש קשר',
+  customer_contact_removed: 'הסרת איש קשר',
+  customer_internal_note_added: 'הערה פנימית נוספה',
+  customer_follow_up_resolved: 'מעקב נסגר',
+};
+
 export const ORG_STATUS: Record<string, StatusMeta> = {
   active: m('פעיל', 'done'),
   suspended: m('מושהה', 'alert'),
