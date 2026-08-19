@@ -1772,7 +1772,15 @@ async function reportsAndPdf(browser) {
     const table = page.locator('table.report-invoices');
     await table.waitFor();
     const headings = (await table.locator('thead th').allTextContents()).map((value) => value.trim());
-    assert.equal(headings.length, 8, `monthly print report has ${headings.length}/8 columns`);
+    // Eleven since 19.08.2026 (owner review, defect 12): the printed sheet promised eight columns
+    // while the screen showed more, so the accountant was reconciling from a narrower page than the
+    // one they had been looking at. תאריך קליטה, שולם and יתרה joined the grid; הערות went to a
+    // print-only second row per invoice rather than a twelfth column, because twelve columns across
+    // 279mm of A4 landscape leaves 23mm each and breaks the supplier name.
+    assert.equal(headings.length, 11, `monthly print report has ${headings.length}/11 columns`);
+    for (const required of ['שולם', 'יתרה', 'תאריך קליטה']) {
+      assert.ok(headings.includes(required), `printed report lost the ${required} column: ${headings.join(' · ')}`);
+    }
     // The screen defaults to the CURRENT month, and the demo fixture's invoices are dated June-July,
     // so on this tenant the printed sheet is usually an empty month. This assertion used to demand a
     // totals row unconditionally and therefore pinned a `סה״כ ₪0.00 ₪0.00 ₪0.00` line standing over
