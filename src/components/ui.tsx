@@ -775,7 +775,7 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
     <div className="dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-shell/50 p-0 sm:p-4" onClick={() => requestClose()}>
       <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined} aria-busy={busy || undefined} tabIndex={-1}
-        className={`dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-xl w-full ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'} flex flex-col focus:outline-none`}
+        className={`dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'} flex flex-col focus:outline-none`}
         onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-line-soft">
           <h3 ref={titleRef} id={titleId} tabIndex={-1} className="font-semibold text-ink focus:outline-none">{title}</h3>
@@ -850,7 +850,7 @@ export function ToastProvider({ children, bottomNotice }: { children: ReactNode;
               <div key={t.id}
                 role={t.tone === 'error' ? 'alert' : 'status'}
                 aria-live={t.tone === 'error' ? 'assertive' : 'polite'}
-                className={`rounded-lg px-4 py-2.5 text-sm text-on-solid shadow-lg ${t.tone === 'success' ? 'bg-ink-body' : 'bg-alert-solid'}`}>
+                className={`rounded-lg px-4 py-2.5 text-sm text-on-solid shadow-toast ${t.tone === 'success' ? 'bg-ink-body' : 'bg-alert-solid'}`}>
                 {t.message}
               </div>
             ))}

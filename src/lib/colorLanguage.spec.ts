@@ -94,3 +94,80 @@ describe('color language', () => {
     }
   });
 });
+
+/**
+ * oklch → linear sRGB (Björn Ottosson's Oklab matrices). Linear values are exactly what WCAG's
+ * relative-luminance formula wants, so no gamma round-trip is needed to compare two tokens.
+ * Verified against the three ramp hexes index.css documents in its own comment (chart-1,
+ * chart-3, chart-4): all three reproduce byte-for-byte, so the numbers below are the same ones
+ * a browser paints. The literals are not repeated here — this file is scanned by check:tokens.
+ */
+function oklchToLinearRgb(lightness: number, chroma: number, hue: number) {
+  const h = (hue * Math.PI) / 180;
+  const a = chroma * Math.cos(h);
+  const b = chroma * Math.sin(h);
+  const l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (lightness - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+  ] as const;
+}
+
+/** One level of `var()` indirection is all the ramp uses: chart-1 → action, chart-4 → shell. */
+function tokenValue(name: string): string {
+  const raw = rules.match(new RegExp(`--${name}:\s*([^;]+);`))?.[1].trim();
+  if (!raw) throw new Error(`token --${name} is not declared in index.css`);
+  const alias = raw.match(/^var\(--([\w-]+)\)$/);
+  return alias ? tokenValue(alias[1]) : raw;
+}
+
+function luminanceOf(name: string) {
+  const value = tokenValue(name);
+  const parts = value.match(/^oklch\(([\d.]+)%\s+([\d.]+)\s+([\d.]+)\)$/);
+  if (!parts) throw new Error(`--${name} is not a plain oklch() value: ${value}`);
+  const [r, g, b] = oklchToLinearRgb(Number(parts[1]) / 100, Number(parts[2]), Number(parts[3]));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrast(a: string, b: string) {
+  const [hi, lo] = [luminanceOf(a), luminanceOf(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+describe('comparison series', () => {
+  const theme = readFileSync('src/lib/theme.ts', 'utf8');
+  const body = theme.slice(theme.indexOf('export function comparisonSeries'));
+  const steps = [...body.matchAll(/t\.bars\[(\d)\]/g)].map((match) => Number(match[1]));
+
+  it('שתי הסדרות מופרדות ב-3:1 לפחות — לא רק מול המשטח, אלא זו מול זו', () => {
+    // The measurement nobody was making. Until now every chart colour was checked against the
+    // SURFACE it sits on; no assertion asked what a series measures against the series beside it.
+    // That is how the main dashboard shipped two lines at 1.56:1 — chart-1 against chart-4, where
+    // colour contributed nothing and the dash carried the entire distinction on its own.
+    expect(steps).toHaveLength(2);
+    const pair = contrast(`color-chart-${steps[0] + 1}`, `color-chart-${steps[1] + 1}`);
+    expect(pair, `chart-${steps[0] + 1} vs chart-${steps[1] + 1}`).toBeGreaterThanOrEqual(3);
+  });
+
+  it('הסדרה השנייה תמיד מקווקוות — נשא שאינו צבע', () => {
+    // Greyscale print, a compressed screenshot, and colour-vision deficiency all erase hue and
+    // leave lightness. The dash survives all three, so it is a requirement and not a garnish.
+    expect(body).toContain('dash: true');
+    expect(body.indexOf('dash: true')).toBeGreaterThan(body.indexOf(`t.bars[${steps[0]}]`));
+  });
+
+  it('אף מסך אינו בונה סדרות בעצמו — הזיווג חי במקום אחד', () => {
+    // The whole point of the helper: two dashboards previously chose their own indices and
+    // disagreed. A `series={[...]}` literal carrying a colour is that mistake coming back.
+    const handRolled = sources
+      .filter(([file]) => file !== 'lib/theme.ts')
+      .flatMap(([file, source]) => {
+        const flat = source.replace(/\s+/g, ' ');
+        return [...flat.matchAll(/series=\{\[/g)].map((m) => `${file}  ${flat.slice(m.index, m.index + 60)}`);
+      });
+    expect(handRolled).toEqual([]);
+  });
+});
