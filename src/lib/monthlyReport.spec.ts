@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
 import { buildMonthlyWorkbook, buildStyledMonthlyWorkbook, type MonthlyReportLabels } from './monthlyReport';
+import { currentMonthISO, monthRange, safeMonthISO } from './format';
 import { monthlyReportTemplateValues } from './reportTemplateExport';
 
 const labels: MonthlyReportLabels = {
@@ -145,5 +146,35 @@ describe('accountant workbook — styled built-in default', () => {
     const plain = buildMonthlyWorkbook(input);
     expect(plain.Workbook?.Views?.[0]?.RTL).toBeUndefined();
     expect(plain.Sheets['פרטי הדוח']['!merges']).toBeUndefined();
+  });
+});
+
+/**
+ * The month the accountant is reading now lives in `?month=`, so the value reaching `monthRange`,
+ * `fmtMonth` and the export filename is whatever is in the address bar. Junk must degrade to the
+ * current month rather than throw: a mistyped link should show a month, not a blank screen.
+ */
+describe('safeMonthISO', () => {
+  it('passes a real calendar month through unchanged', () => {
+    expect(safeMonthISO('2026-06')).toBe('2026-06');
+    expect(safeMonthISO('2026-01')).toBe('2026-01');
+    expect(safeMonthISO('2026-12')).toBe('2026-12');
+  });
+
+  it('falls back to the current month for junk, empty and absent values', () => {
+    const current = currentMonthISO();
+    expect(safeMonthISO('07/2026')).toBe(current);
+    expect(safeMonthISO('')).toBe(current);
+    expect(safeMonthISO(null)).toBe(current);
+    expect(safeMonthISO(undefined)).toBe(current);
+    // Shaped like a month but not one. `monthRange('2026-13')` throws, and this value can only
+    // arrive from a hand-edited URL — so it is rejected here rather than crashing the report.
+    expect(safeMonthISO('2026-13')).toBe(current);
+    expect(safeMonthISO('2026-00')).toBe(current);
+  });
+
+  it('returns a value every downstream month consumer accepts', () => {
+    expect(() => monthRange(safeMonthISO('2026-13'))).not.toThrow();
+    expect(() => monthRange(safeMonthISO('07/2026'))).not.toThrow();
   });
 });

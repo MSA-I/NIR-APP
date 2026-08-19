@@ -142,6 +142,19 @@ export function toTimeZoneISO(d: Date, timeZone = BUSINESS_TIME_ZONE) {
 export const todayISO = () => toTimeZoneISO(new Date());
 export const currentMonthISO = (d = new Date()) => toTimeZoneISO(d).slice(0, 7);
 
+/**
+ * A month filter that is safe to hand to `monthRange`, `fmtMonth` and a report filename.
+ *
+ * The raw value is user-supplied twice over: it lives in the URL, where anything can be typed or
+ * pasted, and browsers without a native month picker render `<input type="month">` as free text.
+ * Anything that is not a real calendar month falls back to the current one, so the screen shows a
+ * month instead of throwing — the grammar accepted here is exactly `monthRange`'s, because every
+ * consumer of a "sanitized" month eventually reaches it.
+ */
+export function safeMonthISO(raw: string | null | undefined): string {
+  return raw && /^\d{4}-(0[1-9]|1[0-2])$/.test(raw) ? raw : currentMonthISO();
+}
+
 // Business-timezone calendar day for a stored value: a timestamp is projected onto Israel time;
 // a plain YYYY-MM-DD date is taken as-is. Used by chart bucketers so a row lands in the right day.
 export const localDateKey = (value: string) => (value.includes('T') ? toTimeZoneISO(new Date(value)) : value.slice(0, 10));

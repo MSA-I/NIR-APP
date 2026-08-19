@@ -7,7 +7,8 @@ import { useAuth } from '../auth/AuthContext';
 import { StatusBadge, useToast, ConfirmDialog, ErrorNote, PageHeader, SkeletonCards, Note, Modal } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
-import { addCalendarDays, currentMonthISO, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange } from '../lib/format';
+import { addCalendarDays, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange, safeMonthISO } from '../lib/format';
+import { useParamState } from '../lib/useParamState';
 import { toHebrewError } from '../lib/errors';
 import { fetchAll } from '../lib/supabasePaging';
 import { buildLockedMonthlyWorkbook, buildStyledMonthlyWorkbook, type MonthlyReportLabels, type MonthlyReportSnapshot } from '../lib/monthlyReport';
@@ -43,7 +44,12 @@ export default function Reports() {
     : null;
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [month, setMonth] = useState(currentMonthISO());
+  // The month lives in the URL beside the legal entity, so leaving for an invoice and coming back
+  // returns the accountant to the month they were reading. An ABSENT `?month=` means "the current
+  // month" and is never written eagerly: the address stays a clean `/reports` until a month is
+  // actually picked, so a `?month=` in a shared or bookmarked link is always a deliberate choice.
+  const [monthParam, setMonth] = useParamState('month');
+  const month = safeMonthISO(monthParam);
   const [busy, setBusy] = useState(false);
   const [sendSnapshot, setSendSnapshot] = useState<MonthlyReportSnapshot | null>(null);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
@@ -67,10 +73,6 @@ export default function Reports() {
    */
   const [snapshotBlock, setSnapshotBlock] = useState<{ message: string; bank: boolean } | null>(null);
 
-  // Browsers without a native month picker fall back to free text, so a value like "07/2026" can
-  // land in state. One sanitized value drives the query, the headings, the filename and the
-  // mark-sent command — what is shown is always what is exported, and no date math ever throws.
-  const safeMonth = /^\d{4}-\d{2}$/.test(month) ? month : currentMonthISO();
   const canManageExport = !!profile && ['owner', 'accountant'].includes(profile.role);
   const canMutateExport = canManageExport && organizationAccess.canWrite;
   const requestedUnitId = searchParams.get('unit');
@@ -84,8 +86,8 @@ export default function Reports() {
   };
 
   const { data, loading, fetching, error } = useQuery(async () => {
-    const { start, end } = monthRange(safeMonth);
-    const instants = monthInstantRange(safeMonth);
+    const { start, end } = monthRange(month);
+    const instants = monthInstantRange(month);
     const [rawInvoices, rawPayments, rawCredits, rawExceptions, bank] = await Promise.all([
       fetchAll((from, to) => supabase.from('invoices').select('*')
         .eq('financial_role', 'payable').gte('invoice_date', start).lt('invoice_date', end).is('deleted_at', null)
@@ -117,7 +119,7 @@ export default function Reports() {
       bank: bank as { id: string; status: string }[],
       generatedAt: new Date(),
     };
-  }, [safeMonth]);
+  }, [month]);
 
   const {
     data: lockedReports,
@@ -143,13 +145,13 @@ export default function Reports() {
       ? await Promise.all([
         fetchAll((from, to) => supabase.from('monthly_report_snapshots').select('*')
           .eq('unit_id', selectedUnitId)
-          .eq('report_month', `${safeMonth}-01`)
+          .eq('report_month', `${month}-01`)
           .order('version', { ascending: false })
           .range(from, to)),
         fetchAll((from, to) => supabase.from('monthly_report_snapshot_deliveries')
           .select('id, snapshot_id, sent_at, sent_by_name, reason')
           .eq('unit_id', selectedUnitId)
-          .eq('report_month', `${safeMonth}-01`)
+          .eq('report_month', `${month}-01`)
           .order('snapshot_version', { ascending: false })
           .range(from, to)),
       ])
@@ -163,16 +165,16 @@ export default function Reports() {
       reason: string;
     }[];
     return { legalEntities, selectedUnitId, snapshots, deliveries };
-  }, [canManageExport, requestedUnitId, safeMonth]);
+  }, [canManageExport, requestedUnitId, month]);
 
   async function exportExcel() {
     if (!data || fetching || error || !org) return;
     setBusy(true);
     try {
-      const { start, end } = monthRange(safeMonth);
+      const { start, end } = monthRange(month);
       const values = monthlyReportTemplateValues({
         orgName: org.name,
-        periodLabel: fmtMonth(`${safeMonth}-01`),
+        periodLabel: fmtMonth(`${month}-01`),
         periodFrom: fmtDate(start),
         periodTo: fmtDate(addCalendarDays(end, -1)),
         generatedAt: fmtDateTime(data.generatedAt),
@@ -183,7 +185,7 @@ export default function Reports() {
       // The name has to say whose report it is; a fixed tenant name would break multi-tenancy.
       // Strip only what filesystems object to; Hebrew names are fine and are the whole point.
       const slug = org.name.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
-      const fileName = `${slug || 'inplace'}-report-${safeMonth}.xlsx`;
+      const fileName = `${slug || 'inplace'}-report-${month}.xlsx`;
       const templated = await renderConfiguredReportTemplate({
         exportKey: 'accountant_monthly_report', orgId: org.id, values,
       });
@@ -194,7 +196,7 @@ export default function Reports() {
         // custom template still throws above rather than landing here — that contract is
         // renderConfiguredReportTemplate's, untouched.
         const wb = buildStyledMonthlyWorkbook({
-          orgName: org.name, month: safeMonth, generatedAt: data.generatedAt, data,
+          orgName: org.name, month, generatedAt: data.generatedAt, data,
           labels: reportLabels, summary: values,
         });
         XLSX.writeFile(wb, fileName);
@@ -229,7 +231,7 @@ export default function Reports() {
     setSnapshotBlock(null);
     try {
       const snapshot = unwrap(await supabase.rpc('create_monthly_report_snapshot', {
-        p_month: `${safeMonth}-01`,
+        p_month: `${month}-01`,
         p_unit_id: selectedUnitId,
       })) as MonthlyReportSnapshot;
       setSnapshotOpen(false);
@@ -356,7 +358,7 @@ export default function Reports() {
             description="הדוח ייווצר בשרת ממצב נתונים עקבי ויישמר כגרסה חדשה שאינה ניתנת לשינוי."
             busy={busy}>
             <dl className="mb-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-              <div><dt className="text-xs text-ink-muted">חודש הדיווח</dt><dd className="mt-0.5 font-medium">{fmtMonth(`${safeMonth}-01`)}</dd></div>
+              <div><dt className="text-xs text-ink-muted">חודש הדיווח</dt><dd className="mt-0.5 font-medium">{fmtMonth(`${month}-01`)}</dd></div>
               <div><dt className="text-xs text-ink-muted">ארגון</dt><dd className="mt-0.5 font-medium">{org?.name ?? '—'}</dd></div>
               <div><dt className="text-xs text-ink-muted">ישות משפטית</dt><dd className="mt-0.5 font-medium">{selectedLegalEntity?.name ?? '—'}</dd></div>
               <div><dt className="text-xs text-ink-muted">זמן יצירה</dt><dd className="num mt-0.5">{snapshotPreviewAt ? fmtDateTime(snapshotPreviewAt) : '—'}</dd></div>
@@ -416,11 +418,11 @@ export default function Reports() {
                     {snapshotBlock.message}
                     {snapshotBlock.bank && (
                       <span className="block mt-1">
-                        <Link className="link" to={`/bank?month=${safeMonth}&status=unmatched`}>
+                        <Link className="link" to={`/bank?month=${month}&status=unmatched`}>
                           פתיחת {totals.unmatchedBank} תנועות הבנק ללא התאמה בחודש זה
                         </Link>
                         {totals.suggestedBank > 0 && (
-                          <> · <Link className="link" to={`/bank?month=${safeMonth}&status=suggested`}>
+                          <> · <Link className="link" to={`/bank?month=${month}&status=suggested`}>
                             {totals.suggestedBank} התאמות שממתינות לאישור
                           </Link></>
                         )}
@@ -480,19 +482,19 @@ export default function Reports() {
         <div className="hidden print:block">
           {/* Printed header handed to the accountant — carries the tenant's own name. */}
           {orgLogoUrl && <img data-testid="monthly-report-logo" src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
-          <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}דוח חודשי ${fmtMonth(`${safeMonth}-01`)}`}</h2>
+          <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}דוח חודשי ${fmtMonth(`${month}-01`)}`}</h2>
           <p className="text-xs">נוצר {fmtDateTime(data.generatedAt)}</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}`}><div className="text-xs text-ink-muted">חשבוניות</div><div className="kpi-value-compact num">{data.invoices.length}</div></Link>
-          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(totals.invoices)}</div></Link>
-          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(totals.vat)}</div></Link>
-          <Link className={metricLinkClass} to={`/payments?month=${safeMonth}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className={`kpi-value-compact num text-start ${totals.paid ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(totals.paid)}</div></Link>
-          <Link className={metricLinkClass} to={`/invoices?month=${safeMonth}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`kpi-value-compact num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Link>
-          <Link className={metricLinkClass} to={`/bank?month=${safeMonth}&status=unmatched`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`kpi-value-compact num ${totals.unmatchedBank ? 'text-alert-fg' : ''}`}>{totals.unmatchedBank}</div></Link>
-          <Link className={metricLinkClass} to={`/bank?month=${safeMonth}&status=suggested`}><div className="text-xs text-ink-muted">התאמות שממתינות לאישור</div><div className={`kpi-value-compact num ${totals.suggestedBank ? 'text-await-fg' : ''}`}>{totals.suggestedBank}</div></Link>
-          <Link className={metricLinkClass} to={`/credits?month=${safeMonth}&status=all`}><div className="text-xs text-ink-muted">זיכויים בחודש</div><div className="kpi-value-compact num">{data.credits.length}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">חשבוניות</div><div className="kpi-value-compact num">{data.invoices.length}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(totals.invoices)}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(totals.vat)}</div></Link>
+          <Link className={metricLinkClass} to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className={`kpi-value-compact num text-start ${totals.paid ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(totals.paid)}</div></Link>
+          <Link className={metricLinkClass} to={`/invoices?month=${month}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`kpi-value-compact num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Link>
+          <Link className={metricLinkClass} to={`/bank?month=${month}&status=unmatched`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`kpi-value-compact num ${totals.unmatchedBank ? 'text-alert-fg' : ''}`}>{totals.unmatchedBank}</div></Link>
+          <Link className={metricLinkClass} to={`/bank?month=${month}&status=suggested`}><div className="text-xs text-ink-muted">התאמות שממתינות לאישור</div><div className={`kpi-value-compact num ${totals.suggestedBank ? 'text-await-fg' : ''}`}>{totals.suggestedBank}</div></Link>
+          <Link className={metricLinkClass} to={`/credits?month=${month}&status=all`}><div className="text-xs text-ink-muted">זיכויים בחודש</div><div className="kpi-value-compact num">{data.credits.length}</div></Link>
           <Link className={metricLinkClass} to="/exceptions?status=open"><div className="text-xs text-ink-muted">חריגים פתוחים</div><div className={`kpi-value-compact num ${data.exceptions.length ? 'text-await-fg' : ''}`}>{data.exceptions.length}</div></Link>
         </div>
 
@@ -508,7 +510,7 @@ export default function Reports() {
         )}
 
         <div className="card overflow-hidden">
-          <div className="px-4 py-3 border-b border-line-soft section-title">חשבוניות {fmtMonth(`${safeMonth}-01`)}</div>
+          <div className="px-4 py-3 border-b border-line-soft section-title">חשבוניות {fmtMonth(`${month}-01`)}</div>
           <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="חשבוניות בדוח">
             {data.invoices.map((i) => (
               <li key={i.id} className="p-4">
