@@ -796,6 +796,7 @@ function Invoke-InterpretDocumentContractTests {
       (Join-Path $repoRoot "supabase\functions\_shared\organization-egress.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\reserved-egress.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\billing-adapter.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\_shared\provision.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\edge-organization-access-wiring.test.ts") `
       (Join-Path $repoRoot "supabase\functions\document-processing\contract_test.ts") `
       (Join-Path $repoRoot "supabase\functions\document-preprocessing\contract_test.ts") `
@@ -1284,6 +1285,7 @@ try {
     Invoke-SqlTest "supabase\tests\p52_usage_limit_enforcement.sql" "The document limit counts one unit of work once, refuses before any row is written, treats a limit nobody stated as a refusal rather than as infinity, and never hides what the customer already has"
     Invoke-SqlTest "supabase\tests\p53_activation_onboarding_health.sql" "Activation is derived from the audit ledger rather than accumulated, an operator note never overrules a product event that actually happened, an unmeasurable milestone says so instead of reading as not-done, and health returns the reasons that produced it with no score and no prediction"
     Invoke-SqlTest "supabase\tests\p54_billing_boundary_and_funnel.sql" "A billing event is attributed only through a link we wrote ourselves and never from its payload, a replay is a no-op, an unattributable event dead-letters instead of guessing an owner, the quota crossing is recorded once per period on the write that exhausts it, and the funnel names the three stages it cannot see"
+    Invoke-SqlTest "supabase\tests\p55_self_signup_rate_limit.sql" "The anonymous signup door is bounded by a limit the database counts rather than a function remembers, stores hashes and never a readable address or email, records refusals as well as acceptances, and is unreachable from any browser role"
     Invoke-SqlTest "supabase\tests\p24_inventory_intelligence.sql" "Inventory consumption evidence, incoming supply, suggestions, price context and tenant isolation"
     Invoke-SqlTest "supabase\tests\p25_tenant_offboarding_export.sql" "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p26_price_baseline.sql" "Contractual price baseline as of the document date, reversal ordering, undisclosed fallbacks and read-only guarantee"

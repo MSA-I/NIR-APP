@@ -16,6 +16,10 @@ import AcceptInvite from './pages/AcceptInvite';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import { TermsOfService, PrivacyPolicy } from './pages/Legal';
+// Public and unauthenticated, like Login: a visitor who has no account yet is exactly who
+// these two are for (0159).
+import Signup from './pages/Signup';
+import Pricing from './pages/Pricing';
 
 // Lazy: every screen behind the Layout loads its own chunk on demand.
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -230,7 +234,8 @@ export default function App() {
   // AccountUnavailable would trap an invitee on a screen that has nothing to do with them.
   // Recovery links arrive with an Auth session before the tenant profile resolves. Legal pages
   // must remain public as well.
-  const isPublic = ['/accept-invite', '/login', '/forgot-password', '/reset-password', '/terms', '/privacy']
+  const isPublic = ['/accept-invite', '/login', '/forgot-password', '/reset-password', '/terms', '/privacy',
+    '/signup', '/pricing']
     .includes(pathname);
   const isOfflineReceivingRoute = pathname === '/receiving' || pathname.startsWith('/receiving/');
 
@@ -248,6 +253,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
+      <Route path="/pricing" element={<Pricing />} />
       <Route path="/accept-invite" element={<AcceptInvite />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />

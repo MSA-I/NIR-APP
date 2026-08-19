@@ -9,6 +9,9 @@ const layout = source('src/components/Layout.tsx');
 const admin = source('src/pages/Admin.tsx');
 const customers = source('src/operator/Customers.tsx');
 const provision = source('supabase/functions/admin-provision/index.ts');
+// Provisioning moved into a module both doors share (0159): the operator's and the public
+// signup's. The lifecycle claim is asserted where the insert now lives.
+const provisionCore = source('supabase/functions/_shared/provision.ts');
 const auth = source('src/auth/AuthContext.tsx');
 const access = source('src/lib/organizationAccess.ts');
 const migration = source('supabase/migrations/0134_retire_trial_lifecycle.sql');
@@ -57,8 +60,11 @@ describe('organization access after Trial retirement', () => {
     expect(customers).not.toContain('trialEndInstant');
     expect(admin).not.toContain("supabase.rpc('set_organization_lifecycle'");
     expect(provision).not.toContain('body.trial_ends_at');
-    expect(provision).toContain('Status defaults to active');
     expect(provision).not.toContain('body.status');
+    expect(provisionCore).toContain('Status defaults to active');
+    // The public door must not let a form choose a plan either: a signup that could ask for
+    // Business would be a free upgrade (0159).
+    expect(provisionCore).not.toContain('plan_key');
   });
 
   // A lifecycle change is gated on a capability the operator may not hold, and the screen must

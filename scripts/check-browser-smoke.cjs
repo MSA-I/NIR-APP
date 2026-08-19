@@ -1929,6 +1929,55 @@ async function adminState(browser) {
   }
 }
 
+async function publicSignupSurface(browser) {
+  // The anonymous door, checked for the two things that make it safe to have at all: the form
+  // cannot ask for a plan, and the answer is identical whether or not the address already exists.
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1280, height: 900 } });
+  let sent = null;
+  await context.route('**/functions/v1/public-signup*', async (route) => {
+    sent = JSON.parse(route.request().postData() || '{}');
+    return route.fulfill({
+      status: 202,
+      headers: jsonHeaders,
+      json: {
+        status: 'pending_confirmation',
+        message: 'אם הכתובת אינה רשומה עדיין — נשלח אליה מייל אישור, ויש להשלים ממנו את ההרשמה. אם היא כבר רשומה — יש להיכנס עם הסיסמה הקיימת או לאפס אותה.',
+      },
+    });
+  });
+
+  const page = await context.newPage();
+  captureConsole(page, 'public-signup');
+  try {
+    await page.goto(`${baseURL}/signup`);
+    await page.getByRole('heading', { level: 1, name: /פתיחת חשבון/ }).waitFor({ timeout: 20_000 });
+
+    // No plan, tier or price control anywhere on the page: choosing one would be a free upgrade.
+    const body = await page.content();
+    for (const forbidden of ['Business', 'Pro ', 'מסלול Free']) {
+      assert(!body.includes(forbidden), `the signup form offers a plan choice (${forbidden})`);
+    }
+
+    await page.locator('#signup-organization').fill('עסק בדיקה');
+    await page.locator('#signup-name').fill('בעלים בדיקה');
+    await page.locator('#signup-email').fill('p4-signup@example.invalid');
+    await page.locator('#signup-password').fill('a-long-enough-password');
+    await page.getByRole('button', { name: 'פתיחת חשבון' }).click();
+
+    await page.getByText('בדקו את תיבת הדואר').waitFor({ timeout: 20_000 });
+    assert(sent !== null, 'the signup form sent nothing');
+    assert.deepEqual(
+      Object.keys(sent).sort(),
+      ['email', 'full_name', 'organization_name', 'password'],
+      'the signup form sent a field the visitor does not get to choose',
+    );
+
+    await auditAccessibility(page, 'public-signup');
+  } finally {
+    await closeContext(context);
+  }
+}
+
 async function operatorCustomers(browser) {
   // The customer list, and the two things about it that are easy to get wrong:
   //   * a customer that never acted must read as an em dash, not a date and not a zero;
@@ -3551,6 +3600,7 @@ async function run(name, check) {
     await run('Push logout browser failure', () => pushLogout(browser, 'browser-failure', true, false));
     await run('Push logout double failure', () => pushLogout(browser, 'double-failure', false, false));
     await run('operator console: platform admin lands on /operator, password and clipboard state', () => adminState(browser));
+    await run('public signup asks for four fields and answers the same either way', () => publicSignupSurface(browser));
     await run('operator console: the customer list gates on capability and never invents activity', () => operatorCustomers(browser));
     await run('operator console refuses a tenant who is not a platform admin', () => operatorRefusal(browser));
     await run('OCR documents, review, status and export', () => documentOcrAcceptance(browser));
