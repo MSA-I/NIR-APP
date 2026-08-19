@@ -8,6 +8,11 @@
 // does NOT do, and that it keeps the two page limits apart: migration 0144 raised the automatic
 // split ceiling to 40, while the worker's paid-OCR cap stayed at 20, so a scanned 21-40 page packet
 // is still refused. Both numbers come from `serverLimits.ts` here and in the product.
+//
+// Since the move into the operator application the panel reads through the platform door —
+// platform_get_autonomy_policies(p_org_id) (0147), one call for the whole list — instead of four
+// tenant-scoped evaluate_autonomy_policy calls that could only ever answer for the CALLER's own
+// organization.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
@@ -16,16 +21,21 @@ import { createAppQueryClient } from '../lib/query/client';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import {
   AUTOMATIC_SPLIT_PAGE_CEILING, PAID_OCR_PAGE_CAP,
-} from './document-review/serverLimits';
+} from '../components/document-review/serverLimits';
 
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock('../lib/supabase', () => ({ supabase: { rpc } }));
 
 import { AutonomyPolicyPanel } from './AutonomyPolicyPanel';
-import { ToastProvider } from './ui';
+import { ToastProvider } from '../components/ui';
+
+const POLICY_KEYS = [
+  'document.packet_split', 'document.interpretation', 'price_list.intake', 'delivery_note.receiving',
+] as const;
 
 /** `private.autonomy_policy_for_org` always answers, configured or not: an org with no row gets
-    `configured: false` and a NULL threshold, never a missing row. */
+    `configured: false` and a NULL threshold, never a missing row — and the platform door (0147)
+    returns that answer for every defined policy key in one set. */
 function policyRow(policy_key: string, overrides: Partial<{
   configured: boolean; autonomy_enabled: boolean; min_confidence: number | null; kill_switch: boolean;
 }> = {}) {
@@ -39,8 +49,8 @@ function policyRow(policy_key: string, overrides: Partial<{
 }
 
 async function renderPanel() {
-  rpc.mockImplementation(async (_fn: string, args: { p_policy_key: string }) => ({
-    data: [policyRow(args.p_policy_key)],
+  rpc.mockImplementation(async (_fn: string, _args: { p_org_id: string }) => ({
+    data: POLICY_KEYS.map((key) => policyRow(key)),
     error: null,
   }));
   render(
@@ -63,10 +73,13 @@ describe('מדיניות אוטונומיית מסמכים', () => {
   it('מציג את כל ארבע המדיניויות שקיימות בבסיס הנתונים', async () => {
     await renderPanel();
 
-    for (const key of ['document.packet_split', 'document.interpretation', 'price_list.intake', 'delivery_note.receiving']) {
+    for (const key of POLICY_KEYS) {
       expect(card(key)).toBeInTheDocument();
-      expect(rpc).toHaveBeenCalledWith('evaluate_autonomy_policy', { p_policy_key: key });
     }
+    // One read through the platform door, for the organization the operator picked — not four
+    // tenant-scoped evaluator calls that answer for the caller instead of the target.
+    expect(rpc).toHaveBeenCalledWith('platform_get_autonomy_policies', { p_org_id: 'org-1' });
+    expect(rpc).not.toHaveBeenCalledWith('evaluate_autonomy_policy', expect.anything());
     expect(screen.getAllByTestId(/^autonomy-policy-/)).toHaveLength(5); // four cards + the panel
   });
 

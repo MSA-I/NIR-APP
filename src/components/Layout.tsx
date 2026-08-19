@@ -1,5 +1,5 @@
 import { Link, Outlet, useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, Menu, X, Building2, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight, ScrollText } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, Menu, X, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight, ScrollText } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -70,7 +70,7 @@ const NAV_SHORT_LABELS: Partial<Record<string, string>> = {
 
 // Four work groups — מסמכים / רכש / כספים / בקרה — under two ungrouped links that need no
 // header to explain them. The less self-evident items (מחירונים, דרישות תשלום, התאמות בנק,
-// הגדרות, and the focused /pay and /admin routes) sit where the plain
+// הגדרות, and the focused /pay route) sit where the plain
 // procurement/finance/control reading puts them.
 // None of it invents business meaning.
 //
@@ -179,22 +179,24 @@ function itemsFor(role: ActiveRole, paths: readonly string[]): NavItem[] {
 // presentation: daily work is visible; management and control are progressively disclosed. New
 // order, alerts and archive keep their routes and page titles but enter through their contextual
 // surfaces instead of competing with modules in the sidebar.
-export function sectionsForRole(role: ActiveRole | undefined, isPlatformAdmin: boolean): NavSection[] {
-  const roleSections: NavSection[] = role ? [
+export function sectionsForRole(role: ActiveRole | undefined): NavSection[] {
+  // The 'פלטפורמה' section that used to be appended here for a platform admin is gone with the
+  // operator console itself (19.08.2026): /admin now lives in the separate operator application
+  // (operator.html, src/operator/), and the tenant shell offers no door to it. This catalogue is
+  // tenant navigation only.
+  return role ? [
     { section: '', items: itemsFor(role, DAILY_PATHS[role]) },
     { section: 'ניהול', items: itemsFor(role, MANAGEMENT_PATHS[role] ?? []), collapsible: true },
     { section: 'בקרה', items: itemsFor(role, CONTROL_PATHS[role] ?? []), collapsible: true },
   ].filter((section) => section.items.length > 0) : [];
-  const platform = { section: 'פלטפורמה', collapsible: !!role, items: [{ ...navItem('/admin', Building2, []), roles: [] as ActiveRole[] }] };
-  return isPlatformAdmin ? [...roleSections, platform] : roleSections;
 }
 
 export function footerItemsForRole(role: ActiveRole | undefined): NavItem[] {
   return role === 'owner' ? itemsFor(role, ['/onboarding', '/settings']) : [];
 }
 
-export function drawerSectionsForRole(role: ActiveRole | undefined, isPlatformAdmin: boolean): NavSection[] {
-  return sectionsForRole(role, isPlatformAdmin).map((section, index) => (
+export function drawerSectionsForRole(role: ActiveRole | undefined): NavSection[] {
+  return sectionsForRole(role).map((section, index) => (
     role && index === 0 ? { ...section, section: 'עבודה שוטפת' } : section
   ));
 }
@@ -216,7 +218,7 @@ export function pageTitleFor(pathname: string): string {
 
 export default function Layout() {
   useGlowPointer();
-  const { profile, org, roleLabels, isPlatformAdmin, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, accessStatus = 'unknown', signOut } = useAuth();
+  const { profile, org, roleLabels, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, accessStatus = 'unknown', signOut } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const location = useLocation();
@@ -244,8 +246,8 @@ export default function Layout() {
   const currentTitle = pageTitleFor(location.pathname);
   const routeBack = routeBackPresentation(location.pathname);
 
-  const sections = sectionsForRole(role, isPlatformAdmin);
-  const drawerSections = drawerSectionsForRole(role, isPlatformAdmin);
+  const sections = sectionsForRole(role);
+  const drawerSections = drawerSectionsForRole(role);
   const footerItems = footerItemsForRole(role);
 
   const { panelRef: drawerRef, requestClose: closeMobileMenu } = useDialogLayer<HTMLElement>({

@@ -1855,6 +1855,9 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
 }
 
 async function adminState(browser) {
+  // The console left the tenant application (defect 14): /admin no longer exists there, and the
+  // operator surface is the second Vite entry served at /operator. The platform membership is
+  // mocked, so this exercises the operator app's guard and screens with a real signed-in session.
   const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1024, height: 900 } });
   await context.route('**/rest/v1/platform_admins?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: { user_id: 'p4-platform-admin' } }));
   await context.route('**/rest/v1/rpc/is_platform_admin*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: true }));
@@ -1867,7 +1870,7 @@ async function adminState(browser) {
   captureConsole(page, 'admin-state');
   try {
     await login(page, 'owner');
-    await page.goto(`${baseURL}/admin`);
+    await page.goto(`${baseURL}/operator`);
     await page.getByRole('heading', { name: 'ניהול פלטפורמה' }).waitFor({ timeout: 20_000 });
     const opener = page.getByRole('button', { name: 'ארגון חדש' });
     await opener.click();
@@ -1899,6 +1902,26 @@ async function adminState(browser) {
     await opener.click();
     dialog = page.getByRole('dialog', { name: 'הקמת ארגון חדש' });
     assert.notEqual(await dialog.locator('#new-org-password').inputValue(), 'P4-success-reset-check!', 'admin form retained password after success');
+  } finally {
+    await closeContext(context);
+  }
+}
+
+async function operatorRefusal(browser) {
+  // The other half of the operator boundary: a signed-in tenant who is NOT a platform admin
+  // (no platform_admins mock — the live table answers false) lands on /operator and is handed
+  // back to the tenant application by a full document navigation, seeing nothing of the console.
+  // The build separation is not the security boundary — the platform RPCs refuse server-side —
+  // but the guard must still never RENDER the console to a tenant.
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  captureConsole(page, 'operator-refusal');
+  try {
+    await login(page, 'accountant');
+    await page.goto(`${baseURL}/operator`);
+    await page.waitForFunction(() => location.pathname === '/dashboard', null, { timeout: 25_000 });
+    await page.locator('#main').waitFor({ state: 'visible', timeout: 25_000 });
+    assert(!(await page.content()).includes('תפעול פלטפורמה'), 'a tenant without platform membership reached the operator console');
   } finally {
     await closeContext(context);
   }
@@ -3382,7 +3405,8 @@ async function run(name, check) {
     await run('Push logout server failure', () => pushLogout(browser, 'server-failure', false, true));
     await run('Push logout browser failure', () => pushLogout(browser, 'browser-failure', true, false));
     await run('Push logout double failure', () => pushLogout(browser, 'double-failure', false, false));
-    await run('Admin password and Clipboard state', () => adminState(browser));
+    await run('operator console: platform admin lands on /operator, password and clipboard state', () => adminState(browser));
+    await run('operator console refuses a tenant who is not a platform admin', () => operatorRefusal(browser));
     await run('OCR documents, review, status and export', () => documentOcrAcceptance(browser));
     await run('automatic price list creates keyed products and leaves unsafe rows for review', () => automaticPriceListAcceptance(browser));
     await run('a read price list is accepted in one click, per-line approval stays the exception', () => manualPriceListConfirmation(browser));

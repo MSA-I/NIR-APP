@@ -1,5 +1,5 @@
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router';
-import { Component, lazy, Suspense, useState, type ReactNode } from 'react';
+import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { useAuth, homeFor } from './auth/AuthContext';
 import { PageLoader, useToast } from './components/ui';
 import { toHebrewError } from './lib/errors';
@@ -52,7 +52,6 @@ const DocumentOperations = lazy(() => import('./pages/DocumentOperations'));
 const ConsolidatedInvoices = lazy(() => import('./pages/ConsolidatedInvoices'));
 const DocumentReview = lazy(() => import('./pages/DocumentReview'));
 const Settings = lazy(() => import('./pages/Settings'));
-const Admin = lazy(() => import('./pages/Admin'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 
 class LazyRouteErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -110,17 +109,16 @@ function ReadOnlyUnavailable() {
 }
 
 /**
- * Platform operators are a different axis from tenant roles, so they get their own guard
- * rather than a synthetic entry in the Role union — that union mirrors the user_role enum
- * the RLS policies are built on, and inventing a value there would be a lie about the DB.
- * A platform admin need not have a tenant profile at all, so this must not require one.
+ * The platform operator's console is the separate operator application (operator.html,
+ * src/operator/) — a second Vite entry on the same origin with its own bundle. The tenant
+ * application carries none of its code and none of its routes, so handing an operator over is
+ * a full document navigation, not a client-side route.
  */
-function PlatformGuard({ children }: { children: ReactNode }) {
-  const { session, loading, isPlatformAdmin } = useAuth();
-  if (loading) return <PageLoader />;
-  if (!session) return <Navigate to="/login" replace />;
-  if (!isPlatformAdmin) return <Navigate to="/" replace />;
-  return <>{children}</>;
+function OperatorHandoff() {
+  useEffect(() => {
+    window.location.replace('/operator');
+  }, []);
+  return <PageLoader />;
 }
 
 const STAFF: readonly ActiveRole[] = ['owner', 'office'];
@@ -239,18 +237,10 @@ export default function App() {
   if (!isPublic && offlineBootstrap && !isOfflineReceivingRoute) return <OfflineReceivingOnly />;
 
   // An operator with no tenant profile is legitimate — send them to the console, not to
-  // the unavailable screen.
+  // the unavailable screen. The console is the separate operator application, so this is a
+  // document handoff rather than a route.
   if (!isPublic && session && !loading && !profile && isPlatformAdmin) {
-    return (
-      <LazyPageBoundary>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/admin" element={<PlatformGuard><Admin /></PlatformGuard>} />
-            <Route path="*" element={<Navigate to="/admin" replace />} />
-          </Routes>
-        </Suspense>
-      </LazyPageBoundary>
-    );
+    return <OperatorHandoff />;
   }
   if (!isPublic && session && !loading && !profile && bootstrapError) return <BootstrapUnavailable />;
   if (!isPublic && session && !loading && !profile) return <AccountUnavailable />;
@@ -321,7 +311,6 @@ export default function App() {
         <Route path="/supplier-log" element={<Guard roles={['owner']}><SupplierLog /></Guard>} />
         <Route path="/settings" element={<Guard roles={['owner']}><Settings /></Guard>} />
         <Route path="/onboarding" element={<Guard roles={['owner']} write><Onboarding /></Guard>} />
-        <Route path="/admin" element={<PlatformGuard><Admin /></PlatformGuard>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

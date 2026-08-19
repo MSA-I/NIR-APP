@@ -7,7 +7,6 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { PageHeader, SkeletonCards, useToast, ErrorNote, Note, DataTable, StatusBadge, ConfirmDialog, Modal, type Column } from '../components/ui';
-import { AutonomyPolicyPanel } from '../components/AutonomyPolicyPanel';
 import { ExportTemplatesPanel } from '../components/ExportTemplatesPanel';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVITATION_STATUS } from '../lib/status';
@@ -70,7 +69,7 @@ async function logoUploadSessionKey(orgId: string, file: File): Promise<string> 
 }
 
 export default function Settings() {
-  const { profile, org, roleLabels, isPlatformAdmin, organizationAccess, refreshOrganizationAccess } = useAuth();
+  const { profile, org, roleLabels, organizationAccess, refreshOrganizationAccess } = useAuth();
   const canWrite = organizationAccess?.canWrite ?? true;
   // The two roles 0126's template commands accept. Named once, used by the panel gate below.
   const isOffice = profile?.role === 'owner' || profile?.role === 'office';
@@ -436,17 +435,15 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* The autonomy switch lives here because this is where the owner looked for it. It is
-          rendered only for a platform admin, and that gate is not decoration: the command behind
-          it (platform_set_autonomy_policy, 0076:270-272) raises `not_platform_admin` for anyone
-          else. An owner without the grant would meet a control that refuses on submit — the exact
-          shape of the obsolete screen this flow replaced. Absent beats broken. */}
-      {canWrite && isPlatformAdmin && org && <AutonomyPolicyPanel orgId={org.id} orgName={org.name} />}
+      {/* The autonomy switches left this screen for the operator application (src/operator/,
+          19.08.2026): they were never the owner's control — platform_set_autonomy_policy
+          (0076:270-272) raises `not_platform_admin` for anyone who is not a platform operator,
+          and tenant settings must hold only what the tenant can actually operate. */}
 
-      {/* Package K. Gated on the same two roles 0126's commands accept, for the reason the autonomy
-          panel above states: a control that refuses on submit is worse than a control that is not
-          there. `resolve_export_report_template` also admits the accountant, but reading which
-          template their report uses belongs beside the report, not in the owner's settings. */}
+      {/* Package K. Gated on the same two roles 0126's commands accept: a control that refuses
+          on submit is worse than a control that is not there. `resolve_export_report_template`
+          also admits the accountant, but reading which template their report uses belongs beside
+          the report, not in the owner's settings. */}
       {canWrite && org && isOffice && <ExportTemplatesPanel orgId={org.id} />}
 
       <div className="card card-pad space-y-4">

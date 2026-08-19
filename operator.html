@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#003F47" />
+    <link rel="icon" type="image/png" href="/icons/icon-192.png" />
+    <link rel="preload" href="/fonts/noto/NotoSansHebrew-Hebrew.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- The operator console is not the tenant PWA: no manifest and no service-worker
+         registration. Installing "InPlace" as an app belongs to the customer application;
+         this surface is a cross-tenant tool and stays online-only on purpose. -->
+    <title>InPlace — תפעול פלטפורמה</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/operator/main.tsx"></script>
+  </body>
+</html>

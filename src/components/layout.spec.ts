@@ -5,8 +5,8 @@ import type { ActiveRole } from '../lib/types';
 import { routePresentationTitle } from '../lib/routePresentation';
 
 const ACTIVE_ROLES: ActiveRole[] = ['owner', 'office', 'accountant'];
-const pathsFor = (role: ActiveRole | undefined, isPlatformAdmin = false) =>
-  sectionsForRole(role, isPlatformAdmin).flatMap((section) => section.items).map((item) => item.to);
+const pathsFor = (role: ActiveRole | undefined) =>
+  sectionsForRole(role).flatMap((section) => section.items).map((item) => item.to);
 
 describe('מעטפת הניווט', () => {
   it('מרכז הבקרה הוא הפריט הראשון בכל חשבון פעיל', () => {
@@ -15,7 +15,7 @@ describe('מעטפת הניווט', () => {
   });
 
   it('העבודה היומית גלויה ומוגבלת, והאזורים הנדירים מתקפלים', () => {
-    const owner = sectionsForRole('owner', false);
+    const owner = sectionsForRole('owner');
     expect(owner[0].items.map((item) => item.to)).toEqual([
       '/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers',
     ]);
@@ -47,10 +47,15 @@ describe('מעטפת הניווט', () => {
     expect(pathsFor('accountant')).toEqual(expect.arrayContaining(['/dashboard', '/invoices', '/pay']));
   });
 
-  it('מדור הפלטפורמה נוסף אחרון ורק למנהל פלטפורמה', () => {
-    expect(sectionsForRole('owner', true).at(-1)?.section).toBe('פלטפורמה');
-    expect(sectionsForRole(undefined, true).map((section) => section.section)).toEqual(['פלטפורמה']);
-    expect(sectionsForRole('owner', false).map((section) => section.section)).not.toContain('פלטפורמה');
+  it('הקונסולה התפעולית אינה קיימת בניווט הדייר — לאף תפקיד ולאף מפעיל', () => {
+    // The 'פלטפורמה' section moved to the operator application (operator.html, src/operator/,
+    // 19.08.2026). The tenant catalogue must carry no /admin door at all — this pins the removal
+    // so it cannot quietly return as "just one more section".
+    for (const role of [...ACTIVE_ROLES, undefined]) {
+      expect(sectionsForRole(role).map((section) => section.section)).not.toContain('פלטפורמה');
+    }
+    expect(NAV_SECTIONS.flatMap((section) => section.items).map((item) => item.to)).not.toContain('/admin');
+    expect(sectionsForRole(undefined)).toEqual([]);
   });
 
   it('קטלוג המסלולים נשאר מלא וללא כפילויות', () => {
@@ -93,10 +98,10 @@ describe('סרגל הפעולות המהירות במובייל', () => {
 
   it('מחזיר את כל יעדי הניווט למגירה תחת שכבת עבודה שוטפת', () => {
     for (const role of ACTIVE_ROLES) {
-      const drawer = drawerSectionsForRole(role, false);
+      const drawer = drawerSectionsForRole(role);
       expect(drawer[0].section).toBe('עבודה שוטפת');
       expect(drawer.flatMap((section) => section.items)).toEqual(
-        sectionsForRole(role, false).flatMap((section) => section.items),
+        sectionsForRole(role).flatMap((section) => section.items),
       );
     }
   });

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -39,8 +40,15 @@ export default defineConfig({
         // dependency of the entry chunk after Rollup's shared-chunk extraction, so excluding it
         // produces a cached HTML document that still cannot boot offline. Only the two genuinely
         // online-only document stacks stay out; once loaded they join the runtime cache below.
+        //
+        // The operator console (operator.html + its `operator` entry chunk) stays out of the
+        // precache entirely: this worker is the TENANT shell's, and the console is an
+        // online-only cross-tenant surface that must never be served from a tenant cache.
+        // Note `navigateFallbackDenylist` does not exist in injectManifest mode — the
+        // equivalent guard lives in public/sw.js, which refuses to answer /operator
+        // navigations from the shell cache.
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest,woff2}'],
-        globIgnores: ['**/assets/PdfSourceView-*.js', '**/assets/xlsx-*.js'],
+        globIgnores: ['**/assets/PdfSourceView-*.js', '**/assets/xlsx-*.js', '**/operator.html', '**/assets/operator-*'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
       // The dev server serves public/sw.js verbatim (self.__WB_MANIFEST undefined → the
@@ -52,6 +60,16 @@ export default defineConfig({
   preview: { allowedHosts: true },
   build: {
     rollupOptions: {
+      // Two applications, one deploy: the tenant SPA and the operator console are separate HTML
+      // entries in the same dist, so the console ships with the same release ritual and the same
+      // env while the TENANT bundle carries zero operator code. The tenant key is deliberately
+      // `index` (not `main`): the input alias names the entry chunk, and renaming the tenant
+      // bundle from assets/index-*.js to assets/main-*.js would be a gratuitous change in a
+      // commit that is about the operator, not the tenant.
+      input: {
+        index: fileURLToPath(new URL('./index.html', import.meta.url)),
+        operator: fileURLToPath(new URL('./operator.html', import.meta.url)),
+      },
       output: {
         // Split the charting stack into its own chunk. recharts v2 pulls its d3 code
         // through victory-vendor (+ internmap), so only Dashboard/Reports load it — the

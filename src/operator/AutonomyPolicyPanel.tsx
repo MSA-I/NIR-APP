@@ -2,11 +2,11 @@ import { useId, useState } from 'react';
 import { BrainCircuit, ListChecks, Loader2, PackageCheck, Scissors } from 'lucide-react';
 import {
   AUTOMATIC_SPLIT_PAGE_CEILING, PAID_OCR_PAGE_CAP,
-} from './document-review/serverLimits';
+} from '../components/document-review/serverLimits';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
-import { ConfirmDialog, ErrorNote, Note, useToast } from './ui';
+import { ConfirmDialog, ErrorNote, Note, useToast } from '../components/ui';
 
 /**
  * The organization's autonomy switches, in the order a file meets them: a mixed PDF is split
@@ -179,13 +179,17 @@ function PolicyCard({
 }
 
 export function AutonomyPolicyPanel({ orgId, orgName }: { orgId: string; orgName: string }) {
+  // One platform-scoped read (platform_get_autonomy_policies, 0147), not four tenant-scoped
+  // evaluate_autonomy_policy calls: the evaluator resolves auth_org(), which is the CALLER's
+  // organization — for an operator that is either null (no profile) or their own tenant, never
+  // the organization they are administering. This door takes the organization explicitly and is
+  // gated by the same not_platform_admin check as the write beside it.
   const { data, loading, error, refetch } = useQuery(async () => {
-    const rows = await Promise.all(POLICIES.map(async ({ key }) => {
-      const result = await supabase.rpc('evaluate_autonomy_policy', { p_policy_key: key });
-      return (unwrap(result) as AutonomyPolicy[])[0] ?? null;
-    }));
-    return rows;
-  });
+    const rows = unwrap(
+      await supabase.rpc('platform_get_autonomy_policies', { p_org_id: orgId }),
+    ) as AutonomyPolicy[];
+    return POLICIES.map(({ key }) => rows.find((row) => row.policy_key === key) ?? null);
+  }, [orgId]);
 
   if (loading) return <div className="card card-pad text-sm text-ink-muted">טוען את מדיניות האוטונומיה…</div>;
   if (error) return <ErrorNote message={error} />;

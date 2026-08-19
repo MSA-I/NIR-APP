@@ -6,7 +6,6 @@
  * header and browser title.
  */
 export const STATIC_ROUTE_TITLES = {
-  '/admin': 'ניהול פלטפורמה',
   '/dashboard': 'מרכז הבקרה',
   '/suppliers': 'ספקים',
   '/products': 'מוצרים',
@@ -57,7 +56,6 @@ export function staticRouteTitle(path: StaticRoutePath): string {
  * count) keeps reporting them through `meta` — the description sits above that, unchanging.
  */
 export const STATIC_ROUTE_DESCRIPTIONS: Record<StaticRoutePath, string> = {
-  '/admin': 'צפייה בארגונים הרשומים בפלטפורמה, ניהול סיום שירות וייצוא דיירים וקריאת הערות שהגיעו מהמשתמשים.',
   '/dashboard': 'פותחים כאן את היום: מה דורש טיפול עכשיו, מה עלול לעלות כסף ומה מצב העסק ברגע זה.',
   '/suppliers': 'ניהול רשימת הספקים ופרטיהם, וכניסה לכרטיס ספק לצפייה בהזמנות, בחשבוניות ובזיכויים שלו.',
   '/products': 'ניהול קטלוג המוצרים שמהם נבנות ההזמנות, והעלאת מחירוני ספקים עבורם.',
