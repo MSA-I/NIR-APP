@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { reasonOr } from '../lib/reason';
+import { useParamState } from '../lib/useParamState';
 import { ChevronDown, ClipboardCheck, Minus, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -62,7 +63,17 @@ interface InventoryMovement {
 }
 
 type InventoryCommand = 'stocktake' | 'consumption' | 'adjustment';
-type BalanceFilter = 'all' | 'low' | 'uncounted';
+/**
+ * The stock-state filters, one per segment of the band above the table.
+ *
+ * The empty string is "no filter" — the value `useParamState` returns for an absent parameter —
+ * so the URL carries `?stock=low` and nothing at all when the table is unfiltered, rather than a
+ * noise parameter spelling out the default. Anything else in the parameter is not a filter this
+ * screen knows how to run, so it is dropped back to "no filter": a pasted or stale value must not
+ * silently empty the table with no way to tell why.
+ */
+const BALANCE_FILTERS = ['low', 'counted', 'uncounted'] as const;
+type BalanceFilter = '' | typeof BALANCE_FILTERS[number];
 
 const MOVEMENT_LABEL: Record<InventoryMovement['movement_type'], string> = {
   receipt: 'קבלת סחורה',
@@ -88,9 +99,13 @@ const COMMAND_COPY: Record<InventoryCommand, { title: string; quantity: string; 
  * `—`-for-unknown rule, same click-to-filter targets, same 44px hit areas.
  *
  * `border-s` / `border-t` only — never `divide-x`, which is physical and inverts under RTL.
+ *
+ * A segment that filters is a toggle, not a one-way switch, so it carries `aria-pressed` and the
+ * selected surface while its filter is the live one — otherwise the only evidence that the table
+ * below is filtered sits in a dropdown the user did not touch.
  */
-function StockStat({ title, value, sub, tone = 'idle', onClick }: {
-  title: string; value: string; sub: string; tone?: 'idle' | 'alert'; onClick?: () => void;
+function StockStat({ title, value, sub, tone = 'idle', active = false, onClick }: {
+  title: string; value: string; sub: string; tone?: 'idle' | 'alert'; active?: boolean; onClick?: () => void;
 }) {
   const body = (
     <>
@@ -102,8 +117,8 @@ function StockStat({ title, value, sub, tone = 'idle', onClick }: {
   const shared = 'block min-h-20 border-t border-line-soft px-4 py-3 text-start first:border-t-0 sm:border-s sm:border-t-0 sm:px-5 sm:first:border-s-0';
   return onClick
     ? (
-      <button type="button" onClick={onClick}
-        className={`${shared} w-full cursor-pointer transition-colors hover:bg-surface-hover active:bg-surface-selected`}>
+      <button type="button" onClick={onClick} aria-pressed={active}
+        className={`${shared} w-full cursor-pointer transition-colors ${active ? 'bg-surface-selected' : 'hover:bg-surface-hover active:bg-surface-selected'}`}>
         {body}
       </button>
     )
@@ -123,7 +138,13 @@ function movementBadge(type: InventoryMovement['movement_type']) {
 
 export default function Inventory() {
   const { profile, organizationAccess } = useAuth();
-  const [filter, setFilter] = useState<BalanceFilter>('all');
+  // In the URL, not in component state: a filtered מלאי view is a thing an owner sends to the
+  // office ("these are the ones under minimum"), and it has to survive Back after opening a
+  // product. `useState` made the click unshareable and dropped it on every back-navigation.
+  const [filterParam, setFilter] = useParamState('stock');
+  const filter: BalanceFilter = (BALANCE_FILTERS as readonly string[]).includes(filterParam)
+    ? filterParam as BalanceFilter
+    : '';
   const [command, setCommand] = useState<{ product: InventoryBalance; type: InventoryCommand } | null>(null);
 
   const balances = useQuery<InventoryBalance[]>(async () =>
@@ -135,6 +156,7 @@ export default function Inventory() {
 
   const filteredBalances = useMemo(() => (balances.data ?? []).filter((row) => {
     if (filter === 'low') return row.is_low_stock === true;
+    if (filter === 'counted') return row.is_counted;
     if (filter === 'uncounted') return !row.is_counted;
     return true;
   }), [balances.data, filter]);
@@ -244,6 +266,9 @@ export default function Inventory() {
   const counted = balances.data?.filter((row) => row.is_counted).length ?? null;
   const low = balances.data?.filter((row) => row.is_low_stock === true).length ?? null;
   const uncounted = balances.data?.filter((row) => !row.is_counted).length ?? null;
+  // Clicking the segment that is already live clears it — a filter you entered by clicking is a
+  // filter you should be able to leave the same way, without hunting for the dropdown.
+  const toggleFilter = (value: BalanceFilter) => () => setFilter(filter === value ? '' : value);
 
   const movementCount = movements.data?.length ?? null;
   const latestMovementAt = movements.data?.[0]?.created_at ?? null;
@@ -285,11 +310,19 @@ export default function Inventory() {
 
       <section aria-labelledby="inventory-overview-title">
         <h2 id="inventory-overview-title" className="section-title mb-2">תמונת מצב</h2>
+        {/* All three segments filter, and each of them filters on the same condition: the count is
+            KNOWN. A count of zero is a real answer — "nothing is under minimum" — and filtering to
+            an honestly empty table says exactly that; tying clickability to `count > 0`, as it used
+            to be, made the answer look like a dead card. A segment showing `—` stays a plain div,
+            because an unknown count cannot promise a filter it does not know how to compute
+            (CLAUDE.md, "אין ערכים סטטיים מזויפים": `—` is the absence of a measurement, not 0). */}
         {balances.error && !balances.data ? <ErrorNote message={balances.error} /> : (
           <div className="card grid grid-cols-1 sm:grid-cols-3">
-            <StockStat title="מוצרים שנספרו" value={counted == null ? '—' : fmtNum(counted)} sub="עם יתרה ניתנת למדידה" />
+            <StockStat title="מוצרים שנספרו" value={counted == null ? '—' : fmtNum(counted)} sub="עם יתרה ניתנת למדידה"
+              active={filter === 'counted'} onClick={counted == null ? undefined : toggleFilter('counted')} />
             <StockStat title="מתחת למינימום" value={low == null ? '—' : fmtNum(low)} sub="דורש בדיקת רכש"
-              tone={low && low > 0 ? 'alert' : 'idle'} onClick={low && low > 0 ? () => setFilter('low') : undefined} />
+              tone={low && low > 0 ? 'alert' : 'idle'}
+              active={filter === 'low'} onClick={low == null ? undefined : toggleFilter('low')} />
             {/* `idle`, matching the "טרם נספר" badge in the table below. The same set of products
                 was amber here and neutral there, on one screen. Not-counted is the ABSENCE of a
                 measurement — idle is literally "היעדר טענה" — and on a fresh tenant it is every
@@ -297,7 +330,7 @@ export default function Inventory() {
                 applied to INVOICE_EXPORT_STATUS.not_sent in status.ts). "מלאי נמוך" stays the one
                 coloured claim on this screen. The segment is still clickable; the filter did not move. */}
             <StockStat title="ממתינים לספירה" value={uncounted == null ? '—' : fmtNum(uncounted)} sub="היתרה שלהם אינה ידועה"
-              onClick={uncounted && uncounted > 0 ? () => setFilter('uncounted') : undefined} />
+              active={filter === 'uncounted'} onClick={uncounted == null ? undefined : toggleFilter('uncounted')} />
           </div>
         )}
       </section>
@@ -323,15 +356,16 @@ export default function Inventory() {
             searchLabel="חיפוש מוצר במלאי"
             searchFn={(row, q) => row.product_name.toLocaleLowerCase('he').includes(q)}
             error={balances.error}
-            activeFilters={filter === 'all' ? 0 : 1}
-            onClearFilters={() => setFilter('all')}
+            activeFilters={filter ? 1 : 0}
+            onClearFilters={() => setFilter('')}
             toolbar={
               <label className="flex items-center gap-2 text-sm text-ink-soft">
                 <SlidersHorizontal size={16} aria-hidden="true" />
                 <span className="sr-only">סינון מצב מלאי</span>
-                <select className="input w-auto!" aria-label="סינון מצב מלאי" value={filter} onChange={(event) => setFilter(event.target.value as BalanceFilter)}>
-                  <option value="all">כל המוצרים</option>
+                <select className="input w-auto!" aria-label="סינון מצב מלאי" value={filter} onChange={(event) => setFilter(event.target.value)}>
+                  <option value="">כל המוצרים</option>
                   <option value="low">מתחת למינימום</option>
+                  <option value="counted">נספרו</option>
                   <option value="uncounted">טרם נספרו</option>
                 </select>
               </label>
