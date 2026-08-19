@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
-import { buildMonthlyWorkbook, buildStyledMonthlyWorkbook, type MonthlyReportLabels } from './monthlyReport';
+import { buildMonthlyWorkbook, buildStyledMonthlyWorkbook, monthlyReportScreenTotals, type MonthlyReportLabels } from './monthlyReport';
+import { fmtMoneyExact } from './format';
 import { monthlyReportTemplateValues } from './reportTemplateExport';
 
 const labels: MonthlyReportLabels = {
@@ -145,5 +146,40 @@ describe('accountant workbook — styled built-in default', () => {
     const plain = buildMonthlyWorkbook(input);
     expect(plain.Workbook?.Views?.[0]?.RTL).toBeUndefined();
     expect(plain.Sheets['פרטי הדוח']['!merges']).toBeUndefined();
+  });
+});
+
+describe('monthlyReportScreenTotals — אפס שנמדד מול אפס שלא נמדד', () => {
+  const invoice = (total: number, paid = 'unpaid') =>
+    ({ total_amount: total, amount_before_vat: total / 1.18, vat_amount: total - total / 1.18, payment_status: paid });
+
+  it('חודש ריק — הסכומים הם null (המסך יציג —), הספירות הן 0', () => {
+    const totals = monthlyReportScreenTotals({ invoices: [], payments: [], bank: [] });
+    expect(totals.invoices).toBeNull();
+    expect(totals.beforeVat).toBeNull();
+    expect(totals.vat).toBeNull();
+    expect(totals.paid).toBeNull();
+    expect(totals.hasInvoices).toBe(false);
+    // A count over an empty universe was still taken. It stays a number.
+    expect(totals.unpaidCount).toBe(0);
+    expect(totals.unmatchedBank).toBe(0);
+    expect(totals.suggestedBank).toBe(0);
+    expect(fmtMoneyExact(totals.vat)).toBe('—');
+  });
+
+  it('חודש שיש בו חשבוניות שסכומן 0 — אפס אמיתי, לא null', () => {
+    // The half a blanket null-conversion would have destroyed: rows exist, they sum to zero.
+    const totals = monthlyReportScreenTotals({ invoices: [invoice(0)], payments: [], bank: [] });
+    expect(totals.invoices).toBe(0);
+    expect(totals.hasInvoices).toBe(true);
+    expect(fmtMoneyExact(totals.invoices)).not.toBe('—');
+    expect(fmtMoneyExact(totals.invoices)).toContain('0.00');
+  });
+
+  it('תשלומים וחשבוניות נמדדים בנפרד — חודש עם חשבוניות ובלי תשלומים', () => {
+    const totals = monthlyReportScreenTotals({ invoices: [invoice(118)], payments: [], bank: [] });
+    expect(totals.invoices).toBe(118);
+    expect(totals.paid).toBeNull();
+    expect(totals.unpaidCount).toBe(1);
   });
 });

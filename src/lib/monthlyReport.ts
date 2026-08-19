@@ -70,6 +70,39 @@ export interface MonthlyReportLabels {
   exceptionType: Record<string, string | undefined>;
 }
 
+/**
+ * The nine figures the /reports screen puts on its KPI grid, with the one distinction the screen
+ * has to make and a spreadsheet does not: a **sum over an empty set is an absence, not a zero**.
+ * Three of the nine are sums (`invoices`, `vat`, `paid`) and go `null` when their source set is
+ * empty, so `fmtMoneyExact` renders `—` — the dashboard already applies exactly this rule to the
+ * same money facts (Dashboard.tsx money strip), and CLAUDE.md:31 forbids the fake `0`. A month
+ * that HAS invoices which happen to sum to 0 keeps a real `0`: that is a measurement.
+ *
+ * The counts stay numbers unconditionally. A set of zero invoices genuinely contains zero unpaid
+ * invoices — the universe is empty, but the count of it was taken.
+ *
+ * The workbook builders below deliberately keep plain `0`: a numeric cell is what an accountant's
+ * own formulas consume, and `—` would turn it into text. The `—` rule governs screens.
+ */
+export function monthlyReportScreenTotals(data: {
+  invoices: { total_amount: number; amount_before_vat: number; vat_amount: number; payment_status: string }[];
+  payments: { amount: number }[];
+  bank: { status: string }[];
+}) {
+  const hasInvoices = data.invoices.length > 0;
+  const hasPayments = data.payments.length > 0;
+  return {
+    invoices: hasInvoices ? data.invoices.reduce((s, i) => s + i.total_amount, 0) : null,
+    beforeVat: hasInvoices ? data.invoices.reduce((s, i) => s + i.amount_before_vat, 0) : null,
+    vat: hasInvoices ? data.invoices.reduce((s, i) => s + i.vat_amount, 0) : null,
+    paid: hasPayments ? data.payments.reduce((s, p) => s + p.amount, 0) : null,
+    unpaidCount: data.invoices.filter((i) => i.payment_status !== 'paid').length,
+    unmatchedBank: data.bank.filter((b) => b.status === 'unmatched').length,
+    suggestedBank: data.bank.filter((b) => b.status === 'suggested').length,
+    hasInvoices,
+  };
+}
+
 export function buildMonthlyWorkbook(input: {
   orgName: string | null | undefined;
   month: string;

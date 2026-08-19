@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { reasonOr } from '../lib/reason';
-import { ChevronDown, ClipboardCheck, Minus, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, ClipboardCheck, Minus, Package, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import {
   DataTable,
@@ -319,8 +320,15 @@ export default function Inventory() {
           </ul>
         </Disclosure>
         {balances.loading && !balances.data ? <SkeletonTable title={false} cols={5} /> : (
+          /* inventory_balances is one row PER ACTIVE PRODUCT (0026), so an empty table means the
+             catalogue is empty — not that nothing was counted. Saying "עדיין לא נספר מלאי" here
+             would be a false statement about a count that was never possible. */
           <DataTable rows={rows} columns={balanceColumns} searchable pageSize={20}
             searchLabel="חיפוש מוצר במלאי"
+            emptyIcon={<Package size={36} />}
+            emptyTitle="עדיין אין מוצרים פעילים"
+            emptySubtitle="יתרת מלאי נמדדת לכל מוצר פעיל. אחרי הוספת מוצרים, ספירה פיזית ראשונה היא זו שנותנת להם יתרה."
+            emptyAction={<Link className="btn-secondary" to="/products">מעבר למוצרים</Link>}
             searchFn={(row, q) => row.product_name.toLocaleLowerCase('he').includes(q)}
             error={balances.error}
             activeFilters={filter === 'all' ? 0 : 1}
