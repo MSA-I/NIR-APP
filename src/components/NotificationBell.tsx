@@ -15,13 +15,13 @@ export default function NotificationBell({ onShell = false }: { onShell?: boolea
       className={`relative grid size-[44px] shrink-0 place-items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
         onShell
           ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
-          : 'text-ink-soft hover:bg-action-wash hover:text-ink'
+          : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
       }`}>
       <Bell size={19} aria-hidden="true" />
       {!!unread && unread > 0 && (
         <span aria-hidden="true"
           className={`absolute -end-1 -top-1 min-w-5 border px-1 py-0.5 text-center text-xs font-semibold leading-none num ${
-            onShell ? 'border-shell bg-alert-solid text-white' : 'border-surface bg-alert-solid text-white'
+            onShell ? 'border-shell bg-alert-solid text-on-solid' : 'border-surface bg-alert-solid text-on-solid'
           }`}>
           {unread > 99 ? '99+' : unread}
         </span>

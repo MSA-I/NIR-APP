@@ -84,8 +84,8 @@ export default function ProductStep({ products, categories, offersByProduct, car
           const offers = offersByProduct.get(product.id) ?? [];
           const carted = cartByProduct.get(product.id);
           return (
-            <div key={product.id} className={`flex min-h-14 items-center ${carted ? 'bg-action-wash/45' : ''}`}>
-              <button type="button" className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-start hover:bg-action-wash sm:px-4"
+            <div key={product.id} className={`flex min-h-14 items-center ${carted ? 'bg-surface-selected' : ''}`}>
+              <button type="button" className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-start hover:bg-surface-hover sm:px-4"
                 aria-pressed={!!carted}
                 aria-label={`${carted ? 'נבחר' : 'בחירת'} ${product.name}`}
                 onClick={() => { if (!carted) onAdd(product); }}>
@@ -95,9 +95,9 @@ export default function ProductStep({ products, categories, offersByProduct, car
               </button>
               {carted && (
                 <div className="me-3 flex shrink-0 items-center border border-line-strong bg-surface sm:me-4" role="group" aria-label={`כמות ${product.name}`}>
-                  <button type="button" className="grid size-11 place-items-center hover:bg-action-wash" aria-label={`הפחתת כמות ${product.name}`} onClick={() => onQty(product.id, carted.qty - 1)}><Minus size={14} /></button>
+                  <button type="button" className="grid size-11 place-items-center hover:bg-surface-hover" aria-label={`הפחתת כמות ${product.name}`} onClick={() => onQty(product.id, carted.qty - 1)}><Minus size={14} /></button>
                   <span className="min-w-10 border-x border-line py-2 text-center text-sm font-semibold num">{carted.qty}</span>
-                  <button type="button" className="grid size-11 place-items-center hover:bg-action-wash" aria-label={`הוספת כמות ${product.name}`} onClick={() => onQty(product.id, carted.qty + 1)}><Plus size={14} /></button>
+                  <button type="button" className="grid size-11 place-items-center hover:bg-surface-hover" aria-label={`הוספת כמות ${product.name}`} onClick={() => onQty(product.id, carted.qty + 1)}><Plus size={14} /></button>
                 </div>
               )}
             </div>

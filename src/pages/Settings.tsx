@@ -391,7 +391,7 @@ export default function Settings() {
             <button className="btn-ghost py-1! text-xs" onClick={() => setResendTarget(r)}>
               <Send size={13} /> שליחה מחדש
             </button>
-            <button className="btn-ghost py-1! text-xs text-alert-solid hover:bg-alert-wash" onClick={() => setRevokeTarget(r)}>
+            <button className="btn-ghost py-1! text-xs text-alert-fg hover:bg-alert-wash" onClick={() => setRevokeTarget(r)}>
               <Ban size={13} /> ביטול
             </button>
           </div>
@@ -480,7 +480,7 @@ export default function Settings() {
         )}
         <div className="flex flex-wrap justify-end gap-2">
           {!offboardingOpen && (
-            <button type="button" className="btn-secondary text-alert-solid" disabled={offboardingBusy}
+            <button type="button" className="btn-secondary text-alert-fg" disabled={offboardingBusy}
               onClick={() => setOffboardingAction('request')}>
               <LogOut size={15} /> בקשת סיום שירות
             </button>

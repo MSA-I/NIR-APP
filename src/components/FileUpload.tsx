@@ -1015,7 +1015,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
                   </Link>
                 )}
                 {canDelete && (
-                  <button className="btn-ghost p-1.5! min-w-11 min-h-11 text-ink-faint hover:text-alert-solid" onClick={() => setPending(d)} aria-label="מחיקה">
+                  <button className="btn-ghost p-1.5! min-w-11 min-h-11 text-ink-faint hover:text-alert-fg" onClick={() => setPending(d)} aria-label="מחיקה">
                     <Trash2 size={14} />
                   </button>
                 )}

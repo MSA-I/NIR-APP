@@ -493,14 +493,17 @@ export default function InvoiceDetail() {
             <h2 id="invoice-three-way-title" className="section-title">התאמת הזמנה, קבלה וחשבונית</h2>
             <p className="text-sm text-ink-muted mt-1">השוואה ברמת שורה מול הכמות שהוזמנה, הכמות שהתקבלה ומחיר ההזמנה.</p>
           </div>
+          {/* The tone dictionary's own class, not a hand-assembled pair: this was the one badge
+              in the app wearing bg-*-soft with text-*-fg instead of text-*-on-soft, which is a
+              step lighter than every other badge on the same background. */}
           {data.threeWay && (
-            <span className={`badge ${
-              data.threeWay.override_active ? 'bg-await-soft text-await-fg'
-                : data.threeWay.status === 'review_required' ? 'bg-alert-soft text-alert-fg'
-                  : data.threeWay.status === 'matched_with_warnings' ? 'bg-await-soft text-await-fg'
-                    : data.threeWay.status === 'matched' ? 'bg-done-soft text-done-fg'
-                      : 'bg-info-soft text-info-fg'
-            }`}>
+            <span className={
+              data.threeWay.override_active ? 'badge-await'
+                : data.threeWay.status === 'review_required' ? 'badge-alert'
+                  : data.threeWay.status === 'matched_with_warnings' ? 'badge-await'
+                    : data.threeWay.status === 'matched' ? 'badge-done'
+                      : 'badge-info'
+            }>
               {data.threeWay.override_active ? 'אושרה עקיפה מתועדת'
                 : data.threeWay.status === 'review_required' ? 'נדרשת בדיקה'
                   : data.threeWay.status === 'matched_with_warnings' ? 'תואם עם אזהרות'
@@ -568,7 +571,7 @@ export default function InvoiceDetail() {
               && data.threeWay.approval_blocked && !data.threeWay.override_active
               && !data.threeWay.definite_duplicate_invoice && (
                 <div className="flex justify-end">
-                  <button className="btn-secondary text-alert-solid" disabled={busy}
+                  <button className="btn-secondary text-alert-fg" disabled={busy}
                     onClick={() => setOverrideConfirmOpen(true)}>
                     עקיפת חסימה לאחר אימות זהות
                   </button>

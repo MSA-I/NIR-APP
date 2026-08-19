@@ -168,7 +168,7 @@ export function OrdersList() {
                   </div>
                   <div className="ms-auto flex gap-2">
                     <button type="button" className="btn-secondary" onClick={() => navigate(`/orders/new?draft=${draft.id}`)}>המשך עריכה</button>
-                    <button type="button" className="btn-ghost text-alert-solid" onClick={() => setDraftCancelTarget(draft)}>ביטול</button>
+                    <button type="button" className="btn-ghost text-alert-fg" onClick={() => setDraftCancelTarget(draft)}>ביטול</button>
                   </div>
                 </div>
               ))}
@@ -408,7 +408,7 @@ export function OrderDetail() {
           )}
           <button className="btn-secondary" onClick={() => window.print()}><Printer size={15} /> הדפסה</button>
           {canWrite && !['received', 'cancelled'].includes(order.status) && (
-            <button className="btn-ghost text-alert-solid" onClick={() => setConfirm({ status: 'cancelled', label: 'ביטול הזמנה' })}><XCircle size={15} /> ביטול</button>
+            <button className="btn-ghost text-alert-fg" onClick={() => setConfirm({ status: 'cancelled', label: 'ביטול הזמנה' })}><XCircle size={15} /> ביטול</button>
           )}
         </>}
         lifecycle={order.status === 'cancelled' ? undefined : <LifecycleStrip steps={lifecycleSteps} current={order.status} nextAction={nextAction} />} />

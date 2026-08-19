@@ -287,7 +287,7 @@ export function InvoiceLineReviewModal({
                 {lines.length > 1 && (
                   <button
                     type="button"
-                    className="mt-3 inline-flex min-h-11 items-center gap-1 text-sm text-alert-solid"
+                    className="mt-3 inline-flex min-h-11 items-center gap-1 text-sm text-alert-fg"
                     disabled={busy !== null}
                     onClick={() => {
                       setLines((current) => current.filter((_, lineIndex) => lineIndex !== index));

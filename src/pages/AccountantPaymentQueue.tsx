@@ -156,7 +156,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
     return (
       <Modal open onClose={onDone} title="ההעברה נרשמה">
         <div className="text-center mb-4">
-          <CheckCircle2 size={40} className="text-done-solid mx-auto mb-2" />
+          <CheckCircle2 size={40} className="text-done-fg mx-auto mb-2" />
           <p className="text-sm text-ink-soft">אפשר לצרף עכשיו אישור העברה (צילום מסך / PDF).</p>
         </div>
         <DocumentList entityType="payment" entityId={paymentId} capture />

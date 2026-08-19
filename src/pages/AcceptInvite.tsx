@@ -170,7 +170,7 @@ export default function AcceptInvite() {
           </span>
         </label>
 
-        {formError && <div role="alert" className="text-sm text-alert-solid">{formError}</div>}
+        {formError && <div role="alert" className="text-sm text-alert-fg">{formError}</div>}
 
         <button type="submit" className="btn-primary w-full" disabled={busy || !consent}>
           {busy ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={15} />}
@@ -195,7 +195,7 @@ function Shell({ children }: { children: ReactNode }) {
         <div className="text-center mb-8">
           <img src="/icons/icon-192.png" alt="" width="52" height="52"
             className="mx-auto mb-3 size-13 rounded-xl shadow-menu" />
-          <h1 className="text-3xl font-semibold text-white">{APP_NAME}</h1>
+          <h1 className="text-3xl font-semibold text-on-solid">{APP_NAME}</h1>
           <p className="text-shell-ink-soft mt-1 text-sm">רכש, חשבוניות ותשלומים במקום אחד</p>
         </div>
         {children}
@@ -209,7 +209,7 @@ function Notice({ title, message, tone = 'warn' }: { title: string; message: str
   return (
     <div className="card card-pad space-y-3">
       <div className="flex items-start gap-2.5">
-        <Icon size={19} className={tone === 'info' ? 'text-done-solid shrink-0 mt-0.5' : 'text-await-solid shrink-0 mt-0.5'} />
+        <Icon size={19} className={tone === 'info' ? 'text-done-fg shrink-0 mt-0.5' : 'text-await-fg shrink-0 mt-0.5'} />
         <div>
           <div className="font-semibold text-ink">{title}</div>
           <p className="text-sm text-ink-soft mt-1 leading-relaxed">{message}</p>

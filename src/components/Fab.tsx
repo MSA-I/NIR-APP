@@ -44,8 +44,8 @@ export default function Fab() {
   if (!mobileActions.length) return <>{element}</>;
 
   const mobileItemClass =
-    'mobile-action min-w-0 text-xs font-medium text-ink-soft transition-colors hover:bg-action-wash ' +
-    'active:bg-action-wash/70 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 ' +
+    'mobile-action min-w-0 text-xs font-medium text-ink-soft transition-colors hover:bg-surface-hover ' +
+    'active:bg-surface-selected disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 ' +
     'focus-visible:ring-inset focus-visible:ring-focus';
 
   return (
@@ -76,7 +76,7 @@ export default function Fab() {
           ) : (
             <Link key={key} to={to!}
               aria-current={isRouteFamilyActive(pathname, to!) ? 'page' : undefined}
-              className={`${mobileItemClass} ${isRouteFamilyActive(pathname, to!) ? 'bg-action-wash text-action-on-soft' : ''}`}
+              className={`${mobileItemClass} ${isRouteFamilyActive(pathname, to!) ? 'bg-surface-selected text-action-on-soft' : ''}`}
               data-quick-action-key={key}>{content}</Link>
           );
         })}

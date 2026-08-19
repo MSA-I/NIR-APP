@@ -132,7 +132,7 @@ function OperationsDisclosure({ title, count, summary, empty, children }: {
   if (count === 0) {
     return (
       <div className="flex min-h-11 items-center gap-2 border-t border-line-soft py-2.5 text-sm text-ink-muted first:border-t-0">
-        <Check size={15} className="shrink-0 text-done-solid" aria-hidden="true" />
+        <Check size={15} className="shrink-0 text-done-fg" aria-hidden="true" />
         <span>{empty}</span>
         <span className="badge-idle num ms-auto">0</span>
       </div>
@@ -141,7 +141,7 @@ function OperationsDisclosure({ title, count, summary, empty, children }: {
 
   return (
     <details name="dashboard-operations" className="group border-t border-line-soft first:border-t-0">
-      <summary className="-mx-2 flex min-h-11 list-none flex-wrap items-center gap-2 rounded-lg px-2 py-2.5 text-sm hover:bg-action-wash active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+      <summary className="-mx-2 flex min-h-11 list-none flex-wrap items-center gap-2 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
         <span className="font-medium text-ink-body">{title}</span>
         <span className="badge-idle num">{count}</span>
         {summary && <span className="ms-auto min-w-0 text-end text-xs text-ink-muted">{summary}</span>}
@@ -266,7 +266,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
       {total === 0 ? (
         <div className="mt-2 border-t border-line-soft pt-2">
           <div className="flex min-h-11 items-center gap-2 text-sm text-ink-muted">
-            <Check size={15} className="shrink-0 text-done-solid" aria-hidden="true" />
+            <Check size={15} className="shrink-0 text-done-fg" aria-hidden="true" />
             <span>אין אספקות מתוכננות להיום ומחר</span>
             <span className="badge-idle num ms-auto">0</span>
           </div>
@@ -274,7 +274,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
         </div>
       ) : (
         <details className="group mt-2 border-t border-line-soft">
-          <summary className="-mx-2 flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-6 gap-y-1 rounded-lg px-2 py-3 hover:bg-action-wash active:bg-action-wash/70 focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2 [&::-webkit-details-marker]:hidden">
+          <summary className="-mx-2 flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-6 gap-y-1 rounded-lg px-2 py-3 hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2 [&::-webkit-details-marker]:hidden">
             {groups.map((group) => (
               <span key={group.key} className="flex items-baseline gap-1.5">
                 <span className="text-xs font-medium text-ink-muted">{group.label}</span>
@@ -290,13 +290,13 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
                 <div className="mb-1 text-xs font-medium text-ink-muted">{group.label}</div>
                 {group.rows.length === 0 ? (
                   <div className="flex items-center gap-1.5 py-1 text-xs text-ink-muted">
-                    <Check size={13} className="shrink-0 text-done-solid" aria-hidden="true" /> {group.emptyLabel}
+                    <Check size={13} className="shrink-0 text-done-fg" aria-hidden="true" /> {group.emptyLabel}
                   </div>
                 ) : (
                   <ul className="divide-y divide-line-soft">
                     {group.rows.map((order) => (
                       <li key={order.id}>
-                        <Link to={`/orders/${order.id}`} className="-mx-2 block min-h-11 rounded-lg px-2 py-2 text-sm hover:bg-action-wash active:bg-action-wash/70">
+                        <Link to={`/orders/${order.id}`} className="-mx-2 block min-h-11 rounded-lg px-2 py-2 text-sm hover:bg-surface-hover active:bg-surface-selected">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-medium text-ink-body">{order.supplier?.name ?? '—'}</span>
                             <span className="num text-xs text-ink-muted">#{order.number}</span>
@@ -838,8 +838,12 @@ export default function Dashboard() {
                         <div className="text-ink-muted">החודש</div>
                         <div className="flex items-baseline gap-1.5">
                           <span className="num text-sm font-semibold text-ink">{glanceMoney(data.headline.current)}</span>
+                          {/* Neutral ink, same reasoning as DeltaChip above: this is the month's
+                              purchasing against last month's, and buying more is neither good nor
+                              bad. It used to wear alert/done — a business verdict on a figure the
+                              file itself already decided not to judge, 800 lines apart. */}
                           {data.momChange != null && (
-                            <span className={`num text-xs font-medium ${data.momChange > 0 ? 'text-alert-fg' : 'text-done-fg'}`} dir="ltr">
+                            <span className="num text-xs font-medium text-ink-mid" dir="ltr">
                               {data.momChange > 0 ? '+' : ''}{data.momChange.toFixed(0)}%
                             </span>
                           )}
@@ -910,7 +914,7 @@ export default function Dashboard() {
                 <ul className="divide-y divide-line-soft">
                   {data.exceptions.map((exception) => (
                     <li key={exception.id}>
-                      <Link to={`/exceptions?id=${exception.id}`} className="block min-h-11 rounded-lg px-2 py-2 text-sm hover:bg-action-wash active:bg-action-wash/70">
+                      <Link to={`/exceptions?id=${exception.id}`} className="block min-h-11 rounded-lg px-2 py-2 text-sm hover:bg-surface-hover active:bg-surface-selected">
                         <div className="flex items-center gap-2">
                           <StatusBadge meta={SEVERITY[exception.severity]} />
                           <span className="text-xs text-ink-muted">{EXCEPTION_TYPE[exception.type]}</span>
@@ -950,15 +954,18 @@ export default function Dashboard() {
                 <ul className="divide-y divide-line-soft">
                   {data.priceIncreases.map((price, index) => (
                     <li key={index}>
-                      <Link to={`/prices?product=${price.product.id}`} className="flex min-h-11 flex-col items-stretch gap-2 rounded-lg px-2 py-2 text-sm hover:bg-action-wash active:bg-action-wash/70 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                      <Link to={`/prices?product=${price.product.id}`} className="flex min-h-11 flex-col items-stretch gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface-hover active:bg-surface-selected sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <span className="min-w-0 break-words sm:truncate">
                           <bdi className="font-medium text-ink-body">{price.product.name}</bdi>
                           <span className="ms-2 text-xs text-ink-muted">{price.supplier.name}</span>
                         </span>
                         <span className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 sm:justify-start">
                           <span className="text-xs text-ink-muted">מ־<span className="num">{fmtMoneyExact(price.previous_price)}</span> ל־<span className="num">{fmtMoneyExact(price.current_price)}</span></span>
-                          <span className="inline-flex items-center gap-1 font-medium text-alert-fg num" dir="ltr">
-                            <TrendingUp size={13} className="text-trend-up-fg" />+{price.pct.toFixed(1)}%
+                          {/* One vocabulary per element: a price that rose is a DIRECTION, so the
+                              figure and its arrow both speak trend-*. The span used to be alert-fg
+                              with a trend-up arrow inside it — two languages in one number. */}
+                          <span className="inline-flex items-center gap-1 font-medium text-trend-up-fg num" dir="ltr">
+                            <TrendingUp size={13} aria-hidden="true" />+{price.pct.toFixed(1)}%
                           </span>
                         </span>
                       </Link>
@@ -976,7 +983,7 @@ export default function Dashboard() {
                 <ul className="divide-y divide-line-soft">
                   {data.topBalances.map((balance) => (
                     <li key={balance.id}>
-                      <Link to={`/suppliers/${balance.id}`} className="flex min-h-11 items-center justify-between rounded-lg px-2 py-2 text-sm hover:bg-action-wash active:bg-action-wash/70">
+                      <Link to={`/suppliers/${balance.id}`} className="flex min-h-11 items-center justify-between rounded-lg px-2 py-2 text-sm hover:bg-surface-hover active:bg-surface-selected">
                         <span className="text-ink-mid">{balance.name}</span>
                         <span className="font-semibold text-await-fg num">{fmtMoneyExact(balance.balance)}</span>
                       </Link>

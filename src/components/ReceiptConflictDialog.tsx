@@ -443,8 +443,8 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
                           <button key={value} type="button"
                             className={`rounded-lg border min-h-11 px-3 text-xs font-medium transition-colors ${
                               choice[line.orderItemId] === value
-                                ? 'bg-action text-white border-action'
-                                : 'border-line text-ink-soft hover:bg-action-wash'}`}
+                                ? 'bg-action text-on-solid border-action'
+                                : 'border-line text-ink-soft hover:bg-surface-hover'}`}
                             aria-pressed={choice[line.orderItemId] === value}
                             aria-label={`${label} עבור ${line.productName}`}
                             onClick={() => setChoice((current) => ({ ...current, [line.orderItemId]: value }))}>

@@ -38,10 +38,22 @@
   /* T7.3: chroma halved — the deep-wheat strip read as orange (owner); it is now a neutral
      cream that recedes instead of glowing warm. */
   --color-surface-sunken: oklch(95.4% 0.012 80);   /* thead, disabled inputs, quiet strips */
+  /* The two interaction rungs. They exist because `action-wash` was carrying two unrelated jobs:
+     a soft BRAND tint (the secondary button, the filter chip, a quiet panel) and "the pointer is
+     here". As a hover it measured 1.07:1 against the card and was served at 40% opacity on top of
+     that — a state the eye cannot find on white paper. And "chosen" had no token at all, so the
+     active option in global search wore the hover class and the two states were the same pixel.
+     Hover is 3.6 L below the card; selected is 4.1 L below hover. Pressed reuses selected. */
+  --color-surface-hover: oklch(95.6% 0.018 200);   /* row/list/summary under the pointer */
+  --color-surface-selected: oklch(91.5% 0.028 202); /* chosen option, active nav pill, pressed */
 
   --color-line: oklch(89.5% 0.022 78);             /* dividers vs canvas (cards carry none) */
   --color-line-soft: oklch(93.5% 0.017 78);        /* row separators, inner dividers */
-  --color-line-strong: oklch(65% 0.018 78);        /* input + secondary-button borders — 3:1 */
+  /* 65% → 63%: WCAG 1.4.11 wants 3:1 for the boundary of an input, and 65% measured 3.16 against
+     the card but 2.96 against the canvas and 2.83 against a sunken strip — the two places a field
+     most often sits. The doc quoted the card figure as if it were general. 63% measures 3.42 /
+     3.20 / 3.06, so the border holds on every surface it is drawn on. */
+  --color-line-strong: oklch(63% 0.018 78);        /* input + secondary-button borders — 3:1 */
 
   --color-ink: oklch(19.6% 0.022 229);             /* page titles, strongest text — Onyx #0A171D */
   --color-ink-body: oklch(28% 0.021 229);          /* body text */
@@ -62,6 +74,11 @@
   --color-action-wash: oklch(96.6% 0.011 195);
   --color-action-line: oklch(62% 0.055 205);
   --color-focus: oklch(50% 0.085 207);
+  /* Lettering on a FILLED brand or status control — .btn-primary, .btn-danger, the active
+     filter chip, the toast, the Receiving state buttons, the capture puck. It was the bare
+     keyword `white` in 24 places, which named a color and not a role: a lighter brand would
+     have broken every one of them silently. Same value, one edit. */
+  --color-on-solid: #ffffff;
 
   /* The dark shell is the brand frame; the working canvas stays quiet and warm. */
   /* T7.3i (owner): the desktop top bar is a cool GRAY on every screen — he preferred the
@@ -73,7 +90,6 @@
   --color-shell-ink: oklch(97.5% 0.012 80);
   --color-shell-ink-soft: oklch(88% 0.014 80);
   --color-shell-ink-dim: oklch(73% 0.016 80);
-  --color-shell-heading: oklch(72% 0.017 80);
 
   /* ---- Chart ramp — the SYSTEM COLORS themselves (T7.3g, owner: "לפי צבעי המערכת") ----
      No derived teals, no bronze: OCEANIC #003F47 and its solid mixes over the card surface
@@ -100,19 +116,31 @@
   --color-chart-grid: oklch(90% 0.02 78);
   --color-chart-tick: oklch(49.5% 0.02 229);
   --color-chart-label: oklch(43.5% 0.021 229);
-  --color-chart-tick-strong: oklch(36.5% 0.021 229);
 
   /* Elevation (T7.3f — owner: "צריך להשחיר את הצל שיש מתחת לכל ה-CARDים"): with a borderless
      card on bright wheat everywhere, the visible dark drop IS the separation, as in the cards
-     reference. Onyx-based, soft and wide — deliberate reversal of T7.2's near-zero whisper. */
-  --shadow-card: 0 2px 4px rgb(10 23 29 / 0.07), 0 12px 28px rgb(10 23 29 / 0.13);
-  --shadow-card-hover: 0 3px 6px rgb(10 23 29 / 0.09), 0 16px 34px rgb(10 23 29 / 0.17);
-  --shadow-dashboard: 0 2px 4px rgb(10 23 29 / 0.07), 0 14px 32px rgb(10 23 29 / 0.14);
+     reference. Onyx-based, soft and wide — deliberate reversal of T7.2's near-zero whisper.
+     The tints DERIVE from the shell/action tokens rather than transcribing their hexes: the
+     retheme runbook promises "@theme and the doc", and a hand-copied rgb() quietly broke that
+     promise — the shadows would have stayed Onyx after a repaint. Values are unchanged. */
+  --shadow-card:
+    0 2px 4px color-mix(in oklab, var(--color-shell) 7%, transparent),
+    0 12px 28px color-mix(in oklab, var(--color-shell) 13%, transparent);
+  --shadow-card-hover:
+    0 3px 6px color-mix(in oklab, var(--color-shell) 9%, transparent),
+    0 16px 34px color-mix(in oklab, var(--color-shell) 17%, transparent);
+  --shadow-dashboard:
+    0 2px 4px color-mix(in oklab, var(--color-shell) 7%, transparent),
+    0 14px 32px color-mix(in oklab, var(--color-shell) 14%, transparent);
   /* Floating row-action menu (ActionMenu): between card-hover and the toast/modal tier. */
-  --shadow-menu: 0 2px 6px rgb(10 23 29 / 0.08), 0 16px 32px -12px rgb(0 63 71 / 0.2);
+  --shadow-menu:
+    0 2px 6px color-mix(in oklab, var(--color-shell) 8%, transparent),
+    0 16px 32px -12px color-mix(in oklab, var(--color-action) 20%, transparent);
   /* The raised capture puck in the mobile action bar: one step past shadow-menu — the strongest
      oceanic tint in the set. It was the desktop FAB's shadow too, until that surface was removed. */
-  --shadow-fab: 0 3px 8px rgb(10 23 29 / 0.1), 0 20px 40px -12px rgb(0 63 71 / 0.3);
+  --shadow-fab:
+    0 3px 8px color-mix(in oklab, var(--color-shell) 10%, transparent),
+    0 20px 40px -12px color-mix(in oklab, var(--color-action) 30%, transparent);
 
   --color-star: var(--color-amber-400);            /* rating stars: decoration, not status */
   --color-star-hover: var(--color-amber-300);
@@ -194,9 +222,9 @@ body {
      on .app-glow. The login panel's aurora (.aurora-pane + lib/loginAurora.ts) is the one
      deliberate exception, and it is outside Layout — see DESIGN.md §2. */
   background-image: linear-gradient(180deg,
-    oklch(97.5% 0.002 128),
-    oklch(96.9% 0.003 128) 55%,
-    oklch(95.9% 0.004 128) 100%);
+    color-mix(in oklab, white 20%, var(--color-canvas)),
+    var(--color-canvas) 55%,
+    color-mix(in oklab, var(--color-ink) 1.3%, var(--color-canvas)) 100%);
 }
 
 #root { min-inline-size: 0; }
@@ -260,12 +288,12 @@ body {
       color-mix(in oklab, var(--color-shell) 42%, transparent) 100%);
   }
 
-  .btn-primary { @apply btn bg-action text-white hover:bg-action-hover; }
+  .btn-primary { @apply btn bg-action text-on-solid hover:bg-action-hover; }
   /* T7.1: tonal, borderless — a dark outline was the exact separation the owner banned; the
      wash surface + the label carry the affordance, the focus ring stays from `btn`.
      T7.3: the wash is oceanic — the warm sunken rest state read orange (owner). */
   .btn-secondary { @apply btn bg-action-wash text-ink-mid hover:bg-action-soft; }
-  .btn-danger { @apply btn bg-alert-solid text-white hover:bg-alert-on-soft; }
+  .btn-danger { @apply btn bg-alert-solid text-on-solid hover:bg-alert-on-soft; }
   .btn-ghost { @apply btn text-ink-soft hover:bg-canvas; }
 
   /* 16px on phones prevents Safari from zooming the whole page when an input receives focus. */
@@ -274,7 +302,10 @@ body {
 
   /* Shared interaction patterns — every page hover/link points here, never at a raw hue. */
   .link { @apply text-action font-medium hover:underline; }
-  .row-hover { @apply hover:bg-action-wash/40 active:bg-action-wash/70 transition-colors; }
+  /* One hover strength for the whole app. It used to be action-wash at 40% here and action-wash
+     at full opacity in the forty places that inlined the pair instead — two answers to the same
+     question, the quieter one on the shared class nobody reached for. */
+  .row-hover { @apply hover:bg-surface-hover active:bg-surface-selected transition-colors; }
   /* Borderless cards signal "clickable" with lift + deeper shadow alone (T7). */
   .card-link-hover { @apply hover:shadow-card-hover hover:-translate-y-px active:translate-y-0 transition-[box-shadow,translate] duration-200 ease-out; }
 
@@ -282,17 +313,7 @@ body {
      tonal rest, solid oceanic when pressed. Segmented STATE pickers inside forms (receiving line
      status, conflict choices) are inputs, keep their bounded look, and do not use this. */
   .chip-filter { @apply inline-flex min-h-11 items-center justify-center rounded-full px-3.5 text-sm font-medium transition-colors bg-action-wash text-ink-mid hover:bg-action-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus; }
-  .chip-filter-active { @apply bg-action text-white hover:bg-action-hover; }
-
-  /* Hatched capsule fill (T7.3) — the reference's striped progress pill. 45° oceanic hairlines
-     over the wash; text on it stays ink (the stripes are texture, not a status claim). */
-  .pill-hatched {
-    background-image: repeating-linear-gradient(
-      45deg,
-      var(--color-action-soft) 0 6px,
-      var(--color-action-wash) 6px 12px
-    );
-  }
+  .chip-filter-active { @apply bg-action text-on-solid hover:bg-action-hover; }
 
   /* Semantic badges. StatusBadge builds `badge-${tone}` from the Tone union in
      lib/status.ts, so every Tone value MUST have a class here or the tag renders
@@ -500,7 +521,7 @@ body {
   border-radius: 9999px;
   border: 1px solid var(--color-action-line);
   background: var(--color-action);
-  color: #fff;
+  color: var(--color-on-solid);
   box-shadow: var(--shadow-fab);
 }
 
@@ -692,10 +713,12 @@ html { transition: --glow-x 0.45s ease-out, --glow-y 0.45s ease-out; }
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  /* T7.3h: ONE orb (owner: "צריך שזה יהיה כדור אחד") — the deep-wheat counter-wash is gone. */
+  /* T7.3h: ONE orb (owner: "צריך שזה יהיה כדור אחד") — the deep-wheat counter-wash is gone.
+     The orb DERIVES from --color-action: it was the oceanic literal spelled out again, so a
+     brand repaint left the atmosphere behind. Same value, one source. */
   background:
     radial-gradient(46rem circle at var(--glow-x) var(--glow-y),
-      oklch(33.66% 0.058 209 / 0.15), transparent 68%);
+      color-mix(in oklab, var(--color-action) 15%, transparent), transparent 68%);
 }
 @media (prefers-reduced-motion: reduce) { html { transition: none; } }
 /* Phone and tablet: flat canvas, no atmosphere at all (owner, 19.08.2026). The orb exists to
