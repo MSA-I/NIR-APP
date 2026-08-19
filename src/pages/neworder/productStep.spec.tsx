@@ -11,7 +11,7 @@ import ProductStep from './ProductStep';
 import type { Product, SupplierProduct } from '../../lib/types';
 
 const product = (id: string, name: string): Product => ({
-  id, org_id: 'org', name, category_id: null, unit: 'יח׳',
+  id, org_id: 'org', name, display_name: null, category_id: null, unit: 'יח׳',
   sku: null, barcode: null, notes: null, active: true, min_stock: null,
 });
 

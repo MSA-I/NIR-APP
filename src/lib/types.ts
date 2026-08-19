@@ -122,7 +122,14 @@ export interface Supplier {
 }
 
 export interface Product {
-  id: string; org_id: string; name: string; category_id: string | null;
+  id: string; org_id: string; name: string;
+  /**
+   * The canonical, human-approved name (0149). NULL means none was approved and readers fall back
+   * to `name`. Never used for matching -- `nameKey(name)` stays the sole matching key -- and never
+   * sent to a supplier, who recognises their own wording, not one we composed.
+   */
+  display_name: string | null;
+  category_id: string | null;
   unit: string; sku: string | null; barcode: string | null; notes: string | null;
   active: boolean; min_stock: number | null;
   category?: { id: string; name: string } | null;

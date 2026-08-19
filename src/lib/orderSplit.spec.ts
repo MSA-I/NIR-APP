@@ -26,6 +26,7 @@ const product = (id: string): Product => ({
   id,
   org_id: 'org',
   name: `Product ${id}`,
+  display_name: null,
   category_id: null,
   unit: 'unit',
   sku: null,
