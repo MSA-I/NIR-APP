@@ -48,7 +48,10 @@ export default defineConfig({
         // equivalent guard lives in public/sw.js, which refuses to answer /operator
         // navigations from the shell cache.
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest,woff2}'],
-        globIgnores: ['**/assets/PdfSourceView-*.js', '**/assets/xlsx-*.js', '**/operator.html', '**/assets/operator-*'],
+        // The supplier portal (portal.html + its `portal` entry chunk) stays out for the same
+        // reason as the operator console: it is not the tenant shell, and a token-bearing
+        // supplier page must never be served from a tenant cache.
+        globIgnores: ['**/assets/PdfSourceView-*.js', '**/assets/xlsx-*.js', '**/operator.html', '**/assets/operator-*', '**/portal.html', '**/assets/portal-*'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
       // The dev server serves public/sw.js verbatim (self.__WB_MANIFEST undefined → the
@@ -69,6 +72,9 @@ export default defineConfig({
       input: {
         index: fileURLToPath(new URL('./index.html', import.meta.url)),
         operator: fileURLToPath(new URL('./operator.html', import.meta.url)),
+        // Third entry: the no-login supplier order portal. Same deploy, zero tenant code paths
+        // in its chunk, and the tenant bundle carries zero portal code.
+        portal: fileURLToPath(new URL('./portal.html', import.meta.url)),
       },
       output: {
         // Split the charting stack into its own chunk. recharts v2 pulls its d3 code

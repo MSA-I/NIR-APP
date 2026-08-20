@@ -17,9 +17,11 @@ import { renderOrderImage, orderImageFileName } from '../lib/orderImage';
  * Nothing here touches order status: opening ≠ sending (share.ts:41-53); the call sites run
  * their existing human sent-confirmation after `onClose(openedText)`.
  */
-export function WhatsAppSendDialog({ order, orgName, onClose }: {
+export function WhatsAppSendDialog({ order, orgName, portalUrl, onClose }: {
   order: WhatsAppOrder | null;
   orgName: string;
+  /** A freshly issued supplier-portal URL (0167) to ride inside the text message, if any. */
+  portalUrl?: string | null;
   onClose: (openedText: boolean) => void;
 }) {
   const toast = useToast();
@@ -50,7 +52,7 @@ export function WhatsAppSendDialog({ order, orgName, onClose }: {
   if (!order) return null;
 
   function openText() {
-    const res = openOrderWhatsApp(order!, orgName);
+    const res = openOrderWhatsApp(order!, orgName, portalUrl);
     if (res.error) { toast(res.error, 'error'); return; }
     openedTextRef.current = true;
   }

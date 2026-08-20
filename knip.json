@@ -4,6 +4,7 @@
   "entry": [
     "src/main.tsx",
     "src/operator/main.tsx",
+    "src/portal/main.tsx",
     "vite.config.ts",
     "vitest.config.ts",
     "src/**/*.spec.{ts,tsx}",

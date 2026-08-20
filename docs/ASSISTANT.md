@@ -157,7 +157,7 @@ provider אלא כאשר קיימים יחד:
 
 הבדיקה האוטומטית מוכיחה שכל שילוב חסר נעצר **לפני** executor. בסגירה הנוכחית לא ניתן מפתח ולא
 בוצעה קריאה חיה; לכן הסטטוס נשאר `LIVE_MODEL_NOT_EVALUATED`. גם runner סינתטי אינו עוקף את חסמי
-הממשל `#179` והכרעת capability ‏`#188`, ואינו ראיית sandbox/Production.
+הממשל `#179` והכרעת capability ‏`#193`, ואינו ראיית sandbox/Production.
 
 ---
 
@@ -313,20 +313,20 @@ offboarding, suspended או actor שהשתנה אחרי טעינת history אי�
 | למה חשבונית חסומה | `IMPLEMENTED` | `explain_invoice_block`; קודי וסבילויות three-way-match של השרת |
 | מה הוזמן, התקבל וחויב | `IMPLEMENTED` | `compare_order_receipt_invoice`; quantities/deltas מה-RPC הקנוני |
 | שורות מעל מחיר ההזמנה | `IMPLEMENTED_PER_INVOICE` | אותו כלי מול snapshot ההזמנה; רשימה חוצת-חשבוניות היא `DOES_NOT_EXIST` |
-| ספקים שהעלו מחיר החודש | `BLOCKED_DECISION #184` | אין כיוון/baseline/month/aggregation מוכרעים |
+| ספקים שהעלו מחיר החודש | `BLOCKED_DECISION #189` | אין כיוון/baseline/month/aggregation מוכרעים |
 | כסף שממתין לזיכוי | `IMPLEMENTED_WITH_SCOPE_LIMIT` | `get_open_credits`; ‏`DEBT §49` נשאר גלוי |
 | הזמנות שנשלחו ולא אושרו | `IMPLEMENTED` | `get_orders_awaiting_confirmation`; סטטוס `sent`, RLS ו-pagination |
 | תנועות בנק לא מותאמות | `IMPLEMENTED_ROLE_BOUND` | `get_unmatched_bank_transactions`; owner/accountant בלבד, projection ללא raw/reference |
 | הספק שמאחר הכי הרבה וגודל המדגם | `PARTIAL / BLOCKED_DECISION #30` | `get_supplier_performance` מחזיר מדדים ומדגם; אינו ממציא פונקציית דירוג |
 | מוצרים שצפויים להיגמר | `IMPLEMENTED_READ_ONLY` | `get_inventory_risk`; null נשאר “לא נמדד”, incoming אינו מנוכה |
-| המלצת ספק / חיסכון / הצעת רכש | `BLOCKED_DECISION #185` | אין calculation owner; ‏#109 אוסר כתיבה ישירה ל-PO |
-| טיוטת הזמנת רכש | `BLOCKED_DECISION #109/#182/#185` | state machine קיים; composer ופקודת draft בטוחה אינם קיימים |
+| המלצת ספק / חיסכון / הצעת רכש | `BLOCKED_DECISION #190` | אין calculation owner; ‏#109 אוסר כתיבה ישירה ל-PO |
+| טיוטת הזמנת רכש | `BLOCKED_DECISION #109/#182/#190` | state machine קיים; composer ופקודת draft בטוחה אינם קיימים |
 | טיוטת דרישת תשלום | `BLOCKED_DECISION #182` | `create_payment_request` מועמד בלבד; אין composer/revalidation/idempotency מחוברים |
-| תזכורת לספק | `BLOCKED_DECISION #186` | אין external-message capability או command קנוני |
-| עזרה על המוצר מ-metadata | `BLOCKED_DECISION #187` | אין registry/corpus סמכותי; route policy לבדה אינה תוכן עזרה |
+| תזכורת לספק | `BLOCKED_DECISION #191` | אין external-message capability או command קנוני |
+| עזרה על המוצר מ-metadata | `BLOCKED_DECISION #192` | אין registry/corpus סמכותי; route policy לבדה אינה תוכן עזרה |
 | חיפוש ישות וניווט | `IMPLEMENTED_LOCATOR_ONLY` | `find_entity`; type/route allowlist ו-current-role validation |
 | סיכום/התראות/חשיפת תשלום | `IMPLEMENTED_WITH_NAMED_PARTIALS` | שלושת הכלים מחזירים failures וכיסוי; אין “אפס” במקום נתון שלא נמדד |
-| read tools / external sending / live evaluation switches | `BLOCKED_DECISION #188` | UI כרוך ב-read tools; שתי האחרות אינן פעילות ואינן מוצגות כיכולת קיימת |
+| read tools / external sending / live evaluation switches | `BLOCKED_DECISION #193` | UI כרוך ב-read tools; שתי האחרות אינן פעילות ואינן מוצגות כיכולת קיימת |
 
 **הערת קנון שתוקנה בקוד ובכלי יחד:** ‏`0099` הוסיף שורות חשבונית, ולכן ההתראה על עליית מחיר
 אומרת כעת שהסריקה בודקת **את המחירון בלבד** ושמחירי שורות החשבונית אינם חלק ממנה; היא אינה טוענת
@@ -421,11 +421,11 @@ focus/return path, source side-by-side, history open וניגודיות מיני
 |---|---|---|---|---|
 | 1. Contracts ו־client boundary | `contracts.ts`, ‏`client.ts`, ‏`errorCodes.ts` | Zod strict ל־ask/run/history; 2xx פגום נכשל סגור | `client.spec.ts`, ‏typecheck | שינוי wire דורש Edge+client באותו commit |
 | 2. Actor, flags ומכסה | `auth.ts`, ‏`flags.ts`, ‏`runSession.ts` | actor נפתר בכל שימוש; flags exposure בלבד; fingerprint מנקה זיכרון/cache | auth/flags/component negative tests | מכסה עסקית #180 חוסמת activation |
-| 3. Read tools ו־capability map | `tools/*`, ‏§7 | 13 כלים allowlisted, projection מפורש ו־server calculation owner | tools/reads/business suites | #184–#187 נשארים יכולות חסרות ממוספרות |
+| 3. Read tools ו־capability map | `tools/*`, ‏§7 | 13 כלים allowlisted, projection מפורש ו־server calculation owner | tools/reads/business suites | #189–#192 נשארים יכולות חסרות ממוספרות |
 | 4. Provider ו־egress | `provider.ts`, ‏`egress.ts`, ‏`0166` | server-only provider, lease מסוג `assistant`, אין fallback ספק | provider/egress, ‏`p58` | ממשל #179 ומחיר #183 חוסמים activation |
 | 5. Validation ו־evidence authorization | `validate.ts`, ‏`evidence-authorization.ts` | semantic claim + source/route/current actor reauthorization | deleted/hidden/tenant/role/scope negative tests | כשל מסיר תשובה שלמה, לא ממציא redaction |
 | 6. Persistence, deletion ו־retention | `0164`, ‏`history.ts`, ‏§6 | 90 יום history, ‏30 יום proposal לא־מבוצע, delete עצמי מבוקר | `p56`, history Deno tests | backup/provider deletion נשאר ממשל #179/#181 |
 | 7. Core/history UI | `AssistantPanel`, ‏`AssistantDialog`, ‏`AnswerView`, ‏`0170` | B docked/full-screen; source return; Edge-only authorized history | 15 browser cases, component/client tests, ‏`p61` | CI ו־review על SHA משולב טרם בוצעו |
 | 8. Deterministic summary parity | `summary.ts`, ‏`0165` | הסיכום הקיים נשאר זמין כשהעוזר כבוי או נכשל | `p57`, summary tests | אין תלות בספק או בדגל assistant |
-| 9. Evaluation, cost ו־governance | `evaluation.ts`, ‏`live-evaluation.ts`, ‏§4 | corpus סינתטי offline; live דורש שני opt-ins; cost נשאר null | evaluation/live gate tests | אין live call; #179/#183/#188 פתוחים |
+| 9. Evaluation, cost ו־governance | `evaluation.ts`, ‏`live-evaluation.ts`, ‏§4 | corpus סינתטי offline; live דורש שני opt-ins; cost נשאר null | evaluation/live gate tests | אין live call; #179/#183/#193 פתוחים |
 | 10. Release evidence | `docs/PROGRESS.md`, PR/CI | merge, activation ו־rollout הם שלושה מצבים נפרדים | exact SHA, remote parity, required checks | אין deploy/activation במסגרת ה־PR הזה |

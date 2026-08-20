@@ -35,6 +35,7 @@ const PriceLists = lazy(() => import('./pages/PriceLists'));
 const NewOrder = lazy(() => import('./pages/neworder/NewOrder'));
 const OrdersList = lazy(() => import('./pages/Orders').then((m) => ({ default: m.OrdersList })));
 const OrderDetail = lazy(() => import('./pages/Orders').then((m) => ({ default: m.OrderDetail })));
+const SupplierProposalReview = lazy(() => import('./pages/SupplierProposalReview'));
 const ReceivingList = lazy(() => import('./pages/Receiving').then((m) => ({ default: m.ReceivingList })));
 const ReceiveOrder = lazy(() => import('./pages/Receiving').then((m) => ({ default: m.ReceiveOrder })));
 const ReceiptDetail = lazy(() => import('./pages/ReceiptDetail'));
@@ -279,6 +280,8 @@ export default function App() {
 
         <Route path="/orders/new" element={<Guard roles={STAFF} write><NewOrder /></Guard>} />
         <Route path={APP_ROUTE_POLICY.orders.path} element={<Guard roles={APP_ROUTE_POLICY.orders.roles}><OrdersList /></Guard>} />
+        {/* Before /orders/:id so "proposals" is not read as an order id. */}
+        <Route path="/orders/proposals/:proposalId" element={<Guard roles={STAFF}><SupplierProposalReview /></Guard>} />
         <Route path={APP_ROUTE_POLICY.orderDetail.path} element={<Guard roles={APP_ROUTE_POLICY.orderDetail.roles}><OrderDetail /></Guard>} />
 
         <Route path="/receiving" element={<Guard roles={STAFF}><ReceivingList /></Guard>} />

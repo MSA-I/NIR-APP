@@ -110,6 +110,11 @@ verify_jwt = false
 [functions.assistant]
 verify_jwt = true
 
+# The supplier order portal has no user and no JWT by design: the credential is a hashed,
+# revocable, expiring per-order token (0167), the tenant-export shape. POST-only.
+[functions.supplier-portal]
+verify_jwt = false
+
 [analytics]
 enabled = false
 port = 55437

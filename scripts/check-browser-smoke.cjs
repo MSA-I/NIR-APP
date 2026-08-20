@@ -150,7 +150,7 @@ async function retiredPersonasBlocked(browser) {
   }
 }
 
-async function auditAccessibility(page, scope) {
+async function auditAccessibility(page, scope, expectedLang = 'he', expectedDir = 'rtl') {
   const audit = await page.evaluate(() => {
     const visible = (element) => {
       const style = getComputedStyle(element);
@@ -197,14 +197,27 @@ async function auditAccessibility(page, scope) {
     };
   });
   report.accessibility.push({ scope, ...audit });
-  assert.equal(audit.lang, 'he', `${scope}: document language is not Hebrew`);
-  assert.equal(audit.dir, 'rtl', `${scope}: document direction is not RTL`);
+  assert.equal(audit.lang, expectedLang, `${scope}: document language is not ${expectedLang}`);
+  assert.equal(audit.dir, expectedDir, `${scope}: document direction is not ${expectedDir}`);
   assert(audit.h1 >= 1, `${scope}: no level-one heading`);
   assert(audit.overflow <= 1, `${scope}: horizontal overflow ${audit.overflow}px`);
   assert.deepEqual(audit.controls, [], `${scope}: visible form controls without accessible names`);
   assert.deepEqual(audit.actions, [], `${scope}: visible actions without accessible names`);
   assert.deepEqual(audit.duplicateIds, [], `${scope}: duplicate DOM ids`);
   return audit;
+}
+
+async function assertAccessibilityTreeNames(page, scope, expectedNames) {
+  const session = await page.context().newCDPSession(page);
+  try {
+    const tree = await session.send('Accessibility.getFullAXTree');
+    const names = tree.nodes.map((node) => node.name?.value).filter(Boolean);
+    for (const expected of expectedNames) {
+      assert(names.includes(expected), `${scope}: Chromium accessibility tree has no «${expected}»`);
+    }
+  } finally {
+    await session.detach();
+  }
 }
 
 async function assertKeyContrast(page) {
@@ -3599,6 +3612,128 @@ async function consolidatedSupplierInvoice(browser) {
   }
 }
 
+async function supplierPortalLocales(browser) {
+  const token = 'ab'.repeat(32);
+  const portalView = {
+    state: 'open',
+    expires_at: '2026-09-01T09:00:00.000Z',
+    proposal: null,
+    snapshot: {
+      order_id: 'c8600000-0000-4000-8000-000000000001',
+      order_number: 238,
+      revision_number: 1,
+      expected_date: '2026-08-27',
+      notes: 'נא לתאם עם המחסן לפני הגעה',
+      supplier_name: 'ירקות השדה בע"מ',
+      org_name: 'מסעדת הגן הקסום',
+      issued_at: '2026-08-20T09:00:00.000Z',
+      items: [
+        {
+          order_item_id: 'c8610000-0000-4000-8000-000000000001', position: 1,
+          product_name: 'עגבניות שרי 500 גרם', unit: 'unit', qty: 12, unit_price: 8.9,
+        },
+        {
+          order_item_id: 'c8610000-0000-4000-8000-000000000002', position: 2,
+          product_name: 'מלפפון בייבי', unit: 'kg', qty: 6, unit_price: 7.5,
+        },
+      ],
+    },
+  };
+  const locales = {
+    he: {
+      browser: 'he-IL', dir: 'rtl', title: 'אישור הזמנת רכש', heading: /הזמנה #238/,
+      quantity: 'כמות מוצעת', submit: 'אישור ההזמנה כפי שנשלחה',
+      switchName: 'מעבר לאנגלית', submitted: 'כבר נשלחה תשובה להזמנה זו', invalid: 'הקישור אינו פעיל',
+    },
+    en: {
+      browser: 'en-US', dir: 'ltr', title: 'Purchase order response', heading: /Order #238/,
+      quantity: 'Proposed quantity', submit: 'Approve the order as sent',
+      switchName: 'Switch to Hebrew', submitted: 'A response has already been sent for this order',
+      invalid: 'This link is not active',
+    },
+  };
+
+  for (const [locale, copy] of Object.entries(locales)) {
+    for (const [size, width, height] of [['390', 390, 844], ['1440', 1440, 900]]) {
+      const scope = `supplier-portal:${locale}:${size}`;
+      const context = await browser.newContext({
+        locale: copy.browser, serviceWorkers: 'block', viewport: { width, height }, reducedMotion: 'reduce',
+      });
+      const page = await context.newPage();
+      captureConsole(page, scope);
+      try {
+        await page.route('**/functions/v1/supplier-portal', (route) => route.fulfill({ json: portalView }));
+        await page.goto(`${baseURL}/portal.html?lang=${locale}#token=${token}`);
+        await page.getByRole('heading', { name: copy.heading }).waitFor({ timeout: 15_000 });
+        await page.getByLabel(copy.quantity).first().waitFor();
+        assert.equal(await page.title(), copy.title, `${scope}: wrong document title`);
+        await auditAccessibility(page, scope, locale, copy.dir);
+        await assertAccessibilityTreeNames(page, scope, [copy.switchName, copy.quantity, copy.submit]);
+
+        // The language switch is the first interactive control in the standalone portal entry.
+        await page.keyboard.press('Tab');
+        assert.equal(
+          await page.evaluate(() => document.activeElement?.getAttribute('aria-label')),
+          copy.switchName,
+          `${scope}: language switch is not first in keyboard order`,
+        );
+
+        const fileName = `supplier-portal-open-${locale}-${size}.png`;
+        await page.screenshot({ path: path.join(outDir, fileName), fullPage: true });
+        report.screenshots.push(fileName);
+        report.viewports.push({ scope, width, height });
+      } finally {
+        await closeContext(context);
+      }
+    }
+
+    const context = await browser.newContext({
+      locale: copy.browser, serviceWorkers: 'block', viewport: { width: 390, height: 844 },
+      reducedMotion: 'reduce',
+    });
+    try {
+      const submitted = await context.newPage();
+      captureConsole(submitted, `supplier-portal:${locale}:submitted`);
+      await submitted.route('**/functions/v1/supplier-portal', (route) => route.fulfill({
+        json: {
+          ...portalView,
+          state: 'submitted',
+          proposal: {
+            status: 'submitted', submitted_at: '2026-08-20T10:00:00.000Z',
+            proposed_delivery_date: '2026-08-29', total_delta: -42.5,
+          },
+        },
+      }));
+      await submitted.goto(`${baseURL}/portal.html?lang=${locale}#token=${token}`);
+      await submitted.getByText(copy.submitted).waitFor({ timeout: 15_000 });
+      await auditAccessibility(submitted, `supplier-portal:${locale}:submitted`, locale, copy.dir);
+      const submittedShot = `supplier-portal-submitted-${locale}-390.png`;
+      await submitted.screenshot({ path: path.join(outDir, submittedShot), fullPage: true });
+      report.screenshots.push(submittedShot);
+
+      const invalid = await context.newPage();
+      captureConsole(
+        invalid,
+        `supplier-portal:${locale}:invalid`,
+        [],
+        (response) => response.status() === 404
+          && response.url().includes('/functions/v1/supplier-portal'),
+      );
+      await invalid.route('**/functions/v1/supplier-portal', (route) => route.fulfill({
+        status: 404, json: { error: 'link_invalid' },
+      }));
+      await invalid.goto(`${baseURL}/portal.html?lang=${locale}#token=${token}`);
+      await invalid.getByText(copy.invalid).waitFor({ timeout: 15_000 });
+      await auditAccessibility(invalid, `supplier-portal:${locale}:invalid`, locale, copy.dir);
+      const invalidShot = `supplier-portal-invalid-${locale}-390.png`;
+      await invalid.screenshot({ path: path.join(outDir, invalidShot), fullPage: true });
+      report.screenshots.push(invalidShot);
+    } finally {
+      await closeContext(context);
+    }
+  }
+}
+
 async function run(name, check) {
   if (process.env.QUALITY_ONLY && !name.includes(process.env.QUALITY_ONLY)) {
     const reason = `QUALITY_ONLY=${process.env.QUALITY_ONLY}`;
@@ -3665,6 +3800,7 @@ async function run(name, check) {
     // Also writes a live row, for the same reason and with the same placement.
     await run('a feedback note is stored and a failed send says so', () => feedbackNoteChannel(browser));
     await run('consolidated supplier invoice uploads once and exposes three RTL reconciliation channels', () => consolidatedSupplierInvoice(browser));
+    await run('supplier portal is bilingual, isolated, keyboard reachable and screen-reader named', () => supplierPortalLocales(browser));
   } finally {
     await browser.close();
   }

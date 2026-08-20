@@ -634,8 +634,8 @@ lifecycle מכוסים בבדיקות השליליות וב־15 תרחישי bro
 
 זה עדיין אינו גבול שחרור: הסטטוס הוא `LOCAL_IMPLEMENTED / CI_PENDING / NOT_ACTIVATED /
 NOT_DEPLOYED`. ‏`CORE_READ_ONLY_UI_CLOSED` ו־`FULL_UI_CLOSED` אינם נטענים לפני required checks
-ירוקים על SHA יחיד. חסמי activation האמיתיים נשארים בהחלטות #179, ‏#180, ‏#181, ‏#183 ו־#188;
-יכולות חסרות נשארות #184–#187. לא נפתח debt כפול עבורן. flags הוחזרו ל־off לאחר QA המקומי.
+ירוקים על SHA יחיד. חסמי activation האמיתיים נשארים בהחלטות #179, ‏#180, ‏#181, ‏#183 ו־#193;
+יכולות חסרות נשארות #189–#192. לא נפתח debt כפול עבורן. flags הוחזרו ל־off לאחר QA המקומי.
 
 ### §52 — `quickCreateProduct.spec.tsx` נכשלת לסירוגין ב־CI
 
@@ -739,3 +739,25 @@ debounce ולא מול אירוע — ומוסיף לו שדה שלא היה: **
   `waitForDraftSave` (חלקם כבר עושים זאת — `const increaseSave = waitForDraftSave()` בשורה
   ‏1375 הוא הדפוס הנכון), או להמתין ל־`waitForSaved()` בלבד, שמסתמך על `role="status"` ואינו
   תלוי בתזמון הרשת. למדוד חמש הרצות רצופות לפני סגירה.
+
+### §60 — מועמד לסגירה: rate limit מתמיד ולוקאל אנגלי מומשו; CI/live עדיין חסרים
+
+- **מה נסגר בקוד:** ‏`supplier-portal` (‏0167) מפיק HMAC מכתובת gateway עם pepper שרתי ושולח
+  ל-`service_check_supplier_portal_rate_limit`. ה-DB סופר אטומית 30 בקשות בדקה וחוסם לעשר
+  דקות, כך שאיפוס isolate אינו מאפס את המונה. IP קריא אינו נשמר או נרשם בלוג; הטבלה פרטית,
+  ה-RPC ניתן רק ל-`service_role`, ו-cron יחיד מוחק שורות שלא עודכנו 30 יום. בלי pepper באורך
+  32+, כתובת gateway או RPC תקין הדלת מסרבת. הפורטל כולל עברית/RTL ואנגלית/LTR, בחירת URL או
+  שפת דפדפן, fallback לעברית, מתג שפה ו-`Intl` לתאריך/ILS/כמות.
+- **ראיה מקומית:** reset מבודד עד ledger ‏`0167`; ‏P59 עם marker
+  `p59_supplier_order_portal_passed` (ACL/JWT, ‏30/31, reset, מפתחות עצמאיים, cron); ‏P59B
+  בשתי ישיבות `dblink` עם proposal יחיד ו-conflict יחיד, ואחריה reset נקי; postflight של
+  RPC/table/grants/cron; ‏`npm run verify` מלא עם 1,244/1,244 בדיקות ב-132 קבצים וכל ששת
+  השומרים; production build; ‏7/7 Deno; ‏15/15 Vitest ממוקדות; TypeScript ירוק. בדיקת headed ייעודית
+  הפיקה שמונה צילומי he/en במובייל/desktop למצבי open/submitted/invalid ללא overflow או שגיאת
+  console; תרחיש browser CI כולל כעת keyboard, labels ו-Chromium accessibility tree אך טרם רץ
+  בשער המלא על ה-SHA הסופי.
+- **למה הסעיף עדיין פתוח:** אין עדיין CI טרי על SHA סופי, secret חי, Edge deploy ו-E2E חי שמוכיח
+  issue→redeem→submit→review→revision. רק אחרי ארבעתם הסעיף יסומן נסגר.
+- **סיכון שיורי נפרד:** כל rate check עדיין מגיע ל-Edge ול-DB, ומתקפה מבוזרת על כתובות/ASN רבים
+  אינה מקור יחיד. WAF/Turnstile על הנתיב הוא הגנת עומק תפעולית של הבעלים; היעדרו אינו מבטל את
+  המונה המתמיד פר-IP ואינו יוצג שוב כאילו נשאר רק חלון per-isolate.

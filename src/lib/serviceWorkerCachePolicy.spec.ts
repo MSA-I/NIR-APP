@@ -25,15 +25,20 @@ describe('service worker cache boundary', () => {
     expect(source).not.toMatch(/caches\.match\([^)]*(supabase|\/rest\/v1|\/functions\/v1)/i);
   });
 
-  it('never answers the operator console from the tenant shell cache', () => {
-    // The operator console (operator.html, a second Vite entry on the same origin) is inside
-    // this worker's scope. Serving it the cached TENANT shell would swap one application for
-    // another silently — so the worker refuses /operator navigations outright, and the build
-    // keeps operator.html and its entry chunk out of the precache manifest.
+  it('never answers the operator console or the supplier portal from the tenant shell cache', () => {
+    // The operator console (operator.html) and the supplier portal (portal.html) are extra Vite
+    // entries on the same origin, inside this worker's scope. Serving either the cached TENANT
+    // shell would swap one application for another silently — the portal case is sharper still,
+    // since its visitor is a token-bearing supplier. The worker refuses both navigations
+    // outright, and the build keeps both entries out of the precache manifest.
     expect(source).toContain('isOperatorNavigation');
     expect(source).toContain("url.pathname === '/operator'");
-    expect(source).toContain('if (isOperatorNavigation(url)) return;');
+    expect(source).toContain('isPortalNavigation');
+    expect(source).toContain("url.pathname === '/portal'");
+    expect(source).toContain('if (isOperatorNavigation(url) || isPortalNavigation(url)) return;');
     expect(viteConfig).toContain("'**/operator.html'");
     expect(viteConfig).toContain("'**/assets/operator-*'");
+    expect(viteConfig).toContain("'**/portal.html'");
+    expect(viteConfig).toContain("'**/assets/portal-*'");
   });
 });

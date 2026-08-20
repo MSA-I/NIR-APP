@@ -28,3 +28,6 @@ deno.lock
 !supabase/functions/send-feedback/deno.lock
 !supabase/functions/recover-document-processing/deno.lock
 !supabase/functions/assistant/deno.lock
+
+# Local screenshots from scripts/portal-visual-check.cjs (manual visual verification)
+.portal-shots/
