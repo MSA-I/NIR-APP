@@ -1,6 +1,7 @@
 -- P58 -- the eighth egress kind: assistant enters the leased-egress boundary (0166) with the
 -- same fencing as the seven before it -- service-only, active-tenant-only, TTL-bounded,
--- idempotent per (org, kind, correlation) -- and the boundary stays closed to a ninth value.
+-- idempotent per (org, kind, correlation). 0168 later adds supplier_order_email through the
+-- same boundary, so the integrated ledger accepts nine reviewed kinds and refuses a tenth.
 \set ON_ERROR_STOP on
 
 begin;
@@ -81,7 +82,7 @@ select public.set_organization_lifecycle(
   '58000000-0000-4000-8000-000000000002', 'suspended', null,
   'P58: suspend before proving the egress refusal');
 
--- ===== The table constraint: all eight kinds in, a ninth out =====
+-- ===== The table constraint: all nine reviewed kinds in, a tenth out =====
 do $$
 declare
   v_kind text;
@@ -89,7 +90,7 @@ begin
   foreach v_kind in array array[
     'document_interpretation', 'invitation_email', 'push_notification',
     'integration_webhook', 'document_signed_url', 'whatsapp_reminder',
-    'organization_logo_storage', 'assistant'
+    'organization_logo_storage', 'assistant', 'supplier_order_email'
   ] loop
     insert into private.organization_external_egress_leases (
       org_id, kind, correlation_id, expires_at
@@ -102,8 +103,8 @@ end
 $$;
 select pg_temp.p58_assert(
   (select count(distinct kind) from private.organization_external_egress_leases
-    where org_id = '58000000-0000-4000-8000-000000000001') = 8,
-  'the table constraint did not accept all eight kinds');
+    where org_id = '58000000-0000-4000-8000-000000000001') = 9,
+  'the table constraint did not accept all nine reviewed kinds');
 
 select pg_temp.p58_expect_error(
   $$insert into private.organization_external_egress_leases (org_id, kind, correlation_id, expires_at)
@@ -152,7 +153,7 @@ select pg_temp.p58_assert(
    ) result) repeated),
   'replaying the same (org, assistant, correlation) did not return the same live lease idempotently');
 
--- The other seven kinds still reserve after the list grew.
+-- The other eight reviewed kinds still reserve after the list grew.
 do $$
 declare
   v_kind text;
@@ -162,7 +163,7 @@ begin
   foreach v_kind in array array[
     'document_interpretation', 'invitation_email', 'push_notification',
     'integration_webhook', 'document_signed_url', 'whatsapp_reminder',
-    'organization_logo_storage'
+    'organization_logo_storage', 'supplier_order_email'
   ] loop
     v_i := v_i + 1;
     v_result := public.service_reserve_organization_external_egress(
@@ -175,7 +176,7 @@ begin
 end
 $$;
 
--- A ninth, invented kind is refused by the function's own closed list.
+-- A tenth, invented kind is refused by the function's own closed list.
 select pg_temp.p58_expect_error(
   $$select public.service_reserve_organization_external_egress(
       '58000000-0000-4000-8000-000000000001', 'assistant_v2',
@@ -231,35 +232,16 @@ select pg_temp.p58_expect_error(
       '58000000-0000-4000-8000-00000000c008', 90)$$,
   'service_role_required');
 
--- ===== The live body is a reviewed body =====
--- The first hash is 0166 exactly. The second is mechanically the same body with only
--- 'supplier_order_email' appended after 'assistant' -- the stacked PR #87 integration body.
--- Accepting those two exact hashes lets this suite run before or after that stacked migration
--- without weakening the pin to a semantic grep or accepting arbitrary drift.
+-- ===== The live body is the reviewed body =====
+-- 0168 changes only the closed list in the reviewed 0166 body, adding supplier_order_email.
+-- The suite pins the integrated body so drift is caught here, not in production.
 select pg_temp.p58_assert(
   (select md5(replace(proc.prosrc, e'\r', ''))
    from pg_catalog.pg_proc proc
    where proc.oid = pg_catalog.to_regprocedure(
      'public.service_reserve_organization_external_egress(uuid,text,uuid,integer)')
-     and proc.prosecdef) in (
-       'aa98553801b844f570f6a3d9c90b1133',
-       '1cb58aaf4df81dd6e3c977dab795f355'),
-  'the live reservation function is neither reviewed 0166 nor its exact supplier-email integration');
-
-select pg_temp.p58_assert(
-  (select md5(replace(proc.prosrc, e'\r', ''))
-   from pg_catalog.pg_proc proc
-   where proc.oid = pg_catalog.to_regprocedure(
-     'public.service_reserve_organization_external_egress(uuid,text,uuid,integer)'))
-    <> '1cb58aaf4df81dd6e3c977dab795f355'
-  or position(
-    '''supplier_order_email'''
-    in (select pg_get_constraintdef(con.oid)
-        from pg_catalog.pg_constraint con
-        where con.conrelid = 'private.organization_external_egress_leases'::regclass
-          and con.conname = 'organization_external_egress_leases_kind_check')
-  ) > 0,
-  'the combined function accepts supplier email while the lease CHECK refuses it');
+     and proc.prosecdef) = '1cb58aaf4df81dd6e3c977dab795f355',
+  'the live reservation function is not the reviewed 0166+0168 body');
 
 rollback;
 

@@ -1,5 +1,35 @@
 # PROGRESS — מצב נוכחי
 
+עודכן: 20.08.2026 (ג) — **שלב A, פורטל ההזמנה לספק, מוזג ונפרס לייצור עם ראיות Git/CI/DB/Edge/Pages ו־live E2E מלאות.**
+
+> **Git/CI.** ‏PR #86 מוזג: head ‏`d857d7bc795b70a1d7364a3414a564d521be912b`, ‏merge
+> ‏`6430d260edd684bb001fc39d4dd81814f2903275`; ‏8/8 checks עברו על ה-head המדויק, כולל browser
+> artifact ללא failures/skips/console errors ועם שמונה צילומי he/RTL ו-en/LTR, ללא overflow.
+>
+> **מסד ו־Edge.** גיבוי roles/schema/data מלא נשמר מחוץ לריפו תחת
+> `NIR-APP-DOCS/backups/20260820-1755-pre-0151-0167-6430d260`, עם מניפסט ו-SHA-256. כל
+> ‏`0151`–`0167` עברו dry-run בטרנזקציה אחת ו-rollback מוכח. ‏`supabase db push` נעצר לפני חיבור
+> ב-`EAUTHQUERY auth_query secret check timed out` וה-ledger נשאר `0150`; ההחלה החלופית בוצעה
+> דרך Management API כך שכל migration וה-ledger נכתבו באותה טרנזקציה. postflight אימת version,
+> name, statement count, character count ו-SHA-256 לכל 17 הקבצים; ה-ledger הסתיים ב-`0167`,
+> ‏A5/A6 נשארו 0 והספירות העסקיות לא זזו. ‏`SUPPLIER_PORTAL_RATE_LIMIT_PEPPER` נוצר והוגדר בלי
+> להירשם, ו-Edge ‏`supplier-portal` נפרס לבדו כ-`ACTIVE`, גרסה 1, ‏`verify_jwt=false`.
+>
+> **Pages.** build ייצור נקי נבנה מאותו tree של merge SHA, עם host Supabase יחיד וללא
+> ‏`54321`, ‏`service_role` או demo seed. הפריסה לפרויקט `supplyflow` קיבלה unique URL
+> ‏`https://8096d4e1.supplyflow-baq.pages.dev`; ‏106 קבצים הושוו byte-for-byte מול ה-unique
+> והכתובת הקנונית — ‏212/212 התאמות SHA-256. ‏`/portal` ו-`/portal.html` מגישים רק
+> ‏`portal-BIAb3xb5.js`; ‏`/` מגיש רק `index-CHZYDPr2.js`.
+>
+> **live E2E מבוקר.** חשבון owner מורשה הנפיק קישור חי להזמנת fixture ‏#239; דפדפן anonymous
+> פתח את הפורטל והגיש שינוי מובנה מ-2×₪10 ל-3×₪11. ‏Edge החזיר 200 ל-resolve, submit ו-resolve
+> חוזר — ללא 503, console error, כשל רשת אמיתי או overflow ב-390/1440. ההצעה
+> ‏`068ca0ab-41ae-4f9f-8768-31a6a6c547dd` התקבלה, הוחלטה ונוצרה רוויזיה ‏#240
+> (`014bb620-4dab-4850-bdf4-c7c041c77bd4`). postflight הוכיח שהמקורית נשארה עם 2×₪10,
+> קישור קבלה אחד וקישור חשבונית אחד; הרוויזיה מכילה 3×₪11; וכל ששת אירועי ה-audit קיימים פעם אחת.
+> אחרי fixture: ארגונים 1, מוצרים 271, ספקים 22, חשבוניות 15, הזמנות 240, links 1, proposals 1;
+> ‏A5/A6=0. צילומי open/submitted/review/original/revision נבדקו חזותית.
+
 עודכן: 20.08.2026 — **בעל המוצר אישר את חלופה B; Core ו־history UI מומשו ונבדקו מקומית. עדיין אין PR/CI, activation או deploy.**
 
 > **הכרעת UI.** בדסקטופ העוזר הוא פאנל docked ו־non-modal ברוחב 27.5rem; המסך הראשי שומר לו מקום
@@ -105,7 +135,31 @@
 > **חמש הכרעות נפתחו:** #178 מה "השבוע" אומר (הדשבורד מקבץ שבוע קלנדרי מיום ראשון, ‏`summary.ts`
 > עובד בחלון נגרר — ולכן העוזר תומך בחלונות נגררים בלבד ומצהיר על החלון בכל תשובה), #179 ממשל הספק,
 > #180 מכסת הריצות, #181 שימור 90 יום, #182 האם והיכן לאפשר פעולה מאושרת.
-עודכן: 20.08.2026 — **פורטל הזמנות לספק (שלב A של סבב היכולות התחרותיות): קישור-טוקן חד-הזמנתי, הצעת ספק מובנית, מסך החלטה פנימי ורוויזיות append-only.** ‏(ענף `feat/supplier-order-portal`; טרם מוזג וטרם נפרס.)
+עודכן: 20.08.2026 (ב) — **מסירת הזמנות במייל אמיתי (שלב B1): העדפות תקשורת פר-ספק, תבניות he/en ממוספרות-גרסה, ‏ledger שליחה בדפוס 0028, ו-`sent` שנטבע רק על אירוע ספק שנצפה.** ‏(ענף `feat/order-delivery`, מוערם על שלב A; טרם מוזג.)
+
+> **מה נבנה.** ‏`0168`: ‏`supplier_communication_preferences` ‏(fail-closed — ברירת מחדל "ידני
+> בלבד"; ערוץ ספק בלי יעד נדחה בשמירה), ‏`email_order_messages` — שרשור שליחה אחד פר-הזמנה עם
+> ‏claim/lease/תקרת 5 ניסיונות/קפיאת `unknown` (הכללים של 0028), ‏Edge ‏`email-sender`
+> ‏(verify_jwt=true) ששולח **Resend אמיתי** תחת egress lease חדש `supplier_order_email` ומיישב
+> דרך `service_settle_email_order_message` — שגם מטביע `purchase_orders.sent` **רק** על
+> ‏provider-accepted, באותה טרנזקציה עם הראיה (הכרעות #187–188). ה-claim מאציל ל-
+> ‏`issue_supplier_order_link` כך שקישור פורטל טרי רוכב בכל מייל; תבניות he/en ‏escaped
+> וממוספרות (`templates.ts`, ‏6 בדיקות Deno). ‏UI: כרטיס העדפות בכרטיס הספק, כרטיס מסירה במסך
+> ההזמנה עם סולם הסטטוסים המלא (accepted≠delivered), איפוס בעלים מנומק.
+> **‏A5:** ‏claim ‏self-enforcing; ‏settle לוקח exemption (התקדים של 0077) — ה-pin זז 89→90
+> יחד עם p9. **‏A6:** שתי הטבלאות נרשמו; רשימת ה-egress kinds הורחבה בטלאי מעוגן (טבלה+פונקציה+TS).
+>
+> **אימות לאחר rebase:** ‏`npm run check` ירוק עם 1,249/1,249 בדיקות ב-133 קבצים וכל ששת
+> השומרים; dry-run+rollback של `0168` ו-`p60` ירוק; ‏P58 המשולב ו-P9 ירוקים; ‏A5=0, ‏A6=0,
+> pin ‏90 ו-ledger חזר ל-`0167`; ‏6/6 בדיקות Deno לתבניות ו-`deno check --frozen` ל-Edge ירוקים.
+> שישה צילומי local headed מכסים preferences, modal, email-enabled, send card ו-confirmation
+> ב-1440/390 — ללא overflow, console errors או failed requests — ונבדקו חזותית. תרחיש browser CI
+> נוסף לאותם משטחים ולסמנטיקת provider-accepted.
+> **לא רץ:** שער CI מלא (על ה-PR); שליחת מייל חיה (דורש `ORDERS_FROM_EMAIL` + דומיין מאומת —
+> ‏DEBT §25). **חוב חדש:** ‏§61 — שער ה-WhatsApp על `sent` (0029) יידרש ללמוד את
+> מסלול המייל כשחיבור WhatsApp יופעל.
+
+עודכן: 20.08.2026 — **פורטל הזמנות לספק (שלב A של סבב היכולות התחרותיות): קישור-טוקן חד-הזמנתי, הצעת ספק מובנית, מסך החלטה פנימי ורוויזיות append-only.** ‏(מוזג ב-PR #86; ראיות rollout חיות מתועדות בעדכון 20.08.2026 (ג) למעלה.)
 
 > **מה נבנה.** ספק מקבל קישור ל**הזמנה אחת**, פותח אותו בטלפון בלי חשבון ובלי התחברות, ומגיש
 > תשובה אחת: אישור כמות-שהיא או הצעה מובנית — כמות/מחיר-יחידה פר-שורה, "אינו זמין" + תחליף

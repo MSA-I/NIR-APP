@@ -740,7 +740,7 @@ debounce ולא מול אירוע — ומוסיף לו שדה שלא היה: **
   ‏1375 הוא הדפוס הנכון), או להמתין ל־`waitForSaved()` בלבד, שמסתמך על `role="status"` ואינו
   תלוי בתזמון הרשת. למדוד חמש הרצות רצופות לפני סגירה.
 
-### §60 — מועמד לסגירה: rate limit מתמיד ולוקאל אנגלי מומשו; CI/live עדיין חסרים
+### §60 — נסגר: rate limit מתמיד, לוקאל אנגלי, CI ו־live E2E הוכחו
 
 - **מה נסגר בקוד:** ‏`supplier-portal` (‏0167) מפיק HMAC מכתובת gateway עם pepper שרתי ושולח
   ל-`service_check_supplier_portal_rate_limit`. ה-DB סופר אטומית 30 בקשות בדקה וחוסם לעשר
@@ -748,16 +748,29 @@ debounce ולא מול אירוע — ומוסיף לו שדה שלא היה: **
   ה-RPC ניתן רק ל-`service_role`, ו-cron יחיד מוחק שורות שלא עודכנו 30 יום. בלי pepper באורך
   32+, כתובת gateway או RPC תקין הדלת מסרבת. הפורטל כולל עברית/RTL ואנגלית/LTR, בחירת URL או
   שפת דפדפן, fallback לעברית, מתג שפה ו-`Intl` לתאריך/ILS/כמות.
-- **ראיה מקומית:** reset מבודד עד ledger ‏`0167`; ‏P59 עם marker
+- **ראיה מקומית ו-CI:** reset מבודד עד ledger ‏`0167`; ‏P59 עם marker
   `p59_supplier_order_portal_passed` (ACL/JWT, ‏30/31, reset, מפתחות עצמאיים, cron); ‏P59B
   בשתי ישיבות `dblink` עם proposal יחיד ו-conflict יחיד, ואחריה reset נקי; postflight של
   RPC/table/grants/cron; ‏`npm run verify` מלא עם 1,244/1,244 בדיקות ב-132 קבצים וכל ששת
   השומרים; production build; ‏7/7 Deno; ‏15/15 Vitest ממוקדות; TypeScript ירוק. בדיקת headed ייעודית
   הפיקה שמונה צילומי he/en במובייל/desktop למצבי open/submitted/invalid ללא overflow או שגיאת
-  console; תרחיש browser CI כולל כעת keyboard, labels ו-Chromium accessibility tree אך טרם רץ
-  בשער המלא על ה-SHA הסופי.
-- **למה הסעיף עדיין פתוח:** אין עדיין CI טרי על SHA סופי, secret חי, Edge deploy ו-E2E חי שמוכיח
-  issue→redeem→submit→review→revision. רק אחרי ארבעתם הסעיף יסומן נסגר.
+  console; תרחיש browser CI כולל keyboard, labels ו-Chromium accessibility tree. ‏PR #86 עבר
+  ‏8/8 checks על `d857d7bc795b70a1d7364a3414a564d521be912b` ומוזג ל-
+  `6430d260edd684bb001fc39d4dd81814f2903275`.
+- **ראיית סגירה חיה, 20.08.2026:** גיבוי מלא וממוחשב, dry-run+rollback, ledger/name/content postflight,
+  secret חי ו-Edge גרסה 1 ‏`ACTIVE`; פריסת Pages לפרויקט `supplyflow` עם 212/212 התאמות SHA-256
+  בין 106 קבצי `dist` לבין unique+canonical; ו-E2E חי issue→anonymous redeem→structured submit→
+  review→decision→revision. ‏Edge החזיר 200 ולא 503. בדיקת DB הוכיחה שהמקורית וקישורי receipt/
+  invoice נשארו, הרוויזיה לבדה קיבלה את השינויים, ששת אירועי ה-audit קיימים, ו-A5/A6=0.
 - **סיכון שיורי נפרד:** כל rate check עדיין מגיע ל-Edge ול-DB, ומתקפה מבוזרת על כתובות/ASN רבים
   אינה מקור יחיד. WAF/Turnstile על הנתיב הוא הגנת עומק תפעולית של הבעלים; היעדרו אינו מבטל את
   המונה המתמיד פר-IP ואינו יוצג שוב כאילו נשאר רק חלון per-isolate.
+
+### §61 — שער ה־WhatsApp על `sent` (0029) טרם מכיר את מסלול המייל
+
+- **מצב:** ‏`private.guard_purchase_order_whatsapp_sent` (0029:153) חוסם כל כניסה ל־`sent` כאשר
+  לארגון יש `whatsapp_connections` **פעיל** ולספק מספר תקין — אלא אם נצרך אסימון מעבר שה־flow
+  של Meta טובע. מסלול המייל (0168) מטביע `sent` על provider-accepted; בארגון עם חיבור WhatsApp
+  פעיל ההטבעה הזו תיחסם. **היום אפס חיבורים פעילים בייצור**, ולכן אין התנגשות בפועל.
+- **הצעד הזול הבא:** בגל ה־WhatsApp sender — ללמד את השער להכיר גם אסימון מעבר של מסלול המייל,
+  או להחליף את התנאי ב"קיים אירוע ספק שנצפה באחד הערוצים".

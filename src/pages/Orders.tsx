@@ -12,6 +12,7 @@ import { fmtMoneyExact, fmtDate, fmtDateTime, formatQuantity, formatUnit, produc
 import { orderWhatsAppLink, markOrderSentToSupplier, needsSentConfirmation } from '../lib/share';
 import { WhatsAppSendDialog } from '../components/WhatsAppSendDialog';
 import { SupplierPortalCard } from '../components/SupplierPortalCard';
+import { EmailOrderCard } from '../components/EmailOrderCard';
 import { cancelOrderDraft } from '../lib/orderDrafts';
 import type { PurchaseOrder, PurchaseOrderItem, PoStatus } from '../lib/types';
 
@@ -444,7 +445,11 @@ export function OrderDetail() {
       )}
 
       {order.status !== 'draft' && (
-        <SupplierPortalCard order={order} orgName={orgName} canWrite={!!canWrite} />
+        <>
+          <EmailOrderCard orderId={order.id} supplierId={order.supplier.id}
+            orderStatus={order.status} canWrite={!!canWrite} />
+          <SupplierPortalCard order={order} orgName={orgName} canWrite={!!canWrite} />
+        </>
       )}
 
       {/* Printable order sheet */}

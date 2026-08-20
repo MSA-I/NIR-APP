@@ -115,6 +115,11 @@ verify_jwt = true
 [functions.supplier-portal]
 verify_jwt = false
 
+# Caller-initiated order delivery (0168): the browser's JWT is forwarded to
+# claim_email_order_message, which is the security boundary.
+[functions.email-sender]
+verify_jwt = true
+
 [analytics]
 enabled = false
 port = 55437
