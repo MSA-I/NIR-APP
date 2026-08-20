@@ -155,7 +155,8 @@ select public.service_assistant_conversation_snapshot(
 
 select pg_temp.p61_assert(
   jsonb_array_length(:'snapshot'::jsonb -> 'messages') = 2
-  and :'snapshot'::jsonb #>> '{messages,0,run_as_of}' = '2026-08-20T10:00:01+00:00'
+  and (:'snapshot'::jsonb #>> '{messages,0,run_as_of}')::timestamptz
+    = '2026-08-20T10:00:01+00:00'::timestamptz
   and (:'snapshot'::jsonb #>> '{messages,0,complete}')::boolean
   and :'snapshot'::jsonb #>> '{messages,0,tools,0,tool}' = 'get_purchase_metrics'
   and (:'snapshot'::jsonb #>> '{messages,0,tools,0,complete}')::boolean,
