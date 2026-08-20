@@ -1109,6 +1109,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "upload-organization-logo" = "true"
     "send-push" = "false"
     "outbox-worker" = "false"
+    "assistant" = "true"
   }
   foreach ($functionName in $functionJwt.Keys) {
     $expectedJwt = $functionJwt[$functionName]
@@ -1286,6 +1287,9 @@ try {
     Invoke-SqlTest "supabase\tests\p53_activation_onboarding_health.sql" "Activation is derived from the audit ledger rather than accumulated, an operator note never overrules a product event that actually happened, an unmeasurable milestone says so instead of reading as not-done, and health returns the reasons that produced it with no score and no prediction"
     Invoke-SqlTest "supabase\tests\p54_billing_boundary_and_funnel.sql" "A billing event is attributed only through a link we wrote ourselves and never from its payload, a replay is a no-op, an unattributable event dead-letters instead of guessing an owner, the quota crossing is recorded once per period on the write that exhausts it, and the funnel names the three stages it cannot see"
     Invoke-SqlTest "supabase\tests\p55_self_signup_rate_limit.sql" "The anonymous signup door is bounded by a limit the database counts rather than a function remembers, stores hashes and never a readable address or email, records refusals as well as acceptances, and is unreachable from any browser role"
+    Invoke-SqlTest "supabase\tests\p56_assistant_foundations.sql" "A conversation belongs to the person who had it: the owner reads cost and health but never text, an unstated assistant quota refuses rather than allows, the hourly rate limit is counted in the database, the confirmed-actions switch is a reasoned policy and not a flag, and deletion and retention remove dialogue while the audit ledger does not move"
+    Invoke-SqlTest "supabase\tests\p57_business_summary_parity.sql" "The business summary has one definition rather than two: the read model re-derives each of the five metrics against independently written queries, a metric that fails comes back unmeasured while its four neighbours keep their exact values, and a second tenant sees only its own numbers"
+    Invoke-SqlTest "supabase\tests\p58_assistant_egress_kind.sql" "The eighth egress kind: assistant reserves under the same service-only, active-tenant, TTL-bounded, idempotent fencing as the seven before it, with no expiry carve-out and a boundary still closed to a ninth value"
     Invoke-SqlTest "supabase\tests\p24_inventory_intelligence.sql" "Inventory consumption evidence, incoming supply, suggestions, price context and tenant isolation"
     Invoke-SqlTest "supabase\tests\p25_tenant_offboarding_export.sql" "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p26_price_baseline.sql" "Contractual price baseline as of the document date, reversal ordering, undisclosed fallbacks and read-only guarantee"

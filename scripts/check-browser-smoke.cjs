@@ -898,6 +898,11 @@ async function offlineReceiving(browser) {
       return route.fulfill({ status: 200, headers: jsonHeaders, json: detail ? order : [order] });
     });
     await context.route('**/rest/v1/goods_receipts?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: null }));
+    // This scenario owns the offline queue, not the flag resolver. Keep that cross-cutting
+    // dependency deterministic while the same browser context flips offline and online; P4 and
+    // barcodeFlagAndCamera own the resolver's policy and UI contracts.
+    await context.route('**/rest/v1/rpc/resolve_feature_flags', (route) =>
+      route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
     await context.route('**/rest/v1/rpc/save_goods_receipt', async (route) => {
       receiptRequests.push(route.request().postDataJSON());
       if (holdReceiptSync) await receiptSyncGate;

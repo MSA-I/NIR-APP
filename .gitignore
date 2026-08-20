@@ -2,6 +2,7 @@ node_modules/
 dist/
 public/fonts/almoni/
 .env
+supabase/functions/.env
 *.local
 *.log
 .wrangler/
@@ -26,3 +27,4 @@ test-results/
 deno.lock
 !supabase/functions/send-feedback/deno.lock
 !supabase/functions/recover-document-processing/deno.lock
+!supabase/functions/assistant/deno.lock

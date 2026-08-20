@@ -102,6 +102,14 @@ verify_jwt = false
 [functions.outbox-worker]
 verify_jwt = false
 
+# The assistant boundary. Every other function here that sets verify_jwt = false has a concrete
+# reason for it — an anonymous door with no caller, an external worker holding a shared secret, or a
+# hashed export token on a GET. The assistant has none of those: its only caller is a signed-in
+# browser. So the platform gate rejects an unauthenticated request before the handler runs, and the
+# handler's own identity resolution stays as defence in depth rather than as the only check.
+[functions.assistant]
+verify_jwt = true
+
 [analytics]
 enabled = false
 port = 55437

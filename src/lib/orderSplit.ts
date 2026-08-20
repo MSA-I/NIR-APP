@@ -1,5 +1,7 @@
 import type { OrderSavings, SavingsLine } from './orderSavings';
-// @ts-expect-error The direct Node check needs an explicit extension; Vite accepts it.
+// The direct Node check needs an explicit extension; Vite accepts it. The suppression that used to
+// sit here is gone: `allowImportingTsExtensions` is now on in tsconfig, so the extension type-checks
+// on its own, and a `@ts-expect-error` that no longer expects an error is a compile error itself.
 import { calculateOrderSavings, centsFromUnits, hundredths, lineUnits, moneyFromCents } from './orderSavings.ts';
 import type { Product } from './types';
 
