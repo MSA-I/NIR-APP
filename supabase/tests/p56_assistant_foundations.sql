@@ -570,6 +570,13 @@ select pg_temp.p56_assert(
   (public.assistant_confirm_proposal(current_setting('p56.proposal')::uuid)
     ->> 'state') = 'confirmed',
   'the author could not confirm their own awaiting proposal');
+reset role;
+-- The ACL itself is pinned above. Exercise the function's independent JWT-role
+-- guard through a role that may execute it, so this negative test does not rely
+-- on PostgreSQL's denied-EXECUTE path (which can terminate a backend on the CI
+-- image before the expected exception reaches this block).
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role service_role;
 do $$
 begin
   perform public.assistant_record_proposal_outcome(
@@ -578,7 +585,8 @@ begin
     current_setting('p56.proposal')::uuid, true,
     '56000000-0000-4000-8000-0000000000ee'::uuid, null);
   raise exception 'expected an authenticated caller to be unable to forge an execution outcome';
-exception when insufficient_privilege then null;
+exception when insufficient_privilege then
+  if sqlerrm <> 'service_role_required' then raise; end if;
 end
 $$;
 reset role;
