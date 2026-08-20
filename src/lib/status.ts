@@ -130,6 +130,23 @@ export const REQUEST_STATUS: Record<string, StatusMeta> = {
   cancelled: m('בוטלה', 'idle'),
 };
 
+// A supplier's structured response to an order (0167). `submitted` is the one state waiting on
+// US — the supplier already acted; everything after it records our decision.
+export const SUPPLIER_PROPOSAL_STATUS: Record<string, StatusMeta> = {
+  submitted: m('ממתינה להחלטה', 'await'),
+  accepted: m('התקבלה במלואה', 'done'),
+  partially_accepted: m('התקבלה חלקית', 'done'),
+  rejected: m('נדחתה', 'idle'),
+};
+
+// The supplier-portal link lifecycle (0167), derived from timestamps — not a stored enum.
+export const SUPPLIER_LINK_STATE: Record<string, StatusMeta> = {
+  live: m('פעיל', 'done'),
+  submitted: m('התקבלה תשובה', 'info'),
+  expired: m('פג תוקף', 'idle'),
+  revoked: m('בוטל', 'idle'),
+};
+
 export const RECEIPT_LINE_STATUS: Record<string, StatusMeta> = {
   full: m('התקבל מלא', 'done'),
   partial: m('התקבל חלקית', 'await'),

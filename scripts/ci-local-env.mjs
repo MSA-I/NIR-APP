@@ -43,6 +43,7 @@ if (mode === 'write-functions-env') {
   const secrets = {
     OCR_WORKER_TOKEN: `quality-${randomUUID().replace(/-/g, '')}`,
     INTERPRET_DOCUMENT_CRON_SECRET: `quality-${randomUUID().replace(/-/g, '')}`,
+    SUPPLIER_PORTAL_RATE_LIMIT_PEPPER: `quality-${randomUUID().replace(/-/g, '')}`,
     PUSH_FN_SECRET: `quality-${randomUUID().replace(/-/g, '')}`,
   };
   const lines = [
@@ -50,6 +51,7 @@ if (mode === 'write-functions-env') {
     `INTERPRET_DOCUMENT_CRON_SECRET=${secrets.INTERPRET_DOCUMENT_CRON_SECRET}`,
     'OPENAI_API_KEY=local-provider-mock-not-sent',
     'APP_BASE_URL=http://127.0.0.1:5199',
+    `SUPPLIER_PORTAL_RATE_LIMIT_PEPPER=${secrets.SUPPLIER_PORTAL_RATE_LIMIT_PEPPER}`,
     `PUSH_FN_SECRET=${secrets.PUSH_FN_SECRET}`,
     `VAPID_PUBLIC_KEY=${vapid.publicKey}`,
     `VAPID_PRIVATE_KEY=${vapid.privateKey}`,

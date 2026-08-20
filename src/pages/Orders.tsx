@@ -11,6 +11,7 @@ import { PO_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, formatQuantity, formatUnit, productLabel, todayISO } from '../lib/format';
 import { orderWhatsAppLink, markOrderSentToSupplier, needsSentConfirmation } from '../lib/share';
 import { WhatsAppSendDialog } from '../components/WhatsAppSendDialog';
+import { SupplierPortalCard } from '../components/SupplierPortalCard';
 import { cancelOrderDraft } from '../lib/orderDrafts';
 import type { PurchaseOrder, PurchaseOrderItem, PoStatus } from '../lib/types';
 
@@ -386,7 +387,11 @@ export function OrderDetail() {
         breadcrumbs={<Breadcrumbs items={[{ label: 'הזמנות', to: '/orders' }, { label: `#${order.number}` }]} />}
         title={<span>הזמנה <span className="num">#{order.number}</span></span>}
         status={<StatusBadge meta={PO_STATUS[order.status]} />}
-        meta={<><span>{order.supplier.name}</span><span className="num font-semibold text-ink-body">{fmtMoneyExact(total)}</span><span>נוצרה {fmtDateTime(order.created_at)}</span>{order.sent_at && <span>נשלחה {fmtDateTime(order.sent_at)}</span>}</>}
+        meta={<><span>{order.supplier.name}</span><span className="num font-semibold text-ink-body">{fmtMoneyExact(total)}</span><span>נוצרה {fmtDateTime(order.created_at)}</span>{order.sent_at && <span>נשלחה {fmtDateTime(order.sent_at)}</span>}{order.revision_number > 1 && order.revised_from_order_id && (
+          <button type="button" className="underline" onClick={() => navigate(`/orders/${order.revised_from_order_id}`)}>
+            רוויזיה <span className="num">{order.revision_number}</span> — להזמנה המקורית
+          </button>
+        )}</>}
         primaryAction={primaryAction}
         secondaryActions={<>
           {canWrite && ['draft', 'sent'].includes(order.status) && waLink && primaryKey !== 'whatsapp' && (
@@ -436,6 +441,10 @@ export function OrderDetail() {
             שים לב: סכום ההזמנה ({fmtMoneyExact(total)}) נמוך ממינימום ההזמנה של הספק ({fmtMoneyExact(order.supplier.min_order_amount!)}).
           </span>
         </Note>
+      )}
+
+      {order.status !== 'draft' && (
+        <SupplierPortalCard order={order} orgName={orgName} canWrite={!!canWrite} />
       )}
 
       {/* Printable order sheet */}

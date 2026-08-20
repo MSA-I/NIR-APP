@@ -200,6 +200,42 @@ export interface PurchaseOrder {
   status: PoStatus; expected_date: string | null; notes: string | null;
   created_by: string | null; sent_at: string | null; created_at: string;
   confirmed_at: string | null; confirmation_note: string | null;
+  /** 1 for an order created directly; n+1 for a revision created from a supplier proposal (0167). */
+  revision_number: number;
+  revised_from_order_id: string | null;
+}
+
+/** One supplier-portal link (0167). token_hash is column-revoked and never reaches the browser. */
+export interface SupplierOrderLink {
+  id: string; org_id: string; purchase_order_id: string; supplier_id: string;
+  expires_at: string; issued_by: string;
+  opened_at: string | null; open_count: number; submitted_at: string | null;
+  revoked_at: string | null; revoked_by: string | null; revoked_reason: string | null;
+  failed_attempts: number; locked_until: string | null;
+  created_at: string; updated_at: string;
+}
+
+export type SupplierProposalStatus = 'submitted' | 'accepted' | 'partially_accepted' | 'rejected';
+
+/** A supplier's structured response to one order (0167) — immutable evidence plus the decision. */
+export interface SupplierOrderProposal {
+  id: string; org_id: string; link_id: string; purchase_order_id: string; supplier_id: string;
+  status: SupplierProposalStatus;
+  proposed_delivery_date: string | null; supplier_note: string | null;
+  total_delta: number; submitted_at: string;
+  decided_at: string | null; decided_by: string | null; decision_reason: string | null;
+  delivery_date_accepted: boolean | null; revision_order_id: string | null;
+  created_at: string;
+}
+
+export interface SupplierOrderProposalLine {
+  id: string; org_id: string; proposal_id: string; order_item_id: string; position: number;
+  product_name: string; unit: string | null;
+  original_qty: number; proposed_qty: number | null;
+  original_unit_price: number; proposed_unit_price: number | null;
+  availability: 'available' | 'unavailable'; replacement_note: string | null;
+  line_delta: number; decision: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
 }
 export interface PurchaseOrderItem {
   id: string; order_id: string; product_id: string; qty: number; unit_price: number; received_qty: number;
