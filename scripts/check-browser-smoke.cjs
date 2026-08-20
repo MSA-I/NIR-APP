@@ -761,9 +761,17 @@ async function receivingAccessibility(browser) {
   };
   const receiptReasons = [];
   const page = await context.newPage();
-  captureConsole(page, 'receiving-accessibility');
+  const flagsRecovered = page.waitForResponse((response) =>
+    response.request().method() === 'POST'
+    && response.url().includes('/rest/v1/rpc/resolve_feature_flags')
+    && response.ok(), { timeout: 25_000 });
+  // TanStack retries this fail-closed read. A transient gateway response is acceptable only when
+  // the same page subsequently observes a successful resolution; a persistent outage still fails.
+  captureConsole(page, 'receiving-accessibility', [], (response) =>
+    response.status() === 502 && response.url().includes('/rest/v1/rpc/resolve_feature_flags'));
   try {
     await login(page, 'office');
+    await flagsRecovered;
     await settle(page);
     await context.route('**/rest/v1/purchase_orders?**', (route) => {
       const url = new URL(route.request().url());
