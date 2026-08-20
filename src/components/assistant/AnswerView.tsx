@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
-import { Check, ExternalLink, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Link, useLocation } from 'react-router';
+import { Check, ChevronLeft, ThumbsDown, ThumbsUp } from 'lucide-react';
 import type {
+  AssistantRole,
   AssistantRunResult,
   Fact,
   NoAnswerReason,
   SourceReference,
 } from '../../lib/assistant/contracts';
+import { assistantSourceRouteDecision } from '../../lib/assistant/routeAccess';
 import { sendAssistantFeedback } from '../../lib/assistant/client';
 import { toHebrewError } from '../../lib/errors';
-import { fmtDate, fmtMoneyExact, fmtNum } from '../../lib/format';
+import { fmtDate, fmtDateTime, fmtMoneyExact, fmtNum } from '../../lib/format';
 import { Disclosure, Note } from '../ui';
 
 /**
@@ -54,16 +56,41 @@ const NO_ANSWER_TEXT: Record<NoAnswerReason, string> = {
     'המוצר טרם הגדיר את הכלל העסקי שהשאלה נשענת עליו, ולכן העוזר לא ענה. אין פירוש הדבר שאין נתונים.',
 };
 
-function SourceLink({ source, onNavigate }: { source: SourceReference; onNavigate: () => void }) {
+const ASSISTANT_TOOL_LABELS: Record<string, string> = {
+  get_business_summary: 'סיכום עסקי',
+  get_open_alerts: 'התראות פתוחות',
+  get_dashboard_snapshot: 'תמונת מצב ניהולית',
+  get_purchase_metrics: 'מדדי רכש',
+  explain_invoice_block: 'סיבת חסימת חשבונית',
+  compare_order_receipt_invoice: 'התאמת הזמנה, קבלה וחשבונית',
+  get_open_credits: 'זיכויים פתוחים',
+  get_orders_awaiting_confirmation: 'הזמנות שממתינות לאישור ספק',
+  get_unmatched_bank_transactions: 'תנועות בנק לא מותאמות',
+  get_supplier_performance: 'ביצועי ספקים',
+  get_inventory_risk: 'סיכון מלאי',
+  get_payment_exposure: 'חשיפה לתשלום',
+  find_entity: 'חיפוש רשומה',
+};
+
+function toolLabel(tool: string): string {
+  return ASSISTANT_TOOL_LABELS[tool] ?? 'בדיקה תפעולית';
+}
+
+function SourceLink({ source, onNavigate, active = false }: {
+  source: SourceReference;
+  onNavigate: () => void;
+  active?: boolean;
+}) {
   if (!source.route) return <span className="text-xs text-ink-muted">{source.label}</span>;
   return (
     <Link
       to={source.route}
       onClick={onNavigate}
-      className="inline-flex items-center gap-1 rounded-sm text-xs text-action-on-soft underline underline-offset-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-focus"
+      aria-current={active ? 'page' : undefined}
+      className={`inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-xs font-medium text-action-on-soft underline underline-offset-2 hover:bg-surface-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-focus ${active ? 'bg-surface-selected text-ink' : ''}`}
     >
-      <ExternalLink size={12} aria-hidden="true" />
-      {source.label}
+      <ChevronLeft size={14} aria-hidden="true" />
+      פתיחת מקור: {source.label}
     </Link>
   );
 }
@@ -106,14 +133,23 @@ function FeedbackControl({ runId }: { runId: string }) {
   );
 }
 
-export default function AnswerView({ result, onNavigate }: {
+export default function AnswerView({ result, role, onNavigate }: {
   result: AssistantRunResult;
+  role: AssistantRole;
   /** A source link leaves the panel for the screen it names; the dialog closes itself here. */
   onNavigate: () => void;
 }) {
+  const location = useLocation();
   const factById = new Map(result.facts.map((fact) => [fact.id, fact]));
-  const sourceById = new Map(result.sources.map((source) => [source.id, source]));
-  const incompleteTools = result.tools_used.filter((tool) => !tool.complete).map((tool) => tool.tool);
+  const sourceById = new Map(result.sources
+    .filter((source) => assistantSourceRouteDecision(source, role) === 'allowed')
+    .map((source) => [source.id, source]));
+  const incompleteTools = result.tools_used.filter((tool) => !tool.complete).map((tool) => toolLabel(tool.tool));
+  const sourceIsCurrent = (source: SourceReference): boolean => {
+    if (!source.route) return false;
+    const [path, query = ''] = source.route.split('?', 2);
+    return location.pathname === path && (!query || location.search === `?${query}`);
+  };
 
   return (
     <div className="space-y-3">
@@ -147,8 +183,11 @@ export default function AnswerView({ result, onNavigate }: {
             {facts.length > 0 && (
               <dl className="mt-2 space-y-1 border-t border-line-soft pt-2">
                 {facts.map((fact) => (
-                  <div key={fact.id} className="flex items-baseline justify-between gap-3">
-                    <dt className="min-w-0 text-xs text-ink-muted">{fact.label}</dt>
+                  <div key={fact.id} className="flex items-start justify-between gap-3">
+                    <dt className="min-w-0 text-xs text-ink-muted">
+                      <span className="block">{fact.label}</span>
+                      <span className="mt-0.5 block text-xs">נמדד ל־<span className="num">{fmtDateTime(fact.as_of)}</span></span>
+                    </dt>
                     <dd className="num shrink-0 text-sm font-medium text-ink-mid">{factValueText(fact)}</dd>
                   </div>
                 ))}
@@ -157,7 +196,7 @@ export default function AnswerView({ result, onNavigate }: {
             {sources.length > 0 && (
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                 {sources.map((source) => (
-                  <SourceLink key={source.id} source={source} onNavigate={onNavigate} />
+                  <SourceLink key={source.id} source={source} active={sourceIsCurrent(source)} onNavigate={onNavigate} />
                 ))}
               </div>
             )}
@@ -177,7 +216,12 @@ export default function AnswerView({ result, onNavigate }: {
           {result.answer.next_steps.map((step) => {
             const source = sourceById.get(step.source_id);
             return source ? (
-              <SourceLink key={step.source_id} source={{ ...source, label: step.label }} onNavigate={onNavigate} />
+              <SourceLink
+                key={step.source_id}
+                source={{ ...source, label: step.label }}
+                active={sourceIsCurrent(source)}
+                onNavigate={onNavigate}
+              />
             ) : null;
           })}
         </div>
@@ -185,11 +229,11 @@ export default function AnswerView({ result, onNavigate }: {
 
       {result.tools_used.length > 0 && (
         <div className="rounded-xl ring-1 ring-line-soft">
-          <Disclosure title="מה נבדק" count={result.tools_used.length}>
+          <Disclosure title="היקף הבדיקה" count={result.tools_used.length}>
             <ul className="space-y-1 text-xs text-ink-muted">
               {result.tools_used.map((tool) => (
                 <li key={tool.tool} className="flex items-center justify-between gap-3">
-                  <span dir="ltr">{tool.tool}</span>
+                  <span>{toolLabel(tool.tool)}</span>
                   <span>{tool.complete ? 'הושלם' : 'חלקי'}</span>
                 </li>
               ))}

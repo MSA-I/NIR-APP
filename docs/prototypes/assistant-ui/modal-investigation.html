@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <link rel="icon" href="data:," />
+    <title>Prototype A: העוזר של InPlace</title>
+    <link rel="stylesheet" href="/src/index.css" />
+    <link rel="stylesheet" href="./prototype.css" />
+  </head>
+  <body>
+    <div class="prototype-root prototype-modal" data-prototype-root data-variant="modal">
+      <div data-app-shell>
+        <header class="prototype-topbar">
+          <div class="brand-lockup">
+            <img src="/brand/inplace-symbol.svg" alt="" />
+            <span>InPlace</span>
+          </div>
+          <nav class="prototype-nav" aria-label="ניווט ראשי לדוגמה">
+            <a href="#">מרכז הבקרה</a>
+            <a href="#" aria-current="page">חשבוניות</a>
+            <a href="#">בקרה</a>
+          </nav>
+          <div class="prototype-actions">
+            <button type="button" class="assistant-trigger" data-open-assistant aria-label="פתיחת בדיקה עם העוזר של InPlace">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 5.5h10M4 10h7M4 14.5h5" />
+                <circle cx="16" cy="15" r="3.5" />
+                <path d="m18.7 17.7 2.3 2.3" />
+              </svg>
+              <span>בדיקה עם העוזר</span>
+            </button>
+            <span class="avatar-disc" aria-label="חשבון מנהל">מ</span>
+          </div>
+        </header>
+
+        <main class="prototype-workspace">
+          <div class="workspace-inner">
+            <p class="workspace-eyebrow">חשבוניות · סביבת הדגמה</p>
+            <h1 class="workspace-heading">בקרת חשבוניות</h1>
+            <div class="workspace-meta">
+              <span class="demo-badge">נתונים סינתטיים</span>
+              <span>מסך רקע בלבד לבדיקת modality</span>
+            </div>
+            <section class="workspace-ledger" aria-label="חשבוניות לדוגמה">
+              <div class="ledger-heading">
+                <strong>חשבוניות אחרונות</strong>
+                <span>הנתונים מוסתרים בזמן modal</span>
+              </div>
+              <div class="ledger-row"><span>חשבונית לדוגמה א׳</span><span class="num">—</span></div>
+              <div class="ledger-row"><span>חשבונית לדוגמה ב׳</span><span class="num">—</span></div>
+            </section>
+          </div>
+        </main>
+      </div>
+
+      <div class="modal-layer" data-panel-layer>
+        <section class="investigation-panel" data-investigation-panel tabindex="-1">
+          <header class="investigation-header">
+            <div class="assistant-title-row">
+              <span class="investigation-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M4 5.5h10M4 10h7M4 14.5h5" />
+                  <circle cx="16" cy="15" r="3.5" />
+                  <path d="m18.7 17.7 2.3 2.3" />
+                </svg>
+              </span>
+              <div class="assistant-title-copy">
+                <h2 id="assistant-prototype-title">העוזר של InPlace</h2>
+                <p>בדיקה תפעולית מבוססת ראיות · לקריאה בלבד</p>
+              </div>
+            </div>
+            <div class="panel-actions">
+              <button type="button" class="quiet-button" data-new-check aria-label="בדיקה חדשה">
+                <span class="quiet-button-label">בדיקה חדשה</span>
+                <span class="quiet-button-icon" aria-hidden="true">+</span>
+              </button>
+              <button type="button" class="icon-button" data-close-assistant aria-label="סגירת הבדיקה">×</button>
+            </div>
+          </header>
+
+          <div class="answer-scroller" data-answer-scroller>
+            <section class="answer-view" data-answer-view aria-label="ממצאי הבדיקה">
+              <div class="question-block">
+                <p class="question-label">השאלה שנבדקה</p>
+                <p class="question-text" data-fixture-question></p>
+              </div>
+
+              <div class="freshness-line" aria-label="טווח ועדכניות הבדיקה">
+                <span>טווח: <bdi data-fixture-scope></bdi></span>
+                <span>עודכן ל־<bdi class="num" data-fixture-as-of></bdi></span>
+                <span class="demo-badge">נתוני הדגמה סינתטיים</span>
+              </div>
+
+              <div class="partial-note" role="status">
+                <span class="partial-dot" aria-hidden="true"></span>
+                <span>
+                  <strong>הבדיקה חלקית</strong>
+                  התאמת הזמנה, קבלה וחשבונית לא הושלמה לכל הרשומות. הממצאים שנמדדו מוצגים, אך אי אפשר לקבוע שהכול תקין.
+                </span>
+              </div>
+
+              <div class="answer-layout">
+                <div>
+                  <h2 class="summary-heading">ממצאי הבדיקה</h2>
+                  <p class="summary-text" data-fixture-summary></p>
+                  <div class="claims-list" data-fixture-claims></div>
+
+                  <div class="feedback-line" aria-label="משוב איכות">
+                    <span>משוב איכות בלבד. הוא אינו משנה נתונים עסקיים:</span>
+                    <button type="button" class="feedback-button">מועיל</button>
+                    <button type="button" class="feedback-button">לא מועיל</button>
+                  </div>
+
+                  <form class="composer" data-prototype-form>
+                    <label for="modal-new-question">בדיקה חדשה</label>
+                    <div class="composer-row">
+                      <textarea id="modal-new-question" data-new-question rows="2" maxlength="600" placeholder="מה תרצה לבדוק עכשיו?"></textarea>
+                      <button type="submit" class="primary-button">בדיקה</button>
+                    </div>
+                  </form>
+                </div>
+
+                <aside class="scope-panel" aria-labelledby="modal-scope-title">
+                  <p class="scope-label">כיסוי ועדכניות</p>
+                  <h3 id="modal-scope-title">היקף הבדיקה</h3>
+                  <ul class="scope-list" data-fixture-tools></ul>
+                </aside>
+              </div>
+            </section>
+
+            <section class="source-view" data-source-view hidden aria-labelledby="modal-source-title">
+              <div class="source-view-header">
+                <div>
+                  <p class="source-eyebrow" data-source-eyebrow></p>
+                  <h2 id="modal-source-title" class="source-title" data-source-title tabindex="-1"></h2>
+                </div>
+                <button type="button" class="source-back" data-source-back>חזרה לבדיקה</button>
+              </div>
+              <p class="source-description" data-source-description></p>
+              <div class="source-context">
+                <strong>נפתח מתוך השאלה:</strong>
+                <span data-fixture-question></span>
+              </div>
+              <p class="source-route tech-id" dir="ltr" data-source-route></p>
+              <dl class="source-record" data-source-rows></dl>
+              <div class="partial-note">
+                <span class="partial-dot" aria-hidden="true"></span>
+                <span>זהו מקור סינתטי בתוך prototype מבודד. אין קריאה למסד ואין נתון לקוח.</span>
+              </div>
+            </section>
+          </div>
+
+          <div class="sr-only" aria-live="polite" data-live-region></div>
+        </section>
+      </div>
+    </div>
+
+    <script type="module" src="./prototype.js"></script>
+  </body>
+</html>

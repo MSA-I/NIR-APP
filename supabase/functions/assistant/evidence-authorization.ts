@@ -50,16 +50,33 @@ const ENTITY_TABLES: Partial<Record<EvidenceEntity, string>> = {
   organization: "organizations",
 };
 
+export function assistantActorContextsEqual(
+  current: ActorContext,
+  expected: ActorContext,
+): boolean {
+  const normalizedScopes = (actor: ActorContext) => [...actor.scopes].sort();
+  return current.userId === expected.userId &&
+    current.orgId === expected.orgId &&
+    current.role === expected.role &&
+    current.canWrite === expected.canWrite &&
+    JSON.stringify(normalizedScopes(current)) ===
+      JSON.stringify(normalizedScopes(expected)) &&
+    current.capabilities.ui === expected.capabilities.ui &&
+    current.capabilities.history === expected.capabilities.history &&
+    current.capabilities.drafts === expected.capabilities.drafts &&
+    current.capabilities.confirmedActions === expected.capabilities.confirmedActions;
+}
+
 export function createSupabaseEvidenceAuthorizationPort(
   client: EvidenceAuthorizationClient,
   userId: string,
 ): EvidenceAuthorizationPort {
-  let currentActor: Promise<ActorContext> | null = null;
   return {
-    resolveCurrentActor: () => {
-      currentActor ??= resolveActorContext(client, userId);
-      return currentActor;
-    },
+    // Deliberately do not cache this lookup. History load, first generated answer and the one
+    // validation retry are separate authorization moments. A role, scope, flag, profile or
+    // organization lifecycle change between them must be observed before any stored or generated
+    // prose crosses the provider/browser boundary.
+    resolveCurrentActor: () => resolveActorContext(client, userId),
     async visibleEntityIds(entity, ids) {
       if (ids.length === 0) return [];
       const table = ENTITY_TABLES[entity];
@@ -91,19 +108,10 @@ export async function authorizeAssistantEvidence(
     return { ok: false, errors: ["evidence:authorization_unavailable"] };
   }
 
-  const normalizedScopes = (actor: ActorContext) => [...actor.scopes].sort();
-  const sameActor = currentActor.userId === expectedActor.userId &&
-    currentActor.orgId === expectedActor.orgId &&
-    currentActor.role === expectedActor.role &&
-    currentActor.canWrite === expectedActor.canWrite &&
-    JSON.stringify(normalizedScopes(currentActor)) ===
-      JSON.stringify(normalizedScopes(expectedActor)) &&
-    currentActor.capabilities.ui === expectedActor.capabilities.ui &&
-    currentActor.capabilities.history === expectedActor.capabilities.history &&
-    currentActor.capabilities.drafts === expectedActor.capabilities.drafts &&
-    currentActor.capabilities.confirmedActions ===
-      expectedActor.capabilities.confirmedActions;
-  if (!sameActor || !currentActor.capabilities.ui) {
+  if (
+    !assistantActorContextsEqual(currentActor, expectedActor) ||
+    !currentActor.capabilities.ui
+  ) {
     return { ok: false, errors: ["evidence:actor_context_changed"] };
   }
 

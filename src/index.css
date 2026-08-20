@@ -477,6 +477,16 @@ body {
   padding-block-end: env(safe-area-inset-bottom);
 }
 
+/* Assistant B, owner-approved 20.08.2026: full-screen below lg; a real non-modal dock at lg.
+   The dock occupies the logical end (left in RTL), while #main reserves the same measure so a
+   source route and its evidence remain visible side-by-side instead of painting under the panel. */
+.assistant-surface {
+  position: fixed;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100dvh;
+}
+
 .dialog-backdrop-safe {
   padding-inline-start: env(safe-area-inset-right);
   padding-inline-end: env(safe-area-inset-left);
@@ -670,6 +680,23 @@ body {
   .mobile-action-bar { display: none; }
   .phone-safe-main { padding-block-end: 2rem; }
   .mobile-overlay-stack { inset-block-end: 1.5rem; }
+
+  .assistant-surface[data-assistant-mode="docked"] {
+    inset-block-start: 4.25rem;
+    inset-block-end: 0;
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+    inline-size: 27.5rem;
+    block-size: auto;
+    padding-block-start: 0;
+    padding-block-end: 0;
+    border-inline-start: 1px solid var(--color-line-soft);
+    box-shadow: var(--shadow-menu);
+  }
+
+  body:has(.assistant-surface[data-assistant-mode="docked"]) #main {
+    padding-inline-end: 29rem;
+  }
 }
 
 @media (max-width: 47.999rem) {

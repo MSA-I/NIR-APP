@@ -134,15 +134,23 @@ export function validateAnswer(
     if (sameKind.length === 0) {
       errors.push(`block:${index}:fact_does_not_support_claim_kind`);
     }
-    const supporting = sameKind.filter((fact) => {
+    const sameSubject = sameKind.filter((fact) => {
       if (fact.subject === null || block.subject === null) {
         return fact.subject === null && block.subject === null;
       }
       return fact.subject.entity === block.subject.entity &&
         fact.subject.id === block.subject.id;
     });
-    if (sameKind.length > 0 && supporting.length === 0) {
+    if (sameKind.length > 0 && sameSubject.length === 0) {
       errors.push(`block:${index}:fact_does_not_support_claim_subject`);
+    }
+    const sameUnit = sameSubject.filter((fact) => fact.unit === block.claim_unit);
+    if (sameSubject.length > 0 && sameUnit.length === 0) {
+      errors.push(`block:${index}:fact_does_not_support_claim_unit`);
+    }
+    const supporting = sameUnit.filter((fact) => Object.is(fact.value, block.claim_value));
+    if (sameUnit.length > 0 && supporting.length === 0) {
+      errors.push(`block:${index}:fact_does_not_support_claim_value`);
     }
     for (const sourceId of block.source_ids) {
       if (!sourceIds.has(sourceId)) {

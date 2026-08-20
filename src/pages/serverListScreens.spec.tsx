@@ -14,6 +14,7 @@ import { OrgScopeProvider } from '../lib/query/orgScope';
 import { ToastProvider } from '../components/ui';
 import { PAGE_NO_LONGER_EXISTS, SUPPLIER_SEARCH_ID_CAP, SUPPLIER_SEARCH_NARROWED } from '../lib/serverList';
 import { fmtMoneyExact } from '../lib/format';
+import { APP_ROUTE_POLICY } from '../lib/routePolicy';
 
 /**
  * The screens under test import the app's supabase client, which throws at module load without
@@ -329,7 +330,12 @@ describe('active-persona boundaries for the without-order signal', () => {
     expect(readers![1]).toContain('office');
     expect(readers![1]).toContain('accountant');
     expect(readers![1]).not.toMatch(/kitchen|payer|supplier/);
-    expect(appSource).toMatch(/path="\/invoices" element=\{<Guard roles=\{READERS\}>/);
+    expect(APP_ROUTE_POLICY.invoices).toEqual({
+      path: '/invoices',
+      roles: ['owner', 'office', 'accountant'],
+    });
+    expect(appSource).toContain('path={APP_ROUTE_POLICY.invoices.path}');
+    expect(appSource).toContain('roles={APP_ROUTE_POLICY.invoices.roles}');
   });
 
   /**
@@ -372,10 +378,10 @@ describe('active-persona boundaries for the without-order signal', () => {
     expect(holdersOf(libDir, ['.ts', '.tsx'], 'invoice_without_order'))
       .toEqual(['alerts.ts', 'serverList.ts']);
 
-    // alerts.ts is reachable only through /alerts, and /alerts is FINANCE-only.
-    const finance = /const FINANCE: readonly ActiveRole\[\] = \[([^\]]*)\]/.exec(appSource);
-    expect(finance).not.toBeNull();
-    expect(finance![1]).not.toMatch(/kitchen|payer|supplier/);
-    expect(appSource).toMatch(/path="\/alerts" element=\{<Guard roles=\{FINANCE\}>/);
+    // alerts.ts is reachable only through the canonical /alerts policy, and remains staff-only.
+    expect(APP_ROUTE_POLICY.alerts).toEqual({ path: '/alerts', roles: ['owner', 'office'] });
+    expect(APP_ROUTE_POLICY.alerts.roles).not.toEqual(expect.arrayContaining(['kitchen', 'payer', 'supplier']));
+    expect(appSource).toContain('path={APP_ROUTE_POLICY.alerts.path}');
+    expect(appSource).toContain('roles={APP_ROUTE_POLICY.alerts.roles}');
   });
 });

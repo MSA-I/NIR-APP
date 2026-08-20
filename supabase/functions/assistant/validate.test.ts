@@ -44,7 +44,13 @@ function answer(blocks: unknown[], extra: Record<string, unknown> = {}) {
     blocks: blocks.map((block) =>
       block && typeof block === "object" &&
         (block as Record<string, unknown>).type === "claim"
-        ? { claim_kind: "metric.count", subject: null, ...block }
+        ? {
+          claim_kind: "metric.count",
+          subject: null,
+          claim_unit: "count",
+          claim_value: 12,
+          ...block,
+        }
         : block
     ),
     next_steps: [],
@@ -163,6 +169,8 @@ Deno.test("grouped and fixed renderings of a cited money value pass", () => {
         type: "claim",
         text,
         claim_kind: "metric.money",
+        claim_unit: "ils",
+        claim_value: 1234.5,
         fact_ids: ["f1"],
         source_ids: [],
       }]),
@@ -260,6 +268,8 @@ Deno.test("a calendar-date fact admits the product's dotted rendering", () => {
       type: "claim",
       text: "החשבונית האחרונה נקלטה ב-19.08.2026.",
       claim_kind: "invoice.status",
+      claim_unit: "date",
+      claim_value: "2026-08-19",
       fact_ids: ["f1"],
       source_ids: [],
     }]),
@@ -321,6 +331,7 @@ Deno.test("a tenant-authored name with digits never leaks a numeral into claims"
     answer([{
       type: "claim",
       text: "לספק יש 3 חשבוניות פתוחות.",
+      claim_value: 3,
       fact_ids: ["f1"],
       source_ids: [],
     }]),
@@ -332,6 +343,7 @@ Deno.test("a tenant-authored name with digits never leaks a numeral into claims"
     answer([{
       type: "claim",
       text: "לספק 2000 יש 3 חשבוניות פתוחות.",
+      claim_value: 3,
       fact_ids: ["f1"],
       source_ids: [],
     }]),
@@ -382,6 +394,7 @@ Deno.test("a null-valued fact supports no numerals at all", () => {
     answer([{
       type: "claim",
       text: "הסכום הפתוח הוא 0.",
+      claim_value: null,
       fact_ids: ["f1"],
       source_ids: [],
     }]),
@@ -435,6 +448,8 @@ Deno.test("a same-kind fact about a different subject cannot support a claim", (
       text: "סכום החשבונית הוא 12 שקלים.",
       claim_kind: "invoice.total",
       subject: { entity: "invoice", id: invoiceB },
+      claim_unit: "ils",
+      claim_value: 12,
       fact_ids: ["f1"],
       source_ids: [],
     }]),
@@ -449,6 +464,35 @@ Deno.test("a same-kind fact about a different subject cannot support a claim", (
   if (!result.ok) {
     assert.ok(result.errors.some((error) =>
       error.includes("fact_does_not_support_claim_subject")
+    ));
+  }
+});
+
+Deno.test("a same-kind fact about the same subject cannot support a different semantic value", () => {
+  const invoiceId = "11111111-1111-4111-8111-111111111111";
+  const result = validateAnswer(
+    rawAnswer([{
+      type: "claim",
+      text: "החשבונית מאושרת.",
+      claim_kind: "invoice.status",
+      subject: { entity: "invoice", id: invoiceId },
+      claim_unit: "text",
+      claim_value: "approved",
+      fact_ids: ["f1"],
+      source_ids: [],
+    }]),
+    [fact({
+      kind: "invoice.status",
+      subject: { entity: "invoice", id: invoiceId },
+      value: "blocked",
+      unit: "text",
+    })],
+    [],
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(result.errors.some((error) =>
+      error.includes("fact_does_not_support_claim_value")
     ));
   }
 });

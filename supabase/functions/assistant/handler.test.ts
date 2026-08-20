@@ -5,7 +5,7 @@
 // itself (defence in depth, not a substitute). Requires --allow-env (the handler reads its
 // configuration from the environment); no network is touched on any path exercised here.
 import assert from "node:assert/strict";
-import { handler } from "./index.ts";
+import { handler, parseAssistantRequest } from "./index.ts";
 
 function withEnv() {
   Deno.env.set("SUPABASE_URL", "http://127.0.0.1:54321");
@@ -63,4 +63,35 @@ Deno.test("OPTIONS answers the preflight without touching anything", async () =>
     new Request("http://localhost/assistant", { method: "OPTIONS" }),
   );
   assert.equal(response.status, 200);
+});
+
+Deno.test("request router separates provider turns from history reads before any spend path", () => {
+  assert.deepEqual(
+    parseAssistantRequest({ question: "שאלה", conversation_id: null, route: null }),
+    {
+      kind: "ask",
+      request: { question: "שאלה", conversation_id: null, route: null },
+    },
+  );
+  assert.deepEqual(
+    parseAssistantRequest({ operation: "history_list" }),
+    { kind: "history_list", request: { operation: "history_list", limit: 10 } },
+  );
+  assert.deepEqual(
+    parseAssistantRequest({
+      operation: "history_load",
+      conversation_id: "33333333-3333-4333-8333-333333333333",
+    }),
+    {
+      kind: "history_load",
+      request: {
+        operation: "history_load",
+        conversation_id: "33333333-3333-4333-8333-333333333333",
+      },
+    },
+  );
+  assert.deepEqual(
+    parseAssistantRequest({ operation: "history_delete" }),
+    { kind: "invalid", questionTooLong: false },
+  );
 });

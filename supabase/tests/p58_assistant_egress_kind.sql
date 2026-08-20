@@ -231,17 +231,35 @@ select pg_temp.p58_expect_error(
       '58000000-0000-4000-8000-00000000c008', 90)$$,
   'service_role_required');
 
--- ===== The live body is the reviewed body =====
--- 0166 pins the replaced function to the hash of the reviewed source (0132 plus 'assistant',
--- nothing else). The suite re-checks the same pin so drift between migration and database is
--- caught here, not in production.
+-- ===== The live body is a reviewed body =====
+-- The first hash is 0166 exactly. The second is mechanically the same body with only
+-- 'supplier_order_email' appended after 'assistant' -- the stacked PR #87 integration body.
+-- Accepting those two exact hashes lets this suite run before or after that stacked migration
+-- without weakening the pin to a semantic grep or accepting arbitrary drift.
 select pg_temp.p58_assert(
   (select md5(replace(proc.prosrc, e'\r', ''))
    from pg_catalog.pg_proc proc
    where proc.oid = pg_catalog.to_regprocedure(
      'public.service_reserve_organization_external_egress(uuid,text,uuid,integer)')
-     and proc.prosecdef) = 'aa98553801b844f570f6a3d9c90b1133',
-  'the live reservation function is not the reviewed 0166 body');
+     and proc.prosecdef) in (
+       'aa98553801b844f570f6a3d9c90b1133',
+       '1cb58aaf4df81dd6e3c977dab795f355'),
+  'the live reservation function is neither reviewed 0166 nor its exact supplier-email integration');
+
+select pg_temp.p58_assert(
+  (select md5(replace(proc.prosrc, e'\r', ''))
+   from pg_catalog.pg_proc proc
+   where proc.oid = pg_catalog.to_regprocedure(
+     'public.service_reserve_organization_external_egress(uuid,text,uuid,integer)'))
+    <> '1cb58aaf4df81dd6e3c977dab795f355'
+  or position(
+    '''supplier_order_email'''
+    in (select pg_get_constraintdef(con.oid)
+        from pg_catalog.pg_constraint con
+        where con.conrelid = 'private.organization_external_egress_leases'::regclass
+          and con.conname = 'organization_external_egress_leases_kind_check')
+  ) > 0,
+  'the combined function accepts supplier email while the lease CHECK refuses it');
 
 rollback;
 

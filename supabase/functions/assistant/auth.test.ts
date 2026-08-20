@@ -118,10 +118,25 @@ Deno.test("confirmedActions never comes from a flag -- only the policy read rais
   assert.equal(policyOn.confirmedActions, true);
 });
 
-Deno.test("a null auth_org (suspended organization) is a refusal", async () => {
+Deno.test("a null auth_org (disabled user or suspended organization) is a refusal", async () => {
   await assert.rejects(
     resolveActorContext(
       port({ ...liveIdentity, ...allFlagsOn, auth_org: { data: null, error: null } }),
+      USER,
+    ),
+    (error: unknown) =>
+      error instanceof AssistantEdgeError && error.code === "assistant_disabled",
+  );
+});
+
+Deno.test("a missing current role (disabled or offboarded profile) is a refusal", async () => {
+  await assert.rejects(
+    resolveActorContext(
+      port({
+        ...liveIdentity,
+        ...allFlagsOn,
+        auth_role: { data: null, error: null },
+      }),
       USER,
     ),
     (error: unknown) =>

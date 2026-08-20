@@ -4,8 +4,9 @@ import { useAuth, homeFor } from './auth/AuthContext';
 import { PageLoader, useToast } from './components/ui';
 import { toHebrewError } from './lib/errors';
 import { reportError } from './lib/observability';
-import { ACTIVE_ROLES, isActiveRole, type ActiveRole } from './lib/types';
+import { isActiveRole, type ActiveRole } from './lib/types';
 import { ACTIVE_ORGANIZATION_ACCESS } from './lib/organizationAccess';
+import { APP_ROUTE_POLICY } from './lib/routePolicy';
 
 // Eager: the auth shell that must paint before (or regardless of) a resolved session.
 // Layout is the persistent chrome around every tenant screen; Login/AcceptInvite are the
@@ -267,26 +268,26 @@ export default function App() {
         <Route element={<LazyPageBoundary><Suspense fallback={<PageLoader />}><Outlet /></Suspense></LazyPageBoundary>}>
         <Route path="/" element={loading ? <PageLoader /> : <Navigate to={homeFor(profile?.role)} replace />} />
 
-        <Route path="/dashboard" element={<Guard roles={ACTIVE_ROLES}><DashboardHome /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.dashboard.path} element={<Guard roles={APP_ROUTE_POLICY.dashboard.roles}><DashboardHome /></Guard>} />
 
         <Route path="/suppliers" element={<Guard roles={STAFF}><SuppliersList /></Guard>} />
-        <Route path="/suppliers/:id" element={<Guard roles={STAFF}><SupplierCard /></Guard>} />
-        <Route path="/finance/suppliers/:id" element={<Guard roles={['owner', 'accountant']}><FinancialSupplier /></Guard>} />
-        <Route path="/products" element={<Guard roles={STAFF}><Products /></Guard>} />
-        <Route path="/inventory" element={<Guard roles={STAFF}><Inventory /></Guard>} />
-        <Route path="/prices" element={<Guard roles={STAFF}><PriceLists /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.supplierDetail.path} element={<Guard roles={APP_ROUTE_POLICY.supplierDetail.roles}><SupplierCard /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.financialSupplierDetail.path} element={<Guard roles={APP_ROUTE_POLICY.financialSupplierDetail.roles}><FinancialSupplier /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.products.path} element={<Guard roles={APP_ROUTE_POLICY.products.roles}><Products /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.inventory.path} element={<Guard roles={APP_ROUTE_POLICY.inventory.roles}><Inventory /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.prices.path} element={<Guard roles={APP_ROUTE_POLICY.prices.roles}><PriceLists /></Guard>} />
 
         <Route path="/orders/new" element={<Guard roles={STAFF} write><NewOrder /></Guard>} />
-        <Route path="/orders" element={<Guard roles={STAFF}><OrdersList /></Guard>} />
-        <Route path="/orders/:id" element={<Guard roles={STAFF}><OrderDetail /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.orders.path} element={<Guard roles={APP_ROUTE_POLICY.orders.roles}><OrdersList /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.orderDetail.path} element={<Guard roles={APP_ROUTE_POLICY.orderDetail.roles}><OrderDetail /></Guard>} />
 
         <Route path="/receiving" element={<Guard roles={STAFF}><ReceivingList /></Guard>} />
         <Route path="/receiving/:orderId" element={<Guard roles={STAFF} write><ReceiveOrder /></Guard>} />
         <Route path="/receipts/:receiptId" element={<Guard roles={STAFF}><ReceiptDetail /></Guard>} />
 
-        <Route path="/invoices" element={<Guard roles={READERS}><InvoicesList /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.invoices.path} element={<Guard roles={APP_ROUTE_POLICY.invoices.roles}><InvoicesList /></Guard>} />
         <Route path="/invoices/new" element={<Guard roles={STAFF} write><InvoiceNew /></Guard>} />
-        <Route path="/invoices/:id" element={<Guard roles={READERS}><InvoiceDetail /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.invoiceDetail.path} element={<Guard roles={APP_ROUTE_POLICY.invoiceDetail.roles}><InvoiceDetail /></Guard>} />
         <Route path="/documents" element={<Guard roles={STAFF}><DocumentsGallery /></Guard>} />
         <Route path="/documents/operations" element={<Guard roles={['owner']}><DocumentOperations /></Guard>} />
         <Route path="/documents/consolidated-invoices" element={<Guard roles={READERS}><ConsolidatedInvoices /></Guard>} />
@@ -297,21 +298,21 @@ export default function App() {
         <Route path="/documents/:documentId/review" element={<Guard roles={DOCUMENT_REVIEWERS}><DocumentReview /></Guard>} />
         <Route path="/inbox" element={<Navigate to="/documents?filing=unfiled" replace />} />
 
-        <Route path="/credits" element={<Guard roles={READERS}><Credits /></Guard>} />
-        <Route path="/payment-requests" element={<Guard roles={FINANCE}><PaymentRequests /></Guard>} />
-        <Route path="/payments" element={<Guard roles={['owner', 'accountant']}><Payments /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.credits.path} element={<Guard roles={APP_ROUTE_POLICY.credits.roles}><Credits /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.paymentRequests.path} element={<Guard roles={APP_ROUTE_POLICY.paymentRequests.roles}><PaymentRequests /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.payments.path} element={<Guard roles={APP_ROUTE_POLICY.payments.roles}><Payments /></Guard>} />
         <Route path="/pay" element={<Guard roles={['accountant']} write><AccountantPaymentQueue /></Guard>} />
 
-        <Route path="/bank" element={<Guard roles={['owner', 'accountant']}><Bank /></Guard>} />
-        <Route path="/exceptions" element={<Guard roles={READERS}><Exceptions /></Guard>} />
-        <Route path="/alerts" element={<Guard roles={FINANCE}><Alerts /></Guard>} />
-        <Route path="/expenses" element={<Guard roles={['owner', 'accountant']}><Expenses /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.bank.path} element={<Guard roles={APP_ROUTE_POLICY.bank.roles}><Bank /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.exceptions.path} element={<Guard roles={APP_ROUTE_POLICY.exceptions.roles}><Exceptions /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.alerts.path} element={<Guard roles={APP_ROUTE_POLICY.alerts.roles}><Alerts /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.expenses.path} element={<Guard roles={APP_ROUTE_POLICY.expenses.roles}><Expenses /></Guard>} />
         <Route path="/reports" element={<Guard roles={['owner', 'accountant']}><Reports /></Guard>} />
         {/* The product purchase summary reads spend per product — the tenant's commercial
             position — so its readers are the money roles, matching get_product_purchase_summary's
             own role check rather than being wider than it. */}
-        <Route path="/reports/products" element={<Guard roles={['owner', 'office', 'accountant']}><ProductPurchaseSummary /></Guard>} />
-        <Route path="/analytics" element={<Guard roles={['owner', 'office']}><Analytics /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.productReport.path} element={<Guard roles={APP_ROUTE_POLICY.productReport.roles}><ProductPurchaseSummary /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.analytics.path} element={<Guard roles={APP_ROUTE_POLICY.analytics.roles}><Analytics /></Guard>} />
         {/* owner only, and not by preference: audit_logs is owner+accountant (0031:208) while the
             supplier, price-row and product names it has to resolve are owner+office (0133:128-172).
             The intersection is one role, and an accountant would read a wall of UUIDs. */}

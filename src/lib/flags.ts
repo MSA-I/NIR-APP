@@ -80,7 +80,11 @@ export function useFeatureFlags(): FeatureFlagsState {
     staleTime: FLAGS_STALE_TIME_MS,
   });
 
-  const flags = query.data ?? null;
+  // TanStack deliberately retains the last successful `data` when a background refetch fails.
+  // That is useful for ordinary reads, but a capability cache is a deny-by-default boundary:
+  // once freshness was explicitly checked and failed, the old grant is no longer renderable.
+  // A later successful fetch clears `query.error` and makes its newly resolved set visible again.
+  const flags = query.error ? null : query.data ?? null;
   const isEnabled = useCallback((flagKey: string) => flags?.get(flagKey) ?? false, [flags]);
   const refetch = useCallback(
     () => query.refetch().then((result) => !result.isError),

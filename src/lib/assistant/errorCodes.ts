@@ -21,6 +21,7 @@ export const ASSISTANT_ERROR_CODES = [
   'assistant_limit_unknown',
   'assistant_rate_limited',
   'assistant_question_too_long',
+  'assistant_input_restricted',
   'assistant_provider_unavailable',
   'assistant_provider_timeout',
   'assistant_unsupported_answer',
@@ -43,6 +44,8 @@ export const ASSISTANT_ERROR_MESSAGES: Record<AssistantErrorCode, string> = {
   assistant_limit_unknown: 'לא ניתן לקבוע את מכסת העוזר במסלול הזה, ולכן הבקשה נדחתה.',
   assistant_rate_limited: 'נשאלו יותר מדי שאלות בזמן קצר. נסה שוב בעוד כמה דקות.',
   assistant_question_too_long: 'השאלה ארוכה מדי. נסה לנסח אותה קצר יותר.',
+  assistant_input_restricted:
+    'השאלה כוללת מידע שלא ניתן לשלוח לעוזר. יש להסיר פרטי קשר, פרטי בנק, סיסמאות או תוכן מסמך גולמי.',
   assistant_provider_unavailable: 'העוזר אינו זמין כרגע. הנתונים עצמם זמינים במסכים.',
   assistant_provider_timeout: 'העוזר לא השיב בזמן. אפשר לנסות שוב.',
   assistant_unsupported_answer: 'העוזר לא הצליח לבסס תשובה על נתוני המערכת, ולכן לא הוצגה תשובה.',

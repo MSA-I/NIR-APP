@@ -128,7 +128,7 @@
 | `AI_ASSISTANT_MAX_TOOL_CALLS_PER_TURN` | ‏4 | פגום = סירוב |
 | `AI_ASSISTANT_CONTEXT_MESSAGE_LIMIT` | ‏12 | פגום = סירוב |
 | `AI_ASSISTANT_DAILY_USER_LIMIT` · `_DAILY_ORG_LIMIT` · `_MONTHLY_ORG_LIMIT` | לא מוגדר | לא מוגדר = **אין תקרה נוספת**; מוגדר אך בלתי-מדיד = סירוב |
-| `AI_ASSISTANT_SOFT_COST_CAP` · `_HARD_COST_CAP` | לא מוגדר | כנ״ל. **אין מקור מחיר היום**, ולכן עלות נרשמת `null` והתקרות אינן נתפסות עד שיהיה |
+| `AI_ASSISTANT_SOFT_COST_CAP` · `_HARD_COST_CAP` | לא מוגדר | **אין מקור מחיר היום** (`#183`), ולכן עלות נרשמת `null`; הגדרת אחת התקרות מסרבת fail-closed עד שמקור מחיר מנוהל ימלא מדידה אמיתית |
 
 תקרות ה-env הן **תוספת** מעל הזכאות והגבלת הקצב שבמסד, לעולם לא במקומן. משתנה סביבה בתוך מופע
 אחד אינו יכול לספור בקשות שנחתו במופע אחר — הספירה היא של Postgres.
@@ -140,7 +140,24 @@
 באותה מידה, ובדיוק ברגע שבו המערכת לחוצה. במקום זה, כשל ספק מחזיר את המשתמש למסלול הדטרמיניסטי
 (`/alerts` והמסכים) — שממשיך לעבוד בלי מודל בכלל.
 
-→ הכרעות פתוחות: `OPEN-DECISIONS #179`.
+→ הכרעות פתוחות: `OPEN-DECISIONS #179` (ממשל ספק) ו-`#183` (מקור מחיר קנוני).
+
+### 4.1 evaluation — corpus offline ושער live ידני
+
+`supabase/functions/assistant/evaluation.ts` מחזיק corpus **סינתטי בלבד**: שלוש תשובות נתמכות
+וחסימות contact/bank/secret. ‏`evaluation.test.ts` מעביר אותו דרך אותם classifier, validator וחוזה
+runtime של הייצור, ומשנה כל claim כדי להוכיח שהערך המזויף נדחה. זו ראיית חוזה, לא ראיית איכות מודל.
+
+`live-evaluation.ts` הוא runner ידני שאינו חלק מ-CI רגיל ואינו קורא Supabase. הוא אינו רשאי ליצור
+provider אלא כאשר קיימים יחד:
+
+- `AI_ASSISTANT_LIVE_EVALUATION=1`;
+- `AI_ASSISTANT_LIVE_EVALUATION_ACK=synthetic-provider-spend`;
+- מפתח `AI_ASSISTANT_API_KEY` ו-model מפורש בזמן הריצה.
+
+הבדיקה האוטומטית מוכיחה שכל שילוב חסר נעצר **לפני** executor. בסגירה הנוכחית לא ניתן מפתח ולא
+בוצעה קריאה חיה; לכן הסטטוס נשאר `LIVE_MODEL_NOT_EVALUATED`. גם runner סינתטי אינו עוקף את חסמי
+הממשל `#179` והכרעת capability ‏`#188`, ואינו ראיית sandbox/Production.
 
 ---
 
@@ -158,6 +175,26 @@
 
 **אימות אחרי ייצור בודק:** שהמזהה קיים בריצה; שהמקור שייך לדייר; שהקורא הנוכחי רשאי לקרוא אותו;
 שהנתיב הוא נתיב שכלי החזיר ולא נתיב שהומצא; ושכל מספר בטקסט תואם עובדה מצוטטת.
+
+### 5.1 סקירת איום P0 — גבול ההיסטוריה והספק
+
+| רגע אמון | האיום | הבקרה המחייבת | סירוב שנבדק |
+|---|---|---|---|
+| קלט חופשי נוכחי | סוד, פרטי קשר, פרטי בנק או מסמך גולמי נכנסים ל-provider | `input-classification.ts` מסווג בשרת **לפני** מכסה, היסטוריה, lease ובניית provider; אין redaction שמשנה את משמעות השאלה — כל הפריט נדחה | secret/JWT/PEM/bank/contact/raw-document, כולל bidi ו-zero-width |
+| היטל כלי | row מורשה מכיל שדה שאסור להוציא | projection מפורש לכל כלי, `DATA_CLASSES`, ‏`mayReachProvider()` ו-`serializeEnvelopeForProvider()` שמסיר `data` ו-routes | bank/contact/raw-document/provider-forbidden לעולם אינם Facts/Sources של הספק |
+| טעינת היסטוריה | הרשאה ישנה הופכת למענק קבוע | snapshot גולמי הוא `service_role` בלבד ובנוי מ-Facts/Sources; ב-Edge כל run עובר parse, semantic validation, סיווג טקסט מחדש, actor טרי וקריאת `id` בלבד תחת ה-JWT/RLS הנוכחי | role/scope/tenant change, flag history שבוטל, disabled/offboarded user, suspended org, source שנמחק או הוסתר |
+| תשובה אחרי generation/retry | המקור נמחק או ההרשאה השתנתה בזמן קריאת המודל | כל תשובה תקינה עוברת `authorizeAssistantEvidence()` מחדש; ה-actor **אינו נשמר במטמון**, ולכן גם הניסיון הראשון וגם retry רואים את ההרשאה באותו רגע. כשל שני מחזיר `assistant_unsupported_answer` בלי פרוזה | actor/context change, source/RLS change, route לא מורשה ו-Fact שאינו תומך סמנטית בטענה |
+| זיכרון הדפדפן | תוצאה ישנה נשארת אחרי החלפת תפקיד/ארגון/lifecycle | fingerprint ללא סודות + epoch; question/result/conversation/error/pending נעלמים לפני paint, ותשובה מאוחרת אינה יכולה לכתוב state | settled ו-pending במעבר owner→office |
+| egress וספק | קריאה חיצונית בלי גידור או בלי ממשל | lease מסוג `assistant`, ‏TTL ‏5–120 שניות, active/trial/grace בלבד, settlement עם evidence, ‏`store:false`, אין fallback | tenant suspended, kind תשיעי, TTL חורג, browser ACL |
+
+בטעינת היסטוריה המימוש השמרני **משמיט run שלם** אם פרט אחד אינו עובר מחדש; אין redaction חלקי
+שעלול להפוך שאלה או תשובה למשפט אחר שנראה סמכותי.
+
+**הגבול השיורי מפורש:** מסווג טקסט הוא שכבת refusal שמכסה תבניות מוכרות, לא הוכחה חוזית שהספק
+אינו שומר או מאמן על קלט שעבר. לכן `#179` נשאר חסם activation גם כשהקוד והבדיקות ירוקים. בדומה,
+`store:false` הוא בקשת API ולא הוכחת מחיקה אצל הספק. שינוי הרשאה מקבילי יכול להתרחש אחרי בדיקה
+אחרונה כמו בכל מערכת מבוזרת; כל נקודת שימוש נבדקת מחדש, כשל מאוחר אינו מציג תשובה, ואין ניסיון
+לבטל בדפדפן קריאה שהספק אולי כבר קיבל.
 
 ---
 
@@ -226,6 +263,11 @@ feedback והצעות שלא אושרו נמחקים מיד. אין compacted su
 מסיר את `data` ואת ה-routes; רק Facts והפניות מקור מצומצמות מגיעים לספק. לכן עמודת "היטל" מתארת
 גם מה נשאר בשרת/בדפדפן וגם מה מותר לעבור לגבול הספק.
 
+**מצב גישה משותף לכל 13 הכלים:** actor חייב להיפתר מחדש לתפקיד פעיל ול-`assistant.ui=true`;
+זכאות ומכסה חייבות להיות מדידות; lease חיצוני ניתן רק ב-`active|trial|grace`. ‏`read_only`,
+offboarding, suspended או actor שהשתנה אחרי טעינת history אינם מגיעים לקריאת ספק. הצעת פעולה,
+אם תאושר בעתיד, תדרוש בנוסף `canWrite`, מדיניות #182 והפקודה הקנונית עם ה-JWT של המאשר.
+
 | כלי | תפקידים מורשים | מצב גישה, RLS ויחידות | היטל, שדות רגישים ומיסוך | חוב אבטחה / הכרעה |
 |---|---|---|---|---|
 | `explain_invoice_block` | owner, office, accountant | ‏`get_invoice_three_way_match`; ‏`SECURITY DEFINER` עם guard מפורש ל-actor, org, role, מחיקה ו-`auth_scopes()`; accountant רואה רק חשבונית מאושרת | סטטוס, סכום, קודי סיבה, סבילויות וסיבת override; אין OCR גולמי, קובץ או storage path; `data` אינו מגיע לספק | כפוף לרשם ה-definer ב-`DEBT §7`, עם enforcement מוצמד ב-`0099`; אין הרחבת הרשאה של העוזר |
@@ -259,6 +301,32 @@ feedback והצעות שלא אושרו נמחקים מיד. אין compacted su
 | `get_orders_awaiting_confirmation` | row snapshots של PO; Edge מסכם `qty × unit_price` ומעגל לשתי ספרות; לא מחירון נוכחי | סטטוס sent נוכחי; oldest-first | `limit` ‏50/200, ‏limit+1 ו-`has_more` | `tools/business.test.ts`, ‏`tools/reads.test.ts`, ‏`p56` | `VERIFIED` |
 | `get_unmatched_bank_transactions` | rows בסטטוס unmatched/suggested; ספירות הן של העמוד ומסומנות כך כשיש עוד | קריאה נוכחית; newest-first | `limit` ‏50/200, ‏limit+1 ו-`has_more` | `tools/business.test.ts`, ‏`tools/reads.test.ts`, ‏`roadmap_db_contracts.sql`, ‏`p56` | `VERIFIED_WITH_PROVIDER_REDACTION` |
 | `find_entity` | ‏`global_search`; איתור בלבד, לא חישוב authoritative | קריאה נוכחית | query ‏2–80; עד 5 תוצאות לכל סוג, בקשת 6 לצורך `has_more`; kind allowlist | `tools/business.test.ts`, ‏`p9_five_domains.sql`, ‏`p46_consolidated_supplier_invoice.sql`, ‏`p56` | `VERIFIED_LOCATOR_ONLY`; ‏`DEBT §13` ביצועים |
+
+### 7.3 Ledger יכולות מפרט המקור
+
+`IMPLEMENTED` פירושו זרימה מחוברת עם מקור שרת ובדיקה; הוא אינו אומר activated או Production.
+`BLOCKED_DECISION` פירושו שאין להמציא את הסמנטיקה דרך prompt. כל שורה חסרה מקבלת מספר מפורש.
+
+| יכולת במפרט | סיווג נוכחי | מימוש / חסם |
+|---|---|---|
+| כמה חשבוניות נקלטו בחלון | `IMPLEMENTED_WITH_DEFINED_WINDOW` | `get_business_summary` מגדיר `payable`, לא מחוק, ‏`received_date >= today-7`; ‏`get_purchase_metrics` עונה על רכישה לפי `invoice_date`, לא על קליטה |
+| למה חשבונית חסומה | `IMPLEMENTED` | `explain_invoice_block`; קודי וסבילויות three-way-match של השרת |
+| מה הוזמן, התקבל וחויב | `IMPLEMENTED` | `compare_order_receipt_invoice`; quantities/deltas מה-RPC הקנוני |
+| שורות מעל מחיר ההזמנה | `IMPLEMENTED_PER_INVOICE` | אותו כלי מול snapshot ההזמנה; רשימה חוצת-חשבוניות היא `DOES_NOT_EXIST` |
+| ספקים שהעלו מחיר החודש | `BLOCKED_DECISION #184` | אין כיוון/baseline/month/aggregation מוכרעים |
+| כסף שממתין לזיכוי | `IMPLEMENTED_WITH_SCOPE_LIMIT` | `get_open_credits`; ‏`DEBT §49` נשאר גלוי |
+| הזמנות שנשלחו ולא אושרו | `IMPLEMENTED` | `get_orders_awaiting_confirmation`; סטטוס `sent`, RLS ו-pagination |
+| תנועות בנק לא מותאמות | `IMPLEMENTED_ROLE_BOUND` | `get_unmatched_bank_transactions`; owner/accountant בלבד, projection ללא raw/reference |
+| הספק שמאחר הכי הרבה וגודל המדגם | `PARTIAL / BLOCKED_DECISION #30` | `get_supplier_performance` מחזיר מדדים ומדגם; אינו ממציא פונקציית דירוג |
+| מוצרים שצפויים להיגמר | `IMPLEMENTED_READ_ONLY` | `get_inventory_risk`; null נשאר “לא נמדד”, incoming אינו מנוכה |
+| המלצת ספק / חיסכון / הצעת רכש | `BLOCKED_DECISION #185` | אין calculation owner; ‏#109 אוסר כתיבה ישירה ל-PO |
+| טיוטת הזמנת רכש | `BLOCKED_DECISION #109/#182/#185` | state machine קיים; composer ופקודת draft בטוחה אינם קיימים |
+| טיוטת דרישת תשלום | `BLOCKED_DECISION #182` | `create_payment_request` מועמד בלבד; אין composer/revalidation/idempotency מחוברים |
+| תזכורת לספק | `BLOCKED_DECISION #186` | אין external-message capability או command קנוני |
+| עזרה על המוצר מ-metadata | `BLOCKED_DECISION #187` | אין registry/corpus סמכותי; route policy לבדה אינה תוכן עזרה |
+| חיפוש ישות וניווט | `IMPLEMENTED_LOCATOR_ONLY` | `find_entity`; type/route allowlist ו-current-role validation |
+| סיכום/התראות/חשיפת תשלום | `IMPLEMENTED_WITH_NAMED_PARTIALS` | שלושת הכלים מחזירים failures וכיסוי; אין “אפס” במקום נתון שלא נמדד |
+| read tools / external sending / live evaluation switches | `BLOCKED_DECISION #188` | UI כרוך ב-read tools; שתי האחרות אינן פעילות ואינן מוצגות כיכולת קיימת |
 
 **הערת קנון שתוקנה בקוד ובכלי יחד:** ‏`0099` הוסיף שורות חשבונית, ולכן ההתראה על עליית מחיר
 אומרת כעת שהסריקה בודקת **את המחירון בלבד** ושמחירי שורות החשבונית אינם חלק ממנה; היא אינה טוענת
@@ -306,21 +374,27 @@ feedback והצעות שלא אושרו נמחקים מיד. אין compacted su
 
 ---
 
-## 10. מצב UI/UX — תוכנית סגירה, לא השלמה
+## 10. מצב UI/UX — חלופה B אושרה ומומשה מקומית
 
 תוכנית הסגירה הקנונית נמצאת ב־
 `C:\Users\art1\Desktop\PLAN-INPLACE-ASSISTANT-UI-UX-CLOSURE-20260820.md`.
-היא נכתבה ב־20.08.2026 לאחר ביקורת Skeptic, ‏Constraint Guardian ו־User Advocate, וקיבלה
-`APPROVED` מה־Arbiter **כתוכנית בלבד**. אין בכך אישור מימוש, activation או Production.
+היא נכתבה ב־20.08.2026 לאחר ביקורת Skeptic, ‏Constraint Guardian ו־User Advocate. לאחר הצגת
+שני prototypes זהים בתוכן, בעל המוצר אישר במפורש את **חלופה B**: פאנל docked ו־non-modal
+מ־1024px, ומסך מלא מתחתיו. אין באישור ה־UI אישור activation או Production.
 
 **זהות:** שם המוצר הוא `InPlace`; ‏`Place Bay` הוא שם כיוון הסמל בלבד. ‏`brand/identity.md`,
 ‏`brand/brand.yaml` ו־`src/lib/branding.ts` גוברים לשם ולזהות. aliases ומזהי מכונה היסטוריים
 יכולים להישאר `supplyflow-*`; אין להסיק מהם שם מוצר מוצג.
 
-**מצב נוכחי:** הפאנל הקיים הוא בסיס פונקציונלי, אך ה־UI/UX אינו סגור. השאלה נעלמת לאחר שליחה,
-`as_of` אינו מוצג, “מה נבדק” חושף שמות כלים פנימיים, קישור מקור מאבד את הקשר הבדיקה, fallback
-אחד אינו תקף לכל תפקיד, ה־trigger משתמש ב־`Sparkles`, והתנהגות modal/panel וה־breakpoint בין
-`sm` ל־`lg` לא הוכרעו. ‏History מציגה metadata ומחיקה אך אינה נפתחת.
+**מצב מקומי נוכחי:** ה־trigger הוא פקד בדיקה תפעולי עם תווית גלויה בדסקטופ; השאלה, `as_of`,
+freshness, partial ו־null נשארים גלויים; שמות tools הוחלפו בתוויות מוצר; source route עובר את
+מטריצת התפקיד. בדסקטופ המקור נפתח לצד הפאנל והמסך הראשי שומר 27.5rem עבורו; במובייל המקור נפתח
+במסך המוצר וטריגר “חזרה לבדיקה” משחזר את אותו run ואת focus.
+
+History אינה קוראת עוד `assistant_conversations` ישירות. ‏`0170` מוסיפה שני RPCs service-only:
+רשימת candidate ids/dates ו־snapshot מובנה עם actor, ‏Facts, ‏Sources, tools, completeness ו־freshness.
+ה־Edge מחזיר title/date/question/answer רק לאחר reauthorization נוכחי; cache key כולל fingerprint
+של actor/org/role/lifecycle, ותוצאה שהחלה לפני שינוי הרשאה נזרקת גם אם הסתיימה אחריו.
 
 **שני שערים:**
 
@@ -329,6 +403,29 @@ feedback והצעות שלא אושרו נמחקים מיד. אין compacted su
 - `FULL_UI_CLOSED` דורש בנוסף history שנפתחת רק אחרי reauthorization/redaction נוכחיים, עם
   negative tests ל־role downgrade, disabled user, suspended org, deleted source ושינוי הרשאה.
 
-עד אז הסטטוס הוא `PLANNED / NOT_CLOSED / NOT_ACTIVATED / NOT_DEPLOYED`; history היא
-`BLOCKED_SECURITY`. ‏Action composer, draft/confirmed actions ו־external sending מחוץ לתוכנית
-ה־UI לקריאה בלבד, ואינם מקבלים placeholder בממשק.
+**ראיה מקומית טרייה:** 15/15 תרחישי Playwright על production components עברו בשלושת התפקידים
+וב־390/768/1023/1024/1440, עם 40 screenshots, ‏0 console errors, ‏0 overflow, יעדי מגע 44px,
+focus/return path, source side-by-side, history open וניגודיות מינימלית 6.64:1. ‏`p61` עבר מול
+המסד המקומי לאחר `0170`; flags הודלקו רק ל־QA והוחזרו ל־off דרך הפקודה המבוקרת.
+
+הסטטוס הוא `LOCAL_IMPLEMENTED / OWNER_APPROVED_B / CI_PENDING / NOT_ACTIVATED / NOT_DEPLOYED`.
+`CORE_READ_ONLY_UI_CLOSED` ו־`FULL_UI_CLOSED` ייטענו רק אחרי commit, PR ו־required checks ירוקים
+על SHA יחיד. ‏Action composer, draft/confirmed actions ו־external sending נשארים מחוץ ל־UI
+לקריאה בלבד ואינם מקבלים placeholder.
+
+---
+
+## 11. Workstream handoff
+
+| workstream | בעלות וקבצים | חוזה שנמסר | בדיקות וראיות | תלות/חסם |
+|---|---|---|---|---|
+| 1. Contracts ו־client boundary | `contracts.ts`, ‏`client.ts`, ‏`errorCodes.ts` | Zod strict ל־ask/run/history; 2xx פגום נכשל סגור | `client.spec.ts`, ‏typecheck | שינוי wire דורש Edge+client באותו commit |
+| 2. Actor, flags ומכסה | `auth.ts`, ‏`flags.ts`, ‏`runSession.ts` | actor נפתר בכל שימוש; flags exposure בלבד; fingerprint מנקה זיכרון/cache | auth/flags/component negative tests | מכסה עסקית #180 חוסמת activation |
+| 3. Read tools ו־capability map | `tools/*`, ‏§7 | 13 כלים allowlisted, projection מפורש ו־server calculation owner | tools/reads/business suites | #184–#187 נשארים יכולות חסרות ממוספרות |
+| 4. Provider ו־egress | `provider.ts`, ‏`egress.ts`, ‏`0166` | server-only provider, lease מסוג `assistant`, אין fallback ספק | provider/egress, ‏`p58` | ממשל #179 ומחיר #183 חוסמים activation |
+| 5. Validation ו־evidence authorization | `validate.ts`, ‏`evidence-authorization.ts` | semantic claim + source/route/current actor reauthorization | deleted/hidden/tenant/role/scope negative tests | כשל מסיר תשובה שלמה, לא ממציא redaction |
+| 6. Persistence, deletion ו־retention | `0164`, ‏`history.ts`, ‏§6 | 90 יום history, ‏30 יום proposal לא־מבוצע, delete עצמי מבוקר | `p56`, history Deno tests | backup/provider deletion נשאר ממשל #179/#181 |
+| 7. Core/history UI | `AssistantPanel`, ‏`AssistantDialog`, ‏`AnswerView`, ‏`0170` | B docked/full-screen; source return; Edge-only authorized history | 15 browser cases, component/client tests, ‏`p61` | CI ו־review על SHA משולב טרם בוצעו |
+| 8. Deterministic summary parity | `summary.ts`, ‏`0165` | הסיכום הקיים נשאר זמין כשהעוזר כבוי או נכשל | `p57`, summary tests | אין תלות בספק או בדגל assistant |
+| 9. Evaluation, cost ו־governance | `evaluation.ts`, ‏`live-evaluation.ts`, ‏§4 | corpus סינתטי offline; live דורש שני opt-ins; cost נשאר null | evaluation/live gate tests | אין live call; #179/#183/#188 פתוחים |
+| 10. Release evidence | `docs/PROGRESS.md`, PR/CI | merge, activation ו־rollout הם שלושה מצבים נפרדים | exact SHA, remote parity, required checks | אין deploy/activation במסגרת ה־PR הזה |

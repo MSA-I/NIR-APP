@@ -10,6 +10,7 @@
     "scripts/*.{ts,mjs,cjs}",
     "scripts/fixtures/**/*.{ts,mjs,cjs}",
     "supabase/functions/*/index.ts",
+    "supabase/functions/assistant/live-evaluation.ts",
     "supabase/functions/**/*{.test,_test}.ts"
   ],
   "project": [

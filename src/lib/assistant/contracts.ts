@@ -39,6 +39,7 @@ export const DATA_CLASSES = [
   'provider_forbidden',
 ] as const;
 export type DataClass = (typeof DATA_CLASSES)[number];
+export const DataClassSchema = z.enum(DATA_CLASSES);
 
 /**
  * Classes that must never appear in a provider request body.
@@ -165,6 +166,7 @@ export const EVIDENCE_ENTITIES = [
   'organization',
 ] as const;
 export type EvidenceEntity = (typeof EVIDENCE_ENTITIES)[number];
+export const EvidenceEntitySchema = z.enum(EVIDENCE_ENTITIES);
 
 /**
  * Fact kinds. Closed on purpose: post-generation validation asks "does this fact support this
@@ -197,9 +199,27 @@ export const FACT_KINDS = [
   'alert.occurrence',
 ] as const;
 export type FactKind = (typeof FACT_KINDS)[number];
+export const FactKindSchema = z.enum(FACT_KINDS);
 
 export const FACT_UNITS = ['ils', 'count', 'percent', 'date', 'text'] as const;
 export type FactUnit = (typeof FACT_UNITS)[number];
+export const FactUnitSchema = z.enum(FACT_UNITS);
+export const FactValueSchema = z.union([
+  z.number().finite(),
+  z.string().min(1).max(600),
+  z.null(),
+]);
+
+const ContractIdSchema = z.string().min(1).max(200).refine((value) => value.trim() === value, {
+  message: 'identifier_has_surrounding_whitespace',
+});
+const ContractTimestampSchema = z.string().datetime({ offset: true });
+const FactSubjectSchema = z
+  .object({
+    entity: EvidenceEntitySchema,
+    id: ContractIdSchema,
+  })
+  .strict();
 
 /**
  * A single server-computed value the model is allowed to state.
@@ -208,22 +228,42 @@ export type FactUnit = (typeof FACT_UNITS)[number];
  * makes "cite only what this run returned" checkable. `value` is the value as computed by server
  * code; the model may explain it and must not recompute it.
  */
-export interface Fact {
-  id: string;
-  kind: FactKind;
+export const FactSchema = z
+  .object({
+  id: ContractIdSchema,
+  kind: FactKindSchema,
   /** What the fact is about. `null` for an aggregate that is not about one row. */
-  subject: { entity: EvidenceEntity; id: string } | null;
+  subject: FactSubjectSchema.nullable(),
   /** A short Hebrew phrase naming what was measured, e.g. "חשבוניות שנקלטו ב-7 הימים האחרונים". */
-  label: string;
+  label: z.string().min(1).max(300),
   /** `null` means "not measured" and must never be rendered as zero. */
-  value: number | string | null;
-  unit: FactUnit;
+  value: FactValueSchema,
+  unit: FactUnitSchema,
   /** The tool that issued it. */
-  tool: string;
+  tool: z.string().min(1).max(100),
   /** When the underlying data was read. */
-  as_of: string;
-  classification: DataClass;
+  as_of: ContractTimestampSchema,
+  classification: DataClassSchema,
+  })
+  .strict();
+export type Fact = z.infer<typeof FactSchema>;
+
+function isSafeInAppRouteShape(route: string): boolean {
+  if (!route.startsWith('/') || route.startsWith('//') || route.includes('#')) return false;
+  try {
+    const parsed = new URL(route, 'https://inplace.invalid');
+    return parsed.origin === 'https://inplace.invalid'
+      && `${parsed.pathname}${parsed.search}` === route;
+  } catch {
+    return false;
+  }
 }
+
+export const AssistantSourceRouteSchema = z
+  .string()
+  .min(1)
+  .max(300)
+  .refine(isSafeInAppRouteShape, { message: 'source_route_must_be_internal' });
 
 /**
  * A place in the product where a human can go and see the thing for themselves.
@@ -231,16 +271,19 @@ export interface Fact {
  * A source is a reference, never a grant: it is re-authorized against current permissions every
  * time it is read back, so a role change or a deletion takes effect on stored history too.
  */
-export interface SourceReference {
-  id: string;
-  entity: EvidenceEntity;
-  entity_id: string;
+export const SourceReferenceSchema = z
+  .object({
+  id: ContractIdSchema,
+  entity: EvidenceEntitySchema,
+  entity_id: ContractIdSchema,
   /** Safe display label. Never a bank detail, never a raw document filename with a storage path. */
-  label: string;
+  label: z.string().min(1).max(300),
   /** In-app route returned by the tool. The model may not compose a route of its own. */
-  route: string | null;
-  classification: DataClass;
-}
+  route: AssistantSourceRouteSchema.nullable(),
+  classification: DataClassSchema,
+  })
+  .strict();
+export type SourceReference = z.infer<typeof SourceReferenceSchema>;
 
 /* ============================================================================
  * 4. Tool result envelope
@@ -329,7 +372,7 @@ export const TextBlockSchema = z.object({
   text: z.string().min(1).max(600).refine((value) => !DIGIT_PATTERN.test(value), {
     message: 'text_block_contains_digits',
   }),
-});
+}).strict();
 
 export const ClaimBlockSchema = z.object({
   type: z.literal('claim'),
@@ -344,11 +387,14 @@ export const ClaimBlockSchema = z.object({
     })
     .strict()
     .nullable(),
+  /** Exact unit and value asserted by this claim. Both must equal one cited Fact. */
+  claim_unit: FactUnitSchema,
+  claim_value: FactValueSchema,
   /** Every claim rests on at least one fact issued in this run. */
   fact_ids: z.array(z.string().min(1)).min(1).max(12),
   /** Optional: where a human goes to check it. */
   source_ids: z.array(z.string().min(1)).max(12).default([]),
-});
+}).strict();
 
 export const AssistantBlockSchema = z.discriminatedUnion('type', [TextBlockSchema, ClaimBlockSchema]);
 export type AssistantBlock = z.infer<typeof AssistantBlockSchema>;
@@ -370,27 +416,18 @@ export const AssistantAnswerSchema = z.object({
   blocks: z.array(AssistantBlockSchema).min(1).max(20),
   /** Follow-ups a human can take, each pointing at a source this run issued. */
   next_steps: z
-    .array(z.object({ label: z.string().min(1).max(80), source_id: z.string().min(1) }))
+    .array(z.object({
+      label: z.string().min(1).max(80),
+      source_id: z.string().min(1),
+    }).strict())
     .max(3)
     .default([]),
   no_answer_reason: z.enum(NO_ANSWER_REASONS).nullable().default(null),
-});
+}).strict();
 export type AssistantAnswer = z.infer<typeof AssistantAnswerSchema>;
 
 /** What the browser receives. The envelope the panel renders. */
-export interface AssistantRunResult {
-  run_id: string;
-  conversation_id: string | null;
-  answer: AssistantAnswer;
-  facts: Fact[];
-  sources: SourceReference[];
-  /** Tools that ran, for the "what did it look at" disclosure. */
-  tools_used: { tool: string; complete: boolean }[];
-  /** True when every tool that ran reported `complete`. */
-  complete: boolean;
-  as_of: string;
-  proposal: AssistantProposal | null;
-}
+export type AssistantRunResult = z.infer<typeof AssistantRunResultSchema>;
 
 /* ============================================================================
  * 7. Proposal state machine
@@ -437,19 +474,126 @@ export function canTransition(from: ProposalState, to: ProposalState): boolean {
  */
 export const PROPOSAL_TTL_MINUTES = 60;
 
-export interface AssistantProposal {
-  id: string;
-  state: ProposalState;
+export const AssistantProposalSchema = z
+  .object({
+  id: z.string().uuid(),
+  state: z.enum(PROPOSAL_STATES),
   /** The command this proposal would run, from the allowlist. Never free text. */
-  command: string;
+  command: z.string().min(1).max(100).regex(/^[a-z][a-z0-9_]*$/),
   /** Hebrew, human-readable, one line — what confirming this will do. */
-  summary: string;
+  summary: z.string().min(1).max(300),
   /** The exact arguments, server-validated before the proposal was ever shown. */
-  payload: Record<string, unknown>;
-  facts: Fact[];
-  sources: SourceReference[];
-  expires_at: string;
-}
+  payload: z.record(z.unknown()),
+  facts: z.array(FactSchema).max(2_000),
+  sources: z.array(SourceReferenceSchema).max(2_000),
+  expires_at: ContractTimestampSchema,
+  })
+  .strict();
+export type AssistantProposal = z.infer<typeof AssistantProposalSchema>;
+
+/**
+ * Runtime wire contract for every successful Edge response.
+ *
+ * TypeScript only checks code we compiled; this schema checks the network value before React can
+ * see it. It is strict at every object boundary and also verifies the cross-reference invariants
+ * that a collection of individually valid facts and sources cannot express on its own.
+ */
+export const AssistantRunResultSchema = z
+  .object({
+    run_id: z.string().uuid(),
+    conversation_id: z.string().uuid().nullable(),
+    answer: AssistantAnswerSchema,
+    facts: z.array(FactSchema).max(2_000),
+    sources: z.array(SourceReferenceSchema).max(2_000),
+    tools_used: z.array(z.object({
+      tool: z.string().min(1).max(100),
+      complete: z.boolean(),
+    }).strict()).max(50),
+    complete: z.boolean(),
+    as_of: ContractTimestampSchema,
+    proposal: AssistantProposalSchema.nullable(),
+  })
+  .strict()
+  .superRefine((result, ctx) => {
+    const facts = new Map<string, Fact>();
+    result.facts.forEach((fact, index) => {
+      if (facts.has(fact.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['facts', index, 'id'],
+          message: 'duplicate_fact_id',
+        });
+      }
+      facts.set(fact.id, fact);
+    });
+
+    const sources = new Set<string>();
+    result.sources.forEach((source, index) => {
+      if (sources.has(source.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['sources', index, 'id'],
+          message: 'duplicate_source_id',
+        });
+      }
+      sources.add(source.id);
+    });
+
+    result.answer.blocks.forEach((block, blockIndex) => {
+      if (block.type !== 'claim') return;
+      for (const factId of block.fact_ids) {
+        if (!facts.has(factId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['answer', 'blocks', blockIndex, 'fact_ids'],
+            message: 'unknown_fact_id',
+          });
+        }
+      }
+      for (const sourceId of block.source_ids) {
+        if (!sources.has(sourceId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['answer', 'blocks', blockIndex, 'source_ids'],
+            message: 'unknown_source_id',
+          });
+        }
+      }
+      const supportsSemanticClaim = block.fact_ids.some((factId) => {
+        const fact = facts.get(factId);
+        if (!fact || fact.kind !== block.claim_kind || fact.unit !== block.claim_unit) return false;
+        const sameSubject = fact.subject === null || block.subject === null
+          ? fact.subject === null && block.subject === null
+          : fact.subject.entity === block.subject.entity && fact.subject.id === block.subject.id;
+        return sameSubject && Object.is(fact.value, block.claim_value);
+      });
+      if (!supportsSemanticClaim) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['answer', 'blocks', blockIndex, 'claim_value'],
+          message: 'fact_does_not_support_claim_value',
+        });
+      }
+    });
+
+    result.answer.next_steps.forEach((step, index) => {
+      if (!sources.has(step.source_id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['answer', 'next_steps', index, 'source_id'],
+          message: 'unknown_source_id',
+        });
+      }
+    });
+
+    if (result.complete !== result.tools_used.every((tool) => tool.complete)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['complete'],
+        message: 'complete_does_not_match_tools',
+      });
+    }
+  });
 
 /* ============================================================================
  * 8. Error taxonomy
@@ -481,3 +625,32 @@ export const AssistantAskRequestSchema = z.object({
   route: z.string().max(200).nullable().default(null),
 });
 export type AssistantAskRequest = z.infer<typeof AssistantAskRequestSchema>;
+
+export const AssistantHistoryListRequestSchema = z.object({
+  operation: z.literal('history_list'),
+  limit: z.number().int().min(1).max(20).default(10),
+}).strict();
+export type AssistantHistoryListRequest = z.infer<typeof AssistantHistoryListRequestSchema>;
+
+export const AssistantHistoryLoadRequestSchema = z.object({
+  operation: z.literal('history_load'),
+  conversation_id: z.string().uuid(),
+}).strict();
+export type AssistantHistoryLoadRequest = z.infer<typeof AssistantHistoryLoadRequestSchema>;
+
+export const AssistantConversationRowSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().trim().min(1).max(120),
+  updated_at: ContractTimestampSchema,
+}).strict();
+export type AssistantConversationRow = z.infer<typeof AssistantConversationRowSchema>;
+
+export const AssistantHistoryListResponseSchema = z.object({
+  conversations: z.array(AssistantConversationRowSchema).max(20),
+}).strict();
+
+export const AssistantHistoryViewSchema = z.object({
+  question: z.string().trim().min(1).max(ASSISTANT_QUESTION_MAX_CHARS),
+  result: AssistantRunResultSchema,
+}).strict();
+export type AssistantHistoryView = z.infer<typeof AssistantHistoryViewSchema>;

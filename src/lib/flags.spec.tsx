@@ -131,4 +131,41 @@ describe('useFeatureFlags', () => {
     // Errored = everything off.
     expect(result.current.isEnabled('sso.enabled')).toBe(false);
   });
+
+  it('drops a previously enabled capability after refetch failure until a new success arrives', async () => {
+    let response: 'success' | 'failure' = 'success';
+    server.use(
+      http.post(`${SUPABASE_URL}/rest/v1/rpc/resolve_feature_flags`, () => (
+        response === 'success'
+          ? HttpResponse.json([{ flag_key: 'assistant.ui', state: true }])
+          : HttpResponse.json(
+            { message: 'temporary flag resolver failure', code: 'XX000' },
+            { status: 500 },
+          )
+      )),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { Wrapper } = wrap('org-1', client);
+    const { result } = renderHook(() => useFeatureFlags(), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.isEnabled('assistant.ui')).toBe(true));
+
+    response = 'failure';
+    let failedRefetch = true;
+    await act(async () => {
+      failedRefetch = await result.current.refetch();
+    });
+    expect(failedRefetch).toBe(false);
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    expect(result.current.flags).toBeNull();
+    expect(result.current.isEnabled('assistant.ui')).toBe(false);
+
+    response = 'success';
+    let recoveredRefetch = false;
+    await act(async () => {
+      recoveredRefetch = await result.current.refetch();
+    });
+    expect(recoveredRefetch).toBe(true);
+    await waitFor(() => expect(result.current.error).toBeNull());
+    expect(result.current.isEnabled('assistant.ui')).toBe(true);
+  });
 });
