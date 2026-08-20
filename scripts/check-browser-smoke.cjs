@@ -1392,8 +1392,9 @@ async function orderSupplierComparison(browser) {
     await page.keyboard.press('Enter');
     await fixes.waitFor();
     const increaseSave = waitForDraftSave();
-    await increase.focus();
-    await page.keyboard.press('Enter');
+    // The dialog focuses its panel on the next animation frame after every reopen. Keep focus
+    // and Enter atomic so that frame cannot redirect the keypress away from this option.
+    await increase.press('Enter');
     assert((await increaseSave).ok(), 'live minimum resolution was not saved');
     await waitForSaved();
     await fixes.getByText('הקבוצה עוברת כעת את מינימום ההזמנה.').waitFor();
