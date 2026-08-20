@@ -48,6 +48,14 @@ select pg_temp.p54_assert(
 select pg_temp.p54_assert(
   (select pronargs from pg_proc where oid = to_regprocedure('private.resolve_billing_org(text,text)')) = 2,
   'resolve_billing_org changed shape -- attribution must not receive the payload');
+select pg_temp.p54_assert(
+  not has_function_privilege(
+    'anon', 'public.service_record_billing_event(text,text,text,text,jsonb)', 'EXECUTE')
+  and not has_function_privilege(
+    'authenticated', 'public.service_record_billing_event(text,text,text,text,jsonb)', 'EXECUTE')
+  and has_function_privilege(
+    'service_role', 'public.service_record_billing_event(text,text,text,text,jsonb)', 'EXECUTE'),
+  'billing ingestion execute grants are not service_role only');
 
 -- ===== Fixture =====
 insert into public.organizations (id, name, status, created_at) values
@@ -76,7 +84,10 @@ update organization_subscriptions
 
 -- ===== Ingestion is service_role only =====
 select pg_temp.p54_as('64000000-0000-4000-8000-000000000002', true);
-set local role authenticated;
+-- PostgreSQL 17.6 in the local Supabase image segfaults instead of returning 42501 when SET ROLE
+-- directly invokes any function whose EXECUTE grant was revoked; a synthetic pg_temp function
+-- reproduces it without this migration. The structural assertion above proves the outer ACL. Run
+-- as the test owner here so the authenticated JWT claim reaches and proves the inner role guard.
 do $$
 begin
   perform public.service_record_billing_event(
@@ -85,7 +96,6 @@ begin
 exception when insufficient_privilege then null;
 end
 $$;
-reset role;
 
 -- ===== Attribution comes from our own link, never from the payload =====
 select pg_temp.p54_as_service();

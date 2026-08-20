@@ -66,6 +66,15 @@ beforeEach(() => {
 
 const wrap = (children: ReactNode) => <ToastProvider>{children}</ToastProvider>;
 
+/**
+ * The shared dialog layer moves focus to the panel on its first animation frame. Wait for that
+ * handoff before typing so the frame cannot interrupt the first field interaction and leave only
+ * the first character behind. This is the same ordering contract exercised by QuickCreateSupplier.
+ */
+async function waitForInitialDialogFocus() {
+  await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
+}
+
 /** Records both writes in one ordered log, so "which ran first" is an assertion and not a guess. */
 function recordWrites(options: { importFails?: boolean } = {}) {
   const calls: { endpoint: 'products' | 'import'; body: Record<string, unknown> }[] = [];
@@ -127,6 +136,7 @@ describe('QuickCreateProduct', () => {
     const calls = recordWrites();
     const created = vi.fn();
     render(wrap(<QuickCreateProduct suppliers={SUPPLIERS} onClose={() => {}} onCreated={created} />));
+    await waitForInitialDialogFocus();
 
     await fillForm(user);
     await user.click(screen.getByRole('button', { name: 'הוספה להזמנה' }));
@@ -149,6 +159,7 @@ describe('QuickCreateProduct', () => {
     const user = userEvent.setup();
     const calls = recordWrites();
     render(wrap(<QuickCreateProduct suppliers={SUPPLIERS} onClose={() => {}} onCreated={() => {}} />));
+    await waitForInitialDialogFocus();
 
     await user.type(screen.getByLabelText('שם המוצר *'), 'עגבניות שרי');
     await user.type(screen.getByLabelText('מחיר ליחידה *'), '12.5');
@@ -162,6 +173,7 @@ describe('QuickCreateProduct', () => {
     const user = userEvent.setup();
     const calls = recordWrites();
     render(wrap(<QuickCreateProduct suppliers={SUPPLIERS} onClose={() => {}} onCreated={() => {}} />));
+    await waitForInitialDialogFocus();
 
     await user.type(screen.getByLabelText('שם המוצר *'), 'עגבניות שרי');
     await user.selectOptions(screen.getByLabelText('ספק *'), 'sup-cohen');
@@ -194,6 +206,7 @@ describe('QuickCreateProduct', () => {
     const calls = recordWrites({ importFails: true });
     const created = vi.fn();
     render(wrap(<QuickCreateProduct suppliers={SUPPLIERS} onClose={() => {}} onCreated={created} />));
+    await waitForInitialDialogFocus();
 
     await fillForm(user);
     await user.click(screen.getByRole('button', { name: 'הוספה להזמנה' }));

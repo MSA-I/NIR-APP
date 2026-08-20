@@ -77,13 +77,14 @@ async function closeContext(context) {
   await context.close();
 }
 
-function captureConsole(page, scope, ignore = []) {
+function captureConsole(page, scope, ignore = [], ignoreResponse = () => false) {
   const sanitize = (value) => value.replace(/([?&]apikey=)[^&'\s]+/gi, '$1[redacted]');
   const isExpected = (value) => ignore.some((pattern) => pattern.test(value));
   page.on('pageerror', (error) => report.consoleErrors.push({ scope, text: sanitize(error.message).slice(0, 400) }));
   page.on('response', (response) => {
     if (response.status() < 400) return;
     const value = `HTTP ${response.status()} ${sanitize(response.url())}`;
+    if (ignoreResponse(response)) return;
     if (!isExpected(value)) report.consoleErrors.push({ scope, text: value.slice(0, 400) });
   });
   page.on('requestfailed', (request) => {
@@ -1854,12 +1855,45 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
     return route.fulfill({ status: 500, headers: jsonHeaders, json: { code: 'P4_FORCED', message: 'forced push cleanup failure' } });
   });
   const page = await context.newPage();
-  captureConsole(page, `push:${name}`, [/HTTP 500 .*push_subscriptions/]);
+  // Signing out revokes the access token before React can unmount Dashboard. Reads that were
+  // already in flight can therefore finish as 401 during that transition. Keep the exception
+  // deliberately narrower than a URL regex: exact Dashboard endpoints, exact method, requests
+  // observed before the click, and responses observed only after logout began. A request started
+  // after logout, an unrelated endpoint or any pre-click 401 still fails the gate.
+  const logoutTransitionReads = new Map([
+    ['/rest/v1/invoices', 'GET'],
+    ['/rest/v1/payments', 'GET'],
+    ['/rest/v1/purchase_orders', 'GET'],
+    ['/rest/v1/exceptions', 'GET'],
+    ['/rest/v1/supplier_products', 'GET'],
+    ['/rest/v1/purchase_request_items', 'GET'],
+    ['/rest/v1/rpc/management_dashboard_snapshot', 'POST'],
+    ['/rest/v1/suppliers', 'GET'],
+    ['/rest/v1/purchase_order_items', 'GET'],
+  ]);
+  const readsStartedBeforeLogout = new WeakSet();
+  let logoutStarted = false;
+  page.on('request', (request) => {
+    if (logoutStarted) return;
+    const url = new URL(request.url());
+    if (url.origin === apiURL && logoutTransitionReads.get(url.pathname) === request.method()) {
+      readsStartedBeforeLogout.add(request);
+    }
+  });
+  captureConsole(page, `push:${name}`, [/HTTP 500 .*push_subscriptions/], (response) => {
+    if (!logoutStarted || response.status() !== 401) return false;
+    const request = response.request();
+    const url = new URL(response.url());
+    return url.origin === apiURL
+      && logoutTransitionReads.get(url.pathname) === request.method()
+      && readsStartedBeforeLogout.has(request);
+  });
   try {
     await login(page, 'owner');
     // T7.3: the desktop shell is the floating pill nav — signing out lives inside the account
     // menu behind the avatar, not on a permanent sidebar strip. Open it, then sign out.
     await page.getByRole('button', { name: /^תפריט החשבון של/ }).click();
+    logoutStarted = true;
     await page.getByRole('button', { name: 'התנתקות' }).click();
     await page.waitForURL((url) => url.pathname === '/login', { timeout: 25_000 });
     await page.waitForTimeout(250);
@@ -2069,7 +2103,7 @@ async function operatorCustomers(browser) {
     // showing an empty panel that reads like a measurement returning nothing.
     await page.getByRole('cell', { name: 'לקוח פעיל בבדיקה' }).first().click();
     await page.getByRole('heading', { level: 1, name: /לקוח פעיל בבדיקה/ }).waitFor({ timeout: 20_000 });
-    await page.getByText('אינם נמדדים עדיין').waitFor({ timeout: 20_000 });
+    await page.getByText(/אינן ניתנות למדידה/).waitFor({ timeout: 20_000 });
     assert(
       !(await page.content()).includes('הערות פנימיות'),
       'the notes panel rendered for an operator holding no notes.view',

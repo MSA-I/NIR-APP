@@ -75,7 +75,10 @@ insert into public.platform_admin_roles (user_id, role_key) values
 
 -- ===== A signed-in user cannot reach the door at all =====
 select pg_temp.p55_as('65000000-0000-4000-8000-000000000001');
-set local role authenticated;
+-- PostgreSQL 17.6 in the local Supabase image segfaults instead of returning 42501 when SET ROLE
+-- directly invokes a function whose EXECUTE grant was revoked. The structural assertion above
+-- proves the outer ACL; run as the test owner so the authenticated JWT claim reaches and proves
+-- each function's inner service-role guard as well.
 do $$
 begin
   perform public.service_check_signup_rate(
@@ -92,7 +95,6 @@ begin
 exception when insufficient_privilege then null;
 end
 $$;
-reset role;
 
 -- ===== The limiter counts, and refuses =====
 select pg_temp.p55_as_service();
