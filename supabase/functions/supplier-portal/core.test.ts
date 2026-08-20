@@ -1,4 +1,13 @@
-import { corsFor, mapSubmitError, normalizeToken, RateWindow, sha256Hex, TOKEN_SHAPE } from './core.ts';
+import {
+  clientAddress,
+  corsFor,
+  mapSubmitError,
+  normalizeToken,
+  rateLimitFingerprint,
+  sha256Hex,
+  TOKEN_SHAPE,
+  validRateLimitPepper,
+} from './core.ts';
 
 function assertEquals<T>(actual: T, expected: T, label: string): void {
   if (actual !== expected) {
@@ -45,15 +54,28 @@ Deno.test('corsFor echoes only allowlisted origins and never a blanket *', () =>
   assertEquals(corsFor('https://x.dev', undefined)['Access-Control-Allow-Origin'], '', 'no allowlist');
 });
 
-Deno.test('rate window trips above the limit and only within the window', () => {
-  const window = new RateWindow(3, 1_000);
-  const t0 = 1_000_000;
-  assertEquals(window.overLimit('k', t0), false, 'hit 1');
-  assertEquals(window.overLimit('k', t0 + 1), false, 'hit 2');
-  assertEquals(window.overLimit('k', t0 + 2), false, 'hit 3');
-  assertEquals(window.overLimit('k', t0 + 3), true, 'hit 4 trips');
-  assertEquals(window.overLimit('k', t0 + 2_000), false, 'window expired, counter reset');
-  assertEquals(window.overLimit('other', t0 + 4), false, 'independent keys');
+Deno.test('clientAddress trusts the closest gateway hop and refuses non-address text', () => {
+  assertEquals(clientAddress(new Headers({ 'cf-connecting-ip': '203.0.113.8' })),
+    '203.0.113.8', 'Cloudflare address');
+  assertEquals(clientAddress(new Headers({ 'x-forwarded-for': '198.51.100.4, 2001:db8::7' })),
+    '2001:db8::7', 'rightmost forwarded hop');
+  assertEquals(clientAddress(new Headers({ 'x-real-ip': 'unknown' })), null, 'invalid address');
+  assertEquals(clientAddress(new Headers({ 'x-real-ip': 'abc' })), null, 'hex-like text is not an IP');
+  assertEquals(clientAddress(new Headers({ 'x-real-ip': '999.1.1.1' })), null, 'invalid IPv4 octet');
+  assertEquals(clientAddress(new Headers()), null, 'missing address');
+});
+
+Deno.test('rate-limit fingerprint is stable, opaque and requires a production-sized pepper', async () => {
+  const pepper = 'p'.repeat(32);
+  assertEquals(validRateLimitPepper(pepper), true, '32-character pepper');
+  assertEquals(validRateLimitPepper('short'), false, 'short pepper');
+  const first = await rateLimitFingerprint('203.0.113.8', pepper);
+  const same = await rateLimitFingerprint('203.0.113.8', pepper);
+  const other = await rateLimitFingerprint('203.0.113.9', pepper);
+  assertEquals(TOKEN_SHAPE.test(first), true, '64-hex HMAC');
+  assertEquals(first, same, 'stable fingerprint');
+  assertEquals(first === other, false, 'different address differs');
+  assertEquals(first.includes('203.0.113.8'), false, 'raw address absent');
 });
 
 Deno.test('submit errors map by name; anything unrecognised is an opaque 503', () => {

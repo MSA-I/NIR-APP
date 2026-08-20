@@ -50,6 +50,81 @@ create function pg_temp.p59_hash(p_raw text)
 returns text language sql immutable as
 $$ select encode(sha256(convert_to(p_raw, 'UTF8')), 'hex') $$;
 
+-- ===== Persistent distributed rate limit =====
+select pg_temp.p59_assert(
+  not has_function_privilege(
+    'authenticated', 'public.service_check_supplier_portal_rate_limit(text)', 'execute')
+  and has_function_privilege(
+    'service_role', 'public.service_check_supplier_portal_rate_limit(text)', 'execute'),
+  'the persistent rate-limit RPC is not service-role-only');
+select pg_temp.p59_assert(
+  not exists (
+    select 1 from information_schema.role_table_grants
+    where table_schema = 'private'
+      and table_name = 'supplier_portal_rate_limits'
+      and grantee in ('anon', 'authenticated', 'service_role')),
+  'a browser or service role can read the retained rate fingerprints directly');
+
+-- Exercise the function's JWT guard through a DB role that may execute it. A direct denied
+-- EXECUTE is intentionally avoided because the local Supabase image can terminate that backend.
+select pg_temp.p59_actor('2a500000-0000-4000-8000-000000000001');
+set local role service_role;
+select pg_temp.p59_expect_error(
+  $$select public.service_check_supplier_portal_rate_limit(repeat('a', 64))$$,
+  'service_role_required');
+select pg_temp.p59_service();
+do $$
+declare
+  v_attempt integer;
+  v_decision jsonb;
+begin
+  for v_attempt in 1..30 loop
+    v_decision := public.service_check_supplier_portal_rate_limit(repeat('a', 64));
+    perform pg_temp.p59_assert(
+      (v_decision ->> 'allowed')::boolean
+      and (v_decision ->> 'observed_count')::integer = v_attempt,
+      'an allowed persistent rate hit returned the wrong count');
+  end loop;
+end
+$$;
+select pg_temp.p59_assert(
+  not (public.service_check_supplier_portal_rate_limit(repeat('a', 64)) ->> 'allowed')::boolean,
+  'the thirty-first request was not blocked across database calls');
+reset role;
+select pg_temp.p59_assert(
+  (select hit_count = 31 and blocked_until > statement_timestamp()
+   from private.supplier_portal_rate_limits where fingerprint = repeat('a', 64)),
+  'the persistent rate row did not retain the block');
+
+-- A completed minute resets the same key; another fingerprint has an independent window.
+update private.supplier_portal_rate_limits
+set window_started_at = statement_timestamp() - interval '2 minutes',
+    hit_count = 30,
+    blocked_until = null
+where fingerprint = repeat('a', 64);
+select pg_temp.p59_service();
+set local role service_role;
+select pg_temp.p59_assert(
+  (public.service_check_supplier_portal_rate_limit(repeat('a', 64)) ->> 'allowed')::boolean,
+  'an elapsed rate window did not reset');
+select pg_temp.p59_assert(
+  (public.service_check_supplier_portal_rate_limit(repeat('b', 64)) ->> 'allowed')::boolean,
+  'an independent fingerprint inherited another source block');
+select pg_temp.p59_expect_error(
+  $$select public.service_check_supplier_portal_rate_limit('readable-ip')$$,
+  'supplier_portal_rate_fingerprint_invalid');
+reset role;
+select pg_temp.p59_assert(
+  (select hit_count = 1 from private.supplier_portal_rate_limits
+   where fingerprint = repeat('a', 64))
+  and (select hit_count = 1 from private.supplier_portal_rate_limits
+       where fingerprint = repeat('b', 64)),
+  'rate windows did not reset and isolate fingerprints independently');
+select pg_temp.p59_assert(
+  (select count(*) = 1 from cron.job
+   where jobname = 'supplyflow-supplier-portal-rate-prune' and active),
+  'the persistent rate-limit retention job is missing');
+
 -- ===== Fixtures =====
 insert into public.organizations (id, name, status) values
   ('1a500000-0000-4000-8000-000000000001', 'P59 A', 'active'),
@@ -89,6 +164,21 @@ insert into public.purchase_order_items (id, org_id, order_id, product_id, qty, 
    '6a500000-0000-4000-8000-000000000002', '3a500000-0000-4000-8000-000000000001', 1, 10),
   ('7a500000-0000-4000-8000-000000000004', '1a500000-0000-4000-8000-000000000002',
    '6a500000-0000-4000-8000-000000000003', '3a500000-0000-4000-8000-000000000003', 1, 1);
+insert into public.goods_receipts (id, org_id, order_id, status, received_by) values (
+  '8a500000-0000-4000-8000-000000000001', '1a500000-0000-4000-8000-000000000001',
+  '6a500000-0000-4000-8000-000000000001', 'draft',
+  '2a500000-0000-4000-8000-000000000001');
+insert into public.invoices (
+  id, org_id, supplier_id, invoice_number, invoice_date, received_by,
+  amount_before_vat, vat_amount, total_amount
+) values (
+  '8b500000-0000-4000-8000-000000000001', '1a500000-0000-4000-8000-000000000001',
+  '4a500000-0000-4000-8000-000000000001', 'P59-EVIDENCE', current_date,
+  '2a500000-0000-4000-8000-000000000001', 76.92, 13.08, 90.00);
+insert into public.invoice_order_links (org_id, invoice_id, order_id) values (
+  '1a500000-0000-4000-8000-000000000001',
+  '8b500000-0000-4000-8000-000000000001',
+  '6a500000-0000-4000-8000-000000000001');
 
 -- ===== 1. Issuing: role gate, reason gate, tenancy, token round trip =====
 select pg_temp.p59_actor('2a500000-0000-4000-8000-000000000002');
@@ -154,6 +244,31 @@ select pg_temp.p59_assert(
    where id = (select value::uuid from pg_temp.p59_state where key = 'link1')),
   'regeneration revokes the previous link');
 
+-- Manual revocation is reasoned, audited, and indistinguishable from every other dead link.
+do $$
+declare
+  v jsonb;
+begin
+  v := issue_supplier_order_link('6a500000-0000-4000-8000-000000000002', 'P59 revoke issue');
+  insert into pg_temp.p59_state values
+    ('revoked_token', v ->> 'token'), ('revoked_link', v ->> 'link_id');
+end
+$$;
+select revoke_supplier_order_link(
+  (select value::uuid from pg_temp.p59_state where key = 'revoked_link'), 'P59 manual revoke');
+select pg_temp.p59_assert(
+  (select revoked_by = '2a500000-0000-4000-8000-000000000001'
+      and revoked_reason = 'P59 manual revoke'
+   from supplier_order_links
+   where id = (select value::uuid from pg_temp.p59_state where key = 'revoked_link')),
+  'manual revocation did not retain actor and reason');
+select pg_temp.p59_assert(
+  (select count(*) = 1 from audit_logs
+   where action = 'supplier_order_link_revoked'
+     and entity_id = (select value::uuid from pg_temp.p59_state where key = 'revoked_link')
+     and reason = 'P59 manual revoke'),
+  'manual revocation is not audited');
+
 -- ===== 3. Redemption: service_role only, uniform miss, open accounting =====
 select pg_temp.p59_expect_error(
   $$select service_resolve_supplier_order_link(repeat('a', 64))$$,
@@ -164,6 +279,10 @@ select pg_temp.p59_assert(
   service_resolve_supplier_order_link(
     pg_temp.p59_hash((select value from pg_temp.p59_state where key = 'token1'))) is null,
   'a revoked link resolves to nothing');
+select pg_temp.p59_assert(
+  service_resolve_supplier_order_link(
+    pg_temp.p59_hash((select value from pg_temp.p59_state where key = 'revoked_token'))) is null,
+  'a manually revoked link resolves to the same uniform miss');
 select pg_temp.p59_assert(
   service_resolve_supplier_order_link(repeat('0', 64)) is null,
   'an unknown token resolves to nothing');
@@ -373,6 +492,16 @@ select pg_temp.p59_assert(
    where order_id = '6a500000-0000-4000-8000-000000000001'),
   'the original order rows are untouched evidence');
 select pg_temp.p59_assert(
+  (select count(*) = 1 from goods_receipts
+   where id = '8a500000-0000-4000-8000-000000000001'
+     and order_id = '6a500000-0000-4000-8000-000000000001'),
+  'the original receipt evidence did not remain linked to the original order');
+select pg_temp.p59_assert(
+  (select count(*) = 1 from invoice_order_links
+   where invoice_id = '8b500000-0000-4000-8000-000000000001'
+     and order_id = '6a500000-0000-4000-8000-000000000001'),
+  'the original invoice evidence did not remain linked to the original order');
+select pg_temp.p59_assert(
   (select revision_order_id = (select value::uuid from pg_temp.p59_state where key = 'revision')
    from supplier_order_proposals
    where id = (select value::uuid from pg_temp.p59_state where key = 'proposal1')),
@@ -454,3 +583,5 @@ select pg_temp.p59_expect_error(
   'supplier_order_link_immutable');
 
 rollback;
+
+\echo 'p59_supplier_order_portal_passed'

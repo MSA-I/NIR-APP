@@ -738,14 +738,24 @@ debounce ולא מול אירוע — ומוסיף לו שדה שלא היה: **
   ‏1375 הוא הדפוס הנכון), או להמתין ל־`waitForSaved()` בלבד, שמסתמך על `role="status"` ואינו
   תלוי בתזמון הרשת. למדוד חמש הרצות רצופות לפני סגירה.
 
-### §60 — לפורטל הספק אין הגבלת קצב פר־IP, ואין לו עדיין לוקאל אנגלי
+### §60 — מועמד לסגירה: rate limit מתמיד ולוקאל אנגלי מומשו; CI/live עדיין חסרים
 
-- **מצב:** ‏`supplier-portal` (‏0167) הוא משטח ציבורי ללא JWT. ההגנות הקיימות: אנטרופיית טוקן
-  ‏32 בייט, ‏404 אחיד, מונה כשלים+נעילה פר־קישור בשרת, וחלון קצב רך פר־isolate ב־Edge
-  (30/דקה, ‏`core.ts RateWindow`). **מה שאין:** הגבלת קצב פר־IP/ASN לפני ה־Edge —
-  ‏isolate מתחלף מאפס את החלון, ותוקף מבוזר אינו נעצר עד שהוא פוגע בקישור ספציפי.
-  ‏`ENTERPRISE-SECURITY-MODEL.md §10` מנה "הגשות ספק ציבוריות" כפער הזה עוד לפני שהמשטח נבנה.
-- **סיכון:** עומס DB מ־enumeration עיוור (לא דליפת מידע — כל תשובה 404 אחידה), ועלות בקשות.
-- **הצעד הזול הבא:** ‏Cloudflare WAF rate-limit rule על ‏`/functions/v1/supplier-portal` (או
-  ‏Turnstile בדף הפורטל) — תצורת חשבון של הבעלים, לא קוד. לוקאל אנגלי לפורטל מגיע עם העדפות
-  התקשורת של פאזת השליחה (he/en פר־ספק), ולא הומצא עכשיו.
+- **מה נסגר בקוד:** ‏`supplier-portal` (‏0167) מפיק HMAC מכתובת gateway עם pepper שרתי ושולח
+  ל-`service_check_supplier_portal_rate_limit`. ה-DB סופר אטומית 30 בקשות בדקה וחוסם לעשר
+  דקות, כך שאיפוס isolate אינו מאפס את המונה. IP קריא אינו נשמר או נרשם בלוג; הטבלה פרטית,
+  ה-RPC ניתן רק ל-`service_role`, ו-cron יחיד מוחק שורות שלא עודכנו 30 יום. בלי pepper באורך
+  32+, כתובת gateway או RPC תקין הדלת מסרבת. הפורטל כולל עברית/RTL ואנגלית/LTR, בחירת URL או
+  שפת דפדפן, fallback לעברית, מתג שפה ו-`Intl` לתאריך/ILS/כמות.
+- **ראיה מקומית:** reset מבודד עד ledger ‏`0167`; ‏P59 עם marker
+  `p59_supplier_order_portal_passed` (ACL/JWT, ‏30/31, reset, מפתחות עצמאיים, cron); ‏P59B
+  בשתי ישיבות `dblink` עם proposal יחיד ו-conflict יחיד, ואחריה reset נקי; postflight של
+  RPC/table/grants/cron; ‏`npm run verify` מלא עם 1,244/1,244 בדיקות ב-132 קבצים וכל ששת
+  השומרים; production build; ‏7/7 Deno; ‏15/15 Vitest ממוקדות; TypeScript ירוק. בדיקת headed ייעודית
+  הפיקה שמונה צילומי he/en במובייל/desktop למצבי open/submitted/invalid ללא overflow או שגיאת
+  console; תרחיש browser CI כולל כעת keyboard, labels ו-Chromium accessibility tree אך טרם רץ
+  בשער המלא על ה-SHA הסופי.
+- **למה הסעיף עדיין פתוח:** אין עדיין CI טרי על SHA סופי, secret חי, Edge deploy ו-E2E חי שמוכיח
+  issue→redeem→submit→review→revision. רק אחרי ארבעתם הסעיף יסומן נסגר.
+- **סיכון שיורי נפרד:** כל rate check עדיין מגיע ל-Edge ול-DB, ומתקפה מבוזרת על כתובות/ASN רבים
+  אינה מקור יחיד. WAF/Turnstile על הנתיב הוא הגנת עומק תפעולית של הבעלים; היעדרו אינו מבטל את
+  המונה המתמיד פר-IP ואינו יוצג שוב כאילו נשאר רק חלון per-isolate.

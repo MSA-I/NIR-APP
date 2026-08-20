@@ -31,6 +31,7 @@ $functionsEnvCreated = $false
 $ocrWorkerToken = "quality-$([guid]::NewGuid().ToString('N'))"
 $pushFunctionSecret = "quality-$([guid]::NewGuid().ToString('N'))"
 $interpretCronSecret = "quality-$([guid]::NewGuid().ToString('N'))"
+$supplierPortalRateLimitPepper = "quality-$([guid]::NewGuid().ToString('N'))"
 $cleanupPhase = $false
 $credentialSeed = $null
 $ocrBrowserFixtureCleanupRequired = $false
@@ -676,20 +677,21 @@ function New-LocalVapidKeys {
 }
 
 # True only for a file this gate wrote itself: the mock provider key is a literal that exists
-# nowhere else, and both secrets carry the per-run `quality-<guid>` shape minted at the top of this
-# script. A developer's real .env cannot match all five markers.
+# nowhere else, and every generated secret carries the per-run `quality-<guid>` shape minted at
+# the top of this script. A developer's real .env cannot match every marker.
 function Test-AbandonedFunctionsEnvironment([string]$Path) {
   $values = @{}
   foreach ($line in (Get-Content -LiteralPath $Path -ErrorAction SilentlyContinue)) {
     $separator = $line.IndexOf("=")
     if ($separator -gt 0) { $values[$line.Substring(0, $separator)] = $line.Substring($separator + 1) }
   }
-  return ($values.Count -eq 8 -and
+  return ($values.Count -eq 9 -and
     $values["OPENAI_API_KEY"] -eq "local-provider-mock-not-sent" -and
     $values["APP_BASE_URL"] -eq "http://127.0.0.1:5199" -and
     $values["VAPID_SUBJECT"] -eq "mailto:quality-local@example.test" -and
     $values["OCR_WORKER_TOKEN"] -match '^quality-[0-9a-f]{32}$' -and
     $values["INTERPRET_DOCUMENT_CRON_SECRET"] -match '^quality-[0-9a-f]{32}$' -and
+    $values["SUPPLIER_PORTAL_RATE_LIMIT_PEPPER"] -match '^quality-[0-9a-f]{32}$' -and
     $values["PUSH_FN_SECRET"] -match '^quality-[0-9a-f]{32}$')
 }
 
@@ -715,6 +717,7 @@ function New-LocalFunctionsEnvironment {
     "INTERPRET_DOCUMENT_CRON_SECRET=$interpretCronSecret",
     "OPENAI_API_KEY=local-provider-mock-not-sent",
     "APP_BASE_URL=http://127.0.0.1:5199",
+    "SUPPLIER_PORTAL_RATE_LIMIT_PEPPER=$supplierPortalRateLimitPepper",
     "PUSH_FN_SECRET=$pushFunctionSecret",
     "VAPID_PUBLIC_KEY=$($vapidKeys.PublicKey)",
     "VAPID_PRIVATE_KEY=$($vapidKeys.PrivateKey)",
@@ -1292,6 +1295,9 @@ try {
     Invoke-SqlTest "supabase\tests\p57_business_summary_parity.sql" "The business summary has one definition rather than two: the read model re-derives each of the five metrics against independently written queries, a metric that fails comes back unmeasured while its four neighbours keep their exact values, and a second tenant sees only its own numbers"
     Invoke-SqlTest "supabase\tests\p58_assistant_egress_kind.sql" "The eighth egress kind: assistant reserves under the same service-only, active-tenant, TTL-bounded, idempotent fencing as the seven before it, with no expiry carve-out and a boundary still closed to a ninth value"
     Invoke-SqlTest "supabase\tests\p59_supplier_order_portal.sql" "Supplier order portal: hashed one-order tokens, immutable structured proposals, reasoned decisions, revisions that never mutate history, and zero browser or cross-tenant surface"
+    Invoke-SqlTest "supabase\tests\p59_supplier_order_portal_concurrency.sql" "Concurrent supplier submissions serialize to one immutable proposal and one named conflict" "supabase_admin"
+    Write-Gate "Reset after committed supplier-portal concurrency fixtures"
+    Reset-LocalDatabase
     Invoke-SqlTest "supabase\tests\p24_inventory_intelligence.sql" "Inventory consumption evidence, incoming supply, suggestions, price context and tenant isolation"
     Invoke-SqlTest "supabase\tests\p25_tenant_offboarding_export.sql" "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p26_price_baseline.sql" "Contractual price baseline as of the document date, reversal ordering, undisclosed fallbacks and read-only guarantee"

@@ -10,23 +10,41 @@
 // POST-only, deliberately: a GET would put the token in the URL, and URLs are logged by every
 // hop. Failures are uniform: a wrong, expired, revoked or foreign token is answered with the
 // same 404 `link_invalid`, so the endpoint confirms nothing about what exists (the
-// tenant-export idiom). The pure pieces -- token shape, hashing, CORS allowlist, the soft rate
-// window and the error map -- live in core.ts with their own Deno tests.
+// tenant-export idiom). Before the token is inspected, the gateway-provided client IP is HMACed
+// with a server-only pepper and counted by a database RPC. That limit is persistent across Edge
+// isolates and never stores or logs the readable IP.
 //
 // Required environment (supabase secrets set ...):
 //   ALLOWED_ORIGINS / APP_BASE_URL -- CORS allowlist, same convention as send-invite
+//   SUPPLIER_PORTAL_RATE_LIMIT_PEPPER -- random server-only value, at least 32 characters
 //   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY -- injected by the platform
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.91.1';
-import { corsFor, mapSubmitError, normalizeToken, RateWindow, sha256Hex } from './core.ts';
+import {
+  clientAddress,
+  corsFor,
+  mapSubmitError,
+  normalizeToken,
+  rateLimitFingerprint,
+  sha256Hex,
+  validRateLimitPepper,
+} from './core.ts';
 
-function json(body: unknown, status: number, cors: Record<string, string>): Response {
+function json(
+  body: unknown,
+  status: number,
+  cors: Record<string, string>,
+  extraHeaders: Record<string, string> = {},
+): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    headers: {
+      ...cors,
+      ...extraHeaders,
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+    },
   });
 }
-
-const rateWindow = new RateWindow();
 
 interface PortalRequest {
   action: 'resolve' | 'submit';
@@ -44,7 +62,31 @@ Deno.serve(async (request) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!supabaseUrl || !serviceKey) return json({ error: 'misconfigured' }, 500, cors);
+  const rateLimitPepper = Deno.env.get('SUPPLIER_PORTAL_RATE_LIMIT_PEPPER');
+  if (!supabaseUrl || !serviceKey || !validRateLimitPepper(rateLimitPepper)) {
+    return json({ error: 'misconfigured' }, 500, cors);
+  }
+
+  const address = clientAddress(request.headers);
+  if (!address) {
+    console.error('supplier-portal client address unavailable');
+    return json({ error: 'service_unavailable' }, 503, cors);
+  }
+  const fingerprint = await rateLimitFingerprint(address, rateLimitPepper);
+  const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+  const { data: rateDecision, error: rateError } = await admin.rpc(
+    'service_check_supplier_portal_rate_limit',
+    { p_fingerprint: fingerprint },
+  );
+  if (rateError) {
+    console.error('supplier-portal rate limit failed', rateError.code);
+    return json({ error: 'service_unavailable' }, 503, cors);
+  }
+  const rate = rateDecision as { allowed?: boolean; retry_after_seconds?: number } | null;
+  if (rate?.allowed !== true) {
+    const retryAfter = Math.max(1, Math.ceil(rate?.retry_after_seconds ?? 60));
+    return json({ error: 'rate_limited' }, 429, cors, { 'Retry-After': String(retryAfter) });
+  }
 
   let body: PortalRequest;
   try {
@@ -55,10 +97,8 @@ Deno.serve(async (request) => {
 
   const token = normalizeToken(body.token);
   if (!token) return json({ error: 'link_invalid' }, 404, cors);
-  if (rateWindow.overLimit(token.slice(0, 8))) return json({ error: 'rate_limited' }, 429, cors);
 
   const tokenHash = await sha256Hex(token);
-  const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
   if (body.action === 'resolve') {
     const { data, error } = await admin.rpc('service_resolve_supplier_order_link', {

@@ -22,26 +22,42 @@ export async function sha256Hex(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * Soft per-isolate rate window: real enforcement is the token's 32 bytes of entropy plus the
- * per-link failed-submission lock in SQL; this only keeps one noisy client from hammering the
- * DB through a single warm isolate.
- */
-export class RateWindow {
-  private readonly hits = new Map<string, number[]>();
-  constructor(
-    private readonly limit = 30,
-    private readonly windowMs = 60_000,
-    private readonly maxKeys = 1_000,
-  ) {}
-
-  overLimit(key: string, now = Date.now()): boolean {
-    const kept = (this.hits.get(key) ?? []).filter((t) => now - t < this.windowMs);
-    kept.push(now);
-    this.hits.set(key, kept);
-    if (this.hits.size > this.maxKeys) this.hits.clear();
-    return kept.length > this.limit;
+function isIpAddress(value: string): boolean {
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)) {
+    return value.split('.').every((part) => Number(part) <= 255);
   }
+  if (!value.includes(':') || value.length > 64) return false;
+  try {
+    return new URL(`http://[${value}]/`).hostname.length > 2;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reads only gateway-populated address headers. For X-Forwarded-For the rightmost value is the
+ * hop appended by the closest proxy; the user-controlled left edge is deliberately ignored.
+ * The returned address is never stored or logged -- it exists only long enough to HMAC below.
+ */
+export function clientAddress(headers: Headers): string | null {
+  const direct = headers.get('cf-connecting-ip') ?? headers.get('x-real-ip');
+  const forwarded = headers.get('x-forwarded-for')?.split(',').at(-1);
+  const candidate = (direct ?? forwarded ?? '').trim();
+  return isIpAddress(candidate) ? candidate.toLowerCase() : null;
+}
+
+export function validRateLimitPepper(value: string | undefined): value is string {
+  return typeof value === 'string' && value.length >= 32;
+}
+
+/** HMAC keeps the cross-isolate key stable without making a retained row an IP-address oracle. */
+export async function rateLimitFingerprint(address: string, pepper: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', encoder.encode(pepper), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  const digest = await crypto.subtle.sign('HMAC', key, encoder.encode(address));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 export interface MappedError {

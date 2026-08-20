@@ -9,7 +9,12 @@ const source = (path: string) => readFileSync(join(process.cwd(), path), 'utf8')
 // out of URLs and logs, and the supplier must keep seeing the RAW product wording (0149 rule —
 // the canonical display name never leaves the tenant screens).
 describe('supplier portal boundary', () => {
-  const portalFiles = ['src/portal/main.tsx', 'src/portal/PortalApp.tsx', 'src/portal/api.ts'];
+  const portalFiles = [
+    'src/portal/main.tsx',
+    'src/portal/PortalApp.tsx',
+    'src/portal/api.ts',
+    'src/portal/i18n.ts',
+  ];
 
   it('never imports the Supabase client, the auth context, or tenant pages', () => {
     for (const file of portalFiles) {

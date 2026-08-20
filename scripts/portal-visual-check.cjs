@@ -1,6 +1,6 @@
 // One-off visual verification of the supplier portal entry (0167). Serves the built dist with
-// `vite preview`, intercepts the Edge endpoint with a fixture, and screenshots the three states
-// the supplier meets: the open form (mobile + desktop), the submitted state, and the dead link.
+// `vite preview`, intercepts the Edge endpoint with a fixture, and screenshots both locales in
+// the three states the supplier meets: the open form (mobile + desktop), submitted, and dead link.
 // Headed on purpose — headless misses injected CSS on this machine (memory: headless-screenshot-
 // stale-css). Not wired into any gate; run manually: node scripts/portal-visual-check.cjs
 const { chromium } = require('playwright-core');
@@ -30,57 +30,133 @@ const view = {
   },
 };
 
+const locales = {
+  he: {
+    browser: 'he-IL', dir: 'rtl', heading: /הזמנה #238/,
+    quantity: 'כמות מוצעת', submitted: 'כבר נשלחה תשובה להזמנה זו', invalid: 'הקישור אינו פעיל',
+  },
+  en: {
+    browser: 'en-US', dir: 'ltr', heading: /Order #238/,
+    quantity: 'Proposed quantity', submitted: 'A response has already been sent for this order',
+    invalid: 'This link is not active',
+  },
+};
+
+function captureBrowserFailures(page, label, { allowPortal404 = false } = {}) {
+  const failures = [];
+  let portal404Responses = 0;
+  page.on('pageerror', (error) => failures.push(`pageerror: ${error.message}`));
+  page.on('response', (response) => {
+    if (response.status() === 404 && response.url().includes('/functions/v1/supplier-portal')) {
+      portal404Responses += 1;
+    }
+  });
+  page.on('console', (message) => {
+    if (message.type() === 'error') failures.push(`console: ${message.text()}`);
+  });
+  return () => {
+    let remainingPortal404s = allowPortal404 ? portal404Responses : 0;
+    const unexpected = failures.filter((failure) => {
+      if (remainingPortal404s > 0
+          && failure === 'console: Failed to load resource: the server responded with a status of 404 (Not Found)') {
+        remainingPortal404s -= 1;
+        return false;
+      }
+      return true;
+    });
+    if (unexpected.length) throw new Error(`${label}: ${unexpected.join(' | ')}`);
+  };
+}
+
+async function assertLocaleAndLayout(page, locale, label) {
+  const actual = await page.evaluate(() => ({
+    lang: document.documentElement.lang,
+    dir: document.documentElement.dir,
+    overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  }));
+  if (actual.lang !== locale || actual.dir !== locales[locale].dir) {
+    throw new Error(`${label}: expected ${locale}/${locales[locale].dir}, got ${actual.lang}/${actual.dir}`);
+  }
+  if (actual.overflow > 0) throw new Error(`${label}: horizontal overflow ${actual.overflow}px`);
+}
+
 async function main() {
   mkdirSync(OUT, { recursive: true });
-  const preview = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], {
-    cwd: ROOT, shell: true, stdio: 'pipe',
+  const viteBin = join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
+  const preview = spawn(process.execPath, [viteBin, 'preview', '--port', String(PORT), '--strictPort'], {
+    cwd: ROOT, shell: false, stdio: 'pipe',
   });
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('preview did not start')), 30000);
+    let stderr = '';
+    preview.stderr.on('data', (d) => { stderr += String(d); });
     preview.stdout.on('data', (d) => { if (String(d).includes('Local')) { clearTimeout(timer); resolve(); } });
-    preview.on('exit', () => reject(new Error('preview exited')));
+    preview.on('exit', () => {
+      clearTimeout(timer);
+      reject(new Error(`preview exited${stderr ? `: ${stderr.trim()}` : ''}`));
+    });
   });
 
   const browser = await chromium.launch({ headless: false });
   try {
-    for (const [label, width, height] of [['mobile', 390, 844], ['desktop', 1440, 900]]) {
-      const context = await browser.newContext({
-        viewport: { width, height }, reducedMotion: 'reduce', locale: 'he-IL',
-      });
-      const page = await context.newPage();
-      await page.route('**/functions/v1/supplier-portal', (route) => route.fulfill({ json: view }));
-      await page.goto(`http://localhost:${PORT}/portal.html#token=${TOKEN}`);
-      await page.getByText('#238').waitFor();
-      await page.screenshot({ path: join(OUT, `portal-open-${label}.png`), fullPage: true });
+    for (const [locale, copy] of Object.entries(locales)) {
+      for (const [size, width, height] of [['mobile', 390, 844], ['desktop', 1440, 900]]) {
+        const label = `${locale}-${size}`;
+        const context = await browser.newContext({
+          viewport: { width, height }, reducedMotion: 'reduce', locale: copy.browser,
+        });
+        const page = await context.newPage();
+        const assertNoBrowserFailures = captureBrowserFailures(page, label);
+        await page.route('**/functions/v1/supplier-portal', (route) => route.fulfill({ json: view }));
+        await page.goto(`http://localhost:${PORT}/portal.html?lang=${locale}#token=${TOKEN}`);
+        await page.getByRole('heading', { name: copy.heading }).waitFor();
+        await page.getByLabel(copy.quantity).first().waitFor();
+        await assertLocaleAndLayout(page, locale, label);
 
-      // horizontal overflow check
-      const overflow = await page.evaluate(() =>
-        document.documentElement.scrollWidth - document.documentElement.clientWidth);
-      if (overflow > 0) throw new Error(`horizontal overflow ${overflow}px at ${label}`);
-      await context.close();
+        // The language switch is the first interactive control and remains keyboard-reachable.
+        await page.keyboard.press('Tab');
+        const focused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+        if (!focused) throw new Error(`${label}: language switch was not keyboard-reachable`);
+
+        await page.screenshot({ path: join(OUT, `portal-open-${label}.png`), fullPage: true });
+        assertNoBrowserFailures();
+        await context.close();
+      }
     }
 
-    // Submitted + dead-link states, mobile only.
-    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
-    const page = await context.newPage();
-    await page.route('**/functions/v1/supplier-portal', (route) => route.fulfill({
-      json: { ...view, state: 'submitted', proposal: {
-        status: 'submitted', submitted_at: new Date().toISOString(),
-        proposed_delivery_date: '2026-08-29', total_delta: -42.5,
-      } },
-    }));
-    await page.goto(`http://localhost:${PORT}/portal.html#token=${TOKEN}`);
-    await page.getByText('כבר נשלחה תשובה להזמנה זו').waitFor();
-    await page.screenshot({ path: join(OUT, 'portal-submitted-mobile.png'), fullPage: true });
+    // Submitted + dead-link states in both locales, mobile.
+    for (const [locale, copy] of Object.entries(locales)) {
+      const context = await browser.newContext({
+        viewport: { width: 390, height: 844 }, reducedMotion: 'reduce', locale: copy.browser,
+      });
+      const page = await context.newPage();
+      const assertSubmittedHasNoBrowserFailures = captureBrowserFailures(page, `${locale}-submitted`);
+      await page.route('**/functions/v1/supplier-portal', (route) => route.fulfill({
+        json: { ...view, state: 'submitted', proposal: {
+          status: 'submitted', submitted_at: new Date().toISOString(),
+          proposed_delivery_date: '2026-08-29', total_delta: -42.5,
+        } },
+      }));
+      await page.goto(`http://localhost:${PORT}/portal.html?lang=${locale}#token=${TOKEN}`);
+      await page.getByText(copy.submitted).waitFor();
+      await assertLocaleAndLayout(page, locale, `${locale}-submitted`);
+      await page.screenshot({ path: join(OUT, `portal-submitted-${locale}-mobile.png`), fullPage: true });
+      assertSubmittedHasNoBrowserFailures();
 
-    const page2 = await context.newPage();
-    await page2.route('**/functions/v1/supplier-portal', (route) => route.fulfill({
-      status: 404, json: { error: 'link_invalid' },
-    }));
-    await page2.goto(`http://localhost:${PORT}/portal.html#token=${TOKEN}`);
-    await page2.getByText('הקישור אינו פעיל').waitFor();
-    await page2.screenshot({ path: join(OUT, 'portal-invalid-mobile.png'), fullPage: true });
-    await context.close();
+      const page2 = await context.newPage();
+      const assertInvalidHasNoBrowserFailures = captureBrowserFailures(
+        page2, `${locale}-invalid`, { allowPortal404: true },
+      );
+      await page2.route('**/functions/v1/supplier-portal', (route) => route.fulfill({
+        status: 404, json: { error: 'link_invalid' },
+      }));
+      await page2.goto(`http://localhost:${PORT}/portal.html?lang=${locale}#token=${TOKEN}`);
+      await page2.getByText(copy.invalid).waitFor();
+      await assertLocaleAndLayout(page2, locale, `${locale}-invalid`);
+      await page2.screenshot({ path: join(OUT, `portal-invalid-${locale}-mobile.png`), fullPage: true });
+      assertInvalidHasNoBrowserFailures();
+      await context.close();
+    }
     console.log('portal visual check: OK, shots in', OUT);
   } finally {
     await browser.close();

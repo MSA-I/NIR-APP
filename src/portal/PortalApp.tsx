@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fmtDate, fmtMoneyExact, formatQuantity } from '../lib/format';
 import {
   PortalError,
   resolvePortalLink,
@@ -9,6 +8,14 @@ import {
   type PortalSnapshotItem,
   type PortalView,
 } from './api';
+import {
+  formatPortalDate,
+  formatPortalMoney,
+  formatPortalQuantity,
+  portalLocaleFromLocation,
+  PORTAL_COPY,
+  type PortalLocale,
+} from './i18n';
 
 // One order, one token, one decision. The portal renders the snapshot the business issued —
 // raw supplier-facing wording, snapshot prices — and lets the supplier either approve the
@@ -46,21 +53,36 @@ function lineDelta(item: PortalSnapshotItem, edit: LineEdit): number {
   return qty * price - item.qty * item.unit_price;
 }
 
-const PROPOSAL_STATUS_LABEL: Record<string, string> = {
-  submitted: 'ההצעה התקבלה וממתינה להחלטת העסק',
-  accepted: 'ההצעה אושרה על ידי העסק',
-  partially_accepted: 'ההצעה אושרה חלקית על ידי העסק',
-  rejected: 'ההצעה נדחתה על ידי העסק',
-};
-
 export default function PortalApp() {
   const token = useMemo(() => tokenFromLocation(window.location.hash, window.location.search), []);
+  const [locale, setLocale] = useState<PortalLocale>(() =>
+    portalLocaleFromLocation(window.location.search, window.navigator.language));
   const [screen, setScreen] = useState<Screen>({ kind: 'loading' });
   const [edits, setEdits] = useState<Record<string, LineEdit>>({});
   const [deliveryDate, setDeliveryDate] = useState('');
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const copy = PORTAL_COPY[locale];
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.documentElement.dir = locale === 'he' ? 'rtl' : 'ltr';
+    document.title = copy.pageTitle;
+  }, [copy.pageTitle, locale]);
+
+  const switchLocale = () => {
+    const next: PortalLocale = locale === 'he' ? 'en' : 'he';
+    const url = new URL(window.location.href);
+    url.searchParams.set('lang', next);
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+    setLocale(next);
+    setSubmitError(null);
+  };
 
   useEffect(() => {
     if (!token) {
@@ -81,31 +103,29 @@ export default function PortalApp() {
   }, [token]);
 
   if (screen.kind === 'loading') {
-    return <Shell><p className="text-ink-muted">טוען את פרטי ההזמנה…</p></Shell>;
+    return <Shell locale={locale} onSwitchLocale={switchLocale}><p className="text-ink-muted">{copy.loading}</p></Shell>;
   }
   if (screen.kind === 'invalid') {
     return (
-      <Shell>
-        <h1 className="text-lg font-semibold text-ink-strong">הקישור אינו פעיל</h1>
-        <p className="mt-2 text-ink-muted">
-          הקישור פג תוקף, בוטל או שגוי. יש לפנות לעסק שממנו התקבלה ההזמנה כדי לקבל קישור חדש.
-        </p>
+      <Shell locale={locale} onSwitchLocale={switchLocale}>
+        <h1 className="text-lg font-semibold text-ink-strong">{copy.invalidTitle}</h1>
+        <p className="mt-2 text-ink-muted">{copy.invalidBody}</p>
       </Shell>
     );
   }
   if (screen.kind === 'locked') {
     return (
-      <Shell>
-        <h1 className="text-lg font-semibold text-ink-strong">הקישור ננעל זמנית</h1>
-        <p className="mt-2 text-ink-muted">נרשמו יותר מדי ניסיונות. יש לנסות שוב מאוחר יותר.</p>
+      <Shell locale={locale} onSwitchLocale={switchLocale}>
+        <h1 className="text-lg font-semibold text-ink-strong">{copy.lockedTitle}</h1>
+        <p className="mt-2 text-ink-muted">{copy.lockedBody}</p>
       </Shell>
     );
   }
   if (screen.kind === 'error') {
     return (
-      <Shell>
-        <h1 className="text-lg font-semibold text-ink-strong">שגיאה זמנית</h1>
-        <p className="mt-2 text-ink-muted">לא ניתן לטעון את ההזמנה כרגע. יש לנסות שוב בעוד כמה דקות.</p>
+      <Shell locale={locale} onSwitchLocale={switchLocale}>
+        <h1 className="text-lg font-semibold text-ink-strong">{copy.errorTitle}</h1>
+        <p className="mt-2 text-ink-muted">{copy.errorBody}</p>
       </Shell>
     );
   }
@@ -116,22 +136,22 @@ export default function PortalApp() {
   if (screen.kind === 'submitted') {
     const proposal = view.proposal;
     return (
-      <Shell orgName={snapshot.org_name}>
-        <OrderHeader view={view} />
+      <Shell orgName={snapshot.org_name} locale={locale} onSwitchLocale={switchLocale}>
+        <OrderHeader view={view} locale={locale} />
         <div className="card mt-4 p-4">
           <h2 className="font-semibold text-ink-strong">
-            {screen.justNow ? 'התשובה נשלחה בהצלחה' : 'כבר נשלחה תשובה להזמנה זו'}
+            {screen.justNow ? copy.sentNow : copy.alreadySent}
           </h2>
           <p className="mt-1 text-sm text-ink-muted">
-            {proposal ? PROPOSAL_STATUS_LABEL[proposal.status] : 'ההזמנה אושרה כפי שנשלחה.'}
+            {proposal ? copy.proposalStatus[proposal.status] : copy.approvedAsSent}
           </p>
           {proposal && proposal.total_delta !== 0 && (
             <p className="mt-1 text-sm text-ink-muted">
-              הפרש כספי מוצע: <span className="num">{fmtMoneyExact(proposal.total_delta)}</span>
+              {copy.proposedMoneyDelta} <span className="num">{formatPortalMoney(locale, proposal.total_delta)}</span>
             </p>
           )}
         </div>
-        <ItemsView items={snapshot.items} readOnly edits={edits} onEdit={() => {}} />
+        <ItemsView items={snapshot.items} readOnly edits={edits} onEdit={() => {}} locale={locale} />
       </Shell>
     );
   }
@@ -177,13 +197,13 @@ export default function PortalApp() {
       if (error instanceof PortalError && error.code === 'proposal_already_submitted') {
         const refreshed = await resolvePortalLink(token).catch(() => null);
         if (refreshed) setScreen({ kind: 'submitted', view: refreshed, justNow: false });
-        else setSubmitError('כבר נשלחה תשובה להזמנה זו.');
+        else setSubmitError(copy.submitAlready);
       } else if (error instanceof PortalError && error.code === 'proposal_invalid') {
-        setSubmitError('התשובה לא התקבלה. יש לבדוק את הערכים שהוזנו ולנסות שוב.');
+        setSubmitError(copy.submitInvalid);
       } else if (error instanceof PortalError && error.code === 'rate_limited') {
-        setSubmitError('נרשמו יותר מדי ניסיונות. יש להמתין ולנסות שוב.');
+        setSubmitError(copy.submitRateLimited);
       } else {
-        setSubmitError('שגיאה זמנית בשליחה. יש לנסות שוב בעוד כמה דקות.');
+        setSubmitError(copy.submitTemporary);
       }
     } finally {
       setSending(false);
@@ -191,19 +211,20 @@ export default function PortalApp() {
   };
 
   return (
-    <Shell orgName={snapshot.org_name}>
-      <OrderHeader view={view} />
+    <Shell orgName={snapshot.org_name} locale={locale} onSwitchLocale={switchLocale}>
+      <OrderHeader view={view} locale={locale} />
 
       <ItemsView
         items={snapshot.items}
         readOnly={false}
         edits={edits}
         onEdit={(id, edit) => setEdits((prev) => ({ ...prev, [id]: edit }))}
+        locale={locale}
       />
 
       <div className="card mt-4 space-y-3 p-4">
         <div>
-          <label className="label" htmlFor="portal-delivery-date">הצעה לתאריך אספקה אחר (לא חובה)</label>
+          <label className="label" htmlFor="portal-delivery-date">{copy.deliveryDateLabel}</label>
           <input
             id="portal-delivery-date"
             type="date"
@@ -213,7 +234,7 @@ export default function PortalApp() {
           />
         </div>
         <div>
-          <label className="label" htmlFor="portal-note">הערה כללית לעסק (לא חובה)</label>
+          <label className="label" htmlFor="portal-note">{copy.noteLabel}</label>
           <textarea
             id="portal-note"
             className="input min-h-20"
@@ -224,7 +245,7 @@ export default function PortalApp() {
         </div>
         {totalDelta !== 0 && (
           <p className="text-sm text-ink-muted">
-            סה״כ הפרש כספי מוצע: <span className="num font-medium">{fmtMoneyExact(totalDelta)}</span>
+            {copy.totalDelta} <span className="num font-medium">{formatPortalMoney(locale, totalDelta)}</span>
           </p>
         )}
         {submitError && (
@@ -237,24 +258,39 @@ export default function PortalApp() {
             disabled={sending}
             onClick={() => void submit(!hasChanges)}
           >
-            {sending ? 'שולח…' : hasChanges ? 'שליחת השינויים המוצעים' : 'אישור ההזמנה כפי שנשלחה'}
+            {sending ? copy.sending : hasChanges ? copy.sendChanges : copy.approveAsSent}
           </button>
         </div>
-        <p className="text-xs text-ink-faint">
-          ניתן לשלוח תשובה אחת בלבד. לאחר השליחה העסק יבחן את התשובה ויחליט.
-        </p>
+        <p className="text-xs text-ink-faint">{copy.oneResponse}</p>
       </div>
     </Shell>
   );
 }
 
-function Shell({ children, orgName }: { children: React.ReactNode; orgName?: string }) {
+function Shell({ children, orgName, locale, onSwitchLocale }: {
+  children: React.ReactNode;
+  orgName?: string;
+  locale: PortalLocale;
+  onSwitchLocale: () => void;
+}) {
+  const copy = PORTAL_COPY[locale];
   return (
-    <div className="min-h-dvh bg-canvas">
+    <div className="min-h-dvh bg-canvas" dir={locale === 'he' ? 'rtl' : 'ltr'}>
       <main className="mx-auto max-w-3xl px-4 py-6">
-        <header className="mb-4">
-          <p className="text-xs text-ink-faint">אישור הזמנת רכש</p>
-          {orgName && <p className="text-lg font-semibold text-ink-strong"><bdi>{orgName}</bdi></p>}
+        <header className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs text-ink-faint">{copy.pageTitle}</p>
+            {orgName && <p className="text-lg font-semibold text-ink-strong"><bdi>{orgName}</bdi></p>}
+          </div>
+          <button
+            type="button"
+            className="btn-secondary min-h-11 shrink-0 px-3 py-2 text-sm"
+            aria-label={copy.switchLanguageLabel}
+            lang={locale === 'he' ? 'en' : 'he'}
+            onClick={onSwitchLocale}
+          >
+            {copy.switchLanguage}
+          </button>
         </header>
         {children}
       </main>
@@ -262,33 +298,34 @@ function Shell({ children, orgName }: { children: React.ReactNode; orgName?: str
   );
 }
 
-function OrderHeader({ view }: { view: PortalView }) {
+function OrderHeader({ view, locale }: { view: PortalView; locale: PortalLocale }) {
   const { snapshot } = view;
+  const copy = PORTAL_COPY[locale];
   return (
     <div className="card p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-lg font-semibold text-ink-strong">
-          הזמנה <span className="num">#{snapshot.order_number}</span>
+          {copy.order} <span className="num">#{snapshot.order_number}</span>
           {snapshot.revision_number > 1 && (
             <span className="ms-2 badge bg-action-wash text-ink-mid">
-              גרסה <span className="num">{snapshot.revision_number}</span>
+              {copy.revision} <span className="num">{snapshot.revision_number}</span>
             </span>
           )}
         </h1>
         <p className="text-sm text-ink-muted">
-          בתוקף עד <span className="num">{fmtDate(view.expires_at)}</span>
+          {copy.validUntil} <span className="num">{formatPortalDate(locale, view.expires_at)}</span>
         </p>
       </div>
       <dl className="mt-2 grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
         {snapshot.supplier_name && (
           <div className="flex gap-1">
-            <dt className="text-ink-faint">לכבוד:</dt>
+            <dt className="text-ink-faint">{copy.addressee}</dt>
             <dd className="text-ink-body"><bdi>{snapshot.supplier_name}</bdi></dd>
           </div>
         )}
         <div className="flex gap-1">
-          <dt className="text-ink-faint">תאריך אספקה מבוקש:</dt>
-          <dd className="text-ink-body num">{fmtDate(snapshot.expected_date)}</dd>
+          <dt className="text-ink-faint">{copy.requestedDelivery}</dt>
+          <dd className="text-ink-body num">{formatPortalDate(locale, snapshot.expected_date)}</dd>
         </div>
       </dl>
       {snapshot.notes && (
@@ -299,15 +336,17 @@ function OrderHeader({ view }: { view: PortalView }) {
 }
 
 function ItemsView({
-  items, readOnly, edits, onEdit,
+  items, readOnly, edits, onEdit, locale,
 }: {
   items: PortalSnapshotItem[];
   readOnly: boolean;
   edits: Record<string, LineEdit>;
   onEdit: (id: string, edit: LineEdit) => void;
+  locale: PortalLocale;
 }) {
+  const copy = PORTAL_COPY[locale];
   return (
-    <section className="mt-4" aria-label="שורות ההזמנה">
+    <section className="mt-4" aria-label={copy.orderLines}>
       <ul className="space-y-3">
         {items.map((item) => {
           const edit = edits[item.order_item_id] ?? emptyEdit;
@@ -317,14 +356,14 @@ function ItemsView({
               <div className="flex items-start justify-between gap-3">
                 <p className="font-medium text-ink-strong"><bdi>{item.product_name}</bdi></p>
                 <p className="text-sm text-ink-muted num whitespace-nowrap">
-                  {formatQuantity(item.qty, item.unit)} × {fmtMoneyExact(item.unit_price)}
+                  {formatPortalQuantity(locale, item.qty, item.unit)} × {formatPortalMoney(locale, item.unit_price)}
                 </p>
               </div>
               {!readOnly && (
                 <div className="mt-3 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="label" htmlFor={`qty-${item.order_item_id}`}>כמות מוצעת</label>
+                      <label className="label" htmlFor={`qty-${item.order_item_id}`}>{copy.proposedQty}</label>
                       <input
                         id={`qty-${item.order_item_id}`}
                         className="input num"
@@ -336,7 +375,7 @@ function ItemsView({
                       />
                     </div>
                     <div>
-                      <label className="label" htmlFor={`price-${item.order_item_id}`}>מחיר יחידה מוצע</label>
+                      <label className="label" htmlFor={`price-${item.order_item_id}`}>{copy.proposedUnitPrice}</label>
                       <input
                         id={`price-${item.order_item_id}`}
                         className="input num"
@@ -355,12 +394,12 @@ function ItemsView({
                       checked={edit.unavailable}
                       onChange={(e) => onEdit(item.order_item_id, { ...edit, unavailable: e.target.checked })}
                     />
-                    הפריט אינו זמין
+                    {copy.unavailable}
                   </label>
                   {edit.unavailable && (
                     <div>
                       <label className="label" htmlFor={`replacement-${item.order_item_id}`}>
-                        הצעת תחליף (טקסט חופשי, לא חובה)
+                        {copy.replacement}
                       </label>
                       <input
                         id={`replacement-${item.order_item_id}`}
@@ -373,7 +412,7 @@ function ItemsView({
                   )}
                   {delta !== 0 && (
                     <p className="text-xs text-ink-muted">
-                      הפרש לשורה: <span className="num">{fmtMoneyExact(delta)}</span>
+                      {copy.lineDelta} <span className="num">{formatPortalMoney(locale, delta)}</span>
                     </p>
                   )}
                 </div>

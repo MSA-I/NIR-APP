@@ -36,7 +36,7 @@ const fetchMock = vi.fn();
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
-  window.location.hash = `#token=${TOKEN}`;
+  window.history.replaceState({}, '', `/portal.html?lang=he#token=${TOKEN}`);
 });
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -113,7 +113,8 @@ describe('PortalApp', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'link_invalid' }, 404));
     render(<PortalApp />);
     expect(await screen.findByText('הקישור אינו פעיל')).toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /נסו שוב|רענון|טעינה מחדש/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'מעבר לאנגלית' })).toBeInTheDocument();
   });
 
   it('a missing or malformed fragment token never reaches the network', async () => {
@@ -135,5 +136,24 @@ describe('PortalApp', () => {
     expect(await screen.findByText('כבר נשלחה תשובה להזמנה זו')).toBeInTheDocument();
     expect(screen.getByText('ההצעה אושרה חלקית על ידי העסק')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /אישור ההזמנה/ })).not.toBeInTheDocument();
+  });
+
+  it('renders an English LTR locale from the URL and can switch back to Hebrew', async () => {
+    window.history.replaceState({}, '', `/portal.html?lang=en#token=${TOKEN}`);
+    fetchMock.mockResolvedValueOnce(jsonResponse(view()));
+    render(<PortalApp />);
+
+    expect(await screen.findByRole('heading', { name: /Order #42/ })).toBeInTheDocument();
+    expect(document.documentElement).toHaveAttribute('lang', 'en');
+    expect(document.documentElement).toHaveAttribute('dir', 'ltr');
+    expect(document.title).toBe('Purchase order response');
+    expect(screen.getByLabelText('Proposed quantity', { selector: '#qty-i-1' })).toBeInTheDocument();
+    expect(screen.getByText(/₪10\.00/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Switch to Hebrew' }));
+    expect(document.documentElement).toHaveAttribute('lang', 'he');
+    expect(document.documentElement).toHaveAttribute('dir', 'rtl');
+    expect(window.location.search).toBe('?lang=he');
+    expect(screen.getByRole('button', { name: 'מעבר לאנגלית' })).toBeInTheDocument();
   });
 });

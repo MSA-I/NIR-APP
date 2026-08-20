@@ -27,11 +27,11 @@
 --   * Expiry and revocation live in the WHERE clause of every read, never in app code.
 --
 -- Enumeration and brute force: 32 random bytes make guessing infeasible; that entropy is the
--- primary defense (0103 records the same reasoning). On top of it, every failed lookup is
--- ledgered in private.supplier_portal_lookup_failures for observability, and a link that
--- accumulates failed SUBMIT attempts locks itself (failed_attempts >= 20 -> locked for 1 hour).
--- Per-IP limiting is an Edge/CDN concern and is recorded as a documented gap
--- (ENTERPRISE-SECURITY-MODEL.md:271-274 already names public supplier submissions there).
+-- primary defense (0103 records the same reasoning). On top of it, an HMAC fingerprint of the
+-- gateway-provided client IP is counted atomically in the database: 30 requests/minute, followed
+-- by a ten-minute block shared by every Edge isolate. Raw IPs are never stored. Every failed
+-- lookup is ledgered in private.supplier_portal_lookup_failures for observability, and a link
+-- that accumulates failed SUBMIT attempts locks itself (failed_attempts >= 20 -> locked for 1 hour).
 --
 -- Snapshot rule: the portal renders order_snapshot, captured at issue time -- the supplier
 -- sees what was sent, even if the order is later cancelled or revised. The snapshot carries the
@@ -234,14 +234,41 @@ create trigger supplier_order_links_guard
 before update or delete on supplier_order_links
 for each row execute function private.supplier_order_link_guard();
 
--- ===== 5. Failed-lookup ledger (observability; private, no browser surface) =====
+-- ===== 5. Persistent per-IP rate limit + failed-lookup ledger =====
+-- The Edge Function HMACs the gateway-provided client address with a server-only pepper. The
+-- database sees only that 64-hex fingerprint, so the limit is shared by every isolate without
+-- retaining a readable IP address. One atomic upsert serializes concurrent hits for a key.
+create table private.supplier_portal_rate_limits (
+  fingerprint text primary key check (fingerprint ~ '^[0-9a-f]{64}$'),
+  window_started_at timestamptz not null,
+  hit_count integer not null check (hit_count >= 1),
+  blocked_until timestamptz,
+  updated_at timestamptz not null default now()
+);
+create index supplier_portal_rate_limits_updated_idx
+  on private.supplier_portal_rate_limits (updated_at);
+revoke all on table private.supplier_portal_rate_limits
+  from public, anon, authenticated, service_role;
+
+-- Retain enough history to inspect recurring abuse without allowing one row per source to grow
+-- forever. cron.schedule is an upsert by job name (0028:1032).
+select cron.schedule(
+  'supplyflow-supplier-portal-rate-prune',
+  '23 3 * * *',
+  $$delete from private.supplier_portal_rate_limits
+    where updated_at < statement_timestamp() - interval '30 days'$$
+);
+
+-- Unknown/revoked/expired token lookups remain a separate append-only operational ledger. It
+-- never stores the IP fingerprint or a raw token, only the presented hash prefix and action.
 create table private.supplier_portal_lookup_failures (
   id uuid primary key default gen_random_uuid(),
   seen_at timestamptz not null default now(),
   token_prefix text not null check (char_length(token_prefix) <= 8),
   source text
 );
-revoke all on table private.supplier_portal_lookup_failures from public, anon, authenticated;
+revoke all on table private.supplier_portal_lookup_failures
+  from public, anon, authenticated, service_role;
 
 -- ===== 6. RLS and grants =====
 alter table supplier_order_links enable row level security;
@@ -448,6 +475,66 @@ revoke all on function revoke_supplier_order_link(uuid, text) from public, anon;
 grant execute on function revoke_supplier_order_link(uuid, text) to authenticated;
 
 -- ===== 8. Redemption (service_role, called only by the supplier-portal Edge Function) =====
+
+create function service_check_supplier_portal_rate_limit(p_fingerprint text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = private, public, pg_temp
+as $$
+declare
+  v_now timestamptz := statement_timestamp();
+  v_count integer;
+  v_blocked_until timestamptz;
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'service_role_required' using errcode = '42501';
+  end if;
+  if lower(coalesce(p_fingerprint, '')) !~ '^[0-9a-f]{64}$' then
+    raise exception 'supplier_portal_rate_fingerprint_invalid' using errcode = '22023';
+  end if;
+
+  insert into private.supplier_portal_rate_limits as current_rate (
+    fingerprint, window_started_at, hit_count, blocked_until, updated_at
+  ) values (
+    lower(p_fingerprint), v_now, 1, null, v_now
+  )
+  on conflict (fingerprint) do update
+  set window_started_at = case
+        when current_rate.blocked_until > v_now then current_rate.window_started_at
+        when current_rate.window_started_at <= v_now - interval '1 minute' then v_now
+        else current_rate.window_started_at
+      end,
+      hit_count = case
+        when current_rate.blocked_until > v_now then current_rate.hit_count
+        when current_rate.window_started_at <= v_now - interval '1 minute' then 1
+        else current_rate.hit_count + 1
+      end,
+      blocked_until = case
+        when current_rate.blocked_until > v_now then current_rate.blocked_until
+        when current_rate.window_started_at <= v_now - interval '1 minute' then null
+        when current_rate.hit_count + 1 > 30 then v_now + interval '10 minutes'
+        else null
+      end,
+      updated_at = v_now
+  returning hit_count, blocked_until into v_count, v_blocked_until;
+
+  return jsonb_build_object(
+    'allowed', v_blocked_until is null or v_blocked_until <= v_now,
+    'limit', 30,
+    'window_seconds', 60,
+    'retry_after_seconds', case
+      when v_blocked_until > v_now
+        then greatest(1, ceil(extract(epoch from v_blocked_until - v_now))::integer)
+      else 0
+    end,
+    'observed_count', v_count
+  );
+end
+$$;
+revoke all on function service_check_supplier_portal_rate_limit(text)
+  from public, anon, authenticated;
+grant execute on function service_check_supplier_portal_rate_limit(text) to service_role;
 
 create function service_resolve_supplier_order_link(p_token_hash text)
 returns jsonb
@@ -992,6 +1079,31 @@ where registry.table_name in (
   'purchase_orders', 'supplier_order_links',
   'supplier_order_proposals', 'supplier_order_proposal_lines'
 );
+
+-- The distributed limiter is part of the public-door boundary, not optional observability.
+do $$
+declare
+  v_count integer;
+begin
+  if pg_catalog.to_regclass('private.supplier_portal_rate_limits') is null
+     or pg_catalog.to_regprocedure('public.service_check_supplier_portal_rate_limit(text)') is null then
+    raise exception '0167: persistent supplier-portal rate limit is missing';
+  end if;
+  if has_function_privilege(
+       'authenticated', 'public.service_check_supplier_portal_rate_limit(text)', 'execute')
+     or not has_function_privilege(
+       'service_role', 'public.service_check_supplier_portal_rate_limit(text)', 'execute') then
+    raise exception '0167: supplier-portal rate limit is not service-role-only';
+  end if;
+  select count(*) into v_count
+  from cron.job
+  where jobname = 'supplyflow-supplier-portal-rate-prune'
+    and active;
+  if v_count <> 1 then
+    raise exception '0167: supplier-portal rate-limit retention job missing (found %)', v_count;
+  end if;
+end
+$$;
 
 -- ===== Re-assert A1 / A3 / A5 (the 0058:207-218 idiom; required of every post-0057 file) =====
 do $$

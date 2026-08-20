@@ -121,7 +121,10 @@
 > אחורה גם את מונה הכשלים ואת רישום ה-lookup שנכשל, כלומר בדיוק הראיות שכשל חייב להשאיר.
 > לכן כשלי ולידציה **נענים** ‏(`{error: code}`) ולא נזרקים, וה-Edge מתרגם לקוד HTTP; ‏20 כשלי
 > הגשה נועלים קישור לשעה, וכל lookup כושל נרשם ב-`private.supplier_portal_lookup_failures`.
-> פער שנשאר במפורש: אין הגבלת קצב פר-IP לפני ה-Edge — ‏`DEBT §60`.
+> **Recovery ‏20.08:** החלון הרך הוחלף במונה DB מתמיד פר-IP: כתובת gateway עוברת HMAC עם pepper
+> שרתי, ‏30 בקשות בדקה ואחריהן חסימה לעשר דקות, משותפת לכל Edge isolates. אין IP קריא במסד או
+> בלוג, והדלת מסרבת בלי pepper/כתובת/RPC. הגנת WAF/Turnstile נפחית לפני Edge נשארת הגנת עומק
+> תפעולית; מצב ה-CI והפריסה נשאר פתוח ב-`DEBT §60`.
 >
 > **‏A6 נתפס גם הוא ב-dry-run:** ‏purchase_orders גדלה בשתי עמודות ⇒ רענון hash הסכימה ברשם
 > הייצוא; שלוש הטבלאות החדשות נרשמו include, עם `token_hash` **מוחרג** מהייצוא. ‏A5 נפתר
@@ -131,7 +134,8 @@
 > **‏entry שלישי.** ‏`portal.html` + ‏`src/portal/` — בלי supabase-js, בלי AuthContext, בלי
 > router; מחוץ ל-precache; ‏SW מסרב לנווט `/portal` מהמטמון; אסור ב-`_redirects` (הלקח של
 > ‏`/operator`); שני מסווגי ה-CI עודכנו כך שה-entry לא מקבל אפס שערים בשקט. הגבולות מוצמדים
-> ב-`portalBoundary.spec.ts`.
+> ב-`portalBoundary.spec.ts`. הפורטל עצמו תומך כעת בעברית/RTL ובאנגלית/LTR לפי `?lang=he|en`,
+> שפת דפדפן עם fallback לעברית ומתג נגיש; תאריך, ILS וכמויות עוברים דרך `Intl` של הלוקאל.
 >
 > **אימות:** ‏build ירוק; ‏`verify` ירוק — ‏1,171 בדיקות ב-120 קבצים כולל ששת השומרים;
 > ‏6 בדיקות Deno ל-core של ה-Edge (צעד CI חדש); ‏**dry-run מקומי בטרנזקציה מגולגלת של
@@ -141,9 +145,23 @@
 > ‏(vite preview + ‏route interception של ה-Edge) ב-390×844 וב-1440×900 בשלושת המצבים, אפס
 > גלישה אופקית (`scripts/portal-visual-check.cjs`).
 >
+> **Recovery מקומי אחרי rebase:** reset מבודד החיל את `0001`–`0167`; ‏P59 עבר עם
+> `p59_supplier_order_portal_passed` ומכסה גם ACL/JWT guard, בקשות 30/31, reset חלון,
+> fingerprints עצמאיים ו-cron יחיד. ‏P59B מריצה שתי ישיבות `dblink` מקבילות ומוכיחה בדיוק
+> proposal אחד ו-`proposal_already_submitted` אחד; reset מיד אחריה מחק schema/fixtures והחזיר
+> ledger ל-`0167`. postflight מדד RPC+table קיימים, `service_role_execute=true`,
+> ‏`authenticated_execute=false` ו-cron פעיל אחד. בנוסף עבר `npm run verify` מלא מקומית:
+> ‏1,244/1,244 בדיקות ב-132 קבצים וכל ששת השומרים; וכן 15/15 בדיקות Vitest ממוקדות של
+> הפורטל/גבול/i18n, ‏7/7 Deno ו-TypeScript. בדיקת headed ייעודית הפיקה שמונה צילומים ב-he/en,
+> ‏RTL/LTR, ‏390×844 ו-1440×900 למצבי open/submitted/invalid, בלי overflow או שגיאת console;
+> ותרחיש ה-browser CI הורחב עם keyboard, labels ו-Chromium accessibility tree. אלה ראיות
+> מקומיות בלבד; production build ו-verify עברו, אך CI והתרחיש החי על ה-SHA הסופי עדיין אינם
+> מסומנים כעוברים.
+>
 > **מה במפורש לא רץ:** שער ה-CI המלא (ירוץ על ה-PR); ‏E2E חי מול Edge אמיתי עם DB שבו `0167`
 > חלה (ה-dry-run מתגלגל אחורה בכוונה); מסירת הקישור לספק עדיין ידנית — שליחה אוטומטית במייל
-> אמיתי (Resend) ו-WhatsApp היא השלב הבא, יחד עם he/en פר-ספק.
+> אמיתי (Resend) ו-WhatsApp היא השלב הבא. בחירת locale אוטומטית לפי העדפת ספק תתחבר ב-#87;
+> הפורטל עצמו כבר מציע he/en ללא תלות בחשבון ספק.
 
 עודכן: 19.08.2026 (ערב) — **שוחרר לייצור: המיגרציות `0147`–`0150` ו-bundle שנושא את PR #77, #78, #79 ו-#81; ואחריו תיקון `/operator` (#83).**
 
