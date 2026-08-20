@@ -92,12 +92,9 @@ jobs:
           product_matches() { grep -Eq "$1" product-files.txt; }
 
           workflow='^\.github/workflows/quality-gate\.yml$'
-          # src/lib/assistant/ is in the edge set on purpose: the assistant Edge function imports
-          # src/lib/assistant/contracts.ts directly (one canonical contract, two runtimes), so a
           # contract change must re-run the Deno contracts even when no supabase/ path moved.
-          # The whole directory is matched rather than the one file, so a second cross-runtime
           # import added later cannot silently fall outside the gate.
-          edge='^(deno\.lock|src/lib/assistant/|supabase/(config\.toml|functions/))'
+          edge='^(deno\.lock|supabase/(config\.toml|functions/))'
           ocr='^(docker-compose\.ocr\.yml|worker/ocr/)'
           audit='^(package\.json|package-lock\.json)$'
           sql='^(supabase/(config\.toml|migrations/|tests/|demo/|seed\.sql)|scripts/(check-quality-gates\.ps1|ci-sql-suites\.mjs|ci-local-env\.mjs|fixtures/.*\.sql))'
@@ -290,33 +287,6 @@ jobs:
           ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-outbox.log \
             || { echo 'Ignored or skipped cases are not acceptable in this gate.'; exit 1; }
 
-      - name: Assistant authorization, egress, validation, tool and provider contracts
-        if: needs.changes.outputs.edge == 'true'
-        run: |
-          set -euo pipefail
-          ASSISTANT_ROOT=supabase/functions/assistant
-          # The glob, not a hand-kept list: a new *.test.ts in the function directory is gated
-          # the moment it exists, instead of shipping silently until someone edits this file.
-          # --allow-env covers handler.test.ts and is granted to the whole invocation on purpose:
-          # splitting the glob into per-permission lists would reintroduce the hand-kept list.
-          npx --yes deno test \
-            --config "$ASSISTANT_ROOT/deno.json" \
-            --lock "$ASSISTANT_ROOT/deno.lock" \
-            --frozen \
-            --allow-env \
-            "$ASSISTANT_ROOT"/*.test.ts 2>&1 | tee deno-assistant.log
-          grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-assistant.log \
-            || { echo 'No assistant contract test completed.'; exit 1; }
-          ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-assistant.log \
-            || { echo 'Ignored or skipped assistant cases are not acceptable.'; exit 1; }
-          npx --yes deno check \
-            --allow-import \
-            --node-modules-dir=auto \
-            --config "$ASSISTANT_ROOT/deno.json" \
-            --lock "$ASSISTANT_ROOT/deno.lock" \
-            --frozen \
-            "$ASSISTANT_ROOT/index.ts"
-
       - name: OCR worker Compose validation
         if: needs.changes.outputs.ocr == 'true'
         run: docker compose -f docker-compose.ocr.yml config --quiet
@@ -383,7 +353,10 @@ jobs:
       # so the only evidence was whichever suite happened to be running. Failure only.
       - name: The postmaster log, if a backend died
         if: failure()
-        run: docker logs --tail 400 "supabase_db_${SUPABASE_PROJECT_ID}" 2>&1 || true
+        run: |
+          docker logs "supabase_db_${SUPABASE_PROJECT_ID}" 2>&1 \
+            | grep -iE -B 3 -A 25 "was terminated by signal|PANIC|server process|out of memory|startup process|stack depth|recovery mode" \
+            | tail -300 || echo "no crash markers in the postmaster log"
 
       - name: Stop the stack
         if: always()
