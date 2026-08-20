@@ -208,15 +208,19 @@ select pg_temp.p58_assert(
   'a refused reservation for a suspended organization still wrote a lease');
 
 -- ===== Service-only, at both fences =====
--- The grant surface: a browser role cannot even execute the function.
-select pg_temp.p58_authenticated();
-set local role authenticated;
-select pg_temp.p58_expect_error(
-  $$select public.service_reserve_organization_external_egress(
-      '58000000-0000-4000-8000-000000000001', 'assistant',
-      '58000000-0000-4000-8000-00000000c007', 90)$$,
-  'permission denied');
-reset role;
+-- Pin the grant surface through the catalog instead of issuing denied EXECUTE:
+-- the local Supabase PostgreSQL image can terminate the backend on that generic
+-- ACL path before PL/pgSQL can catch the expected error.
+select pg_temp.p58_assert(
+  not has_function_privilege(
+    'authenticated',
+    'public.service_reserve_organization_external_egress(uuid,text,uuid,integer)',
+    'execute')
+  and has_function_privilege(
+    'service_role',
+    'public.service_reserve_organization_external_egress(uuid,text,uuid,integer)',
+    'execute'),
+  'the reservation function is not service-role-only');
 
 -- The body guard: a caller that CAN execute but does not carry a service_role JWT is refused
 -- by the in-function check, independently of grants.
