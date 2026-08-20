@@ -48,6 +48,34 @@ select pg_temp.p51_assert(
       and grantee = 'authenticated' and privilege_type <> 'SELECT') = 0,
   'the plan catalogue is writable by a browser role');
 
+-- `/pricing` is a public route. Anonymous readers need the active catalogue, but never the
+-- inactive `legacy` holding plan that exists only for customers predating self-service.
+select pg_temp.p51_assert(
+  has_table_privilege('anon', 'public.subscription_plans', 'SELECT')
+  and has_table_privilege('anon', 'public.plan_entitlements', 'SELECT'),
+  'the public pricing route cannot read the plan catalogue');
+
+select set_config('request.jwt.claim.role', 'anon', true);
+set local role anon;
+select pg_temp.p51_assert(
+  (select count(*) from subscription_plans) > 0
+  and (select count(*) from plan_entitlements) > 0,
+  'the anonymous pricing policies returned an empty catalogue');
+select pg_temp.p51_assert(
+  (select count(*) from subscription_plans where not active) = 0,
+  'the anonymous pricing catalogue exposed an inactive plan');
+select pg_temp.p51_assert(
+  not exists (select 1 from plan_entitlements where plan_key = 'legacy'),
+  'the anonymous pricing catalogue exposed legacy entitlements');
+select pg_temp.p51_assert(
+  not exists (
+    select 1 from plan_entitlements entitlement
+    where not exists (
+      select 1 from subscription_plans plan
+      where plan.plan_key = entitlement.plan_key)),
+  'the anonymous pricing catalogue exposed entitlements without a visible active plan');
+reset role;
+
 -- my_entitlements() must take no organization argument: a parameter is a thing an attacker can
 -- change, and this function's whole safety is that the tenant comes from auth_org().
 select pg_temp.p51_assert(
