@@ -29,7 +29,7 @@
 -- what this customer may process, and treating that as infinite is the exact failure mode this
 -- layer exists to prevent when the thing being counted costs money per page. Today every seeded
 -- plan is `unlimited`, so nothing is refused; the refusal path is live, tested, and waiting for
--- the numbers (OPEN-DECISIONS #157).
+-- the numbers (OPEN-DECISIONS #166).
 --
 -- WHAT IS COUNTED BUT NOT ENFORCED: `ocr_pages.monthly`. The page count is only known AFTER
 -- extraction (0045:284 reads it out of the payload), so there is no honest way to refuse a job on
@@ -40,7 +40,7 @@
 --
 -- What this deliberately does not cover: no limit on users, suppliers or storage -- their
 -- entitlements exist and resolve, but nothing counts them yet, and the read models say `measured:
--- false` rather than reporting a zero. No downgrade behaviour (OPEN-DECISIONS #160). No blocking
+-- false` rather than reporting a zero. No downgrade behaviour (OPEN-DECISIONS #169). No blocking
 -- of reads: a customer at their limit keeps every document, invoice and report they already have.
 
 -- ===== 1. Events and counters =====

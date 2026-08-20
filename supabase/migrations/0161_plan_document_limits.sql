@@ -1,4 +1,4 @@
--- OWNER DECISION 19.08.2026 -- the monthly document limits (OPEN-DECISIONS #157).
+-- OWNER DECISION 19.08.2026 -- the monthly document limits (OPEN-DECISIONS #166).
 --
 -- This file is a PRICING decision expressed as data. 0154 built the machinery and deliberately
 -- seeded every plan `unlimited`, saying that turning a limit on would be one UPDATE reviewed as
@@ -28,9 +28,9 @@
 --                  limit, and applying one now would be changing a deal retroactively.
 --
 -- WHAT ELSE THE OWNER DECIDED, and where it lives instead of here:
---   * No capability is gated by plan -- tiers differ by volume only (#158). The seeded booleans are
+--   * No capability is gated by plan -- tiers differ by volume only (#167). The seeded booleans are
 --     already all-on, so that decision needs no change and this file makes none.
---   * A downgrade blocks new actions only; nothing retroactive (#160). Already how 0155 behaves.
+--   * A downgrade blocks new actions only; nothing retroactive (#169). Already how 0155 behaves.
 --   * ocr_pages.monthly stays unlimited: it is counted, not enforced (DEBT §55), and setting a
 --     limit on a metric nothing refuses would be a number with no effect.
 

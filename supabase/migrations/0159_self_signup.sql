@@ -22,7 +22,7 @@
 -- deliberately conservative: 5 attempts per address per hour, 3 per email address per hour, and
 -- 200 across the whole platform per day. The global cap is the one that matters most -- it bounds
 -- how many junk organizations a single bad afternoon can create, and it is a number an operator
--- can raise once real traffic exists (OPEN-DECISIONS #162).
+-- can raise once real traffic exists (OPEN-DECISIONS #171).
 --
 -- What this deliberately does not cover: no CAPTCHA. Supabase Auth carries hCaptcha/Turnstile as a
 -- project setting rather than as code, so wiring it is an enablement step and is recorded as one

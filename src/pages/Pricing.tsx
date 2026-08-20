@@ -22,7 +22,7 @@ interface EntitlementRow {
  * first customer to notice would be one who was refused something the page promised.
  *
  * There are NO PRICES on this page, and that is not an omission to fill in later without a
- * decision. Prices are OPEN-DECISIONS #161 and no shekel figure exists anywhere in the schema;
+ * decision. Prices are OPEN-DECISIONS #170 and no shekel figure exists anywhere in the schema;
  * inventing one on a public page would be the most expensive kind of guess.
  */
 export default function Pricing() {

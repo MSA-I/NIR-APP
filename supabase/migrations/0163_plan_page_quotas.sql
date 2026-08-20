@@ -1,4 +1,4 @@
--- OWNER DECISION 19.08.2026 -- the monthly OCR page quotas (OPEN-DECISIONS #168).
+-- OWNER DECISION 19.08.2026 -- the monthly OCR page quotas (OPEN-DECISIONS #177).
 --
 -- The rule, in one line: a plan's page quota is its document quota times the hard per-document
 -- page ceiling. Nothing is invented; the number is derived from two facts that already exist.

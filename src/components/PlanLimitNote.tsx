@@ -14,7 +14,7 @@ import { Note } from './ui';
  *     "no quota has been configured" is about us, and must not be dressed up as a reason to buy.
  *   * No countdown, no scarcity, no urgency the data does not support. The number is the number.
  *   * It never claims which plan to buy, because this build has no prices and no plan comparison
- *     yet (OPEN-DECISIONS #157, #161). Saying "upgrade to Pro" before Pro's limits exist would be
+ *     yet (OPEN-DECISIONS #166, #170). Saying "upgrade to Pro" before Pro's limits exist would be
  *     inventing the offer.
  */
 interface UsageRow {

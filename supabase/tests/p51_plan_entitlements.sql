@@ -58,7 +58,7 @@ select pg_temp.p51_assert(
 
 -- Until 19.08.2026 this asserted that NO plan carried a numeric limit, because the numbers were
 -- an open owner decision and a seeded limit would have been an invented one. The owner decided
--- (#157), so the guard now pins what was decided rather than the absence of a decision: Free
+-- (#166), so the guard now pins what was decided rather than the absence of a decision: Free
 -- below Pro, both stated, and nothing else restrictive.
 select pg_temp.p51_assert(
   (select numeric_limit from plan_entitlements
