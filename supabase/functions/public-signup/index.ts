@@ -131,8 +131,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       error: {
         code: 'signup_failed',
         message: 'ההרשמה נכשלה. יש לנסות שוב, ואם הבעיה חוזרת לפנות לתמיכה.',
-        // The leftovers line is for our logs, not for the visitor's screen.
-        detail: outcome.failure.leftovers.length ? outcome.failure.leftovers.join('; ') : undefined,
+        // Rollback leftovers remain available to the trusted admin-provision caller, but an
+        // anonymous response must never expose internal row identifiers or database errors.
       },
     }, 500);
   }

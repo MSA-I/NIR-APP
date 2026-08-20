@@ -186,3 +186,20 @@ Deno.test("rollback removes the subscription the database trigger created", asyn
     throw new Error("the organization was deleted before the rows referencing it");
   }
 });
+
+Deno.test("public signup never returns rollback leftovers to an anonymous caller", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../public-signup/index.ts", import.meta.url),
+  );
+  const publicFailure = source.match(
+    /code\s*:\s*'signup_failed'[\s\S]*?\},\s*500\);/,
+  );
+  if (!publicFailure) {
+    throw new Error("public-signup no longer exposes a reviewable generic failure contract");
+  }
+  if (/\bdetail\s*:/.test(publicFailure[0])) {
+    throw new Error(
+      "public-signup exposes internal cleanup identifiers and database errors in its response",
+    );
+  }
+});
