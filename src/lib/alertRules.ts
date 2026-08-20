@@ -52,6 +52,9 @@ export interface AlertScanDefinition<T> {
   run: () => Promise<T | null>;
 }
 
+export const PRICE_INCREASE_SCOPE_DETAIL =
+  'לפי המחירון בלבד. מחירי שורות החשבונית בפועל אינם חלק מהסריקה הזאת';
+
 export async function settleAlertScans<T>(scans: readonly AlertScanDefinition<T>[]) {
   const settled = await Promise.allSettled(scans.map((scan) => scan.run()));
   const alerts: T[] = [];

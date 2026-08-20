@@ -7,9 +7,10 @@
 -- policy exists, writes have one door each and the door checks who is knocking). The commands run
 -- under the CALLER'S OWN JWT -- never service_role -- so auth_org()/auth.uid() remain the
 -- boundary of record and a compromised Edge secret cannot write another tenant's dialogue. They
--- are definers because their tables deliberately hold no browser DML grants; none of them reads a
--- scope-enforced table, so none costs a scope_definer_exemptions row (DEBT-REGISTER §7 stays
--- untouched).
+-- are definers because their tables deliberately hold no browser DML grants. The polymorphic
+-- evidence guard is the sole helper that reads scope-enforced business tables; it applies the
+-- canonical auth_scopes() predicate and is pinned in the enforcement ledger below, so none costs a
+-- scope_definer_exemptions row (DEBT-REGISTER §7 stays untouched).
 --
 -- THE PRIVACY RULE (assistant spec §13). A conversation belongs to the person who had it, not to
 -- their organization. Every read policy therefore pins BOTH org_id = auth_org() AND the owning
@@ -77,7 +78,9 @@ create table assistant_conversations (
   created_at timestamptz not null default now(),
   -- `updated_at`, not `last_activity_at`: the house convention every set_updated_at() table
   -- uses, and the column the client already orders its conversation list by.
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint assistant_conversations_id_org_key unique (id, org_id),
+  constraint assistant_conversations_id_org_user_key unique (id, org_id, user_id)
 );
 create index assistant_conversations_owner_idx
   on assistant_conversations (org_id, user_id, updated_at desc) where deleted_at is null;
@@ -100,11 +103,28 @@ create table assistant_runs (
   cost_micros     bigint check (cost_micros is null or cost_micros >= 0),
   latency_ms      integer check (latency_ms is null or latency_ms >= 0),
   complete        boolean not null,
+  -- Snapshot of the exact authorization context that produced the evidence. History is shown or
+  -- reused only when the current server-resolved context still matches it; direct fixture rows
+  -- may omit the whole snapshot, but a partial snapshot is never meaningful.
+  actor_role       text check (actor_role is null or actor_role in ('owner', 'office', 'accountant')),
+  actor_scopes     uuid[],
+  actor_access_mode text check (
+    actor_access_mode is null or actor_access_mode in ('active', 'read_only', 'suspended')),
+  actor_capabilities jsonb check (
+    actor_capabilities is null or jsonb_typeof(actor_capabilities) = 'object'),
   created_at      timestamptz not null default now(),
   -- A run that succeeded has no error to name; a run that did not must say why.
   constraint assistant_runs_error_shape check (
     (status = 'succeeded' and error_code is null)
-    or (status <> 'succeeded' and error_code is not null))
+    or (status <> 'succeeded' and error_code is not null)),
+  constraint assistant_runs_actor_snapshot_shape check (
+    (actor_role is null and actor_scopes is null and actor_access_mode is null
+      and actor_capabilities is null)
+    or
+    (actor_role is not null and actor_scopes is not null and actor_access_mode is not null
+      and actor_capabilities is not null)),
+  constraint assistant_runs_id_org_key unique (id, org_id),
+  constraint assistant_runs_id_org_user_key unique (id, org_id, user_id)
 );
 create index assistant_runs_owner_idx on assistant_runs (org_id, user_id, created_at desc);
 create index assistant_runs_org_period_idx on assistant_runs (org_id, created_at);
@@ -126,7 +146,10 @@ create table assistant_messages (
   created_at      timestamptz not null default clock_timestamp(),
   constraint assistant_messages_author_payload check (
     (author = 'user' and question is not null and blocks is null)
-    or (author = 'assistant' and blocks is not null and question is null))
+    or (author = 'assistant' and blocks is not null and question is null)),
+  constraint assistant_messages_conversation_org_fk
+    foreign key (conversation_id, org_id)
+    references assistant_conversations(id, org_id) on delete cascade
 );
 create index assistant_messages_conversation_idx
   on assistant_messages (conversation_id, created_at);
@@ -143,7 +166,9 @@ create table assistant_tool_calls (
   failures     jsonb not null default '[]'::jsonb check (jsonb_typeof(failures) = 'array'),
   duration_ms  integer check (duration_ms is null or duration_ms >= 0),
   error_code   text,
-  created_at   timestamptz not null default now()
+  created_at   timestamptz not null default now(),
+  constraint assistant_tool_calls_run_org_fk
+    foreign key (run_id, org_id) references assistant_runs(id, org_id) on delete cascade
 );
 create index assistant_tool_calls_run_idx on assistant_tool_calls (run_id);
 create index assistant_tool_calls_org_idx on assistant_tool_calls (org_id, created_at);
@@ -173,6 +198,7 @@ create table assistant_facts (
     'credit_note', 'exception', 'document', 'bank_transaction', 'price_offer', 'organization')),
   entity_id      uuid,
   label          text not null check (length(btrim(label)) between 1 and 200),
+  tool           text not null check (length(btrim(tool)) between 1 and 80),
   value_numeric  numeric,
   value_text     text,
   unit           text not null check (unit in ('ils', 'count', 'percent', 'date', 'text')),
@@ -186,7 +212,9 @@ create table assistant_facts (
   -- would leave the reader guessing which value the claim cited.
   constraint assistant_facts_value_shape check (
     value_numeric is null or value_text is null),
-  constraint assistant_facts_ref_unique unique (run_id, fact_ref)
+  constraint assistant_facts_ref_unique unique (run_id, fact_ref),
+  constraint assistant_facts_run_org_fk
+    foreign key (run_id, org_id) references assistant_runs(id, org_id) on delete cascade
 );
 create index assistant_facts_org_idx on assistant_facts (org_id, created_at);
 
@@ -205,7 +233,9 @@ create table assistant_source_references (
     'public_product_metadata', 'tenant_standard', 'financial_sensitive',
     'bank_restricted', 'personal_contact', 'document_raw', 'provider_forbidden')),
   created_at     timestamptz not null default now(),
-  constraint assistant_source_references_ref_unique unique (run_id, source_ref)
+  constraint assistant_source_references_ref_unique unique (run_id, source_ref),
+  constraint assistant_source_references_run_org_fk
+    foreign key (run_id, org_id) references assistant_runs(id, org_id) on delete cascade
 );
 create index assistant_source_references_org_idx
   on assistant_source_references (org_id, created_at);
@@ -252,7 +282,10 @@ create table assistant_feedback (
   rating     text not null check (rating in ('helpful', 'not_helpful')),
   note       text check (note is null or length(btrim(note)) between 1 and 1000),
   created_at timestamptz not null default now(),
-  constraint assistant_feedback_once_per_run unique (run_id)
+  constraint assistant_feedback_once_per_run unique (run_id),
+  constraint assistant_feedback_run_org_user_fk
+    foreign key (run_id, org_id, user_id)
+    references assistant_runs(id, org_id, user_id) on delete cascade
 );
 create index assistant_feedback_org_idx on assistant_feedback (org_id, created_at);
 
@@ -274,6 +307,126 @@ create trigger zz_organization_write_guard before insert or update or delete on 
   for each row execute function private.organization_row_write_guard();
 create trigger zz_organization_write_guard before insert or update or delete on public.assistant_feedback
   for each row execute function private.organization_row_write_guard();
+
+-- Composite ownership where nullable references cannot use an ON DELETE SET NULL composite FK.
+-- A child may never pair one tenant/user with another tenant's run or conversation, even when a
+-- future trusted writer is added beside assistant_record_run.
+create or replace function private.assistant_reference_owner_guard() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_new jsonb := to_jsonb(new);
+begin
+  if tg_table_name = 'assistant_runs' and (v_new ->> 'conversation_id') is not null then
+    if not exists (
+      select 1 from assistant_conversations conversation
+      where conversation.id = (v_new ->> 'conversation_id')::uuid
+        and conversation.org_id = (v_new ->> 'org_id')::uuid
+        and conversation.user_id = (v_new ->> 'user_id')::uuid
+    ) then
+      raise exception 'assistant_reference_owner_mismatch' using errcode = '23503';
+    end if;
+  elsif tg_table_name = 'assistant_messages' then
+    if not exists (
+      select 1 from assistant_conversations conversation
+      where conversation.id = (v_new ->> 'conversation_id')::uuid
+        and conversation.org_id = (v_new ->> 'org_id')::uuid
+        and (
+          (v_new ->> 'run_id') is null or exists (
+            select 1 from assistant_runs run
+            where run.id = (v_new ->> 'run_id')::uuid
+              and run.org_id = (v_new ->> 'org_id')::uuid
+              and run.user_id = conversation.user_id))
+    ) then
+      raise exception 'assistant_reference_owner_mismatch' using errcode = '23503';
+    end if;
+  elsif tg_table_name = 'assistant_action_proposals' and (v_new ->> 'run_id') is not null then
+    if not exists (
+      select 1 from assistant_runs run
+      where run.id = (v_new ->> 'run_id')::uuid
+        and run.org_id = (v_new ->> 'org_id')::uuid
+        and run.user_id = (v_new ->> 'user_id')::uuid
+    ) then
+      raise exception 'assistant_reference_owner_mismatch' using errcode = '23503';
+    end if;
+  end if;
+  return new;
+end
+$$;
+revoke all on function private.assistant_reference_owner_guard() from public, anon, authenticated;
+
+create trigger zzz_assistant_reference_owner_guard before insert or update on assistant_runs
+  for each row execute function private.assistant_reference_owner_guard();
+create trigger zzz_assistant_reference_owner_guard before insert or update on assistant_messages
+  for each row execute function private.assistant_reference_owner_guard();
+create trigger zz_assistant_reference_owner_guard before insert or update on assistant_action_proposals
+  for each row execute function private.assistant_reference_owner_guard();
+
+-- Facts and sources are polymorphic, so ordinary foreign keys cannot express their target. This
+-- trigger supplies the missing invariant: every non-aggregate subject exists in the same tenant.
+-- `price_offer` is the product's supplier_products row; `credit_note` is credit_requests.
+create or replace function private.assistant_evidence_entity_guard() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_exists boolean := false;
+begin
+  if new.entity is null and new.entity_id is null then return new; end if;
+  case new.entity
+    when 'invoice' then
+      select exists (
+        select 1 from invoices row
+        where row.id = new.entity_id and row.org_id = new.org_id
+          and (row.unit_id is null or row.unit_id = any(auth_scopes()))
+      ) into v_exists;
+    when 'purchase_order' then
+      select exists (
+        select 1 from purchase_orders row
+        where row.id = new.entity_id and row.org_id = new.org_id
+          and (row.unit_id is null or row.unit_id = any(auth_scopes()))
+      ) into v_exists;
+    when 'supplier' then
+      select exists (select 1 from suppliers row where row.id = new.entity_id and row.org_id = new.org_id) into v_exists;
+    when 'product' then
+      select exists (select 1 from products row where row.id = new.entity_id and row.org_id = new.org_id) into v_exists;
+    when 'payment_request' then
+      select exists (select 1 from payment_requests row where row.id = new.entity_id and row.org_id = new.org_id) into v_exists;
+    when 'payment' then
+      select exists (
+        select 1 from payments row
+        where row.id = new.entity_id and row.org_id = new.org_id
+          and (row.unit_id is null or row.unit_id = any(auth_scopes()))
+      ) into v_exists;
+    when 'credit_note' then
+      select exists (select 1 from credit_requests row where row.id = new.entity_id and row.org_id = new.org_id) into v_exists;
+    when 'exception' then
+      select exists (select 1 from exceptions row where row.id = new.entity_id and row.org_id = new.org_id) into v_exists;
+    when 'document' then
+      select exists (
+        select 1 from documents row
+        where row.id = new.entity_id and row.org_id = new.org_id
+          and (row.unit_id is null or row.unit_id = any(auth_scopes()))
+      ) into v_exists;
+    when 'bank_transaction' then
+      select exists (select 1 from bank_transactions row where row.id = new.entity_id and row.org_id = new.org_id) into v_exists;
+    when 'price_offer' then
+      select exists (select 1 from supplier_products row where row.id = new.entity_id and row.org_id = new.org_id) into v_exists;
+    when 'organization' then
+      v_exists := new.entity_id = new.org_id
+        and exists (select 1 from organizations row where row.id = new.org_id);
+    else
+      v_exists := false;
+  end case;
+  if not v_exists then
+    raise exception 'assistant_evidence_entity_invalid' using errcode = '23503';
+  end if;
+  return new;
+end
+$$;
+revoke all on function private.assistant_evidence_entity_guard() from public, anon, authenticated;
+
+create trigger zzz_assistant_evidence_entity_guard before insert or update on assistant_facts
+  for each row execute function private.assistant_evidence_entity_guard();
+create trigger zzz_assistant_evidence_entity_guard before insert or update on assistant_source_references
+  for each row execute function private.assistant_evidence_entity_guard();
 
 -- ===== 2. The proposal state machine, enforced by the database =====
 -- contracts.ts PROPOSAL_TRANSITIONS, verbatim: draft -> awaiting_confirmation | rejected |
@@ -346,12 +499,12 @@ revoke all on table assistant_feedback          from public, anon, authenticated
 
 grant select on table assistant_conversations     to authenticated;
 grant select on table assistant_runs              to authenticated;
-grant select on table assistant_messages          to authenticated;
-grant select on table assistant_tool_calls        to authenticated;
-grant select on table assistant_facts             to authenticated;
-grant select on table assistant_source_references to authenticated;
 grant select on table assistant_action_proposals  to authenticated;
 grant select on table assistant_feedback          to authenticated;
+
+-- Raw transcript/evidence rows never cross PostgREST to a browser. The service-only structured
+-- snapshot below is the sole read path; Edge reauthorizes every fact/source under the current JWT
+-- before either provider context or history UI receives it.
 
 -- Every policy pins BOTH the tenant and the owning user. An organization owner deliberately gets
 -- no read of another employee's rows here -- not by a stricter role check inside the same policy,
@@ -365,36 +518,6 @@ create policy assistant_conversations_select on assistant_conversations
 create policy assistant_runs_select on assistant_runs
   for select to authenticated
   using (org_id = auth_org() and user_id = auth.uid());
-
-create policy assistant_messages_select on assistant_messages
-  for select to authenticated
-  using (org_id = auth_org() and exists (
-    select 1 from assistant_conversations conversation
-    where conversation.id = assistant_messages.conversation_id
-      and conversation.org_id = auth_org()
-      and conversation.user_id = auth.uid()
-      and conversation.deleted_at is null));
-
-create policy assistant_tool_calls_select on assistant_tool_calls
-  for select to authenticated
-  using (org_id = auth_org() and exists (
-    select 1 from assistant_runs run
-    where run.id = assistant_tool_calls.run_id
-      and run.org_id = auth_org() and run.user_id = auth.uid()));
-
-create policy assistant_facts_select on assistant_facts
-  for select to authenticated
-  using (org_id = auth_org() and exists (
-    select 1 from assistant_runs run
-    where run.id = assistant_facts.run_id
-      and run.org_id = auth_org() and run.user_id = auth.uid()));
-
-create policy assistant_source_references_select on assistant_source_references
-  for select to authenticated
-  using (org_id = auth_org() and exists (
-    select 1 from assistant_runs run
-    where run.id = assistant_source_references.run_id
-      and run.org_id = auth_org() and run.user_id = auth.uid()));
 
 create policy assistant_action_proposals_select on assistant_action_proposals
   for select to authenticated
@@ -510,18 +633,26 @@ create or replace function public.assistant_record_run(
   p_tool_calls      jsonb default '[]'::jsonb,
   p_facts           jsonb default '[]'::jsonb,
   p_sources         jsonb default '[]'::jsonb,
-  p_proposal        jsonb default null
+  p_proposal        jsonb default null,
+  p_lease_id        uuid default null,
+  p_lease_token     uuid default null,
+  p_actor_capabilities jsonb default null
 ) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_org             uuid := auth_org();
   v_user            uuid := auth.uid();
+  v_actor_role      text := auth_role()::text;
+  v_actor_scopes    uuid[] := auth_scopes();
+  v_access_mode     text;
+  v_capabilities    jsonb;
   v_conversation_id uuid;
   v_proposal_id     uuid;
   v_item            jsonb;
   v_tool_count      integer := 0;
   v_existing        assistant_runs;
   v_counter         private.usage_counters;
+  v_lease           private.organization_external_egress_leases;
 begin
   if v_org is null or v_user is null or auth_role() is null then
     raise exception 'assistant_unauthenticated' using errcode = '42501';
@@ -538,8 +669,43 @@ begin
      or jsonb_typeof(coalesce(p_sources, '[]'::jsonb)) <> 'array' then
     raise exception 'assistant_invalid_request' using errcode = '22023';
   end if;
+  if jsonb_typeof(p_actor_capabilities) <> 'object'
+     or jsonb_typeof(p_actor_capabilities -> 'ui') <> 'boolean'
+     or jsonb_typeof(p_actor_capabilities -> 'history') <> 'boolean'
+     or jsonb_typeof(p_actor_capabilities -> 'drafts') <> 'boolean'
+     or jsonb_typeof(p_actor_capabilities -> 'confirmedActions') <> 'boolean'
+     or coalesce((p_actor_capabilities ->> 'history')::boolean, false)
+        <> coalesce(p_store_history, false) then
+    raise exception 'assistant_invalid_request' using errcode = '22023';
+  end if;
   if private.organization_access_mode(v_org) <> 'active' then
     raise exception 'assistant_read_only_organization' using errcode = '42501';
+  end if;
+  v_access_mode := private.organization_access_mode(v_org);
+  -- The Edge resolves flags and policy under this same caller JWT immediately before provider
+  -- egress. The opaque settled lease below proves this call came back through that boundary; the
+  -- browser never receives its token. Persist that exact server-resolved snapshot without making
+  -- the database resolver part of another routine (0059/0076 and p4_flags_identity forbid it).
+  v_capabilities := p_actor_capabilities;
+
+  -- Only the Edge boundary receives this opaque token from the service-role egress reservation.
+  -- The lease must already be settled with immutable evidence for this exact run and tenant.
+  select * into v_lease
+  from private.organization_external_egress_leases lease
+  where lease.lease_id = p_lease_id and lease.lease_token = p_lease_token
+    and lease.org_id = v_org and lease.kind = 'assistant'
+    and lease.correlation_id = p_run_id and lease.status = 'settled'
+  for share;
+  if not found
+     or (p_status = 'succeeded' and v_lease.outcome <> 'delivered')
+     or (p_status <> 'succeeded' and v_lease.outcome <> 'failed')
+     or not exists (
+       select 1 from private.organization_external_egress_evidence evidence
+       where evidence.lease_id = v_lease.lease_id and evidence.org_id = v_org
+         and evidence.kind = 'assistant' and evidence.correlation_id = p_run_id
+         and evidence.outcome = v_lease.outcome
+     ) then
+    raise exception 'assistant_egress_lease_invalid' using errcode = '42501';
   end if;
 
   -- Idempotency: a retried Edge call finds the run it already wrote. Someone else's run id is
@@ -585,7 +751,7 @@ begin
   if coalesce(p_store_history, false) then
     if p_conversation_id is null then
       insert into assistant_conversations (org_id, user_id, title)
-      values (v_org, v_user, left(btrim(p_question), 120))
+      values (v_org, v_user, 'שיחה עם העוזר')
       returning id into v_conversation_id;
     else
       select id into v_conversation_id from assistant_conversations
@@ -600,11 +766,13 @@ begin
 
   insert into assistant_runs (
     id, org_id, user_id, conversation_id, status, error_code, model, prompt_version,
-    input_tokens, output_tokens, cost_micros, latency_ms, complete
+    input_tokens, output_tokens, cost_micros, latency_ms, complete,
+    actor_role, actor_scopes, actor_access_mode, actor_capabilities
   ) values (
     p_run_id, v_org, v_user, v_conversation_id, p_status,
     nullif(btrim(coalesce(p_error_code, '')), ''), p_model, p_prompt_version,
-    p_input_tokens, p_output_tokens, p_cost_micros, p_latency_ms, p_complete
+    p_input_tokens, p_output_tokens, p_cost_micros, p_latency_ms, p_complete,
+    v_actor_role, v_actor_scopes, v_access_mode, v_capabilities
   );
 
   if v_conversation_id is not null then
@@ -643,7 +811,7 @@ begin
     for v_item in select value from jsonb_array_elements(coalesce(p_facts, '[]'::jsonb))
     loop
       insert into assistant_facts (
-        org_id, run_id, fact_ref, kind, entity, entity_id, label,
+        org_id, run_id, fact_ref, kind, entity, entity_id, label, tool,
         value_numeric, value_text, unit, classification, as_of
       ) values (
         v_org, p_run_id,
@@ -652,6 +820,7 @@ begin
         v_item #>> '{subject,entity}',
         (v_item #>> '{subject,id}')::uuid,
         v_item ->> 'label',
+        v_item ->> 'tool',
         case when jsonb_typeof(v_item -> 'value') = 'number'
              then (v_item ->> 'value')::numeric end,
         case when jsonb_typeof(v_item -> 'value') = 'string'
@@ -719,21 +888,22 @@ $$;
 -- Grants and revokes stay on ONE line each throughout this migration: the CI browser-job
 -- classifier sniffs changed migrations line by line for grants to authenticated/anon, and a
 -- statement split across lines would let a policy-bearing migration skip the browser gate.
-revoke all on function public.assistant_record_run(uuid, uuid, boolean, text, jsonb, text, text, text, text, integer, integer, bigint, integer, boolean, jsonb, jsonb, jsonb, jsonb) from public, anon;
-grant execute on function public.assistant_record_run(uuid, uuid, boolean, text, jsonb, text, text, text, text, integer, integer, bigint, integer, boolean, jsonb, jsonb, jsonb, jsonb) to authenticated;
+revoke all on function public.assistant_record_run(uuid, uuid, boolean, text, jsonb, text, text, text, text, integer, integer, bigint, integer, boolean, jsonb, jsonb, jsonb, jsonb, uuid, uuid, jsonb) from public, anon;
+grant execute on function public.assistant_record_run(uuid, uuid, boolean, text, jsonb, text, text, text, text, integer, integer, bigint, integer, boolean, jsonb, jsonb, jsonb, jsonb, uuid, uuid, jsonb) to authenticated;
 
 comment on function public.assistant_record_run(
   uuid, uuid, boolean, text, jsonb, text, text, text, text, integer, integer, bigint, integer,
-  boolean, jsonb, jsonb, jsonb, jsonb) is
+  boolean, jsonb, jsonb, jsonb, jsonb, uuid, uuid, jsonb) is
   'One completed assistant run lands in one transaction (0164): dialogue, evidence, tool shapes, '
   'optional proposal, usage event and audit row -- or nothing. Caller-supplied run id makes a '
-  'retried Edge call idempotent. Callable only with the user''s own JWT; auth_org()/auth.uid() '
-  'are the boundary of record.';
+  'retried Edge call idempotent. The caller''s JWT supplies actor/org and an opaque settled '
+  'assistant egress lease token proves the call came through the Edge/provider boundary.';
 
 -- The privacy delete. The person who had the conversation removes its text NOW -- messages,
--- facts and source references are hard-deleted, tool-call rows go with them (their arguments
--- echo what was asked), and the conversation row itself is tombstoned so the client stops
--- listing it. The run rows stay: status, token and cost figures are billing truth, carry no
+-- facts and source references are hard-deleted, tool-call rows and feedback go with them, and
+-- unconfirmed proposals disappear because they are dialogue-derived. The conversation row itself
+-- is tombstoned so the client stops listing it. Confirmed/failed/executed proposals keep their
+-- business-decision trail. The run rows stay: status, token and cost figures are billing truth, carry no
 -- dialogue, and deleting them would let a tenant erase what their usage cost -- and would reset
 -- the hourly rate window. No typed reason is demanded: OPEN-DECISIONS #156 reserves a
 -- user-written reason for decisions someone may later have to defend (cancellations,
@@ -750,6 +920,8 @@ declare
   v_facts integer;
   v_sources integer;
   v_tool_calls integer;
+  v_feedback integer;
+  v_unconfirmed_proposals integer;
 begin
   if v_org is null or v_user is null then
     raise exception 'assistant_unauthenticated' using errcode = '42501';
@@ -783,6 +955,23 @@ begin
     where run.id = tool_call.run_id and run.conversation_id = p_conversation_id);
   get diagnostics v_tool_calls = row_count;
 
+  delete from assistant_feedback feedback
+  where feedback.org_id = v_org and exists (
+    select 1 from assistant_runs run
+    where run.id = feedback.run_id and run.conversation_id = p_conversation_id);
+  get diagnostics v_feedback = row_count;
+
+  -- A draft that no human confirmed is dialogue-derived and disappears with that dialogue.
+  -- Confirmed/failed/executed proposals are business-decision records: their audit trail and the
+  -- proposal row survive until their own retention rule (executed survives indefinitely).
+  delete from assistant_action_proposals proposal
+  where proposal.org_id = v_org
+    and proposal.state in ('draft', 'awaiting_confirmation', 'rejected', 'expired')
+    and exists (
+      select 1 from assistant_runs run
+      where run.id = proposal.run_id and run.conversation_id = p_conversation_id);
+  get diagnostics v_unconfirmed_proposals = row_count;
+
   delete from assistant_messages
   where org_id = v_org and conversation_id = p_conversation_id;
   get diagnostics v_messages = row_count;
@@ -797,12 +986,16 @@ begin
     p_conversation_id,
     jsonb_build_object(
       'messages_deleted', v_messages, 'facts_deleted', v_facts,
-      'sources_deleted', v_sources, 'tool_calls_deleted', v_tool_calls),
+      'sources_deleted', v_sources, 'tool_calls_deleted', v_tool_calls,
+      'feedback_deleted', v_feedback,
+      'unconfirmed_proposals_deleted', v_unconfirmed_proposals),
     'conversation deleted by its author');
 
   return jsonb_build_object(
     'conversation_id', p_conversation_id, 'idempotent', false,
-    'messages_deleted', v_messages);
+    'messages_deleted', v_messages,
+    'feedback_deleted', v_feedback,
+    'unconfirmed_proposals_deleted', v_unconfirmed_proposals);
 end
 $$;
 revoke all on function public.assistant_delete_conversation(uuid) from public, anon;
@@ -907,30 +1100,46 @@ grant execute on function public.assistant_reject_proposal(uuid, text) to authen
 -- human's own JWT, it records the outcome here. execution_audit_id points at the audit row the
 -- PRODUCT command wrote -- the proposal remembers which business write it became.
 create or replace function public.assistant_record_proposal_outcome(
-  p_proposal_id uuid, p_succeeded boolean, p_execution_audit_id uuid, p_error_code text
+  p_org_id uuid, p_actor_user_id uuid, p_proposal_id uuid,
+  p_succeeded boolean, p_execution_audit_id uuid, p_error_code text
 ) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare
-  v_org      uuid := auth_org();
-  v_user     uuid := auth.uid();
   v_proposal assistant_action_proposals;
 begin
-  if v_org is null or v_user is null then
-    raise exception 'assistant_unauthenticated' using errcode = '42501';
+  if auth.role() <> 'service_role' then
+    raise exception 'service_role_required' using errcode = '42501';
   end if;
-  if p_succeeded is null or (p_succeeded and p_execution_audit_id is null)
-     or (not p_succeeded and nullif(btrim(coalesce(p_error_code, '')), '') is null) then
+  if p_org_id is null or p_actor_user_id is null or p_succeeded is null
+     or (p_succeeded and (
+       p_execution_audit_id is null
+       or nullif(btrim(coalesce(p_error_code, '')), '') is not null))
+     or (not p_succeeded and (
+       p_execution_audit_id is not null
+       or nullif(btrim(coalesce(p_error_code, '')), '') is null)) then
     raise exception 'assistant_invalid_request' using errcode = '22023';
   end if;
 
   select * into v_proposal from assistant_action_proposals
-  where id = p_proposal_id and org_id = v_org and user_id = v_user
+  where id = p_proposal_id and org_id = p_org_id and user_id = p_actor_user_id
+    and confirmed_by = p_actor_user_id
   for update;
   if not found then
     raise exception 'assistant_proposal_unavailable' using errcode = '42501';
   end if;
   if v_proposal.state <> 'confirmed' then
     raise exception 'assistant_proposal_state' using errcode = 'P0001';
+  end if;
+
+  if p_succeeded and not exists (
+    select 1 from audit_logs audit
+    where audit.id = p_execution_audit_id
+      and audit.org_id = p_org_id and audit.user_id = p_actor_user_id
+      and audit.created_at >= v_proposal.confirmed_at
+      and audit.entity_type <> 'assistant_action_proposals'
+      and audit.action not like 'assistant_%'
+  ) then
+    raise exception 'assistant_execution_audit_invalid' using errcode = '42501';
   end if;
 
   if p_succeeded then
@@ -945,7 +1154,7 @@ begin
 
   insert into audit_logs (org_id, user_id, action, entity_type, entity_id, new_values, reason)
   values (
-    v_org, v_user,
+    p_org_id, p_actor_user_id,
     case when p_succeeded then 'assistant_proposal_executed'
          else 'assistant_proposal_failed' end,
     'assistant_action_proposals', p_proposal_id,
@@ -960,8 +1169,8 @@ begin
     'state', case when p_succeeded then 'executed' else 'failed' end);
 end
 $$;
-revoke all on function public.assistant_record_proposal_outcome(uuid, boolean, uuid, text) from public, anon;
-grant execute on function public.assistant_record_proposal_outcome(uuid, boolean, uuid, text) to authenticated;
+revoke all on function public.assistant_record_proposal_outcome(uuid, uuid, uuid, boolean, uuid, text) from public, anon, authenticated, service_role;
+grant execute on function public.assistant_record_proposal_outcome(uuid, uuid, uuid, boolean, uuid, text) to service_role;
 
 -- Feedback: one rating per run, by the person whose run it was, in the exact shape the client
 -- already calls -- rpc('assistant_record_feedback', { p_run_id, p_helpful }). The rating may be
@@ -1047,49 +1256,94 @@ comment on function public.assistant_org_health() is
   'current billing period. No text column exists in its select list -- the privacy rule that an '
   'owner never reads an employee''s dialogue is enforced by shape, not by trust.';
 
--- Bounded conversation context for the Edge boundary. The conversation id arrives from the
--- browser, so the definer body is the only thing standing between one employee and another's
--- dialogue: ownership is checked against auth_org()/auth.uid(), never against the argument, and
--- a foreign or unknown id RAISES rather than returning empty -- an empty result would let the
--- Edge silently build context on nothing while quietly confirming the id exists. Unknown and
--- foreign are the same error, so the raise is not an oracle either.
-create or replace function public.assistant_conversation_context(
-  p_conversation_id uuid, p_limit integer default 12
-) returns table (author text, content text)
+-- Raw history is an internal service snapshot, never a browser RPC. It preserves structured
+-- answers plus their exact fact/source records and authorization snapshot; the Edge then parses
+-- and reauthorizes each run under the caller's CURRENT JWT. Returning blocks::text here would
+-- silently turn old authorization into new provider context.
+create or replace function public.service_assistant_conversation_snapshot(
+  p_org_id uuid, p_user_id uuid, p_conversation_id uuid, p_limit integer default 12
+) returns jsonb
 language plpgsql stable security definer set search_path = public, pg_temp as $$
 declare
-  v_org  uuid := auth_org();
-  v_user uuid := auth.uid();
+  v_messages jsonb;
 begin
-  if v_org is null or v_user is null then
-    raise exception 'assistant_unauthenticated' using errcode = '42501';
+  if auth.role() <> 'service_role' then
+    raise exception 'service_role_required' using errcode = '42501';
+  end if;
+  if p_org_id is null or p_user_id is null or p_conversation_id is null then
+    raise exception 'assistant_history_unavailable' using errcode = '42501';
   end if;
   if not exists (
     select 1 from assistant_conversations conversation
     where conversation.id = p_conversation_id
-      and conversation.org_id = v_org and conversation.user_id = v_user
+      and conversation.org_id = p_org_id and conversation.user_id = p_user_id
       and conversation.deleted_at is null
   ) then
     raise exception 'assistant_history_unavailable' using errcode = '42501';
   end if;
-  -- The newest N messages, returned oldest-first: that is the shape a prompt context wants.
-  return query
-  select recent.message_author, recent.message_content
+
+  select coalesce(jsonb_agg(recent.payload order by recent.created_at, recent.message_id), '[]'::jsonb)
+    into v_messages
   from (
-    select message.author as message_author,
-           coalesce(message.question, message.blocks::text) as message_content,
-           message.created_at as message_created_at,
-           message.id as message_id
+    select message.id as message_id, message.created_at,
+      jsonb_build_object(
+        'message_id', message.id,
+        'run_id', message.run_id,
+        'author', message.author,
+        'question', message.question,
+        'blocks', message.blocks,
+        'created_at', message.created_at,
+        'actor', case when run.id is null then null else jsonb_build_object(
+          'userId', run.user_id,
+          'orgId', run.org_id,
+          'role', run.actor_role,
+          'scopes', run.actor_scopes,
+          'canWrite', run.actor_access_mode = 'active',
+          'capabilities', run.actor_capabilities) end,
+        'facts', coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'id', fact.fact_ref,
+            'kind', fact.kind,
+            'subject', case when fact.entity is null then null else
+              jsonb_build_object('entity', fact.entity, 'id', fact.entity_id) end,
+            'label', fact.label,
+            'value', coalesce(to_jsonb(fact.value_numeric), to_jsonb(fact.value_text), 'null'::jsonb),
+            'unit', fact.unit,
+            'tool', fact.tool,
+            'as_of', fact.as_of,
+            'classification', fact.classification)
+            order by fact.created_at, fact.id)
+          from assistant_facts fact
+          where fact.run_id = message.run_id and fact.org_id = p_org_id
+        ), '[]'::jsonb),
+        'sources', coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'id', source.source_ref,
+            'entity', source.entity,
+            'entity_id', source.entity_id,
+            'label', source.label,
+            'route', source.route,
+            'classification', source.classification)
+            order by source.created_at, source.id)
+          from assistant_source_references source
+          where source.run_id = message.run_id and source.org_id = p_org_id
+        ), '[]'::jsonb)
+      ) as payload
     from assistant_messages message
-    where message.conversation_id = p_conversation_id and message.org_id = v_org
+    left join assistant_runs run
+      on run.id = message.run_id and run.org_id = p_org_id and run.user_id = p_user_id
+    where message.conversation_id = p_conversation_id and message.org_id = p_org_id
     order by message.created_at desc, message.id desc
     limit least(greatest(coalesce(p_limit, 12), 1), 50)
-  ) recent
-  order by recent.message_created_at asc, recent.message_id asc;
+  ) recent;
+
+  return jsonb_build_object(
+    'conversation_id', p_conversation_id,
+    'messages', v_messages);
 end
 $$;
-revoke all on function public.assistant_conversation_context(uuid, integer) from public, anon;
-grant execute on function public.assistant_conversation_context(uuid, integer) to authenticated;
+revoke all on function public.service_assistant_conversation_snapshot(uuid, uuid, uuid, integer) from public, anon, authenticated, service_role;
+grant execute on function public.service_assistant_conversation_snapshot(uuid, uuid, uuid, integer) to service_role;
 
 -- Run totals for the Edge's environment caps. The load-bearing part is what is NULL: user/org
 -- day counts and the period count are measured by construction (every recorded run passes
@@ -1332,7 +1586,7 @@ from subscription_plans plan;
 --                                                                                                             billing/activity truth after the run row goes
 --   assistant_tool_calls          90 days (with run)       hard (cascade + user delete) cron, daily           shape only; never stores tool result rows
 --   assistant_facts / sources     90 days (with run)       hard (cascade + user delete) cron, daily           --
---   assistant_action_proposals    90 days unless executed  hard                         cron, daily           EXECUTED proposals are never purged: each one
+--   assistant_action_proposals    30 days unless executed  hard                         cron, daily           EXECUTED proposals are never purged: each one
 --                                                                                                             explains a real business write and keeps its
 --                                                                                                             execution_audit_id pointer
 --   assistant_feedback            90 days (with run)       hard (cascade)               cron, daily           --
@@ -1350,6 +1604,8 @@ returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_cutoff timestamptz;
+  v_proposal_retention_days constant integer := 30;
+  v_proposal_cutoff timestamptz;
   v_expired integer;
   v_proposals integer;
   v_runs integer;
@@ -1360,6 +1616,7 @@ begin
     raise exception 'assistant_retention_window_invalid' using errcode = '22023';
   end if;
   v_cutoff := now() - make_interval(days => p_retention_days);
+  v_proposal_cutoff := now() - make_interval(days => v_proposal_retention_days);
 
   -- Proposals that outlived their confirmation window flip to expired first, through the same
   -- transition the state machine allows, so the deletes below never remove a row that still
@@ -1373,7 +1630,7 @@ begin
 
   delete from assistant_action_proposals proposal
   where proposal.state <> 'executed'
-    and proposal.created_at < v_cutoff
+    and proposal.created_at < v_proposal_cutoff
     and private.organization_access_mode(proposal.org_id) = 'active';
   get diagnostics v_proposals = row_count;
 
@@ -1399,6 +1656,7 @@ begin
 
   return jsonb_build_object(
     'retention_days', p_retention_days,
+    'proposal_retention_days', v_proposal_retention_days,
     'proposals_expired', v_expired,
     'proposals_deleted', v_proposals,
     'runs_deleted', v_runs,
@@ -1409,7 +1667,8 @@ $$;
 revoke all on function private.purge_assistant_history(integer) from public, anon, authenticated, service_role;
 
 comment on function private.purge_assistant_history(integer) is
-  'Assistant retention (0164, spec §15): dialogue older than the window is hard-deleted daily. '
+  'Assistant retention (0164, spec §15): dialogue older than 90 days and unexecuted proposals '
+  'older than 30 days are hard-deleted daily. '
   'Never touches audit_logs, never touches an executed proposal, never touches any financial '
   'record. Skips organizations that are not writable; catches up when they return.';
 
@@ -1491,6 +1750,27 @@ where registry.table_name in (
   'assistant_facts', 'assistant_source_references', 'assistant_action_proposals',
   'assistant_feedback', 'org_assistant_policies');
 
+-- A5: this guard is enforced, not exempt. The four business tables in its body that carry a
+-- canonical unit_id are filtered by the caller's auth_scopes(); org-global and derived entities
+-- remain tenant-pinned through org_id. Compute the CR-stripped body hash from pg_proc so Windows
+-- line endings cannot create a false stale-registration failure.
+insert into private.scope_definer_enforcements (
+  function_signature, body_hash, enforcement_kind, scope_proof
+)
+select reviewed.function_signature, md5(replace(proc.prosrc, e'\r', '')),
+       'filtered_read', reviewed.scope_proof
+from (values (
+  'private.assistant_evidence_entity_guard()',
+  '0164 validates every polymorphic evidence id in the run tenant and applies the canonical '
+  'null-or-auth_scopes unit predicate to purchase_orders, invoices, payments and documents.'
+)) as reviewed(function_signature, scope_proof)
+join pg_catalog.pg_proc proc
+  on proc.oid = pg_catalog.to_regprocedure(reviewed.function_signature)
+on conflict (function_signature) do update
+  set body_hash = excluded.body_hash,
+      enforcement_kind = excluded.enforcement_kind,
+      scope_proof = excluded.scope_proof;
+
 -- ===== 10. Structural re-assertion =====
 do $assert_0164$
 declare
@@ -1515,7 +1795,7 @@ declare
   v_count integer;
   v_result jsonb;
 begin
-  -- RLS is on everywhere, and the browser holds SELECT on the dialogue tables and nothing else.
+  -- RLS is on everywhere. Raw transcript/evidence tables have no browser SELECT at all.
   select count(*) into v_count
   from pg_catalog.pg_class relation
   join pg_catalog.pg_namespace space on space.oid = relation.relnamespace
@@ -1540,6 +1820,16 @@ begin
     and privilege_type <> 'SELECT';
   if v_count > 0 then
     raise exception '0164: % browser DML grant(s) on an assistant table -- the commands are the only door', v_count;
+  end if;
+  select count(*) into v_count
+  from information_schema.role_table_grants
+  where table_schema = 'public'
+    and table_name in (
+      'assistant_messages', 'assistant_tool_calls',
+      'assistant_facts', 'assistant_source_references')
+    and grantee = 'authenticated' and privilege_type = 'SELECT';
+  if v_count > 0 then
+    raise exception '0164: % raw transcript/evidence SELECT grant(s) reach authenticated', v_count;
   end if;
 
   -- The policy table is closed to the browser entirely, and service_role lost its default CRUD:
@@ -1572,6 +1862,13 @@ begin
       and trg.tgname = 'zzz_assistant_proposal_guard' and not trg.tgisinternal
   ) then
     raise exception '0164: the proposal state machine is not enforced by the database';
+  end if;
+  select count(*) into v_count from pg_catalog.pg_trigger trg
+  join pg_catalog.pg_class relation on relation.oid = trg.tgrelid
+  where relation.relname in ('assistant_facts', 'assistant_source_references')
+    and trg.tgname = 'zzz_assistant_evidence_entity_guard' and not trg.tgisinternal;
+  if v_count <> 2 then
+    raise exception '0164: expected 2 polymorphic evidence guards, found %', v_count;
   end if;
 
   -- Exactly three flags, all born off, none killed -- and NOT a fourth for confirmed actions.
@@ -1625,20 +1922,42 @@ begin
   if not exists (
     select 1 from pg_catalog.pg_proc
     where oid = pg_catalog.to_regprocedure(
-      'public.assistant_record_run(uuid,uuid,boolean,text,jsonb,text,text,text,text,integer,integer,bigint,integer,boolean,jsonb,jsonb,jsonb,jsonb)')
+      'public.assistant_record_run(uuid,uuid,boolean,text,jsonb,text,text,text,text,integer,integer,bigint,integer,boolean,jsonb,jsonb,jsonb,jsonb,uuid,uuid,jsonb)')
       and prosrc like '%usage_counter_locked%'
       and prosrc like '%assert_usage_within_limit%'
       and prosrc like '%record_usage_event%'
       and prosrc like '%assistant_assert_run_rate_limit%'
+      and prosrc like '%organization_external_egress_evidence%'
+      and prosrc like '%assistant_egress_lease_invalid%'
   ) then
     raise exception '0164: assistant_record_run does not lock, assert and count the quota at write time';
   end if;
 
-  -- The Edge's context and totals reads exist, and the context read is definer-guarded (the
-  -- conversation id it receives comes from the browser).
-  if pg_catalog.to_regprocedure('public.assistant_conversation_context(uuid,integer)') is null
+  -- The Edge's context read is service-only and structured; the browser never receives raw rows.
+  if pg_catalog.to_regprocedure(
+       'public.service_assistant_conversation_snapshot(uuid,uuid,uuid,integer)') is null
      or pg_catalog.to_regprocedure('public.assistant_run_totals()') is null then
     raise exception '0164: the Edge context/totals reads are missing';
+  end if;
+  if has_function_privilege(
+       'authenticated',
+       'public.service_assistant_conversation_snapshot(uuid,uuid,uuid,integer)',
+       'execute')
+     or not has_function_privilege(
+       'service_role',
+       'public.service_assistant_conversation_snapshot(uuid,uuid,uuid,integer)',
+       'execute') then
+    raise exception '0164: the structured history snapshot is not service-role-only';
+  end if;
+  if has_function_privilege(
+       'authenticated',
+       'public.assistant_record_proposal_outcome(uuid,uuid,uuid,boolean,uuid,text)',
+       'execute')
+     or not has_function_privilege(
+       'service_role',
+       'public.assistant_record_proposal_outcome(uuid,uuid,uuid,boolean,uuid,text)',
+       'execute') then
+    raise exception '0164: proposal outcome recording is not service-role-only';
   end if;
   if not exists (
     select 1 from pg_catalog.pg_proc
@@ -1664,7 +1983,9 @@ begin
   end if;
 
   v_result := private.purge_assistant_history();
-  if v_result is null or (v_result ->> 'retention_days')::integer <> 90 then
+  if v_result is null
+     or (v_result ->> 'retention_days')::integer <> 90
+     or (v_result ->> 'proposal_retention_days')::integer <> 30 then
     raise exception '0164 self-check: the purge returned %', v_result;
   end if;
 end

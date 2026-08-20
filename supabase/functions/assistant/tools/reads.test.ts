@@ -13,12 +13,13 @@ import {
 interface RecordedQuery {
   table: string;
   columns: string;
+  selectOptions?: { count?: "exact"; head?: boolean };
   filters: { method: string; args: unknown[] }[];
   orders: { column: string; options?: Record<string, unknown> }[];
   limit: number | null;
 }
 
-function fakeClient(rows: unknown[]): {
+function fakeClient(rows: unknown[], exactCount: number | null = null): {
   client: MinimalReadClient;
   queries: RecordedQuery[];
 } {
@@ -26,10 +27,14 @@ function fakeClient(rows: unknown[]): {
   const client: MinimalReadClient = {
     from(table: string) {
       return {
-        select(columns: string) {
+        select(
+          columns: string,
+          options?: { count?: "exact"; head?: boolean },
+        ) {
           const query: RecordedQuery = {
             table,
             columns,
+            selectOptions: options,
             filters: [],
             orders: [],
             limit: null,
@@ -57,7 +62,7 @@ function fakeClient(rows: unknown[]): {
               return builder;
             },
             then(onFulfilled, onRejected) {
-              return Promise.resolve({ data: rows, error: null }).then(
+              return Promise.resolve({ data: rows, count: exactCount, error: null }).then(
                 onFulfilled,
                 onRejected,
               );
@@ -147,6 +152,19 @@ Deno.test("sent orders filter on status='sent' and order oldest-first determinis
     "id",
   ]);
   assert.equal(query.limit, 6);
+});
+
+Deno.test("sent-order count uses PostgREST exact head count instead of a one-row list", async () => {
+  const { client, queries } = fakeClient([{ id: "only-projected-row" }], 4);
+  const reads = createSupabaseToolReads(client);
+  const result = await reads.countSentOrders();
+  assert.deepEqual(result, { count: 4, error: null });
+  assert.equal(queries.length, 1);
+  assert.equal(queries[0].table, "purchase_orders");
+  assert.equal(queries[0].columns, "id");
+  assert.deepEqual(queries[0].selectOptions, { count: "exact", head: true });
+  assert.deepEqual(queries[0].filters, [{ method: "eq", args: ["status", "sent"] }]);
+  assert.equal(queries[0].limit, null);
 });
 
 Deno.test("supplier metrics order by supplier id -- the port never ranks", async () => {

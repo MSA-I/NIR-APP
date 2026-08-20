@@ -73,7 +73,7 @@ export const getOpenCredits: AssistantTool = {
       classification: "financial_sensitive",
     }));
     sources.push(ctx.evidence.source({
-      entity: "credit_note",
+      entity: "organization",
       entity_id: ctx.actor.orgId,
       label: "מסך הזיכויים",
       route: "/credits",

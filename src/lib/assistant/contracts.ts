@@ -295,7 +295,7 @@ export const ORG_TIME_ZONE = 'Asia/Jerusalem';
  * `startOfCalendarWeek` from src/lib/format.ts, which starts on Sunday. Server-side there is no
  * week helper at all. Offering both semantics here would let one question return two numbers, both
  * defensible, with nothing on screen to say which was used. Until the owner picks one
- * (OPEN-DECISIONS #169), the assistant answers only in windows it can name out loud.
+ * (OPEN-DECISIONS #178), the assistant answers only in windows it can name out loud.
  */
 export const TIME_WINDOWS = ['last_7_days', 'last_30_days', 'last_90_days'] as const;
 export type TimeWindow = (typeof TIME_WINDOWS)[number];
@@ -334,6 +334,16 @@ export const TextBlockSchema = z.object({
 export const ClaimBlockSchema = z.object({
   type: z.literal('claim'),
   text: z.string().min(1).max(600),
+  /** The exact server-issued semantic this sentence claims. */
+  claim_kind: z.enum(FACT_KINDS),
+  /** Must match the supporting Fact subject exactly; null is reserved for aggregates. */
+  subject: z
+    .object({
+      entity: z.enum(EVIDENCE_ENTITIES),
+      id: z.string().min(1).max(200),
+    })
+    .strict()
+    .nullable(),
   /** Every claim rests on at least one fact issued in this run. */
   fact_ids: z.array(z.string().min(1)).min(1).max(12),
   /** Optional: where a human goes to check it. */
@@ -423,7 +433,7 @@ export function canTransition(from: ProposalState, to: ProposalState): boolean {
  * why `0164` deliberately refuses to default it: a draft is composed from figures read at one
  * moment, and the longer it sits the less those figures describe. Sixty minutes is short enough
  * that the numbers a person confirms are the numbers they were shown. Recorded as
- * OPEN-DECISIONS #173 so an owner can lengthen it on purpose rather than by drift.
+ * OPEN-DECISIONS #182 so an owner can lengthen it on purpose rather than by drift.
  */
 export const PROPOSAL_TTL_MINUTES = 60;
 

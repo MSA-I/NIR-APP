@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { settleAlertScans } from './alertRules';
+import { PRICE_INCREASE_SCOPE_DETAIL, settleAlertScans } from './alertRules';
 import { addCalendarDays, todayISO } from './format';
 
 /**
@@ -76,8 +76,8 @@ async function scanDuplicateInvoices(): Promise<Alert | null> {
   };
 }
 
-/** Catalogue price rises. Note the scope limit in `detail`: there is no invoice_items table,
- *  so this sees the price list, never what a supplier actually billed. */
+/** Catalogue price rises. This scan intentionally reads the price list only; invoice line prices
+ *  exist, but belong to the invoice matching flow and are outside this scanner's scope. */
 async function scanPriceIncreases(): Promise<Alert | null> {
   const raised = await rpcCount(supabase.rpc('p2_recent_price_increase_count', {
     p_since: daysAgo(PRICE_INCREASE_WINDOW_DAYS),
@@ -88,7 +88,7 @@ async function scanPriceIncreases(): Promise<Alert | null> {
     code: 'price_increase',
     severity: 'warning',
     title: `${raised} מחירים עלו ב-${PRICE_INCREASE_WINDOW_DAYS} הימים האחרונים`,
-    detail: 'לפי המחירון. מה שנגבה בפועל בחשבונית אינו נמדד — לחשבונית אין שורות פריטים',
+    detail: PRICE_INCREASE_SCOPE_DETAIL,
     to: '/prices?increases=1',
   };
 }

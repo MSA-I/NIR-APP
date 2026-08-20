@@ -67,7 +67,7 @@ export const getBusinessSummaryTool: AssistantTool = {
     required: [],
     additionalProperties: false,
   },
-  requiredRoles: ["owner", "office", "accountant"],
+  requiredRoles: ["owner", "office"],
   classification: "financial_sensitive",
   async run(ctx: ToolContext): Promise<ToolEnvelope> {
     const asOf = ctx.now().toISOString();

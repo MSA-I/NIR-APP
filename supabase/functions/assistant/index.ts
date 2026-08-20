@@ -14,6 +14,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   AssistantAskRequestSchema,
+  type AssistantCapabilities,
   type AssistantRunResult,
   type Fact,
   type SourceReference,
@@ -32,14 +33,20 @@ import {
 import {
   EgressReservationDeniedError,
   runAssistantEgress,
+  type OrganizationEgressLease,
   type ServiceRpc,
   type ServiceRpcResult,
 } from "./egress.ts";
+import {
+  authorizeAssistantEvidence,
+  createSupabaseEvidenceAuthorizationPort,
+  type EvidenceAuthorizationClient,
+} from "./evidence-authorization.ts";
 import { AssistantEdgeError, corsFor, fail, json } from "./errors.ts";
+import { loadAuthorizedConversationContext } from "./history.ts";
 import {
   type AssistantTurnOutcome,
   buildInstructions,
-  type ConversationMessage,
   createOpenAiAssistantProvider,
   type ProviderUsageTotals,
   runAssistantTurn,
@@ -65,40 +72,10 @@ function serviceRpc(admin: SupabaseClient): ServiceRpc {
     admin.rpc(name, args) as unknown as PromiseLike<ServiceRpcResult>;
 }
 
-async function loadConversationContext(
-  caller: SupabaseClient,
-  conversationId: string,
-  limit: number,
-): Promise<ConversationMessage[]> {
-  if (limit === 0) return [];
-  // assistant_conversation_context: the caller's own conversation, newest-last, bounded.
-  // Ownership is decided by the RPC under the caller's JWT -- never by trusting the id.
-  const result = await caller.rpc("assistant_conversation_context", {
-    p_conversation_id: conversationId,
-    p_limit: limit,
-  });
-  if (result.error) {
-    throw new AssistantEdgeError("assistant_history_unavailable");
-  }
-  const rows = Array.isArray(result.data) ? result.data : [];
-  const messages: ConversationMessage[] = [];
-  for (const row of rows) {
-    if (!row || typeof row !== "object") continue;
-    // 0164's column is `author`; content is the question for user rows and the stored
-    // AssistantAnswer JSON for assistant rows -- our own previously validated output.
-    const { author, content } = row as Record<string, unknown>;
-    if (
-      (author === "user" || author === "assistant") &&
-      typeof content === "string" && content.length > 0
-    ) {
-      messages.push({ role: author, content });
-    }
-  }
-  return messages;
-}
-
 interface RecordRunValues {
   runId: string;
+  leaseId: string;
+  leaseToken: string;
   conversationId: string | null;
   storeHistory: boolean;
   question: string;
@@ -112,6 +89,7 @@ interface RecordRunValues {
   toolRecords: ToolCallRecord[];
   facts: Fact[];
   sources: SourceReference[];
+  capabilities: AssistantCapabilities;
 }
 
 /**
@@ -145,6 +123,9 @@ async function recordRun(
     p_facts: values.facts,
     p_sources: values.sources,
     p_proposal: null,
+    p_lease_id: values.leaseId,
+    p_lease_token: values.leaseToken,
+    p_actor_capabilities: values.capabilities,
   });
   if (recorded.error) {
     const message = recorded.error.message;
@@ -267,16 +248,31 @@ export async function handler(req: Request): Promise<Response> {
     await assertRunAllowed(caller);
     await assertWithinLimits(caller, config);
 
+    // service_role is held only for fenced infrastructure reads/writes: raw history snapshot and
+    // egress reservation/evidence. Every tenant entity read still runs through `caller` and RLS.
+    const admin = createClient(url, serviceKey, {
+      auth: { persistSession: false },
+    });
+    const rpc = serviceRpc(admin);
+    const evidenceAuthorization = createSupabaseEvidenceAuthorizationPort(
+      caller as unknown as EvidenceAuthorizationClient,
+      userResult.data.user.id,
+    );
+
     // History off means the conversation id is context the product refuses to have: run
     // normally, persist nothing but the run row (0164), remember nothing.
     const conversationId = actor.capabilities.history
       ? request.conversation_id
       : null;
     const conversationContext = conversationId
-      ? await loadConversationContext(
-        caller,
-        conversationId,
-        config.contextMessageLimit,
+      ? await loadAuthorizedConversationContext(
+        admin,
+        evidenceAuthorization,
+        {
+          actor,
+          conversationId,
+          limit: config.contextMessageLimit,
+        },
       )
       : [];
 
@@ -303,17 +299,9 @@ export async function handler(req: Request): Promise<Response> {
         parameters: tool.inputJsonSchema,
       })),
     });
-
-    // service_role exists in this function for exactly one purpose: the egress reservation RPCs
-    // are granted to service_role alone. Every tenant business read and write runs through
-    // `caller`.
-    const admin = createClient(url, serviceKey, {
-      auth: { persistSession: false },
-    });
-    const rpc = serviceRpc(admin);
-
     const startedAt = performance.now();
     let outcome: AssistantTurnOutcome;
+    const egressLease: { current: OrganizationEgressLease | null } = { current: null };
     try {
       outcome = await runAssistantEgress(
         rpc,
@@ -322,8 +310,9 @@ export async function handler(req: Request): Promise<Response> {
           runId,
           ttlSeconds: ASSISTANT_EGRESS_TTL_SECONDS,
         },
-        () =>
-          runAssistantTurn({
+        (lease) => {
+          egressLease.current = lease;
+          return runAssistantTurn({
             provider,
             registry: REGISTRY,
             toolContext,
@@ -331,7 +320,16 @@ export async function handler(req: Request): Promise<Response> {
             conversationContext,
             maxToolCalls: config.maxToolCallsPerTurn,
             totalBudgetMs: ASSISTANT_TOTAL_BUDGET_MS,
-          }),
+            authorizeEvidence: (answer, facts, sources) =>
+              authorizeAssistantEvidence(
+                evidenceAuthorization,
+                actor,
+                answer,
+                facts,
+                sources,
+              ),
+          });
+        },
         (settled) => ({
           code: settled.ok
             ? "assistant_run_recorded"
@@ -369,8 +367,11 @@ export async function handler(req: Request): Promise<Response> {
         ? error
         : new AssistantEdgeError("assistant_provider_unavailable", 503);
       try {
-        await recordRun(caller, {
+        const settledLease = egressLease.current;
+        if (settledLease) await recordRun(caller, {
           runId,
+          leaseId: settledLease.lease_id,
+          leaseToken: settledLease.lease_token,
           conversationId,
           storeHistory: actor.capabilities.history,
           question: request.question,
@@ -386,16 +387,23 @@ export async function handler(req: Request): Promise<Response> {
           toolRecords: [],
           facts: [],
           sources: [],
+          capabilities: actor.capabilities,
         });
       } catch {
         console.error("assistant failed-run recording skipped", runId);
       }
       throw edgeError;
     }
+    const settledLease = egressLease.current;
+    if (!settledLease) {
+      throw new AssistantEdgeError("assistant_persistence_failed");
+    }
     const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
 
     const persisted = await recordRun(caller, {
       runId,
+      leaseId: settledLease.lease_id,
+      leaseToken: settledLease.lease_token,
       conversationId,
       storeHistory: actor.capabilities.history,
       question: request.question,
@@ -409,6 +417,7 @@ export async function handler(req: Request): Promise<Response> {
       toolRecords: outcome.toolRecords,
       facts: evidence.facts,
       sources: evidence.sources,
+      capabilities: actor.capabilities,
     });
 
     // Allowlisted observability: ids, counters and versions. Never the question, never a value.

@@ -90,9 +90,9 @@ export const getUnmatchedBankTransactions: AssistantTool = {
       const description = sanitizeText(row.description, 80);
       const statusHe = STATUS_HE[row.status] ?? row.status;
       const direction = row.is_debit ? "חובה" : "זכות";
-      const title = `תנועת ${direction} ${statusHe} מ-${row.tx_date}${
-        description ? ` — ${description}` : ""
-      }`;
+      // Bank-export descriptions stay in the server/browser data projection. They never ride in a
+      // Fact or Source label, because those labels are the provider projection.
+      const title = `תנועת ${direction} ${statusHe} מ-${row.tx_date}`;
       facts.push(ctx.evidence.fact({
         kind: "metric.money",
         subject: { entity: "bank_transaction", id: row.id },

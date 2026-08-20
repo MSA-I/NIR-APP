@@ -224,6 +224,23 @@ Deno.test("a set env ceiling that cannot be measured refuses", async () => {
   );
 });
 
+Deno.test("an unmeasurable configured soft cost cap also refuses fail-closed", async () => {
+  await assert.rejects(
+    assertWithinLimits(
+      port({
+        assistant_run_totals: {
+          data: [{ user_today: 0, org_today: 0, org_month: 0, org_month_cost: null }],
+          error: null,
+        },
+      }),
+      baseConfig({ softCostCap: 10_000 }),
+    ),
+    (error: unknown) =>
+      error instanceof AssistantEdgeError &&
+      error.code === "assistant_limit_unknown",
+  );
+});
+
 Deno.test("a measured env ceiling at its cap refuses", async () => {
   await assert.rejects(
     assertWithinLimits(

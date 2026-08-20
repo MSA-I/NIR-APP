@@ -626,6 +626,15 @@
 ‏`/operator` נמדד חי, בדסקטופ ובמובייל. **הלקח שנשאר:** נתיב שאינו `/` או `/login` אינו מכוסה
 ב־smoke הקנוני של סקריפט הפריסה, ולכן משטח חדש חייב להוסיף לו שורה — אחרת הוא נפרס ירוק ושבור.
 
+**20.08.2026 — גבול העוזר של InPlace:** נכתבה תוכנית סגירת UI/UX ב־
+`C:\Users\art1\Desktop\PLAN-INPLACE-ASSISTANT-UI-UX-CLOSURE-20260820.md`; אין פירוש הדבר שהמשטח
+סגור או מועמד לשחרור. ‏Core UI הוא `PLANNED / NOT_CLOSED`; ‏history היא `BLOCKED_SECURITY` עד
+reauthorization/redaction נוכחיים; והעוזר כולו `NOT_ACTIVATED / NOT_DEPLOYED`. ביקורת התכנון
+זיהתה חסמי activation נוספים — קלט חופשי לפני provider, runtime response/route validation,
+stale flags ו־run lifecycle — שנבדקים בעבודת האבטחה הפעילה. לא הוקצו כאן מספרי debt חדשים בזמן
+שהענף עדיין מחזיק WIP ומפת המזהים נעה; אם חסם יישאר אחרי ה־SHA המשולב והבדיקות, הוא יקבל סעיף
+קנוני לאחר rebase ולא עותק מתחרה עכשיו.
+
 ### §52 — `quickCreateProduct.spec.tsx` נכשלת לסירוגין ב־CI
 
 - **מצב:** התרחיש "retries the PRICE after a failed price command, never a second product row" נכשל

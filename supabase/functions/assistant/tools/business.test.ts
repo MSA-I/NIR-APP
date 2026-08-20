@@ -14,7 +14,13 @@ import { getPaymentExposure } from "./getPaymentExposure.ts";
 import { getPurchaseMetrics } from "./getPurchaseMetrics.ts";
 import { getSupplierPerformance } from "./getSupplierPerformance.ts";
 import { getUnmatchedBankTransactions } from "./getUnmatchedBankTransactions.ts";
-import { buildRegistry, RunEvidence, runRegisteredTool, type ToolContext } from "./registry.ts";
+import {
+  buildRegistry,
+  RunEvidence,
+  runRegisteredTool,
+  serializeEnvelopeForProvider,
+  type ToolContext,
+} from "./registry.ts";
 import type { ReadError, RowsResult, ToolReads } from "./reads.ts";
 import { deterministicBusinessTools } from "./business.ts";
 
@@ -332,6 +338,8 @@ Deno.test("payment exposure keeps nulls null and always carries the coverage", a
     0,
   );
   assert.equal(byLabel.get("דרישות תשלום פעילות"), 3);
+  assert.equal(envelope.sources[0]?.entity, "organization");
+  assert.equal(envelope.sources[0]?.entity_id, actor().orgId);
 });
 
 Deno.test("an unmeasured on_time_pct stays null and the sample size travels beside it", async () => {
@@ -630,6 +638,8 @@ Deno.test("bank rows carry exactly the operational projection and nothing more",
   assert.equal(row.description, 'העברה לספק בע"מ');
   const amount = envelope.facts.find((fact) => fact.kind === "metric.money");
   assert.equal(amount?.value, 1200);
+  const providerPayload = JSON.stringify(serializeEnvelopeForProvider(envelope));
+  assert.ok(!providerPayload.includes("העברה לספק"));
 });
 
 Deno.test("find_entity never surfaces a supplier's contact subtitle", async () => {
@@ -694,6 +704,37 @@ Deno.test("find_entity kind filter narrows to the requested type", async () => {
   assert.equal((envelope.data[0] as { entity: string }).entity, "supplier");
 });
 
+Deno.test("find_entity overfetches one hit per type and reports honest has_more", async () => {
+  let perType: unknown = null;
+  const hits = Array.from({ length: 6 }, (_, index) => ({
+    entity: "supplier",
+    id: `22222222-2222-4222-8222-${String(index + 1).padStart(12, "0")}`,
+    title: `ספק ${index + 1}`,
+    subtitle: null,
+  }));
+  const db = fakeDb();
+  db.rpc = (_name, args) => {
+    perType = args?.per_type;
+    return Promise.resolve({ data: hits, error: null });
+  };
+  const envelope = await findEntity.run(
+    ctxWith(db),
+    { query: "ספק", kind: "supplier" },
+  );
+  assert.equal(perType, 6);
+  assert.equal(envelope.result_count, 5);
+  assert.equal(envelope.sources.length, 5);
+  assert.equal(envelope.has_more, true);
+});
+
+Deno.test("supplier performance refuses to answer an undefined lateness ranking", () => {
+  assert.ok(
+    getSupplierPerformance.description.includes(
+      "אינו עונה מי הספק שמאחר הכי הרבה",
+    ),
+  );
+});
+
 Deno.test("open credits: a failed per-supplier breakdown degrades to complete:false", async () => {
   const envelope = await getOpenCredits.run(
     ctxWith(fakeDb({
@@ -711,6 +752,8 @@ Deno.test("open credits: a failed per-supplier breakdown degrades to complete:fa
   const sum = envelope.facts.find((fact) => fact.kind === "credit.open_amount");
   assert.equal(count?.value, 0);
   assert.equal(sum?.value, null);
+  assert.equal(envelope.sources[0]?.entity, "organization");
+  assert.equal(envelope.sources[0]?.entity_id, actor().orgId);
 });
 
 Deno.test("every tool declares roles, a Hebrew description and a strict JSON schema", () => {

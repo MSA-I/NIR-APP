@@ -29,6 +29,7 @@ const KINDS = [
   "payment",
   "credit",
 ] as const;
+const RESULT_LIMIT_PER_TYPE = 5;
 
 const inputSchema = z
   .object({
@@ -121,7 +122,7 @@ export const findEntity: AssistantTool = {
 
     const result = await ctx.db.rpc("global_search", {
       q: query,
-      per_type: 5,
+      per_type: RESULT_LIMIT_PER_TYPE + 1,
     });
     if (result.error) {
       return failure(ctx, "entity_search_failed", "החיפוש נכשל", filters);
@@ -131,6 +132,28 @@ export const findEntity: AssistantTool = {
       .map((entry) => record(entry))
       .filter((entry): entry is Record<string, unknown> => entry !== null);
 
+    const boundedHits: {
+      hit: Record<string, unknown>;
+      mapping: EntityMapping;
+      id: string;
+    }[] = [];
+    const hitsPerType = new Map<string, number>();
+    let hasMore = false;
+    for (const hit of hits) {
+      const mapping = ENTITY_MAP[str(hit.entity) ?? ""];
+      if (!mapping) continue;
+      if (kind !== "any" && mapping.kindName !== kind) continue;
+      const id = str(hit.id);
+      if (!id) continue;
+      const seen = hitsPerType.get(mapping.kindName) ?? 0;
+      if (seen >= RESULT_LIMIT_PER_TYPE) {
+        hasMore = true;
+        continue;
+      }
+      hitsPerType.set(mapping.kindName, seen + 1);
+      boundedHits.push({ hit, mapping, id });
+    }
+
     const sources: SourceReference[] = [];
     const dataRows: {
       entity: EvidenceEntity;
@@ -138,12 +161,7 @@ export const findEntity: AssistantTool = {
       label: string;
       route: string | null;
     }[] = [];
-    for (const hit of hits) {
-      const mapping = ENTITY_MAP[str(hit.entity) ?? ""];
-      if (!mapping) continue;
-      if (kind !== "any" && mapping.kindName !== kind) continue;
-      const id = str(hit.id);
-      if (!id) continue;
+    for (const { hit, mapping, id } of boundedHits) {
       const title = sanitizeText(hit.title, 60);
       const subtitle = mapping.keepSubtitle ? sanitizeText(hit.subtitle, 40) : "";
       const label = subtitle ? `${title} — ${subtitle}` : title;
@@ -170,13 +188,10 @@ export const findEntity: AssistantTool = {
     })];
 
     // amount rides on invoice/payment/credit hits; it is already computed server-side and citable.
-    for (const hit of hits) {
-      const mapping = ENTITY_MAP[str(hit.entity) ?? ""];
-      if (!mapping || mapping.evidence !== "invoice") continue;
-      if (kind !== "any" && mapping.kindName !== kind) continue;
-      const id = str(hit.id);
+    for (const { hit, mapping, id } of boundedHits) {
+      if (mapping.evidence !== "invoice") continue;
       const amount = num(hit.amount);
-      if (!id || amount === null) continue;
+      if (amount === null) continue;
       facts.push(ctx.evidence.fact({
         kind: "invoice.total",
         subject: { entity: "invoice", id },
@@ -196,7 +211,7 @@ export const findEntity: AssistantTool = {
       filters,
       as_of: asOf,
       result_count: dataRows.length,
-      has_more: false,
+      has_more: hasMore,
       facts,
       sources,
       warnings: dataRows.length > 0 ? [UNTRUSTED_TEXT_WARNING] : [],

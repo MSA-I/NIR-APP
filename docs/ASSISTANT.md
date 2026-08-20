@@ -67,7 +67,7 @@
 הייתה מאפשרת לאותה שאלה לחזור עם שני מספרים. כל כלי מחזיר `as_of` ומצהיר על החלון שלו בטקסט
 (`TIME_WINDOW_LABELS`), כדי שהתשובה תישא את גבולותיה.
 
-→ הכרעה פתוחה: `OPEN-DECISIONS #169` — מה "השבוע" אומר במוצר, ומי משנה את עצמו כשיוכרע.
+→ הכרעה פתוחה: `OPEN-DECISIONS #178` — מה "השבוע" אומר במוצר, ומי משנה את עצמו כשיוכרע.
 
 ---
 
@@ -140,7 +140,7 @@
 באותה מידה, ובדיוק ברגע שבו המערכת לחוצה. במקום זה, כשל ספק מחזיר את המשתמש למסלול הדטרמיניסטי
 (`/alerts` והמסכים) — שממשיך לעבוד בלי מודל בכלל.
 
-→ הכרעות פתוחות: `OPEN-DECISIONS #170`.
+→ הכרעות פתוחות: `OPEN-DECISIONS #179`.
 
 ---
 
@@ -170,7 +170,7 @@
 | `assistant_runs` | 90 יום | אין | בטיהור | מתוזמן | — |
 | `assistant_tool_calls` | 90 יום | אין | עם הריצה | מתוזמן | — |
 | `assistant_facts` / `assistant_source_references` | 90 יום | אין | עם הריצה | מתוזמן | — |
-| `assistant_action_proposals` שלא בוצעו | 30 יום | אין | בטיהור | מתוזמן | — |
+| `assistant_action_proposals` שלא בוצעו | 30 יום | אין | בטיהור; draft/awaiting/rejected/expired נמחקים מיד במחיקת שיחה | מתוזמן | confirmed/failed נשארים עד חלון 30 הימים כי הם החלטת אדם |
 | `assistant_action_proposals` שבוצעו | כשימור הפקודה שהן הפעילו | אין | **לא נמחק** | — | **כן** |
 | `assistant_feedback` | 90 יום | אין | בטיהור | מתוזמן | — |
 | `usage_counters` / `usage_events` | לפי `0155` | — | — | — | **כן** |
@@ -179,7 +179,17 @@
 **מחיקת היסטוריית שיחה לעולם אינה מוחקת רשומת ביקורת פיננסית.** אם שיחה הובילה לפעולה שבוצעה,
 הפעולה נשארת ב-`audit_logs` עם הסיבה שלה; מה שנמחק הוא הטקסט של השיחה.
 
-**הערה על אמינות ההבטחה:** בריפו לא היה עד היום שום job מתוזמן למחיקה — `0103` תכנן טיהור ולא מימש,
+**התנהגות מחיקה מפורשת:** הודעות, Facts, הפניות מקור, labels שנשמרו, arguments/shape של tool calls,
+feedback והצעות שלא אושרו נמחקים מיד. אין compacted summaries במימוש. שורות `assistant_runs`,
+`usage_events` ו-usage counters נשארות כראיית מכסה/עלות בלי טקסט שיחה. הצעה confirmed/failed נשארת
+עד חלון 30 הימים; הצעה executed ורשומת ה-`audit_logs` שלה אינן נמחקות. שורת השיחה מקבלת tombstone
+ונמחקת קשה בטיהור לאחר שאין לה הודעות.
+
+**גיבויים וספק:** הטיהור מבטיח מחיקה מהמסד החי; גיבויי הפלטפורמה עלולים לשמור עותק עד סבב
+ה-rotation שלהם. הספק אינו מקבל transcript שמור דרך API של InPlace, אבל מחיקת שיחה במסד אינה
+הוכחת מחיקה אצל הספק. שימור/zero-retention/log deletion אצל OpenAI נשארים חסם activation ב-#179.
+
+**הערה על אמינות ההבטחה:** בריפו לא היה לפני `0164` שום job מתוזמן למחיקה — `0103` תכנן טיהור ולא מימש,
 ו-`0159` סירב לו במפורש. הטיהור כאן מיושם כפונקציה מתוזמנת דרך `pg_cron` (התקדים קיים ב-`0016`,
 `0028`, `0081`, `0142`). **תקופת השימור נשמרת במסד ולא במשתנה סביבה של Edge** — משתנה סביבה אינו
 יכול למחוק שורה, ושני מקורות אמת לתקופה אחת הם סתירה שמחכה לקרות.
@@ -198,7 +208,7 @@
 | מצב העסק עכשיו | `management_dashboard_snapshot` (`0100`+`0137`+`0148`) | ‏`SECURITY INVOKER`; מחזיר NULL לכל תפקיד שאינו owner/office; ‏`money.openBalance` ריק ל-office **בכוונה** | `VERIFIED` |
 | כמה נרכש בתקופה | `get_purchase_metrics` (`0113`+`0137`) | חשבוניות **מאושרות** בלבד, ‏`payable`, מקובצות לפי **`invoice_date`** — לא לפי מועד הקליטה | `VERIFIED` (בכפוף לניסוח מדויק) |
 | כמה חשבוניות נקלטו השבוע | `summary.ts` → `p2_business_summary_rows()` (`0165`) | ‏`received_date >= today-7`, ‏`payable`, לא מחוק | `VERIFIED` |
-| איזה ספק מאחר, ועל סמך כמה הזמנות | `supplier_metrics` (‏`0031`, ‏`0133`) | חלון **קבוע של 180 יום**; בזמן = `received_at ≤ expected_date`; ‏`on_time_pct` **null** כשאין דגימות. הזמנה בלי `expected_date` יוצאת מהמדגם | `VERIFIED` — ובלבד שגודל המדגם נוסע עם המספר |
+| איזה ספק מאחר, ועל סמך כמה הזמנות | `supplier_metrics` (‏`0031`, ‏`0133`) | המדדים לכל ספק מאומתים: חלון **קבוע של 180 יום**; בזמן = `received_at ≤ expected_date`; ‏`on_time_pct` **null** כשאין דגימות. אבל "מי מאחר הכי הרבה" דורש לבחור בין אחוז, מספר איחורים, משך איחור וגודל מדגם | מדדים: `VERIFIED`; דירוג חוצה־ספקים: **`REQUIRES_BUSINESS_DECISION` (#30)** |
 | אילו מוצרים ייגמרו | `inventory_intelligence` (`0102`) | ‏`projected_stockout_days` = מלאי / צריכה יומית, ‏null אלא אם **שניהם** נמדדו; הזמנות בדרך **אינן** נזקפות | `VERIFIED` |
 | כמה כסף ממתין לזיכוי | דשבורד `credits` + `supplier_metrics` | פתוח = `open`/`requested`/`received`; רק `offset`/`closed` מקטינים יתרה | `VERIFIED` |
 | חשיפת תשלום | דשבורד `paymentRequests` | **רק דרישות שהוזן להן תאריך**; ‏`dueDateCoverage` חייב לנסוע עם המספר | `VERIFIED` (חלקי מטבעו) |
@@ -208,10 +218,53 @@
 | חיסכון משוער / המלצת ספק / הצעת רכש | — | ‏`suggested_reorder_quantity` הוא נוסחה מעל `min_stock`, לא המלצה | **`REQUIRES_BUSINESS_DECISION`** |
 | שליחת תזכורת לספק | — | אין פקודת "שלח מייל לספק". ‏WhatsApp קיים להזמנות ולתזכורות מתוזמנות בלבד | **מחוץ לתחום** |
 
-**שתי הערות בקוד שנמצאו מיושנות ותוקנו במדידה:** ‏`alerts.ts:91` טוען שאין `invoice_items` —
-‏`0099` הוסיף שורות חשבונית והתאמה תלת-כיוונית מלאה, ולכן הטענה נכונה רק לתקופה שלפניו.
-לעומת זאת `alerts.ts:156` **עדיין נכון**: לחשבוניות אין `due_date`, ו-`suppliers.payment_terms`
-הוא טקסט חופשי שאיש אינו מנתח. **אין תקציב בסכימה** — "חריגה מתקציב" היא קלט עסקי, לא נגזרת.
+### 7.1 חוזה הגישה וההיטל של 13 הכלים
+
+`JWT/RLS` בטבלאות הבאות פירושו לקוח Supabase שנבנה מה-JWT הנוכחי של הקורא; אף כלי אינו משתמש
+ב-`service_role`. ‏`source-owned unit scope` פירושו שהעוזר אינו ממציא מסנן יחידה נוסף: ה-RLS או גוף
+ה-RPC הקנוני מכריעים `org_id`, ‏`auth_scopes()` ותפקיד. בכל הכלים `serializeEnvelopeForProvider()`
+מסיר את `data` ואת ה-routes; רק Facts והפניות מקור מצומצמות מגיעים לספק. לכן עמודת "היטל" מתארת
+גם מה נשאר בשרת/בדפדפן וגם מה מותר לעבור לגבול הספק.
+
+| כלי | תפקידים מורשים | מצב גישה, RLS ויחידות | היטל, שדות רגישים ומיסוך | חוב אבטחה / הכרעה |
+|---|---|---|---|---|
+| `explain_invoice_block` | owner, office, accountant | ‏`get_invoice_three_way_match`; ‏`SECURITY DEFINER` עם guard מפורש ל-actor, org, role, מחיקה ו-`auth_scopes()`; accountant רואה רק חשבונית מאושרת | סטטוס, סכום, קודי סיבה, סבילויות וסיבת override; אין OCR גולמי, קובץ או storage path; `data` אינו מגיע לספק | כפוף לרשם ה-definer ב-`DEBT §7`, עם enforcement מוצמד ב-`0099`; אין הרחבת הרשאה של העוזר |
+| `compare_order_receipt_invoice` | owner, office, accountant | אותו RPC ואותו guard כמו הכלי הקודם | כמויות הזמנה/קבלה/חיוב ודלתאות מחיר שה-RPC חישב; תיאור שורה מנוקה ומוגבל; אין מטען OCR; לכל היותר 25 פריטי הזמנה מנפיקים Facts | ‏`DEBT §29`: snapshot אישור ממשיך לצרוך כמות גם אחרי `investigation`; זו סמנטיקת המקור המוצהרת, לא תיקון של העוזר |
+| `get_dashboard_snapshot` | owner, office | ‏`management_dashboard_snapshot`; ‏`SECURITY INVOKER`, ‏JWT/RLS ו-source-owned unit scope | היטל מדדים קבוע. ל-office מוסרים גם מ-`data` וגם מ-Facts את bank, ‏`openSupplierCount` ו-`topBalances`; שמות ספק מנוקים | ‏`DEBT §59` נשאר פתוח במקור. הכלי ממיר את האפס השקרי ל-`complete:false/not_permitted`; צרכנים אחרים עדיין חשופים לחוב |
+| `get_business_summary` | owner, office | ‏`p2_business_summary_rows`; ‏`SECURITY INVOKER`, ‏JWT/RLS ו-source-owned unit scope; role gate לפני ה-RPC | חמישה aggregates בלבד; אין rows, שמות או טקסט מקור | accountant הוא `not_permitted` עד read model שמוכיח שה-RLS שלו אינו הופך חוסר נראות ל-`0 measured` |
+| `get_purchase_metrics` | owner, office, accountant | ‏`get_purchase_metrics`; ‏`SECURITY DEFINER` עם actor/org/role מפורשים; aggregate ארגוני בלבד, בלי החזרת row חוצה־יחידה | שבעה מדדי כסף/ספירה והגדרת net של השרת; אין חשבוניות או ספקים גולמיים | כפוף ל-`DEBT §7`; semantic window נשאר מתועד ב-#178 |
+| `get_open_alerts` | owner, office, accountant | RPCs מסוג `SECURITY INVOKER` ו-`countSentOrders()` מדויק תחת JWT/RLS; source-owned unit scope | ספירות aggregate בלבד; אין רשימות או שמות. מחירון ודרישות מתוארכות נושאים scope warning קנוני | ‏`DEBT §10`: סריקת חשבונית ללא הזמנה נחסמת ל-accountant ומוחזרת ככשל בשם; שאר הסריקות ממשיכות |
+| `get_supplier_performance` | owner, office | ‏`supplier_metrics` ‏security-invoker/barrier + RLS; שמות ספקים בשליפה מפורשת `id,name` בלבד | מדדי ביצוע ושם ספק מנוקה; אין contact, ‏bank_details או רשומת ספק מלאה | דירוג "מי מאחר הכי הרבה" הוא `REQUIRES_BUSINESS_DECISION` לפי #30; הכלי אינו מדרג ואוסר להציג את המדדים כדירוג |
+| `get_inventory_risk` | owner, office | ‏`inventory_intelligence` ‏security-invoker/barrier + RLS; source-owned unit scope | מדדי מלאי/צריכה/הזמנות בדרך ושם מוצר מנוקה; אין row מוצר מלא | risk read model הוא `VERIFIED`; המלצת ספק/רכש היא `REQUIRES_BUSINESS_DECISION`, ו-#182 אינו תחליף לסמנטיקת המלצה |
+| `get_open_credits` | owner, office | snapshot קנוני + `supplier_metrics`, שניהם תחת JWT/RLS | סך ופירוט כספי לפי ספק; `suppliers` מוגבל ל-`id,name`; מסמך זיכוי, OCR ופרטי קשר אינם נשלחים | ‏`DEBT §49`: מסמך זיכוי שלא הפך לרשומת זיכוי אינו נספר; ההגבלה נוסעת עם התשובה |
+| `get_payment_exposure` | owner, office | בלוק `paymentRequests` של snapshot קנוני תחת JWT/RLS | aggregates בלבד; הכיסוי `dueDateCoverage/activeCount` תמיד נוסע עם הסכום | אין `invoice.due_date`; חשיפה כוללת מעבר לדרישות מתוארכות היא `DOES_NOT_EXIST`, לא אפס |
+| `get_orders_awaiting_confirmation` | owner, office | `purchase_orders` + items + supplier name בקריאה ישירה תחת JWT/RLS | projection מפורש; item snapshots משמשים רק לסכום; לספק עוברים Facts ושם מנוקה, לא שורות הפריטים או פרטי קשר | הרשימה משתמשת overfetch ולא exact count; הספירה המדויקת היחידה להתראה מתועדת מול `DEBT §15` |
+| `get_unmatched_bank_transactions` | owner, accountant | `bank_transactions` בקריאה ישירה תחת JWT/RLS; role gate זהה למסך הבנק | `id,date,amount,direction,status,description` בלבד; אין raw import, reference או supplier. התיאור נשאר ב-`data` בלבד ואינו נכנס ל-Fact/Source label של הספק | projection negative test חובה בכל שינוי; אין הרחבה ל-office |
+| `find_entity` | owner, office, accountant | ‏`global_search`; ‏`SECURITY INVOKER`, type gate שרתי ו-RLS לפי התפקיד | `id,title,route` בלבד; subtitle של ספק/contact ושל תשלום/reference נזרק; routes נבדקים שוב בשרת; draft חסר EvidenceEntity נזרק | ‏`DEBT §13` הוא חוב ביצועים. היכולת היא locator בלבד, לא מקור אמת כספי |
+
+### 7.2 בעל החישוב, רעננות, גבולות ובדיקות חובה
+
+| כלי | בעל החישוב וסמנטיקת המקור | רעננות | pagination / חלון | בדיקות חובה | מצב יכולת |
+|---|---|---|---|---|---|
+| `explain_invoice_block` | ‏`get_invoice_three_way_match` (`0099`/`0137`), קודי הסיבה והסבילויות של השרת | קריאה נוכחית; `as_of` בזמן הריצה | UUID יחיד; אין pagination | `tools/business.test.ts`, ‏`p20_invoice_three_way_match.sql`, ‏`p56_assistant_foundations.sql` | `VERIFIED` |
+| `compare_order_receipt_invoice` | אותו RPC; דלתאות וכמויות מועברות בלי חישוב במודל | קריאה נוכחית; `as_of` בזמן הריצה | UUID יחיד; Facts ל-25 פריטי הזמנה, ואז `has_more=true` | `tools/business.test.ts`, ‏`p20_invoice_three_way_match.sql`, ‏`p20_invoice_approval_concurrency.sql`, ‏`p56` | `VERIFIED_WITH_DOCUMENTED_CAP` |
+| `get_dashboard_snapshot` | ‏`management_dashboard_snapshot` (`0100`/`0137`/`0148`) | business date של Asia/Jerusalem ו-`as_of` נוכחי | aggregate יחיד | `tools/business.test.ts`, ‏`p21_dashboard_snapshot.sql`, ‏`p56` | owner: `VERIFIED`; office: `VERIFIED_PARTIAL/§59_MITIGATED` |
+| `get_business_summary` | ‏`p2_business_summary_rows` (`0165`), אותו read model של `summary.ts` | 7 ימים לקבלה, 30 יום למחיר, שאר המדדים נוכחיים; `as_of` נוכחי | חמישה rows קבועים | `tools.test.ts`, ‏`p57_business_summary_parity.sql`, ‏`p56` | owner/office: `VERIFIED`; accountant: `NOT_PERMITTED` |
+| `get_purchase_metrics` | ‏`private.canonical_purchase_metrics` דרך `get_purchase_metrics`; snapshot prices, invoice_date ו-net definition שרתיים | מעוגן ביום העסקי בזמן הריצה | חלון נגרר בלבד: 7/30/90 יום; אין pagination | `tools/business.test.ts`, ‏`p33_canonical_purchase_metrics.sql`, ‏`p56` | `VERIFIED`; time-label product decision #178 נשאר גלוי |
+| `get_open_alerts` | חמש RPCs קנוניות + exact head count להזמנות sent | נוכחי; מחיר 30 יום, due 7 ימים, margin ‏15% | אין row pagination; כל scan מחזיר aggregate או failure | `tools.test.ts`, ‏`tools/reads.test.ts`, ‏`p2_data_reliability.sql`, ‏`p46_consolidated_supplier_invoice.sql` | `VERIFIED_WITH_NAMED_PARTIAL_FAILURE` |
+| `get_supplier_performance` | view ‏`supplier_metrics`; אחוז, sample size, lead time, איחורים וזיכויים כפי שה-view מחשב | חלון קבוע 180 יום; יתרות פתוחות נוכחיות | `limit` ברירת מחדל 50, תקרה 200, ‏limit+1 ו-`has_more` | `tools/business.test.ts`, ‏`tools/reads.test.ts`, ‏`roadmap_db_contracts.sql` | metrics: `VERIFIED`; ranking: `REQUIRES_BUSINESS_DECISION (#30)` |
+| `get_inventory_risk` | view ‏`inventory_intelligence`; stockout דורש גם ספירה וגם צריכה; incoming אינו מנוכה | צריכה מאז ספירה ועד 30 יום; מלאי והזמנות בדרך נוכחיים | `limit` ‏50/200, ‏limit+1 ו-`has_more` | `tools/business.test.ts`, ‏`tools/reads.test.ts`, ‏`p24_inventory_intelligence.sql` | risk: `VERIFIED`; recommendation/action: `BLOCKED` |
+| `get_open_credits` | credits block של snapshot + פירוט `supplier_metrics`; statuses ‏open/requested/received | business date ו-`as_of` נוכחיים | aggregate + 50 ספקים קבועים, limit+1 ו-`has_more` | `tools/business.test.ts`, ‏`tools/reads.test.ts`, ‏`p21_dashboard_snapshot.sql`, ‏`p56` | `VERIFIED_WITH_SCOPE_LIMIT (DEBT §49)` |
+| `get_payment_exposure` | paymentRequests block של snapshot; כסף רק לדרישות עם due date | business date נוכחי; overdue/היום/7 ימים | aggregate יחיד; אין pagination | `tools/business.test.ts`, ‏`p21_dashboard_snapshot.sql`, ‏`p56` | `VERIFIED_PARTIAL_BY_DEFINITION` |
+| `get_orders_awaiting_confirmation` | row snapshots של PO; Edge מסכם `qty × unit_price` ומעגל לשתי ספרות; לא מחירון נוכחי | סטטוס sent נוכחי; oldest-first | `limit` ‏50/200, ‏limit+1 ו-`has_more` | `tools/business.test.ts`, ‏`tools/reads.test.ts`, ‏`p56` | `VERIFIED` |
+| `get_unmatched_bank_transactions` | rows בסטטוס unmatched/suggested; ספירות הן של העמוד ומסומנות כך כשיש עוד | קריאה נוכחית; newest-first | `limit` ‏50/200, ‏limit+1 ו-`has_more` | `tools/business.test.ts`, ‏`tools/reads.test.ts`, ‏`roadmap_db_contracts.sql`, ‏`p56` | `VERIFIED_WITH_PROVIDER_REDACTION` |
+| `find_entity` | ‏`global_search`; איתור בלבד, לא חישוב authoritative | קריאה נוכחית | query ‏2–80; עד 5 תוצאות לכל סוג, בקשת 6 לצורך `has_more`; kind allowlist | `tools/business.test.ts`, ‏`p9_five_domains.sql`, ‏`p46_consolidated_supplier_invoice.sql`, ‏`p56` | `VERIFIED_LOCATOR_ONLY`; ‏`DEBT §13` ביצועים |
+
+**הערת קנון שתוקנה בקוד ובכלי יחד:** ‏`0099` הוסיף שורות חשבונית, ולכן ההתראה על עליית מחיר
+אומרת כעת שהסריקה בודקת **את המחירון בלבד** ושמחירי שורות החשבונית אינם חלק ממנה; היא אינה טוענת
+עוד שאין שורות. לעומת זאת מגבלת מועד הפירעון עדיין נכונה: לחשבוניות אין `due_date`, ו-
+`suppliers.payment_terms` הוא טקסט חופשי שאיש אינו מנתח. **אין תקציב בסכימה** — "חריגה מתקציב"
+היא קלט עסקי, לא נגזרת.
 
 ---
 
@@ -237,7 +290,7 @@
 מדיניות `assistant.confirmed_actions` כבויה בבסיס, וחוזה `AssistantProposal` שהממשק יודע לרנדר.
 
 **מה שלא נבנה: אף מנסח הצעה אחד.** לא מפני שקשה, אלא מפני ש**איזו פקודה מותר להציע היא הכרעה
-עסקית שאיש לא קיבל** (`OPEN-DECISIONS #173`), והמפרט עצמו אוסר לחשוף יכולת שאין מאחוריה זרימת שרת
+עסקית שאיש לא קיבל** (`OPEN-DECISIONS #182`), והמפרט עצמו אוסר לחשוף יכולת שאין מאחוריה זרימת שרת
 מוכרעת. שלוש עובדות שמחדדות למה עצירה כאן היא התשובה הנכונה ולא עצלות:
 
 - ‏`OPEN-DECISIONS #109(ד1)` אוסר במפורש על המודל לכתוב `purchase_orders` ו-`purchase_order_items` —
@@ -250,3 +303,32 @@
 מנסח אחד לפקודה שתיבחר שמייצר `payload` שהשרת מאמת **לפני** שההצעה מוצגת, ו-`expires_at` מתוך
 `PROPOSAL_TTL_MINUTES`. הביצוע נשאר כפי שהוא כתוב כאן: הפקודה הקיימת, עם ה-JWT של מי שאישר,
 עם האימות והביקורת שלה — לא מסלול שני.
+
+---
+
+## 10. מצב UI/UX — תוכנית סגירה, לא השלמה
+
+תוכנית הסגירה הקנונית נמצאת ב־
+`C:\Users\art1\Desktop\PLAN-INPLACE-ASSISTANT-UI-UX-CLOSURE-20260820.md`.
+היא נכתבה ב־20.08.2026 לאחר ביקורת Skeptic, ‏Constraint Guardian ו־User Advocate, וקיבלה
+`APPROVED` מה־Arbiter **כתוכנית בלבד**. אין בכך אישור מימוש, activation או Production.
+
+**זהות:** שם המוצר הוא `InPlace`; ‏`Place Bay` הוא שם כיוון הסמל בלבד. ‏`brand/identity.md`,
+‏`brand/brand.yaml` ו־`src/lib/branding.ts` גוברים לשם ולזהות. aliases ומזהי מכונה היסטוריים
+יכולים להישאר `supplyflow-*`; אין להסיק מהם שם מוצר מוצג.
+
+**מצב נוכחי:** הפאנל הקיים הוא בסיס פונקציונלי, אך ה־UI/UX אינו סגור. השאלה נעלמת לאחר שליחה,
+`as_of` אינו מוצג, “מה נבדק” חושף שמות כלים פנימיים, קישור מקור מאבד את הקשר הבדיקה, fallback
+אחד אינו תקף לכל תפקיד, ה־trigger משתמש ב־`Sparkles`, והתנהגות modal/panel וה־breakpoint בין
+`sm` ל־`lg` לא הוכרעו. ‏History מציגה metadata ומחיקה אך אינה נפתחת.
+
+**שני שערים:**
+
+- `CORE_READ_ONLY_UI_CLOSED` דורש brief מאושר, question/evidence/freshness, routes לפי role,
+  runtime response validation, responsive/RTL/WCAG ו־CI על SHA מדויק.
+- `FULL_UI_CLOSED` דורש בנוסף history שנפתחת רק אחרי reauthorization/redaction נוכחיים, עם
+  negative tests ל־role downgrade, disabled user, suspended org, deleted source ושינוי הרשאה.
+
+עד אז הסטטוס הוא `PLANNED / NOT_CLOSED / NOT_ACTIVATED / NOT_DEPLOYED`; history היא
+`BLOCKED_SECURITY`. ‏Action composer, draft/confirmed actions ו־external sending מחוץ לתוכנית
+ה־UI לקריאה בלבד, ואינם מקבלים placeholder בממשק.

@@ -40,6 +40,20 @@ function source(overrides: Partial<SourceReference> = {}): SourceReference {
 }
 
 function answer(blocks: unknown[], extra: Record<string, unknown> = {}) {
+  return {
+    blocks: blocks.map((block) =>
+      block && typeof block === "object" &&
+        (block as Record<string, unknown>).type === "claim"
+        ? { claim_kind: "metric.count", subject: null, ...block }
+        : block
+    ),
+    next_steps: [],
+    no_answer_reason: null,
+    ...extra,
+  };
+}
+
+function rawAnswer(blocks: unknown[], extra: Record<string, unknown> = {}) {
   return { blocks, next_steps: [], no_answer_reason: null, ...extra };
 }
 
@@ -145,7 +159,13 @@ Deno.test("grouped and fixed renderings of a cited money value pass", () => {
   });
   for (const text of ["הסכום הפתוח הוא 1,234.50 שקלים.", "בסך 1234.5 ש\"ח."]) {
     const result = validateAnswer(
-      answer([{ type: "claim", text, fact_ids: ["f1"], source_ids: [] }]),
+      answer([{
+        type: "claim",
+        text,
+        claim_kind: "metric.money",
+        fact_ids: ["f1"],
+        source_ids: [],
+      }]),
       [money],
       [],
     );
@@ -239,6 +259,7 @@ Deno.test("a calendar-date fact admits the product's dotted rendering", () => {
     answer([{
       type: "claim",
       text: "החשבונית האחרונה נקלטה ב-19.08.2026.",
+      claim_kind: "invoice.status",
       fact_ids: ["f1"],
       source_ids: [],
     }]),
@@ -368,4 +389,124 @@ Deno.test("a null-valued fact supports no numerals at all", () => {
     [],
   );
   assert.equal(result.ok, false);
+});
+
+Deno.test("a claim without a server-known semantic kind is rejected", () => {
+  const result = validateAnswer(
+    rawAnswer([{
+      type: "claim",
+      text: "נקלטו 12 חשבוניות.",
+      fact_ids: ["f1"],
+      source_ids: [],
+    }]),
+    [fact()],
+    [],
+  );
+  assert.equal(result.ok, false);
+});
+
+Deno.test("a related fact of the wrong semantic kind cannot support a claim", () => {
+  const result = validateAnswer(
+    answer([{
+      type: "claim",
+      text: "נקלטו 12 חשבוניות.",
+      claim_kind: "invoice.status",
+      subject: null,
+      fact_ids: ["f1"],
+      source_ids: [],
+    }]),
+    [fact({ kind: "metric.count" })],
+    [],
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(result.errors.some((error) =>
+      error.includes("fact_does_not_support_claim_kind")
+    ));
+  }
+});
+
+Deno.test("a same-kind fact about a different subject cannot support a claim", () => {
+  const invoiceA = "11111111-1111-4111-8111-111111111111";
+  const invoiceB = "22222222-2222-4222-8222-222222222222";
+  const result = validateAnswer(
+    answer([{
+      type: "claim",
+      text: "סכום החשבונית הוא 12 שקלים.",
+      claim_kind: "invoice.total",
+      subject: { entity: "invoice", id: invoiceB },
+      fact_ids: ["f1"],
+      source_ids: [],
+    }]),
+    [fact({
+      kind: "invoice.total",
+      subject: { entity: "invoice", id: invoiceA },
+      unit: "ils",
+    })],
+    [],
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(result.errors.some((error) =>
+      error.includes("fact_does_not_support_claim_subject")
+    ));
+  }
+});
+
+Deno.test("a source route outside the product allowlist is rejected", () => {
+  const result = validateAnswer(
+    answer([{
+      type: "claim",
+      text: "נקלטו 12 חשבוניות.",
+      fact_ids: ["f1"],
+      source_ids: ["s1"],
+    }]),
+    [fact()],
+    [source({ route: "/not-a-real-route" })],
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(result.errors.includes("source:s1:route_not_allowlisted"));
+  }
+});
+
+Deno.test("an external source URL is rejected rather than treated as an in-app route", () => {
+  const result = validateAnswer(
+    answer([{
+      type: "claim",
+      text: "נקלטו 12 חשבוניות.",
+      fact_ids: ["f1"],
+      source_ids: ["s1"],
+    }]),
+    [fact()],
+    [source({ route: "https://example.test/invoices" })],
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(result.errors.includes("source:s1:route_not_allowlisted"));
+  }
+});
+
+Deno.test("a canonical route that the current role cannot open is rejected", () => {
+  const validateForRole = validateAnswer as unknown as (
+    raw: unknown,
+    facts: readonly Fact[],
+    sources: readonly SourceReference[],
+    role: "owner" | "office" | "accountant",
+  ) => ReturnType<typeof validateAnswer>;
+  const result = validateForRole(
+    answer([{
+      type: "claim",
+      text: "נקלטו 12 חשבוניות.",
+      fact_ids: ["f1"],
+      source_ids: ["s1"],
+    }]),
+    [fact()],
+    [source({ route: "/alerts" })],
+    "accountant",
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(result.errors.includes("source:s1:route_not_permitted"));
+  }
 });

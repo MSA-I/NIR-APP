@@ -26,6 +26,46 @@ begin
 end
 $$;
 
+create function pg_temp.p56_capabilities(p_history boolean)
+returns jsonb language sql immutable as $$
+  select jsonb_build_object(
+    'ui', true,
+    'history', p_history,
+    'drafts', false,
+    'confirmedActions', false
+  )
+$$;
+
+create function pg_temp.p56_lease(
+  p_org uuid,
+  p_run uuid,
+  p_outcome text default 'delivered'
+) returns jsonb
+language plpgsql security definer set search_path = public, private, pg_temp as $$
+declare
+  v_lease private.organization_external_egress_leases;
+begin
+  insert into private.organization_external_egress_leases (
+    org_id, kind, correlation_id, status, outcome, evidence_code,
+    reserved_at, expires_at, settled_at
+  ) values (
+    p_org, 'assistant', p_run, 'settled', p_outcome, 'p56_assistant_run',
+    statement_timestamp(), statement_timestamp() + interval '60 seconds', statement_timestamp()
+  ) returning * into v_lease;
+  insert into private.organization_external_egress_evidence (
+    lease_id, org_id, kind, correlation_id, outcome, evidence_code,
+    evidence, evidence_sha256
+  ) values (
+    v_lease.lease_id, p_org, 'assistant', p_run, p_outcome, 'p56_assistant_run',
+    '{}'::jsonb, repeat('a', 64)
+  );
+  return jsonb_build_object(
+    'lease_id', v_lease.lease_id,
+    'lease_token', v_lease.lease_token
+  );
+end
+$$;
+
 -- ===== Structural claims =====
 select pg_temp.p56_assert(
   (select count(*) from pg_catalog.pg_class relation
@@ -49,6 +89,54 @@ select pg_temp.p56_assert(
       and grantee in ('anon', 'authenticated')
       and privilege_type <> 'SELECT'),
   'a browser role holds a DML grant on an assistant table');
+
+select pg_temp.p56_assert(
+  not exists (
+    select 1 from information_schema.role_table_grants
+    where table_schema = 'public'
+      and table_name in (
+        'assistant_messages', 'assistant_tool_calls',
+        'assistant_facts', 'assistant_source_references')
+      and grantee = 'authenticated' and privilege_type = 'SELECT'),
+  'raw assistant dialogue or evidence is directly selectable by the browser');
+
+select pg_temp.p56_assert(
+  (select count(*) from information_schema.columns
+    where table_schema = 'public' and table_name = 'assistant_runs'
+      and column_name in (
+        'actor_role', 'actor_scopes', 'actor_access_mode', 'actor_capabilities')) = 4,
+  'assistant_runs does not retain the authorization snapshot needed for history rechecks');
+
+select pg_temp.p56_assert(
+  to_regprocedure(
+    'public.assistant_record_run(uuid,uuid,boolean,text,jsonb,text,text,text,text,integer,integer,bigint,integer,boolean,jsonb,jsonb,jsonb,jsonb,uuid,uuid,jsonb)'
+  ) is not null,
+  'assistant_record_run is not fenced by an egress lease id and token');
+
+select pg_temp.p56_assert(
+  to_regprocedure(
+    'public.service_assistant_conversation_snapshot(uuid,uuid,uuid,integer)'
+  ) is not null
+  and not has_function_privilege(
+    'authenticated',
+    'public.service_assistant_conversation_snapshot(uuid,uuid,uuid,integer)',
+    'execute')
+  and has_function_privilege(
+    'service_role',
+    'public.service_assistant_conversation_snapshot(uuid,uuid,uuid,integer)',
+    'execute'),
+  'the structured history snapshot is not service-role-only');
+
+select pg_temp.p56_assert(
+  not has_function_privilege(
+    'authenticated',
+    'public.assistant_record_proposal_outcome(uuid,uuid,uuid,boolean,uuid,text)',
+    'execute')
+  and has_function_privilege(
+    'service_role',
+    'public.assistant_record_proposal_outcome(uuid,uuid,uuid,boolean,uuid,text)',
+    'execute'),
+  'proposal outcomes can be forged outside the service boundary');
 
 -- The policy table's only writer is the reasoned command: even service_role lost its default
 -- CRUD, the org_autonomy_policies precedent.
@@ -77,6 +165,12 @@ insert into public.profiles (id, org_id, full_name, role) values
   ('66000000-0000-4000-8000-000000000002', '56000000-0000-4000-8000-000000000001', 'P56 office 1', 'office'),
   ('66000000-0000-4000-8000-000000000003', '56000000-0000-4000-8000-000000000001', 'P56 office 2', 'office'),
   ('66000000-0000-4000-8000-000000000004', '56000000-0000-4000-8000-000000000002', 'P56 owner B',  'owner');
+
+insert into public.suppliers (id, org_id, name) values
+  ('56000000-0000-4000-8000-0000000000aa',
+   '56000000-0000-4000-8000-000000000001', 'P56 supplier A'),
+  ('56000000-0000-4000-8000-0000000000bb',
+   '56000000-0000-4000-8000-000000000002', 'P56 supplier B');
 
 insert into public.platform_admins (user_id, note) values
   ('66000000-0000-4000-8000-000000000005', 'P56 platform ops');
@@ -136,8 +230,29 @@ select pg_temp.p56_assert(
   'a stated quota with room refused the preflight');
 
 do $$
-declare v_result jsonb;
 begin
+  perform public.assistant_record_run(
+    '56000000-0000-4000-8000-00000000afff'::uuid, null, false,
+    'forged browser run', null, 'failed', 'assistant_provider_unavailable',
+    null, null, null, null, null, 1, false,
+    '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, null,
+    '56000000-0000-4000-8000-00000000eeee'::uuid,
+    '56000000-0000-4000-8000-00000000dddd'::uuid,
+    pg_temp.p56_capabilities(false));
+  raise exception 'expected a browser-forged run without the Edge lease secret to refuse';
+exception when insufficient_privilege then
+  if sqlerrm <> 'assistant_egress_lease_invalid' then raise; end if;
+end
+$$;
+
+do $$
+declare
+  v_result jsonb;
+  v_lease jsonb;
+begin
+  v_lease := pg_temp.p56_lease(
+    '56000000-0000-4000-8000-000000000001',
+    '56000000-0000-4000-8000-00000000a001');
   v_result := public.assistant_record_run(
     '56000000-0000-4000-8000-00000000a001'::uuid, null, true,
     'כמה ספקים פעילים יש לנו?',
@@ -149,21 +264,28 @@ begin
     jsonb_build_array(
       jsonb_build_object('id', 'f1', 'kind', 'metric.count', 'subject', null,
         'label', 'ספקים פעילים', 'value', 3, 'unit', 'count',
-        'classification', 'tenant_standard', 'as_of', now()),
+        'tool', 'summary.metrics', 'classification', 'tenant_standard', 'as_of', now()),
       jsonb_build_object('id', 'f2', 'kind', 'supplier.balance',
         'subject', jsonb_build_object('entity', 'supplier',
                                       'id', '56000000-0000-4000-8000-0000000000aa'),
         'label', 'יתרת ספק', 'value', 118.5, 'unit', 'ils',
-        'classification', 'financial_sensitive', 'as_of', now())),
+        'tool', 'summary.metrics', 'classification', 'financial_sensitive', 'as_of', now())),
     jsonb_build_array(jsonb_build_object(
       'id', 's1', 'entity', 'supplier',
       'entity_id', '56000000-0000-4000-8000-0000000000aa',
-      'label', 'ספק לדוגמה', 'route', '/suppliers', 'classification', 'tenant_standard')),
-    null);
+      'label', 'ספק לדוגמה',
+      'route', '/suppliers/56000000-0000-4000-8000-0000000000aa',
+      'classification', 'tenant_standard')),
+    null,
+    (v_lease ->> 'lease_id')::uuid,
+    (v_lease ->> 'lease_token')::uuid,
+    pg_temp.p56_capabilities(true));
   if coalesce((v_result ->> 'idempotent')::boolean, true) then
     raise exception 'a first run reported itself as a replay';
   end if;
   perform set_config('p56.conversation', v_result ->> 'conversation_id', true);
+  perform set_config('p56.lease_a001', v_lease ->> 'lease_id', true);
+  perform set_config('p56.token_a001', v_lease ->> 'lease_token', true);
 end
 $$;
 
@@ -178,15 +300,28 @@ select pg_temp.p56_assert(
     select id, title, created_at, updated_at from assistant_conversations
     order by updated_at desc limit 20) listed) = 1,
   'the conversation list shape the client selects did not return the conversation');
+select pg_temp.p56_assert(
+  (select title from assistant_conversations limit 1) = 'שיחה עם העוזר',
+  'a conversation title retained the user question instead of the generic title');
 
 -- A replayed Edge call finds its run and moves nothing.
 do $$
-declare v_result jsonb;
+declare
+  v_result jsonb;
+  v_lease jsonb;
 begin
+  v_lease := pg_temp.p56_lease(
+    '56000000-0000-4000-8000-000000000001',
+    '56000000-0000-4000-8000-00000000a002');
+  perform set_config('p56.lease_a002', v_lease ->> 'lease_id', true);
+  perform set_config('p56.token_a002', v_lease ->> 'lease_token', true);
   v_result := public.assistant_record_run(
     '56000000-0000-4000-8000-00000000a001'::uuid, null, true, 'replay', null,
     'succeeded', null, null, null, null, null, null, null, true,
-    '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, null);
+    '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, null,
+    current_setting('p56.lease_a001')::uuid,
+    current_setting('p56.token_a001')::uuid,
+    pg_temp.p56_capabilities(true));
   if not coalesce((v_result ->> 'idempotent')::boolean, false) then
     raise exception 'a replayed run id was recorded as a new run';
   end if;
@@ -196,11 +331,27 @@ select pg_temp.p56_assert(
   (select used from public.organization_usage_snapshot()
     where metric_key = 'assistant_runs.monthly') = 1,
   'a replayed run moved the usage counter a second time');
+reset role;
 select pg_temp.p56_assert(
   (select count(*) from assistant_messages
     where conversation_id = current_setting('p56.conversation')::uuid) = 2,
   'a replayed run duplicated the stored messages');
-reset role;
+
+do $$
+begin
+  insert into assistant_facts (
+    org_id, run_id, fact_ref, kind, entity, entity_id, label, tool,
+    value_numeric, unit, classification, as_of
+  ) values (
+    '56000000-0000-4000-8000-000000000001',
+    '56000000-0000-4000-8000-00000000a001', 'foreign', 'supplier.balance',
+    'supplier', '56000000-0000-4000-8000-0000000000bb',
+    'foreign supplier balance', 'p56', 1, 'ils', 'financial_sensitive', now());
+  raise exception 'expected a cross-tenant polymorphic fact subject to refuse';
+exception when foreign_key_violation then
+  if sqlerrm <> 'assistant_evidence_entity_invalid' then raise; end if;
+end
+$$;
 
 -- Headroom for the proposal runs below; the write-time enforcement is proven separately.
 update public.plan_entitlements
@@ -212,11 +363,15 @@ select pg_temp.p56_as('66000000-0000-4000-8000-000000000003');
 set local role authenticated;
 select pg_temp.p56_assert(
   (select count(*) from assistant_conversations) = 0
-  and (select count(*) from assistant_messages) = 0
-  and (select count(*) from assistant_runs) = 0
-  and (select count(*) from assistant_facts) = 0
-  and (select count(*) from assistant_source_references) = 0,
-  'a colleague in the same organization read another user''s dialogue');
+  and (select count(*) from assistant_runs) = 0,
+  'a colleague in the same organization read another user''s conversation metadata');
+do $$
+begin
+  perform count(*) from assistant_messages;
+  raise exception 'expected raw messages to be unavailable through PostgREST role grants';
+exception when insufficient_privilege then null;
+end
+$$;
 reset role;
 
 -- ===== A user cannot read another organization''s conversation =====
@@ -224,18 +379,16 @@ select pg_temp.p56_as('66000000-0000-4000-8000-000000000004');
 set local role authenticated;
 select pg_temp.p56_assert(
   (select count(*) from assistant_conversations) = 0
-  and (select count(*) from assistant_messages) = 0
   and (select count(*) from assistant_runs) = 0,
-  'a user read another organization''s dialogue');
+  'a user read another organization''s assistant metadata');
 reset role;
 
 -- ===== The owner reads health and cost, never text =====
 select pg_temp.p56_as('66000000-0000-4000-8000-000000000001');
 set local role authenticated;
 select pg_temp.p56_assert(
-  (select count(*) from assistant_messages) = 0
-  and (select count(*) from assistant_conversations) = 0,
-  'the organization owner read an employee''s dialogue rows');
+  (select count(*) from assistant_conversations) = 0,
+  'the organization owner read an employee''s conversation rows');
 select pg_temp.p56_assert(
   (select run_count from public.assistant_org_health()) = 1
   and (select input_tokens from public.assistant_org_health()) = 1000
@@ -377,7 +530,10 @@ begin
       'command', 'create_purchase_order_draft',
       'summary', 'טיוטת הזמנה לספק לדוגמה',
       'payload', jsonb_build_object('supplier_id', '56000000-0000-4000-8000-0000000000aa'),
-      'expires_at', now() + interval '1 hour'));
+      'expires_at', now() + interval '1 hour'),
+    current_setting('p56.lease_a002')::uuid,
+    current_setting('p56.token_a002')::uuid,
+    pg_temp.p56_capabilities(true));
   perform set_config('p56.proposal', v_result ->> 'proposal_id', true);
 end
 $$;
@@ -414,16 +570,49 @@ select pg_temp.p56_assert(
   (public.assistant_confirm_proposal(current_setting('p56.proposal')::uuid)
     ->> 'state') = 'confirmed',
   'the author could not confirm their own awaiting proposal');
+do $$
+begin
+  perform public.assistant_record_proposal_outcome(
+    '56000000-0000-4000-8000-000000000001',
+    '66000000-0000-4000-8000-000000000002',
+    current_setting('p56.proposal')::uuid, true,
+    '56000000-0000-4000-8000-0000000000ee'::uuid, null);
+  raise exception 'expected an authenticated caller to be unable to forge an execution outcome';
+exception when insufficient_privilege then null;
+end
+$$;
+reset role;
+
+insert into audit_logs (id, org_id, user_id, action, entity_type, entity_id, reason)
+values (
+  '56000000-0000-4000-8000-0000000000ee',
+  '56000000-0000-4000-8000-000000000001',
+  '66000000-0000-4000-8000-000000000002',
+  'purchase_order_created', 'purchase_orders',
+  '56000000-0000-4000-8000-0000000000aa', 'P56 underlying command audit');
+
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
 select pg_temp.p56_assert(
   (public.assistant_record_proposal_outcome(
+    '56000000-0000-4000-8000-000000000001',
+    '66000000-0000-4000-8000-000000000002',
     current_setting('p56.proposal')::uuid, true,
     '56000000-0000-4000-8000-0000000000ee'::uuid, null) ->> 'state') = 'executed',
-  'the confirmed proposal could not record its executed outcome');
+  'the service boundary could not record the audit-backed executed outcome');
+reset role;
 
 -- An expired proposal refuses confirmation; the flip to expired is the retention sweep''s job.
+select pg_temp.p56_as('66000000-0000-4000-8000-000000000002');
+set local role authenticated;
 do $$
-declare v_result jsonb;
+declare
+  v_result jsonb;
+  v_lease jsonb;
 begin
+  v_lease := pg_temp.p56_lease(
+    '56000000-0000-4000-8000-000000000001',
+    '56000000-0000-4000-8000-00000000a003');
   v_result := public.assistant_record_run(
     '56000000-0000-4000-8000-00000000a003'::uuid,
     current_setting('p56.conversation')::uuid, true,
@@ -432,7 +621,10 @@ begin
     '[]'::jsonb, '[]'::jsonb, '[]'::jsonb,
     jsonb_build_object(
       'command', 'create_purchase_order_draft', 'summary', 'טיוטה שפגה',
-      'payload', '{}'::jsonb, 'expires_at', now() - interval '1 minute'));
+      'payload', '{}'::jsonb, 'expires_at', now() - interval '1 minute'),
+    (v_lease ->> 'lease_id')::uuid,
+    (v_lease ->> 'lease_token')::uuid,
+    pg_temp.p56_capabilities(true));
   perform set_config('p56.expired_proposal', v_result ->> 'proposal_id', true);
   begin
     perform public.assistant_confirm_proposal((v_result ->> 'proposal_id')::uuid);
@@ -488,20 +680,30 @@ begin
   v_result := public.assistant_record_run(
     '56000000-0000-4000-8000-00000000a001'::uuid, null, true, 'retry at the limit', null,
     'succeeded', null, null, null, null, null, null, null, true,
-    '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, null);
+    '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, null,
+    current_setting('p56.lease_a001')::uuid,
+    current_setting('p56.token_a001')::uuid,
+    pg_temp.p56_capabilities(true));
   if not coalesce((v_result ->> 'idempotent')::boolean, false) then
     raise exception 'a retried recording at the limit was treated as a new run';
   end if;
 end
 $$;
 do $$
+declare v_lease jsonb;
 begin
+  v_lease := pg_temp.p56_lease(
+    '56000000-0000-4000-8000-000000000001',
+    '56000000-0000-4000-8000-00000000a004');
   perform public.assistant_record_run(
     '56000000-0000-4000-8000-00000000a004'::uuid,
     current_setting('p56.conversation')::uuid, true,
     'שאלה רביעית', '{"blocks":[{"type":"text","text":"תשובה"}]}'::jsonb,
     'succeeded', null, 'p56-model', 'v1', 100, 50, 100, 300, true,
-    '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, null);
+    '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, null,
+    (v_lease ->> 'lease_id')::uuid,
+    (v_lease ->> 'lease_token')::uuid,
+    pg_temp.p56_capabilities(true));
   raise exception 'expected the write-time quota to refuse a fourth run';
 exception when raise_exception then
   if sqlerrm <> 'assistant_limit_reached' then raise; end if;
@@ -522,43 +724,45 @@ update public.plan_entitlements
    set unlimited = false, numeric_limit = 10, updated_at = now()
  where plan_key = 'free' and entitlement_key = 'assistant_runs.monthly';
 
--- ===== The Edge context read is ownership-guarded, and the totals read is honest about nulls =====
+-- ===== Raw history is service-only and structured; totals stay caller-bound =====
 select pg_temp.p56_as('66000000-0000-4000-8000-000000000002');
 set local role authenticated;
-select pg_temp.p56_assert(
-  (select count(*) from public.assistant_conversation_context(
-    current_setting('p56.conversation')::uuid, 12)) = 6
-  and (select context.content from public.assistant_conversation_context(
-    current_setting('p56.conversation')::uuid, 12) context limit 1)
-      = 'כמה ספקים פעילים יש לנו?',
-  'the conversation context did not return the owner''s messages oldest-first');
+do $$
+begin
+  perform public.service_assistant_conversation_snapshot(
+    '56000000-0000-4000-8000-000000000001',
+    '66000000-0000-4000-8000-000000000002',
+    current_setting('p56.conversation')::uuid, 12);
+  raise exception 'expected the raw history snapshot to refuse an authenticated browser';
+exception when insufficient_privilege then null;
+end
+$$;
 select pg_temp.p56_assert(
   (public.assistant_run_totals() ->> 'org_month')::numeric = 3
   and (public.assistant_run_totals() ->> 'org_month_cost')::bigint = 750,
   'the run totals did not report the metered period count and the summed cost');
 reset role;
 
--- A colleague holding the conversation id gets a RAISE, not an empty context: the id arrives
--- from the browser, and this definer body is the only thing standing there.
-select pg_temp.p56_as('66000000-0000-4000-8000-000000000003');
-set local role authenticated;
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+select pg_temp.p56_assert(
+  jsonb_array_length(public.service_assistant_conversation_snapshot(
+    '56000000-0000-4000-8000-000000000001',
+    '66000000-0000-4000-8000-000000000002',
+    current_setting('p56.conversation')::uuid, 12) -> 'messages') = 6
+  and public.service_assistant_conversation_snapshot(
+    '56000000-0000-4000-8000-000000000001',
+    '66000000-0000-4000-8000-000000000002',
+    current_setting('p56.conversation')::uuid, 12)
+      #>> '{messages,0,question}' = 'כמה ספקים פעילים יש לנו?',
+  'the service snapshot did not preserve structured messages oldest-first');
 do $$
 begin
-  perform count(*) from public.assistant_conversation_context(
+  perform public.service_assistant_conversation_snapshot(
+    '56000000-0000-4000-8000-000000000001',
+    '66000000-0000-4000-8000-000000000003',
     current_setting('p56.conversation')::uuid, 12);
-  raise exception 'expected a colleague''s context read to raise rather than return';
-exception when insufficient_privilege then
-  if sqlerrm <> 'assistant_history_unavailable' then raise; end if;
-end
-$$;
-reset role;
-select pg_temp.p56_as('66000000-0000-4000-8000-000000000004');
-set local role authenticated;
-do $$
-begin
-  perform count(*) from public.assistant_conversation_context(
-    current_setting('p56.conversation')::uuid, 12);
-  raise exception 'expected another organization''s context read to raise rather than return';
+  raise exception 'expected a mismatched user snapshot to refuse';
 exception when insufficient_privilege then
   if sqlerrm <> 'assistant_history_unavailable' then raise; end if;
 end
@@ -587,8 +791,31 @@ select pg_temp.p56_assert(
   and (select count(*) from assistant_source_references
     where org_id = '56000000-0000-4000-8000-000000000001') = 0
   and (select count(*) from assistant_tool_calls
-    where org_id = '56000000-0000-4000-8000-000000000001') = 0,
-  'deleting a conversation left dialogue-derived rows behind');
+    where org_id = '56000000-0000-4000-8000-000000000001') = 0
+  and (select count(*) from assistant_feedback
+    where run_id in (
+      '56000000-0000-4000-8000-00000000a002',
+      '56000000-0000-4000-8000-00000000a003')) = 0,
+  format(
+    'deleting a conversation left dialogue-derived rows behind: messages=%s facts=%s sources=%s tool_calls=%s feedback=%s',
+    (select count(*) from assistant_messages
+      where conversation_id = current_setting('p56.conversation')::uuid),
+    (select count(*) from assistant_facts
+      where org_id = '56000000-0000-4000-8000-000000000001'),
+    (select count(*) from assistant_source_references
+      where org_id = '56000000-0000-4000-8000-000000000001'),
+    (select count(*) from assistant_tool_calls
+      where org_id = '56000000-0000-4000-8000-000000000001'),
+    (select count(*) from assistant_feedback
+      where run_id in (
+        '56000000-0000-4000-8000-00000000a002',
+        '56000000-0000-4000-8000-00000000a003'))));
+select pg_temp.p56_assert(
+  not exists (select 1 from assistant_action_proposals
+    where id = current_setting('p56.expired_proposal')::uuid)
+  and exists (select 1 from assistant_action_proposals
+    where id = current_setting('p56.proposal')::uuid and state = 'executed'),
+  'conversation deletion did not remove an unconfirmed proposal or removed an executed record');
 select pg_temp.p56_assert(
   (select count(*) from assistant_runs
     where org_id = '56000000-0000-4000-8000-000000000001') = 3,
@@ -613,6 +840,30 @@ values ('56000000-0000-4000-8000-000000000001', '56000000-0000-4000-8000-0000000
         '56000000-0000-4000-8000-00000000a01d', 'user', 'שאלה ישנה',
         now() - interval '120 days');
 
+-- Exact history boundaries: 89 days survives; 91 days is purged by the 90-day policy.
+insert into assistant_conversations (id, org_id, user_id, started_at, updated_at, created_at)
+values
+  ('56000000-0000-4000-8000-000000000089', '56000000-0000-4000-8000-000000000001',
+   '66000000-0000-4000-8000-000000000002',
+   now() - interval '89 days', now() - interval '89 days', now() - interval '89 days'),
+  ('56000000-0000-4000-8000-000000000091', '56000000-0000-4000-8000-000000000001',
+   '66000000-0000-4000-8000-000000000002',
+   now() - interval '91 days', now() - interval '91 days', now() - interval '91 days');
+insert into assistant_runs (id, org_id, user_id, conversation_id, status, complete, created_at)
+values
+  ('56000000-0000-4000-8000-00000000a089', '56000000-0000-4000-8000-000000000001',
+   '66000000-0000-4000-8000-000000000002', '56000000-0000-4000-8000-000000000089',
+   'succeeded', true, now() - interval '89 days'),
+  ('56000000-0000-4000-8000-00000000a091', '56000000-0000-4000-8000-000000000001',
+   '66000000-0000-4000-8000-000000000002', '56000000-0000-4000-8000-000000000091',
+   'succeeded', true, now() - interval '91 days');
+insert into assistant_messages (org_id, conversation_id, run_id, author, question, created_at)
+values
+  ('56000000-0000-4000-8000-000000000001', '56000000-0000-4000-8000-000000000089',
+   '56000000-0000-4000-8000-00000000a089', 'user', 'P56 day 89', now() - interval '89 days'),
+  ('56000000-0000-4000-8000-000000000001', '56000000-0000-4000-8000-000000000091',
+   '56000000-0000-4000-8000-00000000a091', 'user', 'P56 day 91', now() - interval '91 days');
+
 -- An old proposal that never got confirmed, and an old one that WAS executed. The second must
 -- survive the purge: it explains a business write.
 insert into assistant_action_proposals (
@@ -622,6 +873,18 @@ insert into assistant_action_proposals (
    '66000000-0000-4000-8000-000000000002', null, 'awaiting_confirmation',
    'create_purchase_order_draft', 'P56 stale draft', '{}'::jsonb,
    now() - interval '119 days', now() - interval '120 days'),
+  ('56000000-0000-4000-8000-00000000b029', '56000000-0000-4000-8000-000000000001',
+   '66000000-0000-4000-8000-000000000002', null, 'awaiting_confirmation',
+   'create_purchase_order_draft', 'P56 day 29 proposal', '{}'::jsonb,
+   now() - interval '28 days', now() - interval '29 days'),
+  ('56000000-0000-4000-8000-00000000b031', '56000000-0000-4000-8000-000000000001',
+   '66000000-0000-4000-8000-000000000002', null, 'awaiting_confirmation',
+   'create_purchase_order_draft', 'P56 day 31 proposal', '{}'::jsonb,
+   now() - interval '30 days', now() - interval '31 days'),
+  ('56000000-0000-4000-8000-00000000b0dd', '56000000-0000-4000-8000-000000000001',
+   '66000000-0000-4000-8000-000000000002', null, 'awaiting_confirmation',
+   'create_purchase_order_draft', 'P56 recent overdue proposal', '{}'::jsonb,
+   now() - interval '1 minute', now() - interval '1 day'),
   ('56000000-0000-4000-8000-00000000beee', '56000000-0000-4000-8000-000000000001',
    '66000000-0000-4000-8000-000000000002', null, 'awaiting_confirmation',
    'create_purchase_order_draft', 'P56 old executed', '{}'::jsonb,
@@ -634,7 +897,13 @@ update assistant_action_proposals set state = 'executed', executed_at = now(),
 where id = '56000000-0000-4000-8000-00000000beee';
 
 select (select count(*) from audit_logs)::text as before \gset purge_audit_
-select private.purge_assistant_history(90);
+select set_config(
+  'p56.purge_result', private.purge_assistant_history(90)::text, true);
+
+select pg_temp.p56_assert(
+  (current_setting('p56.purge_result')::jsonb ->> 'retention_days')::int = 90
+  and (current_setting('p56.purge_result')::jsonb ->> 'proposal_retention_days')::int = 30,
+  'the purge did not report the independent history and proposal retention windows');
 
 select pg_temp.p56_assert(
   not exists (select 1 from assistant_runs
@@ -645,19 +914,32 @@ select pg_temp.p56_assert(
     where id = '56000000-0000-4000-8000-00000000c01d'),
   'the purge left dialogue older than the retention window');
 select pg_temp.p56_assert(
-  (select count(*) from assistant_runs
-    where org_id = '56000000-0000-4000-8000-000000000001'
-      and id <> '56000000-0000-4000-8000-00000000a01d') = 3,
-  'the purge deleted runs inside the retention window');
+  exists (select 1 from assistant_runs
+    where id = '56000000-0000-4000-8000-00000000a089')
+  and exists (select 1 from assistant_messages
+    where conversation_id = '56000000-0000-4000-8000-000000000089')
+  and exists (select 1 from assistant_conversations
+    where id = '56000000-0000-4000-8000-000000000089')
+  and not exists (select 1 from assistant_runs
+    where id = '56000000-0000-4000-8000-00000000a091')
+  and not exists (select 1 from assistant_messages
+    where conversation_id = '56000000-0000-4000-8000-000000000091')
+  and not exists (select 1 from assistant_conversations
+    where id = '56000000-0000-4000-8000-000000000091'),
+  'the 89/91-day history boundary was not enforced');
 select pg_temp.p56_assert(
   not exists (select 1 from assistant_action_proposals
-    where id = '56000000-0000-4000-8000-00000000b01d'),
-  'the purge kept a stale unexecuted proposal past the window');
+    where id in (
+      '56000000-0000-4000-8000-00000000b01d',
+      '56000000-0000-4000-8000-00000000b031'))
+  and exists (select 1 from assistant_action_proposals
+    where id = '56000000-0000-4000-8000-00000000b029'),
+  'the 29/31-day unexecuted proposal boundary was not enforced');
 -- The sweep half of the purge: the recent-but-overdue proposal from the confirmation test above
 -- is flipped to expired rather than deleted -- it is inside the retention window.
 select pg_temp.p56_assert(
   (select state from assistant_action_proposals
-    where id = current_setting('p56.expired_proposal')::uuid) = 'expired',
+    where id = '56000000-0000-4000-8000-00000000b0dd') = 'expired',
   'the retention sweep did not expire an overdue awaiting proposal');
 select pg_temp.p56_assert(
   exists (select 1 from assistant_action_proposals

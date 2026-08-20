@@ -12,6 +12,7 @@ import type {
   SourceReference,
   ToolEnvelope,
 } from "../../../../src/lib/assistant/contracts.ts";
+import { PRICE_INCREASE_SCOPE_DETAIL } from "../../../../src/lib/alertRules.ts";
 import { addCalendarDays, toZoneISO } from "../time.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
 
@@ -142,7 +143,7 @@ export const getOpenAlertsTool: AssistantTool = {
               ? [listSource("עליות מחיר", "/prices?increases=1")]
               : [],
             warnings: [
-              "לפי המחירון. מה שנגבה בפועל בחשבונית אינו נמדד — לחשבונית אין שורות פריטים",
+              PRICE_INCREASE_SCOPE_DETAIL,
             ],
           };
         },

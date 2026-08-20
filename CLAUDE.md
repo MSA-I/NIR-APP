@@ -1,4 +1,4 @@
-# SupplyFlow — חוקת הפרויקט
+# InPlace — חוקת הפרויקט
 
 מערכת procurement-to-payment בעברית RTL. **עוברת ממערכת ללקוח יחיד למוצר SaaS רב-דיירי.**
 

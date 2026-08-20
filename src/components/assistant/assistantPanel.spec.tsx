@@ -45,7 +45,14 @@ const makeResult = (over: Partial<AssistantRunResult> = {}): AssistantRunResult 
   answer: {
     blocks: [
       { type: 'text', text: 'בשבוע האחרון נקלטו חשבוניות חדשות.' },
-      { type: 'claim', text: 'היתרה הפתוחה לספק ירקות השדה גבוהה מהרגיל.', fact_ids: ['f1'], source_ids: ['s1'] },
+      {
+        type: 'claim',
+        text: 'היתרה הפתוחה לספק ירקות השדה גבוהה מהרגיל.',
+        claim_kind: 'supplier.balance',
+        subject: { entity: 'supplier', id: 'sup-1' },
+        fact_ids: ['f1'],
+        source_ids: ['s1'],
+      },
     ],
     next_steps: [],
     no_answer_reason: null,
@@ -195,7 +202,14 @@ describe('העוזר של InPlace — הפאנל', () => {
       }],
       sources: [],
       answer: {
-        blocks: [{ type: 'claim', text: 'אי אפשר למדוד תשלומים ללא תאריך יעד.', fact_ids: ['f1'], source_ids: [] }],
+        blocks: [{
+          type: 'claim',
+          text: 'אי אפשר למדוד תשלומים ללא תאריך יעד.',
+          claim_kind: 'metric.count',
+          subject: null,
+          fact_ids: ['f1'],
+          source_ids: [],
+        }],
         next_steps: [],
         no_answer_reason: null,
       },

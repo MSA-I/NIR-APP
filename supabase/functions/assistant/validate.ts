@@ -11,6 +11,10 @@ import {
   mayReachProvider,
   type SourceReference,
 } from "../../../src/lib/assistant/contracts.ts";
+import {
+  assistantSourceRouteDecision,
+} from "../../../src/lib/assistant/routeAccess.ts";
+import type { AssistantRole } from "../../../src/lib/assistant/contracts.ts";
 
 export type ValidationResult =
   | { ok: true; answer: AssistantAnswer }
@@ -79,6 +83,7 @@ export function validateAnswer(
   raw: unknown,
   facts: readonly Fact[],
   sources: readonly SourceReference[],
+  role?: AssistantRole,
 ): ValidationResult {
   const parsed = AssistantAnswerSchema.safeParse(raw);
   if (!parsed.success) {
@@ -93,6 +98,15 @@ export function validateAnswer(
   const errors: string[] = [];
   const factById = new Map(facts.map((fact) => [fact.id, fact]));
   const sourceIds = new Set(sources.map((source) => source.id));
+
+  for (const source of sources) {
+    const routeDecision = assistantSourceRouteDecision(source, role);
+    if (routeDecision === "not_allowlisted") {
+      errors.push(`source:${source.id}:route_not_allowlisted`);
+    } else if (routeDecision === "not_permitted") {
+      errors.push(`source:${source.id}:route_not_permitted`);
+    }
+  }
 
   answer.blocks.forEach((block, index) => {
     if (block.type === "text") {
@@ -116,6 +130,20 @@ export function validateAnswer(
       }
       cited.push(fact);
     }
+    const sameKind = cited.filter((fact) => fact.kind === block.claim_kind);
+    if (sameKind.length === 0) {
+      errors.push(`block:${index}:fact_does_not_support_claim_kind`);
+    }
+    const supporting = sameKind.filter((fact) => {
+      if (fact.subject === null || block.subject === null) {
+        return fact.subject === null && block.subject === null;
+      }
+      return fact.subject.entity === block.subject.entity &&
+        fact.subject.id === block.subject.id;
+    });
+    if (sameKind.length > 0 && supporting.length === 0) {
+      errors.push(`block:${index}:fact_does_not_support_claim_subject`);
+    }
     for (const sourceId of block.source_ids) {
       if (!sourceIds.has(sourceId)) {
         errors.push(`block:${index}:unknown_source_id:${sourceId}`);
@@ -127,7 +155,7 @@ export function validateAnswer(
     // somebody's window -- and a supplier named "ספק 2000" hands 2000 to every claim citing it.
     // A window or scope is described in words; the retry feedback teaches the model exactly that.
     const valueUnion = new Set<string>();
-    for (const fact of cited) {
+    for (const fact of supporting) {
       for (const numeral of valueNumeralsForFact(fact)) valueUnion.add(numeral);
     }
     for (const numeral of extractNumerals(block.text)) {

@@ -17,7 +17,7 @@ import {
 } from "../_shared/reserved-egress.ts";
 
 export { EgressReservationDeniedError };
-export type { ServiceRpc, ServiceRpcResult };
+export type { OrganizationEgressLease, ServiceRpc, ServiceRpcResult };
 
 export const ASSISTANT_EGRESS_KIND = "assistant" as const;
 

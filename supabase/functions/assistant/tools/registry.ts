@@ -185,6 +185,7 @@ export function serializeEnvelopeForProvider(
     facts: facts.map((fact) => ({
       id: fact.id,
       kind: fact.kind,
+      subject: fact.subject,
       label: fact.label,
       value: fact.value,
       unit: fact.unit,

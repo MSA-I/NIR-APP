@@ -209,12 +209,10 @@ export async function assertWithinLimits(
   for (const ceiling of ceilings) {
     if (ceiling.cap === null) continue;
     if (ceiling.current === null) {
-      if (ceiling.hard) {
-        // A set ceiling nobody can measure. Fail closed rather than run unmetered.
-        throw new AssistantEdgeError("assistant_limit_unknown");
-      }
-      console.error("assistant soft cap unmeasurable", ceiling.name);
-      continue;
+      // A configured ceiling nobody can measure is not a ceiling. Both hard and soft cost caps
+      // refuse until a real price source fills cost_micros; "soft" controls threshold behavior,
+      // not whether an unknown measurement may be treated as safe.
+      throw new AssistantEdgeError("assistant_limit_unknown");
     }
     if (ceiling.current >= ceiling.cap) {
       if (ceiling.hard) {

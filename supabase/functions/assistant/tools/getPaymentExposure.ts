@@ -83,7 +83,7 @@ export const getPaymentExposure: AssistantTool = {
     fact("דרישות תשלום הממתינות לאישור", values.pendingApproval, "count");
 
     const source = ctx.evidence.source({
-      entity: "payment_request",
+      entity: "organization",
       entity_id: ctx.actor.orgId,
       label: "מסך דרישות התשלום",
       route: "/payment-requests",

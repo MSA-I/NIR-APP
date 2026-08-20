@@ -122,6 +122,7 @@ export function hasToolReads(db: ToolDataPort): db is ToolReads {
 
 interface QueryResult {
   data: unknown[] | null;
+  count?: number | null;
   error: ReadError | null;
 }
 
@@ -139,7 +140,10 @@ export interface MinimalFilterBuilder extends PromiseLike<QueryResult> {
 
 export interface MinimalReadClient {
   from(table: string): {
-    select(columns: string): MinimalFilterBuilder;
+    select(
+      columns: string,
+      options?: { count?: "exact"; head?: boolean },
+    ): MinimalFilterBuilder;
   };
   rpc(
     name: string,
@@ -196,10 +200,18 @@ export function createSupabaseToolReads(client: MinimalReadClient): ToolReads {
     },
 
     async countSentOrders() {
-      // Kept for registry compatibility; derived from the same projected read.
-      const result = await this.listSentOrders(1);
+      const result = await client
+        .from("purchase_orders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "sent");
       if (result.error) return { count: null, error: result.error };
-      return { count: result.rows?.length ?? 0, error: null };
+      if (!Number.isSafeInteger(result.count) || (result.count ?? -1) < 0) {
+        return {
+          count: null,
+          error: { message: "sent_order_count_unavailable" },
+        };
+      }
+      return { count: result.count ?? null, error: null };
     },
 
     async listSentOrders(limit) {

@@ -96,11 +96,34 @@ Deno.test("get_open_alerts: the scope-limit sentences ride along verbatim", asyn
   const ctx = context(alertsDb(new Set()));
   const envelope = await runRegisteredTool(REGISTRY, ctx, "get_open_alerts", {});
   assert.ok(envelope.warnings.includes(
-    "לפי המחירון. מה שנגבה בפועל בחשבונית אינו נמדד — לחשבונית אין שורות פריטים",
+    "לפי המחירון בלבד. מחירי שורות החשבונית בפועל אינם חלק מהסריקה הזאת",
+  ));
+  assert.ok(!envelope.warnings.some((warning) =>
+    warning.includes("לחשבונית אין שורות פריטים")
   ));
   assert.ok(envelope.warnings.includes(
     "מכסה רק דרישות תשלום שהוזן להן תאריך. לחשבוניות אין מועד פירעון במערכת",
   ));
+});
+
+Deno.test("get_business_summary: registry refuses accountant before the invoker RPC runs", async () => {
+  let rpcCalled = false;
+  const ctx = context({
+    rpc: () => {
+      rpcCalled = true;
+      return Promise.resolve({ data: [], error: null });
+    },
+    countSentOrders: () => Promise.resolve({ count: 0, error: null }),
+  }, "accountant");
+  const envelope = await runRegisteredTool(
+    REGISTRY,
+    ctx,
+    "get_business_summary",
+    {},
+  );
+  assert.equal(envelope.complete, false);
+  assert.equal(envelope.failures[0].code, "not_permitted");
+  assert.equal(rpcCalled, false);
 });
 
 Deno.test("get_business_summary: a failed RPC is five named failures, not a fabrication", async () => {

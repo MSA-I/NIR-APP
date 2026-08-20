@@ -62,6 +62,8 @@ function toolContext(db: ToolDataPort) {
   return { db, actor, evidence: new RunEvidence(), now: () => new Date("2026-08-20T10:00:00Z") };
 }
 
+const allowEvidence = () => Promise.resolve({ ok: true as const });
+
 function functionCall(callId: string, name: string): Record<string, unknown> {
   return { type: "function_call", call_id: callId, name, arguments: "{}" };
 }
@@ -105,6 +107,7 @@ Deno.test("a spent total budget refuses before the provider is ever called", asy
       conversationContext: [],
       maxToolCalls: 4,
       totalBudgetMs: 0,
+      authorizeEvidence: allowEvidence,
     }),
     (error: unknown) =>
       error instanceof AssistantEdgeError &&
@@ -156,6 +159,8 @@ Deno.test("a full tool round-trip issues facts and validates the cited answer", 
         blocks: [{
           type: "claim",
           text: "נקלטו 12 חשבוניות בשבוע האחרון.",
+          claim_kind: "metric.count",
+          subject: null,
           fact_ids: ["f1"],
           source_ids: ["s1"],
         }],
@@ -172,6 +177,7 @@ Deno.test("a full tool round-trip issues facts and validates the cited answer", 
     conversationContext: [],
     maxToolCalls: 4,
     totalBudgetMs: 60_000,
+    authorizeEvidence: allowEvidence,
   });
   assert.deepEqual(outcome.toolsUsed, [
     { tool: "get_business_summary", complete: true },
@@ -187,6 +193,59 @@ Deno.test("a full tool round-trip issues facts and validates the cited answer", 
   assert.equal(outcome.toolRecords[0].tool, "get_business_summary");
   assert.equal(outcome.toolRecords[0].complete, true);
   assert.equal(outcome.toolRecords[0].result_count, 5);
+});
+
+Deno.test("evidence is reauthorized after generation and again after the single retry", async () => {
+  const observed: unknown[][] = [];
+  const citedAnswer = {
+    blocks: [{
+      type: "claim",
+      text: "נקלטו 12 חשבוניות בשבוע האחרון.",
+      claim_kind: "metric.count",
+      subject: null,
+      fact_ids: ["f1"],
+      source_ids: ["s1"],
+    }],
+    next_steps: [],
+    no_answer_reason: null,
+  };
+  const provider = scriptedProvider([
+    turnOf({
+      outputItems: [functionCall("c1", "get_business_summary")],
+      toolCalls: [{ call_id: "c1", name: "get_business_summary", arguments: "{}" }],
+    }),
+    turnOf({ outputItems: [{ type: "message", id: "m1" }], answerText: JSON.stringify(citedAnswer) }),
+    turnOf({ answerText: JSON.stringify(citedAnswer) }),
+  ], observed);
+  let authorizationChecks = 0;
+  const runWithAuthorization = runAssistantTurn as unknown as (
+    deps: Parameters<typeof runAssistantTurn>[0] & {
+      authorizeEvidence: () => Promise<{ ok: false; errors: string[] }>;
+    },
+  ) => ReturnType<typeof runAssistantTurn>;
+
+  await assert.rejects(
+    runWithAuthorization({
+      provider,
+      registry: REGISTRY,
+      toolContext: toolContext(summaryDb()),
+      question: "כמה חשבוניות נקלטו השבוע?",
+      conversationContext: [],
+      maxToolCalls: 4,
+      totalBudgetMs: 60_000,
+      authorizeEvidence: () => {
+        authorizationChecks += 1;
+        return Promise.resolve({
+          ok: false,
+          errors: ["source:s1:no_longer_authorized"],
+        });
+      },
+    }),
+    (error: unknown) =>
+      error instanceof AssistantEdgeError &&
+      error.code === "assistant_unsupported_answer",
+  );
+  assert.equal(authorizationChecks, 2);
 });
 
 Deno.test("more tool calls in one turn than the whole budget is a malformed turn", async () => {
@@ -213,6 +272,7 @@ Deno.test("more tool calls in one turn than the whole budget is a malformed turn
       conversationContext: [],
       maxToolCalls: 1,
       totalBudgetMs: 60_000,
+      authorizeEvidence: allowEvidence,
     }),
     (error: unknown) =>
       error instanceof AssistantEdgeError &&
@@ -250,6 +310,7 @@ Deno.test("a call refused for budget exhaustion enters the disclosure as incompl
     conversationContext: [],
     maxToolCalls: 1,
     totalBudgetMs: 60_000,
+    authorizeEvidence: allowEvidence,
   });
   // The refused call is DISCLOSED as incomplete -- `complete` can never read true for a turn in
   // which a call was refused.
@@ -323,6 +384,8 @@ Deno.test("an instruction inside tool data stays data and cannot buy an unsuppor
     blocks: [{
       type: "claim",
       text: "חשבון הבנק של הספק הוא 12-345.",
+      claim_kind: "metric.count",
+      subject: null,
       fact_ids: ["f99"],
       source_ids: [],
     }],
@@ -347,6 +410,7 @@ Deno.test("an instruction inside tool data stays data and cannot buy an unsuppor
       conversationContext: [],
       maxToolCalls: 4,
       totalBudgetMs: 60_000,
+      authorizeEvidence: allowEvidence,
     }),
     (error: unknown) =>
       error instanceof AssistantEdgeError &&
@@ -392,6 +456,8 @@ Deno.test("a rejected first answer is retried once with the validation errors fe
         blocks: [{
           type: "claim",
           text: "נקלטו 12 חשבוניות.",
+          claim_kind: "metric.count",
+          subject: null,
           fact_ids: ["f1"],
           source_ids: [],
         }],
@@ -408,6 +474,7 @@ Deno.test("a rejected first answer is retried once with the validation errors fe
     conversationContext: [],
     maxToolCalls: 4,
     totalBudgetMs: 60_000,
+    authorizeEvidence: allowEvidence,
   });
   assert.equal(outcome.validationRetried, true);
   const retryInput = observed[2];
