@@ -42,16 +42,36 @@ fallback לעברית, ובדף יש מתג שפה. הטוקן נשאר ב-fragm
 חסימה לעשר דקות; אין IP קריא); כשלי lookup ב-`private.supplier_portal_lookup_failures`;
 נעילות קישור ב-`supplier_order_links.locked_until`. משטח קריאה מורשה יתווסף בפאזת התצפיות.
 
-## 2. מייל יוצא — Resend (send-invite פעיל; שליחת הזמנות בפאזה הבאה)
+## 2. מייל יוצא — Resend (send-invite + ‏email-sender פעילים)
 
-קיים היום: ‏`send-invite` שולח דרך `https://api.resend.com/emails` עם `RESEND_API_KEY`,
-‏`INVITE_FROM_EMAIL`, ‏idempotency ו-egress lease. **חסם תפעולי מתועד (DEBT §25):** בלי דומיין
-מאומת ב-Resend המסירה מוגבלת לכתובת בעל החשבון. אימות הדומיין הוא פעולת בעלים בלוח של Resend
+**Edge Function:** ‏`email-sender` ‏(`verify_jwt=true`; נקרא מהדפדפן עם JWT של owner/office אחרי
+לחיצת "שליחה במייל"). ה-claim ‏(`claim_email_order_message`, ‏0168) הוא גבול ההרשאה: העדפות
+תקשורת fail-closed, תקרת 5 ניסיונות, קפיאת `unknown` להגשה שנקטעה. ההזמנה מסומנת `sent` רק
+כשהספק אישר את קבלת ההודעה — האירוע נרשם ב-`email_order_messages` וה-settle מטביע את הסטטוס
+באותה טרנזקציה.
+
+| משתנה | תפקיד |
+|---|---|
+| `RESEND_API_KEY` | קיים (send-invite) |
+| `ORDERS_FROM_EMAIL` | זהות שולח להזמנות, למשל `InPlace <orders@example.co.il>`; ‏fallback ל-`INVITE_FROM_EMAIL` |
+| `APP_BASE_URL` | בסיס לקישורי הפורטל שבגוף המייל |
+| `ALLOWED_ORIGINS` | ‏allowlist ל-CORS (כמו send-invite) |
+
+**פריסה:** אחרי `0168` — ‏`supabase functions deploy email-sender` (‏verify_jwt ברירת מחדל).
+**כיבוי בלי לשבור עבודה ידנית:** מוחקים את `ORDERS_FROM_EMAIL` (הפונקציה עונה `misconfigured`,
+אפס fake-success), או מחזירים את הספק ל"ידני בלבד" בהעדפות התקשורת — זרימת ה-WhatsApp הידנית
+וההדפסה אינן תלויות בזה.
+**סיבוב סוד:** ‏`supabase secrets set RESEND_API_KEY=...` + ביטול המפתח הישן בלוח Resend.
+**‏replay של כשל:** כפתור "שליחה חוזרת" עד תקרת הניסיונות; מעבר לה — "איפוס ניסיונות" לבעלים
+(‏`reset_email_order_message`, מנומק ומתועד).
+
+**חסם תפעולי מתועד (DEBT §25):** בלי דומיין מאומת ב-Resend המסירה מוגבלת לכתובת בעל החשבון —
+הפונקציה מסמנת זאת בתשובה (`deliveryLimited`). אימות הדומיין הוא פעולת בעלים בלוח של Resend
 (‏DNS: ‏SPF+DKIM) ואינו כרוך בקוד.
 
-שדות שיידרשו לחיבור שליחת ההזמנות (פאזה B): זהות שולח פר-מוצר (`ORDERS_FROM_EMAIL`), סוד חתימת
-‏webhook של Resend ‏(`RESEND_WEBHOOK_SECRET`, חתימות בפורמט svix), ו-URL ה-webhook שירשם אצל
-הספק אל פונקציית `email-webhook` (טרם קיימת).
+שדות שעוד יידרשו לאירועי מסירה נכנסים (delivered/bounced, פאזת ה-webhooks): סוד חתימת webhook
+של Resend ‏(`RESEND_WEBHOOK_SECRET`, חתימות בפורמט svix) ו-URL שירשם אצל הספק אל פונקציית
+`email-webhook` (טרם קיימת).
 
 ## 3. ‏WhatsApp — תשתית DB קיימת (0028/0029), ספק לא מחובר
 

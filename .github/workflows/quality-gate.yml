@@ -245,6 +245,17 @@ jobs:
           ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-supplier-portal.log \
             || { echo 'Ignored or skipped supplier-portal cases are not acceptable.'; exit 1; }
 
+      - name: Email order-delivery template contracts
+        if: needs.changes.outputs.edge == 'true'
+        run: |
+          set -euo pipefail
+          npx --yes deno test \
+            supabase/functions/email-sender/templates.test.ts 2>&1 | tee deno-email-sender.log
+          grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-email-sender.log \
+            || { echo 'No email-sender test completed.'; exit 1; }
+          ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-email-sender.log \
+            || { echo 'Ignored or skipped email-sender cases are not acceptable.'; exit 1; }
+
       - name: Document preprocessing contracts
         if: needs.changes.outputs.edge == 'true'
         run: |

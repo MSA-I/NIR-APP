@@ -3751,6 +3751,72 @@ async function run(name, check) {
   }
 }
 
+async function supplierEmailDeliverySurface(browser) {
+  const context = await browser.newContext({
+    locale: 'he-IL',
+    serviceWorkers: 'block',
+    viewport: { width: 1440, height: 900 },
+  });
+  const page = await context.newPage();
+  captureConsole(page, 'supplier-email-delivery');
+  try {
+    await login(page, 'owner');
+
+    await page.goto(`${baseURL}/suppliers/aa000000-0000-4000-8000-000000000012`);
+    await settle(page);
+    const communicationHeading = page.getByRole('heading', { name: 'תקשורת עם הספק', exact: true });
+    await communicationHeading.waitFor();
+    const communicationCard = communicationHeading.locator('xpath=ancestor::div[contains(@class,"card")][1]');
+    await communicationCard.getByRole('button', { name: 'עריכה', exact: true }).click();
+
+    const preferences = page.getByRole('dialog', { name: 'העדפות תקשורת עם הספק' });
+    await preferences.waitFor();
+    await preferences.locator('#comm-channel').selectOption('email');
+    await preferences.locator('#comm-locale').selectOption('en');
+    await preferences.locator('#comm-reason').fill('Browser gate: supplier email delivery');
+    await auditAccessibility(page, 'supplier-email-preferences');
+    await page.screenshot({ path: path.join(outDir, 'supplier-email-preferences-1440.png'), fullPage: true });
+    report.screenshots.push('supplier-email-preferences-1440.png');
+    await preferences.getByRole('button', { name: 'שמירה', exact: true }).click();
+    await preferences.waitFor({ state: 'hidden' });
+    await communicationCard.getByText('מייל', { exact: true }).waitFor();
+    await communicationCard.getByText('alon@hadpaami-alef.demo', { exact: true }).waitFor();
+
+    await page.goto(`${baseURL}/orders/f0000000-0000-4000-8000-000000000014`);
+    await settle(page);
+    const emailHeading = page.getByRole('heading', { name: 'מסירת ההזמנה במייל', exact: true });
+    await emailHeading.waitFor();
+    const emailCard = emailHeading.locator('xpath=ancestor::div[contains(@class,"card")][1]');
+    const send = emailCard.getByRole('button', { name: 'שליחת ההזמנה במייל', exact: true });
+    await send.waitFor();
+    await page.screenshot({ path: path.join(outDir, 'supplier-email-order-1440.png'), fullPage: true });
+    report.screenshots.push('supplier-email-order-1440.png');
+
+    await send.click();
+    const confirm = page.getByRole('dialog', { name: 'שליחת ההזמנה לספק במייל' });
+    await confirm.waitFor();
+    assert.match(await confirm.textContent(), /תסומן כנשלחה רק לאחר שספק המייל יאשר/,
+      'email confirmation implied click success instead of provider acceptance');
+    await auditAccessibility(page, 'supplier-email-confirm');
+    await confirm.getByRole('button', { name: 'ביטול', exact: true }).click();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: path.join(outDir, 'supplier-email-order-390.png'), fullPage: true });
+    report.screenshots.push('supplier-email-order-390.png');
+    const metrics = await page.evaluate(() => ({
+      width: window.innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    const overflow = metrics.documentWidth - metrics.clientWidth;
+    report.viewports.push({ role: 'owner', label: 'supplier-email-390', ...metrics, overflow });
+    assert(overflow <= 1, `supplier-email/390: horizontal overflow ${overflow}px`);
+    await auditAccessibility(page, 'supplier-email-order-mobile');
+  } finally {
+    await closeContext(context);
+  }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true, executablePath: browserPath });
   try {
@@ -3801,6 +3867,7 @@ async function run(name, check) {
     await run('a feedback note is stored and a failed send says so', () => feedbackNoteChannel(browser));
     await run('consolidated supplier invoice uploads once and exposes three RTL reconciliation channels', () => consolidatedSupplierInvoice(browser));
     await run('supplier portal is bilingual, isolated, keyboard reachable and screen-reader named', () => supplierPortalLocales(browser));
+    await run('supplier email preferences and provider-accepted delivery stay explicit and responsive', () => supplierEmailDeliverySurface(browser));
   } finally {
     await browser.close();
   }

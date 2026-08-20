@@ -147,6 +147,26 @@ export const SUPPLIER_LINK_STATE: Record<string, StatusMeta> = {
   revoked: m('בוטל', 'idle'),
 };
 
+// Email order delivery (0168). `accepted` is the provider's word, not proof of reading;
+// `unknown` is an in-flight send whose lease died — frozen for reconciliation, never guessed.
+export const EMAIL_MESSAGE_STATUS: Record<string, StatusMeta> = {
+  queued: m('ממתינה לשליחה', 'idle'),
+  sending: m('נשלחת כעת', 'await'),
+  unknown: m('מצב לא ידוע', 'alert'),
+  accepted: m('נמסרה לספק המייל', 'info'),
+  delivered: m('נמסרה לנמען', 'done'),
+  bounced: m('הוחזרה (כתובת שגויה)', 'alert'),
+  failed: m('נכשלה', 'alert'),
+};
+
+// Supplier communication channel (0168 preferences).
+export const COMMUNICATION_CHANNEL: Record<string, StatusMeta> = {
+  manual: m('ידני בלבד', 'idle'),
+  email: m('מייל', 'info'),
+  whatsapp: m('WhatsApp', 'info'),
+  both: m('מייל ו-WhatsApp', 'info'),
+};
+
 export const RECEIPT_LINE_STATUS: Record<string, StatusMeta> = {
   full: m('התקבל מלא', 'done'),
   partial: m('התקבל חלקית', 'await'),
