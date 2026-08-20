@@ -734,7 +734,11 @@ update public.plan_entitlements
 
 -- ===== Raw history is service-only and structured; totals stay caller-bound =====
 select pg_temp.p56_as('66000000-0000-4000-8000-000000000002');
-set local role authenticated;
+-- The ACL itself is pinned above. Exercise the function's independent JWT-role
+-- guard through service_role, which may execute it. Direct denied EXECUTE is not
+-- used because the local Supabase PostgreSQL image can terminate the backend on
+-- that generic ACL path before PL/pgSQL can catch insufficient_privilege.
+set local role service_role;
 do $$
 begin
   perform public.service_assistant_conversation_snapshot(
@@ -742,7 +746,8 @@ begin
     '66000000-0000-4000-8000-000000000002',
     current_setting('p56.conversation')::uuid, 12);
   raise exception 'expected the raw history snapshot to refuse an authenticated browser';
-exception when insufficient_privilege then null;
+exception when insufficient_privilege then
+  if sqlerrm <> 'service_role_required' then raise; end if;
 end
 $$;
 select pg_temp.p56_assert(
