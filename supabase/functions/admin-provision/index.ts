@@ -16,7 +16,10 @@
  * email_confirm: true, password supplied by the operator).
  */
 
-import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+import {
+  provisionTenant, validateProvisionInput, type ProvisionResult,
+} from '../_shared/provision.ts';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -43,22 +46,6 @@ interface ProvisionRequest {
   categories?: string[];
 }
 
-interface ProvisionResult {
-  org_id: string;
-  owner_user_id: string;
-  categories_created: number;
-}
-
-/**
- * A single neutral bucket, NOT the food/beverage/cleaning set from supabase/seed.sql — those
- * describe a legacy tenant's business and would be an invented assumption about what a new
- * customer buys (docs/OPEN-DECISIONS.md:3). `products.category_id` is nullable, so a tenant
- * can also run with none. The operator can pass a real list in `categories`.
- */
-const DEFAULT_CATEGORIES = ['כללי'];
-
-const MIN_PASSWORD_LENGTH = 10;
-
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -68,66 +55,6 @@ function json(body: unknown, status: number): Response {
 
 function fail(code: ErrorCode, message: string, status: number, detail?: string): Response {
   return json({ error: { code, message, detail } }, status);
-}
-
-/** Returns a human-readable problem, or null when the payload is usable. */
-function validate(body: Partial<ProvisionRequest>): string | null {
-  const name = body.name?.trim();
-  if (!name) return 'שם הארגון חסר';
-  if (name.length > 200) return 'שם הארגון ארוך מדי';
-
-  const email = body.owner_email?.trim();
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'כתובת אימייל של בעל העסק אינה תקינה';
-
-  if (!body.owner_name?.trim()) return 'שם בעל העסק חסר';
-
-  if (!body.owner_password || body.owner_password.length < MIN_PASSWORD_LENGTH) {
-    return `סיסמה ראשונית חייבת להכיל לפחות ${MIN_PASSWORD_LENGTH} תווים`;
-  }
-
-  if (body.vat_rate !== undefined) {
-    if (typeof body.vat_rate !== 'number' || !Number.isFinite(body.vat_rate) || body.vat_rate < 0 || body.vat_rate > 100) {
-      return 'שיעור מע״מ אינו תקין';
-    }
-  }
-
-  if (body.categories !== undefined) {
-    if (!Array.isArray(body.categories) || body.categories.some((c) => typeof c !== 'string')) {
-      return 'רשימת הקטגוריות אינה תקינה';
-    }
-  }
-
-  return null;
-}
-
-/**
- * Postgres cannot roll back an `auth.users` insert together with a public-schema transaction —
- * the admin API is a separate call over HTTP. So provisioning is unwound explicitly, in
- * reverse order of creation. Deleting the auth user cascades its `profiles` row
- * (0001_init.sql:32), and categories must go before the organization they reference.
- *
- * Returns the list of steps that could not be undone, so a half-provisioned tenant is at
- * least reported loudly rather than left silently.
- */
-async function rollback(
-  admin: SupabaseClient,
-  created: { orgId?: string; userId?: string },
-): Promise<string[]> {
-  const leftovers: string[] = [];
-
-  if (created.userId) {
-    const { error } = await admin.auth.admin.deleteUser(created.userId);
-    if (error) leftovers.push(`auth user ${created.userId}: ${error.message}`);
-  }
-  if (created.orgId) {
-    const cats = await admin.from('categories').delete().eq('org_id', created.orgId);
-    if (cats.error) leftovers.push(`categories of org ${created.orgId}: ${cats.error.message}`);
-
-    const org = await admin.from('organizations').delete().eq('id', created.orgId);
-    if (org.error) leftovers.push(`organization ${created.orgId}: ${org.error.message}`);
-  }
-
-  return leftovers;
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -171,89 +98,34 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return fail('invalid_request', 'גוף הבקשה אינו JSON תקין', 400);
   }
 
-  const problem = validate(body);
+  const input = {
+    name: body.name ?? '',
+    ownerEmail: body.owner_email ?? '',
+    ownerName: body.owner_name ?? '',
+    ownerPassword: body.owner_password ?? '',
+    vatRate: body.vat_rate,
+    categories: body.categories,
+    // An operator hands the credentials over in person; there is nobody to send a confirmation
+    // to. Self-signup (0159) is the path that starts unconfirmed.
+    emailConfirmed: true,
+  };
+
+  const problem = validateProvisionInput(input);
   if (problem) return fail('invalid_request', problem, 400);
 
-  const name = body.name!.trim();
-  const ownerEmail = body.owner_email!.trim().toLowerCase();
-  const ownerName = body.owner_name!.trim();
-  const categories = (body.categories ?? DEFAULT_CATEGORIES)
-    .map((c) => c.trim())
-    .filter((c) => c.length > 0);
-
-  const created: { orgId?: string; userId?: string } = {};
-
-  try {
-    // ===== 4. Organization =====
-    // Status defaults to active. Lifecycle policy is owned by the database, so provisioning
-    // never accepts a client-selected status or deadline.
-    const orgInsert = await admin
-      .from('organizations')
-      .insert({
-        name,
-        ...(body.vat_rate !== undefined ? { vat_rate: body.vat_rate } : {}),
-      })
-      .select('id')
-      .single();
-
-    if (orgInsert.error || !orgInsert.data) {
-      throw new Error(`יצירת הארגון נכשלה: ${orgInsert.error?.message ?? 'לא הוחזר מזהה'}`);
-    }
-    created.orgId = orgInsert.data.id as string;
-
-    // ===== 5. Owner auth user =====
-    const userCreate = await admin.auth.admin.createUser({
-      email: ownerEmail,
-      password: body.owner_password!,
-      email_confirm: true,
-    });
-
-    if (userCreate.error || !userCreate.data.user) {
-      const message = userCreate.error?.message ?? 'לא הוחזר משתמש';
-      // Surface the common operator mistake as its own code instead of a generic failure.
-      const taken = /already|registered|exists/i.test(message);
-      const leftovers = await rollback(admin, created);
-      return taken
-        ? fail('email_taken', 'כתובת האימייל כבר רשומה במערכת', 409, leftovers.join('; ') || undefined)
-        : fail('provision_failed', `יצירת משתמש הבעלים נכשלה: ${message}`, 500, leftovers.join('; ') || undefined);
-    }
-    created.userId = userCreate.data.user.id;
-
-    // ===== 6. Owner profile =====
-    const profileInsert = await admin.from('profiles').insert({
-      id: created.userId,
-      org_id: created.orgId,
-      full_name: ownerName,
-      role: 'owner',
-      active: true,
-    });
-    if (profileInsert.error) throw new Error(`יצירת פרופיל הבעלים נכשלה: ${profileInsert.error.message}`);
-
-    // ===== 7. Baseline categories =====
-    let categoriesCreated = 0;
-    if (categories.length > 0) {
-      const catInsert = await admin
-        .from('categories')
-        .insert(categories.map((c, i) => ({ org_id: created.orgId, name: c, sort: i + 1 })))
-        .select('id');
-      if (catInsert.error) throw new Error(`יצירת קטגוריות הבסיס נכשלה: ${catInsert.error.message}`);
-      categoriesCreated = catInsert.data?.length ?? 0;
-    }
-
-    const result: ProvisionResult = {
-      org_id: created.orgId,
-      owner_user_id: created.userId,
-      categories_created: categoriesCreated,
-    };
-    return json(result, 201);
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    const leftovers = await rollback(admin, created);
-    return fail(
-      'provision_failed',
-      message,
-      500,
-      leftovers.length ? `ניקוי חלקי נכשל — נדרש טיפול ידני: ${leftovers.join('; ')}` : undefined,
-    );
+  // ===== 4-7. Organization, owner, profile, categories =====
+  // One implementation, shared with public-signup (0159): a second copy of the create-and-unwind
+  // sequence is how the two doors would drift until one forgot its rollback.
+  const outcome = await provisionTenant(admin, input);
+  if (!outcome.ok) {
+    const detail = outcome.failure.leftovers.length
+      ? `ניקוי חלקי נכשל — נדרש טיפול ידני: ${outcome.failure.leftovers.join('; ')}`
+      : undefined;
+    return outcome.failure.kind === 'email_taken'
+      ? fail('email_taken', outcome.failure.message, 409, detail)
+      : fail('provision_failed', outcome.failure.message, 500, detail);
   }
+
+  const result: ProvisionResult = outcome.result;
+  return json(result, 201);
 });

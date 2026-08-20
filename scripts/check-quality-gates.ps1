@@ -795,6 +795,8 @@ function Invoke-InterpretDocumentContractTests {
       (Join-Path $repoRoot "supabase\functions\_shared\organization-access.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\organization-egress.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\reserved-egress.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\_shared\billing-adapter.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\_shared\provision.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\edge-organization-access-wiring.test.ts") `
       (Join-Path $repoRoot "supabase\functions\document-processing\contract_test.ts") `
       (Join-Path $repoRoot "supabase\functions\document-preprocessing\contract_test.ts") `
@@ -1277,6 +1279,13 @@ try {
     Invoke-SqlTest "supabase\tests\p46_consolidated_supplier_invoice.sql" "One supplier-month payable anchor, immutable supporting evidence, three reconciliation channels and concurrent intake fencing" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p47_mixed_document_packets.sql" "Mixed PDFs split only from a complete reviewed manifest into isolated child documents and jobs" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p48_product_display_name.sql" "Canonical product names: owner/office only, reason mandatory, blank unrepresentable, no direct column write, every rename audited, and the switched read models render the approved name only once one exists"
+    Invoke-SqlTest "supabase\tests\p49_platform_capabilities.sql" "Platform capabilities narrow operator authority: a tenant reads none of it, an operator without customer.view reads nothing, and the customer list filters, pages and counts activity without counting the console itself"
+    Invoke-SqlTest "supabase\tests\p50_customer_operations_record.sql" "The internal customer record is unreachable from a tenant, notes are append-only, the platform timeline cannot be edited, and a suspended customer still takes an operator note"
+    Invoke-SqlTest "supabase\tests\p51_plan_entitlements.sql" "One resolution rule for entitlements: an override beats the plan, a limit nobody stated is unknown rather than infinite, a tenant reads its own plan and no other, and the money commands demand a capability, a reason and a fresh password"
+    Invoke-SqlTest "supabase\tests\p52_usage_limit_enforcement.sql" "The document limit counts one unit of work once, refuses before any row is written, treats a limit nobody stated as a refusal rather than as infinity, and never hides what the customer already has"
+    Invoke-SqlTest "supabase\tests\p53_activation_onboarding_health.sql" "Activation is derived from the audit ledger rather than accumulated, an operator note never overrules a product event that actually happened, an unmeasurable milestone says so instead of reading as not-done, and health returns the reasons that produced it with no score and no prediction"
+    Invoke-SqlTest "supabase\tests\p54_billing_boundary_and_funnel.sql" "A billing event is attributed only through a link we wrote ourselves and never from its payload, a replay is a no-op, an unattributable event dead-letters instead of guessing an owner, the quota crossing is recorded once per period on the write that exhausts it, and the funnel names the three stages it cannot see"
+    Invoke-SqlTest "supabase\tests\p55_self_signup_rate_limit.sql" "The anonymous signup door is bounded by a limit the database counts rather than a function remembers, stores hashes and never a readable address or email, records refusals as well as acceptances, and is unreachable from any browser role"
     Invoke-SqlTest "supabase\tests\p24_inventory_intelligence.sql" "Inventory consumption evidence, incoming supply, suggestions, price context and tenant isolation"
     Invoke-SqlTest "supabase\tests\p25_tenant_offboarding_export.sql" "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p26_price_baseline.sql" "Contractual price baseline as of the document date, reversal ordering, undisclosed fallbacks and read-only guarantee"

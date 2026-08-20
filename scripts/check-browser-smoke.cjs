@@ -77,13 +77,14 @@ async function closeContext(context) {
   await context.close();
 }
 
-function captureConsole(page, scope, ignore = []) {
+function captureConsole(page, scope, ignore = [], ignoreResponse = () => false) {
   const sanitize = (value) => value.replace(/([?&]apikey=)[^&'\s]+/gi, '$1[redacted]');
   const isExpected = (value) => ignore.some((pattern) => pattern.test(value));
   page.on('pageerror', (error) => report.consoleErrors.push({ scope, text: sanitize(error.message).slice(0, 400) }));
   page.on('response', (response) => {
     if (response.status() < 400) return;
     const value = `HTTP ${response.status()} ${sanitize(response.url())}`;
+    if (ignoreResponse(response)) return;
     if (!isExpected(value)) report.consoleErrors.push({ scope, text: value.slice(0, 400) });
   });
   page.on('requestfailed', (request) => {
@@ -1854,12 +1855,45 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
     return route.fulfill({ status: 500, headers: jsonHeaders, json: { code: 'P4_FORCED', message: 'forced push cleanup failure' } });
   });
   const page = await context.newPage();
-  captureConsole(page, `push:${name}`, [/HTTP 500 .*push_subscriptions/]);
+  // Signing out revokes the access token before React can unmount Dashboard. Reads that were
+  // already in flight can therefore finish as 401 during that transition. Keep the exception
+  // deliberately narrower than a URL regex: exact Dashboard endpoints, exact method, requests
+  // observed before the click, and responses observed only after logout began. A request started
+  // after logout, an unrelated endpoint or any pre-click 401 still fails the gate.
+  const logoutTransitionReads = new Map([
+    ['/rest/v1/invoices', 'GET'],
+    ['/rest/v1/payments', 'GET'],
+    ['/rest/v1/purchase_orders', 'GET'],
+    ['/rest/v1/exceptions', 'GET'],
+    ['/rest/v1/supplier_products', 'GET'],
+    ['/rest/v1/purchase_request_items', 'GET'],
+    ['/rest/v1/rpc/management_dashboard_snapshot', 'POST'],
+    ['/rest/v1/suppliers', 'GET'],
+    ['/rest/v1/purchase_order_items', 'GET'],
+  ]);
+  const readsStartedBeforeLogout = new WeakSet();
+  let logoutStarted = false;
+  page.on('request', (request) => {
+    if (logoutStarted) return;
+    const url = new URL(request.url());
+    if (url.origin === apiURL && logoutTransitionReads.get(url.pathname) === request.method()) {
+      readsStartedBeforeLogout.add(request);
+    }
+  });
+  captureConsole(page, `push:${name}`, [/HTTP 500 .*push_subscriptions/], (response) => {
+    if (!logoutStarted || response.status() !== 401) return false;
+    const request = response.request();
+    const url = new URL(response.url());
+    return url.origin === apiURL
+      && logoutTransitionReads.get(url.pathname) === request.method()
+      && readsStartedBeforeLogout.has(request);
+  });
   try {
     await login(page, 'owner');
     // T7.3: the desktop shell is the floating pill nav — signing out lives inside the account
     // menu behind the avatar, not on a permanent sidebar strip. Open it, then sign out.
     await page.getByRole('button', { name: /^תפריט החשבון של/ }).click();
+    logoutStarted = true;
     await page.getByRole('button', { name: 'התנתקות' }).click();
     await page.waitForURL((url) => url.pathname === '/login', { timeout: 25_000 });
     await page.waitForTimeout(250);
@@ -1924,6 +1958,174 @@ async function adminState(browser) {
     await opener.click();
     dialog = page.getByRole('dialog', { name: 'הקמת ארגון חדש' });
     assert.notEqual(await dialog.locator('#new-org-password').inputValue(), 'P4-success-reset-check!', 'admin form retained password after success');
+  } finally {
+    await closeContext(context);
+  }
+}
+
+async function publicSignupSurface(browser) {
+  // The anonymous door, checked for the two things that make it safe to have at all: the form
+  // cannot ask for a plan, and the answer is identical whether or not the address already exists.
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1280, height: 900 } });
+  let sent = null;
+  await context.route('**/functions/v1/public-signup*', async (route) => {
+    sent = JSON.parse(route.request().postData() || '{}');
+    return route.fulfill({
+      status: 202,
+      headers: jsonHeaders,
+      json: {
+        status: 'pending_confirmation',
+        message: 'אם הכתובת אינה רשומה עדיין — נשלח אליה מייל אישור, ויש להשלים ממנו את ההרשמה. אם היא כבר רשומה — יש להיכנס עם הסיסמה הקיימת או לאפס אותה.',
+      },
+    });
+  });
+
+  const page = await context.newPage();
+  captureConsole(page, 'public-signup');
+  try {
+    await page.goto(`${baseURL}/signup`);
+    await page.getByRole('heading', { level: 1, name: /פתיחת חשבון/ }).waitFor({ timeout: 20_000 });
+
+    // No plan, tier or price control anywhere on the page: choosing one would be a free upgrade.
+    const body = await page.content();
+    for (const forbidden of ['Business', 'Pro ', 'מסלול Free']) {
+      assert(!body.includes(forbidden), `the signup form offers a plan choice (${forbidden})`);
+    }
+
+    await page.locator('#signup-organization').fill('עסק בדיקה');
+    await page.locator('#signup-name').fill('בעלים בדיקה');
+    await page.locator('#signup-email').fill('p4-signup@example.invalid');
+    await page.locator('#signup-password').fill('a-long-enough-password');
+    await page.getByRole('button', { name: 'פתיחת חשבון' }).click();
+
+    await page.getByText('בדקו את תיבת הדואר').waitFor({ timeout: 20_000 });
+    assert(sent !== null, 'the signup form sent nothing');
+    assert.deepEqual(
+      Object.keys(sent).sort(),
+      ['email', 'full_name', 'organization_name', 'password'],
+      'the signup form sent a field the visitor does not get to choose',
+    );
+
+    await auditAccessibility(page, 'public-signup');
+  } finally {
+    await closeContext(context);
+  }
+}
+
+async function operatorCustomers(browser) {
+  // The customer list, and the two things about it that are easy to get wrong:
+  //   * a customer that never acted must read as an em dash, not a date and not a zero;
+  //   * an operator without customer.view must be told so, because platform_customers() answers
+  //     that caller with zero rows and an empty table would claim the platform has no customers.
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1280, height: 900 } });
+  await context.route('**/rest/v1/platform_admins?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: { user_id: 'p4-platform-admin' } }));
+  await context.route('**/rest/v1/rpc/is_platform_admin*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: true }));
+  await context.route('**/rest/v1/rpc/platform_offboarding_requests*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
+
+  let capabilities = ['customer.view', 'org.lifecycle'];
+  await context.route('**/rest/v1/rpc/platform_my_capabilities*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: capabilities }));
+  await context.route('**/rest/v1/rpc/platform_operators*', (route) => route.fulfill({
+    status: 200, headers: jsonHeaders,
+    json: [{ user_id: 'p4-operator', email: 'ops@inplace.invalid', note: null, roles: ['customer_ops'] }],
+  }));
+  await context.route('**/rest/v1/rpc/platform_customer_detail*', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: {
+      org_id: 'p4-customer-active', name: 'לקוח פעיל בבדיקה', status: 'active', vat_rate: 18,
+      created_at: '2026-02-01T08:00:00.000Z', access_mode: 'active', active_user_count: 4,
+      last_activity_at: '2026-08-18T09:30:00.000Z', internal_owner: null,
+      internal_owner_email: null, customer_since: null, open_follow_up_count: 0,
+      offboarding_status: null,
+    },
+  }));
+  await context.route('**/rest/v1/rpc/platform_customer_contacts*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
+  await context.route('**/rest/v1/rpc/platform_customer_notes*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
+  await context.route('**/rest/v1/rpc/platform_customer_timeline*', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
+  await context.route('**/rest/v1/rpc/platform_customer_onboarding*', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: [
+      { step_key: 'suppliers_imported', label: 'ספקים הוזנו', sort_order: 20, state: 'completed',
+        source: 'product_event', achieved_at: '2026-02-05T08:00:00.000Z', reason: null,
+        recorded_by_email: null, recorded_at: null },
+      { step_key: 'team_invited', label: 'הצוות הוזמן', sort_order: 50, state: 'not_started',
+        source: 'none', achieved_at: null, reason: null, recorded_by_email: null, recorded_at: null },
+    ],
+  }));
+  await context.route('**/rest/v1/rpc/platform_customer_health*', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: {
+      org_id: 'p4-customer-active', status: 'needs_attention',
+      evaluated_at: '2026-08-19T18:00:00.000Z', last_activity_at: '2026-08-05T10:00:00.000Z',
+      signals: [{ code: 'activity_slowing', severity: 'warn',
+                  detail: 'הפעילות האחרונה הייתה לפני יותר משבועיים' }],
+    },
+  }));
+  await context.route('**/rest/v1/rpc/platform_customers*', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: [
+      {
+        id: 'p4-customer-active', name: 'לקוח פעיל בבדיקה', status: 'active', vat_rate: 18,
+        created_at: '2026-02-01T08:00:00.000Z', active_user_count: 4,
+        last_activity_at: '2026-08-18T09:30:00.000Z', offboarding_status: null, total_count: 2,
+      },
+      {
+        id: 'p4-customer-silent', name: 'לקוח ללא פעילות בבדיקה', status: 'active', vat_rate: 18,
+        created_at: '2026-03-01T08:00:00.000Z', active_user_count: 0,
+        last_activity_at: null, offboarding_status: null, total_count: 2,
+      },
+    ],
+  }));
+
+  const page = await context.newPage();
+  captureConsole(page, 'operator-customers');
+  try {
+    await login(page, 'owner');
+    await page.goto(`${baseURL}/operator#/admin/customers`);
+    await page.getByRole('heading', { name: 'לקוחות' }).waitFor({ timeout: 20_000 });
+    // By cell role, not by text: DataTable keeps BOTH layouts mounted and hides one in CSS
+    // (ui.tsx:1009). `getByText(...).first()` picks the mobile card, which at this width is
+    // display:none, so it is found and never becomes visible. Only the desktop table has cells.
+    await page.getByRole('cell', { name: 'לקוח ללא פעילות בבדיקה' })
+      .first().waitFor({ timeout: 20_000 });
+
+    // The dash belongs to the customer that never acted, and only to it.
+    const dashes = await page.locator('td, .num').filter({ hasText: /^—$/ }).count();
+    assert(dashes > 0, 'a customer with no recorded activity rendered something other than an em dash');
+    assert(!(await page.content()).includes('לקוח ללא פעילות בבדיקה: 0'), 'a never-active customer reported a zero');
+
+    await auditAccessibility(page, 'operator-customers');
+
+    // The row opens the customer card, and the card says what it cannot yet measure rather than
+    // showing an empty panel that reads like a measurement returning nothing.
+    await page.getByRole('cell', { name: 'לקוח פעיל בבדיקה' }).first().click();
+    await page.getByRole('heading', { level: 1, name: /לקוח פעיל בבדיקה/ }).waitFor({ timeout: 20_000 });
+    await page.getByText(/אינן ניתנות למדידה/).waitFor({ timeout: 20_000 });
+    assert(
+      !(await page.content()).includes('הערות פנימיות'),
+      'the notes panel rendered for an operator holding no notes.view',
+    );
+    // Health shows the reason, never a score; a step the product completed offers no manual
+    // record, because there is nothing to record.
+    await page.getByText('דורש תשומת לב').first().waitFor({ timeout: 20_000 });
+    await page.getByText('לפני יותר משבועיים').first().waitFor({ timeout: 20_000 });
+    assert(
+      (await page.getByText('לפי פעולה במוצר').count()) > 0,
+      'a step completed by a product event did not say so',
+    );
+
+    await auditAccessibility(page, 'operator-customer-detail');
+    await page.goto(`${baseURL}/operator#/admin/customers`);
+    await page.getByRole('heading', { name: 'לקוחות' }).waitFor({ timeout: 20_000 });
+
+    // Now the same screen for an operator who may not read customers at all.
+    capabilities = [];
+    await page.reload();
+    await page.getByText('הרשאת צפייה בלקוחות').waitFor({ timeout: 20_000 });
+    assert(!(await page.content()).includes('אין לקוחות'), 'a refused operator was shown the empty-customer-base state');
   } finally {
     await closeContext(context);
   }
@@ -3436,6 +3638,8 @@ async function run(name, check) {
     await run('Push logout browser failure', () => pushLogout(browser, 'browser-failure', true, false));
     await run('Push logout double failure', () => pushLogout(browser, 'double-failure', false, false));
     await run('operator console: platform admin lands on /operator, password and clipboard state', () => adminState(browser));
+    await run('public signup asks for four fields and answers the same either way', () => publicSignupSurface(browser));
+    await run('operator console: the customer list gates on capability and never invents activity', () => operatorCustomers(browser));
     await run('operator console refuses a tenant who is not a platform admin', () => operatorRefusal(browser));
     await run('OCR documents, review, status and export', () => documentOcrAcceptance(browser));
     await run('automatic price list creates keyed products and leaves unsafe rows for review', () => automaticPriceListAcceptance(browser));

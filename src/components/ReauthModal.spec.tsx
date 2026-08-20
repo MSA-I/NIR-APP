@@ -41,6 +41,14 @@ beforeEach(() => {
   authState.session = sessionWith(passwordToken(10 * 60));
 });
 
+/**
+ * The shared dialog layer moves focus to the panel on its first animation frame. Wait for that
+ * handoff before typing so the frame cannot interrupt the password interaction.
+ */
+async function waitForInitialDialogFocus() {
+  await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
+}
+
 describe('hasFreshPasswordAuthentication — the client mirror of the 0031 assertion', () => {
   it('accepts a password entry inside the window', () => {
     expect(hasFreshPasswordAuthentication(passwordToken(60))).toBe(true);
@@ -105,6 +113,7 @@ describe('ReauthModal', () => {
     });
     const onConfirm = vi.fn();
     render(<ReauthModal open onConfirm={onConfirm} onCancel={vi.fn()} />);
+    await waitForInitialDialogFocus();
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     await user.type(screen.getByLabelText('סיסמה לאימות זהות טרי *'), 'secret-pass');
@@ -133,6 +142,7 @@ describe('ReauthModal', () => {
     auth.signOut.mockResolvedValue({ error: null });
     const onConfirm = vi.fn();
     render(<ReauthModal open onConfirm={onConfirm} onCancel={vi.fn()} />);
+    await waitForInitialDialogFocus();
 
     await user.type(screen.getByLabelText('סיסמה לאימות זהות טרי *'), 'secret-pass');
     await user.click(screen.getByRole('button', { name: /אישור זהות/ }));
@@ -149,6 +159,7 @@ describe('ReauthModal', () => {
       error: new Error('Invalid login credentials'),
     });
     render(<ReauthModal open onConfirm={vi.fn()} onCancel={vi.fn()} />);
+    await waitForInitialDialogFocus();
 
     const field = screen.getByLabelText('סיסמה לאימות זהות טרי *');
     await user.type(field, 'wrong-pass');
@@ -164,6 +175,7 @@ describe('ReauthModal', () => {
     const user = userEvent.setup();
     const onCancel = vi.fn();
     render(<ReauthModal open onConfirm={vi.fn()} onCancel={onCancel} />);
+    await waitForInitialDialogFocus();
     await user.click(screen.getByRole('button', { name: 'ביטול' }));
     expect(onCancel).toHaveBeenCalled();
     expect(auth.signInWithPassword).not.toHaveBeenCalled();

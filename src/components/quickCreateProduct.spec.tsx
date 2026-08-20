@@ -66,6 +66,15 @@ beforeEach(() => {
 
 const wrap = (children: ReactNode) => <ToastProvider>{children}</ToastProvider>;
 
+/**
+ * The shared dialog layer moves focus to the panel on its first animation frame. Wait for that
+ * handoff before typing so the frame cannot interrupt the first field interaction and leave only
+ * the first character behind. This is the same ordering contract exercised by QuickCreateSupplier.
+ */
+async function waitForInitialDialogFocus() {
+  await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
+}
+
 /** Records both writes in one ordered log, so "which ran first" is an assertion and not a guess. */
 function recordWrites(options: { importFails?: boolean } = {}) {
   const calls: { endpoint: 'products' | 'import'; body: Record<string, unknown> }[] = [];
@@ -127,6 +136,7 @@ describe('QuickCreateProduct', () => {
     const calls = recordWrites();
     const created = vi.fn();
     render(wrap(<QuickCreateProduct suppliers={SUPPLIERS} onClose={() => {}} onCreated={created} />));
+    await waitForInitialDialogFocus();
 
     await fillForm(user);
     await user.click(screen.getByRole('button', { name: 'הוספה להזמנה' }));
@@ -149,6 +159,7 @@ describe('QuickCreateProduct', () => {
     const user = userEvent.setup();
     const calls = recordWrites();
     render(wrap(<QuickCreateProduct suppliers={SUPPLIERS} onClose={() => {}} onCreated={() => {}} />));
+    await waitForInitialDialogFocus();
 
     await user.type(screen.getByLabelText('שם המוצר *'), 'עגבניות שרי');
     await user.type(screen.getByLabelText('מחיר ליחידה *'), '12.5');
@@ -162,6 +173,7 @@ describe('QuickCreateProduct', () => {
     const user = userEvent.setup();
     const calls = recordWrites();
     render(wrap(<QuickCreateProduct suppliers={SUPPLIERS} onClose={() => {}} onCreated={() => {}} />));
+    await waitForInitialDialogFocus();
 
     await user.type(screen.getByLabelText('שם המוצר *'), 'עגבניות שרי');
     await user.selectOptions(screen.getByLabelText('ספק *'), 'sup-cohen');
@@ -173,7 +185,13 @@ describe('QuickCreateProduct', () => {
     // test, which is about the price, waits forever for a message it made impossible. That is why
     // it failed intermittently, why the frequency tracked CPU load, and why re-running "fixed" it.
     // Asserting the preconditions before pressing removes the race instead of widening a timeout.
+    // 20.08.2026: the NAME is waited on too, and first. CI evidence (PR #85) showed the alert on
+    // screen was "שם מוצר הוא שדה חובה" with the name input still value="" seconds later, while
+    // supplier and price were both set -- so the interaction that vanished is the FIRST user.type
+    // after render(), on the one field this precondition did not cover. Whether waiting recovers
+    // it or merely fails precisely, "expected false to be true" named the wrong thing.
     await waitFor(() => {
+      expect((screen.getByLabelText('שם המוצר *') as HTMLInputElement).value).toBe('עגבניות שרי');
       expect((screen.getByLabelText('ספק *') as HTMLSelectElement).value).toBe('sup-cohen');
       expect((screen.getByLabelText('מחיר ליחידה *') as HTMLInputElement).value).toBe('0');
     });
@@ -188,6 +206,7 @@ describe('QuickCreateProduct', () => {
     const calls = recordWrites({ importFails: true });
     const created = vi.fn();
     render(wrap(<QuickCreateProduct suppliers={SUPPLIERS} onClose={() => {}} onCreated={created} />));
+    await waitForInitialDialogFocus();
 
     await fillForm(user);
     await user.click(screen.getByRole('button', { name: 'הוספה להזמנה' }));

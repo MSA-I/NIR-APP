@@ -64,6 +64,12 @@ enabled = true
 policy = "oneshot"
 inspector_port = 55483
 
+# The anonymous signup door (0159). verify_jwt = false because there IS no caller to
+# authenticate: its safety is a database-counted rate limit, a payload nothing tenant-shaped can
+# be read from, and an unconfirmed owner account.
+[functions.public-signup]
+verify_jwt = false
+
 [functions.document-processing]
 verify_jwt = false
 

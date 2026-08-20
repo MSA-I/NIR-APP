@@ -13,6 +13,77 @@ export interface StatusMeta { label: string; tone: Tone }
 
 const m = (label: string, tone: Tone): StatusMeta => ({ label, tone });
 
+/* ---------- Customer Operations (0152) — the operator console's vocabulary ---------- */
+
+export const CUSTOMER_CONTACT_KIND: Record<string, string> = {
+  primary: 'איש קשר ראשי',
+  billing: 'איש קשר לחיוב',
+  technical: 'איש קשר טכני',
+};
+
+export const CONTACT_CHANNEL: Record<string, string> = {
+  email: 'אימייל',
+  phone: 'טלפון',
+  whatsapp: 'וואטסאפ',
+};
+
+// A follow-up is a promise with a date on it, so it claims attention until it is closed; a
+// support interaction is information; a plain note asserts nothing.
+export const CUSTOMER_NOTE_KIND: Record<string, StatusMeta> = {
+  note: m('הערה', 'idle'),
+  support: m('פנייה', 'info'),
+  follow_up: m('מעקב', 'await'),
+};
+
+/**
+ * Hebrew for the actions recorded in `platform_lifecycle_events`. A reader that met an unknown
+ * action must show the raw string rather than an empty cell — the ledger is evidence, and an
+ * action this map has not caught up with is still something that happened.
+ */
+export const PLATFORM_EVENT_ACTION: Record<string, string> = {
+  customer_account_set: 'עדכון פרטי החשבון',
+  customer_contact_set: 'עדכון איש קשר',
+  customer_contact_removed: 'הסרת איש קשר',
+  customer_internal_note_added: 'הערה פנימית נוספה',
+  customer_follow_up_resolved: 'מעקב נסגר',
+  subscription_set: 'שינוי מנוי',
+  entitlement_override_granted: 'חריג הרשאה ניתן',
+  entitlement_override_revoked: 'חריג הרשאה בוטל',
+  onboarding_step_recorded: 'שלב הקמה נרשם',
+};
+
+// `past_due` is a claim that money is owed, not a neutral state; `paused` and `canceled` say the
+// relationship stopped without implying which side stopped it.
+export const SUBSCRIPTION_STATUS: Record<string, StatusMeta> = {
+  active: m('פעיל', 'done'),
+  past_due: m('בפיגור תשלום', 'alert'),
+  paused: m('מוקפא', 'await'),
+  canceled: m('בוטל', 'idle'),
+};
+
+// Health is never a score. `unknown` is a real answer -- a customer we cannot judge is not a
+// healthy one -- and it is idle rather than green precisely so nobody reads it as reassurance.
+export const CUSTOMER_HEALTH: Record<string, StatusMeta> = {
+  healthy: m('תקין', 'done'),
+  needs_attention: m('דורש תשומת לב', 'await'),
+  at_risk: m('בסיכון', 'alert'),
+  unknown: m('אין מספיק נתונים', 'idle'),
+};
+
+export const ONBOARDING_STEP_STATE: Record<string, StatusMeta> = {
+  completed: m('הושלם', 'done'),
+  in_progress: m('בתהליך', 'await'),
+  blocked: m('חסום', 'alert'),
+  skipped: m('דולג', 'idle'),
+  not_started: m('טרם התחיל', 'idle'),
+};
+
+export const ONBOARDING_SOURCE: Record<string, string> = {
+  product_event: 'לפי פעולה במוצר',
+  operator_manual: 'נרשם בידי מפעיל',
+  none: '',
+};
+
 export const ORG_STATUS: Record<string, StatusMeta> = {
   active: m('פעיל', 'done'),
   suspended: m('מושהה', 'alert'),

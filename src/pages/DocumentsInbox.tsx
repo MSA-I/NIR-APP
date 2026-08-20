@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { INBOX_CHANGED_EVENT } from '../components/QuickCapture';
 import { ConfirmDialog, DataTable, ErrorNote, Modal, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
+import { PlanLimitNote } from '../components/PlanLimitNote';
 import { DocumentRemovalDialog } from '../components/DocumentRemovalDialog';
 import { ok, toHebrewError } from '../lib/errors';
 import { fmtDate, fmtDateTime, todayISO } from '../lib/format';
@@ -814,6 +815,12 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             {archive ? <FolderOpen size={16} /> : <Archive size={16} />}{archive ? 'חזרה לתיקיית המסמכים' : 'ארכיון'}
           </Link>
         </>} />
+
+      {/* The one screen whose action a document limit refuses, so the one screen that says so.
+          It renders nothing while the quota is unlimited, unmeasured-but-unlimited, or far away —
+          a banner that is always present is decoration, and decoration about money reads as
+          pressure (wave 4). */}
+      {!archive && canUpload && <PlanLimitNote metricKey="documents.monthly" />}
 
       {!archive && <UploadCenter />}
 

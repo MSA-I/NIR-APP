@@ -92,6 +92,8 @@ jobs:
           product_matches() { grep -Eq "$1" product-files.txt; }
 
           workflow='^\.github/workflows/quality-gate\.yml$'
+          # contract change must re-run the Deno contracts even when no supabase/ path moved.
+          # import added later cannot silently fall outside the gate.
           edge='^(deno\.lock|supabase/(config\.toml|functions/))'
           ocr='^(docker-compose\.ocr\.yml|worker/ocr/)'
           audit='^(package\.json|package-lock\.json)$'
@@ -109,11 +111,15 @@ jobs:
             # A DB-only change normally stops at the SQL gate. Permission migrations are the
             # exception: their product surface is the signed-in browser even when no src file
             # changed, so inspect only changed migration files for the trust-boundary vocabulary.
+            # The file is read STATEMENT-BY-STATEMENT, not line-by-line: whitespace (newlines
+            # included) is collapsed and the text split on ';', so a grant/revoke wrapped across
+            # lines by a long signature reads the same as an unwrapped one. Measured before this
+            # granularity fix: 0166 revokes browser roles across three wrapped lines and produced
+            # ZERO line-based matches — the exact statement this sniffer exists to catch.
             while IFS= read -r migration; do
               [ -f "$migration" ] || continue
-              if grep -Eqi \
-                '(create|alter|drop)[[:space:]]+policy|row[[:space:]]+level[[:space:]]+security|user_role|auth_(role|org|scopes)[[:space:]]*\(|(grant|revoke).*(authenticated|anon)' \
-                "$migration"; then
+              if tr -s '[:space:]' ' ' < "$migration" | tr ';' '\n' | grep -Eqi \
+                '(create|alter|drop)[[:space:]]+policy|row[[:space:]]+level[[:space:]]+security|user_role|auth_(role|org|scopes)[[:space:]]*\(|(grant|revoke).*(authenticated|anon)'; then
                 browser_required=true
                 break
               fi
@@ -340,6 +346,17 @@ jobs:
 
       - name: The suites, in the order check-quality-gates.ps1 declares them
         run: node scripts/ci-sql-suites.mjs
+
+      # psql reports "server closed the connection unexpectedly" and every later suite then
+      # fails with "the database system is in recovery mode" -- one backend crash reads as a
+      # wall of unrelated failures. The reason is in the postmaster log, which nothing printed,
+      # so the only evidence was whichever suite happened to be running. Failure only.
+      - name: The postmaster log, if a backend died
+        if: failure()
+        run: |
+          docker logs "supabase_db_${SUPABASE_PROJECT_ID}" 2>&1 \
+            | grep -iE -B 3 -A 25 "was terminated by signal|PANIC|server process|out of memory|startup process|stack depth|recovery mode" \
+            | tail -300 || echo "no crash markers in the postmaster log"
 
       - name: Stop the stack
         if: always()
