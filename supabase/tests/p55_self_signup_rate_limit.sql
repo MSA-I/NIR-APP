@@ -60,6 +60,17 @@ select pg_temp.p55_assert(
       and grantee in ('anon', 'authenticated')),
   'a browser role can execute a signup service function');
 
+-- Counting and recording must be one serialized decision. Persistence alone is insufficient:
+-- without a transaction lock, concurrent anonymous requests can all observe the same count below
+-- the threshold and all insert an accepted row.
+select pg_temp.p55_assert(
+  (select position('pg_advisory_xact_lock' in prosrc) > 0
+          and position('pg_advisory_xact_lock' in prosrc)
+              < position('select count(*) into v_ip_count' in prosrc)
+     from pg_catalog.pg_proc
+    where oid = to_regprocedure('public.service_check_signup_rate(text,text)')),
+  'the signup limiter does not serialize before its first count');
+
 -- ===== Fixture =====
 insert into public.organizations (id, name, status) values
   ('55000000-0000-4000-8000-000000000001', 'P55 tenant', 'active');

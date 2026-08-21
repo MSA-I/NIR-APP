@@ -394,20 +394,22 @@ select pg_temp.p52_assert(
   'a failed job clawed back pages the provider had already charged for');
 
 -- ===== The page quota refuses at upload, on pages the server already owns (0162) =====
--- The new document's own page count is unknown until the provider reads it, so the check is on
--- what has ALREADY been read this period. That bounds the overshoot to one document, which the
--- worker caps at ExtractionLimits.max_ai_pages = 20 whatever the file contains.
-update plan_entitlements set unlimited = false, numeric_limit = 5
+-- The new document's exact page count is unknown until the provider reads it, so the check uses
+-- what has ALREADY been read plus the server-known one-page lower bound. That bounds the remaining
+-- overshoot to 19 pages because the worker caps a document at 20 whatever the file contains.
+update plan_entitlements set unlimited = false, numeric_limit = 7
 where plan_key = (select plan_key from organization_subscriptions
                   where org_id = '52000000-0000-4000-8000-000000000001')
   and entitlement_key = 'ocr_pages.monthly';
 
--- The extraction earlier in this suite already recorded 7 pages, which is over the limit of 5.
+-- The extraction earlier in this suite already recorded 7 pages, exactly the limit. A new
+-- document must be refused here: every processable document has at least one page, even though
+-- its exact server-owned count is unavailable until extraction.
 select pg_temp.p52_assert(
   (select quantity from private.usage_counters
     where org_id = '52000000-0000-4000-8000-000000000001'
       and metric_key = 'ocr_pages.monthly') = 7,
-  'the fixture does not start from the recorded pages');
+  'the fixture does not start exactly at the recorded-page limit');
 
 -- Give the document quota room back, so the refusal that follows can only be the page one.
 update plan_entitlements set unlimited = true, numeric_limit = null
@@ -439,24 +441,104 @@ end
 $$;
 reset role;
 
--- Back under the page quota, and the same document is accepted -- the refusal was the quota, not
--- the document.
+-- ===== A concurrent retry rechecks idempotency after the counter lock =====
+-- Deterministically model the interleaving that matters without a timing-based test: the BEFORE
+-- INSERT trigger fires inside usage_counter_locked(), after enqueue's optimistic job lookup. It
+-- installs the job, event and counter state the competing transaction would have committed while
+-- this caller waited for that same counter row. The caller must return that job before checking
+-- `current + 1`; at an exact limit, checking first would falsely refuse an idempotent retry.
 update plan_entitlements set unlimited = true, numeric_limit = null
 where plan_key = (select plan_key from organization_subscriptions
                   where org_id = '52000000-0000-4000-8000-000000000001')
   and entitlement_key = 'ocr_pages.monthly';
 
-select pg_temp.p52_as('62000000-0000-4000-8000-000000000001');
-set local role authenticated;
-do $$
-declare v_doc uuid;
+update plan_entitlements set unlimited = false, numeric_limit = 1
+where plan_key = (select plan_key from organization_subscriptions
+                  where org_id = '52000000-0000-4000-8000-000000000001')
+  and entitlement_key = 'documents.monthly';
+
+create function pg_temp.p52_inject_concurrent_job()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_document public.documents;
+  v_job_id uuid;
 begin
-  select id into v_doc from public.documents
-  where org_id = '52000000-0000-4000-8000-000000000001' and file_name = 'second.pdf';
-  perform public.enqueue_document_processing(v_doc);
+  if new.org_id = '52000000-0000-4000-8000-000000000001'
+     and new.metric_key = 'documents.monthly'
+     and current_setting('p52.inject_concurrent_job', true) = 'on' then
+    perform set_config('p52.inject_concurrent_job', 'off', true);
+
+    select * into strict v_document
+    from public.documents
+    where org_id = new.org_id and file_name = 'second.pdf';
+
+    insert into public.document_processing_jobs (
+      org_id, document_id, requested_by, status, input_checksum, contract_version
+    ) values (
+      new.org_id,
+      v_document.id,
+      '62000000-0000-4000-8000-000000000001',
+      'queued',
+      public.smart_document_source_checksum(
+        v_document.org_id, v_document.storage_path, v_document.mime_type,
+        v_document.uploaded_by),
+      '1'
+    ) returning id into v_job_id;
+
+    insert into private.usage_events (
+      org_id, metric_key, quantity, idempotency_key, source, period_start
+    ) values (
+      new.org_id, new.metric_key, 1, v_job_id::text,
+      'p52_concurrent_enqueue', new.period_start
+    );
+    update private.usage_counters
+       set quantity = quantity + 1, updated_at = now()
+     where org_id = new.org_id
+       and metric_key = new.metric_key
+       and period_start = new.period_start;
+
+    perform set_config('p52.concurrent_job', v_job_id::text, true);
+  end if;
+  return new;
 end
 $$;
+
+create trigger p52_inject_concurrent_job
+before insert on private.usage_counters
+for each row execute function pg_temp.p52_inject_concurrent_job();
+
+select set_config('p52.inject_concurrent_job', 'on', true);
+
+select pg_temp.p52_as('62000000-0000-4000-8000-000000000001');
+set local role authenticated;
+select set_config(
+  'p52.concurrent_result',
+  public.enqueue_document_processing((
+    select id from public.documents
+    where org_id = '52000000-0000-4000-8000-000000000001'
+      and file_name = 'second.pdf'))::text,
+  true);
 reset role;
+
+select pg_temp.p52_assert(
+  current_setting('p52.concurrent_result') = current_setting('p52.concurrent_job'),
+  'a concurrent retry did not return the equivalent job that won the counter lock');
+select pg_temp.p52_assert(
+  (select quantity from private.usage_counters
+    where org_id = '52000000-0000-4000-8000-000000000001'
+      and metric_key = 'documents.monthly') = 1,
+  'a concurrent retry moved the document counter twice');
+select pg_temp.p52_assert(
+  (select count(*) from public.document_processing_jobs
+    where org_id = '52000000-0000-4000-8000-000000000001'
+      and document_id = (select id from public.documents
+        where org_id = '52000000-0000-4000-8000-000000000001'
+          and file_name = 'second.pdf')) = 1,
+  'a concurrent retry created a second processing job');
 
 rollback;
 
