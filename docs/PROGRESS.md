@@ -1,6 +1,6 @@
 # PROGRESS — מצב נוכחי
 
-עודכן: 21.08.2026 — **Customer Operations, Assistant, Supplier Portal ו-Email Delivery מוזגו לריפו; לא בוצע rollout של hardening. מועמד hardening forward-only הוא `0169`.**
+עודכן: 21.08.2026 — **Customer Operations hardening מוזג ב-PR #89 (`7e981ad`); לא בוצע rollout. המיגרציה forward-only היא `0169`.**
 
 > **למה נדרש follow-up ולא עריכת היסטוריה.** הסקירה האחרונה הסתיימה אחרי המיזוג ומצאה ארבעה
 > כשלים: `/pricing` הציבורי חסר `anon` grant/RLS; החלטת rate-limit של signup אינה מסוריאלית;
@@ -9,13 +9,17 @@
 > המיגרציות `0154`, ‏`0159`, ‏`0162` ו-`0163` כבר committed ולכן אינן משתנות. ‏`0169` מחליפה את
 > גופי הפונקציות ומוסיפה את grants/policies קדימה בלבד; תיקון ה-Edge נפרד ואינו חושף leftovers.
 >
-> **ראיית RED/GREEN ממוקדת, עדיין לא טענת שחרור.** על stack חדש עד `0163`, ‏`p51` נפל על קטלוג
+> **ראיית RED/GREEN ומיזוג.** על stack חדש עד `0163`, ‏`p51` נפל על קטלוג
 > ציבורי חסום, ‏`p52` נפל על גבול העמודים ו-`p55` נפל על היעדר serialization. לאחר `0169` שלושתן
 > עברו. בדיקת מקביליות אמיתית החזירה job יחיד לשתי קריאות מסמך, וב-12 קריאות signup מקבילות
-> התקבלו 5, נחסמו 7 ונרשמו 12. חוזה Deno עבר 7/7. שערים מלאים על הבסיס החדש עדיין נדרשים.
+> התקבלו 5, נחסמו 7 ונרשמו 12. על הבסיס הסופי `99b454c`, סדר migrations ‏`0168`→`0169`→`0170`
+> עבר ב-DB חדש; ‏`p51`/`p52`/`p55`/`p56`/`p61` ו-preflight ‏46/46 עברו. ‏`npm run check` עבר
+> עם 1,281 בדיקות ב-134 קבצים. כל checks של head ‏`14b087f` ושל merge ‏`7e981ad` עברו:
+> Deno, verify, SQL/preflight ו-browser/a11y, אפס failures.
 >
 > **סדר האינטגרציה החי:** Assistant הוא `0164`–`0166`; Supplier Portal הוא `0167`; Email Delivery
-> הוא `0168`; ולכן hardening מקבל `0169`. אין rollout כחלק מהתיקון הזה.
+> הוא `0168`; hardening הוא `0169`; Assistant UI הוא `0170`. המיזוג לא אישר ולא ביצע החלת DB,
+> Edge deploy, Pages deploy או smoke חי עבור hardening.
 
 עודכן: 20.08.2026 (ג) — **שלב A, פורטל ההזמנה לספק, מוזג ונפרס לייצור עם ראיות Git/CI/DB/Edge/Pages ו־live E2E מלאות.**
 
