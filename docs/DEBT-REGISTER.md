@@ -714,31 +714,26 @@ Hebrew and clears the field" — עם `Unable to find an element with the text: 
 להריץ את הקובץ תחת `--reporter=verbose --no-file-parallelism` עד כשל, ולשמור את ה-DOM המלא של
 הרגע — בלי לדעת איזו הודעה **כן** הופיעה במקום, כל תיקון נוסף הוא ניחוש רביעי.
 
-### §54 — ‏`waitForDraftSave` בשער הדפדפן מתוזמן מול debounce, ולא מול אירוע
+### §54 — race של focus בפתיחה חוזרת של מסך הפתרונות
 
-**20.08.2026 — נקודת מדידה: נפל ואז לא נפל, על אותו ענף, בלי ששונה דבר בקוד שלו.**
-ב-PR #85 התרחיש "order split, minimum fixes and reason-free approval" נפל בריצה אחת
-(`page.waitForResponse: Timeout 30000ms` ב-`check-browser-smoke.cjs:1198`) ועבר בריצה שאחריה,
-כששתי הריצות מפרידות ביניהן רק שינויים שאינם נוגעים בהזמנות. זה מחזק את האבחון הקיים — תזמון מול
-debounce ולא מול אירוע — ומוסיף לו שדה שלא היה: **התדירות אינה יציבה מספיק כדי ש"עבר" ייחשב ראיה
-לתיקון.** מי שיתקן את §54 חייב למדוד סדרה, לא ריצה אחת ירוקה.
-
-- **מצב:** התרחיש "order split, minimum fixes and reason-free approval" נכשל ב־`quality-gate` על
-  ‏PR #79 עם `page.waitForResponse: Timeout 30000ms exceeded while waiting for event "response"`.
-  ה־PR נגע בטוקני צל, ב־`comparisonSeries()` ובמסמכים — **אף לא אחד מהם באותו מסלול קוד**.
-  הרצה חוזרת על אותו SHA עברה, ‏8m7s.
-- **הראיה:** ‏`scripts/check-browser-smoke.cjs:1198` — ‏`waitForDraftSave()` בונה
-  `page.waitForResponse(...)` על `POST /rest/v1/rpc/save_purchase_request_draft`, ונקרא
-  מ־`orderSupplierComparison` (‏:1375) **אחרי** שהאינטראקציה שמפעילה את השמירה כבר יכולה
-  להיות בדרך. השמירה ב־`NewOrder` היא debounced; אם ה־flush מקדים את רישום ה־listener,
-  ההמתנה מפספסת את התגובה ונופלת על הטיימאאוט המלא.
-- **סיכון:** זהה ל־§52 ומצטבר אליו — שני שערים נפרדים שנכשלים בלי שהקוד השתנה מאמנים את
-  הקורא ללחוץ "הרץ שוב", וזה בדיוק ההרגל שסעיף "אבחון כישלונות" בחוקה אוסר. ‏7 דקות של
-  ריצת דפדפן על כל כשל כזה.
-- **הצעד הזול הבא:** לרשום את ה־listener **לפני** האינטראקציה בכל אתרי הקריאה של
-  `waitForDraftSave` (חלקם כבר עושים זאת — `const increaseSave = waitForDraftSave()` בשורה
-  ‏1375 הוא הדפוס הנכון), או להמתין ל־`waitForSaved()` בלבד, שמסתמך על `role="status"` ואינו
-  תלוי בתזמון הרשת. למדוד חמש הרצות רצופות לפני סגירה.
+- **המדידה שהפריכה את האבחון הקודם, 20.08.2026:** ‏PR #87 עבר את תרחיש
+  `order split, minimum fixes and reason-free approval` על `a046b6f`, ואותו tree בדיוק נכשל
+  אחרי המיזוג ל־`main` ב־`5db28e5`. ‏41 תרחישי דפדפן אחרים עברו. הכשל היה שוב
+  `page.waitForResponse: Timeout 30000ms`, הפעם ב־`increaseSave` — אחרי שה־listener כבר נרשם
+  במפורש **לפני** האינטראקציה. לכן ההשערה הישנה, שלפיה ה־listener נרשם מאוחר מול debounce,
+  אינה מסבירה את הכשל הזה ונפסלה.
+- **שורש מדוד בקוד:** ‏`useDialogLayer` מחזיר focus לפאנל ב־`requestAnimationFrame` אחרי כל
+  פתיחה. התרחיש חיכה שהפאנל יהיה visible, ביצע `increase.focus()`, ואז שלח Enter בנפרד דרך
+  `page.keyboard`. ה־frame המתוזמן יכול לנחות בין שתי הפעולות, להחזיר focus לפאנל, ולכן Enter
+  אינו מפעיל את אפשרות ההגדלה ולא נוצרת בקשת שמירה. בפתיחה הראשונה התרחיש כבר חיכה במפורש
+  ש־`document.activeElement` יהיה הפאנל; בפתיחה החוזרת הוא לא חיכה לאותו lifecycle.
+- **מועמד התיקון:** ‏`increase.press('Enter')` מחבר focus+Enter לפעולת Playwright אטומית אחת.
+  קוד המוצר, debounce וחוזה השמירה לא השתנו; התיקון יושב בשכבת הבדיקה שהחזיקה את המרוץ.
+- **מה לא הוכח מקומית:** ניסיון למדוד חמש חזרות ממוקדות נעצר לפי גבול החוקה אחרי שלושה כשלי
+  setup סביבתיים. האחרון מדיד: `demo_reset.sql` אינו יכול למחוק חשבונית כל עוד
+  `invoice_three_way_overrides` מפנה אליה. לא שוכתבו נתוני fixture ולא בוצע rerun לאותו SHA.
+- **מצב הסעיף:** פתוח עד חמש חזרות רצופות של התרחיש או ראיה שקולה. מעבר CI יחיד אינו סוגר אותו;
+  הוא רק תנאי למיזוג מועמד התיקון.
 
 ### §60 — נסגר: rate limit מתמיד, לוקאל אנגלי, CI ו־live E2E הוכחו
 
