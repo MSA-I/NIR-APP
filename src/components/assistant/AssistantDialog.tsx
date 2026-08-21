@@ -1,21 +1,25 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router';
-import { Loader2, RotateCcw, Send, Trash2, X } from 'lucide-react';
+import { ClipboardCheck, Loader2, RotateCcw, Send, Trash2, X } from 'lucide-react';
 import {
   ASSISTANT_FLAG_KEYS,
   ASSISTANT_QUESTION_MAX_CHARS,
-  type AssistantRunResult,
 } from '../../lib/assistant/contracts';
 import {
-  askAssistant,
   deleteAssistantConversation,
+  loadAssistantConversation,
   useAssistantConversations,
 } from '../../lib/assistant/client';
+import type { AssistantHistoryView } from '../../lib/assistant/contracts';
+import type { AssistantRunSession } from '../../lib/assistant/runSession';
 import { toHebrewError } from '../../lib/errors';
 import { useFeatureFlags } from '../../lib/flags';
 import { APP_NAME } from '../../lib/branding';
 import { fmtDateTime } from '../../lib/format';
+import { useAuth } from '../../auth/AuthContext';
+import { isActiveRole } from '../../lib/types';
+import { APP_ROUTE_POLICY, appRouteAllowsRole } from '../../lib/routePolicy';
 import { ConfirmDialog, ErrorNote, Note, Skeleton, useDialogLayer } from '../ui';
 import AnswerView from './AnswerView';
 
@@ -36,6 +40,31 @@ const FALLBACK_CODES = [
   'assistant_tool_failed',
 ] as const;
 
+const ASSISTANT_DESKTOP_QUERY = '(min-width: 64rem)';
+
+function useAssistantDesktopMode(): boolean {
+  const [desktop, setDesktop] = useState(() =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia(ASSISTANT_DESKTOP_QUERY).matches
+      : false);
+
+  useEffect(() => {
+    const query = window.matchMedia(ASSISTANT_DESKTOP_QUERY);
+    const sync = () => setDesktop(query.matches);
+    query.addEventListener('change', sync);
+    sync();
+    return () => query.removeEventListener('change', sync);
+  }, []);
+
+  return desktop;
+}
+
+const ROLE_EXAMPLES = {
+  owner: ['כמה כסף ממתין לזיכוי?', 'כמה חשבוניות נקלטו ב־7 הימים האחרונים?'],
+  office: ['למה החשבונית חסומה?', 'אילו הזמנות נשלחו ולא אושרו?'],
+  accountant: ['אילו תנועות בנק אינן מותאמות?', 'כמה כסף ממתין לזיכוי?'],
+} as const;
+
 function needsFallback(rawError: string): boolean {
   return FALLBACK_CODES.some((code) => rawError.includes(code));
 }
@@ -44,10 +73,15 @@ function needsFallback(rawError: string): boolean {
  * Stored history, mounted only while `assistant.history` is on — off means runs are not stored,
  * and fetching an empty table just to prove it would be noise. Rows arrive through RLS.
  */
-function ConversationHistory() {
-  const { data, loading, error, refetch } = useAssistantConversations();
+function ConversationHistory({ authorizationFingerprint, onOpen }: {
+  authorizationFingerprint: string;
+  onOpen: (view: AssistantHistoryView, expectedAuthorizationFingerprint: string) => void;
+}) {
+  const { data, loading, error, refetch } = useAssistantConversations(authorizationFingerprint);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
 
   if (loading) {
     return (
@@ -63,19 +97,40 @@ function ConversationHistory() {
 
   return (
     <div>
-      <h3 className="mb-1 text-xs font-medium text-ink-muted">שיחות קודמות</h3>
+      <h3 className="mb-1 text-xs font-medium text-ink-muted">בדיקות קודמות</h3>
+      {openError && <ErrorNote message={openError} />}
       {deleteError && <ErrorNote message={deleteError} />}
       <ul className="divide-y divide-line-soft">
         {data.map((conversation) => (
           <li key={conversation.id} className="flex min-h-11 items-center gap-2 py-1">
-            <span className="min-w-0 flex-1 truncate text-sm text-ink-body">
-              {conversation.title || 'שיחה ללא כותרת'}
-            </span>
-            <span className="num shrink-0 text-xs text-ink-muted">{fmtDateTime(conversation.updated_at)}</span>
             <button
               type="button"
-              className="btn-ghost p-1.5! min-h-9 min-w-9"
-              aria-label={`מחיקת השיחה ${conversation.title || 'ללא כותרת'}`}
+              className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-start transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+              disabled={openingId !== null}
+              aria-label={`פתיחת הבדיקה ${conversation.title}`}
+              onClick={() => {
+                const expectedAuthorizationFingerprint = authorizationFingerprint;
+                setOpeningId(conversation.id);
+                setOpenError(null);
+                void loadAssistantConversation(conversation.id)
+                  .then((view) => {
+                    setOpeningId(null);
+                    onOpen(view, expectedAuthorizationFingerprint);
+                  })
+                  .catch((e) => {
+                    setOpeningId(null);
+                    setOpenError(toHebrewError(e));
+                  });
+              }}
+            >
+              <span className="min-w-0 flex-1 truncate text-sm text-ink-body">{conversation.title}</span>
+              <span className="num shrink-0 text-xs text-ink-muted">{fmtDateTime(conversation.updated_at)}</span>
+              {openingId === conversation.id && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
+            </button>
+            <button
+              type="button"
+              className="btn-ghost p-1.5! min-h-11 min-w-11"
+              aria-label={`מחיקת הבדיקה ${conversation.title}`}
               onClick={() => setPendingDelete(conversation.id)}
             >
               <Trash2 size={14} aria-hidden="true" />
@@ -88,8 +143,8 @@ function ConversationHistory() {
       <ConfirmDialog
         open={pendingDelete !== null}
         danger
-        title="מחיקת שיחה"
-        message="השיחה והתשובות שנשמרו בה יימחקו. הנתונים העסקיים עצמם אינם מושפעים."
+        title="מחיקת בדיקה"
+        message="השאלה והממצאים שנשמרו בבדיקה יימחקו. הנתונים העסקיים עצמם אינם מושפעים."
         confirmLabel="מחיקה"
         onClose={() => setPendingDelete(null)}
         onConfirm={() => {
@@ -105,104 +160,106 @@ function ConversationHistory() {
   );
 }
 
-export default function AssistantDialog({ onClose }: { onClose: () => void }) {
+export default function AssistantDialog({ session, onClose, onMobileSourceNavigate }: {
+  session: AssistantRunSession;
+  onClose: () => void;
+  onMobileSourceNavigate: () => void;
+}) {
   const { isEnabled } = useFeatureFlags();
+  const { profile } = useAuth();
+  const desktop = useAssistantDesktopMode();
   const location = useLocation();
   const titleId = useId();
   const descriptionId = useId();
-
-  const [question, setQuestion] = useState('');
-  const [pending, setPending] = useState(false);
-  const [result, setResult] = useState<AssistantRunResult | null>(null);
-  const [conversationId, setConversationId] = useState<string | null>(null);
-  const [rawError, setRawError] = useState<string | null>(null);
-  const [errorText, setErrorText] = useState<string | null>(null);
-  // Announced ONCE per settled run. The answer arrives as one payload (see client.ts), so there
-  // is nothing incremental to narrate — the region speaks only when the result is final.
-  const [announcement, setAnnouncement] = useState('');
+  const {
+    authorizationFingerprint,
+    question,
+    setQuestion,
+    submittedQuestion,
+    pending,
+    result,
+    conversationId,
+    rawError,
+    errorText,
+    announcement,
+    submit,
+    restoreHistory,
+    resetConversation,
+  } = session;
 
   const { panelRef, requestClose } = useDialogLayer<HTMLDivElement>({
     open: true,
     onClose,
     busy: pending,
     allowCloseWhileBusy: true,
+    modal: !desktop,
     initialFocus: (panel) => panel.querySelector<HTMLElement>('textarea'),
   });
 
-  async function submit() {
-    const trimmed = question.trim();
-    if (!trimmed || pending) return;
-    setPending(true);
-    setRawError(null);
-    setErrorText(null);
-    try {
-      const run = await askAssistant({
-        question: trimmed,
-        conversation_id: conversationId,
-        // Context only — the server treats it as neither authorization nor a data filter.
-        route: location.pathname.slice(0, 200),
-      });
-      setResult(run);
-      setConversationId(run.conversation_id);
-      setQuestion('');
-      setAnnouncement('התקבלה תשובה מהעוזר');
-    } catch (e) {
-      const raw = e instanceof Error ? e.message : String(e);
-      setRawError(raw);
-      setErrorText(toHebrewError(e));
-      setAnnouncement('הבקשה נכשלה');
-    } finally {
-      setPending(false);
-    }
-  }
-
-  function resetConversation() {
-    setResult(null);
-    setConversationId(null);
-    setRawError(null);
-    setErrorText(null);
-    setAnnouncement('');
-  }
-
   const showFallback = rawError !== null && needsFallback(rawError);
+  const role = profile && isActiveRole(profile.role) ? profile.role : null;
+  const canOpenAlerts = role !== null && appRouteAllowsRole('alerts', role);
+  const canOpenDashboard = role !== null && appRouteAllowsRole('dashboard', role);
+  const examples = role ? ROLE_EXAMPLES[role] : [];
+  const closeForProductNavigation = () => {
+    if (!desktop) onMobileSourceNavigate();
+  };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 bg-shell/50 no-print" onClick={() => requestClose()}>
-      {/* Mobile: full-screen at 100dvh behind the safe-area paddings. Desktop: an end-anchored
-          panel on the dialog shadow. Entrance rides the shared page-fade (150ms ease-out, cancelled
-          under prefers-reduced-motion by index.css) — no decorative motion of its own. */}
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-        tabIndex={-1}
-        onClick={(event) => event.stopPropagation()}
-        className="page-fade phone-safe-dialog absolute inset-x-0 top-0 flex h-dvh w-full flex-col bg-surface focus:outline-none sm:inset-x-auto sm:end-4 sm:top-4 sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:w-[27rem] sm:rounded-2xl sm:shadow-dialog sm:ring-1 sm:ring-line-soft"
-      >
+    <div
+      id="inplace-assistant-panel"
+      ref={panelRef}
+      role={desktop ? 'complementary' : 'dialog'}
+      aria-modal={desktop ? undefined : true}
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      data-assistant-mode={desktop ? 'docked' : 'fullscreen'}
+      tabIndex={-1}
+      className="assistant-surface page-fade phone-safe-dialog z-50 flex flex-col bg-surface focus:outline-none no-print"
+    >
         <div className="flex items-center gap-2 border-b border-line-soft px-4 py-3">
-          <h2 id={titleId} className="min-w-0 flex-1 truncate font-semibold text-ink">
-            העוזר של {APP_NAME}
-          </h2>
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-action-wash text-action" aria-hidden="true">
+            <ClipboardCheck size={19} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 id={titleId} className="truncate font-semibold text-ink">העוזר של {APP_NAME}</h2>
+            <p className="truncate text-xs text-ink-muted">בדיקה תפעולית מבוססת ראיות · לקריאה בלבד</p>
+          </div>
           {(result || conversationId) && (
-            <button type="button" className="btn-ghost gap-1 px-2! py-1! text-xs" onClick={resetConversation}>
-              <RotateCcw size={13} aria-hidden="true" /> שיחה חדשה
+            <button
+              type="button"
+              className="btn-ghost gap-1 px-2! py-1! text-xs"
+              disabled={pending}
+              onClick={resetConversation}
+            >
+              <RotateCcw size={13} aria-hidden="true" /> בדיקה חדשה
             </button>
           )}
-          <button type="button" className="btn-ghost p-1.5! min-h-11 min-w-11" onClick={() => requestClose()} aria-label="סגירה">
+          <button type="button" className="btn-ghost p-1.5! min-h-11 min-w-11" onClick={() => requestClose()} aria-label="סגירת הבדיקה">
             <X size={18} aria-hidden="true" />
           </button>
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
           <p id={descriptionId} className="text-xs text-ink-muted">
-            העוזר עונה רק על סמך נתונים שהמערכת חישבה, ומצרף לכל מספר את המקור שבו אפשר לבדוק אותו.
+            העוזר מציג רק נתונים שהמערכת מדדה, ולכל ממצא מצרף עדכניות ומקור לבדיקה.
           </p>
+
+          {submittedQuestion && (
+            <section className="rounded-lg bg-surface-sunken p-3" aria-labelledby={`${titleId}-question`}>
+              <h3 id={`${titleId}-question`} className="text-xs font-medium text-ink-muted">השאלה שנבדקה</h3>
+              <p className="mt-1 text-sm font-medium leading-relaxed text-ink">{submittedQuestion}</p>
+              {result && (
+                <p className="mt-2 text-xs text-ink-muted">
+                  עודכן ל־<span className="num">{fmtDateTime(result.as_of)}</span>
+                </p>
+              )}
+            </section>
+          )}
 
           {pending && (
             <div role="status" aria-busy="true" className="space-y-2">
-              <span className="sr-only">העוזר בודק את הנתונים</span>
+              <span className="sr-only">בודק את הנתונים המורשים</span>
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-5/6" />
               <Skeleton className="h-4 w-2/3" />
@@ -212,15 +269,19 @@ export default function AssistantDialog({ onClose }: { onClose: () => void }) {
           {!pending && errorText && (
             <div className="space-y-3">
               <ErrorNote message={errorText} />
-              {showFallback && (
+              {showFallback && canOpenDashboard && (
                 <Note tone="info">
                   <span className="min-w-0 flex-1">
                     המסכים ממשיכים לעבוד גם בלי העוזר:{' '}
-                    <Link to="/alerts" onClick={() => requestClose()} className="underline underline-offset-2">
-                      מסך ההתראות
-                    </Link>{' '}
-                    סורק מה דורש טיפול, ו
-                    <Link to="/dashboard" onClick={() => requestClose()} className="underline underline-offset-2">
+                    {canOpenAlerts && (
+                      <>
+                        <Link to={APP_ROUTE_POLICY.alerts.path} onClick={closeForProductNavigation} className="underline underline-offset-2">
+                          מסך ההתראות
+                        </Link>{' '}
+                        סורק מה דורש טיפול, ו
+                      </>
+                    )}
+                    <Link to={APP_ROUTE_POLICY.dashboard.path} onClick={closeForProductNavigation} className="underline underline-offset-2">
                       מרכז הבקרה
                     </Link>{' '}
                     מציג את תמונת המצב המלאה.
@@ -230,16 +291,43 @@ export default function AssistantDialog({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          {!pending && !errorText && result && <AnswerView result={result} onNavigate={() => requestClose()} />}
+          {!pending && !errorText && result && role && (
+            <AnswerView result={result} role={role} onNavigate={closeForProductNavigation} />
+          )}
 
-          {!pending && !result && !errorText && isEnabled(ASSISTANT_FLAG_KEYS.history) && <ConversationHistory />}
+          {!pending && !result && !errorText && (
+            <section aria-labelledby={`${titleId}-start`}>
+              <h3 id={`${titleId}-start`} className="section-title">מה תרצה לבדוק?</h3>
+              <p className="mt-1 text-sm text-ink-muted">אפשר להתחיל מדוגמה שמתאימה להרשאות שלך.</p>
+              <div className="mt-3 flex flex-col gap-2">
+                {examples.map((example) => (
+                  <button
+                    key={example}
+                    type="button"
+                    className="min-h-11 rounded-lg bg-action-wash px-3 text-start text-sm font-medium text-action-on-soft transition-colors hover:bg-action-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                    onClick={() => setQuestion(example)}
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+              {isEnabled(ASSISTANT_FLAG_KEYS.history) && (
+                <div className="mt-5">
+                  <ConversationHistory
+                    authorizationFingerprint={authorizationFingerprint}
+                    onOpen={(view, expected) => restoreHistory(view, expected)}
+                  />
+                </div>
+              )}
+            </section>
+          )}
         </div>
 
         <form
           className="border-t border-line-soft p-3"
           onSubmit={(event) => {
             event.preventDefault();
-            void submit();
+            void submit(location.pathname);
           }}
         >
           <div className="flex items-end gap-2">
@@ -247,28 +335,27 @@ export default function AssistantDialog({ onClose }: { onClose: () => void }) {
               className="input min-h-11 flex-1 resize-none"
               rows={2}
               maxLength={ASSISTANT_QUESTION_MAX_CHARS}
-              placeholder="מה תרצה לבדוק? למשל: אילו חשבוניות חורגות מהיתרה?"
-              aria-label="שאלה לעוזר"
+              placeholder={examples[0] ?? 'מה תרצה לבדוק?'}
+              aria-label="שאלה לבדיקה"
               value={question}
               disabled={pending}
               onChange={(event) => setQuestion(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault();
-                  void submit();
+                  void submit(location.pathname);
                 }
               }}
             />
             <button type="submit" className="btn-primary min-h-11" disabled={pending || !question.trim()}>
               {pending
                 ? <><Loader2 size={16} className="animate-spin" aria-hidden="true" /><span className="sr-only">שולח</span></>
-                : <><Send size={16} aria-hidden="true" /> שאל</>}
+                : <><Send size={16} aria-hidden="true" /> בדיקה</>}
             </button>
           </div>
         </form>
 
         <div aria-live="polite" className="sr-only">{announcement}</div>
-      </div>
     </div>,
     document.body,
   );

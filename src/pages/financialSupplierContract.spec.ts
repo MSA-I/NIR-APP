@@ -6,6 +6,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {} }));
 
 import { financialBankStatusCounts, financialDueExposure } from './FinancialSupplier';
 import { NAV_SECTIONS } from '../components/Layout';
+import { APP_ROUTE_POLICY } from '../lib/routePolicy';
 
 const source = readFileSync(join(process.cwd(), 'src', 'pages', 'FinancialSupplier.tsx'), 'utf8');
 const app = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
@@ -45,12 +46,18 @@ describe('financial supplier capability boundary', () => {
   });
 
   it('is routed only to owner and accountant', () => {
-    expect(app).toContain('path="/finance/suppliers/:id"');
-    expect(app).toContain("roles={['owner', 'accountant']}");
+    expect(APP_ROUTE_POLICY.financialSupplierDetail).toEqual({
+      path: '/finance/suppliers/:id',
+      roles: ['owner', 'accountant'],
+    });
+    expect(app).toContain('path={APP_ROUTE_POLICY.financialSupplierDetail.path}');
+    expect(app).toContain('roles={APP_ROUTE_POLICY.financialSupplierDetail.roles}');
   });
 
   it('does not route accountant into procurement supplier analytics', () => {
-    expect(app).toContain("roles={['owner', 'office']}><Analytics");
+    expect(APP_ROUTE_POLICY.analytics.roles).toEqual(['owner', 'office']);
+    expect(app).toContain('path={APP_ROUTE_POLICY.analytics.path}');
+    expect(app).toContain('roles={APP_ROUTE_POLICY.analytics.roles}');
     const navigation = NAV_SECTIONS.flatMap((section) => section.items)
       .find((item) => item.to === '/analytics');
     expect(navigation).toMatchObject({ label: 'ביצועי ספקים', roles: ['owner', 'office'] });

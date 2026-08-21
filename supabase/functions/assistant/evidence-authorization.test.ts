@@ -7,6 +7,7 @@ import type {
   SourceReference,
 } from "../../../src/lib/assistant/contracts.ts";
 import {
+  assistantActorContextsEqual,
   authorizeAssistantEvidence,
   createSupabaseEvidenceAuthorizationPort,
   type EvidenceAuthorizationPort,
@@ -36,6 +37,8 @@ const answer: AssistantAnswer = {
     text: "סכום החשבונית הוא 12 שקלים.",
     claim_kind: "invoice.total",
     subject: { entity: "invoice", id: INVOICE },
+    claim_unit: "ils",
+    claim_value: 12,
     fact_ids: ["f1"],
     source_ids: ["s1"],
   }],
@@ -124,6 +127,49 @@ Deno.test("a deleted, foreign, or newly hidden entity revokes its fact and sourc
   }
 });
 
+Deno.test("actor equality is order-insensitive for scopes and strict for lifecycle capabilities", () => {
+  assert.equal(
+    assistantActorContextsEqual(
+      { ...actor, scopes: [...actor.scopes].reverse() },
+      actor,
+    ),
+    true,
+  );
+  assert.equal(
+    assistantActorContextsEqual(
+      {
+        ...actor,
+        capabilities: { ...actor.capabilities, history: false },
+      },
+      actor,
+    ),
+    false,
+  );
+});
+
+Deno.test("a tenant change revokes evidence before entity reads", async () => {
+  let entityReads = 0;
+  const result = await authorizeAssistantEvidence(
+    port({
+      resolveCurrentActor: () => Promise.resolve({
+        ...actor,
+        orgId: "66666666-6666-4666-8666-666666666666",
+      }),
+      visibleEntityIds: (_entity, ids) => {
+        entityReads += 1;
+        return Promise.resolve([...ids]);
+      },
+    }),
+    actor,
+    answer,
+    [fact],
+    [source],
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.ok(result.errors.includes("evidence:actor_context_changed"));
+  assert.equal(entityReads, 0);
+});
+
 Deno.test("an aggregate source is authorized only for the current organization", async () => {
   const orgSource: SourceReference = {
     ...source,
@@ -183,6 +229,55 @@ Deno.test("the Supabase port rechecks only an explicit id projection on the mapp
     ["select", "id"],
     ["in", "id", [INVOICE]],
   ]);
+});
+
+Deno.test("the Supabase port resolves current actor afresh at every authorization moment", async () => {
+  let roleReads = 0;
+  const client = {
+    rpc(name: string) {
+      const result = (() => {
+        if (name === "auth_org") return { data: ORG, error: null };
+        if (name === "auth_role") {
+          roleReads += 1;
+          return { data: roleReads === 1 ? "owner" : "office", error: null };
+        }
+        if (name === "auth_scopes") return { data: actor.scopes, error: null };
+        if (name === "organization_access_state") {
+          return { data: [{ access_mode: "active" }], error: null };
+        }
+        if (name === "resolve_feature_flags") {
+          return {
+            data: [
+              { flag_key: "assistant.ui", state: true },
+              { flag_key: "assistant.history", state: true },
+              { flag_key: "assistant.drafts", state: false },
+            ],
+            error: null,
+          };
+        }
+        if (name === "assistant_confirmed_actions_enabled") {
+          return { data: false, error: null };
+        }
+        return { data: null, error: { message: `unexpected rpc ${name}` } };
+      })();
+      return Promise.resolve(result);
+    },
+    from() {
+      return {
+        select() {
+          return {
+            in() {
+              return Promise.resolve({ data: [], error: null });
+            },
+          };
+        },
+      };
+    },
+  };
+  const access = createSupabaseEvidenceAuthorizationPort(client, USER);
+  assert.equal((await access.resolveCurrentActor()).role, "owner");
+  assert.equal((await access.resolveCurrentActor()).role, "office");
+  assert.equal(roleReads, 2);
 });
 
 Deno.test("a product source points only to the staff product route", async () => {

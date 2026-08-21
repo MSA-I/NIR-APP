@@ -30,20 +30,26 @@
 > אחרי fixture: ארגונים 1, מוצרים 271, ספקים 22, חשבוניות 15, הזמנות 240, links 1, proposals 1;
 > ‏A5/A6=0. צילומי open/submitted/review/original/revision נבדקו חזותית.
 
-עודכן: 20.08.2026 — **נכתבה ואושרה לתכנון תוכנית סגירת UI/UX לעוזר של InPlace; לא בוצע מימוש UI במסגרת העדכון הזה.**
+עודכן: 20.08.2026 — **בעל המוצר אישר את חלופה B; Core ו־history UI מומשו ונבדקו מקומית. עדיין אין PR/CI, activation או deploy.**
 
-> התוכנית נמצאת ב־`C:\Users\art1\Desktop\PLAN-INPLACE-ASSISTANT-UI-UX-CLOSURE-20260820.md`.
-> היא מגדירה את המשטח כבדיקה תפעולית מבוססת־ראיות, לא chatbot, ומתקנת את מקור האמת למותג:
-> **InPlace** הוא שם המוצר; **Place Bay** הוא שם כיוון הסמל בלבד. ‏`SupplyFlow` נשאר רק במזהי
-> מכונה/דומיין/aliases היסטוריים שאסור לשנות מכנית. התוכנית עברה ביקורת Skeptic, ‏Constraint
-> Guardian ו־User Advocate וקיבלה `APPROVED` מה־Arbiter **לתוכנית בלבד**.
+> **הכרעת UI.** בדסקטופ העוזר הוא פאנל docked ו־non-modal ברוחב 27.5rem; המסך הראשי שומר לו מקום
+> והמקור נפתח לצדו. מתחת ל־1024px הוא full-screen; פתיחת מקור עוברת למסך המוצר, והטריגר הופך
+> ל־“חזרה לבדיקה” ושומר result, focus ונתיב חזרה. השאלה, freshness, partial/null, מקורות ותוויות
+> הכלים האנושיות נשארים גלויים. ‏`Sparkles`, שמות tools ומנטל־מודל “שיחה” הוסרו מהמשטח.
 >
-> מצב הסגירה: `PLANNED / NOT_CLOSED / NOT_ACTIVATED / NOT_DEPLOYED`. ‏Core UI עדיין חסר שאלה
-> גלויה, freshness, תוויות כלים אנושיות, source-return flow, fallback לפי תפקיד והכרעת modality.
-> ‏History נשארת `BLOCKED_SECURITY` עד reauthorization/redaction בכל טעינה. בנוסף זוהו כחסמי
-> activation: סיווג טקסט חופשי לפני ספק, runtime validation של response/routes, semantics של flags
-> לאחר cache, lifecycle של ריצה בזמן close/reopen ו־route-policy parity. עבודת אבטחה פעילה בעץ
-> הנוכחי טרם התקבלה כראיה סופית. אין action composer בתוכנית זו, אין קריאה למודל ואין rollout.
+> **History.** ‏`0170_assistant_history_ui_handoff.sql` משאירה את טבלאות הטקסט ללא browser SELECT
+> ומוסיפה candidate list ו־structured snapshot לשירות בלבד. ה־Edge מחזיר metadata/content רק אחרי
+> actor/source/route/text reauthorization נוכחיים. cache key נושא authorization fingerprint;
+> role/org/lifecycle change מוחק state, ותשובת history שהחלה לפני השינוי נזרקת. ‏`p61` עבר מקומית.
+>
+> **ראיה ויזואלית אמיתית.** production components הורצו מול Supabase מקומי ו־Edge response מבודד:
+> ‏15/15 תרחישים בשלושת התפקידים וב־390/768/1023/1024/1440, ‏40 screenshots, ‏0 console errors,
+> ‏0 overflow, יעדי מגע 44px, source/return/history ויחס ניגודיות מינימלי 6.64:1. flags הופעלו
+> דרך `platform_set_org_flag` לצורך QA בלבד והוחזרו ל־off אחריו.
+>
+> המספור `0170`/`p61` שומר מקום ל־PR #89 ולשתי מיגרציות PR #87; אין שינוי בענפים אלה. הסטטוס:
+> `LOCAL_IMPLEMENTED / OWNER_APPROVED_B / CI_PENDING / NOT_ACTIVATED / NOT_DEPLOYED`. אין קריאת
+> מודל חיה, action composer או rollout.
 
 עודכן: 20.08.2026 — **העוזר של InPlace נבנה: מיגרציות `0164`–`0166`, פונקציית Edge, ‏13 כלים, פאנל.
 כבוי לחלוטין, ומעולם לא דיבר עם מודל.**

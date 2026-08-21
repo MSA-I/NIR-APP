@@ -17,6 +17,7 @@ const STATUS: Record<AssistantEdgeErrorCode, number> = {
   assistant_limit_unknown: 403,
   assistant_rate_limited: 429,
   assistant_question_too_long: 400,
+  assistant_input_restricted: 400,
   assistant_provider_unavailable: 503,
   assistant_provider_timeout: 504,
   assistant_unsupported_answer: 502,

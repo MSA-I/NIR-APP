@@ -1,7 +1,17 @@
 import { supabase } from '../supabase';
 import { ok } from '../errors';
-import { unwrap, useQuery, type QueryState } from '../useQuery';
-import type { AssistantAskRequest, AssistantRunResult } from './contracts';
+import { useQuery, type QueryState } from '../useQuery';
+import {
+  AssistantHistoryListResponseSchema,
+  AssistantHistoryViewSchema,
+  AssistantRunResultSchema,
+  type AssistantAskRequest,
+  type AssistantConversationRow as AssistantConversationRowContract,
+  type AssistantHistoryListRequest,
+  type AssistantHistoryLoadRequest,
+  type AssistantHistoryView,
+  type AssistantRunResult,
+} from './contracts';
 
 /**
  * The browser side of the InPlace assistant.
@@ -60,9 +70,11 @@ async function edgeErrorCode(error: unknown): Promise<string | null> {
  * where the failure is shown). The panel needs the raw code anyway, to decide whether the
  * deterministic fallback applies.
  */
-export async function askAssistant(request: AssistantAskRequest): Promise<AssistantRunResult> {
-  const { data, error } = await supabase.functions.invoke<AssistantRunResult>('assistant', {
-    body: request,
+async function invokeAssistant(
+  body: AssistantAskRequest | AssistantHistoryListRequest | AssistantHistoryLoadRequest,
+): Promise<unknown> {
+  const { data, error } = await supabase.functions.invoke<unknown>('assistant', {
+    body,
   });
   if (error) {
     const code = await edgeErrorCode(error);
@@ -75,25 +87,24 @@ export async function askAssistant(request: AssistantAskRequest): Promise<Assist
   return data;
 }
 
+export async function askAssistant(request: AssistantAskRequest): Promise<AssistantRunResult> {
+  const data = await invokeAssistant(request);
+  const parsed = AssistantRunResultSchema.safeParse(data);
+  if (!parsed.success) throw new Error('assistant_unsupported_answer');
+  return parsed.data;
+}
+
 /**
  * One stored conversation, as the panel lists it (0164). Read through RLS — the policy already
  * filters to the asker's own rows and hides tombstoned (`deleted_at`) conversations.
  */
-export interface AssistantConversationRow {
-  id: string;
-  title: string | null;
-  started_at: string;
-  updated_at: string;
-}
+export type AssistantConversationRow = AssistantConversationRowContract;
 
 async function listConversations(): Promise<AssistantConversationRow[]> {
-  return unwrap(
-    await supabase
-      .from('assistant_conversations')
-      .select('id, title, started_at, updated_at')
-      .order('updated_at', { ascending: false })
-      .limit(20),
-  ) as AssistantConversationRow[];
+  const data = await invokeAssistant({ operation: 'history_list', limit: 10 });
+  const parsed = AssistantHistoryListResponseSchema.safeParse(data);
+  if (!parsed.success) throw new Error('assistant_unsupported_answer');
+  return parsed.data.conversations;
 }
 
 /**
@@ -101,8 +112,24 @@ async function listConversations(): Promise<AssistantConversationRow[]> {
  * Rooted at the tenant by `useQuery` itself (the `flags.ts` contract): an org switch invalidates
  * the whole subtree, so one tenant's conversations can never be served to another from cache.
  */
-export function useAssistantConversations(): QueryState<AssistantConversationRow[]> {
-  return useQuery(listConversations, [], [ASSISTANT_DOMAIN, 'conversations']);
+export function useAssistantConversations(
+  authorizationFingerprint = 'assistant-authorization-unscoped',
+): QueryState<AssistantConversationRow[]> {
+  return useQuery(
+    listConversations,
+    [],
+    [ASSISTANT_DOMAIN, 'conversations', authorizationFingerprint],
+  );
+}
+
+export async function loadAssistantConversation(conversationId: string): Promise<AssistantHistoryView> {
+  const data = await invokeAssistant({
+    operation: 'history_load',
+    conversation_id: conversationId,
+  });
+  const parsed = AssistantHistoryViewSchema.safeParse(data);
+  if (!parsed.success) throw new Error('assistant_unsupported_answer');
+  return parsed.data;
 }
 
 /**

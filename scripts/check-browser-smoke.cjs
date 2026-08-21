@@ -1882,11 +1882,11 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
     return route.fulfill({ status: 500, headers: jsonHeaders, json: { code: 'P4_FORCED', message: 'forced push cleanup failure' } });
   });
   const page = await context.newPage();
-  // Signing out revokes the access token before React can unmount Dashboard. Reads that were
-  // already in flight can therefore finish as 401 during that transition. Keep the exception
-  // deliberately narrower than a URL regex: exact Dashboard endpoints, exact method, requests
-  // observed before the click, and responses observed only after logout began. A request started
-  // after logout, an unrelated endpoint or any pre-click 401 still fails the gate.
+  // Push cleanup runs BEFORE auth.signOut and can take long enough for an exact Dashboard read to
+  // start after the click while the authenticated screen is still mounted. auth.signOut can then
+  // revoke that request before its response. Keep the exception structural: exact endpoint and
+  // method, a Bearer header observed while the page was still outside /login, and a 401 observed
+  // only after logout began. A post-navigation read, unrelated endpoint or pre-click 401 fails.
   const logoutTransitionReads = new Map([
     ['/rest/v1/invoices', 'GET'],
     ['/rest/v1/payments', 'GET'],
@@ -1898,13 +1898,18 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
     ['/rest/v1/suppliers', 'GET'],
     ['/rest/v1/purchase_order_items', 'GET'],
   ]);
-  const readsStartedBeforeLogout = new WeakSet();
+  const authenticatedTransitionReads = new WeakSet();
   let logoutStarted = false;
   page.on('request', (request) => {
-    if (logoutStarted) return;
     const url = new URL(request.url());
-    if (url.origin === apiURL && logoutTransitionReads.get(url.pathname) === request.method()) {
-      readsStartedBeforeLogout.add(request);
+    const authorization = request.headers().authorization ?? '';
+    if (
+      new URL(page.url()).pathname !== '/login'
+      && authorization.startsWith('Bearer ')
+      && url.origin === apiURL
+      && logoutTransitionReads.get(url.pathname) === request.method()
+    ) {
+      authenticatedTransitionReads.add(request);
     }
   });
   captureConsole(page, `push:${name}`, [/HTTP 500 .*push_subscriptions/], (response) => {
@@ -1913,7 +1918,7 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
     const url = new URL(response.url());
     return url.origin === apiURL
       && logoutTransitionReads.get(url.pathname) === request.method()
-      && readsStartedBeforeLogout.has(request);
+      && authenticatedTransitionReads.has(request);
   });
   try {
     await login(page, 'owner');

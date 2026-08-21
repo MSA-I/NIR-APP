@@ -750,6 +750,8 @@ exception when insufficient_privilege then
   if sqlerrm <> 'service_role_required' then raise; end if;
 end
 $$;
+reset role;
+set local role authenticated;
 select pg_temp.p56_assert(
   (public.assistant_run_totals() ->> 'org_month')::numeric = 3
   and (public.assistant_run_totals() ->> 'org_month_cost')::bigint = 750,

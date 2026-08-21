@@ -14,6 +14,8 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   AssistantAskRequestSchema,
+  AssistantHistoryListRequestSchema,
+  AssistantHistoryLoadRequestSchema,
   type AssistantCapabilities,
   type AssistantRunResult,
   type Fact,
@@ -38,12 +40,18 @@ import {
   type ServiceRpcResult,
 } from "./egress.ts";
 import {
+  assistantActorContextsEqual,
   authorizeAssistantEvidence,
   createSupabaseEvidenceAuthorizationPort,
   type EvidenceAuthorizationClient,
 } from "./evidence-authorization.ts";
 import { AssistantEdgeError, corsFor, fail, json } from "./errors.ts";
-import { loadAuthorizedConversationContext } from "./history.ts";
+import {
+  listAuthorizedConversations,
+  loadAuthorizedConversationContext,
+  loadAuthorizedConversationViews,
+} from "./history.ts";
+import { assertAssistantProviderTextAllowed } from "./input-classification.ts";
 import {
   type AssistantTurnOutcome,
   buildInstructions,
@@ -66,6 +74,34 @@ const REGISTRY = buildRegistry([
   getOpenAlertsTool,
   ...deterministicBusinessTools,
 ]);
+
+export type ParsedAssistantRequest =
+  | { kind: "ask"; request: ReturnType<typeof AssistantAskRequestSchema.parse> }
+  | { kind: "history_list"; request: ReturnType<typeof AssistantHistoryListRequestSchema.parse> }
+  | { kind: "history_load"; request: ReturnType<typeof AssistantHistoryLoadRequestSchema.parse> }
+  | { kind: "invalid"; questionTooLong: boolean };
+
+export function parseAssistantRequest(rawBody: unknown): ParsedAssistantRequest {
+  const operation = rawBody && typeof rawBody === "object" && !Array.isArray(rawBody)
+    ? (rawBody as Record<string, unknown>).operation
+    : undefined;
+  if (operation !== undefined) {
+    const list = AssistantHistoryListRequestSchema.safeParse(rawBody);
+    if (list.success) return { kind: "history_list", request: list.data };
+    const load = AssistantHistoryLoadRequestSchema.safeParse(rawBody);
+    if (load.success) return { kind: "history_load", request: load.data };
+    return { kind: "invalid", questionTooLong: false };
+  }
+
+  const ask = AssistantAskRequestSchema.safeParse(rawBody);
+  if (ask.success) return { kind: "ask", request: ask.data };
+  return {
+    kind: "invalid",
+    questionTooLong: ask.error.issues.some((issue) =>
+      issue.path[0] === "question" && issue.code === "too_big"
+    ),
+  };
+}
 
 function serviceRpc(admin: SupabaseClient): ServiceRpc {
   return (name, args) =>
@@ -188,32 +224,13 @@ export async function handler(req: Request): Promise<Response> {
   const url = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const providerKey = Deno.env.get("AI_ASSISTANT_API_KEY");
-  const parsedConfig = parseAssistantConfig((name) => Deno.env.get(name));
-  if (!url || !anonKey || !serviceKey || !providerKey || !parsedConfig.ok) {
-    // The reason names the knob class, never a value; a misconfigured cap must be visible to an
-    // operator without leaking anything tenant-shaped.
-    console.error(
-      "assistant configuration refused",
-      parsedConfig.ok ? "env_missing" : parsedConfig.reason,
-    );
-    return fail(
-      cors,
-      new AssistantEdgeError("assistant_provider_unavailable", 503),
-    );
+  if (!url || !anonKey || !serviceKey) {
+    console.error("assistant configuration refused", "supabase_env_missing");
+    return fail(cors, new AssistantEdgeError("assistant_provider_unavailable", 503));
   }
-  const config = parsedConfig.config;
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return fail(cors, new AssistantEdgeError("assistant_unauthenticated"));
-  }
-  const caller = createClient(url, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-    auth: { persistSession: false },
-  });
-  const userResult = await caller.auth.getUser();
-  if (userResult.error || !userResult.data.user) {
     return fail(cors, new AssistantEdgeError("assistant_unauthenticated"));
   }
 
@@ -223,21 +240,90 @@ export async function handler(req: Request): Promise<Response> {
   } catch {
     return fail(cors, new AssistantEdgeError("assistant_invalid_request"));
   }
-  const parsedRequest = AssistantAskRequestSchema.safeParse(rawBody);
-  if (!parsedRequest.success) {
-    const tooLong = parsedRequest.error.issues.some((issue) =>
-      issue.path[0] === "question" && issue.code === "too_big"
-    );
+  const parsedRequest = parseAssistantRequest(rawBody);
+  if (parsedRequest.kind === "invalid") {
     return fail(
       cors,
       new AssistantEdgeError(
-        tooLong ? "assistant_question_too_long" : "assistant_invalid_request",
+        parsedRequest.questionTooLong
+          ? "assistant_question_too_long"
+          : "assistant_invalid_request",
       ),
     );
   }
-  const request = parsedRequest.data;
+
+  // History reads never construct a provider or require provider configuration. An ask still
+  // fails before auth network work when its model boundary is misconfigured, preserving the
+  // existing fail-closed operational signal and guaranteeing no silent model default.
+  const providerKey = Deno.env.get("AI_ASSISTANT_API_KEY");
+  const parsedConfig = parseAssistantConfig((name) => Deno.env.get(name));
+  if (
+    parsedRequest.kind === "ask" &&
+    (!providerKey || !parsedConfig.ok)
+  ) {
+    console.error(
+      "assistant configuration refused",
+      parsedConfig.ok ? "env_missing" : parsedConfig.reason,
+    );
+    return fail(cors, new AssistantEdgeError("assistant_provider_unavailable", 503));
+  }
+
+  const caller = createClient(url, anonKey, {
+    global: { headers: { Authorization: authHeader } },
+    auth: { persistSession: false },
+  });
+  const userResult = await caller.auth.getUser();
+  if (userResult.error || !userResult.data.user) {
+    return fail(cors, new AssistantEdgeError("assistant_unauthenticated"));
+  }
+
+  if (parsedRequest.kind !== "ask") {
+    try {
+      const actor = await resolveActorContext(caller, userResult.data.user.id);
+      if (!actor.capabilities.ui) throw new AssistantEdgeError("assistant_disabled");
+      if (!actor.capabilities.history) {
+        throw new AssistantEdgeError("assistant_history_unavailable");
+      }
+      const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
+      const authorization = createSupabaseEvidenceAuthorizationPort(
+        caller as unknown as EvidenceAuthorizationClient,
+        userResult.data.user.id,
+      );
+      if (parsedRequest.kind === "history_list") {
+        const conversations = await listAuthorizedConversations(
+          admin,
+          authorization,
+          { actor, limit: parsedRequest.request.limit },
+        );
+        return json(cors, { conversations }, 200);
+      }
+      const views = await loadAuthorizedConversationViews(admin, authorization, {
+        actor,
+        conversationId: parsedRequest.request.conversation_id,
+        limit: 12,
+      });
+      const latest = views.at(-1);
+      if (!latest) throw new AssistantEdgeError("assistant_history_unavailable");
+      return json(cors, latest, 200);
+    } catch (error) {
+      const edgeError = error instanceof AssistantEdgeError
+        ? error
+        : new AssistantEdgeError("assistant_history_unavailable");
+      console.error("assistant history failed", edgeError.code);
+      return fail(cors, edgeError);
+    }
+  }
+
+  if (!providerKey || !parsedConfig.ok) {
+    return fail(cors, new AssistantEdgeError("assistant_provider_unavailable", 503));
+  }
+  const config = parsedConfig.config;
+  const request = parsedRequest.request;
 
   try {
+    // Browser-authored free text is classified before quota checks, history reads, egress leases
+    // or provider construction. Refused text is neither sent nor persisted as a failed run.
+    assertAssistantProviderTextAllowed(request.question);
     const actor = await resolveActorContext(caller, userResult.data.user.id);
     if (!actor.capabilities.ui) {
       throw new AssistantEdgeError("assistant_disabled");
@@ -310,8 +396,19 @@ export async function handler(req: Request): Promise<Response> {
           runId,
           ttlSeconds: ASSISTANT_EGRESS_TTL_SECONDS,
         },
-        (lease) => {
+        async (lease) => {
           egressLease.current = lease;
+          // The actor used to choose the tenant, role gates and egress lease may have changed
+          // while history was loaded. Re-resolve after the lease and immediately before the
+          // first provider byte can leave InPlace. The lease is then settled as a refusal and no
+          // provider call occurs; post-generation authorization repeats the same fresh check.
+          const currentActor = await evidenceAuthorization.resolveCurrentActor();
+          if (
+            !assistantActorContextsEqual(currentActor, actor) ||
+            !currentActor.capabilities.ui
+          ) {
+            throw new AssistantEdgeError("assistant_disabled");
+          }
           return runAssistantTurn({
             provider,
             registry: REGISTRY,

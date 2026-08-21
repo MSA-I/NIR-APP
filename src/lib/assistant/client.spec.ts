@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   askAssistant,
   deleteAssistantConversation,
+  loadAssistantConversation,
   sendAssistantFeedback,
   useAssistantConversations,
 } from './client';
@@ -28,7 +29,7 @@ vi.mock('../supabase', () => ({
 }));
 
 const emptyRun: AssistantRunResult = {
-  run_id: 'run-1',
+  run_id: '11111111-1111-4111-8111-111111111111',
   conversation_id: null,
   answer: { blocks: [{ type: 'text', text: 'אין חריגות פתוחות' }], next_steps: [], no_answer_reason: null },
   facts: [],
@@ -37,6 +38,48 @@ const emptyRun: AssistantRunResult = {
   complete: true,
   as_of: '2026-08-20T00:00:00.000Z',
   proposal: null,
+};
+
+const invoiceFact = {
+  id: 'f1',
+  kind: 'invoice.total' as const,
+  subject: { entity: 'invoice' as const, id: 'invoice-1' },
+  label: 'סכום חשבונית',
+  value: 50,
+  unit: 'ils' as const,
+  tool: 'explain_invoice_block',
+  as_of: '2026-08-20T00:00:00.000Z',
+  classification: 'financial_sensitive' as const,
+};
+
+const invoiceSource = {
+  id: 's1',
+  entity: 'invoice' as const,
+  entity_id: 'invoice-1',
+  label: 'חשבונית',
+  route: '/invoices/invoice-1',
+  classification: 'financial_sensitive' as const,
+};
+
+const supportedRun: AssistantRunResult = {
+  ...emptyRun,
+  answer: {
+    blocks: [{
+      type: 'claim',
+      text: 'סכום החשבונית הוא 50 שקלים.',
+      claim_kind: 'invoice.total',
+      subject: { entity: 'invoice', id: 'invoice-1' },
+      claim_unit: 'ils',
+      claim_value: 50,
+      fact_ids: ['f1'],
+      source_ids: ['s1'],
+    }],
+    next_steps: [],
+    no_answer_reason: null,
+  },
+  facts: [invoiceFact],
+  sources: [invoiceSource],
+  tools_used: [{ tool: 'explain_invoice_block', complete: true }],
 };
 
 beforeEach(() => {
@@ -50,6 +93,93 @@ describe('askAssistant', () => {
     const result = await askAssistant(request);
     expect(invoke).toHaveBeenCalledWith('assistant', { body: request });
     expect(result).toEqual(emptyRun);
+  });
+
+  it.each([
+    ['מעטפה עם שדה לא מוכר', { ...emptyRun, arbitrary: true }],
+    ['answer שאינו עומד בחוזה', {
+      ...emptyRun,
+      answer: { ...emptyRun.answer, blocks: [{ type: 'text', text: 'נמצאו 2 חריגות' }] },
+    }],
+    ['fact שאינו עומד בחוזה', {
+      ...emptyRun,
+      facts: [{
+        id: 'f1',
+        kind: 'invoice.total',
+        subject: null,
+        label: 'סכום חשבונית',
+        value: { amount: 50 },
+        unit: 'ils',
+        tool: 'explain_invoice_block',
+        as_of: '2026-08-20T00:00:00.000Z',
+        classification: 'financial_sensitive',
+      }],
+    }],
+    ['source שאינו עומד בחוזה', {
+      ...emptyRun,
+      sources: [{
+        id: 's1',
+        entity: 'invoice',
+        entity_id: 'invoice-1',
+        label: ['חשבונית'],
+        route: '/invoices/invoice-1',
+        classification: 'tenant_standard',
+      }],
+    }],
+    ['route חיצוני בתוך source', {
+      ...emptyRun,
+      sources: [{
+        id: 's1',
+        entity: 'invoice',
+        entity_id: 'invoice-1',
+        label: 'חשבונית',
+        route: 'https://attacker.invalid/invoices/invoice-1',
+        classification: 'tenant_standard',
+      }],
+    }],
+    ['מזהה Fact כפול', {
+      ...supportedRun,
+      facts: [invoiceFact, { ...invoiceFact }],
+    }],
+    ['מזהה Source כפול', {
+      ...supportedRun,
+      sources: [invoiceSource, { ...invoiceSource }],
+    }],
+    ['claim שמפנה ל-Fact שלא הונפק', {
+      ...supportedRun,
+      answer: {
+        ...supportedRun.answer,
+        blocks: [{ ...supportedRun.answer.blocks[0], fact_ids: ['missing-fact'] }],
+      },
+    }],
+    ['claim שמפנה ל-Source שלא הונפק', {
+      ...supportedRun,
+      answer: {
+        ...supportedRun.answer,
+        blocks: [{ ...supportedRun.answer.blocks[0], source_ids: ['missing-source'] }],
+      },
+    }],
+    ['Fact קשור שאינו תומך בערך הסמנטי של ה-claim', {
+      ...supportedRun,
+      answer: {
+        ...supportedRun.answer,
+        blocks: [{
+          ...supportedRun.answer.blocks[0],
+          text: 'סכום החשבונית הוא 51 שקלים.',
+          claim_value: 51,
+        }],
+      },
+    }],
+    ['complete שסותר את תוצאות הכלים', {
+      ...supportedRun,
+      tools_used: [{ tool: 'explain_invoice_block', complete: false }],
+      complete: true,
+    }],
+  ])('נכשל סגור על 2xx פגום: %s', async (_case, malformed) => {
+    invoke.mockResolvedValue({ data: malformed, error: null });
+
+    await expect(askAssistant({ question: 'שאלה', conversation_id: null, route: null }))
+      .rejects.toThrow('assistant_unsupported_answer');
   });
 
   it('חושף את קוד הסירוב מגוף התשובה — supabase-js בולע את הגוף ב-non-2xx, והקוד הוא מה שממופה לעברית אחת', async () => {
@@ -106,6 +236,29 @@ describe('מילון השגיאות — ניסוח אחד, לא שניים', () 
 });
 
 describe('פעולות שיחה', () => {
+  it('פתיחת בדיקה קודמת עוברת רק דרך Edge שמבצע reauthorization ומפרש מעטפה סגורה', async () => {
+    const historyRun = {
+      question: 'מה מצב החשבונית?',
+      result: { ...emptyRun, conversation_id: '22222222-2222-4222-8222-222222222222' },
+    };
+    invoke.mockResolvedValue({ data: historyRun, error: null });
+
+    await expect(loadAssistantConversation('22222222-2222-4222-8222-222222222222'))
+      .resolves.toEqual(historyRun);
+    expect(invoke).toHaveBeenCalledWith('assistant', {
+      body: {
+        operation: 'history_load',
+        conversation_id: '22222222-2222-4222-8222-222222222222',
+      },
+    });
+  });
+
+  it('פתיחת history נכשלת סגור אם ה-Edge החזיר shape לא מוכר', async () => {
+    invoke.mockResolvedValue({ data: { question: 'שאלה', result: { arbitrary: true } }, error: null });
+    await expect(loadAssistantConversation('22222222-2222-4222-8222-222222222222'))
+      .rejects.toThrow('assistant_unsupported_answer');
+  });
+
   it('מחיקת שיחה עוברת דרך ה-definer של 0164 בחתימה המדויקת שלו', async () => {
     rpc.mockResolvedValue({ data: null, error: null });
     await deleteAssistantConversation('conv-9');
@@ -130,15 +283,18 @@ describe('פעולות שיחה', () => {
 
 describe('useAssistantConversations — מפתח מטמון מושרש בדייר', () => {
   it('המפתח נפתח ב-org, כך שהחלפת ארגון לעולם לא מגישה שיחות של דייר אחר מהמטמון', async () => {
-    limit.mockResolvedValue({ data: [], error: null });
+    invoke.mockResolvedValue({ data: { conversations: [] }, error: null });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrapper = ({ children }: { children: ReactNode }) =>
       createElement(QueryClientProvider, { client: queryClient },
         createElement(OrgScopeProvider, { org: 'org-a', children }));
-    const { result } = renderHook(() => useAssistantConversations(), { wrapper });
+    const { result } = renderHook(() => useAssistantConversations('actor-owner-active'), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
     const keys = queryClient.getQueryCache().getAll().map((entry) => entry.queryKey);
-    expect(keys).toContainEqual(['org', 'org-a', 'assistant', 'conversations']);
-    expect(from).toHaveBeenCalledWith('assistant_conversations');
+    expect(keys).toContainEqual(['org', 'org-a', 'assistant', 'conversations', 'actor-owner-active']);
+    expect(invoke).toHaveBeenCalledWith('assistant', {
+      body: { operation: 'history_list', limit: 10 },
+    });
+    expect(from).not.toHaveBeenCalled();
   });
 });

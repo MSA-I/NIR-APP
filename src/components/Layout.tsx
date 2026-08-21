@@ -7,6 +7,7 @@ import { APP_NAME } from '../lib/branding';
 import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
 import Fab from './Fab';
 import AssistantPanel from './AssistantPanel';
+import { assistantAuthorizationFingerprint, useAssistantRunSession } from '../lib/assistant/runSession';
 import NotificationBell from './NotificationBell';
 import FeedbackButton from './FeedbackButton';
 import { ConfirmDialog, useDialogLayer, useToast } from './ui';
@@ -232,7 +233,17 @@ export function pageTitleFor(pathname: string): string {
 
 export default function Layout() {
   useGlowPointer();
-  const { profile, org, roleLabels, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, accessStatus = 'unknown', signOut } = useAuth();
+  const { session, profile, org, roleLabels, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, accessStatus = 'unknown', signOut } = useAuth();
+  const assistantSession = useAssistantRunSession(assistantAuthorizationFingerprint({
+    userId: session?.user.id,
+    profileId: profile?.id,
+    orgId: org?.id ?? profile?.org_id,
+    role: profile?.role,
+    profileActive: profile?.active,
+    orgStatus: org?.status,
+    accessMode: organizationAccess.mode,
+    accessStatus,
+  }));
   const navigate = useNavigate();
   const toast = useToast();
   const location = useLocation();
@@ -608,7 +619,7 @@ export default function Layout() {
           <div className="flex shrink-0 items-center gap-1.5">
             {canSearch && <div className="w-44 xl:w-64 [&_input]:rounded-full [&_input]:bg-surface/90"><GlobalSearch /></div>}
             {/* Self-gated on assistant.ui (fail-closed); renders nothing while the flag is off. */}
-            <AssistantPanel />
+            <AssistantPanel session={assistantSession} />
             <NotificationBell />
             {feedbackOn && <FeedbackButton />}
             {topAccountMenu}
@@ -649,7 +660,7 @@ export default function Layout() {
         {/* T7.3k (owner, images #33-34 "אתה רואה את ההבדלים בשפה?"): the desktop language —
             bare round icon targets in dark ink straight on the bar, no boxed cluster. */}
         <div className="mobile-shell-actions flex shrink-0 items-center gap-0.5">
-          <AssistantPanel />
+          <AssistantPanel session={assistantSession} />
           <NotificationBell />
           <FeedbackButton />
           {canSearch && (

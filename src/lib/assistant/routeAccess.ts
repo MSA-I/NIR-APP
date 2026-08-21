@@ -1,54 +1,63 @@
 import type { AssistantRole, EvidenceEntity, SourceReference } from './contracts.ts';
+import {
+  APP_ROUTE_POLICY,
+  type AppRoutePolicyKey,
+} from '../routePolicy.ts';
 
-type RouteRule = {
+export type AssistantExactRouteRule = {
   route: string;
-  roles: readonly AssistantRole[];
+  appRoute: AppRoutePolicyKey;
   entities: readonly EvidenceEntity[];
 };
-
-const ALL_ASSISTANT_ROLES: readonly AssistantRole[] = ['owner', 'office', 'accountant'];
-const STAFF_ROLES: readonly AssistantRole[] = ['owner', 'office'];
-const MONEY_ROLES: readonly AssistantRole[] = ['owner', 'accountant'];
 
 /**
  * Exact list routes the current assistant tools may issue. Query strings are part of the
  * allowlist: `/invoices?attention=duplicates` is a product route; `/invoices?next=https://...`
  * is not. This module is shared by Edge validation and the browser renderer.
  */
-const EXACT_ROUTE_RULES: readonly RouteRule[] = [
-  { route: '/dashboard', roles: ALL_ASSISTANT_ROLES, entities: ['organization'] },
-  { route: '/invoices', roles: ALL_ASSISTANT_ROLES, entities: ['organization'] },
-  { route: '/invoices?attention=duplicates', roles: ALL_ASSISTANT_ROLES, entities: ['organization'] },
-  { route: '/invoices?attention=without-order', roles: STAFF_ROLES, entities: ['organization'] },
-  { route: '/orders?status=sent', roles: STAFF_ROLES, entities: ['organization'] },
-  { route: '/prices', roles: STAFF_ROLES, entities: ['organization'] },
-  { route: '/prices?increases=1', roles: STAFF_ROLES, entities: ['organization'] },
-  { route: '/payment-requests', roles: STAFF_ROLES, entities: ['payment_request', 'organization'] },
-  { route: '/payment-requests?status=active&due=soon', roles: STAFF_ROLES, entities: ['organization'] },
-  { route: '/credits', roles: ALL_ASSISTANT_ROLES, entities: ['credit_note', 'organization'] },
-  { route: '/inventory', roles: STAFF_ROLES, entities: ['product', 'organization'] },
-  { route: '/products', roles: STAFF_ROLES, entities: ['product'] },
-  { route: '/bank', roles: MONEY_ROLES, entities: ['bank_transaction', 'organization'] },
-  { route: '/exceptions', roles: ALL_ASSISTANT_ROLES, entities: ['exception', 'organization'] },
-  { route: '/expenses', roles: MONEY_ROLES, entities: ['organization'] },
-  { route: '/alerts', roles: STAFF_ROLES, entities: ['organization'] },
-  { route: '/reports/products', roles: ALL_ASSISTANT_ROLES, entities: ['product', 'organization'] },
-  { route: '/analytics', roles: STAFF_ROLES, entities: ['supplier', 'organization'] },
-  { route: '/payments', roles: MONEY_ROLES, entities: ['payment', 'organization'] },
+export const ASSISTANT_EXACT_ROUTE_RULES: readonly AssistantExactRouteRule[] = [
+  { route: APP_ROUTE_POLICY.dashboard.path, appRoute: 'dashboard', entities: ['organization'] },
+  { route: APP_ROUTE_POLICY.invoices.path, appRoute: 'invoices', entities: ['organization'] },
+  { route: `${APP_ROUTE_POLICY.invoices.path}?attention=duplicates`, appRoute: 'invoices', entities: ['organization'] },
+  { route: `${APP_ROUTE_POLICY.invoices.path}?attention=without-order`, appRoute: 'invoices', entities: ['organization'] },
+  { route: `${APP_ROUTE_POLICY.orders.path}?status=sent`, appRoute: 'orders', entities: ['organization'] },
+  { route: APP_ROUTE_POLICY.prices.path, appRoute: 'prices', entities: ['organization'] },
+  { route: `${APP_ROUTE_POLICY.prices.path}?increases=1`, appRoute: 'prices', entities: ['organization'] },
+  { route: APP_ROUTE_POLICY.paymentRequests.path, appRoute: 'paymentRequests', entities: ['payment_request', 'organization'] },
+  { route: `${APP_ROUTE_POLICY.paymentRequests.path}?status=active&due=soon`, appRoute: 'paymentRequests', entities: ['organization'] },
+  { route: APP_ROUTE_POLICY.credits.path, appRoute: 'credits', entities: ['credit_note', 'organization'] },
+  { route: APP_ROUTE_POLICY.inventory.path, appRoute: 'inventory', entities: ['product', 'organization'] },
+  { route: APP_ROUTE_POLICY.products.path, appRoute: 'products', entities: ['product'] },
+  { route: APP_ROUTE_POLICY.bank.path, appRoute: 'bank', entities: ['bank_transaction', 'organization'] },
+  { route: APP_ROUTE_POLICY.exceptions.path, appRoute: 'exceptions', entities: ['exception', 'organization'] },
+  { route: APP_ROUTE_POLICY.expenses.path, appRoute: 'expenses', entities: ['organization'] },
+  { route: APP_ROUTE_POLICY.alerts.path, appRoute: 'alerts', entities: ['organization'] },
+  { route: APP_ROUTE_POLICY.productReport.path, appRoute: 'productReport', entities: ['product', 'organization'] },
+  { route: APP_ROUTE_POLICY.analytics.path, appRoute: 'analytics', entities: ['supplier', 'organization'] },
+  { route: APP_ROUTE_POLICY.payments.path, appRoute: 'payments', entities: ['payment', 'organization'] },
 ];
 
-type DynamicRule = {
-  prefix: string;
-  roles: readonly AssistantRole[];
+export type AssistantDynamicRouteRule = {
+  appRoute: AppRoutePolicyKey;
   entity: EvidenceEntity;
 };
 
-const DYNAMIC_ROUTE_RULES: readonly DynamicRule[] = [
-  { prefix: '/suppliers/', roles: STAFF_ROLES, entity: 'supplier' },
-  { prefix: '/finance/suppliers/', roles: MONEY_ROLES, entity: 'supplier' },
-  { prefix: '/orders/', roles: STAFF_ROLES, entity: 'purchase_order' },
-  { prefix: '/invoices/', roles: ALL_ASSISTANT_ROLES, entity: 'invoice' },
+export const ASSISTANT_DYNAMIC_ROUTE_RULES: readonly AssistantDynamicRouteRule[] = [
+  { appRoute: 'supplierDetail', entity: 'supplier' },
+  { appRoute: 'financialSupplierDetail', entity: 'supplier' },
+  { appRoute: 'orderDetail', entity: 'purchase_order' },
+  { appRoute: 'invoiceDetail', entity: 'invoice' },
 ];
+
+function dynamicPrefix(rule: AssistantDynamicRouteRule): string {
+  const path = APP_ROUTE_POLICY[rule.appRoute].path;
+  const parameter = path.indexOf(':');
+  return parameter === -1 ? '' : path.slice(0, parameter);
+}
+
+function rolesFor(appRoute: AppRoutePolicyKey): readonly AssistantRole[] {
+  return APP_ROUTE_POLICY[appRoute].roles;
+}
 
 export type AssistantRouteDecision = 'allowed' | 'not_allowlisted' | 'not_permitted';
 
@@ -70,16 +79,19 @@ export function assistantSourceRouteDecision(
   if (source.route === null) return 'allowed';
   if (!isPlainInAppRoute(source.route)) return 'not_allowlisted';
 
-  const exact = EXACT_ROUTE_RULES.find((rule) => rule.route === source.route);
+  const exact = ASSISTANT_EXACT_ROUTE_RULES.find((rule) => rule.route === source.route);
   if (exact) {
     if (!exact.entities.includes(source.entity)) return 'not_allowlisted';
-    return role && !exact.roles.includes(role) ? 'not_permitted' : 'allowed';
+    return role && !rolesFor(exact.appRoute).includes(role) ? 'not_permitted' : 'allowed';
   }
 
   if (source.route.includes('?')) return 'not_allowlisted';
-  const dynamic = DYNAMIC_ROUTE_RULES.find((rule) => source.route!.startsWith(rule.prefix));
+  const dynamic = ASSISTANT_DYNAMIC_ROUTE_RULES.find((rule) => {
+    const prefix = dynamicPrefix(rule);
+    return prefix !== '' && source.route!.startsWith(prefix);
+  });
   if (!dynamic || dynamic.entity !== source.entity) return 'not_allowlisted';
-  const id = source.route.slice(dynamic.prefix.length);
+  const id = source.route.slice(dynamicPrefix(dynamic).length);
   if (!id || id.includes('/') || id !== source.entity_id) return 'not_allowlisted';
-  return role && !dynamic.roles.includes(role) ? 'not_permitted' : 'allowed';
+  return role && !rolesFor(dynamic.appRoute).includes(role) ? 'not_permitted' : 'allowed';
 }

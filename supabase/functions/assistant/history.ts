@@ -1,12 +1,13 @@
 import {
   ASSISTANT_ROLES,
   AssistantAnswerSchema,
+  AssistantRunResultSchema,
   DATA_CLASSES,
   EVIDENCE_ENTITIES,
   FACT_KINDS,
   FACT_UNITS,
   type ActorContext,
-  type AssistantAnswer,
+  type AssistantRunResult,
   type DataClass,
   type EvidenceEntity,
   type Fact,
@@ -19,6 +20,7 @@ import {
   type EvidenceAuthorizationPort,
 } from "./evidence-authorization.ts";
 import { AssistantEdgeError } from "./errors.ts";
+import { classifyAssistantProviderText } from "./input-classification.ts";
 import { validateAnswer } from "./validate.ts";
 
 export interface HistorySnapshotRpc {
@@ -33,8 +35,27 @@ export interface AuthorizedConversationMessage {
   content: string;
 }
 
+export interface AuthorizedConversationView {
+  question: string;
+  result: AssistantRunResult;
+}
+
+export interface AuthorizedConversationListRow {
+  id: string;
+  title: string;
+  updated_at: string;
+}
+
+interface SnapshotTool {
+  tool: string;
+  complete: boolean;
+}
+
 interface SnapshotRow {
   runId: string;
+  runAsOf: string;
+  complete: boolean;
+  tools: SnapshotTool[];
   author: "user" | "assistant";
   question: string | null;
   blocks: unknown;
@@ -147,18 +168,36 @@ function parseSources(value: unknown): SourceReference[] | null {
   return parsed;
 }
 
+function parseTools(value: unknown): SnapshotTool[] | null {
+  if (!Array.isArray(value) || value.length > 50) return null;
+  const tools: SnapshotTool[] = [];
+  for (const item of value) {
+    if (
+      !isRecord(item) || typeof item.tool !== "string" ||
+      typeof item.complete !== "boolean"
+    ) return null;
+    tools.push({ tool: item.tool, complete: item.complete });
+  }
+  return tools;
+}
+
 function parseRow(value: unknown): SnapshotRow | null {
   if (!isRecord(value)) return null;
   const actor = parseActor(value.actor);
   const facts = parseFacts(value.facts);
   const sources = parseSources(value.sources);
+  const tools = parseTools(value.tools);
   if (
-    !actor || !facts || !sources || typeof value.run_id !== "string" ||
+    !actor || !facts || !sources || !tools || typeof value.run_id !== "string" ||
+    typeof value.run_as_of !== "string" || typeof value.complete !== "boolean" ||
     (value.author !== "user" && value.author !== "assistant") ||
     !(value.question === null || typeof value.question === "string")
   ) return null;
   return {
     runId: value.run_id,
+    runAsOf: value.run_as_of,
+    complete: value.complete,
+    tools,
     author: value.author,
     question: value.question,
     blocks: value.blocks,
@@ -168,11 +207,11 @@ function parseRow(value: unknown): SnapshotRow | null {
   };
 }
 
-export async function loadAuthorizedConversationContext(
+export async function loadAuthorizedConversationViews(
   service: HistorySnapshotRpc,
   authorization: EvidenceAuthorizationPort,
   values: { actor: ActorContext; conversationId: string; limit: number },
-): Promise<AuthorizedConversationMessage[]> {
+): Promise<AuthorizedConversationView[]> {
   const result = await service.rpc("service_assistant_conversation_snapshot", {
     p_org_id: values.actor.orgId,
     p_user_id: values.actor.userId,
@@ -185,7 +224,6 @@ export async function loadAuthorizedConversationContext(
 
   const rows = result.data.messages.map(parseRow);
   const usableRows = rows.filter((row): row is SnapshotRow => row !== null);
-  const answers = new Map<string, AssistantAnswer>();
   const byRun = new Map<string, SnapshotRow[]>();
   for (const row of usableRows) {
     const runRows = byRun.get(row.runId) ?? [];
@@ -193,9 +231,11 @@ export async function loadAuthorizedConversationContext(
     byRun.set(row.runId, runRows);
   }
 
+  const views: AuthorizedConversationView[] = [];
   for (const [runId, runRows] of byRun) {
+    const user = runRows.find((row) => row.author === "user");
     const assistant = runRows.find((row) => row.author === "assistant");
-    if (!assistant) continue;
+    if (!user?.question || !assistant) continue;
     const parsedAnswer = AssistantAnswerSchema.safeParse(assistant.blocks);
     if (!parsedAnswer.success) continue;
     const validated = validateAnswer(
@@ -212,18 +252,94 @@ export async function loadAuthorizedConversationContext(
       assistant.facts,
       assistant.sources,
     );
-    if (allowed.ok) answers.set(runId, validated.answer);
+    if (!allowed.ok) continue;
+
+    // Stored questions and answer prose are browser-authored/model-authored free text, separate
+    // from the field-projected facts and sources. Reclassify on every load; legacy content that
+    // the current boundary would refuse is omitted as one whole run, never redacted into a
+    // different-looking question.
+    const serializedAnswer = JSON.stringify(validated.answer);
+    if (
+      !classifyAssistantProviderText(user.question).allowed ||
+      !classifyAssistantProviderText(serializedAnswer).allowed
+    ) continue;
+    const candidate = AssistantRunResultSchema.safeParse({
+      run_id: runId,
+      conversation_id: values.conversationId,
+      answer: validated.answer,
+      facts: assistant.facts,
+      sources: assistant.sources,
+      tools_used: assistant.tools,
+      complete: assistant.complete,
+      as_of: assistant.runAsOf,
+      proposal: null,
+    });
+    if (!candidate.success) continue;
+    views.push({ question: user.question, result: candidate.data });
   }
 
+  return views;
+}
+
+export async function loadAuthorizedConversationContext(
+  service: HistorySnapshotRpc,
+  authorization: EvidenceAuthorizationPort,
+  values: { actor: ActorContext; conversationId: string; limit: number },
+): Promise<AuthorizedConversationMessage[]> {
+  const views = await loadAuthorizedConversationViews(service, authorization, values);
   const context: AuthorizedConversationMessage[] = [];
-  for (const row of usableRows) {
-    const authorizedAnswer = answers.get(row.runId);
-    if (!authorizedAnswer) continue;
-    if (row.author === "user" && row.question) {
-      context.push({ role: "user", content: row.question });
-    } else if (row.author === "assistant") {
-      context.push({ role: "assistant", content: JSON.stringify(authorizedAnswer) });
-    }
+  for (const view of views) {
+    context.push({ role: "user", content: view.question });
+    context.push({ role: "assistant", content: JSON.stringify(view.result.answer) });
   }
   return context;
+}
+
+export async function listAuthorizedConversations(
+  service: HistorySnapshotRpc,
+  authorization: EvidenceAuthorizationPort,
+  values: { actor: ActorContext; limit: number },
+): Promise<AuthorizedConversationListRow[]> {
+  const recent = await service.rpc("service_assistant_recent_conversations", {
+    p_org_id: values.actor.orgId,
+    p_user_id: values.actor.userId,
+    p_limit: values.limit,
+  });
+  if (
+    recent.error || !isRecord(recent.data) ||
+    !Array.isArray(recent.data.conversations)
+  ) throw new AssistantEdgeError("assistant_history_unavailable");
+
+  const candidates = recent.data.conversations.flatMap((value) => {
+    if (
+      !isRecord(value) || typeof value.id !== "string" ||
+      typeof value.updated_at !== "string"
+    ) return [];
+    return [{ id: value.id, updated_at: value.updated_at }];
+  });
+
+  const rows: AuthorizedConversationListRow[] = [];
+  let snapshotFailures = 0;
+  for (const candidate of candidates) {
+    try {
+      const views = await loadAuthorizedConversationViews(service, authorization, {
+        actor: values.actor,
+        conversationId: candidate.id,
+        limit: 2,
+      });
+      const latest = views.at(-1);
+      if (!latest) continue;
+      rows.push({
+        id: candidate.id,
+        title: latest.question.replace(/\s+/g, " ").trim().slice(0, 120),
+        updated_at: candidate.updated_at,
+      });
+    } catch {
+      snapshotFailures += 1;
+    }
+  }
+  if (candidates.length > 0 && snapshotFailures === candidates.length) {
+    throw new AssistantEdgeError("assistant_history_unavailable");
+  }
+  return rows;
 }

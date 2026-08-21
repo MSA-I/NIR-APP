@@ -652,12 +652,14 @@ function unlockBody() {
   if (bodyLockDepth === 0) document.body.style.overflow = previousBodyOverflow;
 }
 
-export function useDialogLayer<T extends HTMLElement>({ open, onClose, busy = false, allowCloseWhileBusy = false, initialFocus }: {
+export function useDialogLayer<T extends HTMLElement>({ open, onClose, busy = false, allowCloseWhileBusy = false, initialFocus, modal = true }: {
   open: boolean;
   onClose: () => void;
   busy?: boolean;
   allowCloseWhileBusy?: boolean;
   initialFocus?: (panel: T) => HTMLElement | null;
+  /** False keeps the layer focusable and closeable without locking or trapping the page. */
+  modal?: boolean;
 }) {
   const panelRef = useRef<T>(null);
   const openerRef = useRef<HTMLElement | null>(null);
@@ -666,39 +668,61 @@ export function useDialogLayer<T extends HTMLElement>({ open, onClose, busy = fa
   const busyRef = useRef(busy);
   const allowCloseRef = useRef(allowCloseWhileBusy);
   const initialFocusRef = useRef(initialFocus);
+  const modalRef = useRef(modal);
   onCloseRef.current = onClose;
   busyRef.current = busy;
   allowCloseRef.current = allowCloseWhileBusy;
   initialFocusRef.current = initialFocus;
+  modalRef.current = modal;
 
   const isTop = useCallback(() => dialogStack.at(-1) === tokenRef.current, []);
   const requestClose = useCallback(() => {
-    if (!isTop() || (busyRef.current && !allowCloseRef.current)) return false;
+    if (
+      (modalRef.current ? !isTop() : dialogStack.length > 0) ||
+      (busyRef.current && !allowCloseRef.current)
+    ) return false;
     onCloseRef.current();
     return true;
   }, [isTop]);
 
+  // Opener ownership and initial focus belong to the layer itself, not to its current responsive
+  // modality. Crossing 1024px while open must not pretend the layer closed and steal focus twice.
   useEffect(() => {
     if (!open) return;
-    const token = tokenRef.current;
     openerRef.current = document.activeElement as HTMLElement | null;
-    dialogStack.push(token);
-    lockBody();
 
     const focusFrame = requestAnimationFrame(() => {
       const panel = panelRef.current;
       if (panel) (initialFocusRef.current?.(panel) ?? panel).focus();
     });
 
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      const opener = openerRef.current;
+      requestAnimationFrame(() => {
+        if (opener?.isConnected && !opener.hidden && opener.getClientRects().length > 0) opener.focus();
+      });
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const token = tokenRef.current;
+    if (modal) {
+      dialogStack.push(token);
+      lockBody();
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!isTop()) return;
+      if (modal ? !isTop() : dialogStack.length > 0) return;
       if (event.key === 'Escape') {
+        if (!modal && !panelRef.current?.contains(document.activeElement)) return;
         event.preventDefault();
         event.stopPropagation();
         requestClose();
         return;
       }
-      if (event.key !== 'Tab' || !panelRef.current) return;
+      if (!modal || event.key !== 'Tab' || !panelRef.current) return;
       const nodes = focusableWithin(panelRef.current);
       if (!nodes.length) {
         event.preventDefault();
@@ -721,17 +745,14 @@ export function useDialogLayer<T extends HTMLElement>({ open, onClose, busy = fa
 
     document.addEventListener('keydown', onKeyDown);
     return () => {
-      cancelAnimationFrame(focusFrame);
       document.removeEventListener('keydown', onKeyDown);
-      const index = dialogStack.lastIndexOf(token);
-      if (index >= 0) dialogStack.splice(index, 1);
-      unlockBody();
-      const opener = openerRef.current;
-      requestAnimationFrame(() => {
-        if (opener?.isConnected && !opener.hidden && opener.getClientRects().length > 0) opener.focus();
-      });
+      if (modal) {
+        const index = dialogStack.lastIndexOf(token);
+        if (index >= 0) dialogStack.splice(index, 1);
+        unlockBody();
+      }
     };
-  }, [open, isTop, requestClose]);
+  }, [open, modal, isTop, requestClose]);
 
   return { panelRef, requestClose, isTop };
 }

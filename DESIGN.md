@@ -451,6 +451,29 @@ markup אסור — ‏`bidiIsolate` מ־`src/lib/format.ts` עוטף ב־FSI/PD
 תמיד את כל מבנה המערכת. `isRouteFamilyActive` משותף לסרגל, למגירה ולמובייל כדי שפרטי רשומה ישמרו
 את הקשרם.
 
+### העוזר של InPlace — משטח בדיקה docked (20.08.2026, הכרעת בעלים B)
+
+העוזר הוא **משטח בדיקה תפעולית**, לא chatbot. הטריגר משתמש ב־`ClipboardCheck` ובתווית גלויה
+„בדיקה” בדסקטופ; במובייל נשאר שם נגיש מלא. אין `Sparkles`, רובוט, avatar, בועות שיחה, שם מודל,
+gradient או typing theatre. ‏Oceanic מסמן את הפקודה לפתוח בדיקה; צבעי status נשמרים ל־partial,
+failure ומדידה עסקית בלבד.
+
+מ־`lg` הפאנל docked בקצה הלוגי (`inline-end`, שמאל ב־RTL), ברוחב **27.5rem**, מתחיל מתחת לטופ־בר
+ואינו modal: אין backdrop, אין נעילת body ואין focus trap. ‏`#main` שומר **29rem** בקצה הזה, כך
+שמסך מקור אמיתי אינו נצבע מתחת לפאנל. פתיחת מקור משאירה question/result גלויים ומסמנת את הקישור
+הפעיל ב־`surface-selected`. מתחת ל־`lg` אותו משטח הוא `100dvh` full-screen, modal ונעול focus;
+פתיחת מקור עוברת למסך המוצר והטריגר משתנה ל־„חזרה לבדיקה”, מחזיר focus ואת אותו run.
+
+האנטומיה קבועה: כותרת InPlace + „קריאה בלבד”; השאלה שנבדקה; `as_of`; הודעת partial שאינה
+מתחזית ל־all-clear; answer blocks; Fact עם ערך ו־freshness; source פנימי; „היקף הבדיקה” בתוויות
+מוצר עבריות; משוב איכות; composer. ‏`0` ו־`—` נשארים שונים. כל source, next step ו־fallback
+מסוננים מול role/route policy לפני render. ‏History מוצגת רק אחרי Edge reauthorization נוכחי;
+אין direct browser read לטקסט השמור.
+
+כל פקד הוא 44px לפחות. במובייל focus כלוא רק בזמן שהמשטח פתוח; בדסקטופ Tab רשאי לעבור בין
+הפאנל למסך המקור. ‏Escape, close, source-return, reduced-motion, RTL, bidi ו־200% zoom כפופים
+לאותם כללים של מעטפת המוצר.
+
 ### Buttons
 Primary אוקיאני · Secondary **טונאלי ללא מסגרת (T7.1)** — ‏`surface-sunken` עם hover ‏`line-soft`;
 המילוי והתווית הם האפורדנס, לא קו-מתאר כהה · Danger ‏`alert-solid` (תמיד מאחורי

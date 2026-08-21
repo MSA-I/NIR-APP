@@ -626,14 +626,16 @@
 ‏`/operator` נמדד חי, בדסקטופ ובמובייל. **הלקח שנשאר:** נתיב שאינו `/` או `/login` אינו מכוסה
 ב־smoke הקנוני של סקריפט הפריסה, ולכן משטח חדש חייב להוסיף לו שורה — אחרת הוא נפרס ירוק ושבור.
 
-**20.08.2026 — גבול העוזר של InPlace:** נכתבה תוכנית סגירת UI/UX ב־
-`C:\Users\art1\Desktop\PLAN-INPLACE-ASSISTANT-UI-UX-CLOSURE-20260820.md`; אין פירוש הדבר שהמשטח
-סגור או מועמד לשחרור. ‏Core UI הוא `PLANNED / NOT_CLOSED`; ‏history היא `BLOCKED_SECURITY` עד
-reauthorization/redaction נוכחיים; והעוזר כולו `NOT_ACTIVATED / NOT_DEPLOYED`. ביקורת התכנון
-זיהתה חסמי activation נוספים — קלט חופשי לפני provider, runtime response/route validation,
-stale flags ו־run lifecycle — שנבדקים בעבודת האבטחה הפעילה. לא הוקצו כאן מספרי debt חדשים בזמן
-שהענף עדיין מחזיק WIP ומפת המזהים נעה; אם חסם יישאר אחרי ה־SHA המשולב והבדיקות, הוא יקבל סעיף
-קנוני לאחר rebase ולא עותק מתחרה עכשיו.
+**20.08.2026 — גבול העוזר של InPlace:** בעל המוצר אישר את UI חלופה B, ו־Core/history מומשו
+ונבדקו מקומית. ‏History עוברת דרך `0170` ו־Edge בלבד: metadata, question, answer, Facts ו־Sources
+אינם יוצאים לפני actor/source/route/text reauthorization נוכחיים; cache ותוצאה מאוחרת קשורים
+ל־authorization fingerprint. קלט חופשי, runtime response/route validation, stale flags ו־run
+lifecycle מכוסים בבדיקות השליליות וב־15 תרחישי browser בשלושת התפקידים.
+
+זה עדיין אינו גבול שחרור: הסטטוס הוא `LOCAL_IMPLEMENTED / CI_PENDING / NOT_ACTIVATED /
+NOT_DEPLOYED`. ‏`CORE_READ_ONLY_UI_CLOSED` ו־`FULL_UI_CLOSED` אינם נטענים לפני required checks
+ירוקים על SHA יחיד. חסמי activation האמיתיים נשארים בהחלטות #179, ‏#180, ‏#181, ‏#183 ו־#193;
+יכולות חסרות נשארות #189–#192. לא נפתח debt כפול עבורן. flags הוחזרו ל־off לאחר QA המקומי.
 
 ### §52 — `quickCreateProduct.spec.tsx` נכשלת לסירוגין ב־CI
 

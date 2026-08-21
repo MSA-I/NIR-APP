@@ -116,6 +116,40 @@ Deno.test("a spent total budget refuses before the provider is ever called", asy
   assert.equal(observed.length, 0);
 });
 
+Deno.test("restricted current or historical text is refused before the provider is ever called", async () => {
+  for (const values of [
+    {
+      question: "האימייל של הספק הוא buyer@example.com",
+      conversationContext: [] as { role: "user" | "assistant"; content: string }[],
+    },
+    {
+      question: "מה מצב החשבונית?",
+      conversationContext: [{
+        role: "user" as const,
+        content: "service_role=sb_secret_1234567890",
+      }],
+    },
+  ]) {
+    const observed: unknown[][] = [];
+    await assert.rejects(
+      runAssistantTurn({
+        provider: scriptedProvider([], observed),
+        registry: REGISTRY,
+        toolContext: toolContext(summaryDb()),
+        question: values.question,
+        conversationContext: values.conversationContext,
+        maxToolCalls: 4,
+        totalBudgetMs: 60_000,
+        authorizeEvidence: allowEvidence,
+      }),
+      (error: unknown) =>
+        error instanceof AssistantEdgeError &&
+        error.code === "assistant_input_restricted",
+    );
+    assert.equal(observed.length, 0);
+  }
+});
+
 Deno.test("the adapter clamps retries to the remaining budget", async () => {
   let clock = 0;
   let fetchCalls = 0;
@@ -161,6 +195,8 @@ Deno.test("a full tool round-trip issues facts and validates the cited answer", 
           text: "נקלטו 12 חשבוניות בשבוע האחרון.",
           claim_kind: "metric.count",
           subject: null,
+          claim_unit: "count",
+          claim_value: 12,
           fact_ids: ["f1"],
           source_ids: ["s1"],
         }],
@@ -203,6 +239,8 @@ Deno.test("evidence is reauthorized after generation and again after the single 
       text: "נקלטו 12 חשבוניות בשבוע האחרון.",
       claim_kind: "metric.count",
       subject: null,
+      claim_unit: "count",
+      claim_value: 12,
       fact_ids: ["f1"],
       source_ids: ["s1"],
     }],
@@ -386,6 +424,8 @@ Deno.test("an instruction inside tool data stays data and cannot buy an unsuppor
       text: "חשבון הבנק של הספק הוא 12-345.",
       claim_kind: "metric.count",
       subject: null,
+      claim_unit: "count",
+      claim_value: 12,
       fact_ids: ["f99"],
       source_ids: [],
     }],
@@ -458,6 +498,8 @@ Deno.test("a rejected first answer is retried once with the validation errors fe
           text: "נקלטו 12 חשבוניות.",
           claim_kind: "metric.count",
           subject: null,
+          claim_unit: "count",
+          claim_value: 12,
           fact_ids: ["f1"],
           source_ids: [],
         }],
