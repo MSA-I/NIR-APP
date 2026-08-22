@@ -1,6 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
-  <title id="title">InPlace Place Bay symbol</title>
-  <desc id="desc">An L-shaped bay of two square-cut arms defining a place, with one solid square block seated in it.</desc>
-  <path d="M11.5 8V52.5H56" fill="none" stroke="#0A171D" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
-  <rect x="20" y="20" width="24" height="24" fill="#0A171D"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="1659.8087799072266 677.8427764892579 156.29247436523437 156.29247436523437" role="img" aria-labelledby="title desc">
+  <title id="title">InPlace symbol</title>
+  <desc id="desc">Final dark InPlace standalone symbol.</desc>
+  <g>
+    <path xmlns="http://www.w3.org/2000/svg" transform="translate(0,0)" fill="#0D222F" d="M 1669.44 755.823 L 1710.28 755.879 C 1708.61 767.232 1707.38 778.645 1706.59 790.092 L 1736.02 790.07 C 1736.92 781.041 1737.62 771.993 1738.13 762.934 L 1760.32 763.051 C 1759.51 774.972 1758.47 786.875 1757.2 798.755 L 1754.87 825.177 L 1663.53 825.087 L 1669.44 755.823 z"/>
+    <path xmlns="http://www.w3.org/2000/svg" transform="translate(0,0)" fill="#0D222F" d="M 1720.4 686.812 L 1812.38 686.801 C 1811.2 709.917 1808.06 732.974 1806.67 756.062 L 1771.75 756.048 C 1770.71 756.05 1767.89 756.114 1767.79 755.436 C 1766.97 749.628 1769.92 723.931 1770.27 718.871 L 1740.77 718.879 C 1739.68 728.796 1739.03 738.754 1737.95 748.673 C 1729.48 748.622 1723.1 748.384 1714.61 749.043 C 1716.84 728.328 1718.77 707.582 1720.4 686.812 z"/>
+  </g>
 </svg>

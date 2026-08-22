@@ -5,8 +5,8 @@ one_liner: "A calm procurement-to-payment control system where everything has it
 industry: "B2B procurement-to-payment software"
 archetype: "trusted controller"
 created: "2026-08-18"
-updated: "2026-08-18"   # palette synced to the owner's Onyx/Wheat/Oceanic decision (T7)
-status: "identity-concept"
+updated: "2026-08-21"
+status: "final-identity"
 artifacts:
   context: true
   audience: true

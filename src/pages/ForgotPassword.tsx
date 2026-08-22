@@ -46,7 +46,10 @@ export default function ForgotPassword() {
     <div className="min-h-dvh flex items-center justify-center bg-action p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-semibold text-on-solid">{APP_NAME}</h1>
+          <h1>
+            <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="184" height="40"
+              className="mx-auto h-auto w-44" />
+          </h1>
           <p className="text-shell-ink-dim mt-1 text-sm">איפוס סיסמה</p>
         </div>
         {sent ? (
