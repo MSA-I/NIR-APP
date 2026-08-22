@@ -22,7 +22,10 @@ function LegalShell({ title, children }: { title: string; children: React.ReactN
     <div className="min-h-dvh bg-action py-8 px-4">
       <div className="max-w-2xl mx-auto space-y-4">
         <div className="text-center">
-          <h1 className="text-2xl font-semibold text-on-solid">{APP_NAME}</h1>
+          <h1>
+            <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="166" height="36"
+              className="mx-auto h-auto w-40" />
+          </h1>
         </div>
         <div className="card card-pad space-y-4">
           <h2 className="page-title">{title}</h2>

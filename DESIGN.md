@@ -3,9 +3,9 @@ name: InPlace
 description: מערכת procurement-to-payment עברית RTL — B2B פרימיום, Onyx/Wheat/Oceanic + צבע סמנטי
 colors:
   # ---- שלד (structural) — "Onyx / Wheat / Oceanic" (T7, 18.08.2026, פלטת רפרנס של הבעלים) ----
-  # שלושה עוגנים: ONYX ‏#0A171D (דיו + הסמל) · WHEAT ‏#FFF6E9 (קרם נקודתי) ·
+  # שלושה עוגנים: ONYX ‏#0A171D (דיו + shell) · WHEAT ‏#FFF6E9 (קרם נקודתי) ·
   # OCEANIC ‏#003F47 (מותג + פעולה). T7.3k: הרקע הגדול הוא אפור ניטרלי — הקרם ירד
-  # לנקודות בלבד (רקע האייקון, sunken, אותיות ה-tooltip, הדגשות עדינות).
+  # לנקודות בלבד (sunken, אותיות ה-tooltip, הדגשות עדינות). צבעי הלוגו הסופי נפרדים; ראו §6.
   canvas: "oklch(96.88% 0.0028 128)"            # רקע הגוף — ‏#F4F5F3 (בעלים, T7.3k)
   surface: "oklch(99.2% 0.006 80)"              # כרטיסים, טבלאות, מודאלים, שדות
   surface-sunken: "oklch(95.4% 0.012 80)"       # thead, שדות disabled, רצועות שקטות
@@ -938,17 +938,20 @@ buckets שבועיים נושאים `label`, סכום ומספר רשומות. *
 
 ### Retheme Runbook + אכיפה
 
-**רה-תמה סטטית עתידית = שישה קבצים** (המסמך אמר „שלושה" עד 19.08.2026, וזו הייתה הבטחה גדולה
-ממה שהקוד קיים — הצללים, כתם ה-glow וגרדיאנט ה-body העתיקו ערכי טוקן ביד ולא היו משתנים):
+**רה-תמה סטטית עתידית = ארבעה משטחים**. נכסי הלוגו אינם עוד חלק מהרה-תמה: ב־21.08.2026 אושר
+לוגו סופי בעל פלטת נכס עצמאית, והבעלים בחר במפורש „נכסי לוגו בלבד” ללא repaint של הממשק.
 
 1. **בלוק ה-`@theme` ב-`src/index.css`** — כל ערך צבע בקובץ יושב בתוכו. מחוץ לבלוק צבע מגיע רק
    דרך `var()` או `color-mix(… var(--token) …)`; ‏`check:tokens` נופל אחרת.
 2. `index.html` — ‏`<meta name="theme-color">` והפונטים.
 3. `public/manifest.webmanifest` — ‏`theme_color` ו-`background_color`.
-4. `public/brand/inplace-symbol.svg` — ‏Onyx ‏`#0A171D`.
-5. `public/brand/inplace-symbol-paper.svg` — ‏`#FBF6EE`, גרסת הנייר של הסמל. **ערך הקרם הזה אינו
-   טוקן ואינו זהה ל-WHEAT ‏`#FFF6E9`** — הוא של הסמל בלבד, ומי שמזיז את הקרם צריך להזיז גם אותו.
-6. המסמך הזה.
+4. המסמך הזה.
+
+**מערכת הלוגו הסופית נפרדת:** ‏`public/brand/` מכיל lockup, סמל, inverse ו־app icon שנגזרו 1:1
+מלוח ה־SVG הקנוני. צבעי הנכס הם dark ‏`#0D222F`, accent ‏`#05394F`, wordmark ‏`#3E3E40`
+ו־paper ‏`#FBFBFB`. אין למפות אותם אוטומטית ל־`@theme`; צבעי ה־runtime נשארים Onyx / Wheat /
+Oceanic. ‏`public/icons/icon-192.png`, ‏`icon-512.png` ו־`icon-512-maskable.png` הם נגזרות raster
+של אותה מערכת. מקור, מטריצת שימוש וכללי הפקה: `brand/identity.md` ו־`brand/implementation-surface.md`.
 
 מעבר שמשנה את *קוטביות* ה־shell (בהיר↔כהה) מחייב בנוסף audit לצרכני `bg-shell` כדי לוודא שהם
 משתמשים ב־`shell-ink-*`, כפי שנעשה ב־Login/AcceptInvite בסבב T6.

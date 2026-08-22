@@ -89,10 +89,10 @@ export default function Login() {
           <div className="aurora-pane h-44 lg:h-auto">
             <canvas ref={auroraRef} aria-hidden="true" className="absolute inset-0 size-full" />
             <div className="relative z-10 flex h-full flex-col justify-between p-6 lg:p-10">
-              <div className="flex items-center gap-2.5">
-                <img src="/brand/inplace-symbol-paper.svg" alt="" width="28" height="28" className="size-7" />
-                <h1 className="text-xl font-semibold text-on-solid">{APP_NAME}</h1>
-              </div>
+              <h1>
+                <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="156" height="34"
+                  className="h-auto w-36 sm:w-40" />
+              </h1>
               <div>
                 {/* shell-ink, never -soft or -dim: on the ramp's brightest stop those measure
                     3.62:1 and worse, while shell-ink holds 4.83:1. */}
