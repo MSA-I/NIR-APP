@@ -1399,9 +1399,9 @@ async function orderSupplierComparison(browser) {
     await fixOpener.focus();
     await page.keyboard.press('Enter');
     await fixes.waitFor();
+    const reopenedFixesHandle = await fixes.elementHandle();
+    await page.waitForFunction((node) => document.activeElement === node, reopenedFixesHandle, { timeout: 3_000 });
     const increaseSave = waitForDraftSave();
-    // The dialog focuses its panel on the next animation frame after every reopen. Keep focus
-    // and Enter atomic so that frame cannot redirect the keypress away from this option.
     await increase.press('Enter');
     assert((await increaseSave).ok(), 'live minimum resolution was not saved');
     await waitForSaved();
