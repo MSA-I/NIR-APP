@@ -99,7 +99,7 @@ Edge Function ייעודית, מופעלת ב-`pg_cron` דרך `pg_net`, עם: �
 `updatePaymentStatus`, ‏`retrieveAccountMapping`, ‏`retrieveSyncStatus`) · `ErpAdapter` · `WmsAdapter`
 (סנכרון ספקים, מוצרים, סניפים ומחסנים, הזמנות, קבלות, אירועי מלאי; מזהים חיצוניים; טיפול בקונפליקט;
 סטטוס ייבוא/ייצוא) · `IdentityProviderAdapter` · `NotificationProvider` · `SearchProvider` ·
-`WorkflowEngine` · `RulesEngine` · `DocumentExtractionProvider` · `FileStorageProvider` ·
+`RulesEngine` · `DocumentExtractionProvider` · `FileStorageProvider` ·
 `FeatureFlagProvider`.
 
 **‏`external_references`** מחזיקה את המיפוי בין ישות פנימית לישות אצל ספק חיצוני — `(org_id, provider,
@@ -115,8 +115,9 @@ entity_type, internal_id, external_id)`. זה הגבול. אין עמודות `o
 > ‏`integration_failures` (כשלי מתאם/נכנס — הגבול מול `integration_deliveries` הוכרע ב-#99).
 > מהממשקים שברשימה מומשו **שלושה** עם mock ו-spec לכל אחד: ‏`AccountingAdapter` (שבע המתודות
 > שלמעלה), ‏`ErpAdapter` ו-`WmsAdapter` — אפס יבואנים בעיצוב עד שספק אמיתי נבחר. יתר השמות
-> (‏Identity/Notification/Search/Workflow/Rules/DocumentExtraction/FileStorage/FeatureFlag)
-> נשארים עתידיים — חלקם כבר קיימים כמערכות פנימיות וחלקם שייכים לגל 9. **מסך האינטגרציות
+> (‏Identity/Notification/Search/DocumentExtraction/FileStorage/FeatureFlag) נשארים עתידיים.
+> Rules Engine אושר לתכנון ב־#258, אך אינו מתאם ספק ואינו ממומש. Workflow Engine הוסר מהיעד
+> לפי #257. **מסך האינטגרציות
 > נדחה (‏#98)** — ‏`read_webhook_subscriptions()` ו-`read_integration_failures()` הם המשטח
 > שהמסך העתידי יקרא.
 
@@ -163,8 +164,7 @@ entity_type, internal_id, external_id)`. זה הגבול. אין עמודות `o
 
 ## 6. מה לא נפרס, ולמה
 
-**‏הסעיף הזה נמצא בשורות ‏164-172 של הקובץ** (הכותרת, כותרת הטבלה וחמש השורות). ציטוטים
-שהפנו ל-`168-172` הצביעו על גוף הטבלה בלבד והשמיטו את הכותרת — העוגן המדויק הוא ‏`:164-172`.
+הסעיף מתעד את ההכרעות הנוכחיות; הפניות היסטוריות למספרי שורה אינן מקור אמת מפני שהמסמך משתנה.
 
 **גל 9 פעל לפי הטבלה הזו ולא נגדה:** שלוש מהשורות נגעו בו, ואף אחת מהן לא נפרסה. מה שכן
 נמסר בגל 9 מתועד ב-OPEN-DECISIONS ‏#103 (התכולה שנדחתה ולמה), ‏#104 (מדיניות מצרה בלבד)
@@ -172,8 +172,9 @@ entity_type, internal_id, external_id)`. זה הגבול. אין עמודות `o
 
 | כלי | הכרעה |
 |---|---|
-| Temporal | לא נפרס. **גל 9 דחה גם את "מנוע ה-workflow הפנימי"** (#103): שש מכונות המצב החיות *הן* המימוש, והפער האמיתי היה מטריצה משוכפלת בדפדפן — נסגר ב-`read_allowed_transitions()` (‏`0070`, ‏invoker, מחזירה את הגרף כדאטה). מתאם Temporal עתידי ללא שינוי במודולים העסקיים |
+| Temporal | לא נפרס ולא מתוכנן. #257 דוחה Workflow Engine כללי; מכונות המצב והפקודות בעלות־השם נשארות מקור האמת. מטריצת הדפדפן המשוכפלת כבר נסגרה ב־`read_allowed_transitions()` (`0070`) |
 | Novu | לא נפרס. `NotificationProvider` מעל מערכת ההתראות הקיימת. **גל 9 הוסיף העדפות פר-משתמש** (`notification_preferences`, ‏`0068`) — מסננות מסירה, לעולם לא יוצרות אותה, ולעולם לא מרחיבות קהל |
 | Meilisearch | לא נפרס, **וגם לא נמדד** — החלפת pg_trgm נשארה אסורה בגל 9 במפורש. `SearchProvider` מעל `global_search()` הקיימת (`0011:113`) — pg_trgm + ILIKE, כי לעברית אין מילון PostgreSQL. שער סוגי-התוצאה נמצא בשרת ובדפדפן לפי `owner`/`office`/`accountant`; תפקיד היסטורי אינו פותר `auth_role()` ולכן אינו מקבל תוצאה — תיקון הרשאה, לא מנוע חיפוש חדש |
-| json-rules-engine בדפדפן | **אסור.** מנוע חוקים סמכותי בדפדפן אינו גבול אבטחה. מימוש ראשוני בפונקציות PostgreSQL ורשומות חוק מובנות; אם ירוץ מנוע JS בעתיד — בסביבת שרת מהימנה בלבד, וההכרעה נרשמת. **גל 9 מסר סכימת מדיניות אישור + מעריך טהור עם אפס צרכנים** (`0070`) — חיווטו לפקודה פיננסית היה מכריע מחדש את #2 |
+| json-rules-engine בדפדפן | **אסור.** #258 מאשר Rules Engine לתכנון שרתי בלבד: owner יוצר מתוך allowlist; ‏Platform Admin מגדיר בסיס גלובלי; rule מתריע, מנתב לבדיקה או מחמיר דרישה, ולעולם אינו מבצע פקודה עסקית, כותב כסף, מרחיב הרשאה או מחליף state machine. עדיין `NOT_DESIGNED / NOT_IMPLEMENTED` |
+| Report Jobs | אושרו לתכנון ב־#259 עבור דוחות קיימים וכבדים בלבד. נדרשים worker/storage/retention/permissions; אין תור jobs פעיל ואין סמכות להמציא דוח או שדה |
 | read replica | לא מופעל "למראית עין". הפשטת ניתוב בלבד, ותיעוד מפורש אילו שאילתות דורשות read-after-write ונשארות על הראשי |
