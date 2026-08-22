@@ -1,9 +1,10 @@
 # PROGRESS — מצב נוכחי
 
-עודכן: 23.08.2026 — **PR #93 ו־#94 מוזגו וגבול Git התקדם; לא בוצע rollout או deploy במסגרת העדכון.**
+עודכן: 23.08.2026 — **PR #95 מיזג את יישור התיעוד מעל PR #93/#94; לא בוצע rollout או deploy במסגרת העדכון.**
 
-> **גבול Git ו־Production הנוכחי:** ‏`origin/main` הוא `bac330d` אחרי PR #93 (מותג) ו־PR #94
-> (תיקון test-only). סדר
+> **גבול מקור המוצר והבדיקות:** המקור דרך PR #94 (תיקון test-only) ו־PR #93 (מותג) הוא merge
+> ‏`bac330d`; ‏PR #95 מיזג מעליו תיעוד בלבד. commits של docs-only יכולים לקדם את `origin/main`
+> בלי לשנות runtime, ולכן את ref ה־Git החי קוראים מ־Git בזמן הבדיקה ואינם מקפיאים כאן כ־SHA נוכחי. סדר
 > המיגרציות בריפו הוא Assistant ‏`0164`–`0166`, Supplier Portal ‏`0167`, Email Delivery ‏`0168`,
 > Customer Operations hardening ‏`0169`, Assistant history UI ‏`0170`. Production ledger הוכח
 > עד `0167`; ‏Pages הוכח על source ‏`6430d26`; מבין משטחי Edge החדשים רק `supplier-portal`
