@@ -1399,9 +1399,9 @@ async function orderSupplierComparison(browser) {
     await fixOpener.focus();
     await page.keyboard.press('Enter');
     await fixes.waitFor();
+    const reopenedFixesHandle = await fixes.elementHandle();
+    await page.waitForFunction((node) => document.activeElement === node, reopenedFixesHandle, { timeout: 3_000 });
     const increaseSave = waitForDraftSave();
-    // The dialog focuses its panel on the next animation frame after every reopen. Keep focus
-    // and Enter atomic so that frame cannot redirect the keypress away from this option.
     await increase.press('Enter');
     assert((await increaseSave).ok(), 'live minimum resolution was not saved');
     await waitForSaved();
@@ -1885,8 +1885,9 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
   // Push cleanup runs BEFORE auth.signOut and can take long enough for an exact Dashboard read to
   // start after the click while the authenticated screen is still mounted. auth.signOut can then
   // revoke that request before its response. Keep the exception structural: exact endpoint and
-  // method, a Bearer header observed while the page was still outside /login, and a 401 observed
-  // only after logout began. A post-navigation read, unrelated endpoint or pre-click 401 fails.
+  // method, a Bearer header, an exact Request object observed while transition tracking is open,
+  // and a 401 observed only after logout began. Do not infer lifecycle from `page.url()`: Chromium
+  // can commit /login before Playwright delivers the request event for a read the old shell began.
   const logoutTransitionReads = new Map([
     ['/rest/v1/invoices', 'GET'],
     ['/rest/v1/payments', 'GET'],
@@ -1899,13 +1900,14 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
     ['/rest/v1/purchase_order_items', 'GET'],
   ]);
   const authenticatedTransitionReads = new WeakSet();
+  let transitionReadTrackingOpen = true;
   let logoutStarted = false;
   page.on('request', (request) => {
+    if (!transitionReadTrackingOpen) return;
     const url = new URL(request.url());
     const authorization = request.headers().authorization ?? '';
     if (
-      new URL(page.url()).pathname !== '/login'
-      && authorization.startsWith('Bearer ')
+      authorization.startsWith('Bearer ')
       && url.origin === apiURL
       && logoutTransitionReads.get(url.pathname) === request.method()
     ) {
@@ -1928,6 +1930,9 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
     logoutStarted = true;
     await page.getByRole('button', { name: 'התנתקות' }).click();
     await page.waitForURL((url) => url.pathname === '/login', { timeout: 25_000 });
+    // The transition is now settled. New reads, even with a stale Bearer header, must fail the
+    // console gate; responses for exact requests already in the WeakSet remain transition reads.
+    transitionReadTrackingOpen = false;
     await page.waitForTimeout(250);
     const body = await page.locator('body').innerText();
     const expected = serverSuccess && localSuccess ? null
@@ -1938,6 +1943,7 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
     else assert(!body.includes('ניקוי מנוי ההתראות') && !body.includes('לא אומת'), `${name}: false Push cleanup warning`);
     assert.equal(await page.evaluate(() => window.__p4UnsubscribeCalls || 0), 1, `${name}: local unsubscribe was not attempted exactly once`);
   } finally {
+    transitionReadTrackingOpen = false;
     await closeContext(context);
   }
 }
