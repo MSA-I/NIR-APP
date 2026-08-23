@@ -3,9 +3,10 @@
 -- This suite proves the two owner decisions that close DEBT §49-§50:
 --   * an approved credit note creates one received credit only when supplier and credited invoice
 --     resolve uniquely; the document remains evidence and intake alone changes no balance;
---   * credit allocations consume only the remaining amount, a credit may only settle its OWN
---     invoice, and every reader of "how much credit was consumed" answers from allocations that
---     actually happened rather than from the credit's lifecycle label.
+--   * credit allocations consume only the remaining amount, a credit settles the invoice it is
+--     LINKED to, an unlinked credit may settle any invoice of its own supplier and is linked at the
+--     moment it does, and every reader of "how much credit was consumed" answers from allocations
+--     that actually happened rather than from the credit's lifecycle label.
 --
 -- Everything here runs inside ONE transaction and ends in ROLLBACK. Nothing is left behind, so the
 -- suite is re-runnable and cannot shift the row counts p9, p49 and live_schema_alignment measure.
@@ -65,7 +66,9 @@ insert into public.profiles (id, org_id, full_name, role) values
 
 insert into public.suppliers (id, org_id, name, status) values
   ('f6300000-0000-4000-8000-000000000011', 'f6300000-0000-4000-8000-000000000001',
-   'P63 supplier', 'active');
+   'P63 supplier', 'active'),
+  ('f6300000-0000-4000-8000-000000000012', 'f6300000-0000-4000-8000-000000000001',
+   'P63 other supplier', 'active');
 
 -- INV-CREDITED is 200 on purpose: a 60 credit consumed in two 30 halves has to leave the invoice
 -- visibly part-settled in between, which a 100 invoice would hide behind a zero balance.
@@ -86,7 +89,21 @@ insert into public.invoices (
   ('f6300000-0000-4000-8000-000000000026', 'f6300000-0000-4000-8000-000000000001',
    'f6300000-0000-4000-8000-000000000011', 'INV-FOREIGN-CREDIT', current_date, 100, 0, 100, 'received'),
   ('f6300000-0000-4000-8000-000000000027', 'f6300000-0000-4000-8000-000000000001',
-   'f6300000-0000-4000-8000-000000000011', 'INV-COVERAGE', current_date, 100, 0, 100, 'received');
+   'f6300000-0000-4000-8000-000000000011', 'INV-COVERAGE', current_date, 100, 0, 100, 'received'),
+  -- 200, so the same unlinked credit can be applied to it twice and still leave the invoice
+  -- visibly part-settled between the two halves.
+  ('f6300000-0000-4000-8000-000000000028', 'f6300000-0000-4000-8000-000000000001',
+   'f6300000-0000-4000-8000-000000000011', 'INV-UNLINKED-TARGET', current_date, 200, 0, 200,
+   'received'),
+  ('f6300000-0000-4000-8000-000000000029', 'f6300000-0000-4000-8000-000000000001',
+   'f6300000-0000-4000-8000-000000000011', 'INV-UNLINKED-OTHER', current_date, 100, 0, 100,
+   'received'),
+  -- Same tenant, DIFFERENT supplier. Nothing but the supplier predicate stands between a credit
+  -- and this invoice: it receives no cash in the payload that names it, and the cash branch is the
+  -- only other place an invoice's supplier is ever compared.
+  ('f6300000-0000-4000-8000-00000000002a', 'f6300000-0000-4000-8000-000000000001',
+   'f6300000-0000-4000-8000-000000000012', 'INV-CROSS-SUPPLIER', current_date, 100, 0, 100,
+   'received');
 
 -- Two credit-note readings: one has one exact invoice, one has two. Supplier provenance is the
 -- document's tenant-bound supplier_id, not a client-supplied guess.
@@ -254,7 +271,9 @@ where id = any (array[
   'f6300000-0000-4000-8000-000000000024',
   'f6300000-0000-4000-8000-000000000025',
   'f6300000-0000-4000-8000-000000000026',
-  'f6300000-0000-4000-8000-000000000027']::uuid[])
+  'f6300000-0000-4000-8000-000000000027',
+  'f6300000-0000-4000-8000-000000000028',
+  'f6300000-0000-4000-8000-000000000029']::uuid[])
 order by id;
 select public.set_invoice_review_status(id, 'approved', 'P63 fixture approved')
 from public.invoices
@@ -263,7 +282,9 @@ where id = any (array[
   'f6300000-0000-4000-8000-000000000024',
   'f6300000-0000-4000-8000-000000000025',
   'f6300000-0000-4000-8000-000000000026',
-  'f6300000-0000-4000-8000-000000000027']::uuid[])
+  'f6300000-0000-4000-8000-000000000027',
+  'f6300000-0000-4000-8000-000000000028',
+  'f6300000-0000-4000-8000-000000000029']::uuid[])
 order by id;
 
 -- Fixture rows are written with no end-user subject, which is the branch p1_financial_command_guard
@@ -285,7 +306,8 @@ select ('f6300000-0000-4000-8000-0000000000' || spec.suffix)::uuid,
        'f6300000-0000-4000-8000-000000000002', now()
 from (values
   ('81', 100), ('82', 100), ('83', 100), ('84', 100),
-  ('85', 120), ('86', 100), ('87', 100), ('88', 200)
+  ('85', 120), ('86', 100), ('87', 100), ('88', 200),
+  ('89', 100), ('8a', 100), ('8b', 100), ('8c', 100)
 ) as spec(suffix, amount);
 
 insert into public.payment_request_invoices (org_id, payment_request_id, invoice_id, amount_allocated)
@@ -296,11 +318,17 @@ select 'f6300000-0000-4000-8000-000000000001',
 from (values
   ('81', '21', 100), ('82', '21', 100), ('83', '24', 100), ('84', '25', 100),
   ('85', '25', 120), ('86', '26', 100), ('87', '26', 100),
-  ('88', '26', 100), ('88', '27', 100)
+  ('88', '26', 100), ('88', '27', 100),
+  ('89', '28', 100), ('8a', '29', 100), ('8b', '28', 100),
+  -- 8c pays one invoice of its own supplier and one of another. There is no constraint stopping
+  -- that shape, which is precisely why the credit's supplier has to be checked against the invoice
+  -- it settles rather than against the request.
+  ('8c', '28', 70), ('8c', '2a', 30)
 ) as spec(request, invoice, amount);
 
--- Four hand-built credits alongside the document credit. 93 deliberately names no invoice: what an
--- unlinked credit may offset is an open business question, and the executor must say so by name.
+-- Five hand-built credits alongside the document credit. 93 and 95 deliberately name no invoice:
+-- an unlinked credit may settle any invoice of its own supplier, and the executor has to be told
+-- WHICH one. 93 is the specimen for the refusals, 95 for the allocation that records the link.
 insert into public.credit_requests (
   id, org_id, supplier_id, invoice_id, reason, amount, status, created_by
 ) values
@@ -315,7 +343,10 @@ insert into public.credit_requests (
    'other', 30, 'received', 'f6300000-0000-4000-8000-000000000002'),
   ('f6300000-0000-4000-8000-000000000094', 'f6300000-0000-4000-8000-000000000001',
    'f6300000-0000-4000-8000-000000000011', 'f6300000-0000-4000-8000-000000000026',
-   'other', 30, 'received', 'f6300000-0000-4000-8000-000000000002');
+   'other', 30, 'received', 'f6300000-0000-4000-8000-000000000002'),
+  ('f6300000-0000-4000-8000-000000000095', 'f6300000-0000-4000-8000-000000000001',
+   'f6300000-0000-4000-8000-000000000011', null,
+   'other', 60, 'received', 'f6300000-0000-4000-8000-000000000002');
 
 set local role authenticated;
 select pg_temp.p63_activate('f6300000-0000-4000-8000-000000000003', true);
@@ -449,19 +480,68 @@ select pg_temp.p63_expect_error(
       'P63 credit from another invoice')$$,
   'allocation_target_invalid');
 
--- An unlinked credit fails closed under its own name. This is a placeholder, not a decision:
--- OPEN-DECISIONS #244 settled partial consumption of an invoice-linked credit and is silent here.
+-- An unlinked credit that names no target invoice. Everything else about this payload is legal --
+-- 93 is received, belongs to the request's supplier, has its full 30 remaining, and 70 + 30 covers
+-- INV-FOREIGN-CREDIT exactly. The single missing thing is the answer to "which invoice", and the
+-- executor must ask for it by name rather than choose one.
 select pg_temp.p63_expect_error(
   $$select public.execute_payment_request(
       'f6300000-0000-4000-8000-000000000087', current_date, 'bank transfer',
-      'P63-UNLINKED-CREDIT', null,
+      'P63-UNLINKED-NO-TARGET', null,
       jsonb_build_array(
         jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000026',
           'credit_id', null, 'amount', 70),
         jsonb_build_object('invoice_id', null,
           'credit_id', 'f6300000-0000-4000-8000-000000000093', 'amount', 30)),
-      'P63 credit with no invoice')$$,
-  'credit_request_not_linked_to_invoice');
+      'P63 unlinked credit with no target')$$,
+  'credit_allocation_invoice_required');
+
+-- An unlinked credit aimed at an invoice of ANOTHER supplier. INV-CROSS-SUPPLIER really is one of
+-- this request's invoices and takes no cash here, so containment and the cash branch both pass it.
+-- Only the supplier predicate stands between supplier 11's credit and supplier 12's invoice.
+select pg_temp.p63_expect_error(
+  $$select public.execute_payment_request(
+      'f6300000-0000-4000-8000-00000000008c', current_date, 'bank transfer',
+      'P63-CROSS-SUPPLIER', null,
+      jsonb_build_array(
+        jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000028',
+          'credit_id', null, 'amount', 70),
+        jsonb_build_object('invoice_id', null,
+          'credit_id', 'f6300000-0000-4000-8000-000000000093', 'amount', 30,
+          'credit_invoice_id', 'f6300000-0000-4000-8000-00000000002a')),
+      'P63 credit aimed at another supplier')$$,
+  'credit_allocation_supplier_mismatch');
+
+-- A LINKED credit may not be re-aimed. Credit 94 belongs to INV-FOREIGN-CREDIT; naming
+-- INV-COVERAGE for it is a request to move a recorded link, and both invoices are in this request
+-- so containment alone would not notice. The recorded link wins over the caller's hint.
+select pg_temp.p63_expect_error(
+  $$select public.execute_payment_request(
+      'f6300000-0000-4000-8000-000000000088', current_date, 'bank transfer',
+      'P63-RELINK', null,
+      jsonb_build_array(
+        jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000026',
+          'credit_id', null, 'amount', 100),
+        jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000027',
+          'credit_id', null, 'amount', 70),
+        jsonb_build_object('invoice_id', null,
+          'credit_id', 'f6300000-0000-4000-8000-000000000094', 'amount', 30,
+          'credit_invoice_id', 'f6300000-0000-4000-8000-000000000027')),
+      'P63 linked credit aimed elsewhere')$$,
+  'allocation_target_invalid');
+
+-- The target rides on the credit row, never on the cash row: a cash allocation that carries one is
+-- a caller mistake, not a second way to say the same thing.
+select pg_temp.p63_expect_error(
+  $$select public.execute_payment_request(
+      'f6300000-0000-4000-8000-000000000089', current_date, 'bank transfer',
+      'P63-TARGET-ON-CASH', null,
+      jsonb_build_array(
+        jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000028',
+          'credit_id', null, 'amount', 100,
+          'credit_invoice_id', 'f6300000-0000-4000-8000-000000000028')),
+      'P63 target on a cash row')$$,
+  'allocation_invalid');
 
 -- ===== 7. The cash a credit displaces comes off the credit's own invoice =====
 --
@@ -485,13 +565,124 @@ select pg_temp.p63_expect_error(
 reset role;
 select pg_temp.p63_assert(
   not exists (select 1 from public.payments
-              where reference in ('P63-FOREIGN-CREDIT', 'P63-UNLINKED-CREDIT', 'P63-COVERAGE'))
+              where reference in ('P63-FOREIGN-CREDIT', 'P63-UNLINKED-NO-TARGET',
+                                  'P63-CROSS-SUPPLIER', 'P63-RELINK', 'P63-TARGET-ON-CASH',
+                                  'P63-COVERAGE'))
   and (select coalesce(sum(amount), 0) = 0 from public.payment_allocations
        where credit_id in ('f6300000-0000-4000-8000-000000000093',
                            'f6300000-0000-4000-8000-000000000094')),
   'a refused allocation still moved money');
 
--- ===== 8. No live financial reader answers from lifecycle labels any more =====
+-- ===== 8. An unlinked credit settles any invoice of its supplier, and is linked doing it =====
+--
+-- Credit 95 is 60 with no invoice. It is applied 30 at a time to INV-UNLINKED-TARGET, which belongs
+-- to its own supplier and is paid by this request. The first allocation is what the owner ruled on:
+-- it succeeds AND records the link.
+set local role authenticated;
+select pg_temp.p63_activate('f6300000-0000-4000-8000-000000000003', true);
+
+select pg_temp.p63_assert(
+  (select not (r ->> 'idempotent')::boolean
+   from public.execute_payment_request(
+     'f6300000-0000-4000-8000-000000000089', current_date, 'bank transfer',
+     'P63-UNLINKED-A', null,
+     jsonb_build_array(
+       jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000028',
+         'credit_id', null, 'amount', 70),
+       jsonb_build_object('invoice_id', null,
+         'credit_id', 'f6300000-0000-4000-8000-000000000095', 'amount', 30,
+         'credit_invoice_id', 'f6300000-0000-4000-8000-000000000028')),
+     'P63 unlinked credit takes its invoice') r),
+  'an unlinked credit was refused against an invoice of its own supplier');
+select pg_temp.p63_assert(
+  (select remaining_amount = 30 and allocated_amount = 30
+   from public.credit_request_balance_rows('f6300000-0000-4000-8000-000000000011')
+   where credit_id = 'f6300000-0000-4000-8000-000000000095'),
+  'the newly linked credit did not report half of itself consumed');
+select pg_temp.p63_assert(
+  (select paid_amount = 70 and credited_amount = 30 and balance = 100
+   from public.p0_invoice_balance_rows()
+   where invoice_id = 'f6300000-0000-4000-8000-000000000028'),
+  'the credit an unlinked allocation applied did not reach the invoice it named');
+
+reset role;
+select pg_temp.p63_assert(
+  (select invoice_id = 'f6300000-0000-4000-8000-000000000028' and status::text = 'received'
+   from public.credit_requests where id = 'f6300000-0000-4000-8000-000000000095'),
+  'the allocation did not record the link on the credit');
+-- The link is a change to a financial record, so it carries the executing accountant's own reason.
+select pg_temp.p63_assert(
+  (select count(*) = 1
+   from public.audit_logs
+   where entity_type = 'credit_requests'
+     and entity_id = 'f6300000-0000-4000-8000-000000000095'
+     and action = 'credit_request_invoice_linked'
+     and old_values ->> 'invoice_id' is null
+     and new_values ->> 'invoice_id' = 'f6300000-0000-4000-8000-000000000028'
+     and reason = 'P63 unlinked credit takes its invoice'),
+  'recording the link was not audited with the caller reason');
+set local role authenticated;
+select pg_temp.p63_activate('f6300000-0000-4000-8000-000000000003', true);
+
+-- The link is not advisory. The remaining 30 cannot be moved to a different invoice, whether the
+-- caller names the new invoice or lets the recorded one speak: a credit's applied total is
+-- attributed to exactly one invoice by every balance reader, so a split would misstate both.
+select pg_temp.p63_expect_error(
+  $$select public.execute_payment_request(
+      'f6300000-0000-4000-8000-00000000008a', current_date, 'bank transfer',
+      'P63-UNLINKED-MOVED', null,
+      jsonb_build_array(
+        jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000029',
+          'credit_id', null, 'amount', 70),
+        jsonb_build_object('invoice_id', null,
+          'credit_id', 'f6300000-0000-4000-8000-000000000095', 'amount', 30,
+          'credit_invoice_id', 'f6300000-0000-4000-8000-000000000029')),
+      'P63 linked credit moved by name')$$,
+  'allocation_target_invalid');
+select pg_temp.p63_expect_error(
+  $$select public.execute_payment_request(
+      'f6300000-0000-4000-8000-00000000008a', current_date, 'bank transfer',
+      'P63-UNLINKED-DRIFT', null,
+      jsonb_build_array(
+        jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000029',
+          'credit_id', null, 'amount', 70),
+        jsonb_build_object('invoice_id', null,
+          'credit_id', 'f6300000-0000-4000-8000-000000000095', 'amount', 30)),
+      'P63 linked credit drifting to another request')$$,
+  'allocation_target_invalid');
+
+-- The remainder settles the invoice the link names, and the caller no longer has to repeat it.
+select public.execute_payment_request(
+  'f6300000-0000-4000-8000-00000000008b', current_date, 'bank transfer',
+  'P63-UNLINKED-B', null,
+  jsonb_build_array(
+    jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000028',
+      'credit_id', null, 'amount', 70),
+    jsonb_build_object('invoice_id', null,
+      'credit_id', 'f6300000-0000-4000-8000-000000000095', 'amount', 30)),
+  'P63 once-unlinked credit finishes');
+select pg_temp.p63_assert(
+  (select remaining_amount = 0 and allocated_amount = 60
+   from public.credit_request_balance_rows('f6300000-0000-4000-8000-000000000011')
+   where credit_id = 'f6300000-0000-4000-8000-000000000095')
+  and (select balance = 0 from public.p0_invoice_balance_rows()
+       where invoice_id = 'f6300000-0000-4000-8000-000000000028'),
+  'the second half of the once-unlinked credit did not close its invoice');
+reset role;
+select pg_temp.p63_assert(
+  (select status::text = 'offset' and resolved_at is not null
+          and invoice_id = 'f6300000-0000-4000-8000-000000000028'
+   from public.credit_requests where id = 'f6300000-0000-4000-8000-000000000095'),
+  'exhausting a once-unlinked credit did not offset it against the invoice it was linked to');
+-- Linking happens once, at the moment it becomes true -- not again on every later allocation.
+select pg_temp.p63_assert(
+  (select count(*) = 1 from public.audit_logs
+   where entity_type = 'credit_requests'
+     and entity_id = 'f6300000-0000-4000-8000-000000000095'
+     and action = 'credit_request_invoice_linked'),
+  'a later allocation of an already linked credit audited the link again');
+
+-- ===== 9. No live financial reader answers from lifecycle labels any more =====
 --
 -- The four readers 0173 patched forward are not otherwise reachable from a transactional suite:
 -- soft_delete_supplier needs a supplier with no balance and no orders, and both approval-side
@@ -529,6 +720,14 @@ begin
      ), e'\r', '')) = 0 then
     raise exception
       'P63 financial credit assertion failed: the office open-credit signal still sums the original credit amount';
+  end if;
+  -- The fail-closed placeholder is not merely unreachable, it is gone. An executor that can still
+  -- raise it is one that never learned the 2026-08-23 ruling.
+  if position('credit_request_not_linked_to_invoice' in replace(pg_get_functiondef(
+       'public.execute_payment_request(uuid,date,text,text,text,jsonb,text)'::regprocedure
+     ), e'\r', '')) > 0 then
+    raise exception
+      'P63 financial credit assertion failed: the unlinked-credit placeholder refusal survives';
   end if;
 end
 $$;

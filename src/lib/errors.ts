@@ -15,6 +15,39 @@
 // pulled in by most of the app, and `./assistant/contracts` carries Zod for its schemas.
 import { ASSISTANT_ERROR_CODES, ASSISTANT_ERROR_MESSAGES } from './assistant/errorCodes';
 
+/**
+ * The payment-execution split, refused by name.
+ *
+ * `buildPaymentAllocations` (AccountantPaymentQueue) refuses these BEFORE the RPC is called, so
+ * the accountant is stopped at the field rather than at the server. The screen shows the same
+ * sentence inline next to the button it disables, and `toHebrewError` reads it too — one wording,
+ * whether the refusal came from the browser's own arithmetic or arrived as a thrown message.
+ *
+ * Two of these names are the SERVER'S OWN — `credit_allocation_invoice_required` and
+ * `payment_cash_amount_required` are raised by `execute_payment_request` too, so the client uses
+ * the identical name and the accountant reads the identical sentence whichever side caught it.
+ * The rest are client-only readings of conditions the server folds into its broader containment
+ * refusals (`allocation_target_invalid`, `credit_allocation_supplier_mismatch`,
+ * `allocation_invoice_coverage_mismatch`), mapped separately below.
+ */
+export const ALLOCATION_REFUSAL_MESSAGES: Record<string, string> = {
+  credit_allocation_exceeds_remaining: 'סכום הקיזוז חורג מיתרת הזיכוי הזמינה',
+  credit_allocation_exceeds_invoice: 'סכום הקיזוז חורג מסכום החשבונית שהזיכוי מקוזז מולה',
+  // OPEN-DECISIONS #243/#244 as the owner settled them on 23.08.2026: an unlinked credit may be
+  // offset against any invoice of the same supplier, and the link is recorded at the moment of
+  // allocation. Which invoice it lands on is therefore a decision with a money consequence, and
+  // the absence of a decision is a refusal — not a default.
+  credit_allocation_invoice_required:
+    'יש לבחור לאיזו חשבונית נזקף כל זיכוי שאינו משויך לחשבונית. המערכת לא תבחר עבורך — החשבונית שתיבחר היא זו שתקוזז',
+  // Client-only, and the server agrees by a broader name: a linked credit simply cannot be moved,
+  // and naming a different invoice for it is answered there with `allocation_target_invalid`.
+  credit_invoice_link_immutable:
+    'זיכוי שכבר משויך לחשבונית מקוזז מולה בלבד ואי אפשר להעבירו לחשבונית אחרת',
+  credit_invoice_not_in_request: 'החשבונית שנבחרה לזיכוי אינה מחשבוניות דרישת התשלום הזו',
+  payment_cash_amount_required:
+    'חייב להישאר סכום להעברה בפועל — לא ניתן לכסות את מלוא הדרישה בזיכויים',
+};
+
 const PATTERNS: [RegExp, string][] = [
   // Assistant codes (contracts §8), generated from the canonical map so a failure reads
   // identically whether it surfaced from the Edge function or from a direct RPC — one wording,
@@ -96,12 +129,34 @@ const PATTERNS: [RegExp, string][] = [
     'יש להשלים תאריך, אסמכתה וסיבת ביצוע.'],
   [/payment_execution_conflict|payment_request_idempotency_conflict|invoice_idempotency_conflict|receipt_idempotency_conflict|bank_payment_idempotency_conflict|credit_request_idempotency_conflict/i,
     'אותה פעולה כבר נשלחה עם פרטים אחרים. רענן את המסך לפני ניסיון נוסף.'],
+  // Ahead of the server's allocation family on purpose: `credit_allocation_exceeds_invoice` and
+  // its siblings are specific readings of the same failure, and the generic sentences below would
+  // otherwise answer a question the specific ones already answer better.
+  ...Object.entries(ALLOCATION_REFUSAL_MESSAGES).map(([code, text]): [RegExp, string] => [
+    new RegExp(code, 'i'),
+    text,
+  ]),
   [/allocation_exceeds_balance|payment_request_allocation_invalid/i,
     'הסכום שהוקצה גבוה מהיתרה הפתוחה. רענן את הנתונים ועדכן את החלוקה.'],
   [/allocation_total_mismatch|bank_allocation_total_mismatch/i,
     'סכום החלוקה אינו תואם לסכום הפעולה.'],
+  // 0173: the executor checks each invoice of the request separately — cash allocated to it plus
+  // credit offset against it must equal exactly what the request allocated to that invoice. It
+  // fires when the split drifted from the request between preview and execution, so the sentence
+  // sends the accountant back to the split rather than to the total.
+  [/allocation_invoice_coverage_mismatch/i,
+    'הסכום שהוקצה לאחת מחשבוניות הדרישה אינו מכוסה במדויק על ידי ההעברה והזיכויים שיוחסו לה. רענן את המסך ובדוק את החלוקה בין החשבוניות.'],
+  // 0173: the credit and the invoice it was pointed at belong to different suppliers. Its own
+  // sentence rather than an arm of allocation_target_invalid, because it is the one refusal here
+  // that says the two records were never related — no refresh and no re-split will change that.
+  [/credit_allocation_supplier_mismatch/i,
+    'הזיכוי שייך לספק אחר מזה של החשבונית שנבחרה. אפשר לקזז זיכוי רק מול חשבונית של אותו ספק.'],
+  // The server's containment refusal for a single allocation row: an invoice or a credit that is
+  // not this org's, not this supplier's, not in this request, not in a state that can be
+  // allocated, an amount above what is left of it — or a credit that already names an invoice
+  // being pointed at a different one, which the server refuses here rather than by its own name.
   [/allocation_target_invalid|allocation_invalid/i,
-    'אחת מהקצאות התשלום אינה תקינה או אינה שייכת לספק הנבחר.'],
+    'אחת מהקצאות התשלום אינה תקינה: החשבונית או הזיכוי אינם שייכים לספק ולדרישה הזו, או שהסכום גבוה מהיתרה שנותרה. רענן את המסך ובדוק את הבחירה.'],
   [/payment_request_checks_failed/i,
     'בדיקות השרת מצאו חשבונית ששולמה או יתרה שהשתנתה. רענן ובדוק את הדרישה.'],
   [/payment_request_checks_mismatch/i,

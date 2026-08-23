@@ -4,6 +4,14 @@
 -- remainder. The credit row is locked before the remainder is checked. It stays `received` while
 -- money remains and becomes `offset` exactly when fully consumed. The payment row records only
 -- cash transferred; invoice allocations plus credit allocations still equal the approved request.
+--
+-- Owner ruling 2026-08-23: a credit whose `invoice_id` is null may be allocated against ANY invoice
+-- of the same supplier, and the link is RECORDED at the moment of allocation. The caller names the
+-- target on the allocation row itself (`credit_invoice_id`); an unlinked credit that names no target
+-- is refused by name, because the per-invoice coverage rule has nothing to check without one. Once
+-- the link is recorded the credit is an ordinary linked credit, so any later partial allocation of
+-- the same credit lands on the same invoice -- section 3 explains why the schema admits no other
+-- consistent answer.
 
 -- ===== 1. Canonical computed credit balance =====
 create or replace function public.credit_request_balance_rows(p_supplier_id uuid)
@@ -99,6 +107,7 @@ begin
   v_input jsonb;$anchor$;
   v_replacement := $replacement$  v_sum numeric;
   v_cash_sum numeric;
+  v_linked_credits uuid[];
   v_input jsonb;$replacement$;
   if position(v_anchor in v_definition) = 0 then
     raise exception '0173: executor declaration anchor moved';
@@ -119,6 +128,23 @@ begin
   v_replacement := $replacement$    into v_count, v_distinct_count, v_sum, v_cash_sum, v_input$replacement$;
   if position(v_anchor in v_definition) = 0 then
     raise exception '0173: executor aggregate target anchor moved';
+  end if;
+  v_definition := replace(v_definition, v_anchor, v_replacement);
+
+  -- The allocation row grows one optional key. `invoice_id` stays the CASH target: reusing it for
+  -- the credit's target would put credit money into v_cash_sum and into payments.amount, which is
+  -- exactly the money the rest of this migration takes out of there. `credit_invoice_id` is only
+  -- meaningful next to a credit_id, so a cash row that carries one is a caller mistake and is
+  -- refused rather than silently ignored.
+  v_anchor := $anchor$    from jsonb_to_recordset(p_allocations) as a(invoice_id uuid, credit_id uuid, amount numeric)
+    where num_nonnulls(invoice_id, credit_id) <> 1 or amount is null or amount <= 0$anchor$;
+  v_replacement := $replacement$    from jsonb_to_recordset(p_allocations) as a(
+      invoice_id uuid, credit_id uuid, amount numeric, credit_invoice_id uuid
+    )
+    where num_nonnulls(invoice_id, credit_id) <> 1 or amount is null or amount <= 0
+       or (credit_id is null and credit_invoice_id is not null)$replacement$;
+  if position(v_anchor in v_definition) = 0 then
+    raise exception '0173: executor allocation shape anchor moved';
   end if;
   v_definition := replace(v_definition, v_anchor, v_replacement);
 
@@ -143,17 +169,40 @@ begin
   end if;
   v_definition := replace(v_definition, v_anchor, v_replacement);
 
+  -- The containment block reads the credit's target, so its recordset needs the new key too.
+  v_anchor := $anchor$    from jsonb_to_recordset(p_allocations) as a(invoice_id uuid, credit_id uuid, amount numeric)
+    left join public.invoices i on i.id = a.invoice_id$anchor$;
+  v_replacement := $replacement$    from jsonb_to_recordset(p_allocations) as a(
+      invoice_id uuid, credit_id uuid, amount numeric, credit_invoice_id uuid
+    )
+    left join public.invoices i on i.id = a.invoice_id$replacement$;
+  if position(v_anchor in v_definition) = 0 then
+    raise exception '0173: executor containment recordset anchor moved';
+  end if;
+  v_definition := replace(v_definition, v_anchor, v_replacement);
+
+  -- Containment, for both legal shapes of a credit. The EFFECTIVE target is
+  -- `coalesce(c.invoice_id, a.credit_invoice_id)`: a recorded link always wins, and a caller that
+  -- names a different invoice for an already-linked credit is refused rather than quietly moved.
+  -- Whichever shape applies, the target must be an invoice this request pays, alive and payable.
+  -- Supplier identity is asserted separately, under its own name, before this block runs.
   v_anchor := $anchor$             c.id is null or c.org_id <> v_org or c.supplier_id <> v_request.supplier_id
              or c.status <> 'received' or round(a.amount, 2) <> round(c.amount, 2)$anchor$;
   v_replacement := $replacement$             c.id is null or c.org_id <> v_org or c.supplier_id <> v_request.supplier_id
              or c.status <> 'received'
-             or c.invoice_id is null
+             or (c.invoice_id is not null and a.credit_invoice_id is not null
+                 and a.credit_invoice_id <> c.invoice_id)
              or not exists (
                select 1
                from public.payment_request_invoices pri_credit
+               join public.invoices credit_invoice
+                 on credit_invoice.org_id = pri_credit.org_id
+                and credit_invoice.id = pri_credit.invoice_id
                where pri_credit.org_id = v_org
                  and pri_credit.payment_request_id = v_request.id
-                 and pri_credit.invoice_id = c.invoice_id
+                 and pri_credit.invoice_id = coalesce(c.invoice_id, a.credit_invoice_id)
+                 and credit_invoice.deleted_at is null
+                 and credit_invoice.financial_role = 'payable'
              )
              or round(a.amount, 2) > round(
                c.amount - coalesce((
@@ -166,11 +215,19 @@ begin
   end if;
   v_definition := replace(v_definition, v_anchor, v_replacement);
 
-  -- The credit branch above can only contain a credit inside the request once every credit names
-  -- an invoice. A credit with no invoice is refused by its own name rather than being silently
-  -- allowed against an arbitrary invoice or silently dropped: OPEN-DECISIONS #244 settled partial
-  -- consumption of an INVOICE-LINKED credit and says nothing about an unlinked one. This is a
-  -- fail-closed placeholder and must be revisited when the owner rules on the unlinked case.
+  -- Two refusals that must not hide inside `allocation_target_invalid`, because each says something
+  -- the caller has to act on differently. Both run AFTER `for update of c`, so a credit that a
+  -- concurrent winner has just linked is read at its committed value, not at the value this session
+  -- saw before it queued for the lock.
+  --
+  --   credit_allocation_invoice_required -- an unlinked credit arrived with no target. There is no
+  --     defensible implicit choice: the per-invoice coverage rule below has nothing to balance, and
+  --     silently picking an invoice would decide, on the caller's behalf, which invoice this credit
+  --     permanently belongs to.
+  --   credit_allocation_supplier_mismatch -- the credit's supplier is not the supplier of the
+  --     invoice it would settle. A payment request already pins the credit to the request supplier,
+  --     but an invoice that receives only credit coverage and no cash is never supplier-checked by
+  --     the cash branch, so without this a credit could cross suppliers through a mixed request.
   v_anchor := $anchor$  ) input on input.credit_id = c.id
   order by c.id
   for update of c;
@@ -182,11 +239,29 @@ begin
 
   if exists (
     select 1
-    from jsonb_to_recordset(p_allocations) as a(invoice_id uuid, credit_id uuid, amount numeric)
+    from jsonb_to_recordset(p_allocations) as a(
+      invoice_id uuid, credit_id uuid, amount numeric, credit_invoice_id uuid
+    )
     join public.credit_requests c on c.id = a.credit_id and c.org_id = v_org
-    where a.credit_id is not null and c.invoice_id is null
+    where a.credit_id is not null
+      and coalesce(c.invoice_id, a.credit_invoice_id) is null
   ) then
-    raise exception 'credit_request_not_linked_to_invoice' using errcode = '22023';
+    raise exception 'credit_allocation_invoice_required' using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_to_recordset(p_allocations) as a(
+      invoice_id uuid, credit_id uuid, amount numeric, credit_invoice_id uuid
+    )
+    join public.credit_requests c on c.id = a.credit_id and c.org_id = v_org
+    join public.invoices credit_target
+      on credit_target.org_id = c.org_id
+     and credit_target.id = coalesce(c.invoice_id, a.credit_invoice_id)
+    where a.credit_id is not null
+      and credit_target.supplier_id <> c.supplier_id
+  ) then
+    raise exception 'credit_allocation_supplier_mismatch' using errcode = '22023';
   end if;
 
   if exists ($replacement$;
@@ -233,11 +308,13 @@ begin
       group by a.invoice_id
     ) cash on cash.invoice_id = pri_cover.invoice_id
     left join (
-      select c.invoice_id as invoice_id, sum(a.amount) as amount
-      from jsonb_to_recordset(p_allocations) as a(invoice_id uuid, credit_id uuid, amount numeric)
+      select coalesce(c.invoice_id, a.credit_invoice_id) as invoice_id, sum(a.amount) as amount
+      from jsonb_to_recordset(p_allocations) as a(
+        invoice_id uuid, credit_id uuid, amount numeric, credit_invoice_id uuid
+      )
       join public.credit_requests c on c.id = a.credit_id and c.org_id = v_org
       where a.credit_id is not null
-      group by c.invoice_id
+      group by coalesce(c.invoice_id, a.credit_invoice_id)
     ) credited on credited.invoice_id = pri_cover.invoice_id
     where pri_cover.org_id = v_org and pri_cover.payment_request_id = v_request.id
       and round(coalesce(cash.amount, 0) + coalesce(credited.amount, 0), 2)
@@ -250,11 +327,66 @@ begin
   end if;
   v_definition := replace(v_definition, v_anchor, v_replacement);
 
+  -- Recording the link is the substance of the 2026-08-23 ruling, and it is also the only shape the
+  -- schema can represent. `credit_requests.invoice_id` is a single scalar, and EVERY reader of "how
+  -- much credit settled this invoice" -- p0_invoice_balance_rows, p1_refresh_invoice_payment_statuses,
+  -- soft_delete_supplier, the two approval-side readers and the overpayment guard below -- attributes
+  -- the credit's WHOLE applied sum to that one invoice. A credit split 40/60 across two invoices
+  -- would therefore over-credit one and under-credit the other in every one of them. So the link is
+  -- written once, on the first allocation, and a later partial allocation of the same credit travels
+  -- the ordinary linked path and must land on the same invoice. Splitting a credit across invoices
+  -- would need per-allocation invoice attribution, which is a data-model change, not a wider guard.
+  --
+  -- The write is audited with the caller's reason, exactly one row per credit that changed, never
+  -- one per allocation. Which credits changed is captured BEFORE the update, because afterwards
+  -- nothing distinguishes a credit linked a second ago from one linked at intake; the audit row
+  -- itself is written AFTER, because 0175 files a credit_requests audit row under the legal entity
+  -- of `credit_requests.invoice_id`, and a row written a statement earlier would be filed
+  -- cross_scope -- attributing the event to nowhere precisely as it acquires a somewhere.
   v_anchor := $anchor$  update public.credit_requests c
   set status = 'offset', resolved_at = now()
   from jsonb_to_recordset(p_allocations) as a(invoice_id uuid, credit_id uuid, amount numeric)
   where a.credit_id = c.id;$anchor$;
-  v_replacement := $replacement$  update public.credit_requests c
+  v_replacement := $replacement$  select coalesce(array_agg(c.id order by c.id), '{}'::uuid[])
+    into v_linked_credits
+  from jsonb_to_recordset(p_allocations) as a(
+    invoice_id uuid, credit_id uuid, amount numeric, credit_invoice_id uuid
+  )
+  join public.credit_requests c on c.id = a.credit_id and c.org_id = v_org
+  where a.credit_id is not null
+    and c.invoice_id is null
+    and a.credit_invoice_id is not null;
+
+  update public.credit_requests c
+  set invoice_id = a.credit_invoice_id
+  from jsonb_to_recordset(p_allocations) as a(
+    invoice_id uuid, credit_id uuid, amount numeric, credit_invoice_id uuid
+  )
+  where a.credit_id = c.id
+    and c.org_id = v_org
+    and c.invoice_id is null
+    and a.credit_invoice_id is not null;
+
+  insert into public.audit_logs (
+    org_id, user_id, action, entity_type, entity_id, old_values, new_values, reason
+  )
+  select v_org, v_user, 'credit_request_invoice_linked', 'credit_requests', c.id,
+         jsonb_build_object('invoice_id', null::uuid),
+         jsonb_build_object(
+           'invoice_id', c.invoice_id,
+           'payment_id', v_payment.id,
+           'payment_request_id', v_request.id,
+           'amount', round(a.amount, 2)
+         ),
+         v_reason
+  from jsonb_to_recordset(p_allocations) as a(
+    invoice_id uuid, credit_id uuid, amount numeric, credit_invoice_id uuid
+  )
+  join public.credit_requests c on c.id = a.credit_id and c.org_id = v_org
+  where c.id = any (v_linked_credits)
+  order by c.id;
+
+  update public.credit_requests c
   set status = case
         when coalesce((
           select sum(applied.amount)
@@ -283,7 +415,10 @@ comment on function public.execute_payment_request(uuid, date, text, text, text,
   'Executes an approved request as accountant with the existing fresh-password step-up. 0173 keeps '
   'invoice plus credit allocations equal to the approved amount, records only invoice-allocation '
   'cash on payments.amount, locks every credit before checking amount minus prior allocations, and '
-  'leaves partial credits received until their computed remainder reaches zero.';
+  'leaves partial credits received until their computed remainder reaches zero. An unlinked credit '
+  'may settle any invoice of its own supplier that this request pays, named by credit_invoice_id on '
+  'the allocation row; the link is written and audited under the same lock, after which the credit '
+  'is an ordinary linked credit.';
 
 -- ===== 3b. Every other reader of "how much credit was consumed" =====
 --
@@ -506,11 +641,22 @@ declare
 begin
   if position('v_cash_sum' in v_executor) = 0
      or position('existing.credit_id = c.id' in v_executor) = 0
-     or position('credit_request_not_linked_to_invoice' in v_executor) = 0
+     or position('credit_allocation_invoice_required' in v_executor) = 0
+     or position('credit_allocation_supplier_mismatch' in v_executor) = 0
      or position('allocation_invoice_coverage_mismatch' in v_executor) = 0
-     or position('pri_credit.invoice_id = c.invoice_id' in v_executor) = 0
+     or position('pri_credit.invoice_id = coalesce(c.invoice_id, a.credit_invoice_id)'
+                 in v_executor) = 0
+     or position('set invoice_id = a.credit_invoice_id' in v_executor) = 0
+     or position('into v_linked_credits' in v_executor) = 0
+     or position('credit_request_invoice_linked' in v_executor) = 0
      or position('sum(pa.amount) as amount' in v_balance) = 0 then
     raise exception '0173: partial-credit executor or allocation-based balance did not land';
+  end if;
+
+  -- The fail-closed placeholder this migration replaced must be gone, not merely unreachable: an
+  -- executor that can still raise it is an executor that never learned the 2026-08-23 ruling.
+  if position('credit_request_not_linked_to_invoice' in v_executor) > 0 then
+    raise exception '0173: the unlinked-credit placeholder refusal survives in the executor';
   end if;
 
   -- No live financial reader may still answer "how much credit was consumed" from lifecycle

@@ -9,10 +9,14 @@
 -- executing at the same moment must not both spend the same remainder of one credit. The split is
 -- the same one payment_credit_override_concurrency.sql makes for the 0073 races.
 --
--- Both requests deliberately name the SAME invoice and the SAME credit. That is the only shape in
--- which two payments can legitimately compete for one remainder now that a credit may only settle
--- its own invoice: give them different invoices and the loser would be refused for containment
--- rather than for losing the race, and the test would pass without proving anything.
+-- The credit under test is UNLINKED, which is now the sharpest version of the race: the winner does
+-- not merely spend part of the remainder, it also decides -- and records -- which invoice this credit
+-- belongs to for good. Both requests deliberately name the SAME invoice as the credit's target, so
+-- the only scarce thing is the remainder. Give them different targets and the loser would be refused
+-- because the winner's link contradicts its own, which is containment, not the race: the test would
+-- go green while proving nothing about the lock. A third, single-session payment runs afterwards and
+-- succeeds on exactly the remainder the loser was denied, which is what separates "refused because
+-- the money was gone" from "refused because the credit had become unreachable".
 \set ON_ERROR_STOP on
 
 create extension if not exists dblink;
@@ -82,7 +86,7 @@ insert into public.credit_requests (
   'f6390000-0000-4000-8000-000000000041',
   'f6390000-0000-4000-8000-000000000001',
   'f6390000-0000-4000-8000-000000000011',
-  'f6390000-0000-4000-8000-000000000021',
+  null,
   'other', 25, 'received', 'f6390000-0000-4000-8000-000000000002');
 
 -- Both requests are written already approved: this harness measures execution, and routing them
@@ -96,6 +100,10 @@ insert into public.payment_requests (
    'f6390000-0000-4000-8000-000000000002', 'f6390000-0000-4000-8000-000000000002', now()),
   ('f6390000-0000-4000-8000-000000000032', 'f6390000-0000-4000-8000-000000000001',
    :'p63c_legal_entity', 'f6390000-0000-4000-8000-000000000011', 100, 'approved',
+   'f6390000-0000-4000-8000-000000000002', 'f6390000-0000-4000-8000-000000000002', now()),
+  -- The control: 5 of cash and the 5 of credit the loser could not have.
+  ('f6390000-0000-4000-8000-000000000033', 'f6390000-0000-4000-8000-000000000001',
+   :'p63c_legal_entity', 'f6390000-0000-4000-8000-000000000011', 10, 'approved',
    'f6390000-0000-4000-8000-000000000002', 'f6390000-0000-4000-8000-000000000002', now());
 
 insert into public.payment_request_invoices (org_id, payment_request_id, invoice_id, amount_allocated)
@@ -103,7 +111,9 @@ values
   ('f6390000-0000-4000-8000-000000000001', 'f6390000-0000-4000-8000-000000000031',
    'f6390000-0000-4000-8000-000000000021', 100),
   ('f6390000-0000-4000-8000-000000000001', 'f6390000-0000-4000-8000-000000000032',
-   'f6390000-0000-4000-8000-000000000021', 100);
+   'f6390000-0000-4000-8000-000000000021', 100),
+  ('f6390000-0000-4000-8000-000000000001', 'f6390000-0000-4000-8000-000000000033',
+   'f6390000-0000-4000-8000-000000000021', 10);
 
 create function p63_credit_concurrency.activate()
 returns void language plpgsql security invoker as $$
@@ -146,12 +156,31 @@ begin
         jsonb_build_object('invoice_id', 'f6390000-0000-4000-8000-000000000021',
           'credit_id', null, 'amount', 80),
         jsonb_build_object('invoice_id', null,
-          'credit_id', 'f6390000-0000-4000-8000-000000000041', 'amount', 20)),
+          'credit_id', 'f6390000-0000-4000-8000-000000000041', 'amount', 20,
+          'credit_invoice_id', 'f6390000-0000-4000-8000-000000000021')),
       'P63 concurrent partial credit allocation');
   exception when others then
     if position('allocation_target_invalid' in sqlerrm) = 0 then raise; end if;
     return jsonb_build_object('error', 'allocation_target_invalid');
   end;
+end
+$$;
+
+-- The control names no target at all: by the time it runs the credit is linked, so it travels the
+-- ordinary linked path. If the loser had been refused for containment rather than for the
+-- remainder, this call -- which asks for less money against the same invoice -- would fail too.
+create function p63_credit_concurrency.run_control()
+returns jsonb language plpgsql security invoker as $$
+begin
+  perform p63_credit_concurrency.activate();
+  return public.execute_payment_request(
+    'f6390000-0000-4000-8000-000000000033', current_date, 'bank transfer', 'P63-RACE-CONTROL', null,
+    jsonb_build_array(
+      jsonb_build_object('invoice_id', 'f6390000-0000-4000-8000-000000000021',
+        'credit_id', null, 'amount', 5),
+      jsonb_build_object('invoice_id', null,
+        'credit_id', 'f6390000-0000-4000-8000-000000000041', 'amount', 5)),
+    'P63 control takes the remainder the loser was denied');
 end
 $$;
 
@@ -194,7 +223,44 @@ select p63_credit_concurrency.assert(
        where org_id = 'f6390000-0000-4000-8000-000000000001' and status = 'executed'),
   'the refused session still moved the invoice or its own request');
 
+-- The winner decided what this credit belongs to, and said so in the ledger. The loser wrote
+-- nothing: one link, one audit row, whichever session got there first.
+select p63_credit_concurrency.assert(
+  (select invoice_id = 'f6390000-0000-4000-8000-000000000021' and status = 'received'
+   from public.credit_requests where id = 'f6390000-0000-4000-8000-000000000041'),
+  'the winning session did not record the link on the unlinked credit');
+select p63_credit_concurrency.assert(
+  (select count(*) = 1 from public.audit_logs
+   where entity_type = 'credit_requests'
+     and entity_id = 'f6390000-0000-4000-8000-000000000041'
+     and action = 'credit_request_invoice_linked'
+     and new_values ->> 'invoice_id' = 'f6390000-0000-4000-8000-000000000021'
+     and reason = 'P63 concurrent partial credit allocation'),
+  'the recorded link was audited twice, or not at all, under contention');
+
 drop trigger zz_p63_pause_credit_allocation on public.payment_allocations;
+
+-- The loser lost the money, not the invoice. A refusal here aborts the suite under ON_ERROR_STOP,
+-- which is the assertion: the control must be able to spend exactly what the loser could not.
+select p63_credit_concurrency.run_control();
+select p63_credit_concurrency.assert(
+  (select count(*) = 1 and bool_and(amount = 5) from public.payments
+   where reference = 'P63-RACE-CONTROL'),
+  'the remainder of the once-unlinked credit was unreachable after the race');
+select p63_credit_concurrency.assert(
+  (select coalesce(sum(amount), 0) = 25 from public.payment_allocations
+   where credit_id = 'f6390000-0000-4000-8000-000000000041')
+  and (select status = 'offset' and resolved_at is not null
+       and invoice_id = 'f6390000-0000-4000-8000-000000000021'
+       from public.credit_requests where id = 'f6390000-0000-4000-8000-000000000041'),
+  'the control did not exhaust the credit against the invoice the winner linked it to');
+select p63_credit_concurrency.assert(
+  (select count(*) = 1 from public.audit_logs
+   where entity_type = 'credit_requests'
+     and entity_id = 'f6390000-0000-4000-8000-000000000041'
+     and action = 'credit_request_invoice_linked'),
+  'a later allocation of the already linked credit audited the link again');
+
 drop schema p63_credit_concurrency cascade;
 
 select 'p63_financial_credit_concurrency_passed' as result;
