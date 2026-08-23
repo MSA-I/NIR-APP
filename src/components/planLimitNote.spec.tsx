@@ -7,14 +7,15 @@ vi.mock('../lib/supabase', () => ({ supabase: { rpc: (...args: unknown[]) => rpc
 
 const row = (over: Record<string, unknown> = {}) => ({
   metric_key: 'documents.monthly',
-  label: 'מסמכים בחודש',
+  label: 'מסמכים',
   used: 10,
   usage_limit: 100,
   unlimited: false,
   measured: true,
   remaining: 90,
   percent_used: 10,
-  period_end: '2026-09-01T00:00:00.000Z',
+  period_start: '2026-08-04T00:00:00.000Z',
+  period_end: '2026-09-04T00:00:00.000Z',
   ...over,
 });
 
@@ -25,7 +26,8 @@ beforeEach(() => {
 const settle = () => waitFor(() => expect(rpc).toHaveBeenCalled());
 
 describe('התרעת מכסת מסלול', () => {
-  it('שותקת כשהמכסה רחוקה — באנר קבוע הוא קישוט, וקישוט על כסף נקרא כלחץ', async () => {
+  it('שותקת מתחת ל־60% — הסף הראשון ש־#202 מכיר בו', async () => {
+    rpc.mockResolvedValue({ data: [row({ used: 59, remaining: 41, percent_used: 59 })], error: null });
     const { container } = render(<PlanLimitNote metricKey="documents.monthly" />);
     await settle();
     await waitFor(() => expect(container).toBeEmptyDOMElement());
@@ -41,30 +43,47 @@ describe('התרעת מכסת מסלול', () => {
     await waitFor(() => expect(container).toBeEmptyDOMElement());
   });
 
-  it('מתריעה כשמתקרבים למכסה, ואומרת שהקיים אינו מושפע', async () => {
-    rpc.mockResolvedValue({ data: [row({ used: 85, remaining: 15, percent_used: 85 })], error: null });
+  it('ב־60% מדווחת עובדות שימוש בלבד — בלי המלצת מסלול ובלי השוואת חיסכון', async () => {
+    rpc.mockResolvedValue({ data: [row({ used: 60, remaining: 40, percent_used: 60 })], error: null });
     render(<PlanLimitNote metricKey="documents.monthly" />);
-    expect(await screen.findByText(/85/)).toBeInTheDocument();
-    expect(screen.getByText(/המסמכים הקיימים אינם מושפעים/)).toBeInTheDocument();
+    expect(await screen.findByText(/60/)).toBeInTheDocument();
+    expect(screen.getByText(/100/)).toBeInTheDocument();
+    expect(screen.queryByText(/שדרג|מומלץ|כדאי|חיסכון|לחסוך/)).not.toBeInTheDocument();
   });
 
-  it('כשהמכסה נוצלה — אומרת מה ייחסם ומה נשאר זמין, בלי דחיפות מומצאת', async () => {
+  it('ב־80% עדיין עובדות, ובלי דחיפות מומצאת', async () => {
+    rpc.mockResolvedValue({ data: [row({ used: 80, remaining: 20, percent_used: 80 })], error: null });
+    render(<PlanLimitNote metricKey="documents.monthly" />);
+    expect(await screen.findByText(/80/)).toBeInTheDocument();
+    expect(screen.queryByText(/נותרו רק|מהרו|בעוד \d+ שעות/)).not.toBeInTheDocument();
+  });
+
+  it('ב־100% אומרת שרק עיבוד חדש נעצר, ואין מחיקה או חסימה למפרע', async () => {
     rpc.mockResolvedValue({ data: [row({ used: 100, remaining: 0, percent_used: 100 })], error: null });
     render(<PlanLimitNote metricKey="documents.monthly" />);
-    expect(await screen.findByText(/עיבוד מסמך חדש ייחסם/)).toBeInTheDocument();
-    expect(screen.getByText(/נשארים זמינים במלואם/)).toBeInTheDocument();
-    // No fabricated countdown, and no claim about a plan whose price and limits do not exist yet.
-    expect(screen.queryByText(/נותרו רק/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/שדרג ל/)).not.toBeInTheDocument();
+    expect(await screen.findByText(/עיבוד חדש נעצר/)).toBeInTheDocument();
+    expect(screen.getByText(/אינו נמחק/)).toBeInTheDocument();
+    expect(screen.getByText(/למפרע/)).toBeInTheDocument();
   });
 
-  it('מכסה שלא הוגדרה מוצגת כתקלת הגדרה אצלנו, לא כהזמנה לשדרג', async () => {
+  it('מדברת על תקופת השימוש, לא על תקופת החיוב — הן נפרדות לפי #242', async () => {
+    rpc.mockResolvedValue({ data: [row({ used: 90, remaining: 10, percent_used: 90 })], error: null });
+    render(<PlanLimitNote metricKey="documents.monthly" />);
+    expect(await screen.findByText(/תקופת השימוש/)).toBeInTheDocument();
+    expect(screen.queryByText(/תקופת החיוב/)).not.toBeInTheDocument();
+    // The period is anchored to the organization's signup date, so no calendar-month language.
+    expect(screen.queryByText(/החודש הקלנדרי|תחילת החודש|ב־1 ל/)).not.toBeInTheDocument();
+  });
+
+  it('מכסה שלא הוגדרה מוצגת כמקף ותקלת הגדרה אצלנו — לא כאפס ולא כהזמנה לשדרג', async () => {
     rpc.mockResolvedValue({
-      data: [row({ measured: false, unlimited: false, usage_limit: null, percent_used: null })],
+      data: [row({ measured: false, unlimited: false, usage_limit: null, used: null, percent_used: null })],
       error: null,
     });
     render(<PlanLimitNote metricKey="documents.monthly" />);
     expect(await screen.findByText(/זו הגדרה במערכת/)).toBeInTheDocument();
-    expect(screen.queryByText(/לשדרג/)).not.toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
+    expect(screen.queryByText(/לשדרג|שדרג/)).not.toBeInTheDocument();
   });
 });

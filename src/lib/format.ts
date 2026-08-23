@@ -33,6 +33,26 @@ const dateFmt = new Intl.DateTimeFormat('he-IL', { day: '2-digit', month: '2-dig
 const dateTimeFmt = new Intl.DateTimeFormat('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TIME_ZONE });
 const monthFmt = new Intl.DateTimeFormat('he-IL', { month: 'long', year: 'numeric', timeZone: BUSINESS_TIME_ZONE });
 
+/**
+ * Subscription catalogue prices, and the ONE reason a second currency exists in this file.
+ *
+ * The product's own money is shekels and stays that way (#14). A plan price is different:
+ * OPEN-DECISIONS #208 keeps two versioned catalogues — ILS for a verified Israeli billing address,
+ * USD for every other country — and the catalogue is chosen by the merchant of record, never by
+ * this code. So the CURRENCY IS AN ARGUMENT, supplied by the row being rendered, and a currency
+ * this function does not recognise returns an em dash rather than a figure in the wrong unit.
+ *
+ * Zero decimals, because every figure #195 decided is whole and a pricing surface is a glance
+ * surface. As with the shekel formatters, the shape follows the surface and never the value.
+ */
+const usdRounded = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+export const fmtPlanPrice = (v: number | null | undefined, currency: string | null | undefined) => {
+  if (v == null) return '—';
+  if (currency === 'ILS') return ilsRounded.format(v);
+  if (currency === 'USD') return usdRounded.format(v);
+  return '—';
+};
+
 export const fmtMoneyExact = (v: number | null | undefined) => (v == null ? '—' : ilsExact.format(v));
 export const fmtMoneyRounded = (v: number | null | undefined) => (v == null ? '—' : ilsRounded.format(v));
 export const fmtMoneyCompact = (v: number | null | undefined) => (v == null ? '—' : ilsCompact.format(v));
