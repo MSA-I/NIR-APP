@@ -1,0 +1,2 @@
+# Screenshots stay out of Git; the JSON reports and the scripts that produced them are the evidence.
+*.png

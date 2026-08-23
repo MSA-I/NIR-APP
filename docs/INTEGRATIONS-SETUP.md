@@ -99,14 +99,33 @@ Morning או חיוב Paddle/Stripe פעיל. לפני הפעלה נדרשים �
 מספור/ביטול/זיכוי, webhooks חתומים ו־reconciliation. מצב:
 `SELECTED / ACCOUNT_NOT_PROVEN / NOT_CONFIGURED / NOT_INTEGRATED / NOT_LIVE`.
 
-## 5. דומיין ו־origins — נבחרו; טרם נרכשו או הוגדרו
+## 5. דומיין ו־origins — האפליקציה חיה; ה־apex וה־`www` אינם מוגדרים במכוון
 
-- אתר שיווקי: `https://inplace.digital`
-- אפליקציה: `https://app.inplace.digital`
-- מפעיל: `https://app.inplace.digital/operator`
-- `https://www.inplace.digital` מפנה קנונית ל־`https://inplace.digital`
+**מצב מ־24.08.2026: `PURCHASED / DELEGATED / ZONE_ACTIVE / APP_LIVE / AUTH_CONFIGURED`** — לאפליקציה
+בלבד. אומת מול התשתית החיה, לא מתוך תיעוד; הראיות ב־`artifacts/domain-cutover/`.
 
-האפליקציה והמפעיל חולקים origin/session, אך הרשאת המפעיל נשארת שרתית. מצב:
-`SELECTED / NOT_PURCHASED / DNS_NOT_CONFIGURED / AUTH_ALLOWLIST_NOT_CONFIGURED / NOT_DEPLOYED`.
-לפני טענת זמינות נדרשים רכישה, DNS, redirect, ‏Cloudflare Pages custom domains, ‏Supabase Auth
-redirect allowlist, התאמת origins וסשן, ואז smoke אנונימי ומחובר.
+| כתובת | מצב נמדד |
+|---|---|
+| `https://app.inplace.digital` | **חי.** ‏custom domain על פרויקט ה־Pages הקיים `supplyflow` (`status=active`, ‏`cert=active`), דרך `CNAME app → supplyflow-baq.pages.dev` proxied |
+| `https://app.inplace.digital/operator` | נתיב באותו origin. נטען, והגבול השרתי לא זז — `office` ו־`accountant` מנותבים לדשבורד שלהם |
+| `https://supplyflow-baq.pages.dev` | **נשאר חי** כ־origin לגלגול אחורה; מגיש את אותה פריסה בדיוק. אין הפניה למשתמש |
+| `https://inplace.digital` (apex) | **אינו מגיש דבר, במכוון.** רשומות ה־web של NameCheap שסריקת הייבוא משכה — `A → 192.64.119.114` ו־`CNAME www → parkingpage.namecheap.com` — נמחקו לפני שההאצלה הפכה סמכותית |
+| `https://www.inplace.digital` | **‏NXDOMAIN.** אין רשומה ואין הפניה |
+
+האזור מתארח ב־Cloudflare (‏id `82a4bdef…7b5a`, ‏`active`) עם `clyde.ns.cloudflare.com` ו־
+`rose.ns.cloudflare.com`; ‏RDAP מדווח את ההחלפה ב־`2026-08-23T22:07:04Z`. רשומות ה־`MX`/`TXT` של
+השורש הן מישור הדואר ולא נגעו — ראה §2. **אין לגזור מהן רשות להוסיף לשורש רשומת web.**
+
+התצורה שהשתנתה: ‏`ALLOWED_ORIGINS` הורחב תוספתית ל־
+`https://supplyflow-baq.pages.dev,http://localhost:5199,https://app.inplace.digital` (הסדר נשמר, אין
+`*`, מקור לא־מורשה עדיין נדחה); ‏`APP_BASE_URL` הועבר ל־`https://app.inplace.digital`; ב־Supabase
+Auth ה־Site URL היה `http://localhost:3000` ועכשיו `https://app.inplace.digital`, וה־allowlist
+**הורחב ולא הוחלף** — `https://supplyflow-baq.pages.dev/reset-password` נשאר לצד
+`https://app.inplace.digital/reset-password`, כדי שקישורי שחזור שכבר נשלחו ימשיכו לנחות.
+
+**לא נדרשה בנייה או פריסה חדשה.** ה־bundle אינו נושא כתובת בסיס: הלקוח בונה קישורים מוחלטים מ־
+`window.location.origin`, ולכן אותה פריסה בדיוק (`e851dbe8…`, ‏`15baeac`) נכונה לשתי הכתובות — אומת
+בהתאמת entry chunks. אין `VITE_APP_BASE_URL` בחוזה ולא נוסף.
+
+**שינוי שם פרויקט ה־Pages נשאר הכרעת בעלים פתוחה.** הפרויקט עדיין `supplyflow`; שינוי שם מזיז את
+`*.pages.dev` ושובר את ה־CNAME, את ה־allowlist ואת ה־smoke.

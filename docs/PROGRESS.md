@@ -1,5 +1,51 @@
 # PROGRESS — מצב נוכחי
 
+עודכן: 24.08.2026 — **‏`https://app.inplace.digital` חי ומאומת. תצורה בלבד: אין build חדש, אין פריסה חדשה ואין שינוי קוד.**
+
+> **מה חי עכשיו.** האזור `inplace.digital` (‏id `82a4bdef…7b5a`) **‏active** ב-Cloudflare אחרי שה-nameservers
+> ברשם הוחלפו ל-`clyde.ns.cloudflare.com`/`rose.ns.cloudflare.com` (‏RDAP `last changed`
+> ‏`2026-08-23T22:07:04Z`). ‏`app.inplace.digital` מחובר כ-custom domain לפרויקט ה-Pages **הקיים**
+> ‏`supplyflow` — `status=active`, ‏`cert=active` — דרך `CNAME app → supplyflow-baq.pages.dev`
+> ‏(proxied). ‏**לא נוצר עותק שני של האפליקציה:** ה-entry chunks בשתי הכתובות זהים
+> ‏(`index-Do0SLF1a.js`, ‏`client-DW-RYYJh.js`, ‏`format-BW5Zejev.js`, ‏`recharts-BhAWep5w.js`),
+> כלומר שתיהן מגישות את פריסת הייצור `e851dbe8-fcc6-450d-b5b8-d80aace67da0` ‏(`15baeac`).
+>
+> **למה לא נדרש build.** ה-frontend אינו נושא כתובת בסיס. הלקוח בונה כל קישור מוחלט מ-
+> `window.location.origin` — ‏`src/lib/supplierPortal.ts:11` ו-`src/pages/ForgotPassword.tsx:33` —
+> ולכן **אותו bundle בדיוק** נכון לשתי הכתובות. אין `VITE_APP_BASE_URL` בחוזה, ולא נוסף כזה.
+> הכתובת המוחלטת היחידה היא שרתית: הסוד `APP_BASE_URL`.
+>
+> **מה שונה בתצורה, ומה נשמר.** ‏`ALLOWED_ORIGINS` **הורחב תוספתית** ל-
+> `pages.dev, localhost:5199, app.inplace.digital` — הסדר נשמר כך ש-`allowed[0]` לא זז; מקור לא-מורשה
+> עדיין נדחה ואין `*`. ‏`APP_BASE_URL` הועבר ל-`https://app.inplace.digital`. ב-Supabase Auth ה-Site URL
+> **היה `http://localhost:3000`** — ברירת המחדל של Supabase, מעולם לא הוצבעה לייצור — והוא עכשיו
+> `https://app.inplace.digital`; ה-allowlist **הורחב ולא הוחלף**:
+> ‏`…pages.dev/reset-password` **נשאר** לצד `…app.inplace.digital/reset-password`, כדי שקישורי שחזור
+> שכבר נשלחו ימשיכו לנחות. אין wildcard.
+>
+> **‏`supplyflow-baq.pages.dev` נשאר חי** כ-origin לגלגול אחורה; לא נוצרה ממנו הפניה למשתמש.
+>
+> **ה-apex ו-`www` אינם מוגדרים — במכוון.** סריקת הייבוא של Cloudflare משכה את ברירות המחדל של
+> ‏NameCheap, ובהן `A inplace.digital → 192.64.119.114` (דף חניה) ו-`CNAME www → parkingpage.namecheap.com`,
+> שתיהן proxied. **שתיהן נמחקו לפני שההאצלה הפכה סמכותית**, ולכן `https://inplace.digital` ו-
+> `https://www.inplace.digital` אינם מגישים דבר (`www` מחזיר NXDOMAIN). רשומות ה-MX וה-SPF של השורש
+> **לא נגעו** — הן מישור הדואר, ומטופלות בנפרד.
+>
+> **אימות חי, לא הסקה.** ‏14 נתיבים על הכתובת החדשה מחזירים `200` ו-`/operator.html` מחזיר `308`
+> ל-`/operator`. ‏Playwright headed-equivalent מול הייצור עם שלוש זהויות הבדיקה המורשות: התחברות 3/3,
+> התנתקות 3/3, deep-link ל-`/suppliers` ורענון מלא שומרים סשן 3/3, **אפס** שגיאות console, ‏pageerror,
+> ‏CORS ו-HTTP≥400, אפס גלישה אופקית ב-1440×900 וב-390×844. בקשת השחזור **נלכדה ובוטלה לפני שיצאה**
+> והוכיחה `redirect_to=https://app.inplace.digital/reset-password` — בדיוק הערך שב-allowlist.
+> ‏`/accept-invite` ו-`/portal` מגישים את המסכים שלהם עם הודעת "קישור לא תקין", לא 404.
+> **גבול המפעיל לא זז:** ‏`office` ו-`accountant` מנותבים מ-`/operator` לדשבורד שלהם, ואותה סוויטה
+> בדיוק רצה כביקורת מול `pages.dev` והחזירה סיכום **זהה בייטית** — כלומר ההתנהגות היא של המוצר, לא
+> של המעבר.
+>
+> **מה שבמפורש לא קרה:** לא Resend, לא SMTP, לא Twilio, לא חיוב, לא Assistant, לא דגל, לא מיגרציה,
+> לא רשומה עסקית. ‏`RESEND_API_KEY` קיים אך הוא מפתח **מוגבל-שליחה** (`GET /domains` מחזיר `401
+> restricted_api_key`), ולכן מצב אימות הדומיין ב-Resend **אינו ידוע מכאן** ולא נטען עליו דבר.
+> ראיות: `artifacts/domain-cutover/`.
+
 עודכן: 23.08.2026 — **מועמד המיזוג דרך `0170` שוחרר ל־Production; Assistant וקריאות לספקי צד־שלישי נשארו כבויים.**
 
 > **מקור runtime וראיות:** ‏PR #97 תיקן את קריאת ה־flags האנונימית ומוזג כ־
