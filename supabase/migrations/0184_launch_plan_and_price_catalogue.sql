@@ -19,34 +19,35 @@
 --         "we do not count that".
 --
 --   WHAT THE x10 IS AND IS NOT. 0163 derived every page quota as `document quota x 20` from
---   `ExtractionLimits.max_ai_pages = 20` in worker/ocr/src/limits.py. #197 changes the COMMERCIAL
---   ratio to ten and says in the same row that the twenty stays as a separate per-FILE cap. So the
---   twenty is not superseded and is not touched here: it is still the truncation that stops one
---   document ever costing more than twenty billed pages, and it lives in the worker, not in this
---   catalogue. Only the plan-level pages:documents ratio moves.
+--   `ExtractionLimits.max_ai_pages = 20` in worker/ocr/src/limits.py, and its anchor enforced that
+--   multiple. #197 replaces the COMMERCIAL ratio with TEN, and this file supersedes 0163's
+--   derivation deliberately and re-asserts the new one below.
 --
---   AND THIS FILE DELIBERATELY DOES NOT APPLY THREE OF THE EIGHT DECIDED NUMBERS.
---   Three of them are REDUCTIONS against what is live today:
+--   What it does NOT do is touch the twenty. #197 says in the same row that the 20-AI-pages-per
+--   document cap remains a separate FILE limit, and it does: it is still the truncation in the
+--   worker that stops one document ever costing more than twenty billed pages. Removing it because
+--   the commercial ratio moved would delete a live cost control. Only the plan-level
+--   pages:documents ratio changes here.
+--
+--   THREE OF THE EIGHT ARE REDUCTIONS AGAINST WHAT IS LIVE, AND THE OWNER RULED THEY APPLY
+--   IMMEDIATELY AT CUTOVER (23.08.2026):
 --
 --       free  ocr_pages.monthly   500 -> 250
 --       pro   documents.monthly   300 -> 200
 --       pro   ocr_pages.monthly  6000 -> 2000
 --
---   #164 decides only Legacy->Free. #215 decides how a PRICE change reaches an existing
---   subscription (30 days' notice, effective at renewal). #216 decides tier and interval changes.
---   NOTHING decides when a reduced QUOTA reaches an organization already on that plan --
---   immediately, at the next usage period, or at renewal. Applying a reduction on a guess would
---   silently shrink what a paying customer may do, so under the orchestrator's ruling of 23.08.2026
---   the three reductions are RECORDED and NOT APPLIED. `private.plan_quota_decisions` holds every
---   decided figure with an `applied` flag and the reason it was withheld, and
---   `platform_plan_cutover_report()` names every organization that would be over the decided figure
---   the moment somebody decides to apply it.
+--   #164 decides only Legacy->Free, #215 decides how a PRICE change reaches an existing
+--   subscription and #216 decides tier and interval changes; none of them covers a reduced QUOTA
+--   reaching an organization already on that plan. The owner closed that question directly: it
+--   lands with the migration, not at the next renewal and not at the next usage period.
 --
---   THE CONSEQUENCE IS AN INTENTIONALLY MIXED CATALOGUE, and it is stated here rather than
---   discovered later: `basic` and `premium` are brand new, hold nobody, and land at the decided
---   x10 ratio; `free` and `pro` keep their live x20 rows until the owner decides the reduction
---   timing. The anchor below pins exactly that mixed state. What resolves it is one owner decision,
---   not a migration.
+--   That makes an organization that was compliant the minute before this migration over its ceiling
+--   the minute after, and it is the reason `platform_plan_cutover_report()` is a DELIVERABLE rather
+--   than a courtesy. It names, per organization, exactly who can no longer process a new document
+--   the moment this applies -- which limit they cross, what they have used in their current usage
+--   period, the ceiling they had and the ceiling they now have. `private.plan_quota_decisions`
+--   keeps every decided figure next to the figure it replaced, so "what changed and by how much" is
+--   answerable from the database rather than from this comment.
 --
 --   #196  No capability is gated by plan. Every boolean entitlement stays on for every rung; only
 --         volume differs. A boolean that is false for one plan would reverse #196 through a side
@@ -124,58 +125,55 @@ cross join private.entitlement_definitions definition
 where plan.plan_key in ('basic', 'premium')
 on conflict (plan_key, entitlement_key) do nothing;
 
--- ===== 2. The decided volumes (#197), recorded in full and applied only where they do not shrink
---          what a live organization already has =====
+-- ===== 2. The decided volumes (#197) =====
+-- The record is kept as well as applied. A migration that simply UPDATEs eight numbers leaves no
+-- way to answer "what was it before, and by how much did it move" -- which is exactly the question
+-- the cutover report has to answer per organization when a ceiling drops beneath somebody.
 create table private.plan_quota_decisions (
-  plan_key           text not null references subscription_plans(plan_key) on delete restrict,
-  entitlement_key    text not null,
-  decided_limit      numeric not null check (decided_limit >= 0),
-  decision_ref       text not null check (length(btrim(decision_ref)) > 0),
-  applied            boolean not null,
-  -- Null exactly when the figure was applied. A withheld number without a stated reason would be
-  -- indistinguishable from a number somebody forgot.
-  withheld_reason    text,
-  recorded_at        timestamptz not null default now(),
+  plan_key        text not null references subscription_plans(plan_key) on delete restrict,
+  entitlement_key text not null,
+  decided_limit   numeric not null check (decided_limit >= 0),
+  -- What the plan allowed immediately before this migration. Null for a rung that did not exist,
+  -- which is a different thing from a rung that allowed nothing.
+  previous_limit  numeric check (previous_limit >= 0),
+  previous_unlimited boolean not null default false,
+  decision_ref    text not null check (length(btrim(decision_ref)) > 0),
+  recorded_at     timestamptz not null default now(),
   primary key (plan_key, entitlement_key),
   constraint plan_quota_decisions_definition_fk
     foreign key (entitlement_key)
-    references private.entitlement_definitions(entitlement_key) on delete restrict,
-  constraint plan_quota_decisions_reason_shape check ((withheld_reason is null) = applied)
+    references private.entitlement_definitions(entitlement_key) on delete restrict
 );
 revoke all on table private.plan_quota_decisions
   from public, anon, authenticated, service_role;
 
 comment on table private.plan_quota_decisions is
-  'Every figure #197 decided, whether or not it is live (0184). Three of the eight are reductions '
-  'against an existing plan and no decision says when a reduction reaches an organization already '
-  'on it, so they are recorded here with the reason they were withheld rather than applied on a '
-  'guess or dropped on the floor.';
+  'Every figure #197 decided, beside the figure it replaced (0184). Three of the eight are '
+  'reductions and the owner ruled they apply at cutover, so this table is how the size of each '
+  'move stays answerable from the database rather than from a migration comment.';
 
 insert into private.plan_quota_decisions
-  (plan_key, entitlement_key, decided_limit, decision_ref, applied, withheld_reason)
-values
-  ('free',    'documents.monthly',   25, 'OPEN-DECISIONS #197', true,  null),
-  ('basic',   'documents.monthly',   50, 'OPEN-DECISIONS #197', true,  null),
-  ('premium', 'documents.monthly',  500, 'OPEN-DECISIONS #197', true,  null),
-  ('basic',   'ocr_pages.monthly',  500, 'OPEN-DECISIONS #197', true,  null),
-  ('premium', 'ocr_pages.monthly', 5000, 'OPEN-DECISIONS #197', true,  null),
-  ('pro',     'documents.monthly',  200, 'OPEN-DECISIONS #197', false,
-   'A reduction from the live 300. No decision states when a reduced quota reaches an organization '
-   'already on the plan -- immediately, at the next usage period, or at renewal (#215 covers price, '
-   '#216 covers tier and interval, neither covers quota).'),
-  ('free',    'ocr_pages.monthly',  250, 'OPEN-DECISIONS #197', false,
-   'A reduction from the live 500, withheld for the same undecided timing.'),
-  ('pro',     'ocr_pages.monthly', 2000, 'OPEN-DECISIONS #197', false,
-   'A reduction from the live 6000, withheld for the same undecided timing.');
+  (plan_key, entitlement_key, decided_limit, previous_limit, previous_unlimited, decision_ref)
+select decided.plan_key, decided.entitlement_key, decided.quota,
+       existing.numeric_limit, coalesce(existing.unlimited, false), 'OPEN-DECISIONS #197'
+from (values
+  ('free',    'documents.monthly',   25),
+  ('basic',   'documents.monthly',   50),
+  ('pro',     'documents.monthly',  200),
+  ('premium', 'documents.monthly',  500),
+  ('free',    'ocr_pages.monthly',  250),
+  ('basic',   'ocr_pages.monthly',  500),
+  ('pro',     'ocr_pages.monthly', 2000),
+  ('premium', 'ocr_pages.monthly', 5000)
+) as decided(plan_key, entitlement_key, quota)
+left join plan_entitlements existing
+  on existing.plan_key = decided.plan_key
+ and existing.entitlement_key = decided.entitlement_key;
 
--- Only the applied half moves. `basic` and `premium` are new and hold nobody; `free`'s document
--- quota is already the decided figure, so this statement is a no-op for it and is written anyway so
--- the applied set is one list rather than a list minus a footnote.
 update plan_entitlements
    set unlimited = false, numeric_limit = decision.decided_limit, updated_at = now()
 from private.plan_quota_decisions decision
-where decision.applied
-  and plan_entitlements.plan_key = decision.plan_key
+where plan_entitlements.plan_key = decision.plan_key
   and plan_entitlements.entitlement_key = decision.entitlement_key;
 
 -- ===== 3. Price catalogues (#195, #208, #215) =====
@@ -245,19 +243,15 @@ values
 alter table plan_price_catalogues enable row level security;
 alter table plan_prices           enable row level security;
 
--- Same posture as the plan catalogue itself (0154 / 0169): the price list is public and read-only,
--- because a pricing page that hardcodes figures is the drift ARCHITECTURE.md forbids. There is
--- nothing tenant-specific and no provider identifier in either table, by construction.
+-- NOT granted to a browser role, deliberately, and this is the one place it is worth arguing.
+-- 0154/0169 made the PLAN catalogue anon-readable so a pricing page would not hardcode figures,
+-- and that instinct is right -- but these two tables carry more than a price list.
+-- `notice_published_at` is #215 price-change-notice operations timing, `effective_from` and
+-- `active` are catalogue lifecycle, and a prospect who can read them is reading our calendar. The
+-- public page therefore goes through a read model that returns the columns a price list actually
+-- consists of; 0186 defines it.
 revoke all on table plan_price_catalogues from public, anon, authenticated;
 revoke all on table plan_prices           from public, anon, authenticated;
-grant select on table plan_price_catalogues to anon, authenticated;
-grant select on table plan_prices           to anon, authenticated;
-create policy plan_price_catalogues_public_select on plan_price_catalogues
-  for select to anon, authenticated using (active);
-create policy plan_prices_public_select on plan_prices
-  for select to anon, authenticated using (exists (
-    select 1 from plan_price_catalogues catalogue
-    where catalogue.catalogue_version = plan_prices.catalogue_version and catalogue.active));
 
 comment on table plan_price_catalogues is
   'Versioned, pre-tax price catalogues (0184, #195/#208/#215). One per billing-country scope: '
@@ -267,40 +261,19 @@ comment on table plan_prices is
   'What each plan costs in a catalogue version (0184, #195). The annual row buys twelve months at '
   'ten months'' price; Business has no row at all, because its answer is a conversation (#201).';
 
--- #208 as a function rather than a comment: the country comes from the MoR, and this is the one
--- place that turns it into a catalogue scope.
+-- #208 as a function rather than a comment: the country comes from the merchant of record, and
+-- this is the one place that turns it into a catalogue scope.
+--
+-- It classifies a COUNTRY -- the verified fact -- and never decides which country anybody is in.
+-- No browser role gets execute: nothing in a browser holds a verified country to classify, and a
+-- pricing surface that accepts a scope from its caller is a free currency picker with a different
+-- name, which is the half of #208 that is easiest to build by accident. The customer-facing reads
+-- in 0186 are SECURITY DEFINER and call this internally after reading the verified country.
 create or replace function public.billing_catalogue_scope(p_country_code text)
 returns text language sql immutable as $$
   select case when upper(btrim(coalesce(p_country_code, ''))) = 'IL' then 'IL' else 'ROW' end
 $$;
-grant execute on function public.billing_catalogue_scope(text) to anon, authenticated;
-
--- The public pricing read model. It takes the scope as an argument and does NOT guess one:
--- guessing is precisely what #208 forbids, and a server that inferred a currency from a request
--- would be inventing the thing the merchant of record is supposed to verify.
-create or replace function public.plan_pricing(p_billing_country_scope text)
-returns table (
-  plan_key text, plan_label text, tier_order integer,
-  billing_interval text, amount numeric, currency text, months_covered integer,
-  tax_mode text, catalogue_version text
-)
-language sql stable as $$
-  select plan.plan_key, plan.label, plan.tier_order,
-         price.billing_interval, price.amount, catalogue.currency, price.months_covered,
-         catalogue.tax_mode, catalogue.catalogue_version
-  from plan_price_catalogues catalogue
-  join plan_prices price on price.catalogue_version = catalogue.catalogue_version
-  join subscription_plans plan on plan.plan_key = price.plan_key
-  where catalogue.active and plan.active
-    and catalogue.billing_country_scope = p_billing_country_scope
-  order by plan.tier_order, price.billing_interval
-$$;
-grant execute on function public.plan_pricing(text) to anon, authenticated;
-
-comment on function public.plan_pricing(text) is
-  'Public, pre-tax pricing for one billing-country scope (0184). Takes the scope rather than '
-  'inferring it: #208 forbids choosing a currency from an IP address or a free picker, and '
-  'Business carries no price row at all (#201).';
+revoke all on function public.billing_catalogue_scope(text) from public, anon, authenticated;
 
 -- ===== 4. The billing period ledger (#215, #216, #223, #242) =====
 -- A BILLING period is what the customer paid for. A USAGE period is what quotas are measured in,
@@ -395,11 +368,18 @@ $$;
 revoke all on function private.record_billing_period(
   uuid, text, text, text, timestamptz, timestamptz, text, uuid) from public, anon, authenticated;
 
--- ===== 5. The cutover report (#164, and the quota reduction #197 causes) =====
+-- ===== 5. The cutover report (#164, and the quota reduction #197 applies) =====
 -- One report answers both questions, because they are the same question: for every organization,
--- what plan will it be held to after this migration, and is it ALREADY past that plan's ceiling in
--- the period it is currently in? #164 demands exactly this for Legacy; #197 shrinks two live
--- quotas and deserves nothing less.
+-- what plan is it held to after this migration, and is it ALREADY past that plan's ceiling in the
+-- usage period it is currently in? #164 demands exactly this for Legacy. #197 needs it just as
+-- badly and for more organizations: three ceilings drop, so an organization that was compliant the
+-- minute before this migration can be over quota the minute after, on `free` or `pro`, without
+-- having done anything.
+--
+-- It is per-organization and per-metric on purpose. An aggregate count answers "how bad is it";
+-- the owner needs "who", "which limit", "how much have they used", "what was the ceiling" and
+-- "what is it now" -- which is one row per organization per metered quota, and is what this
+-- returns.
 create or replace function private.plan_cutover_rows()
 returns table (
   org_id uuid, org_name text, org_status text,
@@ -407,7 +387,8 @@ returns table (
   metric_key text, metric_label text,
   used numeric, target_limit numeric, target_unlimited boolean, target_measured boolean,
   over_target boolean, writes_blocked boolean,
-  decided_limit numeric, decision_applied boolean, over_decided boolean,
+  previous_limit numeric, previous_unlimited boolean, ceiling_dropped boolean,
+  newly_over_target boolean,
   period_start timestamptz, period_end timestamptz
 )
 language sql stable security definer set search_path = public as $$
@@ -428,12 +409,21 @@ language sql stable security definer set search_path = public as $$
          -- An organization the write guard already refuses is moved through the operator handshake
          -- rather than skipped, but the run should still say how many took that path.
          org.status::text <> 'active',
-         decision.decided_limit,
-         decision.applied,
-         -- The second question this report answers: if the owner decides to apply a withheld
-         -- reduction, who is already past it on the day the decision lands?
-         decision.decided_limit is not null
-           and coalesce(counter.quantity, 0) > decision.decided_limit,
+         decision.previous_limit,
+         decision.previous_unlimited,
+         -- Did this migration lower the ceiling for this plan and metric at all?
+         decision.plan_key is not null
+           and (decision.previous_unlimited
+                or (decision.previous_limit is not null
+                    and decision.previous_limit > decision.decided_limit)),
+         -- The row the owner is actually looking for: compliant a minute ago, over quota now,
+         -- purely because the ceiling moved underneath them.
+         not target.unlimited
+           and target.numeric_limit is not null
+           and coalesce(counter.quantity, 0) > target.numeric_limit
+           and (decision.previous_unlimited
+                or (decision.previous_limit is not null
+                    and coalesce(counter.quantity, 0) <= decision.previous_limit)),
          period.period_start,
          period.period_end
   from organizations org
@@ -463,7 +453,8 @@ returns table (
   metric_key text, metric_label text,
   used numeric, target_limit numeric, target_unlimited boolean, target_measured boolean,
   over_target boolean, writes_blocked boolean,
-  decided_limit numeric, decision_applied boolean, over_decided boolean,
+  previous_limit numeric, previous_unlimited boolean, ceiling_dropped boolean,
+  newly_over_target boolean,
   period_start timestamptz, period_end timestamptz
 )
 language sql stable security definer set search_path = public as $$
@@ -622,20 +613,43 @@ begin
     raise exception '0184: legacy became selectable again -- #164 retires it, it does not revive it';
   end if;
 
-  -- THE INTENDED MIXED STATE, pinned exactly. This is not the tidy invariant 0163 had, and pinning
-  -- a tidy one would either fail or force the reduction this migration deliberately withheld. Every
-  -- number below is either the decided figure (new rungs) or the untouched live figure (existing
-  -- rungs), and the pin says which is which so a later reader cannot mistake the mixture for drift.
+  -- #197 as stated, and #197's ratio re-asserted at TEN in place of 0163's twenty. A plan that
+  -- limits documents must limit pages at exactly ten times; a plan that limits neither must limit
+  -- neither, or the page quota silently becomes the only ceiling.
+  for v_plan in
+    select docs.plan_key,
+           docs.unlimited      as docs_unlimited,
+           docs.numeric_limit  as docs_limit,
+           pages.unlimited     as pages_unlimited,
+           pages.numeric_limit as pages_limit
+    from plan_entitlements docs
+    join plan_entitlements pages on pages.plan_key = docs.plan_key
+    where docs.entitlement_key = 'documents.monthly'
+      and pages.entitlement_key = 'ocr_pages.monthly'
+  loop
+    if v_plan.docs_unlimited then
+      if not v_plan.pages_unlimited then
+        raise exception '0184: plan % limits pages but not documents', v_plan.plan_key;
+      end if;
+    elsif v_plan.pages_unlimited
+       or v_plan.pages_limit is distinct from v_plan.docs_limit * 10 then
+      raise exception '0184: plan % pages (%) is not its documents (%) times ten',
+        v_plan.plan_key, v_plan.pages_limit, v_plan.docs_limit;
+    end if;
+  end loop;
+
+  -- The eight decided figures, named one at a time rather than counted, so a wrong number fails
+  -- here and not in front of a customer.
   select count(*) into v_count
   from (values
-    ('free',    'documents.monthly',   25),   -- decided and live agree
-    ('free',    'ocr_pages.monthly',  500),   -- live; decided 250 withheld
-    ('basic',   'documents.monthly',   50),   -- decided, new rung
-    ('basic',   'ocr_pages.monthly',  500),   -- decided, new rung
-    ('pro',     'documents.monthly',  300),   -- live; decided 200 withheld
-    ('pro',     'ocr_pages.monthly', 6000),   -- live; decided 2000 withheld
-    ('premium', 'documents.monthly',  500),   -- decided, new rung
-    ('premium', 'ocr_pages.monthly', 5000)    -- decided, new rung
+    ('free',    'documents.monthly',   25),
+    ('free',    'ocr_pages.monthly',  250),
+    ('basic',   'documents.monthly',   50),
+    ('basic',   'ocr_pages.monthly',  500),
+    ('pro',     'documents.monthly',  200),
+    ('pro',     'ocr_pages.monthly', 2000),
+    ('premium', 'documents.monthly',  500),
+    ('premium', 'ocr_pages.monthly', 5000)
   ) as expected(plan_key, entitlement_key, quota)
   join plan_entitlements entitlement
     on entitlement.plan_key = expected.plan_key
@@ -643,7 +657,7 @@ begin
    and not entitlement.unlimited
    and entitlement.numeric_limit = expected.quota;
   if v_count <> 8 then
-    raise exception '0184: only % of the eight pinned metered quotas hold their expected value', v_count;
+    raise exception '0184: only % of the eight decided metered quotas landed', v_count;
   end if;
 
   -- Business and legacy still stop counting: #197 and #201 make Business contractual, and a number
@@ -657,43 +671,29 @@ begin
     raise exception '0184: a metered quota was applied to a plan whose answer is a conversation';
   end if;
 
-  -- Nothing was withheld except a reduction. A withheld INCREASE would be a customer quietly kept
-  -- below what the owner decided they get, which is the opposite failure and just as silent.
-  for v_plan in
-    select decision.plan_key, decision.entitlement_key, decision.decided_limit,
-           entitlement.numeric_limit as live_limit, entitlement.unlimited as live_unlimited
-    from private.plan_quota_decisions decision
-    join plan_entitlements entitlement
-      on entitlement.plan_key = decision.plan_key
-     and entitlement.entitlement_key = decision.entitlement_key
-    where not decision.applied
-  loop
-    if v_plan.live_unlimited or v_plan.live_limit is null
-       or v_plan.live_limit <= v_plan.decided_limit then
-      raise exception
-        '0184: % / % was withheld but its live value (%) is not above the decided one (%)',
-        v_plan.plan_key, v_plan.entitlement_key, v_plan.live_limit, v_plan.decided_limit;
-    end if;
-  end loop;
-
-  -- Every applied decision really is live, or the record and the runtime disagree about what a
-  -- customer may do.
+  -- Every decision reached the catalogue, and every one of them is on record beside the figure it
+  -- replaced. A decision applied without a record leaves the cutover report unable to say what
+  -- moved; a record without the application is a number nobody is actually held to.
   select count(*) into v_count
   from private.plan_quota_decisions decision
   join plan_entitlements entitlement
     on entitlement.plan_key = decision.plan_key
    and entitlement.entitlement_key = decision.entitlement_key
-  where decision.applied
-    and (entitlement.unlimited or entitlement.numeric_limit is distinct from decision.decided_limit);
+  where entitlement.unlimited
+     or entitlement.numeric_limit is distinct from decision.decided_limit;
   if v_count > 0 then
-    raise exception '0184: % applied quota decision(s) did not reach the catalogue', v_count;
+    raise exception '0184: % decided quota(s) did not reach the catalogue', v_count;
   end if;
-
-  -- All eight of #197's figures are on record whether or not they are live: a decision dropped on
-  -- the floor is indistinguishable from one nobody took.
   if (select count(*) from private.plan_quota_decisions) <> 8 then
     raise exception '0184: #197 decided eight figures and % are recorded',
       (select count(*) from private.plan_quota_decisions);
+  end if;
+
+  -- The three reductions are recorded AS reductions, so the report can name who they drop beneath.
+  select count(*) into v_count from private.plan_quota_decisions
+  where previous_limit is not null and previous_limit > decided_limit;
+  if v_count <> 3 then
+    raise exception '0184: % of the three expected ceiling reductions are on record', v_count;
   end if;
 
   -- #196: volume differs, capability does not. A boolean that is false anywhere would gate a

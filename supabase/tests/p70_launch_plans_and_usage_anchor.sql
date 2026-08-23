@@ -65,18 +65,15 @@ select pg_temp.p70_assert(
   'the anonymous catalogue exposed a retired plan');
 reset role;
 
--- ===== 2. Volumes: what is live, and what was decided but withheld (#197) =====
--- Pinned as the deliberately MIXED state 0184 landed: the two new rungs at the decided #197
--- figures, the two existing rungs untouched because every remaining #197 figure is a REDUCTION and
--- no decision says when a reduction reaches an organization already on the plan.
+-- ===== 2. Volumes (#197), applied in full at cutover =====
 select pg_temp.p70_assert(
   (select count(*) from (values
      ('free',    'documents.monthly',   25),
-     ('free',    'ocr_pages.monthly',  500),
+     ('free',    'ocr_pages.monthly',  250),
      ('basic',   'documents.monthly',   50),
      ('basic',   'ocr_pages.monthly',  500),
-     ('pro',     'documents.monthly',  300),
-     ('pro',     'ocr_pages.monthly', 6000),
+     ('pro',     'documents.monthly',  200),
+     ('pro',     'ocr_pages.monthly', 2000),
      ('premium', 'documents.monthly',  500),
      ('premium', 'ocr_pages.monthly', 5000)) as expected(plan_key, entitlement_key, quota)
    join plan_entitlements entitlement
@@ -84,27 +81,36 @@ select pg_temp.p70_assert(
     and entitlement.entitlement_key = expected.entitlement_key
     and not entitlement.unlimited
     and entitlement.numeric_limit = expected.quota) = 8,
-  'the metered quotas are not the eight values 0184 pinned');
+  'the metered quotas are not the eight figures #197 decided');
+-- The ratio is ten, superseding 0163's twenty as the COMMERCIAL multiple. The per-document
+-- 20-AI-page file cap is a different limit, lives in the worker, and is untouched.
+select pg_temp.p70_assert(
+  not exists (
+    select 1 from plan_entitlements docs
+    join plan_entitlements pages
+      on pages.plan_key = docs.plan_key and pages.entitlement_key = 'ocr_pages.monthly'
+    where docs.entitlement_key = 'documents.monthly'
+      and (case when docs.unlimited then not pages.unlimited
+                else pages.unlimited
+                     or pages.numeric_limit is distinct from docs.numeric_limit * 10
+           end)),
+  'a plan page quota is not its document quota times ten');
 select pg_temp.p70_assert(
   (select count(*) from private.plan_quota_decisions) = 8
-  and (select count(*) from private.plan_quota_decisions where not applied) = 3,
-  '#197 decided eight figures with three withheld, and the record no longer says so');
--- A withheld figure must always be BELOW the live one. A withheld increase would be a customer
--- quietly kept under what the owner decided they get.
+  and (select count(*) from private.plan_quota_decisions
+       where previous_limit is not null and previous_limit > decided_limit) = 3,
+  'the #197 record does not hold eight figures with the three ceiling reductions it made');
+-- Every decided figure actually reached the catalogue: a record without the application is a
+-- number nobody is held to.
 select pg_temp.p70_assert(
   not exists (
     select 1 from private.plan_quota_decisions decision
     join plan_entitlements entitlement
       on entitlement.plan_key = decision.plan_key
      and entitlement.entitlement_key = decision.entitlement_key
-    where not decision.applied
-      and (entitlement.unlimited or entitlement.numeric_limit is null
-           or entitlement.numeric_limit <= decision.decided_limit)),
-  'a withheld quota decision was not a reduction');
-select pg_temp.p70_assert(
-  not exists (select 1 from private.plan_quota_decisions
-              where not applied and nullif(btrim(coalesce(withheld_reason, '')), '') is null),
-  'a quota figure was withheld without a stated reason');
+    where entitlement.unlimited
+       or entitlement.numeric_limit is distinct from decision.decided_limit),
+  'a decided quota did not reach the catalogue');
 
 -- #196: tiers differ by volume only. A boolean that is false anywhere gates a capability by plan.
 select pg_temp.p70_assert(
@@ -183,17 +189,15 @@ select pg_temp.p70_assert(
 
 select set_config('request.jwt.claim.role', 'anon', true);
 set local role anon;
-select pg_temp.p70_assert(
-  (select count(*) from public.plan_pricing('IL')) = 8
-  and (select count(*) from public.plan_pricing('ROW')) = 8,
-  'the anonymous pricing read did not return four plans on two intervals');
-select pg_temp.p70_assert(
-  (select count(*) from public.plan_pricing('IL') where currency <> 'ILS') = 0
-  and (select count(*) from public.plan_pricing('ROW') where currency <> 'USD') = 0,
-  'a pricing scope returned the other scope''s currency');
-select pg_temp.p70_assert(
-  (select count(*) from public.plan_pricing('IL') where plan_key = 'business') = 0,
-  'the public pricing read exposed a Business price');
+-- The anonymous surface is the read model, never the base tables: those carry #215 price-change
+-- notice metadata, and a prospect who can read when a change was announced is reading our calendar.
+do $$
+begin
+  perform (select count(*) from public.plan_prices);
+  raise exception 'expected an anonymous read of the price base table to be refused';
+exception when insufficient_privilege then null;
+end
+$$;
 do $$
 begin
   update public.plan_prices set amount = 1;
@@ -451,12 +455,26 @@ select pg_temp.p70_assert(
        where org_id = '70000000-0000-4000-8000-000000000002'
          and metric_key = 'documents.monthly'),
   'the dry run reported a tenant as over quota that has used nothing');
--- The withheld reductions are visible in the same report, so the owner decides on evidence.
+-- The report carries the ceiling that was replaced beside the one now in force, per organization
+-- and per metric, so the owner can see the size of every move rather than only its result.
 select pg_temp.p70_assert(
-  (select decided_limit from public.platform_plan_cutover_report()
+  (select previous_limit from public.platform_plan_cutover_report()
    where org_id = '70000000-0000-4000-8000-000000000001'
-     and metric_key = 'documents.monthly') is not null,
-  'the report does not carry the decided figure alongside the live one');
+     and metric_key = 'ocr_pages.monthly') = 500
+  and (select target_limit from public.platform_plan_cutover_report()
+   where org_id = '70000000-0000-4000-8000-000000000001'
+     and metric_key = 'ocr_pages.monthly') = 250,
+  'the report does not carry the ceiling that was replaced beside the one now in force');
+select pg_temp.p70_assert(
+  (select ceiling_dropped from public.platform_plan_cutover_report()
+   where org_id = '70000000-0000-4000-8000-000000000001'
+     and metric_key = 'ocr_pages.monthly'),
+  'the report does not flag a metric whose ceiling this migration lowered');
+select pg_temp.p70_assert(
+  not (select ceiling_dropped from public.platform_plan_cutover_report()
+       where org_id = '70000000-0000-4000-8000-000000000001'
+         and metric_key = 'documents.monthly'),
+  'the report flagged a ceiling drop on a metric whose figure did not move');
 select pg_temp.p70_assert(
   not exists (select 1 from public.platform_plan_cutover_report() where target_plan_key = 'legacy'),
   'the report proposed moving somebody ONTO the retired plan');
@@ -576,6 +594,424 @@ select pg_temp.p70_assert(
   (select amount from organization_billing_periods
    where org_id = '70000000-0000-4000-8000-000000000001' and billing_interval = 'yearly') = 4490,
   'the billing period did not take its price from the catalogue version it names');
+
+-- ===== 9. The client contract exists (the false-green rule) =====
+-- A client suite that mocks a server function is green whether or not the function was ever
+-- written. These assertions are the thing that would have caught eight mocked contracts meeting
+-- zero real ones, and they name each signature rather than counting a catalogue -- a census would
+-- also see the objects a concurrent, unmerged migration happens to have added to this container.
+do $$
+declare
+  v_signature text;
+begin
+  foreach v_signature in array array[
+    'public.get_public_plan_catalogue()',
+    'public.get_public_plan_quotas()',
+    'public.my_subscription()',
+    'public.my_upgrade_options()',
+    'public.my_referral_code()',
+    'public.my_referral_bonus()',
+    'public.service_bind_referral(uuid,text)',
+    'public.platform_referral_ledger(uuid)',
+    'public.platform_revoke_referral_grant(uuid,text,text)',
+    'public.platform_plan_cutover_report()',
+    'public.platform_legacy_cutover(text)',
+    'public.organization_usage_snapshot()',
+    'public.my_entitlements()'
+  ] loop
+    if to_regprocedure(v_signature) is null then
+      raise exception 'P70: the published client contract % does not exist', v_signature;
+    end if;
+  end loop;
+end
+$$;
+
+-- ===== 10. #208: a caller may not choose its own currency =====
+-- The regression this exists to stop: a pricing read that TAKES a scope and is granted to a
+-- browser role is a free currency picker with a different name, and the answer comes back wearing
+-- the authority of a server response. The guard is the signature, not a convention.
+select pg_temp.p70_assert(
+  to_regprocedure('public.plan_pricing(text)') is null,
+  'a pricing function that accepts a caller-supplied scope still exists');
+select pg_temp.p70_assert(
+  not exists (
+    select 1 from information_schema.role_table_grants
+    where table_schema = 'public'
+      and table_name in ('plan_price_catalogues', 'plan_prices')
+      and grantee in ('anon', 'authenticated')),
+  'a browser role can still read the price tables, including the #215 notice metadata');
+-- The `my_<noun>()` rule, enforced the way p51:78-85 already enforces it for my_entitlements():
+-- one named function, one property. The prefix is not decoration -- it marks a read that takes NO
+-- parameter and therefore cannot be aimed at another tenant, and a parameter is a thing an
+-- attacker can change. This is the machine-checked form of the defect that put a caller-supplied
+-- scope on a pricing function.
+select pg_temp.p70_assert(
+  (select pronargs from pg_proc procedure
+    join pg_namespace space on space.oid = procedure.pronamespace
+   where space.nspname = 'public' and procedure.proname = 'my_subscription') = 0,
+  'my_subscription() grew a parameter -- the tenant must come from auth_org() alone');
+select pg_temp.p70_assert(
+  (select pronargs from pg_proc procedure
+    join pg_namespace space on space.oid = procedure.pronamespace
+   where space.nspname = 'public' and procedure.proname = 'my_upgrade_options') = 0,
+  'my_upgrade_options() grew a parameter -- the tenant must come from auth_org() alone');
+select pg_temp.p70_assert(
+  (select pronargs from pg_proc procedure
+    join pg_namespace space on space.oid = procedure.pronamespace
+   where space.nspname = 'public' and procedure.proname = 'my_referral_code') = 0,
+  'my_referral_code() grew a parameter -- the tenant must come from auth_org() alone');
+select pg_temp.p70_assert(
+  (select pronargs from pg_proc procedure
+    join pg_namespace space on space.oid = procedure.pronamespace
+   where space.nspname = 'public' and procedure.proname = 'my_referral_bonus') = 0,
+  'my_referral_bonus() grew a parameter -- the tenant must come from auth_org() alone');
+-- The public catalogue reads take nothing either, for the #208 reason rather than the tenant one:
+-- an argument on an anon-executable pricing read is a free currency picker with a different name.
+select pg_temp.p70_assert(
+  (select pronargs from pg_proc procedure
+    join pg_namespace space on space.oid = procedure.pronamespace
+   where space.nspname = 'public' and procedure.proname = 'get_public_plan_catalogue') = 0,
+  'get_public_plan_catalogue() grew a parameter -- a caller could then name its own currency');
+select pg_temp.p70_assert(
+  (select pronargs from pg_proc procedure
+    join pg_namespace space on space.oid = procedure.pronamespace
+   where space.nspname = 'public' and procedure.proname = 'get_public_plan_quotas') = 0,
+  'get_public_plan_quotas() grew a parameter');
+
+select set_config('request.jwt.claim.role', 'anon', true);
+set local role anon;
+-- The anonymous page gets BOTH catalogues, each labelled, asserting nothing about the viewer.
+select pg_temp.p70_assert(
+  (select count(*) from public.get_public_plan_catalogue()) = 8
+  and (select count(distinct currency) from public.get_public_plan_catalogue()) = 2,
+  'the anonymous catalogue does not return both currencies for the four public plans');
+select pg_temp.p70_assert(
+  (select count(*) from public.get_public_plan_catalogue() where plan_key = 'business') = 0
+  and (select count(*) from public.get_public_plan_quotas() where plan_key = 'business') = 0,
+  'Business reached an anonymous surface -- `דברו איתנו` is the whole public answer (#201)');
+-- #200: the storage ceilings are internal safety limits and are never published.
+select pg_temp.p70_assert(
+  (select count(*) from public.get_public_plan_quotas() where entitlement_key = 'storage.bytes') = 0,
+  'the internal storage ceiling was published as a plan quota');
+-- #199 / DEBT §56: an entitlement nothing counts is reported unmeasured AND blank, so a caller
+-- that forgets to read the flag still cannot publish a promise.
+select pg_temp.p70_assert(
+  not exists (
+    select 1 from public.get_public_plan_quotas()
+    where not measured and (unlimited or numeric_limit is not null)),
+  'an unmeasured entitlement was published with a value attached');
+select pg_temp.p70_assert(
+  (select measured from public.get_public_plan_quotas()
+   where plan_key = 'basic' and entitlement_key = 'documents.monthly')
+  and (select numeric_limit from public.get_public_plan_quotas()
+   where plan_key = 'basic' and entitlement_key = 'documents.monthly') = 50,
+  'a decided, counted quota was not published');
+reset role;
+
+-- An authenticated tenant with no verified billing country is told it has none, rather than being
+-- quoted in a currency somebody guessed for it.
+select pg_temp.p70_as('71000000-0000-4000-8000-000000000001');
+set local role authenticated;
+select pg_temp.p70_assert(
+  (select billing_country_verified from public.my_subscription()) = false
+  and (select catalogue_currency from public.my_subscription()) is null,
+  'an unverified billing country produced a currency anyway');
+select pg_temp.p70_assert(
+  (select count(*) from public.my_upgrade_options()) = 5
+  and (select contact_sales from public.my_upgrade_options()
+       where plan_key = 'business')
+  and (select monthly_amount from public.my_upgrade_options()
+       where plan_key = 'business') is null,
+  'the upgrade surface does not show all five rungs with Business priceless');
+select pg_temp.p70_assert(
+  not exists (select 1 from public.my_upgrade_options() where currency is not null),
+  'an upgrade price appeared without a verified billing country');
+reset role;
+
+-- Once a signed provider event has verified a country, the currency follows from it -- derived,
+-- never asked for.
+select private.record_billing_country(
+  '70000000-0000-4000-8000-000000000001', 'IL', now(), null);
+select pg_temp.p70_as('71000000-0000-4000-8000-000000000001');
+set local role authenticated;
+select pg_temp.p70_assert(
+  (select catalogue_currency from public.my_subscription()) = 'ILS'
+  and (select billing_country from public.my_subscription()) = 'IL',
+  'a verified billing country did not select its catalogue');
+select pg_temp.p70_assert(
+  (select monthly_amount from public.my_upgrade_options() where plan_key = 'pro')
+    = 249,
+  'the upgrade surface did not price from the verified country''s catalogue');
+reset role;
+
+-- ===== 11. Referral (#212, #227, #228, #229, #230) =====
+-- Clear the impersonation first. audit_row_change (0020:198) derives the acting organization from
+-- the JWT, and creating a tenant while wearing another tenant's identity is refused as a
+-- cross-tenant audit source -- the same trap p52 documents for its own fixture.
+select pg_temp.p70_as(null);
+
+insert into public.organizations (id, name, status, created_at) values
+  ('70000000-0000-4000-8000-000000000005', 'P70 referrer', 'active', now() - interval '300 days'),
+  ('70000000-0000-4000-8000-000000000006', 'P70 referred', 'active', now() - interval '10 days'),
+  ('70000000-0000-4000-8000-000000000007', 'P70 twin-email tenant', 'active', now() - interval '9 days');
+
+insert into auth.users (id, email, email_confirmed_at) values
+  ('71000000-0000-4000-8000-000000000005', 'owner-referrer-p70@example.test', now()),
+  ('71000000-0000-4000-8000-000000000006', 'owner-referred-p70@example.test', now()),
+  -- The same address in different case. `auth.users` uniqueness is on the RAW email, so these are
+  -- two legitimate accounts as far as the database is concerned -- and they are the same person as
+  -- far as #228 is concerned, which is exactly why the block compares case-insensitively.
+  ('71000000-0000-4000-8000-000000000007', 'Owner-Referrer-P70@example.test', now());
+
+insert into public.profiles (id, org_id, full_name, role) values
+  ('71000000-0000-4000-8000-000000000005', '70000000-0000-4000-8000-000000000005', 'P70 referrer owner', 'owner'),
+  ('71000000-0000-4000-8000-000000000006', '70000000-0000-4000-8000-000000000006', 'P70 referred owner', 'owner'),
+  ('71000000-0000-4000-8000-000000000007', '70000000-0000-4000-8000-000000000007', 'P70 twin owner', 'owner');
+
+-- Every organization can share. A code that does not exist cannot be given away.
+select pg_temp.p70_assert(
+  (select count(*) from private.referral_codes
+   where org_id in ('70000000-0000-4000-8000-000000000005',
+                    '70000000-0000-4000-8000-000000000006')) = 2,
+  'a newly created organization has no referral code to share');
+
+select set_config('p70.referrer_code',
+  (select code from private.referral_codes
+   where org_id = '70000000-0000-4000-8000-000000000005'), true);
+
+-- #229: binding happens in the signup request, through the service path and nothing else. Asserted
+-- on the GRANT rather than by calling it from a browser role: no browser role holds EXECUTE at
+-- all, so there is no in-function refusal to observe, and a privilege check is the stronger claim
+-- anyway -- it holds even if the function's own guard is later edited.
+select pg_temp.p70_assert(
+  not has_function_privilege('anon', 'public.service_bind_referral(uuid,text)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.service_bind_referral(uuid,text)', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.service_bind_referral(uuid,text)', 'EXECUTE'),
+  'referral binding is reachable from a browser role, or unreachable from the signup path');
+
+select set_config('request.jwt.claim.role', 'service_role', true);
+-- An absent or unknown code produces an organization with no referrer and does NOT raise: a
+-- mistyped share link must never be able to stop somebody opening an account.
+select pg_temp.p70_assert(
+  (public.service_bind_referral('70000000-0000-4000-8000-000000000006', null) ->> 'reason')
+    = 'code_absent'
+  and (public.service_bind_referral('70000000-0000-4000-8000-000000000006', 'NOTACODE12') ->> 'reason')
+    = 'code_unknown',
+  'a missing or unknown referral code did not fall through harmlessly');
+select pg_temp.p70_assert(
+  (select count(*) from private.organization_referrals
+   where referred_org_id = '70000000-0000-4000-8000-000000000006') = 0,
+  'an invalid code created a binding anyway');
+
+-- #228: the same verified owner email is a hard block, and the verdict is a code, never an address.
+select pg_temp.p70_assert(
+  (public.service_bind_referral(
+     '70000000-0000-4000-8000-000000000007', current_setting('p70.referrer_code')) ->> 'reason')
+    = 'same_verified_owner_email',
+  'two organizations sharing a verified owner email were allowed to refer each other');
+
+select pg_temp.p70_assert(
+  (public.service_bind_referral(
+     '70000000-0000-4000-8000-000000000006', current_setting('p70.referrer_code')) ->> 'bound')::boolean,
+  'a valid referral code did not bind');
+-- #229: one binding, immutable. A second attempt reports the existing state rather than replacing.
+select pg_temp.p70_assert(
+  (public.service_bind_referral('70000000-0000-4000-8000-000000000006', 'NOTACODE12') ->> 'reason')
+    = 'already_bound',
+  'a second binding attempt was treated as a fresh attribution');
+select set_config('request.jwt.claim.role', 'authenticated', true);
+
+do $$
+begin
+  update private.organization_referrals
+     set referrer_org_id = '70000000-0000-4000-8000-000000000001'
+   where referred_org_id = '70000000-0000-4000-8000-000000000006';
+  raise exception 'expected the referral binding to be immutable';
+exception when insufficient_privilege then null;
+end
+$$;
+
+-- #212: binding is not activation. Nothing is paid until the owner's email is verified AND a
+-- document has really been processed.
+select pg_temp.p70_assert(
+  (select count(*) from private.referral_grants) = 0,
+  'a referral paid out before it was activated');
+
+-- The first successfully processed document. The extraction row IS that event, which is why
+-- activation hangs off it rather than off a second definition of "processed".
+insert into public.documents (
+  org_id, entity_type, entity_id, storage_path, file_name, mime_type, uploaded_by,
+  document_kind, supplier_id, document_date
+) values (
+  '70000000-0000-4000-8000-000000000006', 'inbox', null,
+  '70000000-0000-4000-8000-000000000006/inbox/first.pdf', 'first.pdf', 'application/pdf',
+  '71000000-0000-4000-8000-000000000006', 'other', null, null);
+
+insert into public.document_processing_jobs (
+  org_id, document_id, requested_by, status, input_checksum, contract_version
+) values (
+  '70000000-0000-4000-8000-000000000006',
+  (select id from public.documents where org_id = '70000000-0000-4000-8000-000000000006'),
+  '71000000-0000-4000-8000-000000000006', 'queued', 'etag:dddddddddddddddd', '1');
+
+insert into public.document_extractions (
+  org_id, job_id, document_id, engine, model, model_version, input_checksum,
+  contract_version, payload
+) values (
+  '70000000-0000-4000-8000-000000000006',
+  (select id from public.document_processing_jobs
+   where org_id = '70000000-0000-4000-8000-000000000006'),
+  (select id from public.documents where org_id = '70000000-0000-4000-8000-000000000006'),
+  'p70', 'p70-model', '1', 'etag:dddddddddddddddd', '1',
+  jsonb_build_object(
+    'schema_version', '1',
+    'document', jsonb_build_object(
+      'page_count', 3, 'detected_languages', jsonb_build_array('he'),
+      'plain_text', 'p70', 'partial', false),
+    'blocks', '[]'::jsonb, 'tables', '[]'::jsonb, 'marks', '[]'::jsonb));
+
+select pg_temp.p70_assert(
+  (select activated_at from private.organization_referrals
+   where referred_org_id = '70000000-0000-4000-8000-000000000006') is not null,
+  'a first processed document did not activate the referral');
+
+-- #227: BOTH sides are credited, each inside ITS OWN current usage period -- and the two periods
+-- are anchored to two different signup instants, so this is not one shared window.
+select pg_temp.p70_assert(
+  (select count(*) from private.referral_grants
+   where referred_org_id = '70000000-0000-4000-8000-000000000006') = 2,
+  'a referral did not credit both organizations');
+select pg_temp.p70_assert(
+  (select count(*) from private.referral_grants grant_row
+   join private.organization_usage_anchors anchor
+     on anchor.org_id = grant_row.beneficiary_org_id
+   cross join lateral private.usage_period(grant_row.beneficiary_org_id) period
+   where grant_row.period_start <> period.period_start) = 0,
+  'a grant was credited to a period that is not the beneficiary''s own current one');
+select pg_temp.p70_assert(
+  (select count(distinct period_start) from private.referral_grants
+   where referred_org_id = '70000000-0000-4000-8000-000000000006') = 2,
+  'both sides were credited in the same window -- their signup anchors differ');
+select pg_temp.p70_assert(
+  (select count(*) from private.referral_grants where quantity = 10) = 2,
+  'the referral did not pay the ten #227 decided');
+
+-- The bonus reaches the quota through the ONE resolution rule, so enforcement and every read model
+-- see the same number.
+select pg_temp.p70_assert(
+  (public.effective_entitlement(
+    '70000000-0000-4000-8000-000000000006', 'documents.monthly') ->> 'limit')::numeric = 35,
+  'the referral bonus did not raise the beneficiary''s effective limit');
+select pg_temp.p70_assert(
+  (public.effective_entitlement(
+    '70000000-0000-4000-8000-000000000006', 'documents.monthly') ->> 'referral_bonus')::numeric = 10,
+  'the resolution rule does not report the bonus separately from the plan');
+-- An unstated limit stays a refusal: a bonus is added to a number, and there is no number here.
+select pg_temp.p70_assert(
+  (public.effective_entitlement(
+    '70000000-0000-4000-8000-000000000006', 'assistant_runs.monthly') ->> 'measured')::boolean
+    = false,
+  'a bonus made an unstated limit look measured');
+
+-- A replayed activation pays once. The key is (referral, beneficiary, period) and the retry lands
+-- on the same row.
+select private.try_activate_referral('70000000-0000-4000-8000-000000000006');
+select pg_temp.p70_assert(
+  (select count(*) from private.referral_grants
+   where referred_org_id = '70000000-0000-4000-8000-000000000006') = 2
+  and (select sum(quantity) from private.referral_grants
+   where beneficiary_org_id = '70000000-0000-4000-8000-000000000006') = 10,
+  'a replayed activation paid a second time');
+
+-- #228: a cycle is a hard block. The referrer now tries to be referred by the organization it
+-- referred.
+select set_config('request.jwt.claim.role', 'service_role', true);
+select pg_temp.p70_assert(
+  (public.service_bind_referral(
+     '70000000-0000-4000-8000-000000000005',
+     (select code from private.referral_codes
+      where org_id = '70000000-0000-4000-8000-000000000006')) ->> 'bound')::boolean,
+  'the cycle fixture did not bind -- a cycle is only detectable once both edges exist');
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select pg_temp.p70_assert(
+  (private.try_activate_referral('70000000-0000-4000-8000-000000000005') ->> 'reason')
+    = 'referral_cycle',
+  'a referral cycle was allowed to pay out');
+select pg_temp.p70_assert(
+  (select block_reason from private.organization_referrals
+   where referred_org_id = '70000000-0000-4000-8000-000000000005') = 'referral_cycle',
+  'the cycle block was not recorded as a reason code');
+
+-- #230: reversal takes back only the UNUSED remainder. Consume four of the beneficiary's units
+-- first: with a plan allowance of 25 and a bonus of 10, twenty-nine used means four of the bonus
+-- are spent and six remain.
+do $$
+declare v_i integer;
+begin
+  for v_i in 1..29 loop
+    perform private.record_usage_event(
+      '70000000-0000-4000-8000-000000000006', 'documents.monthly', 1,
+      'p70-burn-' || v_i, 'p70');
+  end loop;
+end
+$$;
+select pg_temp.p70_assert(
+  (select quantity from private.usage_counters
+   where org_id = '70000000-0000-4000-8000-000000000006'
+     and metric_key = 'documents.monthly') = 29,
+  'the reversal fixture did not consume what it meant to');
+
+select pg_temp.p70_as('71000000-0000-4000-8000-000000000002', true);
+set local role authenticated;
+do $$
+begin
+  perform public.platform_revoke_referral_grant(
+    '70000000-0000-4000-8000-000000000006', 'P70: fraud review', null);
+  raise exception 'expected a reversal without evidence to be refused';
+exception when invalid_parameter_value then null;
+end
+$$;
+select set_config('p70.reversal',
+  public.platform_revoke_referral_grant(
+    '70000000-0000-4000-8000-000000000006',
+    'P70: #230 confirmed fraudulent referral',
+    'P70: operator ticket 4711, chargeback evidence attached')::text, true);
+reset role;
+
+select pg_temp.p70_assert(
+  (select revoked_quantity from private.referral_grants
+   where beneficiary_org_id = '70000000-0000-4000-8000-000000000006') = 6,
+  'the reversal did not take back exactly the unused remainder');
+select pg_temp.p70_assert(
+  (select revoked_quantity from private.referral_grants
+   where beneficiary_org_id = '70000000-0000-4000-8000-000000000005') = 10,
+  'the untouched beneficiary''s whole unused grant was not reversed');
+select pg_temp.p70_assert(
+  (select quantity from private.usage_counters
+   where org_id = '70000000-0000-4000-8000-000000000006'
+     and metric_key = 'documents.monthly') = 29,
+  'the reversal clawed back usage that had already happened -- #230 forbids it');
+select pg_temp.p70_assert(
+  (select count(*) from private.referral_grants
+   where referred_org_id = '70000000-0000-4000-8000-000000000006') = 2,
+  'a reversed grant was deleted instead of marked');
+-- #230: the full issued amount keeps counting toward the ceiling, so a reversal cannot mint room
+-- for a fresh allowance.
+select pg_temp.p70_assert(
+  (select sum(quantity) from private.referral_grants
+   where beneficiary_org_id = '70000000-0000-4000-8000-000000000006') = 10,
+  'a reversal reduced the issued amount the period ceiling is measured on');
+
+-- An identical retry adds no second reversal.
+select pg_temp.p70_as('71000000-0000-4000-8000-000000000002', true);
+set local role authenticated;
+select pg_temp.p70_assert(
+  (public.platform_revoke_referral_grant(
+     '70000000-0000-4000-8000-000000000006',
+     'P70: #230 confirmed fraudulent referral',
+     'P70: operator ticket 4711, chargeback evidence attached') ->> 'idempotent')::boolean,
+  'a repeated reversal was not idempotent');
+reset role;
 
 rollback;
 

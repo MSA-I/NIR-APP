@@ -96,7 +96,7 @@ select pg_temp.p51_assert(
   (select numeric_limit from plan_entitlements
     where plan_key = 'free' and entitlement_key = 'documents.monthly') = 25
   and (select numeric_limit from plan_entitlements
-    where plan_key = 'pro' and entitlement_key = 'documents.monthly') = 300,
+    where plan_key = 'pro' and entitlement_key = 'documents.monthly') = 200,
   'the decided monthly document limits moved without a decision');
 select pg_temp.p51_assert(
   (select unlimited from plan_entitlements
@@ -104,19 +104,17 @@ select pg_temp.p51_assert(
   and (select unlimited from plan_entitlements
     where plan_key = 'legacy' and entitlement_key = 'documents.monthly'),
   'a limit was applied to a plan that promises none');
--- The two rungs that existed before the launch ladder keep the 0163 derivation: page quota =
--- document quota times the hard 20-page-per-document ceiling the worker enforces. #197 decides a
--- commercial ratio of TEN for the launch catalogue, but every remaining #197 figure for `free` and
--- `pro` is a REDUCTION, and no decision states when a reduced quota reaches an organization already
--- on the plan -- so 0184 records those three figures and deliberately does not apply them. Pinning
--- the live values here is what stops a later edit applying a reduction by accident.
+-- Page quotas are the document quota times TEN. Until 23.08.2026 this pinned 0163's twenty, the
+-- per-document AI page ceiling; #197 replaces the COMMERCIAL ratio with ten and keeps the twenty
+-- as a separate per-file cap in the worker. Pinning the RELATIONSHIP rather than the numbers is
+-- what catches a later edit that moves one and forgets the other, which would refuse a customer
+-- who stayed inside the document quota they were sold.
 select pg_temp.p51_assert(
   (select numeric_limit from plan_entitlements
-    where plan_key = 'free' and entitlement_key = 'ocr_pages.monthly') = 25 * 20
+    where plan_key = 'free' and entitlement_key = 'ocr_pages.monthly') = 25 * 10
   and (select numeric_limit from plan_entitlements
-    where plan_key = 'pro' and entitlement_key = 'ocr_pages.monthly') = 300 * 20,
-  'the page quotas of the pre-launch rungs moved without a decision on reduction timing');
--- The launch rungs are new, hold nobody, and therefore land at the decided #197 ratio of ten.
+    where plan_key = 'pro' and entitlement_key = 'ocr_pages.monthly') = 200 * 10,
+  'the page quotas are no longer the document quota times ten');
 select pg_temp.p51_assert(
   (select numeric_limit from plan_entitlements
     where plan_key = 'basic' and entitlement_key = 'documents.monthly') = 50
@@ -127,20 +125,13 @@ select pg_temp.p51_assert(
   and (select numeric_limit from plan_entitlements
     where plan_key = 'premium' and entitlement_key = 'ocr_pages.monthly') = 500 * 10,
   'the launch rungs are not at the volumes #197 decided for them');
--- Every decided figure is on record whether or not it is live, and every withheld one carries the
--- reason it was withheld. A decision dropped on the floor reads exactly like one nobody took.
+-- Every decided figure is on record beside the one it replaced, so the size of each move stays
+-- answerable after the fact -- three of the eight lowered a ceiling somebody was already under.
 select pg_temp.p51_assert(
   (select count(*) from private.plan_quota_decisions) = 8
-  and not exists (
-    select 1 from private.plan_quota_decisions
-    where not applied and nullif(btrim(coalesce(withheld_reason, '')), '') is null),
-  'a #197 figure is missing from the record or was withheld without a stated reason');
-select pg_temp.p51_assert(
-  (select unlimited from plan_entitlements
-    where plan_key = 'business' and entitlement_key = 'ocr_pages.monthly')
-  and (select unlimited from plan_entitlements
-    where plan_key = 'legacy' and entitlement_key = 'ocr_pages.monthly'),
-  'a page quota was applied to a plan that limits no documents');
+  and (select count(*) from private.plan_quota_decisions
+       where previous_limit is not null and previous_limit > decided_limit) = 3,
+  'the #197 record does not hold eight figures with three ceiling reductions');
 -- The pin below was one assertion until 0164 introduced a metric whose limit nobody has decided
 -- yet. Splitting it keeps both teeth rather than blunting one: a STATED number outside the two
 -- decided limits still fails, and the unknown-that-refuses state is pinned to exactly the one key
