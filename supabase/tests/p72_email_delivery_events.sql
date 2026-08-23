@@ -51,6 +51,80 @@ begin
 end
 $$;
 
+-- ===== 0. THE CLIENT/SERVER CONTRACT EXISTS =====
+-- Every RPC this feature's browser code and delivery Edge Functions call, asserted BY NAME with
+-- its FULL argument-type list, before a single fixture is inserted -- a missing contract should
+-- fail in the first second, not after three hundred lines of setup.
+--
+-- WHY THIS BLOCK EXISTS. A Vitest spec that mocks an RPC proves the component renders and refuses
+-- correctly against a SHAPE. It cannot prove that the function exists, that it is NAMED that, or
+-- that it takes those argument types -- so a client and a server can both be green and share no
+-- surface at all. `to_regprocedure` answers null instead of raising for an unknown signature,
+-- which is exactly the question being asked here.
+--
+-- The list was derived mechanically, not from memory:
+--   grep -rn "\.rpc(" src/lib/orderEmail.ts src/components/EmailOrderCard.tsx
+--   grep -rn "rpc('"  supabase/functions/email-webhook/index.ts supabase/functions/email-sender/index.ts
+-- Enumerated one assertion per function ON PURPOSE: never a census, never a pattern match, never
+-- a count. A count would pass here today against whatever else happens to be applied to the
+-- shared local stack, and would say nothing about this branch.
+select pg_temp.p72_assert(
+  to_regprocedure('public.set_supplier_communication_preferences(uuid,text,text,text,text,boolean,text)')
+    is not null,
+  'src/lib/orderEmail.ts calls set_supplier_communication_preferences(uuid,text,text,text,text,boolean,text) and it does not exist under that signature');
+select pg_temp.p72_assert(
+  to_regprocedure('public.reset_email_order_message(uuid,text)') is not null,
+  'src/lib/orderEmail.ts calls reset_email_order_message(uuid,text) and it does not exist under that signature');
+select pg_temp.p72_assert(
+  to_regprocedure('public.claim_email_order_message(uuid,text)') is not null,
+  'the email-sender Edge Function calls claim_email_order_message(uuid,text) -- the #188 retry path -- and it does not exist under that signature');
+select pg_temp.p72_assert(
+  to_regprocedure('public.service_settle_email_order_message(uuid,text,text,integer,text,text)')
+    is not null,
+  'the email-sender Edge Function calls service_settle_email_order_message(uuid,text,text,integer,text,text) and it does not exist under that signature');
+select pg_temp.p72_assert(
+  to_regprocedure('public.service_record_email_delivery_event(text,text,text,text,text,timestamptz)')
+    is not null,
+  'the email-webhook Edge Function calls service_record_email_delivery_event(text,text,text,text,text,timestamptz) and it does not exist under that signature');
+select pg_temp.p72_assert(
+  to_regprocedure('public.issue_supplier_order_link(uuid,text)') is not null,
+  'claim_email_order_message delegates to issue_supplier_order_link(uuid,text) to mint the new portal link (#188) and it does not exist under that signature');
+
+-- The READ surface the browser binds to, asserted the same way. EmailOrderCard.tsx renders
+-- `message.delivery_state`; a card reading a column that does not exist is the same defect class
+-- as calling a function that does not exist, and a mocked row would hide it just as well.
+select pg_temp.p72_assert(
+  exists (
+    select 1 from information_schema.columns column_info
+    where column_info.table_schema = 'public'
+      and column_info.table_name = 'email_order_messages'
+      and column_info.column_name = 'delivery_state'),
+  'EmailOrderCard.tsx renders email_order_messages.delivery_state and the column does not exist');
+select pg_temp.p72_assert(
+  has_table_privilege('authenticated', 'public.email_order_messages', 'SELECT')
+  and has_table_privilege('authenticated', 'public.supplier_communication_preferences', 'SELECT'),
+  'src/lib/orderEmail.ts selects from email_order_messages and supplier_communication_preferences, which a signed-in browser cannot read');
+
+-- THE REVERSE DIRECTION, which the block above can never see. An existence check finds a client
+-- call with no server function. It cannot find a server function with NO CLIENT CALLER -- that one
+-- is invisible to any survey of `.rpc(` call sites, which is exactly how public.my_entitlements()
+-- (0154:343) went unnoticed. 0190 creates three such functions, all deliberately uncalled from the
+-- browser: two `private.` internals and one service-role webhook recorder. Pinned here by name and
+-- by grant, so that "nothing calls it" cannot quietly become "nothing noticed it was renamed,
+-- dropped, or opened up".
+select pg_temp.p72_assert(
+  to_regprocedure('private.email_delivery_rank(text)') is not null,
+  'private.email_delivery_rank(text) is gone -- the monotonic ladder 0190 relies on has no client caller and nothing else would have noticed');
+select pg_temp.p72_assert(
+  to_regprocedure('private.email_delivery_event_guard()') is not null,
+  'private.email_delivery_event_guard() is gone -- the append-only trigger has no client caller and nothing else would have noticed');
+select pg_temp.p72_assert(
+  not has_function_privilege('authenticated', 'private.email_delivery_rank(text)', 'execute')
+  and not has_function_privilege('anon', 'private.email_delivery_rank(text)', 'execute')
+  and not has_function_privilege('authenticated', 'private.email_delivery_event_guard()', 'execute')
+  and not has_function_privilege('anon', 'private.email_delivery_event_guard()', 'execute'),
+  'a browser role gained execute on a 0190 internal that is meant to have no caller outside the database');
+
 -- ===== Fixtures: two tenants, three order threads =====
 insert into public.organizations (id, name, status) values
   ('1a720000-0000-4000-8000-000000000001', 'P72 A', 'active'),
