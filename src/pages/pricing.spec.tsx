@@ -42,19 +42,24 @@ const quota = (planKey: string, key: string, label: string, limit: number | null
 /**
  * THE SERVER'S NUMBERS, NOT THE DECISION TABLE'S — and they are deliberately not the same.
  *
- * The orchestrator ruled that a reduction may not be applied to an organization already on a paid
- * plan while the timing of such a reduction is undecided. So the running catalogue is MIXED: the
- * new plans carry #197's figures, while `free` pages and `pro` keep the limits `0161`/`0163`
- * already enforce. A page that printed #197 verbatim would promise limits the system does not
- * enforce, which is exactly the fake-static-value rule in CLAUDE.md. These fixtures therefore
- * encode the mixed reality, and the test below pins the page to it.
+ * These quota figures are SYNTHETIC and do not describe production. The owner ruled on 23.08.2026
+ * that #197's reduction applies immediately at cutover, so the live catalogue will hold #197
+ * verbatim (25/250, 50/500, 200/2,000, 500/5,000) once the migration lands. An earlier ruling had
+ * left a mixed catalogue in place and these fixtures used to record it; that is withdrawn.
+ *
+ * They stay divergent on purpose. If the fixtures matched #197, a page that hardcoded #197 would
+ * pass this file, and the one property worth pinning here would go untested: the page must render
+ * WHAT THE SERVER ENFORCES, whatever that is, because the day the two disagree again is the day a
+ * public promise stops matching the refusal a customer actually gets. Divergent fixtures are the
+ * only way to prove the page reads the catalogue rather than a constant.
  */
 const QUOTAS = [
   ...['free', 'basic', 'pro', 'premium'].map((plan, index) =>
     quota(plan, 'documents.monthly', 'מסמכים', [25, 50, 300, 500][index])),
   ...['free', 'basic', 'pro', 'premium'].map((plan, index) =>
     quota(plan, 'ocr_pages.monthly', 'עמודי OCR', [500, 500, 6000, 5000][index])),
-  // Seeded UNKNOWN in 0164 and still unmeasured for every tenant.
+  // Unmeasured, so the page cannot publish #198's 20/40/100/250. The #197 ruling did not cover
+  // the assistant quota — re-verify this against the catalogue when the contract names land.
   ...['free', 'basic', 'pro', 'premium'].map((plan) =>
     quota(plan, 'assistant_runs.monthly', 'ריצות עוזר', null, { measured: false })),
   // DEBT §56 — nothing measures these either.
@@ -138,7 +143,8 @@ describe('דף המסלולים הציבורי', () => {
     renderPage();
     await settle();
     const documents = screen.getByRole('row', { name: /מסמכים/ });
-    // The live `pro` entitlement is 300; #197's 200 is not yet applied to existing paid plans.
+    // 300 is the fixture's synthetic value, 200 is #197's decided one. The page must print the
+    // former: it reports the catalogue, never the decision table.
     expect(within(documents).getByText('300')).toBeInTheDocument();
     expect(within(documents).queryByText('200')).not.toBeInTheDocument();
   });

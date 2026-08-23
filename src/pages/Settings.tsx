@@ -486,11 +486,13 @@ export default function Settings() {
       {/* The organization's own commercial subscription — plan, price, upgrade, cancel, and the
           read-only state a failed renewal puts the tenant in.
 
-          OWNER ONLY, and the gate is the capability contract rather than a preference: PRODUCT.md
-          gives `office` no access to payment at all, and `accountant` only the execution of an
-          already-approved SUPPLIER payment. Neither has any claim on what the business itself is
-          buying. A control that refuses on submit is worse than a control that is not there —
-          the same reasoning that gates the export-templates panel two blocks below. */}
+          OWNER ONLY, by owner decision (23.08.2026): only `owner` may manage the subscription.
+          `office` and `accountant` keep read visibility of usage and limits and cannot change the
+          plan or cancel. This gate was built fail-closed from PRODUCT.md's capability contract
+          before the decision existed — `office` has no access to payment at all, `accountant` only
+          executes an already-approved SUPPLIER payment — and the ruling confirmed it. It is no
+          longer an assumption. A control that refuses on submit is worse than a control that is
+          not there — the same reasoning that gates the export-templates panel two blocks below. */}
       {profile?.role === 'owner' && <OrgSubscriptionPanel />}
 
       {/* The autonomy switches left this screen for the operator application (src/operator/,
