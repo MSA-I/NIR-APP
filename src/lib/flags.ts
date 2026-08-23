@@ -78,24 +78,29 @@ export function useFeatureFlags(): FeatureFlagsState {
     queryKey: flagsKey(org),
     queryFn: async () => normalizeResolvedFlags(unwrap(await supabase.rpc('resolve_feature_flags'))),
     staleTime: FLAGS_STALE_TIME_MS,
+    // `null` is the deliberate pre-profile/suspended scope. Calling a tenant resolver before
+    // auth bootstrap completes creates an anonymous 401 on `/` and can never yield a grant.
+    enabled: org !== null,
   });
 
   // TanStack deliberately retains the last successful `data` when a background refetch fails.
   // That is useful for ordinary reads, but a capability cache is a deny-by-default boundary:
   // once freshness was explicitly checked and failed, the old grant is no longer renderable.
   // A later successful fetch clears `query.error` and makes its newly resolved set visible again.
-  const flags = query.error ? null : query.data ?? null;
+  const flags = org === null || query.error ? null : query.data ?? null;
   const isEnabled = useCallback((flagKey: string) => flags?.get(flagKey) ?? false, [flags]);
   const refetch = useCallback(
-    () => query.refetch().then((result) => !result.isError),
-    [query],
+    () => org === null
+      ? Promise.resolve(false)
+      : query.refetch().then((result) => !result.isError),
+    [org, query],
   );
 
   return {
     flags,
     isEnabled,
-    loading: query.isLoading,
-    error: query.error ? toHebrewError(query.error) : null,
+    loading: org !== null && query.isLoading,
+    error: org !== null && query.error ? toHebrewError(query.error) : null,
     refetch,
   };
 }
