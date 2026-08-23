@@ -40,7 +40,10 @@ create trigger document_kind_resolution_history_immutable before update or delet
 alter table public.document_kind_resolution_history enable row level security;
 alter table public.document_kind_resolution_history force row level security;
 revoke all on table public.document_kind_resolution_history from public, anon, authenticated;
-grant select, insert on table public.document_kind_resolution_history to service_role;
+-- Full CRUD for the same reason 0177 states at length: the immutability trigger above rejects every
+-- UPDATE and DELETE regardless of grant, so the ACL is not the guard here, and p0_client_dml_acl.sql
+-- reserves its write-exception list for ledgers whose INSERT is closed at the trigger as well.
+grant select, insert, update, delete on table public.document_kind_resolution_history to service_role;
 
 create function public.get_document_kind_history_preview()
 returns table (

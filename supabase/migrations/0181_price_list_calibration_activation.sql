@@ -23,7 +23,15 @@ create trigger price_list_calibration_preparations_immutable before update or de
 alter table public.price_list_calibration_preparations enable row level security;
 alter table public.price_list_calibration_preparations force row level security;
 revoke all on public.price_list_calibration_preparations from public,anon,authenticated,service_role;
-grant select,insert on public.price_list_calibration_preparations to service_role;
+-- Full CRUD, unlike its 0096 neighbours on the p0 write-exception list, and the difference is the
+-- trigger above: 0096 attaches reject_price_list_measurement_mutation BEFORE INSERT OR UPDATE OR
+-- DELETE and gates INSERT behind a writer setting, so on those tables no role can write at all and
+-- the missing grant records a closure that already exists. Here the trigger covers UPDATE and
+-- DELETE only -- it raises 42501 for every role, so those two grants can never execute a row --
+-- while INSERT stays a normal server write. Half a grant would leave the table in a third state
+-- p0_client_dml_acl.sql:96-120 cannot express, and adding a write exception whose INSERT is still
+-- open would be an exception that hides a grant rather than documenting its absence (:141-149).
+grant select,insert,update,delete on public.price_list_calibration_preparations to service_role;
 
 -- The queue is read PER DOCUMENT and paginated. An org-wide window ordered by run.created_at
 -- returned the organization's oldest rows, so the review screen of any newer document saw none of

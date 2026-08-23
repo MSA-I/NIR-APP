@@ -48,9 +48,20 @@ begin
   end if;
 end $move_apply_exemption$;
 
--- Preflight the complete immutable interpretation before the first product INSERT. Duplicate
--- identifiers or two different identifiers resolving to one product send the whole document to
--- review; iteration order can never make the first line win.
+-- Preflight the complete immutable interpretation before the first product INSERT, for the ONE
+-- class of ambiguity a per-line pass structurally cannot see: the same identifier on two lines, or
+-- two different identifiers resolving to one product. There iteration order decides which price
+-- lands, so #250's "no first wins" needs the whole document to stop before any write.
+--
+-- A line whose OWN identifiers conflict is deliberately NOT preflighted here. #78/#122 already
+-- answered it and `private.match_price_list_line` already returns `ambiguous` for it deterministic-
+-- ally, with no ordering involved: the line waits WITH A RECORDED REASON while the safe lines of
+-- the same document are taken (`קליטה חלקית: שורות בטוחות נכנסות; עמומות ... ממתינות עם סיבה`,
+-- OPEN-DECISIONS.md:312, reaffirmed by #250 at :600 -- "עמימות ... נשארים review", per line).
+-- Short-circuiting it here returned the same outcome while writing no decision and no
+-- price_list_interpretation_lines row, so the review screen was handed a document queued for review
+-- with nothing on record about which line was ambiguous or why -- the reason the decision requires.
+-- P15 pins that row (supabase/tests/p15_automatic_price_list_intake.sql:405-408, :435-440).
 create function public.apply_price_list_interpretation(
   p_job_id uuid,p_interpretation_id uuid,p_actor_id uuid default null
 ) returns jsonb language plpgsql security invoker set search_path=public,pg_temp as $$
@@ -82,8 +93,9 @@ begin
     end loop;
     if v_doc.supplier_id is not null and (v_sku is not null or v_barcode is not null) then
       v_match:=private.match_price_list_line(v_i.org_id,v_doc.supplier_id,v_sku,v_barcode);
-      if v_match->>'status'='ambiguous' then v_ambiguous:=true;
-      elsif v_match->>'status'='matched' then
+      -- `ambiguous` is intentionally not an arm: that line is already refused per line, with its
+      -- reason_code recorded, by the authoritative writer this wrapper delegates to.
+      if v_match->>'status'='matched' then
         v_product:=(v_match->>'product_id')::uuid;
         if v_product=any(v_seen_products) then v_ambiguous:=true; end if;
         v_seen_products:=array_append(v_seen_products,v_product);

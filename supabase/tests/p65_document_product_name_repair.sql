@@ -36,6 +36,21 @@ insert into public.supplier_price_submissions (
   '65100000-0000-4000-8000-000000000001'
 );
 
+-- Before anything has been measured the read model must SAY so. This is the whole reason 0177
+-- returns an object instead of a row set: an empty candidate list alone is indistinguishable from
+-- "nobody ever produced a report", and the screen rendered it as a measured zero.
+select set_config('request.jwt.claim.sub', '65100000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select pg_temp.p65_assert((
+  select queue ->> 'has_dry_run' = 'false'
+     and (queue ->> 'dry_run_count')::integer = 0
+     and queue ->> 'latest_dry_run_at' is null
+     and queue -> 'candidates' = '[]'::jsonb
+  from public.get_product_name_repair_queue() queue
+), 'an unmeasured queue reported itself as a measured zero');
+reset role;
+
 -- Dry-run preparation is server-only and binds rows to the immutable submission checksum.
 select set_config('request.jwt.claim.role', 'service_role', true);
 set local role service_role;
@@ -84,24 +99,35 @@ reset role;
 select set_config('request.jwt.claim.sub', '65100000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
+-- ...and once one HAS been produced, the same read model must say that too, or the measurement is
+-- unobservable and the assertion above would pass forever on a function that always answers false.
 select pg_temp.p65_assert((
-  select count(*) = 1 from public.get_product_name_repair_queue()
-  where product_id = '65300000-0000-4000-8000-000000000001'
-    and status = 'ready' and old_name = ')ג"ק 5( ןבל חמק'
-    and proposed_name = 'קמח לבן (5 ק"ג)' and source_row = 7
-    and source_checksum = repeat('a', 64)
-    and source_evidence = '{"cell":"B7","sheet":"מחירון"}'::jsonb
+  select queue ->> 'has_dry_run' = 'true'
+     and (queue ->> 'dry_run_count')::integer = 1
+     and queue ->> 'latest_dry_run_at' is not null
+  from public.get_product_name_repair_queue() queue
+), 'a produced dry run was still reported as never measured');
+select pg_temp.p65_assert((
+  select count(*) = 1
+  from jsonb_array_elements(public.get_product_name_repair_queue() -> 'candidates') candidate
+  where candidate ->> 'product_id' = '65300000-0000-4000-8000-000000000001'
+    and candidate ->> 'status' = 'ready' and candidate ->> 'old_name' = ')ג"ק 5( ןבל חמק'
+    and candidate ->> 'proposed_name' = 'קמח לבן (5 ק"ג)'
+    and (candidate ->> 'source_row')::integer = 7
+    and candidate ->> 'source_checksum' = repeat('a', 64)
+    and candidate -> 'source_evidence' = '{"cell":"B7","sheet":"מחירון"}'::jsonb
 ), 'ready preview lost old/new or provenance');
 select pg_temp.p65_assert((
-  select count(*) = 1 from public.get_product_name_repair_queue()
-  where product_id = '65300000-0000-4000-8000-000000000002'
-    and status = 'blocked' and reason_code = 'missing_source'
+  select count(*) = 1
+  from jsonb_array_elements(public.get_product_name_repair_queue() -> 'candidates') candidate
+  where candidate ->> 'product_id' = '65300000-0000-4000-8000-000000000002'
+    and candidate ->> 'status' = 'blocked' and candidate ->> 'reason_code' = 'missing_source'
 ), 'target absent from source must remain blocked');
 
 -- One approval changes one name, carries reason/checksum, and retries idempotently.
-select set_config('p65.candidate_id', (select candidate_id::text
-  from public.get_product_name_repair_queue()
-  where product_id = '65300000-0000-4000-8000-000000000001'), true);
+select set_config('p65.candidate_id', (select candidate ->> 'candidate_id'
+  from jsonb_array_elements(public.get_product_name_repair_queue() -> 'candidates') candidate
+  where candidate ->> 'product_id' = '65300000-0000-4000-8000-000000000001'), true);
 select public.apply_product_name_repair(
   current_setting('p65.candidate_id')::uuid,
   ')ג"ק 5( ןבל חמק', 'קמח לבן (5 ק"ג)', repeat('a', 64),
@@ -129,7 +155,7 @@ select pg_temp.p65_assert((select count(*) = 1 from public.audit_logs
 select set_config('request.jwt.claim.sub', '65100000-0000-4000-8000-000000000002', true);
 set local role authenticated;
 do $$ begin
-  perform * from public.get_product_name_repair_queue();
+  perform public.get_product_name_repair_queue();
   raise exception 'accountant queue access accepted';
 exception when sqlstate '42501' then null; end $$;
 reset role;

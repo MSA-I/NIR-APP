@@ -17,18 +17,52 @@ select pg_temp.p68_assert(
   to_regprocedure('public.prepare_price_list_calibration_batch(uuid,uuid[],uuid,text)') is not null
   and to_regprocedure('public.record_price_list_calibration_batch(uuid,uuid,text)') is not null,
   'office preparation or owner batch review command missing');
+-- The queue is read PER DOCUMENT and paged: (p_document_id uuid, p_limit integer default 200,
+-- p_offset integer default 0). The single-argument form must NOT also exist -- an overload would
+-- make every grant and body assertion below ambiguous about which body it measured.
 select pg_temp.p68_assert(
-  has_function_privilege('authenticated','public.get_price_list_calibration_preparation_queue(integer)','EXECUTE')
-  and not has_function_privilege('service_role','public.get_price_list_calibration_preparation_queue(integer)','EXECUTE')
-  and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(integer)'::regprocedure)
+  to_regprocedure('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)') is not null
+  and to_regprocedure('public.get_price_list_calibration_preparation_queue(integer)') is null,
+  'the calibration preparation queue is not the document-scoped, paged signature');
+select pg_temp.p68_assert(
+  has_function_privilege('authenticated','public.get_price_list_calibration_preparation_queue(uuid,integer,integer)','EXECUTE')
+  and not has_function_privilege('service_role','public.get_price_list_calibration_preparation_queue(uuid,integer,integer)','EXECUTE')
+  and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
     like '%auth_role() not in (''owner'',''office'')%'
-  and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(integer)'::regprocedure)
+  and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
     like '%document.unit_id is null or document.unit_id=any(public.auth_scopes())%'
-  and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(integer)'::regprocedure)
+  and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
     like '%preparation.id%'
-  and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(integer)'::regprocedure)
+  and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
     !~* '(provider|model|prompt_version|schema_version|payload|decision_confidence|evidence_block_ids)',
   'office queue grant/scope or safe projection contract is wrong');
+-- What the rewrite ADDED, asserted here and not only in 0181's apply-time do-block: that block runs
+-- once, against the schema the migration itself just built. This suite runs against the schema as
+-- it stands, so a later `create or replace` that drops the document filter, the paging total or the
+-- preparation's own line count is caught here instead of shipping.
+--
+-- Each of the three is load-bearing for one sentence the screen says out loud. The document filter:
+-- an org-wide window ordered by run.created_at served the organization's oldest rows, so a newer
+-- document's review screen saw none of its own lines and stated that none were waiting.
+-- `count(*) over ()`: counted over the whole filtered set BEFORE offset/limit, it is what separates
+-- "the last page" from "truncated" on a 338-line live price list. `cardinality(prepared.line_ids)`:
+-- the number the reviewing screen checks its rendered rows against before an owner approves.
+select pg_temp.p68_assert(
+  pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
+    like '%run.document_id=p_document_id%'
+  and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
+    like '%count(*) over ()%'
+  and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
+    like '%cardinality(prepared.line_ids)%',
+  'the calibration queue is not document-scoped, paged with a pre-page total, or counted per preparation');
+-- And the batch itself is all-or-nothing over what is still outstanding. Without this refusal an
+-- owner could approve a window while the same run keeps unreviewed lines nobody ever looked at,
+-- and the preparation's line_count would be a statement about a subset instead of about the run --
+-- which is the number platform activation later reads as completeness evidence.
+select pg_temp.p68_assert(
+  pg_get_functiondef('public.prepare_price_list_calibration_batch(uuid,uuid[],uuid,text)'::regprocedure)
+    like '%calibration_preparation_incomplete%',
+  'a preparation may cover a subset of the run''s outstanding lines');
 select pg_temp.p68_assert(
   pg_get_functiondef('public.record_price_list_calibration_batch(uuid,uuid,text)'::regprocedure)
     like '%calibration_preparation_superseded%',

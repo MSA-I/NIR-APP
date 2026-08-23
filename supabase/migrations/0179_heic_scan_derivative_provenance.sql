@@ -52,7 +52,10 @@ create trigger document_scan_derivative_provenance_immutable_trg
 alter table public.document_scan_derivative_provenance enable row level security;
 alter table public.document_scan_derivative_provenance force row level security;
 revoke all on table public.document_scan_derivative_provenance from public, anon, authenticated;
-grant select, insert on table public.document_scan_derivative_provenance to service_role;
+-- Full CRUD, matching document_scan_outputs (0136:391-393) -- the row this table is 1:1 with, under
+-- the same reject_document_scan_evidence_mutation trigger. Locking the child while the parent stays
+-- writable would buy nothing and would leave the two halves of one scan record on different rules.
+grant select, insert, update, delete on table public.document_scan_derivative_provenance to service_role;
 
 create or replace function public.service_complete_document_scan_job_v2(
   p_job_id uuid,

@@ -110,8 +110,19 @@ alter table public.product_name_repair_decisions enable row level security;
 alter table public.product_name_repair_decisions force row level security;
 revoke all on table public.product_name_repair_runs, public.product_name_repair_candidates,
   public.product_name_repair_decisions from public, anon, authenticated;
-grant select, insert on table public.product_name_repair_runs, public.product_name_repair_candidates,
-  public.product_name_repair_decisions to service_role;
+-- Full CRUD, not `select, insert`. The append-only guarantee on these three ledgers is the
+-- BEFORE UPDATE OR DELETE trigger above, which raises 42501 for every role including the owner --
+-- so an UPDATE/DELETE grant cannot execute a single row and the ACL is not what protects them.
+-- p0_client_dml_acl.sql:96-120 states the contract the other way round: the trusted server holds
+-- full CRUD on every public table except the command-only ledgers named in its exception list, and
+-- those are tables whose write path is closed at the trigger for INSERT too (0096 guards
+-- price_list_shadow_runs BEFORE INSERT OR UPDATE OR DELETE behind a writer setting, so no role can
+-- insert and the missing grant merely documents an absence that already exists). These tables take
+-- inserts from a SECURITY DEFINER, exactly like document_scan_outputs (0136) and
+-- price_list_interpretation_decisions (0081), both of which hold full CRUD next to the same shape
+-- of immutability trigger. A half grant put them in a third state the suite has no vocabulary for.
+grant select, insert, update, delete on table public.product_name_repair_runs,
+  public.product_name_repair_candidates, public.product_name_repair_decisions to service_role;
 
 create function public.prepare_product_name_repair_dry_run(
   p_source_submission_id uuid,
