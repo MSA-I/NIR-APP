@@ -43,6 +43,35 @@ function useResolveFlags(body: unknown, status = 200) {
 }
 
 describe('useFeatureFlags', () => {
+  it('does not call the tenant resolver before an organization scope exists', async () => {
+    const counter = useResolveFlags([{ flag_key: 'assistant.ui', state: true }]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let org: string | null = null;
+    const Wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <OrgScopeProvider org={org}>{children}</OrgScopeProvider>
+      </QueryClientProvider>
+    );
+    const { result, rerender } = renderHook(() => useFeatureFlags(), { wrapper: Wrapper });
+
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(counter.calls).toBe(0);
+    expect(result.current.flags).toBeNull();
+    expect(result.current.isEnabled('assistant.ui')).toBe(false);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+
+    let refetched = true;
+    await act(async () => { refetched = await result.current.refetch(); });
+    expect(refetched).toBe(false);
+    expect(counter.calls).toBe(0);
+
+    org = 'org-1';
+    rerender();
+    await waitFor(() => expect(result.current.isEnabled('assistant.ui')).toBe(true));
+    expect(counter.calls).toBe(1);
+  });
+
   it('resolves the set and answers lookups fail-closed', async () => {
     // The contract shape, migration 0059: `returns table (flag_key text, state boolean)`.
     useResolveFlags([
