@@ -1,0 +1,226 @@
+// whatsapp-webhook/core -- the provider callback contract, pure and importable.
+//
+// PROVIDER CONTRACT, VERIFIED (read 2026-08-23). Nothing in this file is written from memory:
+//
+//   https://www.twilio.com/docs/usage/security
+//     The request-validation algorithm, verbatim: (1) take the full request URL "from the
+//     protocol (https...) through the end of the query string"; (2) "Sort all the POST
+//     parameters alphabetically (using Unix-style case-sensitive sorting order)"; (3) "Append
+//     the variable name and value (with no delimiters) to the end of the URL string"; (4) "Sign
+//     the resulting string with HMAC-SHA1 using your AuthToken as the key"; (5) "Base64-encode
+//     the resulting hash value"; (6) compare with the X-Twilio-Signature header. The same page
+//     publishes the worked example this file's known-answer test pins.
+//     CAVEAT the same page states: Twilio drops any username/password from the URL before
+//     signing, and port handling differs between HTTP and HTTPS callbacks -- so the URL must be
+//     RECONSTRUCTED from what the provider actually called, not from what a proxy handed us.
+//
+//   https://www.twilio.com/docs/usage/webhooks/webhooks-security
+//     The URL passed to validation must include scheme, host, non-standard port, path and the
+//     COMPLETE query string, and query parameters must never be extracted and passed separately.
+//     For an application/json body Twilio "appends a bodySHA256 query parameter to your webhook
+//     URL"; validation then checks the SHA-256 of the RAW body against that parameter and signs
+//     the URL (which already contains it). A load balancer that rewrites scheme or host breaks
+//     the reconstruction, which is why the deployed URL is configuration, not a guess.
+//
+//   https://www.twilio.com/docs/messaging/guides/track-outbound-message-status
+//     Status callbacks are POST, application/x-www-form-urlencoded, carrying MessageSid,
+//     MessageStatus, AccountSid, From, To, and ErrorCode when the status is failed or
+//     undelivered. Channel callbacks add ChannelInstallSid / ChannelStatusMessage /
+//     ChannelPrefix, and EventType carries READ for read receipts on channels that support it.
+//
+//   https://www.twilio.com/docs/messaging/api/message-resource
+//     The outbound status vocabulary: queued, accepted, scheduled, sending, sent, delivered,
+//     undelivered, failed, canceled, read. receiving/received are INBOUND states.
+//
+// #241 (owner, 22.08.2026): inbound text and media are not ingested, not filed and do not
+// trigger automation at launch. Classification therefore has an explicit `inbound` verdict that
+// is neither stored nor answered as handled, and no field derived from message content survives
+// it. Extending this to inbound requires a NEW owner decision, not a hook here.
+
+/** The internal delivery vocabulary. Mirrors the `whatsapp_message_status` values a callback
+ * is allowed to assert; the ladder itself is enforced in SQL, not here. */
+export type InternalDeliveryStatus = 'accepted' | 'sent' | 'delivered' | 'read' | 'failed';
+
+export type WebhookClassification =
+  | {
+    kind: 'delivery_status';
+    providerMessageId: string;
+    providerSenderId: string;
+    status: InternalDeliveryStatus;
+    errorCode: string | null;
+  }
+  | { kind: 'inbound'; reason: 'inbound_message' | 'inbound_media' | 'inbound_status' }
+  | { kind: 'unsupported'; reason: string };
+
+const TEXT = new TextEncoder();
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+/**
+ * The signed string: the full URL, then every POST parameter as name immediately followed by
+ * value, in byte-wise ascending name order. `Array.prototype.sort` with no comparator sorts by
+ * UTF-16 code unit, which is the case-sensitive Unix ordering the contract specifies -- a
+ * locale-aware comparison would silently reorder mixed-case names and never validate.
+ */
+export function buildSignatureBase(url: string, params: Record<string, string>): string {
+  const names = Object.keys(params).sort();
+  let base = url;
+  for (const name of names) base += name + params[name];
+  return base;
+}
+
+export async function computeTwilioSignature(
+  authToken: string,
+  url: string,
+  params: Record<string, string>,
+): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    TEXT.encode(authToken),
+    { name: 'HMAC', hash: 'SHA-1' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, TEXT.encode(buildSignatureBase(url, params)));
+  return toBase64(new Uint8Array(signature));
+}
+
+/**
+ * Fixed-length comparison with no early return: every byte of the longer input is visited, and
+ * a length mismatch is folded into the accumulator rather than short-circuiting.
+ */
+export function constantTimeEquals(left: string, right: string): boolean {
+  const a = TEXT.encode(left);
+  const b = TEXT.encode(right);
+  let difference = a.length ^ b.length;
+  const span = Math.max(a.length, b.length);
+  for (let index = 0; index < span; index += 1) {
+    difference |= (a[index] ?? 0) ^ (b[index] ?? 0);
+  }
+  return difference === 0;
+}
+
+export async function verifyTwilioSignature(
+  authToken: string,
+  url: string,
+  params: Record<string, string>,
+  signature: string | null | undefined,
+): Promise<boolean> {
+  // A missing header is a rejection, never a skip: "unsigned" must not be a way in.
+  if (!authToken || !signature) return false;
+  return constantTimeEquals(await computeTwilioSignature(authToken, url, params), signature);
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', TEXT.encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * The application/json variant. Two checks, both required: the raw body must hash to the
+ * bodySHA256 the URL advertises, and the URL (which carries that parameter) must carry a valid
+ * signature. The raw body string is used verbatim -- re-serializing parsed JSON would change
+ * bytes and fail for the wrong reason.
+ */
+export async function verifyTwilioJsonSignature(
+  authToken: string,
+  url: string,
+  rawBody: string,
+  signature: string | null | undefined,
+): Promise<boolean> {
+  if (!authToken || !signature) return false;
+  let advertised: string | null = null;
+  try {
+    advertised = new URL(url).searchParams.get('bodySHA256');
+  } catch {
+    return false;
+  }
+  if (!advertised) return false;
+  if (!constantTimeEquals(await sha256Hex(rawBody), advertised.toLowerCase())) return false;
+  return verifyTwilioSignature(authToken, url, {}, signature);
+}
+
+const OUTBOUND_STATUS: Record<string, InternalDeliveryStatus> = {
+  // Queued/accepted/scheduled/sending all mean the provider has the message and we do not.
+  queued: 'accepted',
+  accepted: 'accepted',
+  scheduled: 'accepted',
+  sending: 'accepted',
+  sent: 'sent',
+  delivered: 'delivered',
+  read: 'read',
+  undelivered: 'failed',
+  failed: 'failed',
+  canceled: 'failed',
+};
+
+const INBOUND_STATUS = new Set(['receiving', 'received']);
+
+/** null means "not an outbound status we recognize" -- including the inbound ones. */
+export function mapTwilioStatus(status: string | null | undefined): InternalDeliveryStatus | null {
+  if (!status) return null;
+  return OUTBOUND_STATUS[status.trim().toLowerCase()] ?? null;
+}
+
+/**
+ * A short enumerated code the database CHECK accepts (`^[a-z0-9_]+$`, at most 100 characters).
+ * An unexpected value collapses rather than travelling verbatim into a stored column.
+ */
+export function normalizeProviderErrorCode(code: string | number | null | undefined): string | null {
+  if (code === null || code === undefined) return null;
+  const raw = String(code).trim();
+  if (!raw) return null;
+  if (!/^[0-9]{1,20}$/.test(raw)) return 'twilio_unknown';
+  return `twilio_${raw}`;
+}
+
+/**
+ * Decide what a callback IS before deciding what to do with it. Inbound gets its own verdict so
+ * the handler can refuse it by name; an unrecognized shape is `unsupported`, never a default.
+ */
+export function classifyTwilioWebhook(params: Record<string, string>): WebhookClassification {
+  const messageSid = (params.MessageSid ?? params.SmsSid ?? '').trim();
+  const from = (params.From ?? '').trim();
+  const to = (params.To ?? '').trim();
+  const rawStatus = (params.MessageStatus ?? params.SmsStatus ?? '').trim().toLowerCase();
+  const numMedia = Number.parseInt(params.NumMedia ?? '', 10);
+
+  if (Number.isFinite(numMedia) && numMedia > 0) return { kind: 'inbound', reason: 'inbound_media' };
+  if (typeof params.Body === 'string' && params.Body.length > 0) {
+    return { kind: 'inbound', reason: 'inbound_message' };
+  }
+  if (INBOUND_STATUS.has(rawStatus)) return { kind: 'inbound', reason: 'inbound_status' };
+
+  if (!messageSid) return { kind: 'unsupported', reason: 'message_sid_missing' };
+  if (!rawStatus) return { kind: 'unsupported', reason: 'status_missing' };
+  const status = mapTwilioStatus(rawStatus);
+  if (!status) return { kind: 'unsupported', reason: 'status_unrecognized' };
+
+  // The tenant is resolved by the SENDER address. On an outbound status callback that is `From`;
+  // `To` is the supplier and must never select a connection.
+  const providerSenderId = from || to;
+  if (!providerSenderId) return { kind: 'unsupported', reason: 'sender_missing' };
+
+  // EventType READ is the channel-level read receipt; it may arrive with a coarser MessageStatus.
+  const eventType = (params.EventType ?? '').trim().toUpperCase();
+  const effective: InternalDeliveryStatus = eventType === 'READ' ? 'read' : status;
+
+  return {
+    kind: 'delivery_status',
+    providerMessageId: messageSid,
+    providerSenderId,
+    status: effective,
+    errorCode: effective === 'failed' ? normalizeProviderErrorCode(params.ErrorCode) : null,
+  };
+}
+
+/** Form-encoded body -> the flat parameter map the signature algorithm signs. */
+export function formParams(body: string): Record<string, string> {
+  const params: Record<string, string> = {};
+  for (const [name, value] of new URLSearchParams(body)) params[name] = value;
+  return params;
+}
