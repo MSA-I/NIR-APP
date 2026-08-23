@@ -1115,6 +1115,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "assistant" = "true"
     "supplier-portal" = "false"
     "email-sender" = "true"
+    "billing-webhook" = "false"
   }
   foreach ($functionName in $functionJwt.Keys) {
     $expectedJwt = $functionJwt[$functionName]
@@ -1300,6 +1301,8 @@ try {
     Write-Gate "Reset after committed supplier-portal concurrency fixtures"
     Reset-LocalDatabase
     Invoke-SqlTest "supabase\tests\p60_email_order_delivery.sql" "Email order delivery: fail-closed communication preferences, the claim/settle ledger with attempt ceilings and ambiguous-send freezes, and sent stamped only by the observed provider event"
+    Invoke-SqlTest "supabase\tests\p70_launch_plans_and_usage_anchor.sql" "The launch ladder is ordered, priced in two versioned pre-tax catalogues and never lets a caller name its own currency; Legacy retires through an idempotent, audited, reasoned command whose dry run names every organization the new ceilings drop beneath; the usage period is anchored to the organization's signup instant, so no payment, renewal, tier change, cancellation, delinquency, late payment or refund resets a counter; and a referral pays both sides once, in their own periods, with only the unused remainder ever reversible"
+    Invoke-SqlTest "supabase\tests\p71_billing_provider_event_processing.sql" "A provider event is recorded before anything acts on it and applied exactly once: a forged organization in the payload moves no entitlement, an unrecognized or undecided event type dead-letters without touching a plan, a merchant of record that is not enabled refuses even a correctly signed activation, no transition writes a usage counter or period, and a tenant reads none of the platform reconciliation surface"
     Invoke-SqlTest "supabase\tests\p24_inventory_intelligence.sql" "Inventory consumption evidence, incoming supply, suggestions, price context and tenant isolation"
     Invoke-SqlTest "supabase\tests\p25_tenant_offboarding_export.sql" "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p26_price_baseline.sql" "Contractual price baseline as of the document date, reversal ordering, undisclosed fallbacks and read-only guarantee"
