@@ -71,8 +71,8 @@ const QUOTAS = [
 
 beforeEach(() => {
   rpc.mockImplementation((name: string) => {
-    if (name === 'public_plan_catalogue') return Promise.resolve({ data: CATALOGUE, error: null });
-    if (name === 'public_plan_quotas') return Promise.resolve({ data: QUOTAS, error: null });
+    if (name === 'get_public_plan_catalogue') return Promise.resolve({ data: CATALOGUE, error: null });
+    if (name === 'get_public_plan_quotas') return Promise.resolve({ data: QUOTAS, error: null });
     return Promise.resolve({ data: null, error: { message: `unexpected rpc ${name}` } });
   });
 });

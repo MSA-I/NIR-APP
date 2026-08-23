@@ -7,9 +7,13 @@ import { OrgSubscriptionPanel } from './OrgSubscriptionPanel';
 /**
  * The tenant's own subscription surface, held to OPEN-DECISIONS #194, #199–#204, #208, #216–#225.
  *
- * The load-bearing test in this file is "checkout redirect is not proof". #224 and #217 both say
- * the entitlement moves on a SIGNED SERVER EVENT and nothing else; a browser that came back from
- * a payment page knows only that a browser came back from a payment page.
+ * The load-bearing test in this file used to be "a checkout redirect is not proof". It is now
+ * stronger and simpler: THERE IS NO CHECKOUT PATH AT ALL. Paddle is ACCOUNT_NOT_PROVEN, no
+ * `billing-checkout` function exists, and none is being built this wave — so the panel must not
+ * invoke one, must not render an affordance that would, and must not contain any wording that
+ * could read as payment having happened. #224 and #217 say the entitlement moves on a signed
+ * server event and nothing else; the safest implementation of that is to have no local path that
+ * could ever claim otherwise, and this file pins exactly that.
  */
 const rpc = vi.fn();
 const invoke = vi.fn();
@@ -36,7 +40,7 @@ const subscription = (over: Record<string, unknown> = {}) => ({
   billing_country: null,
   billing_country_verified: false,
   catalogue_currency: null,
-  checkout_pending: false,
+  billing_provider_enabled: false,
   ...over,
 });
 
@@ -122,27 +126,44 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
   });
 
-  it('חזרה מדף התשלום אינה הצלחה — המסלול נשאר מה שהשרת אומר, והמצב הוא «ממתין לאישור»', async () => {
-    const user = userEvent.setup();
+  it('אין שום נתיב רכישה — לא כפתור, לא קריאה לפונקציה, ולא מילה שנשמעת כמו תשלום שבוצע', async () => {
     renderPanel();
     await settle();
-    await user.click(await screen.findByRole('button', { name: /מעבר לתשלום — פרו/ }));
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith('billing-checkout', expect.objectContaining({
-      body: expect.objectContaining({ plan_key: 'pro', billing_interval: 'monthly' }),
-    })));
-    // The browser was sent to the provider. That is ALL that happened.
-    expect(await screen.findByText(/ממתין לאישור/)).toBeInTheDocument();
-    expect(screen.getByText(/אירוע תשלום חתום/)).toBeInTheDocument();
-    expect(screen.queryByText(/התשלום בוצע|המסלול שודרג|שולם בהצלחה/)).not.toBeInTheDocument();
-    // The current plan still reads what the server reports, which is still Free.
+    // No affordance that would start a checkout.
+    expect(screen.queryByRole('button', { name: /מעבר לתשלום/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /רכישה|תשלום/ })).not.toBeInTheDocument();
+    // No Edge function is called, ever, from this panel.
+    expect(invoke).not.toHaveBeenCalled();
+    // And nothing on screen could be read as money having moved.
+    expect(screen.queryByText(/התשלום בוצע|שולם|שודרג|ממתין לאישור/)).not.toBeInTheDocument();
     expect(screen.getByTestId('current-plan')).toHaveTextContent('חינם');
   });
 
-  it('מצב «ממתין לאישור» שהשרת מדווח מוצג גם בלי לחיצה בדפדפן הזה', async () => {
-    mockServer(subscription({ checkout_pending: true }));
+  it('ספק סליקה שאינו פעיל — אומר שרכישה אינה זמינה עדיין, כעובדה', async () => {
     renderPanel();
     await settle();
-    expect(await screen.findByText(/ממתין לאישור/)).toBeInTheDocument();
+    expect(await screen.findByTestId('billing-availability')).toHaveTextContent(/אינה זמינה עדיין/);
+  });
+
+  it('ספק סליקה פעיל — אומר משהו אחר, ולא ממציא כפתור שאין מאחוריו נתיב', async () => {
+    mockServer(subscription({ billing_provider_enabled: true }));
+    renderPanel();
+    await settle();
+    const note = await screen.findByTestId('billing-availability');
+    expect(note).not.toHaveTextContent(/אינה זמינה עדיין/);
+    expect(screen.queryByRole('button', { name: /מעבר לתשלום/ })).not.toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('דגל שאינו בוליאני הוא «לא ידוע» — מצב שלישי, ולעולם לא «לא זמין»', async () => {
+    // 0189 guarantees the key is present and non-null, so this is defence in depth: "we could not
+    // determine" must never be rendered as "no", the same distinction as `measured:false` -> «—».
+    mockServer(subscription({ billing_provider_enabled: null }));
+    renderPanel();
+    await settle();
+    const note = await screen.findByTestId('billing-availability');
+    expect(note).toHaveTextContent(/לא ניתן לקבוע/);
+    expect(note).not.toHaveTextContent(/אינה זמינה עדיין/);
   });
 
   it('מצב פיגור תשלום — קריאה בלבד, יציאה רק בתשלום חתום, בלי מחיקה ובלי שנמוך אוטומטי', async () => {
@@ -180,6 +201,12 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     expect(screen.getByText(/בסוף התקופה ששולמה/)).toBeInTheDocument();
     // An unmeasured metric is an em dash inside the cancellation summary too, never a zero.
     expect(screen.getByTestId('cancel-usage-users.max')).toHaveTextContent('—');
+    // #220's disclosure survives even though the transition itself does not exist yet: the
+    // control stays reachable per #204, and the confirm step says plainly that it cannot be
+    // completed rather than calling nothing and looking like it worked.
+    expect(screen.getByRole('button', { name: /ביטול בסוף התקופה/ })).toBeDisabled();
+    expect(screen.getByText(/אינו זמין עדיין/)).toBeInTheDocument();
+    expect(rpc).not.toHaveBeenCalledWith('cancel_subscription_at_period_end', expect.anything());
   });
 
   it('מנוי שסומן לביטול מציע לחזור ממנו, ואומר עד מתי הגישה מלאה', async () => {
@@ -189,8 +216,11 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     }));
     renderPanel();
     await settle();
-    expect(await screen.findByRole('button', { name: /חזרה מהביטול/ })).toBeInTheDocument();
+    // Visible, never hidden (#204) — and disabled rather than silently doing nothing, because
+    // `resume_subscription` does not exist this wave.
+    expect(await screen.findByRole('button', { name: /חזרה מהביטול/ })).toBeDisabled();
     expect(screen.getByText(/גישה מלאה עד/)).toBeInTheDocument();
+    expect(rpc).not.toHaveBeenCalledWith('resume_subscription', expect.anything());
   });
 
   it('במסלול חינם אין מה לבטל', async () => {

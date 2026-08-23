@@ -1,22 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CreditCard, Undo2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { toHebrewError } from '../lib/errors';
 import { fmtDate, fmtNum, fmtPlanPrice } from '../lib/format';
 import { SUBSCRIPTION_STATUS } from '../lib/status';
-import { ErrorNote, Modal, Note, StatusBadge, useToast } from './ui';
+import { ErrorNote, Modal, Note, StatusBadge } from './ui';
 
 /**
  * The tenant's own subscription surface: what they are on, what else exists, and the three
  * lifecycle moves they are allowed to make. It is deliberately NOT a sales page.
  *
- * THE RULE THAT SHAPES EVERYTHING HERE: a redirect is not a receipt.
- * OPEN-DECISIONS #217 and #224 both settle it — a paid entitlement opens on a SIGNED SERVER
- * EVENT and on nothing else. A browser returning from a payment page has learned that a browser
- * returned from a payment page; it has not learned that money moved. So the checkout button sends
- * the customer to the provider and then says «ממתין לאישור», and the plan on screen keeps saying
- * whatever `my_subscription()` says until the server itself reports otherwise. There is no code
- * path in this file that upgrades a plan locally.
+ * THE RULE THAT SHAPES EVERYTHING HERE: there is no purchase path, and that is deliberate.
+ * OPEN-DECISIONS #217 and #224 say a paid entitlement opens on a SIGNED SERVER EVENT and on
+ * nothing else. An earlier draft honoured that by sending the customer to a provider checkout and
+ * then refusing to call the return a success. Paddle is ACCOUNT_NOT_PROVEN, no `billing-checkout`
+ * function exists, and none is being built this wave — so the honest implementation is stronger
+ * and simpler: THIS FILE INVOKES NO EDGE FUNCTION, renders no affordance that would start a
+ * payment, and contains no wording that could be read as money having moved. A rule enforced by
+ * the absence of a code path cannot be violated by a future edit to that path.
  *
  * THE OTHER FOUR RULES, each with the decision that forces it:
  *   * Currency is never guessed (#208). ILS or USD follows the billing country VERIFIED at the
@@ -26,7 +26,10 @@ import { ErrorNote, Modal, Note, StatusBadge, useToast } from './ui';
  *     platform business and never reach a tenant screen.
  *   * A paid→paid tier or interval change lands AT THE NEXT RENEWAL with no proration (#216);
  *     cancellation lands at the end of the paid period and can be reversed until then (#219).
- *     Neither ever touches the usage period, which is anchored to signup (#242).
+ *     Neither ever touches the usage period, which is anchored to signup (#242). The server
+ *     transitions for all three do not exist yet, so the controls render DISABLED with the reason
+ *     stated — visible per #204, which forbids hidden cancellation, and never silently no-op.
+ *     `is_paid_plan` is false for every organization today, so none of them is reachable.
  *   * A failed renewal is read-only, not deletion and not a silent downgrade (#221), and the only
  *     way out is a successful signed payment event (#222). The notice says both halves, because a
  *     customer who is refused an upload will otherwise assume the worse one.
@@ -47,7 +50,17 @@ interface SubscriptionRow {
   billing_country: string | null;
   billing_country_verified: boolean;
   catalogue_currency: string | null;
-  checkout_pending: boolean;
+  /**
+   * Whether the organization can acquire a paid plan at all. Delegated by `my_subscription()` to
+   * `my_billing_availability()` so there is one derivation, and `0189` guarantees it is present
+   * and non-null. It is ONE BOOLEAN on purpose: a customer may learn whether it can buy, never
+   * which merchant of record we chose or that our KYC is unproven.
+   *
+   * It gates ACQUIRING a plan only. Cancellation and resume are never gated on it — #204 names
+   * hidden cancellation alongside fake countdowns, and #219 grants the right unqualified. A
+   * provider outage must not trap a paying customer.
+   */
+  billing_provider_enabled: boolean;
 }
 
 interface UpgradeOption {
@@ -74,32 +87,13 @@ interface UsageRow {
 const INTERVALS = [['monthly', 'חודשי'], ['yearly', 'שנתי']] as const;
 type Interval = (typeof INTERVALS)[number][0];
 
-/** Keep command identity across a lost response or a refresh, exactly as the offboarding calls do. */
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-function stableSessionUuid(key: string): string {
-  const existing = window.sessionStorage.getItem(key);
-  if (existing && UUID_PATTERN.test(existing)) return existing;
-  const created = crypto.randomUUID();
-  window.sessionStorage.setItem(key, created);
-  return created;
-}
-
 export function OrgSubscriptionPanel() {
-  const toast = useToast();
   const [subscription, setSubscription] = useState<SubscriptionRow | null>(null);
   const [options, setOptions] = useState<UpgradeOption[]>([]);
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [interval, setIntervalChoice] = useState<Interval>('monthly');
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
-  /**
-   * "This browser started a checkout." That is the whole meaning, and it is why the flag is local
-   * and never promotes anything: it changes the WORDING to «ממתין לאישור» and nothing else. The
-   * server's own `checkout_pending` outranks it, and the moment the server reports a paid plan
-   * this flag stops mattering.
-   */
-  const [startedCheckout, setStartedCheckout] = useState(false);
 
   const load = useCallback(async () => {
     const [sub, upgrade, snapshot] = await Promise.all([
@@ -121,69 +115,24 @@ export function OrgSubscriptionPanel() {
 
   useEffect(() => { void load(); }, [load]);
 
-  async function run(action: () => Promise<void>, done?: string) {
-    setBusy(true);
-    try {
-      await action();
-      await load();
-      if (done) toast(done);
-    } catch (actionError) {
-      toast(toHebrewError(actionError), 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   /**
-   * Free → paid. The Edge function hands back a provider-hosted checkout URL; this code opens it
-   * and then knows nothing further. It records that a checkout was STARTED — never that one
-   * succeeded — and re-reads the server, which is the only thing entitled to say the plan changed.
+   * `schedule_subscription_change`, `cancel_subscription_at_period_end` and `resume_subscription`
+   * DO NOT EXIST. They need stored state on the subscription that the provider webhook must also
+   * write, and that agent has stood down — building one half of a two-sided contract alone is the
+   * failure mode this program has already paid for once. So there are no handlers here and no
+   * call sites: an orphan RPC name in the source is a real defect, not a placeholder.
    */
-  const startCheckout = (option: UpgradeOption) => run(async () => {
-    const started = await supabase.functions.invoke<{ checkout_url: string; checkout_attempt_id: string }>(
-      'billing-checkout', { body: { plan_key: option.plan_key, billing_interval: interval } });
-    if (started.error || !started.data?.checkout_url) {
-      throw started.error ?? new Error('checkout_unavailable');
-    }
-    setStartedCheckout(true);
-    window.open(started.data.checkout_url, '_blank', 'noopener,noreferrer');
-  });
-
-  const scheduleChange = (option: UpgradeOption) => run(async () => {
-    const key = `supplyflow:subscription:schedule:${option.plan_key}:${interval}`;
-    const changed = await supabase.rpc('schedule_subscription_change', {
-      p_plan_key: option.plan_key,
-      p_billing_interval: interval,
-      p_idempotency_key: stableSessionUuid(key),
-    });
-    if (changed.error) throw changed.error;
-    window.sessionStorage.removeItem(key);
-  }, 'השינוי נקבע לחידוש הבא.');
-
-  const cancelAtPeriodEnd = () => run(async () => {
-    const key = 'supplyflow:subscription:cancel';
-    const cancelled = await supabase.rpc('cancel_subscription_at_period_end', {
-      p_idempotency_key: stableSessionUuid(key),
-    });
-    if (cancelled.error) throw cancelled.error;
-    window.sessionStorage.removeItem(key);
-    setConfirmingCancel(false);
-  }, 'הביטול נרשם ויחול בסוף התקופה ששולמה.');
-
-  const resume = () => run(async () => {
-    const key = 'supplyflow:subscription:resume';
-    const resumed = await supabase.rpc('resume_subscription', {
-      p_idempotency_key: stableSessionUuid(key),
-    });
-    if (resumed.error) throw resumed.error;
-    window.sessionStorage.removeItem(key);
-  }, 'המנוי ממשיך כרגיל.');
-
   const currency = subscription?.billing_country_verified ? subscription.catalogue_currency : null;
   const amountOf = (option: UpgradeOption) =>
     (interval === 'yearly' ? option.yearly_amount : option.monthly_amount);
-  const pendingCheckout = !!subscription
-    && (subscription.checkout_pending || (startedCheckout && !subscription.is_paid_plan));
+  /**
+   * Three states, never two. "We could not determine" must not be rendered as "no" — the same
+   * distinction the codebase already draws with `measured: false` → «—» rather than `0`. `0189`
+   * forbids a missing or null key, so this branch is defence in depth rather than an expected path.
+   */
+  const availability: 'available' | 'unavailable' | 'indeterminate' =
+    typeof subscription?.billing_provider_enabled !== 'boolean' ? 'indeterminate'
+      : subscription.billing_provider_enabled ? 'available' : 'unavailable';
 
   return (
     <section className="card card-pad space-y-4" aria-labelledby="org-subscription-heading">
@@ -220,15 +169,19 @@ export function OrgSubscriptionPanel() {
             </Note>
           )}
 
-          {pendingCheckout && (
-            <Note tone="await" role="status">
-              <span className="min-w-0 flex-1">
-                נפתח תשלום אצל ספק הסליקה, והמצב הוא ממתין לאישור. המסלול ישתנה רק כאשר יתקבל
-                אירוע תשלום חתום מהשרת; חזרה מדף התשלום אינה אישור, ועד אז המסלול הנוכחי הוא
-                שבתוקף.
-              </span>
-            </Note>
-          )}
+          {/* Wording provisional under #203. One boolean in, three sentences out — and the third
+              is the one that matters: an unknown availability is said aloud, never rendered as a
+              refusal. Nothing here names the provider or hints why it is not ready. */}
+          <Note tone={availability === 'unavailable' ? 'info' : 'idle'}>
+            <span className="min-w-0 flex-1" data-testid="billing-availability">
+              {availability === 'unavailable'
+                && 'רכישת מסלול בתשלום אינה זמינה עדיין. אפשר להמשיך לעבוד במסלול הנוכחי; כשהרכישה תיפתח היא תופיע כאן.'}
+              {availability === 'available'
+                && 'רכישת מסלול בתשלום עדיין אינה מתבצעת מהמסך הזה. הפרטים והמכסות למטה מעודכנים.'}
+              {availability === 'indeterminate'
+                && 'לא ניתן לקבוע כרגע אם רכישת מסלול זמינה. זה אינו אומר שהיא חסומה — רענון או ניסיון מאוחר יותר יראה את המצב העדכני.'}
+            </span>
+          </Note>
 
           {subscription.scheduled_plan_key && (
             <Note tone="info">
@@ -255,7 +208,7 @@ export function OrgSubscriptionPanel() {
             <span className="text-sm text-ink-body" id="subscription-interval-label">מחזור חיוב</span>
             <div className="flex gap-2" role="group" aria-labelledby="subscription-interval-label">
               {INTERVALS.map(([value, label]) => (
-                <button key={value} type="button" aria-pressed={interval === value} disabled={busy}
+                <button key={value} type="button" aria-pressed={interval === value}
                   className={`chip-filter ${interval === value ? 'chip-filter-active' : ''}`}
                   onClick={() => setIntervalChoice(value)}>{label}</button>
               ))}
@@ -294,19 +247,16 @@ export function OrgSubscriptionPanel() {
                     </span>
                   )}
                   {current && <span className="badge-idle">המסלול הנוכחי</span>}
-                  {!current && !option.contact_sales && option.paid && (
+                  {/* A paid organization sees the scheduled-change control, disabled: #216's
+                      transition is unbuilt, and a button that calls nothing is worse than one
+                      that says it cannot. A Free organization sees no control at all — the
+                      availability note above already says why, and a disabled button per plan
+                      would repeat it four times. */}
+                  {!current && !option.contact_sales && option.paid && subscription.is_paid_plan && (
                     <span className="ms-auto">
-                      {subscription.is_paid_plan ? (
-                        <button type="button" className="btn-secondary py-1! text-xs" disabled={busy}
-                          onClick={() => void scheduleChange(option)}>
-                          תזמון מעבר ל{option.label}
-                        </button>
-                      ) : (
-                        <button type="button" className="btn-primary py-1! text-xs" disabled={busy}
-                          onClick={() => void startCheckout(option)}>
-                          מעבר לתשלום — {option.label}
-                        </button>
-                      )}
+                      <button type="button" className="btn-secondary py-1! text-xs" disabled>
+                        תזמון מעבר ל{option.label}
+                      </button>
                     </span>
                   )}
                 </li>
@@ -316,12 +266,15 @@ export function OrgSubscriptionPanel() {
 
           <div className="flex flex-wrap justify-end gap-2">
             {subscription.is_paid_plan && subscription.cancel_at_period_end && (
-              <button type="button" className="btn-secondary" disabled={busy} onClick={() => void resume()}>
+              <button type="button" className="btn-secondary" disabled>
                 <Undo2 size={15} /> חזרה מהביטול
               </button>
             )}
+            {/* Reachable, not disabled: opening it is how #220's usage-versus-quota disclosure is
+                delivered, and #204 forbids putting cancellation out of reach. The stop is at the
+                confirm step, where it is stated rather than silently swallowed. */}
             {subscription.is_paid_plan && !subscription.cancel_at_period_end && (
-              <button type="button" className="btn-secondary text-alert-fg" disabled={busy}
+              <button type="button" className="btn-secondary text-alert-fg"
                 onClick={() => setConfirmingCancel(true)}>
                 ביטול המנוי
               </button>
@@ -332,11 +285,9 @@ export function OrgSubscriptionPanel() {
 
       {confirmingCancel && subscription && (
         <CancelDialog
-          busy={busy}
           usage={usage}
           periodEnd={subscription.current_period_end}
           onClose={() => setConfirmingCancel(false)}
-          onConfirm={() => void cancelAtPeriodEnd()}
         />
       )}
     </section>
@@ -350,15 +301,13 @@ export function OrgSubscriptionPanel() {
  * decision is the actual usage against the actual quota, including the metrics we cannot measure,
  * which appear as `—` rather than a reassuring zero.
  */
-function CancelDialog({ busy, usage, periodEnd, onClose, onConfirm }: {
-  busy: boolean;
+function CancelDialog({ usage, periodEnd, onClose }: {
   usage: UsageRow[];
   periodEnd: string | null;
   onClose: () => void;
-  onConfirm: () => void;
 }) {
   return (
-    <Modal open onClose={onClose} title="ביטול המנוי" busy={busy}>
+    <Modal open onClose={onClose} title="ביטול המנוי">
       <div className="space-y-3">
         <p className="text-sm text-ink-body">
           הביטול ייכנס לתוקף בסוף התקופה ששולמה{periodEnd ? `, ב־${fmtDate(periodEnd)}` : ''}. עד אז
@@ -388,11 +337,20 @@ function CancelDialog({ busy, usage, periodEnd, onClose, onConfirm }: {
             ))}
           </ul>
         </div>
+        {/* The honest stop. A refused cancellation must never look like a completed one, and a
+            transient toast is close enough to silence for an action the customer believes they
+            just performed — so the reason is stated here, in the dialog, and it stays. Wording
+            provisional under #203. */}
+        <Note tone="await">
+          <span className="min-w-0 flex-1">
+            ביטול מהמסך הזה אינו זמין עדיין. שום דבר לא השתנה במנוי שלך כתוצאה מפתיחת החלון הזה.
+          </span>
+        </Note>
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>
-            השארת המנוי
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            סגירה
           </button>
-          <button type="button" className="btn-primary" disabled={busy} onClick={onConfirm}>
+          <button type="button" className="btn-primary" disabled>
             ביטול בסוף התקופה
           </button>
         </div>

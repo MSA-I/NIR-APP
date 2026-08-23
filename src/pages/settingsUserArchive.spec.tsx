@@ -75,7 +75,7 @@ function renderSettings(rows: Array<Record<string, unknown>>) {
       billing_interval: 'monthly', current_period_end: null, cancel_at_period_end: false,
       scheduled_plan_key: null, scheduled_plan_label: null, scheduled_interval: null,
       scheduled_effective_at: null, delinquent: false, billing_country: null,
-      billing_country_verified: false, catalogue_currency: null, checkout_pending: false,
+      billing_country_verified: false, catalogue_currency: null, billing_provider_enabled: false,
     }])),
     http.post(`${SUPABASE_URL}/rest/v1/rpc/my_upgrade_options`, () => HttpResponse.json([
       { plan_key: 'free', label: 'חינם', tier_order: 1, paid: false, contact_sales: false, currency: null, catalogue_version: null, monthly_amount: null, yearly_amount: null },

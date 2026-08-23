@@ -10,7 +10,7 @@ import { fmtNum, fmtPlanPrice } from '../lib/format';
  * ARCHITECTURE.md:244 forbids a pricing plan hidden in code, and this page is the reason that
  * rule exists: a hardcoded table would drift from what the server actually enforces, and the
  * first customer to notice would be one who was refused something the page promised. Every
- * figure below therefore arrives from `public_plan_catalogue()` / `public_plan_quotas()`.
+ * figure below therefore arrives from `get_public_plan_catalogue()` / `get_public_plan_quotas()`.
  *
  * THREE THINGS THIS PAGE DELIBERATELY DOES NOT DO.
  *
@@ -20,7 +20,7 @@ import { fmtNum, fmtPlanPrice } from '../lib/format';
  *    to state. Both decided catalogues are shown side by side, labelled, with the rule spelled
  *    out; choosing one here would be presenting a guess as a fact.
  * 2. It does not show `ביזנס`. #194 puts Business in the authenticated upgrade surface only, with
- *    no price. The exclusion is the server's — `public_plan_catalogue()` returns four plans — so a
+ *    no price. The exclusion is the server's — `get_public_plan_catalogue()` returns four plans — so a
  *    client-side filter cannot be forgotten. #201's internal minimums never leave the platform.
  * 3. It does not publish what nobody measures. `users.max` and `suppliers.max` have no measurement
  *    (DEBT §56) and the storage ceilings of #200 are internal safety limits, not a promise. An
@@ -74,8 +74,8 @@ export default function Pricing() {
     let cancelled = false;
     void (async () => {
       const [catalogue, quotas] = await Promise.all([
-        supabase.rpc('public_plan_catalogue'),
-        supabase.rpc('public_plan_quotas'),
+        supabase.rpc('get_public_plan_catalogue'),
+        supabase.rpc('get_public_plan_quotas'),
       ]);
       if (cancelled) return;
       if (catalogue.error || quotas.error) {
