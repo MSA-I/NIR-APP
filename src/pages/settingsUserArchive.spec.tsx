@@ -68,6 +68,20 @@ function renderSettings(rows: Array<Record<string, unknown>>) {
     http.post(`${SUPABASE_URL}/rest/v1/rpc/organization_offboarding_state`, () => HttpResponse.json([])),
     http.post(`${SUPABASE_URL}/rest/v1/rpc/resolve_export_report_template`, () =>
       HttpResponse.json({ found: false, export_key: 'accountant_monthly_report' })),
+    // The owner's own subscription panel reads three scoped functions. A Free organization with
+    // no verified billing country is the default shape a new tenant actually has.
+    http.post(`${SUPABASE_URL}/rest/v1/rpc/my_subscription`, () => HttpResponse.json([{
+      plan_key: 'free', plan_label: 'חינם', is_paid_plan: false, status: 'active',
+      billing_interval: 'monthly', current_period_end: null, cancel_at_period_end: false,
+      scheduled_plan_key: null, scheduled_plan_label: null, scheduled_interval: null,
+      scheduled_effective_at: null, delinquent: false, billing_country: null,
+      billing_country_verified: false, catalogue_currency: null, checkout_pending: false,
+    }])),
+    http.post(`${SUPABASE_URL}/rest/v1/rpc/my_upgrade_options`, () => HttpResponse.json([
+      { plan_key: 'free', label: 'חינם', tier_order: 1, paid: false, contact_sales: false, currency: null, catalogue_version: null, monthly_amount: null, yearly_amount: null },
+      { plan_key: 'business', label: 'ביזנס', tier_order: 5, paid: true, contact_sales: true, currency: null, catalogue_version: null, monthly_amount: null, yearly_amount: null },
+    ])),
+    http.post(`${SUPABASE_URL}/rest/v1/rpc/organization_usage_snapshot`, () => HttpResponse.json([])),
   );
   return render(
     <QueryClientProvider client={createAppQueryClient()}>
@@ -144,6 +158,18 @@ describe('/settings — users, attention strip and archive', () => {
     // Preselected on an assignable role: the retired one is not an option the server would take.
     expect((screen.getByLabelText('תפקיד חדש') as HTMLSelectElement).value).toBe('office');
     expect(screen.queryByRole('option', { name: HISTORICAL_ROLE_LABEL.payer })).toBeNull();
+  });
+
+  it('gives the owner the subscription panel, with Business as a conversation and no figure', async () => {
+    renderSettings([OFFICE]);
+    await screen.findByText('רות משרד');
+
+    const panel = await screen.findByRole('region', { name: 'מסלול ומנוי' });
+    expect(within(panel).getByTestId('current-plan')).toHaveTextContent('חינם');
+    // #194/#201: Business is a conversation here and carries no price anywhere.
+    expect(within(panel).getByText('ביזנס')).toBeInTheDocument();
+    expect(within(panel).getByText('דברו איתנו')).toBeInTheDocument();
+    expect(within(panel).queryByText(/299/)).toBeNull();
   });
 
   it('shows neither extra surface when every profile holds an assignable role', async () => {

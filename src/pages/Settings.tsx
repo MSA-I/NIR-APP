@@ -8,6 +8,7 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { PageHeader, SkeletonCards, useToast, ErrorNote, Note, DataTable, Disclosure, StatusBadge, ConfirmDialog, Modal, type Column } from '../components/ui';
 import { ExportTemplatesPanel } from '../components/ExportTemplatesPanel';
+import { OrgSubscriptionPanel } from '../components/OrgSubscriptionPanel';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVITATION_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime, fmtNum } from '../lib/format';
@@ -481,6 +482,16 @@ export default function Settings() {
           {canWrite && logoPath && <button type="button" className="btn-ghost" disabled={logoBusy} onClick={() => void removeLogo()}>הסרת לוגו</button>}
         </div>
       </div>
+
+      {/* The organization's own commercial subscription — plan, price, upgrade, cancel, and the
+          read-only state a failed renewal puts the tenant in.
+
+          OWNER ONLY, and the gate is the capability contract rather than a preference: PRODUCT.md
+          gives `office` no access to payment at all, and `accountant` only the execution of an
+          already-approved SUPPLIER payment. Neither has any claim on what the business itself is
+          buying. A control that refuses on submit is worse than a control that is not there —
+          the same reasoning that gates the export-templates panel two blocks below. */}
+      {profile?.role === 'owner' && <OrgSubscriptionPanel />}
 
       {/* The autonomy switches left this screen for the operator application (src/operator/,
           19.08.2026): they were never the owner's control — platform_set_autonomy_policy
