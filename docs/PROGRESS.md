@@ -1,5 +1,27 @@
 # PROGRESS — מצב נוכחי
 
+עודכן: 23.08.2026 — **מועמד המיזוג דרך `0170` שוחרר ל־Production; Assistant וקריאות לספקי צד־שלישי נשארו כבויים.**
+
+> **מקור runtime וראיות:** ‏PR #97 תיקן את קריאת ה־flags האנונימית ומוזג כ־
+> `15baeac6bc7a3340089a07507a628d76860369b0`. ‏Build, verify ו־browser/a11y עברו גם על head ה־PR
+> וגם על merge SHA זה; ‏`npm run check` עבר עם 1,282 בדיקות. ‏Production DB הוחל forward-only
+> ובסדר `0168`→`0169`→`0170`; ראש ה־ledger הוא `0170` עם 169 שורות, ‏A5/A6 הם 0, ושלושת
+> מקורות ה־ledger תואמים בשם, באורך וב־SHA-256 לקבצי ה־runtime. גיבוי roles/schema/data נוצר
+> וה־hash של כל קובץ אומת לפני apply. ארבע חריגות P1 היסטוריות נשארו באותו fingerprint
+> ‏`7/7/2/58`; ‏42/46 הבדיקות האחרות אפס ולא נוצרה חריגה חדשה.
+>
+> **Edge ו־Pages:** ‏`public-signup` פעיל v1 עם `verify_jwt=false`; ‏`email-sender` ו־`assistant`
+> פעילים v1 עם `verify_jwt=true`. בדיקות OPTIONS/auth-negative עברו. ‏Pages deployment
+> ‏`e851dbe8-fcc6-450d-b5b8-d80aace67da0` בפרויקט `supplyflow` נושא source ‏`15baeac`;
+> ה־canonical וה־unique התאימו 111/111. ‏36 תרחישי public עברו בדסקטופ וב־390px ללא
+> console/page/HTTP errors או overflow. ‏owner/office/accountant ‏3/3 עברו smoke מחובר,
+> קריאה בלבד, בדשבורד הקנוני בדסקטופ. ספירות העסק נשארו זהות.
+>
+> **גבול activation:** ‏Assistant מוסתר בשלושת התפקידים, flags/policy נשארו off, מכסת הריצות
+> אינה measured, מספר הריצות 0 ואין `AI_ASSISTANT_*`; לא הייתה קריאת מודל. טבלאות מסירת המייל
+> נשארו עם 0 preferences ו־0 messages; לא הייתה קריאת Resend או טענת delivered. ‏Twilio,
+> Paddle, Stripe ו־Morning לא הוגדרו ולא נקראו. פריסה אינה activation.
+
 עודכן: 23.08.2026 — **PR #95 מיזג את יישור התיעוד מעל PR #93/#94; לא בוצע rollout או deploy במסגרת העדכון.**
 
 > **גבול מקור המוצר והבדיקות:** המקור דרך PR #94 (תיקון test-only) ו־PR #93 (מותג) הוא merge
@@ -1256,11 +1278,10 @@
 
 ## השינויים הממתינים לשחרור
 
-**יש, והם נפרדים לפי משטח.** ‏Production ledger הוכח עד `0167`; המיגרציות `0168`–`0170`
-נמצאות ב־main אך אינן מוכחות כחיות. ‏Pages הוכח על `6430d26`, ולכן Assistant UI שמוזג אחריו
-אינו מוכח בפריסה. ‏`supplier-portal` הוא משטח ה־Edge החדש היחיד שהוכח פעיל; ‏`email-sender`
-ו־Assistant Edge אינם מוכחים כפרוסים. אין להחיל migration, לפרוס Edge/Pages, להפעיל Assistant,
-לחבר Resend/Twilio או לבצע smoke חי מכוח מסמך זה; כל אחד דורש תוכנית והרשאת Production נפרדות.
+**אין שינוי merged שממתין לפריסה במסגרת חבילת `0168`–`0170`.** ‏Production ledger הוכח עד
+`0170`; שלוש פונקציות ה־Edge הנדרשות פעילות, ו־Pages הוכח על runtime source ‏`15baeac` עם parity
+ו־smoke חיים. מצב deployed אינו משנה את גבול ההפעלה: Assistant, שליחת מייל חיצונית ו־WhatsApp
+נשארים כבויים/לא־מוכחים עד ההכרעות, ההגדרות וה־smoke החיצוני הנפרדים המתועדים בחוב ובהחלטות.
 
 ## אימות קוד
 
