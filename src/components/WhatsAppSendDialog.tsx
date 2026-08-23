@@ -16,6 +16,12 @@ import { renderOrderImage, orderImageFileName } from '../lib/orderImage';
  *
  * Nothing here touches order status: opening ≠ sending (share.ts:41-53); the call sites run
  * their existing human sent-confirmation after `onClose(openedText)`.
+ *
+ * THIS IS THE MANUAL CHANNEL, AND IT SAYS SO. Since 0191 an organization may also connect its
+ * own WhatsApp sender and have the provider report delivery (#239, #240). The two must never be
+ * confused: opening wa.me is a person promising a message left, and no provider ever confirms
+ * it. The banner below is that distinction made visible, so a manual share can never be read --
+ * by a manager or by a later feature -- as verified provider delivery.
  */
 export function WhatsAppSendDialog({ order, orgName, portalUrl, onClose }: {
   order: WhatsAppOrder | null;
@@ -68,6 +74,13 @@ export function WhatsAppSendDialog({ order, orgName, portalUrl, onClose }: {
     <Modal open title={`שליחת הזמנה #${order.number} ב-WhatsApp`} onClose={() => onClose(openedTextRef.current)}
       description="שני שלבים: הודעת טקסט, ואחריה תמונת ההזמנה המלאה.">
       <div className="space-y-4">
+        <Note tone="idle">
+          <span className="min-w-0 flex-1">
+            זהו שיתוף ידני: ההודעה נשלחת מהמכשיר שלכם ואין אישור מסירה מספק. המערכת לא תרשום
+            את השיתוף הזה כמסירה מאומתת.
+          </span>
+        </Note>
+
         <button className="btn-primary w-full justify-center" onClick={openText}>
           <MessageCircle size={16} /> 1. שליחת הודעת הטקסט
         </button>

@@ -94,6 +94,17 @@ describe('WhatsAppSendDialog', () => {
     expect(rpcCalls).toEqual([]);
   });
 
+  it('labels itself as the manual channel and never as provider delivery', async () => {
+    renderDialog();
+    // #239/#240 added a provider-backed channel. The manual share must stay legible AS manual:
+    // it says the message leaves the operator's own device and that nothing records a delivery.
+    expect(screen.getByText(/שיתוף ידני/)).toBeInTheDocument();
+    expect(screen.getByText(/אין אישור מסירה מספק/)).toBeInTheDocument();
+    expect(screen.getByText(/לא תרשום את השיתוף הזה כמסירה מאומתת/)).toBeInTheDocument();
+    // And still nothing in this dialog reaches the delivery ledger.
+    expect(rpcCalls).toEqual([]);
+  });
+
   it('closing without opening the text reports false', async () => {
     const user = userEvent.setup();
     const onClose = renderDialog();
